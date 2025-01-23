@@ -3,7 +3,7 @@ use crate::{
     prebase::ProtoM21ObjectTrait,
 };
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct GeneralNote {
     music21object: Music21Object,
 }

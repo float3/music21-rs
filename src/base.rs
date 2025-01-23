@@ -1,6 +1,6 @@
 use crate::prebase::{ProtoM21Object, ProtoM21ObjectTrait};
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct Music21Object {
     proto: ProtoM21Object,
 }
@@ -10,6 +10,10 @@ impl Music21Object {
         Self {
             proto: ProtoM21Object::new(),
         }
+    }
+
+    pub(crate) fn get_super(&self) -> ProtoM21Object {
+        self.proto.clone()
     }
 }
 

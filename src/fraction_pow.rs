@@ -1,5 +1,4 @@
 use crate::defaults::IntegerType;
-
 use fraction::GenericFraction;
 use num::Integer;
 use num_traits::{One, Pow, Zero};
@@ -25,7 +24,7 @@ where
         };
 
         let numer = match numer {
-            Some(n) => n.clone().pow(exponent.abs() as u32),
+            Some(n) => n.clone().pow(exponent.unsigned_abs()),
             None => {
                 eprintln!("Error: numerator is None");
                 return GenericFraction::zero();
@@ -33,7 +32,7 @@ where
         };
 
         let denom = match denom {
-            Some(d) => d.clone().pow(exponent.abs() as u32),
+            Some(d) => d.clone().pow(exponent.unsigned_abs()),
             None => {
                 eprintln!("Error: denominator is None");
                 return GenericFraction::zero();
@@ -123,7 +122,7 @@ mod tests {
     fn test_pow_one_exponent() {
         let frac: GenericFraction<IntegerType> = GenericFraction::new(5, 7);
         let result = frac.pow(1);
-        let expected = frac.clone();
+        let expected = frac;
         assert_eq!(
             result, expected,
             "Any fraction raised to the power of 1 should be itself"
