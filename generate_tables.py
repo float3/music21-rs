@@ -33,15 +33,18 @@ def rustify_value(value):
 
 
 def generate_forte_table():
-    rust_code = """
+    rust_code = f"""
     pub(crate) static ref FORTE: Vec<Vec<Option<TNIStructure>>> = vec![
-        // Index 0 is unused (cardinality 0)
+        // Index 0 is unused (Cardinality 0 {CARDINALITIES[0]})
         vec![],
     """
 
     for card in range(1, len(tables.FORTE)):
         card_data = tables.FORTE[card]
-        rust_code += f"        // Cardinality {card} {CARDINALITIES[card]}\n"
+        if card == 1:
+            rust_code += f"    // Cardinality {card} {CARDINALITIES[card]}\n"
+        else:
+            rust_code += f"        // Cardinality {card} {CARDINALITIES[card]}\n"
         rust_code += "        vec![\n"
         rust_code += "            None, // Index 0 unused\n"
 
@@ -82,8 +85,13 @@ def generate_cardinality_to_chord_members_rust():
 
     rust_code += "\n        let mut outer = HashMap::new();\n"
 
+    rust_code += f"        // Cardinality 0 {CARDINALITIES[0]}\n"
+
+    rust_code += "        let inner_0 = HashMap::new();\n"
+    rust_code += "        outer.insert(0, inner_0);\n"
+
     for card in range(1, len(tables.FORTE)):
-        rust_code += f"        // Cardinality {card}\n"
+        rust_code += f"        // Cardinality {card} {CARDINALITIES[card]}\n"
         rust_code += f"        let mut inner_{card} = HashMap::new();\n"
 
         card_data = tables.FORTE[card]
@@ -114,8 +122,8 @@ def generate_cardinality_to_chord_members_rust():
 def generate_maximum_index_number_without_inversion_equivalence():
     rust_code = "\n    pub(crate) static ref MAXIMUM_INDEX_NUMBER_WITHOUT_INVERSION_EQUIVALENCE: HashMap<u8, u8> = {"
     rust_code += "        let mut m = HashMap::new();\n"
-    for idx in range(1, len(tables.maximumIndexNumberWithoutInversionEquivalence)):
-        rust_code += f"        m.insert({idx - 1}, {tables.maximumIndexNumberWithoutInversionEquivalence[idx]});\n"
+    for idx in range(0, len(tables.maximumIndexNumberWithoutInversionEquivalence)):
+        rust_code += f"        m.insert({idx}, {tables.maximumIndexNumberWithoutInversionEquivalence[idx]});\n"
     rust_code += "        m\n"
     rust_code += "    };\n"
     return rust_code
@@ -124,8 +132,8 @@ def generate_maximum_index_number_without_inversion_equivalence():
 def generate_maximum_index_number_with_inversion_equivalence():
     rust_code = "\n    pub(crate) static ref MAXIMUM_INDEX_NUMBER_WITH_INVERSION_EQUIVALENCE: HashMap<u8, u8> = {"
     rust_code += "\n        let mut m = HashMap::new();\n"
-    for idx in range(1, len(tables.maximumIndexNumberWithInversionEquivalence)):
-        rust_code += f"        m.insert({idx - 1}, {tables.maximumIndexNumberWithInversionEquivalence[idx]});\n"
+    for idx in range(0, len(tables.maximumIndexNumberWithInversionEquivalence)):
+        rust_code += f"        m.insert({idx}, {tables.maximumIndexNumberWithInversionEquivalence[idx]});\n"
     rust_code += "        m\n"
     rust_code += "    };\n"
     return rust_code

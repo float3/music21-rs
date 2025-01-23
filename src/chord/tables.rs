@@ -24,9 +24,9 @@ type TNIStructure = (Vec<u8>, Vec<u8>, Vec<u8>, u8);
 // BEGIN_GENERATED_CODE
 lazy_static! {
     pub(crate) static ref FORTE: Vec<Vec<Option<TNIStructure>>> = vec![
-        // Index 0 is unused (cardinality 0)
+        // Index 0 is unused (Cardinality 0 None)
         vec![],
-            // Cardinality 1 monad
+        // Cardinality 1 monad
         vec![
             None, // Index 0 unused
             Some((vec![0], vec![0, 0, 0, 0, 0, 0], vec![1, 1, 1, 1, 11, 11, 11, 11], 0)),
@@ -433,11 +433,14 @@ lazy_static! {
 
     pub(crate) static ref CARDINALITY_TO_CHORD_MEMBERS: HashMap<u8, HashMap<(u8, i8), (Vec<u8>, Vec<u8>, Vec<u8>)>> = {
         let mut outer = HashMap::new();
-        // Cardinality 1
+        // Cardinality 0 None
+        let inner_0 = HashMap::new();
+        outer.insert(0, inner_0);
+        // Cardinality 1 monad
         let mut inner_1 = HashMap::new();
         inner_1.insert((1, 0), (vec![0], vec![1, 1, 1, 1, 11, 11, 11, 11], vec![0, 0, 0, 0, 0, 0]));
         outer.insert(1, inner_1);
-        // Cardinality 2
+        // Cardinality 2 diad
         let mut inner_2 = HashMap::new();
         inner_2.insert((1, 0), (vec![0, 1], vec![1, 1, 0, 0, 9, 9, 8, 8], vec![1, 0, 0, 0, 0, 0]));
         inner_2.insert((2, 0), (vec![0, 2], vec![1, 1, 1, 1, 9, 9, 9, 9], vec![0, 1, 0, 0, 0, 0]));
@@ -446,7 +449,7 @@ lazy_static! {
         inner_2.insert((5, 0), (vec![0, 5], vec![1, 1, 0, 0, 9, 9, 8, 8], vec![0, 0, 0, 0, 1, 0]));
         inner_2.insert((6, 0), (vec![0, 6], vec![2, 2, 2, 2, 10, 10, 10, 10], vec![0, 0, 0, 0, 0, 1]));
         outer.insert(2, inner_2);
-        // Cardinality 3
+        // Cardinality 3 trichord
         let mut inner_3 = HashMap::new();
         inner_3.insert((1, 0), (vec![0, 1, 2], vec![1, 1, 0, 0, 7, 7, 4, 4], vec![2, 1, 0, 0, 0, 0]));
         inner_3.insert((2, 1), (vec![0, 1, 3], vec![1, 0, 0, 0, 5, 6, 5, 5], vec![1, 1, 1, 0, 0, 0]));
@@ -468,7 +471,7 @@ lazy_static! {
         inner_3.insert((11, -1), (vec![0, 4, 7], vec![1, 0, 0, 0, 5, 6, 5, 5], vec![0, 0, 1, 1, 1, 0]));
         inner_3.insert((12, 0), (vec![0, 4, 8], vec![3, 3, 3, 3, 9, 9, 9, 9], vec![0, 0, 0, 3, 0, 0]));
         outer.insert(3, inner_3);
-        // Cardinality 4
+        // Cardinality 4 tetrachord
         let mut inner_4 = HashMap::new();
         inner_4.insert((1, 0), (vec![0, 1, 2, 3], vec![1, 1, 0, 0, 5, 5, 1, 1], vec![3, 2, 1, 0, 0, 0]));
         inner_4.insert((2, 1), (vec![0, 1, 2, 4], vec![1, 0, 0, 0, 3, 4, 1, 1], vec![2, 2, 1, 1, 0, 0]));
@@ -514,7 +517,7 @@ lazy_static! {
         inner_4.insert((29, 1), (vec![0, 1, 3, 7], vec![1, 0, 0, 0, 0, 3, 3, 1], vec![1, 1, 1, 1, 1, 1]));
         inner_4.insert((29, -1), (vec![0, 4, 6, 7], vec![1, 0, 0, 0, 0, 3, 3, 1], vec![1, 1, 1, 1, 1, 1]));
         outer.insert(4, inner_4);
-        // Cardinality 5
+        // Cardinality 5 pentachord
         let mut inner_5 = HashMap::new();
         inner_5.insert((1, 0), (vec![0, 1, 2, 3, 4], vec![1, 1, 0, 0, 3, 3, 0, 0], vec![4, 3, 2, 1, 0, 0]));
         inner_5.insert((2, 1), (vec![0, 1, 2, 3, 5], vec![1, 0, 0, 0, 1, 2, 1, 1], vec![3, 3, 2, 1, 1, 0]));
@@ -583,7 +586,7 @@ lazy_static! {
         inner_5.insert((38, 1), (vec![0, 1, 2, 5, 8], vec![1, 0, 0, 0, 0, 1, 1, 0], vec![2, 1, 2, 2, 2, 1]));
         inner_5.insert((38, -1), (vec![0, 3, 6, 7, 8], vec![1, 0, 0, 0, 0, 1, 1, 0], vec![2, 1, 2, 2, 2, 1]));
         outer.insert(5, inner_5);
-        // Cardinality 6
+        // Cardinality 6 hexachord
         let mut inner_6 = HashMap::new();
         inner_6.insert((1, 0), (vec![0, 1, 2, 3, 4, 5], vec![1, 1, 0, 0, 1, 1, 0, 0], vec![5, 4, 3, 2, 1, 0]));
         inner_6.insert((2, 1), (vec![0, 1, 2, 3, 4, 6], vec![1, 0, 0, 0, 0, 1, 0, 0], vec![4, 4, 3, 2, 1, 1]));
@@ -666,7 +669,7 @@ lazy_static! {
         inner_6.insert((49, 0), (vec![0, 1, 3, 4, 7, 9], vec![1, 1, 1, 1, 0, 0, 0, 0], vec![2, 2, 4, 3, 2, 2]));
         inner_6.insert((50, 0), (vec![0, 1, 4, 6, 7, 9], vec![1, 1, 0, 0, 0, 0, 0, 0], vec![2, 2, 4, 2, 3, 2]));
         outer.insert(6, inner_6);
-        // Cardinality 7
+        // Cardinality 7 septachord
         let mut inner_7 = HashMap::new();
         inner_7.insert((1, 0), (vec![0, 1, 2, 3, 4, 5, 6], vec![1, 1, 0, 0, 0, 0, 0, 0], vec![6, 5, 4, 3, 2, 1]));
         inner_7.insert((2, 1), (vec![0, 1, 2, 3, 4, 5, 7], vec![1, 0, 0, 0, 0, 0, 0, 0], vec![5, 5, 4, 3, 3, 1]));
@@ -735,7 +738,7 @@ lazy_static! {
         inner_7.insert((38, 1), (vec![0, 1, 2, 4, 5, 7, 8], vec![1, 0, 0, 0, 0, 0, 0, 0], vec![4, 3, 4, 4, 4, 2]));
         inner_7.insert((38, -1), (vec![0, 1, 3, 4, 6, 7, 8], vec![1, 0, 0, 0, 0, 0, 0, 0], vec![4, 3, 4, 4, 4, 2]));
         outer.insert(7, inner_7);
-        // Cardinality 8
+        // Cardinality 8 octachord
         let mut inner_8 = HashMap::new();
         inner_8.insert((1, 0), (vec![0, 1, 2, 3, 4, 5, 6, 7], vec![1, 1, 0, 0, 0, 0, 0, 0], vec![7, 6, 5, 4, 4, 2]));
         inner_8.insert((2, 1), (vec![0, 1, 2, 3, 4, 5, 6, 8], vec![1, 0, 0, 0, 0, 0, 0, 0], vec![6, 6, 5, 5, 4, 2]));
@@ -781,7 +784,7 @@ lazy_static! {
         inner_8.insert((29, 1), (vec![0, 1, 2, 3, 5, 6, 7, 9], vec![1, 0, 0, 0, 0, 0, 0, 0], vec![5, 5, 5, 5, 5, 3]));
         inner_8.insert((29, -1), (vec![0, 2, 3, 4, 6, 7, 8, 9], vec![1, 0, 0, 0, 0, 0, 0, 0], vec![5, 5, 5, 5, 5, 3]));
         outer.insert(8, inner_8);
-        // Cardinality 9
+        // Cardinality 9 nonachord
         let mut inner_9 = HashMap::new();
         inner_9.insert((1, 0), (vec![0, 1, 2, 3, 4, 5, 6, 7, 8], vec![1, 1, 0, 0, 0, 0, 0, 0], vec![8, 7, 6, 6, 6, 3]));
         inner_9.insert((2, 1), (vec![0, 1, 2, 3, 4, 5, 6, 7, 9], vec![1, 0, 0, 0, 0, 0, 0, 0], vec![7, 7, 7, 6, 6, 3]));
@@ -803,7 +806,7 @@ lazy_static! {
         inner_9.insert((11, -1), (vec![0, 1, 2, 3, 5, 6, 8, 9, 10], vec![1, 0, 0, 0, 0, 0, 0, 0], vec![6, 6, 7, 7, 7, 3]));
         inner_9.insert((12, 0), (vec![0, 1, 2, 4, 5, 6, 8, 9, 10], vec![3, 3, 3, 3, 0, 0, 0, 0], vec![6, 6, 6, 9, 6, 3]));
         outer.insert(9, inner_9);
-        // Cardinality 10
+        // Cardinality 10 decachord
         let mut inner_10 = HashMap::new();
         inner_10.insert((1, 0), (vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9], vec![1, 1, 0, 0, 0, 0, 0, 0], vec![9, 8, 8, 8, 8, 4]));
         inner_10.insert((2, 0), (vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 10], vec![1, 1, 1, 1, 0, 0, 0, 0], vec![8, 9, 8, 8, 8, 4]));
@@ -812,11 +815,11 @@ lazy_static! {
         inner_10.insert((5, 0), (vec![0, 1, 2, 3, 4, 5, 7, 8, 9, 10], vec![1, 1, 0, 0, 0, 0, 0, 0], vec![8, 8, 8, 8, 9, 4]));
         inner_10.insert((6, 0), (vec![0, 1, 2, 3, 4, 6, 7, 8, 9, 10], vec![2, 2, 2, 2, 0, 0, 0, 0], vec![8, 8, 8, 8, 8, 5]));
         outer.insert(10, inner_10);
-        // Cardinality 11
+        // Cardinality 11 undecachord
         let mut inner_11 = HashMap::new();
         inner_11.insert((1, 0), (vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], vec![1, 1, 1, 1, 0, 0, 0, 0], vec![10, 10, 10, 10, 10, 5]));
         outer.insert(11, inner_11);
-        // Cardinality 12
+        // Cardinality 12 duodecachord
         let mut inner_12 = HashMap::new();
         inner_12.insert((1, 0), (vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], vec![12, 12, 12, 12, 0, 0, 0, 0], vec![12, 12, 12, 12, 12, 6]));
         outer.insert(12, inner_12);
@@ -825,34 +828,36 @@ lazy_static! {
 
     pub(crate) static ref MAXIMUM_INDEX_NUMBER_WITHOUT_INVERSION_EQUIVALENCE: HashMap<u8, u8> = {        let mut m = HashMap::new();
         m.insert(0, 1);
-        m.insert(1, 6);
-        m.insert(2, 19);
-        m.insert(3, 43);
-        m.insert(4, 66);
-        m.insert(5, 80);
-        m.insert(6, 66);
-        m.insert(7, 43);
-        m.insert(8, 19);
-        m.insert(9, 6);
-        m.insert(10, 1);
+        m.insert(1, 1);
+        m.insert(2, 6);
+        m.insert(3, 19);
+        m.insert(4, 43);
+        m.insert(5, 66);
+        m.insert(6, 80);
+        m.insert(7, 66);
+        m.insert(8, 43);
+        m.insert(9, 19);
+        m.insert(10, 6);
         m.insert(11, 1);
+        m.insert(12, 1);
         m
     };
 
     pub(crate) static ref MAXIMUM_INDEX_NUMBER_WITH_INVERSION_EQUIVALENCE: HashMap<u8, u8> = {
         let mut m = HashMap::new();
         m.insert(0, 1);
-        m.insert(1, 6);
-        m.insert(2, 12);
-        m.insert(3, 29);
-        m.insert(4, 38);
-        m.insert(5, 50);
-        m.insert(6, 38);
-        m.insert(7, 29);
-        m.insert(8, 12);
-        m.insert(9, 6);
-        m.insert(10, 1);
+        m.insert(1, 1);
+        m.insert(2, 6);
+        m.insert(3, 12);
+        m.insert(4, 29);
+        m.insert(5, 38);
+        m.insert(6, 50);
+        m.insert(7, 38);
+        m.insert(8, 29);
+        m.insert(9, 12);
+        m.insert(10, 6);
         m.insert(11, 1);
+        m.insert(12, 1);
         m
     };
 
