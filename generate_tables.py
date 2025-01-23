@@ -33,25 +33,23 @@ def rustify_value(value):
 
 
 def generate_forte_table():
-    rust_code = f"""
-    pub(crate) static ref FORTE: Vec<Vec<Option<TNIStructure>>> = vec![
-        // Index 0 is unused (Cardinality 0 {CARDINALITIES[0]})
-        vec![],
-    """
+    rust_code = (
+        "\n    pub(crate) static ref FORTE: Vec<Vec<Option<TNIStructure>>> = vec!["
+    )
 
-    for card in range(1, len(tables.FORTE)):
+    for card in range(0, len(tables.FORTE)):
+        if card == 0:
+            rust_code += f"\n        // Cardinality {card} {CARDINALITIES[card]}\n"
+            rust_code += "        vec![],\n"
+            continue
         card_data = tables.FORTE[card]
-        if card == 1:
-            rust_code += f"    // Cardinality {card} {CARDINALITIES[card]}\n"
-        else:
-            rust_code += f"        // Cardinality {card} {CARDINALITIES[card]}\n"
+        rust_code += f"        // Cardinality {card} {CARDINALITIES[card]}\n"
         rust_code += "        vec![\n"
-        rust_code += "            None, // Index 0 unused\n"
 
-        for i in range(1, len(card_data)):
+        for i in range(0, len(card_data)):
             entry = card_data[i]
             if entry is None:
-                rust_code += "            None,\n"
+                rust_code += "            None, // Index 0 unused\n"
             else:
                 pcs, icv, inv_vec, z_relation = entry
                 pcs_vec = f"vec!{list(pcs)}"
@@ -85,32 +83,30 @@ def generate_cardinality_to_chord_members_rust():
 
     rust_code += "\n        let mut outer = HashMap::new();\n"
 
-    rust_code += f"        // Cardinality 0 {CARDINALITIES[0]}\n"
-
-    rust_code += "        let inner_0 = HashMap::new();\n"
-    rust_code += "        outer.insert(0, inner_0);\n"
-
     for card in range(1, len(tables.FORTE)):
         rust_code += f"        // Cardinality {card} {CARDINALITIES[card]}\n"
         rust_code += f"        let mut inner_{card} = HashMap::new();\n"
 
         card_data = tables.FORTE[card]
-        for forte_idx in range(1, len(card_data)):
-            entry = card_data[forte_idx]
-            if entry is None:
-                continue
+        if card != 0:
+            for forte_idx in range(1, len(card_data)):
+                entry = card_data[forte_idx]
+                if entry is None:
+                    continue
 
-            pcs, icv, inv_vec, z_rel = entry
-            has_distinct = inv_vec[1] == 0
+                pcs, icv, inv_vec, z_rel = entry
+                has_distinct = inv_vec[1] == 0
 
-            # Original entry
-            key = (forte_idx, 1 if has_distinct else 0)
-            rust_code += f"        inner_{card}.insert({key}, (vec!{list(pcs)}, vec!{list(inv_vec)}, vec!{list(icv)}));\n"
+                # Original entry
+                key = (forte_idx, 1 if has_distinct else 0)
+                rust_code += f"        inner_{card}.insert({key}, (vec!{list(pcs)}, vec!{list(inv_vec)}, vec!{list(icv)}));\n"
 
-            if has_distinct:
-                # Inverted entry
-                inv_pcs = tables.inversionDefaultPitchClasses.get((card, forte_idx), [])
-                rust_code += f"        inner_{card}.insert(({forte_idx}, -1), (vec!{list(inv_pcs)}, vec!{list(inv_vec)}, vec!{list(icv)}));\n"
+                if has_distinct:
+                    # Inverted entry
+                    inv_pcs = tables.inversionDefaultPitchClasses.get(
+                        (card, forte_idx), []
+                    )
+                    rust_code += f"        inner_{card}.insert(({forte_idx}, -1), (vec!{list(inv_pcs)}, vec!{list(inv_vec)}, vec!{list(icv)}));\n"
 
         rust_code += f"        outer.insert({card}, inner_{card});\n"
 

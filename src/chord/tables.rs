@@ -24,7 +24,7 @@ type TNIStructure = (Vec<u8>, Vec<u8>, Vec<u8>, u8);
 // BEGIN_GENERATED_CODE
 lazy_static! {
     pub(crate) static ref FORTE: Vec<Vec<Option<TNIStructure>>> = vec![
-        // Index 0 is unused (Cardinality 0 None)
+        // Cardinality 0 None
         vec![],
         // Cardinality 1 monad
         vec![
@@ -433,9 +433,6 @@ lazy_static! {
 
     pub(crate) static ref CARDINALITY_TO_CHORD_MEMBERS: HashMap<u8, HashMap<(u8, i8), (Vec<u8>, Vec<u8>, Vec<u8>)>> = {
         let mut outer = HashMap::new();
-        // Cardinality 0 None
-        let inner_0 = HashMap::new();
-        outer.insert(0, inner_0);
         // Cardinality 1 monad
         let mut inner_1 = HashMap::new();
         inner_1.insert((1, 0), (vec![0], vec![1, 1, 1, 1, 11, 11, 11, 11], vec![0, 0, 0, 0, 0, 0]));
