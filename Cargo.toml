@@ -1,9 +1,16 @@
 [package]
-name = "music21_rs"
-version = "0.1.0"
+authors = ["hill <hill@hilll.dev>"]
+description = "a rust port of music21 (for now just the chord naming algorithm)"
 edition = "2021"
+keywords = ["music", "chords", "music21"]
+license = "LICENSE"
+name = "music21-rs"
+repository = "https://github.com/float3/music21-rs"
+version = "0.0.1"
+build = "build.rs"
 
 [dependencies]
 fraction = "0.15.3"
+lazy_static = "1.5.0"
 num = "0.4.3"
 num-traits = "0.2.19"
