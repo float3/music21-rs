@@ -1,0 +1,9 @@
+[package]
+name = "music21-rs"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+fraction = "0.15.3"
+num = "0.4.3"
+num-traits = "0.2.19"
