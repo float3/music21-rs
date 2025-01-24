@@ -13,7 +13,7 @@ pub(crate) enum Exception {
     Pitch(String),
     Microtone(String),
     Accidental(String),
-    ChordTable(String),
+    ChordTables(String),
 }
 
 impl Display for Exception {

@@ -124,7 +124,7 @@ def generate_inversion_default_pitch_class():
     return rust_code
 
 
-def generate_cardinality_to_chord_members_rust():
+def generate_cardinality_to_chord_members():
     rust_code = "\n    pub(crate) static ref CARDINALITY_TO_CHORD_MEMBERS: CardinalityToChordMembers = {"
 
     rust_code += "\n        let mut outer = HashMap::new();\n"
@@ -168,27 +168,25 @@ def generate_cardinality_to_chord_members_rust():
 
 
 def generate_maximum_index_number_without_inversion_equivalence():
-    rust_code = "\n    pub(crate) static ref MAXIMUM_INDEX_NUMBER_WITHOUT_INVERSION_EQUIVALENCE: HashMap<u8, u8> = {"
-    rust_code += "        let mut m = HashMap::new();\n"
+    rust_code = "\n    pub(crate) static ref MAXIMUM_INDEX_NUMBER_WITHOUT_INVERSION_EQUIVALENCE: Vec<u8> = vec!["
     for idx in range(0, len(tables.maximumIndexNumberWithoutInversionEquivalence)):
-        rust_code += f"        m.insert({idx}, {tables.maximumIndexNumberWithoutInversionEquivalence[idx]});\n"
-    rust_code += "        m\n"
-    rust_code += "    };\n"
+        rust_code += f"{tables.maximumIndexNumberWithoutInversionEquivalence[idx]}, "
+    rust_code = rust_code.rstrip(", ")  # Remove the trailing comma and space
+    rust_code += "];\n"
     return rust_code
 
 
 def generate_maximum_index_number_with_inversion_equivalence():
-    rust_code = "\n    pub(crate) static ref MAXIMUM_INDEX_NUMBER_WITH_INVERSION_EQUIVALENCE: HashMap<u8, u8> = {"
-    rust_code += "\n        let mut m = HashMap::new();\n"
+    rust_code = "\n\n    pub(crate) static ref MAXIMUM_INDEX_NUMBER_WITH_INVERSION_EQUIVALENCE: Vec<u8> = vec!["
     for idx in range(0, len(tables.maximumIndexNumberWithInversionEquivalence)):
-        rust_code += f"        m.insert({idx}, {tables.maximumIndexNumberWithInversionEquivalence[idx]});\n"
-    rust_code += "        m\n"
-    rust_code += "    };\n"
+        rust_code += f"{tables.maximumIndexNumberWithInversionEquivalence[idx]}, "
+    rust_code = rust_code.rstrip(", ")  # Remove the trailing comma and space
+    rust_code += "];\n"
     return rust_code
 
 
 def generate_forte_number_with_inversion_to_tn_index():
-    rust_code = "\n    pub(crate) static ref FORTE_NUMBER_WITH_INVERSION_TO_INDEX: HashMap<(u8, u8, i8), u8> = {"
+    rust_code = "\n\n    pub(crate) static ref FORTE_NUMBER_WITH_INVERSION_TO_INDEX: HashMap<(u8, u8, i8), u8> = {"
     rust_code += "\n        let mut m = HashMap::new();\n"
     for key, i in tables.forteNumberWithInversionToTnIndex.items():
         card, idx, inv = key
@@ -227,7 +225,7 @@ def generate_rust_tables():
     rust_code = "lazy_static! {\n"
     rust_code += generate_forte_table()
     rust_code += generate_inversion_default_pitch_class()
-    rust_code += generate_cardinality_to_chord_members_rust()
+    # rust_code += generate_cardinality_to_chord_members()
     rust_code += generate_maximum_index_number_without_inversion_equivalence()
     rust_code += generate_maximum_index_number_with_inversion_equivalence()
     rust_code += generate_forte_number_with_inversion_to_tn_index()
