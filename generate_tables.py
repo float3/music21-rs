@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import sys
+import argparse
+from pathlib import Path
 
 sys.path.append("./music21")
 from music21.chord import tables
@@ -20,7 +22,6 @@ CARDINALITIES = [
     "duodecachord",
 ]
 
-
 def rustify_value(value):
     """Convert Python values to Rust equivalents with proper type handling"""
     if value is None:
@@ -32,6 +33,7 @@ def rustify_value(value):
     return str(value)
 
 
+# TODO: Implement NoneMode for FORTE table
 def generate_forte_table():
     rust_code = (
         "\n    pub(crate) static ref FORTE: Vec<Vec<Option<TNIStructure>>> = vec!["
@@ -64,7 +66,6 @@ def generate_forte_table():
 
     return rust_code
 
-
 def generate_inversion_default_pitch_class():
     rust_code = "\n    pub(crate) static ref INVERSION_DEFAULT_PITCH_CLASSES: HashMap<(u8, u8), Vec<u8>> = {"
 
@@ -77,13 +78,17 @@ def generate_inversion_default_pitch_class():
 
     return rust_code
 
-
 def generate_cardinality_to_chord_members_rust():
     rust_code = "\n    pub(crate) static ref CARDINALITY_TO_CHORD_MEMBERS: HashMap<u8, HashMap<(u8, i8), (Vec<u8>, Vec<u8>, Vec<u8>)>> = {"
 
     rust_code += "\n        let mut outer = HashMap::new();\n"
 
-    for card in range(1, len(tables.FORTE)):
+    if NoneMode:
+        x = 0
+    else:
+        x = 1
+
+    for card in range(x, len(tables.FORTE)):
         rust_code += f"        // Cardinality {card} {CARDINALITIES[card]}\n"
         rust_code += f"        let mut inner_{card} = HashMap::new();\n"
 
@@ -147,7 +152,10 @@ def generate_forte_number_with_inversion_to_tn_index():
 
 
 def generate_tn_index_to_chord_info():
-    rust_code = "\n    pub(crate) static ref TN_INDEX_TO_CHORD_INFO: HashMap<(u8, u8, i8), Option<Vec<&'static str>>> = {"
+    if NoneMode:
+        rust_code = "\n    pub(crate) static ref TN_INDEX_TO_CHORD_INFO: HashMap<(u8, u8, i8), Option<Vec<&'static str>>> = {"
+    else:
+        rust_code = "\n    pub(crate) static ref TN_INDEX_TO_CHORD_INFO: HashMap<(u8, u8, i8), Vec<&'static str>> = {"
 
     rust_code += "\n        let mut m = HashMap::new();\n"
     for key, info in tables.tnIndexToChordInfo.items():
@@ -155,10 +163,15 @@ def generate_tn_index_to_chord_info():
         names = info.get("name", [])
         if names:
             names_str = ", ".join(f'"{n}"' for n in names)
-            rust_code += (
-                f"        m.insert(({card}, {idx}, {inv}), Some(vec![{names_str}]));\n"
-            )
-        else:
+            if NoneMode:
+                rust_code += (
+                    f"        m.insert(({card}, {idx}, {inv}), Some(vec![{names_str}]));\n"
+                )
+            else:
+                rust_code += (
+                    f"        m.insert(({card}, {idx}, {inv}), vec![{names_str}]);\n"
+                )
+        elif NoneMode:
             rust_code += f"        m.insert(({card}, {idx}, {inv}), None);\n"
     rust_code += "        m\n"
     rust_code += "    };\n"
@@ -177,16 +190,47 @@ def generate_rust_tables():
     rust_code += "}\n"
     return rust_code
 
+NoneMode: bool = False
+
+def main():
+    parser = argparse.ArgumentParser(description="Generate Rust chord tables.")
+    parser.add_argument(
+        "--NoneMode",
+        action="store_true",
+        help="Enable NoneMode functionality",
+    )
+    args = parser.parse_args()
+
+    global NoneMode 
+    NoneMode = args.NoneMode
+
+    rust = generate_rust_tables()
+
+    try:
+        file_path = Path("src/chord/tables.rs")
+        if not file_path.exists():
+            raise FileNotFoundError(f"File {file_path} does not exist.")
+
+        with file_path.open("r+") as f:
+            content = f.read()
+            start = content.find("// BEGIN_GENERATED_CODE") + len(
+                "// BEGIN_GENERATED_CODE\n"
+            )
+            end = content.find("// END_GENERATED_CODE")
+
+            if start == -1 or end == -1:
+                raise ValueError("Missing markers for generated code in the target file.")
+
+            new_content = content[:start] + rust + content[end:]
+            f.seek(0)
+            f.write(new_content)
+            f.truncate()
+
+        print("Rust tables generated successfully.")
+
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
 
 if __name__ == "__main__":
-    rust = generate_rust_tables()
-    with open("src/chord/tables.rs", "r+") as f:
-        content = f.read()
-        start = content.find("// BEGIN_GENERATED_CODE") + len(
-            "// BEGIN_GENERATED_CODE\n"
-        )
-        end = content.find("// END_GENERATED_CODE")
-        new_content = content[:start] + rust + content[end:]
-        f.seek(0)
-        f.write(new_content)
-        f.truncate()
+    main()
