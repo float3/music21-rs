@@ -3173,9 +3173,7 @@ fn forte_index_to_inversions_available(card: u8, index: u8) -> Result<Vec<i8>, E
     }
     if index < 1
         || index
-            > *MAXIMUM_INDEX_NUMBER_WITHOUT_INVERSION_EQUIVALENCE
-                .get(&card)
-                .unwrap()
+            > *MAXIMUM_INDEX_NUMBER_WITHOUT_INVERSION_EQUIVALENCE[card]
     {
         return Err(Exception::ChordTables(format!(
             "index {} not valid for cardinality {}",
