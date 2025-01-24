@@ -2,4 +2,5 @@
 
 python3 -m venv venv
 ./venv/bin/pip3 install -r ./music21/requirements.txt
-./venv/bin/python3 -m generate_tables
+./venv/bin/python3 -m generate_tables #--NoneMode
+cargo fmt

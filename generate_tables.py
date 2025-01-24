@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-import sys
 import argparse
+import sys
 from pathlib import Path
 
 sys.path.append("./music21")
@@ -23,6 +23,7 @@ CARDINALITIES = [
     "duodecachord",
 ]
 
+
 def rustify_value(value):
     """Convert Python values to Rust equivalents with proper type handling"""
     if value is None:
@@ -40,50 +41,52 @@ def generate_forte_table():
         rust_code = (
             "    pub(crate) static ref FORTE: Vec<Vec<Option<TNIStructure>>> = vec![\n"
         )
-    
+
         for card in range(len(tables.FORTE)):
             # Add a comment for each cardinality
-            rust_code += f"        // Cardinality {card} {CARDINALITIES[card]}\n"
-            
+            if Comments:
+                rust_code += f"        // Cardinality {card} {CARDINALITIES[card]}\n"
+
             if card == 0:
                 # For the 0th element, use an empty vector
                 rust_code += "        vec![],\n"
                 continue
-            
+
             card_data = tables.FORTE[card]
             rust_code += "        vec![\n"
 
             for i, entry in enumerate(card_data):
                 if entry is None:
                     # Use None for entries that are not present
-                    rust_code += "            None, // Index {} unused\n".format(i)
+                    rust_code += "            None,"
+                    if Comments:
+                        rust_code += f"// Index {i} unused"
                 else:
                     pcs, icv, inv_vec, z_relation = entry
                     pcs_vec = f"vec!{list(pcs)}"
                     icv_vec = f"vec!{list(icv)}"
                     inv_vec_vec = f"vec!{list(inv_vec)}"
                     z_rel = "None" if z_relation is None else f"{z_relation}"
-                    rust_code += f"            Some(({pcs_vec}, {icv_vec}, {inv_vec_vec}, {z_rel})),\n"
+                    rust_code += f"\n            Some(({pcs_vec}, {icv_vec}, {inv_vec_vec}, {z_rel})),\n"
 
             rust_code += "        ],\n"
-    
+        rust_code += "    ];\n"
+
     else:
         # Generate code for Vec<HashMap<TNIStructure>>
-        rust_code = (
-            "    pub(crate) static ref FORTE: Vec<HashMap<u8, TNIStructure>> = vec!["
-        )
-    
+        rust_code = "    pub(crate) static ref FORTE: HashMap<u8, HashMap<u8, TNIStructure>> = {"
+        rust_code += "\n        let mut outer = HashMap::new();\n"
+
         for card in range(len(tables.FORTE)):
-            # Add a comment for each cardinality
-            rust_code += f"\n        // Cardinality {card} {CARDINALITIES[card]}\n"
-            
+            if Comments:
+                rust_code += f"\n        // Cardinality {card} {CARDINALITIES[card]}\n"
+
             if card == 0:
-                # For the 0th element, use an empty HashMap
-                rust_code += "        HashMap::new(),\n"
+                # For the 0th element, skip
                 continue
-            
+
             card_data = tables.FORTE[card]
-            rust_code += "        { \n            let mut map = HashMap::new();\n"
+            rust_code += f"\n        let mut inner_{card} = HashMap::new();\n"
 
             for i, entry in enumerate(card_data):
                 if entry is None:
@@ -97,14 +100,14 @@ def generate_forte_table():
                     inv_vec_vec = f"vec!{list(inv_vec)}"
                     z_rel = "None" if z_relation is None else f"{z_relation}"
                     # Define the key (TNIStructure) and value (YourValueType)
-                    key = f"TNIStructure {{ pcs: {pcs_vec}, icv: {icv_vec}, inv_vec: {inv_vec_vec}, z_relation: {z_rel} }}"
-                    value = "YourValue"  # Replace with the actual value type or computation
-                    rust_code += f"            map.insert({key}, {value});\n"
+                    value = f"({pcs_vec}, {icv_vec}, {inv_vec_vec}, {z_rel})"
+                    key = f"{i}"
+                    rust_code += f"        inner_{card}.insert({key}, {value});\n"
 
-            rust_code += "            map\n        },\n"
-    
-    rust_code += "    ];\n"
-    
+            rust_code += f"        outer.insert({card},inner_{card});\n"
+        rust_code += "        outer\n"
+        rust_code += "    };\n"
+
     return rust_code
 
 
@@ -120,6 +123,7 @@ def generate_inversion_default_pitch_class():
 
     return rust_code
 
+
 def generate_cardinality_to_chord_members_rust():
     rust_code = "\n    pub(crate) static ref CARDINALITY_TO_CHORD_MEMBERS: CardinalityToChordMembers = {"
 
@@ -128,7 +132,8 @@ def generate_cardinality_to_chord_members_rust():
     for card in range(len(tables.FORTE)):
         if NoneMode == False and card == 0:
             continue
-        rust_code += f"        // Cardinality {card} {CARDINALITIES[card]}\n"
+        if Comments:
+            rust_code += f"        // Cardinality {card} {CARDINALITIES[card]}\n"
         if card == 0:
             rust_code += f"        let inner_{card} = HashMap::new();\n"
         else:
@@ -206,9 +211,7 @@ def generate_tn_index_to_chord_info():
         if names:
             names_str = ", ".join(f'"{n}"' for n in names)
             if NoneMode:
-                rust_code += (
-                    f"        m.insert(({card}, {idx}, {inv}), Some(vec![{names_str}]));\n"
-                )
+                rust_code += f"        m.insert(({card}, {idx}, {inv}), Some(vec![{names_str}]));\n"
             else:
                 rust_code += (
                     f"        m.insert(({card}, {idx}, {inv}), vec![{names_str}]);\n"
@@ -221,7 +224,7 @@ def generate_tn_index_to_chord_info():
 
 
 def generate_rust_tables():
-    rust_code = ""
+    rust_code = "lazy_static! {\n"
     rust_code += generate_forte_table()
     rust_code += generate_inversion_default_pitch_class()
     rust_code += generate_cardinality_to_chord_members_rust()
@@ -229,27 +232,46 @@ def generate_rust_tables():
     rust_code += generate_maximum_index_number_with_inversion_equivalence()
     rust_code += generate_forte_number_with_inversion_to_tn_index()
     rust_code += generate_tn_index_to_chord_info()
-    rust_code += "\n"
+    rust_code += "}\n"
     return rust_code
 
+
 NoneMode: bool = False
+Comments: bool = False
+
 
 def main():
     parser = argparse.ArgumentParser(description="Generate Rust chord tables.")
     parser.add_argument(
         "--NoneMode",
+        "-n",
         action="store_true",
         help="Enable NoneMode functionality",
     )
+    parser.add_argument(
+        "--output",
+        "-o",
+        type=str,
+        default="src/chord/tables.rs",
+        help="Output file path",
+    )
+    parser.add_argument(
+        "--Comments",
+        "-c",
+        action="store_true",
+        help="Enable comments in the generated code",
+    )
     args = parser.parse_args()
 
-    global NoneMode 
+    global NoneMode
+    global Comments
     NoneMode = args.NoneMode
+    Comments = args.Comments
 
     rust = generate_rust_tables()
 
     try:
-        file_path = Path("src/chord/tables.rs")
+        file_path = Path(args.output)
         if not file_path.exists():
             raise FileNotFoundError(f"File {file_path} does not exist.")
 
@@ -261,7 +283,9 @@ def main():
             end = content.find("// END_GENERATED_CODE")
 
             if start == -1 or end == -1:
-                raise ValueError("Missing markers for generated code in the target file.")
+                raise ValueError(
+                    "Missing markers for generated code in the target file."
+                )
 
             new_content = content[:start] + rust + content[end:]
             f.seek(0)
@@ -273,6 +297,7 @@ def main():
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()
