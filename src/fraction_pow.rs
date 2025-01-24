@@ -43,11 +43,7 @@ where
             }
         };
 
-        if exponent.is_negative() {
-            GenericFraction::new(denom, numer)
-        } else {
-            GenericFraction::new(numer, denom)
-        }
+        GenericFraction::new(numer, denom)
     }
 }
 
