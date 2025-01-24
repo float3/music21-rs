@@ -168,7 +168,7 @@ def generate_cardinality_to_chord_members():
 
 
 def generate_maximum_index_number_without_inversion_equivalence():
-    rust_code = "\n    pub(crate) static ref MAXIMUM_INDEX_NUMBER_WITHOUT_INVERSION_EQUIVALENCE: Vec<u8> = vec!["
+    rust_code = "\n    pub(crate) static MAXIMUM_INDEX_NUMBER_WITHOUT_INVERSION_EQUIVALENCE: Vec<u8> = vec!["
     for idx in range(0, len(tables.maximumIndexNumberWithoutInversionEquivalence)):
         rust_code += f"{tables.maximumIndexNumberWithoutInversionEquivalence[idx]}, "
     rust_code = rust_code.rstrip(", ")  # Remove the trailing comma and space
@@ -177,7 +177,7 @@ def generate_maximum_index_number_without_inversion_equivalence():
 
 
 def generate_maximum_index_number_with_inversion_equivalence():
-    rust_code = "\n\n    pub(crate) static ref MAXIMUM_INDEX_NUMBER_WITH_INVERSION_EQUIVALENCE: Vec<u8> = vec!["
+    rust_code = "\n\n    pub(crate) static MAXIMUM_INDEX_NUMBER_WITH_INVERSION_EQUIVALENCE: Vec<u8> = vec!["
     for idx in range(0, len(tables.maximumIndexNumberWithInversionEquivalence)):
         rust_code += f"{tables.maximumIndexNumberWithInversionEquivalence[idx]}, "
     rust_code = rust_code.rstrip(", ")  # Remove the trailing comma and space
@@ -226,11 +226,11 @@ def generate_rust_tables():
     rust_code += generate_forte_table()
     rust_code += generate_inversion_default_pitch_class()
     # rust_code += generate_cardinality_to_chord_members()
-    rust_code += generate_maximum_index_number_without_inversion_equivalence()
-    rust_code += generate_maximum_index_number_with_inversion_equivalence()
     rust_code += generate_forte_number_with_inversion_to_tn_index()
     rust_code += generate_tn_index_to_chord_info()
     rust_code += "}\n"
+    rust_code += generate_maximum_index_number_without_inversion_equivalence()
+    rust_code += generate_maximum_index_number_with_inversion_equivalence()
     return rust_code
 
 
