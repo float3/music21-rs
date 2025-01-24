@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::defaults::IntegerType;
 
 #[derive(Debug, Copy, Clone)]
@@ -60,61 +62,69 @@ impl TryFrom<IntegerType> for Ordinal {
     }
 }
 
-impl Ordinal {
-    pub(crate) fn from_string(value: &str) -> Option<Ordinal> {
+impl TryFrom<&str> for Ordinal {
+    type Error = ();
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
         match value.to_lowercase().as_str() {
-            "zeroth" => Some(Ordinal::Zeroth),
-            "first" => Some(Ordinal::First),
-            "second" => Some(Ordinal::Second),
-            "third" => Some(Ordinal::Third),
-            "fourth" => Some(Ordinal::Fourth),
-            "fifth" => Some(Ordinal::Fifth),
-            "sixth" => Some(Ordinal::Sixth),
-            "seventh" => Some(Ordinal::Seventh),
-            "eighth" => Some(Ordinal::Eighth),
-            "ninth" => Some(Ordinal::Ninth),
-            "tenth" => Some(Ordinal::Tenth),
-            "eleventh" => Some(Ordinal::Eleventh),
-            "twelfth" => Some(Ordinal::Twelfth),
-            "thirteenth" => Some(Ordinal::Thirteenth),
-            "fourteenth" => Some(Ordinal::Fourteenth),
-            "fifteenth" => Some(Ordinal::Fifteenth),
-            "sixteenth" => Some(Ordinal::Sixteenth),
-            "seventeenth" => Some(Ordinal::Seventeenth),
-            "eighteenth" => Some(Ordinal::Eighteenth),
-            "nineteenth" => Some(Ordinal::Nineteenth),
-            "twentieth" => Some(Ordinal::Twentieth),
-            "twenty-first" => Some(Ordinal::TwentyFirst),
-            "twenty-second" => Some(Ordinal::TwentySecond),
-            _ => None,
+            "zeroth" => Ok(Ordinal::Zeroth),
+            "first" => Ok(Ordinal::First),
+            "second" => Ok(Ordinal::Second),
+            "third" => Ok(Ordinal::Third),
+            "fourth" => Ok(Ordinal::Fourth),
+            "fifth" => Ok(Ordinal::Fifth),
+            "sixth" => Ok(Ordinal::Sixth),
+            "seventh" => Ok(Ordinal::Seventh),
+            "eighth" => Ok(Ordinal::Eighth),
+            "ninth" => Ok(Ordinal::Ninth),
+            "tenth" => Ok(Ordinal::Tenth),
+            "eleventh" => Ok(Ordinal::Eleventh),
+            "twelfth" => Ok(Ordinal::Twelfth),
+            "thirteenth" => Ok(Ordinal::Thirteenth),
+            "fourteenth" => Ok(Ordinal::Fourteenth),
+            "fifteenth" => Ok(Ordinal::Fifteenth),
+            "sixteenth" => Ok(Ordinal::Sixteenth),
+            "seventeenth" => Ok(Ordinal::Seventeenth),
+            "eighteenth" => Ok(Ordinal::Eighteenth),
+            "nineteenth" => Ok(Ordinal::Nineteenth),
+            "twentieth" => Ok(Ordinal::Twentieth),
+            "twenty-first" => Ok(Ordinal::TwentyFirst),
+            "twenty-second" => Ok(Ordinal::TwentySecond),
+            _ => Err(()),
         }
     }
+}
 
-    pub(crate) fn to_string(&self) -> String {
-        match self {
-            Ordinal::Zeroth => "zeroth".to_string(),
-            Ordinal::First => "first".to_string(),
-            Ordinal::Second => "second".to_string(),
-            Ordinal::Third => "third".to_string(),
-            Ordinal::Fourth => "fourth".to_string(),
-            Ordinal::Fifth => "fifth".to_string(),
-            Ordinal::Sixth => "sixth".to_string(),
-            Ordinal::Seventh => "seventh".to_string(),
-            Ordinal::Eighth => "eighth".to_string(),
-            Ordinal::Ninth => "ninth".to_string(),
-            Ordinal::Tenth => "tenth".to_string(),
-            Ordinal::Eleventh => "eleventh".to_string(),
-            Ordinal::Twelfth => "twelfth".to_string(),
-            Ordinal::Thirteenth => "thirteenth".to_string(),
-            Ordinal::Fourteenth => "fourteenth".to_string(),
-            Ordinal::Fifteenth => "fifteenth".to_string(),
-            Ordinal::Sixteenth => "sixteenth".to_string(),
-            Ordinal::Seventeenth => "seventeenth".to_string(),
-            Ordinal::Eighteenth => "eighteenth".to_string(),
-            Ordinal::Nineteenth => "nineteenth".to_string(),
-            Ordinal::Twentieth => "twentieth".to_string(),
-            Ordinal::TwentyFirst => "twenty-first".to_string(),
-            Ordinal::TwentySecond => "twenty-second".to_string(),
-        }
+impl Display for Ordinal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let x: String = {
+            let this = &self;
+            match this {
+                Ordinal::Zeroth => "zeroth".to_string(),
+                Ordinal::First => "first".to_string(),
+                Ordinal::Second => "second".to_string(),
+                Ordinal::Third => "third".to_string(),
+                Ordinal::Fourth => "fourth".to_string(),
+                Ordinal::Fifth => "fifth".to_string(),
+                Ordinal::Sixth => "sixth".to_string(),
+                Ordinal::Seventh => "seventh".to_string(),
+                Ordinal::Eighth => "eighth".to_string(),
+                Ordinal::Ninth => "ninth".to_string(),
+                Ordinal::Tenth => "tenth".to_string(),
+                Ordinal::Eleventh => "eleventh".to_string(),
+                Ordinal::Twelfth => "twelfth".to_string(),
+                Ordinal::Thirteenth => "thirteenth".to_string(),
+                Ordinal::Fourteenth => "fourteenth".to_string(),
+                Ordinal::Fifteenth => "fifteenth".to_string(),
+                Ordinal::Sixteenth => "sixteenth".to_string(),
+                Ordinal::Seventeenth => "seventeenth".to_string(),
+                Ordinal::Eighteenth => "eighteenth".to_string(),
+                Ordinal::Nineteenth => "nineteenth".to_string(),
+                Ordinal::Twentieth => "twentieth".to_string(),
+                Ordinal::TwentyFirst => "twenty-first".to_string(),
+                Ordinal::TwentySecond => "twenty-second".to_string(),
+            }
+        };
+        write!(f, "{}", x)
     }
 }

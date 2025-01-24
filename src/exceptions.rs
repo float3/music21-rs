@@ -8,11 +8,12 @@ pub(crate) type ExceptionResult<T> = Result<T, Exception>;
 
 #[derive(Debug)]
 pub(crate) enum Exception {
-    Music21ObjectException(String),
-    ChordException(String),
-    PitchException(String),
-    MicrotoneException(String),
-    AccidentalException(String),
+    Music21Object(String),
+    Chord(String),
+    Pitch(String),
+    Microtone(String),
+    Accidental(String),
+    ChordTable(String),
 }
 
 impl Display for Exception {

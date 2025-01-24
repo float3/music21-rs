@@ -17,6 +17,10 @@ where
     type Output = GenericFraction<T>;
 
     fn pow(self, exponent: IntegerType) -> GenericFraction<T> {
+        if self.numer() == Some(&T::zero()) && exponent.is_negative() {
+            return GenericFraction::Infinity(fraction::Sign::Plus);
+        }
+
         let (numer, denom) = match exponent.cmp(&0) {
             Ordering::Greater => (self.numer(), self.denom()),
             Ordering::Less => (self.denom(), self.numer()),

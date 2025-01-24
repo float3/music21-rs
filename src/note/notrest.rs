@@ -2,7 +2,7 @@ use super::generalnote::{GeneralNote, GeneralNoteTrait};
 use crate::{base::Music21ObjectTrait, defaults::IntegerType, prebase::ProtoM21ObjectTrait};
 
 #[derive(Clone, Debug)]
-pub(crate) struct NotRest {
+pub struct NotRest {
     general_note: GeneralNote,
 }
 
@@ -24,7 +24,7 @@ impl Music21ObjectTrait for NotRest {}
 
 impl ProtoM21ObjectTrait for NotRest {}
 
-pub(crate) trait IntoNotRests {
+pub trait IntoNotRests {
     fn into(self) -> Vec<NotRest>;
 }
 
@@ -40,7 +40,19 @@ impl IntoNotRests for String {
     }
 }
 
+impl IntoNotRests for &str {
+    fn into(self) -> Vec<NotRest> {
+        todo!()
+    }
+}
+
 impl IntoNotRests for Vec<String> {
+    fn into(self) -> Vec<NotRest> {
+        todo!()
+    }
+}
+
+impl IntoNotRests for Vec<&str> {
     fn into(self) -> Vec<NotRest> {
         todo!()
     }
