@@ -5,7 +5,8 @@ fn main() {
     let script_path = PathBuf::from("./generate_tables.sh");
     let python_path = PathBuf::from("./generate_tables.py");
 
-    let status = Command::new(script_path.clone())
+    let status = Command::new("sh")
+        .arg(&script_path.clone())
         .status()
         .expect("Failed to execute command");
 
@@ -16,8 +17,4 @@ fn main() {
     println!("cargo:rerun-if-changed={}", script_path.display());
     println!("cargo:rerun-if-changed={}", python_path.display());
     println!("cargo:rerun-if-changed=music21/music21/chord/tables.py");
-    Command::new("cargo")
-        .arg("fmt")
-        .status()
-        .expect("Failed to execute command");
 }
