@@ -27,6 +27,10 @@
             clang
             llvmPackages.bintools
             rustup
+            git
+            python3
+            python3Packages.virtualenv
+            rustfmt
           ];
 
           RUSTC_VERSION = overrides.toolchain.channel;
