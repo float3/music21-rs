@@ -29,7 +29,6 @@ name = "music21-rs"
 version = "0.0.1"
 dependencies = [
  "fraction",
- "lazy_static",
  "num",
  "num-traits",
 ]
