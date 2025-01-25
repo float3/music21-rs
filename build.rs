@@ -5,7 +5,7 @@ fn main() {
     let script_path = PathBuf::from("./generate_tables.sh");
     let python_path = PathBuf::from("./generate_tables.py");
 
-    let status = Command::new("sh")
+    let status = Command::new("bash")
         .arg(&script_path.clone())
         .status()
         .expect("Failed to execute command");
