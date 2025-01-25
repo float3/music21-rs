@@ -1433,7 +1433,6 @@ static FORTE: LazyLock<Vec<Vec<Option<TNIStructure>>>> = LazyLock::new(|| {
         ],
     ]
 });
-
 static INVERSION_DEFAULT_PITCH_CLASSES: LazyLock<HashMap<(u8, u8), Vec<u8>>> =
     LazyLock::new(|| {
         let mut m = HashMap::new();
@@ -1567,7 +1566,6 @@ static INVERSION_DEFAULT_PITCH_CLASSES: LazyLock<HashMap<(u8, u8), Vec<u8>>> =
         m.insert((9, 11), vec![0, 1, 2, 3, 5, 6, 8, 9, 10]);
         m
     });
-
 static FORTE_NUMBER_WITH_INVERSION_TO_INDEX: LazyLock<HashMap<U8U8SB, u8>> = LazyLock::new(|| {
     let mut m = HashMap::new();
     m.insert((1, 1, SuperBool::Zero), 1);
@@ -1923,7 +1921,6 @@ static FORTE_NUMBER_WITH_INVERSION_TO_INDEX: LazyLock<HashMap<U8U8SB, u8>> = Laz
     m.insert((12, 1, SuperBool::Zero), 1);
     m
 });
-
 static TN_INDEX_TO_CHORD_INFO: LazyLock<HashMap<U8U8SB, Option<Vec<&'static str>>>> = LazyLock::new(
     || {
         let mut m = HashMap::new();
@@ -2636,7 +2633,7 @@ static TN_INDEX_TO_CHORD_INFO: LazyLock<HashMap<U8U8SB, Option<Vec<&'static str>
                 "combinatorial I (I7)",
             ]),
         );
-        m.insert((6, 35, SuperBool::Zero), Some(vec!["whole tone scale", "6 equal part division", "F all-combinatorial (P1, P3, P5, P7, P9, P11, I1, I3, I5, I7, I9, I11, R2, R4, R6, R8, R10, RI2, RI4, RI6, RI8, RI10)", "Messiaen's mode 1", "sixth-order all combinatorial"]));
+        m.insert((6, 35, SuperBool::Zero),Some(vec!["whole tone scale", "6 equal part division", "F all-combinatorial (P1, P3, P5, P7, P9, P11, I1, I3, I5, I7, I9, I11, R2, R4, R6, R8, R10, RI2, RI4, RI6, RI8, RI10)", "Messiaen's mode 1", "sixth-order all combinatorial"]));
         m.insert((6, 36, SuperBool::One), None);
         m.insert((6, 36, SuperBool::NegativeOne), None);
         m.insert(
@@ -2952,15 +2949,11 @@ static TN_INDEX_TO_CHORD_INFO: LazyLock<HashMap<U8U8SB, Option<Vec<&'static str>
         m
     },
 );
-
 static MAXIMUM_INDEX_NUMBER_WITHOUT_INVERSION_EQUIVALENCE: LazyLock<Vec<u8>> =
     LazyLock::new(|| vec![1, 1, 6, 19, 43, 66, 80, 66, 43, 19, 6, 1, 1]);
-
 static MAXIMUM_INDEX_NUMBER_WITH_INVERSION_EQUIVALENCE: LazyLock<Vec<u8>> =
     LazyLock::new(|| vec![1, 1, 6, 12, 29, 38, 50, 38, 29, 12, 6, 1, 1]);
-
 // END_GENERATED_CODE
-
 /*
 # to access the data for a single form, use:
 # forte   [size(tetra)] = 4
