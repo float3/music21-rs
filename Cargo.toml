@@ -11,6 +11,5 @@ build = "build.rs"
 
 [dependencies]
 fraction = "0.15.3"
-lazy_static = "1.5.0"
 num = "0.4.3"
 num-traits = "0.2.19"
