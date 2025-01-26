@@ -31,6 +31,8 @@
             python3
             python3Packages.virtualenv
             rustfmt
+            vscode
+            code-cursor
           ];
 
           RUSTC_VERSION = overrides.toolchain.channel;

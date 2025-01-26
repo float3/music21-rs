@@ -97,14 +97,24 @@ impl TNITupleExt for TNIStructure {
 
 #[repr(i8)]
 #[derive(Eq, Hash, PartialEq)]
-enum SuperBool {
+enum Sign {
     NegativeOne = -1,
     Zero = 0,
     One = 1,
 }
 
-type U8SB = (u8, SuperBool);
-type U8U8SB = (u8, u8, SuperBool);
+type U8SB = (u8, Sign);
+type U8U8SB = (u8, u8, Sign);
+
+const CARDINALITIES: usize = 13;
+
+type Forte = LazyLock<[Vec<Option<TNIStructure>>; CARDINALITIES]>;
+type InversionDefaultPitchClasses = LazyLock<HashMap<(u8, u8), PitchClasses>>;
+type CardinalityToChordMembersGenerated = LazyLock<[HashMap<U8SB, Pcivicv>; CARDINALITIES]>;
+type ForteNumberWithInversionToIndex = LazyLock<HashMap<U8U8SB, u8>>;
+type TnIndexToChordInfo = LazyLock<HashMap<U8U8SB, Option<Vec<&'static str>>>>;
+type MaximumIndexNumberWithoutInversionEquivalence = LazyLock<Vec<u8>>;
+type MaximumIndexNumberWithInversionEquivalence = LazyLock<Vec<u8>>;
 
 static CARDINALITY_TO_CHORD_MEMBERS: LazyLock<HashMap<u8, HashMap<U8SB, Pcivicv>>> =
     LazyLock::new(|| {
@@ -118,11 +128,7 @@ static CARDINALITY_TO_CHORD_MEMBERS: LazyLock<HashMap<u8, HashMap<U8SB, Pcivicv>
                     continue;
                 };
                 let has_distinct = tni.interval_class_vector()[1] == 0;
-                let inv_num = if has_distinct {
-                    SuperBool::One
-                } else {
-                    SuperBool::Zero
-                };
+                let inv_num = if has_distinct { Sign::One } else { Sign::Zero };
                 entries.insert(
                     (forte_after_dash as u8, inv_num),
                     (
@@ -136,7 +142,7 @@ static CARDINALITY_TO_CHORD_MEMBERS: LazyLock<HashMap<u8, HashMap<U8SB, Pcivicv>
                         .get(&(cardinality as u8, forte_after_dash as u8))
                         .unwrap();
                     entries.insert(
-                        (forte_after_dash as u8, SuperBool::NegativeOne),
+                        (forte_after_dash as u8, Sign::NegativeOne),
                         (
                             inv_pitches,
                             tni.invariance_vector(),
@@ -150,7 +156,7 @@ static CARDINALITY_TO_CHORD_MEMBERS: LazyLock<HashMap<u8, HashMap<U8SB, Pcivicv>
         cardinality_to_chord_members
     });
 
-fn forte_index_to_inversions_available(card: u8, index: u8) -> Result<Vec<SuperBool>, Exception> {
+fn forte_index_to_inversions_available(card: u8, index: u8) -> Result<Vec<Sign>, Exception> {
     if !(1..=12).contains(&card) {
         return Err(Exception::ChordTables(format!(
             "cardinality {} not valid",
@@ -169,10 +175,10 @@ fn forte_index_to_inversions_available(card: u8, index: u8) -> Result<Vec<SuperB
     if let Some(entry) = &forte_entry[index as usize] {
         // second value stored inversion status
         if entry.invariance_vector()[1] > 0 {
-            inversions.push(SuperBool::Zero);
+            inversions.push(Sign::Zero);
         } else {
-            inversions.push(SuperBool::NegativeOne);
-            inversions.push(SuperBool::One);
+            inversions.push(Sign::NegativeOne);
+            inversions.push(Sign::One);
         }
     }
     Ok(inversions)

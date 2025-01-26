@@ -35,8 +35,8 @@ def rustify_value(value):
 
 
 def generate_forte_table():
-    # Generate code for Vec<Vec<Option<TNIStructure>>>
-    rust_code = "pub(super) static FORTE: LazyLock<Vec<Vec<Option<TNIStructure>>>> = LazyLock::new(|| {vec!["
+    # Generate code for [Vec<Option<TNIStructure>>; len(tables.FORTE)]
+    rust_code = f"pub(super) static FORTE: Forte = LazyLock::new(|| {{["
 
     for card in range(len(tables.FORTE)):
         # Add a comment for each cardinality
@@ -71,13 +71,13 @@ def generate_forte_table():
                 z_rel = "None" if z_relation is None else f"{z_relation}"
                 rust_code += f"Some(({pcs_vec}, {icv_vec}, {iv_vec}, {z_rel})),"
         rust_code += "],"
-    rust_code += "]});"
+    rust_code += "]\n});"
 
     return rust_code
 
 
 def generate_inversion_default_pitch_class():
-    rust_code = "pub(super) static INVERSION_DEFAULT_PITCH_CLASSES: LazyLock<HashMap<(u8, u8), PitchClasses>> = LazyLock::new(|| {"
+    rust_code = "pub(super) static INVERSION_DEFAULT_PITCH_CLASSES: InversionDefaultPitchClasses = LazyLock::new(|| {"
 
     rust_code += "let mut m = HashMap::new();"
     for card_forte, pcs in tables.inversionDefaultPitchClasses.items():
@@ -94,7 +94,7 @@ def generate_inversion_default_pitch_class():
 
 
 def generate_cardinality_to_chord_members():
-    rust_code = "    pub(super) static CARDINALITY_TO_CHORD_MEMBERS_GENERATED: LazyLock<Vec<HashMap<U8SB, Pcivicv>>> = LazyLock::new(|| {\n"
+    rust_code = f"    pub(super) static CARDINALITY_TO_CHORD_MEMBERS_GENERATED: CardinalityToChordMembersGenerated = LazyLock::new(|| {{\n"
     inner_vars = []
 
     for card in range(len(tables.FORTE)):
@@ -128,7 +128,7 @@ def generate_cardinality_to_chord_members():
                 )
 
                 # Insert original entry
-                key = f"({forte_idx}, {"SuperBool::One" if has_distinct else "SuperBool::Zero"})"
+                key = f"({forte_idx}, {"Sign::One" if has_distinct else "Sign::Zero"})"
                 rust_code += f"        inner_{card}.insert({key}, ({pcs_vec}, {list(inv_vec)}, {list(icv)}));\n"
 
                 if has_distinct:
@@ -142,10 +142,9 @@ def generate_cardinality_to_chord_members():
                     inv_pcs_vec = f"{list(inv_pcs_vec)}".replace(
                         "True", "true"
                     ).replace("False", "false")
-                    rust_code += f"        inner_{card}.insert(({forte_idx}, SuperBool::NegativeOne), ({inv_pcs_vec}, {list(inv_vec)}, {list(icv)}));\n"
+                    rust_code += f"        inner_{card}.insert(({forte_idx}, Sign::NegativeOne), ({inv_pcs_vec}, {list(inv_vec)}, {list(icv)}));\n"
 
-    # Build the vec! with all inner variables
-    rust_code += "        vec![\n"
+    rust_code += "        [\n"
     for var in inner_vars:
         rust_code += f"            {var},\n"
     rust_code += "        ]\n    });\n"
@@ -154,7 +153,7 @@ def generate_cardinality_to_chord_members():
 
 
 def generate_maximum_index_number_without_inversion_equivalence():
-    rust_code = "pub(super) static MAXIMUM_INDEX_NUMBER_WITHOUT_INVERSION_EQUIVALENCE: LazyLock<Vec<u8>> = LazyLock::new(|| vec!["
+    rust_code = "pub(super) static MAXIMUM_INDEX_NUMBER_WITHOUT_INVERSION_EQUIVALENCE: MaximumIndexNumberWithoutInversionEquivalence = LazyLock::new(|| vec!["
     for idx in range(0, len(tables.maximumIndexNumberWithoutInversionEquivalence)):
         rust_code += f"{tables.maximumIndexNumberWithoutInversionEquivalence[idx]}, "
     rust_code = rust_code.rstrip(", ")
@@ -163,7 +162,7 @@ def generate_maximum_index_number_without_inversion_equivalence():
 
 
 def generate_maximum_index_number_with_inversion_equivalence():
-    rust_code = "pub(super) static MAXIMUM_INDEX_NUMBER_WITH_INVERSION_EQUIVALENCE: LazyLock<Vec<u8>> = LazyLock::new(|| vec!["
+    rust_code = "pub(super) static MAXIMUM_INDEX_NUMBER_WITH_INVERSION_EQUIVALENCE: MaximumIndexNumberWithInversionEquivalence = LazyLock::new(|| vec!["
     for idx in range(0, len(tables.maximumIndexNumberWithInversionEquivalence)):
         rust_code += f"{tables.maximumIndexNumberWithInversionEquivalence[idx]}, "
     rust_code = rust_code.rstrip(", ")
@@ -172,16 +171,16 @@ def generate_maximum_index_number_with_inversion_equivalence():
 
 
 def generate_forte_number_with_inversion_to_tn_index():
-    rust_code = "pub(super) static FORTE_NUMBER_WITH_INVERSION_TO_INDEX: LazyLock<HashMap<U8U8SB, u8>> = LazyLock::new(|| {"
+    rust_code = "pub(super) static FORTE_NUMBER_WITH_INVERSION_TO_INDEX: ForteNumberWithInversionToIndex = LazyLock::new(|| {"
     rust_code += "let mut m = HashMap::new();"
     for key, i in tables.forteNumberWithInversionToTnIndex.items():
         card, idx, inv = key
         if inv == -1:
-            inv = "SuperBool::NegativeOne"
+            inv = "Sign::NegativeOne"
         elif inv == 0:
-            inv = "SuperBool::Zero"
+            inv = "Sign::Zero"
         elif inv == 1:
-            inv = "SuperBool::One"
+            inv = "Sign::One"
         else:
             print(inv)
         rust_code += f"m.insert(({card}, {idx}, {inv}), {i});"
@@ -191,17 +190,17 @@ def generate_forte_number_with_inversion_to_tn_index():
 
 
 def generate_tn_index_to_chord_info():
-    rust_code = "pub(super) static TN_INDEX_TO_CHORD_INFO: LazyLock<HashMap<U8U8SB, Option<Vec<&'static str>>>> = LazyLock::new(|| {"
+    rust_code = "pub(super) static TN_INDEX_TO_CHORD_INFO: TnIndexToChordInfo = LazyLock::new(|| {"
 
     rust_code += "let mut m = HashMap::new();"
     for key, info in tables.tnIndexToChordInfo.items():
         card, idx, inv = key
         if inv == -1:
-            inv = "SuperBool::NegativeOne"
+            inv = "Sign::NegativeOne"
         elif inv == 0:
-            inv = "SuperBool::Zero"
+            inv = "Sign::Zero"
         elif inv == 1:
-            inv = "SuperBool::One"
+            inv = "Sign::One"
         else:
             print(inv)
         names = info.get("name", [])
@@ -215,16 +214,16 @@ def generate_tn_index_to_chord_info():
     return rust_code
 
 
-def generate_rust_tables():
-    rust_code = f"""
+def generate_rust_tables(imports: str):
+    rust_code = (
+        f"""
 /*
 This file is autogenerated from the tables in the original music21 library
 check {Path(__file__).name} to see how it works
-*/  
-use super::{{Pcivicv, PitchClasses, SuperBool, TNIStructure, U8SB, U8U8SB}};
-use std::{{collections::HashMap, sync::LazyLock}};
-
+*/
 """
+        + imports
+    )
     rust_code += generate_forte_table()
     rust_code += "\n\n"
     rust_code += generate_inversion_default_pitch_class()
@@ -266,12 +265,21 @@ def main():
     global Comments
     Comments = args.Comments
 
-    rust = generate_rust_tables()
-
     try:
         file_path = Path(args.output)
         if not file_path.exists():
             raise FileNotFoundError(f"File {file_path} does not exist.")
+
+        imports = """
+use super::{
+    CardinalityToChordMembersGenerated, Forte, ForteNumberWithInversionToIndex,
+    InversionDefaultPitchClasses, MaximumIndexNumberWithInversionEquivalence,
+    MaximumIndexNumberWithoutInversionEquivalence, Sign, TnIndexToChordInfo,
+};
+use std::{collections::HashMap, sync::LazyLock};
+\n"""
+
+        rust = generate_rust_tables(imports)
 
         with file_path.open("r+") as f:
             f.write(rust)
