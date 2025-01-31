@@ -1,4 +1,6 @@
+#[derive(Clone, Debug)]
 pub(crate) struct SlottedObjectMixin {}
+
 impl SlottedObjectMixin {
     pub(crate) fn new() -> Self {
         Self {}

@@ -3,9 +3,13 @@ use crate::{
     prebase::{ProtoM21Object, ProtoM21ObjectTrait},
 };
 
+use super::FloatType;
+
+#[derive(Clone, Debug)]
 pub(crate) struct Microtone {
     proto: ProtoM21Object,
     slottedobjectmixin: SlottedObjectMixin,
+    pub(crate) _alter: FloatType,
 }
 
 impl Microtone {
@@ -13,6 +17,7 @@ impl Microtone {
         Self {
             proto: ProtoM21Object::new(),
             slottedobjectmixin: SlottedObjectMixin::new(),
+            _alter: todo!(),
         }
     }
 }

@@ -2,19 +2,29 @@ pub(crate) mod generalnote;
 pub mod notrest;
 
 use generalnote::GeneralNoteTrait;
-use notrest::{IntoNotRests, NotRest, NotRestTrait};
+use notrest::{NotRest, NotRestTrait};
+use num::Num;
 
-use crate::{base::Music21ObjectTrait, defaults::IntegerType, prebase::ProtoM21ObjectTrait};
+use crate::{
+    base::Music21ObjectTrait,
+    pitch::{IntoPitchName, Pitch},
+    prebase::ProtoM21ObjectTrait,
+};
 
 #[derive(Clone, Debug)]
 pub struct Note {
     notrest: NotRest,
+    pub(crate) _pitch: Pitch,
 }
 
 impl Note {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new<T>(pitch: Option<T>) -> Self
+    where
+        T: IntoPitch,
+    {
         Self {
             notrest: NotRest::new(),
+            _pitch: todo!(),
         }
     }
 
@@ -35,48 +45,18 @@ impl ProtoM21ObjectTrait for Note {}
 
 impl Music21ObjectTrait for Note {}
 
-pub trait IntoNotes {
-    fn into(self) -> Vec<Note>;
+pub trait IntoPitch {
+    fn into_pitch(&self) -> Pitch;
 }
 
-impl IntoNotes for Vec<Note> {
-    fn into(self) -> Vec<Note> {
-        self
+impl IntoPitch for Pitch {
+    fn into_pitch(&self) -> Pitch {
+        self.clone()
     }
 }
 
-impl IntoNotRests for Vec<Note> {
-    fn into(self) -> Vec<NotRest> {
-        self.into_iter().map(|note| note.get_super()).collect()
-    }
-}
-
-impl IntoNotes for String {
-    fn into(self) -> Vec<Note> {
-        todo!()
-    }
-}
-
-impl IntoNotes for &str {
-    fn into(self) -> Vec<Note> {
-        todo!()
-    }
-}
-
-impl IntoNotes for Vec<String> {
-    fn into(self) -> Vec<Note> {
-        todo!()
-    }
-}
-
-impl IntoNotes for Vec<&str> {
-    fn into(self) -> Vec<Note> {
-        todo!()
-    }
-}
-
-impl IntoNotes for Vec<IntegerType> {
-    fn into(self) -> Vec<Note> {
-        todo!()
+impl<T: Num + IntoPitchName + Clone> IntoPitch for T {
+    fn into_pitch(&self) -> Pitch {
+        Pitch::new(Some(self.clone()))
     }
 }
