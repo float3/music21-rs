@@ -14,6 +14,7 @@ pub(crate) enum Exception {
     Microtone(String),
     Accidental(String),
     ChordTables(String),
+    Interval(String),
 }
 
 impl Display for Exception {

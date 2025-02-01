@@ -3,11 +3,10 @@ pub(crate) mod tables;
 
 // use chordbase::{ChordBase, ChordBaseTrait, IntoNotRests};
 
-use std::rc::Rc;
-
 use crate::{
     base::Music21ObjectTrait,
     defaults::IntegerType,
+    key::KeySignature,
     note::{generalnote::GeneralNoteTrait, notrest::NotRestTrait, Note},
     pitch::Pitch,
     prebase::ProtoM21ObjectTrait,
@@ -30,7 +29,7 @@ impl Chord {
                 .as_ref()
                 .map_or_else(Vec::new, |notes| notes.into_notes().into_iter().collect()),
         };
-        chord.simplify_enharmonics_in_place();
+        chord.simplify_enharmonics(true, None);
         chord
     }
 
@@ -42,11 +41,26 @@ impl Chord {
         self._notes.iter().map(|note| note._pitch.clone()).collect()
     }
 
-    fn simplify_enharmonics_in_place(&mut self) {
+    fn simplify_enharmonics(
+        &mut self,
+        in_place: bool,
+        key_context: Option<KeySignature>,
+    ) -> Option<Self> {
+        if in_place {
+            self.simplify_enharmonics_in_place(key_context);
+            None
+        } else {
+            let mut new_chord = self.clone();
+            new_chord.simplify_enharmonics_in_place(key_context);
+            Some(new_chord)
+        }
+    }
+
+    fn simplify_enharmonics_in_place(&mut self, key_context: Option<KeySignature>) {
         let pitches = crate::pitch::simplify_multiple_enharmonics(self.pitches());
         for (i, pitch) in pitches.iter().enumerate() {
-            if let Some(note) = Rc::get_mut(&mut self._notes.borrow_mut()[i]) {
-                note.set_pitch(pitch.clone());
+            if let Some(note) = self._notes.get_mut(i) {
+                note._pitch = pitch.clone();
             }
         }
     }

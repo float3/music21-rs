@@ -138,9 +138,12 @@ static CARDINALITY_TO_CHORD_MEMBERS: LazyLock<HashMap<u8, HashMap<U8SB, Pcivicv>
                     ),
                 );
                 if has_distinct {
-                    let inv_pitches = *INVERSION_DEFAULT_PITCH_CLASSES
+                    let inv_pitches = match INVERSION_DEFAULT_PITCH_CLASSES
                         .get(&(cardinality as u8, forte_after_dash as u8))
-                        .unwrap();
+                    {
+                        Some(pitches) => *pitches,
+                        None => continue,
+                    };
                     entries.insert(
                         (forte_after_dash as u8, Sign::NegativeOne),
                         (

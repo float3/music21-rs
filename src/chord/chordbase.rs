@@ -10,7 +10,7 @@ use crate::{
 };
 use std::collections::HashMap;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct ChordBase {
     notrest: NotRest,
     _notes: Vec<NotRest>,

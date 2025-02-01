@@ -31,6 +31,10 @@ impl Note {
     pub(crate) fn get_super(&self) -> NotRest {
         self.notrest.clone()
     }
+
+    pub(crate) fn pitchChanged(&self) {
+        todo!()
+    }
 }
 
 pub(crate) trait NoteTrait: NotRestTrait {}

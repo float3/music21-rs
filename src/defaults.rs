@@ -2,7 +2,7 @@ use fraction::GenericFraction;
 
 use crate::stepname::StepName;
 
-pub(crate) type IntegerType = i32;
+pub(crate) type IntegerType = u32;
 pub(crate) type FloatType = f64;
 pub(crate) type FractionType = GenericFraction<IntegerType>;
 

@@ -3,7 +3,7 @@ use crate::{
     prebase::{ProtoM21Object, ProtoM21ObjectTrait},
 };
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct Duration {
     proto: ProtoM21Object,
     mixin: SlottedObjectMixin,
