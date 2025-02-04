@@ -1,10 +1,6 @@
-use std::path::PathBuf;
 use std::process::Command;
 
-use pyo3::{
-    types::{PyAnyMethods, PyModule},
-    PyResult, Python,
-};
+use pyo3::{types::PyAnyMethods, PyResult, Python};
 
 #[derive(Debug, PartialEq, Eq)]
 #[repr(u8)]
@@ -58,7 +54,7 @@ fn main() -> PyResult<()> {
         let tables = chord.getattr("tables")?;
         println!("tables: {:?}", tables);
 
-        println!("cargo:rerun-if-changed={}", script_path.display());
+        // println!("cargo:rerun-if-changed={}", script_path.display());
         println!("cargo:rerun-if-changed=./music21/music21/chord/tables.py");
         println!("cargo:rerun-if-changed={}", "./build.rs");
         Ok(())
