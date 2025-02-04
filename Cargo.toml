@@ -7,7 +7,7 @@ license = "LICENSE"
 name = "music21-rs"
 repository = "https://github.com/float3/music21-rs"
 version = "0.0.1"
-build = "build.rs"
+# build = "build.rs"
 
 [dependencies]
 fraction = "0.15.3"
