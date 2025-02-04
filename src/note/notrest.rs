@@ -1,16 +1,17 @@
 use super::generalnote::{GeneralNote, GeneralNoteTrait};
 use crate::{base::Music21ObjectTrait, duration::Duration, prebase::ProtoM21ObjectTrait};
-use std::fmt::Debug;
 
 #[derive(Clone, Debug)]
 pub(crate) struct NotRest {
     general_note: GeneralNote,
+    // pub(crate) _chord_attached: Option<Arc<ChordBase>>,
 }
 
 impl NotRest {
     pub(crate) fn new(duration: Option<Duration>) -> Self {
         Self {
             general_note: GeneralNote::new(duration),
+            // _chord_attached: None,
         }
     }
 }

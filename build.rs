@@ -66,8 +66,7 @@ mod pyo3 {
                     let card_data: &Bound<'_, PyTuple> = item.downcast()?;
                     let entries: Result<Vec<String>, PyErr> = card_data
                         .iter()
-                        .enumerate()
-                        .map(|(_, entry)| {
+                        .map(|entry| {
                             if entry.is_none() {
                                 Ok("None,".to_string())
                             } else {
@@ -405,6 +404,9 @@ use std::{collections::HashMap, sync::LazyLock};
         if !output.status.success() {
             panic!();
         }
+        println!(
+            "cargo:rerun-if-changed=./music21/music21/chord/tables.py"
+        );
         Ok(())
     }
 }

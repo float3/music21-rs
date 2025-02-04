@@ -10,39 +10,96 @@ use crate::{
 };
 use std::sync::Arc;
 
-use accidental::Accidental;
+use accidental::{Accidental, IntoAccidental};
 use itertools::Itertools;
-use microtone::Microtone;
+use microtone::{IntoMicrotone, Microtone};
 use num::Num;
 use ordered_float::OrderedFloat;
 
-use self::defaults::FloatType;
+use self::defaults::{FloatType, Octave, PITCH_STEP};
 
 #[derive(Clone, Debug)]
 pub(crate) struct Pitch {
     proto: ProtoM21Object,
     _step: StepName,
-    _octave: Option<IntegerType>,
+    _octave: Octave,
     _overriden_freq440: Option<FloatType>,
-    _accidental: Option<Accidental>,
+    _accidental: Accidental,
     _microtone: Option<Microtone>,
     _client: Option<Arc<Note>>,
+    spelling_is_infered: bool,
+    fundamental: Option<Arc<Pitch>>,
 }
 
 impl Pitch {
-    pub(crate) fn new<T>(pitch: Option<T>) -> Self
+    pub(crate) fn new<T, U, V>(
+        name: Option<T>,
+        step: Option<StepName>,
+        octave: Octave,
+        accidental: Option<U>,
+        microtone: Option<V>,
+    ) -> Self
     where
         T: IntoPitchName,
+        U: IntoAccidental,
+        V: IntoMicrotone,
     {
-        Pitch {
-            proto: ProtoM21Object::new(),
-            _step: defaults::PITCH_STEP,
-            _overriden_freq440: None,
-            _accidental: todo!(),
-            _microtone: todo!(),
-            _octave: todo!(),
-            _client: todo!(),
+        let mut self_name = None;
+        let mut self_step = PITCH_STEP;
+        let mut self_accidental;
+        let mut self_microtone: Option<Microtone> = None;
+        let mut self_spelling_is_inferred = false;
+        let mut self_octave = None;
+
+        if let Some(name) = name {
+            let x = name.into_name();
+            self_name = x.name;
+            if let Some(step) = x.step {
+                self_step = step
+            }
+
+            if let Some(accidental) = x.accidental {
+                self_accidental = accidental
+            }
+
+            if let Some(spelling) = x.spelling_is_inferred {
+                self_spelling_is_inferred = spelling
+            }
+            self_octave = x.octave;
+        } else if let Some(step) = step {
+            self_step = step;
+        };
+
+        if let Some(octave) = octave {
+            self_octave = Some(octave)
         }
+
+        if let Some(accidental) = accidental {
+            self_accidental = accidental.into_accidental();
+        } else {
+            self_accidental = Accidental::new("natural");
+        }
+
+        if let Some(microtone) = microtone {
+            self_microtone = Some(microtone.into_microtone());
+        }
+
+        //TODO(more stuff here)
+
+        let mut pitch = Pitch {
+            proto: ProtoM21Object::new(),
+            _step: self_step,
+            _overriden_freq440: None,
+            _accidental: self_accidental,
+            _microtone: self_microtone,
+            _octave: self_octave,
+            _client: None,
+            spelling_is_infered: self_spelling_is_inferred,
+            fundamental: None,
+        };
+
+        pitch.set_name(self_name);
+        pitch
     }
 
     pub(crate) fn name_with_octave(&self) -> String {
@@ -56,9 +113,7 @@ impl Pitch {
     pub(crate) fn alter(&self) -> FloatType {
         let mut post = 0.0;
 
-        if let Some(accidental) = &self._accidental {
-            post += accidental._alter;
-        }
+        post += self._accidental._alter;
 
         if let Some(microtone) = &self._microtone {
             post += microtone._alter;
@@ -67,7 +122,7 @@ impl Pitch {
         post
     }
 
-    pub(crate) fn set_octave(&mut self, octave: Option<IntegerType>) {
+    pub(crate) fn set_octave(&mut self, octave: Octave) {
         self._octave = octave;
         self.informclient()
     }
@@ -89,29 +144,73 @@ impl Pitch {
     pub(crate) fn ps(&self) -> FloatType {
         todo!()
     }
+
+    fn set_name(&mut self, self_name: Option<String>) {
+        todo!()
+    }
 }
 
 impl ProtoM21ObjectTrait for Pitch {}
 
+pub(crate) struct PitchParameteres {
+    pub(crate) name: Option<String>,
+    pub(crate) step: Option<StepName>,
+    pub(crate) accidental: Option<Accidental>,
+    pub(crate) spelling_is_inferred: Option<bool>,
+    pub(crate) octave: Octave,
+}
+
 pub(crate) trait IntoPitchName {
-    fn into_name(self) -> String;
+    fn into_name(self) -> PitchParameteres;
 }
 
 impl IntoPitchName for Pitch {
-    fn into_name(self) -> String {
-        self.name_with_octave()
+    fn into_name(self) -> PitchParameteres {
+        self.name_with_octave().into_name()
     }
 }
 
 impl IntoPitchName for IntegerType {
-    fn into_name(self) -> String {
-        todo!()
+    fn into_name(self) -> PitchParameteres {
+        let (step_name, accidental, _, _) = convert_ps_to_step(self);
+
+        let octave = if self >= 12 {
+            Some(self / 12 - 1)
+        } else {
+            None
+        };
+
+        PitchParameteres {
+            name: None,
+            step: Some(step_name),
+            accidental: Some(accidental),
+            spelling_is_inferred: Some(true),
+            octave,
+        }
     }
 }
 
 impl IntoPitchName for String {
-    fn into_name(self) -> String {
-        todo!()
+    fn into_name(self) -> PitchParameteres {
+        PitchParameteres {
+            name: Some(self),
+            step: None,
+            accidental: None,
+            spelling_is_inferred: None,
+            octave: None,
+        }
+    }
+}
+
+impl IntoPitchName for &str {
+    fn into_name(self) -> PitchParameteres {
+        PitchParameteres {
+            name: Some(self.to_string()),
+            step: None,
+            accidental: None,
+            spelling_is_inferred: None,
+            octave: None,
+        }
     }
 }
 
@@ -228,7 +327,13 @@ fn dissonance_score(
             for interval in intervals.iter() {
                 match interval_to_pythagorean_ratio(interval.clone()) {
                     Result::Ok(ratio) => {
-                        score_ratio += (*(ratio.denom().unwrap()) as f64).ln() * 0.03792663444
+                        score_ratio += (match ratio {
+                            fraction::GenericFraction::Rational(sign, ratio) => *ratio.denom(),
+                            fraction::GenericFraction::Infinity(sign) => panic!(),
+                            fraction::GenericFraction::NaN => panic!(),
+                        } as f64)
+                            .ln()
+                            * 0.03792663444
                     }
                     Result::Err(_) => return f64::INFINITY, //TODO: investigate this
                 };

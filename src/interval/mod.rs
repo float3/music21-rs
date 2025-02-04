@@ -64,7 +64,13 @@ impl Music21ObjectTrait for Interval {}
 impl ProtoM21ObjectTrait for Interval {}
 
 pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> Result<FractionType, Exception> {
-    let start_pitch = Pitch::new(Some("C1".to_string()));
+    let start_pitch = Pitch::new(
+        Some("C1".to_string()),
+        None,
+        None,
+        Option::<IntegerType>::None,
+        Option::<IntegerType>::None,
+    );
     let end_pitch_wanted = start_pitch.transpose((interval).clone());
 
     let mut cache = match PYTHAGOREAN_CACHE.lock() {

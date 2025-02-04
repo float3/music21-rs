@@ -25,7 +25,7 @@ impl Chord {
         T: IntoNotes + Clone + IntoNotRests,
     {
         let mut chord = Self {
-            chordbase: ChordBase::new(notes.clone(), None),
+            chordbase: ChordBase::new(notes.clone(), &None),
             _notes: notes.as_ref().map_or_else(Vec::new, |notes| {
                 notes
                     .clone()

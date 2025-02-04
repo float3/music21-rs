@@ -6,6 +6,7 @@ pub(crate) type IntegerType = u32;
 pub(crate) type FloatType = f64;
 pub(crate) type FractionType = GenericFraction<IntegerType>;
 
+pub(crate) type Octave = Option<IntegerType>;
 pub(crate) const PITCH_STEP: StepName = StepName::C;
 pub(crate) const PITCH_OCTAVE: IntegerType = 4;
 

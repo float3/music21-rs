@@ -12,6 +12,7 @@ pub(crate) mod base;
 pub mod chord;
 pub(crate) mod common;
 pub(crate) mod defaults;
+pub(crate) mod display;
 pub(crate) mod duration;
 pub(crate) mod exceptions;
 pub(crate) mod fraction_pow;

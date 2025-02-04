@@ -35,7 +35,13 @@ impl Note {
                     },
                 };
 
-                Pitch::new(Some(name))
+                Pitch::new(
+                    Some(name),
+                    None,
+                    None,
+                    Option::<IntegerType>::None,
+                    Option::<IntegerType>::None,
+                )
             }
         };
 
@@ -82,18 +88,36 @@ impl IntoPitch for Pitch {
 
 impl IntoPitch for String {
     fn into_pitch(self) -> Pitch {
-        todo!()
+        Pitch::new(
+            Some(self),
+            None,
+            None,
+            Option::<IntegerType>::None,
+            Option::<IntegerType>::None,
+        )
     }
 }
 
 impl IntoPitch for &str {
     fn into_pitch(self) -> Pitch {
-        todo!()
+        Pitch::new(
+            Some(self),
+            None,
+            None,
+            Option::<IntegerType>::None,
+            Option::<IntegerType>::None,
+        )
     }
 }
 
 impl IntoPitch for IntegerType {
     fn into_pitch(self) -> Pitch {
-        Pitch::new(Some(self))
+        Pitch::new(
+            Some(self),
+            None,
+            None,
+            Option::<IntegerType>::None,
+            Option::<IntegerType>::None,
+        )
     }
 }
