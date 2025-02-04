@@ -19,7 +19,7 @@ use ordered_float::OrderedFloat;
 use self::defaults::FloatType;
 
 #[derive(Clone, Debug)]
-pub struct Pitch {
+pub(crate) struct Pitch {
     proto: ProtoM21Object,
     _step: StepName,
     _octave: Option<IntegerType>,
@@ -30,7 +30,7 @@ pub struct Pitch {
 }
 
 impl Pitch {
-    pub fn new<T>(pitch: Option<T>) -> Self
+    pub(crate) fn new<T>(pitch: Option<T>) -> Self
     where
         T: IntoPitchName,
     {
@@ -93,7 +93,7 @@ impl Pitch {
 
 impl ProtoM21ObjectTrait for Pitch {}
 
-pub trait IntoPitchName {
+pub(crate) trait IntoPitchName {
     fn into_name(self) -> String;
 }
 

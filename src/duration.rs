@@ -4,7 +4,7 @@ use crate::{
 };
 
 #[derive(Clone, Debug)]
-pub struct Duration {
+pub(crate) struct Duration {
     proto: ProtoM21Object,
     mixin: SlottedObjectMixin,
 }

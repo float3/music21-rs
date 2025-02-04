@@ -96,7 +96,7 @@ impl Music21ObjectTrait for Chord {}
 
 impl ProtoM21ObjectTrait for Chord {}
 
-pub trait IntoNotes {
+pub(crate) trait IntoNotes {
     type T: IntoIterator<Item = Note>;
 
     fn into_notes(self) -> Self::T;
@@ -158,7 +158,7 @@ impl IntoNotes for &[IntegerType] {
     }
 }
 
-// pub trait IntoNote {
+// pub(crate) trait IntoNote {
 //     fn into_note(&self) -> Note;
 // }
 

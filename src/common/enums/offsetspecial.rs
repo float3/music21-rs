@@ -6,7 +6,7 @@ pub(crate) enum OffsetSpecial {
 }
 
 impl OffsetSpecial {
-    pub const fn as_str(&self) -> &str {
+    pub(crate) const fn as_str(&self) -> &str {
         match self {
             OffsetSpecial::AtEnd => "atEnd",
             OffsetSpecial::LowestOffset => "lowestOffset",

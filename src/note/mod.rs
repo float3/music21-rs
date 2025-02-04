@@ -1,15 +1,15 @@
 pub(crate) mod generalnote;
-pub mod notrest;
-
-use generalnote::GeneralNoteTrait;
-use notrest::{NotRest, NotRestTrait};
+pub(crate) mod notrest;
 
 use crate::{
     base::Music21ObjectTrait, defaults::IntegerType, pitch::Pitch, prebase::ProtoM21ObjectTrait,
 };
 
+use generalnote::GeneralNoteTrait;
+use notrest::{NotRest, NotRestTrait};
+
 #[derive(Clone, Debug)]
-pub struct Note {
+pub(crate) struct Note {
     notrest: NotRest,
     pub(crate) _pitch: Pitch,
 }
@@ -70,7 +70,7 @@ impl ProtoM21ObjectTrait for Note {}
 
 impl Music21ObjectTrait for Note {}
 
-pub trait IntoPitch {
+pub(crate) trait IntoPitch {
     fn into_pitch(self) -> Pitch;
 }
 

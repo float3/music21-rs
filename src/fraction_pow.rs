@@ -2,7 +2,7 @@ use fraction::GenericFraction::{self, Infinity};
 use num::Integer;
 use num_traits::{FromPrimitive, One, Signed, Zero};
 
-pub trait FractionPow<E> {
+pub(crate) trait FractionPow<E> {
     fn pow(&self, exp: E) -> Self;
 }
 

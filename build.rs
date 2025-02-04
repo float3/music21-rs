@@ -8,20 +8,21 @@ use pyo3::{
 
 #[derive(Debug, PartialEq, Eq)]
 #[repr(u8)]
-pub enum Cardinality {
+#[allow(dead_code)]
+enum Cardinality {
     None = 0,
-    Monad,
-    Diad,
-    Trichord,
-    Tetrachord,
-    Pentachord,
-    Hexachord,
-    Septachord,
-    Octachord,
-    Nonachord,
-    Decachord,
-    Undecachord,
-    Duodecachord,
+    Monad = 1,
+    Diad = 2,
+    Trichord = 3,
+    Tetrachord = 4,
+    Pentachord = 5,
+    Hexachord = 6,
+    Septachord = 7,
+    Octachord = 8,
+    Nonachord = 9,
+    Decachord = 10,
+    Undecachord = 11,
+    Duodecachord = 12,
 }
 
 fn main() -> PyResult<()> {

@@ -3,6 +3,8 @@
 #![allow(unused_assignments)]
 #![allow(unused_results)]
 #![allow(unreachable_code)]
+#![allow(unused_macros)]
+#![allow(private_bounds)]
 // #![feature(negative_impls)]
 // #![feature(specialization)]
 // #![feature(lazy_get)]
@@ -15,7 +17,9 @@ pub(crate) mod exceptions;
 pub(crate) mod fraction_pow;
 pub(crate) mod interval;
 pub(crate) mod key;
-pub mod note;
+// #[macro_use]
+// pub(crate) mod macros;
+pub(crate) mod note;
 pub(crate) mod pitch;
 pub(crate) mod pitchclass;
 pub(crate) mod prebase;

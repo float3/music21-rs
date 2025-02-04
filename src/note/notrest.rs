@@ -3,7 +3,7 @@ use crate::{base::Music21ObjectTrait, duration::Duration, prebase::ProtoM21Objec
 use std::fmt::Debug;
 
 #[derive(Clone, Debug)]
-pub struct NotRest {
+pub(crate) struct NotRest {
     general_note: GeneralNote,
 }
 
