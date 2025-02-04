@@ -78,7 +78,7 @@ impl Pitch {
 
     fn informclient(&self) {
         if let Some(ref client) = self._client {
-            client.pitchChanged();
+            client.pitch_changed();
         }
     }
 
@@ -94,23 +94,23 @@ impl Pitch {
 impl ProtoM21ObjectTrait for Pitch {}
 
 pub trait IntoPitchName {
-    fn into_name(&self) -> String;
+    fn into_name(self) -> String;
 }
 
 impl IntoPitchName for Pitch {
-    fn into_name(&self) -> String {
+    fn into_name(self) -> String {
         self.name_with_octave()
     }
 }
 
 impl IntoPitchName for IntegerType {
-    fn into_name(&self) -> String {
+    fn into_name(self) -> String {
         todo!()
     }
 }
 
 impl IntoPitchName for String {
-    fn into_name(&self) -> String {
+    fn into_name(self) -> String {
         todo!()
     }
 }
@@ -155,14 +155,14 @@ fn brute_force_enharmonics_search(
         }
     }
 
-    best_combination
+    Some(best_combination)
 }
 
 fn greedy_enharmonics_search(
     old_pitches: Vec<Pitch>,
     score_func: fn(&[Pitch]) -> f64,
 ) -> Option<Vec<Pitch>> {
-    let mut new_pitches = vec![old_pitches.get(0)?.clone()];
+    let mut new_pitches = vec![old_pitches.first()?.clone()];
 
     for old_pitch in old_pitches.iter().skip(1) {
         let mut candidates = vec![old_pitch.clone()];
@@ -219,7 +219,7 @@ fn dissonance_score(
                     Some(PitchOrNote::Pitch(p2.clone())),
                 ) {
                     Some(interval) => intervals.push(interval),
-                    None => return std::f64::INFINITY,
+                    None => return f64::INFINITY,
                 }
             }
         }
@@ -227,10 +227,10 @@ fn dissonance_score(
         if small_pythagorean_ratio {
             for interval in intervals.iter() {
                 match interval_to_pythagorean_ratio(interval.clone()) {
-                    Some(ratio) => {
+                    Result::Ok(ratio) => {
                         score_ratio += (*(ratio.denom().unwrap()) as f64).ln() * 0.03792663444
                     }
-                    None => return std::f64::INFINITY,
+                    Result::Err(_) => return f64::INFINITY, //TODO: investigate this
                 };
             }
             score_ratio /= pitches.len() as f64;

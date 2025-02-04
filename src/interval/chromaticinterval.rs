@@ -9,7 +9,9 @@ pub(crate) struct ChromaticInterval {
 }
 
 impl ChromaticInterval {
-    pub(crate) fn new(semitones: IntegerType) {}
+    pub(crate) fn new(semitones: IntegerType) -> Self {
+        todo!()
+    }
 }
 
 impl IntervalBaseTrait for ChromaticInterval {}

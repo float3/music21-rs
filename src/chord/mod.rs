@@ -1,11 +1,12 @@
-// pub(crate) mod chordbase;
+pub(crate) mod chordbase;
 pub(crate) mod tables;
 
-// use chordbase::{ChordBase, ChordBaseTrait, IntoNotRests};
+use chordbase::{ChordBase, ChordBaseTrait, IntoNotRests};
 
 use crate::{
     base::Music21ObjectTrait,
     defaults::IntegerType,
+    duration::Duration,
     key::KeySignature,
     note::{generalnote::GeneralNoteTrait, notrest::NotRestTrait, Note},
     pitch::Pitch,
@@ -14,20 +15,24 @@ use crate::{
 
 #[derive(Clone, Debug)]
 pub struct Chord {
-    // chordbase: ChordBase,
+    chordbase: ChordBase,
     _notes: Vec<Note>,
 }
 
 impl Chord {
     pub fn new<T>(notes: Option<T>) -> Self
     where
-        T: IntoNotes + Clone, //+ IntoNotRests
+        T: IntoNotes + Clone + IntoNotRests,
     {
         let mut chord = Self {
-            // chordbase: ChordBase::new(notes.clone()),
-            _notes: notes
-                .as_ref()
-                .map_or_else(Vec::new, |notes| notes.into_notes().into_iter().collect()),
+            chordbase: ChordBase::new(notes.clone(), None),
+            _notes: notes.as_ref().map_or_else(Vec::new, |notes| {
+                notes
+                    .clone()
+                    .into_notes()
+                    .into_iter()
+                    .collect::<Vec<Note>>()
+            }),
         };
         chord.simplify_enharmonics(true, None);
         chord
@@ -58,9 +63,16 @@ impl Chord {
 
     fn simplify_enharmonics_in_place(&mut self, key_context: Option<KeySignature>) {
         let pitches = crate::pitch::simplify_multiple_enharmonics(self.pitches());
-        for (i, pitch) in pitches.iter().enumerate() {
-            if let Some(note) = self._notes.get_mut(i) {
-                note._pitch = pitch.clone();
+        match pitches {
+            Some(pitches) => {
+                for (i, pitch) in pitches.iter().enumerate() {
+                    if let Some(note) = self._notes.get_mut(i) {
+                        note._pitch = pitch.clone();
+                    }
+                }
+            }
+            None => {
+                eprintln!("simplify_multiple_enharmonics failed")
             }
         }
     }
@@ -70,11 +82,15 @@ pub(crate) trait ChordTrait {}
 
 impl ChordTrait for Chord {}
 
-// impl ChordBaseTrait for Chord {}
+impl ChordBaseTrait for Chord {}
 
 impl NotRestTrait for Chord {}
 
-impl GeneralNoteTrait for Chord {}
+impl GeneralNoteTrait for Chord {
+    fn duration(&self) -> &Option<Duration> {
+        self.chordbase.duration()
+    }
+}
 
 impl Music21ObjectTrait for Chord {}
 
@@ -83,13 +99,13 @@ impl ProtoM21ObjectTrait for Chord {}
 pub trait IntoNotes {
     type T: IntoIterator<Item = Note>;
 
-    fn into_notes(&self) -> Self::T;
+    fn into_notes(self) -> Self::T;
 }
 
 impl IntoNotes for &[Pitch] {
     type T = Vec<Note>;
 
-    fn into_notes(&self) -> Self::T {
+    fn into_notes(self) -> Self::T {
         todo!()
     }
 }
@@ -97,7 +113,7 @@ impl IntoNotes for &[Pitch] {
 impl IntoNotes for &[Note] {
     type T = Vec<Note>;
 
-    fn into_notes(&self) -> Self::T {
+    fn into_notes(self) -> Self::T {
         todo!()
     }
 }
@@ -105,7 +121,7 @@ impl IntoNotes for &[Note] {
 impl IntoNotes for &[Chord] {
     type T = Vec<Note>;
 
-    fn into_notes(&self) -> Self::T {
+    fn into_notes(self) -> Self::T {
         self.iter().flat_map(|chord| chord._notes.clone()).collect()
     }
 }
@@ -113,7 +129,7 @@ impl IntoNotes for &[Chord] {
 impl IntoNotes for &[String] {
     type T = Vec<Note>;
 
-    fn into_notes(&self) -> Self::T {
+    fn into_notes(self) -> Self::T {
         todo!()
     }
 }
@@ -121,7 +137,7 @@ impl IntoNotes for &[String] {
 impl IntoNotes for String {
     type T = Vec<Note>;
 
-    fn into_notes(&self) -> Self::T {
+    fn into_notes(self) -> Self::T {
         todo!()
     }
 }
@@ -129,7 +145,7 @@ impl IntoNotes for String {
 impl IntoNotes for &str {
     type T = Vec<Note>;
 
-    fn into_notes(&self) -> Self::T {
+    fn into_notes(self) -> Self::T {
         todo!()
     }
 }
@@ -137,7 +153,7 @@ impl IntoNotes for &str {
 impl IntoNotes for &[IntegerType] {
     type T = Vec<Note>;
 
-    fn into_notes(&self) -> Self::T {
+    fn into_notes(self) -> Self::T {
         todo!()
     }
 }
@@ -152,7 +168,7 @@ impl IntoNotes for &[IntegerType] {
 // {
 //     type T = Vec<Note>;
 
-//     fn into_notes(&self) -> Self::T {
+//     fn into_notes(self) -> Self::T {
 //         vec![self.into_note()]
 //     }
 // }

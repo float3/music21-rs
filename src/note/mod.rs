@@ -3,12 +3,9 @@ pub mod notrest;
 
 use generalnote::GeneralNoteTrait;
 use notrest::{NotRest, NotRestTrait};
-use num::Num;
 
 use crate::{
-    base::Music21ObjectTrait,
-    pitch::{IntoPitchName, Pitch},
-    prebase::ProtoM21ObjectTrait,
+    base::Music21ObjectTrait, defaults::IntegerType, pitch::Pitch, prebase::ProtoM21ObjectTrait,
 };
 
 #[derive(Clone, Debug)]
@@ -18,21 +15,41 @@ pub struct Note {
 }
 
 impl Note {
-    pub(crate) fn new<T>(pitch: Option<T>) -> Self
+    pub(crate) fn new<T>(
+        pitch: Option<T>,
+        duration: Option<crate::duration::Duration>,
+        name: Option<String>,
+        name_with_octave: Option<String>,
+    ) -> Self
     where
         T: IntoPitch,
     {
+        let _pitch = match pitch {
+            Some(pitch) => pitch.into_pitch(),
+            None => {
+                let name = match name_with_octave {
+                    Some(name_with_octave) => name_with_octave,
+                    None => match name {
+                        Some(name) => name,
+                        None => "C4".to_string(),
+                    },
+                };
+
+                Pitch::new(Some(name))
+            }
+        };
+
         Self {
-            notrest: NotRest::new(),
-            _pitch: todo!(),
+            notrest: NotRest::new(duration),
+            _pitch,
         }
     }
 
-    pub(crate) fn get_super(&self) -> NotRest {
-        self.notrest.clone()
+    pub(crate) fn get_super(&self) -> &NotRest {
+        &self.notrest
     }
 
-    pub(crate) fn pitchChanged(&self) {
+    pub(crate) fn pitch_changed(&self) {
         todo!()
     }
 }
@@ -43,24 +60,40 @@ impl NoteTrait for Note {}
 
 impl NotRestTrait for Note {}
 
-impl GeneralNoteTrait for Note {}
+impl GeneralNoteTrait for Note {
+    fn duration(&self) -> &Option<crate::duration::Duration> {
+        self.notrest.duration()
+    }
+}
 
 impl ProtoM21ObjectTrait for Note {}
 
 impl Music21ObjectTrait for Note {}
 
 pub trait IntoPitch {
-    fn into_pitch(&self) -> Pitch;
+    fn into_pitch(self) -> Pitch;
 }
 
 impl IntoPitch for Pitch {
-    fn into_pitch(&self) -> Pitch {
+    fn into_pitch(self) -> Pitch {
         self.clone()
     }
 }
 
-impl<T: Num + IntoPitchName + Clone> IntoPitch for T {
-    fn into_pitch(&self) -> Pitch {
-        Pitch::new(Some(self.clone()))
+impl IntoPitch for String {
+    fn into_pitch(self) -> Pitch {
+        todo!()
+    }
+}
+
+impl IntoPitch for &str {
+    fn into_pitch(self) -> Pitch {
+        todo!()
+    }
+}
+
+impl IntoPitch for IntegerType {
+    fn into_pitch(self) -> Pitch {
+        Pitch::new(Some(self))
     }
 }

@@ -2,7 +2,10 @@
 #![allow(unused_variables)]
 #![allow(unused_assignments)]
 #![allow(unused_results)]
-#![feature(lazy_get)]
+#![allow(unreachable_code)]
+// #![feature(negative_impls)]
+// #![feature(specialization)]
+// #![feature(lazy_get)]
 pub(crate) mod base;
 pub mod chord;
 pub(crate) mod common;

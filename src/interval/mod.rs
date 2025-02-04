@@ -75,10 +75,7 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> Result<Fracti
     if let Some((cached_pitch, cached_ratio)) = cache.get(&end_pitch_wanted.name()).cloned() {
         let octaves = (end_pitch_wanted.ps() - cached_pitch.ps()) / 12.0;
         let octave_multiplier = FractionType::new(2u32, 1u32).pow(octaves as i32);
-        return match octave_multiplier {
-            Some(multiplier) => Ok(cached_ratio * multiplier),
-            None => Ok(cached_ratio),
-        };
+        return Ok(cached_ratio * octave_multiplier);
     }
 
     let mut end_pitch_up = start_pitch.clone();
@@ -89,19 +86,13 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> Result<Fracti
         if end_pitch_up.name() == end_pitch_wanted.name() {
             found = Some((
                 end_pitch_up.clone(),
-                match FractionType::new(3u32, 2u32).pow(counter) {
-                    Some(ratio) => ratio,
-                    None => return Err(Exception::Interval("Failed to compute ratio".to_string())),
-                },
+                FractionType::new(3u32, 2u32).pow(counter),
             ));
             break;
         } else if end_pitch_down.name() == end_pitch_wanted.name() {
             found = Some((
                 end_pitch_down.clone(),
-                match FractionType::new(2u32, 3u32).pow(counter) {
-                    Some(ratio) => ratio,
-                    None => return Err(Exception::Interval("Failed to compute ratio".to_string())),
-                },
+                FractionType::new(2u32, 3u32).pow(counter),
             ));
             break;
         } else {
@@ -122,14 +113,11 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> Result<Fracti
 
     cache.insert(
         end_pitch_wanted.name().clone(),
-        (found_pitch.clone(), found_ratio.clone()),
+        (found_pitch.clone(), found_ratio),
     );
 
     let octaves = (end_pitch_wanted.ps() - found_pitch.ps()) / 12.0;
     let octave_multiplier = FractionType::new(2u32, 1u32).pow(octaves as i32);
 
-    return match octave_multiplier {
-        Some(multiplier) => Ok(found_ratio * multiplier),
-        None => Ok(found_ratio),
-    };
+    Ok(found_ratio * octave_multiplier)
 }

@@ -1,5 +1,5 @@
 #!/usr/bin/env nix-shell
-#!nix-shell -i bash -p git python3 python3Packages.virtualenv rustfmt
+#!nix-shell -i bash -p git python312 python312Packages.virtualenv rustfmt
 
 set -e
 
@@ -9,7 +9,7 @@ activate_venv() {
   elif [ -f "./venv/Scripts/activate" ]; then
     source ./venv/Scripts/activate
   else
-    python3 -m venv venv
+    python3.12 -m venv venv
     if [ -f "./venv/bin/activate" ]; then
       source ./venv/bin/activate
     elif [ -f "./venv/Scripts/activate" ]; then

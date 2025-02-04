@@ -1,5 +1,6 @@
 use super::generalnote::{GeneralNote, GeneralNoteTrait};
-use crate::{base::Music21ObjectTrait, prebase::ProtoM21ObjectTrait};
+use crate::{base::Music21ObjectTrait, duration::Duration, prebase::ProtoM21ObjectTrait};
+use std::fmt::Debug;
 
 #[derive(Clone, Debug)]
 pub struct NotRest {
@@ -7,9 +8,9 @@ pub struct NotRest {
 }
 
 impl NotRest {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(duration: Option<Duration>) -> Self {
         Self {
-            general_note: GeneralNote::new(),
+            general_note: GeneralNote::new(duration),
         }
     }
 }
@@ -18,7 +19,11 @@ pub(crate) trait NotRestTrait: GeneralNoteTrait {}
 
 impl NotRestTrait for NotRest {}
 
-impl GeneralNoteTrait for NotRest {}
+impl GeneralNoteTrait for NotRest {
+    fn duration(&self) -> &Option<Duration> {
+        self.general_note.duration()
+    }
+}
 
 impl Music21ObjectTrait for NotRest {}
 

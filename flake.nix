@@ -28,8 +28,8 @@
             llvmPackages.bintools
             rustup
             git
-            python3
-            python3Packages.virtualenv
+            python312
+            python312Packages.virtualenv
             rustfmt
           ];
 
@@ -41,6 +41,14 @@
           shellHook = ''
             export PATH=$PATH:''${CARGO_HOME:-~/.cargo}/bin
             export PATH=$PATH:''${RUSTUP_HOME:-~/.rustup}/toolchains/$RUSTC_VERSION-x86_64-unknown-linux-gnu/bin/
+
+            if [ ! -d venv ]; then
+              python3.12 -m venv venv
+            fi
+            source venv/bin/activate
+
+            pip install --upgrade pip
+            pip install -r ./music21/requirements.txt
           '';
 
           # Add precompiled library to rustc search path
