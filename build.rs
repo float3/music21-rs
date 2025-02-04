@@ -1,5 +1,12 @@
-use std::collections::HashMap;
-use std::{fs, path::PathBuf};
+#!/usr/bin/env nix-shell
+//! ```cargo
+//! [dependencies]
+//! pyo3 = { version = "0.23.4", features = ["auto-initialize"] }
+//! ```
+/*
+#!nix-shell -i rust-script -p rustc -p rust-script -p cargo -p rustfmt
+*/
+use std::{collections::HashMap, fs, path::PathBuf};
 
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyTuple};
@@ -21,112 +28,117 @@ const CARDINALITIES: [&str; 13] = [
     "duodecachord",
 ];
 
-fn generate_forte_table(tables: &Tables) -> PyResult<String> {
-    let mut rust_code = String::from("pub(super) static FORTE: Forte = LazyLock::new(|| {[\n");
-
-    let forte = tables.getattr("FORTE")?;
-    let forte_list: &Bound<'_, PyTuple> = forte.downcast_exact()?;
-
-    for (card, item) in forte_list.iter().enumerate() {
-        if card == 0 {
-            rust_code.push_str("vec![],");
-            continue;
+/// Helper: Given a Python object that is iterable over pitch‐class indices,
+/// build a `[bool; 12]` vector with the indicated indices set to true.
+fn build_pc_vec(pcs: &Bound<'_, PyAny>) -> PyResult<Vec<bool>> {
+    let mut vec = vec![false; 12];
+    for obj in pcs.try_iter()? {
+        let idx: usize = obj?.extract()?;
+        if idx < 12 {
+            vec[idx] = true;
         }
-        let card_data: &Bound<'_, PyTuple> = item.downcast()?;
-        rust_code.push_str("vec![");
-        for entry in card_data.iter() {
-            if entry.is_none() {
-                rust_code.push_str("None,");
-            } else {
-                // entry is expected to be a tuple (pcs, icv, iv, z_relation)
-                let tup: &Bound<'_, PyTuple> = entry.downcast()?;
-                let pcs = tup.get_item(0)?;
-                let icv = tup.get_item(1)?;
-                let iv = tup.get_item(2)?;
-                let z_relation = tup.get_item(3)?;
-
-                // Process pcs: create a [bool; 12] vector and set indices to true.
-                let mut pcs_vec = vec![false; 12];
-                for obj in pcs.try_iter()? {
-                    let idx: usize = obj?.extract()?;
-                    if idx < 12 {
-                        pcs_vec[idx] = true;
-                    }
-                }
-                let pcs_vec_str = format!("{:?}", pcs_vec);
-
-                // Process icv and iv – assume they are lists of numbers.
-                let icv_vec: Vec<i32> = icv.extract()?;
-                let iv_vec: Vec<i32> = iv.extract()?;
-                let icv_vec_str = format!("{:?}", icv_vec);
-                let iv_vec_str = format!("{:?}", iv_vec);
-
-                // For z_relation, use "None" if missing.
-                let z_rel_str = if z_relation.is_none() {
-                    "None".to_string()
-                } else {
-                    // Use the Python string representation.
-                    z_relation.str()?.to_str()?.to_string()
-                };
-
-                rust_code.push_str(&format!(
-                    "Some(({}, {}, {}, {})),",
-                    pcs_vec_str, icv_vec_str, iv_vec_str, z_rel_str
-                ));
-            }
-        }
-        rust_code.push_str("],");
-        rust_code.push('\n');
     }
-    rust_code.push_str("]\n});");
+    Ok(vec)
+}
+
+fn generate_forte_table(forte_list: &pyo3::Bound<'_, PyTuple>) -> PyResult<String> {
+    let table_lines: Result<Vec<String>, PyErr> = forte_list
+        .iter()
+        .enumerate()
+        .map(|(card, item)| {
+            if card == 0 {
+                Ok("vec![],".to_string())
+            } else {
+                let card_data: &Bound<'_, PyTuple> = item.downcast()?;
+                let entries: Result<Vec<String>, PyErr> = card_data
+                    .iter()
+                    .enumerate()
+                    .map(|(_, entry)| {
+                        if entry.is_none() {
+                            Ok("None,".to_string())
+                        } else {
+                            let tup: &Bound<'_, PyTuple> = entry.downcast()?;
+                            let pcs = tup.get_item(0)?;
+                            let icv = tup.get_item(1)?;
+                            let iv = tup.get_item(2)?;
+                            let z_relation = tup.get_item(3)?;
+
+                            let pcs_vec_str = format!("{:?}", build_pc_vec(&pcs)?);
+                            let icv_vec: Vec<i32> = icv.extract()?;
+                            let iv_vec: Vec<i32> = iv.extract()?;
+                            let icv_vec_str = format!("{:?}", icv_vec);
+                            let iv_vec_str = format!("{:?}", iv_vec);
+                            let z_rel_str = if z_relation.is_none() {
+                                "None".to_string()
+                            } else {
+                                z_relation.str()?.to_str()?.to_string()
+                            };
+                            Ok(format!(
+                                "Some(({}, {}, {}, {})),",
+                                pcs_vec_str, icv_vec_str, iv_vec_str, z_rel_str
+                            ))
+                        }
+                    })
+                    .collect();
+                let joined = entries?.join(" ");
+                Ok(format!("vec![{}],", joined))
+            }
+        })
+        .collect();
+    let table_body = table_lines?.join("\n");
+
+    let rust_code = format!(
+        "pub(super) static FORTE: Forte = LazyLock::new(|| {{[\n{}\n]}});",
+        table_body
+    );
     Ok(rust_code)
 }
 
 fn generate_inversion_default_pitch_class(tables: &Tables) -> PyResult<String> {
-    let mut rust_code = String::from("pub(super) static INVERSION_DEFAULT_PITCH_CLASSES: InversionDefaultPitchClasses = LazyLock::new(|| {\n");
-    rust_code.push_str("    let mut m = HashMap::new();\n");
-
     let inv_default = tables.getattr("inversionDefaultPitchClasses")?;
     let inv_dict: &Bound<'_, PyDict> = inv_default.downcast()?;
-    for (key, value) in inv_dict {
-        // key is a tuple (card, forte)
-        let key_tuple: &Bound<'_, PyTuple> = key.downcast()?;
-        let card: i32 = key_tuple.get_item(0)?.extract()?;
-        let forte: i32 = key_tuple.get_item(1)?.extract()?;
-        // value is a list of pitch-class indices
-        let pcs_list: Vec<usize> = value.extract()?;
-        let mut pcs_vec = vec![false; 12];
-        for i in pcs_list {
-            if i < 12 {
-                pcs_vec[i] = true;
+    let entries: Result<Vec<String>, PyErr> = inv_dict
+        .iter()
+        .map(|(key, value)| {
+            let key_tuple: &Bound<'_, PyTuple> = key.downcast()?;
+            let card: i32 = key_tuple.get_item(0)?.extract()?;
+            let forte: i32 = key_tuple.get_item(1)?.extract()?;
+            let pcs_list: Vec<usize> = value.extract()?;
+            let mut pcs_vec = vec![false; 12];
+            for i in pcs_list {
+                if i < 12 {
+                    pcs_vec[i] = true;
+                }
             }
-        }
-        let pcs_vec_str = format!("{:?}", pcs_vec);
-        rust_code.push_str(&format!(
-            "    m.insert(({}, {}), {});\n",
-            card, forte, pcs_vec_str
-        ));
-    }
-    rust_code.push_str("    m\n});");
+            Ok(format!(
+                "    m.insert(({}, {}), {:?});",
+                card, forte, pcs_vec
+            ))
+        })
+        .collect();
+    let rust_code = format!(
+        "pub(super) static INVERSION_DEFAULT_PITCH_CLASSES: InversionDefaultPitchClasses = LazyLock::new(|| {{\n    let mut m = HashMap::new();\n{}\n    m\n}});",
+        entries?.join("\n")
+    );
     Ok(rust_code)
 }
 
-fn generate_cardinality_to_chord_members(py: Python, tables: &Tables) -> PyResult<String> {
-    let mut rust_code = String::from("pub(super) static CARDINALITY_TO_CHORD_MEMBERS_GENERATED: CardinalityToChordMembersGenerated = LazyLock::new(|| {\n");
+fn generate_cardinality_to_chord_members(
+    py: Python,
+    tables: &Tables,
+    forte_list: &pyo3::Bound<'_, PyTuple>,
+) -> PyResult<String> {
     let mut inner_vars = Vec::new();
-    let forte = tables.getattr("FORTE")?;
-    let forte_list: &Bound<'_, PyTuple> = forte.downcast_exact()?;
+    let mut lines = Vec::new();
 
     for (card, item) in forte_list.iter().enumerate() {
+        let var_name = format!("inner_{}", card);
+        inner_vars.push(var_name.clone());
         if card == 0 {
-            rust_code.push_str(&format!("    let inner_{} = HashMap::new();\n", card));
+            lines.push(format!("    let {} = HashMap::new();", var_name));
         } else {
-            rust_code.push_str(&format!("    let mut inner_{} = HashMap::new();\n", card));
-        }
-        inner_vars.push(format!("inner_{}", card));
-        if card != 0 {
+            lines.push(format!("    let mut {} = HashMap::new();", var_name));
             let card_data: &Bound<'_, PyTuple> = item.downcast()?;
-            // Iterate over forte indices starting at 1.
             for forte_idx in 1..card_data.len() {
                 let entry = card_data.get_item(forte_idx)?;
                 if entry.is_none() {
@@ -137,38 +149,22 @@ fn generate_cardinality_to_chord_members(py: Python, tables: &Tables) -> PyResul
                 let icv = tup.get_item(1)?;
                 let inv_vec = tup.get_item(2)?;
                 let _z_rel = tup.get_item(3)?;
-
                 let inv_vec_list: Vec<i32> = inv_vec.extract()?;
-                let has_distinct = if inv_vec_list.len() > 1 {
-                    inv_vec_list[1] == 0
-                } else {
-                    false
-                };
-
-                let mut pcs_vec = vec![false; 12];
-                for obj in pcs.try_iter()? {
-                    let idx: usize = obj?.extract()?;
-                    if idx < 12 {
-                        pcs_vec[idx] = true;
-                    }
-                }
-                let pcs_vec_str = format!("{:?}", pcs_vec);
+                let has_distinct = inv_vec_list.get(1).map_or(false, |&v| v == 0);
+                let pcs_vec_str = format!("{:?}", build_pc_vec(&pcs)?);
                 let icv_vec: Vec<i32> = icv.extract()?;
                 let inv_vec_str = format!("{:?}", inv_vec_list);
                 let icv_vec_str = format!("{:?}", icv_vec);
-
                 let sign_str = if has_distinct {
                     "Sign::One"
                 } else {
                     "Sign::Zero"
                 };
-                rust_code.push_str(&format!(
-                    "    inner_{}.insert(({}, {}), ({}, {}, {}));\n",
-                    card, forte_idx, sign_str, pcs_vec_str, inv_vec_str, icv_vec_str
+                lines.push(format!(
+                    "    {}.insert(({}, {}), ({}, {}, {}));",
+                    var_name, forte_idx, sign_str, pcs_vec_str, inv_vec_str, icv_vec_str
                 ));
-
                 if has_distinct {
-                    // Insert inverted entry.
                     let inversion_default = tables.getattr("inversionDefaultPitchClasses")?;
                     let card_py = card.into_pyobject(py)?;
                     let forte_idx_py = forte_idx.into_pyobject(py)?;
@@ -176,70 +172,88 @@ fn generate_cardinality_to_chord_members(py: Python, tables: &Tables) -> PyResul
 
                     let inv_pcs = inversion_default
                         .get_item(key)
-                        .unwrap_or(py.None().bind(py).clone());
-                    let mut inv_pcs_vec = vec![false; 12];
-                    if !inv_pcs.is_none() {
+                        .unwrap_or_else(|_| py.None().bind(py).clone());
+                    let inv_pcs_vec = if inv_pcs.is_none() {
+                        vec![false; 12]
+                    } else {
                         let inv_pcs_list: Vec<usize> = inv_pcs.extract()?;
+                        let mut vec = vec![false; 12];
                         for i in inv_pcs_list {
                             if i < 12 {
-                                inv_pcs_vec[i] = true;
+                                vec[i] = true;
                             }
                         }
-                    }
+                        vec
+                    };
                     let inv_pcs_vec_str = format!("{:?}", inv_pcs_vec);
-                    rust_code.push_str(&format!(
-                        "    inner_{}.insert(({}, Sign::NegativeOne), ({}, {}, {}));\n",
-                        card, forte_idx, inv_pcs_vec_str, inv_vec_str, icv_vec_str
+                    lines.push(format!(
+                        "    {}.insert(({}, Sign::NegativeOne), ({}, {}, {}));",
+                        var_name, forte_idx, inv_pcs_vec_str, inv_vec_str, icv_vec_str
                     ));
                 }
             }
         }
     }
-    rust_code.push_str("    [\n");
-    for var in inner_vars {
-        rust_code.push_str(&format!("        {},\n", var));
-    }
-    rust_code.push_str("    ]\n});\n");
+    let inner_vars_str = inner_vars
+        .into_iter()
+        .map(|v| format!("        {},", v))
+        .collect::<Vec<_>>()
+        .join("\n");
+    lines.push("    [".to_string());
+    lines.push(inner_vars_str);
+    lines.push("    ]".to_string());
+    let rust_code = format!(
+        "pub(super) static CARDINALITY_TO_CHORD_MEMBERS_GENERATED: CardinalityToChordMembersGenerated = LazyLock::new(|| {{\n{}\n}});\n",
+        lines.join("\n")
+    );
+    Ok(rust_code)
+}
+
+fn generate_maximum_index_number(
+    tables: &Tables,
+    attr_name: &str,
+    static_name: &str,
+    type_name: &str,
+) -> PyResult<String> {
+    let arr = tables.getattr(attr_name)?;
+    let arr_dict: &Bound<'_, PyDict> = arr.downcast()?;
+    let hashmap: HashMap<usize, i32> = arr_dict.extract()?;
+    let values: Vec<String> = (0..hashmap.len())
+        .map(|num| hashmap.get(&num).unwrap().to_string())
+        .collect();
+    let rust_code = format!(
+        "pub(super) static {}: {} = LazyLock::new(|| vec![{}]);",
+        static_name,
+        type_name,
+        values.join(", ")
+    );
     Ok(rust_code)
 }
 
 fn generate_maximum_index_number_without_inversion_equivalence(
     tables: &Tables,
 ) -> PyResult<String> {
-    let mut rust_code = String::from("pub(super) static MAXIMUM_INDEX_NUMBER_WITHOUT_INVERSION_EQUIVALENCE: MaximumIndexNumberWithoutInversionEquivalence = LazyLock::new(|| vec![");
-    let arr = tables.getattr("maximumIndexNumberWithoutInversionEquivalence")?;
-    let arr_list: &Bound<'_, PyDict> = arr.downcast()?;
-    let hashmap = arr_list.extract::<HashMap<usize, i32>>()?;
-    for num in 0..hashmap.len() {
-        rust_code.push_str(&format!("{}, ", hashmap.get(&num).unwrap()));
-    }
-    if rust_code.ends_with(", ") {
-        rust_code.truncate(rust_code.len() - 2);
-    }
-    rust_code.push_str("]);");
-    Ok(rust_code)
+    generate_maximum_index_number(
+        tables,
+        "maximumIndexNumberWithoutInversionEquivalence",
+        "MAXIMUM_INDEX_NUMBER_WITHOUT_INVERSION_EQUIVALENCE",
+        "MaximumIndexNumberWithoutInversionEquivalence",
+    )
 }
 
 fn generate_maximum_index_number_with_inversion_equivalence(tables: &Tables) -> PyResult<String> {
-    let mut rust_code = String::from("pub(super) static MAXIMUM_INDEX_NUMBER_WITH_INVERSION_EQUIVALENCE: MaximumIndexNumberWithInversionEquivalence = LazyLock::new(|| vec![");
-    let arr = tables.getattr("maximumIndexNumberWithInversionEquivalence")?;
-    let arr_list: &Bound<'_, PyDict> = arr.downcast()?;
-    let hashmap = arr_list.extract::<HashMap<usize, i32>>()?;
-    for num in 0..hashmap.len() {
-        rust_code.push_str(&format!("{}, ", hashmap.get(&num).unwrap()));
-    }
-    if rust_code.ends_with(", ") {
-        rust_code.truncate(rust_code.len() - 2);
-    }
-    rust_code.push_str("]);");
-    Ok(rust_code)
+    generate_maximum_index_number(
+        tables,
+        "maximumIndexNumberWithInversionEquivalence",
+        "MAXIMUM_INDEX_NUMBER_WITH_INVERSION_EQUIVALENCE",
+        "MaximumIndexNumberWithInversionEquivalence",
+    )
 }
 
 fn generate_forte_number_with_inversion_to_tn_index(tables: &Tables) -> PyResult<String> {
-    let mut rust_code = String::from("pub(super) static FORTE_NUMBER_WITH_INVERSION_TO_INDEX: ForteNumberWithInversionToIndex = LazyLock::new(|| {\n");
-    rust_code.push_str("    let mut m = HashMap::new();\n");
     let dict = tables.getattr("forteNumberWithInversionToTnIndex")?;
     let dict_py: &Bound<'_, PyDict> = dict.downcast()?;
+    let mut lines = Vec::new();
     for (key, value) in dict_py {
         let key_tuple: &Bound<'_, PyTuple> = key.downcast()?;
         let card: i32 = key_tuple.get_item(0)?.extract()?;
@@ -252,22 +266,22 @@ fn generate_forte_number_with_inversion_to_tn_index(tables: &Tables) -> PyResult
             _ => format!("{}", inv),
         };
         let i: i32 = value.extract()?;
-        rust_code.push_str(&format!(
-            "    m.insert(({}, {}, {}), {});\n",
+        lines.push(format!(
+            "    m.insert(({}, {}, {}), {});",
             card, idx, inv_str, i
         ));
     }
-    rust_code.push_str("    m\n});");
+    let rust_code = format!(
+        "pub(super) static FORTE_NUMBER_WITH_INVERSION_TO_INDEX: ForteNumberWithInversionToIndex = LazyLock::new(|| {{\n    let mut m = HashMap::new();\n{}\n    m\n}});",
+        lines.join("\n")
+    );
     Ok(rust_code)
 }
 
 fn generate_tn_index_to_chord_info(tables: &Tables) -> PyResult<String> {
-    let mut rust_code = String::from(
-        "pub(super) static TN_INDEX_TO_CHORD_INFO: TnIndexToChordInfo = LazyLock::new(|| {\n",
-    );
-    rust_code.push_str("    let mut m = HashMap::new();\n");
     let dict = tables.getattr("tnIndexToChordInfo")?;
     let dict_py: &Bound<'_, PyDict> = dict.downcast()?;
+    let mut lines = Vec::new();
     for (key, value) in dict_py {
         let key_tuple: &Bound<'_, PyTuple> = key.downcast()?;
         let card: i32 = key_tuple.get_item(0)?.extract()?;
@@ -279,7 +293,6 @@ fn generate_tn_index_to_chord_info(tables: &Tables) -> PyResult<String> {
             1 => "Sign::One".to_string(),
             _ => format!("{}", inv),
         };
-        // value is expected to be a dict with a "name" key.
         let value_dict: &Bound<'_, PyDict> = value.downcast()?;
         if let Some(names) = value_dict.get_item("name")? {
             let names_list: Vec<String> = names.extract()?;
@@ -289,50 +302,47 @@ fn generate_tn_index_to_chord_info(tables: &Tables) -> PyResult<String> {
                     .map(|s| format!("\"{}\"", s))
                     .collect::<Vec<_>>()
                     .join(", ");
-                rust_code.push_str(&format!(
-                    "    m.insert(({}, {}, {}), Some(vec![{}]));\n",
+                lines.push(format!(
+                    "    m.insert(({}, {}, {}), Some(vec![{}]));",
                     card, idx, inv_str, names_str
                 ));
             } else {
-                rust_code.push_str(&format!(
-                    "    m.insert(({}, {}, {}), None);\n",
+                lines.push(format!(
+                    "    m.insert(({}, {}, {}), None);",
                     card, idx, inv_str
                 ));
             }
         } else {
-            rust_code.push_str(&format!(
-                "    m.insert(({}, {}, {}), None);\n",
+            lines.push(format!(
+                "    m.insert(({}, {}, {}), None);",
                 card, idx, inv_str
             ));
         }
     }
-    rust_code.push_str("    m\n});");
+    let rust_code = format!(
+        "pub(super) static TN_INDEX_TO_CHORD_INFO: TnIndexToChordInfo = LazyLock::new(|| {{\n    let mut m = HashMap::new();\n{}\n    m\n}});",
+        lines.join("\n")
+    );
     Ok(rust_code)
 }
 
 fn generate_rust_tables(py: Python, tables: &Tables, imports: &str) -> PyResult<String> {
-    let mut rust_code = String::new();
-
-    rust_code.push_str("/*\nThis file is autogenerated from the tables in the original music21 library\ncheck the build script for details\n*/\n");
-    rust_code.push_str(imports);
-    rust_code.push('\n');
-    rust_code.push_str(&generate_forte_table(tables)?);
-    rust_code.push_str("\n\n");
-    rust_code.push_str(&generate_inversion_default_pitch_class(tables)?);
-    rust_code.push_str("\n\n");
-    rust_code.push_str(&generate_cardinality_to_chord_members(py, tables)?);
-    rust_code.push_str("\n\n");
-    rust_code.push_str(&generate_forte_number_with_inversion_to_tn_index(tables)?);
-    rust_code.push_str("\n\n");
-    rust_code.push_str(&generate_tn_index_to_chord_info(tables)?);
-    rust_code.push_str("\n\n");
-    rust_code.push_str(&generate_maximum_index_number_without_inversion_equivalence(tables)?);
-    rust_code.push_str("\n\n");
-    rust_code.push_str(&generate_maximum_index_number_with_inversion_equivalence(
-        tables,
-    )?);
-    rust_code.push_str("\n\n");
-
+    let forte = tables.getattr("FORTE")?;
+    let forte_list: &Bound<'_, PyTuple> = forte.downcast_exact()?;
+    let parts = [
+        generate_forte_table(forte_list)?,
+        generate_inversion_default_pitch_class(tables)?,
+        generate_cardinality_to_chord_members(py, tables, forte_list)?,
+        generate_forte_number_with_inversion_to_tn_index(tables)?,
+        generate_tn_index_to_chord_info(tables)?,
+        generate_maximum_index_number_without_inversion_equivalence(tables)?,
+        generate_maximum_index_number_with_inversion_equivalence(tables)?,
+    ];
+    let rust_code = format!(
+        "/*\nThis file is autogenerated from the tables in the original music21 library\ncheck the build script for details\n*/\n{}\n\n{}",
+        imports,
+        parts.join("\n\n")
+    );
     Ok(rust_code)
 }
 
@@ -377,6 +387,6 @@ use std::{collections::HashMap, sync::LazyLock};
 
     if !output.status.success() {
         panic!();
-    };
+    }
     Ok(())
 }

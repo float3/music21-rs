@@ -30,6 +30,7 @@
             git
             python312
             python312Packages.virtualenv
+            python312Packages.mypy
             rustfmt
           ];
 
@@ -42,6 +43,9 @@
             export PATH=$PATH:''${CARGO_HOME:-~/.cargo}/bin
             export PATH=$PATH:''${RUSTUP_HOME:-~/.rustup}/toolchains/$RUSTC_VERSION-x86_64-unknown-linux-gnu/bin/
 
+            git submodule update --init --recursive
+            cd ./music21; git pull origin master; cd ..
+
             if [ ! -d venv ]; then
               python3.12 -m venv venv
             fi
@@ -49,6 +53,9 @@
 
             pip install --upgrade pip
             pip install -r ./music21/requirements.txt
+
+            cargo build
+            fish
           '';
 
           # Add precompiled library to rustc search path
