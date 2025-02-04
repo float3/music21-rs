@@ -58,7 +58,7 @@ def generate_forte_table():
                 if Comments:
                     rust_code += f"\n// Index {i} unused\n"
             else:
-                entry: tables.TNIStructure
+                entry: &Tables.TNIStructure
                 pcs, icv, iv, z_relation = entry
                 pcs_vec = [False] * 12
                 for i in pcs:
