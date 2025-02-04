@@ -8,8 +8,7 @@ name = "music21-rs"
 repository = "https://github.com/float3/music21-rs"
 version = "0.0.2"
 build = "build.rs"
-exclude = ["./music21/*"]
-include = ["./music21/music21/chord/tables.py"]
+include = ["/src", "build.rs", "music21/music21/chord/tables.py"]
 
 [dependencies]
 fraction = "0.15.3"
