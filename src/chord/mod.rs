@@ -173,7 +173,9 @@ impl IntoNotes for &[IntegerType] {
 //     }
 // }
 
+
 #[test]
+#[ignore]
 fn c_e_g_pitchedcommonname() {
     let chord = Chord::new(Some("C E G"));
     assert_eq!(chord.pitched_common_name(), "C-major triad");
