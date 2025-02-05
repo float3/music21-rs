@@ -20,7 +20,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg(feature = "buildscript")]
 mod pyo3 {
-    use std::{collections::HashMap, fs, path::PathBuf};
+    use std::{collections::HashMap, process::Command, fs, path::PathBuf};
 
     use pyo3::prelude::*;
     use pyo3::types::{PyDict, PyTuple};
