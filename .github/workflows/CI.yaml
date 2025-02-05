@@ -65,9 +65,5 @@ jobs:
     - name: Run tests
       run: cargo test --verbose --all-targets --all-features --no-fail-fast --lib --bins --examples --tests --benches
 
-    - name: Run report
-      run: cargo report future-incompat
-
     - name: Check for uncommitted changes
       run: git diff --exit-code
-
