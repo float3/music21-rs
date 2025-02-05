@@ -5,10 +5,10 @@
 //! buildscript = ["dep:pyo3"]
 //!
 //! [dependencies]
-//! pyo3 = { version = "0.23.4", features = ["auto-initialize"], optional = true }
+//! pyo3 = { version = "0.23.4", features = [auto-initialize], optional = true }
 //! ```
 /*
-#!nix-shell -i rust-script -p rustc -p rust-script -p cargo -p rustfmt
+#!nix-shell -i rust-script -p rustc -p rust-script -p cargo -p rustfmt -p python312 -p python312Packages.virtualenv
 */
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -364,7 +364,17 @@ mod pyo3 {
     type Tables<'py> = Bound<'py, PyModule>;
 
     pub(super) fn main() -> PyResult<()> {
+        let pip_status = Command::new("python3.12")
+            .args(&["-m". "pip", "install", "-r", "./music21/requirements.txt"])
+            .status()
+            .expect("Failed to run pip install");
+        if !pip_status.success() {
+            eprintln!("pip install failed");
+            std::process::exit(1);
+        }
+
         let rust_path = "./src/chord/tables/generated.rs";
+
         Python::with_gil(|py| -> PyResult<()> {
             let sys = py.import("sys")?;
             let path = sys.getattr("path")?;
