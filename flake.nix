@@ -31,7 +31,7 @@
             rustfmt
           ];
 
-          RUSTC_VERSION = stable;
+          RUSTC_VERSION = "stable";
 
           # https://github.com/rust-lang/rust-bindgen#environment-variables
           LIBCLANG_PATH = pkgs.lib.makeLibraryPath [pkgs.llvmPackages_latest.libclang.lib];
