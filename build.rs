@@ -365,7 +365,7 @@ mod pyo3 {
 
     pub(super) fn main() -> PyResult<()> {
         let pip_status = Command::new("python3.12")
-            .args(&["-m". "pip", "install", "-r", "./music21/requirements.txt"])
+            .args(&["-m", "pip", "install", "-r", "./music21/requirements.txt"])
             .status()
             .expect("Failed to run pip install");
         if !pip_status.success() {
