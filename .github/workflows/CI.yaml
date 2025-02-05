@@ -50,12 +50,6 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-python-
 
-    - name: Install Python dependencies
-      run: |
-        python3.12 -m venv venv
-        source ./venv/bin/activate
-        pip3.12 install -r ./music21/requirements.txt
-
     - name: Build
       run: cargo build --verbose --all-targets --all-features
 
