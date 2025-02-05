@@ -15,7 +15,7 @@
       system: let
         pkgs = nixpkgs.legacyPackages.${system};
         # Read the file relative to the flake's root
-        overrides = builtins.fromTOML (builtins.readFile (self + "/rust-toolchain.toml"));
+        # overrides = builtins.fromTOML (builtins.readFile (self + "/rust-toolchain.toml"));
         libPath = with pkgs;
           lib.makeLibraryPath [
             # load external libraries that you need in your rust project here
@@ -30,11 +30,10 @@
             git
             python312
             python312Packages.virtualenv
-            python312Packages.mypy
             rustfmt
           ];
 
-          RUSTC_VERSION = overrides.toolchain.channel;
+          # RUSTC_VERSION = overrides.toolchain.channel;
 
           # https://github.com/rust-lang/rust-bindgen#environment-variables
           LIBCLANG_PATH = pkgs.lib.makeLibraryPath [pkgs.llvmPackages_latest.libclang.lib];
