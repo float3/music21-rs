@@ -73,3 +73,7 @@ jobs:
 
     - name: Run report
       run: cargo report future-incompat
+
+    - name: Check for uncommitted changes
+      run: git diff --exit-code
+
