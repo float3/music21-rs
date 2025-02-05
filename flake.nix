@@ -14,8 +14,6 @@
     flake-utils.lib.eachDefaultSystem (
       system: let
         pkgs = nixpkgs.legacyPackages.${system};
-        # Read the file relative to the flake's root
-        # overrides = builtins.fromTOML (builtins.readFile (self + "/rust-toolchain.toml"));
         libPath = with pkgs;
           lib.makeLibraryPath [
             # load external libraries that you need in your rust project here
@@ -33,7 +31,7 @@
             rustfmt
           ];
 
-          # RUSTC_VERSION = overrides.toolchain.channel;
+          RUSTC_VERSION = stable;
 
           # https://github.com/rust-lang/rust-bindgen#environment-variables
           LIBCLANG_PATH = pkgs.lib.makeLibraryPath [pkgs.llvmPackages_latest.libclang.lib];
@@ -50,8 +48,8 @@
             fi
             source venv/bin/activate
 
-            pip install --upgrade pip
-            pip install -r ./music21/requirements.txt
+            python3.12 -m pip install --upgrade pip
+            python3.12 -m pip install -r ./music21/requirements.txt
 
             cargo build
             fish
