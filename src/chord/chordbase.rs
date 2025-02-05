@@ -2,6 +2,7 @@ use super::{IntegerType, Pitch};
 use crate::{
     base::Music21ObjectTrait,
     duration::Duration,
+    exceptions::ExceptionResult,
     note::{
         generalnote::GeneralNoteTrait,
         notrest::{NotRest, NotRestTrait},
@@ -19,7 +20,7 @@ pub(crate) struct ChordBase {
 }
 
 impl ChordBase {
-    pub(crate) fn new<T>(notes: Option<T>, duration: &Option<Duration>) -> Self
+    pub(crate) fn new<T>(notes: Option<T>, duration: &Option<Duration>) -> ExceptionResult<Self>
     where
         T: IntoNotRests,
     {
@@ -29,15 +30,15 @@ impl ChordBase {
             _overrides: HashMap::new(),
         };
 
-        x.add_core_or_init(notes, duration);
-        x
+        x.add_core_or_init(notes, duration)?;
+        Ok(x)
     }
 
     fn add_core_or_init<T>(
         &mut self,
         notes: Option<T>,
         duration: &Option<Duration>,
-    ) -> Option<Duration>
+    ) -> ExceptionResult<Option<Duration>>
     where
         T: IntoNotRests,
     {
@@ -53,7 +54,7 @@ impl ChordBase {
 
         if let Some(notes) = notes {
             let (use_duration, self_duration, notrests) =
-                notes.into_not_rests(duration, quick_duration);
+                notes.into_not_rests(duration, quick_duration)?;
             duration = use_duration;
             notrests.into_iter().for_each(|n| {
                 // n._chord_attached = Some(Arc::new(self));
@@ -61,7 +62,7 @@ impl ChordBase {
             })
         }
 
-        duration.clone()
+        Ok(duration.clone())
     }
 }
 
@@ -88,11 +89,11 @@ pub(crate) trait IntoNotRests {
         self,
         duration: &Option<Duration>,
         quick_duration: bool,
-    ) -> (
+    ) -> ExceptionResult<(
         &Option<Duration>, //useDuration
         Option<Duration>,  //self.duration
         Self::T,
-    );
+    )>;
 }
 
 impl IntoNotRests for String {
@@ -101,7 +102,7 @@ impl IntoNotRests for String {
         self,
         duration: &Option<Duration>,
         quick_duration: bool,
-    ) -> (&Option<Duration>, Option<Duration>, Self::T) {
+    ) -> ExceptionResult<(&Option<Duration>, Option<Duration>, Self::T)> {
         if self.contains(char::is_whitespace) {
             // Split into whitespace parts and delegate to &[&str]
             self.split_whitespace()
@@ -109,10 +110,10 @@ impl IntoNotRests for String {
                 .as_slice()
                 .into_not_rests(duration, quick_duration)
         } else {
-            let note = Note::new(Some(self), duration.clone(), None, None)
+            let note = Note::new(Some(self), duration.clone(), None, None)?
                 .get_super()
                 .clone();
-            (duration, duration.clone(), vec![note])
+            Ok((duration, duration.clone(), vec![note]))
         }
     }
 }
@@ -123,17 +124,17 @@ impl IntoNotRests for &str {
         self,
         duration: &Option<Duration>,
         quick_duration: bool,
-    ) -> (&Option<Duration>, Option<Duration>, Self::T) {
+    ) -> ExceptionResult<(&Option<Duration>, Option<Duration>, Self::T)> {
         if self.contains(char::is_whitespace) {
             self.split_whitespace()
                 .collect::<Vec<&str>>()
                 .as_slice()
                 .into_not_rests(duration, quick_duration)
         } else {
-            let note = Note::new(Some(self), duration.clone(), None, None)
+            let note = Note::new(Some(self), duration.clone(), None, None)?
                 .get_super()
                 .clone();
-            (duration, duration.clone(), vec![note])
+            Ok((duration, duration.clone(), vec![note]))
         }
     }
 }
@@ -144,16 +145,18 @@ impl IntoNotRests for &[String] {
         self,
         duration: &Option<Duration>,
         quick_duration: bool,
-    ) -> (&Option<Duration>, Option<Duration>, Self::T) {
+    ) -> ExceptionResult<(&Option<Duration>, Option<Duration>, Self::T)> {
         let notes = self
             .iter()
             .map(|s| {
-                Note::new(Some(s.to_string()), duration.clone(), None, None)
-                    .get_super()
-                    .clone()
+                Ok(
+                    Note::new(Some(s.to_string()), duration.clone(), None, None)?
+                        .get_super()
+                        .clone(),
+                )
             })
-            .collect();
-        (duration, duration.clone(), notes)
+            .collect::<ExceptionResult<Vec<_>>>()?;
+        Ok((duration, duration.clone(), notes))
     }
 }
 
@@ -163,16 +166,16 @@ impl IntoNotRests for &[&str] {
         self,
         duration: &Option<Duration>,
         quick_duration: bool,
-    ) -> (&Option<Duration>, Option<Duration>, Self::T) {
+    ) -> ExceptionResult<(&Option<Duration>, Option<Duration>, Self::T)> {
         let notes = self
             .iter()
             .map(|s| {
-                Note::new(Some(*s), duration.clone(), None, None)
+                Ok(Note::new(Some(*s), duration.clone(), None, None)?
                     .get_super()
-                    .clone()
+                    .clone())
             })
-            .collect();
-        (duration, duration.clone(), notes)
+            .collect::<ExceptionResult<Vec<_>>>()?;
+        Ok((duration, duration.clone(), notes))
     }
 }
 
@@ -182,16 +185,16 @@ impl IntoNotRests for &[Pitch] {
         self,
         duration: &Option<Duration>,
         quick_duration: bool,
-    ) -> (&Option<Duration>, Option<Duration>, Self::T) {
+    ) -> ExceptionResult<(&Option<Duration>, Option<Duration>, Self::T)> {
         let notes = self
             .iter()
             .map(|p| {
-                Note::new(Some(p.clone()), duration.clone(), None, None)
+                Ok(Note::new(Some(p.clone()), duration.clone(), None, None)?
                     .get_super()
-                    .clone()
+                    .clone())
             })
-            .collect();
-        (duration, duration.clone(), notes)
+            .collect::<ExceptionResult<Vec<_>>>()?;
+        Ok((duration, duration.clone(), notes))
     }
 }
 
@@ -201,7 +204,7 @@ impl IntoNotRests for &[ChordBase] {
         self,
         duration: &Option<Duration>,
         quick_duration: bool,
-    ) -> (&Option<Duration>, Option<Duration>, Self::T) {
+    ) -> ExceptionResult<(&Option<Duration>, Option<Duration>, Self::T)> {
         if quick_duration {
             // Here we obtain self_duration from the first chord.
             let self_duration = self[0].duration().clone();
@@ -209,13 +212,13 @@ impl IntoNotRests for &[ChordBase] {
                 .iter()
                 .flat_map(|chord_base| chord_base._notes.clone())
                 .collect();
-            (&None, self_duration, notes)
+            Ok((&None, self_duration, notes))
         } else {
             let notes: Self::T = self
                 .iter()
                 .flat_map(|chord_base| chord_base._notes.clone())
                 .collect();
-            (duration, None, notes)
+            Ok((duration, None, notes))
         }
     }
 }
@@ -226,8 +229,8 @@ impl IntoNotRests for &[NotRest] {
         self,
         duration: &Option<Duration>,
         quick_duration: bool,
-    ) -> (&Option<Duration>, Option<Duration>, Self::T) {
-        (duration, duration.clone(), self.to_vec())
+    ) -> ExceptionResult<(&Option<Duration>, Option<Duration>, Self::T)> {
+        Ok((duration, duration.clone(), self.to_vec()))
     }
 }
 
@@ -237,15 +240,15 @@ impl IntoNotRests for &[IntegerType] {
         self,
         duration: &Option<Duration>,
         quick_duration: bool,
-    ) -> (&Option<Duration>, Option<Duration>, Self::T) {
+    ) -> ExceptionResult<(&Option<Duration>, Option<Duration>, Self::T)> {
         let notes = self
             .iter()
             .map(|i| {
-                Note::new(Some(*i), duration.clone(), None, None)
+                Ok(Note::new(Some(*i), duration.clone(), None, None)?
                     .get_super()
-                    .clone()
+                    .clone())
             })
-            .collect();
-        (duration, duration.clone(), notes)
+            .collect::<ExceptionResult<Vec<_>>>()?;
+        Ok((duration, duration.clone(), notes))
     }
 }

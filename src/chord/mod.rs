@@ -7,6 +7,7 @@ use crate::{
     base::Music21ObjectTrait,
     defaults::IntegerType,
     duration::Duration,
+    exceptions::ExceptionResult,
     key::KeySignature,
     note::{generalnote::GeneralNoteTrait, notrest::NotRestTrait, Note},
     pitch::Pitch,
@@ -20,12 +21,12 @@ pub struct Chord {
 }
 
 impl Chord {
-    pub fn new<T>(notes: Option<T>) -> Self
+    pub fn new<T>(notes: Option<T>) -> ExceptionResult<Self>
     where
         T: IntoNotes + Clone + IntoNotRests,
     {
         let mut chord = Self {
-            chordbase: ChordBase::new(notes.clone(), &None),
+            chordbase: ChordBase::new(notes.clone(), &None)?,
             _notes: notes.as_ref().map_or_else(Vec::new, |notes| {
                 notes
                     .clone()
@@ -35,7 +36,7 @@ impl Chord {
             }),
         };
         chord.simplify_enharmonics(true, None);
-        chord
+        Ok(chord)
     }
 
     pub fn pitched_common_name(&self) -> String {
@@ -177,5 +178,8 @@ impl IntoNotes for &[IntegerType] {
 #[ignore]
 fn c_e_g_pitchedcommonname() {
     let chord = Chord::new(Some("C E G"));
-    assert_eq!(chord.pitched_common_name(), "C-major triad");
+
+    assert!(chord.is_ok());
+
+    assert_eq!(chord.unwrap().pitched_common_name(), "C-major triad");
 }

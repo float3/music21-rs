@@ -7,7 +7,7 @@ use std::{
 pub(crate) type ExceptionResult<T> = Result<T, Exception>;
 
 #[derive(Debug)]
-pub(crate) enum Exception {
+pub enum Exception {
     Music21Object(String),
     Chord(String),
     Pitch(String),

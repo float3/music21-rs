@@ -5,15 +5,15 @@
 //! buildscript = ["dep:pyo3"]
 //!
 //! [dependencies]
-//! pyo3 = { version = "0.23.4", features = [auto-initialize], optional = true }
+//! pyo3 = { version = "0.23.4", features = ["auto-initialize"], optional = true }
 //! ```
 /*
 #!nix-shell -i rust-script -p rustc -p rust-script -p cargo -p rustfmt -p python312 -p python312Packages.virtualenv -p git
 */
 
-use std::error;
+use std::error::Error;
 
-fn main() -> Result<(), Box<dyn error::Error>> {
+fn main() -> Result<(), Box<dyn Error>> {
     #[cfg(feature = "buildscript")]
     pyo3::main()?;
 

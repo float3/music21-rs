@@ -2,7 +2,8 @@ pub(crate) mod generalnote;
 pub(crate) mod notrest;
 
 use crate::{
-    base::Music21ObjectTrait, defaults::IntegerType, pitch::Pitch, prebase::ProtoM21ObjectTrait,
+    base::Music21ObjectTrait, defaults::IntegerType, exceptions::ExceptionResult, pitch::Pitch,
+    prebase::ProtoM21ObjectTrait,
 };
 
 use generalnote::GeneralNoteTrait;
@@ -20,13 +21,13 @@ impl Note {
         duration: Option<crate::duration::Duration>,
         name: Option<String>,
         name_with_octave: Option<String>,
-    ) -> Self
+    ) -> ExceptionResult<Self>
     where
         T: IntoPitch,
     {
         let _pitch = match pitch {
             Some(pitch) => pitch.into_pitch(),
-            None => {
+            None => Ok({
                 let name = match name_with_octave {
                     Some(name_with_octave) => name_with_octave,
                     None => match name {
@@ -41,14 +42,14 @@ impl Note {
                     None,
                     Option::<IntegerType>::None,
                     Option::<IntegerType>::None,
-                )
-            }
-        };
+                )?
+            }),
+        }?;
 
-        Self {
+        Ok(Self {
             notrest: NotRest::new(duration),
             _pitch,
-        }
+        })
     }
 
     pub(crate) fn get_super(&self) -> &NotRest {
@@ -77,17 +78,17 @@ impl ProtoM21ObjectTrait for Note {}
 impl Music21ObjectTrait for Note {}
 
 pub(crate) trait IntoPitch {
-    fn into_pitch(self) -> Pitch;
+    fn into_pitch(self) -> ExceptionResult<Pitch>;
 }
 
 impl IntoPitch for Pitch {
-    fn into_pitch(self) -> Pitch {
-        self.clone()
+    fn into_pitch(self) -> ExceptionResult<Pitch> {
+        Ok(self.clone())
     }
 }
 
 impl IntoPitch for String {
-    fn into_pitch(self) -> Pitch {
+    fn into_pitch(self) -> ExceptionResult<Pitch> {
         Pitch::new(
             Some(self),
             None,
@@ -99,7 +100,7 @@ impl IntoPitch for String {
 }
 
 impl IntoPitch for &str {
-    fn into_pitch(self) -> Pitch {
+    fn into_pitch(self) -> ExceptionResult<Pitch> {
         Pitch::new(
             Some(self),
             None,
@@ -111,7 +112,7 @@ impl IntoPitch for &str {
 }
 
 impl IntoPitch for IntegerType {
-    fn into_pitch(self) -> Pitch {
+    fn into_pitch(self) -> ExceptionResult<Pitch> {
         Pitch::new(
             Some(self),
             None,

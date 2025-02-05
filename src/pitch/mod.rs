@@ -3,6 +3,7 @@ pub(crate) mod microtone;
 
 use crate::{
     defaults::{self, IntegerType},
+    exceptions::ExceptionResult,
     interval::{interval_to_pythagorean_ratio, Interval, PitchOrNote},
     note::Note,
     prebase::{ProtoM21Object, ProtoM21ObjectTrait},
@@ -38,7 +39,7 @@ impl Pitch {
         octave: Octave,
         accidental: Option<U>,
         microtone: Option<V>,
-    ) -> Self
+    ) -> ExceptionResult<Self>
     where
         T: IntoPitchName,
         U: IntoAccidental,
@@ -75,9 +76,9 @@ impl Pitch {
         }
 
         if let Some(accidental) = accidental {
-            self_accidental = accidental.into_accidental();
+            self_accidental = Accidental::new(accidental)?;
         } else {
-            self_accidental = Accidental::new("natural");
+            self_accidental = Accidental::new("natural")?;
         }
 
         if let Some(microtone) = microtone {
@@ -99,7 +100,7 @@ impl Pitch {
         };
 
         pitch.set_name(self_name);
-        pitch
+        Ok(pitch)
     }
 
     pub(crate) fn name_with_octave(&self) -> String {
@@ -124,14 +125,14 @@ impl Pitch {
 
     pub(crate) fn set_octave(&mut self, octave: Octave) {
         self._octave = octave;
-        self.informclient()
+        self.inform_client()
     }
 
     fn get_all_common_enharmonics(&self, alter_limit: IntegerType) -> Vec<Pitch> {
         todo!()
     }
 
-    fn informclient(&self) {
+    fn inform_client(&self) {
         if let Some(ref client) = self._client {
             client.pitch_changed();
         }
