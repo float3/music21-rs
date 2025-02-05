@@ -363,15 +363,18 @@ mod pyo3 {
 
     type Tables<'py> = Bound<'py, PyModule>;
 
-    fn run_command(cmd: &mut Command, description: &str) -> Result<(), String> {
+    fn run_command(cmd: &mut Command, description: &str) -> PyResult<()> {
         let output = cmd
             .output()
-            .map_err(|e| format!("Failed to execute {}: {}", description, e))?;
+            .map_err(|e| PyErr::new_err(format!("Failed to execute {}: {}", description, e)))?;
         if output.status.success() {
             Ok(())
         } else {
             let stderr = str::from_utf8(&output.stderr).unwrap_or("Failed to capture error");
-            Err(format!("{} failed: {}", description, stderr))
+            Err(PyErr::new_err(format!(
+                "{} failed: {}",
+                description, stderr
+            )))
         }
     }
 
