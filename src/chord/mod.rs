@@ -173,7 +173,6 @@ impl IntoNotes for &[IntegerType] {
 //     }
 // }
 
-
 #[test]
 #[ignore]
 fn c_e_g_pitchedcommonname() {
