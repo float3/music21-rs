@@ -5,7 +5,7 @@
 #![allow(unreachable_code)]
 #![allow(unused_macros)]
 #![allow(private_bounds)]
-#![feature(inline_const_pat)]
+// #![feature(inline_const_pat)]
 // #![feature(negative_impls)]
 // #![feature(specialization)]
 // #![feature(lazy_get)]
