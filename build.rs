@@ -20,7 +20,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg(feature = "buildscript")]
 mod pyo3 {
-    use std::{collections::HashMap, fs, path::PathBuf, process::Command};
+    use std::{collections::HashMap, fs, path::PathBuf, process::Command, str};
 
     use pyo3::prelude::*;
     use pyo3::types::{PyDict, PyTuple};
@@ -42,8 +42,7 @@ mod pyo3 {
         "duodecachord",
     ];
 
-    /// Helper: Given a Python object that is iterable over pitch‐class indices,
-    /// build a `[bool; 12]` vector with the indicated indices set to true.
+    /// Given a Python iterable over pitch‐class indices, build a `[bool; 12]` vector.
     fn build_pc_vec(pcs: &Bound<'_, PyAny>) -> PyResult<Vec<bool>> {
         let mut vec = vec![false; 12];
         for obj in pcs.try_iter()? {
@@ -55,7 +54,17 @@ mod pyo3 {
         Ok(vec)
     }
 
-    fn generate_forte_table(forte_list: &pyo3::Bound<'_, PyTuple>) -> PyResult<String> {
+    // Helper to convert sign integer to string representation.
+    fn sign_str(inv: i32) -> String {
+        match inv {
+            -1 => "Sign::NegativeOne".to_string(),
+            0 => "Sign::Zero".to_string(),
+            1 => "Sign::One".to_string(),
+            other => other.to_string(),
+        }
+    }
+
+    fn generate_forte_table(forte_list: &Bound<'_, PyTuple>) -> PyResult<String> {
         let table_lines: Result<Vec<String>, PyErr> = forte_list
             .iter()
             .enumerate()
@@ -130,16 +139,16 @@ mod pyo3 {
             })
             .collect();
         let rust_code = format!(
-        "pub(super) static INVERSION_DEFAULT_PITCH_CLASSES: InversionDefaultPitchClasses = LazyLock::new(|| {{\n    let mut m = HashMap::new();\n{}\n    m\n}});",
-        entries?.join("\n")
-    );
+            "pub(super) static INVERSION_DEFAULT_PITCH_CLASSES: InversionDefaultPitchClasses = LazyLock::new(|| {{\n    let mut m = HashMap::new();\n{}\n    m\n}});",
+            entries?.join("\n")
+        );
         Ok(rust_code)
     }
 
     fn generate_cardinality_to_chord_members(
         py: Python,
         tables: &Tables,
-        forte_list: &pyo3::Bound<'_, PyTuple>,
+        forte_list: &Bound<'_, PyTuple>,
     ) -> PyResult<String> {
         let mut inner_vars = Vec::new();
         let mut lines = Vec::new();
@@ -168,14 +177,14 @@ mod pyo3 {
                     let icv_vec: Vec<i32> = icv.extract()?;
                     let inv_vec_str = format!("{:?}", inv_vec_list);
                     let icv_vec_str = format!("{:?}", icv_vec);
-                    let sign_str = if has_distinct {
-                        "Sign::One"
+                    let sign = if has_distinct {
+                        sign_str(1)
                     } else {
-                        "Sign::Zero"
+                        sign_str(0)
                     };
                     lines.push(format!(
                         "    {}.insert(({}, {}), ({}, {}, {}));",
-                        var_name, forte_idx, sign_str, pcs_vec_str, inv_vec_str, icv_vec_str
+                        var_name, forte_idx, sign, pcs_vec_str, inv_vec_str, icv_vec_str
                     ));
                     if has_distinct {
                         let inversion_default = tables.getattr("inversionDefaultPitchClasses")?;
@@ -200,8 +209,13 @@ mod pyo3 {
                         };
                         let inv_pcs_vec_str = format!("{:?}", inv_pcs_vec);
                         lines.push(format!(
-                            "    {}.insert(({}, Sign::NegativeOne), ({}, {}, {}));",
-                            var_name, forte_idx, inv_pcs_vec_str, inv_vec_str, icv_vec_str
+                            "    {}.insert(({}, {}), ({}, {}, {}));",
+                            var_name,
+                            forte_idx,
+                            sign_str(-1),
+                            inv_pcs_vec_str,
+                            inv_vec_str,
+                            icv_vec_str
                         ));
                     }
                 }
@@ -216,9 +230,9 @@ mod pyo3 {
         lines.push(inner_vars_str);
         lines.push("    ]".to_string());
         let rust_code = format!(
-        "pub(super) static CARDINALITY_TO_CHORD_MEMBERS_GENERATED: CardinalityToChordMembersGenerated = LazyLock::new(|| {{\n{}\n}});\n",
-        lines.join("\n")
-    );
+            "pub(super) static CARDINALITY_TO_CHORD_MEMBERS_GENERATED: CardinalityToChordMembersGenerated = LazyLock::new(|| {{\n{}\n}});\n",
+            lines.join("\n")
+        );
         Ok(rust_code)
     }
 
@@ -274,12 +288,7 @@ mod pyo3 {
             let card: i32 = key_tuple.get_item(0)?.extract()?;
             let idx: i32 = key_tuple.get_item(1)?.extract()?;
             let inv: i32 = key_tuple.get_item(2)?.extract()?;
-            let inv_str = match inv {
-                -1 => "Sign::NegativeOne".to_string(),
-                0 => "Sign::Zero".to_string(),
-                1 => "Sign::One".to_string(),
-                _ => format!("{}", inv),
-            };
+            let inv_str = sign_str(inv);
             let i: i32 = value.extract()?;
             lines.push(format!(
                 "    m.insert(({}, {}, {}), {});",
@@ -287,9 +296,9 @@ mod pyo3 {
             ));
         }
         let rust_code = format!(
-        "pub(super) static FORTE_NUMBER_WITH_INVERSION_TO_INDEX: ForteNumberWithInversionToIndex = LazyLock::new(|| {{\n    let mut m = HashMap::new();\n{}\n    m\n}});",
-        lines.join("\n")
-    );
+            "pub(super) static FORTE_NUMBER_WITH_INVERSION_TO_INDEX: ForteNumberWithInversionToIndex = LazyLock::new(|| {{\n    let mut m = HashMap::new();\n{}\n    m\n}});",
+            lines.join("\n")
+        );
         Ok(rust_code)
     }
 
@@ -302,12 +311,7 @@ mod pyo3 {
             let card: i32 = key_tuple.get_item(0)?.extract()?;
             let idx: i32 = key_tuple.get_item(1)?.extract()?;
             let inv: i32 = key_tuple.get_item(2)?.extract()?;
-            let inv_str = match inv {
-                -1 => "Sign::NegativeOne".to_string(),
-                0 => "Sign::Zero".to_string(),
-                1 => "Sign::One".to_string(),
-                _ => format!("{}", inv),
-            };
+            let inv_str = sign_str(inv);
             let value_dict: &Bound<'_, PyDict> = value.downcast()?;
             if let Some(names) = value_dict.get_item("name")? {
                 let names_list: Vec<String> = names.extract()?;
@@ -335,9 +339,9 @@ mod pyo3 {
             }
         }
         let rust_code = format!(
-        "pub(super) static TN_INDEX_TO_CHORD_INFO: TnIndexToChordInfo = LazyLock::new(|| {{\n    let mut m = HashMap::new();\n{}\n    m\n}});",
-        lines.join("\n")
-    );
+            "pub(super) static TN_INDEX_TO_CHORD_INFO: TnIndexToChordInfo = LazyLock::new(|| {{\n    let mut m = HashMap::new();\n{}\n    m\n}});",
+            lines.join("\n")
+        );
         Ok(rust_code)
     }
 
@@ -354,10 +358,10 @@ mod pyo3 {
             generate_maximum_index_number_with_inversion_equivalence(tables)?,
         ];
         let rust_code = format!(
-        "/*\nThis file is autogenerated from the tables in the original music21 library\ncheck the build script for details\n*/\n{}\n\n{}",
-        imports,
-        parts.join("\n\n")
-    );
+            "/*\nThis file is autogenerated from the tables in the original music21 library\ncheck the build script for details\n*/\n{}\n\n{}",
+            imports,
+            parts.join("\n\n")
+        );
         Ok(rust_code)
     }
 
