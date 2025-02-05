@@ -23,10 +23,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 #[cfg(feature = "buildscript")]
 mod pyo3 {
     use pyo3::{
-        PyErr, PyResult,
         exceptions::PyRuntimeError,
         prelude::*,
         types::{PyDict, PyTuple},
+        PyErr, PyResult,
     };
     use std::{collections::HashMap, fs, path::PathBuf, process::Command, str};
 
