@@ -11,7 +11,9 @@
 #!nix-shell -i rust-script -p rustc -p rust-script -p cargo -p rustfmt -p python312 -p python312Packages.virtualenv
 */
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+use std::error;
+
+fn main() -> Result<(), Box<dyn error::Error>> {
     #[cfg(feature = "buildscript")]
     pyo3::main()?;
 
@@ -20,10 +22,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg(feature = "buildscript")]
 mod pyo3 {
+    use pyo3::{
+        PyErr, PyResult,
+        exceptions::PyRuntimeError,
+        prelude::*,
+        types::{PyDict, PyTuple},
+    };
     use std::{collections::HashMap, fs, path::PathBuf, process::Command, str};
-
-    use pyo3::prelude::*;
-    use pyo3::types::{PyDict, PyTuple};
 
     #[allow(unused)]
     const CARDINALITIES: [&str; 13] = [
@@ -368,14 +373,14 @@ mod pyo3 {
     type Tables<'py> = Bound<'py, PyModule>;
 
     fn run_command(cmd: &mut Command, description: &str) -> PyResult<()> {
-        let output = cmd
-            .output()
-            .map_err(|e| PyErr::new_err(format!("Failed to execute {}: {}", description, e)))?;
+        let output = cmd.output().map_err(|e| {
+            PyErr::new::<PyRuntimeError, _>(format!("Failed to execute {}: {}", description, e))
+        })?;
         if output.status.success() {
             Ok(())
         } else {
             let stderr = str::from_utf8(&output.stderr).unwrap_or("Failed to capture error");
-            Err(PyErr::new_err(format!(
+            Err(PyErr::new::<PyRuntimeError, _>(format!(
                 "{} failed: {}",
                 description, stderr
             )))
