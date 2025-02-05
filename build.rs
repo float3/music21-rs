@@ -20,7 +20,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg(feature = "buildscript")]
 mod pyo3 {
-    use std::{collections::HashMap, process::Command, fs, path::PathBuf};
+    use std::{collections::HashMap, fs, path::PathBuf, process::Command};
 
     use pyo3::prelude::*;
     use pyo3::types::{PyDict, PyTuple};
@@ -363,15 +363,36 @@ mod pyo3 {
 
     type Tables<'py> = Bound<'py, PyModule>;
 
-    pub(super) fn main() -> PyResult<()> {
-        let pip_status = Command::new("python3.12")
-            .args(&["-m", "pip", "install", "-r", "./music21/requirements.txt"])
-            .status()
-            .expect("Failed to run pip install");
-        if !pip_status.success() {
-            eprintln!("pip install failed");
-            std::process::exit(1);
+    fn run_command(cmd: &mut Command, description: &str) -> Result<(), String> {
+        let output = cmd
+            .output()
+            .map_err(|e| format!("Failed to execute {}: {}", description, e))?;
+        if output.status.success() {
+            Ok(())
+        } else {
+            let stderr = str::from_utf8(&output.stderr).unwrap_or("Failed to capture error");
+            Err(format!("{} failed: {}", description, stderr))
         }
+    }
+
+    pub(super) fn main() -> PyResult<()> {
+        if let Err(e) = run_command(
+            Command::new("python3.12").args(["-m", "pip", "install", "--upgrade", "pip"]),
+            "pip upgrade",
+        ) {
+            eprintln!("{}", e);
+        }
+
+        run_command(
+            Command::new("python3.12").args([
+                "-m",
+                "pip",
+                "install",
+                "-r",
+                "./music21/requirements.txt",
+            ]),
+            "pip install",
+        )?;
 
         let rust_path = "./src/chord/tables/generated.rs";
 
@@ -406,14 +427,8 @@ use std::{collections::HashMap, sync::LazyLock};
             Ok(())
         })?;
 
-        let output = std::process::Command::new("rustfmt")
-            .arg(rust_path)
-            .output()
-            .expect("Failed to execute rustfmt");
+        run_command(Command::new("rustfmt").arg(rust_path), "rustfmt")?;
 
-        if !output.status.success() {
-            panic!();
-        }
         println!("cargo:rerun-if-changed=./music21/music21/chord/tables.py");
         Ok(())
     }
