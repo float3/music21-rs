@@ -8,7 +8,7 @@
 //! pyo3 = { version = "0.23.4", features = [auto-initialize], optional = true }
 //! ```
 /*
-#!nix-shell -i rust-script -p rustc -p rust-script -p cargo -p rustfmt -p python312 -p python312Packages.virtualenv
+#!nix-shell -i rust-script -p rustc -p rust-script -p cargo -p rustfmt -p python312 -p python312Packages.virtualenv -p git
 */
 
 use std::error;
@@ -389,14 +389,32 @@ mod pyo3 {
 
     pub(super) fn main() -> PyResult<()> {
         if let Err(e) = run_command(
-            Command::new("python3.12").args(["-m", "pip", "install", "--upgrade", "pip"]),
+            Command::new("git").args(["-C", "./music21", "pull", "origin", "master"]),
+            "git pull",
+        ) {
+            eprintln!("{}", e);
+        }
+
+        run_command(
+            Command::new("python3.12").args(["-m", "venv", "venv"]),
+            "create venv",
+        )?;
+
+        if let Err(e) = run_command(
+            Command::new("./venv/bin/python3.12").args([
+                "-m",
+                "pip",
+                "install",
+                "--upgrade",
+                "pip",
+            ]),
             "pip upgrade",
         ) {
             eprintln!("{}", e);
         }
 
         run_command(
-            Command::new("python3.12").args([
+            Command::new("./venv/bin/python3.12").args([
                 "-m",
                 "pip",
                 "install",
