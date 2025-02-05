@@ -62,9 +62,6 @@ jobs:
     - name: Run cargo check
       run: cargo check --verbose --all-targets --all-features
 
-    - name: Run cargo fix
-      run: cargo fix --verbose --all-targets --all-features
-
     - name: Run Clippy
       run: cargo clippy --verbose --all-targets --all-features -- -D warnings
 
@@ -72,4 +69,7 @@ jobs:
       run: cargo fmt -- --check
 
     - name: Run tests
-      run: cargo test --verbose --all-targets --all-features
+      run: cargo test --verbose --all-targets --all-features --no-fail-fast --lib --bins --examples --tests --benches
+
+    - name: Run report
+      run: cargo report future-incompat
