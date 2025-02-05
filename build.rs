@@ -404,9 +404,7 @@ use std::{collections::HashMap, sync::LazyLock};
         if !output.status.success() {
             panic!();
         }
-        println!(
-            "cargo:rerun-if-changed=./music21/music21/chord/tables.py"
-        );
+        println!("cargo:rerun-if-changed=./music21/music21/chord/tables.py");
         Ok(())
     }
 }
