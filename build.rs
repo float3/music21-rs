@@ -163,7 +163,7 @@ mod pyo3 {
                     let inv_vec = tup.get_item(2)?;
                     let _z_rel = tup.get_item(3)?;
                     let inv_vec_list: Vec<i32> = inv_vec.extract()?;
-                    let has_distinct = inv_vec_list.get(1).map_or(false, |&v| v == 0);
+                    let has_distinct = inv_vec_list.get(1).is_some_and(|&v| v == 0);
                     let pcs_vec_str = format!("{:?}", build_pc_vec(&pcs)?);
                     let icv_vec: Vec<i32> = icv.extract()?;
                     let inv_vec_str = format!("{:?}", inv_vec_list);
