@@ -14,7 +14,7 @@ version = "0.0.2"
 members = ["utils"]
 
 [features]
-default = ["python"]
+default = []
 python = ["dep:pyo3"]
 
 [dependencies]

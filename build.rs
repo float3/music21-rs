@@ -6,6 +6,7 @@
 //!
 //! [dependencies]
 //! pyo3 = { version = "0.23.4", features = ["auto-initialize"], optional = true }
+//! utils = { path = "./utils" }
 //! ```
 /*
 #!nix-shell -i rust-script -p rustc -p rust-script -p cargo -p rustfmt -p python312 -p python312Packages.virtualenv -p git
