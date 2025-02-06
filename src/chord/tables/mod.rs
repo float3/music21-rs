@@ -50,6 +50,7 @@ type TNIStructure = (
 );
 
 type Pcivicv = (PitchClasses, InvarianceVector, IntervalClassVector);
+
 trait TNITupleExt {
     fn pitches(&self) -> PitchClasses;
     fn pitch_classes(&self) -> PitchClasses;
@@ -214,7 +215,7 @@ fn forte_index_to_inversions_available(card: u8, index: u8) -> Result<Vec<Sign>,
 
 #[cfg(test)]
 mod tests {
-    use super::{Pcivicv, U8SB};
+    use super::{Pcivicv, TNIStructure, U8SB};
 
     use crate::chord::tables::{
         Sign, CARDINALITY_TO_CHORD_MEMBERS, CARDINALITY_TO_CHORD_MEMBERS_GENERATED, FORTE,
@@ -248,7 +249,7 @@ mod tests {
         });
     }
 
-    fn match_python(tuple: &([bool; 12], [u8; 8], [u8; 6])) -> String {
+    fn match_python(tuple: &Pcivicv) -> String {
         let true_indices: Vec<String> = tuple
             .0
             .iter()
@@ -330,7 +331,7 @@ mod tests {
         .unwrap();
     }
 
-    fn match_python2(v: &Vec<Option<([bool; 12], [u8; 6], [u8; 8], u8)>>) -> String {
+    fn match_python2(v: &Vec<Option<TNIStructure>>) -> String {
         let elems: Vec<String> = v
             .iter()
             .map(|opt| {
