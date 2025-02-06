@@ -1,14 +1,21 @@
 [package]
 authors = ["hill <hill@hilll.dev>"]
+build = "build.rs"
 description = "a rust port of music21 (for now just the chord naming algorithm)"
 edition = "2021"
+include = ["/src", "/utils", "build.rs", "music21/music21/chord/tables.py"]
 keywords = ["music", "chords", "music21"]
 license-file = "LICENSE"
 name = "music21-rs"
 repository = "https://github.com/float3/music21-rs"
 version = "0.0.2"
-build = "build.rs"
-include = ["/src", "build.rs", "music21/music21/chord/tables.py"]
+
+[workspace]
+members = ["utils"]
+
+[features]
+default = ["python"]
+python = ["dep:pyo3"]
 
 [dependencies]
 fraction = "0.15.3"
@@ -17,9 +24,10 @@ num = "0.4.3"
 num-traits = "0.2.19"
 ordered-float = "4.6.0"
 
-[features]
-default = []
-buildscript = ["dep:pyo3"]
-
 [build-dependencies]
 pyo3 = { version = "0.23.4", features = ["auto-initialize"], optional = true }
+utils = { path = "./utils" }
+
+[dev-dependencies]
+pyo3 = { version = "0.23.4", features = ["auto-initialize"] }
+utils = { path = "./utils" }

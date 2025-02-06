@@ -174,12 +174,17 @@ impl IntoNotes for &[IntegerType] {
 //     }
 // }
 
-#[test]
-#[ignore]
-fn c_e_g_pitchedcommonname() {
-    let chord = Chord::new(Some("C E G"));
+#[cfg(test)]
+mod tests {
+    use crate::chord::Chord;
 
-    assert!(chord.is_ok());
+    #[test]
+    #[ignore]
+    fn c_e_g_pitchedcommonname() {
+        let chord = Chord::new(Some("C E G"));
 
-    assert_eq!(chord.unwrap().pitched_common_name(), "C-major triad");
+        assert!(chord.is_ok());
+
+        assert_eq!(chord.unwrap().pitched_common_name(), "C-major triad");
+    }
 }

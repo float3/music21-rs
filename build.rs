@@ -1,8 +1,8 @@
 #!/usr/bin/env nix-shell
 //! ```cargo
 //! [features]
-//! default = ["buildscript"]
-//! buildscript = ["dep:pyo3"]
+//! default = ["python"]
+//! python = ["dep:pyo3"]
 //!
 //! [dependencies]
 //! pyo3 = { version = "0.23.4", features = ["auto-initialize"], optional = true }
@@ -14,21 +14,22 @@
 use std::error::Error;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    #[cfg(feature = "buildscript")]
-    pyo3::main()?;
+    #[cfg(feature = "python")]
+    python::main()?;
 
     Ok(())
 }
 
-#[cfg(feature = "buildscript")]
-mod pyo3 {
+#[cfg(feature = "python")]
+mod python {
     use pyo3::{
-        exceptions::PyRuntimeError,
+        exceptions::PyIOError,
         prelude::*,
         types::{PyDict, PyTuple},
         PyErr, PyResult,
     };
-    use std::{collections::HashMap, fs, path::PathBuf, process::Command, str};
+    use std::{collections::HashMap, error::Error, fs, path::PathBuf};
+    use utils::{init_py, prepare, run_command, Tables};
 
     #[allow(unused)]
     const CARDINALITIES: [&str; 13] = [
@@ -235,7 +236,7 @@ mod pyo3 {
         lines.push(inner_vars_str);
         lines.push("    ]".to_string());
         let rust_code = format!(
-            "pub(super) static CARDINALITY_TO_CHORD_MEMBERS_GENERATED: CardinalityToChordMembersGenerated = LazyLock::new(|| {{\n{}\n}});\n",
+            "pub(super) static CARDINALITY_TO_CHORD_MEMBERS_GENERATED: CardinalityToChordMembers = LazyLock::new(|| {{\n{}\n}});\n",
             lines.join("\n")
         );
         Ok(rust_code)
@@ -370,73 +371,19 @@ mod pyo3 {
         Ok(rust_code)
     }
 
-    type Tables<'py> = Bound<'py, PyModule>;
-
-    fn run_command(cmd: &mut Command, description: &str) -> PyResult<()> {
-        let output = cmd.output().map_err(|e| {
-            PyErr::new::<PyRuntimeError, _>(format!("Failed to execute {}: {}", description, e))
-        })?;
-        if output.status.success() {
-            Ok(())
-        } else {
-            let stderr = str::from_utf8(&output.stderr).unwrap_or("Failed to capture error");
-            Err(PyErr::new::<PyRuntimeError, _>(format!(
-                "{} failed: {}",
-                description, stderr
-            )))
-        }
-    }
-
-    pub(super) fn main() -> PyResult<()> {
-        if let Err(e) = run_command(
-            Command::new("git").args(["-C", "./music21", "pull", "origin", "master"]),
-            "git pull",
-        ) {
-            eprintln!("{}", e);
-        }
-
-        run_command(
-            Command::new("python3.12").args(["-m", "venv", "venv"]),
-            "create venv",
-        )?;
-
-        if let Err(e) = run_command(
-            Command::new("./venv/bin/python3.12").args([
-                "-m",
-                "pip",
-                "install",
-                "--upgrade",
-                "pip",
-            ]),
-            "pip upgrade",
-        ) {
-            eprintln!("{}", e);
-        }
-
-        run_command(
-            Command::new("./venv/bin/python3.12").args([
-                "-m",
-                "pip",
-                "install",
-                "-r",
-                "./music21/requirements.txt",
-            ]),
-            "pip install",
-        )?;
+    pub(super) fn main() -> Result<(), Box<dyn Error>> {
+        prepare()?;
 
         let rust_path = "./src/chord/tables/generated.rs";
 
         Python::with_gil(|py| -> PyResult<()> {
-            let sys = py.import("sys")?;
-            let path = sys.getattr("path")?;
-            path.call_method1("append", ("./venv/lib/python3.12/site-packages",))?;
-            path.call_method1("append", ("./music21",))?;
+            init_py(py)?;
 
             let tables: Tables = py.import("music21.chord.tables")?;
 
             let imports = r#"
 use super::{
-    CardinalityToChordMembersGenerated, Forte, ForteNumberWithInversionToIndex,
+    CardinalityToChordMembers, Forte, ForteNumberWithInversionToIndex,
     InversionDefaultPitchClasses, MaximumIndexNumberWithInversionEquivalence,
     MaximumIndexNumberWithoutInversionEquivalence, Sign, TnIndexToChordInfo,
 };
@@ -451,13 +398,13 @@ use std::{collections::HashMap, sync::LazyLock};
                 std::process::exit(1);
             }
             fs::write(&output_path, rust)
-                .map_err(|e| PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("{}", e)))?;
+                .map_err(|e| PyErr::new::<PyIOError, _>(format!("{}", e)))?;
 
             println!("Rust tables generated successfully.");
             Ok(())
         })?;
 
-        run_command(Command::new("rustfmt").arg(rust_path), "rustfmt")?;
+        run_command(&["rustfmt", rust_path], "rustfmt")?;
 
         println!("cargo:rerun-if-changed=./music21/music21/chord/tables.py");
         Ok(())

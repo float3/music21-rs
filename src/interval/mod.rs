@@ -13,6 +13,7 @@ use std::sync::Mutex;
 use std::{collections::HashMap, sync::LazyLock};
 
 use crate::base::Music21ObjectTrait;
+
 use crate::exceptions::{Exception, ExceptionResult};
 use crate::prebase::ProtoM21ObjectTrait;
 use crate::{
@@ -68,7 +69,7 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> ExceptionResu
         Some("C1".to_string()),
         None,
         None,
-        Option::<IntegerType>::None,
+        Option::<i8>::None,
         Option::<IntegerType>::None,
     )?;
 

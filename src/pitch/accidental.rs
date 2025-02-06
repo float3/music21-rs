@@ -10,7 +10,7 @@ use crate::{
     prebase::{ProtoM21Object, ProtoM21ObjectTrait},
 };
 
-use super::{FloatType, IntegerType, Pitch};
+use super::{FloatType, Pitch};
 
 enum AccidentalEnum {
     Natural,
@@ -237,7 +237,7 @@ impl AccidentalEnum {
         }
     }
 
-    fn from_int(i: IntegerType) -> Option<Self> {
+    fn from_int(i: i8) -> Option<Self> {
         match i {
             -4 => Some(AccidentalEnum::QuadrupleFlat),
             -3 => Some(AccidentalEnum::TripleFlat),
@@ -373,7 +373,7 @@ pub(crate) trait IntoAccidental: Display + Clone {
     fn into_accidental(self, allow_non_standard_values: bool) -> Option<(String, FloatType)>;
 }
 
-impl IntoAccidental for IntegerType {
+impl IntoAccidental for i8 {
     fn into_accidental(self, allow_non_standard_values: bool) -> Option<(String, FloatType)> {
         match AccidentalEnum::from_int(self) {
             Some(acci) => Some(acci.to_name_and_alter()),

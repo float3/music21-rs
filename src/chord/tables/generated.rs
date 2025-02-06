@@ -4,7 +4,7 @@ check the build script for details
 */
 
 use super::{
-    CardinalityToChordMembersGenerated, Forte, ForteNumberWithInversionToIndex,
+    CardinalityToChordMembers, Forte, ForteNumberWithInversionToIndex,
     InversionDefaultPitchClasses, MaximumIndexNumberWithInversionEquivalence,
     MaximumIndexNumberWithoutInversionEquivalence, Sign, TnIndexToChordInfo,
 };
@@ -2617,7 +2617,7 @@ pub(super) static INVERSION_DEFAULT_PITCH_CLASSES: InversionDefaultPitchClasses 
         m
     });
 
-pub(super) static CARDINALITY_TO_CHORD_MEMBERS_GENERATED: CardinalityToChordMembersGenerated =
+pub(super) static CARDINALITY_TO_CHORD_MEMBERS_GENERATED: CardinalityToChordMembers =
     LazyLock::new(|| {
         let inner_0 = HashMap::new();
         let mut inner_1 = HashMap::new();

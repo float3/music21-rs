@@ -40,7 +40,7 @@ impl Note {
                     Some(name),
                     None,
                     None,
-                    Option::<IntegerType>::None,
+                    Option::<i8>::None,
                     Option::<IntegerType>::None,
                 )?
             }),
@@ -93,7 +93,7 @@ impl IntoPitch for String {
             Some(self),
             None,
             None,
-            Option::<IntegerType>::None,
+            Option::<i8>::None,
             Option::<IntegerType>::None,
         )
     }
@@ -105,7 +105,7 @@ impl IntoPitch for &str {
             Some(self),
             None,
             None,
-            Option::<IntegerType>::None,
+            Option::<i8>::None,
             Option::<IntegerType>::None,
         )
     }
@@ -117,7 +117,7 @@ impl IntoPitch for IntegerType {
             Some(self),
             None,
             None,
-            Option::<IntegerType>::None,
+            Option::<i8>::None,
             Option::<IntegerType>::None,
         )
     }
