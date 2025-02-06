@@ -24,6 +24,10 @@ impl GeneralNoteTrait for NotRest {
     fn duration(&self) -> &Option<Duration> {
         self.general_note.duration()
     }
+
+    fn set_duration(&self, duration: &Duration) {
+        todo!()
+    }
 }
 
 impl Music21ObjectTrait for NotRest {}

@@ -76,6 +76,10 @@ impl GeneralNoteTrait for ChordBase {
     fn duration(&self) -> &Option<Duration> {
         self.notrest.duration()
     }
+
+    fn set_duration(&self, duration: &Duration) {
+        todo!()
+    }
 }
 
 impl Music21ObjectTrait for ChordBase {}

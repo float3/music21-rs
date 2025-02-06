@@ -183,14 +183,14 @@ static CARDINALITY_TO_CHORD_MEMBERS: CardinalityToChordMembers = LazyLock::new(|
     cardinality_to_chord_members
 });
 
-fn forte_index_to_inversions_available(card: u8, index: u8) -> Result<Vec<Sign>, Exception> {
-    if !(1..=12).contains(&card) {
+fn forte_index_to_inversions_available(card: usize, index: u8) -> Result<Vec<Sign>, Exception> {
+    if !(1..=13).contains(&card) {
         return Err(Exception::ChordTables(format!(
             "cardinality {} not valid",
             card
         )));
     }
-    if index < 1 || index > MAXIMUM_INDEX_NUMBER_WITHOUT_INVERSION_EQUIVALENCE[card as usize] {
+    if index < 1 || index > MAXIMUM_INDEX_NUMBER_WITHOUT_INVERSION_EQUIVALENCE[card] {
         return Err(Exception::ChordTables(format!(
             "index {} not valid for cardinality {}",
             index, card
@@ -198,8 +198,7 @@ fn forte_index_to_inversions_available(card: u8, index: u8) -> Result<Vec<Sign>,
     }
 
     let mut inversions = vec![];
-    let forte_entry = &FORTE[card as usize];
-    if let Some(entry) = &forte_entry[index as usize] {
+    if let Some(entry) = &(&FORTE[card])[index as usize] {
         // second value stored inversion status
         if entry.invariance_vector()[1] > 0 {
             inversions.push(Sign::Zero);
@@ -209,6 +208,10 @@ fn forte_index_to_inversions_available(card: u8, index: u8) -> Result<Vec<Sign>,
         }
     }
     Ok(inversions)
+}
+
+fn _validate_address() {
+    //todo
 }
 
 // include!("./generated.rs");
@@ -331,7 +334,7 @@ mod tests {
         .unwrap();
     }
 
-    fn match_python2(v: &Vec<Option<TNIStructure>>) -> String {
+    fn match_python2(v: &[Option<TNIStructure>]) -> String {
         let elems: Vec<String> = v
             .iter()
             .map(|opt| {
@@ -369,6 +372,12 @@ mod tests {
         format!("({})", elems.join(", "))
     }
 
+    #[test]
+    fn test() {
+        for i in 1..12 {
+            println!("{}", i);
+        }
+    }
     #[test]
     fn python_forte_equality_test() {
         prepare().unwrap();

@@ -71,6 +71,10 @@ impl GeneralNoteTrait for Note {
     fn duration(&self) -> &Option<crate::duration::Duration> {
         self.notrest.duration()
     }
+
+    fn set_duration(&self, duration: &crate::duration::Duration) {
+        todo!()
+    }
 }
 
 impl ProtoM21ObjectTrait for Note {}

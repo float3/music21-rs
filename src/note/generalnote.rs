@@ -21,11 +21,16 @@ impl GeneralNote {
 
 pub(crate) trait GeneralNoteTrait: Music21ObjectTrait {
     fn duration(&self) -> &Option<Duration>;
+    fn set_duration(&self, duration: &Duration);
 }
 
 impl GeneralNoteTrait for GeneralNote {
     fn duration(&self) -> &Option<Duration> {
         &self._duration
+    }
+
+    fn set_duration(&self, duration: &Duration) {
+        todo!()
     }
 }
 
