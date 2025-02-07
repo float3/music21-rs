@@ -4,6 +4,8 @@ use crate::{
     prebase::ProtoM21ObjectTrait,
 };
 
+use super::Key;
+
 pub(crate) struct KeySignature {
     music21object: Music21Object,
     _sharps: IntegerType,
@@ -15,6 +17,10 @@ impl KeySignature {
             music21object: Music21Object::new(),
             _sharps: sharps,
         }
+    }
+
+    pub(crate) fn as_key(&self, arg: &str) -> Key {
+        todo!()
     }
 }
 

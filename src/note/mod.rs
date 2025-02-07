@@ -42,6 +42,10 @@ impl Note {
                     None,
                     Option::<i8>::None,
                     Option::<IntegerType>::None,
+                    None,
+                    None,
+                    None,
+                    None,
                 )?
             }),
         }?;
@@ -99,6 +103,10 @@ impl IntoPitch for String {
             None,
             Option::<i8>::None,
             Option::<IntegerType>::None,
+            None,
+            None,
+            None,
+            None,
         )
     }
 }
@@ -111,6 +119,10 @@ impl IntoPitch for &str {
             None,
             Option::<i8>::None,
             Option::<IntegerType>::None,
+            None,
+            None,
+            None,
+            None,
         )
     }
 }
@@ -123,6 +135,10 @@ impl IntoPitch for IntegerType {
             None,
             Option::<i8>::None,
             Option::<IntegerType>::None,
+            None,
+            None,
+            None,
+            None,
         )
     }
 }

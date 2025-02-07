@@ -1,4 +1,10 @@
-use std::{error::Error, process::Command, str};
+use std::{error::Error, process::Command, str::from_utf8};
+
+fn git_submodule() -> Result<(), Box<dyn Error>> {
+    run_command(&["git", "submodule", "init"], "init submodule")?;
+    run_command(&["git", "submodule", "update"], "update submodule")?;
+    Ok(())
+}
 
 fn git_pull() {
     if let Err(e) = run_command(
@@ -56,12 +62,14 @@ pub fn run_command(args: &[&str], description: &str) -> Result<(), Box<dyn Error
     if output.status.success() {
         Ok(())
     } else {
-        let stderr = str::from_utf8(&output.stderr).unwrap_or("Failed to capture error");
+        let stderr = from_utf8(&output.stderr)
+            .map_err(|e| format!("{} failed: stderr not valid UTF-8: {}", description, e))?;
         Err(format!("{} failed: {}", description, stderr).into())
     }
 }
 
 pub fn prepare() -> Result<(), Box<dyn Error>> {
+    git_submodule()?;
     git_pull();
     create_venv()?;
     pip_upgrade();

@@ -15,6 +15,7 @@ pub enum Exception {
     Accidental(String),
     ChordTables(String),
     Interval(String),
+    StepName(String),
 }
 
 impl Display for Exception {

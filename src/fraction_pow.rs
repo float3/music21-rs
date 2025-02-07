@@ -56,9 +56,9 @@ mod tests {
 
     #[test]
     fn test_pow_positive_exponent() {
-        let frac: GenericFraction<IntegerType> = GenericFraction::new(2u32, 3u32);
+        let frac: GenericFraction<IntegerType> = GenericFraction::new(2i32, 3i32);
         let result = frac.pow(3);
-        let expected = GenericFraction::new(8u32, 27u32);
+        let expected = GenericFraction::new(8i32, 27i32);
         assert_eq!(
             result, expected,
             "2/3 raised to the power of 3 should be 8/27"
@@ -77,10 +77,10 @@ mod tests {
     }
 
     #[test]
-    fn fraction_u32() {
-        let frac: GenericFraction<u32> = GenericFraction::new(2u32, 3u32);
+    fn fraction_i32() {
+        let frac: GenericFraction<i32> = GenericFraction::new(2i32, 3i32);
         let result = frac.pow(3);
-        let expected = GenericFraction::new(8u32, 27u32);
+        let expected = GenericFraction::new(8i32, 27i32);
         assert_eq!(
             result, expected,
             "2/3 raised to the power of 3 should be 8/27"
@@ -100,9 +100,9 @@ mod tests {
 
     #[test]
     fn test_pow_negative_exponent() {
-        let frac: GenericFraction<IntegerType> = GenericFraction::new(2u32, 3u32);
+        let frac: GenericFraction<IntegerType> = GenericFraction::new(2i32, 3i32);
         let result = frac.pow(-2);
-        let expected = GenericFraction::new(9u32, 4u32);
+        let expected = GenericFraction::new(9i32, 4i32);
         assert_eq!(
             result, expected,
             "2/3 raised to the power of -2 should be 9/4"
@@ -111,7 +111,7 @@ mod tests {
 
     #[test]
     fn test_pow_zero_exponent() {
-        let frac: GenericFraction<IntegerType> = GenericFraction::new(2u32, 3u32);
+        let frac: GenericFraction<IntegerType> = GenericFraction::new(2i32, 3i32);
         let result = frac.pow(0);
         let expected = GenericFraction::one();
         assert_eq!(
@@ -122,7 +122,7 @@ mod tests {
 
     #[test]
     fn test_pow_one_exponent() {
-        let frac: GenericFraction<IntegerType> = GenericFraction::new(5u32, 7u32);
+        let frac: GenericFraction<IntegerType> = GenericFraction::new(5i32, 7i32);
         let result = frac.pow(1);
         let expected = frac;
         assert_eq!(
@@ -133,9 +133,9 @@ mod tests {
 
     #[test]
     fn test_pow_negative_one_exponent() {
-        let frac: GenericFraction<IntegerType> = GenericFraction::new(4u32, 5u32);
+        let frac: GenericFraction<IntegerType> = GenericFraction::new(4i32, 5i32);
         let result = frac.pow(-1);
-        let expected = GenericFraction::new(5u32, 4u32);
+        let expected = GenericFraction::new(5i32, 4i32);
         assert_eq!(
             result, expected,
             "4/5 raised to the power of -1 should be 5/4"
@@ -144,9 +144,9 @@ mod tests {
 
     #[test]
     fn test_pow_large_exponent() {
-        let frac: GenericFraction<IntegerType> = GenericFraction::new(2u32, 3u32);
+        let frac: GenericFraction<IntegerType> = GenericFraction::new(2i32, 3i32);
         let result = frac.pow(10);
-        let expected = GenericFraction::new(1024u32, 59049u32);
+        let expected = GenericFraction::new(1024i32, 59049i32);
         assert_eq!(
             result, expected,
             "2/3 raised to the power of 10 should be 1024/59049"
@@ -155,9 +155,9 @@ mod tests {
 
     #[test]
     fn test_pow_negative_large_exponent() {
-        let frac: GenericFraction<IntegerType> = GenericFraction::new(2u32, 3u32);
+        let frac: GenericFraction<IntegerType> = GenericFraction::new(2i32, 3i32);
         let result = frac.pow(-3);
-        let expected = GenericFraction::new(27u32, 8u32);
+        let expected = GenericFraction::new(27i32, 8i32);
         assert_eq!(
             result, expected,
             "2/3 raised to the power of -3 should be 27/8"
@@ -166,9 +166,9 @@ mod tests {
 
     #[test]
     fn test_pow_zero_fraction() {
-        let frac: GenericFraction<IntegerType> = GenericFraction::new(0u32, 5u32);
+        let frac: GenericFraction<IntegerType> = GenericFraction::new(0i32, 5i32);
         let result = frac.pow(3);
-        let expected = GenericFraction::new(0u32, 1u32);
+        let expected = GenericFraction::new(0i32, 1i32);
         assert_eq!(
             result, expected,
             "0/5 raised to the power of 3 should be 0/1"
@@ -177,7 +177,7 @@ mod tests {
 
     #[test]
     fn test_pow_negative_exponent_zero_fraction() {
-        let frac: GenericFraction<IntegerType> = GenericFraction::new(0u32, 5u32);
+        let frac: GenericFraction<IntegerType> = GenericFraction::new(0i32, 5i32);
         let result = frac.pow(-2);
         let expected = Infinity(Plus); // Adjusted expectation
         assert_eq!(

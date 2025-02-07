@@ -45,7 +45,10 @@ static PYTHAGOREAN_CACHE: LazyLock<Mutex<HashMap<String, (Pitch, FractionType)>>
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 impl Interval {
-    pub(crate) fn between(arg0: Option<PitchOrNote>, arg1: Option<PitchOrNote>) -> Option<Self> {
+    pub(crate) fn between(
+        arg0: Option<PitchOrNote>,
+        arg1: Option<PitchOrNote>,
+    ) -> ExceptionResult<Self> {
         todo!()
     }
 
@@ -71,6 +74,10 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> ExceptionResu
         None,
         Option::<i8>::None,
         Option::<IntegerType>::None,
+        None,
+        None,
+        None,
+        None,
     )?;
 
     let end_pitch_wanted = start_pitch.transpose((interval).clone());
@@ -82,7 +89,7 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> ExceptionResu
 
     if let Some((cached_pitch, cached_ratio)) = cache.get(&end_pitch_wanted.name()).cloned() {
         let octaves = (end_pitch_wanted.ps() - cached_pitch.ps()) / 12.0;
-        let octave_multiplier = FractionType::new(2u32, 1u32).pow(octaves as i32);
+        let octave_multiplier = FractionType::new(2i32, 1i32).pow(octaves as i32);
         return Ok(cached_ratio * octave_multiplier);
     }
 
@@ -94,13 +101,13 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> ExceptionResu
         if end_pitch_up.name() == end_pitch_wanted.name() {
             found = Some((
                 end_pitch_up.clone(),
-                FractionType::new(3u32, 2u32).pow(counter),
+                FractionType::new(3i32, 2i32).pow(counter),
             ));
             break;
         } else if end_pitch_down.name() == end_pitch_wanted.name() {
             found = Some((
                 end_pitch_down.clone(),
-                FractionType::new(2u32, 3u32).pow(counter),
+                FractionType::new(2i32, 3i32).pow(counter),
             ));
             break;
         } else {
@@ -125,7 +132,7 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> ExceptionResu
     );
 
     let octaves = (end_pitch_wanted.ps() - found_pitch.ps()) / 12.0;
-    let octave_multiplier = FractionType::new(2u32, 1u32).pow(octaves as i32);
+    let octave_multiplier = FractionType::new(2i32, 1i32).pow(octaves as i32);
 
     Ok(found_ratio * octave_multiplier)
 }

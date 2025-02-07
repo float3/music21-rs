@@ -3,17 +3,20 @@ pub(crate) mod microtone;
 
 use crate::{
     defaults::{self, IntegerType},
-    exceptions::ExceptionResult,
+    exceptions::{Exception, ExceptionResult},
     interval::{interval_to_pythagorean_ratio, Interval, PitchOrNote},
+    key::keysignature::KeySignature,
     note::Note,
+    pitchclass::PitchClassString,
     prebase::{ProtoM21Object, ProtoM21ObjectTrait},
     stepname::StepName,
 };
 use std::sync::Arc;
 
 use accidental::{Accidental, IntoAccidental};
+use fraction::GenericFraction;
 use itertools::Itertools;
-use microtone::{IntoMicrotone, Microtone};
+use microtone::{IntoCentShift, Microtone};
 use num::Num;
 use ordered_float::OrderedFloat;
 
@@ -32,18 +35,32 @@ pub(crate) struct Pitch {
     fundamental: Option<Arc<Pitch>>,
 }
 
+impl PartialEq for Pitch {
+    fn eq(&self, other: &Self) -> bool {
+        self._step == other._step
+            && self._octave == other._octave
+            && self._accidental == other._accidental
+            && self._microtone == other._microtone
+    }
+}
+
 impl Pitch {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new<T, U, V>(
         name: Option<T>,
         step: Option<StepName>,
         octave: Octave,
         accidental: Option<U>,
         microtone: Option<V>,
+        pitch_class: Option<PitchClassString>,
+        midi: Option<IntegerType>,
+        ps: Option<FloatType>,
+        fundamental: Option<Pitch>,
     ) -> ExceptionResult<Self>
     where
         T: IntoPitchName,
         U: IntoAccidental,
-        V: IntoMicrotone,
+        V: IntoCentShift,
     {
         let mut self_name = None;
         let mut self_step = PITCH_STEP;
@@ -51,6 +68,10 @@ impl Pitch {
         let mut self_microtone: Option<Microtone> = None;
         let mut self_spelling_is_inferred = false;
         let mut self_octave = None;
+        let self_pitch_class = pitch_class;
+        let self_fundamental = fundamental;
+        let self_midi = midi;
+        let self_ps = ps;
 
         if let Some(name) = name {
             let x = name.into_name();
@@ -76,16 +97,24 @@ impl Pitch {
         }
 
         if let Some(accidental) = accidental {
-            self_accidental = Accidental::new(accidental)?;
+            if accidental.is_accidental() {
+                self_accidental = accidental.accidental();
+            } else {
+                self_accidental = Accidental::new(accidental)?;
+            }
         } else {
             self_accidental = Accidental::new("natural")?;
         }
 
         if let Some(microtone) = microtone {
-            self_microtone = Some(microtone.into_microtone());
+            if microtone.is_microtone() {
+                self_microtone = Some(microtone.microtone());
+            } else {
+                self_microtone = Some(microtone.into_microtone()?);
+            }
         }
 
-        //TODO(more stuff here)
+        //we can't just assign here because the original library has a bunch of lgoic in the setters that we have to port
 
         let mut pitch = Pitch {
             proto: ProtoM21Object::new(),
@@ -99,6 +128,8 @@ impl Pitch {
             fundamental: None,
         };
 
+        //TODO implement all the setterse
+
         pitch.set_name(self_name);
         Ok(pitch)
     }
@@ -108,7 +139,55 @@ impl Pitch {
     }
 
     pub(crate) fn name(&self) -> String {
-        todo!()
+        match self.accidental() {
+            Some(acc) => format!("{:?}{}", self._step, acc.modifier()),
+            None => format!("{:?}", self._step),
+        }
+    }
+
+    fn name_setter(&mut self, usr_str: &str) -> ExceptionResult<()> {
+        let usr_str = usr_str.trim();
+
+        let digit_index = usr_str
+            .char_indices()
+            .find(|&(_, c)| c.is_ascii_digit())
+            .map(|(i, _)| i);
+
+        let (pitch_part, octave_part) = if let Some(i) = digit_index {
+            if i == 0 {
+                return Err(Exception::Pitch(format!(
+                    "Cannot have octave given before pitch name in {:?}",
+                    usr_str
+                )));
+            }
+            (&usr_str[..i], &usr_str[i..])
+        } else {
+            (usr_str, "")
+        };
+
+        // Process the pitch part.
+        let mut pitch_chars = pitch_part.chars();
+        let step = pitch_chars.next().ok_or(Exception::Pitch(format!(
+            "Cannot make a name out of {:?}",
+            pitch_part
+        )))?;
+        self.step_setter(step)?;
+
+        let accidental_str: String = pitch_chars.collect();
+        if accidental_str.is_empty() {
+            self.accidental_setter(Accidental::natural())?;
+        } else {
+            self.accidental_setter(Accidental::new(accidental_str)?)?;
+        }
+
+        if !octave_part.is_empty() {
+            let octave = octave_part.parse::<IntegerType>().map_err(|_| {
+                Exception::Pitch(format!("Cannot parse {:?} to octave", octave_part))
+            })?;
+            self.octave_setter(Some(octave));
+        }
+
+        Ok(())
     }
 
     pub(crate) fn alter(&self) -> FloatType {
@@ -117,13 +196,13 @@ impl Pitch {
         post += self._accidental._alter;
 
         if let Some(microtone) = &self._microtone {
-            post += microtone._alter;
+            post += microtone.alter();
         }
 
         post
     }
 
-    pub(crate) fn set_octave(&mut self, octave: Octave) {
+    pub(crate) fn octave_setter(&mut self, octave: Octave) {
         self._octave = octave;
         self.inform_client()
     }
@@ -147,6 +226,18 @@ impl Pitch {
     }
 
     fn set_name(&mut self, self_name: Option<String>) {
+        todo!()
+    }
+
+    fn accidental(&self) -> Option<Accidental> {
+        todo!()
+    }
+
+    fn step_setter(&self, step: char) -> ExceptionResult<()> {
+        todo!()
+    }
+
+    fn accidental_setter(&self, natural: Accidental) -> ExceptionResult<()> {
         todo!()
     }
 }
@@ -219,18 +310,39 @@ fn convert_ps_to_step<T: Num>(ps: T) -> (StepName, Accidental, Microtone, Intege
     todo!()
 }
 
-pub(crate) fn simplify_multiple_enharmonics(pitches: Vec<Pitch>) -> Option<Vec<Pitch>> {
-    if pitches.len() < 5 {
-        brute_force_enharmonics_search(pitches, |x| dissonance_score(x, true, true, true))
+pub(crate) fn simplify_multiple_enharmonics(
+    pitches: Vec<Pitch>,
+    criterion: Option<fn(&[Pitch]) -> ExceptionResult<FloatType>>,
+    key_context: Option<KeySignature>,
+) -> ExceptionResult<Vec<Pitch>> {
+    let mut old_pitches = pitches;
+
+    let criterion = match criterion {
+        Some(criterion) => criterion,
+        None => {
+            (|x: &[Pitch]| dissonance_score(x, true, true, true))
+                as fn(&[Pitch]) -> ExceptionResult<FloatType>
+        }
+    };
+
+    match key_context {
+        Some(key) => {
+            old_pitches.insert(0, key.as_key("major").tonic());
+        }
+        None => todo!(),
+    }
+
+    if old_pitches.len() < 5 {
+        brute_force_enharmonics_search(old_pitches, criterion)
     } else {
-        greedy_enharmonics_search(pitches, |x| dissonance_score(x, true, true, true))
+        greedy_enharmonics_search(old_pitches, criterion)
     }
 }
 
 fn brute_force_enharmonics_search(
     old_pitches: Vec<Pitch>,
-    score_func: fn(&[Pitch]) -> f64,
-) -> Option<Vec<Pitch>> {
+    score_func: fn(&[Pitch]) -> ExceptionResult<FloatType>,
+) -> ExceptionResult<Vec<Pitch>> {
     let all_possible_pitches: Vec<Vec<Pitch>> = old_pitches[1..]
         .iter()
         .map(|p| {
@@ -242,41 +354,57 @@ fn brute_force_enharmonics_search(
 
     let all_pitch_combinations = all_possible_pitches.into_iter().multi_cartesian_product();
 
-    let mut min_score = f64::MAX;
+    let mut min_score = FloatType::MAX;
     let mut best_combination: Vec<Pitch> = Vec::new();
 
     for combination in all_pitch_combinations {
         let mut pitches: Vec<Pitch> = old_pitches[..1].to_vec();
         pitches.extend(combination);
-        let score = score_func(&pitches);
+        let score = score_func(&pitches)?;
         if score < min_score {
             min_score = score;
             best_combination = pitches;
         }
     }
 
-    Some(best_combination)
+    Ok(best_combination)
 }
 
 fn greedy_enharmonics_search(
     old_pitches: Vec<Pitch>,
-    score_func: fn(&[Pitch]) -> f64,
-) -> Option<Vec<Pitch>> {
-    let mut new_pitches = vec![old_pitches.first()?.clone()];
+    score_func: fn(&[Pitch]) -> ExceptionResult<FloatType>,
+) -> ExceptionResult<Vec<Pitch>> {
+    let mut new_pitches = vec![];
+
+    if let Some(first) = old_pitches.first() {
+        new_pitches.push(first.clone());
+    } else {
+        return Err(Exception::Pitch(
+            "can't perform greedy enharmonics search on empty pitches".into(),
+        ));
+    }
 
     for old_pitch in old_pitches.iter().skip(1) {
         let mut candidates = vec![old_pitch.clone()];
         candidates.extend(old_pitch.get_all_common_enharmonics(2).into_iter());
 
-        let best_candidate = candidates.iter().min_by_key(|candidate| {
+        let mut best_candidate = None;
+        let mut best_score: Option<OrderedFloat<FloatType>> = None;
+        for candidate in candidates.iter() {
             let mut candidate_list = new_pitches.clone();
-            candidate_list.push((*candidate).clone());
-            OrderedFloat(score_func(&candidate_list))
-        })?;
-
+            candidate_list.push(candidate.clone());
+            let score = score_func(&candidate_list)?;
+            let score = OrderedFloat(score);
+            if best_score.is_none() || score < best_score.unwrap() {
+                best_score = Some(score);
+                best_candidate = Some(candidate);
+            }
+        }
+        let best_candidate = best_candidate
+            .ok_or_else(|| Exception::Pitch("candidates list is unexpectedly empty".to_string()))?;
         new_pitches.push(best_candidate.clone());
     }
-    Some(new_pitches)
+    Ok(new_pitches)
 }
 
 fn dissonance_score(
@@ -284,25 +412,25 @@ fn dissonance_score(
     small_pythagorean_ratio: bool,
     accidental_penalty: bool,
     triad_award: bool,
-) -> f64 {
+) -> ExceptionResult<FloatType> {
     let mut score_accidentals = 0.0;
     let mut score_ratio = 0.0;
     let mut score_triad = 0.0;
 
     if pitches.is_empty() {
-        return 0.0;
+        return Ok(0.0);
     }
 
     if accidental_penalty {
         let accidentals = pitches
             .iter()
             .map(|p| p.alter().abs())
-            .collect::<Vec<f64>>();
+            .collect::<Vec<FloatType>>();
         score_accidentals = accidentals
             .iter()
             .map(|a| if *a > 1.0 { *a } else { 0.0 })
             .sum::<f64>()
-            / pitches.len() as f64;
+            / pitches.len() as FloatType;
     }
 
     let mut intervals: Vec<Interval> = vec![];
@@ -312,34 +440,36 @@ fn dissonance_score(
             for p2 in pitches.iter().skip(index + 1) {
                 let mut p1 = (*p1).clone();
                 let mut p2 = (*p2).clone();
-                p1.set_octave(None);
-                p2.set_octave(None);
-                match Interval::between(
+                p1.octave_setter(None);
+                p2.octave_setter(None);
+                intervals.push(Interval::between(
                     Some(PitchOrNote::Pitch(p1.clone())),
                     Some(PitchOrNote::Pitch(p2.clone())),
-                ) {
-                    Some(interval) => intervals.push(interval),
-                    None => return f64::INFINITY,
-                }
+                )?);
             }
         }
 
         if small_pythagorean_ratio {
             for interval in intervals.iter() {
-                match interval_to_pythagorean_ratio(interval.clone()) {
-                    Result::Ok(ratio) => {
-                        score_ratio += (match ratio {
-                            fraction::GenericFraction::Rational(sign, ratio) => *ratio.denom(),
-                            fraction::GenericFraction::Infinity(sign) => panic!(),
-                            fraction::GenericFraction::NaN => panic!(),
-                        } as f64)
-                            .ln()
-                            * 0.03792663444
+                score_ratio += (match interval_to_pythagorean_ratio(interval.clone())? {
+                    GenericFraction::Rational(sign, ratio) => *ratio.denom(),
+                    GenericFraction::Infinity(sign) => {
+                        return Err(Exception::Pitch(format!(
+                            "the ratio computed from {:?} is Infinity",
+                            interval
+                        )));
                     }
-                    Result::Err(_) => return f64::INFINITY, //TODO: investigate this
-                };
+                    GenericFraction::NaN => {
+                        return Err(Exception::Pitch(format!(
+                            "the ratio comptued from {:?} is NaN",
+                            interval
+                        )));
+                    }
+                } as FloatType)
+                    .ln()
+                    * 0.03792663444
             }
-            score_ratio /= pitches.len() as f64;
+            score_ratio /= pitches.len() as FloatType;
         }
 
         if triad_award {
@@ -353,12 +483,185 @@ fn dissonance_score(
                     score_triad -= 1.0;
                 }
             });
-            score_triad /= pitches.len() as f64;
+            score_triad /= pitches.len() as FloatType;
         }
     }
 
-    (score_accidentals + score_ratio + score_triad)
+    Ok((score_accidentals + score_ratio + score_triad)
         / (small_pythagorean_ratio as IntegerType
             + accidental_penalty as IntegerType
-            + triad_award as IntegerType) as f64
+            + triad_award as IntegerType) as FloatType)
+}
+
+fn convert_harmonic_to_cents(_harmonic_shift: IntegerType) -> IntegerType {
+    todo!()
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::defaults::IntegerType;
+
+    use super::{simplify_multiple_enharmonics, Pitch};
+
+    #[test]
+    #[ignore]
+    fn simplify_multiple_enharmonics_test() {
+        let more_than_five = vec![
+            Pitch::new(
+                Some(0),
+                None,
+                None,
+                Option::<i8>::None,
+                Option::<IntegerType>::None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .unwrap(),
+            Pitch::new(
+                Some(1),
+                None,
+                None,
+                Option::<i8>::None,
+                Option::<IntegerType>::None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .unwrap(),
+            Pitch::new(
+                Some(2),
+                None,
+                None,
+                Option::<i8>::None,
+                Option::<IntegerType>::None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .unwrap(),
+            Pitch::new(
+                Some(3),
+                None,
+                None,
+                Option::<i8>::None,
+                Option::<IntegerType>::None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .unwrap(),
+            Pitch::new(
+                Some(4),
+                None,
+                None,
+                Option::<i8>::None,
+                Option::<IntegerType>::None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .unwrap(),
+            Pitch::new(
+                Some(5),
+                None,
+                None,
+                Option::<i8>::None,
+                Option::<IntegerType>::None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .unwrap(),
+            Pitch::new(
+                Some(12),
+                None,
+                None,
+                Option::<i8>::None,
+                Option::<IntegerType>::None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .unwrap(),
+            Pitch::new(
+                Some(13),
+                None,
+                None,
+                Option::<i8>::None,
+                Option::<IntegerType>::None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .unwrap(),
+        ];
+
+        let x = simplify_multiple_enharmonics(more_than_five, None, None);
+        let less_than_five = vec![
+            Pitch::new(
+                Some(0),
+                None,
+                None,
+                Option::<i8>::None,
+                Option::<IntegerType>::None,
+                None,
+                None,
+                None,
+                None,
+            ),
+            Pitch::new(
+                Some(1),
+                None,
+                None,
+                Option::<i8>::None,
+                Option::<IntegerType>::None,
+                None,
+                None,
+                None,
+                None,
+            ),
+            Pitch::new(
+                Some(2),
+                None,
+                None,
+                Option::<i8>::None,
+                Option::<IntegerType>::None,
+                None,
+                None,
+                None,
+                None,
+            ),
+            Pitch::new(
+                Some(12),
+                None,
+                None,
+                Option::<i8>::None,
+                Option::<IntegerType>::None,
+                None,
+                None,
+                None,
+                None,
+            ),
+            Pitch::new(
+                Some(13),
+                None,
+                None,
+                Option::<i8>::None,
+                Option::<IntegerType>::None,
+                None,
+                None,
+                None,
+                None,
+            ),
+        ];
+    }
 }

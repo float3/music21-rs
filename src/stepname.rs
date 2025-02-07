@@ -1,4 +1,7 @@
-use crate::defaults::IntegerType;
+use crate::{
+    defaults::IntegerType,
+    exceptions::{Exception, ExceptionResult},
+};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub(crate) enum StepName {
@@ -14,16 +17,19 @@ pub(crate) enum StepName {
 pub(crate) type StepType = IntegerType;
 
 impl StepName {
-    pub(crate) fn step_to_dnn_offset_reverse(n: StepType) -> Self {
+    pub(crate) fn dnn_offset_to_step(n: StepType) -> ExceptionResult<Self> {
         match n {
-            0 => Self::C,
-            1 => Self::D,
-            2 => Self::E,
-            3 => Self::F,
-            4 => Self::G,
-            5 => Self::A,
-            6 => Self::B,
-            _ => panic!(),
+            0 => Ok(Self::C),
+            1 => Ok(Self::D),
+            2 => Ok(Self::E),
+            3 => Ok(Self::F),
+            4 => Ok(Self::G),
+            5 => Ok(Self::A),
+            6 => Ok(Self::B),
+            _ => Err(Exception::StepName(format!(
+                "dnn offset doesn't match step: {}",
+                n
+            ))),
         }
     }
 
@@ -51,16 +57,19 @@ impl StepName {
         }
     }
 
-    pub(crate) fn step_ref_reverse(n: StepType) -> Self {
+    pub(crate) fn ref_to_step(n: StepType) -> ExceptionResult<Self> {
         match n {
-            0 => StepName::C,
-            2 => StepName::D,
-            4 => StepName::E,
-            5 => StepName::F,
-            7 => StepName::G,
-            9 => StepName::A,
-            11 => StepName::B,
-            _ => panic!(),
+            0 => Ok(StepName::C),
+            2 => Ok(StepName::D),
+            4 => Ok(StepName::E),
+            5 => Ok(StepName::F),
+            7 => Ok(StepName::G),
+            9 => Ok(StepName::A),
+            11 => Ok(StepName::B),
+            _ => Err(Exception::StepName(format!(
+                "ref doesn't match any step: {}",
+                n
+            ))),
         }
     }
 }

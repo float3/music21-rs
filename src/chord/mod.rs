@@ -7,8 +7,8 @@ use crate::{
     base::Music21ObjectTrait,
     defaults::IntegerType,
     duration::Duration,
-    exceptions::ExceptionResult,
-    key::KeySignature,
+    exceptions::{Exception, ExceptionResult},
+    key::keysignature::KeySignature,
     note::{generalnote::GeneralNoteTrait, notrest::NotRestTrait, Note},
     pitch::Pitch,
     prebase::ProtoM21ObjectTrait,
@@ -35,7 +35,7 @@ impl Chord {
                     .collect::<Vec<Note>>()
             }),
         };
-        chord.simplify_enharmonics(true, None);
+        chord.simplify_enharmonics(true, None)?;
         Ok(chord)
     }
 
@@ -55,30 +55,34 @@ impl Chord {
         &mut self,
         in_place: bool,
         key_context: Option<KeySignature>,
-    ) -> Option<Self> {
+    ) -> ExceptionResult<Option<Self>> {
         if in_place {
-            self.simplify_enharmonics_in_place(key_context);
-            None
+            self.simplify_enharmonics_in_place(key_context)?;
+            Ok(None)
         } else {
             let mut new_chord = self.clone();
-            new_chord.simplify_enharmonics_in_place(key_context);
-            Some(new_chord)
+            new_chord.simplify_enharmonics_in_place(key_context)?;
+            Ok(Some(new_chord))
         }
     }
 
-    fn simplify_enharmonics_in_place(&mut self, key_context: Option<KeySignature>) {
-        let pitches = crate::pitch::simplify_multiple_enharmonics(self.pitches());
-        match pitches {
-            Some(pitches) => {
+    fn simplify_enharmonics_in_place(
+        &mut self,
+        key_context: Option<KeySignature>,
+    ) -> ExceptionResult<()> {
+        match crate::pitch::simplify_multiple_enharmonics(self.pitches(), None, key_context) {
+            Ok(pitches) => {
                 for (i, pitch) in pitches.iter().enumerate() {
                     if let Some(note) = self._notes.get_mut(i) {
                         note._pitch = pitch.clone();
                     }
                 }
+                Ok(())
             }
-            None => {
-                eprintln!("simplify_multiple_enharmonics failed")
-            }
+            Err(err) => Err(Exception::Chord(format!(
+                "simplifying multiple enharmonics failed because of {}",
+                err
+            ))),
         }
     }
 }

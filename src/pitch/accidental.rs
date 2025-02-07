@@ -299,6 +299,12 @@ pub(crate) struct Accidental {
     pub(crate) _alter: FloatType,
 }
 
+impl PartialEq for Accidental {
+    fn eq(&self, other: &Self) -> bool {
+        self._name == other._name
+    }
+}
+
 impl Accidental {
     pub(crate) fn new<T>(specifier: T) -> ExceptionResult<Self>
     where
@@ -326,7 +332,7 @@ impl Accidental {
     where
         T: IntoAccidental,
     {
-        let acci_tuple = name.clone().into_accidental(allow_non_standard_value);
+        let acci_tuple = name.clone().accidental_args(allow_non_standard_value);
 
         if allow_non_standard_value {
             assert!(acci_tuple.is_some());
@@ -347,15 +353,35 @@ impl Accidental {
 
         let name: Option<AccidentalEnum> = AccidentalEnum::from_name(&self._name);
 
-        assert!(name.is_some());
-
-        self._modifier = name.unwrap().to_modifier().to_owned();
+        match name {
+            Some(n) => self._modifier = n.to_modifier().to_owned(),
+            None => panic!("Expected name to be Some"),
+        }
 
         if let Some(client) = &self._client {
             client.inform_client();
         }
 
         Ok(())
+    }
+
+    pub(crate) fn modifier(&self) -> &str {
+        todo!()
+    }
+
+    pub(crate) fn natural() -> Accidental {
+        let x = Accidental::new("n");
+        assert!(x.is_ok());
+        match x {
+            Ok(val) => val,
+            Err(err) => panic!("creating a natural Accidental should never fail: {}", err),
+        }
+    }
+}
+
+impl Default for Accidental {
+    fn default() -> Self {
+        Self::natural()
     }
 }
 
@@ -370,47 +396,110 @@ impl ProtoM21ObjectTrait for Accidental {}
 impl SlottedObjectMixinTrait for Accidental {}
 
 pub(crate) trait IntoAccidental: Display + Clone {
-    fn into_accidental(self, allow_non_standard_values: bool) -> Option<(String, FloatType)>;
+    fn accidental_args(self, allow_non_standard_values: bool) -> Option<(String, FloatType)>;
+    fn is_accidental(&self) -> bool;
+    fn into_accidental(self) -> ExceptionResult<Accidental>;
+    fn accidental(self) -> Accidental;
 }
 
 impl IntoAccidental for i8 {
-    fn into_accidental(self, allow_non_standard_values: bool) -> Option<(String, FloatType)> {
+    fn accidental_args(self, allow_non_standard_values: bool) -> Option<(String, FloatType)> {
         match AccidentalEnum::from_int(self) {
             Some(acci) => Some(acci.to_name_and_alter()),
             _ if allow_non_standard_values => Some(("".to_owned(), self as FloatType)),
             _ => None,
         }
     }
+
+    fn is_accidental(&self) -> bool {
+        false
+    }
+
+    fn into_accidental(self) -> ExceptionResult<Accidental> {
+        Accidental::new(self)
+    }
+
+    fn accidental(self) -> Accidental {
+        panic!("call into_accidental instead")
+    }
 }
 
 impl IntoAccidental for FloatType {
-    fn into_accidental(self, allow_non_standard_values: bool) -> Option<(String, FloatType)> {
+    fn accidental_args(self, allow_non_standard_values: bool) -> Option<(String, FloatType)> {
         match AccidentalEnum::from_float(self) {
             Some(acci) => Some(acci.to_name_and_alter()),
             _ if allow_non_standard_values => Some(("".to_owned(), self)),
             _ => None,
         }
     }
+
+    fn is_accidental(&self) -> bool {
+        false
+    }
+
+    fn into_accidental(self) -> ExceptionResult<Accidental> {
+        Accidental::new(self)
+    }
+
+    fn accidental(self) -> Accidental {
+        panic!("call into_accidental instead")
+    }
 }
 
 impl IntoAccidental for &str {
-    fn into_accidental(self, allow_non_standard_values: bool) -> Option<(String, FloatType)> {
-        self.to_string().into_accidental(allow_non_standard_values)
+    fn accidental_args(self, allow_non_standard_values: bool) -> Option<(String, FloatType)> {
+        self.to_string().accidental_args(allow_non_standard_values)
+    }
+
+    fn is_accidental(&self) -> bool {
+        false
+    }
+
+    fn into_accidental(self) -> ExceptionResult<Accidental> {
+        Accidental::new(self)
+    }
+
+    fn accidental(self) -> Accidental {
+        panic!("call into_accidental instead")
     }
 }
 
 impl IntoAccidental for String {
-    fn into_accidental(self, allow_non_standard_values: bool) -> Option<(String, FloatType)> {
+    fn accidental_args(self, allow_non_standard_values: bool) -> Option<(String, FloatType)> {
         match AccidentalEnum::from_string(self.to_lowercase().as_str()) {
             Some(acci) => Some(acci.to_name_and_alter()),
             _ if allow_non_standard_values => Some((self, 0.0)),
             _ => None,
         }
     }
+
+    fn is_accidental(&self) -> bool {
+        false
+    }
+
+    fn into_accidental(self) -> ExceptionResult<Accidental> {
+        Accidental::new(self)
+    }
+
+    fn accidental(self) -> Accidental {
+        panic!("call into_accidental instead")
+    }
 }
 
 impl IntoAccidental for Accidental {
-    fn into_accidental(self, allow_non_standard_values: bool) -> Option<(String, FloatType)> {
+    fn accidental_args(self, allow_non_standard_values: bool) -> Option<(String, FloatType)> {
         Some((self._name, self._alter))
+    }
+
+    fn is_accidental(&self) -> bool {
+        true
+    }
+
+    fn into_accidental(self) -> ExceptionResult<Accidental> {
+        panic!("don't call into_accidental on an accidental");
+    }
+
+    fn accidental(self) -> Accidental {
+        self
     }
 }
