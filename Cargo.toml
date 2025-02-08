@@ -30,4 +30,4 @@ utils = { path = "./utils", default-features = false }
 
 [dev-dependencies]
 pyo3 = { version = "0.23.4", features = ["auto-initialize"] }
-utils = { path = "./utils", default-features = false }
+utils = { path = "./utils" }

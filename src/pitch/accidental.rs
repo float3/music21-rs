@@ -6,7 +6,7 @@ use std::{
 use crate::{
     common::objects::slottedobjectmixin::{SlottedObjectMixin, SlottedObjectMixinTrait},
     display::{DisplayLocation, DisplaySize, DisplayStyle, DisplayType},
-    exceptions::{Exception, ExceptionResult},
+    exception::{Exception, ExceptionResult},
     prebase::{ProtoM21Object, ProtoM21ObjectTrait},
 };
 

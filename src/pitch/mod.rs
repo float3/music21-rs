@@ -3,7 +3,7 @@ pub(crate) mod microtone;
 
 use crate::{
     defaults::{self, IntegerType},
-    exceptions::{Exception, ExceptionResult},
+    exception::{Exception, ExceptionResult},
     interval::{interval_to_pythagorean_ratio, Interval, PitchOrNote},
     key::keysignature::KeySignature,
     note::Note,
@@ -128,9 +128,14 @@ impl Pitch {
             fundamental: None,
         };
 
-        //TODO implement all the setterse
+        //TODO implement all the setters
 
-        pitch.set_name(self_name);
+        if let Some(name) = self_name {
+            pitch.name_setter(&name)?
+        };
+
+        pitch.step_setter(self_step);
+
         Ok(pitch)
     }
 
@@ -171,7 +176,7 @@ impl Pitch {
             "Cannot make a name out of {:?}",
             pitch_part
         )))?;
-        self.step_setter(step)?;
+        self.step_setter(StepName::try_from(step)?);
 
         let accidental_str: String = pitch_chars.collect();
         if accidental_str.is_empty() {
@@ -225,16 +230,14 @@ impl Pitch {
         todo!()
     }
 
-    fn set_name(&mut self, self_name: Option<String>) {
-        todo!()
-    }
-
     fn accidental(&self) -> Option<Accidental> {
         todo!()
     }
 
-    fn step_setter(&self, step: char) -> ExceptionResult<()> {
-        todo!()
+    fn step_setter(&mut self, step_name: StepName) {
+        self._step = step_name;
+        self.spelling_is_infered = true;
+        self.inform_client();
     }
 
     fn accidental_setter(&self, natural: Accidental) -> ExceptionResult<()> {

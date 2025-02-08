@@ -1,6 +1,6 @@
 mod generated;
 
-use crate::exceptions::Exception;
+use crate::exception::Exception;
 
 use generated::*;
 use std::{collections::HashMap, sync::LazyLock};

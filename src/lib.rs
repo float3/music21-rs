@@ -15,7 +15,7 @@ pub(crate) mod common;
 pub(crate) mod defaults;
 pub(crate) mod display;
 pub(crate) mod duration;
-pub(crate) mod exceptions;
+pub(crate) mod exception;
 pub(crate) mod fraction_pow;
 pub(crate) mod interval;
 pub(crate) mod key;

@@ -9,6 +9,9 @@ pub(crate) struct ConcreteScale {
 pub(crate) trait ConcreteScaleTrait: ScaleTrait {}
 
 impl ConcreteScaleTrait for ConcreteScale {}
+
 impl ScaleTrait for ConcreteScale {}
+
 impl Music21ObjectTrait for ConcreteScale {}
+
 impl ProtoM21ObjectTrait for ConcreteScale {}

@@ -14,7 +14,7 @@ use std::{collections::HashMap, sync::LazyLock};
 
 use crate::base::Music21ObjectTrait;
 
-use crate::exceptions::{Exception, ExceptionResult};
+use crate::exception::{Exception, ExceptionResult};
 use crate::prebase::ProtoM21ObjectTrait;
 use crate::{
     defaults::{FloatType, FractionType, IntegerType},

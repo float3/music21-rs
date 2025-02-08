@@ -12,7 +12,7 @@ use std::{
 use pyo3::{prelude::*, types::PyModule};
 
 #[cfg(feature = "python")]
-const PYTHON_EXE: LazyLock<String> = LazyLock::new(|| {
+static PYTHON_EXE: LazyLock<String> = LazyLock::new(|| {
     let version: (u8, u8) = Python::with_gil(|py| -> PyResult<(u8, u8)> {
         let sys = py.import("sys")?;
         let version_info = sys.getattr("version_info")?;

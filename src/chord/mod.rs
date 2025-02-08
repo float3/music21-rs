@@ -7,7 +7,7 @@ use crate::{
     base::Music21ObjectTrait,
     defaults::IntegerType,
     duration::Duration,
-    exceptions::{Exception, ExceptionResult},
+    exception::{Exception, ExceptionResult},
     key::keysignature::KeySignature,
     note::{generalnote::GeneralNoteTrait, notrest::NotRestTrait, Note},
     pitch::Pitch,

@@ -2,7 +2,7 @@ use super::{IntegerType, Pitch};
 use crate::{
     base::Music21ObjectTrait,
     duration::Duration,
-    exceptions::ExceptionResult,
+    exception::ExceptionResult,
     note::{
         generalnote::GeneralNoteTrait,
         notrest::{NotRest, NotRestTrait},

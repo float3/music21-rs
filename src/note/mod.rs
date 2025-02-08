@@ -2,7 +2,7 @@ pub(crate) mod generalnote;
 pub(crate) mod notrest;
 
 use crate::{
-    base::Music21ObjectTrait, defaults::IntegerType, exceptions::ExceptionResult, pitch::Pitch,
+    base::Music21ObjectTrait, defaults::IntegerType, exception::ExceptionResult, pitch::Pitch,
     prebase::ProtoM21ObjectTrait,
 };
 

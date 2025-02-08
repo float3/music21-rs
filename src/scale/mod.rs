@@ -13,5 +13,7 @@ pub(crate) struct Scale {
 pub(crate) trait ScaleTrait: Music21ObjectTrait {}
 
 impl ScaleTrait for Scale {}
+
 impl Music21ObjectTrait for Scale {}
+
 impl ProtoM21ObjectTrait for Scale {}

@@ -12,7 +12,11 @@ pub(crate) struct Diatonicscale {
 pub(crate) trait DiatonicscaleTrait: ConcreteScaleTrait {}
 
 impl DiatonicscaleTrait for Diatonicscale {}
+
 impl ConcreteScaleTrait for Diatonicscale {}
+
 impl ScaleTrait for Diatonicscale {}
+
 impl Music21ObjectTrait for Diatonicscale {}
+
 impl ProtoM21ObjectTrait for Diatonicscale {}
