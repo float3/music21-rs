@@ -20,7 +20,7 @@ I am also taking into account [this post](https://www.music21.org/music21docs/de
   `pyo3` is used only in the test suite and `build.rs`.
 
 - **Build Script:**  
-  When the `python` feature is enabled, `build.rs` generates Rust code from Python (currently, only Python 3.12 is supported). Although normal usage doesn’t require running the build script (since the generated code is checked in), it’s preferable to keep the generator alongside the generated code.
+  When the `python` feature is enabled, `build.rs` generates Rust code from Python. Although normal usage doesn’t require running the build script (since the generated code is checked in), it’s preferable to keep the generator alongside the generated code.
 
 - **Testing:**
   Some Tests are done by running python code and inspecting it to see if the Rust counterpart matches, for example that's how I test the auto-generated code.  

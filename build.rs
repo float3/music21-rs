@@ -10,7 +10,6 @@
 //! ```
 /*
 #!nix-shell -i rust-script -p rustc -p rust-script -p cargo -p rustfmt -p python312 -p python312Packages.virtualenv -p git
-#!python3 -m pip install -r ./music21/requirements.txt
 */
 
 use std::error::Error;
@@ -409,6 +408,8 @@ use std::{collections::HashMap, sync::LazyLock};
         run_command(&["rustfmt", rust_path], "rustfmt")?;
 
         println!("cargo:rerun-if-changed=./music21/music21/chord/tables.py");
+        println!("cargo:rerun-if-changed=./build.rs");
+        println!("cargo:rerun-if-changed=./utils/src/lib.rs");
         Ok(())
     }
 }
