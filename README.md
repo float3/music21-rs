@@ -5,9 +5,13 @@ This is a work-in-progress (WIP) **Rust** port of [music21](https://github.com/c
 ### Motivation
 
 The project began when I tried to develop a primitive chord-naming algorithm in HLSL and later C# for [AudioLink](https://github.com/llealloo/audiolink/edit/master/README.md). During my search for existing solutions, I discovered that the music21 library offered one of the most comprehensive implementations available.
+
 Later, while working on [Tuning Playground](https://hilll.dev/tools/tuningplayground), I built a large chord-name lookup table (LUT) using music21 to generate it. However, this approach did not satisfy me because implementing the original algorithm is inherently more correct than relying on a LUT.
+
 I wanted a more adaptable solution—an implementation of the music21 chord-naming algorithm that could run on the web, in WebAssembly, or be compiled to JavaScript, as well as on any other platform where running Python might not be ideal. I considered writing it in Rust, TypeScript, C#/F#, Haskell, and Elm, but ultimately decided to go with Rust.
+
 For now, I am adhering closely to the original design and APIs of music21; I plan to adopt a more idiomatic Rust style after implementing the core functionality and expanding the test suite.
+
 I am also taking into account [this post](https://www.music21.org/music21docs/developerReference/startingOver.html). Kudos to the music21 team for providing such resources—it’s always valuable to have these insights compiled.
 
 ### pyo3 Dependency
@@ -42,5 +46,7 @@ assert_eq!(chord.unwrap().pitched_common_name(), "C-major triad");
 ```
 
 thanks to Michael Scott Asato Cuthbert for his work in computational musicology
+
 thanks to Michael and the music21 contributors and Community for the music21 library
+
 thanks to Valentin for answering my Rust questions

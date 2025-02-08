@@ -1,8 +1,17 @@
-use std::{error::Error, process::Command, str::from_utf8};
+use std::{
+    error::Error,
+    process::Command,
+    str::from_utf8,
+    sync::atomic::{AtomicBool, Ordering},
+};
+
+const PYTHON_EXE: &str = "Python3";
 
 fn git_submodule() -> Result<(), Box<dyn Error>> {
-    run_command(&["git", "submodule", "init"], "init submodule")?;
-    run_command(&["git", "submodule", "update"], "update submodule")?;
+    run_command(
+        &["git", "submodule", "update", "--init"],
+        "init and update submodule",
+    )?;
     Ok(())
 }
 
@@ -16,14 +25,14 @@ fn git_pull() {
 }
 
 fn create_venv() -> Result<(), Box<dyn Error>> {
-    run_command(&["python3.12", "-m", "venv", "venv"], "create venv")?;
+    run_command(&[PYTHON_EXE, "-m", "venv", "venv"], "create venv")?;
     Ok(())
 }
 
 fn install_dependencies() -> Result<(), Box<dyn Error>> {
     run_command(
         &[
-            "./venv/bin/python3.12",
+            &format!("./venv/bin/{}", PYTHON_EXE),
             "-m",
             "pip",
             "install",
@@ -38,7 +47,7 @@ fn install_dependencies() -> Result<(), Box<dyn Error>> {
 fn pip_upgrade() {
     if let Err(e) = run_command(
         &[
-            "./venv/bin/python3.12",
+            &format!("./venv/bin/{}", PYTHON_EXE),
             "-m",
             "pip",
             "install",
@@ -51,6 +60,25 @@ fn pip_upgrade() {
     }
 }
 
+static PREPARED: AtomicBool = AtomicBool::new(false);
+
+pub fn prepare() -> Result<(), Box<dyn Error>> {
+    if PREPARED.load(Ordering::Acquire) {
+        return Ok(());
+    }
+    println!("preparing environment");
+    let res = (|| {
+        git_submodule()?;
+        git_pull();
+        create_venv()?;
+        pip_upgrade();
+        install_dependencies()?;
+        Ok(())
+    })();
+    PREPARED.store(true, Ordering::Release);
+    res
+}
+
 pub fn run_command(args: &[&str], description: &str) -> Result<(), Box<dyn Error>> {
     let mut cmd = Command::new(args[0]);
     cmd.args(&args[1..]);
@@ -60,21 +88,13 @@ pub fn run_command(args: &[&str], description: &str) -> Result<(), Box<dyn Error
         .map_err(|e| format!("Failed to execute {}: {}", description, e))?;
 
     if output.status.success() {
+        println!("{}", description);
         Ok(())
     } else {
         let stderr = from_utf8(&output.stderr)
             .map_err(|e| format!("{} failed: stderr not valid UTF-8: {}", description, e))?;
         Err(format!("{} failed: {}", description, stderr).into())
     }
-}
-
-pub fn prepare() -> Result<(), Box<dyn Error>> {
-    git_submodule()?;
-    git_pull();
-    create_venv()?;
-    pip_upgrade();
-    install_dependencies()?;
-    Ok(())
 }
 
 use pyo3::{
@@ -86,8 +106,23 @@ pub type Tables<'py> = Bound<'py, PyModule>;
 
 pub fn init_py(py: Python<'_>) -> Result<(), PyErr> {
     let sys = py.import("sys")?;
+
+    let sysconfig = py.import("sysconfig")?;
+
+    let system_site_packages: String = sysconfig
+        .call_method1("get_path", ("purelib",))?
+        .extract()?;
+
+    let version_info = sys.getattr("version_info")?;
+    let major: u8 = version_info.get_item(0)?.extract()?;
+    let minor: u8 = version_info.get_item(1)?.extract()?;
+    let venv_site_packages = format!("./venv/lib/python{}.{}{}", major, minor, "/site-packages");
+
+    let music21 = "./music21".to_owned();
+
     let path = sys.getattr("path")?;
-    path.call_method1("append", ("./venv/lib/python3.12/site-packages",))?;
-    path.call_method1("append", ("./music21",))?;
+    let items = vec![system_site_packages, venv_site_packages, music21];
+    path.call_method1("extend", (items,))?;
+
     Ok(())
 }
