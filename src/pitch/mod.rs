@@ -310,20 +310,17 @@ fn convert_ps_to_step<T: Num>(ps: T) -> (StepName, Accidental, Microtone, Intege
     todo!()
 }
 
+type CriterionFunction = fn(&[Pitch]) -> ExceptionResult<FloatType>;
+
 pub(crate) fn simplify_multiple_enharmonics(
     pitches: Vec<Pitch>,
-    criterion: Option<fn(&[Pitch]) -> ExceptionResult<FloatType>>,
+    criterion: Option<CriterionFunction>,
     key_context: Option<KeySignature>,
 ) -> ExceptionResult<Vec<Pitch>> {
     let mut old_pitches = pitches;
 
-    let criterion = match criterion {
-        Some(criterion) => criterion,
-        None => {
-            (|x: &[Pitch]| dissonance_score(x, true, true, true))
-                as fn(&[Pitch]) -> ExceptionResult<FloatType>
-        }
-    };
+    let criterion: CriterionFunction =
+        criterion.unwrap_or(|x: &[Pitch]| dissonance_score(x, true, true, true));
 
     match key_context {
         Some(key) => {
@@ -341,7 +338,7 @@ pub(crate) fn simplify_multiple_enharmonics(
 
 fn brute_force_enharmonics_search(
     old_pitches: Vec<Pitch>,
-    score_func: fn(&[Pitch]) -> ExceptionResult<FloatType>,
+    score_func: CriterionFunction,
 ) -> ExceptionResult<Vec<Pitch>> {
     let all_possible_pitches: Vec<Vec<Pitch>> = old_pitches[1..]
         .iter()
@@ -372,7 +369,7 @@ fn brute_force_enharmonics_search(
 
 fn greedy_enharmonics_search(
     old_pitches: Vec<Pitch>,
-    score_func: fn(&[Pitch]) -> ExceptionResult<FloatType>,
+    score_func: CriterionFunction,
 ) -> ExceptionResult<Vec<Pitch>> {
     let mut new_pitches = vec![];
 
