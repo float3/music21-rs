@@ -1,30 +1,32 @@
+#[cfg(feature = "python")]
+use std::sync::LazyLock;
+
 use std::{
     error::Error,
     process::Command,
     str::from_utf8,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        LazyLock,
-    },
+    sync::atomic::{AtomicBool, Ordering},
 };
 
+#[cfg(feature = "python")]
+use pyo3::{prelude::*, types::PyModule};
+
+#[cfg(feature = "python")]
 const PYTHON_EXE: LazyLock<String> = LazyLock::new(|| {
-    let x: (u8, u8) = Python::with_gil(|py| -> PyResult<(u8, u8)> {
+    let version: (u8, u8) = Python::with_gil(|py| -> PyResult<(u8, u8)> {
         let sys = py.import("sys")?;
         let version_info = sys.getattr("version_info")?;
         let major: u8 = version_info.get_item(0)?.extract()?;
         let minor: u8 = version_info.get_item(1)?.extract()?;
-
         Ok((major, minor))
     })
     .unwrap();
-
-    format!("python{}.{}", x.0, x.1)
+    format!("python{}.{}", version.0, version.1)
 });
 
+#[cfg(feature = "python")]
 fn python_venv() -> String {
-    let s: &str = &PYTHON_EXE;
-    format!("./venv/bin/{}", s)
+    format!("./venv/bin/{}", *PYTHON_EXE)
 }
 
 fn git_submodule() -> Result<(), Box<dyn Error>> {
@@ -44,11 +46,13 @@ fn git_pull() {
     }
 }
 
+#[cfg(feature = "python")]
 fn create_venv() -> Result<(), Box<dyn Error>> {
     run_command(&[&PYTHON_EXE, "-m", "venv", "venv"], "create venv")?;
     Ok(())
 }
 
+#[cfg(feature = "python")]
 fn install_dependencies() -> Result<(), Box<dyn Error>> {
     run_command(
         &[
@@ -64,6 +68,7 @@ fn install_dependencies() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+#[cfg(feature = "python")]
 fn pip_upgrade() {
     if let Err(e) = run_command(
         &[
@@ -90,8 +95,11 @@ pub fn prepare() -> Result<(), Box<dyn Error>> {
     let res = (|| {
         git_submodule()?;
         git_pull();
+        #[cfg(feature = "python")]
         create_venv()?;
+        #[cfg(feature = "python")]
         pip_upgrade();
+        #[cfg(feature = "python")]
         install_dependencies()?;
         Ok(())
     })();
@@ -103,11 +111,9 @@ pub fn run_command(args: &[&str], description: &str) -> Result<(), Box<dyn Error
     println!("{} running command: {}", description, args.join(" "));
     let mut cmd = Command::new(args[0]);
     cmd.args(&args[1..]);
-
     let output = cmd
         .output()
         .map_err(|e| format!("Failed to execute {}: {}", description, e))?;
-
     if output.status.success() {
         Ok(())
     } else {
@@ -117,26 +123,22 @@ pub fn run_command(args: &[&str], description: &str) -> Result<(), Box<dyn Error
     }
 }
 
-use pyo3::{
-    types::{PyAnyMethods, PyModule},
-    Bound, PyErr, PyResult, Python,
-};
+#[cfg(feature = "python")]
+pub type Tables<'py> = pyo3::Bound<'py, PyModule>;
 
-pub type Tables<'py> = Bound<'py, PyModule>;
-
-pub fn init_py(py: Python<'_>) -> Result<(), PyErr> {
+#[cfg(feature = "python")]
+pub fn init_py(py: Python<'_>) -> pyo3::PyResult<()> {
     let sys = py.import("sys")?;
     let sysconfig = py.import("sysconfig")?;
     let system_site_packages: String = sysconfig
         .call_method1("get_path", ("purelib",))?
         .extract()?;
     let path = sys.getattr("path")?;
-    let s: &str = &PYTHON_EXE;
     path.call_method1(
         "extend",
         (vec![
             system_site_packages,
-            format!("./venv/lib/{}/site-packages", s),
+            format!("./venv/lib/{}/site-packages", *PYTHON_EXE),
             "./music21".to_owned(),
         ],),
     )?;

@@ -2,11 +2,11 @@
 //! ```cargo
 //! [features]
 //! default = ["python"]
-//! python = ["dep:pyo3"]
+//! python = ["dep:pyo3", "utils/python"]
 //!
 //! [dependencies]
 //! pyo3 = { version = "0.23.4", features = ["auto-initialize"], optional = true }
-//! utils = { path = "./utils" }
+//! utils = { path = "./utils", default-features = false }
 //! ```
 /*
 #!nix-shell -i rust-script -p rustc -p rust-script -p cargo -p rustfmt -p python312 -p python312Packages.virtualenv -p git
