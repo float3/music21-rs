@@ -25,15 +25,19 @@ impl Chord {
     where
         T: IntoNotes + Clone + IntoNotRests,
     {
-        let mut chord = Self {
-            chordbase: ChordBase::new(notes.clone(), &None)?,
-            _notes: notes.as_ref().map_or_else(Vec::new, |notes| {
+        let chord_notes = notes.as_ref().map_or_else(
+            || Ok(Vec::new()),
+            |notes| {
                 notes
                     .clone()
-                    .into_notes()
-                    .into_iter()
-                    .collect::<Vec<Note>>()
-            }),
+                    .try_into_notes()
+                    .map(|notes| notes.into_iter().collect::<Vec<Note>>())
+            },
+        )?;
+
+        let mut chord = Self {
+            chordbase: ChordBase::new(notes.clone(), &None)?,
+            _notes: chord_notes,
         };
         chord.simplify_enharmonics(true, None)?;
         Ok(chord)
@@ -70,7 +74,7 @@ impl Chord {
         &mut self,
         key_context: Option<KeySignature>,
     ) -> ExceptionResult<()> {
-        match crate::pitch::simplify_multiple_enharmonics(self.pitches(), None, key_context) {
+        match crate::pitch::simplify_multiple_enharmonics(&mut self.pitches(), None, key_context) {
             Ok(pitches) => {
                 for (i, pitch) in pitches.iter().enumerate() {
                     if let Some(note) = self._notes.get_mut(i) {
@@ -118,13 +122,13 @@ impl ProtoM21ObjectTrait for Chord {}
 pub(crate) trait IntoNotes {
     type T: IntoIterator<Item = Note>;
 
-    fn into_notes(self) -> Self::T;
+    fn try_into_notes(self) -> ExceptionResult<Self::T>;
 }
 
 impl IntoNotes for &[Pitch] {
     type T = Vec<Note>;
 
-    fn into_notes(self) -> Self::T {
+    fn try_into_notes(self) -> Result<Self::T, Exception> {
         todo!()
     }
 }
@@ -132,7 +136,7 @@ impl IntoNotes for &[Pitch] {
 impl IntoNotes for &[Note] {
     type T = Vec<Note>;
 
-    fn into_notes(self) -> Self::T {
+    fn try_into_notes(self) -> Result<Self::T, Exception> {
         todo!()
     }
 }
@@ -140,15 +144,15 @@ impl IntoNotes for &[Note] {
 impl IntoNotes for &[Chord] {
     type T = Vec<Note>;
 
-    fn into_notes(self) -> Self::T {
-        self.iter().flat_map(|chord| chord._notes.clone()).collect()
+    fn try_into_notes(self) -> Result<Self::T, Exception> {
+        Ok(self.iter().flat_map(|chord| chord._notes.clone()).collect())
     }
 }
 
 impl IntoNotes for &[String] {
     type T = Vec<Note>;
 
-    fn into_notes(self) -> Self::T {
+    fn try_into_notes(self) -> Result<Self::T, Exception> {
         todo!()
     }
 }
@@ -156,23 +160,39 @@ impl IntoNotes for &[String] {
 impl IntoNotes for String {
     type T = Vec<Note>;
 
-    fn into_notes(self) -> Self::T {
+    fn try_into_notes(self) -> Result<Self::T, Exception> {
         todo!()
+    }
+}
+
+impl IntoNotes for &[&str] {
+    type T = Vec<Note>;
+
+    fn try_into_notes(self) -> Result<Self::T, Exception> {
+        let mut vec = vec![];
+        for str in self {
+            vec.append(&mut str.try_into_notes()?);
+        }
+        Ok(vec)
     }
 }
 
 impl IntoNotes for &str {
     type T = Vec<Note>;
 
-    fn into_notes(self) -> Self::T {
-        todo!()
+    fn try_into_notes(self) -> Result<Self::T, Exception> {
+        if self.contains(' ') {
+            self.split(" ").collect::<Vec<&str>>().try_into_notes()
+        } else {
+            Ok(vec![Note::new(Some(self), None, None, None)?])
+        }
     }
 }
 
 impl IntoNotes for &[IntegerType] {
     type T = Vec<Note>;
 
-    fn into_notes(self) -> Self::T {
+    fn try_into_notes(self) -> Result<Self::T, Exception> {
         todo!()
     }
 }

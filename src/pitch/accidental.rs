@@ -363,15 +363,32 @@ impl Accidental {
     }
 
     pub(crate) fn modifier(&self) -> &str {
-        todo!()
+        return &self._modifier;
     }
 
     pub(crate) fn natural() -> Accidental {
-        let x = Accidental::new("n");
+        let x = Accidental::new("natural");
         assert!(x.is_ok());
         match x {
             Ok(val) => val,
             Err(err) => panic!("creating a natural Accidental should never fail: {}", err),
+        }
+    }
+
+    pub(crate) fn flat() -> Accidental {
+        let x = Accidental::new("flat");
+        assert!(x.is_ok());
+        match x {
+            Ok(val) => val,
+            Err(err) => panic!("creating a flat Accidental should never fail: {}", err),
+        }
+    }
+    pub(crate) fn sharp() -> Accidental {
+        let x = Accidental::new("sharp");
+        assert!(x.is_ok());
+        match x {
+            Ok(val) => val,
+            Err(err) => panic!("creating a sharp Accidental should never fail: {}", err),
         }
     }
 }
@@ -498,5 +515,123 @@ impl IntoAccidental for Accidental {
 
     fn accidental(self) -> Accidental {
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Accidental, IntoAccidental};
+
+    #[test]
+    fn test_natural() {
+        let acc = Accidental::natural();
+        assert_eq!(acc._name, "natural");
+        assert_eq!(acc._alter, 0.0);
+        assert_eq!(acc.modifier(), "");
+    }
+
+    #[test]
+    fn test_sharp() {
+        let acc = Accidental::sharp();
+        assert_eq!(acc._name, "sharp");
+        assert_eq!(acc._alter, 1.0);
+        assert_eq!(acc.modifier(), "#");
+    }
+
+    #[test]
+    fn test_flat() {
+        let acc = Accidental::flat();
+        assert_eq!(acc._name, "flat");
+        assert_eq!(acc._alter, -1.0);
+        assert_eq!(acc.modifier(), "-");
+    }
+
+    #[test]
+    fn test_creation_from_int() {
+        let acc_sharp = 1.into_accidental().unwrap();
+        assert_eq!(acc_sharp._name, "sharp");
+        assert_eq!(acc_sharp._alter, 1.0);
+
+        let acc_flat = (-1).into_accidental().unwrap();
+        assert_eq!(acc_flat._name, "flat");
+        assert_eq!(acc_flat._alter, -1.0);
+
+        let acc_natural = 0.into_accidental().unwrap();
+        assert_eq!(acc_natural._name, "natural");
+        assert_eq!(acc_natural._alter, 0.0);
+    }
+
+    #[test]
+    fn test_creation_from_float() {
+        let acc_double_sharp: Accidental = 2.0.into_accidental().unwrap();
+        assert_eq!(acc_double_sharp._name, "double-sharp");
+        assert_eq!(acc_double_sharp._alter, 2.0);
+
+        let acc_half_flat: Accidental = (-0.5).into_accidental().unwrap();
+        assert_eq!(acc_half_flat._name, "half-flat");
+        assert_eq!(acc_half_flat._alter, -0.5);
+    }
+
+    #[test]
+    fn test_creation_from_str() {
+        let acc1: Accidental = <&str>::into_accidental("sharp").unwrap();
+        assert_eq!(acc1._name, "sharp");
+        assert_eq!(acc1._alter, 1.0);
+
+        // Case insensitivity: "Flat" should be accepted as "flat"
+        let acc2: Accidental = <&str>::into_accidental("Flat").unwrap();
+        assert_eq!(acc2._name, "flat");
+        assert_eq!(acc2._alter, -1.0);
+    }
+
+    #[test]
+    fn test_creation_from_string() {
+        let acc: Accidental = String::into_accidental("double-flat".to_string()).unwrap();
+        assert_eq!(acc._name, "double-flat");
+        assert_eq!(acc._alter, -2.0);
+    }
+
+    #[test]
+    fn test_invalid_accidental() {
+        let result = Accidental::new("invalid");
+        assert!(
+            result.is_err(),
+            "An invalid accidental should return an error"
+        );
+    }
+
+    #[test]
+    fn test_display_trait() {
+        let acc = Accidental::sharp();
+        assert_eq!(format!("{}", acc), "sharp");
+    }
+
+    #[test]
+    fn test_equality() {
+        let acc1 = Accidental::sharp();
+        let acc2 = Accidental::sharp();
+        let acc3 = Accidental::flat();
+        assert_eq!(acc1, acc2);
+        assert_ne!(acc1, acc3);
+    }
+
+    #[test]
+    fn test_alternate_names() {
+        // Using alternate names from AccidentalEnum::from_alternate_name
+        let acc_sharp: Accidental = String::into_accidental("is".to_string()).unwrap();
+        assert_eq!(acc_sharp._name, "sharp");
+        assert_eq!(acc_sharp._alter, 1.0);
+
+        let acc_double_sharp: Accidental = String::into_accidental("isis".to_string()).unwrap();
+        assert_eq!(acc_double_sharp._name, "double-sharp");
+        assert_eq!(acc_double_sharp._alter, 2.0);
+
+        let acc_triple_sharp: Accidental = String::into_accidental("isisis".to_string()).unwrap();
+        assert_eq!(acc_triple_sharp._name, "triple-sharp");
+        assert_eq!(acc_triple_sharp._alter, 3.0);
+
+        let acc_double_flat: Accidental = String::into_accidental("eses".to_string()).unwrap();
+        assert_eq!(acc_double_flat._name, "double-flat");
+        assert_eq!(acc_double_flat._alter, -2.0);
     }
 }

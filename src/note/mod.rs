@@ -1,10 +1,12 @@
 pub(crate) mod generalnote;
 pub(crate) mod notrest;
 
-use crate::{
-    base::Music21ObjectTrait, defaults::IntegerType, exception::ExceptionResult, pitch::Pitch,
-    prebase::ProtoM21ObjectTrait,
-};
+use crate::base::Music21ObjectTrait;
+use crate::defaults::IntegerType;
+use crate::duration::Duration;
+use crate::exception::ExceptionResult;
+use crate::pitch::Pitch;
+use crate::prebase::ProtoM21ObjectTrait;
 
 use generalnote::GeneralNoteTrait;
 use notrest::{NotRest, NotRestTrait};
@@ -18,7 +20,7 @@ pub(crate) struct Note {
 impl Note {
     pub(crate) fn new<T>(
         pitch: Option<T>,
-        duration: Option<crate::duration::Duration>,
+        duration: Option<Duration>,
         name: Option<String>,
         name_with_octave: Option<String>,
     ) -> ExceptionResult<Self>
@@ -72,11 +74,11 @@ impl NoteTrait for Note {}
 impl NotRestTrait for Note {}
 
 impl GeneralNoteTrait for Note {
-    fn duration(&self) -> &Option<crate::duration::Duration> {
+    fn duration(&self) -> &Option<Duration> {
         self.notrest.duration()
     }
 
-    fn set_duration(&self, duration: &crate::duration::Duration) {
+    fn set_duration(&self, duration: &Duration) {
         todo!()
     }
 }

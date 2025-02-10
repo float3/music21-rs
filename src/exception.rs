@@ -17,6 +17,14 @@ pub enum Exception {
     PitchClassString(String),
     Ordinal(String),
 }
+impl Exception {
+    pub(crate) fn is_accidental_exception(&self) -> bool {
+        match self {
+            Exception::Accidental(_) => true,
+            _ => false,
+        }
+    }
+}
 
 impl fmt::Display for Exception {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

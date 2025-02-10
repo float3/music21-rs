@@ -61,9 +61,10 @@ impl Pitch {
         U: IntoAccidental,
         V: IntoCentShift,
     {
+        // --- Step 1: Parse parameters ---
         let mut self_name = None;
         let mut self_step = PITCH_STEP;
-        let mut self_accidental;
+        let mut self_accidental: Option<Accidental> = None;
         let mut self_microtone: Option<Microtone> = None;
         let mut self_spelling_is_inferred = false;
         let mut self_octave = None;
@@ -76,50 +77,47 @@ impl Pitch {
             let x = name.into_name();
             self_name = x.name;
             if let Some(step) = x.step {
-                self_step = step
+                self_step = step;
             }
-
             if let Some(accidental) = x.accidental {
-                self_accidental = accidental
+                self_accidental = Some(accidental);
             }
-
-            if let Some(spelling) = x.spelling_is_inferred {
-                self_spelling_is_inferred = spelling
+            if let Some(inferred) = x.spelling_is_inferred {
+                self_spelling_is_inferred = inferred;
             }
             self_octave = x.octave;
-        } else if let Some(step) = step {
-            self_step = step;
-        };
-
-        if let Some(octave) = octave {
-            self_octave = Some(octave)
+        } else if let Some(s) = step {
+            self_step = s;
         }
 
-        if let Some(accidental) = accidental {
-            if accidental.is_accidental() {
-                self_accidental = accidental.accidental();
+        if let Some(oct) = octave {
+            self_octave = Some(oct);
+        }
+
+        if let Some(acc) = accidental {
+            self_accidental = Some(if acc.is_accidental() {
+                acc.accidental()
             } else {
-                self_accidental = Accidental::new(accidental)?;
-            }
-        } else {
-            self_accidental = Accidental::new("natural")?;
+                Accidental::new(acc)?
+            });
+        } else if self_accidental.is_none() {
+            self_accidental = Some(Accidental::new("natural")?);
         }
 
-        if let Some(microtone) = microtone {
-            if microtone.is_microtone() {
-                self_microtone = Some(microtone.microtone());
+        if let Some(mt) = microtone {
+            self_microtone = Some(if mt.is_microtone() {
+                mt.microtone()
             } else {
-                self_microtone = Some(microtone.into_microtone()?);
-            }
+                mt.into_microtone()?
+            });
         }
 
-        //we can't just assign here because the original library has a bunch of lgoic in the setters that we have to port
-
+        // --- Step 2: Construct Pitch with initial values ---
         let mut pitch = Pitch {
             proto: ProtoM21Object::new(),
             _step: self_step,
             _overriden_freq440: None,
-            _accidental: self_accidental,
+            _accidental: self_accidental.clone().unwrap(),
             _microtone: self_microtone,
             _octave: self_octave,
             _client: None,
@@ -127,13 +125,31 @@ impl Pitch {
             fundamental: None,
         };
 
-        //TODO implement all the setters
-
-        if let Some(name) = self_name {
-            pitch.name_setter(&name)?
-        };
+        // --- Step 3: Call setters in proper order ---
+        if let Some(ref n) = self_name {
+            pitch.name_setter(n)?;
+        }
 
         pitch.step_setter(self_step);
+
+        pitch.octave_setter(self_octave);
+
+        pitch.accidental_setter(pitch._accidental.clone());
+        if let Some(ref mt) = pitch._microtone {
+            pitch.microtone_setter(mt.clone());
+        }
+        if let Some(pc) = self_pitch_class {
+            pitch.pitch_class_setter(pc);
+        }
+        if let Some(f) = self_fundamental {
+            pitch.fundamental_setter(f);
+        }
+        if let Some(m) = self_midi {
+            pitch.midi_setter(m);
+        }
+        if let Some(p) = self_ps {
+            pitch.ps_setter(p);
+        }
 
         Ok(pitch)
     }
@@ -143,10 +159,7 @@ impl Pitch {
     }
 
     pub(crate) fn name(&self) -> String {
-        match self.accidental() {
-            Some(acc) => format!("{:?}{}", self._step, acc.modifier()),
-            None => format!("{:?}", self._step),
-        }
+        format!("{:?}{}", self._step, self._accidental.modifier())
     }
 
     fn name_setter(&mut self, usr_str: &str) -> ExceptionResult<()> {
@@ -179,9 +192,9 @@ impl Pitch {
 
         let accidental_str: String = pitch_chars.collect();
         if accidental_str.is_empty() {
-            self.accidental_setter(Accidental::natural())?;
+            self.accidental_setter(Accidental::natural());
         } else {
-            self.accidental_setter(Accidental::new(accidental_str)?)?;
+            self.accidental_setter(Accidental::new(accidental_str)?);
         }
 
         if !octave_part.is_empty() {
@@ -211,8 +224,73 @@ impl Pitch {
         self.inform_client()
     }
 
-    fn get_all_common_enharmonics(&self, alter_limit: IntegerType) -> Vec<Pitch> {
-        todo!()
+    fn get_all_common_enharmonics(
+        &mut self,
+        alter_limit: FloatType,
+    ) -> ExceptionResult<Vec<Pitch>> {
+        let mut post: Vec<Pitch> = vec![];
+
+        // Initial simplified enharmonic
+        let c = self.simplify_enharmonic(false)?;
+        if c.name() != self.name() {
+            post.push(c.clone());
+        }
+
+        // Iterative scan upward
+        let mut c_up = self.clone();
+        loop {
+            let next = match c_up.get_higher_enharmonic() {
+                Ok(p) => p,
+                Err(e) => {
+                    if e.is_accidental_exception() {
+                        break;
+                    } else {
+                        return Err(e);
+                    }
+                }
+            };
+
+            c_up = next;
+
+            if c_up._accidental._alter.abs() > alter_limit {
+                break;
+            }
+
+            if !post.contains(&c_up) {
+                post.push(c_up.clone());
+            } else {
+                break;
+            }
+        }
+
+        // Iterative scan downward
+        let mut c_down = self.clone();
+        loop {
+            let next = match c_down.get_higher_enharmonic() {
+                Ok(p) => p,
+                Err(e) => {
+                    if e.is_accidental_exception() {
+                        break;
+                    } else {
+                        return Err(e);
+                    }
+                }
+            };
+
+            c_down = next;
+
+            if c_down._accidental._alter.abs() > alter_limit {
+                break;
+            }
+
+            if !post.contains(&c_down) {
+                post.push(c_down.clone());
+            } else {
+                break;
+            }
+        }
+
+        Ok(post)
     }
 
     fn inform_client(&self) {
@@ -229,17 +307,92 @@ impl Pitch {
         todo!()
     }
 
-    fn accidental(&self) -> Option<Accidental> {
-        todo!()
-    }
-
     fn step_setter(&mut self, step_name: StepName) {
         self._step = step_name;
         self.spelling_is_infered = true;
         self.inform_client();
     }
 
-    fn accidental_setter(&self, natural: Accidental) -> ExceptionResult<()> {
+    fn accidental_setter(&mut self, value: Accidental) -> () {
+        self._accidental = value;
+        self.inform_client();
+    }
+
+    fn microtone_setter(&self, mt: Microtone) {
+        todo!()
+    }
+
+    fn pitch_class_setter(&self, pc: PitchClassString) {
+        todo!()
+    }
+
+    fn fundamental_setter(&self, f: Pitch) {
+        todo!()
+    }
+
+    fn midi_setter(&self, m: IntegerType) {
+        todo!()
+    }
+
+    fn ps_setter(&self, p: FloatType) {
+        todo!()
+    }
+
+    fn simplify_enharmonic(&mut self, most_common: bool) -> ExceptionResult<Pitch> {
+        const EXCLUDED_NAMES: [&str; 4] = ["E#", "B#", "C-", "F-"];
+        if !(self._accidental._alter.abs() < 2.0 && !EXCLUDED_NAMES.contains(&self.name().as_str()))
+        {
+            // by resetting the pitch space value, we will get a simpler
+            // enharmonic spelling
+            let save_octave = self._octave;
+            self.ps_setter(self.ps());
+            if save_octave == None {
+                self.octave_setter(None);
+            }
+        }
+
+        if most_common {
+            match self.name().as_str() {
+                "D#" => {
+                    self.step_setter(StepName::E);
+                    self.accidental_setter(Accidental::new("flat")?);
+                }
+                "A#" => {
+                    self.step_setter(StepName::B);
+                    self.accidental_setter(Accidental::new("flat")?);
+                }
+                "G-" => {
+                    self.step_setter(StepName::F);
+                    self.accidental_setter(Accidental::new("sharp")?);
+                }
+                "D-" => {
+                    self.step_setter(StepName::C);
+                    self.accidental_setter(Accidental::new("sharp")?);
+                }
+                _ => {}
+            }
+        }
+
+        Ok(self.clone())
+    }
+
+    fn simplify_enharmonic_in_place(&mut self, most_common: bool) -> ExceptionResult<()> {
+        todo!()
+    }
+
+    fn get_higher_enharmonic(&self) -> ExceptionResult<Pitch> {
+        self._get_enharmonic_helper(true)
+    }
+
+    fn get_higher_enharmonic_in_place(&mut self) -> ExceptionResult<()> {
+        self._get_enharmonic_helper_in_place(true)
+    }
+
+    fn _get_enharmonic_helper(&self, up: bool) -> ExceptionResult<Pitch> {
+        todo!()
+    }
+
+    fn _get_enharmonic_helper_in_place(&mut self, up: bool) -> ExceptionResult<()> {
         todo!()
     }
 }
@@ -315,43 +468,53 @@ fn convert_ps_to_step<T: Num>(ps: T) -> (StepName, Accidental, Microtone, Intege
 type CriterionFunction = fn(&[Pitch]) -> ExceptionResult<FloatType>;
 
 pub(crate) fn simplify_multiple_enharmonics(
-    pitches: Vec<Pitch>,
+    pitches: &[Pitch],
     criterion: Option<CriterionFunction>,
     key_context: Option<KeySignature>,
 ) -> ExceptionResult<Vec<Pitch>> {
-    let mut old_pitches = pitches;
+    let mut old_pitches: Vec<Pitch> = pitches.to_vec();
 
     let criterion: CriterionFunction =
         criterion.unwrap_or(|x: &[Pitch]| dissonance_score(x, true, true, true));
 
-    match key_context {
+    let remove_first: bool = match key_context {
         Some(key) => {
             old_pitches.insert(0, key.as_key("major").tonic());
+            true
         }
-        None => todo!(),
+        None => false,
+    };
+
+    let mut simplified_pitches = match old_pitches.len() < 5 {
+        true => brute_force_enharmonics_search(&mut old_pitches, criterion)?,
+        false => greedy_enharmonics_search(&mut old_pitches, criterion)?,
+    };
+
+    for (new_p, old_p) in simplified_pitches.iter_mut().zip(old_pitches) {
+        new_p.spelling_is_infered = old_p.spelling_is_infered;
     }
 
-    if old_pitches.len() < 5 {
-        brute_force_enharmonics_search(old_pitches, criterion)
-    } else {
-        greedy_enharmonics_search(old_pitches, criterion)
+    if remove_first {
+        simplified_pitches.remove(0);
     }
+
+    Ok(simplified_pitches)
 }
 
 fn brute_force_enharmonics_search(
-    old_pitches: Vec<Pitch>,
+    old_pitches: &mut [Pitch],
     score_func: CriterionFunction,
 ) -> ExceptionResult<Vec<Pitch>> {
-    let all_possible_pitches: Vec<Vec<Pitch>> = old_pitches[1..]
-        .iter()
-        .map(|p| {
-            let mut enharmonics = p.get_all_common_enharmonics(2);
-            enharmonics.insert(0, (*p).clone());
-            enharmonics
+    let all_possible_pitches: ExceptionResult<Vec<Vec<Pitch>>> = old_pitches[1..]
+        .iter_mut()
+        .map(|p| -> ExceptionResult<Vec<Pitch>> {
+            let mut enharmonics = p.get_all_common_enharmonics(2 as FloatType)?;
+            enharmonics.insert(0, p.clone());
+            Ok(enharmonics)
         })
         .collect();
 
-    let all_pitch_combinations = all_possible_pitches.into_iter().multi_cartesian_product();
+    let all_pitch_combinations = all_possible_pitches?.into_iter().multi_cartesian_product();
 
     let mut min_score = FloatType::MAX;
     let mut best_combination: Vec<Pitch> = Vec::new();
@@ -370,7 +533,7 @@ fn brute_force_enharmonics_search(
 }
 
 fn greedy_enharmonics_search(
-    old_pitches: Vec<Pitch>,
+    old_pitches: &mut [Pitch],
     score_func: CriterionFunction,
 ) -> ExceptionResult<Vec<Pitch>> {
     let mut new_pitches = vec![];
@@ -383,9 +546,13 @@ fn greedy_enharmonics_search(
         ));
     }
 
-    for old_pitch in old_pitches.iter().skip(1) {
+    for old_pitch in old_pitches.iter_mut().skip(1) {
         let mut candidates = vec![old_pitch.clone()];
-        candidates.extend(old_pitch.get_all_common_enharmonics(2).into_iter());
+        candidates.extend(
+            old_pitch
+                .get_all_common_enharmonics(2 as FloatType)?
+                .into_iter(),
+        );
 
         let mut best_candidate = None;
         let mut best_score: Option<OrderedFloat<FloatType>> = None;
@@ -505,7 +672,7 @@ mod tests {
     #[test]
     #[ignore]
     fn simplify_multiple_enharmonics_test() {
-        let more_than_five = vec![
+        let mut more_than_five = vec![
             Pitch::new(
                 Some(0),
                 None,
@@ -604,7 +771,7 @@ mod tests {
             .unwrap(),
         ];
 
-        let x = simplify_multiple_enharmonics(more_than_five, None, None);
+        let x = simplify_multiple_enharmonics(&mut more_than_five, None, None);
         let less_than_five = vec![
             Pitch::new(
                 Some(0),
