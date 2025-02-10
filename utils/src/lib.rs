@@ -1,15 +1,14 @@
 #[cfg(feature = "python")]
-use std::sync::LazyLock;
-
-use std::{
-    error::Error,
-    process::Command,
-    str::from_utf8,
-    sync::atomic::{AtomicBool, Ordering},
-};
-
-#[cfg(feature = "python")]
 use pyo3::{prelude::*, types::PyModule};
+
+use std::error::Error;
+use std::process::Command;
+use std::str::from_utf8;
+use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(feature = "python")]
+use std::sync::LazyLock;
+use std::thread::sleep;
+use std::time::Duration;
 
 #[cfg(feature = "python")]
 static PYTHON_EXE: LazyLock<String> = LazyLock::new(|| {
@@ -30,11 +29,25 @@ fn python_venv() -> String {
 }
 
 fn git_submodule() -> Result<(), Box<dyn Error>> {
-    run_command(
-        &["git", "submodule", "update", "--init"],
-        "init and update submodule",
-    )?;
-    Ok(())
+    let max_attempts = 5;
+    let mut attempts = 0;
+
+    loop {
+        match run_command(
+            &["git", "submodule", "update", "--init"],
+            "init and update submodule",
+        ) {
+            Ok(_) => return Ok(()),
+            Err(e)
+                if e.to_string().contains("could not lock config file")
+                    && attempts < max_attempts =>
+            {
+                attempts += 1;
+                sleep(Duration::from_millis(100)); // wait before retrying
+            }
+            Err(e) => return Err(e),
+        }
+    }
 }
 
 fn git_pull() {
