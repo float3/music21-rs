@@ -19,10 +19,7 @@ pub enum Exception {
 }
 impl Exception {
     pub(crate) fn is_accidental_exception(&self) -> bool {
-        match self {
-            Exception::Accidental(_) => true,
-            _ => false,
-        }
+        matches!(self, Exception::Accidental(_))
     }
 }
 

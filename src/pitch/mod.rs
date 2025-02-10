@@ -19,6 +19,7 @@ use fraction::GenericFraction;
 use itertools::Itertools;
 use num::Num;
 use ordered_float::OrderedFloat;
+use std::cmp::Ordering;
 use std::sync::Arc;
 
 #[derive(Clone, Debug)]
@@ -242,7 +243,10 @@ impl Pitch {
             let next = match c_up.get_higher_enharmonic() {
                 Ok(p) => p,
                 Err(e) => {
-                    if e.is_accidental_exception() {
+                    if {
+                        let this = &e;
+                        matches!(this, Exception::Accidental(_))
+                    } {
                         break;
                     } else {
                         return Err(e);
@@ -269,7 +273,10 @@ impl Pitch {
             let next = match c_down.get_higher_enharmonic() {
                 Ok(p) => p,
                 Err(e) => {
-                    if e.is_accidental_exception() {
+                    if {
+                        let this = &e;
+                        matches!(this, Exception::Accidental(_))
+                    } {
                         break;
                     } else {
                         return Err(e);
@@ -313,7 +320,7 @@ impl Pitch {
         self.inform_client();
     }
 
-    fn accidental_setter(&mut self, value: Accidental) -> () {
+    fn accidental_setter(&mut self, value: Accidental) {
         self._accidental = value;
         self.inform_client();
     }
@@ -340,13 +347,13 @@ impl Pitch {
 
     fn simplify_enharmonic(&mut self, most_common: bool) -> ExceptionResult<Pitch> {
         const EXCLUDED_NAMES: [&str; 4] = ["E#", "B#", "C-", "F-"];
-        if !(self._accidental._alter.abs() < 2.0 && !EXCLUDED_NAMES.contains(&self.name().as_str()))
+        if self._accidental._alter.abs().partial_cmp(&2.0) != Some(Ordering::Less)
+            || EXCLUDED_NAMES.contains(&self.name().as_str())
         {
-            // by resetting the pitch space value, we will get a simpler
-            // enharmonic spelling
+            // by resetting the pitch space value, we get a simpler enharmonic spelling
             let save_octave = self._octave;
             self.ps_setter(self.ps());
-            if save_octave == None {
+            if save_octave.is_none() {
                 self.octave_setter(None);
             }
         }
@@ -672,7 +679,7 @@ mod tests {
     #[test]
     #[ignore]
     fn simplify_multiple_enharmonics_test() {
-        let mut more_than_five = vec![
+        let more_than_five = vec![
             Pitch::new(
                 Some(0),
                 None,
@@ -771,7 +778,7 @@ mod tests {
             .unwrap(),
         ];
 
-        let x = simplify_multiple_enharmonics(&mut more_than_five, None, None);
+        let x = simplify_multiple_enharmonics(&more_than_five, None, None);
         let less_than_five = vec![
             Pitch::new(
                 Some(0),

@@ -363,7 +363,7 @@ impl Accidental {
     }
 
     pub(crate) fn modifier(&self) -> &str {
-        return &self._modifier;
+        &self._modifier
     }
 
     pub(crate) fn natural() -> Accidental {

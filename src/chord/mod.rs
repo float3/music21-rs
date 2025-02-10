@@ -74,7 +74,7 @@ impl Chord {
         &mut self,
         key_context: Option<KeySignature>,
     ) -> ExceptionResult<()> {
-        match crate::pitch::simplify_multiple_enharmonics(&mut self.pitches(), None, key_context) {
+        match crate::pitch::simplify_multiple_enharmonics(&self.pitches(), None, key_context) {
             Ok(pitches) => {
                 for (i, pitch) in pitches.iter().enumerate() {
                     if let Some(note) = self._notes.get_mut(i) {
