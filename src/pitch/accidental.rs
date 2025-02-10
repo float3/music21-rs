@@ -1,16 +1,13 @@
-use std::{
-    fmt::{Display, Formatter},
-    sync::Arc,
-};
+use super::Pitch;
 
-use crate::{
-    common::objects::slottedobjectmixin::{SlottedObjectMixin, SlottedObjectMixinTrait},
-    display::{DisplayLocation, DisplaySize, DisplayStyle, DisplayType},
-    exception::{Exception, ExceptionResult},
-    prebase::{ProtoM21Object, ProtoM21ObjectTrait},
-};
+use crate::common::objects::slottedobjectmixin::{SlottedObjectMixin, SlottedObjectMixinTrait};
+use crate::defaults::FloatType;
+use crate::display::{DisplayLocation, DisplaySize, DisplayStyle, DisplayType};
+use crate::exception::{Exception, ExceptionResult};
+use crate::prebase::{ProtoM21Object, ProtoM21ObjectTrait};
 
-use super::{FloatType, Pitch};
+use std::fmt::{Display, Formatter};
+use std::sync::Arc;
 
 enum AccidentalEnum {
     Natural,

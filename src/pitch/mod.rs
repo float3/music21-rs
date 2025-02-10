@@ -1,26 +1,25 @@
 pub(crate) mod accidental;
 pub(crate) mod microtone;
+pub(crate) mod pitchclass;
+pub(crate) mod pitchclassstring;
 
-use crate::{
-    defaults::{self, IntegerType},
-    exception::{Exception, ExceptionResult},
-    interval::{interval_to_pythagorean_ratio, Interval, PitchOrNote},
-    key::keysignature::KeySignature,
-    note::Note,
-    pitchclass::PitchClassString,
-    prebase::{ProtoM21Object, ProtoM21ObjectTrait},
-    stepname::StepName,
-};
-use std::sync::Arc;
+use crate::defaults::{FloatType, IntegerType, Octave, PITCH_STEP};
+use crate::exception::{Exception, ExceptionResult};
+use crate::interval::{interval_to_pythagorean_ratio, Interval, PitchOrNote};
+use crate::key::keysignature::KeySignature;
+use crate::note::Note;
+use crate::prebase::{ProtoM21Object, ProtoM21ObjectTrait};
+use crate::stepname::StepName;
 
 use accidental::{Accidental, IntoAccidental};
+use microtone::{IntoCentShift, Microtone};
+use pitchclassstring::PitchClassString;
+
 use fraction::GenericFraction;
 use itertools::Itertools;
-use microtone::{IntoCentShift, Microtone};
 use num::Num;
 use ordered_float::OrderedFloat;
-
-use self::defaults::{FloatType, Octave, PITCH_STEP};
+use std::sync::Arc;
 
 #[derive(Clone, Debug)]
 pub(crate) struct Pitch {

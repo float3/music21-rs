@@ -43,7 +43,7 @@ impl Chord {
         todo!()
     }
 
-    pub fn common_name(&self) -> String {
+    pub(crate) fn common_name(&self) -> String {
         todo!()
     }
 

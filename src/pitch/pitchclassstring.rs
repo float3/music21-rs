@@ -1,4 +1,4 @@
-use crate::exception::Exception;
+use crate::{defaults::IntegerType, exception::Exception};
 
 #[allow(non_camel_case_types)]
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -14,7 +14,7 @@ pub(crate) enum PitchClassString {
 }
 
 impl PitchClassString {
-    pub fn as_char(&self) -> char {
+    pub(crate) fn as_char(&self) -> char {
         match self {
             PitchClassString::a => 'a',
             PitchClassString::A => 'A',
@@ -27,7 +27,7 @@ impl PitchClassString {
         }
     }
 
-    pub fn to_uppercase(self) -> Self {
+    pub(crate) fn to_uppercase(self) -> Self {
         match self {
             PitchClassString::a | PitchClassString::A => PitchClassString::A,
             PitchClassString::t | PitchClassString::T => PitchClassString::T,
@@ -36,13 +36,32 @@ impl PitchClassString {
         }
     }
 
-    pub fn to_lowercase(self) -> Self {
+    pub(crate) fn to_lowercase(self) -> Self {
         match self {
             PitchClassString::a | PitchClassString::A => PitchClassString::a,
             PitchClassString::t | PitchClassString::T => PitchClassString::t,
             PitchClassString::b | PitchClassString::B => PitchClassString::b,
             PitchClassString::e | PitchClassString::E => PitchClassString::e,
         }
+    }
+
+    pub(crate) fn to_number(self) -> IntegerType {
+        match self {
+            PitchClassString::a
+            | PitchClassString::A
+            | PitchClassString::t
+            | PitchClassString::T => 10,
+            PitchClassString::b
+            | PitchClassString::B
+            | PitchClassString::e
+            | PitchClassString::E => 11,
+        }
+    }
+}
+
+impl From<PitchClassString> for IntegerType {
+    fn from(val: PitchClassString) -> Self {
+        val.to_number()
     }
 }
 

@@ -14,6 +14,7 @@ use std::{collections::HashMap, sync::LazyLock};
 
 use crate::base::Music21ObjectTrait;
 
+use crate::defaults::UnsignedIntegerType;
 use crate::exception::{Exception, ExceptionResult};
 use crate::prebase::ProtoM21ObjectTrait;
 use crate::{
@@ -89,7 +90,10 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> ExceptionResu
 
     if let Some((cached_pitch, cached_ratio)) = cache.get(&end_pitch_wanted.name()).cloned() {
         let octaves = (end_pitch_wanted.ps() - cached_pitch.ps()) / 12.0;
-        let octave_multiplier = FractionType::new(2i32, 1i32).pow(octaves as i32);
+        let octave_multiplier = FractionPow::<IntegerType, FloatType, UnsignedIntegerType>::powi(
+            &FractionType::new(2i64, 1i64),
+            octaves as IntegerType,
+        );
         return Ok(cached_ratio * octave_multiplier);
     }
 
@@ -101,13 +105,19 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> ExceptionResu
         if end_pitch_up.name() == end_pitch_wanted.name() {
             found = Some((
                 end_pitch_up.clone(),
-                FractionType::new(3i32, 2i32).pow(counter),
+                FractionPow::<IntegerType, FloatType, UnsignedIntegerType>::powi(
+                    &FractionType::new(3i32, 2i32),
+                    counter,
+                ),
             ));
             break;
         } else if end_pitch_down.name() == end_pitch_wanted.name() {
             found = Some((
                 end_pitch_down.clone(),
-                FractionType::new(2i32, 3i32).pow(counter),
+                FractionPow::<IntegerType, FloatType, UnsignedIntegerType>::powi(
+                    &FractionType::new(2i32, 3i32),
+                    counter,
+                ),
             ));
             break;
         } else {
@@ -132,7 +142,10 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> ExceptionResu
     );
 
     let octaves = (end_pitch_wanted.ps() - found_pitch.ps()) / 12.0;
-    let octave_multiplier = FractionType::new(2i32, 1i32).pow(octaves as i32);
+    let octave_multiplier = FractionPow::<IntegerType, FloatType, UnsignedIntegerType>::powi(
+        &FractionType::new(2i32, 1i32),
+        octaves as IntegerType,
+    );
 
     Ok(found_ratio * octave_multiplier)
 }

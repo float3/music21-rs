@@ -13,6 +13,7 @@ pub enum Exception {
     ChordTables(String),
     Interval(String),
     StepName(String),
+    PitchClass(String),
     PitchClassString(String),
     Ordinal(String),
 }
@@ -28,6 +29,7 @@ impl fmt::Display for Exception {
             Exception::ChordTables(msg) => write!(f, "ChordTables error: {}", msg),
             Exception::Interval(msg) => write!(f, "Interval error: {}", msg),
             Exception::StepName(msg) => write!(f, "StepName error: {}", msg),
+            Exception::PitchClass(msg) => write!(f, "PitchClass error: {}", msg),
             Exception::PitchClassString(msg) => write!(f, "PitchClassString error: {}", msg),
             Exception::Ordinal(msg) => write!(f, "Ordinal error: {}", msg),
         }

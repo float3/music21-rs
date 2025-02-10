@@ -21,7 +21,6 @@ pub(crate) mod interval;
 pub(crate) mod key;
 pub(crate) mod note;
 pub(crate) mod pitch;
-pub(crate) mod pitchclass;
 pub(crate) mod prebase;
 pub(crate) mod scale;
 pub(crate) mod stepname;

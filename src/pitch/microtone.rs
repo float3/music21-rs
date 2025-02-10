@@ -1,10 +1,9 @@
-use crate::{
-    common::objects::slottedobjectmixin::{SlottedObjectMixin, SlottedObjectMixinTrait},
-    exception::{Exception, ExceptionResult},
-    prebase::{ProtoM21Object, ProtoM21ObjectTrait},
-};
+use super::{convert_harmonic_to_cents, IntegerType};
 
-use super::{convert_harmonic_to_cents, FloatType, IntegerType};
+use crate::common::objects::slottedobjectmixin::{SlottedObjectMixin, SlottedObjectMixinTrait};
+use crate::defaults::FloatType;
+use crate::exception::{Exception, ExceptionResult};
+use crate::prebase::{ProtoM21Object, ProtoM21ObjectTrait};
 
 const MICROTONE_OPEN: &str = "(";
 const MICROTONE_CLOSE: &str = ")";

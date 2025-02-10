@@ -6,7 +6,7 @@ use crate::exception::Exception;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[repr(u8)]
-pub enum Ordinal {
+pub(crate) enum Ordinal {
     Zeroth = 0,
     First = 1,
     Second = 2,
