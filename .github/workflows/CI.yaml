@@ -82,7 +82,7 @@ jobs:
       if: ${{ github.event_name == 'push' && matrix.rust == 'stable' }}
       uses: actions/upload-pages-artifact@v3
       with:
-        path: "./target/doc/music21_rs"
+        path: "./target/doc"
 
     - name: Deploy to GitHub Pages
       if: ${{ github.event_name == 'push' && matrix.rust == 'stable' }}
