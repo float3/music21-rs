@@ -74,9 +74,13 @@ jobs:
       if: ${{ github.event_name == 'push' && matrix.rust == 'stable' }}
       run: cargo doc --workspace --no-deps
 
-    - name: Deploy documentation to GitHub Pages
+    - name: Upload artifact
       if: ${{ github.event_name == 'push' && matrix.rust == 'stable' }}
-      uses: peaceiris/actions-gh-pages@v4
+      uses: actions/upload-pages-artifact@v3
       with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: ./target/doc
+        path: "./target/doc"
+
+    - name: Deploy to GitHub Pages
+      if: ${{ github.event_name == 'push' && matrix.rust == 'stable' }}
+      id: deployment
+      uses: actions/deploy-pages@v4
