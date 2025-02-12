@@ -66,7 +66,10 @@ fn create_venv() -> Result<(), Box<dyn Error>> {
     match run_command(&[&PYTHON_EXE, "-m", "venv", "venv"], "create venv") {
         Ok(_) => Ok(()),
         Err(e) => match Path::new(&python_venv()).exists() {
-            true => Ok(()),
+            true => {
+                println!("path exists");
+                Ok(())
+            }
             false => Err(e),
         },
     }
