@@ -36,26 +36,6 @@ jobs:
         override: true
         components: rustfmt, clippy
 
-    - name: Cache Cargo registry
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-registry-
-
-    - name: Cache Python packages
-      uses: actions/cache@v4
-      with:
-        path: |
-          ./venv
-          ./__pycache__
-        key: ${{ runner.os }}-python-${{ hashFiles('./music21/requirements.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-python-
-    
     - run: cargo build --verbose --workspace --all-targets --all-features
     - run: cargo check --verbose --workspace --all-targets --all-features
     - run: cargo clippy --verbose --workspace --all-targets --all-features -- -D warnings
