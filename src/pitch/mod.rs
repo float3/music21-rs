@@ -36,6 +36,9 @@ use std::sync::Arc;
 use std::sync::LazyLock;
 use std::sync::Mutex;
 
+// TODO: rework this, don't use a HashMap for two possible inputs, either figure
+// out what the -d2 and d2 intervals are beforehand or caculate them and store
+// them each in a static
 static TRANSPOSITIONAL_INTERVALS: LazyLock<Mutex<HashMap<IntervalString, Interval>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
