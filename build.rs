@@ -49,7 +49,8 @@ mod python {
         "duodecachord",
     ];
 
-    /// Given a Python iterable over pitch‐class indices, build a `[bool; 12]` vector.
+    /// Given a Python iterable over pitch‐class indices, build a `[bool; 12]`
+    /// vector.
     fn build_pc_vec(pcs: &Bound<'_, PyAny>) -> PyResult<Vec<bool>> {
         let mut vec = vec![false; 12];
         for obj in pcs.try_iter()? {

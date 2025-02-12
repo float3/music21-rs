@@ -1,19 +1,25 @@
 pub(crate) mod chromaticinterval;
 pub(crate) mod diatonicinterval;
+pub(crate) mod direction;
 pub(crate) mod genericinterval;
 pub(crate) mod intervalbase;
+pub(crate) mod intervalstring;
 pub(crate) mod specifier;
 
 use chromaticinterval::ChromaticInterval;
 use diatonicinterval::DiatonicInterval;
 use genericinterval::GenericInterval;
 use intervalbase::IntervalBaseTrait;
+use regex::Regex;
+use specifier::Specifier;
 
 use std::sync::Mutex;
 use std::{collections::HashMap, sync::LazyLock};
 
 use crate::base::Music21ObjectTrait;
 
+use crate::common::numbertools::MUSICAL_ORDINAL_STRINGS;
+use crate::common::stringtools::get_num_from_str;
 use crate::defaults::UnsignedIntegerType;
 use crate::exception::{Exception, ExceptionResult};
 use crate::prebase::ProtoM21ObjectTrait;
@@ -29,6 +35,8 @@ pub(crate) struct Interval {
     pub(crate) implicit_diatonic: bool,
     pub(crate) diatonic: DiatonicInterval,
     pub(crate) chromatic: ChromaticInterval,
+    pitch_start: Option<Pitch>,
+    pitch_end: Option<Pitch>,
 }
 
 pub(crate) enum PitchOrNote {
@@ -36,33 +44,155 @@ pub(crate) enum PitchOrNote {
     Note(Note),
 }
 
-pub(crate) enum Arg1 {
+pub(crate) enum IntervalArgument {
     Str(String),
-    Int(IntegerType),
-    Float(FloatType),
+    Int(UnsignedIntegerType),
+    Pitch(Pitch),
+    Note(Note),
 }
 
 static PYTHAGOREAN_CACHE: LazyLock<Mutex<HashMap<String, (Pitch, FractionType)>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 impl Interval {
-    pub(crate) fn between(
-        arg0: Option<PitchOrNote>,
-        arg1: Option<PitchOrNote>,
-    ) -> ExceptionResult<Self> {
+    pub(crate) fn between(start: PitchOrNote, end: PitchOrNote) -> ExceptionResult<Self> {
         todo!()
     }
 
-    fn new(arg: Arg1) -> Interval {
+    pub(crate) fn from_diatonic_and_chromatic(
+        diatonic: DiatonicInterval,
+        chromatic: ChromaticInterval,
+    ) -> ExceptionResult<Interval> {
         todo!()
+    }
+
+    pub fn new(arg: IntervalArgument) -> ExceptionResult<Interval> {
+        match arg {
+            IntervalArgument::Str(str) => {
+                let name = str;
+                let (diatonic_new, chromatic_new, inferred) = _string_to_diatonic_chromatic(name)?;
+                todo!()
+            }
+            IntervalArgument::Int(int) => {
+                let chromatic = ChromaticInterval::new(int);
+                let diatonic = chromatic.get_diatonic();
+
+                Ok(Self {
+                    implicit_diatonic: true,
+                    diatonic,
+                    chromatic,
+                    pitch_start: None,
+                    pitch_end: None,
+                })
+            }
+            IntervalArgument::Pitch(pitch) => todo!(),
+            IntervalArgument::Note(note) => todo!(),
+        }
     }
 
     pub(crate) fn generic(&self) -> &GenericInterval {
         &self.diatonic.generic
     }
+
+    /// reverse default is false
+    /// maxAccidental default is 4
+    pub(crate) fn transpose_pitch(
+        self,
+        p: &Pitch,
+        reverse: bool,
+        max_accidental: Option<IntegerType>,
+    ) -> ExceptionResult<Pitch> {
+        if reverse {
+            return self.reverse()?.transpose_pitch(p, false, Some(4));
+        }
+        todo!()
+    }
+
+    pub(crate) fn transpose_pitch_in_place(
+        &self,
+        arg: &Pitch,
+        reverse: bool,
+        max_accidental: Option<IntegerType>,
+    ) -> ExceptionResult<()> {
+        todo!()
+    }
 }
 
-impl IntervalBaseTrait for Interval {}
+fn _string_to_diatonic_chromatic(
+    mut value: String,
+) -> ExceptionResult<(DiatonicInterval, ChromaticInterval, bool)> {
+    let mut inferred = false;
+    let mut dir_scale = 1;
+
+    // Check for '-' and remove them:
+    if value.contains('-') {
+        value = value.replace('-', "");
+        dir_scale = -1;
+    }
+    let mut value_lower = value.to_lowercase();
+
+    // Remove directional words:
+    {
+        let descending_re = Regex::new(r"(?i)descending\s*").unwrap();
+        if descending_re.is_match(&value) {
+            value = descending_re.replace_all(&value, "").to_string();
+            dir_scale = -1;
+        } else {
+            let ascending_re = Regex::new(r"(?i)ascending\s*").unwrap();
+            if ascending_re.is_match(&value) {
+                value = ascending_re.replace_all(&value, "").to_string();
+            }
+        }
+    }
+    value_lower = value.to_lowercase();
+
+    // Handle whole/half abbreviations:
+    if value_lower == "w" || value_lower == "whole" || value_lower == "tone" {
+        value = "M2".to_string();
+        inferred = true;
+    } else if value_lower == "h" || value_lower == "half" || value_lower == "semitone" {
+        value = "m2".to_string();
+        inferred = true;
+    }
+
+    // Replace any music ordinal in the string with its index.
+    for (i, ordinal) in MUSICAL_ORDINAL_STRINGS.iter().enumerate() {
+        if value.to_lowercase().contains(&ordinal.to_lowercase()) {
+            let pattern = format!(r"(?i)\s*{}\s*", regex::escape(ordinal));
+            let re = Regex::new(&pattern).unwrap();
+            value = re.replace_all(&value, i.to_string().as_str()).to_string();
+        }
+    }
+
+    // Extract number and remaining spec:
+    let (found, remain) = get_num_from_str(&value, "0123456789");
+    let generic_number: IntegerType = found
+        .parse::<IntegerType>()
+        .expect("Failed to parse number")
+        * dir_scale;
+    let spec_name = Specifier::parse(remain);
+
+    let g_interval = GenericInterval::from_int(generic_number)?;
+    let d_interval = g_interval.get_diatonic(spec_name);
+    let c_interval = d_interval.get_chromatic();
+    Ok((d_interval, c_interval, inferred))
+}
+
+impl IntervalBaseTrait for Interval {
+    fn reverse(self) -> ExceptionResult<Self>
+    where
+        Self: Sized,
+    {
+        if let (Some(start), Some(end)) = (self.pitch_start, self.pitch_end) {
+            Interval::between(PitchOrNote::Pitch(end), PitchOrNote::Pitch(start))
+        } else {
+            Interval::from_diatonic_and_chromatic(
+                self.diatonic.reverse()?,
+                self.chromatic.reverse()?,
+            )
+        }
+    }
+}
 
 impl Music21ObjectTrait for Interval {}
 
@@ -121,8 +251,10 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> ExceptionResu
             ));
             break;
         } else {
-            end_pitch_up = end_pitch_up.transpose(Interval::new(Arg1::Str("P5".to_string())));
-            end_pitch_down = end_pitch_down.transpose(Interval::new(Arg1::Str("-P5".to_string())));
+            end_pitch_up =
+                end_pitch_up.transpose(Interval::new(IntervalArgument::Str("P5".to_string()))?);
+            end_pitch_down =
+                end_pitch_down.transpose(Interval::new(IntervalArgument::Str("-P5".to_string()))?);
         }
     }
 
@@ -148,4 +280,8 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> ExceptionResu
     );
 
     Ok(found_ratio * octave_multiplier)
+}
+
+pub trait IntoInterval {
+    fn into_interval_arg();
 }

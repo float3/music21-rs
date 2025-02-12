@@ -16,6 +16,7 @@ pub enum Exception {
     PitchClass(String),
     PitchClassString(String),
     Ordinal(String),
+    Polyrhythm(String),
 }
 
 impl fmt::Display for Exception {
@@ -32,6 +33,7 @@ impl fmt::Display for Exception {
             Exception::PitchClass(msg) => write!(f, "PitchClass error: {}", msg),
             Exception::PitchClassString(msg) => write!(f, "PitchClassString error: {}", msg),
             Exception::Ordinal(msg) => write!(f, "Ordinal error: {}", msg),
+            Exception::Polyrhythm(msg) => write!(f, "Polyrhythm {}", msg),
         }
     }
 }
@@ -41,6 +43,7 @@ impl Error for Exception {
         None
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;

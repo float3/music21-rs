@@ -19,10 +19,12 @@ pub(crate) mod exception;
 pub(crate) mod fraction_pow;
 pub(crate) mod interval;
 pub(crate) mod key;
-pub(crate) mod note;
-pub(crate) mod pitch;
+pub mod note;
+pub mod pitch;
+pub mod polyrhythm;
 pub(crate) mod prebase;
 pub(crate) mod scale;
 pub(crate) mod stepname;
+pub mod tuningsystem;
 // #[macro_use]
 // pub(crate) mod macros;

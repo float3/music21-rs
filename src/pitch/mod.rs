@@ -3,16 +3,27 @@ pub(crate) mod microtone;
 pub(crate) mod pitchclass;
 pub(crate) mod pitchclassstring;
 
-use crate::defaults::{FloatType, IntegerType, Octave, PITCH_STEP};
-use crate::exception::{Exception, ExceptionResult};
-use crate::interval::{interval_to_pythagorean_ratio, Interval, PitchOrNote};
+use crate::defaults::FloatType;
+use crate::defaults::IntegerType;
+use crate::defaults::Octave;
+use crate::defaults::PITCH_STEP;
+use crate::exception::Exception;
+use crate::exception::ExceptionResult;
+use crate::interval::interval_to_pythagorean_ratio;
+use crate::interval::intervalstring::IntervalString;
+use crate::interval::Interval;
+use crate::interval::IntervalArgument;
+use crate::interval::PitchOrNote;
 use crate::key::keysignature::KeySignature;
 use crate::note::Note;
-use crate::prebase::{ProtoM21Object, ProtoM21ObjectTrait};
+use crate::prebase::ProtoM21Object;
+use crate::prebase::ProtoM21ObjectTrait;
 use crate::stepname::StepName;
 
-use accidental::{Accidental, IntoAccidental};
-use microtone::{IntoCentShift, Microtone};
+use accidental::Accidental;
+use accidental::IntoAccidental;
+use microtone::IntoCentShift;
+use microtone::Microtone;
 use pitchclassstring::PitchClassString;
 
 use fraction::GenericFraction;
@@ -20,7 +31,13 @@ use itertools::Itertools;
 use num::Num;
 use ordered_float::OrderedFloat;
 use std::cmp::Ordering;
+use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::LazyLock;
+use std::sync::Mutex;
+
+static TRANSPOSITIONAL_INTERVALS: LazyLock<Mutex<HashMap<IntervalString, Interval>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 #[derive(Clone, Debug)]
 pub(crate) struct Pitch {
@@ -396,6 +413,30 @@ impl Pitch {
     }
 
     fn _get_enharmonic_helper(&self, up: bool) -> ExceptionResult<Pitch> {
+        let interval_string = match up {
+            true => IntervalString::Up,
+            false => IntervalString::Down,
+        };
+
+        let mut dict = match TRANSPOSITIONAL_INTERVALS.lock() {
+            Ok(dict) => dict,
+            Err(err) => err.into_inner(),
+        };
+
+        let interval: Interval = match dict.get(&interval_string) {
+            None => {
+                let interval =
+                    Interval::new(IntervalArgument::Str(interval_string.clone().string()))?;
+                dict.insert(interval_string.clone(), interval.clone());
+                interval
+            }
+            Some(interval) => interval.to_owned(),
+        };
+
+        let octave_stored = self._octave;
+
+        let p = interval.transpose_pitch(self, false, None);
+
         todo!()
     }
 
@@ -616,8 +657,8 @@ fn dissonance_score(
                 p1.octave_setter(None);
                 p2.octave_setter(None);
                 intervals.push(Interval::between(
-                    Some(PitchOrNote::Pitch(p1.clone())),
-                    Some(PitchOrNote::Pitch(p2.clone())),
+                    PitchOrNote::Pitch(p1.clone()),
+                    PitchOrNote::Pitch(p2.clone()),
                 )?);
             }
         }

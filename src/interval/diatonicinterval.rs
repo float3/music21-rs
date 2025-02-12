@@ -1,6 +1,8 @@
 use crate::{base::Music21ObjectTrait, prebase::ProtoM21ObjectTrait};
 
-use super::{specifier::Specifier, GenericInterval, IntervalBaseTrait};
+use super::{
+    chromaticinterval::ChromaticInterval, specifier::Specifier, GenericInterval, IntervalBaseTrait,
+};
 
 #[derive(Clone, Debug)]
 pub(crate) struct DiatonicInterval {
@@ -8,9 +10,20 @@ pub(crate) struct DiatonicInterval {
     speicifier: Specifier,
 }
 
-impl DiatonicInterval {}
+impl DiatonicInterval {
+    pub(crate) fn get_chromatic(&self) -> ChromaticInterval {
+        todo!()
+    }
+}
 
-impl IntervalBaseTrait for DiatonicInterval {}
+impl IntervalBaseTrait for DiatonicInterval {
+    fn reverse(self) -> crate::exception::ExceptionResult<Self>
+    where
+        Self: Sized,
+    {
+        todo!()
+    }
+}
 
 impl Music21ObjectTrait for DiatonicInterval {}
 

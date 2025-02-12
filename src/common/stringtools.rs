@@ -1,3 +1,4 @@
+/// default for numbers is "0123456789"
 pub(crate) fn get_num_from_str(usr_str: &str, numbers: &str) -> (String, String) {
     let mut found = String::new();
     let mut remain = String::new();
