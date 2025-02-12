@@ -1,4 +1,7 @@
-use crate::{base::Music21ObjectTrait, exception::ExceptionResult, prebase::ProtoM21ObjectTrait};
+use crate::{
+    base::Music21ObjectTrait, exception::ExceptionResult, note::Note, pitch::Pitch,
+    prebase::ProtoM21ObjectTrait,
+};
 
 use super::{
     diatonicinterval::DiatonicInterval, direction::Direction, intervalbase::IntervalBase,
@@ -67,7 +70,19 @@ fn convert_generic(value: IntegerType) -> IntegerType {
 }
 
 impl IntervalBaseTrait for GenericInterval {
-    fn reverse(self) -> crate::exception::ExceptionResult<Self>
+    fn transpose_note(self, note1: Note) -> ExceptionResult<Note> {
+        todo!()
+    }
+
+    fn transpose_pitch(self, pitch1: Pitch) -> ExceptionResult<Pitch> {
+        todo!()
+    }
+
+    fn transpose_pitch_in_place(self, pitch1: &mut Pitch) -> ExceptionResult<()> {
+        todo!()
+    }
+
+    fn reverse(self) -> ExceptionResult<Self>
     where
         Self: Sized,
     {

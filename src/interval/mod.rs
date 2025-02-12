@@ -105,6 +105,11 @@ impl Interval {
         if reverse {
             return self.reverse()?.transpose_pitch(p, false, Some(4));
         }
+        let max_accidental = max_accidental.unwrap_or(IntegerType::MIN);
+
+        if self.implicit_diatonic {
+            let p_out = self.chromatic.transpose_pitch(p.clone())?;
+        }
         todo!()
     }
 
@@ -191,6 +196,18 @@ impl IntervalBaseTrait for Interval {
                 self.chromatic.reverse()?,
             )
         }
+    }
+
+    fn transpose_note(self, note1: Note) -> ExceptionResult<Note> {
+        todo!()
+    }
+
+    fn transpose_pitch(self, pitch1: Pitch) -> ExceptionResult<Pitch> {
+        todo!()
+    }
+
+    fn transpose_pitch_in_place(self, pitch1: &mut Pitch) -> ExceptionResult<()> {
+        todo!()
     }
 }
 

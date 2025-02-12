@@ -61,8 +61,15 @@ fn git_pull() {
 
 #[cfg(feature = "python")]
 fn create_venv() -> Result<(), Box<dyn Error>> {
-    run_command(&[&PYTHON_EXE, "-m", "venv", "venv"], "create venv")?;
-    Ok(())
+    use std::path::Path;
+
+    match run_command(&[&PYTHON_EXE, "-m", "venv", "venv"], "create venv") {
+        Ok(_) => Ok(()),
+        Err(e) => match Path::new(&python_venv()).exists() {
+            true => Ok(()),
+            false => Err(e),
+        },
+    }
 }
 
 #[cfg(feature = "python")]

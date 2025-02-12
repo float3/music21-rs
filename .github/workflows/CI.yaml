@@ -55,8 +55,7 @@ jobs:
         key: ${{ runner.os }}-python-${{ hashFiles('./music21/requirements.txt') }}
         restore-keys: |
           ${{ runner.os }}-python-
-    - run: pwd
-    - run: ls ./venv/bin
+    
     - run: cargo build --verbose --workspace --all-targets --all-features
     - run: cargo check --verbose --workspace --all-targets --all-features
     - run: cargo clippy --verbose --workspace --all-targets --all-features -- -D warnings
