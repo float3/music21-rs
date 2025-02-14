@@ -1,6 +1,7 @@
 use crate::defaults::FloatType;
 
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) enum DisplayType {
     Normal,
     Always,
@@ -11,6 +12,7 @@ pub(crate) enum DisplayType {
 }
 
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) enum DisplayStyle {
     Normal,
     Parentheses,
@@ -19,6 +21,7 @@ pub(crate) enum DisplayStyle {
 }
 
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) enum DisplaySize {
     Full,
     Cue,
@@ -27,6 +30,7 @@ pub(crate) enum DisplaySize {
 }
 
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) enum DisplayLocation {
     Normal,
     Above,

@@ -4,7 +4,8 @@ use crate::{
     prebase::ProtoM21ObjectTrait,
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct GeneralNote {
     music21object: Music21Object,
     _duration: Option<Duration>,

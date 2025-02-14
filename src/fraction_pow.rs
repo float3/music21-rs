@@ -133,19 +133,31 @@ mod tests {
     fn test_pow_unsigned() {
         let frac: GenericFraction<i32> = GenericFraction::new(2, 3);
         assert_eq!(
-            FractionPow::<IntegerType, FloatType, UnsignedIntegerType>::pow(&frac, 0u64),
+            FractionPow::<IntegerType, FloatType, UnsignedIntegerType>::pow(
+                &frac,
+                0 as UnsignedIntegerType
+            ),
             GenericFraction::new(1, 1)
         );
         assert_eq!(
-            FractionPow::<IntegerType, FloatType, UnsignedIntegerType>::pow(&frac, 1u64),
+            FractionPow::<IntegerType, FloatType, UnsignedIntegerType>::pow(
+                &frac,
+                1 as UnsignedIntegerType
+            ),
             GenericFraction::new(2, 3)
         );
         assert_eq!(
-            FractionPow::<IntegerType, FloatType, UnsignedIntegerType>::pow(&frac, 3u64),
+            FractionPow::<IntegerType, FloatType, UnsignedIntegerType>::pow(
+                &frac,
+                3 as UnsignedIntegerType
+            ),
             GenericFraction::new(8, 27)
         );
         assert_eq!(
-            FractionPow::<IntegerType, FloatType, UnsignedIntegerType>::pow(&frac, 4u64),
+            FractionPow::<IntegerType, FloatType, UnsignedIntegerType>::pow(
+                &frac,
+                4 as UnsignedIntegerType
+            ),
             GenericFraction::new(16, 81)
         );
     }
@@ -193,7 +205,10 @@ mod tests {
     fn test_nan_behavior() {
         let nan_frac: GenericFraction<i32> = GenericFraction::NaN;
         assert!(matches!(
-            FractionPow::<IntegerType, FloatType, UnsignedIntegerType>::pow(&nan_frac, 5u64),
+            FractionPow::<IntegerType, FloatType, UnsignedIntegerType>::pow(
+                &nan_frac,
+                5 as UnsignedIntegerType
+            ),
             GenericFraction::NaN
         ));
         assert!(matches!(
@@ -213,7 +228,10 @@ mod tests {
 
         // For pow and powi, Infinity returns Infinity with the same sign.
         assert_eq!(
-            FractionPow::<IntegerType, FloatType, UnsignedIntegerType>::pow(&pos_inf, 3u64),
+            FractionPow::<IntegerType, FloatType, UnsignedIntegerType>::pow(
+                &pos_inf,
+                3 as UnsignedIntegerType
+            ),
             pos_inf
         );
         assert_eq!(
@@ -221,7 +239,10 @@ mod tests {
             pos_inf
         );
         assert_eq!(
-            FractionPow::<IntegerType, FloatType, UnsignedIntegerType>::pow(&neg_inf, 2u64),
+            FractionPow::<IntegerType, FloatType, UnsignedIntegerType>::pow(
+                &neg_inf,
+                2 as UnsignedIntegerType
+            ),
             neg_inf
         );
         assert_eq!(
@@ -396,7 +417,7 @@ mod tests {
     fn test_underlying_type_u64() {
         // Assuming that `Fraction` is defined as GenericFraction<u64> or an alias.
         let frac: Fraction = Fraction::new(2u64, 3u64);
-        let result = FractionPow::<IntegerType, FloatType, u64>::pow(&frac, 3u64);
+        let result = FractionPow::<i64, FloatType, u64>::pow(&frac, 3u64);
         let expected = Fraction::new(8u32, 27u32);
         assert_eq!(
             result, expected,

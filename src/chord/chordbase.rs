@@ -1,41 +1,48 @@
-use super::{IntegerType, Pitch};
-use crate::{
-    base::Music21ObjectTrait,
-    duration::Duration,
-    exception::ExceptionResult,
-    note::{
-        generalnote::GeneralNoteTrait,
-        notrest::{NotRest, NotRestTrait},
-        Note,
-    },
-    prebase::ProtoM21ObjectTrait,
-};
-use std::collections::HashMap;
+use super::IntegerType;
+use super::Pitch;
 
-#[derive(Clone, Debug)]
+use crate::base::Music21ObjectTrait;
+use crate::duration::Duration;
+use crate::exception::ExceptionResult;
+use crate::note::generalnote::GeneralNoteTrait;
+use crate::note::notrest::NotRest;
+use crate::note::notrest::NotRestTrait;
+use crate::note::Note;
+use crate::prebase::ProtoM21ObjectTrait;
+
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::sync::Mutex;
+
+#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct ChordBase {
     notrest: NotRest,
-    _notes: Vec<NotRest>,
+    #[cfg_attr(feature = "serde", serde(skip))]
+    _notes: Arc<Mutex<Vec<NotRest>>>,
     _overrides: HashMap<String, String>,
 }
 
 impl ChordBase {
-    pub(crate) fn new<T>(notes: Option<T>, duration: &Option<Duration>) -> ExceptionResult<Self>
+    pub(crate) fn new<T>(
+        notes: Option<T>,
+        duration: &Option<Duration>,
+    ) -> ExceptionResult<Arc<Self>>
     where
         T: IntoNotRests,
     {
-        let mut x = Self {
+        let chord = Arc::new(Self {
             notrest: NotRest::new(duration.clone()),
-            _notes: vec![],
+            _notes: Arc::new(Mutex::new(vec![])),
             _overrides: HashMap::new(),
-        };
+        });
 
-        x.add_core_or_init(notes, duration)?;
-        Ok(x)
+        Self::add_core_or_init(Arc::clone(&chord), notes, duration)?;
+        Ok(chord)
     }
 
     fn add_core_or_init<T>(
-        &mut self,
+        chord: Arc<Self>,
         notes: Option<T>,
         duration: &Option<Duration>,
     ) -> ExceptionResult<Option<Duration>>
@@ -43,26 +50,25 @@ impl ChordBase {
         T: IntoNotRests,
     {
         let mut quick_duration = false;
-
-        let mut duration: &Option<Duration> = match duration {
+        let mut duration_ref: &Option<Duration> = match duration {
             Some(_) => duration,
             None => {
                 quick_duration = true;
-                &self.duration().clone()
+                &chord.duration().clone()
             }
         };
 
         if let Some(notes) = notes {
-            let (use_duration, self_duration, notrests) =
-                notes.into_not_rests(duration, quick_duration)?;
-            duration = use_duration;
-            notrests.into_iter().for_each(|n| {
-                // n._chord_attached = Some(Arc::new(self));
-                self._notes.push(n);
-            })
+            let (use_duration, _self_duration, notrests) =
+                notes.into_not_rests(duration_ref, quick_duration)?;
+            duration_ref = use_duration;
+            notrests.into_iter().for_each(|mut n| {
+                n._chord_attached = Some(Arc::clone(&chord));
+                chord._notes.lock().unwrap().push(n);
+            });
         }
 
-        Ok(duration.clone())
+        Ok(duration_ref.clone())
     }
 }
 
@@ -214,13 +220,13 @@ impl IntoNotRests for &[ChordBase] {
             let self_duration = self[0].duration().clone();
             let notes: Self::T = self
                 .iter()
-                .flat_map(|chord_base| chord_base._notes.clone())
+                .flat_map(|chord_base| chord_base._notes.lock().unwrap().clone())
                 .collect();
             Ok((&None, self_duration, notes))
         } else {
             let notes: Self::T = self
                 .iter()
-                .flat_map(|chord_base| chord_base._notes.clone())
+                .flat_map(|chord_base| chord_base._notes.lock().unwrap().clone())
                 .collect();
             Ok((duration, None, notes))
         }

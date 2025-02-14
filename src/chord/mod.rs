@@ -1,22 +1,29 @@
 pub(crate) mod chordbase;
 pub(crate) mod tables;
 
-use chordbase::{ChordBase, ChordBaseTrait, IntoNotRests};
+use crate::base::Music21ObjectTrait;
+use crate::defaults::IntegerType;
+use crate::duration::Duration;
+use crate::exception::Exception;
+use crate::exception::ExceptionResult;
+use crate::key::keysignature::KeySignature;
+use crate::note::generalnote::GeneralNoteTrait;
+use crate::note::notrest::NotRestTrait;
+use crate::note::Note;
+use crate::pitch::Pitch;
+use crate::prebase::ProtoM21ObjectTrait;
 
-use crate::{
-    base::Music21ObjectTrait,
-    defaults::IntegerType,
-    duration::Duration,
-    exception::{Exception, ExceptionResult},
-    key::keysignature::KeySignature,
-    note::{generalnote::GeneralNoteTrait, notrest::NotRestTrait, Note},
-    pitch::Pitch,
-    prebase::ProtoM21ObjectTrait,
-};
+use chordbase::ChordBase;
+use chordbase::ChordBaseTrait;
+use chordbase::IntoNotRests;
 
-#[derive(Clone, Debug)]
+use std::sync::Arc;
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Chord {
-    chordbase: ChordBase,
+    #[cfg_attr(feature = "serde", serde(skip))]
+    chordbase: Arc<ChordBase>,
     _notes: Vec<Note>,
 }
 
@@ -39,7 +46,7 @@ impl Chord {
             chordbase: ChordBase::new(notes.clone(), &None)?,
             _notes: chord_notes,
         };
-        chord.simplify_enharmonics(true, None)?;
+        chord.simplify_enharmonics_in_place(None)?;
         Ok(chord)
     }
 
@@ -56,18 +63,11 @@ impl Chord {
     }
 
     fn simplify_enharmonics(
-        &mut self,
-        in_place: bool,
+        self,
         key_context: Option<KeySignature>,
     ) -> ExceptionResult<Option<Self>> {
-        if in_place {
-            self.simplify_enharmonics_in_place(key_context)?;
-            Ok(None)
-        } else {
-            let mut new_chord = self.clone();
-            new_chord.simplify_enharmonics_in_place(key_context)?;
-            Ok(Some(new_chord))
-        }
+        self.clone().simplify_enharmonics_in_place(key_context)?;
+        Ok(Some(self))
     }
 
     fn simplify_enharmonics_in_place(

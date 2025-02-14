@@ -5,6 +5,7 @@ use crate::{
 use std::convert::TryFrom;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub(crate) enum StepName {
     C = 1,

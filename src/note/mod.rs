@@ -12,6 +12,7 @@ use generalnote::GeneralNoteTrait;
 use notrest::{NotRest, NotRestTrait};
 
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct Note {
     notrest: NotRest,
     pub(crate) _pitch: Pitch,

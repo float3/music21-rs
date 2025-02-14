@@ -1,4 +1,5 @@
-#[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug)]
+#[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct ProtoM21Object {}
 
 impl ProtoM21Object {

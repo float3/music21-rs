@@ -43,6 +43,7 @@ static TRANSPOSITIONAL_INTERVALS: LazyLock<Mutex<HashMap<IntervalString, Interva
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct Pitch {
     proto: ProtoM21Object,
     _step: StepName,
@@ -50,8 +51,10 @@ pub(crate) struct Pitch {
     _overriden_freq440: Option<FloatType>,
     _accidental: Accidental,
     _microtone: Option<Microtone>,
+    #[cfg_attr(feature = "serde", serde(skip))]
     _client: Option<Arc<Note>>,
     spelling_is_infered: bool,
+    #[cfg_attr(feature = "serde", serde(skip))]
     fundamental: Option<Arc<Pitch>>,
 }
 
@@ -630,9 +633,9 @@ fn dissonance_score(
     accidental_penalty: bool,
     triad_award: bool,
 ) -> ExceptionResult<FloatType> {
-    let mut score_accidentals = 0.0;
-    let mut score_ratio = 0.0;
-    let mut score_triad = 0.0;
+    let mut score_accidentals: FloatType = 0.0;
+    let mut score_ratio: FloatType = 0.0;
+    let mut score_triad: FloatType = 0.0;
 
     if pitches.is_empty() {
         return Ok(0.0);
@@ -646,7 +649,7 @@ fn dissonance_score(
         score_accidentals = accidentals
             .iter()
             .map(|a| if *a > 1.0 { *a } else { 0.0 })
-            .sum::<f64>()
+            .sum::<FloatType>()
             / pitches.len() as FloatType;
     }
 
@@ -684,7 +687,7 @@ fn dissonance_score(
                     }
                 } as FloatType)
                     .ln()
-                    * 0.03792663444
+                    * 0.037_926_633
             }
             score_ratio /= pitches.len() as FloatType;
         }

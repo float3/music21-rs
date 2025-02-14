@@ -238,7 +238,7 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> ExceptionResu
     if let Some((cached_pitch, cached_ratio)) = cache.get(&end_pitch_wanted.name()).cloned() {
         let octaves = (end_pitch_wanted.ps() - cached_pitch.ps()) / 12.0;
         let octave_multiplier = FractionPow::<IntegerType, FloatType, UnsignedIntegerType>::powi(
-            &FractionType::new(2i64, 1i64),
+            &FractionType::new(2 as IntegerType, 1 as IntegerType),
             octaves as IntegerType,
         );
         return Ok(cached_ratio * octave_multiplier);

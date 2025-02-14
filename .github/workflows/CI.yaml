@@ -36,11 +36,17 @@ jobs:
         override: true
         components: rustfmt, clippy
 
-    - run: cargo build --verbose --workspace --all-targets --all-features
-    - run: cargo check --verbose --workspace --all-targets --all-features
-    - run: cargo clippy --verbose --workspace --all-targets --all-features -- -D warnings
+    - run: cargo install cargo-hack
+    - run: cargo install cargo-hack
+    - run: cargo hack build --feature-powerset --verbose --workspace --all-targets
+    - run: cargo hack check --feature-powerset --verbose --workspace --all-targets
+    - run: cargo hack clippy --feature-powerset --verbose --workspace --all-targets -- -D warnings
+    - run: cargo hack test --feature-powerset --verbose --workspace --all-targets --no-fail-fast --lib --bins --examples --tests --benches
+    - run: cargo hack build --feature-powerset --release --verbose --workspace --all-targets
+    - run: cargo hack check --feature-powerset --release --verbose --workspace --all-targets
+    - run: cargo hack clippy --feature-powerset --release --verbose --workspace --all-targets -- -D warnings
     - run: cargo fmt --all -- --check
-    - run: cargo test --verbose --workspace --all-targets --all-features --no-fail-fast --lib --bins --examples --tests --benches
+    - run: cargo hack test --feature-powerset --release --verbose --workspace --all-targets --no-fail-fast --lib --bins --examples --tests --benches
     - run: git diff --exit-code
 
     - name: Generate cargo docs

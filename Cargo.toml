@@ -14,8 +14,10 @@ version = "0.0.2"
 members = ["utils"]
 
 [features]
-default = []
+default = ["serde"]
 python = ["dep:pyo3", "utils/python"]
+serde = ["dep:serde"]
+halfprecision = []
 
 [dependencies]
 fraction = "0.15.3"
@@ -24,6 +26,8 @@ num = "0.4.3"
 num-traits = "0.2.19"
 ordered-float = "4.6.0"
 regex = "1.11.1"
+serde = { version = "1.0.217", optional = true, features = ["derive"] }
+
 
 [build-dependencies]
 pyo3 = { version = "0.23.4", features = ["auto-initialize"], optional = true }

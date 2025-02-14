@@ -1,6 +1,7 @@
 use crate::prebase::{ProtoM21Object, ProtoM21ObjectTrait};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct Music21Object {
     proto: ProtoM21Object,
 }

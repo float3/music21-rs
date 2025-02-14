@@ -9,6 +9,7 @@ const MICROTONE_OPEN: &str = "(";
 const MICROTONE_CLOSE: &str = ")";
 
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct Microtone {
     proto: ProtoM21Object,
     slottedobjectmixin: SlottedObjectMixin,

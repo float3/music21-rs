@@ -282,6 +282,7 @@ impl AccidentalEnum {
 }
 
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct Accidental {
     proto: ProtoM21Object,
     slottedobjectmixin: SlottedObjectMixin,
@@ -290,6 +291,7 @@ pub(crate) struct Accidental {
     display_style: DisplayStyle,
     display_size: DisplaySize,
     display_location: DisplayLocation,
+    #[cfg_attr(feature = "serde", serde(skip))]
     _client: Option<Arc<Pitch>>,
     _name: String,
     _modifier: String,

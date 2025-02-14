@@ -59,14 +59,14 @@ impl GenericInterval {
     }
 }
 
-fn convert_generic_string(value: String) -> i64 {
+fn convert_generic_string(value: String) -> IntegerType {
     todo!()
 }
 
 fn convert_generic(value: IntegerType) -> IntegerType {
     let post = value;
     let direction_scalar = Direction::Ascending;
-    post * direction_scalar as i64
+    post * direction_scalar as IntegerType
 }
 
 impl IntervalBaseTrait for GenericInterval {

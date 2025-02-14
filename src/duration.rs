@@ -4,6 +4,7 @@ use crate::{
 };
 
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct Duration {
     proto: ProtoM21Object,
     mixin: SlottedObjectMixin,
