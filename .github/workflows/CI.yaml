@@ -37,7 +37,6 @@ jobs:
         components: rustfmt, clippy
 
     - run: cargo install cargo-hack
-    - run: cargo install cargo-hack
     - run: cargo hack build --feature-powerset --verbose --workspace --all-targets
     - run: cargo hack check --feature-powerset --verbose --workspace --all-targets
     - run: cargo hack clippy --feature-powerset --verbose --workspace --all-targets -- -D warnings
