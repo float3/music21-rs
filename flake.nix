@@ -22,13 +22,14 @@
         devShells.default = pkgs.mkShell rec {
           nativeBuildInputs = [pkgs.pkg-config];
           buildInputs = with pkgs; [
+            alsa-lib
             clang
-            llvmPackages.bintools
-            rustup
             git
+            llvmPackages.bintools
             python312
             python312Packages.virtualenv
             rustfmt
+            rustup
           ];
 
           RUSTC_VERSION = "stable";

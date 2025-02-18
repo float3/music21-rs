@@ -35,7 +35,9 @@ jobs:
         toolchain: ${{ matrix.rust }}
         override: true
         components: rustfmt, clippy
-
+    
+    - run: sudo apt update
+    - run: sudo apt install libasound2-dev
     - run: cargo install cargo-hack
     - run: cargo hack build --feature-powerset --verbose --workspace --all-targets
     - run: cargo hack check --feature-powerset --verbose --workspace --all-targets
