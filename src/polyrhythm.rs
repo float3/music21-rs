@@ -22,7 +22,8 @@ pub struct Polyrhythm {
 }
 
 impl Polyrhythm {
-    /// Constructs a new Polyrhythm given a time signature, tempo, and subdivisions.
+    /// Constructs a new Polyrhythm given a time signature, tempo, and
+    /// subdivisions.
     pub fn new_with_time_signature(
         base: UnsignedIntegerType,
         tempo: UnsignedIntegerType,
@@ -66,7 +67,8 @@ impl Polyrhythm {
         self.cycle
     }
 
-    /// Returns beat timings (in seconds) for each subdivision voice over one full measure.
+    /// Returns beat timings (in seconds) for each subdivision voice over one
+    /// full measure.
     pub fn beat_timings(&self) -> ExceptionResult<Vec<Vec<FloatType>>> {
         let tick_duration = self.tick_duration()?;
         Ok(self
@@ -120,7 +122,8 @@ impl Iterator for Polyrhythm {
     type Item = (UnsignedIntegerType, Vec<bool>);
 
     /// Advances the polyrhythm by one tick.
-    /// Returns the current tick and a vector indicating which subdivision triggers a beat.
+    /// Returns the current tick and a vector indicating which subdivision
+    /// triggers a beat.
     fn next(&mut self) -> Option<Self::Item> {
         let tick = self.current_tick;
         let triggers = self
