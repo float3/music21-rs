@@ -35,8 +35,7 @@ jobs:
         toolchain: ${{ matrix.rust }}
         override: true
         components: rustfmt, clippy
-    
-    - run: git -C ./music21 pull origin master
+
     - run: sudo apt update
     - run: sudo apt install libasound2-dev
     - run: cargo install cargo-hack
