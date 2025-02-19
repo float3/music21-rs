@@ -10,8 +10,8 @@ use fraction::GenericFraction;
 
 // #[cfg(not(feature = "halfprecision"))]
 // mod nested {
-pub(crate) type IntegerType = i64;
-pub(crate) type UnsignedIntegerType = u64;
+pub(crate) type IntegerType = i32;
+pub(crate) type UnsignedIntegerType = u32;
 pub(crate) type FloatType = f64;
 // }
 
