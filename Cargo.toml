@@ -17,7 +17,6 @@ members = ["utils"]
 default = ["serde", "python"]
 python = ["dep:pyo3", "dep:reqwest"]
 serde = ["dep:serde"]
-# halfprecision = []
 
 [dependencies]
 fraction = "0.15.3"
