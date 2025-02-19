@@ -2,11 +2,12 @@
 //! ```cargo
 //! [features]
 //! default = ["python"]
-//! python = ["dep:pyo3", "utils/python"]
+//! python = ["dep:pyo3", "dep:reqwest"]
 //!
 //! [dependencies]
 //! pyo3 = { version = "0.23.4", features = ["auto-initialize"], optional = true }
 //! utils = { path = "./utils", default-features = false }
+//! reqwest = { version = "0.12.12", features = ["blocking"], optional = true }
 //! ```
 /*
 #!nix-shell -i rust-script -p rustc -p rust-script -p cargo -p rustfmt -p python312 -p python312Packages.virtualenv -p git
@@ -23,6 +24,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 #[cfg(feature = "python")]
 mod python {
+    mod utils {
+        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/utils/src/lib.rs"));
+    }
+
     use pyo3::exceptions::PyIOError;
     use pyo3::prelude::*;
     use pyo3::types::PyDict;

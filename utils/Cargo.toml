@@ -14,3 +14,6 @@ python = ["dep:pyo3", "dep:reqwest"]
 [dependencies]
 reqwest = { version = "0.12.12", features = ["blocking"], optional = true }
 pyo3 = { version = "0.23.4", features = ["auto-initialize"], optional = true }
+
+[patch.crates-io]
+utils = { path = "./utils" }

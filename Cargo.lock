@@ -931,9 +931,9 @@ dependencies = [
  "ordered-float",
  "pyo3",
  "regex",
+ "reqwest",
  "rodio",
  "serde",
- "utils",
 ]
 
 [[package]]

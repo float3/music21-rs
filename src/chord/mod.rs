@@ -214,6 +214,10 @@ impl IntoNotes for &[IntegerType] {
 
 #[cfg(test)]
 mod tests {
+    mod utils {
+        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/utils/src/lib.rs"));
+    }
+
     use pyo3::{prelude::PyModule, types::PyAnyMethods, Bound, PyAny, PyErr, PyResult, Python};
     use utils::{init_py, prepare};
 
