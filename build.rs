@@ -25,7 +25,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 #[cfg(feature = "python")]
 mod python {
     mod utils {
-        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/utils/src/lib.rs"));
+        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/shared.rs"));
     }
 
     use pyo3::exceptions::PyIOError;

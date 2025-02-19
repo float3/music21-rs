@@ -219,7 +219,7 @@ fn _validate_address() {
 #[cfg(test)]
 mod tests {
     mod utils {
-        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/utils/src/lib.rs"));
+        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/shared.rs"));
     }
 
     use super::{Pcivicv, TNIStructure, U8SB};
