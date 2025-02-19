@@ -1,14 +1,13 @@
 #[cfg(feature = "python")]
 use pyo3::{prelude::*, types::PyModule};
-
 use std::error::Error;
+use std::path::Path;
 use std::process::Command;
 use std::str::from_utf8;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 #[cfg(feature = "python")]
 use std::sync::LazyLock;
-use std::thread::sleep;
-use std::time::Duration;
 
 #[cfg(feature = "python")]
 static PYTHON_EXE: LazyLock<String> = LazyLock::new(|| {
@@ -28,35 +27,22 @@ fn python_venv() -> String {
     format!("./venv/bin/{}", *PYTHON_EXE)
 }
 
-fn git_submodule() -> Result<(), Box<dyn Error>> {
-    let max_attempts = 5;
-    let mut attempts = 0;
-
-    loop {
-        match run_command(
-            &["git", "submodule", "update", "--init"],
-            "init and update submodule",
-        ) {
-            Ok(_) => return Ok(()),
-            Err(e)
-                if e.to_string().contains("could not lock config file")
-                    && attempts < max_attempts =>
-            {
-                attempts += 1;
-                sleep(Duration::from_millis(100)); // wait before retrying
-            }
-            Err(e) => return Err(e),
-        }
+fn git_clone() -> Result<(), Box<dyn Error>> {
+    if Path::new("./music21").exists() {
+        println!("Repository already cloned.");
+        return Ok(());
     }
-}
-
-fn git_pull() {
-    if let Err(e) = run_command(
-        &["git", "-C", "./music21", "pull", "origin", "master"],
-        "git pull",
-    ) {
-        eprintln!("{}", e);
-    }
+    run_command(
+        &[
+            "git",
+            "clone",
+            "--depth",
+            "1",
+            "https://github.com/cuthbertLab/music21.git",
+            "./music21",
+        ],
+        "git clone",
+    )
 }
 
 #[cfg(feature = "python")]
@@ -110,8 +96,7 @@ pub fn prepare() -> Result<(), Box<dyn Error>> {
     }
     println!("preparing environment");
     let res = (|| {
-        git_submodule()?;
-        git_pull();
+        git_clone()?;
         #[cfg(feature = "python")]
         create_venv()?;
         #[cfg(feature = "python")]
@@ -160,4 +145,78 @@ pub fn init_py(py: Python<'_>) -> pyo3::PyResult<()> {
         ],),
     )?;
     Ok(())
+}
+
+/// Dummy function for music21.environment.Environment.
+/// This function does nothing and returns None.
+#[cfg(feature = "python")]
+#[pyfunction]
+fn dummy_environment(_name: &str) -> PyResult<()> {
+    // A minimal stub that satisfies the call signature.
+    Ok(())
+}
+
+/// Creates dummy modules for missing music21 dependencies.
+/// This should be called before importing tables.py.
+#[cfg(feature = "python")]
+fn create_dummy_modules(py: Python) -> PyResult<()> {
+    use pyo3::types::PyList;
+    use pyo3::types::PyMapping;
+    use pyo3::types::PyModule;
+
+    let sys = py.import("sys")?;
+    let binding = sys.getattr("modules")?;
+    let modules: &Bound<'_, PyMapping> = binding.downcast()?;
+
+    let music21_mod = PyModule::new(py, "music21")?;
+    let path_list = PyList::new(py, ["./music21"])?;
+    let path_list = path_list.into_pyobject(py)?;
+    music21_mod.setattr("__path__", path_list)?;
+    modules.set_item("music21", music21_mod)?;
+
+    if !modules.contains("music21.chord")? {
+        let chord_mod = PyModule::new(py, "music21.chord")?;
+        let chord_path = PyList::new(py, ["./music21/chord"])?.into_pyobject(py)?;
+        chord_mod.setattr("__path__", chord_path)?;
+        modules.set_item("music21.chord", chord_mod)?;
+    }
+
+    let env_mod = PyModule::new(py, "music21.environment")?;
+    let env_func = wrap_pyfunction!(dummy_environment, py)?;
+    env_mod.add("Environment", env_func)?;
+    modules.set_item("music21.environment", env_mod)?;
+
+    let exc_mod = PyModule::new(py, "music21.exceptions21")?;
+    let builtins = py.import("builtins")?;
+    let exception_type = builtins.getattr("Exception")?;
+    exc_mod.add("Music21Exception", exception_type)?;
+    modules.set_item("music21.exceptions21", exc_mod)?;
+
+    Ok(())
+}
+
+#[cfg(feature = "python")]
+pub fn init_py_with_dummies(py: Python) -> PyResult<()> {
+    create_dummy_modules(py)?;
+    Ok(())
+}
+
+#[cfg(feature = "python")]
+pub fn get_tables(py: Python<'_>) -> Result<Bound<'_, PyModule>, PyErr> {
+    use pyo3::exceptions::PyIOError;
+    use std::ffi::CStr;
+    use std::ffi::CString;
+
+    let url = "https://raw.githubusercontent.com/cuthbertLab/music21/refs/heads/master/music21/chord/tables.py";
+    let response = reqwest::blocking::get(url)
+        .map_err(|e| PyErr::new::<PyIOError, _>(format!("HTTP error: {}", e)))?;
+    let code = CString::new(
+        response
+            .text()
+            .map_err(|e| PyErr::new::<PyIOError, _>(format!("HTTP error: {}", e)))?,
+    )
+    .map_err(|e| PyErr::new::<PyIOError, _>(format!("CString error: {}", e)))?;
+    let code: &CStr = &code;
+    let tables = PyModule::from_code(py, code, c"tables.py", c"music21.chord.tables")?;
+    Ok(tables)
 }

@@ -23,14 +23,20 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 #[cfg(feature = "python")]
 mod python {
-    use pyo3::{
-        exceptions::PyIOError,
-        prelude::*,
-        types::{PyDict, PyTuple},
-        PyErr, PyResult,
-    };
-    use std::{collections::HashMap, error::Error, fs, path::PathBuf};
-    use utils::{init_py, prepare, run_command, Tables};
+    use pyo3::exceptions::PyIOError;
+    use pyo3::prelude::*;
+    use pyo3::types::PyDict;
+    use pyo3::types::PyTuple;
+    use pyo3::PyErr;
+    use pyo3::PyResult;
+    use std::collections::HashMap;
+    use std::error::Error;
+    use std::fs;
+    use std::path::PathBuf;
+    use utils::get_tables;
+    use utils::init_py_with_dummies;
+    use utils::run_command;
+    use utils::Tables;
 
     #[allow(unused)]
     const CARDINALITIES: [&str; 13] = [
@@ -374,14 +380,12 @@ mod python {
     }
 
     pub(super) fn main() -> Result<(), Box<dyn Error>> {
-        prepare()?;
-
         let rust_path = "./src/chord/tables/generated.rs";
 
         Python::with_gil(|py| -> PyResult<()> {
-            init_py(py)?;
+            init_py_with_dummies(py)?;
 
-            let tables: Tables = py.import("music21.chord.tables")?;
+            let tables = get_tables(py)?;
 
             let imports = r#"
 use super::{
@@ -395,10 +399,6 @@ use std::{collections::HashMap, sync::LazyLock};
             let rust = generate_rust_tables(py, &tables, imports)?;
 
             let output_path = PathBuf::from(rust_path);
-            if !output_path.exists() {
-                eprintln!("Error: File {} does not exist.", output_path.display());
-                std::process::exit(1);
-            }
             fs::write(&output_path, rust)
                 .map_err(|e| PyErr::new::<PyIOError, _>(format!("{}", e)))?;
 

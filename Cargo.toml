@@ -3,18 +3,18 @@ authors = ["hill <hill@hilll.dev>"]
 build = "build.rs"
 description = "a rust port of music21 (for now just the chord naming algorithm)"
 edition = "2021"
-include = ["/src", "/utils", "build.rs", "music21/music21/chord/tables.py"]
+include = ["/src", "/utils", "build.rs"]
 keywords = ["music", "chords", "music21"]
 license-file = "LICENSE"
 name = "music21-rs"
 repository = "https://github.com/float3/music21-rs"
-version = "0.0.2"
+version = "0.0.3"
 
 [workspace]
 members = ["utils"]
 
 [features]
-default = ["serde"]
+default = ["serde", "python"]
 python = ["dep:pyo3", "utils/python"]
 serde = ["dep:serde"]
 # halfprecision = []

@@ -231,7 +231,7 @@ mod tests {
 
     use std::collections::hash_map::Keys;
 
-    use utils::{init_py, prepare, Tables};
+    use utils::{get_tables, init_py_with_dummies, prepare};
 
     #[test]
     fn cardinality_to_chord_members_equality() {
@@ -289,9 +289,9 @@ mod tests {
         prepare().unwrap();
 
         Python::with_gil(|py| -> PyResult<()> {
-            init_py(py)?;
+            init_py_with_dummies(py)?;
 
-            let tables: Tables = py.import("music21.chord.tables")?;
+            let tables = get_tables(py)?;
 
             let cardinality_to_chord_members = tables.getattr("cardinalityToChordMembers")?;
             let cardinality_to_chord_members: &Bound<'_, PyDict> =
@@ -383,11 +383,11 @@ mod tests {
         prepare().unwrap();
 
         Python::with_gil(|py| -> PyResult<()> {
-            init_py(py)?;
+            init_py_with_dummies(py)?;
 
             let operator = py.import("operator")?;
 
-            let tables: Tables = py.import("music21.chord.tables")?;
+            let tables = get_tables(py)?;
 
             let forte = tables.getattr("FORTE")?;
             let forte: &Bound<'_, PyTuple> = forte.downcast_exact()?;
