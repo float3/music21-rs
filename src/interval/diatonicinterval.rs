@@ -1,7 +1,7 @@
 use crate::{base::Music21ObjectTrait, prebase::ProtoM21ObjectTrait};
 
 use super::{
-    chromaticinterval::ChromaticInterval, specifier::Specifier, GenericInterval, IntervalBaseTrait,
+    GenericInterval, IntervalBaseTrait, chromaticinterval::ChromaticInterval, specifier::Specifier,
 };
 
 #[derive(Clone, Debug)]

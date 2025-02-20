@@ -2,7 +2,7 @@
 authors = ["hill <hill@hilll.dev>"]
 build = "build.rs"
 description = "a rust port of music21 (for now just the chord naming algorithm)"
-edition = "2021"
+edition = "2024"
 include = ["/src", "./utils/src/lib.rs", "build.rs", "/examples", "shared.rs"]
 keywords = ["music", "chords", "music21"]
 license-file = "LICENSE"

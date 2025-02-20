@@ -2,11 +2,7 @@ use crate::defaults::UnsignedIntegerType;
 
 // Euclidean algorithm for GCD.
 pub(crate) fn gcd(a: UnsignedIntegerType, b: UnsignedIntegerType) -> UnsignedIntegerType {
-    if b == 0 {
-        a
-    } else {
-        gcd(b, a % b)
-    }
+    if b == 0 { a } else { gcd(b, a % b) }
 }
 
 // LCM computed via GCD.

@@ -1,8 +1,8 @@
 use crate::{base::Music21ObjectTrait, prebase::ProtoM21ObjectTrait};
 
 use super::{
-    concretescale::{ConcreteScale, ConcreteScaleTrait},
     ScaleTrait,
+    concretescale::{ConcreteScale, ConcreteScaleTrait},
 };
 
 pub(crate) struct Diatonicscale {

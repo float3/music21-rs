@@ -4,8 +4,8 @@ use crate::{
 };
 
 use super::{
-    diatonicinterval::DiatonicInterval, direction::Direction, intervalbase::IntervalBase,
-    specifier::Specifier, IntegerType, IntervalBaseTrait,
+    IntegerType, IntervalBaseTrait, diatonicinterval::DiatonicInterval, direction::Direction,
+    intervalbase::IntervalBase, specifier::Specifier,
 };
 
 #[derive(Clone, Debug)]

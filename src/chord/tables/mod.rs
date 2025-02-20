@@ -225,12 +225,12 @@ mod tests {
     use super::{Pcivicv, TNIStructure, U8SB};
 
     use crate::chord::tables::{
-        Sign, CARDINALITY_TO_CHORD_MEMBERS, CARDINALITY_TO_CHORD_MEMBERS_GENERATED, FORTE,
+        CARDINALITY_TO_CHORD_MEMBERS, CARDINALITY_TO_CHORD_MEMBERS_GENERATED, FORTE, Sign,
     };
 
     use pyo3::{
-        types::{PyAnyMethods, PyDict, PyDictMethods, PyTuple},
         Bound, PyResult, Python,
+        types::{PyAnyMethods, PyDict, PyDictMethods, PyTuple},
     };
 
     use utils::{get_tables, init_py_with_dummies, prepare};

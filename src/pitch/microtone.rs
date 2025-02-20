@@ -1,4 +1,4 @@
-use super::{convert_harmonic_to_cents, IntegerType};
+use super::{IntegerType, convert_harmonic_to_cents};
 
 use crate::common::objects::slottedobjectmixin::{SlottedObjectMixin, SlottedObjectMixinTrait};
 use crate::defaults::FloatType;
@@ -57,7 +57,7 @@ impl Microtone {
                 return Err(Exception::Microtone(format!(
                     "input to Microtone was empty: {}",
                     value
-                )))
+                )));
             }
         };
 

@@ -5,9 +5,9 @@ use crate::{
     pitch::Pitch,
     prebase::ProtoM21ObjectTrait,
     scale::{
+        ScaleTrait,
         concretescale::ConcreteScaleTrait,
         diatonicscale::{Diatonicscale, DiatonicscaleTrait},
-        ScaleTrait,
     },
 };
 

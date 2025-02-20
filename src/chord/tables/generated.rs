@@ -1846,774 +1846,390 @@ pub(super) static FORTE: Forte = LazyLock::new(|| {
 pub(super) static INVERSION_DEFAULT_PITCH_CLASSES: InversionDefaultPitchClasses =
     LazyLock::new(|| {
         let mut m = HashMap::new();
-        m.insert(
-            (3, 2),
-            [
-                true, false, true, true, false, false, false, false, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (3, 3),
-            [
-                true, false, false, true, true, false, false, false, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (3, 4),
-            [
-                true, false, false, false, true, true, false, false, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (3, 5),
-            [
-                true, false, false, false, false, true, true, false, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (3, 7),
-            [
-                true, false, false, true, false, true, false, false, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (3, 8),
-            [
-                true, false, false, false, true, false, true, false, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (3, 11),
-            [
-                true, false, false, false, true, false, false, true, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (4, 2),
-            [
-                true, false, true, true, true, false, false, false, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (4, 4),
-            [
-                true, false, false, true, true, true, false, false, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (4, 5),
-            [
-                true, false, false, false, true, true, true, false, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (4, 11),
-            [
-                true, false, true, false, true, true, false, false, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (4, 12),
-            [
-                true, false, false, true, true, false, true, false, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (4, 13),
-            [
-                true, false, false, true, false, true, true, false, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (4, 14),
-            [
-                true, false, false, false, true, true, false, true, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (4, 15),
-            [
-                true, false, true, false, false, true, true, false, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (4, 16),
-            [
-                true, false, true, false, false, false, true, true, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (4, 18),
-            [
-                true, false, false, true, false, false, true, true, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (4, 19),
-            [
-                true, false, false, true, true, false, false, false, true, false, false, false,
-            ],
-        );
-        m.insert(
-            (4, 22),
-            [
-                true, false, false, true, false, true, false, true, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (4, 27),
-            [
-                true, false, false, true, false, false, true, false, true, false, false, false,
-            ],
-        );
-        m.insert(
-            (4, 29),
-            [
-                true, false, false, false, true, false, true, true, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (5, 2),
-            [
-                true, false, true, true, true, true, false, false, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (5, 3),
-            [
-                true, true, false, true, true, true, false, false, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (5, 4),
-            [
-                true, false, false, true, true, true, true, false, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (5, 5),
-            [
-                true, false, false, false, true, true, true, true, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (5, 6),
-            [
-                true, true, false, false, true, true, true, false, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (5, 7),
-            [
-                true, true, false, false, false, true, true, true, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (5, 9),
-            [
-                true, false, true, false, true, true, true, false, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (5, 10),
-            [
-                true, false, true, true, false, true, true, false, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (5, 11),
-            [
-                true, false, false, true, true, true, false, true, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (5, 13),
-            [
-                true, false, true, true, true, false, false, false, true, false, false, false,
-            ],
-        );
-        m.insert(
-            (5, 14),
-            [
-                true, false, true, false, false, true, true, true, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (5, 16),
-            [
-                true, false, false, true, true, false, true, true, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (5, 18),
-            [
-                true, false, true, true, false, false, true, true, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (5, 19),
-            [
-                true, true, false, false, true, false, true, true, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (5, 20),
-            [
-                true, true, false, false, false, true, false, true, true, false, false, false,
-            ],
-        );
-        m.insert(
-            (5, 21),
-            [
-                true, false, false, true, true, false, false, true, true, false, false, false,
-            ],
-        );
-        m.insert(
-            (5, 23),
-            [
-                true, false, true, false, true, true, false, true, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (5, 24),
-            [
-                true, false, true, false, true, false, true, true, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (5, 25),
-            [
-                true, false, false, true, false, true, true, false, true, false, false, false,
-            ],
-        );
-        m.insert(
-            (5, 26),
-            [
-                true, false, false, true, true, false, true, false, true, false, false, false,
-            ],
-        );
-        m.insert(
-            (5, 27),
-            [
-                true, false, false, true, false, true, false, true, true, false, false, false,
-            ],
-        );
-        m.insert(
-            (5, 28),
-            [
-                true, false, true, false, false, true, true, false, true, false, false, false,
-            ],
-        );
-        m.insert(
-            (5, 29),
-            [
-                true, false, true, false, false, true, false, true, true, false, false, false,
-            ],
-        );
-        m.insert(
-            (5, 30),
-            [
-                true, false, true, false, true, false, false, true, true, false, false, false,
-            ],
-        );
-        m.insert(
-            (5, 31),
-            [
-                true, false, true, true, false, false, true, false, false, true, false, false,
-            ],
-        );
-        m.insert(
-            (5, 32),
-            [
-                true, true, false, false, true, false, false, true, false, true, false, false,
-            ],
-        );
-        m.insert(
-            (5, 36),
-            [
-                true, false, false, true, false, true, true, true, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (5, 38),
-            [
-                true, false, false, true, false, false, true, true, true, false, false, false,
-            ],
-        );
-        m.insert(
-            (6, 2),
-            [
-                true, false, true, true, true, true, true, false, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (6, 3),
-            [
-                true, true, false, true, true, true, true, false, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (6, 5),
-            [
-                true, true, false, false, true, true, true, true, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (6, 9),
-            [
-                true, false, true, false, true, true, true, true, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (6, 10),
-            [
-                true, false, true, true, true, false, true, true, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (6, 11),
-            [
-                true, false, true, true, false, true, true, true, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (6, 12),
-            [
-                true, true, false, true, false, true, true, true, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (6, 14),
-            [
-                true, false, false, true, true, true, false, true, true, false, false, false,
-            ],
-        );
-        m.insert(
-            (6, 15),
-            [
-                true, false, false, true, true, false, true, true, true, false, false, false,
-            ],
-        );
-        m.insert(
-            (6, 16),
-            [
-                true, false, true, true, true, false, false, true, true, false, false, false,
-            ],
-        );
-        m.insert(
-            (6, 17),
-            [
-                true, true, false, false, true, false, true, true, true, false, false, false,
-            ],
-        );
-        m.insert(
-            (6, 18),
-            [
-                true, true, false, true, false, false, true, true, true, false, false, false,
-            ],
-        );
-        m.insert(
-            (6, 19),
-            [
-                true, true, false, false, true, true, false, true, true, false, false, false,
-            ],
-        );
-        m.insert(
-            (6, 21),
-            [
-                true, false, true, false, true, true, true, false, true, false, false, false,
-            ],
-        );
-        m.insert(
-            (6, 22),
-            [
-                true, false, true, false, true, false, true, true, true, false, false, false,
-            ],
-        );
-        m.insert(
-            (6, 24),
-            [
-                true, false, true, false, true, true, false, true, true, false, false, false,
-            ],
-        );
-        m.insert(
-            (6, 25),
-            [
-                true, false, true, true, false, true, false, true, true, false, false, false,
-            ],
-        );
-        m.insert(
-            (6, 27),
-            [
-                true, false, true, true, false, true, true, false, false, true, false, false,
-            ],
-        );
-        m.insert(
-            (6, 30),
-            [
-                true, false, true, true, false, false, true, false, true, true, false, false,
-            ],
-        );
-        m.insert(
-            (6, 31),
-            [
-                true, true, false, false, true, false, true, false, true, true, false, false,
-            ],
-        );
-        m.insert(
-            (6, 33),
-            [
-                true, false, true, false, true, false, true, true, false, true, false, false,
-            ],
-        );
-        m.insert(
-            (6, 34),
-            [
-                true, false, true, false, true, false, true, false, true, true, false, false,
-            ],
-        );
-        m.insert(
-            (6, 36),
-            [
-                true, false, false, true, true, true, true, true, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (6, 39),
-            [
-                true, false, false, true, true, true, true, false, true, false, false, false,
-            ],
-        );
-        m.insert(
-            (6, 40),
-            [
-                true, false, false, true, false, true, true, true, true, false, false, false,
-            ],
-        );
-        m.insert(
-            (6, 41),
-            [
-                true, false, true, false, false, true, true, true, true, false, false, false,
-            ],
-        );
-        m.insert(
-            (6, 43),
-            [
-                true, false, true, true, false, false, true, true, true, false, false, false,
-            ],
-        );
-        m.insert(
-            (6, 44),
-            [
-                true, true, true, false, false, true, false, false, true, true, false, false,
-            ],
-        );
-        m.insert(
-            (6, 46),
-            [
-                true, false, true, false, true, true, true, false, false, true, false, false,
-            ],
-        );
-        m.insert(
-            (6, 47),
-            [
-                true, false, true, true, true, false, false, true, false, true, false, false,
-            ],
-        );
-        m.insert(
-            (7, 2),
-            [
-                true, false, true, true, true, true, true, true, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (7, 3),
-            [
-                true, false, false, true, true, true, true, true, true, false, false, false,
-            ],
-        );
-        m.insert(
-            (7, 4),
-            [
-                true, true, false, true, true, true, true, true, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (7, 5),
-            [
-                true, true, true, false, true, true, true, true, false, false, false, false,
-            ],
-        );
-        m.insert(
-            (7, 6),
-            [
-                true, true, false, false, true, true, true, true, true, false, false, false,
-            ],
-        );
-        m.insert(
-            (7, 7),
-            [
-                true, true, true, false, false, true, true, true, true, false, false, false,
-            ],
-        );
-        m.insert(
-            (7, 9),
-            [
-                true, false, true, false, true, true, true, true, true, false, false, false,
-            ],
-        );
-        m.insert(
-            (7, 10),
-            [
-                true, false, true, true, true, true, true, false, false, true, false, false,
-            ],
-        );
-        m.insert(
-            (7, 11),
-            [
-                true, false, true, true, true, true, false, true, true, false, false, false,
-            ],
-        );
-        m.insert(
-            (7, 13),
-            [
-                true, false, true, true, true, false, true, true, true, false, false, false,
-            ],
-        );
-        m.insert(
-            (7, 14),
-            [
-                true, true, false, true, false, true, true, true, true, false, false, false,
-            ],
-        );
-        m.insert(
-            (7, 16),
-            [
-                true, true, false, true, true, true, true, false, false, true, false, false,
-            ],
-        );
-        m.insert(
-            (7, 18),
-            [
-                true, true, false, false, true, false, true, true, true, true, false, false,
-            ],
-        );
-        m.insert(
-            (7, 19),
-            [
-                true, true, true, true, false, false, true, false, true, true, false, false,
-            ],
-        );
-        m.insert(
-            (7, 20),
-            [
-                true, true, true, false, false, true, false, true, true, true, false, false,
-            ],
-        );
-        m.insert(
-            (7, 21),
-            [
-                true, true, false, true, true, true, false, false, true, true, false, false,
-            ],
-        );
-        m.insert(
-            (7, 23),
-            [
-                true, false, true, false, true, true, true, true, false, true, false, false,
-            ],
-        );
-        m.insert(
-            (7, 24),
-            [
-                true, false, true, false, true, false, true, true, true, true, false, false,
-            ],
-        );
-        m.insert(
-            (7, 25),
-            [
-                true, false, true, true, false, true, true, true, false, true, false, false,
-            ],
-        );
-        m.insert(
-            (7, 26),
-            [
-                true, false, true, false, true, true, true, false, true, true, false, false,
-            ],
-        );
-        m.insert(
-            (7, 27),
-            [
-                true, false, true, false, true, true, false, true, true, true, false, false,
-            ],
-        );
-        m.insert(
-            (7, 28),
-            [
-                true, false, true, true, true, false, true, false, true, true, false, false,
-            ],
-        );
-        m.insert(
-            (7, 29),
-            [
-                true, false, true, true, false, true, false, true, true, true, false, false,
-            ],
-        );
-        m.insert(
-            (7, 30),
-            [
-                true, true, false, true, false, true, false, true, true, true, false, false,
-            ],
-        );
-        m.insert(
-            (7, 31),
-            [
-                true, false, true, true, false, true, true, false, true, true, false, false,
-            ],
-        );
-        m.insert(
-            (7, 32),
-            [
-                true, true, false, true, false, true, true, false, true, true, false, false,
-            ],
-        );
-        m.insert(
-            (7, 36),
-            [
-                true, false, true, true, false, true, true, true, true, false, false, false,
-            ],
-        );
-        m.insert(
-            (7, 38),
-            [
-                true, true, false, true, true, false, true, true, true, false, false, false,
-            ],
-        );
-        m.insert(
-            (8, 2),
-            [
-                true, false, true, true, true, true, true, true, true, false, false, false,
-            ],
-        );
-        m.insert(
-            (8, 4),
-            [
-                true, true, false, true, true, true, true, true, true, false, false, false,
-            ],
-        );
-        m.insert(
-            (8, 5),
-            [
-                true, true, true, false, true, true, true, true, true, false, false, false,
-            ],
-        );
-        m.insert(
-            (8, 11),
-            [
-                true, false, true, false, true, true, true, true, true, true, false, false,
-            ],
-        );
-        m.insert(
-            (8, 12),
-            [
-                true, false, true, true, true, true, true, false, true, true, false, false,
-            ],
-        );
-        m.insert(
-            (8, 13),
-            [
-                true, false, true, true, false, true, true, true, true, true, false, false,
-            ],
-        );
-        m.insert(
-            (8, 14),
-            [
-                true, false, true, true, true, true, false, true, true, true, false, false,
-            ],
-        );
-        m.insert(
-            (8, 15),
-            [
-                true, true, false, true, false, true, true, true, true, true, false, false,
-            ],
-        );
-        m.insert(
-            (8, 16),
-            [
-                true, true, true, false, true, false, true, true, true, true, false, false,
-            ],
-        );
-        m.insert(
-            (8, 18),
-            [
-                true, true, false, true, true, false, true, true, true, true, false, false,
-            ],
-        );
-        m.insert(
-            (8, 19),
-            [
-                true, true, false, true, true, true, false, true, true, true, false, false,
-            ],
-        );
-        m.insert(
-            (8, 22),
-            [
-                true, true, true, true, false, true, false, true, false, true, true, false,
-            ],
-        );
-        m.insert(
-            (8, 27),
-            [
-                true, true, true, false, true, false, true, true, false, true, true, false,
-            ],
-        );
-        m.insert(
-            (8, 29),
-            [
-                true, false, true, true, true, false, true, true, true, true, false, false,
-            ],
-        );
-        m.insert(
-            (9, 2),
-            [
-                true, false, true, true, true, true, true, true, true, true, false, false,
-            ],
-        );
-        m.insert(
-            (9, 3),
-            [
-                true, true, false, true, true, true, true, true, true, true, false, false,
-            ],
-        );
-        m.insert(
-            (9, 4),
-            [
-                true, true, true, false, true, true, true, true, true, true, false, false,
-            ],
-        );
-        m.insert(
-            (9, 5),
-            [
-                true, true, true, true, false, true, true, true, true, true, false, false,
-            ],
-        );
-        m.insert(
-            (9, 7),
-            [
-                true, true, true, true, true, true, false, true, false, true, true, false,
-            ],
-        );
-        m.insert(
-            (9, 8),
-            [
-                true, true, true, true, true, false, true, false, true, true, true, false,
-            ],
-        );
-        m.insert(
-            (9, 11),
-            [
-                true, true, true, true, false, true, true, false, true, true, true, false,
-            ],
-        );
+        m.insert((3, 2), [
+            true, false, true, true, false, false, false, false, false, false, false, false,
+        ]);
+        m.insert((3, 3), [
+            true, false, false, true, true, false, false, false, false, false, false, false,
+        ]);
+        m.insert((3, 4), [
+            true, false, false, false, true, true, false, false, false, false, false, false,
+        ]);
+        m.insert((3, 5), [
+            true, false, false, false, false, true, true, false, false, false, false, false,
+        ]);
+        m.insert((3, 7), [
+            true, false, false, true, false, true, false, false, false, false, false, false,
+        ]);
+        m.insert((3, 8), [
+            true, false, false, false, true, false, true, false, false, false, false, false,
+        ]);
+        m.insert((3, 11), [
+            true, false, false, false, true, false, false, true, false, false, false, false,
+        ]);
+        m.insert((4, 2), [
+            true, false, true, true, true, false, false, false, false, false, false, false,
+        ]);
+        m.insert((4, 4), [
+            true, false, false, true, true, true, false, false, false, false, false, false,
+        ]);
+        m.insert((4, 5), [
+            true, false, false, false, true, true, true, false, false, false, false, false,
+        ]);
+        m.insert((4, 11), [
+            true, false, true, false, true, true, false, false, false, false, false, false,
+        ]);
+        m.insert((4, 12), [
+            true, false, false, true, true, false, true, false, false, false, false, false,
+        ]);
+        m.insert((4, 13), [
+            true, false, false, true, false, true, true, false, false, false, false, false,
+        ]);
+        m.insert((4, 14), [
+            true, false, false, false, true, true, false, true, false, false, false, false,
+        ]);
+        m.insert((4, 15), [
+            true, false, true, false, false, true, true, false, false, false, false, false,
+        ]);
+        m.insert((4, 16), [
+            true, false, true, false, false, false, true, true, false, false, false, false,
+        ]);
+        m.insert((4, 18), [
+            true, false, false, true, false, false, true, true, false, false, false, false,
+        ]);
+        m.insert((4, 19), [
+            true, false, false, true, true, false, false, false, true, false, false, false,
+        ]);
+        m.insert((4, 22), [
+            true, false, false, true, false, true, false, true, false, false, false, false,
+        ]);
+        m.insert((4, 27), [
+            true, false, false, true, false, false, true, false, true, false, false, false,
+        ]);
+        m.insert((4, 29), [
+            true, false, false, false, true, false, true, true, false, false, false, false,
+        ]);
+        m.insert((5, 2), [
+            true, false, true, true, true, true, false, false, false, false, false, false,
+        ]);
+        m.insert((5, 3), [
+            true, true, false, true, true, true, false, false, false, false, false, false,
+        ]);
+        m.insert((5, 4), [
+            true, false, false, true, true, true, true, false, false, false, false, false,
+        ]);
+        m.insert((5, 5), [
+            true, false, false, false, true, true, true, true, false, false, false, false,
+        ]);
+        m.insert((5, 6), [
+            true, true, false, false, true, true, true, false, false, false, false, false,
+        ]);
+        m.insert((5, 7), [
+            true, true, false, false, false, true, true, true, false, false, false, false,
+        ]);
+        m.insert((5, 9), [
+            true, false, true, false, true, true, true, false, false, false, false, false,
+        ]);
+        m.insert((5, 10), [
+            true, false, true, true, false, true, true, false, false, false, false, false,
+        ]);
+        m.insert((5, 11), [
+            true, false, false, true, true, true, false, true, false, false, false, false,
+        ]);
+        m.insert((5, 13), [
+            true, false, true, true, true, false, false, false, true, false, false, false,
+        ]);
+        m.insert((5, 14), [
+            true, false, true, false, false, true, true, true, false, false, false, false,
+        ]);
+        m.insert((5, 16), [
+            true, false, false, true, true, false, true, true, false, false, false, false,
+        ]);
+        m.insert((5, 18), [
+            true, false, true, true, false, false, true, true, false, false, false, false,
+        ]);
+        m.insert((5, 19), [
+            true, true, false, false, true, false, true, true, false, false, false, false,
+        ]);
+        m.insert((5, 20), [
+            true, true, false, false, false, true, false, true, true, false, false, false,
+        ]);
+        m.insert((5, 21), [
+            true, false, false, true, true, false, false, true, true, false, false, false,
+        ]);
+        m.insert((5, 23), [
+            true, false, true, false, true, true, false, true, false, false, false, false,
+        ]);
+        m.insert((5, 24), [
+            true, false, true, false, true, false, true, true, false, false, false, false,
+        ]);
+        m.insert((5, 25), [
+            true, false, false, true, false, true, true, false, true, false, false, false,
+        ]);
+        m.insert((5, 26), [
+            true, false, false, true, true, false, true, false, true, false, false, false,
+        ]);
+        m.insert((5, 27), [
+            true, false, false, true, false, true, false, true, true, false, false, false,
+        ]);
+        m.insert((5, 28), [
+            true, false, true, false, false, true, true, false, true, false, false, false,
+        ]);
+        m.insert((5, 29), [
+            true, false, true, false, false, true, false, true, true, false, false, false,
+        ]);
+        m.insert((5, 30), [
+            true, false, true, false, true, false, false, true, true, false, false, false,
+        ]);
+        m.insert((5, 31), [
+            true, false, true, true, false, false, true, false, false, true, false, false,
+        ]);
+        m.insert((5, 32), [
+            true, true, false, false, true, false, false, true, false, true, false, false,
+        ]);
+        m.insert((5, 36), [
+            true, false, false, true, false, true, true, true, false, false, false, false,
+        ]);
+        m.insert((5, 38), [
+            true, false, false, true, false, false, true, true, true, false, false, false,
+        ]);
+        m.insert((6, 2), [
+            true, false, true, true, true, true, true, false, false, false, false, false,
+        ]);
+        m.insert((6, 3), [
+            true, true, false, true, true, true, true, false, false, false, false, false,
+        ]);
+        m.insert((6, 5), [
+            true, true, false, false, true, true, true, true, false, false, false, false,
+        ]);
+        m.insert((6, 9), [
+            true, false, true, false, true, true, true, true, false, false, false, false,
+        ]);
+        m.insert((6, 10), [
+            true, false, true, true, true, false, true, true, false, false, false, false,
+        ]);
+        m.insert((6, 11), [
+            true, false, true, true, false, true, true, true, false, false, false, false,
+        ]);
+        m.insert((6, 12), [
+            true, true, false, true, false, true, true, true, false, false, false, false,
+        ]);
+        m.insert((6, 14), [
+            true, false, false, true, true, true, false, true, true, false, false, false,
+        ]);
+        m.insert((6, 15), [
+            true, false, false, true, true, false, true, true, true, false, false, false,
+        ]);
+        m.insert((6, 16), [
+            true, false, true, true, true, false, false, true, true, false, false, false,
+        ]);
+        m.insert((6, 17), [
+            true, true, false, false, true, false, true, true, true, false, false, false,
+        ]);
+        m.insert((6, 18), [
+            true, true, false, true, false, false, true, true, true, false, false, false,
+        ]);
+        m.insert((6, 19), [
+            true, true, false, false, true, true, false, true, true, false, false, false,
+        ]);
+        m.insert((6, 21), [
+            true, false, true, false, true, true, true, false, true, false, false, false,
+        ]);
+        m.insert((6, 22), [
+            true, false, true, false, true, false, true, true, true, false, false, false,
+        ]);
+        m.insert((6, 24), [
+            true, false, true, false, true, true, false, true, true, false, false, false,
+        ]);
+        m.insert((6, 25), [
+            true, false, true, true, false, true, false, true, true, false, false, false,
+        ]);
+        m.insert((6, 27), [
+            true, false, true, true, false, true, true, false, false, true, false, false,
+        ]);
+        m.insert((6, 30), [
+            true, false, true, true, false, false, true, false, true, true, false, false,
+        ]);
+        m.insert((6, 31), [
+            true, true, false, false, true, false, true, false, true, true, false, false,
+        ]);
+        m.insert((6, 33), [
+            true, false, true, false, true, false, true, true, false, true, false, false,
+        ]);
+        m.insert((6, 34), [
+            true, false, true, false, true, false, true, false, true, true, false, false,
+        ]);
+        m.insert((6, 36), [
+            true, false, false, true, true, true, true, true, false, false, false, false,
+        ]);
+        m.insert((6, 39), [
+            true, false, false, true, true, true, true, false, true, false, false, false,
+        ]);
+        m.insert((6, 40), [
+            true, false, false, true, false, true, true, true, true, false, false, false,
+        ]);
+        m.insert((6, 41), [
+            true, false, true, false, false, true, true, true, true, false, false, false,
+        ]);
+        m.insert((6, 43), [
+            true, false, true, true, false, false, true, true, true, false, false, false,
+        ]);
+        m.insert((6, 44), [
+            true, true, true, false, false, true, false, false, true, true, false, false,
+        ]);
+        m.insert((6, 46), [
+            true, false, true, false, true, true, true, false, false, true, false, false,
+        ]);
+        m.insert((6, 47), [
+            true, false, true, true, true, false, false, true, false, true, false, false,
+        ]);
+        m.insert((7, 2), [
+            true, false, true, true, true, true, true, true, false, false, false, false,
+        ]);
+        m.insert((7, 3), [
+            true, false, false, true, true, true, true, true, true, false, false, false,
+        ]);
+        m.insert((7, 4), [
+            true, true, false, true, true, true, true, true, false, false, false, false,
+        ]);
+        m.insert((7, 5), [
+            true, true, true, false, true, true, true, true, false, false, false, false,
+        ]);
+        m.insert((7, 6), [
+            true, true, false, false, true, true, true, true, true, false, false, false,
+        ]);
+        m.insert((7, 7), [
+            true, true, true, false, false, true, true, true, true, false, false, false,
+        ]);
+        m.insert((7, 9), [
+            true, false, true, false, true, true, true, true, true, false, false, false,
+        ]);
+        m.insert((7, 10), [
+            true, false, true, true, true, true, true, false, false, true, false, false,
+        ]);
+        m.insert((7, 11), [
+            true, false, true, true, true, true, false, true, true, false, false, false,
+        ]);
+        m.insert((7, 13), [
+            true, false, true, true, true, false, true, true, true, false, false, false,
+        ]);
+        m.insert((7, 14), [
+            true, true, false, true, false, true, true, true, true, false, false, false,
+        ]);
+        m.insert((7, 16), [
+            true, true, false, true, true, true, true, false, false, true, false, false,
+        ]);
+        m.insert((7, 18), [
+            true, true, false, false, true, false, true, true, true, true, false, false,
+        ]);
+        m.insert((7, 19), [
+            true, true, true, true, false, false, true, false, true, true, false, false,
+        ]);
+        m.insert((7, 20), [
+            true, true, true, false, false, true, false, true, true, true, false, false,
+        ]);
+        m.insert((7, 21), [
+            true, true, false, true, true, true, false, false, true, true, false, false,
+        ]);
+        m.insert((7, 23), [
+            true, false, true, false, true, true, true, true, false, true, false, false,
+        ]);
+        m.insert((7, 24), [
+            true, false, true, false, true, false, true, true, true, true, false, false,
+        ]);
+        m.insert((7, 25), [
+            true, false, true, true, false, true, true, true, false, true, false, false,
+        ]);
+        m.insert((7, 26), [
+            true, false, true, false, true, true, true, false, true, true, false, false,
+        ]);
+        m.insert((7, 27), [
+            true, false, true, false, true, true, false, true, true, true, false, false,
+        ]);
+        m.insert((7, 28), [
+            true, false, true, true, true, false, true, false, true, true, false, false,
+        ]);
+        m.insert((7, 29), [
+            true, false, true, true, false, true, false, true, true, true, false, false,
+        ]);
+        m.insert((7, 30), [
+            true, true, false, true, false, true, false, true, true, true, false, false,
+        ]);
+        m.insert((7, 31), [
+            true, false, true, true, false, true, true, false, true, true, false, false,
+        ]);
+        m.insert((7, 32), [
+            true, true, false, true, false, true, true, false, true, true, false, false,
+        ]);
+        m.insert((7, 36), [
+            true, false, true, true, false, true, true, true, true, false, false, false,
+        ]);
+        m.insert((7, 38), [
+            true, true, false, true, true, false, true, true, true, false, false, false,
+        ]);
+        m.insert((8, 2), [
+            true, false, true, true, true, true, true, true, true, false, false, false,
+        ]);
+        m.insert((8, 4), [
+            true, true, false, true, true, true, true, true, true, false, false, false,
+        ]);
+        m.insert((8, 5), [
+            true, true, true, false, true, true, true, true, true, false, false, false,
+        ]);
+        m.insert((8, 11), [
+            true, false, true, false, true, true, true, true, true, true, false, false,
+        ]);
+        m.insert((8, 12), [
+            true, false, true, true, true, true, true, false, true, true, false, false,
+        ]);
+        m.insert((8, 13), [
+            true, false, true, true, false, true, true, true, true, true, false, false,
+        ]);
+        m.insert((8, 14), [
+            true, false, true, true, true, true, false, true, true, true, false, false,
+        ]);
+        m.insert((8, 15), [
+            true, true, false, true, false, true, true, true, true, true, false, false,
+        ]);
+        m.insert((8, 16), [
+            true, true, true, false, true, false, true, true, true, true, false, false,
+        ]);
+        m.insert((8, 18), [
+            true, true, false, true, true, false, true, true, true, true, false, false,
+        ]);
+        m.insert((8, 19), [
+            true, true, false, true, true, true, false, true, true, true, false, false,
+        ]);
+        m.insert((8, 22), [
+            true, true, true, true, false, true, false, true, false, true, true, false,
+        ]);
+        m.insert((8, 27), [
+            true, true, true, false, true, false, true, true, false, true, true, false,
+        ]);
+        m.insert((8, 29), [
+            true, false, true, true, true, false, true, true, true, true, false, false,
+        ]);
+        m.insert((9, 2), [
+            true, false, true, true, true, true, true, true, true, true, false, false,
+        ]);
+        m.insert((9, 3), [
+            true, true, false, true, true, true, true, true, true, true, false, false,
+        ]);
+        m.insert((9, 4), [
+            true, true, true, false, true, true, true, true, true, true, false, false,
+        ]);
+        m.insert((9, 5), [
+            true, true, true, true, false, true, true, true, true, true, false, false,
+        ]);
+        m.insert((9, 7), [
+            true, true, true, true, true, true, false, true, false, true, true, false,
+        ]);
+        m.insert((9, 8), [
+            true, true, true, true, true, false, true, false, true, true, true, false,
+        ]);
+        m.insert((9, 11), [
+            true, true, true, true, false, true, true, false, true, true, true, false,
+        ]);
         m
     });
 

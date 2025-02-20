@@ -1,7 +1,7 @@
 use music21_rs::polyrhythm::Polyrhythm;
 use rodio::{
-    source::{SineWave, Source},
     OutputStream, Sink,
+    source::{SineWave, Source},
 };
 use std::{thread::sleep, time::Duration};
 

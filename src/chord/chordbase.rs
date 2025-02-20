@@ -4,10 +4,10 @@ use super::Pitch;
 use crate::base::Music21ObjectTrait;
 use crate::duration::Duration;
 use crate::exception::ExceptionResult;
+use crate::note::Note;
 use crate::note::generalnote::GeneralNoteTrait;
 use crate::note::notrest::NotRest;
 use crate::note::notrest::NotRestTrait;
-use crate::note::Note;
 use crate::prebase::ProtoM21ObjectTrait;
 
 use std::collections::HashMap;

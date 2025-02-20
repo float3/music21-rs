@@ -7,9 +7,9 @@ use crate::duration::Duration;
 use crate::exception::Exception;
 use crate::exception::ExceptionResult;
 use crate::key::keysignature::KeySignature;
+use crate::note::Note;
 use crate::note::generalnote::GeneralNoteTrait;
 use crate::note::notrest::NotRestTrait;
-use crate::note::Note;
 use crate::pitch::Pitch;
 use crate::prebase::ProtoM21ObjectTrait;
 
@@ -218,7 +218,7 @@ mod tests {
         include!(concat!(env!("CARGO_MANIFEST_DIR"), "/shared.rs"));
     }
 
-    use pyo3::{prelude::PyModule, types::PyAnyMethods, Bound, PyAny, PyErr, PyResult, Python};
+    use pyo3::{Bound, PyAny, PyErr, PyResult, Python, prelude::PyModule, types::PyAnyMethods};
     use utils::{init_py, prepare};
 
     use crate::chord::Chord;

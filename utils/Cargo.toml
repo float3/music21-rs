@@ -1,7 +1,7 @@
 [package]
 authors = ["hill <hill@hilll.dev>"]
 description = "crate for sharing code between test suite and build script"
-edition = "2021"
+edition = "2024"
 license-file = "../LICENSE"
 name = "utils"
 repository = "https://github.com/float3/music21-rs"

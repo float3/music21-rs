@@ -3,7 +3,7 @@ use crate::{
     note::Note, pitch::Pitch, prebase::ProtoM21ObjectTrait,
 };
 
-use super::{diatonicinterval::DiatonicInterval, intervalbase::IntervalBase, IntervalBaseTrait};
+use super::{IntervalBaseTrait, diatonicinterval::DiatonicInterval, intervalbase::IntervalBase};
 
 #[derive(Clone, Debug)]
 pub(crate) struct ChromaticInterval {

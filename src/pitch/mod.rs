@@ -9,11 +9,11 @@ use crate::defaults::Octave;
 use crate::defaults::PITCH_STEP;
 use crate::exception::Exception;
 use crate::exception::ExceptionResult;
-use crate::interval::interval_to_pythagorean_ratio;
-use crate::interval::intervalstring::IntervalString;
 use crate::interval::Interval;
 use crate::interval::IntervalArgument;
 use crate::interval::PitchOrNote;
+use crate::interval::interval_to_pythagorean_ratio;
+use crate::interval::intervalstring::IntervalString;
 use crate::key::keysignature::KeySignature;
 use crate::note::Note;
 use crate::prebase::ProtoM21Object;
@@ -721,7 +721,7 @@ fn convert_harmonic_to_cents(_harmonic_shift: IntegerType) -> IntegerType {
 mod tests {
     use crate::defaults::IntegerType;
 
-    use super::{simplify_multiple_enharmonics, Pitch};
+    use super::{Pitch, simplify_multiple_enharmonics};
 
     #[test]
     #[ignore]

@@ -28,20 +28,20 @@ mod python {
         include!(concat!(env!("CARGO_MANIFEST_DIR"), "/shared.rs"));
     }
 
+    use pyo3::PyErr;
+    use pyo3::PyResult;
     use pyo3::exceptions::PyIOError;
     use pyo3::prelude::*;
     use pyo3::types::PyDict;
     use pyo3::types::PyTuple;
-    use pyo3::PyErr;
-    use pyo3::PyResult;
     use std::collections::HashMap;
     use std::error::Error;
     use std::fs;
     use std::path::PathBuf;
+    use utils::Tables;
     use utils::get_tables;
     use utils::init_py_with_dummies;
     use utils::run_command;
-    use utils::Tables;
 
     #[allow(unused)]
     const CARDINALITIES: [&str; 13] = [
