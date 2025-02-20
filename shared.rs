@@ -34,7 +34,7 @@ mod module {
             println!("Repository already cloned.");
             return Ok(());
         }
-        run_command(
+        match run_command(
             &[
                 "git",
                 "clone",
@@ -44,7 +44,16 @@ mod module {
                 "./music21",
             ],
             "git clone",
-        )
+        ) {
+            Ok(_) => Ok(()),
+            Err(_) => {
+                if Path::new("./music21").exists() {
+                    Ok(())
+                } else {
+                    Err("Failed to clone repository".into())
+                }
+            }
+        }
     }
 
     #[cfg(any(feature = "python", test))]
