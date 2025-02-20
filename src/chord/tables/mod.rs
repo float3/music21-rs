@@ -233,9 +233,9 @@ mod tests {
         Bound, PyResult, Python,
     };
 
-    use std::collections::hash_map::Keys;
-
     use utils::{get_tables, init_py_with_dummies, prepare};
+
+    use std::collections::hash_map::Keys;
 
     #[test]
     fn cardinality_to_chord_members_equality() {

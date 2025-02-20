@@ -1,6 +1,6 @@
 #[allow(unused)]
 mod module {
-    #[cfg(feature = "python")]
+    #[cfg(any(feature = "python", test))]
     use pyo3::{prelude::*, types::PyModule};
     use std::error::Error;
     use std::path::Path;
@@ -8,10 +8,10 @@ mod module {
     use std::str::from_utf8;
     use std::sync::atomic::AtomicBool;
     use std::sync::atomic::Ordering;
-    #[cfg(feature = "python")]
+    #[cfg(any(feature = "python", test))]
     use std::sync::LazyLock;
 
-    #[cfg(feature = "python")]
+    #[cfg(any(feature = "python", test))]
     static PYTHON_EXE: LazyLock<String> = LazyLock::new(|| {
         let version: (u8, u8) = Python::with_gil(|py| -> PyResult<(u8, u8)> {
             let sys = py.import("sys")?;
@@ -24,7 +24,7 @@ mod module {
         format!("python{}.{}", version.0, version.1)
     });
 
-    #[cfg(feature = "python")]
+    #[cfg(any(feature = "python", test))]
     fn python_venv() -> String {
         format!("./venv/bin/{}", *PYTHON_EXE)
     }
@@ -47,7 +47,7 @@ mod module {
         )
     }
 
-    #[cfg(feature = "python")]
+    #[cfg(any(feature = "python", test))]
     fn create_venv() -> Result<(), Box<dyn Error>> {
         use std::path::Path;
 
@@ -57,7 +57,7 @@ mod module {
         }
     }
 
-    #[cfg(feature = "python")]
+    #[cfg(any(feature = "python", test))]
     fn install_dependencies() -> Result<(), Box<dyn Error>> {
         run_command(
             &[
@@ -73,7 +73,7 @@ mod module {
         Ok(())
     }
 
-    #[cfg(feature = "python")]
+    #[cfg(any(feature = "python", test))]
     fn pip_upgrade() {
         if let Err(e) = run_command(
             &[
@@ -99,11 +99,11 @@ mod module {
         println!("preparing environment");
         let res = (|| {
             git_clone()?;
-            #[cfg(feature = "python")]
+            #[cfg(any(feature = "python", test))]
             create_venv()?;
-            #[cfg(feature = "python")]
+            #[cfg(any(feature = "python", test))]
             pip_upgrade();
-            #[cfg(feature = "python")]
+            #[cfg(any(feature = "python", test))]
             install_dependencies()?;
             Ok(())
         })();
@@ -127,10 +127,10 @@ mod module {
         }
     }
 
-    #[cfg(feature = "python")]
+    #[cfg(any(feature = "python", test))]
     pub type Tables<'py> = pyo3::Bound<'py, PyModule>;
 
-    #[cfg(feature = "python")]
+    #[cfg(any(feature = "python", test))]
     pub fn init_py(py: Python<'_>) -> pyo3::PyResult<()> {
         let sys = py.import("sys")?;
         let sysconfig = py.import("sysconfig")?;
@@ -151,7 +151,7 @@ mod module {
 
     /// Dummy function for music21.environment.Environment.
     /// This function does nothing and returns None.
-    #[cfg(feature = "python")]
+    #[cfg(any(feature = "python", test))]
     #[pyfunction]
     fn dummy_environment(_name: &str) -> PyResult<()> {
         // A minimal stub that satisfies the call signature.
@@ -160,7 +160,7 @@ mod module {
 
     /// Creates dummy modules for missing music21 dependencies.
     /// This should be called before importing tables.py.
-    #[cfg(feature = "python")]
+    #[cfg(any(feature = "python", test))]
     fn create_dummy_modules(py: Python) -> PyResult<()> {
         use pyo3::types::PyList;
         use pyo3::types::PyMapping;
@@ -197,13 +197,13 @@ mod module {
         Ok(())
     }
 
-    #[cfg(feature = "python")]
+    #[cfg(any(feature = "python", test))]
     pub fn init_py_with_dummies(py: Python) -> PyResult<()> {
         create_dummy_modules(py)?;
         Ok(())
     }
 
-    #[cfg(feature = "python")]
+    #[cfg(any(feature = "python", test))]
     pub fn get_tables(py: Python<'_>) -> Result<Bound<'_, PyModule>, PyErr> {
         use pyo3::exceptions::PyIOError;
         use std::ffi::CStr;
