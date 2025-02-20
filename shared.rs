@@ -46,11 +46,11 @@ mod module {
             "git clone",
         ) {
             Ok(_) => Ok(()),
-            Err(_) => {
+            Err(e) => {
                 if Path::new("./music21").exists() {
                     Ok(())
                 } else {
-                    Err("Failed to clone repository".into())
+                    Err(format!("Failed to clone repository: {}", e).into())
                 }
             }
         }
