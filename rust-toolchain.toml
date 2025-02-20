@@ -1,2 +1,2 @@
 [toolchain]
-components = ["rustfmt", "clippy"]
+components = ["rustfmt"]
