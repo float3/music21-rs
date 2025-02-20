@@ -17,6 +17,7 @@ jobs:
       fail-fast: false
       matrix:
         rust: [stable, beta, nightly]
+        python: ['3.12', '3.13', '3.14']
 
     steps:
     - name: Checkout code
@@ -25,7 +26,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.13'
+        python-version: ${{ matrix.python }}
 
     - name: Set up Rust
       uses: actions-rs/toolchain@v1
@@ -33,6 +34,23 @@ jobs:
         toolchain: ${{ matrix.rust }}
         override: true
         components: rustfmt, clippy
+
+    - name: Cache music21 repository
+      id: cache
+      uses: actions/cache@v4
+      with:
+        path: ./music21
+        key: music21
+
+    - name: Clone music21 repository
+      if: steps.cache.outputs.cache-hit != 'true'
+      run: git clone --depth 1 https://github.com/cuthbertLab/music21.git ./music21
+
+    - name: Pull latest changes in music21 repository
+      if: steps.cache.outputs.cache-hit == 'true'
+      run: |
+        cd ./music21
+        git pull origin master
 
     - run: sudo apt update
     - run: sudo apt install libasound2-dev
