@@ -41,6 +41,13 @@ jobs:
         path: ./music21
         key: music21
 
+    - name: Cache venv
+      id: cache-venv
+      uses: actions/cache@v4
+      with:
+        path: ./venv
+        key: venv
+
     - name: Clone music21 repository
       if: steps.cache.outputs.cache-hit != 'true'
       run: git clone --depth 1 https://github.com/cuthbertLab/music21.git ./music21
@@ -50,6 +57,10 @@ jobs:
       run: |
         cd ./music21
         git pull origin master
+
+    - name: venv
+      if: steps.cache.outputs.cache-venv-hit != 'true'
+      run: python3.13 -m venv venv
 
     - run: sudo apt update
     - run: sudo apt install libasound2-dev
