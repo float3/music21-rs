@@ -1,5 +1,8 @@
 use crate::{
-    base::Music21ObjectTrait, exception::ExceptionResult, note::Note, pitch::Pitch,
+    base::Music21ObjectTrait,
+    exception::{Exception, ExceptionResult},
+    note::Note,
+    pitch::Pitch,
     prebase::ProtoM21ObjectTrait,
 };
 
@@ -46,15 +49,31 @@ impl GenericInterval {
         todo!()
     }
 
-    fn direction(&self) -> IntegerType {
+    pub(crate) fn direction(&self) -> Direction {
         todo!()
     }
 
     fn value_setter(&mut self, value: IntegerType) -> ExceptionResult<()> {
+        if value == 0 {
+            return Err(Exception::Interval("Interval cannot be zero".to_owned()));
+        }
+        self._value = value;
+        Ok(())
+    }
+
+    pub(crate) fn get_diatonic(&self, spec: Specifier) -> DiatonicInterval {
+        DiatonicInterval::new(spec, self)
+    }
+
+    pub(crate) fn staff_distance(&self) -> IntegerType {
         todo!()
     }
 
-    pub(crate) fn get_diatonic(&self, spec_name: Specifier) -> DiatonicInterval {
+    pub(crate) fn simple_undirected(&self) -> IntegerType {
+        todo!()
+    }
+
+    pub(crate) fn is_perfectable(&self) -> bool {
         todo!()
     }
 }
@@ -89,7 +108,7 @@ impl IntervalBaseTrait for GenericInterval {
         if self.undirected() == 1 {
             GenericInterval::from_int(1)
         } else {
-            GenericInterval::from_int(self.undirected() * -self.direction())
+            GenericInterval::from_int(self.undirected() * -self.direction().as_int())
         }
     }
 }

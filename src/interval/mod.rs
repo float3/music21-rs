@@ -46,7 +46,7 @@ pub(crate) enum PitchOrNote {
 
 pub(crate) enum IntervalArgument {
     Str(String),
-    Int(UnsignedIntegerType),
+    Int(IntegerType),
     Pitch(Pitch),
     Note(Note),
 }
@@ -175,11 +175,11 @@ fn _string_to_diatonic_chromatic(
         .parse::<IntegerType>()
         .expect("Failed to parse number")
         * dir_scale;
-    let spec_name = Specifier::parse(remain);
+    let spec = Specifier::parse(remain);
 
     let g_interval = GenericInterval::from_int(generic_number)?;
-    let d_interval = g_interval.get_diatonic(spec_name);
-    let c_interval = d_interval.get_chromatic();
+    let d_interval = g_interval.get_diatonic(spec);
+    let c_interval = d_interval.get_chromatic()?;
     Ok((d_interval, c_interval, inferred))
 }
 

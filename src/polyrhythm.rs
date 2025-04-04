@@ -2,7 +2,7 @@ use num::integer::lcm;
 use std::collections::BTreeSet;
 
 use crate::chord::Chord;
-use crate::defaults::{FloatType, UnsignedIntegerType};
+use crate::defaults::{FloatType, IntegerType, UnsignedIntegerType};
 use crate::exception::{Exception, ExceptionResult};
 use crate::interval::{Interval, IntervalArgument};
 use crate::note::IntoPitch;
@@ -92,7 +92,7 @@ impl Polyrhythm {
             for i in 0..sub {
                 let tick = i * interval;
                 let ratio = tick as FloatType / self.cycle as FloatType;
-                let semitones = (ratio * 12.0).round() as UnsignedIntegerType;
+                let semitones = (ratio * 12.0).round() as IntegerType;
                 offsets.insert(semitones);
             }
         }

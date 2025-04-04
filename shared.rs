@@ -6,10 +6,10 @@ mod module {
     use std::path::Path;
     use std::process::Command;
     use std::str::from_utf8;
-    use std::sync::atomic::AtomicBool;
-    use std::sync::atomic::Ordering;
     #[cfg(any(feature = "python", test))]
     use std::sync::LazyLock;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::Ordering;
 
     #[cfg(any(feature = "python", test))]
     static PYTHON_EXE: LazyLock<String> = LazyLock::new(|| {
@@ -59,6 +59,13 @@ mod module {
     #[cfg(any(feature = "python", test))]
     fn create_venv() -> Result<(), Box<dyn Error>> {
         use std::path::Path;
+
+        if Path::new(python_venv().as_str()).exists() {
+            println!("venv already created.");
+            return Ok(());
+        }
+
+        println!("{:?}", &PYTHON_EXE);
 
         match Path::new(&python_venv()).exists() {
             true => Ok(()),

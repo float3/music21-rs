@@ -1,3 +1,4 @@
+#[derive(PartialEq, Copy, Clone)]
 pub(crate) enum Direction {
     Descending = -1,
     Oblique = 0,
@@ -11,6 +12,10 @@ impl Direction {
             Direction::Oblique => "Oblique".to_string(),
             Direction::Ascending => "Ascending".to_string(),
         }
+    }
+
+    pub(crate) fn as_int(&self) -> i32 {
+        *self as i32
     }
 }
 

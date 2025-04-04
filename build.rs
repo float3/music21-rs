@@ -5,9 +5,9 @@
 //! python = ["dep:pyo3", "dep:reqwest"]
 //!
 //! [dependencies]
-//! pyo3 = { version = "0.23.4", features = ["auto-initialize"], optional = true }
+//! pyo3 = { version = "0.24.1", features = ["auto-initialize"], optional = true }
 //! utils = { path = "./utils", default-features = false }
-//! reqwest = { version = "0.12.12", features = ["blocking"], optional = true }
+//! reqwest = { version = "0.12.15", features = ["blocking"], optional = true }
 //! ```
 /*
 #!nix-shell -i rust-script -p rustc -p rust-script -p cargo -p rustfmt -p python312 -p python312Packages.virtualenv -p git

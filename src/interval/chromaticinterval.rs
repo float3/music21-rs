@@ -1,6 +1,6 @@
 use crate::{
-    base::Music21ObjectTrait, defaults::UnsignedIntegerType, exception::ExceptionResult,
-    note::Note, pitch::Pitch, prebase::ProtoM21ObjectTrait,
+    base::Music21ObjectTrait, defaults::IntegerType, exception::ExceptionResult, note::Note,
+    pitch::Pitch, prebase::ProtoM21ObjectTrait,
 };
 
 use super::{IntervalBaseTrait, diatonicinterval::DiatonicInterval, intervalbase::IntervalBase};
@@ -8,11 +8,11 @@ use super::{IntervalBaseTrait, diatonicinterval::DiatonicInterval, intervalbase:
 #[derive(Clone, Debug)]
 pub(crate) struct ChromaticInterval {
     intervalbase: IntervalBase,
-    pub(crate) semitones: UnsignedIntegerType,
+    pub(crate) semitones: IntegerType,
 }
 
 impl ChromaticInterval {
-    pub(crate) fn new(semitones: UnsignedIntegerType) -> Self {
+    pub(crate) fn new(semitones: IntegerType) -> Self {
         Self {
             intervalbase: IntervalBase::new(),
             semitones,

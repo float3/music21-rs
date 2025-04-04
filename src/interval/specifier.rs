@@ -1,3 +1,5 @@
+use crate::defaults::UnsignedIntegerType;
+
 #[derive(Clone, Debug)]
 pub(crate) enum Specifier {
     Perfect = 1,
@@ -32,6 +34,27 @@ impl Specifier {
     }
 
     pub(crate) fn parse(remain: String) -> Self {
+        match remain.as_str() {
+            "Perfect" | "p" | "P" => Specifier::Perfect,
+            "Major" | "M" => Specifier::Major,
+            "Minor" | "m" => Specifier::Minor,
+            "Augmented" | "a" => Specifier::Augmented,
+            "Diminished" | "d" => Specifier::Diminished,
+            "Double Augmented" | "aa" => Specifier::DoubleAugmented,
+            "Double Diminished" | "dd" => Specifier::DoubleDiminished,
+            "Triple Augmented" | "aaa" => Specifier::TripleAugmented,
+            "Triple Diminished" | "ddd" => Specifier::TripleDiminished,
+            "Quadruple Augmented" | "aaaa" => Specifier::QuadrupleAugmented,
+            "Quadruple Diminished" | "dddd" => Specifier::QuadrupleDiminished,
+            val => panic!("Invalid specifier: {}", val),
+        }
+    }
+
+    pub(crate) fn semitones_above_perfect(&self) -> UnsignedIntegerType {
+        todo!()
+    }
+
+    pub(crate) fn semitones_above_major(&self) -> UnsignedIntegerType {
         todo!()
     }
 }

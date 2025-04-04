@@ -62,6 +62,7 @@ jobs:
       if: steps.cache.outputs.cache-venv-hit != 'true'
       run: python3.13 -m venv venv
 
+    - run: rm -rf venv
     - run: sudo apt update
     - run: sudo apt install libasound2-dev
     - run: cargo install cargo-hack
