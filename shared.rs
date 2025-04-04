@@ -65,8 +65,6 @@ mod module {
             return Ok(());
         }
 
-        println!("{:?}", &PYTHON_EXE);
-
         match Path::new(&python_venv()).exists() {
             true => Ok(()),
             false => run_command(&[&PYTHON_EXE, "-m", "venv", "venv"], "create venv"),
