@@ -68,12 +68,12 @@ jobs:
     - run: cargo hack build --feature-powerset --verbose --workspace --all-targets
     - run: cargo hack check --feature-powerset --verbose --workspace --all-targets
     - run: cargo hack clippy --feature-powerset --verbose --workspace --all-targets -- -D warnings
-    - run: cargo hack test --feature-powerset --verbose --workspace --all-targets --no-fail-fast --lib --bins --examples --tests --benches --test-threads=1
+    - run: cargo hack test --feature-powerset --verbose --workspace --all-targets --no-fail-fast --lib --bins --examples --tests --benches -- --test-threads=1
     - run: cargo hack build --feature-powerset --release --verbose --workspace --all-targets
     - run: cargo hack check --feature-powerset --release --verbose --workspace --all-targets
     - run: cargo hack clippy --feature-powerset --release --verbose --workspace --all-targets -- -D warnings
     - run: cargo fmt --all -- --check
-    - run: cargo hack test --feature-powerset --release --verbose --workspace --all-targets --no-fail-fast --lib --bins --examples --tests --benches --test-threads=1
+    - run: cargo hack test --feature-powerset --release --verbose --workspace --all-targets --no-fail-fast --lib --bins --examples --tests --benches -- --test-threads=1
     - run: git diff --exit-code
 
     - name: Generate cargo docs
