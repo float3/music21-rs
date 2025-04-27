@@ -5,12 +5,12 @@
 //! python = ["dep:pyo3", "dep:reqwest"]
 //!
 //! [dependencies]
-//! pyo3 = { version = "0.24.1", features = ["auto-initialize"], optional = true }
+//! pyo3 = { version = "0.24.2", features = ["auto-initialize"], optional = true }
 //! utils = { path = "./utils", default-features = false }
 //! reqwest = { version = "0.12.15", features = ["blocking"], optional = true }
 //! ```
 /*
-#!nix-shell -i rust-script -p rustc -p rust-script -p cargo -p rustfmt -p python312 -p python312Packages.virtualenv -p git
+#!nix-shell -i rust-script -p rustc -p rust-script -p cargo -p rustfmt -p python312 -p python312Packages.virtualenv -p git -p openssl
 */
 
 use std::error::Error;
@@ -19,6 +19,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     #[cfg(feature = "python")]
     python::main()?;
 
+    println!("cargo:rerun-if-changed=./build.rs");
     Ok(())
 }
 
