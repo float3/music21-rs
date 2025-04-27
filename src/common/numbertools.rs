@@ -128,7 +128,7 @@ pub(crate) static ORDINAL_STRINGS: LazyLock<[String; 23]> = LazyLock::new(|| {
     std::array::from_fn(|i| {
         let val: UnsignedIntegerType = i as UnsignedIntegerType;
         let ordinal = Ordinal::try_from(val).unwrap();
-        format!("{}", ordinal)
+        format!("{ordinal}")
     })
 });
 
@@ -136,7 +136,7 @@ pub(crate) static MUSICAL_ORDINAL_STRINGS: LazyLock<[String; 23]> = LazyLock::ne
     std::array::from_fn(|i| {
         let val: UnsignedIntegerType = i as UnsignedIntegerType;
         let ordinal = MusicOrdinals::try_from(val).unwrap();
-        format!("{}", ordinal)
+        format!("{ordinal}")
     })
 });
 
@@ -200,7 +200,7 @@ mod tests {
     #[test]
     fn test_ordinal_display() {
         let ordinal = Ordinal::TwentyFirst;
-        assert_eq!(format!("{}", ordinal), "Twenty-first");
+        assert_eq!(format!("{ordinal}"), "Twenty-first");
     }
 
     #[test]
@@ -260,7 +260,7 @@ mod tests {
     #[test]
     fn test_music_ordinal_display() {
         let ordinal = MusicOrdinals::TwentyFirst;
-        assert_eq!(format!("{}", ordinal), "Twenty-first");
+        assert_eq!(format!("{ordinal}"), "Twenty-first");
     }
 
     #[test]

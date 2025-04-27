@@ -108,30 +108,28 @@ mod python {
                                 let pcs_vec_str = format!("{:?}", build_pc_vec(&pcs)?);
                                 let icv_vec: Vec<i32> = icv.extract()?;
                                 let iv_vec: Vec<i32> = iv.extract()?;
-                                let icv_vec_str = format!("{:?}", icv_vec);
-                                let iv_vec_str = format!("{:?}", iv_vec);
+                                let icv_vec_str = format!("{icv_vec:?}");
+                                let iv_vec_str = format!("{iv_vec:?}");
                                 let z_rel_str = if z_relation.is_none() {
                                     "None".to_string()
                                 } else {
                                     z_relation.str()?.to_str()?.to_string()
                                 };
                                 Ok(format!(
-                                    "Some(({}, {}, {}, {})),",
-                                    pcs_vec_str, icv_vec_str, iv_vec_str, z_rel_str
+                                    "Some(({pcs_vec_str}, {icv_vec_str}, {iv_vec_str}, {z_rel_str})),"
                                 ))
                             }
                         })
                         .collect();
                     let joined = entries?.join(" ");
-                    Ok(format!("vec![{}],", joined))
+                    Ok(format!("vec![{joined}],"))
                 }
             })
             .collect();
         let table_body = table_lines?.join("\n");
 
         let rust_code = format!(
-            "pub(super) static FORTE: Forte = LazyLock::new(|| {{[\n{}\n]}});",
-            table_body
+            "pub(super) static FORTE: Forte = LazyLock::new(|| {{[\n{table_body}\n]}});"
         );
         Ok(rust_code)
     }
@@ -153,8 +151,7 @@ mod python {
                     }
                 }
                 Ok(format!(
-                    "    m.insert(({}, {}), {:?});",
-                    card, forte, pcs_vec
+                    "    m.insert(({card}, {forte}), {pcs_vec:?});"
                 ))
             })
             .collect();
@@ -174,12 +171,12 @@ mod python {
         let mut lines = Vec::new();
 
         for (card, item) in forte_list.iter().enumerate() {
-            let var_name = format!("inner_{}", card);
+            let var_name = format!("inner_{card}");
             inner_vars.push(var_name.clone());
             if card == 0 {
-                lines.push(format!("    let {} = HashMap::new();", var_name));
+                lines.push(format!("    let {var_name} = HashMap::new();"));
             } else {
-                lines.push(format!("    let mut {} = HashMap::new();", var_name));
+                lines.push(format!("    let mut {var_name} = HashMap::new();"));
                 let card_data: &Bound<'_, PyTuple> = item.downcast()?;
                 for forte_idx in 1..card_data.len() {
                     let entry = card_data.get_item(forte_idx)?;
@@ -195,16 +192,15 @@ mod python {
                     let has_distinct = inv_vec_list.get(1).is_some_and(|&v| v == 0);
                     let pcs_vec_str = format!("{:?}", build_pc_vec(&pcs)?);
                     let icv_vec: Vec<i32> = icv.extract()?;
-                    let inv_vec_str = format!("{:?}", inv_vec_list);
-                    let icv_vec_str = format!("{:?}", icv_vec);
+                    let inv_vec_str = format!("{inv_vec_list:?}");
+                    let icv_vec_str = format!("{icv_vec:?}");
                     let sign = if has_distinct {
                         sign_str(1)
                     } else {
                         sign_str(0)
                     };
                     lines.push(format!(
-                        "    {}.insert(({}, {}), ({}, {}, {}));",
-                        var_name, forte_idx, sign, pcs_vec_str, inv_vec_str, icv_vec_str
+                        "    {var_name}.insert(({forte_idx}, {sign}), ({pcs_vec_str}, {inv_vec_str}, {icv_vec_str}));"
                     ));
                     if has_distinct {
                         let inversion_default = tables.getattr("inversionDefaultPitchClasses")?;
@@ -227,7 +223,7 @@ mod python {
                             }
                             vec
                         };
-                        let inv_pcs_vec_str = format!("{:?}", inv_pcs_vec);
+                        let inv_pcs_vec_str = format!("{inv_pcs_vec:?}");
                         lines.push(format!(
                             "    {}.insert(({}, {}), ({}, {}, {}));",
                             var_name,
@@ -243,7 +239,7 @@ mod python {
         }
         let inner_vars_str = inner_vars
             .into_iter()
-            .map(|v| format!("        {},", v))
+            .map(|v| format!("        {v},"))
             .collect::<Vec<_>>()
             .join("\n");
         lines.push("    [".to_string());
@@ -311,8 +307,7 @@ mod python {
             let inv_str = sign_str(inv);
             let i: i32 = value.extract()?;
             lines.push(format!(
-                "    m.insert(({}, {}, {}), {});",
-                card, idx, inv_str, i
+                "    m.insert(({card}, {idx}, {inv_str}), {i});"
             ));
         }
         let rust_code = format!(
@@ -338,23 +333,20 @@ mod python {
                 if !names_list.is_empty() {
                     let names_str = names_list
                         .into_iter()
-                        .map(|s| format!("\"{}\"", s))
+                        .map(|s| format!("\"{s}\""))
                         .collect::<Vec<_>>()
                         .join(", ");
                     lines.push(format!(
-                        "    m.insert(({}, {}, {}), Some(vec![{}]));",
-                        card, idx, inv_str, names_str
+                        "    m.insert(({card}, {idx}, {inv_str}), Some(vec![{names_str}]));"
                     ));
                 } else {
                     lines.push(format!(
-                        "    m.insert(({}, {}, {}), None);",
-                        card, idx, inv_str
+                        "    m.insert(({card}, {idx}, {inv_str}), None);"
                     ));
                 }
             } else {
                 lines.push(format!(
-                    "    m.insert(({}, {}, {}), None);",
-                    card, idx, inv_str
+                    "    m.insert(({card}, {idx}, {inv_str}), None);"
                 ));
             }
         }
@@ -406,7 +398,7 @@ use std::{collections::HashMap, sync::LazyLock};
 
             let output_path = PathBuf::from(rust_path);
             fs::write(&output_path, rust)
-                .map_err(|e| PyErr::new::<PyIOError, _>(format!("{}", e)))?;
+                .map_err(|e| PyErr::new::<PyIOError, _>(format!("{e}")))?;
 
             println!("Rust tables generated successfully.");
             Ok(())

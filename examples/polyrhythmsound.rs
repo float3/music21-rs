@@ -12,7 +12,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (_stream, stream_handle) = OutputStream::try_default()?;
     loop {
         let (tick, triggers) = poly.next().unwrap();
-        println!("Tick: {} - Triggers: {:?}", tick, triggers);
+        println!("Tick: {tick} - Triggers: {triggers:?}");
         for (i, &trigger) in triggers.iter().enumerate() {
             if trigger {
                 let freq = 100.0 * (i + 1) as f32;

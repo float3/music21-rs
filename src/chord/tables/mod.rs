@@ -156,7 +156,7 @@ static CARDINALITY_TO_CHORD_MEMBERS: CardinalityToChordMembers = LazyLock::new(|
             );
 
             if key == (1, Sign::Zero) {
-                println!("{:?}", value);
+                println!("{value:?}");
             }
 
             entries.insert(key, value);
@@ -186,14 +186,12 @@ static CARDINALITY_TO_CHORD_MEMBERS: CardinalityToChordMembers = LazyLock::new(|
 fn forte_index_to_inversions_available(card: usize, index: u8) -> Result<Vec<Sign>, Exception> {
     if !(1..=13).contains(&card) {
         return Err(Exception::ChordTables(format!(
-            "cardinality {} not valid",
-            card
+            "cardinality {card} not valid"
         )));
     }
     if index < 1 || index > MAXIMUM_INDEX_NUMBER_WITHOUT_INVERSION_EQUIVALENCE[card] {
         return Err(Exception::ChordTables(format!(
-            "index {} not valid for cardinality {}",
-            index, card
+            "index {index} not valid for cardinality {card}"
         )));
     }
 
@@ -243,7 +241,7 @@ mod tests {
             check_equality(i, CARDINALITY_TO_CHORD_MEMBERS[i].keys());
             check_equality(i, CARDINALITY_TO_CHORD_MEMBERS_GENERATED[i].keys());
 
-            println!("{} passed", i);
+            println!("{i} passed");
         });
     }
 
@@ -285,7 +283,7 @@ mod tests {
             .collect::<Vec<_>>()
             .join(", ");
 
-        format!("(({}), ({}), ({}))", first, second, third)
+        format!("(({first}), ({second}), ({third}))")
     }
 
     #[test]
@@ -304,7 +302,7 @@ mod tests {
             cardinality_to_chord_members.keys().into_iter().for_each(
                 |outer_key: Bound<'_, pyo3::PyAny>| {
                     let outer_key_rust: usize = outer_key.extract().unwrap();
-                    println!("outer_key: {:?}", outer_key);
+                    println!("outer_key: {outer_key:?}");
                     let inner_dict: Bound<'_, pyo3::PyAny> = cardinality_to_chord_members
                         .get_item(outer_key)
                         .unwrap()
@@ -317,8 +315,8 @@ mod tests {
                         let (first, second): (u8, i8) = inner_key.extract().unwrap();
                         let key: U8SB = (first, Sign::from_i8(second).unwrap());
 
-                        println!("python key: {:?}", inner_key);
-                        println!("rust key: {:?}", key);
+                        println!("python key: {inner_key:?}");
+                        println!("rust key: {key:?}");
                         assert_eq!(
                             format!("{:?}", inner_dict.get_item(inner_key).unwrap().unwrap()),
                             match_python(
@@ -329,7 +327,7 @@ mod tests {
                         );
                         println!("{:?} passed", &key);
                     });
-                    println!("{} passed", outer_key_rust);
+                    println!("{outer_key_rust} passed");
                 },
             );
 
@@ -368,7 +366,7 @@ mod tests {
                                 .collect::<Vec<_>>()
                                 .join(", ");
                         let fourth = t.3.to_string();
-                        format!("(({}), ({}), ({}), {})", first, second, third, fourth)
+                        format!("(({first}), ({second}), ({third}), {fourth})")
                     }
                 }
             })
@@ -379,7 +377,7 @@ mod tests {
     #[test]
     fn test() {
         for i in 1..12 {
-            println!("{}", i);
+            println!("{i}");
         }
     }
     #[test]
@@ -404,8 +402,8 @@ mod tests {
 
                 match tuple {
                     Ok(t) => {
-                        assert_eq!(format!("{:?}", t), format!("{}", match_python2(&FORTE[i])));
-                        println!("{:?}", t);
+                        assert_eq!(format!("{t:?}"), format!("{}", match_python2(&FORTE[i])));
+                        println!("{t:?}");
                         println!("{}", match_python2(&FORTE[i]));
                     }
                     Err(_) => {

@@ -279,8 +279,7 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> ExceptionResu
         Some(val) => val,
         None => {
             return Err(Exception::Interval(format!(
-                "Could not find a pythagorean ratio for {:?}",
-                interval
+                "Could not find a pythagorean ratio for {interval:?}"
             )));
         }
     };

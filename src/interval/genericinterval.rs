@@ -66,14 +66,31 @@ impl GenericInterval {
     }
 
     pub(crate) fn staff_distance(&self) -> IntegerType {
-        todo!()
+        let directed = self.directed();
+        if directed > 0 {
+            directed - 1
+        } else {
+            directed + 1
+        }
     }
 
     pub(crate) fn simple_undirected(&self) -> IntegerType {
-        todo!()
+        self.simple_steps_and_octaves().0
     }
 
     pub(crate) fn is_perfectable(&self) -> bool {
+        todo!()
+    }
+
+    fn directed(&self) -> IntegerType {
+        self.value()
+    }
+
+    fn value(&self) -> IntegerType {
+        self._value
+    }
+
+    fn simple_steps_and_octaves(&self) -> (IntegerType, IntegerType) {
         todo!()
     }
 }

@@ -197,7 +197,7 @@ mod tests {
         let result = FractionPow::<IntegerType, FloatType, UnsignedIntegerType>::powf(&frac, 1.5);
         match result {
             GenericFraction::NaN => {}
-            _ => panic!("Expected NaN for non-integer exponent, got {:?}", result),
+            _ => panic!("Expected NaN for non-integer exponent, got {result:?}"),
         }
     }
 

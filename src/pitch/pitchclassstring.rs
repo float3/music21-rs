@@ -79,8 +79,7 @@ impl TryFrom<char> for PitchClassString {
             'e' => Ok(PitchClassString::e),
             'E' => Ok(PitchClassString::E),
             _ => Err(Exception::PitchClassString(format!(
-                "Invalid pitch class: {}",
-                c
+                "Invalid pitch class: {c}"
             ))),
         }
     }

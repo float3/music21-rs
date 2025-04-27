@@ -197,8 +197,7 @@ impl Pitch {
         let (pitch_part, octave_part) = if let Some(i) = digit_index {
             if i == 0 {
                 return Err(Exception::Pitch(format!(
-                    "Cannot have octave given before pitch name in {:?}",
-                    usr_str
+                    "Cannot have octave given before pitch name in {usr_str:?}"
                 )));
             }
             (&usr_str[..i], &usr_str[i..])
@@ -209,8 +208,7 @@ impl Pitch {
         // Process the pitch part.
         let mut pitch_chars = pitch_part.chars();
         let step = pitch_chars.next().ok_or(Exception::Pitch(format!(
-            "Cannot make a name out of {:?}",
-            pitch_part
+            "Cannot make a name out of {pitch_part:?}"
         )))?;
         self.step_setter(StepName::try_from(step)?);
 
@@ -223,7 +221,7 @@ impl Pitch {
 
         if !octave_part.is_empty() {
             let octave = octave_part.parse::<IntegerType>().map_err(|_| {
-                Exception::Pitch(format!("Cannot parse {:?} to octave", octave_part))
+                Exception::Pitch(format!("Cannot parse {octave_part:?} to octave"))
             })?;
             self.octave_setter(Some(octave));
         }
@@ -675,14 +673,12 @@ fn dissonance_score(
                     GenericFraction::Rational(sign, ratio) => *ratio.denom(),
                     GenericFraction::Infinity(sign) => {
                         return Err(Exception::Pitch(format!(
-                            "the ratio computed from {:?} is Infinity",
-                            interval
+                            "the ratio computed from {interval:?} is Infinity"
                         )));
                     }
                     GenericFraction::NaN => {
                         return Err(Exception::Pitch(format!(
-                            "the ratio comptued from {:?} is NaN",
-                            interval
+                            "the ratio comptued from {interval:?} is NaN"
                         )));
                     }
                 } as FloatType)

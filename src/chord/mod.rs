@@ -84,8 +84,7 @@ impl Chord {
                 Ok(())
             }
             Err(err) => Err(Exception::Chord(format!(
-                "simplifying multiple enharmonics failed because of {}",
-                err
+                "simplifying multiple enharmonics failed because of {err}"
             ))),
         }
     }
@@ -264,11 +263,11 @@ mod tests {
         let pitched_common_name = chord_instance.getattr("pitchedCommonName")?;
         assert_eq!(
             chord.pitched_common_name(),
-            format!("{:?}", pitched_common_name)
+            format!("{pitched_common_name:?}")
         );
 
         let common_name = chord_instance.getattr("commonName")?;
-        assert_eq!(chord.common_name(), format!("{:?}", common_name));
+        assert_eq!(chord.common_name(), format!("{common_name:?}"));
         Ok(())
     }
 }

@@ -56,8 +56,7 @@ fn semitones_generic(r#in: UnsignedIntegerType) -> ExceptionResult<UnsignedInteg
         6 => Ok(9),
         7 => Ok(11),
         _ => Err(Exception::Interval(format!(
-            "Invalid diatonic interval: {}",
-            r#in
+            "Invalid diatonic interval: {in}"
         ))),
     }
 }

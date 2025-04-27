@@ -50,7 +50,7 @@ mod module {
                 if Path::new("./music21").exists() {
                     Ok(())
                 } else {
-                    Err(format!("Failed to clone repository: {}", e).into())
+                    Err(format!("Failed to clone repository: {e}").into())
                 }
             }
         }
@@ -100,7 +100,7 @@ mod module {
             ],
             "pip upgrade",
         ) {
-            eprintln!("{}", e);
+            eprintln!("{e}");
         }
     }
 
@@ -131,13 +131,13 @@ mod module {
         cmd.args(&args[1..]);
         let output = cmd
             .output()
-            .map_err(|e| format!("Failed to execute {}: {}", description, e))?;
+            .map_err(|e| format!("Failed to execute {description}: {e}"))?;
         if output.status.success() {
             Ok(())
         } else {
             let stderr = from_utf8(&output.stderr)
-                .map_err(|e| format!("{} failed: stderr not valid UTF-8: {}", description, e))?;
-            Err(format!("{} failed: {}", description, stderr).into())
+                .map_err(|e| format!("{description} failed: stderr not valid UTF-8: {e}"))?;
+            Err(format!("{description} failed: {stderr}").into())
         }
     }
 
@@ -225,13 +225,13 @@ mod module {
 
         let url = "https://raw.githubusercontent.com/cuthbertLab/music21/refs/heads/master/music21/chord/tables.py";
         let response = reqwest::blocking::get(url)
-            .map_err(|e| PyErr::new::<PyIOError, _>(format!("HTTP error: {}", e)))?;
+            .map_err(|e| PyErr::new::<PyIOError, _>(format!("HTTP error: {e}")))?;
         let code = CString::new(
             response
                 .text()
-                .map_err(|e| PyErr::new::<PyIOError, _>(format!("HTTP error: {}", e)))?,
+                .map_err(|e| PyErr::new::<PyIOError, _>(format!("HTTP error: {e}")))?,
         )
-        .map_err(|e| PyErr::new::<PyIOError, _>(format!("CString error: {}", e)))?;
+        .map_err(|e| PyErr::new::<PyIOError, _>(format!("CString error: {e}")))?;
         let code: &CStr = &code;
         let tables = PyModule::from_code(py, code, c"tables.py", c"music21.chord.tables")?;
         Ok(tables)

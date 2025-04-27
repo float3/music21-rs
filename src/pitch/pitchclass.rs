@@ -32,7 +32,7 @@ impl TryFrom<PitchClass> for FloatType {
 pub(crate) fn convert_pitch_class_to_str(pc: i32) -> String {
     // Mimic Python's modulo: always a non-negative remainder.
     let pc = pc.rem_euclid(12);
-    format!("{:X}", pc)
+    format!("{pc:X}")
 }
 
 pub(crate) fn convert_ps_to_oct(ps: FloatType) -> IntegerType {

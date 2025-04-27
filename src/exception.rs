@@ -22,18 +22,18 @@ pub enum Exception {
 impl fmt::Display for Exception {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Exception::Music21Object(msg) => write!(f, "Music21Object error: {}", msg),
-            Exception::Chord(msg) => write!(f, "Chord error: {}", msg),
-            Exception::Pitch(msg) => write!(f, "Pitch error: {}", msg),
-            Exception::Microtone(msg) => write!(f, "Microtone error: {}", msg),
-            Exception::Accidental(msg) => write!(f, "Accidental error: {}", msg),
-            Exception::ChordTables(msg) => write!(f, "ChordTables error: {}", msg),
-            Exception::Interval(msg) => write!(f, "Interval error: {}", msg),
-            Exception::StepName(msg) => write!(f, "StepName error: {}", msg),
-            Exception::PitchClass(msg) => write!(f, "PitchClass error: {}", msg),
-            Exception::PitchClassString(msg) => write!(f, "PitchClassString error: {}", msg),
-            Exception::Ordinal(msg) => write!(f, "Ordinal error: {}", msg),
-            Exception::Polyrhythm(msg) => write!(f, "Polyrhythm {}", msg),
+            Exception::Music21Object(msg) => write!(f, "Music21Object error: {msg}"),
+            Exception::Chord(msg) => write!(f, "Chord error: {msg}"),
+            Exception::Pitch(msg) => write!(f, "Pitch error: {msg}"),
+            Exception::Microtone(msg) => write!(f, "Microtone error: {msg}"),
+            Exception::Accidental(msg) => write!(f, "Accidental error: {msg}"),
+            Exception::ChordTables(msg) => write!(f, "ChordTables error: {msg}"),
+            Exception::Interval(msg) => write!(f, "Interval error: {msg}"),
+            Exception::StepName(msg) => write!(f, "StepName error: {msg}"),
+            Exception::PitchClass(msg) => write!(f, "PitchClass error: {msg}"),
+            Exception::PitchClassString(msg) => write!(f, "PitchClassString error: {msg}"),
+            Exception::Ordinal(msg) => write!(f, "Ordinal error: {msg}"),
+            Exception::Polyrhythm(msg) => write!(f, "Polyrhythm {msg}"),
         }
     }
 }
@@ -52,56 +52,56 @@ mod tests {
     #[test]
     fn test_display_music21object() {
         let err = Exception::Music21Object("error message".to_string());
-        assert_eq!(format!("{}", err), "Music21Object error: error message");
+        assert_eq!(format!("{err}"), "Music21Object error: error message");
     }
 
     #[test]
     fn test_display_chord() {
         let err = Exception::Chord("chord error".to_string());
-        assert_eq!(format!("{}", err), "Chord error: chord error");
+        assert_eq!(format!("{err}"), "Chord error: chord error");
     }
 
     #[test]
     fn test_display_pitch() {
         let err = Exception::Pitch("pitch error".to_string());
-        assert_eq!(format!("{}", err), "Pitch error: pitch error");
+        assert_eq!(format!("{err}"), "Pitch error: pitch error");
     }
 
     #[test]
     fn test_display_microtone() {
         let err = Exception::Microtone("microtone error".to_string());
-        assert_eq!(format!("{}", err), "Microtone error: microtone error");
+        assert_eq!(format!("{err}"), "Microtone error: microtone error");
     }
 
     #[test]
     fn test_display_accidental() {
         let err = Exception::Accidental("accidental error".to_string());
-        assert_eq!(format!("{}", err), "Accidental error: accidental error");
+        assert_eq!(format!("{err}"), "Accidental error: accidental error");
     }
 
     #[test]
     fn test_display_chordtables() {
         let err = Exception::ChordTables("chordtables error".to_string());
-        assert_eq!(format!("{}", err), "ChordTables error: chordtables error");
+        assert_eq!(format!("{err}"), "ChordTables error: chordtables error");
     }
 
     #[test]
     fn test_display_interval() {
         let err = Exception::Interval("interval error".to_string());
-        assert_eq!(format!("{}", err), "Interval error: interval error");
+        assert_eq!(format!("{err}"), "Interval error: interval error");
     }
 
     #[test]
     fn test_display_stepname() {
         let err = Exception::StepName("step name error".to_string());
-        assert_eq!(format!("{}", err), "StepName error: step name error");
+        assert_eq!(format!("{err}"), "StepName error: step name error");
     }
 
     #[test]
     fn test_display_pitchclassstring() {
         let err = Exception::PitchClassString("pitch class error".to_string());
         assert_eq!(
-            format!("{}", err),
+            format!("{err}"),
             "PitchClassString error: pitch class error"
         );
     }
@@ -109,7 +109,7 @@ mod tests {
     #[test]
     fn test_display_ordinal() {
         let err = Exception::Ordinal("ordinal error".to_string());
-        assert_eq!(format!("{}", err), "Ordinal error: ordinal error");
+        assert_eq!(format!("{err}"), "Ordinal error: ordinal error");
     }
 
     #[test]
@@ -131,8 +131,7 @@ mod tests {
             // Ensure that source() returns None for each exception.
             assert!(
                 err.source().is_none(),
-                "Expected None for source() in {:?}",
-                err
+                "Expected None for source() in {err:?}"
             );
         }
     }
@@ -177,7 +176,7 @@ mod tests {
         ];
 
         for (err, expected) in cases.iter() {
-            assert_eq!(format!("{}", err), *expected);
+            assert_eq!(format!("{err}"), *expected);
             assert!(err.source().is_none());
         }
     }

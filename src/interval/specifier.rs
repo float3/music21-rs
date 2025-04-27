@@ -46,7 +46,7 @@ impl Specifier {
             "Triple Diminished" | "ddd" => Specifier::TripleDiminished,
             "Quadruple Augmented" | "aaaa" => Specifier::QuadrupleAugmented,
             "Quadruple Diminished" | "dddd" => Specifier::QuadrupleDiminished,
-            val => panic!("Invalid specifier: {}", val),
+            val => panic!("Invalid specifier: {val}"),
         }
     }
 

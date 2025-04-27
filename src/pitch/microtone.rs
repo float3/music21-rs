@@ -55,8 +55,7 @@ impl Microtone {
             Some(first) => first,
             None => {
                 return Err(Exception::Microtone(format!(
-                    "input to Microtone was empty: {}",
-                    value
+                    "input to Microtone was empty: {value}"
                 )));
             }
         };
@@ -65,8 +64,7 @@ impl Microtone {
             let (num, _) = crate::common::stringtools::get_num_from_str(&value, "0123456789.");
             if num.is_empty() {
                 return Err(Exception::Microtone(format!(
-                    "no numbers found in string value: {}",
-                    value
+                    "no numbers found in string value: {value}"
                 )));
             }
             num.parse::<FloatType>()
@@ -76,8 +74,7 @@ impl Microtone {
             let (num, _) = crate::common::stringtools::get_num_from_str(&trimmed, "0123456789.");
             if num.is_empty() {
                 return Err(Exception::Microtone(format!(
-                    "no numbers found in string value: {}",
-                    value
+                    "no numbers found in string value: {value}"
                 )));
             }
             let parsed = num

@@ -22,7 +22,7 @@ pub(crate) type StepType = IntegerType;
 impl StepName {
     pub(crate) fn dnn_offset_to_step(n: StepType) -> ExceptionResult<Self> {
         Self::try_from((n + 1) as u8)
-            .map_err(|_| Exception::StepName(format!("dnn offset doesn't match step: {}", n)))
+            .map_err(|_| Exception::StepName(format!("dnn offset doesn't match step: {n}")))
     }
 
     pub(crate) fn step_to_dnn_offset(&self) -> StepType {
@@ -51,8 +51,7 @@ impl StepName {
             9 => Ok(StepName::A),
             11 => Ok(StepName::B),
             _ => Err(Exception::StepName(format!(
-                "ref doesn't match any step: {}",
-                n
+                "ref doesn't match any step: {n}"
             ))),
         }
     }
@@ -71,8 +70,7 @@ impl TryFrom<u8> for StepName {
             6 => Ok(StepName::A),
             7 => Ok(StepName::B),
             _ => Err(Exception::StepName(format!(
-                "Invalid value for StepName: {}",
-                value
+                "Invalid value for StepName: {value}"
             ))),
         }
     }
@@ -91,8 +89,7 @@ impl TryFrom<char> for StepName {
             'F' => Ok(StepName::F),
             'G' => Ok(StepName::G),
             _ => Err(Exception::StepName(format!(
-                "cannot make StepName out of {}",
-                value
+                "cannot make StepName out of {value}"
             ))),
         }
     }

@@ -344,8 +344,7 @@ impl Accidental {
             }
             None => {
                 return Err(Exception::Accidental(format!(
-                    "{} is not a supported accidental type",
-                    name
+                    "{name} is not a supported accidental type"
                 )));
             }
         }
@@ -373,7 +372,7 @@ impl Accidental {
         assert!(x.is_ok());
         match x {
             Ok(val) => val,
-            Err(err) => panic!("creating a natural Accidental should never fail: {}", err),
+            Err(err) => panic!("creating a natural Accidental should never fail: {err}"),
         }
     }
 
@@ -382,7 +381,7 @@ impl Accidental {
         assert!(x.is_ok());
         match x {
             Ok(val) => val,
-            Err(err) => panic!("creating a flat Accidental should never fail: {}", err),
+            Err(err) => panic!("creating a flat Accidental should never fail: {err}"),
         }
     }
     pub(crate) fn sharp() -> Accidental {
@@ -390,7 +389,7 @@ impl Accidental {
         assert!(x.is_ok());
         match x {
             Ok(val) => val,
-            Err(err) => panic!("creating a sharp Accidental should never fail: {}", err),
+            Err(err) => panic!("creating a sharp Accidental should never fail: {err}"),
         }
     }
 }
@@ -605,7 +604,7 @@ mod tests {
     #[test]
     fn test_display_trait() {
         let acc = Accidental::sharp();
-        assert_eq!(format!("{}", acc), "sharp");
+        assert_eq!(format!("{acc}"), "sharp");
     }
 
     #[test]
