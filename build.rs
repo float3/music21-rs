@@ -128,9 +128,8 @@ mod python {
             .collect();
         let table_body = table_lines?.join("\n");
 
-        let rust_code = format!(
-            "pub(super) static FORTE: Forte = LazyLock::new(|| {{[\n{table_body}\n]}});"
-        );
+        let rust_code =
+            format!("pub(super) static FORTE: Forte = LazyLock::new(|| {{[\n{table_body}\n]}});");
         Ok(rust_code)
     }
 
@@ -150,9 +149,7 @@ mod python {
                         pcs_vec[i] = true;
                     }
                 }
-                Ok(format!(
-                    "    m.insert(({card}, {forte}), {pcs_vec:?});"
-                ))
+                Ok(format!("    m.insert(({card}, {forte}), {pcs_vec:?});"))
             })
             .collect();
         let rust_code = format!(
@@ -306,9 +303,7 @@ mod python {
             let inv: i32 = key_tuple.get_item(2)?.extract()?;
             let inv_str = sign_str(inv);
             let i: i32 = value.extract()?;
-            lines.push(format!(
-                "    m.insert(({card}, {idx}, {inv_str}), {i});"
-            ));
+            lines.push(format!("    m.insert(({card}, {idx}, {inv_str}), {i});"));
         }
         let rust_code = format!(
             "pub(super) static FORTE_NUMBER_WITH_INVERSION_TO_INDEX: ForteNumberWithInversionToIndex = LazyLock::new(|| {{\n    let mut m = HashMap::new();\n{}\n    m\n}});",
@@ -340,14 +335,10 @@ mod python {
                         "    m.insert(({card}, {idx}, {inv_str}), Some(vec![{names_str}]));"
                     ));
                 } else {
-                    lines.push(format!(
-                        "    m.insert(({card}, {idx}, {inv_str}), None);"
-                    ));
+                    lines.push(format!("    m.insert(({card}, {idx}, {inv_str}), None);"));
                 }
             } else {
-                lines.push(format!(
-                    "    m.insert(({card}, {idx}, {inv_str}), None);"
-                ));
+                lines.push(format!("    m.insert(({card}, {idx}, {inv_str}), None);"));
             }
         }
         let rust_code = format!(

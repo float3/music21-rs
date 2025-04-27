@@ -220,9 +220,9 @@ impl Pitch {
         }
 
         if !octave_part.is_empty() {
-            let octave = octave_part.parse::<IntegerType>().map_err(|_| {
-                Exception::Pitch(format!("Cannot parse {octave_part:?} to octave"))
-            })?;
+            let octave = octave_part
+                .parse::<IntegerType>()
+                .map_err(|_| Exception::Pitch(format!("Cannot parse {octave_part:?} to octave")))?;
             self.octave_setter(Some(octave));
         }
 
