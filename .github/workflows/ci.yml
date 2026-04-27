@@ -77,7 +77,7 @@ jobs:
 
       - name: Setup Python
         if: matrix.feature_set.needs_python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.13"
 
