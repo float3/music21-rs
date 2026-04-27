@@ -35,6 +35,9 @@ jobs:
       - name: Configure Nix cache
         uses: DeterminateSystems/magic-nix-cache-action@main
 
+      - name: Check Nix formatting with Alejandra
+        run: nix shell nixpkgs#alejandra -c alejandra --check .
+
       - name: Validate flake
         run: nix flake check --accept-flake-config
 
