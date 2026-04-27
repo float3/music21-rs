@@ -2,7 +2,7 @@
   description = "Nix flake for music21-rs development";
 
   inputs = {
-        nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
