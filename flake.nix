@@ -6,19 +6,22 @@
     flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = {
-    self,
-    nixpkgs,
-    flake-utils,
-  }:
+  outputs =
+    {
+      self,
+      nixpkgs,
+      flake-utils,
+    }:
     flake-utils.lib.eachDefaultSystem (
-      system: let
+      system:
+      let
         pkgs = nixpkgs.legacyPackages.${system};
         lib = pkgs.lib;
         python = pkgs.python3;
         pythonPackages = python.pkgs;
-        linuxOnlyLibs = with pkgs; lib.optionals stdenv.isLinux [alsa-lib];
-      in {
+        linuxOnlyLibs = with pkgs; lib.optionals stdenv.isLinux [ alsa-lib ];
+      in
+      {
         devShells.default = pkgs.mkShell {
           packages =
             (with pkgs; [
@@ -66,7 +69,7 @@
         };
 
         checks.nixfmt = pkgs.runCommand "nixfmt-check" {
-          nativeBuildInputs = [pkgs.nixfmt-rfc-style];
+          nativeBuildInputs = [ pkgs.nixfmt-rfc-style ];
         } ''
           nixfmt --check ${./flake.nix}
           touch "$out"
