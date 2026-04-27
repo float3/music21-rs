@@ -150,9 +150,10 @@ fn convert_generic_string(value: String) -> IntegerType {
             || remain == "nd"
             || remain == "rd"
             || remain == "th")
-        && let Ok(number) = digits.parse::<IntegerType>()
     {
-        return number * direction_scalar;
+        if let Ok(number) = digits.parse::<IntegerType>() {
+            return number * direction_scalar;
+        }
     }
 
     0

@@ -41,6 +41,24 @@ jobs:
       - name: Validate flake
         run: nix flake check --accept-flake-config
 
+  msrv:
+    name: MSRV Check (Rust 1.85)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust 1.85
+        uses: dtolnay/rust-toolchain@1.85.0
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Cargo check
+        run: cargo check --workspace --locked
+
   feature-matrix:
     name: Feature Matrix (${{ matrix.feature_set.name }})
     runs-on: ubuntu-latest
