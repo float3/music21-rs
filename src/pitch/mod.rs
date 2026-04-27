@@ -13,7 +13,6 @@ use crate::exception::ExceptionResult;
 use crate::interval::Interval;
 use crate::interval::IntervalArgument;
 use crate::interval::PitchOrNote;
-use crate::interval::interval_to_pythagorean_ratio;
 use crate::interval::intervalstring::IntervalString;
 use crate::key::keysignature::KeySignature;
 use crate::note::Note;
@@ -27,7 +26,6 @@ use microtone::IntoCentShift;
 use microtone::Microtone;
 use pitchclassstring::PitchClassString;
 
-use fraction::GenericFraction;
 use itertools::Itertools;
 use num::Num;
 use num_traits::ToPrimitive;
@@ -271,9 +269,38 @@ impl Pitch {
         &mut self,
         alter_limit: FloatType,
     ) -> ExceptionResult<Vec<Pitch>> {
-        let _ = alter_limit;
-        // Fallback until enharmonic-interval helpers are fully implemented.
-        Ok(Vec::new())
+        let mut post = Vec::new();
+
+        let simplified = self.clone().simplify_enharmonic(false)?;
+        if simplified.name() != self.name() {
+            post.push(simplified);
+        }
+
+        let mut higher = self.clone();
+        while let Ok(next) = higher.get_higher_enharmonic() {
+            if next._accidental._alter.abs() > alter_limit {
+                break;
+            }
+            if post.contains(&next) {
+                break;
+            }
+            post.push(next.clone());
+            higher = next;
+        }
+
+        let mut lower = self.clone();
+        while let Ok(next) = lower.get_lower_enharmonic() {
+            if next._accidental._alter.abs() > alter_limit {
+                break;
+            }
+            if post.contains(&next) {
+                break;
+            }
+            post.push(next.clone());
+            lower = next;
+        }
+
+        Ok(post)
     }
 
     fn inform_client(&self) {
@@ -404,6 +431,14 @@ impl Pitch {
 
     fn get_higher_enharmonic_in_place(&mut self) -> ExceptionResult<()> {
         self._get_enharmonic_helper_in_place(true)
+    }
+
+    fn get_lower_enharmonic(&self) -> ExceptionResult<Pitch> {
+        self._get_enharmonic_helper(false)
+    }
+
+    fn get_lower_enharmonic_in_place(&mut self) -> ExceptionResult<()> {
+        self._get_enharmonic_helper_in_place(false)
     }
 
     fn _get_enharmonic_helper(&self, up: bool) -> ExceptionResult<Pitch> {
@@ -556,14 +591,11 @@ pub(crate) fn simplify_multiple_enharmonics(
     key_context: Option<KeySignature>,
 ) -> ExceptionResult<Vec<Pitch>> {
     let mut old_pitches: Vec<Pitch> = pitches.to_vec();
+    if old_pitches.is_empty() {
+        return Ok(Vec::new());
+    }
 
-    let criterion: CriterionFunction = criterion.unwrap_or(|x: &[Pitch]| {
-        if x.is_empty() {
-            return Ok(0.0);
-        }
-        let penalty = x.iter().map(|p| p.alter().abs()).sum::<FloatType>() / x.len() as FloatType;
-        Ok(penalty)
-    });
+    let criterion: CriterionFunction = criterion.unwrap_or(default_dissonance_score);
 
     let remove_first: bool = match key_context {
         Some(key) => {
@@ -657,6 +689,10 @@ fn greedy_enharmonics_search(
     Ok(new_pitches)
 }
 
+fn default_dissonance_score(pitches: &[Pitch]) -> ExceptionResult<FloatType> {
+    dissonance_score(pitches, true, true, true)
+}
+
 fn dissonance_score(
     pitches: &[Pitch],
     small_pythagorean_ratio: bool,
@@ -688,34 +724,21 @@ fn dissonance_score(
     if small_pythagorean_ratio | triad_award {
         for (index, p1) in pitches.iter().enumerate() {
             for p2 in pitches.iter().skip(index + 1) {
-                let mut p1 = (*p1).clone();
                 let mut p2 = (*p2).clone();
-                p1.octave_setter(None);
                 p2.octave_setter(None);
-                intervals.push(Interval::between(
+                let Ok(interval) = Interval::between(
                     PitchOrNote::Pitch(p1.clone()),
                     PitchOrNote::Pitch(p2.clone()),
-                )?);
+                ) else {
+                    return Ok(FloatType::INFINITY);
+                };
+                intervals.push(interval);
             }
         }
 
         if small_pythagorean_ratio {
             for interval in intervals.iter() {
-                score_ratio += (match interval_to_pythagorean_ratio(interval.clone())? {
-                    GenericFraction::Rational(sign, ratio) => *ratio.denom(),
-                    GenericFraction::Infinity(sign) => {
-                        return Err(Exception::Pitch(format!(
-                            "the ratio computed from {interval:?} is Infinity"
-                        )));
-                    }
-                    GenericFraction::NaN => {
-                        return Err(Exception::Pitch(format!(
-                            "the ratio comptued from {interval:?} is NaN"
-                        )));
-                    }
-                } as FloatType)
-                    .ln()
-                    * 0.037_926_633
+                score_ratio += pythagorean_denominator_log(interval)? * 0.075_853_268_88
             }
             score_ratio /= pitches.len() as FloatType;
         }
@@ -739,6 +762,43 @@ fn dissonance_score(
         / (small_pythagorean_ratio as IntegerType
             + accidental_penalty as IntegerType
             + triad_award as IntegerType) as FloatType)
+}
+
+fn pythagorean_denominator_log(interval: &Interval) -> ExceptionResult<FloatType> {
+    let start_pitch = Pitch::new(
+        Some("C1".to_string()),
+        None,
+        None,
+        Option::<i8>::None,
+        Option::<IntegerType>::None,
+        None,
+        None,
+        None,
+        None,
+    )?;
+    let end_pitch = interval
+        .clone()
+        .transpose_pitch(&start_pitch, false, Some(4))?;
+
+    let natural_fifths = match end_pitch.step() {
+        StepName::C => 0,
+        StepName::D => 2,
+        StepName::E => 4,
+        StepName::F => -1,
+        StepName::G => 1,
+        StepName::A => 3,
+        StepName::B => 5,
+    };
+    let fifth_count = natural_fifths + (end_pitch.alter().round() as IntegerType * 7);
+    let found_pitch_space = start_pitch.ps() + (7 * fifth_count) as FloatType;
+    let octave_adjust = ((end_pitch.ps() - found_pitch_space) / 12.0).round() as IntegerType;
+
+    let mut denominator_twos = if fifth_count > 0 { fifth_count } else { 0 };
+    let denominator_threes = if fifth_count < 0 { -fifth_count } else { 0 };
+    denominator_twos = (denominator_twos - octave_adjust).max(0);
+
+    Ok(denominator_twos as FloatType * 2.0_f64.ln()
+        + denominator_threes as FloatType * 3.0_f64.ln())
 }
 
 fn convert_harmonic_to_cents(_harmonic_shift: IntegerType) -> IntegerType {

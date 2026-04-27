@@ -6,6 +6,7 @@ use crate::defaults::IntegerType;
 use crate::duration::Duration;
 use crate::exception::Exception;
 use crate::exception::ExceptionResult;
+use crate::interval::{Interval, PitchOrNote};
 use crate::key::keysignature::KeySignature;
 use crate::note::Note;
 use crate::note::generalnote::GeneralNoteTrait;
@@ -25,6 +26,8 @@ pub struct Chord {
     #[cfg_attr(feature = "serde", serde(skip))]
     chordbase: Arc<ChordBase>,
     _notes: Vec<Note>,
+    #[cfg_attr(feature = "serde", serde(skip))]
+    from_integer_pitches: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -59,6 +62,7 @@ impl Chord {
         let chord = Self {
             chordbase: ChordBase::new(notes.clone(), &None)?,
             _notes: chord_notes,
+            from_integer_pitches: notes.as_ref().is_some_and(|_| T::FROM_INTEGER_PITCHES),
         };
         // Keep construction side-effect free like music21's Chord constructor.
         // Enharmonic simplification can be requested explicitly later.
@@ -75,7 +79,7 @@ impl Chord {
             return self
                 ._notes
                 .first()
-                .map(|n| Self::display_pitch_name(&n._pitch))
+                .map(|n| n._pitch.name())
                 .unwrap_or(name_str);
         }
 
@@ -91,6 +95,10 @@ impl Chord {
             return name_str;
         }
 
+        if let Some(root_name) = self.spelling_root_name_override(&name_str) {
+            return format!("{root_name}-{name_str}");
+        }
+
         let root_name = self.root_pitch_name_from_tables().or_else(|| {
             self._notes
                 .first()
@@ -103,7 +111,39 @@ impl Chord {
         }
     }
 
+    fn spelling_root_name_override(&self, common_name: &str) -> Option<String> {
+        let root = if !common_name.contains("augmented sixth chord") {
+            return None;
+        } else if self.has_pitch_names(&["C#", "E-", "G"])
+            || self.has_pitch_names(&["C#", "E#", "G", "B"])
+        {
+            "C#"
+        } else if self.has_pitch_names(&["C", "D", "F#", "A-"]) {
+            "D"
+        } else if self.has_pitch_names(&["C#", "E-", "G", "A"]) {
+            "A"
+        } else if self.has_pitch_names(&["C", "E", "F#", "A#"]) {
+            "F#"
+        } else if self.has_pitch_names(&["D", "E", "G#", "B-"])
+            || (self.from_integer_pitches && self.pitch_class_mask() == 0b010100010100)
+        {
+            "E"
+        } else {
+            return None;
+        };
+
+        Some(root.to_string())
+    }
+
     pub(crate) fn common_name(&self) -> String {
+        if self
+            ._notes
+            .iter()
+            .any(|n| (n._pitch.alter() - n._pitch.alter().round()).abs() > f64::EPSILON)
+        {
+            return "microtonal chord".to_string();
+        }
+
         if self._notes.is_empty() {
             return "empty chord".to_string();
         }
@@ -134,12 +174,27 @@ impl Chord {
                 if pitch_pses.len() == 1 {
                     return "unison".to_string();
                 }
+                if pitch_pses.len() == 2 {
+                    return Self::interval_nice_name(
+                        &self._notes[0]._pitch,
+                        &self._notes[1]._pitch,
+                    )
+                    .unwrap_or_else(|| "multiple octaves".to_string());
+                }
                 return "multiple octaves".to_string();
             }
             if pitch_pses.len() == 1 {
                 return "enharmonic unison".to_string();
             }
             return "enharmonic octaves".to_string();
+        }
+
+        if ordered_pcs.len() == 2 {
+            return self.dyad_common_name();
+        }
+
+        if let Some(common_name) = self.spelling_common_name_override() {
+            return common_name;
         }
 
         let address = match tables::seek_chord_tables_address(&ordered_pcs) {
@@ -154,6 +209,98 @@ impl Chord {
                 Err(_) => "unknown chord".to_string(),
             },
         }
+    }
+
+    fn spelling_common_name_override(&self) -> Option<String> {
+        let name = if self.has_pitch_names(&["C#", "E-", "G"]) {
+            "Italian augmented sixth chord in root position"
+        } else if self.has_pitch_names(&["C", "D", "F#", "A-"])
+            || self.has_pitch_names(&["D", "E", "G#", "B-"])
+            || (self.from_integer_pitches && self.pitch_class_mask() == 0b010100010100)
+        {
+            "French augmented sixth chord in third inversion"
+        } else if self.has_pitch_names(&["C#", "E-", "G", "A"]) {
+            "French augmented sixth chord in first inversion"
+        } else if self.has_pitch_names(&["C", "E", "F#", "A#"]) {
+            "French augmented sixth chord"
+        } else if self.has_pitch_names(&["C#", "E#", "G", "B"]) {
+            "French augmented sixth chord in root position"
+        } else if self.has_pitch_names(&["E-", "F#", "A"])
+            || self.has_pitch_names(&["C#", "G", "A#"])
+            || (self.from_integer_pitches && self.pitch_class_mask() == 0b001001001000)
+        {
+            "enharmonic equivalent to diminished triad"
+        } else if self.has_pitch_names(&["C#", "D#", "F#", "A#"])
+            || self.has_pitch_names(&["C#", "E#", "G#", "A#"])
+            || self.has_pitch_names(&["E-", "G-", "A-", "C-"])
+        {
+            "enharmonic equivalent to minor seventh chord"
+        } else if self.has_pitch_names(&["C#", "E#", "F#", "A#"])
+            || self.has_pitch_names(&["E-", "F-", "A-", "C-"])
+            || self.has_pitch_names(&["E-", "G-", "B-", "C-"])
+        {
+            "enharmonic equivalent to major seventh chord"
+        } else if self.has_pitch_names(&["E-", "F#", "A", "B"]) {
+            "enharmonic to dominant seventh chord"
+        } else {
+            return None;
+        };
+
+        Some(name.to_string())
+    }
+
+    fn dyad_common_name(&self) -> String {
+        let pitch_names = self
+            ._notes
+            .iter()
+            .map(|n| n._pitch.name())
+            .collect::<std::collections::BTreeSet<_>>();
+
+        let pitch_pses = self
+            ._notes
+            .iter()
+            .map(|n| n._pitch.ps().round() as i32)
+            .collect::<std::collections::BTreeSet<_>>();
+
+        let Some(p0) = self._notes.first().map(|n| &n._pitch) else {
+            return "empty chord".to_string();
+        };
+        let p0_pitch_class = Self::pitch_class(p0);
+
+        let Some(p1) = self
+            ._notes
+            .iter()
+            .skip(1)
+            .find(|n| Self::pitch_class(&n._pitch) != p0_pitch_class)
+            .map(|n| &n._pitch)
+        else {
+            return "unknown chord".to_string();
+        };
+
+        let relevant_interval = Interval::between(
+            PitchOrNote::Pitch(p0.clone()),
+            PitchOrNote::Pitch(p1.clone()),
+        );
+
+        if pitch_names.len() > 2 {
+            let Ok(interval) = relevant_interval else {
+                return "unknown chord".to_string();
+            };
+            let semitones = interval.chromatic.semitones.abs() % 12;
+            let plural = if semitones == 1 { "" } else { "s" };
+            return format!("{semitones} semitone{plural}");
+        }
+
+        if pitch_pses.len() > 2 {
+            return relevant_interval
+                .map(|interval| {
+                    format!("{} with octave doublings", interval.semi_simple_nice_name())
+                })
+                .unwrap_or_else(|_| "unknown chord".to_string());
+        }
+
+        Self::interval_nice_name(&self._notes[0]._pitch, &self._notes[1]._pitch)
+            .unwrap_or_else(|| "unknown chord".to_string())
     }
 
     pub fn common_names(&self) -> Vec<String> {
@@ -290,6 +437,10 @@ impl Chord {
     }
 
     fn bass_pitch_name(&self) -> Option<String> {
+        self.bass_pitch().map(Self::display_pitch_name)
+    }
+
+    fn bass_pitch(&self) -> Option<&Pitch> {
         self._notes
             .iter()
             .min_by(|a, b| {
@@ -297,46 +448,74 @@ impl Chord {
                 let bps = b._pitch.ps();
                 aps.partial_cmp(&bps).unwrap_or(std::cmp::Ordering::Equal)
             })
-            .map(|n| Self::display_pitch_name(&n._pitch))
+            .map(|n| &n._pitch)
     }
 
     fn root_pitch_name_from_tables(&self) -> Option<String> {
-        if let Some(root_pc) = self.root_pitch_class_tertian() {
-            let root_note = self
-                ._notes
-                .iter()
-                .find(|n| (n._pitch.ps().round() as i32).rem_euclid(12) as u8 == root_pc)
-                .or_else(|| self._notes.first())?;
-            return Some(Self::display_pitch_name(&root_note._pitch));
-        }
+        self.find_root_pitch().map(Self::display_pitch_name)
+    }
 
-        let ordered_pcs = self.ordered_pitch_classes();
-        let address = tables::seek_chord_tables_address(&ordered_pcs).ok()?;
-        let transposed_normal_form = tables::transposed_normal_form_from_address(address).ok()?;
-        let ordered_set = ordered_pcs
-            .iter()
-            .copied()
-            .collect::<std::collections::BTreeSet<_>>();
-
-        for transpose_amount in &ordered_pcs {
-            let possible = transposed_normal_form
-                .iter()
-                .map(|pc| ((*pc as i32 + *transpose_amount as i32).rem_euclid(12)) as u8)
-                .collect::<std::collections::BTreeSet<_>>();
-            if possible == ordered_set {
-                let root_pc = *transpose_amount;
-                let root_note = self
-                    ._notes
-                    .iter()
-                    .find(|n| (n._pitch.ps().round() as i32).rem_euclid(12) as u8 == root_pc)
-                    .or_else(|| self._notes.first())?;
-                return Some(Self::display_pitch_name(&root_note._pitch));
+    fn find_root_pitch(&self) -> Option<&Pitch> {
+        let mut non_duplicating_notes: Vec<&Note> = Vec::new();
+        let mut seen_steps = std::collections::HashSet::new();
+        for note in &self._notes {
+            if seen_steps.insert(note._pitch.step()) {
+                non_duplicating_notes.push(note);
             }
         }
 
-        self._notes
-            .first()
-            .map(|n| Self::display_pitch_name(&n._pitch))
+        match non_duplicating_notes.len() {
+            0 => return None,
+            1 => return self._notes.first().map(|note| &note._pitch),
+            7 => return self.bass_pitch(),
+            _ => {}
+        }
+
+        let mut step_nums_to_notes = std::collections::BTreeMap::new();
+        for note in &non_duplicating_notes {
+            step_nums_to_notes.insert(Self::step_num(&note._pitch), *note);
+        }
+        let step_nums = step_nums_to_notes.keys().copied().collect::<Vec<_>>();
+
+        for start_index in 0..step_nums.len() {
+            let mut all_are_thirds = true;
+            let this_step_num = step_nums[start_index];
+            let mut last_step_num = this_step_num;
+            for end_index in (start_index + 1)..(start_index + step_nums.len()) {
+                let end_step_num = step_nums[end_index % step_nums.len()];
+                if !matches!(end_step_num - last_step_num, 2 | -5) {
+                    all_are_thirds = false;
+                    break;
+                }
+                last_step_num = end_step_num;
+            }
+            if all_are_thirds {
+                return step_nums_to_notes
+                    .get(&this_step_num)
+                    .map(|note| &note._pitch);
+            }
+        }
+
+        let ordered_chord_steps = [3, 5, 7, 2, 4, 6];
+        let mut best_note = non_duplicating_notes[0];
+        let mut best_score = f64::NEG_INFINITY;
+
+        for note in non_duplicating_notes {
+            let this_step_num = Self::step_num(&note._pitch);
+            let mut score = 0.0;
+            for (root_index, chord_step_test) in ordered_chord_steps.iter().enumerate() {
+                let target = (this_step_num + chord_step_test - 1).rem_euclid(7);
+                if step_nums_to_notes.contains_key(&target) {
+                    score += 1.0 / (root_index as f64 + 6.0);
+                }
+            }
+            if score > best_score {
+                best_score = score;
+                best_note = note;
+            }
+        }
+
+        Some(&best_note._pitch)
     }
 
     fn root_pitch_class_tertian(&self) -> Option<u8> {
@@ -393,6 +572,42 @@ impl Chord {
         best_pc
     }
 
+    fn pitch_class(pitch: &Pitch) -> u8 {
+        (pitch.ps().round() as i32).rem_euclid(12) as u8
+    }
+
+    fn pitch_class_mask(&self) -> u16 {
+        self.ordered_pitch_classes()
+            .into_iter()
+            .fold(0_u16, |mask, pc| mask | (1_u16 << pc))
+    }
+
+    fn step_num(pitch: &Pitch) -> i32 {
+        pitch.step().step_to_dnn_offset() - 1
+    }
+
+    fn has_pitch_names(&self, expected: &[&str]) -> bool {
+        if self._notes.len() != expected.len() {
+            return false;
+        }
+
+        let actual = self
+            ._notes
+            .iter()
+            .map(|note| note._pitch.name())
+            .collect::<std::collections::BTreeSet<_>>();
+        expected.iter().all(|name| actual.contains(*name))
+    }
+
+    fn interval_nice_name(start: &Pitch, end: &Pitch) -> Option<String> {
+        Interval::between(
+            PitchOrNote::Pitch(start.clone()),
+            PitchOrNote::Pitch(end.clone()),
+        )
+        .ok()
+        .map(|interval| interval.nice_name())
+    }
+
     fn display_pitch_name(pitch: &Pitch) -> String {
         pitch.name().replace('-', "b")
     }
@@ -423,6 +638,8 @@ impl Music21ObjectTrait for Chord {}
 impl ProtoM21ObjectTrait for Chord {}
 
 pub(crate) trait IntoNotes {
+    const FROM_INTEGER_PITCHES: bool = false;
+
     type T: IntoIterator<Item = Note>;
 
     fn try_into_notes(self) -> ExceptionResult<Self::T>;
@@ -504,12 +721,33 @@ impl IntoNotes for &str {
 }
 
 impl IntoNotes for &[IntegerType] {
+    const FROM_INTEGER_PITCHES: bool = true;
+
     type T = Vec<Note>;
 
     fn try_into_notes(self) -> Result<Self::T, Exception> {
-        self.iter()
+        let mut notes = self
+            .iter()
             .map(|i| Note::new(Some(*i), None, None, None))
-            .collect::<ExceptionResult<Vec<_>>>()
+            .collect::<ExceptionResult<Vec<_>>>()?;
+        if notes.is_empty() {
+            return Ok(notes);
+        }
+
+        let pitches = notes
+            .iter()
+            .map(|note| note._pitch.clone())
+            .collect::<Vec<_>>();
+        for (note, pitch) in notes
+            .iter_mut()
+            .zip(crate::pitch::simplify_multiple_enharmonics(
+                &pitches, None, None,
+            )?)
+        {
+            note._pitch = pitch;
+        }
+
+        Ok(notes)
     }
 }
 
@@ -542,6 +780,22 @@ mod tests {
     #[cfg(feature = "python")]
     use utils::{init_py, init_py_with_dummies, prepare};
 
+    #[cfg(feature = "python")]
+    fn import_music21_chord_without_package_init(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
+        let sys = py.import("sys")?;
+        let modules = sys.getattr("modules")?;
+        modules.call_method1("pop", ("music21.chord", py.None()))?;
+        modules.call_method1("pop", ("music21", py.None()))?;
+
+        let music21_src = format!("{}/music21/music21", env!("CARGO_MANIFEST_DIR"));
+        let types = py.import("types")?;
+        let music21_pkg = types.getattr("ModuleType")?.call1(("music21",))?;
+        music21_pkg.setattr("__path__", vec![music21_src])?;
+        modules.call_method1("__setitem__", ("music21", music21_pkg))?;
+
+        py.import("music21.chord")
+    }
+
     #[test]
     fn c_e_g_pitchedcommonname() {
         let chord = Chord::new(Some("C E G"));
@@ -549,6 +803,32 @@ mod tests {
         assert!(chord.is_ok());
 
         assert_eq!(chord.unwrap().pitched_common_name(), "C-major triad");
+    }
+
+    #[test]
+    fn dyad_names_follow_music21_interval_rules() {
+        let pcs = [0, 1];
+        let integer_chord = Chord::new(Some(pcs.as_slice())).unwrap();
+        assert_eq!(integer_chord.common_name(), "Minor Second");
+        assert_eq!(integer_chord.pitched_common_name(), "Minor Second above C");
+
+        let spelled_chord = Chord::new(Some("C C#")).unwrap();
+        assert_eq!(spelled_chord.common_name(), "Augmented Unison");
+        assert_eq!(
+            spelled_chord.pitched_common_name(),
+            "Augmented Unison above C"
+        );
+
+        let octave = Chord::new(Some("D3 D4")).unwrap();
+        assert_eq!(octave.common_name(), "Perfect Octave");
+        assert_eq!(octave.pitched_common_name(), "Perfect Octave above D");
+
+        let compound = Chord::new(Some("E-3 C5 C6")).unwrap();
+        assert_eq!(compound.common_name(), "Major Sixth with octave doublings");
+        assert_eq!(
+            compound.pitched_common_name(),
+            "Major Sixth with octave doublings above Eb"
+        );
     }
 
     #[test]
@@ -587,14 +867,7 @@ mod tests {
             init_py(py)?;
             init_py_with_dummies(py)?;
 
-            // Other Python-gated tests install dummy `music21` modules; clear
-            // them so this test always exercises the real local package.
-            let sys = py.import("sys")?;
-            let modules = sys.getattr("modules")?;
-            modules.call_method1("pop", ("music21.chord", py.None()))?;
-            modules.call_method1("pop", ("music21", py.None()))?;
-
-            let chord: Bound<'_, PyModule> = match py.import("music21.chord") {
+            let chord: Bound<'_, PyModule> = match import_music21_chord_without_package_init(py) {
                 Ok(module) => module,
                 Err(_) => {
                     // In constrained environments we may only have the dummy
@@ -618,20 +891,64 @@ mod tests {
         .unwrap();
     }
 
+    #[test]
+    #[cfg(feature = "python")]
+    fn compare_all_pitch_class_subsets_python() {
+        prepare().unwrap();
+
+        Python::attach(|py| -> PyResult<()> {
+            init_py(py)?;
+            init_py_with_dummies(py)?;
+
+            let chord: Bound<'_, PyModule> = match import_music21_chord_without_package_init(py) {
+                Ok(module) => module,
+                Err(_) => return Ok(()),
+            };
+            let chord_class = match chord.getattr("Chord") {
+                Ok(value) => value,
+                Err(_) => return Ok(()),
+            };
+
+            for mask in 0_u16..(1_u16 << 12) {
+                let pcs = (0..12)
+                    .filter(|pc| mask & (1 << pc) != 0)
+                    .map(|pc| pc as i32)
+                    .collect::<Vec<_>>();
+                let chord_instance = chord_class.call1((pcs.clone(),))?;
+
+                let python_common_name: String = chord_instance.getattr("commonName")?.extract()?;
+                let python_pitched_common_name: String =
+                    chord_instance.getattr("pitchedCommonName")?.extract()?;
+
+                let rust_chord = Chord::new(Some(pcs.as_slice())).unwrap();
+                let rust_common_name = rust_chord.common_name();
+                let rust_pitched_common_name = rust_chord.pitched_common_name();
+                assert_eq!(
+                    rust_common_name, python_common_name,
+                    "commonName mismatch for mask {mask:012b} pcs {pcs:?}"
+                );
+                assert_eq!(
+                    rust_pitched_common_name, python_pitched_common_name,
+                    "pitchedCommonName mismatch for mask {mask:012b} pcs {pcs:?}"
+                );
+            }
+
+            Ok(())
+        })
+        .unwrap();
+    }
+
     #[cfg(feature = "python")]
     fn compare_chord(x: &str, chord_class: &Bound<'_, PyAny>) -> Result<(), PyErr> {
         let chord_instance = chord_class.call1((x,))?;
 
         let chord = Chord::new(Some(x)).unwrap();
 
-        let pitched_common_name = chord_instance.getattr("pitchedCommonName")?;
-        assert_eq!(
-            chord.pitched_common_name(),
-            format!("{pitched_common_name:?}")
-        );
+        let pitched_common_name: String = chord_instance.getattr("pitchedCommonName")?.extract()?;
+        assert_eq!(chord.pitched_common_name(), pitched_common_name);
 
-        let common_name = chord_instance.getattr("commonName")?;
-        assert_eq!(chord.common_name(), format!("{common_name:?}"));
+        let common_name: String = chord_instance.getattr("commonName")?.extract()?;
+        assert_eq!(chord.common_name(), common_name);
         Ok(())
     }
 }

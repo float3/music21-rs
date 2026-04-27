@@ -244,6 +244,14 @@ impl Interval {
         &self.diatonic.generic
     }
 
+    pub(crate) fn nice_name(&self) -> String {
+        self.diatonic.nice_name()
+    }
+
+    pub(crate) fn semi_simple_nice_name(&self) -> String {
+        self.diatonic.semi_simple_nice_name()
+    }
+
     /// reverse default is false
     /// maxAccidental default is 4
     pub(crate) fn transpose_pitch(
@@ -265,23 +273,9 @@ impl Interval {
         let old_dnn = p.step().step_to_dnn_offset() + (7 * p.octave().unwrap_or(4));
         let new_dnn = old_dnn + self.diatonic.generic.staff_distance();
 
-        let (new_step, new_octave) = if new_dnn == 0 {
-            (crate::stepname::StepName::B, -1)
-        } else if new_dnn > 0 {
-            let octave = (new_dnn - 1) / 7;
-            let step_number = (new_dnn - 1) - (octave * 7);
-            (
-                crate::stepname::StepName::try_from((step_number + 1) as u8)?,
-                octave,
-            )
-        } else {
-            let octave = (new_dnn as FloatType / 7.0).trunc() as IntegerType;
-            let step_number = (new_dnn - 1) - (octave * 7);
-            (
-                crate::stepname::StepName::try_from((step_number + 1) as u8)?,
-                octave - 1,
-            )
-        };
+        let new_octave = (new_dnn - 1).div_euclid(7);
+        let step_number = (new_dnn - 1).rem_euclid(7);
+        let new_step = crate::stepname::StepName::try_from((step_number + 1) as u8)?;
 
         let step_char = format!("{new_step:?}");
         let mut pitch2 = Pitch::new(
@@ -300,6 +294,10 @@ impl Interval {
         while half_steps_to_fix >= 12.0 {
             half_steps_to_fix -= 12.0;
             pitch2.octave_setter(Some(pitch2.octave().unwrap_or(4) - 1));
+        }
+        while half_steps_to_fix <= -12.0 {
+            half_steps_to_fix += 12.0;
+            pitch2.octave_setter(Some(pitch2.octave().unwrap_or(4) + 1));
         }
 
         let rounded_fix = half_steps_to_fix.round() as IntegerType;
@@ -448,7 +446,9 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> ExceptionResu
         None,
     )?;
 
-    let end_pitch_wanted = start_pitch.transpose((interval).clone());
+    let end_pitch_wanted = interval
+        .clone()
+        .transpose_pitch(&start_pitch, false, Some(4))?;
 
     let mut cache = match PYTHAGOREAN_CACHE.lock() {
         Ok(cache) => cache,
@@ -467,9 +467,17 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> ExceptionResu
     let mut end_pitch_up = start_pitch.clone();
     let mut end_pitch_down = start_pitch.clone();
     let mut found: Option<(Pitch, FractionType)> = None;
+    let fifth_up = Interval::new(IntervalArgument::Str("P5".to_string()))?;
+    let fifth_down = Interval::new(IntervalArgument::Str("-P5".to_string()))?;
 
     for counter in 0..37 {
         if end_pitch_up.name() == end_pitch_wanted.name() {
+            if counter > 18 {
+                return Err(Exception::Interval(format!(
+                    "pythagorean ratio for {} exceeds integer range",
+                    end_pitch_wanted.name()
+                )));
+            }
             found = Some((
                 end_pitch_up.clone(),
                 FractionPow::<IntegerType, FloatType, UnsignedIntegerType>::powi(
@@ -479,6 +487,12 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> ExceptionResu
             ));
             break;
         } else if end_pitch_down.name() == end_pitch_wanted.name() {
+            if counter > 18 {
+                return Err(Exception::Interval(format!(
+                    "pythagorean ratio for {} exceeds integer range",
+                    end_pitch_wanted.name()
+                )));
+            }
             found = Some((
                 end_pitch_down.clone(),
                 FractionPow::<IntegerType, FloatType, UnsignedIntegerType>::powi(
@@ -488,10 +502,12 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> ExceptionResu
             ));
             break;
         } else {
-            end_pitch_up =
-                end_pitch_up.transpose(Interval::new(IntervalArgument::Str("P5".to_string()))?);
-            end_pitch_down =
-                end_pitch_down.transpose(Interval::new(IntervalArgument::Str("-P5".to_string()))?);
+            end_pitch_up = fifth_up
+                .clone()
+                .transpose_pitch(&end_pitch_up, false, Some(4))?;
+            end_pitch_down = fifth_down
+                .clone()
+                .transpose_pitch(&end_pitch_down, false, Some(4))?;
         }
     }
 

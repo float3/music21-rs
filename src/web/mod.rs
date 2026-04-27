@@ -394,9 +394,12 @@ mod tests {
 
     #[test]
     fn web_analyze_progression() {
-        let analysis =
-            analyze_progression(&["C E G", "D F A", "G B D F", "F A C#"], "C", Some("major"))
-                .unwrap();
+        let analysis = analyze_progression(
+            &["C E G", "D F A", "G B D F", "F# A C#"],
+            "C",
+            Some("major"),
+        )
+        .unwrap();
 
         assert_eq!(analysis.mode, "major");
         assert_eq!(analysis.chords[0].roman_numeral.as_deref(), Some("I"));

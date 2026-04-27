@@ -46,6 +46,22 @@ impl DiatonicInterval {
             specifier,
         }
     }
+
+    pub(crate) fn nice_name(&self) -> String {
+        format!(
+            "{} {}",
+            self.specifier.nice_name(),
+            self.generic.nice_name()
+        )
+    }
+
+    pub(crate) fn semi_simple_nice_name(&self) -> String {
+        format!(
+            "{} {}",
+            self.specifier.nice_name(),
+            self.generic.semi_simple_nice_name()
+        )
+    }
 }
 
 fn semitones_generic(r#in: UnsignedIntegerType) -> ExceptionResult<UnsignedIntegerType> {
