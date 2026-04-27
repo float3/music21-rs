@@ -14,7 +14,7 @@ use regex::Regex;
 use specifier::Specifier;
 
 use std::sync::Mutex;
-use std::{collections::HashMap, sync::LazyLock};
+use std::{cmp::Ordering, collections::HashMap, sync::LazyLock};
 
 use crate::base::Music21ObjectTrait;
 
@@ -62,12 +62,10 @@ fn extract_pitch(arg: PitchOrNote) -> Pitch {
 }
 
 fn convert_staff_distance_to_interval(staff_dist: IntegerType) -> IntegerType {
-    if staff_dist == 0 {
-        1
-    } else if staff_dist > 0 {
-        staff_dist + 1
-    } else {
-        staff_dist - 1
+    match staff_dist.cmp(&0) {
+        Ordering::Equal => 1,
+        Ordering::Greater => staff_dist + 1,
+        Ordering::Less => staff_dist - 1,
     }
 }
 
@@ -90,12 +88,10 @@ fn specifier_from_generic_chromatic(
     let normal_semis = note_vals[(g_int.simple_undirected() - 1) as usize]
         + 12 * g_int.simple_steps_and_octaves().1;
 
-    let c_direction = if c_int.semitones == 0 {
-        direction::Direction::Oblique
-    } else if c_int.semitones < 0 {
-        direction::Direction::Descending
-    } else {
-        direction::Direction::Ascending
+    let c_direction = match c_int.semitones.cmp(&0) {
+        Ordering::Equal => direction::Direction::Oblique,
+        Ordering::Less => direction::Direction::Descending,
+        Ordering::Greater => direction::Direction::Ascending,
     };
 
     let these_semis = if g_int.direction() != c_direction

@@ -912,7 +912,6 @@ mod tests {
             for mask in 0_u16..(1_u16 << 12) {
                 let pcs = (0..12)
                     .filter(|pc| mask & (1 << pc) != 0)
-                    .map(|pc| pc as i32)
                     .collect::<Vec<_>>();
                 let chord_instance = chord_class.call1((pcs.clone(),))?;
 
