@@ -1,5 +1,5 @@
 {
-  description = "Rust development environment";
+  description = "Nix flake for music21-rs development";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -14,58 +14,65 @@
     flake-utils.lib.eachDefaultSystem (
       system: let
         pkgs = nixpkgs.legacyPackages.${system};
-        libPath = with pkgs;
-          lib.makeLibraryPath [
-            # load external libraries that you need in your rust project here
-          ];
+        lib = pkgs.lib;
+        python = pkgs.python3;
+        pythonPackages = python.pkgs;
+        linuxOnlyLibs = with pkgs; lib.optionals stdenv.isLinux [alsa-lib];
       in {
-        devShells.default = pkgs.mkShell rec {
-          nativeBuildInputs = [pkgs.pkg-config];
-          buildInputs = with pkgs; [
-            alsa-lib
-            clang
-            git
-            llvmPackages.bintools
-            python312
-            python312Packages.virtualenv
-            rustfmt
-            rustup
-            openssl
-          ];
-
-          RUSTC_VERSION = "stable";
+        devShells.default = pkgs.mkShell {
+          packages =
+            (with pkgs; [
+              cargo
+              rustc
+              clippy
+              rustfmt
+              nixfmt-rfc-style
+              git
+              pkg-config
+              clang
+              llvmPackages_latest.libclang
+              openssl
+              python
+              pythonPackages.virtualenv
+              pythonPackages.requests
+            ])
+            ++ linuxOnlyLibs;
 
           # https://github.com/rust-lang/rust-bindgen#environment-variables
-          LIBCLANG_PATH = pkgs.lib.makeLibraryPath [pkgs.llvmPackages_latest.libclang.lib];
+          LIBCLANG_PATH = "${pkgs.llvmPackages_latest.libclang.lib}/lib";
+
+          BINDGEN_EXTRA_CLANG_ARGS = lib.concatStringsSep " " (
+            [
+              "-I${pkgs.llvmPackages_latest.libclang.lib}/lib/clang/${pkgs.llvmPackages_latest.libclang.version}/include"
+            ]
+            ++ lib.optionals pkgs.stdenv.isLinux [
+              "-I${pkgs.glibc.dev}/include"
+            ]
+          );
+
+          LD_LIBRARY_PATH = lib.makeLibraryPath (
+            [
+              pkgs.openssl
+              pkgs.llvmPackages_latest.libclang
+            ]
+            ++ linuxOnlyLibs
+          );
+
+          PYO3_PYTHON = python.interpreter;
 
           shellHook = ''
-            export PATH=$PATH:''${CARGO_HOME:-~/.cargo}/bin
-            export PATH=$PATH:''${RUSTUP_HOME:-~/.rustup}/toolchains/$RUSTC_VERSION-x86_64-unknown-linux-gnu/bin/
-
-            fish
+            echo "Entered music21-rs dev shell for ${system}"
           '';
-
-          # Add precompiled library to rustc search path
-          RUSTFLAGS = builtins.map (a: ''-L ${a}/lib'') [
-            # add libraries here (e.g. pkgs.libvmi)
-          ];
-
-          LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (buildInputs ++ nativeBuildInputs);
-
-          # Add glibc, clang, glib, and other headers to bindgen search path
-          BINDGEN_EXTRA_CLANG_ARGS =
-            # Includes normal include path
-            (builtins.map (a: ''-I"${a}/include"'') [
-              # add dev libraries here (e.g. pkgs.libvmi.dev)
-              pkgs.glibc.dev
-            ])
-            # Includes with special directory paths
-            ++ [
-              ''-I"${pkgs.llvmPackages_latest.libclang.lib}/lib/clang/${pkgs.llvmPackages_latest.libclang.version}/include"''
-              ''-I"${pkgs.glib.dev}/include/glib-2.0"''
-              ''-I${pkgs.glib.out}/lib/glib-2.0/include/''
-            ];
         };
+
+        checks.nixfmt = pkgs.runCommand "nixfmt-check" {
+          nativeBuildInputs = [pkgs.nixfmt-rfc-style];
+        } ''
+          nixfmt --check ${./flake.nix}
+          touch "$out"
+        '';
+
+        formatter = pkgs.nixfmt-rfc-style;
       }
     );
 }

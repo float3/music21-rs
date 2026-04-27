@@ -1,22 +1,97 @@
-use crate::{base::Music21ObjectTrait, prebase::ProtoM21ObjectTrait};
+use crate::{chord::Chord, defaults::IntegerType, exception::ExceptionResult, pitch::Pitch};
 
-use super::{
-    ScaleTrait,
-    concretescale::{ConcreteScale, ConcreteScaleTrait},
-};
+use super::concretescale::ConcreteScale;
 
-pub(crate) struct Diatonicscale {
-    scale: ConcreteScale,
+#[derive(Clone, Debug)]
+pub(crate) struct DiatonicScale {
+    concrete: ConcreteScale,
+    mode: String,
 }
 
-pub(crate) trait DiatonicscaleTrait: ConcreteScaleTrait {}
+impl DiatonicScale {
+    pub(crate) fn new(tonic: Pitch, sharps: IntegerType, mode: &str) -> Self {
+        Self {
+            concrete: ConcreteScale::new(tonic, sharps),
+            mode: mode.to_string(),
+        }
+    }
 
-impl DiatonicscaleTrait for Diatonicscale {}
+    pub(crate) fn mode(&self) -> &str {
+        &self.mode
+    }
 
-impl ConcreteScaleTrait for Diatonicscale {}
+    pub(crate) fn tonic(&self) -> &Pitch {
+        self.concrete.tonic()
+    }
 
-impl ScaleTrait for Diatonicscale {}
+    pub(crate) fn pitch_from_degree(&self, degree: usize) -> ExceptionResult<Pitch> {
+        self.concrete.pitch_from_degree(degree)
+    }
 
-impl Music21ObjectTrait for Diatonicscale {}
+    pub(crate) fn pitches(&self) -> ExceptionResult<Vec<Pitch>> {
+        self.concrete.pitches()
+    }
 
-impl ProtoM21ObjectTrait for Diatonicscale {}
+    pub(crate) fn triad_from_degree(&self, degree: usize) -> ExceptionResult<Chord> {
+        let notes = vec![
+            self.pitch_from_degree(degree)?,
+            self.pitch_from_degree(degree + 2)?,
+            self.pitch_from_degree(degree + 4)?,
+        ];
+        Chord::new(Some(notes.as_slice()))
+    }
+
+    pub(crate) fn seventh_chord_from_degree(&self, degree: usize) -> ExceptionResult<Chord> {
+        let notes = vec![
+            self.pitch_from_degree(degree)?,
+            self.pitch_from_degree(degree + 2)?,
+            self.pitch_from_degree(degree + 4)?,
+            self.pitch_from_degree(degree + 6)?,
+        ];
+        Chord::new(Some(notes.as_slice()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn pitch(name: &str) -> Pitch {
+        Pitch::new(
+            Some(name.to_string()),
+            None,
+            None,
+            Option::<i8>::None,
+            Option::<IntegerType>::None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("valid pitch")
+    }
+
+    #[test]
+    fn diatonic_scale_degree_lookup() {
+        let scale = DiatonicScale::new(pitch("A4"), 0, "minor");
+        assert_eq!(scale.pitch_from_degree(1).unwrap().name_with_octave(), "A4");
+        assert_eq!(scale.pitch_from_degree(3).unwrap().name_with_octave(), "C5");
+        assert_eq!(scale.pitch_from_degree(7).unwrap().name_with_octave(), "G5");
+    }
+
+    #[test]
+    fn diatonic_scale_degree_chords() {
+        let scale = DiatonicScale::new(pitch("C4"), 0, "major");
+        assert_eq!(
+            scale.triad_from_degree(1).unwrap().pitched_common_name(),
+            "C-major triad"
+        );
+        assert_eq!(
+            scale
+                .seventh_chord_from_degree(5)
+                .unwrap()
+                .pitched_common_name(),
+            "G-dominant seventh chord"
+        );
+    }
+}

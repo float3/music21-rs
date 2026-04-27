@@ -1,4 +1,7 @@
-use crate::defaults::UnsignedIntegerType;
+use crate::{
+    defaults::IntegerType,
+    exception::{Exception, ExceptionResult},
+};
 
 #[derive(Clone, Debug)]
 pub(crate) enum Specifier {
@@ -50,12 +53,55 @@ impl Specifier {
         }
     }
 
-    pub(crate) fn semitones_above_perfect(&self) -> UnsignedIntegerType {
-        todo!()
+    pub(crate) fn inversion(&self) -> Self {
+        match self {
+            Specifier::Perfect => Specifier::Perfect,
+            Specifier::Major => Specifier::Minor,
+            Specifier::Minor => Specifier::Major,
+            Specifier::Augmented => Specifier::Diminished,
+            Specifier::Diminished => Specifier::Augmented,
+            Specifier::DoubleAugmented => Specifier::DoubleDiminished,
+            Specifier::DoubleDiminished => Specifier::DoubleAugmented,
+            Specifier::TripleAugmented => Specifier::TripleDiminished,
+            Specifier::TripleDiminished => Specifier::TripleAugmented,
+            Specifier::QuadrupleAugmented => Specifier::QuadrupleDiminished,
+            Specifier::QuadrupleDiminished => Specifier::QuadrupleAugmented,
+        }
     }
 
-    pub(crate) fn semitones_above_major(&self) -> UnsignedIntegerType {
-        todo!()
+    pub(crate) fn semitones_above_perfect(&self) -> ExceptionResult<IntegerType> {
+        match self {
+            Specifier::Perfect => Ok(0),
+            Specifier::Augmented => Ok(1),
+            Specifier::DoubleAugmented => Ok(2),
+            Specifier::TripleAugmented => Ok(3),
+            Specifier::QuadrupleAugmented => Ok(4),
+            Specifier::Diminished => Ok(-1),
+            Specifier::DoubleDiminished => Ok(-2),
+            Specifier::TripleDiminished => Ok(-3),
+            Specifier::QuadrupleDiminished => Ok(-4),
+            _ => Err(Exception::Interval(format!(
+                "{self:?} cannot be compared to Perfect"
+            ))),
+        }
+    }
+
+    pub(crate) fn semitones_above_major(&self) -> ExceptionResult<IntegerType> {
+        match self {
+            Specifier::Major => Ok(0),
+            Specifier::Minor => Ok(-1),
+            Specifier::Augmented => Ok(1),
+            Specifier::DoubleAugmented => Ok(2),
+            Specifier::TripleAugmented => Ok(3),
+            Specifier::QuadrupleAugmented => Ok(4),
+            Specifier::Diminished => Ok(-2),
+            Specifier::DoubleDiminished => Ok(-3),
+            Specifier::TripleDiminished => Ok(-4),
+            Specifier::QuadrupleDiminished => Ok(-5),
+            _ => Err(Exception::Interval(format!(
+                "{self:?} cannot be compared to Major"
+            ))),
+        }
     }
 }
 
@@ -82,5 +128,26 @@ mod tests {
             Specifier::QuadrupleDiminished.nice_name(),
             "Quadruple Diminished"
         );
+    }
+
+    #[test]
+    fn test_specifier_semitones_above_perfect() {
+        assert_eq!(Specifier::Perfect.semitones_above_perfect().unwrap(), 0);
+        assert_eq!(Specifier::Augmented.semitones_above_perfect().unwrap(), 1);
+        assert_eq!(
+            Specifier::DoubleDiminished
+                .semitones_above_perfect()
+                .unwrap(),
+            -2
+        );
+        assert!(Specifier::Major.semitones_above_perfect().is_err());
+    }
+
+    #[test]
+    fn test_specifier_semitones_above_major() {
+        assert_eq!(Specifier::Major.semitones_above_major().unwrap(), 0);
+        assert_eq!(Specifier::Minor.semitones_above_major().unwrap(), -1);
+        assert_eq!(Specifier::Diminished.semitones_above_major().unwrap(), -2);
+        assert!(Specifier::Perfect.semitones_above_major().is_err());
     }
 }

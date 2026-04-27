@@ -34,8 +34,8 @@ impl GeneralNoteTrait for NotRest {
         self.general_note.duration()
     }
 
-    fn set_duration(&self, duration: &Duration) {
-        todo!()
+    fn set_duration(&mut self, duration: &Duration) {
+        self.general_note.set_duration(duration);
     }
 }
 

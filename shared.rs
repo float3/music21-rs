@@ -1,19 +1,27 @@
 #[allow(unused)]
 mod module {
-    #[cfg(any(feature = "python", test))]
+    #[cfg(feature = "python")]
     use pyo3::{prelude::*, types::PyModule};
     use std::error::Error;
+    #[cfg(feature = "python")]
+    use std::ffi::OsStr;
     use std::path::Path;
     use std::process::Command;
     use std::str::from_utf8;
-    #[cfg(any(feature = "python", test))]
+    #[cfg(feature = "python")]
     use std::sync::LazyLock;
     use std::sync::atomic::AtomicBool;
     use std::sync::atomic::Ordering;
 
-    #[cfg(any(feature = "python", test))]
+    #[cfg(feature = "python")]
     static PYTHON_EXE: LazyLock<String> = LazyLock::new(|| {
-        let version: (u8, u8) = Python::with_gil(|py| -> PyResult<(u8, u8)> {
+        if let Ok(explicit) = std::env::var("PYO3_PYTHON") {
+            if !explicit.trim().is_empty() {
+                return explicit;
+            }
+        }
+
+        let version: (u8, u8) = Python::attach(|py| -> PyResult<(u8, u8)> {
             let sys = py.import("sys")?;
             let version_info = sys.getattr("version_info")?;
             let major: u8 = version_info.get_item(0)?.extract()?;
@@ -21,12 +29,37 @@ mod module {
             Ok((major, minor))
         })
         .unwrap();
+
+        if cfg!(windows) {
+            "python.exe".to_string()
+        } else {
         format!("python{}.{}", version.0, version.1)
+        }
     });
 
-    #[cfg(any(feature = "python", test))]
+    #[cfg(feature = "python")]
     fn python_venv() -> String {
-        format!("./venv/bin/{}", *PYTHON_EXE)
+        if cfg!(windows) {
+            "./venv/Scripts/python.exe".to_string()
+        } else {
+            format!("./venv/bin/{}", python_exe_name())
+        }
+    }
+
+    #[cfg(feature = "python")]
+    fn python_exe_name() -> String {
+        Path::new(&*PYTHON_EXE)
+            .file_name()
+            .and_then(OsStr::to_str)
+            .map(ToOwned::to_owned)
+            .unwrap_or_else(|| PYTHON_EXE.clone())
+    }
+
+    #[cfg(feature = "python")]
+    fn should_prepare_venv() -> bool {
+        std::env::var("MUSIC21_RS_PREPARE_VENV")
+            .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
+            .unwrap_or(false)
     }
 
     fn git_clone() -> Result<(), Box<dyn Error>> {
@@ -56,7 +89,7 @@ mod module {
         }
     }
 
-    #[cfg(any(feature = "python", test))]
+    #[cfg(feature = "python")]
     fn create_venv() -> Result<(), Box<dyn Error>> {
         use std::path::Path;
 
@@ -71,7 +104,7 @@ mod module {
         }
     }
 
-    #[cfg(any(feature = "python", test))]
+    #[cfg(feature = "python")]
     fn install_dependencies() -> Result<(), Box<dyn Error>> {
         run_command(
             &[
@@ -87,7 +120,7 @@ mod module {
         Ok(())
     }
 
-    #[cfg(any(feature = "python", test))]
+    #[cfg(feature = "python")]
     fn pip_upgrade() {
         if let Err(e) = run_command(
             &[
@@ -113,12 +146,12 @@ mod module {
         println!("preparing environment");
         let res = (|| {
             git_clone()?;
-            #[cfg(any(feature = "python", test))]
-            create_venv()?;
-            #[cfg(any(feature = "python", test))]
-            pip_upgrade();
-            #[cfg(any(feature = "python", test))]
-            install_dependencies()?;
+            #[cfg(feature = "python")]
+            if should_prepare_venv() {
+                create_venv()?;
+                pip_upgrade();
+                install_dependencies()?;
+            }
             Ok(())
         })();
         PREPARED.store(true, Ordering::Release);
@@ -141,10 +174,10 @@ mod module {
         }
     }
 
-    #[cfg(any(feature = "python", test))]
+    #[cfg(feature = "python")]
     pub type Tables<'py> = pyo3::Bound<'py, PyModule>;
 
-    #[cfg(any(feature = "python", test))]
+    #[cfg(feature = "python")]
     pub fn init_py(py: Python<'_>) -> pyo3::PyResult<()> {
         let sys = py.import("sys")?;
         let sysconfig = py.import("sysconfig")?;
@@ -152,29 +185,34 @@ mod module {
             .call_method1("get_path", ("purelib",))?
             .extract()?;
         let path = sys.getattr("path")?;
-        path.call_method1(
-            "extend",
-            (vec![
-                system_site_packages,
-                format!("./venv/lib/{}/site-packages", *PYTHON_EXE),
-                "./music21".to_owned(),
-            ],),
-        )?;
+        let mut to_extend = vec![system_site_packages, "./music21".to_owned()];
+        let venv_site = if cfg!(windows) {
+            "./venv/Lib/site-packages".to_string()
+        } else {
+            format!("./venv/lib/{}/site-packages", python_exe_name())
+        };
+        if Path::new(&venv_site).exists() {
+            to_extend.push(venv_site);
+        }
+        path.call_method1("extend", (to_extend,))?;
         Ok(())
     }
 
     /// Dummy function for music21.environment.Environment.
     /// This function does nothing and returns None.
-    #[cfg(any(feature = "python", test))]
+    #[cfg(feature = "python")]
     #[pyfunction]
-    fn dummy_environment(_name: &str) -> PyResult<()> {
-        // A minimal stub that satisfies the call signature.
-        Ok(())
+    fn dummy_environment(py: Python<'_>, _name: &str) -> PyResult<Py<PyAny>> {
+        use pyo3::types::PyDict;
+
+        let env = PyDict::new(py);
+        env.set_item("warnings", 0)?;
+        Ok(env.into_any().unbind())
     }
 
     /// Creates dummy modules for missing music21 dependencies.
     /// This should be called before importing tables.py.
-    #[cfg(any(feature = "python", test))]
+    #[cfg(feature = "python")]
     fn create_dummy_modules(py: Python) -> PyResult<()> {
         use pyo3::types::PyList;
         use pyo3::types::PyMapping;
@@ -182,7 +220,7 @@ mod module {
 
         let sys = py.import("sys")?;
         let binding = sys.getattr("modules")?;
-        let modules: &Bound<'_, PyMapping> = binding.downcast()?;
+        let modules: &Bound<'_, PyMapping> = binding.cast()?;
 
         let music21_mod = PyModule::new(py, "music21")?;
         let path_list = PyList::new(py, ["./music21"])?;
@@ -211,27 +249,37 @@ mod module {
         Ok(())
     }
 
-    #[cfg(any(feature = "python", test))]
+    #[cfg(feature = "python")]
     pub fn init_py_with_dummies(py: Python) -> PyResult<()> {
         create_dummy_modules(py)?;
         Ok(())
     }
 
-    #[cfg(any(feature = "python", test))]
+    #[cfg(feature = "python")]
     pub fn get_tables(py: Python<'_>) -> Result<Bound<'_, PyModule>, PyErr> {
         use pyo3::exceptions::PyIOError;
         use std::ffi::CStr;
         use std::ffi::CString;
+        use std::fs;
 
-        let url = "https://raw.githubusercontent.com/cuthbertLab/music21/refs/heads/master/music21/chord/tables.py";
-        let response = reqwest::blocking::get(url)
-            .map_err(|e| PyErr::new::<PyIOError, _>(format!("HTTP error: {e}")))?;
-        let code = CString::new(
-            response
-                .text()
-                .map_err(|e| PyErr::new::<PyIOError, _>(format!("HTTP error: {e}")))?,
-        )
-        .map_err(|e| PyErr::new::<PyIOError, _>(format!("CString error: {e}")))?;
+        let local_path = "./music21/music21/chord/tables.py";
+        let code_string = match fs::read_to_string(local_path) {
+            Ok(code) => code,
+            Err(local_err) => {
+                let url = "https://raw.githubusercontent.com/cuthbertLab/music21/refs/heads/master/music21/chord/tables.py";
+                let response = reqwest::blocking::get(url).map_err(|http_err| {
+                    PyErr::new::<PyIOError, _>(format!(
+                        "Failed reading local tables ({local_err}) and HTTP fallback failed ({http_err})"
+                    ))
+                })?;
+                response
+                    .text()
+                    .map_err(|e| PyErr::new::<PyIOError, _>(format!("HTTP error: {e}")))?
+            }
+        };
+
+        let code = CString::new(code_string)
+            .map_err(|e| PyErr::new::<PyIOError, _>(format!("CString error: {e}")))?;
         let code: &CStr = &code;
         let tables = PyModule::from_code(py, code, c"tables.py", c"music21.chord.tables")?;
         Ok(tables)

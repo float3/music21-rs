@@ -26,5 +26,6 @@ pub(crate) mod prebase;
 pub(crate) mod scale;
 pub(crate) mod stepname;
 pub mod tuningsystem;
+pub mod web;
 // #[macro_use]
 // pub(crate) mod macros;

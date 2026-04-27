@@ -1,0 +1,170 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  nix:
+    name: Nix Flake Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Configure Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Validate flake
+        run: nix flake check --accept-flake-config
+
+  feature-matrix:
+    name: Feature Matrix (${{ matrix.feature_set.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        feature_set:
+          - name: none
+            flags: --no-default-features
+            test_extra: ""
+            needs_python: false
+          - name: serde
+            flags: --no-default-features --features serde
+            test_extra: ""
+            needs_python: false
+          - name: python
+            flags: --no-default-features --features python
+            test_extra: -- --test-threads=1
+            needs_python: true
+          - name: all-features
+            flags: --all-features
+            test_extra: -- --test-threads=1
+            needs_python: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Setup Python
+        if: matrix.feature_set.needs_python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check / Clippy / Test / Fix
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          FLAGS="${{ matrix.feature_set.flags }}"
+          TEST_EXTRA="${{ matrix.feature_set.test_extra }}"
+
+          if [[ "${{ matrix.feature_set.needs_python }}" == "true" ]]; then
+            export PYO3_PYTHON="$(python -c 'import sys; print(sys.executable)')"
+            echo "Using PYO3_PYTHON=$PYO3_PYTHON"
+          fi
+
+          eval "cargo check --workspace --all-targets $FLAGS"
+          eval "cargo clippy --workspace --all-targets $FLAGS -- -D warnings"
+          eval "cargo test --workspace --all-targets $FLAGS $TEST_EXTRA"
+          eval "cargo fix --workspace --all-targets --allow-dirty --allow-staged $FLAGS"
+          git diff --exit-code
+
+  lint:
+    name: Lint (fmt + clippy + check)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Cargo check
+        run: cargo check --workspace --all-targets
+
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Cargo test
+        run: cargo test --workspace --all-targets
+
+      - name: Binary regression runner
+        run: cargo run --bin test
+
+  docs:
+    name: Build Docs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build docs
+        run: cargo doc --workspace --no-deps

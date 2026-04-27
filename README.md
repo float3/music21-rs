@@ -1,52 +1,88 @@
-[![CI](https://github.com/float3/music21-rs/actions/workflows/CI.yaml/badge.svg)](https://github.com/float3/music21-rs/actions/workflows/CI.yaml)
+# music21-rs
 
-This is a work-in-progress (WIP) **Rust** port of [music21](https://github.com/cuthbertLab/music21/).
+[![CI](https://github.com/float3/music21-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/float3/music21-rs/actions/workflows/ci.yml)
 
-### Motivation
+`music21-rs` is a work-in-progress Rust port of selected parts of [music21](https://github.com/cuthbertLab/music21), currently focused on chord naming and supporting pitch/chord infrastructure.
 
-The project began when I tried to develop a primitive chord-naming algorithm in HLSL and later C# for [AudioLink](https://github.com/llealloo/audiolink/edit/master/README.md). During my search for existing solutions, I discovered that the music21 library offered one of the most comprehensive implementations available.
+## Status
 
-Later, while working on [Tuning Playground](https://hilll.dev/tools/tuningplayground), I built a large chord-name lookup table (LUT) using music21 to generate it. However, this approach did not satisfy me because implementing the original algorithm is inherently more correct than relying on a LUT.
+- The project is under active development.
+- APIs are still evolving and may change between releases.
+- The Python `music21` repository is used as a reference source and is included as a git submodule at [`music21/`](./music21).
 
-I wanted a more adaptable solution—an implementation of the music21 chord-naming algorithm that could run on the web, in WebAssembly, or be compiled to JavaScript, as well as on any other platform where running Python might not be ideal or possible. I considered writing it in Rust, TypeScript, C#/F#, Haskell, and Elm, but ultimately decided to go with Rust.
-
-For now, I am adhering closely to the original design and APIs of music21; I plan to adopt a more idiomatic Rust style after implementing the core functionality and expanding the test suite.
-
-I am also taking into account [this post](https://www.music21.org/music21docs/developerReference/startingOver.html). Thanks to the music21 team for providing this
-
-### pyo3 Dependency
-
-- **Purpose:**  
-  `pyo3` is used only in the test suite and `build.rs`.
-
-- **Build Script:**  
-  When the `python` feature is enabled, `build.rs` generates Rust code from Python. Although normal usage doesn’t require running the build script (since the generated code is checked in), it’s preferable to keep the generator alongside the generated code.
-
-- **Testing:**
-  Some Tests are done by running python code and inspecting it to see if the Rust counterpart matches, for example that's how I test the auto-generated code.  
-
-- **Limitations:**
-  Running the test suite always requires Python to be installed (Cargo dev-dependencies cannot yet be optional)
-
-- **Library Dependencies:**  
-  The main library doesn’t—and will never—depend on `pyo3` or Python.
-
-- **Shared Code:**  
-  The `utils` crate contains code shared between `build.rs` and the test suite.
-
-### Usage
+## Quick Start
 
 ```rust
 use music21_rs::chord::Chord;
 
-let chord = Chord::new(Some("C E G"));
-// This currently fails because the library is still under development.
-assert!(chord.is_ok());
-assert_eq!(chord.unwrap().pitched_common_name(), "C-major triad");
+let chord = Chord::new(Some("C E G"))?;
+assert_eq!(chord.pitched_common_name(), "C-major triad");
+# Ok::<(), music21_rs::exception::Exception>(())
 ```
 
-thanks to Michael Scott Asato Cuthbert for his work in computational musicology
+## Website-Facing APIs
 
-thanks to Michael and the music21 contributors and Community for the music21 library
+The crate now includes high-level helpers in [`src/web/mod.rs`](./src/web/mod.rs) intended for
+backend/API use in music websites and tools:
 
-thanks to Valentin for answering my Rust questions
+- `analyze_chord`: rich chord metadata (common names, forte class, inversion, pitch classes)
+- `analyze_key`: mode/key signature summary, scale tones, harmonized triads/sevenths, relative/parallel
+- `analyze_progression`: degree + roman numeral labeling per chord in a key context
+- `suggest_scales_for_chord`: candidate scales/modes that contain all chord tones
+- `analyze_polyrhythm`: timeline events, beat timings, coincidence ticks, and derived harmonic color
+
+## Development
+
+### Prerequisites
+
+- Rust (stable toolchain; see [`rust-toolchain.toml`](./rust-toolchain.toml))
+- Git
+
+### Clone
+
+```bash
+git clone https://github.com/float3/music21-rs.git
+cd music21-rs
+git submodule update --init --recursive
+```
+
+### Common Commands
+
+```bash
+cargo fmt --all
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace --all-targets
+cargo run --bin test
+```
+
+### Nix Development Shell (Optional)
+
+If you use Nix, the repository includes a flake-based development shell with Rust
+tooling, Python, and bindgen dependencies:
+
+```bash
+nix develop
+```
+
+Inside the shell, `PYO3_PYTHON` is set automatically to the Nix-provided Python
+interpreter for Python-backed build/test flows.
+
+### Optional Python-Backed Validation
+
+Some generation and parity checks can use Python via the `python` feature:
+
+```bash
+cargo test --features python
+```
+
+## Project Layout
+
+- `src/`: main Rust library
+- `src/bin/test.rs`: regression-style executable checks for chord naming
+- `utils/`: shared helper crate for build/test support
+- `music21/`: Python reference submodule
+- `build.rs`: optional table generation logic
+
+## Credits
+
+Thanks to Michael Scott Asato Cuthbert and all `music21` contributors for their work in computational musicology and for the `music21` library.

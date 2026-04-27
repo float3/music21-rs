@@ -119,7 +119,7 @@ pub(crate) trait IntoCentShift {
 
 impl IntoCentShift for String {
     fn into_cent_shift(self) -> FloatType {
-        todo!()
+        Microtone::parse_string(self).unwrap_or(0.0)
     }
 
     fn is_microtone(&self) -> bool {
@@ -137,7 +137,7 @@ impl IntoCentShift for String {
 
 impl IntoCentShift for &str {
     fn into_cent_shift(self) -> FloatType {
-        todo!()
+        Microtone::parse_string(self.to_string()).unwrap_or(0.0)
     }
 
     fn is_microtone(&self) -> bool {
@@ -155,7 +155,7 @@ impl IntoCentShift for &str {
 
 impl IntoCentShift for IntegerType {
     fn into_cent_shift(self) -> FloatType {
-        todo!()
+        self as FloatType
     }
 
     fn is_microtone(&self) -> bool {
@@ -173,7 +173,7 @@ impl IntoCentShift for IntegerType {
 
 impl IntoCentShift for FloatType {
     fn into_cent_shift(self) -> FloatType {
-        todo!()
+        self
     }
 
     fn is_microtone(&self) -> bool {

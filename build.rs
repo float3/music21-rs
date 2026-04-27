@@ -92,14 +92,14 @@ mod python {
                 if card == 0 {
                     Ok("vec![],".to_string())
                 } else {
-                    let card_data: &Bound<'_, PyTuple> = item.downcast()?;
+                    let card_data: &Bound<'_, PyTuple> = item.cast()?;
                     let entries: Result<Vec<String>, PyErr> = card_data
                         .iter()
                         .map(|entry| {
                             if entry.is_none() {
                                 Ok("None,".to_string())
                             } else {
-                                let tup: &Bound<'_, PyTuple> = entry.downcast()?;
+                                let tup: &Bound<'_, PyTuple> = entry.cast()?;
                                 let pcs = tup.get_item(0)?;
                                 let icv = tup.get_item(1)?;
                                 let iv = tup.get_item(2)?;
@@ -113,7 +113,7 @@ mod python {
                                 let z_rel_str = if z_relation.is_none() {
                                     "None".to_string()
                                 } else {
-                                    z_relation.str()?.to_str()?.to_string()
+                                    z_relation.str()?.extract::<String>()?
                                 };
                                 Ok(format!(
                                     "Some(({pcs_vec_str}, {icv_vec_str}, {iv_vec_str}, {z_rel_str})),"
@@ -135,11 +135,11 @@ mod python {
 
     fn generate_inversion_default_pitch_class(tables: &Tables) -> PyResult<String> {
         let inv_default = tables.getattr("inversionDefaultPitchClasses")?;
-        let inv_dict: &Bound<'_, PyDict> = inv_default.downcast()?;
+        let inv_dict: &Bound<'_, PyDict> = inv_default.cast()?;
         let entries: Result<Vec<String>, PyErr> = inv_dict
             .iter()
             .map(|(key, value)| {
-                let key_tuple: &Bound<'_, PyTuple> = key.downcast()?;
+                let key_tuple: &Bound<'_, PyTuple> = key.cast()?;
                 let card: i32 = key_tuple.get_item(0)?.extract()?;
                 let forte: i32 = key_tuple.get_item(1)?.extract()?;
                 let pcs_list: Vec<usize> = value.extract()?;
@@ -174,13 +174,13 @@ mod python {
                 lines.push(format!("    let {var_name} = HashMap::new();"));
             } else {
                 lines.push(format!("    let mut {var_name} = HashMap::new();"));
-                let card_data: &Bound<'_, PyTuple> = item.downcast()?;
+                let card_data: &Bound<'_, PyTuple> = item.cast()?;
                 for forte_idx in 1..card_data.len() {
                     let entry = card_data.get_item(forte_idx)?;
                     if entry.is_none() {
                         continue;
                     }
-                    let tup: &Bound<'_, PyTuple> = entry.downcast()?;
+                    let tup: &Bound<'_, PyTuple> = entry.cast()?;
                     let pcs = tup.get_item(0)?;
                     let icv = tup.get_item(1)?;
                     let inv_vec = tup.get_item(2)?;
@@ -256,7 +256,7 @@ mod python {
         type_name: &str,
     ) -> PyResult<String> {
         let arr = tables.getattr(attr_name)?;
-        let arr_dict: &Bound<'_, PyDict> = arr.downcast()?;
+        let arr_dict: &Bound<'_, PyDict> = arr.cast()?;
         let hashmap: HashMap<usize, i32> = arr_dict.extract()?;
         let values: Vec<String> = (0..hashmap.len())
             .map(|num| hashmap.get(&num).unwrap().to_string())
@@ -294,10 +294,10 @@ mod python {
 
     fn generate_forte_number_with_inversion_to_tn_index(tables: &Tables) -> PyResult<String> {
         let dict = tables.getattr("forteNumberWithInversionToTnIndex")?;
-        let dict_py: &Bound<'_, PyDict> = dict.downcast()?;
+        let dict_py: &Bound<'_, PyDict> = dict.cast()?;
         let mut lines = Vec::new();
         for (key, value) in dict_py {
-            let key_tuple: &Bound<'_, PyTuple> = key.downcast()?;
+            let key_tuple: &Bound<'_, PyTuple> = key.cast()?;
             let card: i32 = key_tuple.get_item(0)?.extract()?;
             let idx: i32 = key_tuple.get_item(1)?.extract()?;
             let inv: i32 = key_tuple.get_item(2)?.extract()?;
@@ -314,15 +314,15 @@ mod python {
 
     fn generate_tn_index_to_chord_info(tables: &Tables) -> PyResult<String> {
         let dict = tables.getattr("tnIndexToChordInfo")?;
-        let dict_py: &Bound<'_, PyDict> = dict.downcast()?;
+        let dict_py: &Bound<'_, PyDict> = dict.cast()?;
         let mut lines = Vec::new();
         for (key, value) in dict_py {
-            let key_tuple: &Bound<'_, PyTuple> = key.downcast()?;
+            let key_tuple: &Bound<'_, PyTuple> = key.cast()?;
             let card: i32 = key_tuple.get_item(0)?.extract()?;
             let idx: i32 = key_tuple.get_item(1)?.extract()?;
             let inv: i32 = key_tuple.get_item(2)?.extract()?;
             let inv_str = sign_str(inv);
-            let value_dict: &Bound<'_, PyDict> = value.downcast()?;
+            let value_dict: &Bound<'_, PyDict> = value.cast()?;
             if let Some(names) = value_dict.get_item("name")? {
                 let names_list: Vec<String> = names.extract()?;
                 if !names_list.is_empty() {
@@ -350,7 +350,7 @@ mod python {
 
     fn generate_rust_tables(py: Python, tables: &Tables, imports: &str) -> PyResult<String> {
         let forte = tables.getattr("FORTE")?;
-        let forte_list: &Bound<'_, PyTuple> = forte.downcast_exact()?;
+        let forte_list: &Bound<'_, PyTuple> = forte.cast_exact()?;
         let parts = [
             generate_forte_table(forte_list)?,
             generate_inversion_default_pitch_class(tables)?,
@@ -371,7 +371,7 @@ mod python {
     pub(super) fn main() -> Result<(), Box<dyn Error>> {
         let rust_path = "./src/chord/tables/generated.rs";
 
-        Python::with_gil(|py| -> PyResult<()> {
+        Python::attach(|py| -> PyResult<()> {
             init_py_with_dummies(py)?;
 
             let tables = get_tables(py)?;

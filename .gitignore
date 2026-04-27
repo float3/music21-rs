@@ -1,4 +1,8 @@
-/target
-/venv
-/__pycache__
-/music21
+/target/
+/venv/
+/__pycache__/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.idea/

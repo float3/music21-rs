@@ -1,5 +1,6 @@
 use crate::{
     base::Music21ObjectTrait,
+    common::{numbertools::MUSICAL_ORDINAL_STRINGS, stringtools::get_num_from_str},
     exception::{Exception, ExceptionResult},
     note::Note,
     pitch::Pitch,
@@ -19,7 +20,12 @@ pub(crate) struct GenericInterval {
 
 impl GenericInterval {
     pub(crate) fn simple_directed(&self) -> IntegerType {
-        todo!()
+        let simple_undirected = self.simple_undirected();
+        if self.direction() == Direction::Descending && simple_undirected > 1 {
+            -simple_undirected
+        } else {
+            simple_undirected
+        }
     }
 
     ///default value is "Unison"
@@ -45,12 +51,19 @@ impl GenericInterval {
         Ok(slf)
     }
 
-    fn undirected(&self) -> IntegerType {
-        todo!()
+    pub(crate) fn undirected(&self) -> IntegerType {
+        self.value().abs()
     }
 
     pub(crate) fn direction(&self) -> Direction {
-        todo!()
+        let directed = self.directed();
+        if directed == 1 {
+            Direction::Oblique
+        } else if directed < 0 {
+            Direction::Descending
+        } else {
+            Direction::Ascending
+        }
     }
 
     fn value_setter(&mut self, value: IntegerType) -> ExceptionResult<()> {
@@ -79,7 +92,7 @@ impl GenericInterval {
     }
 
     pub(crate) fn is_perfectable(&self) -> bool {
-        todo!()
+        matches!(self.simple_undirected(), 1 | 4 | 5)
     }
 
     fn directed(&self) -> IntegerType {
@@ -90,13 +103,59 @@ impl GenericInterval {
         self._value
     }
 
-    fn simple_steps_and_octaves(&self) -> (IntegerType, IntegerType) {
-        todo!()
+    pub(crate) fn simple_steps_and_octaves(&self) -> (IntegerType, IntegerType) {
+        let undirected = self.undirected();
+        let mut octaves = undirected / 7;
+        let mut steps = undirected % 7;
+        if steps == 0 {
+            octaves -= 1;
+            steps = 7;
+        }
+        (steps, octaves)
     }
 }
 
 fn convert_generic_string(value: String) -> IntegerType {
-    todo!()
+    let mut normalized = value.trim().to_lowercase();
+    if normalized.is_empty() {
+        return 0;
+    }
+
+    let mut direction_scalar = 1;
+    if normalized.contains("descending") {
+        direction_scalar = -1;
+        normalized = normalized.replace("descending", "").trim().to_string();
+    } else if normalized.contains("ascending") {
+        normalized = normalized.replace("ascending", "").trim().to_string();
+    } else if normalized.starts_with('-') {
+        direction_scalar = -1;
+        normalized = normalized.trim_start_matches('-').trim().to_string();
+    }
+
+    if let Ok(number) = normalized.parse::<IntegerType>() {
+        return number * direction_scalar;
+    }
+
+    for (idx, ordinal) in MUSICAL_ORDINAL_STRINGS.iter().enumerate() {
+        if normalized == ordinal.to_lowercase() {
+            return (idx as IntegerType) * direction_scalar;
+        }
+    }
+
+    let (digits, remain) = get_num_from_str(&normalized, "0123456789");
+    let remain = remain.trim().to_lowercase();
+    if !digits.is_empty()
+        && (remain.is_empty()
+            || remain == "st"
+            || remain == "nd"
+            || remain == "rd"
+            || remain == "th")
+        && let Ok(number) = digits.parse::<IntegerType>()
+    {
+        return number * direction_scalar;
+    }
+
+    0
 }
 
 fn convert_generic(value: IntegerType) -> IntegerType {
@@ -107,15 +166,33 @@ fn convert_generic(value: IntegerType) -> IntegerType {
 
 impl IntervalBaseTrait for GenericInterval {
     fn transpose_note(self, note1: Note) -> ExceptionResult<Note> {
-        todo!()
+        let specifier = if self.is_perfectable() {
+            Specifier::Perfect
+        } else {
+            Specifier::Major
+        };
+        let diatonic = self.get_diatonic(specifier);
+        let chromatic = diatonic.get_chromatic()?;
+        let interval = super::Interval::from_diatonic_and_chromatic(diatonic, chromatic)?;
+        interval.transpose_note(note1)
     }
 
     fn transpose_pitch(self, pitch1: Pitch) -> ExceptionResult<Pitch> {
-        todo!()
+        let specifier = if self.is_perfectable() {
+            Specifier::Perfect
+        } else {
+            Specifier::Major
+        };
+        let diatonic = self.get_diatonic(specifier);
+        let chromatic = diatonic.get_chromatic()?;
+        let interval = super::Interval::from_diatonic_and_chromatic(diatonic, chromatic)?;
+        interval.transpose_pitch(&pitch1, false, Some(4))
     }
 
     fn transpose_pitch_in_place(self, pitch1: &mut Pitch) -> ExceptionResult<()> {
-        todo!()
+        let transposed = self.transpose_pitch(pitch1.clone())?;
+        *pitch1 = transposed;
+        Ok(())
     }
 
     fn reverse(self) -> ExceptionResult<Self>
@@ -133,3 +210,38 @@ impl IntervalBaseTrait for GenericInterval {
 impl Music21ObjectTrait for GenericInterval {}
 
 impl ProtoM21ObjectTrait for GenericInterval {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn generic_interval_direction_and_simple_values() {
+        let descending_ninth = GenericInterval::from_int(-9).unwrap();
+        assert_eq!(descending_ninth.simple_undirected(), 2);
+        assert_eq!(descending_ninth.simple_directed(), -2);
+        assert!(matches!(
+            descending_ninth.direction(),
+            Direction::Descending
+        ));
+    }
+
+    #[test]
+    fn generic_interval_perfectable() {
+        assert!(GenericInterval::from_int(1).unwrap().is_perfectable());
+        assert!(GenericInterval::from_int(4).unwrap().is_perfectable());
+        assert!(GenericInterval::from_int(12).unwrap().is_perfectable());
+        assert!(!GenericInterval::from_int(3).unwrap().is_perfectable());
+    }
+
+    #[test]
+    fn generic_interval_from_string() {
+        assert_eq!(
+            GenericInterval::from_string("Descending Twelfth".to_string())
+                .unwrap()
+                .staff_distance(),
+            -11
+        );
+        assert!(GenericInterval::from_string("not-an-interval".to_string()).is_err());
+    }
+}

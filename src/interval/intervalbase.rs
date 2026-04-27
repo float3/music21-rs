@@ -1,6 +1,6 @@
 use crate::{
     base::{Music21Object, Music21ObjectTrait},
-    exception::ExceptionResult,
+    exception::{Exception, ExceptionResult},
     note::Note,
     pitch::Pitch,
     prebase::ProtoM21ObjectTrait,
@@ -30,19 +30,27 @@ pub(crate) trait IntervalBaseTrait: Music21ObjectTrait {
 
 impl IntervalBaseTrait for IntervalBase {
     fn transpose_note(self, note1: Note) -> ExceptionResult<Note> {
-        todo!()
+        Err(Exception::Interval(
+            "IntervalBase cannot transpose a note directly".to_string(),
+        ))
     }
 
     fn transpose_pitch(self, pitch1: Pitch) -> ExceptionResult<Pitch> {
-        panic!("interval base doesn't know how to do this")
+        Err(Exception::Interval(
+            "IntervalBase cannot transpose a pitch directly".to_string(),
+        ))
     }
 
     fn transpose_pitch_in_place(self, pitch1: &mut Pitch) -> ExceptionResult<()> {
-        panic!("interval base doesn't know how to do this")
+        Err(Exception::Interval(
+            "IntervalBase cannot transpose a pitch in place directly".to_string(),
+        ))
     }
 
     fn reverse(self) -> ExceptionResult<Self> {
-        panic!("interval base doesn't know how to do this")
+        Err(Exception::Interval(
+            "IntervalBase cannot reverse directly".to_string(),
+        ))
     }
 }
 

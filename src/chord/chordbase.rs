@@ -20,6 +20,8 @@ pub(crate) struct ChordBase {
     notrest: NotRest,
     #[cfg_attr(feature = "serde", serde(skip))]
     _notes: Arc<Mutex<Vec<NotRest>>>,
+    #[cfg_attr(feature = "serde", serde(skip))]
+    _cache: Arc<Mutex<HashMap<String, String>>>,
     _overrides: HashMap<String, String>,
 }
 
@@ -34,6 +36,7 @@ impl ChordBase {
         let chord = Arc::new(Self {
             notrest: NotRest::new(duration.clone()),
             _notes: Arc::new(Mutex::new(vec![])),
+            _cache: Arc::new(Mutex::new(HashMap::new())),
             _overrides: HashMap::new(),
         });
 
@@ -70,6 +73,32 @@ impl ChordBase {
 
         Ok(duration_ref.clone())
     }
+
+    pub(crate) fn clear_cache(&self) {
+        let mut cache = match self._cache.lock() {
+            Ok(cache) => cache,
+            Err(err) => err.into_inner(),
+        };
+        cache.clear();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn insert_cache_value_for_test(&self, key: &str, value: &str) {
+        let mut cache = match self._cache.lock() {
+            Ok(cache) => cache,
+            Err(err) => err.into_inner(),
+        };
+        cache.insert(key.to_string(), value.to_string());
+    }
+
+    #[cfg(test)]
+    pub(crate) fn cache_len_for_test(&self) -> usize {
+        let cache = match self._cache.lock() {
+            Ok(cache) => cache,
+            Err(err) => err.into_inner(),
+        };
+        cache.len()
+    }
 }
 
 pub(crate) trait ChordBaseTrait {}
@@ -83,8 +112,8 @@ impl GeneralNoteTrait for ChordBase {
         self.notrest.duration()
     }
 
-    fn set_duration(&self, duration: &Duration) {
-        todo!()
+    fn set_duration(&mut self, duration: &Duration) {
+        self.notrest.set_duration(duration);
     }
 }
 

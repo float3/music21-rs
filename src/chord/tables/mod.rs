@@ -5,7 +5,7 @@ use crate::exception::Exception;
 use generated::*;
 use std::{collections::HashMap, sync::LazyLock};
 
-type ChordTableAddress = (u8, u8, i8, Option<u8>);
+pub(crate) type ChordTableAddress = (u8, u8, i8, Option<u8>);
 
 trait ChordTableAddressExt {
     fn cardinality(&self) -> u8;
@@ -97,7 +97,7 @@ impl TNITupleExt for TNIStructure {
 }
 
 #[repr(i8)]
-#[derive(Eq, Hash, PartialEq, Debug)]
+#[derive(Copy, Clone, Eq, Hash, PartialEq, Debug)]
 enum Sign {
     NegativeOne = -1,
     Zero = 0,
@@ -105,13 +105,17 @@ enum Sign {
 }
 
 impl Sign {
-    fn from_i8(i: i8) -> Option<Self> {
+    pub(crate) fn from_i8(i: i8) -> Option<Self> {
         match i {
             0 => Some(Sign::Zero),
             1 => Some(Sign::One),
             -1 => Some(Sign::NegativeOne),
             _ => None,
         }
+    }
+
+    fn as_i8(&self) -> i8 {
+        *self as i8
     }
 }
 
@@ -154,10 +158,6 @@ static CARDINALITY_TO_CHORD_MEMBERS: CardinalityToChordMembers = LazyLock::new(|
                 tni.invariance_vector(),
                 tni.interval_class_vector(),
             );
-
-            if key == (1, Sign::Zero) {
-                println!("{value:?}");
-            }
 
             entries.insert(key, value);
 
@@ -208,32 +208,228 @@ fn forte_index_to_inversions_available(card: usize, index: u8) -> Result<Vec<Sig
     Ok(inversions)
 }
 
-fn _validate_address() {
-    //todo
+fn validate_address(address: (u8, u8, Option<i8>)) -> Result<(u8, u8, Sign), Exception> {
+    let card = address.0;
+    let index = address.1;
+    let inversion = address.2.and_then(Sign::from_i8);
+
+    if !(1..=12).contains(&card) {
+        return Err(Exception::ChordTables(format!(
+            "cardinality {card} not valid"
+        )));
+    }
+
+    if index < 1 || index > MAXIMUM_INDEX_NUMBER_WITHOUT_INVERSION_EQUIVALENCE[card as usize] {
+        return Err(Exception::ChordTables(format!("index {index} not valid")));
+    }
+
+    let inversions_available = forte_index_to_inversions_available(card as usize, index)?;
+
+    let resolved_inversion = if let Some(inv) = inversion {
+        if inversions_available.contains(&inv) {
+            inv
+        } else {
+            return Err(Exception::ChordTables(format!(
+                "inversion {} not valid",
+                inv.as_i8()
+            )));
+        }
+    } else if inversions_available.contains(&Sign::Zero) {
+        Sign::Zero
+    } else {
+        Sign::One
+    };
+
+    Ok((card, index, resolved_inversion))
+}
+
+fn bool_vec_to_pitch_classes(v: &[bool]) -> Vec<u8> {
+    v.iter()
+        .enumerate()
+        .filter_map(
+            |(idx, present)| {
+                if *present { Some(idx as u8) } else { None }
+            },
+        )
+        .collect()
+}
+
+fn pitch_classes_to_bools(pcs: &[u8]) -> [bool; 12] {
+    let mut out = [false; 12];
+    for pc in pcs {
+        out[*pc as usize % 12] = true;
+    }
+    out
+}
+
+pub(crate) fn seek_chord_tables_address(
+    ordered_pitch_classes: &[u8],
+) -> Result<ChordTableAddress, Exception> {
+    if ordered_pitch_classes.is_empty() {
+        return Err(Exception::ChordTables(
+            "cannot access chord tables address for Chord with 0 pitches".to_string(),
+        ));
+    }
+
+    let card = ordered_pitch_classes.len() as u8;
+    if card == 1 {
+        return Ok((1, 1, 0, Some(ordered_pitch_classes[0] % 12)));
+    }
+    if card == 12 {
+        return Ok((12, 1, 0, Some(0)));
+    }
+
+    let mut candidates: Vec<([bool; 12], [bool; 12], u8)> = Vec::new();
+    for rot in 0..ordered_pitch_classes.len() {
+        let mut test_set: Vec<u8> = ordered_pitch_classes[rot..].to_vec();
+        test_set.extend_from_slice(&ordered_pitch_classes[..rot]);
+
+        let test_set_original_pc = test_set[0] % 12;
+        let test_set_transposed: Vec<u8> = test_set
+            .iter()
+            .map(|x| ((*x as i32 - test_set_original_pc as i32).rem_euclid(12)) as u8)
+            .collect();
+
+        let mut test_set_invert: Vec<u8> =
+            test_set_transposed.iter().map(|x| (12 - *x) % 12).collect();
+        test_set_invert.reverse();
+        let shift = (12 - test_set_invert[0]) % 12;
+        test_set_invert = test_set_invert.iter().map(|x| (x + shift) % 12).collect();
+
+        candidates.push((
+            pitch_classes_to_bools(&test_set_transposed),
+            pitch_classes_to_bools(&test_set_invert),
+            test_set_original_pc,
+        ));
+    }
+
+    for index_candidate in 1..FORTE[card as usize].len() {
+        let Some(data_line) = &FORTE[card as usize][index_candidate] else {
+            continue;
+        };
+        let data_line_pcs = data_line.pitch_classes();
+        let inversions_available =
+            forte_index_to_inversions_available(card as usize, index_candidate as u8)?;
+
+        for (candidate, candidate_inversion, candidate_original_pc) in &candidates {
+            if data_line_pcs == *candidate {
+                let inversion = if inversions_available.contains(&Sign::Zero) {
+                    0
+                } else {
+                    1
+                };
+                return Ok((
+                    card,
+                    index_candidate as u8,
+                    inversion,
+                    Some(*candidate_original_pc),
+                ));
+            }
+            if data_line_pcs == *candidate_inversion {
+                let inversion = if inversions_available.contains(&Sign::Zero) {
+                    0
+                } else {
+                    -1
+                };
+                return Ok((
+                    card,
+                    index_candidate as u8,
+                    inversion,
+                    Some(*candidate_original_pc),
+                ));
+            }
+        }
+    }
+
+    Err(Exception::ChordTables(format!(
+        "cannot find a chord table address for {ordered_pitch_classes:?}"
+    )))
+}
+
+pub(crate) fn address_to_common_names(
+    address: ChordTableAddress,
+) -> Result<Option<Vec<&'static str>>, Exception> {
+    let (card, index, inversion) = validate_address((address.0, address.1, Some(address.2)))?;
+    Ok(TN_INDEX_TO_CHORD_INFO
+        .get(&(card, index, inversion))
+        .cloned()
+        .flatten())
+}
+
+pub(crate) fn address_to_forte_name(
+    address: ChordTableAddress,
+    classification: &str,
+) -> Result<String, Exception> {
+    let (card, index, inversion) = validate_address((address.0, address.1, Some(address.2)))?;
+    let inversion_suffix = match classification.to_ascii_lowercase().as_str() {
+        "tn" => match inversion {
+            Sign::NegativeOne => "B",
+            Sign::One => "A",
+            Sign::Zero => "",
+        },
+        _ => "",
+    };
+    Ok(format!("{card}-{index}{inversion_suffix}"))
+}
+
+pub(crate) fn transposed_normal_form_from_address(
+    address: ChordTableAddress,
+) -> Result<Vec<u8>, Exception> {
+    let (card, index, inversion) = validate_address((address.0, address.1, Some(address.2)))?;
+    let entry = CARDINALITY_TO_CHORD_MEMBERS
+        .get(card as usize)
+        .and_then(|bucket| bucket.get(&(index, inversion)))
+        .ok_or_else(|| {
+            Exception::ChordTables(format!(
+                "cannot resolve normal form for address ({card}, {index}, {})",
+                inversion.as_i8()
+            ))
+        })?;
+    Ok(bool_vec_to_pitch_classes(&entry.0))
+}
+
+pub(crate) fn interval_class_vector_from_address(
+    address: ChordTableAddress,
+) -> Result<Vec<u8>, Exception> {
+    let (card, index, inversion) = validate_address((address.0, address.1, Some(address.2)))?;
+    let entry = CARDINALITY_TO_CHORD_MEMBERS
+        .get(card as usize)
+        .and_then(|bucket| bucket.get(&(index, inversion)))
+        .ok_or_else(|| {
+            Exception::ChordTables(format!(
+                "cannot resolve interval class vector for address ({card}, {index}, {})",
+                inversion.as_i8()
+            ))
+        })?;
+    Ok(entry.2.to_vec())
 }
 
 // include!("./generated.rs");
 
 #[cfg(test)]
 mod tests {
+    use super::{Pcivicv, U8SB};
+    use crate::chord::tables::{
+        CARDINALITY_TO_CHORD_MEMBERS, CARDINALITY_TO_CHORD_MEMBERS_GENERATED,
+    };
+    use std::collections::hash_map::Keys;
+
+    #[cfg(feature = "python")]
     mod utils {
         include!(concat!(env!("CARGO_MANIFEST_DIR"), "/shared.rs"));
     }
 
-    use super::{Pcivicv, TNIStructure, U8SB};
-
-    use crate::chord::tables::{
-        CARDINALITY_TO_CHORD_MEMBERS, CARDINALITY_TO_CHORD_MEMBERS_GENERATED, FORTE, Sign,
-    };
-
+    #[cfg(feature = "python")]
+    use super::TNIStructure;
+    #[cfg(feature = "python")]
+    use crate::chord::tables::{FORTE, Sign};
+    #[cfg(feature = "python")]
     use pyo3::{
         Bound, PyResult, Python,
         types::{PyAnyMethods, PyDict, PyDictMethods, PyTuple},
     };
-
+    #[cfg(feature = "python")]
     use utils::{get_tables, init_py_with_dummies, prepare};
-
-    use std::collections::hash_map::Keys;
 
     #[test]
     fn cardinality_to_chord_members_equality() {
@@ -254,6 +450,7 @@ mod tests {
         });
     }
 
+    #[cfg(feature = "python")]
     fn match_python(tuple: &Pcivicv) -> String {
         let true_indices: Vec<String> = tuple
             .0
@@ -287,17 +484,18 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "python")]
     fn python_cardinality_to_chord_members_equality_test() {
         prepare().unwrap();
 
-        Python::with_gil(|py| -> PyResult<()> {
+        Python::attach(|py| -> PyResult<()> {
             init_py_with_dummies(py)?;
 
             let tables = get_tables(py)?;
 
             let cardinality_to_chord_members = tables.getattr("cardinalityToChordMembers")?;
             let cardinality_to_chord_members: &Bound<'_, PyDict> =
-                cardinality_to_chord_members.downcast_exact()?;
+                cardinality_to_chord_members.cast_exact()?;
 
             cardinality_to_chord_members.keys().into_iter().for_each(
                 |outer_key: Bound<'_, pyo3::PyAny>| {
@@ -307,10 +505,10 @@ mod tests {
                         .get_item(outer_key)
                         .unwrap()
                         .unwrap();
-                    let inner_dict: &Bound<'_, PyDict> = inner_dict.downcast_exact().unwrap();
+                    let inner_dict: &Bound<'_, PyDict> = inner_dict.cast_exact().unwrap();
 
                     inner_dict.keys().into_iter().for_each(|inner_key| {
-                        let inner_key: &Bound<'_, PyTuple> = inner_key.downcast_exact().unwrap();
+                        let inner_key: &Bound<'_, PyTuple> = inner_key.cast_exact().unwrap();
 
                         let (first, second): (u8, i8) = inner_key.extract().unwrap();
                         let key: U8SB = (first, Sign::from_i8(second).unwrap());
@@ -336,6 +534,7 @@ mod tests {
         .unwrap();
     }
 
+    #[cfg(feature = "python")]
     fn match_python2(v: &[Option<TNIStructure>]) -> String {
         let elems: Vec<String> = v
             .iter()
@@ -381,10 +580,11 @@ mod tests {
         }
     }
     #[test]
+    #[cfg(feature = "python")]
     fn python_forte_equality_test() {
         prepare().unwrap();
 
-        Python::with_gil(|py| -> PyResult<()> {
+        Python::attach(|py| -> PyResult<()> {
             init_py_with_dummies(py)?;
 
             let operator = py.import("operator")?;
@@ -392,13 +592,12 @@ mod tests {
             let tables = get_tables(py)?;
 
             let forte = tables.getattr("FORTE")?;
-            let forte: &Bound<'_, PyTuple> = forte.downcast_exact()?;
+            let forte: &Bound<'_, PyTuple> = forte.cast_exact()?;
 
             for i in 0..13 {
                 let item = operator.call_method1("getitem", (forte, i))?;
 
-                let tuple: Result<&Bound<'_, PyTuple>, pyo3::DowncastError<'_, '_>> =
-                    item.downcast_exact();
+                let tuple: Result<&Bound<'_, PyTuple>, _> = item.cast_exact();
 
                 match tuple {
                     Ok(t) => {
