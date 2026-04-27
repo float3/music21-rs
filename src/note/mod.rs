@@ -187,13 +187,7 @@ mod tests {
 
     #[test]
     fn pitch_changed_clears_note_cache() {
-        let note = Note::new(
-            Some("C4"),
-            None,
-            None,
-            None,
-        )
-        .unwrap();
+        let note = Note::new(Some("C4"), None, None, None).unwrap();
 
         note.insert_cache_value_for_test("pitchName", "C");
         assert_eq!(note.cache_len_for_test(), 1);
@@ -209,13 +203,7 @@ mod tests {
         chord.insert_cache_value_for_test("analysis", "major triad");
         assert_eq!(chord.cache_len_for_test(), 1);
 
-        let mut note = Note::new(
-            Some("E4"),
-            None,
-            None,
-            None,
-        )
-        .unwrap();
+        let mut note = Note::new(Some("E4"), None, None, None).unwrap();
         note.notrest._chord_attached = Some(Arc::clone(&chord));
 
         note.pitch_changed();
