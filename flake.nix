@@ -7,11 +7,7 @@
   };
 
   outputs =
-    {
-      self,
-      nixpkgs,
-      flake-utils,
-    }:
+    { self, nixpkgs, flake-utils }:
     flake-utils.lib.eachDefaultSystem (
       system:
       let
@@ -20,44 +16,37 @@
         python = pkgs.python3;
         pythonPackages = python.pkgs;
         linuxOnlyLibs = with pkgs; lib.optionals stdenv.isLinux [ alsa-lib ];
+        libclangInclude = "-I${pkgs.llvmPackages_latest.libclang.lib}/lib/clang/${pkgs.llvmPackages_latest.libclang.version}/include";
       in
       {
         devShells.default = pkgs.mkShell {
-          packages =
-            (with pkgs; [
-              cargo
-              rustc
-              clippy
-              rustfmt
-              nixfmt-rfc-style
-              git
-              pkg-config
-              clang
-              llvmPackages_latest.libclang
-              openssl
-              python
-              pythonPackages.virtualenv
-              pythonPackages.requests
-            ])
-            ++ linuxOnlyLibs;
+          packages = (with pkgs; [
+            cargo
+            rustc
+            clippy
+            rustfmt
+            nixfmt-rfc-style
+            git
+            pkg-config
+            clang
+            llvmPackages_latest.libclang
+            openssl
+            python
+            pythonPackages.virtualenv
+            pythonPackages.requests
+          ])
+          ++ linuxOnlyLibs;
 
           # https://github.com/rust-lang/rust-bindgen#environment-variables
           LIBCLANG_PATH = "${pkgs.llvmPackages_latest.libclang.lib}/lib";
 
           BINDGEN_EXTRA_CLANG_ARGS = lib.concatStringsSep " " (
-            [
-              "-I${pkgs.llvmPackages_latest.libclang.lib}/lib/clang/${pkgs.llvmPackages_latest.libclang.version}/include"
-            ]
-            ++ lib.optionals pkgs.stdenv.isLinux [
-              "-I${pkgs.glibc.dev}/include"
-            ]
+            [ libclangInclude ]
+            ++ lib.optionals pkgs.stdenv.isLinux [ "-I${pkgs.glibc.dev}/include" ]
           );
 
           LD_LIBRARY_PATH = lib.makeLibraryPath (
-            [
-              pkgs.openssl
-              pkgs.llvmPackages_latest.libclang
-            ]
+            [ pkgs.openssl pkgs.llvmPackages_latest.libclang ]
             ++ linuxOnlyLibs
           );
 
@@ -68,12 +57,11 @@
           '';
         };
 
-        checks.nixfmt = pkgs.runCommand "nixfmt-check" {
-          nativeBuildInputs = [ pkgs.nixfmt-rfc-style ];
-        } ''
-          nixfmt --check ${./flake.nix}
-          touch "$out"
-        '';
+        checks.nixfmt =
+          pkgs.runCommand "nixfmt-check" { nativeBuildInputs = [ pkgs.nixfmt-rfc-style ]; } ''
+            nixfmt --check ${./flake.nix}
+            touch "$out"
+          '';
 
         formatter = pkgs.nixfmt-rfc-style;
       }
