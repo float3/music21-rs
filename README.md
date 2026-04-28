@@ -44,15 +44,6 @@ cd music21-rs
 git submodule update --init --recursive
 ```
 
-### Common Commands
-
-```bash
-cargo fmt --all
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace --all-targets
-cargo run --bin test
-```
-
 ### Nix Development Shell (Optional)
 
 If you use Nix, the repository includes a flake-based development shell with Rust

@@ -822,6 +822,11 @@ impl Pitch {
         Ok(())
     }
 
+    /// Returns the stored octave.
+    ///
+    /// Returns `None` when the pitch was created without an explicit octave,
+    /// such as `Pitch::from_name("C")`. In calculations, octave-less pitches
+    /// use the library default octave.
     pub fn octave(&self) -> Octave {
         self._octave
     }

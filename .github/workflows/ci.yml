@@ -200,6 +200,58 @@ jobs:
       - name: Build docs
         run: cargo doc --workspace --no-deps
 
+      - name: Install wasm-pack
+        if: github.event_name == 'push'
+        run: cargo install wasm-pack --locked
+
+      - name: Build Pages site
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          rm -rf target/pages
+          mkdir -p target/pages/docs
+          cp -R target/doc/. target/pages/docs/
+          cp examples/chord-web/index.html target/pages/index.html
+
+          pushd examples/chord-web
+          wasm-pack build --release --target web --out-dir ../../target/pages/pkg
+          popd
+
+      - name: Configure Pages
+        if: github.event_name == 'push'
+        uses: actions/configure-pages@v5
+
+      - name: Upload docs artifact
+        if: github.event_name == 'push'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: target/pages
+
+  pages:
+    name: Publish Docs
+    runs-on: ubuntu-latest
+    needs:
+      - nix
+      - stable-check
+      - feature-matrix
+      - lint
+      - test
+      - docs
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy docs to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
   release:
     name: GitHub Release
     runs-on: ubuntu-latest
@@ -210,6 +262,7 @@ jobs:
       - lint
       - test
       - docs
+      - pages
     if: github.event_name == 'push'
     permissions:
       contents: write

@@ -184,7 +184,11 @@ impl Chord {
         Some(root.to_string())
     }
 
-    pub(crate) fn common_name(&self) -> String {
+    /// Returns the primary unpitched music21-style common name.
+    ///
+    /// For chords with multiple table aliases, this is the first common name in
+    /// table order. Use [`Self::common_names`] to get every unpitched alias.
+    pub fn common_name(&self) -> String {
         if self
             ._notes
             .iter()
@@ -372,21 +376,30 @@ impl Chord {
         self.ordered_pitch_classes()
     }
 
-    pub(crate) fn pitches(&self) -> Vec<Pitch> {
+    /// Returns cloned pitches for every note in the chord, in input order.
+    pub fn pitches(&self) -> Vec<Pitch> {
         self._notes.iter().map(|note| note._pitch.clone()).collect()
     }
 
     /// Returns the inferred root pitch name when the chord has one.
+    ///
+    /// Returns `None` for empty chords, where there is no pitch from which a
+    /// root can be inferred.
     pub fn root_pitch_name(&self) -> Option<String> {
         self.root_pitch_name_from_tables()
     }
 
     /// Returns the lowest pitch name in the chord.
+    ///
+    /// Returns `None` for empty chords, where there is no bass pitch.
     pub fn bass_pitch_name_public(&self) -> Option<String> {
         self.bass_pitch_name()
     }
 
     /// Returns the Forte class, such as `"3-11B"`, when available.
+    ///
+    /// Returns `None` when the chord's pitch-class set has no Forte-table
+    /// entry, including empty or otherwise unsupported pitch-class sets.
     pub fn forte_class(&self) -> Option<String> {
         let ordered_pcs = self.ordered_pitch_classes();
         let address = tables::seek_chord_tables_address(&ordered_pcs).ok()?;
@@ -394,6 +407,9 @@ impl Chord {
     }
 
     /// Returns the transposed normal form when table metadata is available.
+    ///
+    /// Returns `None` when the chord's pitch-class set cannot be found in the
+    /// chord tables, including empty or otherwise unsupported pitch-class sets.
     pub fn normal_form(&self) -> Option<Vec<u8>> {
         let ordered_pcs = self.ordered_pitch_classes();
         let address = tables::seek_chord_tables_address(&ordered_pcs).ok()?;
@@ -401,6 +417,9 @@ impl Chord {
     }
 
     /// Returns the interval-class vector when table metadata is available.
+    ///
+    /// Returns `None` when the chord's pitch-class set cannot be found in the
+    /// chord tables, including empty or otherwise unsupported pitch-class sets.
     pub fn interval_class_vector(&self) -> Option<Vec<u8>> {
         let ordered_pcs = self.ordered_pitch_classes();
         let address = tables::seek_chord_tables_address(&ordered_pcs).ok()?;
@@ -408,6 +427,10 @@ impl Chord {
     }
 
     /// Returns the tertian inversion number, where root position is `0`.
+    ///
+    /// Returns `None` for empty chords, chords with fewer than three distinct
+    /// pitch classes, or chords whose bass-to-root interval does not match a
+    /// supported tertian inversion.
     pub fn inversion(&self) -> Option<u8> {
         let root_pc = self.root_pitch_class_tertian()?;
         let bass_pc = self
@@ -432,6 +455,8 @@ impl Chord {
     }
 
     /// Returns a human-readable inversion label.
+    ///
+    /// Returns `None` whenever [`Self::inversion`] returns `None`.
     pub fn inversion_name(&self) -> Option<String> {
         match self.inversion()? {
             0 => Some("root position".to_string()),

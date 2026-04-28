@@ -85,6 +85,10 @@ impl Polyrhythm {
         Ok(())
     }
 
+    /// Returns the tempo in beats per minute.
+    ///
+    /// Returns `None` when the polyrhythm was constructed without a tempo and
+    /// [`Self::set_tempo`] has not been called.
     pub fn tempo(&self) -> Option<UnsignedIntegerType> {
         self.tempo
     }
