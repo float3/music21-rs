@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub(crate) struct Note {
+pub struct Note {
     notrest: NotRest,
     pub(crate) _pitch: Pitch,
     #[cfg_attr(feature = "serde", serde(skip))]
@@ -23,6 +23,26 @@ pub(crate) struct Note {
 }
 
 impl Note {
+    pub fn from_name(name: impl Into<String>) -> ExceptionResult<Self> {
+        Self::new(Option::<Pitch>::None, None, None, Some(name.into()))
+    }
+
+    pub fn from_pitch(pitch: Pitch) -> ExceptionResult<Self> {
+        Self::new(Some(pitch), None, None, None)
+    }
+
+    pub fn pitch(&self) -> &Pitch {
+        &self._pitch
+    }
+
+    pub fn pitch_name(&self) -> String {
+        self._pitch.name()
+    }
+
+    pub fn pitch_name_with_octave(&self) -> String {
+        self._pitch.name_with_octave()
+    }
+
     pub(crate) fn new<T>(
         pitch: Option<T>,
         duration: Option<Duration>,

@@ -15,7 +15,7 @@ pub(crate) mod common;
 pub(crate) mod defaults;
 pub(crate) mod display;
 pub(crate) mod duration;
-pub(crate) mod exception;
+pub mod exception;
 pub(crate) mod fraction_pow;
 pub(crate) mod interval;
 pub(crate) mod key;
@@ -26,6 +26,14 @@ pub(crate) mod prebase;
 pub(crate) mod scale;
 pub(crate) mod stepname;
 pub mod tuningsystem;
-pub mod web;
 // #[macro_use]
 // pub(crate) mod macros;
+
+pub use chord::Chord;
+pub use exception::{Exception, ExceptionResult};
+pub use note::Note;
+pub use pitch::{
+    Pitch, PitchAccidental, PitchClassSpecifier, PitchMicrotone, PitchName, PitchOptions,
+};
+pub use polyrhythm::{Polyrhythm, PolyrhythmEvent};
+pub use tuningsystem::{Fraction, TuningSystem};

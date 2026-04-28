@@ -855,7 +855,7 @@ dependencies = [
 
 [[package]]
 name = "music21-rs"
-version = "0.0.5"
+version = "0.0.6"
 dependencies = [
  "fraction",
  "itertools",

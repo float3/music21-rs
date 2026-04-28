@@ -30,20 +30,6 @@ pub struct Chord {
     from_integer_pitches: bool,
 }
 
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct ChordAnalysis {
-    pub common_name: String,
-    pub pitched_common_name: String,
-    pub root: Option<String>,
-    pub bass: Option<String>,
-    pub forte_class: Option<String>,
-    pub normal_form: Option<Vec<u8>>,
-    pub interval_class_vector: Option<Vec<u8>>,
-    pub inversion: Option<u8>,
-    pub inversion_name: Option<String>,
-}
-
 impl Chord {
     pub fn new<T>(notes: Option<T>) -> ExceptionResult<Self>
     where
@@ -67,6 +53,38 @@ impl Chord {
         // Keep construction side-effect free like music21's Chord constructor.
         // Enharmonic simplification can be requested explicitly later.
         Ok(chord)
+    }
+
+    pub fn empty() -> ExceptionResult<Self> {
+        Self::new(Option::<&str>::None)
+    }
+
+    pub fn from_pitch_names(notes: &str) -> ExceptionResult<Self> {
+        Self::new(Some(notes))
+    }
+
+    pub fn from_names(notes: &[&str]) -> ExceptionResult<Self> {
+        Self::new(Some(notes))
+    }
+
+    pub fn from_strings(notes: &[String]) -> ExceptionResult<Self> {
+        Self::new(Some(notes))
+    }
+
+    pub fn from_pitches(pitches: &[Pitch]) -> ExceptionResult<Self> {
+        Self::new(Some(pitches))
+    }
+
+    pub fn from_notes(notes: &[Note]) -> ExceptionResult<Self> {
+        Self::new(Some(notes))
+    }
+
+    pub fn from_chords(chords: &[Chord]) -> ExceptionResult<Self> {
+        Self::new(Some(chords))
+    }
+
+    pub fn from_midi_numbers(notes: &[i32]) -> ExceptionResult<Self> {
+        Self::new(Some(notes))
     }
 
     pub fn pitched_common_name(&self) -> String {
@@ -381,20 +399,6 @@ impl Chord {
             2 => Some("second inversion".to_string()),
             3 => Some("third inversion".to_string()),
             _ => None,
-        }
-    }
-
-    pub fn analysis(&self) -> ChordAnalysis {
-        ChordAnalysis {
-            common_name: self.common_name(),
-            pitched_common_name: self.pitched_common_name(),
-            root: self.root_pitch_name(),
-            bass: self.bass_pitch_name_public(),
-            forte_class: self.forte_class(),
-            normal_form: self.normal_form(),
-            interval_class_vector: self.interval_class_vector(),
-            inversion: self.inversion(),
-            inversion_name: self.inversion_name(),
         }
     }
 
@@ -832,14 +836,13 @@ mod tests {
     }
 
     #[test]
-    fn chord_analysis_has_forte_and_inversion() {
+    fn chord_metadata_methods_have_forte_and_inversion() {
         let chord = Chord::new(Some("C E G")).unwrap();
-        let analysis = chord.analysis();
-        assert_eq!(analysis.root.as_deref(), Some("C"));
-        assert_eq!(analysis.bass.as_deref(), Some("C"));
-        assert_eq!(analysis.inversion, Some(0));
-        assert_eq!(analysis.inversion_name.as_deref(), Some("root position"));
-        assert_eq!(analysis.forte_class.as_deref(), Some("3-11B"));
+        assert_eq!(chord.root_pitch_name().as_deref(), Some("C"));
+        assert_eq!(chord.bass_pitch_name_public().as_deref(), Some("C"));
+        assert_eq!(chord.inversion(), Some(0));
+        assert_eq!(chord.inversion_name().as_deref(), Some("root position"));
+        assert_eq!(chord.forte_class().as_deref(), Some("3-11B"));
         assert!(
             chord
                 .common_names()

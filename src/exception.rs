@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::fmt;
 
-pub(crate) type ExceptionResult<T> = Result<T, Exception>;
+pub type ExceptionResult<T> = Result<T, Exception>;
 
 #[derive(Debug)]
 pub enum Exception {

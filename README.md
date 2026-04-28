@@ -20,17 +20,6 @@ assert_eq!(chord.pitched_common_name(), "C-major triad");
 # Ok::<(), music21_rs::exception::Exception>(())
 ```
 
-## Website-Facing APIs
-
-The crate now includes high-level helpers in [`src/web/mod.rs`](./src/web/mod.rs) intended for
-backend/API use in music websites and tools:
-
-- `analyze_chord`: rich chord metadata (common names, forte class, inversion, pitch classes)
-- `analyze_key`: mode/key signature summary, scale tones, harmonized triads/sevenths, relative/parallel
-- `analyze_progression`: degree + roman numeral labeling per chord in a key context
-- `suggest_scales_for_chord`: candidate scales/modes that contain all chord tones
-- `analyze_polyrhythm`: timeline events, beat timings, coincidence ticks, and derived harmonic color
-
 ## Development
 
 ### Prerequisites

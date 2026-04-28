@@ -1,3 +1,4 @@
+use super::Chord;
 use super::IntegerType;
 use super::Pitch;
 
@@ -234,6 +235,43 @@ impl IntoNotRests for &[Pitch] {
             })
             .collect::<ExceptionResult<Vec<_>>>()?;
         Ok((duration, duration.clone(), notes))
+    }
+}
+
+impl IntoNotRests for &[Note] {
+    type T = Vec<NotRest>;
+    fn into_not_rests(
+        self,
+        duration: &Option<Duration>,
+        quick_duration: bool,
+    ) -> ExceptionResult<(&Option<Duration>, Option<Duration>, Self::T)> {
+        let _ = quick_duration;
+        let notes = self.iter().map(|n| n.get_super().clone()).collect();
+        Ok((duration, duration.clone(), notes))
+    }
+}
+
+impl IntoNotRests for &[Chord] {
+    type T = Vec<NotRest>;
+    fn into_not_rests(
+        self,
+        duration: &Option<Duration>,
+        quick_duration: bool,
+    ) -> ExceptionResult<(&Option<Duration>, Option<Duration>, Self::T)> {
+        let notes = self
+            .iter()
+            .flat_map(|chord| chord._notes.iter().map(|n| n.get_super().clone()))
+            .collect();
+
+        if quick_duration {
+            Ok((
+                &None,
+                self.first().and_then(|chord| chord.duration().clone()),
+                notes,
+            ))
+        } else {
+            Ok((duration, None, notes))
+        }
     }
 }
 
