@@ -9,12 +9,13 @@ use crate::note::IntoPitch;
 use crate::pitch::Pitch;
 
 #[derive(Debug, Clone)]
+/// A repeating polyrhythm defined by a base meter and subdivision voices.
 pub struct Polyrhythm {
     /// Beats per measure (e.g. 4 for 4/4 time)
     pub base: UnsignedIntegerType,
     /// Subdivisions (e.g. [3, 4] for a 3:4 polyrhythm)
     pub components: Vec<UnsignedIntegerType>,
-    /// Tempo in BPM
+    /// Tempo in BPM. `None` means no tempo has been assigned yet.
     pub tempo: Option<UnsignedIntegerType>,
     /// Total ticks per measure (lcm of subdivisions)
     pub cycle: UnsignedIntegerType,
@@ -23,13 +24,18 @@ pub struct Polyrhythm {
 
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// A single tick in a polyrhythm cycle.
 pub struct PolyrhythmEvent {
+    /// Tick index within the cycle.
     pub tick: UnsignedIntegerType,
+    /// Time in seconds from the start of the cycle.
     pub time_seconds: FloatType,
+    /// Per-component trigger flags for this tick.
     pub triggers: Vec<bool>,
 }
 
 impl Polyrhythm {
+    /// Creates a polyrhythm from a base meter and nonzero subdivisions.
     pub fn new(
         base: UnsignedIntegerType,
         subdivisions: &[UnsignedIntegerType],
@@ -57,6 +63,7 @@ impl Polyrhythm {
         })
     }
 
+    /// Creates a polyrhythm and assigns a nonzero tempo in beats per minute.
     pub fn new_with_tempo(
         base: UnsignedIntegerType,
         tempo: UnsignedIntegerType,
@@ -77,6 +84,7 @@ impl Polyrhythm {
         Self::new_with_tempo(base, tempo, subdivisions)
     }
 
+    /// Sets the tempo in beats per minute.
     pub fn set_tempo(&mut self, tempo: UnsignedIntegerType) -> ExceptionResult<()> {
         if tempo == 0 {
             return Err(Exception::Polyrhythm("Tempo must be nonzero".into()));
@@ -93,18 +101,22 @@ impl Polyrhythm {
         self.tempo
     }
 
+    /// Returns the subdivision voices.
     pub fn components(&self) -> &[UnsignedIntegerType] {
         &self.components
     }
 
+    /// Returns the current iterator tick.
     pub fn current_tick(&self) -> UnsignedIntegerType {
         self.current_tick
     }
 
+    /// Resets iteration to the first tick in the cycle.
     pub fn reset(&mut self) {
         self.current_tick = 0;
     }
 
+    /// Returns the tick interval for each subdivision voice.
     pub fn component_intervals(&self) -> Vec<UnsignedIntegerType> {
         self.components
             .iter()
@@ -146,6 +158,7 @@ impl Polyrhythm {
             .collect())
     }
 
+    /// Returns all tick events in one full cycle.
     pub fn events_one_cycle(&self) -> ExceptionResult<Vec<PolyrhythmEvent>> {
         let tick_duration = self.tick_duration()?;
         Ok((0..self.cycle)
@@ -167,6 +180,7 @@ impl Polyrhythm {
             .collect())
     }
 
+    /// Returns ticks where at least `min_simultaneous` components trigger.
     pub fn coincidence_ticks_one_cycle(&self, min_simultaneous: usize) -> Vec<UnsignedIntegerType> {
         if min_simultaneous == 0 {
             return (0..self.cycle).collect();
@@ -210,6 +224,7 @@ impl Polyrhythm {
         Chord::new(notes.as_slice())
     }
 
+    /// Converts one polyrhythm cycle into a chord above `base`.
     pub fn as_chord<T>(&self, base: T) -> ExceptionResult<Chord>
     where
         T: IntoPitch,
@@ -217,6 +232,7 @@ impl Polyrhythm {
         self.chord_from_base_pitch(base.into_pitch()?)
     }
 
+    /// Converts one polyrhythm cycle into a pitch collection above `base`.
     pub fn as_polypitch<T>(&self, base: T) -> ExceptionResult<Chord>
     where
         T: IntoPitch,

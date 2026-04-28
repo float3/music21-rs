@@ -21,6 +21,8 @@ use crate::note::Note;
 use crate::prebase::ProtoM21Object;
 use crate::prebase::ProtoM21ObjectTrait;
 use crate::stepname::StepName;
+use crate::tuningsystem::OCTAVE_SIZE;
+use crate::tuningsystem::TuningSystem;
 
 use accidental::Accidental;
 use accidental::IntoAccidental;
@@ -47,8 +49,11 @@ static TRANSPOSITIONAL_INTERVALS: LazyLock<Mutex<HashMap<IntervalString, Interva
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Input accepted as a pitch name or pitch-space number.
 pub enum PitchName {
+    /// A written pitch name such as `"C#4"` or `"E-"`.
     Name(String),
+    /// A pitch-space number, where 60 corresponds to middle C.
     Number(f64),
 }
 
@@ -78,8 +83,11 @@ impl From<FloatType> for PitchName {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Input accepted as an accidental name or semitone alteration.
 pub enum PitchAccidental {
+    /// An accidental name or symbol such as `"sharp"` or `"#"`.
     Name(String),
+    /// A semitone alteration, such as `1.0` for sharp.
     Alter(f64),
 }
 
@@ -124,8 +132,11 @@ impl Display for PitchAccidental {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Input accepted as a microtone value.
 pub enum PitchMicrotone {
+    /// A cent offset from the notated pitch.
     Cents(f64),
+    /// A textual cent offset.
     Text(String),
 }
 
@@ -155,8 +166,11 @@ impl From<FloatType> for PitchMicrotone {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Input accepted for pitch-class construction.
 pub enum PitchClassSpecifier {
+    /// A numeric pitch class.
     Number(f64),
+    /// A string pitch class, including `A`/`T` for 10 and `B`/`E` for 11.
     String(String),
 }
 
@@ -221,68 +235,89 @@ impl From<String> for PitchClassSpecifier {
 
 #[derive(Clone, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Builder options for constructing a [`Pitch`].
 pub struct PitchOptions {
+    /// Pitch name or pitch-space number.
     pub name: Option<PitchName>,
+    /// Diatonic step name.
     pub step: Option<char>,
+    /// Octave number.
     pub octave: Option<i32>,
+    /// Accidental name or alteration.
     pub accidental: Option<PitchAccidental>,
+    /// Microtone cent offset.
     pub microtone: Option<PitchMicrotone>,
+    /// Pitch class to realize as a pitch.
     pub pitch_class: Option<PitchClassSpecifier>,
+    /// MIDI note number.
     pub midi: Option<i32>,
+    /// Pitch-space value.
     pub ps: Option<f64>,
+    /// Fundamental pitch used for harmonic construction.
     pub fundamental: Option<Pitch>,
 }
 
 impl PitchOptions {
+    /// Creates an empty pitch builder.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Sets the pitch name or pitch-space number.
     pub fn name(mut self, name: impl Into<PitchName>) -> Self {
         self.name = Some(name.into());
         self
     }
 
+    /// Sets the diatonic step.
     pub fn step(mut self, step: char) -> Self {
         self.step = Some(step);
         self
     }
 
+    /// Sets the octave.
     pub fn octave(mut self, octave: i32) -> Self {
         self.octave = Some(octave);
         self
     }
 
+    /// Sets the accidental.
     pub fn accidental(mut self, accidental: impl Into<PitchAccidental>) -> Self {
         self.accidental = Some(accidental.into());
         self
     }
 
+    /// Sets the microtone.
     pub fn microtone(mut self, microtone: impl Into<PitchMicrotone>) -> Self {
         self.microtone = Some(microtone.into());
         self
     }
 
+    /// Sets the pitch class.
     pub fn pitch_class(mut self, pitch_class: impl Into<PitchClassSpecifier>) -> Self {
         self.pitch_class = Some(pitch_class.into());
         self
     }
 
+    /// Sets the MIDI note number.
     pub fn midi(mut self, midi: i32) -> Self {
         self.midi = Some(midi);
         self
     }
 
+    /// Sets the pitch-space value.
     pub fn ps(mut self, ps: f64) -> Self {
         self.ps = Some(ps);
         self
     }
 
+    /// Sets the fundamental pitch.
     pub fn fundamental(mut self, fundamental: Pitch) -> Self {
         self.fundamental = Some(fundamental);
         self
     }
 
+    /// Builds a [`Pitch`] from the collected options.
     pub fn build(self) -> ExceptionResult<Pitch> {
         Pitch::from_options(self)
     }
@@ -290,6 +325,7 @@ impl PitchOptions {
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// A musical pitch with spelling, octave, accidental and optional microtone.
 pub struct Pitch {
     proto: ProtoM21Object,
     _step: StepName,
@@ -314,6 +350,7 @@ impl PartialEq for Pitch {
 }
 
 impl Pitch {
+    /// Builds a pitch from [`PitchOptions`].
     pub fn from_options(options: PitchOptions) -> ExceptionResult<Self> {
         let step = options.step.map(StepName::try_from).transpose()?;
 
@@ -330,10 +367,12 @@ impl Pitch {
         )
     }
 
+    /// Creates a [`PitchOptions`] builder.
     pub fn builder() -> PitchOptions {
         PitchOptions::new()
     }
 
+    /// Builds a pitch from a name such as `"C#4"` or `"E-"`.
     pub fn from_name(name: impl Into<String>) -> ExceptionResult<Self> {
         Self::new(
             Some(name.into()),
@@ -348,6 +387,7 @@ impl Pitch {
         )
     }
 
+    /// Builds a pitch from a pitch-space number.
     pub fn from_number(number: f64) -> ExceptionResult<Self> {
         Self::new(
             Some(PitchName::Number(number)),
@@ -362,6 +402,7 @@ impl Pitch {
         )
     }
 
+    /// Builds a pitch from a diatonic step.
     pub fn from_step(step: char) -> ExceptionResult<Self> {
         Self::new(
             Option::<String>::None,
@@ -376,14 +417,17 @@ impl Pitch {
         )
     }
 
+    /// Builds a pitch from a pitch name and explicit octave.
     pub fn from_name_and_octave(name: impl Into<String>, octave: i32) -> ExceptionResult<Self> {
         PitchOptions::new().name(name.into()).octave(octave).build()
     }
 
+    /// Builds a pitch from a pitch class.
     pub fn from_pitch_class(pitch_class: impl Into<PitchClassSpecifier>) -> ExceptionResult<Self> {
         PitchOptions::new().pitch_class(pitch_class).build()
     }
 
+    /// Builds a pitch from a MIDI note number.
     pub fn from_midi(midi: i32) -> ExceptionResult<Self> {
         Self::new(
             Option::<String>::None,
@@ -398,6 +442,7 @@ impl Pitch {
         )
     }
 
+    /// Builds a pitch from a pitch-space value.
     pub fn from_pitch_space(ps: f64) -> ExceptionResult<Self> {
         Self::new(
             Option::<String>::None,
@@ -538,6 +583,7 @@ impl Pitch {
         Ok(pitch)
     }
 
+    /// Returns the pitch name with the octave suffix when one is set.
     pub fn name_with_octave(&self) -> String {
         match self._octave {
             Some(octave) => format!("{}{}", self.name(), octave),
@@ -545,6 +591,7 @@ impl Pitch {
         }
     }
 
+    /// Returns the pitch name without octave, such as `"F#"` or `"B-"`.
     pub fn name(&self) -> String {
         format!("{:?}{}", self._step, self._accidental.modifier())
     }
@@ -592,6 +639,7 @@ impl Pitch {
         Ok(())
     }
 
+    /// Returns the total semitone alteration from the natural step.
     pub fn alter(&self) -> FloatType {
         let mut post = 0.0;
 
@@ -669,9 +717,25 @@ impl Pitch {
         p
     }
 
+    /// Returns the pitch-space value for this pitch.
     pub fn ps(&self) -> FloatType {
         let octave = self._octave.unwrap_or(PITCH_OCTAVE as IntegerType);
         ((octave + 1) * 12) as FloatType + self._step.step_ref() as FloatType + self.alter()
+    }
+
+    /// Returns this pitch's twelve-tone equal-temperament frequency in hertz.
+    pub fn frequency_hz(&self) -> FloatType {
+        self.frequency_hz_in(TuningSystem::EqualTemperament {
+            octave_size: OCTAVE_SIZE,
+        })
+    }
+
+    /// Returns this pitch's frequency in hertz for a supported tuning system.
+    ///
+    /// The pitch-space value is used as the tuning-system degree index, so this
+    /// is most musically meaningful for twelve-tone systems.
+    pub fn frequency_hz_in(&self, tuning_system: TuningSystem) -> FloatType {
+        tuning_system.frequency_at(self.ps())
     }
 
     fn step_setter(&mut self, step_name: StepName) {
@@ -1289,6 +1353,7 @@ fn convert_harmonic_to_cents(_harmonic_shift: IntegerType) -> IntegerType {
 mod tests {
     use crate::defaults::IntegerType;
     use crate::interval::{Interval, IntervalArgument};
+    use crate::tuningsystem::TuningSystem;
 
     use super::{Pitch, convert_harmonic_to_cents, simplify_multiple_enharmonics};
 
@@ -1477,6 +1542,16 @@ mod tests {
         let m3 = Interval::new(IntervalArgument::Str("m3".to_string())).unwrap();
         let out = c4.transpose(m3);
         assert_eq!(out.name_with_octave(), "E-4");
+    }
+
+    #[test]
+    fn test_pitch_frequency_helpers() {
+        let a4 = Pitch::from_name("A4").unwrap();
+        assert!((a4.frequency_hz() - 440.0).abs() < 0.0001);
+
+        let e4 = Pitch::from_name("E4").unwrap();
+        assert!((e4.frequency_hz_in(TuningSystem::FiveLimit) - 327.032).abs() < 0.001);
+        assert!(e4.frequency_hz_in(TuningSystem::FiveLimit) < e4.frequency_hz());
     }
 
     #[test]

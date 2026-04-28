@@ -66,7 +66,7 @@
 
       .input-row {
         display: grid;
-        grid-template-columns: minmax(180px, 1fr) auto;
+        grid-template-columns: minmax(180px, 1fr) auto auto;
         gap: 10px;
         margin-bottom: 10px;
       }
@@ -81,35 +81,69 @@
         color: var(--ink);
       }
 
-      #analyze {
+      #analyze,
+      #share {
         height: 46px;
         padding: 0 18px;
-        border: 0;
         border-radius: 8px;
-        background: var(--accent);
-        color: #fff;
         font-weight: 700;
         cursor: pointer;
+        white-space: nowrap;
+      }
+
+      #analyze {
+        border: 0;
+        background: var(--accent);
+        color: #fff;
       }
 
       #analyze:hover {
         background: var(--accent-strong);
       }
 
-      .examples {
-        display: flex;
-        flex-wrap: wrap;
+      #share {
+        border: 1px solid var(--line);
+        background: var(--panel);
+        color: var(--accent-strong);
+      }
+
+      #share:hover,
+      #share.copied {
+        border-color: var(--accent);
+        background: #ecfdf5;
+      }
+
+      .suggestions {
+        display: grid;
         gap: 8px;
         margin-bottom: 22px;
       }
 
-      .examples button {
+      .examples,
+      .history {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .history:empty {
+        display: none;
+      }
+
+      .examples button,
+      .history button {
         padding: 7px 10px;
         border: 1px solid var(--line);
         border-radius: 999px;
         background: var(--panel);
         color: var(--ink);
         cursor: pointer;
+      }
+
+      .history button {
+        border-color: #b7d8d4;
+        background: #ecfdf5;
+        color: var(--accent-strong);
       }
 
       .layout {
@@ -146,8 +180,7 @@
         background: var(--panel);
       }
 
-      .fact span,
-      th {
+      .fact span {
         display: block;
         color: var(--muted);
         font-size: 12px;
@@ -182,6 +215,18 @@
         border-collapse: collapse;
       }
 
+      .pitches-section table {
+        min-width: 820px;
+      }
+
+      th {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        white-space: nowrap;
+      }
+
       th,
       td {
         padding: 10px 12px;
@@ -191,6 +236,43 @@
 
       td {
         font-variant-numeric: tabular-nums;
+      }
+
+      .pitches-section {
+        overflow-x: auto;
+      }
+
+      .frequency-cell {
+        min-width: 220px;
+      }
+
+      .tuning-list {
+        display: grid;
+        gap: 5px;
+      }
+
+      .tuning-row {
+        display: grid;
+        grid-template-columns: minmax(112px, 1fr) auto;
+        gap: 10px;
+        align-items: baseline;
+      }
+
+      .tuning-name {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .tuning-hz {
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .tuning-cents {
+        grid-column: 2;
+        justify-self: end;
+        color: var(--muted);
+        font-size: 11px;
       }
 
       .keyboard {
@@ -265,7 +347,8 @@
           font-size: 26px;
         }
 
-        #analyze {
+        #analyze,
+        #share {
           width: 100%;
         }
       }
@@ -279,26 +362,31 @@
       </header>
 
       <form id="form" class="input-row">
-        <input id="chord-input" value="C E G#" autocomplete="off" />
+        <input id="chord-input" value="C E G#" autocomplete="off" list="chord-history" />
+        <datalist id="chord-history"></datalist>
         <button id="analyze" type="submit">Analyze</button>
+        <button id="share" type="button">Copy link</button>
       </form>
 
-      <div class="examples" id="examples"></div>
+      <div class="suggestions">
+        <div class="examples" id="examples"></div>
+        <div class="history" id="history"></div>
+      </div>
       <p class="error" id="error"></p>
 
       <div class="layout">
         <div>
           <section>
-            <h2>Summary</h2>
-            <div class="facts" id="facts"></div>
-          </section>
-
-          <section style="margin-top: 18px">
             <h2>Pitched Names</h2>
             <div class="list" id="pitched-names"></div>
           </section>
 
           <section style="margin-top: 18px">
+            <h2>Summary</h2>
+            <div class="facts" id="facts"></div>
+          </section>
+
+          <section class="pitches-section" style="margin-top: 18px">
             <h2>Pitches</h2>
             <table>
               <thead>
@@ -307,6 +395,7 @@
                   <th>Name</th>
                   <th>Octave</th>
                   <th>Pitch Space</th>
+                  <th>Frequency</th>
                   <th>Class</th>
                   <th>Alter</th>
                 </tr>
@@ -335,6 +424,8 @@
 
       const input = document.querySelector("#chord-input");
       const form = document.querySelector("#form");
+      const share = document.querySelector("#share");
+      const historyOptions = document.querySelector("#chord-history");
       const error = document.querySelector("#error");
       const facts = document.querySelector("#facts");
       const pitchedNames = document.querySelector("#pitched-names");
@@ -342,8 +433,25 @@
       const pitches = document.querySelector("#pitches");
       const keyboard = document.querySelector("#keyboard");
       const examples = document.querySelector("#examples");
+      const history = document.querySelector("#history");
       const pcNames = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"];
+      const inputPitchNames = ["C", "C#", "D", "E-", "E", "F", "F#", "G", "A-", "A", "B-", "B"];
+      const randomChordShapes = [
+        [0, 4, 7],
+        [0, 3, 7],
+        [0, 4, 8],
+        [0, 3, 6],
+        [0, 4, 7, 10],
+        [0, 4, 7, 11],
+        [0, 3, 7, 10],
+        [0, 3, 6, 9],
+      ];
       const blackKeys = new Set([1, 3, 6, 8, 10]);
+      const chordParam = "chord";
+      const historyStorageKey = "music21-rs.chordInspector.history";
+      const maxHistoryItems = 24;
+      let shareResetTimer = null;
+      let chordHistory = loadChordHistory();
 
       function text(value) {
         if (value === null || value === undefined) return "Not available";
@@ -386,6 +494,57 @@
         }
       }
 
+      function formatHz(value) {
+        return Number.isFinite(value) ? `${value.toFixed(3)} Hz` : "Not available";
+      }
+
+      function formatCents(value) {
+        if (!Number.isFinite(value)) return "";
+        const rounded = Math.abs(value) < 0.005 ? 0 : value;
+        return `${rounded > 0 ? "+" : ""}${rounded.toFixed(2)} cents`;
+      }
+
+      function renderFrequencyCell(pitch) {
+        const td = document.createElement("td");
+        td.className = "frequency-cell";
+        const list = document.createElement("div");
+        list.className = "tuning-list";
+        const tuningFrequencies =
+          pitch.tuning_frequencies && pitch.tuning_frequencies.length
+            ? pitch.tuning_frequencies
+            : [
+                {
+                  name: "Equal temperament",
+                  frequency_hz: pitch.frequency_hz,
+                  cents_from_equal_temperament: 0,
+                },
+              ];
+
+        for (const tuning of tuningFrequencies) {
+          const row = document.createElement("div");
+          row.className = "tuning-row";
+          const name = document.createElement("span");
+          name.className = "tuning-name";
+          name.textContent = tuning.name;
+          const hz = document.createElement("span");
+          hz.className = "tuning-hz";
+          hz.textContent = formatHz(tuning.frequency_hz);
+          row.append(name, hz);
+
+          if (Math.abs(tuning.cents_from_equal_temperament) >= 0.005) {
+            const cents = document.createElement("span");
+            cents.className = "tuning-cents";
+            cents.textContent = formatCents(tuning.cents_from_equal_temperament);
+            row.appendChild(cents);
+          }
+
+          list.appendChild(row);
+        }
+
+        td.appendChild(list);
+        return td;
+      }
+
       function renderPitches(data) {
         pitches.replaceChildren();
         for (const pitch of data.pitches) {
@@ -395,10 +554,14 @@
             pitch.name_with_octave || pitch.name,
             pitch.octave ?? "None",
             pitch.pitch_space.toFixed(3),
-            pitch.pitch_class,
-            pitch.alter.toFixed(3),
           ];
           for (const cell of cells) {
+            const td = document.createElement("td");
+            td.textContent = cell;
+            tr.appendChild(td);
+          }
+          tr.appendChild(renderFrequencyCell(pitch));
+          for (const cell of [pitch.pitch_class, pitch.alter.toFixed(3)]) {
             const td = document.createElement("td");
             td.textContent = cell;
             tr.appendChild(td);
@@ -427,33 +590,202 @@
         renderKeyboard(data.pitch_classes);
       }
 
-      function analyze() {
+      function getSharedChord() {
+        const params = new URLSearchParams(window.location.search);
+        return params.has(chordParam) ? (params.get(chordParam) ?? "") : null;
+      }
+
+      function buildShareUrl(value) {
+        const url = new URL(window.location.href);
+        url.searchParams.set(chordParam, value);
+        return url;
+      }
+
+      function syncShareUrl() {
+        const url = buildShareUrl(input.value);
+        window.history.replaceState({ chord: input.value }, "", url.href);
+        return url.href;
+      }
+
+      function normalizeChordInput(value) {
+        return value.trim().replace(/\s+/g, " ");
+      }
+
+      function loadChordHistory() {
         try {
-          render(analyze_chord(input.value));
-        } catch (err) {
-          error.textContent = err instanceof Error ? err.message : String(err);
-          error.style.display = "block";
+          const raw = window.localStorage?.getItem(historyStorageKey);
+          if (!raw) return [];
+          const values = JSON.parse(raw);
+          if (!Array.isArray(values)) return [];
+
+          const seen = new Set();
+          return values
+            .map((value) => (typeof value === "string" ? normalizeChordInput(value) : ""))
+            .filter((value) => {
+              if (!value || seen.has(value)) return false;
+              seen.add(value);
+              return true;
+            })
+            .slice(0, maxHistoryItems);
+        } catch {
+          return [];
         }
       }
 
-      for (const value of ["C E G", "C E- G", "C E G#", "G2 B2 D3 F3", ""]) {
+      function saveChordHistory() {
+        try {
+          window.localStorage?.setItem(historyStorageKey, JSON.stringify(chordHistory));
+        } catch {
+          // Browsers can deny localStorage; history still works for this page view.
+        }
+      }
+
+      function renderChordHistory() {
+        historyOptions.replaceChildren();
+        history.replaceChildren();
+
+        for (const value of chordHistory) {
+          const option = document.createElement("option");
+          option.value = value;
+          historyOptions.appendChild(option);
+
+          const button = document.createElement("button");
+          button.type = "button";
+          button.textContent = value;
+          button.title = "Previous chord";
+          button.addEventListener("click", () => {
+            input.value = value;
+            resetShareButton();
+            analyze({ remember: true });
+          });
+          history.appendChild(button);
+        }
+      }
+
+      function rememberChord(value) {
+        const normalized = normalizeChordInput(value);
+        if (!normalized) return;
+
+        chordHistory = [
+          normalized,
+          ...chordHistory.filter((historyValue) => historyValue !== normalized),
+        ].slice(0, maxHistoryItems);
+        saveChordHistory();
+        renderChordHistory();
+      }
+
+      function resetShareButton() {
+        share.textContent = "Copy link";
+        share.classList.remove("copied");
+      }
+
+      function markShareCopied() {
+        share.textContent = "Copied";
+        share.classList.add("copied");
+        if (shareResetTimer) clearTimeout(shareResetTimer);
+        shareResetTimer = setTimeout(resetShareButton, 1600);
+      }
+
+      async function writeClipboard(value) {
+        if (navigator.clipboard?.writeText && window.isSecureContext) {
+          await navigator.clipboard.writeText(value);
+          return;
+        }
+
+        const textarea = document.createElement("textarea");
+        textarea.value = value;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "fixed";
+        textarea.style.top = "-1000px";
+        document.body.appendChild(textarea);
+        textarea.select();
+        try {
+          if (!document.execCommand("copy")) {
+            throw new Error("Copy command failed");
+          }
+        } finally {
+          textarea.remove();
+        }
+      }
+
+      function analyze({ syncUrl = true, remember = false } = {}) {
+        const chordValue = input.value;
+        try {
+          render(analyze_chord(chordValue));
+          if (syncUrl) syncShareUrl();
+          if (remember) rememberChord(chordValue);
+          return true;
+        } catch (err) {
+          error.textContent = err instanceof Error ? err.message : String(err);
+          error.style.display = "block";
+          return false;
+        }
+      }
+
+      function randomItem(values) {
+        return values[Math.floor(Math.random() * values.length)];
+      }
+
+      function generateRandomChord() {
+        const rootIndex = Math.floor(Math.random() * inputPitchNames.length);
+        return randomItem(randomChordShapes)
+          .map(
+            (interval) =>
+              inputPitchNames[(rootIndex + interval) % inputPitchNames.length],
+          )
+          .join(" ");
+      }
+
+      for (const value of [
+        "C E G",
+        "C E- G",
+        "C E G#",
+        "G2 B2 D3 F3",
+        generateRandomChord(),
+        "",
+      ]) {
         const button = document.createElement("button");
         button.type = "button";
         button.textContent = value === "" ? "empty" : value;
         button.addEventListener("click", () => {
           input.value = value;
-          analyze();
+          analyze({ remember: true });
         });
         examples.appendChild(button);
       }
 
       form.addEventListener("submit", (event) => {
         event.preventDefault();
-        analyze();
+        analyze({ remember: true });
+      });
+
+      input.addEventListener("input", resetShareButton);
+
+      share.addEventListener("click", async () => {
+        const href = syncShareUrl();
+        try {
+          await writeClipboard(href);
+          error.style.display = "none";
+          markShareCopied();
+        } catch {
+          error.textContent = "The URL has been updated in your address bar.";
+          error.style.display = "block";
+        }
+      });
+
+      window.addEventListener("popstate", () => {
+        const sharedChord = getSharedChord();
+        if (sharedChord !== null) {
+          input.value = sharedChord;
+          analyze({ syncUrl: false });
+        }
       });
 
       await init();
-      analyze();
+      renderChordHistory();
+      const sharedChord = getSharedChord();
+      if (sharedChord !== null) input.value = sharedChord;
+      analyze({ syncUrl: false });
     </script>
   </body>
 </html>

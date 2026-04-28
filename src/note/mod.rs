@@ -15,6 +15,7 @@ use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// A pitched note.
 pub struct Note {
     notrest: NotRest,
     pub(crate) _pitch: Pitch,
@@ -23,22 +24,27 @@ pub struct Note {
 }
 
 impl Note {
+    /// Builds a note from a pitch name such as `"C#4"` or `"E-"`.
     pub fn from_name(name: impl Into<String>) -> ExceptionResult<Self> {
         Self::new(Option::<Pitch>::None, None, None, Some(name.into()))
     }
 
+    /// Builds a note from an existing [`Pitch`].
     pub fn from_pitch(pitch: Pitch) -> ExceptionResult<Self> {
         Self::new(Some(pitch), None, None, None)
     }
 
+    /// Returns the note's pitch.
     pub fn pitch(&self) -> &Pitch {
         &self._pitch
     }
 
+    /// Returns the pitch name without an octave, such as `"C#"` or `"E-"`.
     pub fn pitch_name(&self) -> String {
         self._pitch.name()
     }
 
+    /// Returns the pitch name with an octave when one is set.
     pub fn pitch_name_with_octave(&self) -> String {
         self._pitch.name_with_octave()
     }

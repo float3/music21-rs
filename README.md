@@ -1,6 +1,8 @@
 # music21-rs
 
 [![CI](https://github.com/float3/music21-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/float3/music21-rs/actions/workflows/ci.yml)
+[![Crates.io](https://img.shields.io/crates/v/music21-rs.svg)](https://crates.io/crates/music21-rs)
+[![docs.rs](https://docs.rs/music21-rs/badge.svg)](https://docs.rs/music21-rs)
 
 `music21-rs` is a work-in-progress Rust port of selected parts of [music21](https://github.com/cuthbertLab/music21), currently focused on chord naming and supporting pitch/chord infrastructure.
 
@@ -28,6 +30,11 @@ let empty = Chord::new("")?;
 assert_eq!(empty.pitched_common_name(), "empty chord");
 # Ok::<(), music21_rs::exception::Exception>(())
 ```
+
+## Examples
+
+- [Chord Inspector web demo](./examples/chord-web/) builds with `wasm-pack` and is published with the generated docs on GitHub Pages.
+- [Polyrhythm sound example](./examples/polyrhythmsound.rs) demonstrates the polyrhythm helpers.
 
 ## Development
 

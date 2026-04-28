@@ -1,6 +1,13 @@
-use music21_rs::Chord;
+use music21_rs::{COMMON_TWELVE_TONE_TUNING_SYSTEMS, Chord};
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
+
+#[derive(Serialize)]
+struct TuningFrequencyInfo {
+    name: &'static str,
+    frequency_hz: f64,
+    cents_from_equal_temperament: f64,
+}
 
 #[derive(Serialize)]
 struct PitchInfo {
@@ -11,6 +18,8 @@ struct PitchInfo {
     pitch_space: f64,
     pitch_class: u8,
     alter: f64,
+    frequency_hz: f64,
+    tuning_frequencies: Vec<TuningFrequencyInfo>,
 }
 
 #[derive(Serialize)]
@@ -45,6 +54,16 @@ pub fn analyze_chord(input: &str) -> Result<JsValue, JsValue> {
         .enumerate()
         .map(|(index, pitch)| {
             let pitch_space = pitch.ps();
+            let tuning_frequencies = COMMON_TWELVE_TONE_TUNING_SYSTEMS
+                .iter()
+                .copied()
+                .map(|tuning_system| TuningFrequencyInfo {
+                    name: tuning_system.display_name(),
+                    frequency_hz: pitch.frequency_hz_in(tuning_system),
+                    cents_from_equal_temperament: tuning_system.cents_at(pitch_space),
+                })
+                .collect();
+
             PitchInfo {
                 index,
                 name: pitch.name(),
@@ -53,6 +72,8 @@ pub fn analyze_chord(input: &str) -> Result<JsValue, JsValue> {
                 pitch_space,
                 pitch_class: (pitch_space.round() as i32).rem_euclid(12) as u8,
                 alter: pitch.alter(),
+                frequency_hz: pitch.frequency_hz(),
+                tuning_frequencies,
             }
         })
         .collect();

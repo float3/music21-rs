@@ -1,34 +1,59 @@
 use std::str::FromStr;
 
+/// Default octave size for twelve-tone systems.
 pub const OCTAVE_SIZE: u32 = 12;
 
+/// Frequency of middle C in hertz.
 pub const C4: f64 = 261.6256;
+/// Frequency of C0 in hertz.
 pub const C0: f64 = C4 / 16.0;
+/// Frequency of C-1 in hertz.
 pub const CN1: f64 = C4 / 32.0;
 
+/// Frequency of A4 in hertz.
 pub const A4: f64 = 440.0;
+/// Frequency of A0 in hertz.
 pub const A0: f64 = A4 / 16.0;
+/// Frequency of A-1 in hertz.
 pub const AN1: f64 = A4 / 32.0;
 
+/// Degree labels for a twelve-tone chromatic octave.
 pub const TWELVE_TONE_NAMES: [&str; 12] = [
     "C", "C#/Db", "D", "D#/Eb", "E", "F", "F#/Gb", "G", "G#/Ab", "A", "A#/Bb", "B",
 ];
 
+/// Degree labels for a whole-tone octave.
 pub const WHOLE_TONE_NAMES: [&str; 6] = ["C", "D", "E", "F#/Gb", "G#/Ab", "A#/Bb"];
+
+/// The common twelve-tone tuning systems useful for comparing pitch frequencies.
+pub const COMMON_TWELVE_TONE_TUNING_SYSTEMS: [TuningSystem; 4] = [
+    TuningSystem::EqualTemperament {
+        octave_size: OCTAVE_SIZE,
+    },
+    TuningSystem::JustIntonation,
+    TuningSystem::PythagoreanTuning,
+    TuningSystem::FiveLimit,
+];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// A ratio-like value used by tuning tables.
 pub struct Fraction {
+    /// Numerator for a rational ratio, or exponent numerator when `base` is set.
     pub numerator: u32,
+    /// Denominator for a rational ratio, or exponent denominator when `base` is set.
     pub denominator: u32,
+    /// Exponential base. A value of `0` means use `numerator / denominator`.
     pub base: u32,
 }
 
 impl Fraction {
+    /// Creates a rational fraction.
     pub const fn new(numerator: u32, denominator: u32) -> Self {
         Self::new_with_base(numerator, denominator, 0)
     }
 
+    /// Creates a fraction with an optional exponential base.
     pub const fn new_with_base(numerator: u32, denominator: u32, base: u32) -> Self {
         Self {
             numerator,
@@ -37,22 +62,27 @@ impl Fraction {
         }
     }
 
+    /// Returns the numerator.
     pub const fn numerator(&self) -> u32 {
         self.numerator
     }
 
+    /// Returns the denominator.
     pub const fn denominator(&self) -> u32 {
         self.denominator
     }
 
+    /// Returns the exponential base, or `0` for rational ratios.
     pub const fn base(&self) -> u32 {
         self.base
     }
 
+    /// Converts this value into a floating-point ratio.
     pub fn ratio(self) -> f64 {
         self.into()
     }
 
+    /// Returns this fraction shifted upward by `octaves`.
     pub fn with_octaves(mut self, octaves: u32) -> Self {
         if octaves == 0 {
             return self;
@@ -105,57 +135,121 @@ impl From<(u32, u32, u32)> for Fraction {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Supported tuning systems and ratio tables.
 pub enum TuningSystem {
-    EqualTemperament { octave_size: u32 },
-    RecursiveEqualTemperament { octave_size: u32 },
+    /// Equal temperament with a configurable octave size.
+    EqualTemperament {
+        /// Number of equal divisions in each octave.
+        octave_size: u32,
+    },
+    /// Recursive equal temperament with a configurable octave size.
+    RecursiveEqualTemperament {
+        /// Number of equal divisions in each octave.
+        octave_size: u32,
+    },
+    /// Six-tone equal temperament.
     WholeTone,
+    /// Twenty-four-tone equal temperament.
     QuarterTone,
 
+    /// Twelve-tone just intonation table.
     JustIntonation,
+    /// Twenty-four-tone just intonation table.
     JustIntonation24,
+    /// Twelve-tone Pythagorean tuning table.
     PythagoreanTuning,
 
+    /// Twelve-tone five-limit table.
     FiveLimit,
+    /// Twenty-nine-tone eleven-limit table.
     ElevenLimit,
 
+    /// Forty-three-tone ratio table.
     FortyThreeTone,
 
+    /// Twelve-tone step-method equal temperament.
     StepMethod,
 
     // Ethnic scales.
+    /// Five-tone Javanese equal-temperament approximation.
     Javanese,
+    /// Seven-tone Thai equal-temperament approximation.
     Thai,
+    /// Seven-tone Indian scale table.
     Indian,
+    /// Alternate seven-tone Indian scale table.
     IndianAlt,
+    /// Twenty-two-tone Indian scale table.
     Indian22,
+    /// Full twenty-two-tone Indian scale table.
     IndianFull,
 }
 
 impl TuningSystem {
+    /// Returns a compact display name for this tuning system.
+    pub fn display_name(self) -> &'static str {
+        match self {
+            Self::EqualTemperament { .. } => "Equal temperament",
+            Self::RecursiveEqualTemperament { .. } => "Recursive equal temperament",
+            Self::WholeTone => "Whole tone",
+            Self::QuarterTone => "Quarter tone",
+            Self::JustIntonation => "Just intonation",
+            Self::JustIntonation24 => "Just intonation 24",
+            Self::PythagoreanTuning => "Pythagorean",
+            Self::FiveLimit => "Five-limit",
+            Self::ElevenLimit => "Eleven-limit",
+            Self::FortyThreeTone => "Forty-three tone",
+            Self::StepMethod => "Step method",
+            Self::Javanese => "Javanese",
+            Self::Thai => "Thai",
+            Self::Indian => "Indian",
+            Self::IndianAlt => "Indian alternate",
+            Self::Indian22 => "Indian 22",
+            Self::IndianFull => "Indian full",
+        }
+    }
+
+    /// Returns the frequency ratio for a degree index.
     pub fn ratio(self, index: usize) -> f64 {
         get_ratio(self, index, None)
     }
 
+    /// Returns the table fraction for a degree index.
     pub fn fraction(self, index: usize) -> Fraction {
         get_fraction(self, index, None)
     }
 
+    /// Returns a display label for a degree index.
     pub fn label(self, index: u32) -> String {
         get_label(self, index, None)
     }
 
+    /// Returns the octave number containing a degree index.
     pub fn octave(self, index: u32) -> u32 {
         index / self.octave_size()
     }
 
+    /// Returns the frequency in hertz for a degree index.
     pub fn frequency(self, index: u32) -> f64 {
         get_frequency(self, index, None)
     }
 
+    /// Returns the frequency in hertz for a fractional degree index.
+    pub fn frequency_at(self, index: f64) -> f64 {
+        get_frequency_at(self, index, None)
+    }
+
+    /// Returns cents offset from equal temperament for a degree index.
     pub fn cents(self, index: u32) -> f64 {
         get_cents(self, index, None)
     }
 
+    /// Returns cents offset from equal temperament for a fractional degree index.
+    pub fn cents_at(self, index: f64) -> f64 {
+        get_cents_at(self, index, None)
+    }
+
+    /// Returns the number of degrees in one octave for this tuning system.
     pub fn octave_size(self) -> u32 {
         match self {
             Self::EqualTemperament { octave_size }
@@ -241,22 +335,30 @@ impl FromStr for TuningSystem {
     }
 }
 
+/// Creates an equal-temperament fraction for `tone` within `octave_size`.
 pub fn equal_temperament(tone: u32, octave_size: u32) -> Fraction {
     Fraction::new_with_base(tone, octave_size, 2)
 }
 
+/// Creates a twelve-tone equal-temperament fraction.
 pub fn equal_temperament_12(tone: u32) -> Fraction {
     equal_temperament(tone, 12)
 }
 
+/// Creates an equal-temperament fraction using [`OCTAVE_SIZE`].
 pub fn equal_temperament_default(tone: u32) -> Fraction {
     equal_temperament(tone, OCTAVE_SIZE)
 }
 
+/// Returns the frequency ratio for a tuning-system degree.
 pub fn get_ratio(tuning_system: TuningSystem, index: usize, size: Option<u32>) -> f64 {
     get_fraction(tuning_system, index, size).into()
 }
 
+/// Returns the fraction for a tuning-system degree.
+///
+/// The optional `size` overrides the tuning system's octave size for
+/// equal-temperament-style systems.
 pub fn get_fraction(tuning_system: TuningSystem, index: usize, size: Option<u32>) -> Fraction {
     match tuning_system {
         TuningSystem::EqualTemperament { octave_size }
@@ -272,6 +374,10 @@ pub fn get_fraction(tuning_system: TuningSystem, index: usize, size: Option<u32>
     }
 }
 
+/// Returns a display label for a tuning-system degree.
+///
+/// The optional `size` overrides the tuning system's octave size for label
+/// calculation.
 pub fn get_label(tuning_system: TuningSystem, index: u32, size: Option<u32>) -> String {
     let octave_size = size.unwrap_or_else(|| tuning_system.octave_size());
     assert!(octave_size > 0, "octave_size must be greater than zero");
@@ -281,18 +387,54 @@ pub fn get_label(tuning_system: TuningSystem, index: u32, size: Option<u32>) -> 
     )
 }
 
+/// Returns the frequency in hertz for a tuning-system degree.
+///
+/// The optional `size` overrides the tuning system's octave size for
+/// equal-temperament-style systems.
 pub fn get_frequency(tuning_system: TuningSystem, index: u32, size: Option<u32>) -> f64 {
-    if let Some(size) = size {
-        assert!(size > 0, "octave_size must be greater than zero");
-    }
-    get_ratio(tuning_system, index as usize, size) * CN1
+    get_frequency_at(tuning_system, f64::from(index), size)
 }
 
-pub fn get_cents(tuning_system: TuningSystem, index: u32, size: Option<u32>) -> f64 {
+/// Returns the frequency in hertz for a fractional tuning-system degree.
+///
+/// Integer degrees use the tuning system table exactly. Fractional degrees are
+/// interpolated by equal-temperament distance within the same octave.
+pub fn get_frequency_at(tuning_system: TuningSystem, index: f64, size: Option<u32>) -> f64 {
+    assert!(index.is_finite(), "degree index must be finite");
     let octave_size = size.unwrap_or_else(|| tuning_system.octave_size());
     assert!(octave_size > 0, "octave_size must be greater than zero");
-    let reference_freq: f64 = equal_temperament(index, octave_size).into();
-    let comparison_freq = get_frequency(tuning_system, index, size);
+
+    if tuning_system.ratio_table().is_none() {
+        return CN1 * 2.0_f64.powf(index / f64::from(octave_size));
+    }
+
+    let base_index = index.floor() as i32;
+    let fractional_degree = index - f64::from(base_index);
+    CN1 * get_ratio_at_integer_index(tuning_system, base_index)
+        * 2.0_f64.powf(fractional_degree / f64::from(octave_size))
+}
+
+/// Returns cents offset from equal temperament for a tuning-system degree.
+///
+/// The optional `size` overrides the tuning system's octave size for the
+/// equal-temperament comparison.
+pub fn get_cents(tuning_system: TuningSystem, index: u32, size: Option<u32>) -> f64 {
+    get_cents_at(tuning_system, f64::from(index), size)
+}
+
+/// Returns cents offset from equal temperament for a fractional degree index.
+///
+/// The optional `size` overrides the octave size of the equal-temperament
+/// comparison.
+pub fn get_cents_at(tuning_system: TuningSystem, index: f64, size: Option<u32>) -> f64 {
+    let octave_size = size.unwrap_or_else(|| tuning_system.octave_size());
+    assert!(octave_size > 0, "octave_size must be greater than zero");
+    let reference_freq = get_frequency_at(
+        TuningSystem::EqualTemperament { octave_size },
+        index,
+        Some(octave_size),
+    );
+    let comparison_freq = get_frequency_at(tuning_system, index, size);
     1200.0 * (comparison_freq / reference_freq).log2()
 }
 
@@ -303,6 +445,16 @@ fn get_fraction_from_table(tuning_system: TuningSystem, index: usize) -> Fractio
     let len = table.len();
     let octaves = (index / len) as u32;
     table[index % len].with_octaves(octaves)
+}
+
+fn get_ratio_at_integer_index(tuning_system: TuningSystem, index: i32) -> f64 {
+    let table = tuning_system
+        .ratio_table()
+        .expect("tuning system does not have a ratio table");
+    let len = i32::try_from(table.len()).expect("ratio table length exceeds i32 range");
+    let octave = index.div_euclid(len);
+    let degree = index.rem_euclid(len) as usize;
+    table[degree].ratio() * 2.0_f64.powi(octave)
 }
 
 fn index_to_u32(index: usize) -> u32 {
@@ -338,6 +490,7 @@ fn degree_name_with_octave(degree_label: &str, octave: u32) -> String {
     }
 }
 
+/// Twelve-tone just intonation ratios.
 pub const JUST_INTONATION: [Fraction; 12] = [
     Fraction::new(1, 1),
     Fraction::new(17, 16),
@@ -353,6 +506,7 @@ pub const JUST_INTONATION: [Fraction; 12] = [
     Fraction::new(15, 8),
 ];
 
+/// Twenty-four-tone just intonation ratios.
 pub const JUST_INTONATION_24: [Fraction; 24] = [
     Fraction::new(1, 1),
     Fraction::new(33, 32),
@@ -380,6 +534,7 @@ pub const JUST_INTONATION_24: [Fraction; 24] = [
     Fraction::new(31, 16),
 ];
 
+/// Twelve-tone Pythagorean tuning ratios.
 pub const PYTHAGOREAN_TUNING: [Fraction; 12] = [
     Fraction::new(1, 1),
     Fraction::new(256, 243),
@@ -395,6 +550,7 @@ pub const PYTHAGOREAN_TUNING: [Fraction; 12] = [
     Fraction::new(15, 8),
 ];
 
+/// Twelve-tone five-limit tuning ratios.
 pub const FIVE_LIMIT: [Fraction; 12] = [
     Fraction::new(1, 1),
     Fraction::new(16, 15),
@@ -410,6 +566,7 @@ pub const FIVE_LIMIT: [Fraction; 12] = [
     Fraction::new(15, 8),
 ];
 
+/// Twenty-nine-tone eleven-limit tuning ratios.
 pub const ELEVEN_LIMIT: [Fraction; 29] = [
     Fraction::new(1, 1),
     Fraction::new(12, 11),
@@ -442,6 +599,7 @@ pub const ELEVEN_LIMIT: [Fraction; 29] = [
     Fraction::new(11, 6),
 ];
 
+/// Forty-three-tone tuning ratios.
 pub const FORTY_THREE_TONE: [Fraction; 43] = [
     Fraction::new(1, 1),
     Fraction::new(81, 80),
@@ -488,8 +646,10 @@ pub const FORTY_THREE_TONE: [Fraction; 43] = [
     Fraction::new(160, 81),
 ];
 
+/// Backwards-compatible alias for [`FORTY_THREE_TONE`].
 pub const FORTYTHREE_TONE: [Fraction; 43] = FORTY_THREE_TONE;
 
+/// Five-tone Javanese equal-temperament approximation.
 pub const JAVANESE: [Fraction; 5] = [
     Fraction::new_with_base(0, 5, 2),
     Fraction::new_with_base(1, 5, 2),
@@ -498,6 +658,7 @@ pub const JAVANESE: [Fraction; 5] = [
     Fraction::new_with_base(4, 5, 2),
 ];
 
+/// Seven-tone Thai equal-temperament approximation.
 pub const THAI: [Fraction; 7] = [
     Fraction::new_with_base(0, 7, 2),
     Fraction::new_with_base(1, 7, 2),
@@ -508,8 +669,10 @@ pub const THAI: [Fraction; 7] = [
     Fraction::new_with_base(6, 7, 2),
 ];
 
+/// Degree labels for the seven-tone Indian scale.
 pub const INDIAN_SCALE_NAMES: [&str; 7] = ["Sa", "Re", "Ga", "Ma", "Pa", "Dha", "Ni"];
 
+/// Seven-tone Indian scale ratios.
 pub const INDIAN_SCALE: [Fraction; 7] = [
     Fraction::new(1, 1),
     Fraction::new(9, 8),
@@ -520,6 +683,7 @@ pub const INDIAN_SCALE: [Fraction; 7] = [
     Fraction::new(15, 8),
 ];
 
+/// Alternate seven-tone Indian scale ratios.
 pub const INDIA_SCALE_ALT: [Fraction; 7] = [
     Fraction::new(1, 1),
     Fraction::new(9, 8),
@@ -530,6 +694,7 @@ pub const INDIA_SCALE_ALT: [Fraction; 7] = [
     Fraction::new(15, 8),
 ];
 
+/// Twenty-two-tone Indian scale ratios.
 pub const INDIAN_SCALE_22: [Fraction; 22] = [
     Fraction::new(1, 1),
     Fraction::new(256, 243),
@@ -586,6 +751,20 @@ mod tests {
             (TuningSystem::EqualTemperament { octave_size: 12 }.frequency(69) - 440.0).abs()
                 < 0.0001
         );
+    }
+
+    #[test]
+    fn fractional_frequency_helpers_support_pitch_space_values() {
+        let equal = TuningSystem::EqualTemperament {
+            octave_size: OCTAVE_SIZE,
+        };
+        assert!((equal.frequency_at(69.0) - A4).abs() < 0.0001);
+        assert!((equal.frequency_at(60.0) - C4).abs() < 0.0001);
+        assert!((TuningSystem::FiveLimit.frequency_at(64.0) - (C4 * 5.0 / 4.0)).abs() < 0.0001);
+        assert!(
+            (TuningSystem::PythagoreanTuning.frequency_at(67.0) - (C4 * 3.0 / 2.0)).abs() < 0.0001
+        );
+        assert!(TuningSystem::FiveLimit.cents_at(64.0) < -13.0);
     }
 
     #[test]

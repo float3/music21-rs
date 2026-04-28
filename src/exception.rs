@@ -1,21 +1,35 @@
 use std::error::Error;
 use std::fmt;
 
+/// Result type returned by fallible `music21-rs` operations.
 pub type ExceptionResult<T> = Result<T, Exception>;
 
+/// Error variants produced by the crate's theory helpers.
 #[derive(Debug)]
 pub enum Exception {
+    /// Error associated with a generic music21-style object.
     Music21Object(String),
+    /// Error associated with chord construction or analysis.
     Chord(String),
+    /// Error associated with pitch construction, spelling or conversion.
     Pitch(String),
+    /// Error associated with microtone construction or conversion.
     Microtone(String),
+    /// Error associated with accidental parsing or conversion.
     Accidental(String),
+    /// Error associated with generated chord-table lookup data.
     ChordTables(String),
+    /// Error associated with interval construction or conversion.
     Interval(String),
+    /// Error associated with step-name parsing or conversion.
     StepName(String),
+    /// Error associated with numeric pitch-class parsing.
     PitchClass(String),
+    /// Error associated with pitch-class string parsing.
     PitchClassString(String),
+    /// Error associated with ordinal-name parsing.
     Ordinal(String),
+    /// Error associated with polyrhythm construction or timing.
     Polyrhythm(String),
 }
 
