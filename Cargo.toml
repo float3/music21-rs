@@ -9,7 +9,6 @@ license-file = "LICENSE"
 name = "music21-rs"
 readme = "README.md"
 repository = "https://github.com/float3/music21-rs"
-rust-version = "1.85"
 version = "0.0.5"
 
 [workspace]
