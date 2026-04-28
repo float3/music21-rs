@@ -234,7 +234,7 @@ impl Iterator for Polyrhythm {
             .iter()
             .map(|&sub| {
                 let divisor = self.cycle / sub;
-                divisor != 0 && tick % divisor == 0
+                tick.checked_rem(divisor) == Some(0)
             })
             .collect();
         self.current_tick = (self.current_tick + 1) % self.cycle;

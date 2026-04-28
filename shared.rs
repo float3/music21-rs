@@ -15,10 +15,11 @@ mod module {
 
     #[cfg(feature = "python")]
     static PYTHON_EXE: LazyLock<String> = LazyLock::new(|| {
-        if let Ok(explicit) = std::env::var("PYO3_PYTHON") {
-            if !explicit.trim().is_empty() {
-                return explicit;
-            }
+        if let Some(explicit) = std::env::var("PYO3_PYTHON")
+            .ok()
+            .filter(|explicit| !explicit.trim().is_empty())
+        {
+            return explicit;
         }
 
         let version: (u8, u8) = Python::attach(|py| -> PyResult<(u8, u8)> {

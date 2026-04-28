@@ -179,16 +179,10 @@ fn convert_generic_string(value: String) -> IntegerType {
 
     let (digits, remain) = get_num_from_str(&normalized, "0123456789");
     let remain = remain.trim().to_lowercase();
-    if !digits.is_empty()
-        && (remain.is_empty()
-            || remain == "st"
-            || remain == "nd"
-            || remain == "rd"
-            || remain == "th")
-    {
-        if let Ok(number) = digits.parse::<IntegerType>() {
-            return number * direction_scalar;
-        }
+    if !digits.is_empty() && matches!(remain.as_str(), "" | "st" | "nd" | "rd" | "th") {
+        return digits
+            .parse::<IntegerType>()
+            .map_or(0, |number| number * direction_scalar);
     }
 
     0
