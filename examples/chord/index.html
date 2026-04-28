@@ -1,0 +1,1466 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>music21-rs Chord Inspector</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #151515;
+        --muted: #61646b;
+        --line: #d9dde5;
+        --panel: #ffffff;
+        --soft: #f4f6f8;
+        --accent: #0f766e;
+        --accent-strong: #0b5f59;
+        --warn: #b42318;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        color: var(--ink);
+        background:
+          linear-gradient(90deg, rgba(15, 118, 110, 0.08), transparent 32rem),
+          var(--soft);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+      }
+
+      button,
+      input {
+        font: inherit;
+      }
+
+      .shell {
+        width: min(1180px, calc(100vw - 32px));
+        margin: 0 auto;
+        padding: 24px 0 40px;
+      }
+
+      header {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 20px;
+        margin-bottom: 20px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 32px;
+        line-height: 1.05;
+      }
+
+      .title-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+      }
+
+      .home-link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 34px;
+        padding: 0 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        color: var(--accent-strong);
+        font-size: 13px;
+        font-weight: 800;
+        text-decoration: none;
+        white-space: nowrap;
+      }
+
+      .home-link:hover {
+        border-color: var(--accent);
+        background: #ecfdf5;
+      }
+
+      .top-links {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: end;
+        gap: 12px;
+      }
+
+      .docs-link {
+        color: var(--accent-strong);
+        font-weight: 700;
+        text-decoration: none;
+      }
+
+      .input-row {
+        display: grid;
+        grid-template-columns: minmax(180px, 1fr) auto auto auto;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+
+      #chord-input {
+        min-width: 0;
+        height: 46px;
+        padding: 0 14px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        color: var(--ink);
+      }
+
+      #analyze,
+      #share,
+      #play-chord {
+        height: 46px;
+        padding: 0 18px;
+        border-radius: 8px;
+        font-weight: 700;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+
+      #analyze {
+        border: 0;
+        background: var(--accent);
+        color: #fff;
+      }
+
+      #analyze:hover {
+        background: var(--accent-strong);
+      }
+
+      #share,
+      #play-chord {
+        border: 1px solid var(--line);
+        background: var(--panel);
+        color: var(--accent-strong);
+      }
+
+      #share:hover,
+      #share.copied,
+      #play-chord:hover {
+        border-color: var(--accent);
+        background: #ecfdf5;
+      }
+
+      .suggestions {
+        display: grid;
+        gap: 8px;
+        margin-bottom: 22px;
+      }
+
+      .random-controls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .random-controls label {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .random-controls input {
+        width: 58px;
+        height: 34px;
+        padding: 0 8px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        color: var(--ink);
+      }
+
+      .examples,
+      .history {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .history:empty,
+      .clear-history[hidden] {
+        display: none;
+      }
+
+      .examples button,
+      .random-controls button,
+      .history button,
+      .clear-history {
+        padding: 7px 10px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--panel);
+        color: var(--ink);
+        cursor: pointer;
+      }
+
+      .history button {
+        border-color: #b7d8d4;
+        background: #ecfdf5;
+        color: var(--accent-strong);
+      }
+
+      .clear-history {
+        justify-self: start;
+        color: #8a1f17;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+        gap: 18px;
+        align-items: start;
+      }
+
+      section {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        overflow: hidden;
+      }
+
+      section h2 {
+        margin: 0;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--line);
+        font-size: 15px;
+        letter-spacing: 0;
+      }
+
+      .facts {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1px;
+        background: var(--line);
+      }
+
+      .summary-section {
+        overflow: visible;
+      }
+
+      .fact {
+        min-height: 74px;
+        padding: 12px;
+        background: var(--panel);
+      }
+
+      .fact span {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      .fact strong {
+        display: block;
+        margin-top: 6px;
+        overflow-wrap: anywhere;
+        font-size: 16px;
+      }
+
+      .help {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 16px;
+        height: 16px;
+        border: 1px solid #b7d8d4;
+        border-radius: 50%;
+        background: #ecfdf5;
+        color: var(--accent-strong);
+        font-size: 11px;
+        font-weight: 900;
+        line-height: 1;
+        cursor: help;
+      }
+
+      .help::after {
+        position: absolute;
+        z-index: 4;
+        left: 50%;
+        bottom: calc(100% + 8px);
+        width: min(260px, calc(100vw - 40px));
+        padding: 9px 10px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--ink);
+        color: #fff;
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+        content: attr(data-help);
+        font-size: 12px;
+        font-weight: 600;
+        line-height: 1.35;
+        text-transform: none;
+        transform: translateX(-50%);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.12s ease;
+      }
+
+      .help:hover::after,
+      .help:focus-visible::after {
+        opacity: 1;
+      }
+
+      .fact .help::after {
+        left: 0;
+        transform: translateX(-8px);
+      }
+
+      .list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 14px 16px;
+      }
+
+      .chip {
+        padding: 7px 9px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: #f9fafb;
+        font-size: 13px;
+      }
+
+      .resolution-list {
+        display: grid;
+        gap: 8px;
+        padding: 14px 16px;
+      }
+
+      .resolution-chip {
+        display: grid;
+        gap: 4px;
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #f9fafb;
+        color: var(--ink);
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .resolution-chip:hover {
+        border-color: var(--accent);
+        background: #ecfdf5;
+      }
+
+      .resolution-chip strong {
+        font-size: 14px;
+      }
+
+      .resolution-chip span,
+      .resolution-chip small {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .resolution-chip.unavailable {
+        cursor: default;
+      }
+
+      .resolution-chip.unavailable:hover {
+        border-color: var(--line);
+        background: #f9fafb;
+      }
+
+      .action-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        padding: 14px 16px 16px;
+      }
+
+      .button-link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 40px;
+        padding: 0 14px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        color: var(--accent-strong);
+        font-weight: 700;
+        text-decoration: none;
+      }
+
+      .button-link:hover {
+        border-color: var(--accent);
+        background: #ecfdf5;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+      }
+
+      .notation-section,
+      .pitches-section {
+        grid-column: 1 / -1;
+      }
+
+      th {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      th,
+      td {
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        vertical-align: top;
+        overflow-wrap: anywhere;
+      }
+
+      td {
+        font-variant-numeric: tabular-nums;
+      }
+
+      .pitches-section th,
+      .pitches-section td {
+        padding: 10px 8px;
+      }
+
+      .pitches-section th:nth-child(1),
+      .pitches-section td:nth-child(1) {
+        width: 42px;
+      }
+
+      .pitches-section th:nth-child(3),
+      .pitches-section td:nth-child(3),
+      .pitches-section th:nth-child(6),
+      .pitches-section td:nth-child(6),
+      .pitches-section th:nth-child(7),
+      .pitches-section td:nth-child(7) {
+        width: 78px;
+      }
+
+      .pitches-section th:nth-child(4),
+      .pitches-section td:nth-child(4) {
+        width: 96px;
+      }
+
+      .frequency-cell {
+        min-width: 0;
+      }
+
+      .tuning-list {
+        display: grid;
+        gap: 5px;
+      }
+
+      .tuning-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px;
+        align-items: baseline;
+      }
+
+      .tuning-name {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .tuning-hz {
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .tuning-cents {
+        grid-column: 2;
+        justify-self: end;
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .keyboard {
+        position: relative;
+        display: grid;
+        grid-template-columns: repeat(12, 1fr);
+        gap: 2px;
+        padding: 14px 16px 18px;
+      }
+
+      .key {
+        height: 92px;
+        border: 1px solid var(--line);
+        border-radius: 0 0 5px 5px;
+        background: #fff;
+        color: var(--muted);
+        display: flex;
+        flex-direction: column;
+        align-items: end;
+        justify-content: center;
+        gap: 3px;
+        padding-bottom: 8px;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .key-name,
+      .key-alt {
+        display: block;
+        line-height: 1;
+      }
+
+      .key-alt {
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: 700;
+      }
+
+      .key.black {
+        height: 62px;
+        background: #202329;
+        color: #fff;
+      }
+
+      .key.active {
+        border-color: var(--accent);
+        box-shadow: inset 0 -6px 0 var(--accent);
+        color: var(--accent-strong);
+      }
+
+      .key.black.active {
+        box-shadow: inset 0 -6px 0 #2dd4bf;
+        color: #99f6e4;
+      }
+
+      .key.black .key-alt,
+      .key.black.active .key-alt,
+      .key.black:hover .key-alt {
+        color: #99f6e4;
+      }
+
+      .key:hover {
+        border-color: var(--accent);
+        color: var(--accent-strong);
+      }
+
+      .key.black:hover {
+        color: #99f6e4;
+      }
+
+      #notation {
+        min-height: 132px;
+        padding: 6px 16px 12px;
+      }
+
+      #notation svg {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+
+      .notation-fallback {
+        padding: 28px 0;
+        color: var(--muted);
+        font-weight: 700;
+      }
+
+      .error {
+        display: none;
+        margin: 0 0 16px;
+        padding: 12px 14px;
+        border: 1px solid #f3b0aa;
+        border-radius: 8px;
+        background: #fff3f1;
+        color: var(--warn);
+        font-weight: 700;
+      }
+
+      @media (max-width: 760px) {
+        .shell {
+          width: min(100vw - 20px, 680px);
+          padding-top: 14px;
+        }
+
+        header,
+        .layout,
+        .input-row,
+        .facts {
+          grid-template-columns: 1fr;
+        }
+
+        .notation-section,
+        .pitches-section {
+          grid-column: auto;
+        }
+
+        header {
+          display: grid;
+          align-items: start;
+        }
+
+        .top-links {
+          justify-content: start;
+        }
+
+        h1 {
+          font-size: 26px;
+        }
+
+        #analyze,
+        #share,
+        #play-chord {
+          width: 100%;
+        }
+
+        .pitches-section th,
+        .pitches-section td {
+          padding: 8px 5px;
+          font-size: 12px;
+        }
+
+        .pitches-section th:nth-child(1),
+        .pitches-section td:nth-child(1) {
+          width: 30px;
+        }
+
+        .pitches-section th:nth-child(3),
+        .pitches-section td:nth-child(3),
+        .pitches-section th:nth-child(6),
+        .pitches-section td:nth-child(6),
+        .pitches-section th:nth-child(7),
+        .pitches-section td:nth-child(7) {
+          width: 52px;
+        }
+
+        .pitches-section th:nth-child(4),
+        .pitches-section td:nth-child(4) {
+          width: 64px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <header>
+        <div class="title-row">
+          <a class="home-link" href="../index.html">Home</a>
+          <h1>Chord Inspector</h1>
+        </div>
+        <nav class="top-links">
+          <a id="polyrhythm-link" class="docs-link" href="../polyrhythm/index.html">Polyrhythm</a>
+          <a id="tuning-link" class="docs-link" href="../tuning/index.html">Tuning</a>
+          <a class="docs-link" href="../docs/music21_rs/index.html">Rust docs</a>
+        </nav>
+      </header>
+
+      <form id="form" class="input-row">
+        <input id="chord-input" value="C E G#" autocomplete="off" list="chord-history" />
+        <datalist id="chord-history"></datalist>
+        <button id="analyze" type="submit">Analyze</button>
+        <button id="play-chord" type="button">Play chord</button>
+        <button id="share" type="button">Copy link</button>
+      </form>
+
+      <div class="suggestions">
+        <div class="random-controls">
+          <button id="random-chord" type="button">Random chord</button>
+          <label for="random-min-notes">Min</label>
+          <input id="random-min-notes" type="number" min="1" max="12" value="3" />
+          <label for="random-max-notes">Max</label>
+          <input id="random-max-notes" type="number" min="1" max="12" value="6" />
+        </div>
+        <div class="examples" id="examples"></div>
+        <div class="history" id="history"></div>
+        <button id="clear-history" class="clear-history" type="button" hidden>Clear history</button>
+      </div>
+      <p class="error" id="error"></p>
+
+      <div class="layout">
+        <section>
+          <h2>Pitched Names</h2>
+          <div class="list" id="pitched-names"></div>
+        </section>
+
+        <section>
+          <h2>Pitch Classes</h2>
+          <div class="keyboard" id="keyboard"></div>
+          <div class="action-row">
+            <a id="open-polyrhythm" class="button-link" href="../polyrhythm/">Open as polyrhythm</a>
+          </div>
+        </section>
+
+        <section class="summary-section">
+          <h2>Summary</h2>
+          <div class="facts" id="facts"></div>
+        </section>
+
+        <section>
+          <h2>Suggested Resolutions</h2>
+          <div class="resolution-list" id="resolution-chords"></div>
+        </section>
+
+        <section class="notation-section">
+          <h2>Notation</h2>
+          <div id="notation"></div>
+        </section>
+
+        <section class="pitches-section">
+          <h2>Pitches</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Name</th>
+                <th>Octave</th>
+                <th>
+                  Pitch Space
+                  <button
+                    class="help"
+                    type="button"
+                    aria-label="Pitch Space: music21 numeric pitch height where C4 is 60 and each semitone changes the value by 1."
+                    data-help="music21 numeric pitch height: C4 is 60, and each semitone changes the value by 1."
+                  >?</button>
+                </th>
+                <th>Frequency</th>
+                <th>Class</th>
+                <th>
+                  Alter
+                  <button
+                    class="help"
+                    type="button"
+                    aria-label="Alter: accidental offset from the natural note in semitones."
+                    data-help="Accidental offset from the natural note in semitones: -1 is flat, 0 is natural, 1 is sharp."
+                  >?</button>
+                </th>
+              </tr>
+            </thead>
+            <tbody id="pitches"></tbody>
+          </table>
+        </section>
+      </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/abcjs@6.5.2/dist/abcjs-basic-min.js"></script>
+    <script type="module">
+      import init, { analyze_chord } from "./pkg/music21_rs_chord_web.js";
+
+      const input = document.querySelector("#chord-input");
+      const form = document.querySelector("#form");
+      const share = document.querySelector("#share");
+      const playChord = document.querySelector("#play-chord");
+      const historyOptions = document.querySelector("#chord-history");
+      const error = document.querySelector("#error");
+      const polyrhythmLink = document.querySelector("#polyrhythm-link");
+      const tuningLink = document.querySelector("#tuning-link");
+      const openPolyrhythm = document.querySelector("#open-polyrhythm");
+      const facts = document.querySelector("#facts");
+      const pitchedNames = document.querySelector("#pitched-names");
+      const resolutionChords = document.querySelector("#resolution-chords");
+      const pitches = document.querySelector("#pitches");
+      const keyboard = document.querySelector("#keyboard");
+      const notation = document.querySelector("#notation");
+      const randomChord = document.querySelector("#random-chord");
+      const randomMinNotes = document.querySelector("#random-min-notes");
+      const randomMaxNotes = document.querySelector("#random-max-notes");
+      const examples = document.querySelector("#examples");
+      const history = document.querySelector("#history");
+      const clearHistory = document.querySelector("#clear-history");
+      const pcNames = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"];
+      const pcAltNames = ["B#", "Db", "D", "D#", "Fb", "E#", "Gb", "G", "G#", "Bbb", "A#", "Cb"];
+      const inputPitchNames = ["C", "C#", "D", "E-", "E", "F", "F#", "G", "A-", "A", "B-", "B"];
+      const blackKeys = new Set([1, 3, 6, 8, 10]);
+      const chordParam = "chord";
+      const historyStorageKey = "music21-rs.chordInspector.history";
+      const maxHistoryItems = 24;
+      let shareResetTimer = null;
+      let currentAnalysis = null;
+      let audioContext = null;
+      let activeChordNodes = [];
+      let chordHistory = loadChordHistory();
+      let chordHistoryLabels = new Map();
+
+      if (!window.location.pathname.includes("/chord/")) {
+        polyrhythmLink.href = "./polyrhythm/";
+        tuningLink.href = "./tuning/";
+      }
+
+      function text(value) {
+        if (value === null || value === undefined) return "Not available";
+        if (Array.isArray(value)) return value.length ? value.join(", ") : "Not available";
+        return String(value);
+      }
+
+      function renderChips(node, values) {
+        node.replaceChildren();
+        const list = values && values.length ? values : ["Not available"];
+        for (const value of list) {
+          const chip = document.createElement("span");
+          chip.className = "chip";
+          chip.textContent = value;
+          node.appendChild(chip);
+        }
+      }
+
+      function renderFacts(data) {
+        const helpText = {
+          "Forte class": "A catalog label for the chord's pitch-class set, grouping transpositionally or inversionally related sets.",
+          "Normal form": "The chord's pitch classes rotated into their most compact ascending order.",
+          "Interval-class vector": "A six-number count of the unordered interval classes contained inside the pitch-class set.",
+        };
+        const rows = [
+          ["Common name", data.common_name],
+          ["Root", data.root_pitch_name],
+          ["Bass", data.bass_pitch_name],
+          ["Inversion", data.inversion_name ?? data.inversion],
+          ["Key estimate", data.key_estimate],
+          ["Forte class", data.forte_class],
+          ["Normal form", data.normal_form],
+          ["Interval-class vector", data.interval_class_vector],
+        ];
+        facts.replaceChildren();
+        for (const [label, value] of rows) {
+          const item = document.createElement("div");
+          item.className = "fact";
+          const labelNode = document.createElement("span");
+          labelNode.textContent = label;
+          if (helpText[label]) {
+            const help = document.createElement("button");
+            help.type = "button";
+            help.className = "help";
+            help.textContent = "?";
+            help.dataset.help = helpText[label];
+            help.setAttribute("aria-label", `${label}: ${helpText[label]}`);
+            labelNode.appendChild(help);
+          }
+          const valueNode = document.createElement("strong");
+          valueNode.textContent = text(value);
+          item.append(labelNode, valueNode);
+          facts.appendChild(item);
+        }
+      }
+
+      function renderResolutions(data) {
+        resolutionChords.replaceChildren();
+        const values = data.resolution_chords || [];
+        if (!values.length) {
+          const empty = document.createElement("span");
+          empty.className = "resolution-chip unavailable";
+          empty.textContent = "Not available";
+          resolutionChords.appendChild(empty);
+          return;
+        }
+
+        for (const value of values) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "resolution-chip";
+          const name = document.createElement("strong");
+          name.textContent = value.pitched_common_name;
+          const context = document.createElement("span");
+          context.textContent = value.key_context;
+          const pitchesText = document.createElement("small");
+          pitchesText.textContent = text(value.pitch_names);
+          button.append(name, context, pitchesText);
+          button.addEventListener("click", () => {
+            input.value = value.pitch_names.join(" ");
+            resetShareButton();
+            analyze({ remember: true });
+          });
+          resolutionChords.appendChild(button);
+        }
+      }
+
+      function formatHz(value) {
+        return Number.isFinite(value) ? `${value.toFixed(3)} Hz` : "Not available";
+      }
+
+      function formatCents(value) {
+        if (!Number.isFinite(value)) return "";
+        const rounded = Math.abs(value) < 0.005 ? 0 : value;
+        return `${rounded > 0 ? "+" : ""}${rounded.toFixed(2)} cents`;
+      }
+
+      function renderFrequencyCell(pitch) {
+        const td = document.createElement("td");
+        td.className = "frequency-cell";
+        const list = document.createElement("div");
+        list.className = "tuning-list";
+        const tuningFrequencies =
+          pitch.tuning_frequencies && pitch.tuning_frequencies.length
+            ? pitch.tuning_frequencies
+            : [
+                {
+                  name: "Equal temperament",
+                  frequency_hz: pitch.frequency_hz,
+                  cents_from_equal_temperament: 0,
+                },
+              ];
+
+        for (const tuning of tuningFrequencies) {
+          const row = document.createElement("div");
+          row.className = "tuning-row";
+          const name = document.createElement("span");
+          name.className = "tuning-name";
+          name.textContent = tuning.name;
+          const hz = document.createElement("span");
+          hz.className = "tuning-hz";
+          hz.textContent = formatHz(tuning.frequency_hz);
+          row.append(name, hz);
+
+          if (Math.abs(tuning.cents_from_equal_temperament) >= 0.005) {
+            const cents = document.createElement("span");
+            cents.className = "tuning-cents";
+            cents.textContent = formatCents(tuning.cents_from_equal_temperament);
+            row.appendChild(cents);
+          }
+
+          list.appendChild(row);
+        }
+
+        td.appendChild(list);
+        return td;
+      }
+
+      function renderPitches(data) {
+        pitches.replaceChildren();
+        for (const pitch of data.pitches) {
+          const tr = document.createElement("tr");
+          const cells = [
+            pitch.index + 1,
+            pitch.name_with_octave || pitch.name,
+            pitch.octave ?? "None",
+            pitch.pitch_space.toFixed(3),
+          ];
+          for (const cell of cells) {
+            const td = document.createElement("td");
+            td.textContent = cell;
+            tr.appendChild(td);
+          }
+          tr.appendChild(renderFrequencyCell(pitch));
+          for (const cell of [pitch.pitch_class, pitch.alter.toFixed(3)]) {
+            const td = document.createElement("td");
+            td.textContent = cell;
+            tr.appendChild(td);
+          }
+          pitches.appendChild(tr);
+        }
+      }
+
+      function renderKeyboard(activeClasses) {
+        const active = new Set(activeClasses);
+        keyboard.replaceChildren();
+        pcNames.forEach((name, index) => {
+          const key = document.createElement("button");
+          key.type = "button";
+          key.className = `key${blackKeys.has(index) ? " black" : ""}${active.has(index) ? " active" : ""}`;
+          const primary = document.createElement("span");
+          primary.className = "key-name";
+          primary.textContent = name;
+          const alternate = document.createElement("span");
+          alternate.className = "key-alt";
+          alternate.textContent = pcAltNames[index] === name ? "" : pcAltNames[index];
+          key.append(primary, alternate);
+          key.title = active.has(index) ? `Remove ${name}` : `Add ${inputPitchNames[index]}`;
+          key.addEventListener("click", () => {
+            togglePitchClass(index);
+          });
+          keyboard.appendChild(key);
+        });
+      }
+
+      function togglePitchClass(pitchClass) {
+        const tokens = chordInputTokens(input.value);
+        const hasPitchClass = tokens.some((token) => pitchClassFromName(token) === pitchClass);
+        if (hasPitchClass) {
+          input.value = tokens
+            .filter((token) => pitchClassFromName(token) !== pitchClass)
+            .join(" ");
+        } else {
+          const pitchName = inputPitchNames[pitchClass];
+          input.value = tokens.length ? `${tokens.join(" ")} ${pitchName}` : pitchName;
+        }
+        resetShareButton();
+        analyze({ remember: Boolean(normalizeChordInput(input.value)) });
+      }
+
+      function chordInputTokens(value) {
+        return normalizeChordInput(value)
+          .split(/\s+/)
+          .filter(Boolean);
+      }
+
+      function addPitchToChord(pitchName) {
+        const current = normalizeChordInput(input.value);
+        input.value = current ? `${current} ${pitchName}` : pitchName;
+        resetShareButton();
+        analyze({ remember: true });
+      }
+
+      function renderNotation(data) {
+        notation.replaceChildren();
+        const abc = buildAbc(data.pitches || []);
+        const renderAbc = window.ABCJS?.renderAbc || window.abcjs?.renderAbc;
+        if (!renderAbc) {
+          const fallback = document.createElement("div");
+          fallback.className = "notation-fallback";
+          fallback.textContent = "Notation unavailable";
+          notation.appendChild(fallback);
+          return;
+        }
+
+        try {
+          renderAbc("notation", abc, {
+            responsive: "resize",
+            staffwidth: Math.max(360, notation.clientWidth - 20),
+            scale: 0.95,
+          });
+        } catch {
+          const fallback = document.createElement("div");
+          fallback.className = "notation-fallback";
+          fallback.textContent = "Notation unavailable";
+          notation.appendChild(fallback);
+        }
+      }
+
+      function buildAbc(pitchData) {
+        const pitchNames = pitchData.map((pitch) => pitch.name_with_octave || pitch.name);
+        const notes = pitchData
+          .map((pitch) => abcNote(pitch.name_with_octave || pitch.name))
+          .filter(Boolean);
+        const chord = notes.length ? `[${notes.join("")}]4` : "z4";
+        return `X:1\nL:1/4\nM:4/4\nK:C clef=${chooseClef(pitchNames)}\n${chord} |]\n`;
+      }
+
+      function chooseClef(pitchNames) {
+        const midiValues = pitchNames.map(pitchMidi).filter(Number.isFinite);
+        if (!midiValues.length) return "treble";
+        const average = midiValues.reduce((sum, value) => sum + value, 0) / midiValues.length;
+        const lowest = Math.min(...midiValues);
+        return average < 60 || lowest < 48 ? "bass" : "treble";
+      }
+
+      function pitchMidi(value) {
+        const match = String(value).trim().match(/^([A-G])([#b-]*)(-?\d+)?$/);
+        if (!match) return Number.NaN;
+        const natural = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }[match[1]];
+        const accidental = match[2]
+          .split("")
+          .reduce((sum, char) => sum + (char === "#" ? 1 : -1), 0);
+        const octave = match[3] === undefined ? 4 : Number.parseInt(match[3], 10);
+        if (!Number.isFinite(octave)) return Number.NaN;
+        return (octave + 1) * 12 + natural + accidental;
+      }
+
+      function abcNote(value) {
+        const match = String(value).trim().match(/^([A-G])([#b-]*)(-?\d+)?$/);
+        if (!match) return "";
+
+        const step = match[1];
+        const accidental = match[2]
+          .split("")
+          .map((char) => (char === "#" ? "^" : "_"))
+          .join("");
+        const octave = match[3] === undefined ? 4 : Number.parseInt(match[3], 10);
+        if (!Number.isFinite(octave)) return "";
+
+        if (octave >= 5) {
+          return `${accidental}${step.toLowerCase()}${"'".repeat(octave - 5)}`;
+        }
+        return `${accidental}${step}${",".repeat(Math.max(0, 4 - octave))}`;
+      }
+
+      function render(data) {
+        currentAnalysis = data;
+        error.style.display = "none";
+        renderFacts(data);
+        renderChips(pitchedNames, data.pitched_common_names);
+        renderResolutions(data);
+        renderPitches(data);
+        renderKeyboard(data.pitch_classes);
+        renderNotation(data);
+        renderPolyrhythmLink(data);
+      }
+
+      function renderPolyrhythmLink(data) {
+        const rhythm = chordToPolyrhythm(data.pitch_classes || [], data.root_pitch_name);
+        const url = new URL("../polyrhythm/", window.location.href);
+        url.searchParams.set("rhythm", rhythm);
+        openPolyrhythm.href = url.href;
+      }
+
+      function chordToPolyrhythm(pitchClasses, rootPitchName) {
+        const pcs = [...new Set(
+          pitchClasses
+            .map((value) => Number(value))
+            .filter(Number.isFinite)
+            .map(normalizePitchClass),
+        )].sort((a, b) => a - b);
+        if (!pcs.length) return "1";
+        const rootPc = pitchClassFromName(rootPitchName);
+        const anchor = rootPc !== null && pcs.includes(rootPc) ? rootPc : pcs[0];
+        const offsets = pcs.map((pc) => (pc - anchor + 12) % 12).sort((a, b) => a - b);
+        const ratios = offsets.map((offset) => justRatioForSemitone(offset));
+        const commonDenominator = ratios.reduce((acc, ratio) => lcm(acc, ratio.denominator), 1);
+        const integers = ratios.map((ratio) => ratio.numerator * (commonDenominator / ratio.denominator));
+        const divisor = integers.reduce((acc, value) => gcd(acc, value), 0) || 1;
+        return integers.map((value) => value / divisor).join(":");
+      }
+
+      function normalizePitchClass(value) {
+        return ((Number(value) % 12) + 12) % 12;
+      }
+
+      function pitchClassFromName(value) {
+        const midi = pitchMidi(value);
+        if (!Number.isFinite(midi)) return null;
+        return normalizePitchClass(midi);
+      }
+
+      function justRatioForSemitone(offset) {
+        const [numerator, denominator] = [
+          [1, 1],
+          [16, 15],
+          [9, 8],
+          [6, 5],
+          [5, 4],
+          [4, 3],
+          [7, 5],
+          [3, 2],
+          [25, 16],
+          [5, 3],
+          [7, 4],
+          [15, 8],
+        ][normalizePitchClass(offset)];
+        return { numerator, denominator };
+      }
+
+      function lcm(a, b) {
+        return Math.abs(a * b) / gcd(a, b);
+      }
+
+      function gcd(a, b) {
+        while (b !== 0) {
+          [a, b] = [b, a % b];
+        }
+        return Math.abs(a);
+      }
+
+      function getSharedChord() {
+        const params = new URLSearchParams(window.location.search);
+        return params.has(chordParam) ? (params.get(chordParam) ?? "") : null;
+      }
+
+      function buildShareUrl(value) {
+        const url = new URL(window.location.href);
+        url.searchParams.set(chordParam, value);
+        return url;
+      }
+
+      function syncShareUrl() {
+        const url = buildShareUrl(input.value);
+        window.history.replaceState({ chord: input.value }, "", url.href);
+        return url.href;
+      }
+
+      function normalizeChordInput(value) {
+        return value.trim().replace(/\s+/g, " ");
+      }
+
+      function loadChordHistory() {
+        try {
+          const raw = window.localStorage?.getItem(historyStorageKey);
+          if (!raw) return [];
+          const values = JSON.parse(raw);
+          if (!Array.isArray(values)) return [];
+
+          const seen = new Set();
+          return values
+            .map((value) => (typeof value === "string" ? normalizeChordInput(value) : ""))
+            .filter((value) => {
+              if (!value || seen.has(value)) return false;
+              seen.add(value);
+              return true;
+            })
+            .slice(0, maxHistoryItems);
+        } catch {
+          return [];
+        }
+      }
+
+      function saveChordHistory() {
+        try {
+          window.localStorage?.setItem(historyStorageKey, JSON.stringify(chordHistory));
+        } catch {
+          // Browsers can deny localStorage; history still works for this page view.
+        }
+      }
+
+      function renderChordHistory() {
+        historyOptions.replaceChildren();
+        history.replaceChildren();
+        clearHistory.hidden = chordHistory.length === 0;
+
+        for (const value of chordHistory) {
+          const label = chordHistoryLabels.get(value) || historyLabelForChord(value);
+          const option = document.createElement("option");
+          option.value = value;
+          historyOptions.appendChild(option);
+
+          const button = document.createElement("button");
+          button.type = "button";
+          button.textContent = label;
+          button.title = "Previous chord";
+          button.addEventListener("click", () => {
+            input.value = value;
+            resetShareButton();
+            analyze({ remember: true });
+          });
+          history.appendChild(button);
+        }
+      }
+
+      function clearChordHistory() {
+        chordHistory = [];
+        chordHistoryLabels.clear();
+        saveChordHistory();
+        renderChordHistory();
+      }
+
+      function historyLabelForChord(value) {
+        try {
+          const data = analyze_chord(value);
+          const label = data.pitched_common_names?.[0] || data.pitched_common_name || value;
+          chordHistoryLabels.set(value, label);
+          return label;
+        } catch {
+          return value;
+        }
+      }
+
+      function rememberChord(value) {
+        const normalized = normalizeChordInput(value);
+        if (!normalized) return;
+        historyLabelForChord(normalized);
+
+        chordHistory = [
+          normalized,
+          ...chordHistory.filter((historyValue) => historyValue !== normalized),
+        ].slice(0, maxHistoryItems);
+        saveChordHistory();
+        renderChordHistory();
+      }
+
+      function resetShareButton() {
+        share.textContent = "Copy link";
+        share.classList.remove("copied");
+      }
+
+      function markShareCopied() {
+        share.textContent = "Copied";
+        share.classList.add("copied");
+        if (shareResetTimer) clearTimeout(shareResetTimer);
+        shareResetTimer = setTimeout(resetShareButton, 1600);
+      }
+
+      async function writeClipboard(value) {
+        if (navigator.clipboard?.writeText && window.isSecureContext) {
+          await navigator.clipboard.writeText(value);
+          return;
+        }
+
+        const textarea = document.createElement("textarea");
+        textarea.value = value;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "fixed";
+        textarea.style.top = "-1000px";
+        document.body.appendChild(textarea);
+        textarea.select();
+        try {
+          if (!document.execCommand("copy")) {
+            throw new Error("Copy command failed");
+          }
+        } finally {
+          textarea.remove();
+        }
+      }
+
+      async function ensureAudio() {
+        const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextConstructor) {
+          error.textContent = "Audio is not available in this browser.";
+          error.style.display = "block";
+          return false;
+        }
+
+        audioContext ||= new AudioContextConstructor();
+        if (audioContext.state === "suspended") {
+          await audioContext.resume();
+        }
+        return true;
+      }
+
+      function stopChordPlayback() {
+        for (const node of activeChordNodes) {
+          try {
+            node.stop();
+          } catch {
+            // Already stopped.
+          }
+        }
+        activeChordNodes = [];
+      }
+
+      async function playCurrentChord() {
+        if (!currentAnalysis && !analyze({ remember: false })) return;
+        const frequencies = (currentAnalysis?.pitches ?? [])
+          .map((pitch) => pitch.frequency_hz)
+          .filter((frequency) => Number.isFinite(frequency) && frequency > 0);
+        if (!frequencies.length) {
+          error.textContent = "No pitched notes to play.";
+          error.style.display = "block";
+          return;
+        }
+        if (!await ensureAudio()) return;
+
+        stopChordPlayback();
+        error.style.display = "none";
+        const now = audioContext.currentTime;
+        const gainPerVoice = Math.min(0.18, 0.52 / Math.sqrt(frequencies.length));
+        for (const frequency of frequencies) {
+          const oscillator = audioContext.createOscillator();
+          const gain = audioContext.createGain();
+          oscillator.type = "triangle";
+          oscillator.frequency.setValueAtTime(frequency, now);
+          gain.gain.setValueAtTime(0.0001, now);
+          gain.gain.exponentialRampToValueAtTime(gainPerVoice, now + 0.018);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.35);
+          oscillator.connect(gain).connect(audioContext.destination);
+          oscillator.start(now);
+          oscillator.stop(now + 1.45);
+          activeChordNodes.push(oscillator);
+          oscillator.addEventListener("ended", () => {
+            activeChordNodes = activeChordNodes.filter((node) => node !== oscillator);
+          });
+        }
+      }
+
+      function analyze({ syncUrl = true, remember = false } = {}) {
+        const chordValue = input.value;
+        try {
+          render(analyze_chord(chordValue));
+          if (syncUrl) syncShareUrl();
+          if (remember) rememberChord(chordValue);
+          return true;
+        } catch (err) {
+          error.textContent = err instanceof Error ? err.message : String(err);
+          error.style.display = "block";
+          return false;
+        }
+      }
+
+      function clampInteger(value, min, max, fallback) {
+        const parsed = Number.parseInt(value, 10);
+        if (!Number.isFinite(parsed)) return fallback;
+        return Math.min(max, Math.max(min, parsed));
+      }
+
+      function randomNoteCount() {
+        let min = clampInteger(randomMinNotes.value, 1, 12, 3);
+        let max = clampInteger(randomMaxNotes.value, 1, 12, 6);
+        if (min > max) [min, max] = [max, min];
+        randomMinNotes.value = min;
+        randomMaxNotes.value = max;
+        return min + Math.floor(Math.random() * (max - min + 1));
+      }
+
+      function generateRandomChord() {
+        const rootIndex = Math.floor(Math.random() * inputPitchNames.length);
+        const noteCount = randomNoteCount();
+        const intervals = new Set([0]);
+        while (intervals.size < noteCount) {
+          intervals.add(Math.floor(Math.random() * 12));
+        }
+        return [...intervals]
+          .sort((a, b) => a - b)
+          .map((interval) => inputPitchNames[(rootIndex + interval) % inputPitchNames.length])
+          .join(" ");
+      }
+
+      for (const value of [
+        "C E G",
+        "C E- G",
+        "C E G#",
+        "G2 B2 D3 F3",
+        "",
+      ]) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = value === "" ? "empty" : value;
+        button.addEventListener("click", () => {
+          input.value = value;
+          analyze({ remember: true });
+        });
+        examples.appendChild(button);
+      }
+
+      randomChord.addEventListener("click", () => {
+        input.value = generateRandomChord();
+        resetShareButton();
+        analyze({ remember: true });
+      });
+      clearHistory.addEventListener("click", clearChordHistory);
+      playChord.addEventListener("click", playCurrentChord);
+
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        analyze({ remember: true });
+      });
+
+      input.addEventListener("input", resetShareButton);
+
+      share.addEventListener("click", async () => {
+        const href = syncShareUrl();
+        try {
+          await writeClipboard(href);
+          error.style.display = "none";
+          markShareCopied();
+        } catch {
+          error.textContent = "The URL has been updated in your address bar.";
+          error.style.display = "block";
+        }
+      });
+
+      window.addEventListener("popstate", () => {
+        const sharedChord = getSharedChord();
+        if (sharedChord !== null) {
+          input.value = sharedChord;
+          analyze({ syncUrl: false });
+        }
+      });
+
+      await init();
+      renderChordHistory();
+      const sharedChord = getSharedChord();
+      if (sharedChord !== null) input.value = sharedChord;
+      analyze({ syncUrl: false });
+    </script>
+  </body>
+</html>

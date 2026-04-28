@@ -33,7 +33,9 @@ assert_eq!(empty.pitched_common_name(), "empty chord");
 
 ## Examples
 
-- [Chord Inspector web demo](./examples/chord-web/) builds with `wasm-pack` and is published with the generated docs on GitHub Pages.
+- [Chord Inspector web demo](./examples/chord/) builds with `wasm-pack` and is published with the generated docs on GitHub Pages.
+- [Polyrhythm Lab web demo](./examples/polyrhythm/) maps rhythm cycles to chord/polypitch sets and links them back to the chord inspector.
+- [Tuning Explorer web demo](./examples/tuning/) compares music21-rs tuning systems and plays their scales in the browser.
 - [Polyrhythm sound example](./examples/polyrhythmsound.rs) demonstrates the polyrhythm helpers.
 
 ## Development

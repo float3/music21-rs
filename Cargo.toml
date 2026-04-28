@@ -12,7 +12,7 @@ repository = "https://github.com/float3/music21-rs"
 version = "0.0.6"
 
 [workspace]
-members = ["utils", "examples/chord-web"]
+members = ["utils", "examples/chord"]
 
 [features]
 default = ["serde"]

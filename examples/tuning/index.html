@@ -1,0 +1,786 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>music21-rs Tuning Explorer</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #171717;
+      --muted: #60646c;
+      --line: #d9dde5;
+      --panel: #ffffff;
+      --soft: #f5f7f9;
+      --accent: #0f766e;
+      --accent-strong: #0b5f59;
+      --accent-soft: #e6fffb;
+      --warn: #b42318;
+      --pulse: #f59e0b;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      background:
+        linear-gradient(90deg, rgba(15, 118, 110, 0.08), transparent 34rem),
+        var(--soft);
+      font-family:
+        Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+        "Segoe UI", sans-serif;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    .shell {
+      width: min(1220px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 24px 0 40px;
+    }
+
+    header {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 32px;
+      line-height: 1.05;
+    }
+
+    .title-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .home-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      height: 34px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--accent-strong);
+      font-size: 13px;
+      font-weight: 800;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .home-link:hover {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+    }
+
+    .top-links {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: end;
+      gap: 12px;
+    }
+
+    .top-links a {
+      color: var(--accent-strong);
+      font-weight: 700;
+      text-decoration: none;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: minmax(150px, 0.8fr) minmax(120px, 0.55fr) minmax(120px, 0.55fr) auto auto;
+      gap: 10px;
+      align-items: end;
+      margin-bottom: 18px;
+    }
+
+    .field {
+      display: grid;
+      gap: 5px;
+    }
+
+    .field span {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    input,
+    select {
+      min-width: 0;
+      height: 44px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--ink);
+    }
+
+    button,
+    .button-link {
+      height: 44px;
+      padding: 0 16px;
+      border-radius: 8px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .primary {
+      border: 0;
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .primary:hover {
+      background: var(--accent-strong);
+    }
+
+    .secondary,
+    .button-link {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--accent-strong);
+    }
+
+    .secondary:hover,
+    .button-link:hover {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.45fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    section {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      overflow: hidden;
+    }
+
+    section h2 {
+      margin: 0;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      font-size: 15px;
+    }
+
+    .error {
+      display: none;
+      margin: 0 0 16px;
+      padding: 12px 14px;
+      border: 1px solid #f3b0aa;
+      border-radius: 8px;
+      background: #fff3f1;
+      color: var(--warn);
+      font-weight: 700;
+    }
+
+    .systems {
+      display: grid;
+      gap: 1px;
+      max-height: calc(100vh - 190px);
+      overflow: auto;
+      background: var(--line);
+    }
+
+    .system-button {
+      display: grid;
+      height: auto;
+      min-height: 76px;
+      gap: 5px;
+      padding: 12px;
+      border: 0;
+      border-radius: 0;
+      background: var(--panel);
+      color: var(--ink);
+      text-align: left;
+      white-space: normal;
+    }
+
+    .system-button:hover,
+    .system-button.active {
+      background: var(--accent-soft);
+    }
+
+    .system-button strong {
+      font-size: 14px;
+    }
+
+    .system-button span,
+    .system-button small {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .detail {
+      display: grid;
+      gap: 18px;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 1px;
+      background: var(--line);
+    }
+
+    .fact {
+      min-height: 74px;
+      padding: 12px;
+      background: var(--panel);
+    }
+
+    .fact span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .fact strong {
+      display: block;
+      margin-top: 6px;
+      overflow-wrap: anywhere;
+      font-size: 16px;
+    }
+
+    .scale-strip {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+      gap: 8px;
+      padding: 14px 16px 16px;
+    }
+
+    .degree-button {
+      display: grid;
+      height: 58px;
+      align-content: center;
+      gap: 2px;
+      padding: 6px 8px;
+      border: 1px solid var(--line);
+      background: #f9fafb;
+      color: var(--ink);
+    }
+
+    .degree-button:hover,
+    .degree-button.active {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+    }
+
+    .degree-button small {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    th {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    th,
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: middle;
+      overflow-wrap: anywhere;
+    }
+
+    td {
+      font-variant-numeric: tabular-nums;
+    }
+
+    th:nth-child(1),
+    td:nth-child(1) {
+      width: 74px;
+    }
+
+    th:nth-child(4),
+    td:nth-child(4),
+    th:nth-child(5),
+    td:nth-child(5) {
+      width: 116px;
+    }
+
+    .cents {
+      display: grid;
+      gap: 4px;
+    }
+
+    .cents-value {
+      font-weight: 700;
+    }
+
+    .cents-track {
+      height: 5px;
+      border-radius: 999px;
+      background: #eef2f7;
+      overflow: hidden;
+    }
+
+    .cents-fill {
+      display: block;
+      height: 100%;
+      width: 0;
+      border-radius: 999px;
+      background: var(--accent);
+    }
+
+    .cents-fill.negative {
+      background: var(--pulse);
+    }
+
+    @media (max-width: 860px) {
+      .shell {
+        width: min(100vw - 20px, 680px);
+        padding-top: 14px;
+      }
+
+      header,
+      .layout,
+      .controls,
+      .summary {
+        display: grid;
+        grid-template-columns: 1fr;
+        align-items: start;
+      }
+
+      h1 {
+        font-size: 26px;
+      }
+
+      .top-links {
+        justify-content: start;
+      }
+
+      button,
+      .button-link {
+        width: 100%;
+      }
+
+      .systems {
+        max-height: none;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main class="shell">
+    <header>
+      <div class="title-row">
+        <a class="home-link" href="../index.html">Home</a>
+        <h1>Tuning Explorer</h1>
+      </div>
+      <nav class="top-links">
+        <a href="../chord/">Chord Inspector</a>
+        <a href="../polyrhythm/">Polyrhythm</a>
+        <a id="docs-link" href="../docs/music21_rs/index.html">Rust docs</a>
+      </nav>
+    </header>
+
+    <form id="controls" class="controls">
+      <label class="field">
+        <span>Root C4 Hz</span>
+        <input id="root-frequency" type="number" min="20" max="2000" step="0.0001" value="261.6256" />
+      </label>
+      <label class="field">
+        <span>Tempo</span>
+        <input id="tempo" type="number" min="40" max="320" value="150" />
+      </label>
+      <label class="field">
+        <span>Wave</span>
+        <select id="waveform">
+          <option value="sine">Sine</option>
+          <option value="triangle">Triangle</option>
+          <option value="square">Square</option>
+          <option value="sawtooth">Sawtooth</option>
+        </select>
+      </label>
+      <button class="primary" type="submit">Reload</button>
+      <button id="stop" class="secondary" type="button">Stop</button>
+    </form>
+
+    <p class="error" id="error"></p>
+
+    <div class="layout">
+      <section>
+        <h2>Tuning Systems</h2>
+        <div class="systems" id="systems"></div>
+      </section>
+
+      <div class="detail">
+        <section>
+          <h2 id="system-title">Loading</h2>
+          <div class="summary" id="summary"></div>
+        </section>
+
+        <section>
+          <h2>Scale</h2>
+          <div class="scale-strip" id="scale-strip"></div>
+        </section>
+
+        <section>
+          <h2>Degrees</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Degree</th>
+                  <th>Label</th>
+                  <th>Ratio</th>
+                  <th>Hz</th>
+                  <th>Cents</th>
+                  <th>Play</th>
+                </tr>
+              </thead>
+              <tbody id="degrees"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <script type="module">
+    const systemsNode = document.querySelector("#systems");
+    const summary = document.querySelector("#summary");
+    const systemTitle = document.querySelector("#system-title");
+    const scaleStrip = document.querySelector("#scale-strip");
+    const degreesBody = document.querySelector("#degrees");
+    const controls = document.querySelector("#controls");
+    const rootFrequency = document.querySelector("#root-frequency");
+    const tempoInput = document.querySelector("#tempo");
+    const waveform = document.querySelector("#waveform");
+    const stopButton = document.querySelector("#stop");
+    const error = document.querySelector("#error");
+    const docsLink = document.querySelector("#docs-link");
+
+    const isLocalExample = ["127.0.0.1", "localhost"].includes(window.location.hostname)
+      || window.location.protocol === "file:";
+    docsLink.href = isLocalExample ? "../docs/music21_rs/index.html" : "../docs/music21_rs/index.html";
+
+    let tuningSystems = [];
+    let selectedSystemId = "";
+    let selectedDegree = 0;
+    let audioContext = null;
+    let activeNodes = [];
+    let activeTimers = [];
+
+    function showError(message) {
+      error.textContent = message;
+      error.style.display = "block";
+    }
+
+    function clearError() {
+      error.style.display = "none";
+    }
+
+    function clampNumber(value, min, max, fallback) {
+      const parsed = Number.parseFloat(value);
+      if (!Number.isFinite(parsed)) return fallback;
+      return Math.min(max, Math.max(min, parsed));
+    }
+
+    function selectedSystem() {
+      return tuningSystems.find((system) => system.id === selectedSystemId) ?? tuningSystems[0];
+    }
+
+    async function loadTuningSystems() {
+      const candidates = [
+        "../chord/pkg/music21_rs_chord_web.js",
+        "../pkg/music21_rs_chord_web.js",
+      ];
+      let lastError = null;
+      for (const candidate of candidates) {
+        try {
+          const module = await import(new URL(candidate, window.location.href).href);
+          await module.default();
+          if (typeof module.tuning_systems !== "function") {
+            throw new Error("The current WASM package does not expose tuning_systems yet.");
+          }
+          const frequency = clampNumber(rootFrequency.value, 20, 2000, 261.6256);
+          rootFrequency.value = frequency;
+          tuningSystems = module.tuning_systems(frequency);
+          if (!selectedSystemId || !tuningSystems.some((system) => system.id === selectedSystemId)) {
+            selectedSystemId = tuningSystems[0]?.id ?? "";
+          }
+          clearError();
+          render();
+          return;
+        } catch (err) {
+          lastError = err;
+        }
+      }
+      showError(lastError instanceof Error ? lastError.message : String(lastError));
+    }
+
+    function render() {
+      renderSystemList();
+      renderSelectedSystem();
+    }
+
+    function renderSystemList() {
+      systemsNode.replaceChildren();
+      for (const system of tuningSystems) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = `system-button${system.id === selectedSystemId ? " active" : ""}`;
+        const name = document.createElement("strong");
+        name.textContent = system.name;
+        const meta = document.createElement("span");
+        meta.textContent = `${system.octave_size} degrees per octave`;
+        const description = document.createElement("small");
+        description.textContent = system.description;
+        button.append(name, meta, description);
+        button.addEventListener("click", () => {
+          stopPlayback();
+          selectedSystemId = system.id;
+          selectedDegree = 0;
+          render();
+        });
+        systemsNode.appendChild(button);
+      }
+    }
+
+    function renderSelectedSystem() {
+      const system = selectedSystem();
+      if (!system) return;
+      systemTitle.textContent = system.name;
+      renderSummary(system);
+      renderScale(system);
+      renderDegrees(system);
+    }
+
+    function renderSummary(system) {
+      const rows = [
+        ["System", system.id],
+        ["Octave size", system.octave_size],
+        ["Root", `${formatFrequency(system.root_frequency_hz)} Hz`],
+        ["Scale length", `${system.degrees.length} notes`],
+      ];
+      summary.replaceChildren();
+      for (const [label, value] of rows) {
+        const item = document.createElement("div");
+        item.className = "fact";
+        const labelNode = document.createElement("span");
+        labelNode.textContent = label;
+        const valueNode = document.createElement("strong");
+        valueNode.textContent = value;
+        item.append(labelNode, valueNode);
+        summary.appendChild(item);
+      }
+    }
+
+    function renderScale(system) {
+      scaleStrip.replaceChildren();
+      for (const degree of system.degrees) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = `degree-button${degree.degree === selectedDegree ? " active" : ""}`;
+        const label = document.createElement("strong");
+        label.textContent = degree.label;
+        const frequency = document.createElement("small");
+        frequency.textContent = `${formatFrequency(degree.frequency_hz)} Hz`;
+        button.append(label, frequency);
+        button.addEventListener("click", () => {
+          selectedDegree = degree.degree;
+          renderScale(system);
+          playDegree(degree);
+        });
+        scaleStrip.appendChild(button);
+      }
+
+      const playButton = document.createElement("button");
+      playButton.type = "button";
+      playButton.className = "degree-button active";
+      playButton.innerHTML = "<strong>Play scale</strong><small>all degrees</small>";
+      playButton.addEventListener("click", () => playScale(system));
+      scaleStrip.appendChild(playButton);
+    }
+
+    function renderDegrees(system) {
+      degreesBody.replaceChildren();
+      for (const degree of system.degrees) {
+        const row = document.createElement("tr");
+        for (const value of [
+          degree.degree,
+          degree.label,
+          degree.ratio_label,
+          `${formatFrequency(degree.frequency_hz)} Hz`,
+        ]) {
+          const cell = document.createElement("td");
+          cell.textContent = value;
+          row.appendChild(cell);
+        }
+
+        const centsCell = document.createElement("td");
+        centsCell.appendChild(renderCents(degree.cents_from_equal_temperament));
+        row.appendChild(centsCell);
+
+        const playCell = document.createElement("td");
+        const play = document.createElement("button");
+        play.type = "button";
+        play.className = "secondary";
+        play.textContent = "Play";
+        play.addEventListener("click", () => {
+          selectedDegree = degree.degree;
+          renderScale(system);
+          playDegree(degree);
+        });
+        playCell.appendChild(play);
+        row.appendChild(playCell);
+        degreesBody.appendChild(row);
+      }
+    }
+
+    function renderCents(cents) {
+      const wrapper = document.createElement("div");
+      wrapper.className = "cents";
+      const value = document.createElement("span");
+      value.className = "cents-value";
+      value.textContent = formatCents(cents);
+      const track = document.createElement("span");
+      track.className = "cents-track";
+      const fill = document.createElement("span");
+      fill.className = `cents-fill${cents < 0 ? " negative" : ""}`;
+      fill.style.width = `${Math.min(100, Math.abs(cents) * 3)}%`;
+      track.appendChild(fill);
+      wrapper.append(value, track);
+      return wrapper;
+    }
+
+    function formatFrequency(value) {
+      return Number(value).toFixed(value >= 100 ? 2 : 3);
+    }
+
+    function formatCents(value) {
+      const rounded = Number(value).toFixed(2);
+      return value > 0 ? `+${rounded}` : rounded;
+    }
+
+    async function ensureAudio() {
+      const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextConstructor) {
+        showError("Audio is not available in this browser.");
+        return false;
+      }
+      audioContext ||= new AudioContextConstructor();
+      if (audioContext.state === "suspended") {
+        await audioContext.resume();
+      }
+      return true;
+    }
+
+    function noteDurationSeconds() {
+      const tempo = clampNumber(tempoInput.value, 40, 320, 150);
+      tempoInput.value = tempo;
+      return 60 / tempo;
+    }
+
+    async function playDegree(degree) {
+      if (!await ensureAudio()) return;
+      stopPlayback();
+      scheduleTone(degree.frequency_hz, audioContext.currentTime, Math.max(0.24, noteDurationSeconds() * 0.9), true);
+    }
+
+    async function playScale(system) {
+      if (!await ensureAudio()) return;
+      stopPlayback();
+      const duration = noteDurationSeconds();
+      const start = audioContext.currentTime + 0.04;
+      system.degrees.forEach((degree, index) => {
+        const timer = window.setTimeout(() => {
+          selectedDegree = degree.degree;
+          renderScale(system);
+        }, index * duration * 1000);
+        activeTimers.push(timer);
+        scheduleTone(degree.frequency_hz, start + index * duration, duration * 0.86, index === 0);
+      });
+    }
+
+    function scheduleTone(frequency, startTime, duration, accent = false) {
+      const oscillator = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      oscillator.type = waveform.value;
+      oscillator.frequency.setValueAtTime(frequency, startTime);
+      gain.gain.setValueAtTime(0.0001, startTime);
+      gain.gain.exponentialRampToValueAtTime(accent ? 0.32 : 0.22, startTime + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+      oscillator.connect(gain).connect(audioContext.destination);
+      oscillator.start(startTime);
+      oscillator.stop(startTime + duration + 0.08);
+      activeNodes.push(oscillator);
+      oscillator.addEventListener("ended", () => {
+        activeNodes = activeNodes.filter((node) => node !== oscillator);
+      });
+    }
+
+    function stopPlayback() {
+      for (const timer of activeTimers) {
+        window.clearTimeout(timer);
+      }
+      activeTimers = [];
+      for (const node of activeNodes) {
+        try {
+          node.stop();
+        } catch {
+          // Already stopped.
+        }
+      }
+      activeNodes = [];
+    }
+
+    controls.addEventListener("submit", (event) => {
+      event.preventDefault();
+      stopPlayback();
+      loadTuningSystems();
+    });
+    stopButton.addEventListener("click", stopPlayback);
+    rootFrequency.addEventListener("change", loadTuningSystems);
+
+    loadTuningSystems();
+  </script>
+</body>
+
+</html>
