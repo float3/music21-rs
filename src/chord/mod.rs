@@ -16,12 +16,16 @@ use crate::prebase::ProtoM21ObjectTrait;
 
 use chordbase::ChordBase;
 use chordbase::ChordBaseTrait;
-use chordbase::IntoNotRests;
 
 use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// A collection of notes analyzed as one vertical sonority.
+///
+/// `Chord` accepts several note-like inputs, including whitespace-separated
+/// pitch names, slices of pitches or notes, MIDI pitch numbers, vectors, and
+/// `None` for an empty chord.
 pub struct Chord {
     #[cfg_attr(feature = "serde", serde(skip))]
     chordbase: Arc<ChordBase>,
@@ -31,74 +35,101 @@ pub struct Chord {
 }
 
 impl Chord {
-    pub fn new<T>(notes: Option<T>) -> ExceptionResult<Self>
+    /// Builds a chord from any supported note collection.
+    ///
+    /// Empty inputs are valid: pass `""`, an empty vector or slice, or
+    /// `Option::<&str>::None` to construct an empty chord.
+    pub fn new<T>(notes: T) -> ExceptionResult<Self>
     where
-        T: IntoNotes + Clone + IntoNotRests,
+        T: IntoNotes + Clone,
     {
-        let chord_notes = notes.as_ref().map_or_else(
-            || Ok(Vec::new()),
-            |notes| {
-                notes
-                    .clone()
-                    .try_into_notes()
-                    .map(|notes| notes.into_iter().collect::<Vec<Note>>())
-            },
-        )?;
+        let chord_notes = notes
+            .clone()
+            .try_into_notes()
+            .map(|notes| notes.into_iter().collect::<Vec<Note>>())?;
 
         let chord = Self {
-            chordbase: ChordBase::new(notes.clone(), &None)?,
+            chordbase: ChordBase::new(Some(chord_notes.as_slice()), &None)?,
             _notes: chord_notes,
-            from_integer_pitches: notes.as_ref().is_some_and(|_| T::FROM_INTEGER_PITCHES),
+            from_integer_pitches: T::FROM_INTEGER_PITCHES,
         };
         // Keep construction side-effect free like music21's Chord constructor.
         // Enharmonic simplification can be requested explicitly later.
         Ok(chord)
     }
 
+    /// Builds an empty chord.
     pub fn empty() -> ExceptionResult<Self> {
         Self::new(Option::<&str>::None)
     }
 
+    /// Builds a chord from one string such as `"C E G"`.
     pub fn from_pitch_names(notes: &str) -> ExceptionResult<Self> {
-        Self::new(Some(notes))
+        Self::new(notes)
     }
 
+    /// Builds a chord from borrowed pitch-name strings.
     pub fn from_names(notes: &[&str]) -> ExceptionResult<Self> {
-        Self::new(Some(notes))
+        Self::new(notes)
     }
 
+    /// Builds a chord from owned pitch-name strings.
     pub fn from_strings(notes: &[String]) -> ExceptionResult<Self> {
-        Self::new(Some(notes))
+        Self::new(notes)
     }
 
+    /// Builds a chord from pitches.
     pub fn from_pitches(pitches: &[Pitch]) -> ExceptionResult<Self> {
-        Self::new(Some(pitches))
+        Self::new(pitches)
     }
 
+    /// Builds a chord from notes.
     pub fn from_notes(notes: &[Note]) -> ExceptionResult<Self> {
-        Self::new(Some(notes))
+        Self::new(notes)
     }
 
+    /// Builds a chord by flattening the notes from other chords.
     pub fn from_chords(chords: &[Chord]) -> ExceptionResult<Self> {
-        Self::new(Some(chords))
+        Self::new(chords)
     }
 
+    /// Builds a chord from MIDI pitch numbers.
     pub fn from_midi_numbers(notes: &[i32]) -> ExceptionResult<Self> {
-        Self::new(Some(notes))
+        Self::new(notes)
     }
 
+    /// Returns the primary music21-style common name with a pitch prefix.
     pub fn pitched_common_name(&self) -> String {
-        let name_str = self.common_name();
-        if name_str == "empty chord" {
-            return name_str;
+        self.pitched_name_for_common_name(&self.common_name())
+    }
+
+    /// Returns every known music21-style common name with pitch prefixes.
+    ///
+    /// Most chords have a single common name, while some Forte-table entries
+    /// have aliases. This method exposes all of them in table order.
+    pub fn pitched_common_names(&self) -> Vec<String> {
+        let common_names = self.common_names();
+        if common_names.is_empty() {
+            return vec![self.pitched_common_name()];
         }
 
-        if matches!(name_str.as_str(), "note" | "unison") {
+        common_names
+            .iter()
+            .map(|name| self.pitched_name_for_common_name(name))
+            .collect()
+    }
+
+    fn pitched_name_for_common_name(&self, name_str: &str) -> String {
+        if name_str == "empty chord" {
+            return name_str.to_string();
+        }
+
+        if matches!(name_str, "note" | "unison") {
             return self
                 ._notes
                 .first()
                 .map(|n| n._pitch.name())
-                .unwrap_or(name_str);
+                .unwrap_or_else(|| name_str.to_string());
         }
 
         let pitch_class_cardinality = self.ordered_pitch_classes().len();
@@ -110,10 +141,10 @@ impl Chord {
             if let Some(bass_name) = self.bass_pitch_name() {
                 return format!("{name_str} above {bass_name}");
             }
-            return name_str;
+            return name_str.to_string();
         }
 
-        if let Some(root_name) = self.spelling_root_name_override(&name_str) {
+        if let Some(root_name) = self.spelling_root_name_override(name_str) {
             return format!("{root_name}-{name_str}");
         }
 
@@ -125,7 +156,7 @@ impl Chord {
 
         match root_name {
             Some(root_name) => format!("{root_name}-{name_str}"),
-            None => name_str,
+            None => name_str.to_string(),
         }
     }
 
@@ -321,6 +352,7 @@ impl Chord {
             .unwrap_or_else(|| "unknown chord".to_string())
     }
 
+    /// Returns all unpitched common-name aliases known for this chord.
     pub fn common_names(&self) -> Vec<String> {
         let ordered_pcs = self.ordered_pitch_classes();
         let Ok(address) = tables::seek_chord_tables_address(&ordered_pcs) else {
@@ -335,6 +367,7 @@ impl Chord {
             .collect()
     }
 
+    /// Returns the distinct pitch classes in ascending order.
     pub fn pitch_classes(&self) -> Vec<u8> {
         self.ordered_pitch_classes()
     }
@@ -343,32 +376,38 @@ impl Chord {
         self._notes.iter().map(|note| note._pitch.clone()).collect()
     }
 
+    /// Returns the inferred root pitch name when the chord has one.
     pub fn root_pitch_name(&self) -> Option<String> {
         self.root_pitch_name_from_tables()
     }
 
+    /// Returns the lowest pitch name in the chord.
     pub fn bass_pitch_name_public(&self) -> Option<String> {
         self.bass_pitch_name()
     }
 
+    /// Returns the Forte class, such as `"3-11B"`, when available.
     pub fn forte_class(&self) -> Option<String> {
         let ordered_pcs = self.ordered_pitch_classes();
         let address = tables::seek_chord_tables_address(&ordered_pcs).ok()?;
         tables::address_to_forte_name(address, "tn").ok()
     }
 
+    /// Returns the transposed normal form when table metadata is available.
     pub fn normal_form(&self) -> Option<Vec<u8>> {
         let ordered_pcs = self.ordered_pitch_classes();
         let address = tables::seek_chord_tables_address(&ordered_pcs).ok()?;
         tables::transposed_normal_form_from_address(address).ok()
     }
 
+    /// Returns the interval-class vector when table metadata is available.
     pub fn interval_class_vector(&self) -> Option<Vec<u8>> {
         let ordered_pcs = self.ordered_pitch_classes();
         let address = tables::seek_chord_tables_address(&ordered_pcs).ok()?;
         tables::interval_class_vector_from_address(address).ok()
     }
 
+    /// Returns the tertian inversion number, where root position is `0`.
     pub fn inversion(&self) -> Option<u8> {
         let root_pc = self.root_pitch_class_tertian()?;
         let bass_pc = self
@@ -392,6 +431,7 @@ impl Chord {
         }
     }
 
+    /// Returns a human-readable inversion label.
     pub fn inversion_name(&self) -> Option<String> {
         match self.inversion()? {
             0 => Some("root position".to_string()),
@@ -641,18 +681,144 @@ impl Music21ObjectTrait for Chord {}
 
 impl ProtoM21ObjectTrait for Chord {}
 
-pub(crate) trait IntoNotes {
+/// Converts a single note-like value into a [`Note`].
+///
+/// This is useful when constructing vectors or other collections that are
+/// later passed to [`Chord::new`].
+pub trait IntoNote {
+    /// Whether this value came from an integer pitch class or MIDI-like number.
+    const FROM_INTEGER_PITCH: bool = false;
+
+    /// Converts the value into a note.
+    fn try_into_note(self) -> ExceptionResult<Note>;
+}
+
+impl IntoNote for Note {
+    fn try_into_note(self) -> ExceptionResult<Note> {
+        Ok(self)
+    }
+}
+
+impl IntoNote for &Note {
+    fn try_into_note(self) -> ExceptionResult<Note> {
+        Ok(self.clone())
+    }
+}
+
+impl IntoNote for Pitch {
+    fn try_into_note(self) -> ExceptionResult<Note> {
+        Note::new(Some(self), None, None, None)
+    }
+}
+
+impl IntoNote for &Pitch {
+    fn try_into_note(self) -> ExceptionResult<Note> {
+        Note::new(Some(self.clone()), None, None, None)
+    }
+}
+
+impl IntoNote for String {
+    fn try_into_note(self) -> ExceptionResult<Note> {
+        Note::new(Some(self), None, None, None)
+    }
+}
+
+impl IntoNote for &String {
+    fn try_into_note(self) -> ExceptionResult<Note> {
+        Note::new(Some(self.to_string()), None, None, None)
+    }
+}
+
+impl IntoNote for &str {
+    fn try_into_note(self) -> ExceptionResult<Note> {
+        Note::new(Some(self), None, None, None)
+    }
+}
+
+impl IntoNote for IntegerType {
+    const FROM_INTEGER_PITCH: bool = true;
+
+    fn try_into_note(self) -> ExceptionResult<Note> {
+        Note::new(Some(self), None, None, None)
+    }
+}
+
+/// Converts a supported chord input into notes.
+///
+/// Implementations are provided for strings, slices, vectors, other chords,
+/// integer pitch inputs, and `Option<T>`. `None` converts to an empty note list.
+pub trait IntoNotes {
+    /// Whether this input should be treated as integer-derived pitches.
     const FROM_INTEGER_PITCHES: bool = false;
 
-    type T: IntoIterator<Item = Note>;
+    /// Iterator-like collection returned by the conversion.
+    type Notes: IntoIterator<Item = Note>;
 
-    fn try_into_notes(self) -> ExceptionResult<Self::T>;
+    /// Converts the input into notes.
+    fn try_into_notes(self) -> ExceptionResult<Self::Notes>;
+}
+
+impl<T> IntoNotes for Option<T>
+where
+    T: IntoNotes,
+{
+    const FROM_INTEGER_PITCHES: bool = T::FROM_INTEGER_PITCHES;
+
+    type Notes = Vec<Note>;
+
+    fn try_into_notes(self) -> ExceptionResult<Self::Notes> {
+        match self {
+            Some(notes) => Ok(notes.try_into_notes()?.into_iter().collect()),
+            None => Ok(Vec::new()),
+        }
+    }
+}
+
+impl<T> IntoNotes for Vec<T>
+where
+    T: IntoNote,
+{
+    const FROM_INTEGER_PITCHES: bool = T::FROM_INTEGER_PITCH;
+
+    type Notes = Vec<Note>;
+
+    fn try_into_notes(self) -> ExceptionResult<Self::Notes> {
+        let mut notes = self
+            .into_iter()
+            .map(IntoNote::try_into_note)
+            .collect::<ExceptionResult<Vec<_>>>()?;
+        if Self::FROM_INTEGER_PITCHES {
+            simplify_integer_notes(&mut notes)?;
+        }
+        Ok(notes)
+    }
+}
+
+fn simplify_integer_notes(notes: &mut [Note]) -> ExceptionResult<()> {
+    if notes.is_empty() {
+        return Ok(());
+    }
+
+    let pitches = notes
+        .iter()
+        .map(|note| note._pitch.clone())
+        .collect::<Vec<_>>();
+    for (note, pitch) in notes
+        .iter_mut()
+        .zip(crate::pitch::simplify_multiple_enharmonics(
+            &pitches, None, None,
+        )?)
+    {
+        note._pitch = pitch;
+    }
+
+    Ok(())
 }
 
 impl IntoNotes for &[Pitch] {
-    type T = Vec<Note>;
+    type Notes = Vec<Note>;
 
-    fn try_into_notes(self) -> Result<Self::T, Exception> {
+    fn try_into_notes(self) -> Result<Self::Notes, Exception> {
         self.iter()
             .map(|pitch| Note::new(Some(pitch.clone()), None, None, None))
             .collect::<ExceptionResult<Vec<_>>>()
@@ -660,25 +826,25 @@ impl IntoNotes for &[Pitch] {
 }
 
 impl IntoNotes for &[Note] {
-    type T = Vec<Note>;
+    type Notes = Vec<Note>;
 
-    fn try_into_notes(self) -> Result<Self::T, Exception> {
+    fn try_into_notes(self) -> Result<Self::Notes, Exception> {
         Ok(self.to_vec())
     }
 }
 
 impl IntoNotes for &[Chord] {
-    type T = Vec<Note>;
+    type Notes = Vec<Note>;
 
-    fn try_into_notes(self) -> Result<Self::T, Exception> {
+    fn try_into_notes(self) -> Result<Self::Notes, Exception> {
         Ok(self.iter().flat_map(|chord| chord._notes.clone()).collect())
     }
 }
 
 impl IntoNotes for &[String] {
-    type T = Vec<Note>;
+    type Notes = Vec<Note>;
 
-    fn try_into_notes(self) -> Result<Self::T, Exception> {
+    fn try_into_notes(self) -> Result<Self::Notes, Exception> {
         self.iter()
             .map(|s| Note::new(Some(s.to_string()), None, None, None))
             .collect::<ExceptionResult<Vec<_>>>()
@@ -686,10 +852,12 @@ impl IntoNotes for &[String] {
 }
 
 impl IntoNotes for String {
-    type T = Vec<Note>;
+    type Notes = Vec<Note>;
 
-    fn try_into_notes(self) -> Result<Self::T, Exception> {
-        if self.contains(char::is_whitespace) {
+    fn try_into_notes(self) -> Result<Self::Notes, Exception> {
+        if self.trim().is_empty() {
+            Ok(Vec::new())
+        } else if self.contains(char::is_whitespace) {
             self.split_whitespace()
                 .collect::<Vec<&str>>()
                 .as_slice()
@@ -701,9 +869,9 @@ impl IntoNotes for String {
 }
 
 impl IntoNotes for &[&str] {
-    type T = Vec<Note>;
+    type Notes = Vec<Note>;
 
-    fn try_into_notes(self) -> Result<Self::T, Exception> {
+    fn try_into_notes(self) -> Result<Self::Notes, Exception> {
         let mut vec = vec![];
         for str in self {
             vec.append(&mut str.try_into_notes()?);
@@ -713,11 +881,15 @@ impl IntoNotes for &[&str] {
 }
 
 impl IntoNotes for &str {
-    type T = Vec<Note>;
+    type Notes = Vec<Note>;
 
-    fn try_into_notes(self) -> Result<Self::T, Exception> {
-        if self.contains(' ') {
-            self.split(" ").collect::<Vec<&str>>().try_into_notes()
+    fn try_into_notes(self) -> Result<Self::Notes, Exception> {
+        if self.trim().is_empty() {
+            Ok(Vec::new())
+        } else if self.contains(char::is_whitespace) {
+            self.split_whitespace()
+                .collect::<Vec<&str>>()
+                .try_into_notes()
         } else {
             Ok(vec![Note::new(Some(self), None, None, None)?])
         }
@@ -727,52 +899,21 @@ impl IntoNotes for &str {
 impl IntoNotes for &[IntegerType] {
     const FROM_INTEGER_PITCHES: bool = true;
 
-    type T = Vec<Note>;
+    type Notes = Vec<Note>;
 
-    fn try_into_notes(self) -> Result<Self::T, Exception> {
+    fn try_into_notes(self) -> Result<Self::Notes, Exception> {
         let mut notes = self
             .iter()
             .map(|i| Note::new(Some(*i), None, None, None))
             .collect::<ExceptionResult<Vec<_>>>()?;
-        if notes.is_empty() {
-            return Ok(notes);
-        }
-
-        let pitches = notes
-            .iter()
-            .map(|note| note._pitch.clone())
-            .collect::<Vec<_>>();
-        for (note, pitch) in notes
-            .iter_mut()
-            .zip(crate::pitch::simplify_multiple_enharmonics(
-                &pitches, None, None,
-            )?)
-        {
-            note._pitch = pitch;
-        }
-
+        simplify_integer_notes(&mut notes)?;
         Ok(notes)
     }
 }
 
-// pub(crate) trait IntoNote {
-//     fn into_note(&self) -> Note;
-// }
-
-// impl<T> IntoNotes for T
-// where
-//     T: IntoNote,
-// {
-//     type T = Vec<Note>;
-
-//     fn into_notes(self) -> Self::T {
-//         vec![self.into_note()]
-//     }
-// }
-
 #[cfg(test)]
 mod tests {
-    use crate::chord::Chord;
+    use crate::{Pitch, chord::Chord};
 
     #[cfg(feature = "python")]
     mod utils {
@@ -802,7 +943,7 @@ mod tests {
 
     #[test]
     fn c_e_g_pitchedcommonname() {
-        let chord = Chord::new(Some("C E G"));
+        let chord = Chord::new("C E G");
 
         assert!(chord.is_ok());
 
@@ -810,24 +951,53 @@ mod tests {
     }
 
     #[test]
+    fn new_accepts_empty_inputs() {
+        assert_eq!(Chord::new("").unwrap().pitched_common_name(), "empty chord");
+        assert_eq!(
+            Chord::new(Vec::<Pitch>::new())
+                .unwrap()
+                .pitched_common_name(),
+            "empty chord"
+        );
+        assert_eq!(
+            Chord::new(Option::<&str>::None)
+                .unwrap()
+                .pitched_common_name(),
+            "empty chord"
+        );
+    }
+
+    #[test]
+    fn pitched_common_names_returns_aliases() {
+        let chord = Chord::new("C E G#").unwrap();
+        assert_eq!(
+            chord.pitched_common_names(),
+            vec![
+                "C-augmented triad".to_string(),
+                "C-equal 3-part octave division".to_string()
+            ]
+        );
+    }
+
+    #[test]
     fn dyad_names_follow_music21_interval_rules() {
         let pcs = [0, 1];
-        let integer_chord = Chord::new(Some(pcs.as_slice())).unwrap();
+        let integer_chord = Chord::new(pcs.as_slice()).unwrap();
         assert_eq!(integer_chord.common_name(), "Minor Second");
         assert_eq!(integer_chord.pitched_common_name(), "Minor Second above C");
 
-        let spelled_chord = Chord::new(Some("C C#")).unwrap();
+        let spelled_chord = Chord::new("C C#").unwrap();
         assert_eq!(spelled_chord.common_name(), "Augmented Unison");
         assert_eq!(
             spelled_chord.pitched_common_name(),
             "Augmented Unison above C"
         );
 
-        let octave = Chord::new(Some("D3 D4")).unwrap();
+        let octave = Chord::new("D3 D4").unwrap();
         assert_eq!(octave.common_name(), "Perfect Octave");
         assert_eq!(octave.pitched_common_name(), "Perfect Octave above D");
 
-        let compound = Chord::new(Some("E-3 C5 C6")).unwrap();
+        let compound = Chord::new("E-3 C5 C6").unwrap();
         assert_eq!(compound.common_name(), "Major Sixth with octave doublings");
         assert_eq!(
             compound.pitched_common_name(),
@@ -837,7 +1007,7 @@ mod tests {
 
     #[test]
     fn chord_metadata_methods_have_forte_and_inversion() {
-        let chord = Chord::new(Some("C E G")).unwrap();
+        let chord = Chord::new("C E G").unwrap();
         assert_eq!(chord.root_pitch_name().as_deref(), Some("C"));
         assert_eq!(chord.bass_pitch_name_public().as_deref(), Some("C"));
         assert_eq!(chord.inversion(), Some(0));
@@ -853,7 +1023,7 @@ mod tests {
 
     #[test]
     fn chord_first_inversion_detected() {
-        let chord = Chord::new(Some("E3 G3 C4")).unwrap();
+        let chord = Chord::new("E3 G3 C4").unwrap();
         assert_eq!(chord.inversion(), Some(1));
         assert_eq!(chord.inversion_name().as_deref(), Some("first inversion"));
     }
@@ -922,7 +1092,7 @@ mod tests {
                 let python_pitched_common_name: String =
                     chord_instance.getattr("pitchedCommonName")?.extract()?;
 
-                let rust_chord = Chord::new(Some(pcs.as_slice())).unwrap();
+                let rust_chord = Chord::new(pcs.as_slice()).unwrap();
                 let rust_common_name = rust_chord.common_name();
                 let rust_pitched_common_name = rust_chord.pitched_common_name();
                 assert_eq!(
@@ -944,7 +1114,7 @@ mod tests {
     fn compare_chord(x: &str, chord_class: &Bound<'_, PyAny>) -> Result<(), PyErr> {
         let chord_instance = chord_class.call1((x,))?;
 
-        let chord = Chord::new(Some(x)).unwrap();
+        let chord = Chord::new(x).unwrap();
 
         let pitched_common_name: String = chord_instance.getattr("pitchedCommonName")?.extract()?;
         assert_eq!(chord.pitched_common_name(), pitched_common_name);

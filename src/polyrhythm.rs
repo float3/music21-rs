@@ -203,7 +203,7 @@ impl Polyrhythm {
             .collect();
 
         let notes = notes?;
-        Chord::new(Some(notes.as_slice()))
+        Chord::new(notes.as_slice())
     }
 
     pub fn as_chord<T>(&self, base: T) -> ExceptionResult<Chord>

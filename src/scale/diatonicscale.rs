@@ -38,7 +38,7 @@ impl DiatonicScale {
             self.pitch_from_degree(degree + 2)?,
             self.pitch_from_degree(degree + 4)?,
         ];
-        Chord::new(Some(notes.as_slice()))
+        Chord::new(notes.as_slice())
     }
 
     pub(crate) fn seventh_chord_from_degree(&self, degree: usize) -> ExceptionResult<Chord> {
@@ -48,7 +48,7 @@ impl DiatonicScale {
             self.pitch_from_degree(degree + 4)?,
             self.pitch_from_degree(degree + 6)?,
         ];
-        Chord::new(Some(notes.as_slice()))
+        Chord::new(notes.as_slice())
     }
 }
 

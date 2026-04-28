@@ -29,7 +29,7 @@ pub mod tuningsystem;
 // #[macro_use]
 // pub(crate) mod macros;
 
-pub use chord::Chord;
+pub use chord::{Chord, IntoNote, IntoNotes};
 pub use exception::{Exception, ExceptionResult};
 pub use note::Note;
 pub use pitch::{

@@ -65,7 +65,7 @@ fn run_string_cases() {
     ];
 
     for case in cases {
-        let chord = Chord::new(Some(case.notes))
+        let chord = Chord::new(case.notes)
             .unwrap_or_else(|e| panic!("failed to construct {:?}: {e}", case.notes));
         let got = chord.pitched_common_name();
         assert_eq!(
@@ -84,7 +84,7 @@ fn run_integer_cases() {
     }];
 
     for case in cases {
-        let chord = Chord::new(Some(case.notes))
+        let chord = Chord::new(case.notes)
             .unwrap_or_else(|e| panic!("failed to construct {:?}: {e}", case.notes));
         let got = chord.pitched_common_name();
         assert_eq!(

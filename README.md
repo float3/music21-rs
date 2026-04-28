@@ -15,8 +15,17 @@
 ```rust
 use music21_rs::chord::Chord;
 
-let chord = Chord::new(Some("C E G"))?;
+let chord = Chord::new("C E G")?;
 assert_eq!(chord.pitched_common_name(), "C-major triad");
+
+let augmented = Chord::new("C E G#")?;
+assert_eq!(
+    augmented.pitched_common_names(),
+    ["C-augmented triad", "C-equal 3-part octave division"]
+);
+
+let empty = Chord::new("")?;
+assert_eq!(empty.pitched_common_name(), "empty chord");
 # Ok::<(), music21_rs::exception::Exception>(())
 ```
 

@@ -1,5 +1,6 @@
 use super::Chord;
 use super::IntegerType;
+use super::IntoNote;
 use super::Pitch;
 
 use crate::base::Music21ObjectTrait;
@@ -136,6 +137,54 @@ pub(crate) trait IntoNotRests {
     )>;
 }
 
+impl<T> IntoNotRests for Option<T>
+where
+    T: IntoNotRests,
+{
+    type T = Vec<NotRest>;
+
+    fn into_not_rests(
+        self,
+        duration: &Option<Duration>,
+        quick_duration: bool,
+    ) -> ExceptionResult<(&Option<Duration>, Option<Duration>, Self::T)> {
+        match self {
+            Some(notes) => {
+                let (use_duration, self_duration, notes) =
+                    notes.into_not_rests(duration, quick_duration)?;
+                Ok((use_duration, self_duration, notes.into_iter().collect()))
+            }
+            None => Ok((duration, duration.clone(), Vec::new())),
+        }
+    }
+}
+
+impl<T> IntoNotRests for Vec<T>
+where
+    T: IntoNote,
+{
+    type T = Vec<NotRest>;
+
+    fn into_not_rests(
+        self,
+        duration: &Option<Duration>,
+        quick_duration: bool,
+    ) -> ExceptionResult<(&Option<Duration>, Option<Duration>, Self::T)> {
+        let _ = quick_duration;
+        let notes = self
+            .into_iter()
+            .map(|note| {
+                let mut note = note.try_into_note()?;
+                if let Some(duration) = duration {
+                    note.set_duration(duration);
+                }
+                Ok(note.get_super().clone())
+            })
+            .collect::<ExceptionResult<Vec<_>>>()?;
+        Ok((duration, duration.clone(), notes))
+    }
+}
+
 impl IntoNotRests for String {
     type T = Vec<NotRest>;
     fn into_not_rests(
@@ -143,7 +192,9 @@ impl IntoNotRests for String {
         duration: &Option<Duration>,
         quick_duration: bool,
     ) -> ExceptionResult<(&Option<Duration>, Option<Duration>, Self::T)> {
-        if self.contains(char::is_whitespace) {
+        if self.trim().is_empty() {
+            Ok((duration, duration.clone(), Vec::new()))
+        } else if self.contains(char::is_whitespace) {
             // Split into whitespace parts and delegate to &[&str]
             self.split_whitespace()
                 .collect::<Vec<&str>>()
@@ -165,7 +216,9 @@ impl IntoNotRests for &str {
         duration: &Option<Duration>,
         quick_duration: bool,
     ) -> ExceptionResult<(&Option<Duration>, Option<Duration>, Self::T)> {
-        if self.contains(char::is_whitespace) {
+        if self.trim().is_empty() {
+            Ok((duration, duration.clone(), Vec::new()))
+        } else if self.contains(char::is_whitespace) {
             self.split_whitespace()
                 .collect::<Vec<&str>>()
                 .as_slice()
