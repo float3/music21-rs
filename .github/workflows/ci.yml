@@ -231,6 +231,7 @@ jobs:
           mkdir -p target/pages/tuning
           cp -R target/doc/. target/pages/docs/
           cp examples/web/help-tooltips.js target/pages/help-tooltips.js
+          cp examples/web/theme.js target/pages/theme.js
           cp examples/web/index.html target/pages/index.html
           cp examples/web/chord/index.html target/pages/chord/index.html
           cp examples/web/chord/app.js target/pages/chord/app.js
@@ -258,6 +259,7 @@ jobs:
               "pkg/music21_rs_web.js",
               "pkg/music21_rs_web_bg.wasm",
               "help-tooltips.js",
+              "theme.js",
               "docs/music21_rs/index.html",
               "chord/app.js",
               "chords/app.js",
@@ -272,15 +274,15 @@ jobs:
               raise SystemExit(f"missing demo build output: {', '.join(missing)}")
 
           file_checks = {
-              "index.html": ["chord/", "chords/", "polyrhythm/", "tuning/"],
+              "index.html": ["chord/", "chords/", "polyrhythm/", "tuning/", "./theme.js"],
               "chord/index.html": ["./app.js", "../chords/", "../polyrhythm/"],
-              "chord/app.js": ["../pkg/music21_rs_web.js"],
+              "chord/app.js": ["../help-tooltips.js", "../theme.js", "../pkg/music21_rs_web.js"],
               "chords/index.html": ["./app.js", "../chord/"],
-              "chords/app.js": ["../pkg/music21_rs_web.js"],
+              "chords/app.js": ["../help-tooltips.js", "../theme.js", "../pkg/music21_rs_web.js"],
               "polyrhythm/index.html": ["./app.js"],
-              "polyrhythm/app.js": ["../pkg/music21_rs_web.js"],
+              "polyrhythm/app.js": ["../help-tooltips.js", "../theme.js"],
               "tuning/index.html": ["./app.js"],
-              "tuning/app.js": ["../pkg/music21_rs_web.js"],
+              "tuning/app.js": ["../theme.js"],
           }
 
           for name, needles in file_checks.items():
