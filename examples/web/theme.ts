@@ -38,15 +38,23 @@ function resolveTheme(theme: ThemeChoice): ResolvedTheme {
 
 function applyTheme(theme: ThemeChoice): void {
   const resolved = resolveTheme(theme);
-  document.documentElement.dataset.theme = resolved;
-  document.documentElement.style.colorScheme = resolved;
+  if (theme === "system") {
+    delete document.documentElement.dataset.theme;
+    document.documentElement.style.colorScheme = "";
+  } else {
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme;
+  }
   document.dispatchEvent(
-    new CustomEvent("music21-theme-change", { detail: { theme: resolved } }),
+    new CustomEvent("music21-theme-change", {
+      detail: { theme: resolved, choice: theme },
+    }),
   );
 }
 
-function buttonLabel(theme: ResolvedTheme): string {
-  return theme === "dark" ? "Light mode" : "Dark mode";
+function buttonLabel(theme: ThemeChoice): string {
+  if (theme !== "system") return "Use system";
+  return resolveTheme(theme) === "dark" ? "Light mode" : "Dark mode";
 }
 
 function ensureThemeButton(): HTMLButtonElement | null {
@@ -65,10 +73,15 @@ function ensureThemeButton(): HTMLButtonElement | null {
 }
 
 function syncButton(button: HTMLButtonElement, theme: ThemeChoice): void {
-  const resolved = resolveTheme(theme);
-  button.textContent = buttonLabel(resolved);
-  button.setAttribute("aria-label", buttonLabel(resolved));
-  button.setAttribute("aria-pressed", String(resolved === "dark"));
+  const label = buttonLabel(theme);
+  button.textContent = label;
+  button.setAttribute("aria-label", label);
+  button.setAttribute("aria-pressed", String(theme !== "system"));
+}
+
+function nextTheme(theme: ThemeChoice): ThemeChoice {
+  if (theme !== "system") return "system";
+  return resolveTheme(theme) === "dark" ? "light" : "dark";
 }
 
 export function setupThemeToggle(): void {
@@ -80,7 +93,7 @@ export function setupThemeToggle(): void {
   syncButton(button, theme);
 
   button.addEventListener("click", () => {
-    theme = resolveTheme(theme) === "dark" ? "light" : "dark";
+    theme = nextTheme(theme);
     storeTheme(theme);
     applyTheme(theme);
     syncButton(button, theme);
