@@ -1,5 +1,7 @@
 use crate::defaults::{FloatType, IntegerType, UnsignedIntegerType};
+use crate::error::{Error, Result};
 
+use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
 /// Default octave size for twelve-tone systems.
@@ -205,6 +207,29 @@ pub enum TuningSystem {
 }
 
 impl TuningSystem {
+    /// Returns the canonical identifier used by [`FromStr`].
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::EqualTemperament { .. } => "EqualTemperament",
+            Self::RecursiveEqualTemperament { .. } => "RecursiveEqualTemperament",
+            Self::WholeTone => "WholeTone",
+            Self::QuarterTone => "QuarterTone",
+            Self::JustIntonation => "JustIntonation",
+            Self::JustIntonation24 => "JustIntonation24",
+            Self::PythagoreanTuning => "PythagoreanTuning",
+            Self::FiveLimit => "FiveLimit",
+            Self::ElevenLimit => "ElevenLimit",
+            Self::FortyThreeTone => "FortyThreeTone",
+            Self::StepMethod => "StepMethod",
+            Self::Javanese => "Javanese",
+            Self::Thai => "Thai",
+            Self::Indian => "Indian",
+            Self::IndianAlt => "IndianAlt",
+            Self::Indian22 => "Indian22",
+            Self::IndianFull => "IndianFull",
+        }
+    }
+
     /// Returns a compact display name for this tuning system.
     pub fn display_name(self) -> &'static str {
         match self {
@@ -323,8 +348,14 @@ impl TuningSystem {
     }
 }
 
+impl Display for TuningSystem {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.id())
+    }
+}
+
 impl FromStr for TuningSystem {
-    type Err = ();
+    type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
@@ -349,7 +380,7 @@ impl FromStr for TuningSystem {
             "IndianAlt" => Ok(Self::IndianAlt),
             "Indian22" => Ok(Self::Indian22),
             "IndianFull" => Ok(Self::IndianFull),
-            _ => Err(()),
+            _ => Err(Error::TuningSystem(format!("unknown tuning system {s:?}"))),
         }
     }
 }
@@ -878,5 +909,19 @@ mod tests {
         assert_eq!(TuningSystem::FortyThreeTone.label(68), "T25O0");
         assert_eq!(TuningSystem::FortyThreeTone.octave_size(), 43);
         assert_eq!(TuningSystem::FortyThreeTone.ratio(68), 3.0);
+    }
+
+    #[test]
+    fn tuning_system_display_and_parse_are_canonical() {
+        let system = TuningSystem::FiveLimit;
+        assert_eq!(system.id(), "FiveLimit");
+        assert_eq!(system.to_string(), "FiveLimit");
+        assert_eq!("FiveLimit".parse::<TuningSystem>().unwrap(), system);
+
+        let err = "not-a-system".parse::<TuningSystem>().unwrap_err();
+        assert_eq!(
+            err,
+            Error::TuningSystem("unknown tuning system \"not-a-system\"".to_string())
+        );
     }
 }

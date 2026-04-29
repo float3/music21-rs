@@ -31,6 +31,8 @@ pub enum Error {
     Ordinal(String),
     /// Error associated with polyrhythm construction or timing.
     Polyrhythm(String),
+    /// Error associated with tuning-system parsing or lookup.
+    TuningSystem(String),
 }
 
 impl fmt::Display for Error {
@@ -47,7 +49,8 @@ impl fmt::Display for Error {
             Error::PitchClass(msg) => write!(f, "PitchClass error: {msg}"),
             Error::PitchClassString(msg) => write!(f, "PitchClassString error: {msg}"),
             Error::Ordinal(msg) => write!(f, "Ordinal error: {msg}"),
-            Error::Polyrhythm(msg) => write!(f, "Polyrhythm {msg}"),
+            Error::Polyrhythm(msg) => write!(f, "Polyrhythm error: {msg}"),
+            Error::TuningSystem(msg) => write!(f, "TuningSystem error: {msg}"),
         }
     }
 }
@@ -139,6 +142,18 @@ mod tests {
     }
 
     #[test]
+    fn test_display_polyrhythm() {
+        let err = Error::Polyrhythm("polyrhythm error".to_string());
+        assert_eq!(format!("{err}"), "Polyrhythm error: polyrhythm error");
+    }
+
+    #[test]
+    fn test_display_tuningsystem() {
+        let err = Error::TuningSystem("tuning system error".to_string());
+        assert_eq!(format!("{err}"), "TuningSystem error: tuning system error");
+    }
+
+    #[test]
     fn test_source_none() {
         let errors = [
             Error::Music21Object("music21".to_string()),
@@ -149,8 +164,11 @@ mod tests {
             Error::ChordTables("chordtables".to_string()),
             Error::Interval("interval".to_string()),
             Error::StepName("step".to_string()),
+            Error::PitchClass("pitch class".to_string()),
             Error::PitchClassString("pitch class".to_string()),
             Error::Ordinal("ordinal".to_string()),
+            Error::Polyrhythm("polyrhythm".to_string()),
+            Error::TuningSystem("tuning system".to_string()),
         ];
 
         for err in errors.iter() {
@@ -189,12 +207,24 @@ mod tests {
             ),
             (Error::StepName("step".to_string()), "StepName error: step"),
             (
+                Error::PitchClass("pitchclass".to_string()),
+                "PitchClass error: pitchclass",
+            ),
+            (
                 Error::PitchClassString("pitchclass".to_string()),
                 "PitchClassString error: pitchclass",
             ),
             (
                 Error::Ordinal("ordinal".to_string()),
                 "Ordinal error: ordinal",
+            ),
+            (
+                Error::Polyrhythm("polyrhythm".to_string()),
+                "Polyrhythm error: polyrhythm",
+            ),
+            (
+                Error::TuningSystem("tuning system".to_string()),
+                "TuningSystem error: tuning system",
             ),
         ];
 

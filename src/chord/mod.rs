@@ -1008,10 +1008,12 @@ impl Music21ObjectTrait for Chord {}
 
 impl ProtoM21ObjectTrait for Chord {}
 
-/// Converts a supported chord input into notes.
+/// Tries to convert a supported chord input into notes.
 ///
 /// Implementations are provided for strings, slices, vectors, other chords,
 /// integer pitch inputs, and `Option<T>`. `None` converts to an empty note list.
+/// String and integer inputs can fail while constructing pitches or simplifying
+/// enharmonics, so this trait stays explicitly fallible.
 pub trait IntoNotes {
     /// Whether this input should be treated as integer-derived pitches.
     const FROM_INTEGER_PITCHES: bool = false;
@@ -1083,7 +1085,7 @@ fn simplify_integer_notes(notes: &mut [Note]) -> Result<()> {
 impl IntoNotes for &[Pitch] {
     type Notes = Vec<Note>;
 
-    fn try_into_notes(self) -> Result<Self::Notes, Error> {
+    fn try_into_notes(self) -> Result<Self::Notes> {
         self.iter()
             .map(|pitch| Note::new(Some(pitch.clone()), None, None, None))
             .collect::<Result<Vec<_>>>()
@@ -1093,7 +1095,7 @@ impl IntoNotes for &[Pitch] {
 impl IntoNotes for &[Note] {
     type Notes = Vec<Note>;
 
-    fn try_into_notes(self) -> Result<Self::Notes, Error> {
+    fn try_into_notes(self) -> Result<Self::Notes> {
         Ok(self.to_vec())
     }
 }
@@ -1101,7 +1103,7 @@ impl IntoNotes for &[Note] {
 impl IntoNotes for &[Chord] {
     type Notes = Vec<Note>;
 
-    fn try_into_notes(self) -> Result<Self::Notes, Error> {
+    fn try_into_notes(self) -> Result<Self::Notes> {
         Ok(self.iter().flat_map(|chord| chord._notes.clone()).collect())
     }
 }
@@ -1109,7 +1111,7 @@ impl IntoNotes for &[Chord] {
 impl IntoNotes for &[String] {
     type Notes = Vec<Note>;
 
-    fn try_into_notes(self) -> Result<Self::Notes, Error> {
+    fn try_into_notes(self) -> Result<Self::Notes> {
         self.iter()
             .map(|s| Note::new(Some(s.to_string()), None, None, None))
             .collect::<Result<Vec<_>>>()
@@ -1119,7 +1121,7 @@ impl IntoNotes for &[String] {
 impl IntoNotes for String {
     type Notes = Vec<Note>;
 
-    fn try_into_notes(self) -> Result<Self::Notes, Error> {
+    fn try_into_notes(self) -> Result<Self::Notes> {
         if self.trim().is_empty() {
             Ok(Vec::new())
         } else if self.contains(char::is_whitespace) {
@@ -1136,7 +1138,7 @@ impl IntoNotes for String {
 impl IntoNotes for &[&str] {
     type Notes = Vec<Note>;
 
-    fn try_into_notes(self) -> Result<Self::Notes, Error> {
+    fn try_into_notes(self) -> Result<Self::Notes> {
         let mut vec = vec![];
         for str in self {
             vec.append(&mut str.try_into_notes()?);
@@ -1148,7 +1150,7 @@ impl IntoNotes for &[&str] {
 impl IntoNotes for &str {
     type Notes = Vec<Note>;
 
-    fn try_into_notes(self) -> Result<Self::Notes, Error> {
+    fn try_into_notes(self) -> Result<Self::Notes> {
         if self.trim().is_empty() {
             Ok(Vec::new())
         } else if self.contains(char::is_whitespace) {
@@ -1166,7 +1168,7 @@ impl IntoNotes for &[IntegerType] {
 
     type Notes = Vec<Note>;
 
-    fn try_into_notes(self) -> Result<Self::Notes, Error> {
+    fn try_into_notes(self) -> Result<Self::Notes> {
         let mut notes = self
             .iter()
             .map(|i| Note::new(Some(*i), None, None, None))
@@ -1284,6 +1286,11 @@ mod tests {
                 .iter()
                 .any(|name| name == "major triad")
         );
+    }
+
+    #[test]
+    fn new_rejects_invalid_pitch_inputs() {
+        assert!(Chord::new("C nope G").is_err());
     }
 
     #[test]
