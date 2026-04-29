@@ -177,6 +177,8 @@ const pcNames = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"
 const pcAltNames = ["B#", "Db", "D", "D#", "Fb", "E#", "Gb", "G", "G#", "Bbb", "A#", "Cb"];
 const inputPitchNames = ["C", "C#", "D", "E-", "E", "F", "F#", "G", "A-", "A", "B-", "B"];
 const blackKeys = new Set([1, 3, 6, 8, 10]);
+const keyboardStartMidi = 60;
+const keyboardKeyCount = 24;
 const chordParam = "chord";
 const keyParam = "key";
 const vexChordsUrl = "https://cdn.jsdelivr.net/npm/vexchords@1.2.0/dist/vexchords.dev.js";
@@ -407,15 +409,19 @@ function cssVar(name: string, fallback: string): string {
   );
 }
 
-function renderKeyboard(activeClasses: number[]): void {
-  const active = new Set(activeClasses);
+function renderKeyboard(pitchData: PitchInfo[]): void {
+  const active = new Set(pitchData.map((pitch) => pitch.midi));
   keyboard.replaceChildren();
-  for (let index = 0; index < 24; index += 1) {
-    const pitchClass = index % 12;
+  for (let index = 0; index < keyboardKeyCount; index += 1) {
+    const midi = keyboardStartMidi + index;
+    const pitchClass = ((midi % 12) + 12) % 12;
+    const octaveNumber = Math.floor(midi / 12) - 1;
     const name = pcNames[pitchClass];
+    const pitchName = keyboardPitchName(midi);
+    const isActive = active.has(midi);
     const key = document.createElement("button");
     key.type = "button";
-    key.className = `key${blackKeys.has(pitchClass) ? " black" : ""}${active.has(pitchClass) ? " active" : ""}`;
+    key.className = `key${blackKeys.has(pitchClass) ? " black" : ""}${isActive ? " active" : ""}`;
     const primary = document.createElement("span");
     primary.className = "key-name";
     primary.textContent = name;
@@ -424,13 +430,15 @@ function renderKeyboard(activeClasses: number[]): void {
     alternate.textContent = pcAltNames[pitchClass] === name ? "" : pcAltNames[pitchClass];
     const octave = document.createElement("span");
     octave.className = "key-octave";
-    octave.textContent = index < 12 ? "I" : "II";
+    octave.textContent = String(octaveNumber);
     key.append(primary, alternate, octave);
-    key.title = active.has(pitchClass)
-      ? `Remove ${name}`
-      : `Add ${inputPitchNames[pitchClass]}`;
+    key.title = isActive ? `Remove ${displayPitchName(pitchName)}` : `Add ${displayPitchName(pitchName)}`;
+    key.setAttribute(
+      "aria-label",
+      isActive ? `Remove ${displayPitchName(pitchName)}` : `Add ${displayPitchName(pitchName)}`,
+    );
     key.addEventListener("click", () => {
-      togglePitchClass(pitchClass);
+      toggleKeyboardPitch(midi);
     });
     keyboard.appendChild(key);
   }
@@ -674,41 +682,44 @@ function displayPitchClassName(pitchClass: number): string {
   return pcNames[((pitchClass % 12) + 12) % 12];
 }
 
-function pitchClassFromName(value: string): number | null {
-  const match = value.trim().replaceAll("-", "b").match(/^([A-G])([#b]*)(-?\d+)?$/);
-  if (!match) return null;
-
-  const naturalPitchClasses: Record<string, number> = {
-    C: 0,
-    D: 2,
-    E: 4,
-    F: 5,
-    G: 7,
-    A: 9,
-    B: 11,
-  };
-  const natural = naturalPitchClasses[match[1]];
-  if (natural === undefined) return null;
-
-  const accidental = match[2]
-    .split("")
-    .reduce((sum, char) => sum + (char === "#" ? 1 : -1), 0);
-  return ((natural + accidental) % 12 + 12) % 12;
+function keyboardPitchName(midi: number): string {
+  const pitchClass = ((midi % 12) + 12) % 12;
+  const octave = Math.floor(midi / 12) - 1;
+  return `${inputPitchNames[pitchClass]}${octave}`;
 }
 
-function togglePitchClass(pitchClass: number): void {
-  const tokens = chordInputTokens(input.value);
-  const hasPitchClass = tokens.some((token) => pitchClassFromName(token) === pitchClass);
-  if (hasPitchClass) {
-    input.value = tokens
-      .filter((token) => pitchClassFromName(token) !== pitchClass)
-      .join(" ");
+function toggleKeyboardPitch(midi: number): void {
+  if (isMidiChordInput(input.value)) {
+    const tokens = midiInputTokens(input.value);
+    const hasPitch = tokens.some((token) => pitchMidi(token) === midi);
+    const nextTokens = hasPitch
+      ? tokens.filter((token) => pitchMidi(token) !== midi)
+      : [...tokens, String(midi)];
+    input.value = nextTokens.length ? `midi: ${nextTokens.join(" ")}` : "";
   } else {
-    const pitchName = inputPitchNames[pitchClass];
-    input.value = tokens.length ? `${tokens.join(" ")} ${pitchName}` : pitchName;
+    const tokens = chordInputTokens(input.value);
+    const hasPitch = tokens.some((token) => pitchMidi(token) === midi);
+    if (hasPitch) {
+      input.value = tokens.filter((token) => pitchMidi(token) !== midi).join(" ");
+    } else {
+      const pitchName = keyboardPitchName(midi);
+      input.value = tokens.length ? `${tokens.join(" ")} ${pitchName}` : pitchName;
+    }
   }
   resetShareButton();
   analyze({ remember: Boolean(normalizeChordInput(input.value)) });
+}
+
+function isMidiChordInput(value: string): boolean {
+  return /^midi(?::|\s+)/i.test(normalizeChordInput(value));
+}
+
+function midiInputTokens(value: string): string[] {
+  const normalized = normalizeChordInput(value);
+  const body = normalized.toLowerCase().startsWith("midi:")
+    ? normalized.slice(normalized.indexOf(":") + 1)
+    : normalized.replace(/^midi\s+/i, "");
+  return body.split(/[\s,]+/).filter((token) => /^-?\d+$/.test(token));
 }
 
 function chordInputTokens(value: string): string[] {
@@ -859,7 +870,7 @@ function render(data: ChordAnalysis): void {
   renderResolutions(data);
   void renderGuitarFingering(data.guitar_fingering);
   renderPitches(data);
-  renderKeyboard(data.pitch_classes);
+  renderKeyboard(data.pitches);
   renderNotation(data);
   renderPolyrhythmLink(data);
 }
