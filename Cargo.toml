@@ -32,3 +32,9 @@ pyo3 = { version = "0.28.3", features = ["auto-initialize", "abi3-py39"] }
 reqwest = { version = "0.13.3", features = ["blocking"] }
 rodio = "0.21.1"
 sha2 = "0.11.0"
+
+[profile.release]
+codegen-units = 1
+lto = "fat"
+opt-level = 3
+panic = "abort"
