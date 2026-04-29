@@ -208,15 +208,15 @@
       }
 
       .inversion-buttons {
-        display: flex;
-        flex-wrap: wrap;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
         gap: 6px;
         min-width: 0;
       }
 
       .resolution-links {
-        display: flex;
-        flex-wrap: wrap;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
         gap: 6px;
         min-width: 0;
       }
@@ -224,7 +224,10 @@
       .mini-button {
         display: inline-flex;
         align-items: center;
+        justify-content: flex-start;
+        max-width: 100%;
         min-height: 28px;
+        min-width: 0;
         padding: 4px 8px;
         border: 1px solid var(--line);
         border-radius: 6px;
@@ -232,8 +235,11 @@
         color: var(--accent-strong);
         font-size: 12px;
         font-weight: 760;
+        line-height: 1.2;
+        overflow-wrap: anywhere;
+        text-align: left;
         text-decoration: none;
-        white-space: nowrap;
+        white-space: normal;
       }
 
       .mini-button:hover,

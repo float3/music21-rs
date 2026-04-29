@@ -840,6 +840,35 @@ mod tests {
     }
 
     #[test]
+    fn known_chord_info_labels_augmented_sixth_functionally() {
+        let chord = KnownChordType {
+            cardinality: 4,
+            forte_class: "4-25".to_string(),
+            normal_form: vec![0, 2, 6, 8],
+            interval_class_vector: vec![0, 2, 0, 2, 0, 2],
+            common_names: vec![
+                "Messiaen's truncated mode 6".to_string(),
+                "French augmented sixth chord".to_string(),
+            ],
+        };
+        let info = known_chord_info(
+            &chord,
+            "Messiaen's truncated mode 6".to_string(),
+            chord.common_names.clone(),
+            chord.normal_form.clone(),
+            "normal",
+        );
+
+        assert_eq!(info.key_estimate.as_deref(), Some("C minor"));
+        assert_eq!(
+            info.roman_numeral_estimate
+                .as_ref()
+                .map(|roman| roman.figure.as_str()),
+            Some("Fr+6")
+        );
+    }
+
+    #[test]
     fn key_estimate_prefers_chord_root_spelling() {
         let chord = Chord::new("D-4 F4 A-4").unwrap();
 

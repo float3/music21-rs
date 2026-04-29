@@ -20,6 +20,21 @@ pub struct RomanNumeral {
     seventh: bool,
     quality: RomanQuality,
     secondary: Option<String>,
+    kind: RomanKind,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum RomanKind {
+    Diatonic,
+    AugmentedSixth(AugmentedSixthKind),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum AugmentedSixthKind {
+    Italian,
+    French,
+    German,
+    Swiss,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -31,13 +46,74 @@ enum RomanQuality {
     Augmented,
 }
 
+impl AugmentedSixthKind {
+    fn from_figure(figure: &str) -> Option<Self> {
+        match figure.trim() {
+            "It+6" | "It6" => Some(Self::Italian),
+            "Fr+6" | "Fr6" => Some(Self::French),
+            "Ger+6" | "Ger6" => Some(Self::German),
+            "Sw+6" | "Sw6" => Some(Self::Swiss),
+            _ => None,
+        }
+    }
+
+    fn from_common_name(name: &str) -> Option<Self> {
+        if name.contains("Italian augmented sixth chord") {
+            Some(Self::Italian)
+        } else if name.contains("French augmented sixth chord") {
+            Some(Self::French)
+        } else if name.contains("German augmented sixth chord") {
+            Some(Self::German)
+        } else if name.contains("Swiss augmented sixth chord") {
+            Some(Self::Swiss)
+        } else {
+            None
+        }
+    }
+
+    fn figure(self) -> &'static str {
+        match self {
+            Self::Italian => "It+6",
+            Self::French => "Fr+6",
+            Self::German => "Ger+6",
+            Self::Swiss => "Sw+6",
+        }
+    }
+
+    fn interval_names(self) -> Vec<&'static str> {
+        match self {
+            Self::Italian => vec!["P1", "M3", "a6"],
+            Self::French => vec!["P1", "M3", "a4", "a6"],
+            Self::German => vec!["P1", "M3", "P5", "a6"],
+            Self::Swiss => vec!["P1", "M3", "aa4", "a6"],
+        }
+    }
+}
+
 impl RomanNumeral {
     /// Parses a Roman numeral figure in a key.
+    ///
+    /// Supports ordinary figures such as `V7/V` and augmented-sixth figures
+    /// such as `It+6`, `Fr+6`, `Ger+6`, and `Sw+6`.
     pub fn new(figure: impl Into<String>, key: Key) -> Result<Self> {
         let figure = figure.into();
         let trimmed = figure.trim();
         if trimmed.is_empty() {
             return Err(Error::Chord("roman numeral cannot be empty".to_string()));
+        }
+
+        if let Some(kind) = AugmentedSixthKind::from_figure(trimmed) {
+            return Ok(Self {
+                figure: kind.figure().to_string(),
+                key,
+                degree: 6,
+                accidental: -1,
+                inversion: 0,
+                seventh: false,
+                quality: RomanQuality::Augmented,
+                secondary: None,
+                kind: RomanKind::AugmentedSixth(kind),
+            });
         }
 
         let (primary, secondary) = match trimmed.split_once('/') {
@@ -61,6 +137,7 @@ impl RomanNumeral {
             seventh,
             quality,
             secondary,
+            kind: RomanKind::Diatonic,
         })
     }
 
@@ -99,6 +176,10 @@ impl RomanNumeral {
 
     /// Realizes the Roman numeral as a chord.
     pub fn to_chord(&self) -> Result<Chord> {
+        if let RomanKind::AugmentedSixth(kind) = self.kind {
+            return self.augmented_sixth_chord(kind);
+        }
+
         let effective_key = self.effective_key()?;
         let mut root = effective_key.pitch_from_degree(self.degree as usize)?;
         if self.accidental != 0 {
@@ -120,6 +201,19 @@ impl RomanNumeral {
         Chord::new(pitches.as_slice())
     }
 
+    fn augmented_sixth_chord(&self, kind: AugmentedSixthKind) -> Result<Chord> {
+        let mut lowered_sixth = self.key.pitch_from_degree(6)?;
+        if self.key.mode() != "minor" {
+            lowered_sixth = Interval::from_semitones(-1)?.transpose_pitch(&lowered_sixth)?;
+        }
+        let pitches = kind
+            .interval_names()
+            .into_iter()
+            .map(|name| Interval::from_name(name)?.transpose_pitch(&lowered_sixth))
+            .collect::<Result<Vec<_>>>()?;
+        Chord::new(pitches.as_slice())
+    }
+
     /// Performs functional Roman-numeral analysis in a key.
     pub fn analyze(chord: &Chord, key: Key) -> Result<Option<Self>> {
         let Some(root_name) = chord.root_pitch_name() else {
@@ -135,6 +229,10 @@ impl RomanNumeral {
     /// already chosen a transposition root and does not want inversion or root
     /// inference to pick a different chord member.
     pub fn analyze_with_root(chord: &Chord, key: Key, root: &Pitch) -> Result<Option<Self>> {
+        if let Some(kind) = augmented_sixth_kind_for_key(chord, &key)? {
+            return Self::new(kind.figure(), key).map(Some);
+        }
+
         let root_pc = pitch_class(root);
         let intervals = intervals_above_root(chord, root_pc);
         if !intervals.contains(&0) {
@@ -370,6 +468,52 @@ fn intervals_above_root(chord: &Chord, root_pc: u8) -> Vec<u8> {
     intervals.sort_unstable();
     intervals.dedup();
     intervals
+}
+
+fn augmented_sixth_kind_for_key(chord: &Chord, key: &Key) -> Result<Option<AugmentedSixthKind>> {
+    let kind = std::iter::once(chord.common_name())
+        .chain(chord.common_names())
+        .find_map(|name| AugmentedSixthKind::from_common_name(&name));
+    let Some(kind) = kind else {
+        return Ok(None);
+    };
+
+    let pitch_classes = chord.pitch_classes();
+    let tonic = key_degree_pitch_class(key, 1, 0)?;
+    let lowered_sixth_adjust = if key.mode() == "minor" { 0 } else { -1 };
+    let lowered_sixth = key_degree_pitch_class(key, 6, lowered_sixth_adjust)?;
+    let raised_fourth = key_degree_pitch_class(key, 4, 1)?;
+
+    if !pitch_classes.contains(&tonic)
+        || !pitch_classes.contains(&lowered_sixth)
+        || !pitch_classes.contains(&raised_fourth)
+    {
+        return Ok(None);
+    }
+
+    let required_extra = match kind {
+        AugmentedSixthKind::Italian => None,
+        AugmentedSixthKind::French => Some(key_degree_pitch_class(key, 2, 0)?),
+        AugmentedSixthKind::German => {
+            let lowered_third_adjust = if key.mode() == "minor" { 0 } else { -1 };
+            Some(key_degree_pitch_class(key, 3, lowered_third_adjust)?)
+        }
+        AugmentedSixthKind::Swiss => Some(key_degree_pitch_class(key, 2, 1)?),
+    };
+
+    if required_extra.is_some_and(|pitch_class| !pitch_classes.contains(&pitch_class)) {
+        return Ok(None);
+    }
+
+    Ok(Some(kind))
+}
+
+fn key_degree_pitch_class(key: &Key, degree: usize, semitones: IntegerType) -> Result<u8> {
+    let mut pitch = key.pitch_from_degree(degree)?;
+    if semitones != 0 {
+        pitch = Interval::from_semitones(semitones)?.transpose_pitch(&pitch)?;
+    }
+    Ok(pitch_class(&pitch))
 }
 
 fn roman_inversion(chord: &Chord) -> u8 {
@@ -642,6 +786,21 @@ mod tests {
     }
 
     #[test]
+    fn analyzes_augmented_sixth_chords_functionally() {
+        let key = Key::from_tonic_mode("C", "minor").unwrap();
+        let root = Pitch::from_name("C").unwrap();
+        let french = Chord::new("C D F# A-").unwrap();
+        let rn = RomanNumeral::analyze_with_root(&french, key.clone(), &root)
+            .unwrap()
+            .unwrap();
+        assert_eq!(rn.figure(), "Fr+6");
+
+        let german = Chord::new("A- C E- F#").unwrap();
+        let rn = RomanNumeral::analyze(&german, key).unwrap().unwrap();
+        assert_eq!(rn.figure(), "Ger+6");
+    }
+
+    #[test]
     fn roman_numerals_parse_inversions_and_qualities() {
         let key = Key::from_tonic_mode("C", "major").unwrap();
         let first_inversion = RomanNumeral::new("I6", key.clone()).unwrap();
@@ -699,6 +858,24 @@ mod tests {
                 .map(|pitch| pitch.name())
                 .collect::<Vec<_>>(),
             vec!["E", "G#", "B#"]
+        );
+    }
+
+    #[test]
+    fn roman_numerals_parse_augmented_sixth_figures() {
+        let key = Key::from_tonic_mode("C", "minor").unwrap();
+        let french = RomanNumeral::new("Fr+6", key).unwrap();
+        assert_eq!(french.degree(), 6);
+        assert_eq!(french.accidental(), -1);
+        assert_eq!(
+            french
+                .to_chord()
+                .unwrap()
+                .pitches()
+                .into_iter()
+                .map(|pitch| pitch.name())
+                .collect::<Vec<_>>(),
+            vec!["A-", "C", "D", "F#"]
         );
     }
 
