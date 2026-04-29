@@ -116,6 +116,8 @@ jobs:
           if [[ "${{ matrix.feature_set.needs_python }}" == "true" ]]; then
             export PYO3_PYTHON="$(python -c 'import sys; print(sys.executable)')"
             echo "Using PYO3_PYTHON=$PYO3_PYTHON"
+          else
+            export PYO3_NO_PYTHON=1
           fi
 
           eval "cargo check --workspace --all-targets $FLAGS"
@@ -149,9 +151,13 @@ jobs:
 
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
+        env:
+          PYO3_NO_PYTHON: "1"
 
       - name: Cargo check
         run: cargo check --workspace --all-targets
+        env:
+          PYO3_NO_PYTHON: "1"
 
   test:
     name: Test (${{ matrix.os }})
@@ -208,6 +214,10 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Build web WASM package
+        working-directory: examples/web
+        run: wasm-pack build --release --target web --out-dir pkg --out-name music21_rs_web
+
       - name: Build web TypeScript
         working-directory: examples/web
         run: npx --yes --package typescript@5.9.3 tsc -p tsconfig.json
@@ -231,10 +241,7 @@ jobs:
           cp examples/web/chords/app.js target/pages/chords/app.js
           cp examples/web/polyrhythm/index.html target/pages/polyrhythm/index.html
           cp examples/web/tuning/index.html target/pages/tuning/index.html
-
-          pushd examples/web
-          wasm-pack build --release --target web --out-dir ../../target/pages/pkg --out-name music21_rs_web
-          popd
+          cp -R examples/web/pkg target/pages/pkg
 
       - name: Smoke check demo site
         shell: bash

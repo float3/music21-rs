@@ -162,10 +162,10 @@ fn normalize_pitch_class(pc: FloatType) -> FloatType {
 
 fn parse_pitch_class_string(value: &str) -> ExceptionResult<FloatType> {
     let value = value.trim();
-    if value.chars().count() == 1 {
-        if let Ok(pc_string) = PitchClassString::try_from(value.chars().next().unwrap()) {
-            return Ok(pc_string.to_number() as FloatType);
-        }
+    if value.chars().count() == 1
+        && let Ok(pc_string) = PitchClassString::try_from(value.chars().next().unwrap())
+    {
+        return Ok(pc_string.to_number() as FloatType);
     }
 
     value
