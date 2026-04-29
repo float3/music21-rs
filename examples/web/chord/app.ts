@@ -2,15 +2,23 @@ import "../help-tooltips.js";
 import "../theme.js";
 import init, {
   analyze_chord,
-  analyze_chord_with_key,
+  analyze_chord_with_options,
   chord_resolution_abc,
   pitch_midi_number,
+  twelve_tone_tuning_systems,
 } from "../pkg/music21_rs_web.js";
 
 type TuningFrequencyInfo = {
+  id: string;
   name: string;
   frequency_hz: number;
   cents_from_equal_temperament: number;
+};
+
+type TuningSystemOption = {
+  id: string;
+  name: string;
+  description: string;
 };
 
 type PitchInfo = {
@@ -155,6 +163,8 @@ function mustQuery<T extends Element>(selector: string): T {
 
 const input = mustQuery<HTMLInputElement>("#chord-input");
 const keyInput = mustQuery<HTMLInputElement>("#key-input");
+const soundTuning = mustQuery<HTMLSelectElement>("#sound-tuning");
+const guitarTuning = mustQuery<HTMLInputElement>("#guitar-tuning");
 const estimateKey = mustQuery<HTMLButtonElement>("#estimate-key");
 const form = mustQuery<HTMLFormElement>("#form");
 const share = mustQuery<HTMLButtonElement>("#share");
@@ -187,6 +197,10 @@ const keyboardStartMidi = 60;
 const keyboardKeyCount = 24;
 const chordParam = "chord";
 const keyParam = "key";
+const soundTuningParam = "soundTuning";
+const guitarTuningParam = "guitarTuning";
+const defaultSoundTuningId = "EqualTemperament";
+const defaultGuitarTuning = "E2 A2 D3 G3 B3 E4";
 const vexChordsUrl = "https://cdn.jsdelivr.net/npm/vexchords@1.2.0/dist/vexchords.dev.js";
 const historyStorageKey = "music21-rs.chordInspector.history";
 const maxHistoryItems = 24;
@@ -345,6 +359,7 @@ function renderFrequencyCell(pitch: PitchInfo): HTMLTableCellElement {
       ? pitch.tuning_frequencies
       : [
           {
+            id: defaultSoundTuningId,
             name: "Equal temperament",
             frequency_hz: pitch.frequency_hz,
             cents_from_equal_temperament: 0,
@@ -353,7 +368,10 @@ function renderFrequencyCell(pitch: PitchInfo): HTMLTableCellElement {
 
   for (const tuning of tuningFrequencies) {
     const row = document.createElement("div");
-    row.className = "tuning-row";
+    row.className =
+      tuning.id === currentSoundTuningId()
+        ? "tuning-row selected"
+        : "tuning-row";
     const name = document.createElement("span");
     name.className = "tuning-name";
     name.textContent = tuning.name;
@@ -790,10 +808,7 @@ function showResolutionMotion(resolution: ResolutionChordInfo): void {
   if (!currentAnalysis) return;
   let resolutionAnalysis;
   try {
-    resolutionAnalysis = analyze_chord_with_key(
-      chordValueForResolution(resolution),
-      currentKeyContext(),
-    ) as ChordAnalysis;
+    resolutionAnalysis = analyzeWithCurrentOptions(chordValueForResolution(resolution));
   } catch {
     clearResolutionMotion();
     return;
@@ -837,7 +852,26 @@ function getSharedKey(): string | null {
   return params.has(keyParam) ? (params.get(keyParam) ?? "") : null;
 }
 
-function buildShareUrl(value: string, keyValue = keyInput.value): URL {
+function getSharedSoundTuning(): string | null {
+  const params = new URLSearchParams(window.location.search);
+  return params.has(soundTuningParam)
+    ? (params.get(soundTuningParam) ?? "")
+    : null;
+}
+
+function getSharedGuitarTuning(): string | null {
+  const params = new URLSearchParams(window.location.search);
+  return params.has(guitarTuningParam)
+    ? (params.get(guitarTuningParam) ?? "")
+    : null;
+}
+
+function buildShareUrl(
+  value: string,
+  keyValue = keyInput.value,
+  soundTuningValue = currentSoundTuningId(),
+  guitarTuningValue = guitarTuning.value,
+): URL {
   const url = new URL(window.location.href);
   url.searchParams.set(chordParam, value);
   const key = normalizeKeyInput(keyValue);
@@ -846,12 +880,35 @@ function buildShareUrl(value: string, keyValue = keyInput.value): URL {
   } else {
     url.searchParams.delete(keyParam);
   }
+  if (soundTuningValue && soundTuningValue !== defaultSoundTuningId) {
+    url.searchParams.set(soundTuningParam, soundTuningValue);
+  } else {
+    url.searchParams.delete(soundTuningParam);
+  }
+  const normalizedGuitarTuning = normalizeGuitarTuning(guitarTuningValue);
+  if (
+    normalizedGuitarTuning &&
+    normalizedGuitarTuning !== defaultGuitarTuning
+  ) {
+    url.searchParams.set(guitarTuningParam, normalizedGuitarTuning);
+  } else {
+    url.searchParams.delete(guitarTuningParam);
+  }
   return url;
 }
 
 function syncShareUrl(): string {
   const url = buildShareUrl(input.value);
-  window.history.replaceState({ chord: input.value, key: keyInput.value }, "", url.href);
+  window.history.replaceState(
+    {
+      chord: input.value,
+      guitarTuning: guitarTuning.value,
+      key: keyInput.value,
+      soundTuning: soundTuning.value,
+    },
+    "",
+    url.href,
+  );
   return url.href;
 }
 
@@ -863,8 +920,71 @@ function normalizeKeyInput(value: string): string {
   return value.trim().replace(/\s+/g, " ");
 }
 
+function normalizeGuitarTuning(value: string): string {
+  return value.trim().replace(/[,\s]+/g, " ");
+}
+
 function currentKeyContext(): string {
   return normalizeKeyInput(keyInput.value);
+}
+
+function currentGuitarTuning(): string {
+  return normalizeGuitarTuning(guitarTuning.value);
+}
+
+function currentSoundTuningId(): string {
+  return soundTuning.value || defaultSoundTuningId;
+}
+
+function populateSoundTuningOptions(): void {
+  let systems: TuningSystemOption[] = [];
+  try {
+    systems = twelve_tone_tuning_systems() as TuningSystemOption[];
+  } catch (err) {
+    console.error("Twelve-tone tuning systems unavailable", err);
+  }
+
+  if (!systems.length) {
+    systems = [
+      {
+        id: defaultSoundTuningId,
+        name: "Equal temperament",
+        description: "Twelve equal divisions of the octave.",
+      },
+    ];
+  }
+
+  soundTuning.replaceChildren();
+  for (const system of systems) {
+    const option = document.createElement("option");
+    option.value = system.id;
+    option.textContent = system.name;
+    option.title = system.description;
+    soundTuning.appendChild(option);
+  }
+
+  setSoundTuning(getSharedSoundTuning());
+}
+
+function setSoundTuning(value: string | null): void {
+  const options = [...soundTuning.options].map((option) => option.value);
+  soundTuning.value =
+    value && options.includes(value) ? value : defaultSoundTuningId;
+  if (!soundTuning.value && soundTuning.options.length) {
+    soundTuning.selectedIndex = 0;
+  }
+}
+
+function setGuitarTuning(value: string | null): void {
+  guitarTuning.value = normalizeGuitarTuning(value || defaultGuitarTuning);
+}
+
+function analyzeWithCurrentOptions(chordValue: string): ChordAnalysis {
+  return analyze_chord_with_options(
+    chordValue,
+    currentKeyContext(),
+    currentGuitarTuning(),
+  ) as ChordAnalysis;
 }
 
 function loadChordHistory(): string[] {
@@ -1021,9 +1141,16 @@ function chordValueForResolution(resolution: ResolutionChordInfo): string {
   return (resolution.pitch_names || []).join(" ");
 }
 
+function frequencyForPitch(pitch: PitchInfo): number {
+  const selected = pitch.tuning_frequencies?.find(
+    (tuning) => tuning.id === currentSoundTuningId(),
+  );
+  return selected?.frequency_hz ?? pitch.frequency_hz;
+}
+
 function frequenciesFromAnalysis(analysis: ChordAnalysis | null): number[] {
   return (analysis?.pitches ?? [])
-    .map((pitch) => pitch.frequency_hz)
+    .map(frequencyForPitch)
     .filter((frequency) => Number.isFinite(frequency) && frequency > 0);
 }
 
@@ -1133,10 +1260,7 @@ async function playResolutionPreview(resolution: ResolutionChordInfo): Promise<v
   if (!analysis) return;
   let resolutionAnalysis: ChordAnalysis;
   try {
-    resolutionAnalysis = analyze_chord_with_key(
-      chordValueForResolution(resolution),
-      currentKeyContext(),
-    ) as ChordAnalysis;
+    resolutionAnalysis = analyzeWithCurrentOptions(chordValueForResolution(resolution));
   } catch (err) {
     error.textContent = err instanceof Error ? err.message : String(err);
     error.style.display = "block";
@@ -1268,7 +1392,7 @@ function estimateKeyContext(): void {
 function analyze({ syncUrl = true, remember = false }: AnalyzeOptions = {}): boolean {
   const chordValue = input.value;
   try {
-    render(analyze_chord_with_key(chordValue, currentKeyContext()) as ChordAnalysis);
+    render(analyzeWithCurrentOptions(chordValue));
     if (syncUrl) syncShareUrl();
     if (remember) rememberChord(chordValue);
     return true;
@@ -1342,6 +1466,17 @@ form.addEventListener("submit", (event) => {
 
 input.addEventListener("input", resetShareButton);
 keyInput.addEventListener("input", resetShareButton);
+soundTuning.addEventListener("change", () => {
+  resetShareButton();
+  if (currentAnalysis) renderPitches(currentAnalysis);
+  syncShareUrl();
+});
+guitarTuning.addEventListener("input", resetShareButton);
+guitarTuning.addEventListener("change", () => {
+  guitarTuning.value = currentGuitarTuning();
+  resetShareButton();
+  analyze({ remember: false });
+});
 
 share.addEventListener("click", async () => {
   const href = syncShareUrl();
@@ -1360,15 +1495,19 @@ window.addEventListener("popstate", () => {
   if (sharedChord !== null) {
     input.value = sharedChord;
     keyInput.value = getSharedKey() ?? "";
+    setSoundTuning(getSharedSoundTuning());
+    setGuitarTuning(getSharedGuitarTuning());
     analyze({ syncUrl: false });
   }
 });
 
 await init();
+populateSoundTuningOptions();
 renderChordHistory();
 const sharedChord = getSharedChord();
 if (sharedChord !== null) input.value = sharedChord;
 const sharedKey = getSharedKey();
 if (sharedKey !== null) keyInput.value = sharedKey;
+setGuitarTuning(getSharedGuitarTuning());
 analyze({ syncUrl: false });
 void startMidiInput();

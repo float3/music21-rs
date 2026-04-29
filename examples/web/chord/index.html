@@ -94,7 +94,8 @@
       }
 
       button,
-      input {
+      input,
+      select {
         font: inherit;
       }
 
@@ -159,15 +160,40 @@
         text-decoration: none;
       }
 
-      .input-row {
+      .control-panel {
         display: grid;
-        grid-template-columns: minmax(180px, 1fr) minmax(120px, 0.38fr) auto auto auto auto;
         gap: 10px;
         margin-bottom: 10px;
       }
 
+      .input-row {
+        display: grid;
+        grid-template-columns: minmax(180px, 1fr) minmax(120px, 0.38fr) auto auto auto auto;
+        gap: 10px;
+      }
+
+      .options-row {
+        display: grid;
+        grid-template-columns: minmax(180px, 0.42fr) minmax(260px, 1fr);
+        gap: 10px;
+      }
+
+      .option-field {
+        display: grid;
+        gap: 5px;
+        min-width: 0;
+      }
+
+      .option-field span {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 800;
+      }
+
       #chord-input,
-      #key-input {
+      #key-input,
+      #sound-tuning,
+      #guitar-tuning {
         min-width: 0;
         height: 46px;
         padding: 0 14px;
@@ -175,6 +201,10 @@
         border-radius: 8px;
         background: var(--panel);
         color: var(--ink);
+      }
+
+      #sound-tuning {
+        cursor: pointer;
       }
 
       #analyze,
@@ -600,6 +630,15 @@
         align-items: baseline;
       }
 
+      .tuning-row.selected {
+        color: var(--accent-strong);
+      }
+
+      .tuning-row.selected .tuning-name,
+      .tuning-row.selected .tuning-cents {
+        color: var(--accent-strong);
+      }
+
       .tuning-name {
         color: var(--muted);
         font-size: 12px;
@@ -805,6 +844,10 @@
           grid-template-columns: repeat(2, minmax(0, 1fr));
         }
 
+        .options-row {
+          grid-template-columns: 1fr;
+        }
+
         .notation-section,
         .pitches-section {
           grid-column: auto;
@@ -975,22 +1018,40 @@
         </nav>
       </header>
 
-      <form id="form" class="input-row">
-        <input id="chord-input" value="C E G#" autocomplete="off" list="chord-history" placeholder="C E G or midi: 60 64 67" />
-        <datalist id="chord-history"></datalist>
-        <input id="key-input" autocomplete="off" list="key-examples" placeholder="Key: C major" aria-label="Key context" />
-        <button id="estimate-key" type="button">Estimate key</button>
-        <datalist id="key-examples">
-          <option value="C major"></option>
-          <option value="A minor"></option>
-          <option value="G major"></option>
-          <option value="Eb major"></option>
-          <option value="F# minor"></option>
-        </datalist>
-        <button id="analyze" type="submit">Analyze</button>
-        <button id="play-chord" type="button">Play chord</button>
-        <button id="share" type="button">Copy link</button>
-        <span id="midi-status" class="midi-status">MIDI idle</span>
+      <form id="form" class="control-panel">
+        <div class="input-row">
+          <input id="chord-input" value="C E G#" autocomplete="off" list="chord-history" placeholder="C E G or midi: 60 64 67" />
+          <datalist id="chord-history"></datalist>
+          <input id="key-input" autocomplete="off" list="key-examples" placeholder="Key: C major" aria-label="Key context" />
+          <button id="estimate-key" type="button">Estimate key</button>
+          <datalist id="key-examples">
+            <option value="C major"></option>
+            <option value="A minor"></option>
+            <option value="G major"></option>
+            <option value="Eb major"></option>
+            <option value="F# minor"></option>
+          </datalist>
+          <button id="analyze" type="submit">Analyze</button>
+          <button id="play-chord" type="button">Play chord</button>
+          <button id="share" type="button">Copy link</button>
+          <span id="midi-status" class="midi-status">MIDI idle</span>
+        </div>
+        <div class="options-row">
+          <label class="option-field" for="sound-tuning">
+            <span>Sound tuning</span>
+            <select id="sound-tuning" aria-label="Sound tuning"></select>
+          </label>
+          <label class="option-field" for="guitar-tuning">
+            <span>Guitar tuning</span>
+            <input id="guitar-tuning" value="E2 A2 D3 G3 B3 E4" autocomplete="off" list="guitar-tuning-presets" aria-label="Guitar tuning" />
+          </label>
+          <datalist id="guitar-tuning-presets">
+            <option value="E2 A2 D3 G3 B3 E4"></option>
+            <option value="D2 A2 D3 G3 B3 E4"></option>
+            <option value="D2 A2 D3 G3 A3 D4"></option>
+            <option value="D2 G2 D3 G3 B3 D4"></option>
+          </datalist>
+        </div>
       </form>
 
       <div class="suggestions">

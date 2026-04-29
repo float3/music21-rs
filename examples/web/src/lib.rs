@@ -1,9 +1,9 @@
 //! WebAssembly bindings for the browser examples.
 
 use music21_rs::{
-    ALL_TUNING_SYSTEMS, COMMON_TWELVE_TONE_TUNING_SYSTEMS, Chord, ChordResolutionSuggestion, Error,
-    Key, KnownChordType, Pitch, Polyrhythm, Result, abc_chord_document,
-    abc_chord_resolution_document, abc_polyrhythm_document, pitch_class_name,
+    ALL_TUNING_SYSTEMS, Chord, ChordResolutionSuggestion, Error, GuitarTuning, Key, KnownChordType,
+    Pitch, Polyrhythm, Result, TuningSystem, abc_chord_document, abc_chord_resolution_document,
+    abc_polyrhythm_document, pitch_class_name,
 };
 use serde::Serialize;
 use std::collections::BTreeSet;
@@ -11,9 +11,17 @@ use wasm_bindgen::prelude::*;
 
 #[derive(Serialize)]
 struct TuningFrequencyInfo {
+    id: &'static str,
     name: &'static str,
     frequency_hz: f64,
     cents_from_equal_temperament: f64,
+}
+
+#[derive(Serialize)]
+struct PlayableTuningSystemInfo {
+    id: &'static str,
+    name: &'static str,
+    description: &'static str,
 }
 
 #[derive(Serialize)]
@@ -169,22 +177,38 @@ struct PolyrhythmRatioToneInfo {
 #[wasm_bindgen]
 /// Analyzes a chord input string or MIDI-number list for the chord analyzer page.
 pub fn analyze_chord(input: &str) -> Result<JsValue, JsValue> {
-    analyze_chord_inner(input, None)
+    analyze_chord_inner(input, None, None)
 }
 
 #[wasm_bindgen]
 /// Analyzes a chord input string with an optional key context for resolution suggestions.
 pub fn analyze_chord_with_key(input: &str, key_context: &str) -> Result<JsValue, JsValue> {
-    analyze_chord_inner(input, Some(key_context))
+    analyze_chord_inner(input, Some(key_context), None)
 }
 
-fn analyze_chord_inner(input: &str, key_context: Option<&str>) -> Result<JsValue, JsValue> {
+#[wasm_bindgen]
+/// Analyzes a chord input string with key context and guitar tuning options.
+pub fn analyze_chord_with_options(
+    input: &str,
+    key_context: &str,
+    guitar_tuning: &str,
+) -> Result<JsValue, JsValue> {
+    analyze_chord_inner(input, Some(key_context), Some(guitar_tuning))
+}
+
+fn analyze_chord_inner(
+    input: &str,
+    key_context: Option<&str>,
+    guitar_tuning: Option<&str>,
+) -> Result<JsValue, JsValue> {
     let chord = chord_from_input(input).map_err(|err| JsValue::from_str(&err.to_string()))?;
     let common_name = chord.common_name();
     let root_pitch_name = chord.root_pitch_name();
     let chord_symbols = chord.chord_symbols();
     let chord_symbol = chord_symbols.first().cloned();
     let key_context = parse_key_context(key_context)?;
+    let guitar_tuning = parse_guitar_tuning(guitar_tuning)
+        .map_err(|err| JsValue::from_str(&format!("Guitar tuning: {err}")))?;
     let key_context_display = key_context.as_ref().map(display_key_context);
     let estimated_key = estimated_key_for_chord(&chord);
     let key_estimate = estimated_key.as_ref().map(display_key_context);
@@ -208,6 +232,10 @@ fn analyze_chord_inner(input: &str, key_context: Option<&str>) -> Result<JsValue
     let abc_notation =
         abc_chord_document(&display_pitches).map_err(|err| JsValue::from_str(&err.to_string()))?;
     let pitches = pitch_infos(&display_pitches);
+    let guitar_fingering = match guitar_tuning.as_ref() {
+        Some(tuning) => chord.guitar_fingering_with_tuning(tuning),
+        None => chord.guitar_fingering(),
+    };
 
     serde_wasm_bindgen::to_value(&ChordAnalysis {
         input: input.to_string(),
@@ -229,7 +257,7 @@ fn analyze_chord_inner(input: &str, key_context: Option<&str>) -> Result<JsValue
         key_estimate,
         roman_numeral_context,
         roman_numeral_estimate,
-        guitar_fingering: chord.guitar_fingering().map(guitar_fingering_info),
+        guitar_fingering: guitar_fingering.map(guitar_fingering_info),
         polyrhythm_input: chord.polyrhythm_ratio_string(),
         resolution_chords,
         pitches,
@@ -539,6 +567,20 @@ pub fn tuning_systems(root_frequency_hz: f64) -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen]
+/// Returns the built-in twelve-tone tuning systems usable for chord playback.
+pub fn twelve_tone_tuning_systems() -> Result<JsValue, JsValue> {
+    let systems = twelve_tone_systems()
+        .map(|tuning_system| PlayableTuningSystemInfo {
+            id: tuning_system.id(),
+            name: tuning_system.display_name(),
+            description: tuning_system.description(),
+        })
+        .collect::<Vec<_>>();
+
+    serde_wasm_bindgen::to_value(&systems).map_err(|err| JsValue::from_str(&err.to_string()))
+}
+
+#[wasm_bindgen]
 /// Analyzes a polyrhythm and maps its ratio tones onto pitches.
 pub fn analyze_polyrhythm(
     components: JsValue,
@@ -621,10 +663,9 @@ fn pitch_infos(pitches: &[Pitch]) -> Vec<PitchInfo> {
         .enumerate()
         .map(|(index, display_pitch)| {
             let pitch_space = display_pitch.ps();
-            let tuning_frequencies = COMMON_TWELVE_TONE_TUNING_SYSTEMS
-                .iter()
-                .copied()
+            let tuning_frequencies = twelve_tone_systems()
                 .map(|tuning_system| TuningFrequencyInfo {
+                    id: tuning_system.id(),
                     name: tuning_system.display_name(),
                     frequency_hz: display_pitch.frequency_hz_in(tuning_system),
                     cents_from_equal_temperament: tuning_system.cents_at(pitch_space),
@@ -645,6 +686,13 @@ fn pitch_infos(pitches: &[Pitch]) -> Vec<PitchInfo> {
             }
         })
         .collect()
+}
+
+fn twelve_tone_systems() -> impl Iterator<Item = TuningSystem> {
+    ALL_TUNING_SYSTEMS
+        .iter()
+        .copied()
+        .filter(|tuning_system| tuning_system.octave_size() == 12)
 }
 
 fn parse_midi_input(input: &str) -> Option<Vec<i32>> {
@@ -688,6 +736,18 @@ fn parse_pitch_midi_number(input: &str) -> Result<i32> {
     }
 
     Pitch::from_name(trimmed).map(|pitch| pitch.midi())
+}
+
+fn parse_guitar_tuning(input: Option<&str>) -> Result<Option<GuitarTuning>> {
+    let Some(input) = input.map(str::trim).filter(|value| !value.is_empty()) else {
+        return Ok(None);
+    };
+    let strings = input
+        .split(|character: char| character.is_ascii_whitespace() || character == ',')
+        .filter(|token| !token.is_empty())
+        .collect::<Vec<_>>();
+
+    GuitarTuning::new(strings).map(Some)
 }
 
 fn estimated_key_for_chord(chord: &Chord) -> Option<Key> {
@@ -819,9 +879,10 @@ fn display_pitch_for_sequence(pitch: Pitch, last_pitch_space: &mut Option<i32>) 
 mod tests {
     use super::{
         chord_from_input, display_key_context, display_pitches_for_sequence,
-        estimated_key_for_chord, known_chord_info, parse_midi_input, parse_pitch_midi_number,
+        estimated_key_for_chord, known_chord_info, parse_guitar_tuning, parse_midi_input,
+        parse_pitch_midi_number, pitch_infos, twelve_tone_systems,
     };
-    use music21_rs::{Chord, KnownChordType};
+    use music21_rs::{Chord, KnownChordType, Pitch};
 
     #[test]
     fn parse_midi_input_accepts_plain_prefixed_and_csv_values() {
@@ -840,6 +901,35 @@ mod tests {
         assert_eq!(parse_pitch_midi_number("72").unwrap(), 72);
         assert_eq!(parse_pitch_midi_number("C5").unwrap(), 72);
         assert!(parse_pitch_midi_number("not-a-pitch").is_err());
+    }
+
+    #[test]
+    fn parse_guitar_tuning_accepts_custom_pitch_lists() {
+        let tuning = parse_guitar_tuning(Some("D2, A2 D3 G3 A3 D4"))
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(tuning.strings().len(), 6);
+        assert_eq!(tuning.strings()[0].name, "D2");
+        assert_eq!(tuning.strings()[5].name, "D4");
+        assert!(parse_guitar_tuning(Some("")).unwrap().is_none());
+        assert!(parse_guitar_tuning(Some("not-a-pitch")).is_err());
+    }
+
+    #[test]
+    fn pitch_infos_include_all_twelve_tone_tuning_ids() {
+        let pitch: Pitch = "C4".parse().unwrap();
+        let infos = pitch_infos(&[pitch]);
+        let ids = infos[0]
+            .tuning_frequencies
+            .iter()
+            .map(|tuning| tuning.id)
+            .collect::<Vec<_>>();
+        let expected_ids = twelve_tone_systems()
+            .map(|tuning_system| tuning_system.id())
+            .collect::<Vec<_>>();
+
+        assert_eq!(ids, expected_ids);
     }
 
     #[test]
