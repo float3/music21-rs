@@ -231,6 +231,7 @@ jobs:
           mkdir -p target/pages/tuning
           cp -R target/doc/. target/pages/docs/
           cp examples/web/help-tooltips.js target/pages/help-tooltips.js
+          cp examples/web/theme.css target/pages/theme.css
           cp examples/web/theme.js target/pages/theme.js
           cp examples/web/index.html target/pages/index.html
           cp examples/web/chord/index.html target/pages/chord/index.html
@@ -259,6 +260,7 @@ jobs:
               "pkg/music21_rs_web.js",
               "pkg/music21_rs_web_bg.wasm",
               "help-tooltips.js",
+              "theme.css",
               "theme.js",
               "docs/music21_rs/index.html",
               "chord/app.js",
@@ -274,14 +276,15 @@ jobs:
               raise SystemExit(f"missing demo build output: {', '.join(missing)}")
 
           file_checks = {
-              "index.html": ["chord/", "chords/", "polyrhythm/", "tuning/", "./theme.js"],
-              "chord/index.html": ["./app.js", "../chords/", "../polyrhythm/"],
+              "index.html": ["chord/", "chords/", "polyrhythm/", "tuning/", "./theme.css", "./theme.js"],
+              "theme.css": ["--accent", ":root[data-theme=\"dark\"]", ".theme-toggle"],
+              "chord/index.html": ["./app.js", "../theme.css", "../chords/", "../polyrhythm/"],
               "chord/app.js": ["../help-tooltips.js", "../theme.js", "../pkg/music21_rs_web.js"],
-              "chords/index.html": ["./app.js", "../chord/"],
+              "chords/index.html": ["./app.js", "../theme.css", "../chord/"],
               "chords/app.js": ["../help-tooltips.js", "../theme.js", "../pkg/music21_rs_web.js"],
-              "polyrhythm/index.html": ["./app.js"],
+              "polyrhythm/index.html": ["./app.js", "../theme.css"],
               "polyrhythm/app.js": ["../help-tooltips.js", "../theme.js"],
-              "tuning/index.html": ["./app.js"],
+              "tuning/index.html": ["./app.js", "../theme.css"],
               "tuning/app.js": ["../theme.js"],
           }
 
