@@ -258,8 +258,8 @@ pub(crate) fn seek_chord_tables_address(
         ));
     }
 
-    for index_candidate in 1..FORTE[card as usize].len() {
-        let Some(data_line) = &FORTE[card as usize][index_candidate] else {
+    for (index_candidate, data_line) in FORTE[card as usize].iter().enumerate().skip(1) {
+        let Some(data_line) = data_line else {
             continue;
         };
         let data_line_pcs = data_line.pitch_classes();
@@ -402,6 +402,8 @@ mod tests {
         include!(concat!(env!("CARGO_MANIFEST_DIR"), "/shared.rs"));
     }
 
+    #[cfg(feature = "python")]
+    use super::Pcivicv;
     #[cfg(feature = "python")]
     use super::TNIStructure;
     #[cfg(feature = "python")]
@@ -569,19 +571,19 @@ mod tests {
             let forte = tables.getattr("FORTE")?;
             let forte: &Bound<'_, PyTuple> = forte.cast_exact()?;
 
-            for i in 0..13 {
+            for (i, forte_entry) in FORTE.iter().enumerate() {
                 let item = operator.call_method1("getitem", (forte, i))?;
 
                 let tuple: Result<&Bound<'_, PyTuple>, _> = item.cast_exact();
 
                 match tuple {
                     Ok(t) => {
-                        assert_eq!(format!("{t:?}"), format!("{}", match_python2(&FORTE[i])));
+                        assert_eq!(format!("{t:?}"), format!("{}", match_python2(forte_entry)));
                         println!("{t:?}");
-                        println!("{}", match_python2(&FORTE[i]));
+                        println!("{}", match_python2(forte_entry));
                     }
                     Err(_) => {
-                        assert!(FORTE[i].is_empty());
+                        assert!(forte_entry.is_empty());
                         continue;
                     }
                 }
