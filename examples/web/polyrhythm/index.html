@@ -1287,17 +1287,44 @@
       ];
 
       for (const [index, component] of data.components.entries()) {
-        const notes = Array.from({ length: component }, () => "B").join(" ");
-        const tuplet = component === data.base
-          ? notes
-          : component === 1
-            ? `B${data.base}`
-            : `(${component}:${data.base}:${component}${notes}`;
         lines.push(`V:${index + 1} name="${component}" clef=perc style=x`);
-        lines.push(`${tuplet} |]`);
+        lines.push(`${buildRhythmVoiceAbc(component, data.base)} |]`);
       }
 
       return `${lines.join("\n")}\n`;
+    }
+
+    function buildRhythmVoiceAbc(component, base) {
+      if (component === base) {
+        return Array.from({ length: component }, () => "B").join(" ");
+      }
+
+      if (component === 1) {
+        return `B${base}`;
+      }
+
+      if (component <= 9) {
+        const notes = Array.from({ length: component }, () => "B").join(" ");
+        return `(${component}:${base}:${component}${notes}`;
+      }
+
+      const duration = abcDuration(base, component);
+      return Array.from({ length: component }, (_, index) => {
+        const label = index === 0 ? `"^${component}:${base}"` : "";
+        return `${label}B${duration}`;
+      }).join(" ");
+    }
+
+    function abcDuration(numerator, denominator) {
+      const divisor = gcd(Math.abs(numerator), Math.abs(denominator));
+      const top = numerator / divisor;
+      const bottom = denominator / divisor;
+
+      if (bottom === 1) {
+        return top === 1 ? "" : String(top);
+      }
+
+      return top === 1 ? `/${bottom}` : `${top}/${bottom}`;
     }
 
     function buildAbc(pitchNames) {
