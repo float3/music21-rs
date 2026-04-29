@@ -214,13 +214,13 @@ jobs:
           mkdir -p target/pages/polyrhythm
           mkdir -p target/pages/tuning
           cp -R target/doc/. target/pages/docs/
-          cp examples/index.html target/pages/index.html
-          cp examples/chord/index.html target/pages/chord/index.html
-          cp examples/polyrhythm/index.html target/pages/polyrhythm/index.html
-          cp examples/tuning/index.html target/pages/tuning/index.html
+          cp examples/web/index.html target/pages/index.html
+          cp examples/web/chord/index.html target/pages/chord/index.html
+          cp examples/web/polyrhythm/index.html target/pages/polyrhythm/index.html
+          cp examples/web/tuning/index.html target/pages/tuning/index.html
 
-          pushd examples/chord
-          wasm-pack build --release --target web --out-dir ../../target/pages/chord/pkg
+          pushd examples/web
+          wasm-pack build --release --target web --out-dir ../../target/pages/pkg --out-name music21_rs_web
           popd
 
       - name: Smoke check demo site
@@ -235,8 +235,8 @@ jobs:
           required_files = [
               "index.html",
               "chord/index.html",
-              "chord/pkg/music21_rs_chord_web.js",
-              "chord/pkg/music21_rs_chord_web_bg.wasm",
+              "pkg/music21_rs_web.js",
+              "pkg/music21_rs_web_bg.wasm",
               "docs/music21_rs/index.html",
               "polyrhythm/index.html",
               "tuning/index.html",
@@ -248,9 +248,9 @@ jobs:
 
           html_checks = {
               "index.html": ["chord/", "polyrhythm/", "tuning/"],
-              "chord/index.html": ["./pkg/music21_rs_chord_web.js", "../polyrhythm/"],
-              "polyrhythm/index.html": ["../chord/pkg/music21_rs_chord_web.js"],
-              "tuning/index.html": ["../chord/pkg/music21_rs_chord_web.js"],
+              "chord/index.html": ["../pkg/music21_rs_web.js", "../polyrhythm/"],
+              "polyrhythm/index.html": ["../pkg/music21_rs_web.js"],
+              "tuning/index.html": ["../pkg/music21_rs_web.js"],
           }
 
           for name, needles in html_checks.items():

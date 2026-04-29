@@ -1,6 +1,6 @@
 [package]
 edition = "2024"
-name = "music21-rs-chord-web"
+name = "music21-rs-web"
 publish = false
 version = "0.0.0"
 

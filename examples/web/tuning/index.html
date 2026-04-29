@@ -527,10 +527,7 @@
     }
 
     async function loadTuningSystems() {
-      const candidates = [
-        "../chord/pkg/music21_rs_chord_web.js",
-        "../pkg/music21_rs_chord_web.js",
-      ];
+      const candidates = ["../pkg/music21_rs_web.js"];
       let lastError = null;
       for (const candidate of candidates) {
         try {

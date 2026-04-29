@@ -53,17 +53,17 @@ The live browser demos are published at
 
 The `examples/` directory contains a small set of interactive tools:
 
-- [Chord Inspector](./examples/chord/) names chords, shows Forte/normal-form
+- [Chord Inspector](./examples/web/chord/) names chords, shows Forte/normal-form
   data, suggests simple resolution chords, plays the result, and renders staff
   notation.
-- [Polyrhythm Lab](./examples/polyrhythm/) lets you enter ratios such as
+- [Polyrhythm Lab](./examples/web/polyrhythm/) lets you enter ratios such as
   `4:5:6`, play the cycle, and compare the rhythm to its equivalent pitch-set
   relationship.
-- [Tuning Explorer](./examples/tuning/) lists the tuning systems exposed by the
+- [Tuning Explorer](./examples/web/tuning/) lists the tuning systems exposed by the
   crate and plays each scale from a chosen root frequency.
 
 The examples are also wired into the GitHub Pages build, with
-[examples/index.html](./examples/index.html) as the local landing page.
+[examples/web/index.html](./examples/web/index.html) as the local landing page.
 
 ## Local Development
 
@@ -93,7 +93,9 @@ by the repository's CI setup.
   conversion
 - [src/tuningsystem.rs](./src/tuningsystem.rs) tuning-system ratios and
   frequency helpers
-- [examples/](./examples/) browser tools and the small polyrhythm sound example
+- [examples/web/](./examples/web/) browser tools
+- [examples/polyrhythmsound.rs](./examples/polyrhythmsound.rs) small
+  polyrhythm sound example
 - [music21/](./music21/) optional upstream reference submodule
 
 ## Credits

@@ -871,7 +871,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "music21-rs-chord-web"
+name = "music21-rs-web"
 version = "0.0.0"
 dependencies = [
  "music21-rs",

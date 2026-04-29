@@ -1,6 +1,8 @@
 /target/
 /venv/
 /__pycache__/
+/examples/web/pkg/
+/examples/web/chord/pkg/
 
 # OS/editor noise
 .DS_Store

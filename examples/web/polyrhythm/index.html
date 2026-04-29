@@ -1434,10 +1434,7 @@
     async function loadAnalyzer() {
       if (initializedAnalyzer) return;
       initializedAnalyzer = true;
-      const candidates = [
-        "../chord/pkg/music21_rs_chord_web.js",
-        "../pkg/music21_rs_chord_web.js",
-      ];
+      const candidates = ["../pkg/music21_rs_web.js"];
 
       for (const candidate of candidates) {
         try {
