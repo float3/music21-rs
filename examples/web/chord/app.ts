@@ -967,7 +967,7 @@ function populateSoundTuningOptions(): void {
 }
 
 function setSoundTuning(value: string | null): void {
-  const options = [...soundTuning.options].map((option) => option.value);
+  const options = Array.from(soundTuning.options, (option) => option.value);
   soundTuning.value =
     value && options.includes(value) ? value : defaultSoundTuningId;
   if (!soundTuning.value && soundTuning.options.length) {
@@ -1308,7 +1308,7 @@ async function startMidiInput(): Promise<void> {
 function wireMidiInputs(): void {
   if (!midiAccess) return;
   if (!connectedMidiInputs().length) heldMidiNotes.clear();
-  for (const inputDevice of midiAccess.inputs.values()) {
+  for (const inputDevice of midiInputs(midiAccess)) {
     inputDevice.onmidimessage =
       inputDevice.state === "disconnected" ? null : handleMidiMessage;
   }
@@ -1324,7 +1324,13 @@ function midiInputStatus(): string {
 
 function connectedMidiInputs(): MIDIInput[] {
   if (!midiAccess) return [];
-  return [...midiAccess.inputs.values()].filter((inputDevice) => inputDevice.state !== "disconnected");
+  return midiInputs(midiAccess).filter((inputDevice) => inputDevice.state !== "disconnected");
+}
+
+function midiInputs(access: MIDIAccess): MIDIInput[] {
+  return Array.from(
+    (access.inputs as unknown as ReadonlyMap<string, MIDIInput>).values(),
+  );
 }
 
 function handleMidiMessage(event: MIDIMessageEvent): void {
