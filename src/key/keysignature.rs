@@ -35,13 +35,15 @@ fn canonical_mode_for_offset(offset: IntegerType) -> Option<&'static str> {
     }
 }
 
-pub(crate) fn mode_sharps_alter(mode: &str) -> Option<IntegerType> {
+/// Returns the circle-of-fifths sharp-count offset for a mode name.
+pub fn mode_sharps_alter(mode: &str) -> Option<IntegerType> {
     MODE_SHARPS_ALTER
         .iter()
         .find_map(|(name, value)| (*name == mode.to_lowercase()).then_some(*value))
 }
 
-pub(crate) fn sharps_to_pitch(sharp_count: IntegerType) -> Result<Pitch> {
+/// Returns the major-key tonic pitch for a key-signature sharp count.
+pub fn sharps_to_pitch(sharp_count: IntegerType) -> Result<Pitch> {
     if sharp_count == 0 {
         return Pitch::new(
             Some("C".to_string()),
@@ -82,7 +84,8 @@ pub(crate) fn sharps_to_pitch(sharp_count: IntegerType) -> Result<Pitch> {
     Ok(pitch)
 }
 
-pub(crate) fn pitch_to_sharps(pitch_value: &Pitch, mode: Option<&str>) -> Result<IntegerType> {
+/// Returns the key-signature sharp count for a tonic pitch and optional mode.
+pub fn pitch_to_sharps(pitch_value: &Pitch, mode: Option<&str>) -> Result<IntegerType> {
     let step_index = FIFTHS_ORDER_SHARP
         .iter()
         .position(|step| *step == pitch_value.step())
@@ -102,7 +105,8 @@ pub(crate) fn pitch_to_sharps(pitch_value: &Pitch, mode: Option<&str>) -> Result
     Ok(sharps)
 }
 
-pub(crate) fn pitch_name_to_sharps(pitch_name: &str, mode: Option<&str>) -> Result<IntegerType> {
+/// Returns the key-signature sharp count for a tonic pitch name and optional mode.
+pub fn pitch_name_to_sharps(pitch_name: &str, mode: Option<&str>) -> Result<IntegerType> {
     let pitch = Pitch::new(
         Some(pitch_name.to_string()),
         None,
@@ -118,24 +122,30 @@ pub(crate) fn pitch_name_to_sharps(pitch_name: &str, mode: Option<&str>) -> Resu
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct KeySignature {
+/// A key signature represented by the number of sharps.
+///
+/// Flats are represented as negative sharps, so B-flat major has `-2`.
+pub struct KeySignature {
     music21object: Music21Object,
     sharps: IntegerType,
 }
 
 impl KeySignature {
-    pub(crate) fn new(sharps: IntegerType) -> Self {
+    /// Creates a key signature from a sharp count.
+    pub fn new(sharps: IntegerType) -> Self {
         Self {
             music21object: Music21Object::new(),
             sharps,
         }
     }
 
-    pub(crate) fn sharps(&self) -> IntegerType {
+    /// Returns the number of sharps, with flats as negative values.
+    pub fn sharps(&self) -> IntegerType {
         self.sharps
     }
 
-    pub(crate) fn as_key(&self, mode: &str) -> Key {
+    /// Converts this signature to a key in the given mode.
+    pub fn as_key(&self, mode: &str) -> Key {
         self.try_as_key(Some(mode), None).unwrap_or_else(|_| {
             Key::new(
                 Pitch::new(
@@ -156,7 +166,8 @@ impl KeySignature {
         })
     }
 
-    pub(crate) fn try_as_key(&self, mode: Option<&str>, tonic: Option<&str>) -> Result<Key> {
+    /// Converts this signature to a key, optionally inferring mode from tonic.
+    pub fn try_as_key(&self, mode: Option<&str>, tonic: Option<&str>) -> Result<Key> {
         let our_sharps = self.sharps;
 
         let resolved_mode = if mode.is_none() && tonic.is_none() {

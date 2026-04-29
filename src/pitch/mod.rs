@@ -43,6 +43,16 @@ use std::sync::Arc;
 use std::sync::LazyLock;
 use std::sync::Mutex;
 
+/// Canonical pitch names for chromatic pitch classes.
+pub const CHROMATIC_PITCH_CLASS_NAMES: [&str; 12] = [
+    "C", "D-", "D", "E-", "E", "F", "F#", "G", "A-", "A", "B-", "B",
+];
+
+/// Returns a canonical pitch name for a chromatic pitch class.
+pub fn pitch_class_name(pitch_class: u8) -> &'static str {
+    CHROMATIC_PITCH_CLASS_NAMES[pitch_class as usize % 12]
+}
+
 // TODO: rework this, don't use a HashMap for two possible inputs, either figure
 // out what the -d2 and d2 intervals are beforehand or caculate them and store
 // them each in a static
@@ -631,7 +641,7 @@ impl Pitch {
     pub(crate) fn transpose(&self, clone: Interval) -> Pitch {
         let mut p = clone
             .clone()
-            .transpose_pitch(self, false, Some(4))
+            .transpose_pitch_with_options(self, false, Some(4))
             .unwrap_or_else(|_| self.clone());
 
         if !clone.implicit_diatonic {
@@ -806,7 +816,7 @@ impl Pitch {
 
         let octave_stored = self._octave;
 
-        let mut p = interval.transpose_pitch(self, false, None)?;
+        let mut p = interval.transpose_pitch_with_options(self, false, None)?;
         if octave_stored.is_none() {
             p.octave_setter(None);
         }
@@ -1208,7 +1218,7 @@ fn pythagorean_denominator_log(interval: &Interval) -> Result<FloatType> {
     )?;
     let end_pitch = interval
         .clone()
-        .transpose_pitch(&start_pitch, false, Some(4))?;
+        .transpose_pitch_with_options(&start_pitch, false, Some(4))?;
 
     let natural_fifths = match end_pitch.step() {
         StepName::C => 0,

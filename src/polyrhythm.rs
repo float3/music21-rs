@@ -1,5 +1,5 @@
-use num::integer::lcm;
-use std::collections::BTreeSet;
+use num::integer::{gcd, lcm};
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::chord::Chord;
 use crate::defaults::{FloatType, IntegerType, UnsignedIntegerType};
@@ -31,6 +31,40 @@ pub struct PolyrhythmEvent {
     pub time_seconds: FloatType,
     /// Per-component trigger flags for this tick.
     pub triggers: Vec<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// A chord tone inferred from a polyrhythm's subdivision ratios.
+pub struct PolyrhythmRatioTone {
+    /// The reduced subdivision component that produced this tone.
+    pub component: UnsignedIntegerType,
+    /// Semitone offset above the lowest reduced ratio.
+    pub offset: IntegerType,
+    /// Frequency ratio above the lowest reduced ratio.
+    pub ratio: FloatType,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Timing and ratio analysis for one polyrhythm cycle.
+pub struct PolyrhythmAnalysis {
+    /// Beats per measure.
+    pub base: UnsignedIntegerType,
+    /// Subdivision voices.
+    pub components: Vec<UnsignedIntegerType>,
+    /// Tempo in beats per minute.
+    pub tempo: UnsignedIntegerType,
+    /// Total ticks per measure.
+    pub cycle: UnsignedIntegerType,
+    /// Duration of one tick in seconds.
+    pub tick_duration: FloatType,
+    /// Tick interval for each subdivision voice.
+    pub component_intervals: Vec<UnsignedIntegerType>,
+    /// Tick events where at least one voice triggers.
+    pub hit_events: Vec<PolyrhythmEvent>,
+    /// Ratio-derived chord tones.
+    pub ratio_tones: Vec<PolyrhythmRatioTone>,
 }
 
 impl Polyrhythm {
@@ -202,6 +236,96 @@ impl Polyrhythm {
                 }
             })
             .collect())
+    }
+
+    /// Returns only events where at least one component triggers.
+    pub fn hit_events(&self) -> Result<Vec<PolyrhythmEvent>> {
+        Ok(self
+            .events()?
+            .into_iter()
+            .filter(|event| event.triggers.iter().any(|trigger| *trigger))
+            .collect())
+    }
+
+    /// Returns ratio-derived chord tones for the subdivision components.
+    ///
+    /// Components are first reduced by their greatest common divisor. The
+    /// smallest reduced component is treated as the root ratio, and each
+    /// remaining component is mapped to the nearest twelve-tone semitone
+    /// offset using `12 * log2(component / root)`.
+    pub fn ratio_tones(&self) -> Vec<PolyrhythmRatioTone> {
+        let divisor = self
+            .components
+            .iter()
+            .copied()
+            .reduce(gcd)
+            .unwrap_or(1)
+            .max(1);
+        let reduced_components = self
+            .components
+            .iter()
+            .map(|component| component / divisor)
+            .collect::<Vec<_>>();
+        let root_ratio = reduced_components.iter().copied().min().unwrap_or(1).max(1);
+        let mut tones_by_offset = BTreeMap::new();
+
+        for component in reduced_components {
+            let ratio = component as FloatType / root_ratio as FloatType;
+            let offset = (12.0 * ratio.log2()).round() as IntegerType;
+            tones_by_offset.entry(offset).or_insert(component);
+        }
+
+        tones_by_offset
+            .into_iter()
+            .map(|(offset, component)| PolyrhythmRatioTone {
+                component,
+                offset,
+                ratio: component as FloatType / root_ratio as FloatType,
+            })
+            .collect()
+    }
+
+    /// Returns ratio-derived pitches above `base`.
+    pub fn ratio_pitches<T>(&self, base: T) -> Result<Vec<Pitch>>
+    where
+        T: TryInto<Pitch>,
+        T::Error: Into<Error>,
+    {
+        let base_pitch = base.try_into().map_err(Into::into)?;
+        self.ratio_tones()
+            .into_iter()
+            .map(|tone| {
+                let interval = Interval::new(IntervalArgument::Int(tone.offset))?;
+                Ok(base_pitch.transpose(interval))
+            })
+            .collect()
+    }
+
+    /// Converts subdivision ratios into a chord above `base`.
+    pub fn ratio_chord<T>(&self, base: T) -> Result<Chord>
+    where
+        T: TryInto<Pitch>,
+        T::Error: Into<Error>,
+    {
+        let pitches = self.ratio_pitches(base)?;
+        Chord::new(pitches.as_slice())
+    }
+
+    /// Returns timing and ratio analysis for one cycle.
+    pub fn analysis(&self) -> Result<PolyrhythmAnalysis> {
+        let tempo = self
+            .tempo
+            .ok_or_else(|| Error::Polyrhythm("Tempo not set".into()))?;
+        Ok(PolyrhythmAnalysis {
+            base: self.base,
+            components: self.components.clone(),
+            tempo,
+            cycle: self.cycle,
+            tick_duration: self.tick_duration()?,
+            component_intervals: self.component_intervals(),
+            hit_events: self.hit_events()?,
+            ratio_tones: self.ratio_tones(),
+        })
     }
 
     /// Returns ticks where at least `min_simultaneous` components trigger.
@@ -389,6 +513,39 @@ mod tests {
         assert_eq!(events[1].triggers, vec![false, false]);
         assert_eq!(events[2].triggers, vec![false, true]);
         assert_eq!(events[3].triggers, vec![true, false]);
+
+        let hits = poly.hit_events().unwrap();
+        assert_eq!(hits.len(), 4);
+        assert_eq!(
+            hits.iter().map(|event| event.tick).collect::<Vec<_>>(),
+            vec![0, 2, 3, 4]
+        );
+    }
+
+    #[test]
+    fn ratio_tones_reduce_components_and_project_to_pitches() {
+        let poly = Polyrhythm::from_time_signature(4, 120, &[3, 4, 6]).unwrap();
+        let tones = poly.ratio_tones();
+        assert_eq!(
+            tones
+                .iter()
+                .map(|tone| (tone.component, tone.offset))
+                .collect::<Vec<_>>(),
+            vec![(3, 0), (4, 5), (6, 12)]
+        );
+
+        let pitches = poly.ratio_pitches("C4").unwrap();
+        assert_eq!(
+            pitches
+                .iter()
+                .map(Pitch::name_with_octave)
+                .collect::<Vec<_>>(),
+            vec!["C4", "F4", "C5"]
+        );
+
+        let analysis = poly.analysis().unwrap();
+        assert_eq!(analysis.component_intervals, vec![4, 3, 2]);
+        assert_eq!(analysis.ratio_tones, tones);
     }
 
     #[test]

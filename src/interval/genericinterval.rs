@@ -216,7 +216,7 @@ impl IntervalBaseTrait for GenericInterval {
         let diatonic = self.get_diatonic(specifier);
         let chromatic = diatonic.get_chromatic()?;
         let interval = super::Interval::from_diatonic_and_chromatic(diatonic, chromatic)?;
-        interval.transpose_pitch(&pitch1, false, Some(4))
+        interval.transpose_pitch_with_options(&pitch1, false, Some(4))
     }
 
     fn transpose_pitch_in_place(self, pitch1: &mut Pitch) -> Result<()> {

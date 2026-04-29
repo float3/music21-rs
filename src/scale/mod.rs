@@ -3,7 +3,10 @@ use std::{cmp::Ordering, collections::HashMap};
 use crate::{defaults::IntegerType, stepname::StepName};
 
 pub(crate) mod concretescale;
-pub(crate) mod diatonicscale;
+/// Diatonic scale construction and harmonization helpers.
+pub mod diatonicscale;
+
+pub use diatonicscale::DiatonicScale;
 
 pub(crate) const FIFTHS_ORDER_SHARP: [StepName; 7] = [
     StepName::F,

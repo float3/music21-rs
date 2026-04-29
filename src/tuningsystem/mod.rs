@@ -39,6 +39,31 @@ pub const COMMON_TWELVE_TONE_TUNING_SYSTEMS: [TuningSystem; 4] = [
     TuningSystem::FiveLimit,
 ];
 
+/// All built-in tuning systems in canonical display order.
+pub const ALL_TUNING_SYSTEMS: [TuningSystem; 17] = [
+    TuningSystem::EqualTemperament {
+        octave_size: OCTAVE_SIZE,
+    },
+    TuningSystem::RecursiveEqualTemperament {
+        octave_size: OCTAVE_SIZE,
+    },
+    TuningSystem::WholeTone,
+    TuningSystem::QuarterTone,
+    TuningSystem::JustIntonation,
+    TuningSystem::JustIntonation24,
+    TuningSystem::PythagoreanTuning,
+    TuningSystem::FiveLimit,
+    TuningSystem::ElevenLimit,
+    TuningSystem::FortyThreeTone,
+    TuningSystem::StepMethod,
+    TuningSystem::Javanese,
+    TuningSystem::Thai,
+    TuningSystem::Indian,
+    TuningSystem::IndianAlt,
+    TuningSystem::Indian22,
+    TuningSystem::IndianFull,
+];
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// A ratio-like value used by tuning tables.
@@ -90,6 +115,11 @@ impl Fraction {
         self.into()
     }
 
+    /// Returns a compact music-friendly display label.
+    pub fn label(self) -> String {
+        self.to_string()
+    }
+
     /// Returns this fraction shifted upward by `octaves`.
     pub fn with_octaves(mut self, octaves: UnsignedIntegerType) -> Self {
         if octaves == 0 {
@@ -126,6 +156,22 @@ impl From<Fraction> for FloatType {
         } else {
             (frac.base as FloatType)
                 .powf(frac.numerator as FloatType / frac.denominator as FloatType)
+        }
+    }
+}
+
+impl Display for Fraction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if self.base == 0 {
+            if self.denominator == 1 {
+                write!(f, "{}", self.numerator)
+            } else {
+                write!(f, "{}/{}", self.numerator, self.denominator)
+            }
+        } else if self.numerator == 0 {
+            write!(f, "1")
+        } else {
+            write!(f, "{}^({}/{})", self.base, self.numerator, self.denominator)
         }
     }
 }
@@ -250,6 +296,29 @@ impl TuningSystem {
             Self::IndianAlt => "Indian alternate",
             Self::Indian22 => "Indian 22",
             Self::IndianFull => "Indian full",
+        }
+    }
+
+    /// Returns a short description of this tuning system.
+    pub fn description(self) -> &'static str {
+        match self {
+            Self::EqualTemperament { .. } => "Twelve equal divisions of the octave.",
+            Self::RecursiveEqualTemperament { .. } => "Equal temperament calculated recursively.",
+            Self::WholeTone => "Six equal whole-tone steps per octave.",
+            Self::QuarterTone => "Twenty-four equal quarter-tone steps per octave.",
+            Self::JustIntonation => "A twelve-tone just-intonation ratio table.",
+            Self::JustIntonation24 => "A twenty-four-tone just-intonation ratio table.",
+            Self::PythagoreanTuning => "A twelve-tone tuning table built from pure fifths.",
+            Self::FiveLimit => "A twelve-tone table using five-limit just ratios.",
+            Self::ElevenLimit => "A twenty-nine-tone table using eleven-limit ratios.",
+            Self::FortyThreeTone => "A forty-three-tone ratio table.",
+            Self::StepMethod => "A twelve-tone equal-temperament step method.",
+            Self::Javanese => "A five-tone Javanese equal-temperament approximation.",
+            Self::Thai => "A seven-tone Thai equal-temperament approximation.",
+            Self::Indian => "A seven-tone Indian scale ratio table.",
+            Self::IndianAlt => "An alternate seven-tone Indian scale ratio table.",
+            Self::Indian22 => "A twenty-two-tone Indian scale ratio table.",
+            Self::IndianFull => "The full twenty-two-tone Indian scale table.",
         }
     }
 
@@ -875,9 +944,11 @@ mod tests {
         assert_eq!(rational.denominator(), 2);
         assert_eq!(rational.base(), 0);
         assert_eq!(rational.ratio(), 1.5);
+        assert_eq!(rational.label(), "3/2");
         assert_eq!(rational.with_octaves(2), Fraction::new(12, 2));
 
         let exponential = Fraction::from((7, 12, 2));
+        assert_eq!(exponential.label(), "2^(7/12)");
         assert_eq!(
             exponential.with_octaves(1),
             Fraction::new_with_base(19, 12, 2)
@@ -961,29 +1032,11 @@ mod tests {
 
     #[test]
     fn tuning_system_display_names_cover_variants() {
-        let systems = [
-            TuningSystem::EqualTemperament { octave_size: 12 },
-            TuningSystem::RecursiveEqualTemperament { octave_size: 12 },
-            TuningSystem::WholeTone,
-            TuningSystem::QuarterTone,
-            TuningSystem::JustIntonation,
-            TuningSystem::JustIntonation24,
-            TuningSystem::PythagoreanTuning,
-            TuningSystem::FiveLimit,
-            TuningSystem::ElevenLimit,
-            TuningSystem::FortyThreeTone,
-            TuningSystem::StepMethod,
-            TuningSystem::Javanese,
-            TuningSystem::Thai,
-            TuningSystem::Indian,
-            TuningSystem::IndianAlt,
-            TuningSystem::Indian22,
-            TuningSystem::IndianFull,
-        ];
-
-        for system in systems {
+        assert_eq!(ALL_TUNING_SYSTEMS.len(), 17);
+        for system in ALL_TUNING_SYSTEMS {
             assert!(!system.id().is_empty());
             assert!(!system.display_name().is_empty());
+            assert!(!system.description().is_empty());
             assert!(system.octave_size() > 0);
             assert_eq!(system.to_string(), system.id());
         }

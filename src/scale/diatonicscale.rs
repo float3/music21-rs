@@ -3,7 +3,8 @@ use crate::{chord::Chord, defaults::IntegerType, error::Result, pitch::Pitch};
 use super::concretescale::ConcreteScale;
 
 #[derive(Clone, Debug)]
-pub(crate) struct DiatonicScale {
+/// A diatonic scale realized from a tonic, key signature, and mode.
+pub struct DiatonicScale {
     concrete: ConcreteScale,
     mode: String,
 }
@@ -16,23 +17,28 @@ impl DiatonicScale {
         }
     }
 
-    pub(crate) fn mode(&self) -> &str {
+    /// Returns the scale mode.
+    pub fn mode(&self) -> &str {
         &self.mode
     }
 
-    pub(crate) fn tonic(&self) -> &Pitch {
+    /// Returns the tonic pitch.
+    pub fn tonic(&self) -> &Pitch {
         self.concrete.tonic()
     }
 
-    pub(crate) fn pitch_from_degree(&self, degree: usize) -> Result<Pitch> {
+    /// Returns the pitch at a one-based scale degree.
+    pub fn pitch_from_degree(&self, degree: usize) -> Result<Pitch> {
         self.concrete.pitch_from_degree(degree)
     }
 
-    pub(crate) fn pitches(&self) -> Result<Vec<Pitch>> {
+    /// Returns pitches from degree 1 through the octave.
+    pub fn pitches(&self) -> Result<Vec<Pitch>> {
         self.concrete.pitches()
     }
 
-    pub(crate) fn triad_from_degree(&self, degree: usize) -> Result<Chord> {
+    /// Builds a diatonic triad from a one-based degree.
+    pub fn triad_from_degree(&self, degree: usize) -> Result<Chord> {
         let notes = vec![
             self.pitch_from_degree(degree)?,
             self.pitch_from_degree(degree + 2)?,
@@ -41,7 +47,8 @@ impl DiatonicScale {
         Chord::new(notes.as_slice())
     }
 
-    pub(crate) fn seventh_chord_from_degree(&self, degree: usize) -> Result<Chord> {
+    /// Builds a diatonic seventh chord from a one-based degree.
+    pub fn seventh_chord_from_degree(&self, degree: usize) -> Result<Chord> {
         let notes = vec![
             self.pitch_from_degree(degree)?,
             self.pitch_from_degree(degree + 2)?,

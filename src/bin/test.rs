@@ -1,3 +1,5 @@
+//! Chord-table smoke-check binary used during local development.
+
 use music21_rs::{IntegerType, chord::Chord};
 
 struct StrCase {

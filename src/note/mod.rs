@@ -51,6 +51,22 @@ impl Note {
         self._pitch.name_with_octave()
     }
 
+    /// Returns the note duration when one has been assigned.
+    pub fn duration(&self) -> Option<&Duration> {
+        self.notrest.duration().as_ref()
+    }
+
+    /// Assigns a duration to the note.
+    pub fn set_duration(&mut self, duration: Duration) {
+        self.notrest.set_duration(&duration);
+    }
+
+    /// Returns a copy of this note with the supplied duration.
+    pub fn with_duration(mut self, duration: Duration) -> Self {
+        self.set_duration(duration);
+        self
+    }
+
     pub(crate) fn new<T>(
         pitch: Option<T>,
         duration: Option<Duration>,

@@ -33,6 +33,10 @@ pub enum Error {
     Polyrhythm(String),
     /// Error associated with tuning-system parsing or lookup.
     TuningSystem(String),
+    /// Error associated with MIDI import or export.
+    Midi(String),
+    /// Error associated with analysis helpers.
+    Analysis(String),
 }
 
 impl fmt::Display for Error {
@@ -51,6 +55,8 @@ impl fmt::Display for Error {
             Error::Ordinal(msg) => write!(f, "Ordinal error: {msg}"),
             Error::Polyrhythm(msg) => write!(f, "Polyrhythm error: {msg}"),
             Error::TuningSystem(msg) => write!(f, "TuningSystem error: {msg}"),
+            Error::Midi(msg) => write!(f, "Midi error: {msg}"),
+            Error::Analysis(msg) => write!(f, "Analysis error: {msg}"),
         }
     }
 }
@@ -71,6 +77,7 @@ impl From<Infallible> for Error {
 pub use Error as Exception;
 
 #[deprecated(note = "use music21_rs::Result instead")]
+/// Deprecated alias for [`Result`].
 pub type ExceptionResult<T> = Result<T>;
 
 #[cfg(test)]
@@ -169,6 +176,8 @@ mod tests {
             Error::Ordinal("ordinal".to_string()),
             Error::Polyrhythm("polyrhythm".to_string()),
             Error::TuningSystem("tuning system".to_string()),
+            Error::Midi("midi".to_string()),
+            Error::Analysis("analysis".to_string()),
         ];
 
         for err in errors.iter() {
@@ -225,6 +234,11 @@ mod tests {
             (
                 Error::TuningSystem("tuning system".to_string()),
                 "TuningSystem error: tuning system",
+            ),
+            (Error::Midi("midi".to_string()), "Midi error: midi"),
+            (
+                Error::Analysis("analysis".to_string()),
+                "Analysis error: analysis",
             ),
         ];
 

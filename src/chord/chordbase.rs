@@ -172,7 +172,7 @@ where
             .map(|note| {
                 let mut note = note.try_into_note()?;
                 if let Some(duration) = duration {
-                    note.set_duration(duration);
+                    note.set_duration(duration.clone());
                 }
                 Ok(note.get_super().clone())
             })
@@ -315,7 +315,7 @@ impl IntoNotRests for &[Chord] {
         if quick_duration {
             Ok((
                 &None,
-                self.first().and_then(|chord| chord.duration().clone()),
+                self.first().and_then(|chord| chord.duration().cloned()),
                 notes,
             ))
         } else {

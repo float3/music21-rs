@@ -15,7 +15,7 @@ use super::{
 #[derive(Clone, Debug)]
 pub(crate) struct DiatonicInterval {
     pub(crate) generic: GenericInterval,
-    specifier: Specifier,
+    pub(crate) specifier: Specifier,
 }
 
 impl DiatonicInterval {
@@ -87,7 +87,7 @@ impl IntervalBaseTrait for DiatonicInterval {
     fn transpose_pitch(self, pitch1: Pitch) -> Result<Pitch> {
         let interval =
             super::Interval::from_diatonic_and_chromatic(self.clone(), self.get_chromatic()?)?;
-        interval.transpose_pitch(&pitch1, false, Some(4))
+        interval.transpose_pitch_with_options(&pitch1, false, Some(4))
     }
 
     fn transpose_pitch_in_place(self, pitch1: &mut Pitch) -> Result<()> {

@@ -1,8 +1,10 @@
 pub(crate) mod chordbase;
+/// Guitar tuning and fingering helpers.
+pub mod guitar;
 pub(crate) mod tables;
 
 use crate::base::Music21ObjectTrait;
-use crate::defaults::{FloatType, IntegerType};
+use crate::defaults::{FloatType, IntegerType, UnsignedIntegerType};
 use crate::duration::Duration;
 use crate::error::Error;
 use crate::error::Result;
@@ -12,12 +14,14 @@ use crate::key::keysignature::KeySignature;
 use crate::note::generalnote::GeneralNoteTrait;
 use crate::note::notrest::NotRestTrait;
 use crate::note::{IntoNote, Note};
-use crate::pitch::Pitch;
+use crate::pitch::{Pitch, PitchClass, PitchClassSpecifier};
 use crate::prebase::ProtoM21ObjectTrait;
 
 use chordbase::ChordBase;
 use chordbase::ChordBaseTrait;
+pub use guitar::{GuitarFingering, GuitarStringFingering, GuitarTuning, GuitarTuningString};
 
+use num::integer::{gcd, lcm};
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -52,6 +56,19 @@ pub struct KnownChordType {
     /// Six-entry interval-class vector.
     pub interval_class_vector: Vec<u8>,
 }
+
+#[derive(Debug, Clone)]
+/// A likely tonal resolution for a chord, including the key context used.
+pub struct ChordResolutionSuggestion {
+    /// The suggested resolution chord.
+    pub chord: Chord,
+    /// Human-readable harmonic context for the suggestion.
+    pub key_context: String,
+}
+
+const CANDIDATE_TONICS: [&str; 12] = [
+    "C", "D-", "D", "E-", "E", "F", "F#", "G", "A-", "A", "B-", "B",
+];
 
 impl FromStr for Chord {
     type Err = Error;
@@ -187,6 +204,73 @@ impl Chord {
             .collect()
     }
 
+    /// Returns the preferred chord symbol, when available.
+    ///
+    /// This is separate from [`Self::pitched_common_name`]: common names follow
+    /// the music21/Forte tables, while chord symbols are compact harmonic
+    /// spellings such as `Cmaj7`, `F#m7b5`, or `Cdim9 add(#5)`.
+    pub fn chord_symbol(&self) -> Option<String> {
+        self.chord_symbols().into_iter().next()
+    }
+
+    /// Returns ranked chord symbols for this pitch-class set.
+    ///
+    /// Empty and microtonal chords return no symbols because this notation layer
+    /// assumes twelve-tone equal-tempered pitch classes.
+    pub fn chord_symbols(&self) -> Vec<String> {
+        crate::chordsymbol::chord_symbol_spellings(self)
+    }
+
+    /// Returns the preferred chord symbol using an explicit root.
+    ///
+    /// This is useful for pitch-class sets and browser tables where the caller
+    /// already knows the harmonic spelling anchor and does not want an
+    /// inversion/root inference pass to choose another chord member. String
+    /// roots are parsed as pitch names; numeric roots are parsed as pitch
+    /// classes, so use numbers for pitch-class-only values such as 10 or 11.
+    pub fn chord_symbol_with_root(
+        &self,
+        root: impl Into<PitchClassSpecifier>,
+    ) -> Result<Option<String>> {
+        Ok(self.chord_symbols_with_root(root)?.into_iter().next())
+    }
+
+    /// Returns ranked chord symbols using an explicit root.
+    ///
+    /// Empty, microtonal, and rootless-with-respect-to-the-given-root chords
+    /// return no symbols. Non-integer roots are rejected because chord symbols
+    /// are generated in twelve-tone pitch-class space.
+    pub fn chord_symbols_with_root(
+        &self,
+        root: impl Into<PitchClassSpecifier>,
+    ) -> Result<Vec<String>> {
+        let root = Self::chord_symbol_root_pitch_class(root.into())?;
+
+        Ok(crate::chordsymbol::chord_symbol_spellings_with_root(
+            self, root,
+        ))
+    }
+
+    /// Returns a suggested standard-tuning guitar fingering.
+    ///
+    /// The fingering is a compact voicing on six-string guitar in
+    /// E2-A2-D3-G3-B3-E4 tuning. It prefers shapes that cover all chord pitches,
+    /// place the
+    /// root in the bass when possible, avoid internal muted strings, and stay
+    /// within a small fret span.
+    pub fn guitar_fingering(&self) -> Option<GuitarFingering> {
+        guitar::suggested_guitar_fingering(self)
+    }
+
+    /// Returns a suggested guitar fingering for the supplied tuning.
+    ///
+    /// The tuning strings must be ordered from low to high. Fingering generation
+    /// uses exact pitch spaces, so both the chord pitches and open-string
+    /// octaves affect the result.
+    pub fn guitar_fingering_with_tuning(&self, tuning: &GuitarTuning) -> Option<GuitarFingering> {
+        guitar::suggested_guitar_fingering_with_tuning(self, tuning)
+    }
+
     fn pitched_name_for_common_name(&self, name_str: &str) -> String {
         if name_str == "empty chord" {
             return name_str.to_string();
@@ -250,6 +334,45 @@ impl Chord {
         };
 
         Some(root.to_string())
+    }
+
+    fn chord_symbol_root_pitch_class(root: PitchClassSpecifier) -> Result<u8> {
+        match root {
+            PitchClassSpecifier::String(value) => match Pitch::from_name(value.as_str()) {
+                Ok(pitch) => Self::integer_pitch_class_for_chord_symbol_root(pitch.ps()),
+                Err(pitch_error) => {
+                    let pitch_class = PitchClass::new(value.as_str()).map_err(|pitch_class_error| {
+                        Error::Chord(format!(
+                            "cannot parse chord-symbol root {value:?} as a pitch name ({pitch_error}) or pitch class ({pitch_class_error})"
+                        ))
+                    })?;
+                    Self::integer_pitch_class_from_value(pitch_class)
+                }
+            },
+            specifier => {
+                let pitch_class = PitchClass::new(specifier)?;
+                Self::integer_pitch_class_from_value(pitch_class)
+            }
+        }
+    }
+
+    fn integer_pitch_class_from_value(pitch_class: PitchClass) -> Result<u8> {
+        let Some(root) = pitch_class.integer() else {
+            return Err(Error::Chord(
+                "chord symbols require an integer pitch-class root".to_string(),
+            ));
+        };
+        Ok(root as u8)
+    }
+
+    fn integer_pitch_class_for_chord_symbol_root(ps: FloatType) -> Result<u8> {
+        if (ps - ps.round()).abs() > FloatType::EPSILON {
+            return Err(Error::Chord(
+                "chord symbols require an integer pitch-class root".to_string(),
+            ));
+        }
+
+        Ok((ps.round() as IntegerType).rem_euclid(12) as u8)
     }
 
     /// Returns the primary unpitched music21-style common name.
@@ -444,6 +567,54 @@ impl Chord {
         self.ordered_pitch_classes()
     }
 
+    /// Maps this chord's pitch classes to a reduced integer polyrhythm ratio.
+    ///
+    /// Pitch classes are measured from the inferred root when possible, or
+    /// from the lowest pitch class otherwise. Each semitone offset is mapped
+    /// to a compact just-intonation ratio and reduced to whole-number
+    /// components.
+    pub fn polyrhythm_components(&self) -> Vec<UnsignedIntegerType> {
+        let pitch_classes = self.ordered_pitch_classes();
+        if pitch_classes.is_empty() {
+            return vec![1];
+        }
+
+        let root_pc = self
+            .find_root_pitch()
+            .map(Self::pitch_class)
+            .filter(|root_pc| pitch_classes.contains(root_pc))
+            .unwrap_or(pitch_classes[0]);
+        let mut offsets = pitch_classes
+            .iter()
+            .map(|pc| (*pc + 12 - root_pc) % 12)
+            .collect::<Vec<_>>();
+        offsets.sort_unstable();
+
+        let ratios = offsets
+            .into_iter()
+            .map(Self::just_ratio_for_semitone)
+            .collect::<Vec<_>>();
+        let common_denominator = ratios
+            .iter()
+            .fold(1, |acc, (_, denominator)| lcm(acc, *denominator));
+        let integers = ratios
+            .iter()
+            .map(|(numerator, denominator)| numerator * (common_denominator / denominator))
+            .collect::<Vec<_>>();
+        let divisor = integers.iter().copied().reduce(gcd).unwrap_or(1).max(1);
+
+        integers.into_iter().map(|value| value / divisor).collect()
+    }
+
+    /// Returns [`Self::polyrhythm_components`] formatted as `a:b:c`.
+    pub fn polyrhythm_ratio_string(&self) -> String {
+        self.polyrhythm_components()
+            .into_iter()
+            .map(|component| component.to_string())
+            .collect::<Vec<_>>()
+            .join(":")
+    }
+
     /// Returns cloned pitches for every note in the chord, in input order.
     pub fn pitches(&self) -> Vec<Pitch> {
         self._notes.iter().map(|note| note._pitch.clone()).collect()
@@ -452,6 +623,24 @@ impl Chord {
     /// Returns the notes in input order.
     pub fn notes(&self) -> &[Note] {
         &self._notes
+    }
+
+    /// Returns the chord duration when one has been assigned.
+    pub fn duration(&self) -> Option<&Duration> {
+        self.chordbase.duration().as_ref()
+    }
+
+    /// Assigns a duration to the chord.
+    pub fn set_duration(&mut self, duration: Duration) {
+        if let Some(chordbase) = Arc::get_mut(&mut self.chordbase) {
+            chordbase.set_duration(&duration);
+        }
+    }
+
+    /// Returns a copy of this chord with the supplied duration.
+    pub fn with_duration(mut self, duration: Duration) -> Self {
+        self.set_duration(duration);
+        self
     }
 
     /// Returns the inferred root pitch name when the chord has one.
@@ -569,15 +758,21 @@ impl Chord {
     /// the dominant triad.
     pub fn resolution_chords(&self, tonic: &str, mode: Option<&str>) -> Result<Vec<Self>> {
         let key = Key::from_tonic_mode(tonic, mode)?;
+        self.resolution_chords_in_key(&key)
+    }
 
-        if self.is_contextual_augmented_sixth(&key)? {
-            return Ok(vec![key.triad_from_degree(5)?]);
+    /// Returns likely tonal resolution chords in the supplied key.
+    pub fn resolution_chords_in_key(&self, key: &Key) -> Result<Vec<Self>> {
+        if self.is_contextual_augmented_sixth(key)? {
+            return Ok(vec![
+                self.place_resolution_near_source(key.triad_from_degree(5)?)?,
+            ]);
         }
 
         let mut resolutions = Vec::new();
 
         let dominant_resolution = if self.is_dominant_function_sonority() {
-            self.resolve_by_root_motion(&key, 5)?
+            self.resolve_by_root_motion(key, 5)?
         } else {
             None
         };
@@ -586,7 +781,7 @@ impl Chord {
         }
 
         let leading_tone_resolution = if self.is_leading_tone_function_sonority() {
-            self.resolve_by_root_motion(&key, 1)?
+            self.resolve_by_root_motion(key, 1)?
         } else {
             None
         };
@@ -595,6 +790,118 @@ impl Chord {
         }
 
         Ok(Self::deduplicate_resolution_chords(resolutions))
+    }
+
+    /// Returns likely tonal resolution suggestions in the supplied key.
+    pub fn resolution_suggestions_in_key(
+        &self,
+        key: &Key,
+    ) -> Result<Vec<ChordResolutionSuggestion>> {
+        let mut suggestions = Vec::new();
+        let mut seen = std::collections::BTreeSet::new();
+        let key_name = Self::display_key_name(key);
+
+        if self.is_contextual_augmented_sixth(key)? {
+            Self::push_resolution_suggestion(
+                key.triad_from_degree(5)?,
+                format!("augmented-sixth resolution in {key_name}"),
+                &mut suggestions,
+                &mut seen,
+            );
+            return Ok(suggestions);
+        }
+
+        if self.is_dominant_function_sonority()
+            && let Some(chord) = self.resolve_by_root_motion(key, 5)?
+        {
+            Self::push_resolution_suggestion(
+                chord,
+                format!("dominant resolution in {key_name}"),
+                &mut suggestions,
+                &mut seen,
+            );
+        }
+
+        if self.is_leading_tone_function_sonority()
+            && let Some(chord) = self.resolve_by_root_motion(key, 1)?
+        {
+            Self::push_resolution_suggestion(
+                chord,
+                format!("leading-tone resolution in {key_name}"),
+                &mut suggestions,
+                &mut seen,
+            );
+        }
+
+        Ok(suggestions)
+    }
+
+    /// Returns likely tonal resolution chords with inferred key contexts.
+    ///
+    /// This is a convenience wrapper around [`Self::resolution_chords`] for
+    /// exploratory tools: dominant-function sonorities are tested against the
+    /// key a perfect fourth above their root, leading-tone sonorities against
+    /// the key a semitone above their root, and augmented-sixth sonorities
+    /// against all built-in major/minor tonic spellings.
+    pub fn resolution_suggestions(&self) -> Result<Vec<ChordResolutionSuggestion>> {
+        let mut suggestions = Vec::new();
+        let mut seen = std::collections::BTreeSet::new();
+
+        let augmented_contexts = self.augmented_sixth_contexts()?;
+        if !augmented_contexts.is_empty() {
+            for (tonic, mode) in augmented_contexts {
+                let context = format!(
+                    "augmented-sixth resolution in {} {mode}",
+                    Self::display_tonic_name(tonic)
+                );
+                self.add_resolution_suggestions_for_key(
+                    tonic,
+                    mode,
+                    context,
+                    &mut suggestions,
+                    &mut seen,
+                )?;
+            }
+            return Ok(suggestions);
+        }
+
+        if let Some(root_pc) = self.find_root_pitch().map(Self::pitch_class) {
+            if self.is_dominant_function_sonority() {
+                let tonic = Self::pitch_class_name((root_pc + 5) % 12);
+                for mode in ["major", "minor"] {
+                    let context = format!(
+                        "dominant resolution to {} {mode}",
+                        Self::display_tonic_name(tonic)
+                    );
+                    self.add_resolution_suggestions_for_key(
+                        tonic,
+                        mode,
+                        context,
+                        &mut suggestions,
+                        &mut seen,
+                    )?;
+                }
+            }
+
+            if self.is_leading_tone_function_sonority() {
+                let tonic = Self::pitch_class_name((root_pc + 1) % 12);
+                for mode in ["major", "minor"] {
+                    let context = format!(
+                        "leading-tone resolution to {} {mode}",
+                        Self::display_tonic_name(tonic)
+                    );
+                    self.add_resolution_suggestions_for_key(
+                        tonic,
+                        mode,
+                        context,
+                        &mut suggestions,
+                        &mut seen,
+                    )?;
+                }
+            }
+        }
+
+        Ok(suggestions)
     }
 
     fn simplify_enharmonics(self, key_context: Option<KeySignature>) -> Result<Option<Self>> {
@@ -649,7 +956,9 @@ impl Chord {
             return Ok(None);
         };
         let target_pc = (Self::pitch_class(root_pitch) + semitones) % 12;
-        Self::triad_for_key_pitch_class(key, target_pc)
+        Self::triad_for_key_pitch_class(key, target_pc)?
+            .map(|chord| self.place_resolution_near_source(chord))
+            .transpose()
     }
 
     fn triad_for_key_pitch_class(key: &Key, target_pc: u8) -> Result<Option<Self>> {
@@ -660,6 +969,41 @@ impl Chord {
             }
         }
         Ok(None)
+    }
+
+    fn place_resolution_near_source(&self, resolution: Self) -> Result<Self> {
+        let Some(source_center) = Self::pitch_center(&self.pitches()) else {
+            return Ok(resolution);
+        };
+        let Some(resolution_center) = Self::pitch_center(&resolution.pitches()) else {
+            return Ok(resolution);
+        };
+
+        let octave_shift = ((source_center - resolution_center) / 12.0).round() as IntegerType;
+        if octave_shift == 0 {
+            return Ok(resolution);
+        }
+
+        let pitches = resolution
+            .pitches()
+            .into_iter()
+            .map(|pitch| {
+                let octave = pitch
+                    .octave()
+                    .unwrap_or_else(|| (pitch.ps().round() as IntegerType).div_euclid(12) - 1);
+                Pitch::from_name_and_octave(pitch.name(), octave + octave_shift)
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        Chord::new(pitches.as_slice())
+    }
+
+    fn pitch_center(pitches: &[Pitch]) -> Option<FloatType> {
+        if pitches.is_empty() {
+            return None;
+        }
+
+        Some(pitches.iter().map(Pitch::ps).sum::<FloatType>() / pitches.len() as FloatType)
     }
 
     fn deduplicate_resolution_chords(chords: Vec<Self>) -> Vec<Self> {
@@ -673,6 +1017,69 @@ impl Chord {
         }
 
         deduped
+    }
+
+    fn augmented_sixth_contexts(&self) -> Result<Vec<(&'static str, &'static str)>> {
+        if !self.has_augmented_sixth_spelling() {
+            return Ok(Vec::new());
+        }
+
+        let mut contexts = Vec::new();
+        for tonic in CANDIDATE_TONICS {
+            for mode in ["major", "minor"] {
+                let key = Key::from_tonic_mode(tonic, Some(mode))?;
+                if self.is_contextual_augmented_sixth(&key)? {
+                    contexts.push((tonic, mode));
+                }
+            }
+        }
+        Ok(contexts)
+    }
+
+    fn push_resolution_suggestion(
+        chord: Chord,
+        key_context: String,
+        suggestions: &mut Vec<ChordResolutionSuggestion>,
+        seen: &mut std::collections::BTreeSet<(String, String)>,
+    ) {
+        let pitched_common_name = chord.pitched_common_name();
+        if seen.insert((pitched_common_name, key_context.clone())) {
+            suggestions.push(ChordResolutionSuggestion { chord, key_context });
+        }
+    }
+
+    fn has_augmented_sixth_spelling(&self) -> bool {
+        for (index, lower) in self._notes.iter().enumerate() {
+            for upper in self._notes.iter().skip(index + 1) {
+                if Self::is_directed_augmented_sixth(&lower._pitch, &upper._pitch)
+                    || Self::is_directed_augmented_sixth(&upper._pitch, &lower._pitch)
+                {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    fn is_directed_augmented_sixth(lower: &Pitch, upper: &Pitch) -> bool {
+        let generic_interval = (Self::step_num(upper) - Self::step_num(lower)).rem_euclid(7) + 1;
+        let semitones = ((upper.ps().round() as IntegerType) - (lower.ps().round() as IntegerType))
+            .rem_euclid(12);
+        generic_interval == 6 && semitones == 10
+    }
+
+    fn add_resolution_suggestions_for_key(
+        &self,
+        tonic: &str,
+        mode: &str,
+        key_context: String,
+        suggestions: &mut Vec<ChordResolutionSuggestion>,
+        seen: &mut std::collections::BTreeSet<(String, String)>,
+    ) -> Result<()> {
+        for chord in self.resolution_chords(tonic, Some(mode))? {
+            Self::push_resolution_suggestion(chord, key_context.clone(), suggestions, seen);
+        }
+        Ok(())
     }
 
     fn is_dominant_function_sonority(&self) -> bool {
@@ -912,6 +1319,28 @@ impl Chord {
         (pitch.ps().round() as IntegerType).rem_euclid(12) as u8
     }
 
+    fn pitch_class_name(pc: u8) -> &'static str {
+        CANDIDATE_TONICS[pc as usize % 12]
+    }
+
+    fn just_ratio_for_semitone(offset: u8) -> (UnsignedIntegerType, UnsignedIntegerType) {
+        const RATIOS: [(UnsignedIntegerType, UnsignedIntegerType); 12] = [
+            (1, 1),
+            (16, 15),
+            (9, 8),
+            (6, 5),
+            (5, 4),
+            (4, 3),
+            (7, 5),
+            (3, 2),
+            (25, 16),
+            (5, 3),
+            (7, 4),
+            (15, 8),
+        ];
+        RATIOS[offset as usize % 12]
+    }
+
     fn pitch_class_mask(&self) -> u16 {
         self.ordered_pitch_classes()
             .into_iter()
@@ -946,6 +1375,18 @@ impl Chord {
 
     fn display_pitch_name(pitch: &Pitch) -> String {
         pitch.name().replace('-', "b")
+    }
+
+    fn display_key_name(key: &Key) -> String {
+        format!(
+            "{} {}",
+            Self::display_tonic_name(&key.tonic().name()),
+            key.mode()
+        )
+    }
+
+    fn display_tonic_name(name: &str) -> String {
+        name.replace('-', "b")
     }
 }
 
@@ -1145,7 +1586,7 @@ impl IntoNotes for &[IntegerType] {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Pitch, chord::Chord};
+    use crate::{GuitarTuning, Key, Pitch, chord::Chord};
 
     #[cfg(feature = "python")]
     mod utils {
@@ -1212,6 +1653,77 @@ mod tests {
     }
 
     #[test]
+    fn chord_symbols_return_symbol_names() {
+        let major_seventh = Chord::new("C E G B").unwrap();
+        let petrushka = Chord::new("C4 D4 Eb4 F#4 Ab4 A4").unwrap();
+
+        assert_eq!(major_seventh.chord_symbol().as_deref(), Some("Cmaj7"));
+        assert_eq!(petrushka.chord_symbol().as_deref(), Some("Cdim9 add(#5)"));
+    }
+
+    #[test]
+    fn chord_symbols_with_root_accept_pitch_names() {
+        let chord = Chord::new("A C").unwrap();
+
+        assert_eq!(
+            chord.chord_symbol_with_root("A").unwrap().as_deref(),
+            Some("A add(b3)")
+        );
+        assert_eq!(
+            chord.chord_symbol_with_root("C").unwrap().as_deref(),
+            Some("C add(13)")
+        );
+    }
+
+    #[test]
+    fn guitar_fingering_covers_common_chord_tones() {
+        let chord = Chord::new("C E G").unwrap();
+        let fingering = chord.guitar_fingering().unwrap();
+
+        assert_eq!(fingering.strings.len(), 6);
+        assert_eq!(fingering.covered_pitch_spaces, vec![60, 64, 67]);
+        assert_eq!(fingering.covered_pitch_classes, vec![0, 4, 7]);
+        assert!(fingering.omitted_pitch_spaces.is_empty());
+        assert!(fingering.omitted_pitch_classes.is_empty());
+        assert!(
+            fingering
+                .strings
+                .iter()
+                .filter(|string| string.fret.is_some_and(|fret| fret > 0))
+                .all(|string| string
+                    .finger
+                    .is_some_and(|finger| (1..=4).contains(&finger)))
+        );
+    }
+
+    #[test]
+    fn guitar_fingering_still_returns_large_pitch_sets() {
+        let chord = Chord::new("C D E F G A B").unwrap();
+        let fingering = chord.guitar_fingering().unwrap();
+
+        assert_eq!(fingering.strings.len(), 6);
+        assert!(!fingering.covered_pitch_classes.is_empty());
+        assert!(!fingering.omitted_pitch_classes.is_empty());
+    }
+
+    #[test]
+    fn guitar_fingering_uses_supplied_tuning_and_octaves() {
+        let chord = Chord::new("D3 A3 D4").unwrap();
+        let tuning = GuitarTuning::new(["D2", "A2", "D3", "G3", "A3", "D4"]).unwrap();
+        let fingering = chord.guitar_fingering_with_tuning(&tuning).unwrap();
+
+        assert_eq!(fingering.strings.len(), 6);
+        assert_eq!(fingering.strings[0].string_name, "D2");
+        assert_eq!(fingering.covered_pitch_spaces, vec![50, 57, 62]);
+        assert!(fingering.omitted_pitch_spaces.is_empty());
+    }
+
+    #[test]
+    fn guitar_tuning_rejects_empty_tunings() {
+        assert!(GuitarTuning::new(Vec::<&str>::new()).is_err());
+    }
+
+    #[test]
     fn dyad_names_follow_music21_interval_rules() {
         let pcs = [0, 1];
         let integer_chord = Chord::new(pcs.as_slice()).unwrap();
@@ -1251,6 +1763,16 @@ mod tests {
                 .iter()
                 .any(|name| name == "major triad")
         );
+    }
+
+    #[test]
+    fn chord_maps_to_reduced_polyrhythm_components() {
+        let major = Chord::new("C E G").unwrap();
+        assert_eq!(major.polyrhythm_components(), vec![4, 5, 6]);
+        assert_eq!(major.polyrhythm_ratio_string(), "4:5:6");
+
+        let empty = Chord::empty().unwrap();
+        assert_eq!(empty.polyrhythm_ratio_string(), "1");
     }
 
     #[test]
@@ -1302,6 +1824,65 @@ mod tests {
         let resolution = chord.resolution_chord("C", Some("major")).unwrap().unwrap();
 
         assert_eq!(resolution.pitched_common_name(), "C-major triad");
+    }
+
+    #[test]
+    fn resolution_chords_stay_near_source_register() {
+        let chord = Chord::new("G2 B2 D3 F3").unwrap();
+        let resolution = chord.resolution_chord("C", Some("major")).unwrap().unwrap();
+        let names = resolution
+            .pitches()
+            .into_iter()
+            .map(|pitch| pitch.name_with_octave())
+            .collect::<Vec<_>>();
+
+        assert_eq!(names, vec!["C3", "E3", "G3"]);
+    }
+
+    #[test]
+    fn resolution_suggestions_infer_contexts() {
+        let chord = Chord::new("G3 B3 D4 F4").unwrap();
+        let suggestions = chord.resolution_suggestions().unwrap();
+
+        assert!(suggestions.iter().any(|suggestion| {
+            suggestion.key_context == "dominant resolution to C major"
+                && suggestion.chord.pitched_common_name() == "C-major triad"
+        }));
+        assert!(suggestions.iter().any(|suggestion| {
+            suggestion.key_context == "dominant resolution to C minor"
+                && suggestion.chord.pitched_common_name() == "C-minor triad"
+        }));
+    }
+
+    #[test]
+    fn resolution_suggestions_stay_near_source_register() {
+        let chord = Chord::new("G2 B2 D3 F3").unwrap();
+        let suggestions = chord.resolution_suggestions().unwrap();
+        let c_major = suggestions
+            .iter()
+            .find(|suggestion| suggestion.key_context == "dominant resolution to C major")
+            .unwrap();
+        let names = c_major
+            .chord
+            .pitches()
+            .into_iter()
+            .map(|pitch| pitch.name_with_octave())
+            .collect::<Vec<_>>();
+
+        assert_eq!(names, vec!["C3", "E3", "G3"]);
+    }
+
+    #[test]
+    fn resolution_suggestions_can_use_explicit_key_context() {
+        let secondary_dominant = Chord::new("D3 F#3 A3 C4").unwrap();
+        let c_major = Key::from_tonic_mode("C", Some("major")).unwrap();
+        let suggestions = secondary_dominant
+            .resolution_suggestions_in_key(&c_major)
+            .unwrap();
+
+        assert_eq!(suggestions.len(), 1);
+        assert_eq!(suggestions[0].key_context, "dominant resolution in C major");
+        assert_eq!(suggestions[0].chord.pitched_common_name(), "G-major triad");
     }
 
     #[test]

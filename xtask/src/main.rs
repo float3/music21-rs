@@ -1,3 +1,5 @@
+//! Development task runner for regenerating committed chord-table artifacts.
+
 mod shared {
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../shared.rs"));
 }

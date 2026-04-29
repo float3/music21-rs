@@ -13,6 +13,7 @@ use intervalbase::IntervalBaseTrait;
 use regex::Regex;
 use specifier::Specifier;
 
+use std::str::FromStr;
 use std::sync::Mutex;
 use std::{cmp::Ordering, collections::HashMap, sync::LazyLock};
 
@@ -30,8 +31,45 @@ use crate::{
     pitch::Pitch,
 };
 
+/// Direction of a directed interval.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum IntervalDirection {
+    /// The end pitch is lower than the start pitch.
+    Descending = -1,
+    /// The interval is an oblique unison.
+    Oblique = 0,
+    /// The end pitch is higher than the start pitch.
+    Ascending = 1,
+}
+
+impl IntervalDirection {
+    /// Returns `-1`, `0`, or `1` for descending, oblique, or ascending.
+    pub fn as_int(self) -> IntegerType {
+        self as IntegerType
+    }
+
+    /// Returns a display label for the direction.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Descending => "Descending",
+            Self::Oblique => "Oblique",
+            Self::Ascending => "Ascending",
+        }
+    }
+}
+
+fn public_direction(value: direction::Direction) -> IntervalDirection {
+    match value {
+        direction::Direction::Descending => IntervalDirection::Descending,
+        direction::Direction::Oblique => IntervalDirection::Oblique,
+        direction::Direction::Ascending => IntervalDirection::Ascending,
+    }
+}
+
 #[derive(Clone, Debug)]
-pub(crate) struct Interval {
+/// A directed musical interval with diatonic spelling and chromatic size.
+pub struct Interval {
     pub(crate) implicit_diatonic: bool,
     pub(crate) diatonic: DiatonicInterval,
     pub(crate) chromatic: ChromaticInterval,
@@ -202,7 +240,7 @@ impl Interval {
         })
     }
 
-    pub fn new(arg: IntervalArgument) -> Result<Interval> {
+    pub(crate) fn new(arg: IntervalArgument) -> Result<Interval> {
         match arg {
             IntervalArgument::Str(str) => {
                 let name = str;
@@ -236,6 +274,89 @@ impl Interval {
         }
     }
 
+    /// Parses an interval name such as `"M3"`, `"P5"`, or `"-m6"`.
+    pub fn from_name(name: impl Into<String>) -> Result<Self> {
+        Self::new(IntervalArgument::Str(name.into()))
+    }
+
+    /// Creates an implicit diatonic interval from a chromatic semitone count.
+    pub fn from_semitones(semitones: IntegerType) -> Result<Self> {
+        Self::new(IntervalArgument::Int(semitones))
+    }
+
+    /// Returns the directed interval from `start` to `end`.
+    pub fn between_pitches(start: &Pitch, end: &Pitch) -> Result<Self> {
+        Self::between(
+            PitchOrNote::Pitch(start.clone()),
+            PitchOrNote::Pitch(end.clone()),
+        )
+    }
+
+    /// Returns the directed interval from `start` to `end`.
+    pub fn between_notes(start: &Note, end: &Note) -> Result<Self> {
+        Self::between(
+            PitchOrNote::Note(start.clone()),
+            PitchOrNote::Note(end.clone()),
+        )
+    }
+
+    /// Returns the directed chromatic size in semitones.
+    pub fn semitones(&self) -> IntegerType {
+        self.chromatic.semitones
+    }
+
+    /// Returns the directed interval direction.
+    pub fn direction(&self) -> IntervalDirection {
+        public_direction(self.generic().direction())
+    }
+
+    /// Returns the human-readable interval name, such as `"Major Third"`.
+    pub fn name(&self) -> String {
+        self.nice_name()
+    }
+
+    /// Returns the simple or compound generic interval number.
+    pub fn generic_number(&self) -> IntegerType {
+        self.generic().simple_directed()
+    }
+
+    /// Returns `true` when the interval was inferred from semitones only.
+    pub fn is_implicit_diatonic(&self) -> bool {
+        self.implicit_diatonic
+    }
+
+    /// Returns the complementary interval inversion.
+    pub fn inversion(&self) -> Result<Self> {
+        let direction = match self.direction() {
+            IntervalDirection::Oblique => 1,
+            direction => direction.as_int(),
+        };
+        let simple = self.generic().simple_undirected();
+        let inverted_generic = if simple == 1 { 1 } else { 9 - simple };
+        let generic = GenericInterval::from_int(inverted_generic * direction)?;
+        let diatonic = DiatonicInterval::new(self.diatonic.specifier.inversion(), &generic);
+        let chromatic = diatonic.get_chromatic()?;
+        Self::from_diatonic_and_chromatic(diatonic, chromatic)
+    }
+
+    /// Returns the same interval in the opposite direction.
+    pub fn reversed(&self) -> Result<Self> {
+        self.clone().reverse()
+    }
+
+    /// Transposes a pitch by this interval.
+    pub fn transpose_pitch(&self, pitch: &Pitch) -> Result<Pitch> {
+        self.clone()
+            .transpose_pitch_with_options(pitch, false, Some(4))
+    }
+
+    /// Transposes a note by this interval.
+    pub fn transpose_note(&self, note: &Note) -> Result<Note> {
+        let mut out = note.clone();
+        out._pitch = self.transpose_pitch(&note._pitch)?;
+        Ok(out)
+    }
+
     pub(crate) fn generic(&self) -> &GenericInterval {
         &self.diatonic.generic
     }
@@ -250,14 +371,16 @@ impl Interval {
 
     /// reverse default is false
     /// maxAccidental default is 4
-    pub(crate) fn transpose_pitch(
+    pub(crate) fn transpose_pitch_with_options(
         self,
         p: &Pitch,
         reverse: bool,
         max_accidental: Option<IntegerType>,
     ) -> Result<Pitch> {
         if reverse {
-            return self.reverse()?.transpose_pitch(p, false, Some(4));
+            return self
+                .reverse()?
+                .transpose_pitch_with_options(p, false, Some(4));
         }
         let max_accidental = max_accidental.unwrap_or(4);
 
@@ -329,8 +452,42 @@ impl Interval {
         reverse: bool,
         max_accidental: Option<IntegerType>,
     ) -> Result<()> {
-        *arg = self.clone().transpose_pitch(arg, reverse, max_accidental)?;
+        *arg = self
+            .clone()
+            .transpose_pitch_with_options(arg, reverse, max_accidental)?;
         Ok(())
+    }
+}
+
+impl FromStr for Interval {
+    type Err = Error;
+
+    fn from_str(value: &str) -> Result<Self> {
+        Self::from_name(value)
+    }
+}
+
+impl TryFrom<&str> for Interval {
+    type Error = Error;
+
+    fn try_from(value: &str) -> Result<Self> {
+        Self::from_name(value)
+    }
+}
+
+impl TryFrom<String> for Interval {
+    type Error = Error;
+
+    fn try_from(value: String) -> Result<Self> {
+        Self::from_name(value)
+    }
+}
+
+impl TryFrom<IntegerType> for Interval {
+    type Error = Error;
+
+    fn try_from(value: IntegerType) -> Result<Self> {
+        Self::from_semitones(value)
     }
 }
 
@@ -411,16 +568,17 @@ impl IntervalBaseTrait for Interval {
 
     fn transpose_note(self, note1: Note) -> Result<Note> {
         let mut cloned = note1.clone();
-        cloned._pitch = Interval::transpose_pitch(self, &note1._pitch, false, Some(4))?;
+        cloned._pitch =
+            Interval::transpose_pitch_with_options(self, &note1._pitch, false, Some(4))?;
         Ok(cloned)
     }
 
     fn transpose_pitch(self, pitch1: Pitch) -> Result<Pitch> {
-        Interval::transpose_pitch(self, &pitch1, false, Some(4))
+        Interval::transpose_pitch_with_options(self, &pitch1, false, Some(4))
     }
 
     fn transpose_pitch_in_place(self, pitch1: &mut Pitch) -> Result<()> {
-        *pitch1 = Interval::transpose_pitch(self, pitch1, false, Some(4))?;
+        *pitch1 = Interval::transpose_pitch_with_options(self, pitch1, false, Some(4))?;
         Ok(())
     }
 }
@@ -442,9 +600,10 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> Result<Fracti
         None,
     )?;
 
-    let end_pitch_wanted = interval
-        .clone()
-        .transpose_pitch(&start_pitch, false, Some(4))?;
+    let end_pitch_wanted =
+        interval
+            .clone()
+            .transpose_pitch_with_options(&start_pitch, false, Some(4))?;
 
     let mut cache = match PYTHAGOREAN_CACHE.lock() {
         Ok(cache) => cache,
@@ -498,12 +657,14 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> Result<Fracti
             ));
             break;
         } else {
-            end_pitch_up = fifth_up
-                .clone()
-                .transpose_pitch(&end_pitch_up, false, Some(4))?;
-            end_pitch_down = fifth_down
-                .clone()
-                .transpose_pitch(&end_pitch_down, false, Some(4))?;
+            end_pitch_up =
+                fifth_up
+                    .clone()
+                    .transpose_pitch_with_options(&end_pitch_up, false, Some(4))?;
+            end_pitch_down =
+                fifth_down
+                    .clone()
+                    .transpose_pitch_with_options(&end_pitch_down, false, Some(4))?;
         }
     }
 
@@ -528,10 +689,6 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> Result<Fracti
     );
 
     Ok(found_ratio * octave_multiplier)
-}
-
-pub trait IntoInterval {
-    fn into_interval_arg();
 }
 
 #[cfg(test)]
@@ -580,8 +737,17 @@ mod tests {
     fn interval_transpose_pitch() {
         let c4 = pitch("C4");
         let m3 = Interval::new(IntervalArgument::Str("m3".to_string())).unwrap();
-        let out = m3.transpose_pitch(&c4, false, Some(4)).unwrap();
+        let out = m3.transpose_pitch(c4).unwrap();
         assert_eq!(out.name_with_octave(), "E-4");
+    }
+
+    #[test]
+    fn interval_inverts_oblique_unison() {
+        let unison = Interval::from_name("P1").unwrap();
+        let inverted = unison.inversion().unwrap();
+
+        assert_eq!(inverted.semitones(), 0);
+        assert_eq!(inverted.generic_number(), 1);
     }
 
     #[test]
