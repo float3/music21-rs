@@ -265,15 +265,16 @@ jobs:
           if missing:
               raise SystemExit(f"missing demo build output: {', '.join(missing)}")
 
-          html_checks = {
+          file_checks = {
               "index.html": ["chord/", "chords/", "polyrhythm/", "tuning/"],
               "chord/index.html": ["../pkg/music21_rs_web.js", "../chords/", "../polyrhythm/"],
-              "chords/index.html": ["../pkg/music21_rs_web.js", "../chord/"],
+              "chords/index.html": ["./app.js", "../chord/"],
+              "chords/app.js": ["../pkg/music21_rs_web.js"],
               "polyrhythm/index.html": ["../pkg/music21_rs_web.js"],
               "tuning/index.html": ["../pkg/music21_rs_web.js"],
           }
 
-          for name, needles in html_checks.items():
+          for name, needles in file_checks.items():
               text = (root / name).read_text(encoding="utf-8")
               missing_needles = [needle for needle in needles if needle not in text]
               if missing_needles:
