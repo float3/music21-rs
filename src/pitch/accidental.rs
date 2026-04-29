@@ -1000,7 +1000,7 @@ impl IntoAccidental for AccidentalSpecifier {
 
 #[cfg(test)]
 mod tests {
-    use super::{Accidental, IntoAccidental};
+    use super::{Accidental, AccidentalSpecifier, IntoAccidental};
 
     #[test]
     fn test_natural() {
@@ -1185,5 +1185,74 @@ mod tests {
         assert_eq!(target.display_style(), "parentheses");
         assert_eq!(target.display_size(), "cue");
         assert_eq!(target.display_location(), "above");
+    }
+
+    #[test]
+    fn public_api_covers_name_helpers_and_standardization_errors() {
+        let names = Accidental::list_names();
+        assert_eq!(names.first(), Some(&"double-flat"));
+        assert!(names.contains(&"quadruple-sharp"));
+
+        assert!(Accidental::is_valid_name("quarter-sharp"));
+        assert!(Accidental::is_valid_name("es"));
+        assert!(!Accidental::is_valid_name("not-an-accidental"));
+
+        assert_eq!(Accidental::standardize_name("##").unwrap(), "double-sharp");
+        let err = Accidental::standardize_name("not-an-accidental").unwrap_err();
+        assert!(err.to_string().contains("not a supported accidental type"));
+    }
+
+    #[test]
+    fn public_api_covers_setter_branches_and_independent_updates() {
+        let mut accidental = Accidental::default();
+        assert_eq!(accidental.name(), "natural");
+
+        accidental.set(Accidental::flat()).unwrap();
+        assert_eq!(accidental.name(), "flat");
+        assert_eq!(accidental.unicode(), "\u{266d}");
+
+        accidental.set_name("sharp").unwrap();
+        assert_eq!(accidental.alter(), 1.0);
+        assert_eq!(accidental.modifier(), "#");
+
+        accidental.set_modifier("~~");
+        assert_eq!(accidental.name(), "sharp");
+        assert_eq!(accidental.modifier(), "~~");
+        assert_eq!(accidental.unicode(), "~~");
+
+        accidental.set_name_independently("custom");
+        accidental.set_alter_independently(0.25);
+        accidental.set_modifier_independently("^");
+        assert_eq!(accidental.full_name(), "custom");
+        assert_eq!(accidental.alter(), 0.25);
+        assert_eq!(accidental.modifier(), "^");
+
+        let cloned = Accidental::new(AccidentalSpecifier::from(accidental.clone())).unwrap();
+        assert_eq!(cloned, accidental);
+    }
+
+    #[test]
+    fn public_api_rejects_invalid_display_metadata() {
+        let mut accidental = Accidental::new("natural").unwrap();
+        assert!(accidental.set_display_type("sometimes").is_err());
+        assert!(accidental.set_display_style("curly").is_err());
+        assert!(accidental.set_display_size("huge").is_err());
+        assert!(accidental.set_display_location("beside").is_err());
+
+        accidental.set_display_type("never").unwrap();
+        accidental.set_display_style("both").unwrap();
+        accidental.set_display_size("125.5").unwrap();
+        accidental.set_display_location("below").unwrap();
+
+        assert_eq!(accidental.display_type(), "never");
+        assert_eq!(accidental.display_style(), "both");
+        assert_eq!(accidental.display_size(), "125.5");
+        assert_eq!(accidental.display_location(), "below");
+    }
+
+    #[test]
+    fn accidental_ordering_follows_alter() {
+        assert!(Accidental::flat() < Accidental::natural());
+        assert!(Accidental::sharp() > Accidental::natural());
     }
 }

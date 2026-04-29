@@ -335,6 +335,19 @@ mod tests {
     }
 
     #[test]
+    fn test_new_rejects_empty_and_zero_subdivisions() {
+        let empty = Polyrhythm::new(4, &[]).unwrap_err();
+        assert!(empty.to_string().contains("At least one subdivision"));
+
+        let zero_subdivision = Polyrhythm::new(4, &[2, 0, 3]).unwrap_err();
+        assert!(
+            zero_subdivision
+                .to_string()
+                .contains("Subdivision must be nonzero")
+        );
+    }
+
+    #[test]
     fn test_set_tempo_rejects_zero() {
         let mut poly = Polyrhythm::new(4, &[2, 3]).unwrap();
         let err = poly.set_tempo(0).unwrap_err();
@@ -345,6 +358,15 @@ mod tests {
     fn test_with_tempo_sets_tempo() {
         let poly = Polyrhythm::new(4, &[3, 4]).unwrap().with_tempo(90).unwrap();
         assert_eq!(poly.tempo(), Some(90));
+    }
+
+    #[test]
+    fn test_without_tempo_rejects_time_queries() {
+        let poly = Polyrhythm::new(4, &[2, 3]).unwrap();
+        assert!(poly.measure_duration().is_err());
+        assert!(poly.tick_duration().is_err());
+        assert!(poly.beat_timings().is_err());
+        assert!(poly.events().is_err());
     }
 
     #[test]
@@ -372,6 +394,7 @@ mod tests {
     #[test]
     fn test_coincidence_ticks() {
         let poly = Polyrhythm::from_time_signature(4, 120, &[2, 3]).unwrap();
+        assert_eq!(poly.coincidence_ticks(0), vec![0, 1, 2, 3, 4, 5]);
         assert_eq!(poly.coincidence_ticks(2), vec![0]);
         assert_eq!(poly.coincidence_ticks(1), vec![0, 2, 3, 4]);
     }
@@ -381,5 +404,41 @@ mod tests {
         let poly = Polyrhythm::from_time_signature(4, 120, &[2, 3, 4]).unwrap();
         let chord = poly.to_chord("C4").unwrap();
         assert!(!chord.pitched_common_name().is_empty());
+    }
+
+    #[test]
+    fn test_iterator_state_and_reset() {
+        let mut poly = Polyrhythm::new(4, &[2, 4]).unwrap();
+        assert_eq!(poly.components(), &[2, 4]);
+        assert_eq!(poly.component_intervals(), vec![2, 1]);
+        assert_eq!(poly.current_tick(), 0);
+
+        assert_eq!(poly.next(), Some((0, vec![true, true])));
+        assert_eq!(poly.current_tick(), 1);
+        assert_eq!(poly.next(), Some((1, vec![false, true])));
+        poly.reset();
+        assert_eq!(poly.current_tick(), 0);
+    }
+
+    #[allow(deprecated)]
+    #[test]
+    fn deprecated_polyrhythm_aliases_delegate_to_new_names() {
+        let poly = Polyrhythm::new_with_tempo(4, 120, &[2, 3]).unwrap();
+        assert_eq!(poly.cycle_duration(), poly.cycle_len());
+        assert_eq!(poly.events_one_cycle().unwrap(), poly.events().unwrap());
+        assert_eq!(
+            poly.coincidence_ticks_one_cycle(1),
+            poly.coincidence_ticks(1)
+        );
+
+        let timed = Polyrhythm::new_with_time_signature(4, 120, &[2, 3, 4]).unwrap();
+        assert_eq!(
+            timed.as_chord("C4").unwrap().pitch_classes(),
+            timed.to_chord("C4").unwrap().pitch_classes()
+        );
+        assert_eq!(
+            timed.as_polypitch("C4").unwrap().pitch_classes(),
+            timed.to_polypitch("C4").unwrap().pitch_classes()
+        );
     }
 }

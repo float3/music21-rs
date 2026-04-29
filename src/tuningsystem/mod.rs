@@ -869,6 +869,40 @@ mod tests {
     }
 
     #[test]
+    fn fraction_helpers_cover_rational_and_exponential_forms() {
+        let rational = Fraction::from((3, 2));
+        assert_eq!(rational.numerator(), 3);
+        assert_eq!(rational.denominator(), 2);
+        assert_eq!(rational.base(), 0);
+        assert_eq!(rational.ratio(), 1.5);
+        assert_eq!(rational.with_octaves(2), Fraction::new(12, 2));
+
+        let exponential = Fraction::from((7, 12, 2));
+        assert_eq!(
+            exponential.with_octaves(1),
+            Fraction::new_with_base(19, 12, 2)
+        );
+        assert!((exponential.ratio() - 2.0_f64.powf(7.0 / 12.0)).abs() < 1e-12);
+    }
+
+    #[test]
+    fn free_tuning_helpers_accept_size_overrides() {
+        let system = TuningSystem::EqualTemperament { octave_size: 12 };
+        assert_eq!(equal_temperament_12(12), Fraction::new_with_base(12, 12, 2));
+        assert_eq!(
+            equal_temperament_default(3),
+            Fraction::new_with_base(3, OCTAVE_SIZE, 2)
+        );
+        assert_eq!(
+            get_fraction(system, 6, Some(24)),
+            Fraction::new_with_base(6, 24, 2)
+        );
+        assert_eq!(get_label(system, 24, Some(24)), "T0O0");
+        assert!((get_frequency(system, 12, Some(24)) - CN1 * 2.0_f64.sqrt()).abs() < 1e-10);
+        assert_eq!(get_cents(system, 12, Some(24)), 0.0);
+    }
+
+    #[test]
     fn current_tuning_system_variants_return_ratios() {
         assert_eq!(TuningSystem::WholeTone.ratio(6), 2.0);
         assert_eq!(TuningSystem::QuarterTone.ratio(24), 2.0);
@@ -923,5 +957,35 @@ mod tests {
             err,
             Error::TuningSystem("unknown tuning system \"not-a-system\"".to_string())
         );
+    }
+
+    #[test]
+    fn tuning_system_display_names_cover_variants() {
+        let systems = [
+            TuningSystem::EqualTemperament { octave_size: 12 },
+            TuningSystem::RecursiveEqualTemperament { octave_size: 12 },
+            TuningSystem::WholeTone,
+            TuningSystem::QuarterTone,
+            TuningSystem::JustIntonation,
+            TuningSystem::JustIntonation24,
+            TuningSystem::PythagoreanTuning,
+            TuningSystem::FiveLimit,
+            TuningSystem::ElevenLimit,
+            TuningSystem::FortyThreeTone,
+            TuningSystem::StepMethod,
+            TuningSystem::Javanese,
+            TuningSystem::Thai,
+            TuningSystem::Indian,
+            TuningSystem::IndianAlt,
+            TuningSystem::Indian22,
+            TuningSystem::IndianFull,
+        ];
+
+        for system in systems {
+            assert!(!system.id().is_empty());
+            assert!(!system.display_name().is_empty());
+            assert!(system.octave_size() > 0);
+            assert_eq!(system.to_string(), system.id());
+        }
     }
 }

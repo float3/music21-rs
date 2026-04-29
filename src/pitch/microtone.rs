@@ -418,7 +418,7 @@ impl IntoCentShift for MicrotoneSpecifier {
 
 #[cfg(test)]
 mod tests {
-    use super::{Microtone, MicrotoneSpecifier};
+    use super::{IntoCentShift, Microtone, MicrotoneSpecifier};
 
     #[test]
     fn public_microtone_api_matches_music21_basics() {
@@ -458,5 +458,41 @@ mod tests {
         assert_eq!(from_cents.to_string(), "(-25c)");
 
         assert!(Microtone::try_from("+c").is_err());
+    }
+
+    #[test]
+    fn microtone_parser_covers_text_edge_cases() {
+        assert_eq!(Microtone::try_from("nonsense").unwrap().cent_shift(), 0.0);
+        assert!(Microtone::try_from("").is_err());
+        assert!(Microtone::try_from("-c").is_err());
+
+        assert_eq!("not-a-cent-value".into_cent_shift(), 0.0);
+        assert_eq!("+19.5c".to_string().into_cent_shift(), 19.5);
+    }
+
+    #[test]
+    fn microtone_setters_and_harmonic_suffixes_work() {
+        let mut microtone = Microtone::new(MicrotoneSpecifier::Cents(0.0)).unwrap();
+        microtone.set_cent_shift(-0.4);
+        assert_eq!(microtone.to_string(), "(-0c)");
+
+        microtone.set_harmonic_shift(11);
+        assert_eq!(microtone.harmonic_shift(), 11);
+        assert_eq!(microtone.to_string(), "(-0c+11thH)");
+
+        microtone.set_harmonic_shift(-2);
+        assert_eq!(microtone.to_string(), "(-0c+-2ndH)");
+    }
+
+    #[test]
+    fn microtone_specifier_reports_wrapped_microtones() {
+        let wrapped = MicrotoneSpecifier::from(Microtone::new(7).unwrap());
+        assert!(wrapped.is_microtone());
+        assert_eq!(wrapped.clone().into_cent_shift(), 7.0);
+        assert_eq!(wrapped.microtone().cent_shift(), 7.0);
+
+        assert!(!MicrotoneSpecifier::from(7).is_microtone());
+        assert_eq!(25.into_microtone().unwrap().cent_shift(), 25.0);
+        assert_eq!((-12.5).into_microtone().unwrap().cent_shift(), -12.5);
     }
 }
