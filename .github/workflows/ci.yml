@@ -123,7 +123,7 @@ jobs:
           eval "cargo check --workspace --all-targets $FLAGS"
           eval "cargo clippy --workspace --all-targets $FLAGS -- -D warnings"
           eval "cargo test --workspace --all-targets $FLAGS $TEST_EXTRA"
-          eval "cargo fix --workspace --all-targets --allow-dirty --allow-staged $FLAGS"
+          eval "cargo fix --workspace --all-targets --allow-dirty --allow-staged --allow-no-vcs $FLAGS"
           git diff --exit-code
 
   lint:
