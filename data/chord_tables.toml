@@ -1,0 +1,12816 @@
+maximum_index_number_without_inversion_equivalence = [
+    1,
+    1,
+    6,
+    19,
+    43,
+    66,
+    80,
+    66,
+    43,
+    19,
+    6,
+    1,
+    1,
+]
+maximum_index_number_with_inversion_equivalence = [
+    1,
+    1,
+    6,
+    12,
+    29,
+    38,
+    50,
+    38,
+    29,
+    12,
+    6,
+    1,
+    1,
+]
+
+[[forte]]
+cardinality = 1
+index = 1
+pitch_classes = [0]
+interval_class_vector = [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+invariance_vector = [
+    1,
+    1,
+    1,
+    1,
+    11,
+    11,
+    11,
+    11,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 2
+index = 1
+pitch_classes = [
+    0,
+    1,
+]
+interval_class_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    9,
+    9,
+    8,
+    8,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 2
+index = 2
+pitch_classes = [
+    0,
+    2,
+]
+interval_class_vector = [
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+]
+invariance_vector = [
+    1,
+    1,
+    1,
+    1,
+    9,
+    9,
+    9,
+    9,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 2
+index = 3
+pitch_classes = [
+    0,
+    3,
+]
+interval_class_vector = [
+    0,
+    0,
+    1,
+    0,
+    0,
+    0,
+]
+invariance_vector = [
+    1,
+    1,
+    1,
+    1,
+    9,
+    9,
+    9,
+    9,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 2
+index = 4
+pitch_classes = [
+    0,
+    4,
+]
+interval_class_vector = [
+    0,
+    0,
+    0,
+    1,
+    0,
+    0,
+]
+invariance_vector = [
+    1,
+    1,
+    1,
+    1,
+    9,
+    9,
+    9,
+    9,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 2
+index = 5
+pitch_classes = [
+    0,
+    5,
+]
+interval_class_vector = [
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    9,
+    9,
+    8,
+    8,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 2
+index = 6
+pitch_classes = [
+    0,
+    6,
+]
+interval_class_vector = [
+    0,
+    0,
+    0,
+    0,
+    0,
+    1,
+]
+invariance_vector = [
+    2,
+    2,
+    2,
+    2,
+    10,
+    10,
+    10,
+    10,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 3
+index = 1
+pitch_classes = [
+    0,
+    1,
+    2,
+]
+interval_class_vector = [
+    2,
+    1,
+    0,
+    0,
+    0,
+    0,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    7,
+    7,
+    4,
+    4,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 3
+index = 2
+pitch_classes = [
+    0,
+    1,
+    3,
+]
+interval_class_vector = [
+    1,
+    1,
+    1,
+    0,
+    0,
+    0,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    5,
+    6,
+    5,
+    5,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 3
+index = 3
+pitch_classes = [
+    0,
+    1,
+    4,
+]
+interval_class_vector = [
+    1,
+    0,
+    1,
+    1,
+    0,
+    0,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    5,
+    6,
+    5,
+    5,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 3
+index = 4
+pitch_classes = [
+    0,
+    1,
+    5,
+]
+interval_class_vector = [
+    1,
+    0,
+    0,
+    1,
+    1,
+    0,
+]
+invariance_vector = [
+    1,
+    0,
+    1,
+    0,
+    5,
+    6,
+    5,
+    6,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 3
+index = 5
+pitch_classes = [
+    0,
+    1,
+    6,
+]
+interval_class_vector = [
+    1,
+    0,
+    0,
+    0,
+    1,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    1,
+    6,
+    7,
+    7,
+    6,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 3
+index = 6
+pitch_classes = [
+    0,
+    2,
+    4,
+]
+interval_class_vector = [
+    0,
+    2,
+    0,
+    1,
+    0,
+    0,
+]
+invariance_vector = [
+    1,
+    1,
+    1,
+    1,
+    7,
+    7,
+    7,
+    7,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 3
+index = 7
+pitch_classes = [
+    0,
+    2,
+    5,
+]
+interval_class_vector = [
+    0,
+    1,
+    1,
+    0,
+    1,
+    0,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    5,
+    6,
+    5,
+    5,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 3
+index = 8
+pitch_classes = [
+    0,
+    2,
+    6,
+]
+interval_class_vector = [
+    0,
+    1,
+    0,
+    1,
+    0,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    1,
+    6,
+    7,
+    7,
+    6,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 3
+index = 9
+pitch_classes = [
+    0,
+    2,
+    7,
+]
+interval_class_vector = [
+    0,
+    1,
+    0,
+    0,
+    2,
+    0,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    7,
+    7,
+    4,
+    4,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 3
+index = 10
+pitch_classes = [
+    0,
+    3,
+    6,
+]
+interval_class_vector = [
+    0,
+    0,
+    2,
+    0,
+    0,
+    1,
+]
+invariance_vector = [
+    1,
+    1,
+    1,
+    1,
+    8,
+    8,
+    8,
+    8,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 3
+index = 11
+pitch_classes = [
+    0,
+    3,
+    7,
+]
+interval_class_vector = [
+    0,
+    0,
+    1,
+    1,
+    1,
+    0,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    5,
+    6,
+    5,
+    5,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 3
+index = 12
+pitch_classes = [
+    0,
+    4,
+    8,
+]
+interval_class_vector = [
+    0,
+    0,
+    0,
+    3,
+    0,
+    0,
+]
+invariance_vector = [
+    3,
+    3,
+    3,
+    3,
+    9,
+    9,
+    9,
+    9,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 4
+index = 1
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+]
+interval_class_vector = [
+    3,
+    2,
+    1,
+    0,
+    0,
+    0,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    5,
+    5,
+    1,
+    1,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 4
+index = 2
+pitch_classes = [
+    0,
+    1,
+    2,
+    4,
+]
+interval_class_vector = [
+    2,
+    2,
+    1,
+    1,
+    0,
+    0,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    3,
+    4,
+    1,
+    1,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 4
+index = 3
+pitch_classes = [
+    0,
+    1,
+    3,
+    4,
+]
+interval_class_vector = [
+    2,
+    1,
+    2,
+    1,
+    0,
+    0,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    3,
+    3,
+    2,
+    2,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 4
+index = 4
+pitch_classes = [
+    0,
+    1,
+    2,
+    5,
+]
+interval_class_vector = [
+    2,
+    1,
+    1,
+    1,
+    1,
+    0,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    1,
+    3,
+    2,
+    3,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 4
+index = 5
+pitch_classes = [
+    0,
+    1,
+    2,
+    6,
+]
+interval_class_vector = [
+    2,
+    1,
+    0,
+    1,
+    1,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    2,
+    4,
+    3,
+    2,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 4
+index = 6
+pitch_classes = [
+    0,
+    1,
+    2,
+    7,
+]
+interval_class_vector = [
+    2,
+    1,
+    0,
+    0,
+    2,
+    1,
+]
+invariance_vector = [
+    1,
+    1,
+    1,
+    1,
+    4,
+    4,
+    4,
+    4,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 4
+index = 7
+pitch_classes = [
+    0,
+    1,
+    4,
+    5,
+]
+interval_class_vector = [
+    2,
+    0,
+    1,
+    2,
+    1,
+    0,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    3,
+    3,
+    3,
+    3,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 4
+index = 8
+pitch_classes = [
+    0,
+    1,
+    5,
+    6,
+]
+interval_class_vector = [
+    2,
+    0,
+    0,
+    1,
+    2,
+    1,
+]
+invariance_vector = [
+    1,
+    1,
+    1,
+    1,
+    4,
+    4,
+    4,
+    4,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 4
+index = 9
+pitch_classes = [
+    0,
+    1,
+    6,
+    7,
+]
+interval_class_vector = [
+    2,
+    0,
+    0,
+    0,
+    2,
+    2,
+]
+invariance_vector = [
+    2,
+    2,
+    2,
+    2,
+    6,
+    6,
+    6,
+    6,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 4
+index = 10
+pitch_classes = [
+    0,
+    2,
+    3,
+    5,
+]
+interval_class_vector = [
+    1,
+    2,
+    2,
+    0,
+    1,
+    0,
+]
+invariance_vector = [
+    1,
+    1,
+    1,
+    1,
+    3,
+    3,
+    3,
+    3,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 4
+index = 11
+pitch_classes = [
+    0,
+    1,
+    3,
+    5,
+]
+interval_class_vector = [
+    1,
+    2,
+    1,
+    1,
+    1,
+    0,
+]
+invariance_vector = [
+    1,
+    0,
+    1,
+    0,
+    1,
+    3,
+    1,
+    3,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 4
+index = 12
+pitch_classes = [
+    0,
+    2,
+    3,
+    6,
+]
+interval_class_vector = [
+    1,
+    1,
+    2,
+    1,
+    0,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    2,
+    4,
+    3,
+    2,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 4
+index = 13
+pitch_classes = [
+    0,
+    1,
+    3,
+    6,
+]
+interval_class_vector = [
+    1,
+    1,
+    2,
+    0,
+    1,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    1,
+    2,
+    4,
+    4,
+    2,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 4
+index = 14
+pitch_classes = [
+    0,
+    2,
+    3,
+    7,
+]
+interval_class_vector = [
+    1,
+    1,
+    1,
+    1,
+    2,
+    0,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    1,
+    3,
+    2,
+    3,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 4
+index = 15
+pitch_classes = [
+    0,
+    1,
+    4,
+    6,
+]
+interval_class_vector = [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    3,
+    3,
+    1,
+]
+z_relation = 29
+
+[[forte]]
+cardinality = 4
+index = 16
+pitch_classes = [
+    0,
+    1,
+    5,
+    7,
+]
+interval_class_vector = [
+    1,
+    1,
+    0,
+    1,
+    2,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    2,
+    4,
+    3,
+    2,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 4
+index = 17
+pitch_classes = [
+    0,
+    3,
+    4,
+    7,
+]
+interval_class_vector = [
+    1,
+    0,
+    2,
+    2,
+    1,
+    0,
+]
+invariance_vector = [
+    1,
+    1,
+    1,
+    1,
+    3,
+    3,
+    3,
+    3,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 4
+index = 18
+pitch_classes = [
+    0,
+    1,
+    4,
+    7,
+]
+interval_class_vector = [
+    1,
+    0,
+    2,
+    1,
+    1,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    1,
+    2,
+    4,
+    4,
+    2,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 4
+index = 19
+pitch_classes = [
+    0,
+    1,
+    4,
+    8,
+]
+interval_class_vector = [
+    1,
+    0,
+    1,
+    3,
+    1,
+    0,
+]
+invariance_vector = [
+    1,
+    0,
+    1,
+    0,
+    3,
+    5,
+    3,
+    5,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 4
+index = 20
+pitch_classes = [
+    0,
+    1,
+    5,
+    8,
+]
+interval_class_vector = [
+    1,
+    0,
+    1,
+    2,
+    2,
+    0,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    3,
+    3,
+    3,
+    3,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 4
+index = 21
+pitch_classes = [
+    0,
+    2,
+    4,
+    6,
+]
+interval_class_vector = [
+    0,
+    3,
+    0,
+    2,
+    0,
+    1,
+]
+invariance_vector = [
+    1,
+    1,
+    1,
+    1,
+    6,
+    6,
+    6,
+    6,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 4
+index = 22
+pitch_classes = [
+    0,
+    2,
+    4,
+    7,
+]
+interval_class_vector = [
+    0,
+    2,
+    1,
+    1,
+    2,
+    0,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    3,
+    4,
+    1,
+    1,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 4
+index = 23
+pitch_classes = [
+    0,
+    2,
+    5,
+    7,
+]
+interval_class_vector = [
+    0,
+    2,
+    1,
+    0,
+    3,
+    0,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    5,
+    5,
+    1,
+    1,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 4
+index = 24
+pitch_classes = [
+    0,
+    2,
+    4,
+    8,
+]
+interval_class_vector = [
+    0,
+    2,
+    0,
+    3,
+    0,
+    1,
+]
+invariance_vector = [
+    1,
+    1,
+    1,
+    1,
+    6,
+    6,
+    6,
+    6,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 4
+index = 25
+pitch_classes = [
+    0,
+    2,
+    6,
+    8,
+]
+interval_class_vector = [
+    0,
+    2,
+    0,
+    2,
+    0,
+    2,
+]
+invariance_vector = [
+    2,
+    2,
+    2,
+    2,
+    6,
+    6,
+    6,
+    6,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 4
+index = 26
+pitch_classes = [
+    0,
+    3,
+    5,
+    8,
+]
+interval_class_vector = [
+    0,
+    1,
+    2,
+    1,
+    2,
+    0,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    3,
+    3,
+    2,
+    2,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 4
+index = 27
+pitch_classes = [
+    0,
+    2,
+    5,
+    8,
+]
+interval_class_vector = [
+    0,
+    1,
+    2,
+    1,
+    1,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    2,
+    4,
+    3,
+    2,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 4
+index = 28
+pitch_classes = [
+    0,
+    3,
+    6,
+    9,
+]
+interval_class_vector = [
+    0,
+    0,
+    4,
+    0,
+    0,
+    2,
+]
+invariance_vector = [
+    4,
+    4,
+    4,
+    4,
+    8,
+    8,
+    8,
+    8,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 4
+index = 29
+pitch_classes = [
+    0,
+    1,
+    3,
+    7,
+]
+interval_class_vector = [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    3,
+    3,
+    1,
+]
+z_relation = 15
+
+[[forte]]
+cardinality = 5
+index = 1
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+]
+interval_class_vector = [
+    4,
+    3,
+    2,
+    1,
+    0,
+    0,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    3,
+    3,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 5
+index = 2
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    5,
+]
+interval_class_vector = [
+    3,
+    3,
+    2,
+    1,
+    1,
+    0,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    1,
+    2,
+    1,
+    1,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 5
+index = 3
+pitch_classes = [
+    0,
+    1,
+    2,
+    4,
+    5,
+]
+interval_class_vector = [
+    3,
+    2,
+    2,
+    2,
+    1,
+    0,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    1,
+    1,
+    1,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 5
+index = 4
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    6,
+]
+interval_class_vector = [
+    3,
+    2,
+    2,
+    1,
+    1,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    2,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 5
+index = 5
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    7,
+]
+interval_class_vector = [
+    3,
+    2,
+    1,
+    1,
+    2,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    1,
+    1,
+    1,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 5
+index = 6
+pitch_classes = [
+    0,
+    1,
+    2,
+    5,
+    6,
+]
+interval_class_vector = [
+    3,
+    1,
+    1,
+    2,
+    2,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    1,
+    1,
+    1,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 5
+index = 7
+pitch_classes = [
+    0,
+    1,
+    2,
+    6,
+    7,
+]
+interval_class_vector = [
+    3,
+    1,
+    0,
+    1,
+    3,
+    2,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    1,
+    2,
+    3,
+    3,
+    2,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 5
+index = 8
+pitch_classes = [
+    0,
+    2,
+    3,
+    4,
+    6,
+]
+interval_class_vector = [
+    2,
+    3,
+    2,
+    2,
+    0,
+    1,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    2,
+    2,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 5
+index = 9
+pitch_classes = [
+    0,
+    1,
+    2,
+    4,
+    6,
+]
+interval_class_vector = [
+    2,
+    3,
+    1,
+    2,
+    1,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    2,
+    0,
+    1,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 5
+index = 10
+pitch_classes = [
+    0,
+    1,
+    3,
+    4,
+    6,
+]
+interval_class_vector = [
+    2,
+    2,
+    3,
+    1,
+    1,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    1,
+    1,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 5
+index = 11
+pitch_classes = [
+    0,
+    2,
+    3,
+    4,
+    7,
+]
+interval_class_vector = [
+    2,
+    2,
+    2,
+    2,
+    2,
+    0,
+]
+invariance_vector = [
+    1,
+    0,
+    1,
+    0,
+    1,
+    1,
+    1,
+    1,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 5
+index = 12
+pitch_classes = [
+    0,
+    1,
+    3,
+    5,
+    6,
+]
+interval_class_vector = [
+    2,
+    2,
+    2,
+    1,
+    2,
+    1,
+]
+invariance_vector = [
+    1,
+    1,
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 36
+
+[[forte]]
+cardinality = 5
+index = 13
+pitch_classes = [
+    0,
+    1,
+    2,
+    4,
+    8,
+]
+interval_class_vector = [
+    2,
+    2,
+    1,
+    3,
+    1,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    2,
+    0,
+    1,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 5
+index = 14
+pitch_classes = [
+    0,
+    1,
+    2,
+    5,
+    7,
+]
+interval_class_vector = [
+    2,
+    2,
+    1,
+    1,
+    3,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    1,
+    1,
+    1,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 5
+index = 15
+pitch_classes = [
+    0,
+    1,
+    2,
+    6,
+    8,
+]
+interval_class_vector = [
+    2,
+    2,
+    0,
+    2,
+    2,
+    2,
+]
+invariance_vector = [
+    1,
+    1,
+    1,
+    1,
+    2,
+    2,
+    2,
+    2,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 5
+index = 16
+pitch_classes = [
+    0,
+    1,
+    3,
+    4,
+    7,
+]
+interval_class_vector = [
+    2,
+    1,
+    3,
+    2,
+    1,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    1,
+    1,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 5
+index = 17
+pitch_classes = [
+    0,
+    1,
+    3,
+    4,
+    8,
+]
+interval_class_vector = [
+    2,
+    1,
+    2,
+    3,
+    2,
+    0,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    1,
+    1,
+    2,
+    2,
+]
+z_relation = 37
+
+[[forte]]
+cardinality = 5
+index = 18
+pitch_classes = [
+    0,
+    1,
+    4,
+    5,
+    7,
+]
+interval_class_vector = [
+    2,
+    1,
+    2,
+    2,
+    2,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    1,
+    1,
+    0,
+]
+z_relation = 38
+
+[[forte]]
+cardinality = 5
+index = 19
+pitch_classes = [
+    0,
+    1,
+    3,
+    6,
+    7,
+]
+interval_class_vector = [
+    2,
+    1,
+    2,
+    1,
+    2,
+    2,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    1,
+    0,
+    2,
+    2,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 5
+index = 20
+pitch_classes = [
+    0,
+    1,
+    3,
+    7,
+    8,
+]
+interval_class_vector = [
+    2,
+    1,
+    1,
+    2,
+    3,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    1,
+    1,
+    1,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 5
+index = 21
+pitch_classes = [
+    0,
+    1,
+    4,
+    5,
+    8,
+]
+interval_class_vector = [
+    2,
+    0,
+    2,
+    4,
+    2,
+    0,
+]
+invariance_vector = [
+    1,
+    0,
+    1,
+    0,
+    3,
+    3,
+    3,
+    3,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 5
+index = 22
+pitch_classes = [
+    0,
+    1,
+    4,
+    7,
+    8,
+]
+interval_class_vector = [
+    2,
+    0,
+    2,
+    3,
+    2,
+    1,
+]
+invariance_vector = [
+    1,
+    1,
+    1,
+    1,
+    2,
+    2,
+    2,
+    2,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 5
+index = 23
+pitch_classes = [
+    0,
+    2,
+    3,
+    5,
+    7,
+]
+interval_class_vector = [
+    1,
+    3,
+    2,
+    1,
+    3,
+    0,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    1,
+    2,
+    1,
+    1,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 5
+index = 24
+pitch_classes = [
+    0,
+    1,
+    3,
+    5,
+    7,
+]
+interval_class_vector = [
+    1,
+    3,
+    1,
+    2,
+    2,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    2,
+    0,
+    1,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 5
+index = 25
+pitch_classes = [
+    0,
+    2,
+    3,
+    5,
+    8,
+]
+interval_class_vector = [
+    1,
+    2,
+    3,
+    1,
+    2,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    1,
+    1,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 5
+index = 26
+pitch_classes = [
+    0,
+    2,
+    4,
+    5,
+    8,
+]
+interval_class_vector = [
+    1,
+    2,
+    2,
+    3,
+    1,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    1,
+    0,
+    0,
+    2,
+    0,
+    2,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 5
+index = 27
+pitch_classes = [
+    0,
+    1,
+    3,
+    5,
+    8,
+]
+interval_class_vector = [
+    1,
+    2,
+    2,
+    2,
+    3,
+    0,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    1,
+    1,
+    1,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 5
+index = 28
+pitch_classes = [
+    0,
+    2,
+    3,
+    6,
+    8,
+]
+interval_class_vector = [
+    1,
+    2,
+    2,
+    2,
+    1,
+    2,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    1,
+    0,
+    2,
+    2,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 5
+index = 29
+pitch_classes = [
+    0,
+    1,
+    3,
+    6,
+    8,
+]
+interval_class_vector = [
+    1,
+    2,
+    2,
+    1,
+    3,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    2,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 5
+index = 30
+pitch_classes = [
+    0,
+    1,
+    4,
+    6,
+    8,
+]
+interval_class_vector = [
+    1,
+    2,
+    1,
+    3,
+    2,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    2,
+    0,
+    1,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 5
+index = 31
+pitch_classes = [
+    0,
+    1,
+    3,
+    6,
+    9,
+]
+interval_class_vector = [
+    1,
+    1,
+    4,
+    1,
+    1,
+    2,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    1,
+    0,
+    3,
+    3,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 5
+index = 32
+pitch_classes = [
+    0,
+    1,
+    4,
+    6,
+    9,
+]
+interval_class_vector = [
+    1,
+    1,
+    3,
+    2,
+    2,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    1,
+    1,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 5
+index = 33
+pitch_classes = [
+    0,
+    2,
+    4,
+    6,
+    8,
+]
+interval_class_vector = [
+    0,
+    4,
+    0,
+    4,
+    0,
+    2,
+]
+invariance_vector = [
+    1,
+    1,
+    1,
+    1,
+    6,
+    6,
+    6,
+    6,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 5
+index = 34
+pitch_classes = [
+    0,
+    2,
+    4,
+    6,
+    9,
+]
+interval_class_vector = [
+    0,
+    3,
+    2,
+    2,
+    2,
+    1,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    2,
+    2,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 5
+index = 35
+pitch_classes = [
+    0,
+    2,
+    4,
+    7,
+    9,
+]
+interval_class_vector = [
+    0,
+    3,
+    2,
+    1,
+    4,
+    0,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    3,
+    3,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 5
+index = 36
+pitch_classes = [
+    0,
+    1,
+    2,
+    4,
+    7,
+]
+interval_class_vector = [
+    2,
+    2,
+    2,
+    1,
+    2,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    1,
+    0,
+    1,
+    1,
+    0,
+]
+z_relation = 12
+
+[[forte]]
+cardinality = 5
+index = 37
+pitch_classes = [
+    0,
+    3,
+    4,
+    5,
+    8,
+]
+interval_class_vector = [
+    2,
+    1,
+    2,
+    3,
+    2,
+    0,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    1,
+    1,
+    2,
+    2,
+]
+z_relation = 17
+
+[[forte]]
+cardinality = 5
+index = 38
+pitch_classes = [
+    0,
+    1,
+    2,
+    5,
+    8,
+]
+interval_class_vector = [
+    2,
+    1,
+    2,
+    2,
+    2,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    1,
+    1,
+    0,
+]
+z_relation = 18
+
+[[forte]]
+cardinality = 6
+index = 1
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+]
+interval_class_vector = [
+    5,
+    4,
+    3,
+    2,
+    1,
+    0,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    1,
+    1,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 6
+index = 2
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    6,
+]
+interval_class_vector = [
+    4,
+    4,
+    3,
+    2,
+    1,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 6
+index = 3
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    5,
+    6,
+]
+interval_class_vector = [
+    4,
+    3,
+    3,
+    2,
+    2,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 36
+
+[[forte]]
+cardinality = 6
+index = 4
+pitch_classes = [
+    0,
+    1,
+    2,
+    4,
+    5,
+    6,
+]
+interval_class_vector = [
+    4,
+    3,
+    2,
+    3,
+    2,
+    1,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 37
+
+[[forte]]
+cardinality = 6
+index = 5
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    6,
+    7,
+]
+interval_class_vector = [
+    4,
+    2,
+    2,
+    2,
+    3,
+    2,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 6
+index = 6
+pitch_classes = [
+    0,
+    1,
+    2,
+    5,
+    6,
+    7,
+]
+interval_class_vector = [
+    4,
+    2,
+    1,
+    2,
+    4,
+    2,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    1,
+    1,
+]
+z_relation = 38
+
+[[forte]]
+cardinality = 6
+index = 7
+pitch_classes = [
+    0,
+    1,
+    2,
+    6,
+    7,
+    8,
+]
+interval_class_vector = [
+    4,
+    2,
+    0,
+    2,
+    4,
+    3,
+]
+invariance_vector = [
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 6
+index = 8
+pitch_classes = [
+    0,
+    2,
+    3,
+    4,
+    5,
+    7,
+]
+interval_class_vector = [
+    3,
+    4,
+    3,
+    2,
+    3,
+    0,
+]
+invariance_vector = [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 6
+index = 9
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    5,
+    7,
+]
+interval_class_vector = [
+    3,
+    4,
+    2,
+    2,
+    3,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    1,
+    0,
+    0,
+    1,
+    0,
+    1,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 6
+index = 10
+pitch_classes = [
+    0,
+    1,
+    3,
+    4,
+    5,
+    7,
+]
+interval_class_vector = [
+    3,
+    3,
+    3,
+    3,
+    2,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 39
+
+[[forte]]
+cardinality = 6
+index = 11
+pitch_classes = [
+    0,
+    1,
+    2,
+    4,
+    5,
+    7,
+]
+interval_class_vector = [
+    3,
+    3,
+    3,
+    2,
+    3,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+]
+z_relation = 40
+
+[[forte]]
+cardinality = 6
+index = 12
+pitch_classes = [
+    0,
+    1,
+    2,
+    4,
+    6,
+    7,
+]
+interval_class_vector = [
+    3,
+    3,
+    2,
+    2,
+    3,
+    2,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 41
+
+[[forte]]
+cardinality = 6
+index = 13
+pitch_classes = [
+    0,
+    1,
+    3,
+    4,
+    6,
+    7,
+]
+interval_class_vector = [
+    3,
+    2,
+    4,
+    2,
+    2,
+    2,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 42
+
+[[forte]]
+cardinality = 6
+index = 14
+pitch_classes = [
+    0,
+    1,
+    3,
+    4,
+    5,
+    8,
+]
+interval_class_vector = [
+    3,
+    2,
+    3,
+    4,
+    3,
+    0,
+]
+invariance_vector = [
+    1,
+    0,
+    1,
+    0,
+    1,
+    0,
+    1,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 6
+index = 15
+pitch_classes = [
+    0,
+    1,
+    2,
+    4,
+    5,
+    8,
+]
+interval_class_vector = [
+    3,
+    2,
+    3,
+    4,
+    2,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 6
+index = 16
+pitch_classes = [
+    0,
+    1,
+    4,
+    5,
+    6,
+    8,
+]
+interval_class_vector = [
+    3,
+    2,
+    2,
+    4,
+    3,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    1,
+    0,
+    0,
+    1,
+    0,
+    1,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 6
+index = 17
+pitch_classes = [
+    0,
+    1,
+    2,
+    4,
+    7,
+    8,
+]
+interval_class_vector = [
+    3,
+    2,
+    2,
+    3,
+    3,
+    2,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 43
+
+[[forte]]
+cardinality = 6
+index = 18
+pitch_classes = [
+    0,
+    1,
+    2,
+    5,
+    7,
+    8,
+]
+interval_class_vector = [
+    3,
+    2,
+    2,
+    2,
+    4,
+    2,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 6
+index = 19
+pitch_classes = [
+    0,
+    1,
+    3,
+    4,
+    7,
+    8,
+]
+interval_class_vector = [
+    3,
+    1,
+    3,
+    4,
+    3,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+]
+z_relation = 44
+
+[[forte]]
+cardinality = 6
+index = 20
+pitch_classes = [
+    0,
+    1,
+    4,
+    5,
+    8,
+    9,
+]
+interval_class_vector = [
+    3,
+    0,
+    3,
+    6,
+    3,
+    0,
+]
+invariance_vector = [
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 6
+index = 21
+pitch_classes = [
+    0,
+    2,
+    3,
+    4,
+    6,
+    8,
+]
+interval_class_vector = [
+    2,
+    4,
+    2,
+    4,
+    1,
+    2,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 6
+index = 22
+pitch_classes = [
+    0,
+    1,
+    2,
+    4,
+    6,
+    8,
+]
+interval_class_vector = [
+    2,
+    4,
+    1,
+    4,
+    2,
+    2,
+]
+invariance_vector = [
+    1,
+    0,
+    1,
+    0,
+    0,
+    1,
+    0,
+    1,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 6
+index = 23
+pitch_classes = [
+    0,
+    2,
+    3,
+    5,
+    6,
+    8,
+]
+interval_class_vector = [
+    2,
+    3,
+    4,
+    2,
+    2,
+    2,
+]
+invariance_vector = [
+    1,
+    1,
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 45
+
+[[forte]]
+cardinality = 6
+index = 24
+pitch_classes = [
+    0,
+    1,
+    3,
+    4,
+    6,
+    8,
+]
+interval_class_vector = [
+    2,
+    3,
+    3,
+    3,
+    3,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 46
+
+[[forte]]
+cardinality = 6
+index = 25
+pitch_classes = [
+    0,
+    1,
+    3,
+    5,
+    6,
+    8,
+]
+interval_class_vector = [
+    2,
+    3,
+    3,
+    2,
+    4,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 47
+
+[[forte]]
+cardinality = 6
+index = 26
+pitch_classes = [
+    0,
+    1,
+    3,
+    5,
+    7,
+    8,
+]
+interval_class_vector = [
+    2,
+    3,
+    2,
+    3,
+    4,
+    1,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 48
+
+[[forte]]
+cardinality = 6
+index = 27
+pitch_classes = [
+    0,
+    1,
+    3,
+    4,
+    6,
+    9,
+]
+interval_class_vector = [
+    2,
+    2,
+    5,
+    2,
+    2,
+    2,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    1,
+    0,
+    1,
+    1,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 6
+index = 28
+pitch_classes = [
+    0,
+    1,
+    3,
+    5,
+    6,
+    9,
+]
+interval_class_vector = [
+    2,
+    2,
+    4,
+    3,
+    2,
+    2,
+]
+invariance_vector = [
+    1,
+    1,
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 49
+
+[[forte]]
+cardinality = 6
+index = 29
+pitch_classes = [
+    0,
+    1,
+    3,
+    6,
+    8,
+    9,
+]
+interval_class_vector = [
+    2,
+    2,
+    4,
+    2,
+    3,
+    2,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 50
+
+[[forte]]
+cardinality = 6
+index = 30
+pitch_classes = [
+    0,
+    1,
+    3,
+    6,
+    7,
+    9,
+]
+interval_class_vector = [
+    2,
+    2,
+    4,
+    2,
+    2,
+    3,
+]
+invariance_vector = [
+    2,
+    0,
+    0,
+    2,
+    0,
+    2,
+    2,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 6
+index = 31
+pitch_classes = [
+    0,
+    1,
+    3,
+    5,
+    8,
+    9,
+]
+interval_class_vector = [
+    2,
+    2,
+    3,
+    4,
+    3,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 6
+index = 32
+pitch_classes = [
+    0,
+    2,
+    4,
+    5,
+    7,
+    9,
+]
+interval_class_vector = [
+    1,
+    4,
+    3,
+    2,
+    5,
+    0,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    1,
+    1,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 6
+index = 33
+pitch_classes = [
+    0,
+    2,
+    3,
+    5,
+    7,
+    9,
+]
+interval_class_vector = [
+    1,
+    4,
+    3,
+    2,
+    4,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 6
+index = 34
+pitch_classes = [
+    0,
+    1,
+    3,
+    5,
+    7,
+    9,
+]
+interval_class_vector = [
+    1,
+    4,
+    2,
+    4,
+    2,
+    2,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 6
+index = 35
+pitch_classes = [
+    0,
+    2,
+    4,
+    6,
+    8,
+    10,
+]
+interval_class_vector = [
+    0,
+    6,
+    0,
+    6,
+    0,
+    3,
+]
+invariance_vector = [
+    6,
+    6,
+    6,
+    6,
+    6,
+    6,
+    6,
+    6,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 6
+index = 36
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    7,
+]
+interval_class_vector = [
+    4,
+    3,
+    3,
+    2,
+    2,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 3
+
+[[forte]]
+cardinality = 6
+index = 37
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    8,
+]
+interval_class_vector = [
+    4,
+    3,
+    2,
+    3,
+    2,
+    1,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 4
+
+[[forte]]
+cardinality = 6
+index = 38
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    7,
+    8,
+]
+interval_class_vector = [
+    4,
+    2,
+    1,
+    2,
+    4,
+    2,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    1,
+    1,
+]
+z_relation = 6
+
+[[forte]]
+cardinality = 6
+index = 39
+pitch_classes = [
+    0,
+    2,
+    3,
+    4,
+    5,
+    8,
+]
+interval_class_vector = [
+    3,
+    3,
+    3,
+    3,
+    2,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 10
+
+[[forte]]
+cardinality = 6
+index = 40
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    5,
+    8,
+]
+interval_class_vector = [
+    3,
+    3,
+    3,
+    2,
+    3,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+]
+z_relation = 11
+
+[[forte]]
+cardinality = 6
+index = 41
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    6,
+    8,
+]
+interval_class_vector = [
+    3,
+    3,
+    2,
+    2,
+    3,
+    2,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 12
+
+[[forte]]
+cardinality = 6
+index = 42
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    6,
+    9,
+]
+interval_class_vector = [
+    3,
+    2,
+    4,
+    2,
+    2,
+    2,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 13
+
+[[forte]]
+cardinality = 6
+index = 43
+pitch_classes = [
+    0,
+    1,
+    2,
+    5,
+    6,
+    8,
+]
+interval_class_vector = [
+    3,
+    2,
+    2,
+    3,
+    3,
+    2,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 17
+
+[[forte]]
+cardinality = 6
+index = 44
+pitch_classes = [
+    0,
+    1,
+    2,
+    5,
+    6,
+    9,
+]
+interval_class_vector = [
+    3,
+    1,
+    3,
+    4,
+    3,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+]
+z_relation = 19
+
+[[forte]]
+cardinality = 6
+index = 45
+pitch_classes = [
+    0,
+    2,
+    3,
+    4,
+    6,
+    9,
+]
+interval_class_vector = [
+    2,
+    3,
+    4,
+    2,
+    2,
+    2,
+]
+invariance_vector = [
+    1,
+    1,
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 23
+
+[[forte]]
+cardinality = 6
+index = 46
+pitch_classes = [
+    0,
+    1,
+    2,
+    4,
+    6,
+    9,
+]
+interval_class_vector = [
+    2,
+    3,
+    3,
+    3,
+    3,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 24
+
+[[forte]]
+cardinality = 6
+index = 47
+pitch_classes = [
+    0,
+    1,
+    2,
+    4,
+    7,
+    9,
+]
+interval_class_vector = [
+    2,
+    3,
+    3,
+    2,
+    4,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 25
+
+[[forte]]
+cardinality = 6
+index = 48
+pitch_classes = [
+    0,
+    1,
+    2,
+    5,
+    7,
+    9,
+]
+interval_class_vector = [
+    2,
+    3,
+    2,
+    3,
+    4,
+    1,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 26
+
+[[forte]]
+cardinality = 6
+index = 49
+pitch_classes = [
+    0,
+    1,
+    3,
+    4,
+    7,
+    9,
+]
+interval_class_vector = [
+    2,
+    2,
+    4,
+    3,
+    2,
+    2,
+]
+invariance_vector = [
+    1,
+    1,
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 28
+
+[[forte]]
+cardinality = 6
+index = 50
+pitch_classes = [
+    0,
+    1,
+    4,
+    6,
+    7,
+    9,
+]
+interval_class_vector = [
+    2,
+    2,
+    4,
+    2,
+    3,
+    2,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 29
+
+[[forte]]
+cardinality = 7
+index = 1
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+]
+interval_class_vector = [
+    6,
+    5,
+    4,
+    3,
+    2,
+    1,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 7
+index = 2
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    7,
+]
+interval_class_vector = [
+    5,
+    5,
+    4,
+    3,
+    3,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 7
+index = 3
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    8,
+]
+interval_class_vector = [
+    5,
+    4,
+    4,
+    4,
+    3,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 7
+index = 4
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    6,
+    7,
+]
+interval_class_vector = [
+    5,
+    4,
+    4,
+    3,
+    3,
+    2,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 7
+index = 5
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    5,
+    6,
+    7,
+]
+interval_class_vector = [
+    5,
+    4,
+    3,
+    3,
+    4,
+    2,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 7
+index = 6
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    7,
+    8,
+]
+interval_class_vector = [
+    5,
+    3,
+    3,
+    4,
+    4,
+    2,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 7
+index = 7
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    6,
+    7,
+    8,
+]
+interval_class_vector = [
+    5,
+    3,
+    2,
+    3,
+    5,
+    3,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 7
+index = 8
+pitch_classes = [
+    0,
+    2,
+    3,
+    4,
+    5,
+    6,
+    8,
+]
+interval_class_vector = [
+    4,
+    5,
+    4,
+    4,
+    2,
+    2,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 7
+index = 9
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    6,
+    8,
+]
+interval_class_vector = [
+    4,
+    5,
+    3,
+    4,
+    3,
+    2,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 7
+index = 10
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    6,
+    9,
+]
+interval_class_vector = [
+    4,
+    4,
+    5,
+    3,
+    3,
+    2,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 7
+index = 11
+pitch_classes = [
+    0,
+    1,
+    3,
+    4,
+    5,
+    6,
+    8,
+]
+interval_class_vector = [
+    4,
+    4,
+    4,
+    4,
+    4,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 7
+index = 12
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    7,
+    9,
+]
+interval_class_vector = [
+    4,
+    4,
+    4,
+    3,
+    4,
+    2,
+]
+invariance_vector = [
+    1,
+    1,
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 36
+
+[[forte]]
+cardinality = 7
+index = 13
+pitch_classes = [
+    0,
+    1,
+    2,
+    4,
+    5,
+    6,
+    8,
+]
+interval_class_vector = [
+    4,
+    4,
+    3,
+    5,
+    3,
+    2,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 7
+index = 14
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    5,
+    7,
+    8,
+]
+interval_class_vector = [
+    4,
+    4,
+    3,
+    3,
+    5,
+    2,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 7
+index = 15
+pitch_classes = [
+    0,
+    1,
+    2,
+    4,
+    6,
+    7,
+    8,
+]
+interval_class_vector = [
+    4,
+    4,
+    2,
+    4,
+    4,
+    3,
+]
+invariance_vector = [
+    1,
+    1,
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 7
+index = 16
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    5,
+    6,
+    9,
+]
+interval_class_vector = [
+    4,
+    3,
+    5,
+    4,
+    3,
+    2,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 7
+index = 17
+pitch_classes = [
+    0,
+    1,
+    2,
+    4,
+    5,
+    6,
+    9,
+]
+interval_class_vector = [
+    4,
+    3,
+    4,
+    5,
+    4,
+    1,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 37
+
+[[forte]]
+cardinality = 7
+index = 18
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    5,
+    8,
+    9,
+]
+interval_class_vector = [
+    4,
+    3,
+    4,
+    4,
+    4,
+    2,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 38
+
+[[forte]]
+cardinality = 7
+index = 19
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    6,
+    7,
+    9,
+]
+interval_class_vector = [
+    4,
+    3,
+    4,
+    3,
+    4,
+    3,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 7
+index = 20
+pitch_classes = [
+    0,
+    1,
+    2,
+    4,
+    7,
+    8,
+    9,
+]
+interval_class_vector = [
+    4,
+    3,
+    3,
+    4,
+    5,
+    2,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 7
+index = 21
+pitch_classes = [
+    0,
+    1,
+    2,
+    4,
+    5,
+    8,
+    9,
+]
+interval_class_vector = [
+    4,
+    2,
+    4,
+    6,
+    4,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 7
+index = 22
+pitch_classes = [
+    0,
+    1,
+    2,
+    5,
+    6,
+    8,
+    9,
+]
+interval_class_vector = [
+    4,
+    2,
+    4,
+    5,
+    4,
+    2,
+]
+invariance_vector = [
+    1,
+    1,
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 7
+index = 23
+pitch_classes = [
+    0,
+    2,
+    3,
+    4,
+    5,
+    7,
+    9,
+]
+interval_class_vector = [
+    3,
+    5,
+    4,
+    3,
+    5,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 7
+index = 24
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    5,
+    7,
+    9,
+]
+interval_class_vector = [
+    3,
+    5,
+    3,
+    4,
+    4,
+    2,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 7
+index = 25
+pitch_classes = [
+    0,
+    2,
+    3,
+    4,
+    6,
+    7,
+    9,
+]
+interval_class_vector = [
+    3,
+    4,
+    5,
+    3,
+    4,
+    2,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 7
+index = 26
+pitch_classes = [
+    0,
+    1,
+    3,
+    4,
+    5,
+    7,
+    9,
+]
+interval_class_vector = [
+    3,
+    4,
+    4,
+    5,
+    3,
+    2,
+]
+invariance_vector = [
+    1,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 7
+index = 27
+pitch_classes = [
+    0,
+    1,
+    2,
+    4,
+    5,
+    7,
+    9,
+]
+interval_class_vector = [
+    3,
+    4,
+    4,
+    4,
+    5,
+    1,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 7
+index = 28
+pitch_classes = [
+    0,
+    1,
+    3,
+    5,
+    6,
+    7,
+    9,
+]
+interval_class_vector = [
+    3,
+    4,
+    4,
+    4,
+    3,
+    3,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 7
+index = 29
+pitch_classes = [
+    0,
+    1,
+    2,
+    4,
+    6,
+    7,
+    9,
+]
+interval_class_vector = [
+    3,
+    4,
+    4,
+    3,
+    5,
+    2,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 7
+index = 30
+pitch_classes = [
+    0,
+    1,
+    2,
+    4,
+    6,
+    8,
+    9,
+]
+interval_class_vector = [
+    3,
+    4,
+    3,
+    5,
+    4,
+    2,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 7
+index = 31
+pitch_classes = [
+    0,
+    1,
+    3,
+    4,
+    6,
+    7,
+    9,
+]
+interval_class_vector = [
+    3,
+    3,
+    6,
+    3,
+    3,
+    3,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 7
+index = 32
+pitch_classes = [
+    0,
+    1,
+    3,
+    4,
+    6,
+    8,
+    9,
+]
+interval_class_vector = [
+    3,
+    3,
+    5,
+    4,
+    4,
+    2,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 7
+index = 33
+pitch_classes = [
+    0,
+    1,
+    2,
+    4,
+    6,
+    8,
+    10,
+]
+interval_class_vector = [
+    2,
+    6,
+    2,
+    6,
+    2,
+    3,
+]
+invariance_vector = [
+    1,
+    1,
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 7
+index = 34
+pitch_classes = [
+    0,
+    1,
+    3,
+    4,
+    6,
+    8,
+    10,
+]
+interval_class_vector = [
+    2,
+    5,
+    4,
+    4,
+    4,
+    2,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 7
+index = 35
+pitch_classes = [
+    0,
+    1,
+    3,
+    5,
+    6,
+    8,
+    10,
+]
+interval_class_vector = [
+    2,
+    5,
+    4,
+    3,
+    6,
+    1,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 7
+index = 36
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    5,
+    6,
+    8,
+]
+interval_class_vector = [
+    4,
+    4,
+    4,
+    3,
+    4,
+    2,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 12
+
+[[forte]]
+cardinality = 7
+index = 37
+pitch_classes = [
+    0,
+    1,
+    3,
+    4,
+    5,
+    7,
+    8,
+]
+interval_class_vector = [
+    4,
+    3,
+    4,
+    5,
+    4,
+    1,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 17
+
+[[forte]]
+cardinality = 7
+index = 38
+pitch_classes = [
+    0,
+    1,
+    2,
+    4,
+    5,
+    7,
+    8,
+]
+interval_class_vector = [
+    4,
+    3,
+    4,
+    4,
+    4,
+    2,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 18
+
+[[forte]]
+cardinality = 8
+index = 1
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+]
+interval_class_vector = [
+    7,
+    6,
+    5,
+    4,
+    4,
+    2,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 8
+index = 2
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    8,
+]
+interval_class_vector = [
+    6,
+    6,
+    5,
+    5,
+    4,
+    2,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 8
+index = 3
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    9,
+]
+interval_class_vector = [
+    6,
+    5,
+    6,
+    5,
+    4,
+    2,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 8
+index = 4
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    7,
+    8,
+]
+interval_class_vector = [
+    6,
+    5,
+    5,
+    5,
+    5,
+    2,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 8
+index = 5
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    6,
+    7,
+    8,
+]
+interval_class_vector = [
+    6,
+    5,
+    4,
+    5,
+    5,
+    3,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 8
+index = 6
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    5,
+    6,
+    7,
+    8,
+]
+interval_class_vector = [
+    6,
+    5,
+    4,
+    4,
+    6,
+    3,
+]
+invariance_vector = [
+    1,
+    1,
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 8
+index = 7
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    8,
+    9,
+]
+interval_class_vector = [
+    6,
+    4,
+    5,
+    6,
+    5,
+    2,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 8
+index = 8
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    7,
+    8,
+    9,
+]
+interval_class_vector = [
+    6,
+    4,
+    4,
+    5,
+    6,
+    3,
+]
+invariance_vector = [
+    1,
+    1,
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 8
+index = 9
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    6,
+    7,
+    8,
+    9,
+]
+interval_class_vector = [
+    6,
+    4,
+    4,
+    4,
+    6,
+    4,
+]
+invariance_vector = [
+    2,
+    2,
+    2,
+    2,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 8
+index = 10
+pitch_classes = [
+    0,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    9,
+]
+interval_class_vector = [
+    5,
+    6,
+    6,
+    4,
+    5,
+    2,
+]
+invariance_vector = [
+    1,
+    1,
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 8
+index = 11
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    7,
+    9,
+]
+interval_class_vector = [
+    5,
+    6,
+    5,
+    5,
+    5,
+    2,
+]
+invariance_vector = [
+    1,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 8
+index = 12
+pitch_classes = [
+    0,
+    1,
+    3,
+    4,
+    5,
+    6,
+    7,
+    9,
+]
+interval_class_vector = [
+    5,
+    5,
+    6,
+    5,
+    4,
+    3,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 8
+index = 13
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    6,
+    7,
+    9,
+]
+interval_class_vector = [
+    5,
+    5,
+    6,
+    4,
+    5,
+    3,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 8
+index = 14
+pitch_classes = [
+    0,
+    1,
+    2,
+    4,
+    5,
+    6,
+    7,
+    9,
+]
+interval_class_vector = [
+    5,
+    5,
+    5,
+    5,
+    6,
+    2,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 8
+index = 15
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    6,
+    8,
+    9,
+]
+interval_class_vector = [
+    5,
+    5,
+    5,
+    5,
+    5,
+    3,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 29
+
+[[forte]]
+cardinality = 8
+index = 16
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    5,
+    7,
+    8,
+    9,
+]
+interval_class_vector = [
+    5,
+    5,
+    4,
+    5,
+    6,
+    3,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 8
+index = 17
+pitch_classes = [
+    0,
+    1,
+    3,
+    4,
+    5,
+    6,
+    8,
+    9,
+]
+interval_class_vector = [
+    5,
+    4,
+    6,
+    6,
+    5,
+    2,
+]
+invariance_vector = [
+    1,
+    1,
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 8
+index = 18
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    5,
+    6,
+    8,
+    9,
+]
+interval_class_vector = [
+    5,
+    4,
+    6,
+    5,
+    5,
+    3,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 8
+index = 19
+pitch_classes = [
+    0,
+    1,
+    2,
+    4,
+    5,
+    6,
+    8,
+    9,
+]
+interval_class_vector = [
+    5,
+    4,
+    5,
+    7,
+    5,
+    2,
+]
+invariance_vector = [
+    1,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 8
+index = 20
+pitch_classes = [
+    0,
+    1,
+    2,
+    4,
+    5,
+    7,
+    8,
+    9,
+]
+interval_class_vector = [
+    5,
+    4,
+    5,
+    6,
+    6,
+    2,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 8
+index = 21
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    6,
+    8,
+    10,
+]
+interval_class_vector = [
+    4,
+    7,
+    4,
+    6,
+    4,
+    3,
+]
+invariance_vector = [
+    1,
+    1,
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 8
+index = 22
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    5,
+    6,
+    8,
+    10,
+]
+interval_class_vector = [
+    4,
+    6,
+    5,
+    5,
+    6,
+    2,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 8
+index = 23
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    5,
+    7,
+    8,
+    10,
+]
+interval_class_vector = [
+    4,
+    6,
+    5,
+    4,
+    7,
+    2,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 8
+index = 24
+pitch_classes = [
+    0,
+    1,
+    2,
+    4,
+    5,
+    6,
+    8,
+    10,
+]
+interval_class_vector = [
+    4,
+    6,
+    4,
+    7,
+    4,
+    3,
+]
+invariance_vector = [
+    1,
+    1,
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 8
+index = 25
+pitch_classes = [
+    0,
+    1,
+    2,
+    4,
+    6,
+    7,
+    8,
+    10,
+]
+interval_class_vector = [
+    4,
+    6,
+    4,
+    6,
+    4,
+    4,
+]
+invariance_vector = [
+    2,
+    2,
+    2,
+    2,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 8
+index = 26
+pitch_classes = [
+    0,
+    1,
+    2,
+    4,
+    5,
+    7,
+    9,
+    10,
+]
+interval_class_vector = [
+    4,
+    5,
+    6,
+    5,
+    6,
+    2,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 8
+index = 27
+pitch_classes = [
+    0,
+    1,
+    2,
+    4,
+    5,
+    7,
+    8,
+    10,
+]
+interval_class_vector = [
+    4,
+    5,
+    6,
+    5,
+    5,
+    3,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 8
+index = 28
+pitch_classes = [
+    0,
+    1,
+    3,
+    4,
+    6,
+    7,
+    9,
+    10,
+]
+interval_class_vector = [
+    4,
+    4,
+    8,
+    4,
+    4,
+    4,
+]
+invariance_vector = [
+    4,
+    4,
+    4,
+    4,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 8
+index = 29
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    5,
+    6,
+    7,
+    9,
+]
+interval_class_vector = [
+    5,
+    5,
+    5,
+    5,
+    5,
+    3,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 15
+
+[[forte]]
+cardinality = 9
+index = 1
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+]
+interval_class_vector = [
+    8,
+    7,
+    6,
+    6,
+    6,
+    3,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 9
+index = 2
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    9,
+]
+interval_class_vector = [
+    7,
+    7,
+    7,
+    6,
+    6,
+    3,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 9
+index = 3
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    8,
+    9,
+]
+interval_class_vector = [
+    7,
+    6,
+    7,
+    7,
+    6,
+    3,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 9
+index = 4
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    7,
+    8,
+    9,
+]
+interval_class_vector = [
+    7,
+    6,
+    6,
+    7,
+    7,
+    3,
+]
+invariance_vector = [
+    1,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 9
+index = 5
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    6,
+    7,
+    8,
+    9,
+]
+interval_class_vector = [
+    7,
+    6,
+    6,
+    6,
+    7,
+    4,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 9
+index = 6
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    8,
+    10,
+]
+interval_class_vector = [
+    6,
+    8,
+    6,
+    7,
+    6,
+    3,
+]
+invariance_vector = [
+    1,
+    1,
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 9
+index = 7
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    7,
+    8,
+    10,
+]
+interval_class_vector = [
+    6,
+    7,
+    7,
+    6,
+    7,
+    3,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 9
+index = 8
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    6,
+    7,
+    8,
+    10,
+]
+interval_class_vector = [
+    6,
+    7,
+    6,
+    7,
+    6,
+    4,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 9
+index = 9
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    5,
+    6,
+    7,
+    8,
+    10,
+]
+interval_class_vector = [
+    6,
+    7,
+    6,
+    6,
+    8,
+    3,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 9
+index = 10
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    6,
+    7,
+    9,
+    10,
+]
+interval_class_vector = [
+    6,
+    6,
+    8,
+    6,
+    6,
+    4,
+]
+invariance_vector = [
+    1,
+    1,
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 9
+index = 11
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    5,
+    6,
+    7,
+    9,
+    10,
+]
+interval_class_vector = [
+    6,
+    6,
+    7,
+    7,
+    7,
+    3,
+]
+invariance_vector = [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 9
+index = 12
+pitch_classes = [
+    0,
+    1,
+    2,
+    4,
+    5,
+    6,
+    8,
+    9,
+    10,
+]
+interval_class_vector = [
+    6,
+    6,
+    6,
+    9,
+    6,
+    3,
+]
+invariance_vector = [
+    3,
+    3,
+    3,
+    3,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 10
+index = 1
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+]
+interval_class_vector = [
+    9,
+    8,
+    8,
+    8,
+    8,
+    4,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 10
+index = 2
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    10,
+]
+interval_class_vector = [
+    8,
+    9,
+    8,
+    8,
+    8,
+    4,
+]
+invariance_vector = [
+    1,
+    1,
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 10
+index = 3
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    9,
+    10,
+]
+interval_class_vector = [
+    8,
+    8,
+    9,
+    8,
+    8,
+    4,
+]
+invariance_vector = [
+    1,
+    1,
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 10
+index = 4
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    8,
+    9,
+    10,
+]
+interval_class_vector = [
+    8,
+    8,
+    8,
+    9,
+    8,
+    4,
+]
+invariance_vector = [
+    1,
+    1,
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 10
+index = 5
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    7,
+    8,
+    9,
+    10,
+]
+interval_class_vector = [
+    8,
+    8,
+    8,
+    8,
+    9,
+    4,
+]
+invariance_vector = [
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 10
+index = 6
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    6,
+    7,
+    8,
+    9,
+    10,
+]
+interval_class_vector = [
+    8,
+    8,
+    8,
+    8,
+    8,
+    5,
+]
+invariance_vector = [
+    2,
+    2,
+    2,
+    2,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 11
+index = 1
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+]
+interval_class_vector = [
+    10,
+    10,
+    10,
+    10,
+    10,
+    5,
+]
+invariance_vector = [
+    1,
+    1,
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[forte]]
+cardinality = 12
+index = 1
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+]
+interval_class_vector = [
+    12,
+    12,
+    12,
+    12,
+    12,
+    6,
+]
+invariance_vector = [
+    12,
+    12,
+    12,
+    12,
+    0,
+    0,
+    0,
+    0,
+]
+z_relation = 0
+
+[[inversion_default_pitch_classes]]
+cardinality = 3
+index = 2
+pitch_classes = [
+    0,
+    2,
+    3,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 3
+index = 3
+pitch_classes = [
+    0,
+    3,
+    4,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 3
+index = 4
+pitch_classes = [
+    0,
+    4,
+    5,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 3
+index = 5
+pitch_classes = [
+    0,
+    5,
+    6,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 3
+index = 7
+pitch_classes = [
+    0,
+    3,
+    5,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 3
+index = 8
+pitch_classes = [
+    0,
+    4,
+    6,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 3
+index = 11
+pitch_classes = [
+    0,
+    4,
+    7,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 4
+index = 2
+pitch_classes = [
+    0,
+    2,
+    3,
+    4,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 4
+index = 4
+pitch_classes = [
+    0,
+    3,
+    4,
+    5,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 4
+index = 5
+pitch_classes = [
+    0,
+    4,
+    5,
+    6,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 4
+index = 11
+pitch_classes = [
+    0,
+    2,
+    4,
+    5,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 4
+index = 12
+pitch_classes = [
+    0,
+    3,
+    4,
+    6,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 4
+index = 13
+pitch_classes = [
+    0,
+    3,
+    5,
+    6,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 4
+index = 14
+pitch_classes = [
+    0,
+    4,
+    5,
+    7,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 4
+index = 15
+pitch_classes = [
+    0,
+    2,
+    5,
+    6,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 4
+index = 16
+pitch_classes = [
+    0,
+    2,
+    6,
+    7,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 4
+index = 18
+pitch_classes = [
+    0,
+    3,
+    6,
+    7,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 4
+index = 19
+pitch_classes = [
+    0,
+    3,
+    4,
+    8,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 4
+index = 22
+pitch_classes = [
+    0,
+    3,
+    5,
+    7,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 4
+index = 27
+pitch_classes = [
+    0,
+    3,
+    6,
+    8,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 4
+index = 29
+pitch_classes = [
+    0,
+    4,
+    6,
+    7,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 5
+index = 2
+pitch_classes = [
+    0,
+    2,
+    3,
+    4,
+    5,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 5
+index = 3
+pitch_classes = [
+    0,
+    1,
+    3,
+    4,
+    5,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 5
+index = 4
+pitch_classes = [
+    0,
+    3,
+    4,
+    5,
+    6,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 5
+index = 5
+pitch_classes = [
+    0,
+    4,
+    5,
+    6,
+    7,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 5
+index = 6
+pitch_classes = [
+    0,
+    1,
+    4,
+    5,
+    6,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 5
+index = 7
+pitch_classes = [
+    0,
+    1,
+    5,
+    6,
+    7,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 5
+index = 9
+pitch_classes = [
+    0,
+    2,
+    4,
+    5,
+    6,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 5
+index = 10
+pitch_classes = [
+    0,
+    2,
+    3,
+    5,
+    6,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 5
+index = 11
+pitch_classes = [
+    0,
+    3,
+    4,
+    5,
+    7,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 5
+index = 13
+pitch_classes = [
+    0,
+    2,
+    3,
+    4,
+    8,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 5
+index = 14
+pitch_classes = [
+    0,
+    2,
+    5,
+    6,
+    7,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 5
+index = 16
+pitch_classes = [
+    0,
+    3,
+    4,
+    6,
+    7,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 5
+index = 18
+pitch_classes = [
+    0,
+    2,
+    3,
+    6,
+    7,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 5
+index = 19
+pitch_classes = [
+    0,
+    1,
+    4,
+    6,
+    7,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 5
+index = 20
+pitch_classes = [
+    0,
+    1,
+    5,
+    7,
+    8,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 5
+index = 21
+pitch_classes = [
+    0,
+    3,
+    4,
+    7,
+    8,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 5
+index = 23
+pitch_classes = [
+    0,
+    2,
+    4,
+    5,
+    7,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 5
+index = 24
+pitch_classes = [
+    0,
+    2,
+    4,
+    6,
+    7,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 5
+index = 25
+pitch_classes = [
+    0,
+    3,
+    5,
+    6,
+    8,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 5
+index = 26
+pitch_classes = [
+    0,
+    3,
+    4,
+    6,
+    8,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 5
+index = 27
+pitch_classes = [
+    0,
+    3,
+    5,
+    7,
+    8,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 5
+index = 28
+pitch_classes = [
+    0,
+    2,
+    5,
+    6,
+    8,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 5
+index = 29
+pitch_classes = [
+    0,
+    2,
+    5,
+    7,
+    8,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 5
+index = 30
+pitch_classes = [
+    0,
+    2,
+    4,
+    7,
+    8,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 5
+index = 31
+pitch_classes = [
+    0,
+    2,
+    3,
+    6,
+    9,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 5
+index = 32
+pitch_classes = [
+    0,
+    1,
+    4,
+    7,
+    9,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 5
+index = 36
+pitch_classes = [
+    0,
+    3,
+    5,
+    6,
+    7,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 5
+index = 38
+pitch_classes = [
+    0,
+    3,
+    6,
+    7,
+    8,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 6
+index = 2
+pitch_classes = [
+    0,
+    2,
+    3,
+    4,
+    5,
+    6,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 6
+index = 3
+pitch_classes = [
+    0,
+    1,
+    3,
+    4,
+    5,
+    6,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 6
+index = 5
+pitch_classes = [
+    0,
+    1,
+    4,
+    5,
+    6,
+    7,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 6
+index = 9
+pitch_classes = [
+    0,
+    2,
+    4,
+    5,
+    6,
+    7,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 6
+index = 10
+pitch_classes = [
+    0,
+    2,
+    3,
+    4,
+    6,
+    7,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 6
+index = 11
+pitch_classes = [
+    0,
+    2,
+    3,
+    5,
+    6,
+    7,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 6
+index = 12
+pitch_classes = [
+    0,
+    1,
+    3,
+    5,
+    6,
+    7,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 6
+index = 14
+pitch_classes = [
+    0,
+    3,
+    4,
+    5,
+    7,
+    8,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 6
+index = 15
+pitch_classes = [
+    0,
+    3,
+    4,
+    6,
+    7,
+    8,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 6
+index = 16
+pitch_classes = [
+    0,
+    2,
+    3,
+    4,
+    7,
+    8,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 6
+index = 17
+pitch_classes = [
+    0,
+    1,
+    4,
+    6,
+    7,
+    8,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 6
+index = 18
+pitch_classes = [
+    0,
+    1,
+    3,
+    6,
+    7,
+    8,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 6
+index = 19
+pitch_classes = [
+    0,
+    1,
+    4,
+    5,
+    7,
+    8,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 6
+index = 21
+pitch_classes = [
+    0,
+    2,
+    4,
+    5,
+    6,
+    8,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 6
+index = 22
+pitch_classes = [
+    0,
+    2,
+    4,
+    6,
+    7,
+    8,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 6
+index = 24
+pitch_classes = [
+    0,
+    2,
+    4,
+    5,
+    7,
+    8,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 6
+index = 25
+pitch_classes = [
+    0,
+    2,
+    3,
+    5,
+    7,
+    8,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 6
+index = 27
+pitch_classes = [
+    0,
+    2,
+    3,
+    5,
+    6,
+    9,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 6
+index = 30
+pitch_classes = [
+    0,
+    2,
+    3,
+    6,
+    8,
+    9,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 6
+index = 31
+pitch_classes = [
+    0,
+    1,
+    4,
+    6,
+    8,
+    9,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 6
+index = 33
+pitch_classes = [
+    0,
+    2,
+    4,
+    6,
+    7,
+    9,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 6
+index = 34
+pitch_classes = [
+    0,
+    2,
+    4,
+    6,
+    8,
+    9,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 6
+index = 36
+pitch_classes = [
+    0,
+    3,
+    4,
+    5,
+    6,
+    7,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 6
+index = 39
+pitch_classes = [
+    0,
+    3,
+    4,
+    5,
+    6,
+    8,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 6
+index = 40
+pitch_classes = [
+    0,
+    3,
+    5,
+    6,
+    7,
+    8,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 6
+index = 41
+pitch_classes = [
+    0,
+    2,
+    5,
+    6,
+    7,
+    8,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 6
+index = 43
+pitch_classes = [
+    0,
+    2,
+    3,
+    6,
+    7,
+    8,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 6
+index = 44
+pitch_classes = [
+    0,
+    1,
+    2,
+    5,
+    8,
+    9,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 6
+index = 46
+pitch_classes = [
+    0,
+    2,
+    4,
+    5,
+    6,
+    9,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 6
+index = 47
+pitch_classes = [
+    0,
+    2,
+    3,
+    4,
+    7,
+    9,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 7
+index = 2
+pitch_classes = [
+    0,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 7
+index = 3
+pitch_classes = [
+    0,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 7
+index = 4
+pitch_classes = [
+    0,
+    1,
+    3,
+    4,
+    5,
+    6,
+    7,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 7
+index = 5
+pitch_classes = [
+    0,
+    1,
+    2,
+    4,
+    5,
+    6,
+    7,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 7
+index = 6
+pitch_classes = [
+    0,
+    1,
+    4,
+    5,
+    6,
+    7,
+    8,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 7
+index = 7
+pitch_classes = [
+    0,
+    1,
+    2,
+    5,
+    6,
+    7,
+    8,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 7
+index = 9
+pitch_classes = [
+    0,
+    2,
+    4,
+    5,
+    6,
+    7,
+    8,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 7
+index = 10
+pitch_classes = [
+    0,
+    2,
+    3,
+    4,
+    5,
+    6,
+    9,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 7
+index = 11
+pitch_classes = [
+    0,
+    2,
+    3,
+    4,
+    5,
+    7,
+    8,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 7
+index = 13
+pitch_classes = [
+    0,
+    2,
+    3,
+    4,
+    6,
+    7,
+    8,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 7
+index = 14
+pitch_classes = [
+    0,
+    1,
+    3,
+    5,
+    6,
+    7,
+    8,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 7
+index = 16
+pitch_classes = [
+    0,
+    1,
+    3,
+    4,
+    5,
+    6,
+    9,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 7
+index = 18
+pitch_classes = [
+    0,
+    1,
+    4,
+    6,
+    7,
+    8,
+    9,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 7
+index = 19
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    6,
+    8,
+    9,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 7
+index = 20
+pitch_classes = [
+    0,
+    1,
+    2,
+    5,
+    7,
+    8,
+    9,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 7
+index = 21
+pitch_classes = [
+    0,
+    1,
+    3,
+    4,
+    5,
+    8,
+    9,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 7
+index = 23
+pitch_classes = [
+    0,
+    2,
+    4,
+    5,
+    6,
+    7,
+    9,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 7
+index = 24
+pitch_classes = [
+    0,
+    2,
+    4,
+    6,
+    7,
+    8,
+    9,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 7
+index = 25
+pitch_classes = [
+    0,
+    2,
+    3,
+    5,
+    6,
+    7,
+    9,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 7
+index = 26
+pitch_classes = [
+    0,
+    2,
+    4,
+    5,
+    6,
+    8,
+    9,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 7
+index = 27
+pitch_classes = [
+    0,
+    2,
+    4,
+    5,
+    7,
+    8,
+    9,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 7
+index = 28
+pitch_classes = [
+    0,
+    2,
+    3,
+    4,
+    6,
+    8,
+    9,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 7
+index = 29
+pitch_classes = [
+    0,
+    2,
+    3,
+    5,
+    7,
+    8,
+    9,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 7
+index = 30
+pitch_classes = [
+    0,
+    1,
+    3,
+    5,
+    7,
+    8,
+    9,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 7
+index = 31
+pitch_classes = [
+    0,
+    2,
+    3,
+    5,
+    6,
+    8,
+    9,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 7
+index = 32
+pitch_classes = [
+    0,
+    1,
+    3,
+    5,
+    6,
+    8,
+    9,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 7
+index = 36
+pitch_classes = [
+    0,
+    2,
+    3,
+    5,
+    6,
+    7,
+    8,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 7
+index = 38
+pitch_classes = [
+    0,
+    1,
+    3,
+    4,
+    6,
+    7,
+    8,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 8
+index = 2
+pitch_classes = [
+    0,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 8
+index = 4
+pitch_classes = [
+    0,
+    1,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 8
+index = 5
+pitch_classes = [
+    0,
+    1,
+    2,
+    4,
+    5,
+    6,
+    7,
+    8,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 8
+index = 11
+pitch_classes = [
+    0,
+    2,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 8
+index = 12
+pitch_classes = [
+    0,
+    2,
+    3,
+    4,
+    5,
+    6,
+    8,
+    9,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 8
+index = 13
+pitch_classes = [
+    0,
+    2,
+    3,
+    5,
+    6,
+    7,
+    8,
+    9,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 8
+index = 14
+pitch_classes = [
+    0,
+    2,
+    3,
+    4,
+    5,
+    7,
+    8,
+    9,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 8
+index = 15
+pitch_classes = [
+    0,
+    1,
+    3,
+    5,
+    6,
+    7,
+    8,
+    9,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 8
+index = 16
+pitch_classes = [
+    0,
+    1,
+    2,
+    4,
+    6,
+    7,
+    8,
+    9,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 8
+index = 18
+pitch_classes = [
+    0,
+    1,
+    3,
+    4,
+    6,
+    7,
+    8,
+    9,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 8
+index = 19
+pitch_classes = [
+    0,
+    1,
+    3,
+    4,
+    5,
+    7,
+    8,
+    9,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 8
+index = 22
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    5,
+    7,
+    9,
+    10,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 8
+index = 27
+pitch_classes = [
+    0,
+    1,
+    2,
+    4,
+    6,
+    7,
+    9,
+    10,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 8
+index = 29
+pitch_classes = [
+    0,
+    2,
+    3,
+    4,
+    6,
+    7,
+    8,
+    9,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 9
+index = 2
+pitch_classes = [
+    0,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 9
+index = 3
+pitch_classes = [
+    0,
+    1,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 9
+index = 4
+pitch_classes = [
+    0,
+    1,
+    2,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 9
+index = 5
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    5,
+    6,
+    7,
+    8,
+    9,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 9
+index = 7
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    7,
+    9,
+    10,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 9
+index = 8
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    6,
+    8,
+    9,
+    10,
+]
+
+[[inversion_default_pitch_classes]]
+cardinality = 9
+index = 11
+pitch_classes = [
+    0,
+    1,
+    2,
+    3,
+    5,
+    6,
+    8,
+    9,
+    10,
+]
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 1
+index = 1
+inversion = 0
+tn_index = 1
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 2
+index = 1
+inversion = 0
+tn_index = 1
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 2
+index = 2
+inversion = 0
+tn_index = 2
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 2
+index = 3
+inversion = 0
+tn_index = 3
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 2
+index = 4
+inversion = 0
+tn_index = 4
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 2
+index = 5
+inversion = 0
+tn_index = 5
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 2
+index = 6
+inversion = 0
+tn_index = 6
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 3
+index = 1
+inversion = 0
+tn_index = 1
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 3
+index = 2
+inversion = -1
+tn_index = 3
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 3
+index = 2
+inversion = 1
+tn_index = 2
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 3
+index = 3
+inversion = -1
+tn_index = 5
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 3
+index = 3
+inversion = 1
+tn_index = 4
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 3
+index = 4
+inversion = -1
+tn_index = 7
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 3
+index = 4
+inversion = 1
+tn_index = 6
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 3
+index = 5
+inversion = -1
+tn_index = 9
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 3
+index = 5
+inversion = 1
+tn_index = 8
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 3
+index = 6
+inversion = 0
+tn_index = 10
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 3
+index = 7
+inversion = -1
+tn_index = 12
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 3
+index = 7
+inversion = 1
+tn_index = 11
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 3
+index = 8
+inversion = -1
+tn_index = 14
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 3
+index = 8
+inversion = 1
+tn_index = 13
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 3
+index = 9
+inversion = 0
+tn_index = 15
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 3
+index = 10
+inversion = 0
+tn_index = 16
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 3
+index = 11
+inversion = -1
+tn_index = 18
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 3
+index = 11
+inversion = 1
+tn_index = 17
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 3
+index = 12
+inversion = 0
+tn_index = 19
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 1
+inversion = 0
+tn_index = 1
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 2
+inversion = -1
+tn_index = 3
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 2
+inversion = 1
+tn_index = 2
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 3
+inversion = 0
+tn_index = 4
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 4
+inversion = -1
+tn_index = 6
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 4
+inversion = 1
+tn_index = 5
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 5
+inversion = -1
+tn_index = 8
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 5
+inversion = 1
+tn_index = 7
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 6
+inversion = 0
+tn_index = 9
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 7
+inversion = 0
+tn_index = 10
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 8
+inversion = 0
+tn_index = 11
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 9
+inversion = 0
+tn_index = 12
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 10
+inversion = 0
+tn_index = 13
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 11
+inversion = -1
+tn_index = 15
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 11
+inversion = 1
+tn_index = 14
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 12
+inversion = -1
+tn_index = 17
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 12
+inversion = 1
+tn_index = 16
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 13
+inversion = -1
+tn_index = 19
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 13
+inversion = 1
+tn_index = 18
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 14
+inversion = -1
+tn_index = 21
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 14
+inversion = 1
+tn_index = 20
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 15
+inversion = -1
+tn_index = 23
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 15
+inversion = 1
+tn_index = 22
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 16
+inversion = -1
+tn_index = 25
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 16
+inversion = 1
+tn_index = 24
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 17
+inversion = 0
+tn_index = 26
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 18
+inversion = -1
+tn_index = 28
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 18
+inversion = 1
+tn_index = 27
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 19
+inversion = -1
+tn_index = 30
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 19
+inversion = 1
+tn_index = 29
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 20
+inversion = 0
+tn_index = 31
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 21
+inversion = 0
+tn_index = 32
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 22
+inversion = -1
+tn_index = 34
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 22
+inversion = 1
+tn_index = 33
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 23
+inversion = 0
+tn_index = 35
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 24
+inversion = 0
+tn_index = 36
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 25
+inversion = 0
+tn_index = 37
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 26
+inversion = 0
+tn_index = 38
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 27
+inversion = -1
+tn_index = 40
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 27
+inversion = 1
+tn_index = 39
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 28
+inversion = 0
+tn_index = 41
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 29
+inversion = -1
+tn_index = 43
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 4
+index = 29
+inversion = 1
+tn_index = 42
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 1
+inversion = 0
+tn_index = 1
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 2
+inversion = -1
+tn_index = 3
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 2
+inversion = 1
+tn_index = 2
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 3
+inversion = -1
+tn_index = 5
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 3
+inversion = 1
+tn_index = 4
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 4
+inversion = -1
+tn_index = 7
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 4
+inversion = 1
+tn_index = 6
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 5
+inversion = -1
+tn_index = 9
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 5
+inversion = 1
+tn_index = 8
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 6
+inversion = -1
+tn_index = 11
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 6
+inversion = 1
+tn_index = 10
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 7
+inversion = -1
+tn_index = 13
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 7
+inversion = 1
+tn_index = 12
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 8
+inversion = 0
+tn_index = 14
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 9
+inversion = -1
+tn_index = 16
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 9
+inversion = 1
+tn_index = 15
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 10
+inversion = -1
+tn_index = 18
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 10
+inversion = 1
+tn_index = 17
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 11
+inversion = -1
+tn_index = 20
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 11
+inversion = 1
+tn_index = 19
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 12
+inversion = 0
+tn_index = 21
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 13
+inversion = -1
+tn_index = 23
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 13
+inversion = 1
+tn_index = 22
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 14
+inversion = -1
+tn_index = 25
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 14
+inversion = 1
+tn_index = 24
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 15
+inversion = 0
+tn_index = 26
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 16
+inversion = -1
+tn_index = 28
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 16
+inversion = 1
+tn_index = 27
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 17
+inversion = 0
+tn_index = 29
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 18
+inversion = -1
+tn_index = 31
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 18
+inversion = 1
+tn_index = 30
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 19
+inversion = -1
+tn_index = 33
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 19
+inversion = 1
+tn_index = 32
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 20
+inversion = -1
+tn_index = 35
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 20
+inversion = 1
+tn_index = 34
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 21
+inversion = -1
+tn_index = 37
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 21
+inversion = 1
+tn_index = 36
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 22
+inversion = 0
+tn_index = 38
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 23
+inversion = -1
+tn_index = 40
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 23
+inversion = 1
+tn_index = 39
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 24
+inversion = -1
+tn_index = 42
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 24
+inversion = 1
+tn_index = 41
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 25
+inversion = -1
+tn_index = 44
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 25
+inversion = 1
+tn_index = 43
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 26
+inversion = -1
+tn_index = 46
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 26
+inversion = 1
+tn_index = 45
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 27
+inversion = -1
+tn_index = 48
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 27
+inversion = 1
+tn_index = 47
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 28
+inversion = -1
+tn_index = 50
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 28
+inversion = 1
+tn_index = 49
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 29
+inversion = -1
+tn_index = 52
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 29
+inversion = 1
+tn_index = 51
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 30
+inversion = -1
+tn_index = 54
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 30
+inversion = 1
+tn_index = 53
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 31
+inversion = -1
+tn_index = 56
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 31
+inversion = 1
+tn_index = 55
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 32
+inversion = -1
+tn_index = 58
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 32
+inversion = 1
+tn_index = 57
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 33
+inversion = 0
+tn_index = 59
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 34
+inversion = 0
+tn_index = 60
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 35
+inversion = 0
+tn_index = 61
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 36
+inversion = -1
+tn_index = 63
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 36
+inversion = 1
+tn_index = 62
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 37
+inversion = 0
+tn_index = 64
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 38
+inversion = -1
+tn_index = 66
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 5
+index = 38
+inversion = 1
+tn_index = 65
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 1
+inversion = 0
+tn_index = 1
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 2
+inversion = -1
+tn_index = 3
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 2
+inversion = 1
+tn_index = 2
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 3
+inversion = -1
+tn_index = 5
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 3
+inversion = 1
+tn_index = 4
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 4
+inversion = 0
+tn_index = 6
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 5
+inversion = -1
+tn_index = 8
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 5
+inversion = 1
+tn_index = 7
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 6
+inversion = 0
+tn_index = 9
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 7
+inversion = 0
+tn_index = 10
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 8
+inversion = 0
+tn_index = 11
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 9
+inversion = -1
+tn_index = 13
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 9
+inversion = 1
+tn_index = 12
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 10
+inversion = -1
+tn_index = 15
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 10
+inversion = 1
+tn_index = 14
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 11
+inversion = -1
+tn_index = 17
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 11
+inversion = 1
+tn_index = 16
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 12
+inversion = -1
+tn_index = 19
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 12
+inversion = 1
+tn_index = 18
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 13
+inversion = 0
+tn_index = 20
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 14
+inversion = -1
+tn_index = 22
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 14
+inversion = 1
+tn_index = 21
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 15
+inversion = -1
+tn_index = 24
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 15
+inversion = 1
+tn_index = 23
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 16
+inversion = -1
+tn_index = 26
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 16
+inversion = 1
+tn_index = 25
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 17
+inversion = -1
+tn_index = 28
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 17
+inversion = 1
+tn_index = 27
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 18
+inversion = -1
+tn_index = 30
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 18
+inversion = 1
+tn_index = 29
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 19
+inversion = -1
+tn_index = 32
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 19
+inversion = 1
+tn_index = 31
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 20
+inversion = 0
+tn_index = 33
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 21
+inversion = -1
+tn_index = 35
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 21
+inversion = 1
+tn_index = 34
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 22
+inversion = -1
+tn_index = 37
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 22
+inversion = 1
+tn_index = 36
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 23
+inversion = 0
+tn_index = 38
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 24
+inversion = -1
+tn_index = 40
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 24
+inversion = 1
+tn_index = 39
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 25
+inversion = -1
+tn_index = 42
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 25
+inversion = 1
+tn_index = 41
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 26
+inversion = 0
+tn_index = 43
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 27
+inversion = -1
+tn_index = 45
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 27
+inversion = 1
+tn_index = 44
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 28
+inversion = 0
+tn_index = 46
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 29
+inversion = 0
+tn_index = 47
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 30
+inversion = -1
+tn_index = 49
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 30
+inversion = 1
+tn_index = 48
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 31
+inversion = -1
+tn_index = 51
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 31
+inversion = 1
+tn_index = 50
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 32
+inversion = 0
+tn_index = 52
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 33
+inversion = -1
+tn_index = 54
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 33
+inversion = 1
+tn_index = 53
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 34
+inversion = -1
+tn_index = 56
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 34
+inversion = 1
+tn_index = 55
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 35
+inversion = 0
+tn_index = 57
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 36
+inversion = -1
+tn_index = 59
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 36
+inversion = 1
+tn_index = 58
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 37
+inversion = 0
+tn_index = 60
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 38
+inversion = 0
+tn_index = 61
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 39
+inversion = -1
+tn_index = 63
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 39
+inversion = 1
+tn_index = 62
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 40
+inversion = -1
+tn_index = 65
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 40
+inversion = 1
+tn_index = 64
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 41
+inversion = -1
+tn_index = 67
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 41
+inversion = 1
+tn_index = 66
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 42
+inversion = 0
+tn_index = 68
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 43
+inversion = -1
+tn_index = 70
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 43
+inversion = 1
+tn_index = 69
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 44
+inversion = -1
+tn_index = 72
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 44
+inversion = 1
+tn_index = 71
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 45
+inversion = 0
+tn_index = 73
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 46
+inversion = -1
+tn_index = 75
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 46
+inversion = 1
+tn_index = 74
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 47
+inversion = -1
+tn_index = 77
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 47
+inversion = 1
+tn_index = 76
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 48
+inversion = 0
+tn_index = 78
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 49
+inversion = 0
+tn_index = 79
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 6
+index = 50
+inversion = 0
+tn_index = 80
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 1
+inversion = 0
+tn_index = 1
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 2
+inversion = -1
+tn_index = 3
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 2
+inversion = 1
+tn_index = 2
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 3
+inversion = -1
+tn_index = 5
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 3
+inversion = 1
+tn_index = 4
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 4
+inversion = -1
+tn_index = 7
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 4
+inversion = 1
+tn_index = 6
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 5
+inversion = -1
+tn_index = 9
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 5
+inversion = 1
+tn_index = 8
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 6
+inversion = -1
+tn_index = 11
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 6
+inversion = 1
+tn_index = 10
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 7
+inversion = -1
+tn_index = 13
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 7
+inversion = 1
+tn_index = 12
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 8
+inversion = 0
+tn_index = 14
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 9
+inversion = -1
+tn_index = 16
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 9
+inversion = 1
+tn_index = 15
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 10
+inversion = -1
+tn_index = 18
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 10
+inversion = 1
+tn_index = 17
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 11
+inversion = -1
+tn_index = 20
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 11
+inversion = 1
+tn_index = 19
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 12
+inversion = 0
+tn_index = 21
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 13
+inversion = -1
+tn_index = 23
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 13
+inversion = 1
+tn_index = 22
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 14
+inversion = -1
+tn_index = 25
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 14
+inversion = 1
+tn_index = 24
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 15
+inversion = 0
+tn_index = 26
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 16
+inversion = -1
+tn_index = 28
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 16
+inversion = 1
+tn_index = 27
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 17
+inversion = 0
+tn_index = 29
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 18
+inversion = -1
+tn_index = 31
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 18
+inversion = 1
+tn_index = 30
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 19
+inversion = -1
+tn_index = 33
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 19
+inversion = 1
+tn_index = 32
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 20
+inversion = -1
+tn_index = 35
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 20
+inversion = 1
+tn_index = 34
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 21
+inversion = -1
+tn_index = 37
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 21
+inversion = 1
+tn_index = 36
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 22
+inversion = 0
+tn_index = 38
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 23
+inversion = -1
+tn_index = 40
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 23
+inversion = 1
+tn_index = 39
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 24
+inversion = -1
+tn_index = 42
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 24
+inversion = 1
+tn_index = 41
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 25
+inversion = -1
+tn_index = 44
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 25
+inversion = 1
+tn_index = 43
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 26
+inversion = -1
+tn_index = 46
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 26
+inversion = 1
+tn_index = 45
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 27
+inversion = -1
+tn_index = 48
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 27
+inversion = 1
+tn_index = 47
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 28
+inversion = -1
+tn_index = 50
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 28
+inversion = 1
+tn_index = 49
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 29
+inversion = -1
+tn_index = 52
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 29
+inversion = 1
+tn_index = 51
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 30
+inversion = -1
+tn_index = 54
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 30
+inversion = 1
+tn_index = 53
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 31
+inversion = -1
+tn_index = 56
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 31
+inversion = 1
+tn_index = 55
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 32
+inversion = -1
+tn_index = 58
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 32
+inversion = 1
+tn_index = 57
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 33
+inversion = 0
+tn_index = 59
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 34
+inversion = 0
+tn_index = 60
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 35
+inversion = 0
+tn_index = 61
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 36
+inversion = -1
+tn_index = 63
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 36
+inversion = 1
+tn_index = 62
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 37
+inversion = 0
+tn_index = 64
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 38
+inversion = -1
+tn_index = 66
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 7
+index = 38
+inversion = 1
+tn_index = 65
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 1
+inversion = 0
+tn_index = 1
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 2
+inversion = -1
+tn_index = 3
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 2
+inversion = 1
+tn_index = 2
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 3
+inversion = 0
+tn_index = 4
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 4
+inversion = -1
+tn_index = 6
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 4
+inversion = 1
+tn_index = 5
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 5
+inversion = -1
+tn_index = 8
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 5
+inversion = 1
+tn_index = 7
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 6
+inversion = 0
+tn_index = 9
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 7
+inversion = 0
+tn_index = 10
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 8
+inversion = 0
+tn_index = 11
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 9
+inversion = 0
+tn_index = 12
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 10
+inversion = 0
+tn_index = 13
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 11
+inversion = -1
+tn_index = 15
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 11
+inversion = 1
+tn_index = 14
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 12
+inversion = -1
+tn_index = 17
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 12
+inversion = 1
+tn_index = 16
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 13
+inversion = -1
+tn_index = 19
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 13
+inversion = 1
+tn_index = 18
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 14
+inversion = -1
+tn_index = 21
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 14
+inversion = 1
+tn_index = 20
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 15
+inversion = -1
+tn_index = 23
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 15
+inversion = 1
+tn_index = 22
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 16
+inversion = -1
+tn_index = 25
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 16
+inversion = 1
+tn_index = 24
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 17
+inversion = 0
+tn_index = 26
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 18
+inversion = -1
+tn_index = 28
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 18
+inversion = 1
+tn_index = 27
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 19
+inversion = -1
+tn_index = 30
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 19
+inversion = 1
+tn_index = 29
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 20
+inversion = 0
+tn_index = 31
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 21
+inversion = 0
+tn_index = 32
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 22
+inversion = -1
+tn_index = 34
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 22
+inversion = 1
+tn_index = 33
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 23
+inversion = 0
+tn_index = 35
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 24
+inversion = 0
+tn_index = 36
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 25
+inversion = 0
+tn_index = 37
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 26
+inversion = 0
+tn_index = 38
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 27
+inversion = -1
+tn_index = 40
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 27
+inversion = 1
+tn_index = 39
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 28
+inversion = 0
+tn_index = 41
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 29
+inversion = -1
+tn_index = 43
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 8
+index = 29
+inversion = 1
+tn_index = 42
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 9
+index = 1
+inversion = 0
+tn_index = 1
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 9
+index = 2
+inversion = -1
+tn_index = 3
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 9
+index = 2
+inversion = 1
+tn_index = 2
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 9
+index = 3
+inversion = -1
+tn_index = 5
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 9
+index = 3
+inversion = 1
+tn_index = 4
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 9
+index = 4
+inversion = -1
+tn_index = 7
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 9
+index = 4
+inversion = 1
+tn_index = 6
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 9
+index = 5
+inversion = -1
+tn_index = 9
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 9
+index = 5
+inversion = 1
+tn_index = 8
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 9
+index = 6
+inversion = 0
+tn_index = 10
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 9
+index = 7
+inversion = -1
+tn_index = 12
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 9
+index = 7
+inversion = 1
+tn_index = 11
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 9
+index = 8
+inversion = -1
+tn_index = 14
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 9
+index = 8
+inversion = 1
+tn_index = 13
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 9
+index = 9
+inversion = 0
+tn_index = 15
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 9
+index = 10
+inversion = 0
+tn_index = 16
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 9
+index = 11
+inversion = -1
+tn_index = 18
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 9
+index = 11
+inversion = 1
+tn_index = 17
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 9
+index = 12
+inversion = 0
+tn_index = 19
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 10
+index = 1
+inversion = 0
+tn_index = 1
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 10
+index = 2
+inversion = 0
+tn_index = 2
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 10
+index = 3
+inversion = 0
+tn_index = 3
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 10
+index = 4
+inversion = 0
+tn_index = 4
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 10
+index = 5
+inversion = 0
+tn_index = 5
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 10
+index = 6
+inversion = 0
+tn_index = 6
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 11
+index = 1
+inversion = 0
+tn_index = 1
+
+[[forte_number_with_inversion_to_index]]
+cardinality = 12
+index = 1
+inversion = 0
+tn_index = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 1
+index = 1
+inversion = 0
+names = [
+    "unison",
+    "monad",
+    "singleton",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 2
+index = 1
+inversion = 0
+names = [
+    "interval class 1",
+    "minor second",
+    "m2",
+    "half step",
+    "semitone",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 2
+index = 2
+inversion = 0
+names = [
+    "interval class 2",
+    "major second",
+    "M2",
+    "whole step",
+    "whole tone",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 2
+index = 3
+inversion = 0
+names = [
+    "interval class 3",
+    "minor third",
+    "m3",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 2
+index = 4
+inversion = 0
+names = [
+    "interval class 4",
+    "major third",
+    "M3",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 2
+index = 5
+inversion = 0
+names = [
+    "interval class 5",
+    "perfect fourth",
+    "P4",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 2
+index = 6
+inversion = 0
+names = [
+    "tritone",
+    "diminished fifth",
+    "augmented fourth",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 3
+index = 1
+inversion = 0
+names = ["chromatic trimirror"]
+
+[[tn_index_to_chord_info]]
+cardinality = 3
+index = 2
+inversion = -1
+names = ["minor trichord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 3
+index = 2
+inversion = 1
+names = ["phrygian trichord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 3
+index = 3
+inversion = -1
+names = ["major-minor trichord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 3
+index = 3
+inversion = 1
+names = ["major-minor trichord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 3
+index = 4
+inversion = -1
+names = ["incomplete major-seventh chord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 3
+index = 4
+inversion = 1
+names = ["incomplete major-seventh chord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 3
+index = 5
+inversion = -1
+names = ["tritone-fourth"]
+
+[[tn_index_to_chord_info]]
+cardinality = 3
+index = 5
+inversion = 1
+names = ["tritone-fourth"]
+
+[[tn_index_to_chord_info]]
+cardinality = 3
+index = 6
+inversion = 0
+names = ["whole-tone trichord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 3
+index = 7
+inversion = -1
+names = ["incomplete dominant-seventh chord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 3
+index = 7
+inversion = 1
+names = ["incomplete minor-seventh chord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 3
+index = 8
+inversion = -1
+names = ["incomplete half-diminished seventh chord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 3
+index = 8
+inversion = 1
+names = [
+    "incomplete dominant-seventh chord",
+    "Italian augmented sixth chord",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 3
+index = 9
+inversion = 0
+names = ["quartal trichord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 3
+index = 10
+inversion = 0
+names = ["diminished triad"]
+
+[[tn_index_to_chord_info]]
+cardinality = 3
+index = 11
+inversion = -1
+names = ["major triad"]
+
+[[tn_index_to_chord_info]]
+cardinality = 3
+index = 11
+inversion = 1
+names = ["minor triad"]
+
+[[tn_index_to_chord_info]]
+cardinality = 3
+index = 12
+inversion = 0
+names = [
+    "augmented triad",
+    "equal 3-part octave division",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 1
+inversion = 0
+names = [
+    "chromatic tetramirror",
+    "BACH",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 2
+inversion = -1
+names = ["major-second tetracluster"]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 2
+inversion = 1
+names = ["major-second tetracluster"]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 3
+inversion = 0
+names = ["alternating tetramirror"]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 4
+inversion = -1
+names = ["minor third tetracluster"]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 4
+inversion = 1
+names = ["minor third tetracluster"]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 5
+inversion = -1
+names = ["major third tetracluster"]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 5
+inversion = 1
+names = ["major third tetracluster"]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 6
+inversion = 0
+names = ["perfect fourth tetramirror"]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 7
+inversion = 0
+names = ["Arabian tetramirror"]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 8
+inversion = 0
+names = ["double-fourth tetramirror"]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 9
+inversion = 0
+names = ["double tritone tetramirror"]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 10
+inversion = 0
+names = ["minor tetramirror"]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 11
+inversion = -1
+names = [
+    "lydian tetrachord",
+    "major tetrachord",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 11
+inversion = 1
+names = ["phrygian tetrachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 12
+inversion = -1
+names = ["major-third diminished tetrachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 12
+inversion = 1
+names = ["harmonic minor tetrachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 13
+inversion = -1
+names = ["perfect-fourth diminished tetrachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 13
+inversion = 1
+names = ["minor-second diminished tetrachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 14
+inversion = -1
+names = ["perfect-fourth major tetrachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 14
+inversion = 1
+names = ["major-second minor tetrachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 15
+inversion = -1
+names = ["all-interval tetrachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 15
+inversion = 1
+names = ["all-interval tetrachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 16
+inversion = -1
+names = ["tritone quartal tetrachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 16
+inversion = 1
+names = ["minor-second quartal tetrachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 17
+inversion = 0
+names = ["major-minor tetramirror"]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 18
+inversion = -1
+names = ["minor-diminished tetrachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 18
+inversion = 1
+names = ["major-diminished tetrachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 19
+inversion = -1
+names = ["augmented major tetrachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 19
+inversion = 1
+names = ["minor-augmented tetrachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 20
+inversion = 0
+names = ["major seventh chord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 21
+inversion = 0
+names = ["whole-tone tetramirror"]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 22
+inversion = -1
+names = ["perfect-fourth minor tetrachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 22
+inversion = 1
+names = ["major-second major tetrachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 23
+inversion = 0
+names = ["quartal tetramirror"]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 24
+inversion = 0
+names = ["augmented seventh chord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 25
+inversion = 0
+names = [
+    "Messiaen's truncated mode 6",
+    "French augmented sixth chord",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 26
+inversion = 0
+names = ["minor seventh chord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 27
+inversion = -1
+names = [
+    "dominant seventh chord",
+    "major minor seventh chord",
+    "German augmented sixth chord",
+    "Swiss augmented sixth chord",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 27
+inversion = 1
+names = ["half-diminished seventh chord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 28
+inversion = 0
+names = [
+    "diminished seventh chord",
+    "equal 4-part octave division",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 29
+inversion = -1
+names = ["all-interval tetrachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 4
+index = 29
+inversion = 1
+names = ["all-interval tetrachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 1
+inversion = 0
+names = ["chromatic pentamirror"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 2
+inversion = -1
+names = ["major-second pentacluster"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 2
+inversion = 1
+names = ["major-second pentacluster"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 3
+inversion = -1
+names = ["Spanish pentacluster"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 3
+inversion = 1
+names = ["minor-second major pentachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 4
+inversion = -1
+names = ["minor-third pentacluster"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 4
+inversion = 1
+names = ["blues pentacluster"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 5
+inversion = -1
+names = ["major-third pentacluster"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 5
+inversion = 1
+names = ["major-third pentacluster"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 6
+inversion = -1
+names = ["Asian pentacluster"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 6
+inversion = 1
+names = [
+    "Asian pentacluster",
+    "quasi raga Megharanji",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 7
+inversion = -1
+names = ["double pentacluster"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 7
+inversion = 1
+names = [
+    "double pentacluster",
+    "quasi raga Nabhomani",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 8
+inversion = 0
+names = ["tritone-symmetric pentamirror"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 9
+inversion = -1
+names = ["tritone-contracting pentachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 9
+inversion = 1
+names = ["tritone-expanding pentachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 10
+inversion = -1
+names = ["alternating pentachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 10
+inversion = 1
+names = ["alternating pentachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 11
+inversion = -1
+names = ["center-cluster pentachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 11
+inversion = 1
+names = ["center-cluster pentachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 12
+inversion = 0
+names = ["locrian pentachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 13
+inversion = -1
+names = ["augmented pentacluster"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 13
+inversion = 1
+names = ["augmented pentacluster"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 14
+inversion = -1
+names = ["double-seconds triple-fourth pentachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 14
+inversion = 1
+names = ["double-seconds triple-fourth pentachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 15
+inversion = 0
+names = ["asymmetric pentamirror"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 16
+inversion = -1
+names = ["major-minor diminished pentachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 16
+inversion = 1
+names = ["major-minor-diminished pentachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 17
+inversion = 0
+names = ["minor-major ninth chord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 18
+inversion = -1
+names = ["Roma (Gypsy) pentachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 18
+inversion = 1
+names = ["Roma (Gypsy) pentachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 19
+inversion = -1
+names = ["Balinese pentachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 19
+inversion = 1
+names = ["Javanese pentachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 20
+inversion = -1
+names = [
+    "Hirajoshi pentatonic",
+    "Iwato",
+    "Sakura",
+    "quasi raga Saveri",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 20
+inversion = 1
+names = [
+    "Balinese Pelog pentatonic",
+    "quasi raga Bhupala",
+    "quasi raga Bibhas",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 21
+inversion = -1
+names = [
+    "Lebanese pentachord",
+    "augmented-minor chord",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 21
+inversion = 1
+names = [
+    "major-augmented ninth chord",
+    "Syrian pentatonic",
+    "quasi raga Megharanji",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 22
+inversion = 0
+names = [
+    "Persian pentamirror",
+    "quasi raga Ramkali",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 23
+inversion = -1
+names = ["major pentachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 23
+inversion = 1
+names = [
+    "dorian pentachord",
+    "minor pentachord",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 24
+inversion = -1
+names = ["lydian pentachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 24
+inversion = 1
+names = ["phrygian pentachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 25
+inversion = -1
+names = ["minor-diminished ninth chord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 25
+inversion = 1
+names = ["diminished-major ninth chord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 26
+inversion = -1
+names = ["augmented-diminished ninth chord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 26
+inversion = 1
+names = ["diminished-augmented ninth chord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 27
+inversion = -1
+names = ["minor-ninth chord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 27
+inversion = 1
+names = ["major-ninth chord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 28
+inversion = -1
+names = [
+    "Javanese pentatonic",
+    "augmented-sixth pentachord",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 28
+inversion = 1
+names = ["augmented-sixth pentachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 29
+inversion = -1
+names = ["Kumoi pentachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 29
+inversion = 1
+names = ["Kumoi pentachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 30
+inversion = -1
+names = [
+    "enigmatic pentachord",
+    "altered pentatonic",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 30
+inversion = 1
+names = ["enigmatic pentachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 31
+inversion = -1
+names = [
+    "flat-ninth pentachord",
+    "quasi raga Ranjaniraga",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 31
+inversion = 1
+names = ["diminished minor-ninth chord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 32
+inversion = -1
+names = ["Neapolitan pentachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 32
+inversion = 1
+names = ["Neapolitan pentachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 33
+inversion = 0
+names = ["whole-tone pentachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 34
+inversion = 0
+names = [
+    "dominant-ninth",
+    "major-minor",
+    "Prometheus pentamirror",
+    "dominant pentatonic",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 35
+inversion = 0
+names = [
+    "major pentatonic",
+    "black-key scale",
+    "blues pentatonic",
+    "slendro",
+    "quartal pentamirror",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 36
+inversion = -1
+names = ["minor-seventh pentacluster"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 36
+inversion = 1
+names = ["major-seventh pentacluster"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 37
+inversion = 0
+names = ["center-cluster pentamirror"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 38
+inversion = -1
+names = ["diminished pentacluster"]
+
+[[tn_index_to_chord_info]]
+cardinality = 5
+index = 38
+inversion = 1
+names = ["diminished pentacluster"]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 1
+inversion = 0
+names = [
+    "A all combinatorial (P6, I11, RI5, RI11)",
+    "chromatic hexamirror",
+    "first-order all-combinatorial",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 2
+inversion = -1
+names = ["combinatorial I (I1)"]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 2
+inversion = 1
+names = ["combinatorial I (I11)"]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 3
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 3
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 4
+inversion = 0
+names = ["combinatorial RI (RI6)"]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 5
+inversion = -1
+names = ["combinatorial I (I3)"]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 5
+inversion = 1
+names = ["combinatorial I (I11)"]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 6
+inversion = 0
+names = ["double cluster hexamirror"]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 7
+inversion = 0
+names = [
+    "B all combinatorial (P3, P9, I5, R6, R12, R8)",
+    "Messiaen's mode 5",
+    "second-order all combinatorial",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 8
+inversion = 0
+names = ["D all combinatorial (P6, I1, RI7)"]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 9
+inversion = -1
+names = ["combinatorial I (I3)"]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 9
+inversion = 1
+names = ["combinatorial I (I11)"]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 10
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 10
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 11
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 11
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 12
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 12
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 13
+inversion = 0
+names = [
+    "alternating hexamirror",
+    "combinatorial I (I7)",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 14
+inversion = -1
+names = ["combinatorial P (P6)"]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 14
+inversion = 1
+names = ["combinatorial P (P6)"]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 15
+inversion = -1
+names = ["combinatorial I (I5)"]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 15
+inversion = 1
+names = ["combinatorial I (I11)"]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 16
+inversion = -1
+names = [
+    "combinatorial I (I1)",
+    "quasi raga Megha",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 16
+inversion = 1
+names = ["combinatorial I (I3)"]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 17
+inversion = -1
+names = ["all tri-chord hexachord (inverted form)"]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 17
+inversion = 1
+names = ["all tri-chord hexachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 18
+inversion = -1
+names = ["combinatorial I (I5)"]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 18
+inversion = 1
+names = ["combinatorial I (I11)"]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 19
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 19
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 20
+inversion = 0
+names = [
+    "E all combinatorial (P2, P6, P10, I3, I7, R4, R8, RI1, RI5, RI9)",
+    "Messiaen's truncated mode 3",
+    "Genus tertium",
+    "third-order all combinatorial",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 21
+inversion = -1
+names = ["combinatorial I (I3)"]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 21
+inversion = 1
+names = ["combinatorial I (I1)"]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 22
+inversion = -1
+names = ["combinatorial I (I5)"]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 22
+inversion = 1
+names = ["combinatorial I (I11)"]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 23
+inversion = 0
+names = [
+    "combinatorial RI (RI8)",
+    "super-locrian hexamirror",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 24
+inversion = -1
+names = ["melodic-minor hexachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 24
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 25
+inversion = -1
+names = ["minor hexachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 25
+inversion = 1
+names = ["locrian hexachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 26
+inversion = 0
+names = [
+    "phrygian hexamirror",
+    "combinatorial RI (RI8)",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 27
+inversion = -1
+names = [
+    "combinatorial I (I1)",
+    "pyramid hexachord",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 27
+inversion = 1
+names = ["combinatorial I (I11)"]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 28
+inversion = 0
+names = [
+    "double-phrygian hexachord",
+    "combinatorial RI (RI6)",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 29
+inversion = 0
+names = ["combinatorial RI (RI9)"]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 30
+inversion = -1
+names = [
+    "Stravinsky's Petrushka-chord",
+    "Messiaen's truncated mode 2",
+    "major-bitonal hexachord",
+    "combinatorial R (R6)",
+    "combinatorial I (I1, I7)",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 30
+inversion = 1
+names = [
+    "Messiaen's truncated mode 2",
+    "minor-bitonal hexachord",
+    "combinatorial R (R6)",
+    "combinatorial I (I1, I7)",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 31
+inversion = -1
+names = ["combinatorial I (I11)"]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 31
+inversion = 1
+names = ["combinatorial I (I7)"]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 32
+inversion = 0
+names = [
+    "Guidonian hexachord",
+    "C all combinatorial (P6, I3, RI9)",
+    "major hexamirror",
+    "quartal hexamirror",
+    "first-order all combinatorial",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 33
+inversion = -1
+names = [
+    "dominant-eleventh",
+    "lydian hexachord",
+    "combinatorial I (I1)",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 33
+inversion = 1
+names = [
+    "dorian hexachord",
+    "combinatorial I (I6)",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 34
+inversion = -1
+names = [
+    "augmented-eleventh",
+    "harmonic hexachord",
+    "combinatorial I (I7)",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 34
+inversion = 1
+names = [
+    "Scriabin's Mystic-chord",
+    "Prometheus hexachord",
+    "combinatorial I (I11)",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 35
+inversion = 0
+names = [
+    "whole tone scale",
+    "6 equal part division",
+    "F all-combinatorial (P1, P3, P5, P7, P9, P11, I1, I3, I5, I7, I9, I11, R2, R4, R6, R8, R10, RI2, RI4, RI6, RI8, RI10)",
+    "Messiaen's mode 1",
+    "sixth-order all combinatorial",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 36
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 36
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 37
+inversion = 0
+names = ["combinatorial RI (RI4)"]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 38
+inversion = 0
+names = ["combinatorial RI (RI3)"]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 39
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 39
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 40
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 40
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 41
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 41
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 42
+inversion = 0
+names = ["combinatorial RI (RI3)"]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 43
+inversion = -1
+names = ["complement of all-tri-chord hexachord (inverted form)"]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 43
+inversion = 1
+names = ["complement of all tri-chord hexachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 44
+inversion = -1
+names = ["quasi raga Bauli"]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 44
+inversion = 1
+names = ["Schoenberg Anagram hexachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 45
+inversion = 0
+names = ["combinatorial RI (RI6)"]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 46
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 46
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 47
+inversion = -1
+names = ["blues scale"]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 47
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 48
+inversion = 0
+names = ["combinatorial RI (RI2)"]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 49
+inversion = 0
+names = [
+    "combinatorial RI (RI4)",
+    "Prometheus Neapolitan mode",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 6
+index = 50
+inversion = 0
+names = ["combinatorial RI (RI1)"]
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 1
+inversion = 0
+names = ["chromatic heptamirror"]
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 2
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 2
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 3
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 3
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 4
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 4
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 5
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 5
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 6
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 6
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 7
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 7
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 8
+inversion = 0
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 9
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 9
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 10
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 10
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 11
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 11
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 12
+inversion = 0
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 13
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 13
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 14
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 14
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 15
+inversion = 0
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 16
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 16
+inversion = 1
+names = ["Debussy's heptatonic"]
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 17
+inversion = 0
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 18
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 18
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 19
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 19
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 20
+inversion = -1
+names = [
+    "Greek chromatic",
+    "chromatic mixolydian",
+    "chromatic dorian",
+    "quasi raga Pantuvarali",
+    "mela Kanakangi",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 20
+inversion = 1
+names = ["chromatic phrygian inverse"]
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 21
+inversion = -1
+names = ["Roma (Gypsy) hepatonic"]
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 21
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 22
+inversion = 0
+names = [
+    "double harmonic scale",
+    "major Roma (Gypsy)",
+    "Hungarian minor",
+    "double harmonic scale",
+    "quasi raga Mayamdavagaula",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 23
+inversion = -1
+names = ["tritone major heptachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 23
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 24
+inversion = -1
+names = [
+    "mystic heptachord",
+    "Enigmatic heptatonic",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 24
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 25
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 25
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 26
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 26
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 27
+inversion = -1
+names = ["modified blues"]
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 27
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 28
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 28
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 29
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 29
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 30
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 30
+inversion = 1
+names = ["Neapolitan-minor mode"]
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 31
+inversion = -1
+names = [
+    "diminished scale",
+    "alternating heptachord",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 31
+inversion = 1
+names = [
+    "alternating heptachord",
+    "Hungarian major mode",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 32
+inversion = -1
+names = [
+    "harmonic major scale (inverted)",
+    "harmonic minor collection (inverted)",
+    "mela Cakravana",
+    "quasi raga Ahir Bhairav",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 32
+inversion = 1
+names = [
+    "harmonic minor scale",
+    "harmonic minor collection",
+    "Spanish Roma (Gypsy)",
+    "mela Kiravani",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 33
+inversion = 0
+names = [
+    "Neapolitan-major mode",
+    "leading-whole-tone mode",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 34
+inversion = 0
+names = [
+    "melodic minor ascending scale",
+    "jazz minor",
+    "augmented thirteenth heptamirror",
+    "harmonic/super-locrian",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 35
+inversion = 0
+names = [
+    "major scale",
+    "major diatonic heptachord",
+    "natural minor scale",
+    "dominant thirteenth",
+    "locrian",
+    "phrygian",
+    "major inverse",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 36
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 36
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 37
+inversion = 0
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 38
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 7
+index = 38
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 1
+inversion = 0
+names = ["chromatic octamirror"]
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 2
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 2
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 3
+inversion = 0
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 4
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 4
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 5
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 5
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 6
+inversion = 0
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 7
+inversion = 0
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 8
+inversion = 0
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 9
+inversion = 0
+names = ["Messiaen's mode 4"]
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 10
+inversion = 0
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 11
+inversion = -1
+names = ["blues octatonic"]
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 11
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 12
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 12
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 13
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 13
+inversion = 1
+names = ["blues octatonic"]
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 14
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 14
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 15
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 15
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 16
+inversion = -1
+names = ["enigmatic octachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 16
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 17
+inversion = 0
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 18
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 18
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 19
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 19
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 20
+inversion = 0
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 21
+inversion = 0
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 22
+inversion = -1
+names = ["Spanish octatonic scale"]
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 22
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 23
+inversion = 0
+names = [
+    "Greek",
+    "quartal octachord",
+    "diatonic octad",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 24
+inversion = 0
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 25
+inversion = 0
+names = ["Messiaen's mode 6"]
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 26
+inversion = 0
+names = [
+    "Spanish phrygian",
+    "blues",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 27
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 27
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 28
+inversion = 0
+names = [
+    "octatonic scale",
+    "Messiaen's mode 2",
+    "alternating octatonic scale",
+    "diminished scale",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 29
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 8
+index = 29
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 9
+index = 1
+inversion = 0
+names = ["chromatic nonamirror"]
+
+[[tn_index_to_chord_info]]
+cardinality = 9
+index = 2
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 9
+index = 2
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 9
+index = 3
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 9
+index = 3
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 9
+index = 4
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 9
+index = 4
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 9
+index = 5
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 9
+index = 5
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 9
+index = 6
+inversion = 0
+
+[[tn_index_to_chord_info]]
+cardinality = 9
+index = 7
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 9
+index = 7
+inversion = 1
+names = ["nonatonic blues"]
+
+[[tn_index_to_chord_info]]
+cardinality = 9
+index = 8
+inversion = -1
+
+[[tn_index_to_chord_info]]
+cardinality = 9
+index = 8
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 9
+index = 9
+inversion = 0
+
+[[tn_index_to_chord_info]]
+cardinality = 9
+index = 10
+inversion = 0
+
+[[tn_index_to_chord_info]]
+cardinality = 9
+index = 11
+inversion = -1
+names = ["diminishing nonachord"]
+
+[[tn_index_to_chord_info]]
+cardinality = 9
+index = 11
+inversion = 1
+
+[[tn_index_to_chord_info]]
+cardinality = 9
+index = 12
+inversion = 0
+names = [
+    "Messiaen's mode 3",
+    "Tsjerepnin",
+]
+
+[[tn_index_to_chord_info]]
+cardinality = 10
+index = 1
+inversion = 0
+names = ["chromatic decamirror"]
+
+[[tn_index_to_chord_info]]
+cardinality = 10
+index = 2
+inversion = 0
+
+[[tn_index_to_chord_info]]
+cardinality = 10
+index = 3
+inversion = 0
+
+[[tn_index_to_chord_info]]
+cardinality = 10
+index = 4
+inversion = 0
+
+[[tn_index_to_chord_info]]
+cardinality = 10
+index = 5
+inversion = 0
+names = ["major-minor mixed"]
+
+[[tn_index_to_chord_info]]
+cardinality = 10
+index = 6
+inversion = 0
+names = ["Messiaen's mode 7"]
+
+[[tn_index_to_chord_info]]
+cardinality = 11
+index = 1
+inversion = 0
+names = ["chromatic undecamirror"]
+
+[[tn_index_to_chord_info]]
+cardinality = 12
+index = 1
+inversion = 0
+names = [
+    "aggregate",
+    "dodecachord",
+    "twelve-tone chromatic",
+    "chromatic scale",
+    "dodecamirror",
+]

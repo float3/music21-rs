@@ -4,7 +4,6 @@ use crate::defaults::IntegerType;
 use crate::error::Error;
 
 use generated::*;
-use std::{collections::HashMap, sync::LazyLock};
 
 pub(crate) type ChordTableAddress = (u8, u8, i8, Option<u8>);
 
@@ -125,13 +124,12 @@ type U8U8SB = (u8, u8, Sign);
 
 const CARDINALITIES: usize = 13;
 
-type Forte = LazyLock<[Vec<Option<TNIStructure>>; CARDINALITIES]>;
-type InversionDefaultPitchClasses = LazyLock<HashMap<(u8, u8), PitchClasses>>;
-type CardinalityToChordMembers = LazyLock<[HashMap<U8SB, Pcivicv>; CARDINALITIES]>;
-type ForteNumberWithInversionToIndex = LazyLock<HashMap<U8U8SB, u8>>;
-type TnIndexToChordInfo = LazyLock<HashMap<U8U8SB, Option<Vec<&'static str>>>>;
-type MaximumIndexNumberWithoutInversionEquivalence = LazyLock<Vec<u8>>;
-type MaximumIndexNumberWithInversionEquivalence = LazyLock<Vec<u8>>;
+type Forte = [&'static [Option<TNIStructure>]; CARDINALITIES];
+type CardinalityToChordMembers = [&'static [(U8SB, Pcivicv)]; CARDINALITIES];
+type ForteNumberWithInversionToIndex = &'static [(U8U8SB, u8)];
+type TnIndexToChordInfo = &'static [(U8U8SB, Option<&'static [&'static str]>)];
+type MaximumIndexNumberWithoutInversionEquivalence = [u8; CARDINALITIES];
+type MaximumIndexNumberWithInversionEquivalence = [u8; CARDINALITIES];
 
 #[derive(Debug, Clone)]
 pub(crate) struct KnownChordTableEntry {
@@ -141,57 +139,6 @@ pub(crate) struct KnownChordTableEntry {
     pub(crate) normal_form: Vec<u8>,
     pub(crate) interval_class_vector: Vec<u8>,
 }
-
-static CARDINALITY_TO_CHORD_MEMBERS: CardinalityToChordMembers = LazyLock::new(|| {
-    use std::collections::HashMap;
-    let mut cardinality_to_chord_members: [HashMap<U8SB, Pcivicv>; 13] = Default::default();
-    cardinality_to_chord_members[0] = HashMap::new();
-    for cardinality in 1..=12 {
-        let mut entries: HashMap<U8SB, Pcivicv> = HashMap::new();
-        let forte_entries = &generated::FORTE[cardinality as usize];
-        for (forte_after_dash, _) in forte_entries.iter().enumerate().skip(1) {
-            let Some(tni) = &forte_entries[forte_after_dash] else {
-                continue;
-            };
-
-            let has_distinct_inversion = tni.invariance_vector()[1] == 0;
-
-            let inv_num = if has_distinct_inversion {
-                Sign::One
-            } else {
-                Sign::Zero
-            };
-
-            let key = (forte_after_dash as u8, inv_num);
-            let value = (
-                tni.pitch_classes(),
-                tni.invariance_vector(),
-                tni.interval_class_vector(),
-            );
-
-            entries.insert(key, value);
-
-            if has_distinct_inversion {
-                let inv_pitches = match INVERSION_DEFAULT_PITCH_CLASSES
-                    .get(&(cardinality as u8, forte_after_dash as u8))
-                {
-                    Some(pitches) => *pitches,
-                    None => continue,
-                };
-                entries.insert(
-                    (forte_after_dash as u8, Sign::NegativeOne),
-                    (
-                        inv_pitches,
-                        tni.invariance_vector(),
-                        tni.interval_class_vector(),
-                    ),
-                );
-            }
-        }
-        cardinality_to_chord_members[cardinality as usize] = entries;
-    }
-    cardinality_to_chord_members
-});
 
 fn forte_index_to_inversions_available(card: usize, index: u8) -> Result<Vec<Sign>, Error> {
     if !(1..=13).contains(&card) {
@@ -204,7 +151,7 @@ fn forte_index_to_inversions_available(card: usize, index: u8) -> Result<Vec<Sig
     }
 
     let mut inversions = vec![];
-    if let Some(entry) = &(&FORTE[card])[index as usize] {
+    if let Some(entry) = FORTE[card].get(index as usize).and_then(Option::as_ref) {
         // second value stored inversion status
         if entry.invariance_vector()[1] > 0 {
             inversions.push(Sign::Zero);
@@ -358,10 +305,7 @@ pub(crate) fn address_to_common_names(
     address: ChordTableAddress,
 ) -> Result<Option<Vec<&'static str>>, Error> {
     let (card, index, inversion) = validate_address((address.0, address.1, Some(address.2)))?;
-    Ok(TN_INDEX_TO_CHORD_INFO
-        .get(&(card, index, inversion))
-        .cloned()
-        .flatten())
+    Ok(find_tn_index_to_chord_info(card, index, inversion).map(<[_]>::to_vec))
 }
 
 pub(crate) fn address_to_forte_name(
@@ -384,15 +328,12 @@ pub(crate) fn transposed_normal_form_from_address(
     address: ChordTableAddress,
 ) -> Result<Vec<u8>, Error> {
     let (card, index, inversion) = validate_address((address.0, address.1, Some(address.2)))?;
-    let entry = CARDINALITY_TO_CHORD_MEMBERS
-        .get(card as usize)
-        .and_then(|bucket| bucket.get(&(index, inversion)))
-        .ok_or_else(|| {
-            Error::ChordTables(format!(
-                "cannot resolve normal form for address ({card}, {index}, {})",
-                inversion.as_i8()
-            ))
-        })?;
+    let entry = find_cardinality_member(card, index, inversion).ok_or_else(|| {
+        Error::ChordTables(format!(
+            "cannot resolve normal form for address ({card}, {index}, {})",
+            inversion.as_i8()
+        ))
+    })?;
     Ok(bool_vec_to_pitch_classes(&entry.0))
 }
 
@@ -400,23 +341,20 @@ pub(crate) fn interval_class_vector_from_address(
     address: ChordTableAddress,
 ) -> Result<Vec<u8>, Error> {
     let (card, index, inversion) = validate_address((address.0, address.1, Some(address.2)))?;
-    let entry = CARDINALITY_TO_CHORD_MEMBERS
-        .get(card as usize)
-        .and_then(|bucket| bucket.get(&(index, inversion)))
-        .ok_or_else(|| {
-            Error::ChordTables(format!(
-                "cannot resolve interval class vector for address ({card}, {index}, {})",
-                inversion.as_i8()
-            ))
-        })?;
+    let entry = find_cardinality_member(card, index, inversion).ok_or_else(|| {
+        Error::ChordTables(format!(
+            "cannot resolve interval class vector for address ({card}, {index}, {})",
+            inversion.as_i8()
+        ))
+    })?;
     Ok(entry.2.to_vec())
 }
 
 pub(crate) fn known_chord_table_entries() -> Vec<KnownChordTableEntry> {
     let mut entries = TN_INDEX_TO_CHORD_INFO
         .iter()
-        .filter_map(|(&(cardinality, index, inversion), common_names)| {
-            let common_names = common_names.clone().unwrap_or_default();
+        .filter_map(|&((cardinality, index, inversion), common_names)| {
+            let common_names = common_names.unwrap_or_default().to_vec();
             let address = (cardinality, index, inversion.as_i8(), None);
             Some((
                 (cardinality, index, inversion.as_i8()),
@@ -435,15 +373,29 @@ pub(crate) fn known_chord_table_entries() -> Vec<KnownChordTableEntry> {
     entries.into_iter().map(|(_, entry)| entry).collect()
 }
 
+fn find_cardinality_member(card: u8, index: u8, inversion: Sign) -> Option<&'static Pcivicv> {
+    CARDINALITY_TO_CHORD_MEMBERS
+        .get(card as usize)?
+        .iter()
+        .find_map(|(key, value)| (*key == (index, inversion)).then_some(value))
+}
+
+fn find_tn_index_to_chord_info(
+    card: u8,
+    index: u8,
+    inversion: Sign,
+) -> Option<&'static [&'static str]> {
+    TN_INDEX_TO_CHORD_INFO
+        .iter()
+        .find_map(|(key, names)| (*key == (card, index, inversion)).then_some(*names))
+        .flatten()
+}
+
 // include!("./generated.rs");
 
 #[cfg(test)]
 mod tests {
-    use super::{Pcivicv, U8SB};
-    use crate::chord::tables::{
-        CARDINALITY_TO_CHORD_MEMBERS, CARDINALITY_TO_CHORD_MEMBERS_GENERATED,
-    };
-    use std::collections::hash_map::Keys;
+    use super::{Sign, find_cardinality_member};
 
     #[cfg(feature = "python")]
     mod utils {
@@ -453,7 +405,7 @@ mod tests {
     #[cfg(feature = "python")]
     use super::TNIStructure;
     #[cfg(feature = "python")]
-    use crate::chord::tables::{FORTE, Sign};
+    use crate::chord::tables::FORTE;
     #[cfg(feature = "python")]
     use pyo3::{
         Bound, PyResult, Python,
@@ -463,22 +415,15 @@ mod tests {
     use utils::{get_tables, init_py_with_dummies, prepare};
 
     #[test]
-    fn cardinality_to_chord_members_equality() {
-        (0..13).for_each(|i| {
-            check_equality(i, CARDINALITY_TO_CHORD_MEMBERS[i].keys());
-            check_equality(i, CARDINALITY_TO_CHORD_MEMBERS_GENERATED[i].keys());
-
-            println!("{i} passed");
-        });
-    }
-
-    fn check_equality(i: usize, keys: Keys<'_, U8SB, Pcivicv>) {
-        keys.for_each(|key| {
-            assert_eq!(
-                format!("{:?}", CARDINALITY_TO_CHORD_MEMBERS[i].get(key)),
-                format!("{:?}", CARDINALITY_TO_CHORD_MEMBERS_GENERATED[i].get(key))
-            );
-        });
+    fn cardinality_to_chord_members_include_major_triad() {
+        let member = find_cardinality_member(3, 11, Sign::NegativeOne).unwrap();
+        assert_eq!(
+            member.0,
+            [
+                true, false, false, false, true, false, false, true, false, false, false, false
+            ]
+        );
+        assert_eq!(member.2, [0, 0, 1, 1, 1, 0]);
     }
 
     #[cfg(feature = "python")]
@@ -542,15 +487,14 @@ mod tests {
                         let inner_key: &Bound<'_, PyTuple> = inner_key.cast_exact().unwrap();
 
                         let (first, second): (u8, i8) = inner_key.extract().unwrap();
-                        let key: U8SB = (first, Sign::from_i8(second).unwrap());
+                        let key = (first, Sign::from_i8(second).unwrap());
 
                         println!("python key: {inner_key:?}");
                         println!("rust key: {key:?}");
                         assert_eq!(
                             format!("{:?}", inner_dict.get_item(inner_key).unwrap().unwrap()),
                             match_python(
-                                CARDINALITY_TO_CHORD_MEMBERS_GENERATED[outer_key_rust]
-                                    .get(&key)
+                                find_cardinality_member(outer_key_rust as u8, key.0, key.1)
                                     .unwrap()
                             )
                         );

@@ -10,8 +10,12 @@ version = "0.1.0"
 
 [features]
 default = ["python"]
-python = []
+python = ["dep:pyo3", "dep:reqwest"]
 
 [dependencies]
-pyo3 = { version = "0.28.3", features = ["auto-initialize"] }
-reqwest = { version = "0.13.3", features = ["blocking"] }
+proc-macro2 = "1.0.106"
+pyo3 = { version = "0.28.3", features = ["auto-initialize"], optional = true }
+quote = "1.0.45"
+reqwest = { version = "0.13.3", features = ["blocking"], optional = true }
+serde = { version = "1.0.228", features = ["derive"] }
+toml = "0.9"

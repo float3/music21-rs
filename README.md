@@ -91,6 +91,20 @@ Python. To regenerate the table source from upstream `music21`, run:
 cargo run -p xtask -- regenerate-tables
 ```
 
+That command refreshes [data/chord_tables.toml](./data/chord_tables.toml) and
+then emits [src/chord/tables/generated.rs](./src/chord/tables/generated.rs).
+To emit Rust from the committed TOML without touching Python, run:
+
+```bash
+cargo run -p xtask -- emit-tables
+```
+
+To skip compiling the Python extraction path entirely, run:
+
+```bash
+cargo run -p xtask --no-default-features -- emit-tables
+```
+
 If you use Nix, `nix develop` opens a shell with the Rust and Python pieces used
 by the repository's CI setup.
 
