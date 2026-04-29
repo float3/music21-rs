@@ -1,4 +1,4 @@
-use crate::{defaults::IntegerType, exception::Exception};
+use crate::{defaults::IntegerType, error::Error};
 
 #[allow(non_camel_case_types)]
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -78,7 +78,7 @@ impl TryFrom<char> for PitchClassString {
             'B' => Ok(PitchClassString::B),
             'e' => Ok(PitchClassString::e),
             'E' => Ok(PitchClassString::E),
-            _ => Err(Exception::PitchClassString(format!(
+            _ => Err(Error::PitchClassString(format!(
                 "Invalid pitch class: {c}"
             ))),
         }

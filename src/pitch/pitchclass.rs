@@ -1,6 +1,6 @@
 use crate::{
     defaults::{FloatType, IntegerType, PITCH_SPACE_SIGNIFICANT_DIGITS},
-    exception::{Exception, ExceptionResult},
+    error::{Error, Result},
 };
 
 use super::pitchclassstring::PitchClassString;
@@ -19,7 +19,7 @@ pub enum PitchClassSpecifier {
 }
 
 impl PitchClassSpecifier {
-    pub(crate) fn to_number(&self) -> ExceptionResult<FloatType> {
+    pub(crate) fn to_number(&self) -> Result<FloatType> {
         match self {
             Self::Number(value) => Ok(*value),
             Self::String(value) => parse_pitch_class_string(value),
@@ -94,16 +94,16 @@ pub struct PitchClass {
 impl PitchClass {
     /// Creates a normalized pitch class from a number, string, or existing
     /// pitch class.
-    pub fn new(specifier: impl Into<PitchClassSpecifier>) -> ExceptionResult<Self> {
+    pub fn new(specifier: impl Into<PitchClassSpecifier>) -> Result<Self> {
         match specifier.into() {
             PitchClassSpecifier::PitchClass(pitch_class) => Ok(pitch_class),
             specifier => Self::from_number(specifier.to_number()?),
         }
     }
 
-    pub(crate) fn from_number(value: FloatType) -> ExceptionResult<Self> {
+    pub(crate) fn from_number(value: FloatType) -> Result<Self> {
         if !value.is_finite() {
-            return Err(Exception::PitchClass(format!(
+            return Err(Error::PitchClass(format!(
                 "pitch class must be finite, got {value}"
             )));
         }
@@ -160,7 +160,7 @@ fn normalize_pitch_class(pc: FloatType) -> FloatType {
     if normalized == 12.0 { 0.0 } else { normalized }
 }
 
-fn parse_pitch_class_string(value: &str) -> ExceptionResult<FloatType> {
+fn parse_pitch_class_string(value: &str) -> Result<FloatType> {
     let value = value.trim();
     if value.chars().count() == 1
         && let Ok(pc_string) = PitchClassString::try_from(value.chars().next().unwrap())
@@ -170,7 +170,7 @@ fn parse_pitch_class_string(value: &str) -> ExceptionResult<FloatType> {
 
     value
         .parse::<FloatType>()
-        .map_err(|err| Exception::PitchClass(format!("cannot parse pitch class {value:?}: {err}")))
+        .map_err(|err| Error::PitchClass(format!("cannot parse pitch class {value:?}: {err}")))
 }
 
 fn trim_float(value: FloatType) -> String {

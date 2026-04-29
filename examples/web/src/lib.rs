@@ -1,5 +1,5 @@
 use music21_rs::{
-    COMMON_TWELVE_TONE_TUNING_SYSTEMS, Chord, ExceptionResult, Fraction, KnownChordType, Pitch,
+    COMMON_TWELVE_TONE_TUNING_SYSTEMS, Chord, Result, Fraction, KnownChordType, Pitch,
     TuningSystem,
 };
 use serde::Serialize;
@@ -300,7 +300,7 @@ pub fn tuning_systems(root_frequency_hz: f64) -> Result<JsValue, JsValue> {
     serde_wasm_bindgen::to_value(&systems).map_err(|err| JsValue::from_str(&err.to_string()))
 }
 
-fn display_pitch_infos(pitches: Vec<Pitch>) -> ExceptionResult<Vec<PitchInfo>> {
+fn display_pitch_infos(pitches: Vec<Pitch>) -> Result<Vec<PitchInfo>> {
     let mut last_pitch_space: Option<i32> = None;
     let mut infos = Vec::with_capacity(pitches.len());
 
@@ -436,7 +436,7 @@ fn tuning_system_description(id: &str) -> &'static str {
 fn display_pitch_for_sequence(
     pitch: Pitch,
     last_pitch_space: &mut Option<i32>,
-) -> ExceptionResult<Pitch> {
+) -> Result<Pitch> {
     if pitch.octave().is_some() {
         *last_pitch_space = Some(pitch.ps().round() as i32);
         return Ok(pitch);

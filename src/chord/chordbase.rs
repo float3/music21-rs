@@ -5,7 +5,7 @@ use super::Pitch;
 
 use crate::base::Music21ObjectTrait;
 use crate::duration::Duration;
-use crate::exception::ExceptionResult;
+use crate::error::Result;
 use crate::note::Note;
 use crate::note::generalnote::GeneralNoteTrait;
 use crate::note::notrest::NotRest;
@@ -31,7 +31,7 @@ impl ChordBase {
     pub(crate) fn new<T>(
         notes: Option<T>,
         duration: &Option<Duration>,
-    ) -> ExceptionResult<Arc<Self>>
+    ) -> Result<Arc<Self>>
     where
         T: IntoNotRests,
     {
@@ -50,7 +50,7 @@ impl ChordBase {
         chord: Arc<Self>,
         notes: Option<T>,
         duration: &Option<Duration>,
-    ) -> ExceptionResult<Option<Duration>>
+    ) -> Result<Option<Duration>>
     where
         T: IntoNotRests,
     {
@@ -130,7 +130,7 @@ pub(crate) trait IntoNotRests {
         self,
         duration: &Option<Duration>,
         quick_duration: bool,
-    ) -> ExceptionResult<(
+    ) -> Result<(
         &Option<Duration>, //useDuration
         Option<Duration>,  //self.duration
         Self::T,
@@ -147,7 +147,7 @@ where
         self,
         duration: &Option<Duration>,
         quick_duration: bool,
-    ) -> ExceptionResult<(&Option<Duration>, Option<Duration>, Self::T)> {
+    ) -> Result<(&Option<Duration>, Option<Duration>, Self::T)> {
         match self {
             Some(notes) => {
                 let (use_duration, self_duration, notes) =
@@ -169,7 +169,7 @@ where
         self,
         duration: &Option<Duration>,
         quick_duration: bool,
-    ) -> ExceptionResult<(&Option<Duration>, Option<Duration>, Self::T)> {
+    ) -> Result<(&Option<Duration>, Option<Duration>, Self::T)> {
         let _ = quick_duration;
         let notes = self
             .into_iter()
@@ -180,7 +180,7 @@ where
                 }
                 Ok(note.get_super().clone())
             })
-            .collect::<ExceptionResult<Vec<_>>>()?;
+            .collect::<Result<Vec<_>>>()?;
         Ok((duration, duration.clone(), notes))
     }
 }
@@ -191,7 +191,7 @@ impl IntoNotRests for String {
         self,
         duration: &Option<Duration>,
         quick_duration: bool,
-    ) -> ExceptionResult<(&Option<Duration>, Option<Duration>, Self::T)> {
+    ) -> Result<(&Option<Duration>, Option<Duration>, Self::T)> {
         if self.trim().is_empty() {
             Ok((duration, duration.clone(), Vec::new()))
         } else if self.contains(char::is_whitespace) {
@@ -215,7 +215,7 @@ impl IntoNotRests for &str {
         self,
         duration: &Option<Duration>,
         quick_duration: bool,
-    ) -> ExceptionResult<(&Option<Duration>, Option<Duration>, Self::T)> {
+    ) -> Result<(&Option<Duration>, Option<Duration>, Self::T)> {
         if self.trim().is_empty() {
             Ok((duration, duration.clone(), Vec::new()))
         } else if self.contains(char::is_whitespace) {
@@ -238,7 +238,7 @@ impl IntoNotRests for &[String] {
         self,
         duration: &Option<Duration>,
         quick_duration: bool,
-    ) -> ExceptionResult<(&Option<Duration>, Option<Duration>, Self::T)> {
+    ) -> Result<(&Option<Duration>, Option<Duration>, Self::T)> {
         let notes = self
             .iter()
             .map(|s| {
@@ -248,7 +248,7 @@ impl IntoNotRests for &[String] {
                         .clone(),
                 )
             })
-            .collect::<ExceptionResult<Vec<_>>>()?;
+            .collect::<Result<Vec<_>>>()?;
         Ok((duration, duration.clone(), notes))
     }
 }
@@ -259,7 +259,7 @@ impl IntoNotRests for &[&str] {
         self,
         duration: &Option<Duration>,
         quick_duration: bool,
-    ) -> ExceptionResult<(&Option<Duration>, Option<Duration>, Self::T)> {
+    ) -> Result<(&Option<Duration>, Option<Duration>, Self::T)> {
         let notes = self
             .iter()
             .map(|s| {
@@ -267,7 +267,7 @@ impl IntoNotRests for &[&str] {
                     .get_super()
                     .clone())
             })
-            .collect::<ExceptionResult<Vec<_>>>()?;
+            .collect::<Result<Vec<_>>>()?;
         Ok((duration, duration.clone(), notes))
     }
 }
@@ -278,7 +278,7 @@ impl IntoNotRests for &[Pitch] {
         self,
         duration: &Option<Duration>,
         quick_duration: bool,
-    ) -> ExceptionResult<(&Option<Duration>, Option<Duration>, Self::T)> {
+    ) -> Result<(&Option<Duration>, Option<Duration>, Self::T)> {
         let notes = self
             .iter()
             .map(|p| {
@@ -286,7 +286,7 @@ impl IntoNotRests for &[Pitch] {
                     .get_super()
                     .clone())
             })
-            .collect::<ExceptionResult<Vec<_>>>()?;
+            .collect::<Result<Vec<_>>>()?;
         Ok((duration, duration.clone(), notes))
     }
 }
@@ -297,7 +297,7 @@ impl IntoNotRests for &[Note] {
         self,
         duration: &Option<Duration>,
         quick_duration: bool,
-    ) -> ExceptionResult<(&Option<Duration>, Option<Duration>, Self::T)> {
+    ) -> Result<(&Option<Duration>, Option<Duration>, Self::T)> {
         let _ = quick_duration;
         let notes = self.iter().map(|n| n.get_super().clone()).collect();
         Ok((duration, duration.clone(), notes))
@@ -310,7 +310,7 @@ impl IntoNotRests for &[Chord] {
         self,
         duration: &Option<Duration>,
         quick_duration: bool,
-    ) -> ExceptionResult<(&Option<Duration>, Option<Duration>, Self::T)> {
+    ) -> Result<(&Option<Duration>, Option<Duration>, Self::T)> {
         let notes = self
             .iter()
             .flat_map(|chord| chord._notes.iter().map(|n| n.get_super().clone()))
@@ -334,7 +334,7 @@ impl IntoNotRests for &[ChordBase] {
         self,
         duration: &Option<Duration>,
         quick_duration: bool,
-    ) -> ExceptionResult<(&Option<Duration>, Option<Duration>, Self::T)> {
+    ) -> Result<(&Option<Duration>, Option<Duration>, Self::T)> {
         if quick_duration {
             // Here we obtain self_duration from the first chord.
             let self_duration = self[0].duration().clone();
@@ -359,7 +359,7 @@ impl IntoNotRests for &[NotRest] {
         self,
         duration: &Option<Duration>,
         quick_duration: bool,
-    ) -> ExceptionResult<(&Option<Duration>, Option<Duration>, Self::T)> {
+    ) -> Result<(&Option<Duration>, Option<Duration>, Self::T)> {
         Ok((duration, duration.clone(), self.to_vec()))
     }
 }
@@ -370,7 +370,7 @@ impl IntoNotRests for &[IntegerType] {
         self,
         duration: &Option<Duration>,
         quick_duration: bool,
-    ) -> ExceptionResult<(&Option<Duration>, Option<Duration>, Self::T)> {
+    ) -> Result<(&Option<Duration>, Option<Duration>, Self::T)> {
         let notes = self
             .iter()
             .map(|i| {
@@ -378,7 +378,7 @@ impl IntoNotRests for &[IntegerType] {
                     .get_super()
                     .clone())
             })
-            .collect::<ExceptionResult<Vec<_>>>()?;
+            .collect::<Result<Vec<_>>>()?;
         Ok((duration, duration.clone(), notes))
     }
 }

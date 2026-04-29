@@ -3,7 +3,7 @@ use std::fmt::{self, Display};
 use std::sync::LazyLock;
 
 use crate::defaults::UnsignedIntegerType;
-use crate::exception::Exception;
+use crate::error::Error;
 
 macro_rules! define_ordinals {
     (
@@ -27,7 +27,7 @@ macro_rules! define_ordinals {
                 if idx < VARIANTS.len() {
                     Ok(VARIANTS[idx])
                 } else {
-                    Err(Exception::Ordinal(format!(
+                    Err(Error::Ordinal(format!(
                         "Invalid {} value: {}",
                         stringify!($name),
                         value
@@ -43,7 +43,7 @@ macro_rules! define_ordinals {
                     $(
                         $lower => Ok($name::$variant),
                     )*
-                    _ => Err(Exception::Ordinal(format!(
+                    _ => Err(Error::Ordinal(format!(
                         "Invalid {} string: {}",
                         stringify!($name),
                         value
@@ -164,10 +164,10 @@ mod tests {
     fn test_ordinal_try_from_integer_invalid() {
         let result = Ordinal::try_from(23);
         assert!(result.is_err());
-        if let Err(Exception::Ordinal(msg)) = result {
+        if let Err(Error::Ordinal(msg)) = result {
             assert!(msg.contains("Invalid Ordinal value: 23"));
         } else {
-            panic!("Expected Exception::Ordinal error");
+            panic!("Expected Error::Ordinal error");
         }
     }
 
@@ -190,10 +190,10 @@ mod tests {
     fn test_ordinal_try_from_str_invalid() {
         let result = Ordinal::try_from("invalid");
         assert!(result.is_err());
-        if let Err(Exception::Ordinal(msg)) = result {
+        if let Err(Error::Ordinal(msg)) = result {
             assert!(msg.contains("Invalid Ordinal string: invalid"));
         } else {
-            panic!("Expected Exception::Ordinal error");
+            panic!("Expected Error::Ordinal error");
         }
     }
 
@@ -223,10 +223,10 @@ mod tests {
     fn test_music_ordinal_try_from_integer_invalid() {
         let result = MusicOrdinals::try_from(23);
         assert!(result.is_err());
-        if let Err(Exception::Ordinal(msg)) = result {
+        if let Err(Error::Ordinal(msg)) = result {
             assert!(msg.contains("Invalid MusicOrdinals value: 23"));
         } else {
-            panic!("Expected Exception::Ordinal error");
+            panic!("Expected Error::Ordinal error");
         }
     }
 
@@ -250,10 +250,10 @@ mod tests {
     fn test_music_ordinal_try_from_str_invalid() {
         let result = MusicOrdinals::try_from("invalid");
         assert!(result.is_err());
-        if let Err(Exception::Ordinal(msg)) = result {
+        if let Err(Error::Ordinal(msg)) = result {
             assert!(msg.contains("Invalid MusicOrdinals string: invalid"));
         } else {
-            panic!("Expected Exception::Ordinal error");
+            panic!("Expected Error::Ordinal error");
         }
     }
 

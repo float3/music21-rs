@@ -1,7 +1,7 @@
 use keysignature::{KeySignature, KeySignatureTrait, pitch_to_sharps};
 
 use crate::{
-    base::Music21ObjectTrait, chord::Chord, defaults::IntegerType, exception::ExceptionResult,
+    base::Music21ObjectTrait, chord::Chord, defaults::IntegerType, error::Result,
     pitch::Pitch, prebase::ProtoM21ObjectTrait, scale::diatonicscale::DiatonicScale,
 };
 
@@ -23,7 +23,7 @@ impl Key {
         }
     }
 
-    pub(crate) fn from_tonic_mode(tonic: &str, mode: Option<&str>) -> ExceptionResult<Self> {
+    pub(crate) fn from_tonic_mode(tonic: &str, mode: Option<&str>) -> Result<Self> {
         let tonic_pitch = Pitch::new(
             Some(tonic.to_string()),
             None,
@@ -71,35 +71,35 @@ impl Key {
         DiatonicScale::new(self.tonic_pitch.clone(), self.sharps, &self.mode)
     }
 
-    pub(crate) fn pitch_from_degree(&self, degree: usize) -> ExceptionResult<Pitch> {
+    pub(crate) fn pitch_from_degree(&self, degree: usize) -> Result<Pitch> {
         self.scale().pitch_from_degree(degree)
     }
 
-    pub(crate) fn pitches(&self) -> ExceptionResult<Vec<Pitch>> {
+    pub(crate) fn pitches(&self) -> Result<Vec<Pitch>> {
         self.scale().pitches()
     }
 
-    pub(crate) fn triad_from_degree(&self, degree: usize) -> ExceptionResult<Chord> {
+    pub(crate) fn triad_from_degree(&self, degree: usize) -> Result<Chord> {
         self.scale().triad_from_degree(degree)
     }
 
-    pub(crate) fn seventh_chord_from_degree(&self, degree: usize) -> ExceptionResult<Chord> {
+    pub(crate) fn seventh_chord_from_degree(&self, degree: usize) -> Result<Chord> {
         self.scale().seventh_chord_from_degree(degree)
     }
 
-    pub(crate) fn harmonized_triads(&self) -> ExceptionResult<Vec<Chord>> {
+    pub(crate) fn harmonized_triads(&self) -> Result<Vec<Chord>> {
         (1..=7)
             .map(|degree| self.triad_from_degree(degree))
             .collect()
     }
 
-    pub(crate) fn harmonized_sevenths(&self) -> ExceptionResult<Vec<Chord>> {
+    pub(crate) fn harmonized_sevenths(&self) -> Result<Vec<Chord>> {
         (1..=7)
             .map(|degree| self.seventh_chord_from_degree(degree))
             .collect()
     }
 
-    pub(crate) fn relative(&self) -> ExceptionResult<Self> {
+    pub(crate) fn relative(&self) -> Result<Self> {
         match self.mode.as_str() {
             "major" => self.key_signature().try_as_key(Some("minor"), None),
             "minor" => self.key_signature().try_as_key(Some("major"), None),
@@ -107,7 +107,7 @@ impl Key {
         }
     }
 
-    pub(crate) fn parallel(&self) -> ExceptionResult<Self> {
+    pub(crate) fn parallel(&self) -> Result<Self> {
         match self.mode.as_str() {
             "major" => Self::from_tonic_mode(&self.tonic_pitch.name(), Some("minor")),
             "minor" => Self::from_tonic_mode(&self.tonic_pitch.name(), Some("major")),

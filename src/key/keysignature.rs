@@ -1,7 +1,7 @@
 use crate::{
     base::{Music21Object, Music21ObjectTrait},
     defaults::IntegerType,
-    exception::{Exception, ExceptionResult},
+    error::{Error, Result},
     interval::{Interval, IntervalArgument},
     pitch::Pitch,
     prebase::ProtoM21ObjectTrait,
@@ -41,7 +41,7 @@ pub(crate) fn mode_sharps_alter(mode: &str) -> Option<IntegerType> {
         .find_map(|(name, value)| (*name == mode.to_lowercase()).then_some(*value))
 }
 
-pub(crate) fn sharps_to_pitch(sharp_count: IntegerType) -> ExceptionResult<Pitch> {
+pub(crate) fn sharps_to_pitch(sharp_count: IntegerType) -> Result<Pitch> {
     if sharp_count == 0 {
         return Pitch::new(
             Some("C".to_string()),
@@ -85,11 +85,11 @@ pub(crate) fn sharps_to_pitch(sharp_count: IntegerType) -> ExceptionResult<Pitch
 pub(crate) fn pitch_to_sharps(
     pitch_value: &Pitch,
     mode: Option<&str>,
-) -> ExceptionResult<IntegerType> {
+) -> Result<IntegerType> {
     let step_index = FIFTHS_ORDER_SHARP
         .iter()
         .position(|step| *step == pitch_value.step())
-        .ok_or_else(|| Exception::StepName("cannot map step to circle of fifths".to_string()))?;
+        .ok_or_else(|| Error::StepName("cannot map step to circle of fifths".to_string()))?;
 
     let mut sharps = step_index as IntegerType - 1;
     let accidental_alter = pitch_value.alter().round() as IntegerType;
@@ -97,7 +97,7 @@ pub(crate) fn pitch_to_sharps(
 
     if let Some(mode) = mode {
         let Some(mode_offset) = mode_sharps_alter(mode) else {
-            return Err(Exception::Ordinal(format!("unknown mode {mode}")));
+            return Err(Error::Ordinal(format!("unknown mode {mode}")));
         };
         sharps += mode_offset;
     }
@@ -108,7 +108,7 @@ pub(crate) fn pitch_to_sharps(
 pub(crate) fn pitch_name_to_sharps(
     pitch_name: &str,
     mode: Option<&str>,
-) -> ExceptionResult<IntegerType> {
+) -> Result<IntegerType> {
     let pitch = Pitch::new(
         Some(pitch_name.to_string()),
         None,
@@ -166,7 +166,7 @@ impl KeySignature {
         &self,
         mode: Option<&str>,
         tonic: Option<&str>,
-    ) -> ExceptionResult<Key> {
+    ) -> Result<Key> {
         let our_sharps = self.sharps;
 
         let resolved_mode = if mode.is_none() && tonic.is_none() {
@@ -176,7 +176,7 @@ impl KeySignature {
             let major_sharps = pitch_name_to_sharps(tonic_name, None)?;
             canonical_mode_for_offset(our_sharps - major_sharps)
                 .ok_or_else(|| {
-                    Exception::Ordinal(format!(
+                    Error::Ordinal(format!(
                         "Could not solve mode from sharps={} and tonic={}",
                         self.sharps, tonic_name
                     ))
@@ -187,7 +187,7 @@ impl KeySignature {
         };
 
         let sharp_alteration_from_major = mode_sharps_alter(&resolved_mode)
-            .ok_or_else(|| Exception::Ordinal(format!("Mode {resolved_mode} is unknown")))?;
+            .ok_or_else(|| Error::Ordinal(format!("Mode {resolved_mode} is unknown")))?;
 
         let tonic_pitch = sharps_to_pitch(our_sharps - sharp_alteration_from_major)?;
         Ok(Key::new(tonic_pitch, &resolved_mode, our_sharps))

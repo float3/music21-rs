@@ -1,12 +1,12 @@
-use std::error::Error;
-use std::fmt;
+use std::{convert::Infallible, error, fmt};
 
 /// Result type returned by fallible `music21-rs` operations.
-pub type ExceptionResult<T> = Result<T, Exception>;
+pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 /// Error variants produced by the crate's theory helpers.
-#[derive(Debug)]
-pub enum Exception {
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum Error {
     /// Error associated with a generic music21-style object.
     Music21Object(String),
     /// Error associated with chord construction or analysis.
@@ -33,87 +33,99 @@ pub enum Exception {
     Polyrhythm(String),
 }
 
-impl fmt::Display for Exception {
+impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Exception::Music21Object(msg) => write!(f, "Music21Object error: {msg}"),
-            Exception::Chord(msg) => write!(f, "Chord error: {msg}"),
-            Exception::Pitch(msg) => write!(f, "Pitch error: {msg}"),
-            Exception::Microtone(msg) => write!(f, "Microtone error: {msg}"),
-            Exception::Accidental(msg) => write!(f, "Accidental error: {msg}"),
-            Exception::ChordTables(msg) => write!(f, "ChordTables error: {msg}"),
-            Exception::Interval(msg) => write!(f, "Interval error: {msg}"),
-            Exception::StepName(msg) => write!(f, "StepName error: {msg}"),
-            Exception::PitchClass(msg) => write!(f, "PitchClass error: {msg}"),
-            Exception::PitchClassString(msg) => write!(f, "PitchClassString error: {msg}"),
-            Exception::Ordinal(msg) => write!(f, "Ordinal error: {msg}"),
-            Exception::Polyrhythm(msg) => write!(f, "Polyrhythm {msg}"),
+            Error::Music21Object(msg) => write!(f, "Music21Object error: {msg}"),
+            Error::Chord(msg) => write!(f, "Chord error: {msg}"),
+            Error::Pitch(msg) => write!(f, "Pitch error: {msg}"),
+            Error::Microtone(msg) => write!(f, "Microtone error: {msg}"),
+            Error::Accidental(msg) => write!(f, "Accidental error: {msg}"),
+            Error::ChordTables(msg) => write!(f, "ChordTables error: {msg}"),
+            Error::Interval(msg) => write!(f, "Interval error: {msg}"),
+            Error::StepName(msg) => write!(f, "StepName error: {msg}"),
+            Error::PitchClass(msg) => write!(f, "PitchClass error: {msg}"),
+            Error::PitchClassString(msg) => write!(f, "PitchClassString error: {msg}"),
+            Error::Ordinal(msg) => write!(f, "Ordinal error: {msg}"),
+            Error::Polyrhythm(msg) => write!(f, "Polyrhythm {msg}"),
         }
     }
 }
 
-impl Error for Exception {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
+impl error::Error for Error {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         None
     }
 }
 
+impl From<Infallible> for Error {
+    fn from(value: Infallible) -> Self {
+        match value {}
+    }
+}
+
+#[deprecated(note = "use music21_rs::Error instead")]
+pub use Error as Exception;
+
+#[deprecated(note = "use music21_rs::Result instead")]
+pub type ExceptionResult<T> = Result<T>;
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::error::Error;
+    use std::error::Error as StdError;
 
     #[test]
     fn test_display_music21object() {
-        let err = Exception::Music21Object("error message".to_string());
+        let err = Error::Music21Object("error message".to_string());
         assert_eq!(format!("{err}"), "Music21Object error: error message");
     }
 
     #[test]
     fn test_display_chord() {
-        let err = Exception::Chord("chord error".to_string());
+        let err = Error::Chord("chord error".to_string());
         assert_eq!(format!("{err}"), "Chord error: chord error");
     }
 
     #[test]
     fn test_display_pitch() {
-        let err = Exception::Pitch("pitch error".to_string());
+        let err = Error::Pitch("pitch error".to_string());
         assert_eq!(format!("{err}"), "Pitch error: pitch error");
     }
 
     #[test]
     fn test_display_microtone() {
-        let err = Exception::Microtone("microtone error".to_string());
+        let err = Error::Microtone("microtone error".to_string());
         assert_eq!(format!("{err}"), "Microtone error: microtone error");
     }
 
     #[test]
     fn test_display_accidental() {
-        let err = Exception::Accidental("accidental error".to_string());
+        let err = Error::Accidental("accidental error".to_string());
         assert_eq!(format!("{err}"), "Accidental error: accidental error");
     }
 
     #[test]
     fn test_display_chordtables() {
-        let err = Exception::ChordTables("chordtables error".to_string());
+        let err = Error::ChordTables("chordtables error".to_string());
         assert_eq!(format!("{err}"), "ChordTables error: chordtables error");
     }
 
     #[test]
     fn test_display_interval() {
-        let err = Exception::Interval("interval error".to_string());
+        let err = Error::Interval("interval error".to_string());
         assert_eq!(format!("{err}"), "Interval error: interval error");
     }
 
     #[test]
     fn test_display_stepname() {
-        let err = Exception::StepName("step name error".to_string());
+        let err = Error::StepName("step name error".to_string());
         assert_eq!(format!("{err}"), "StepName error: step name error");
     }
 
     #[test]
     fn test_display_pitchclassstring() {
-        let err = Exception::PitchClassString("pitch class error".to_string());
+        let err = Error::PitchClassString("pitch class error".to_string());
         assert_eq!(
             format!("{err}"),
             "PitchClassString error: pitch class error"
@@ -122,27 +134,27 @@ mod tests {
 
     #[test]
     fn test_display_ordinal() {
-        let err = Exception::Ordinal("ordinal error".to_string());
+        let err = Error::Ordinal("ordinal error".to_string());
         assert_eq!(format!("{err}"), "Ordinal error: ordinal error");
     }
 
     #[test]
     fn test_source_none() {
-        let exceptions = [
-            Exception::Music21Object("music21".to_string()),
-            Exception::Chord("chord".to_string()),
-            Exception::Pitch("pitch".to_string()),
-            Exception::Microtone("microtone".to_string()),
-            Exception::Accidental("accidental".to_string()),
-            Exception::ChordTables("chordtables".to_string()),
-            Exception::Interval("interval".to_string()),
-            Exception::StepName("step".to_string()),
-            Exception::PitchClassString("pitch class".to_string()),
-            Exception::Ordinal("ordinal".to_string()),
+        let errors = [
+            Error::Music21Object("music21".to_string()),
+            Error::Chord("chord".to_string()),
+            Error::Pitch("pitch".to_string()),
+            Error::Microtone("microtone".to_string()),
+            Error::Accidental("accidental".to_string()),
+            Error::ChordTables("chordtables".to_string()),
+            Error::Interval("interval".to_string()),
+            Error::StepName("step".to_string()),
+            Error::PitchClassString("pitch class".to_string()),
+            Error::Ordinal("ordinal".to_string()),
         ];
 
-        for err in exceptions.iter() {
-            // Ensure that source() returns None for each exception.
+        for err in errors.iter() {
+            // Ensure that source() returns None for each Error.
             assert!(
                 err.source().is_none(),
                 "Expected None for source() in {err:?}"
@@ -151,40 +163,37 @@ mod tests {
     }
 
     #[test]
-    fn test_all_exceptions_display() {
+    fn test_all_errors_display() {
         let cases = [
             (
-                Exception::Music21Object("music21".to_string()),
+                Error::Music21Object("music21".to_string()),
                 "Music21Object error: music21",
             ),
-            (Exception::Chord("chord".to_string()), "Chord error: chord"),
-            (Exception::Pitch("pitch".to_string()), "Pitch error: pitch"),
+            (Error::Chord("chord".to_string()), "Chord error: chord"),
+            (Error::Pitch("pitch".to_string()), "Pitch error: pitch"),
             (
-                Exception::Microtone("microtone".to_string()),
+                Error::Microtone("microtone".to_string()),
                 "Microtone error: microtone",
             ),
             (
-                Exception::Accidental("accidental".to_string()),
+                Error::Accidental("accidental".to_string()),
                 "Accidental error: accidental",
             ),
             (
-                Exception::ChordTables("chordtables".to_string()),
+                Error::ChordTables("chordtables".to_string()),
                 "ChordTables error: chordtables",
             ),
             (
-                Exception::Interval("interval".to_string()),
+                Error::Interval("interval".to_string()),
                 "Interval error: interval",
             ),
+            (Error::StepName("step".to_string()), "StepName error: step"),
             (
-                Exception::StepName("step".to_string()),
-                "StepName error: step",
-            ),
-            (
-                Exception::PitchClassString("pitchclass".to_string()),
+                Error::PitchClassString("pitchclass".to_string()),
                 "PitchClassString error: pitchclass",
             ),
             (
-                Exception::Ordinal("ordinal".to_string()),
+                Error::Ordinal("ordinal".to_string()),
                 "Ordinal error: ordinal",
             ),
         ];

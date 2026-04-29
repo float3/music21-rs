@@ -3,7 +3,7 @@ use super::Pitch;
 use crate::common::objects::slottedobjectmixin::{SlottedObjectMixin, SlottedObjectMixinTrait};
 use crate::defaults::FloatType;
 use crate::display::{DisplayLocation, DisplaySize, DisplayStyle, DisplayType};
-use crate::exception::{Exception, ExceptionResult};
+use crate::error::{Error, Result};
 use crate::prebase::{ProtoM21Object, ProtoM21ObjectTrait};
 
 use std::fmt::{Display, Formatter};
@@ -375,7 +375,7 @@ impl PartialOrd for Accidental {
 impl Accidental {
     /// Creates an accidental from a name, modifier, alternate name, unicode
     /// symbol, semitone alteration, or another accidental.
-    pub fn new(specifier: impl Into<AccidentalSpecifier>) -> ExceptionResult<Self> {
+    pub fn new(specifier: impl Into<AccidentalSpecifier>) -> Result<Self> {
         let specifier = specifier.into();
         if let AccidentalSpecifier::Accidental(accidental) = specifier {
             return Ok(accidental);
@@ -427,16 +427,16 @@ impl Accidental {
     }
 
     /// Converts a supported accidental spelling to its standard music21 name.
-    pub fn standardize_name(name: &str) -> ExceptionResult<String> {
+    pub fn standardize_name(name: &str) -> Result<String> {
         AccidentalEnum::from_string(&name.to_lowercase())
             .map(|accidental| accidental.to_name().to_string())
             .ok_or_else(|| {
-                Exception::Accidental(format!("{name:?} is not a supported accidental type"))
+                Error::Accidental(format!("{name:?} is not a supported accidental type"))
             })
     }
 
     /// Changes this accidental to a supported accidental.
-    pub fn set(&mut self, specifier: impl Into<AccidentalSpecifier>) -> ExceptionResult<()> {
+    pub fn set(&mut self, specifier: impl Into<AccidentalSpecifier>) -> Result<()> {
         self.set_specifier(specifier.into(), false)
     }
 
@@ -446,7 +446,7 @@ impl Accidental {
     pub fn set_allowing_non_standard_value(
         &mut self,
         specifier: impl Into<AccidentalSpecifier>,
-    ) -> ExceptionResult<()> {
+    ) -> Result<()> {
         self.set_specifier(specifier.into(), true)
     }
 
@@ -454,7 +454,7 @@ impl Accidental {
         &mut self,
         specifier: AccidentalSpecifier,
         allow_non_standard_value: bool,
-    ) -> ExceptionResult<()> {
+    ) -> Result<()> {
         if let AccidentalSpecifier::Accidental(accidental) = specifier {
             *self = accidental;
             self.inform_client();
@@ -470,7 +470,7 @@ impl Accidental {
         }
 
         if !allow_non_standard_value {
-            return Err(Exception::Accidental(format!(
+            return Err(Error::Accidental(format!(
                 "{specifier} is not a supported accidental type"
             )));
         }
@@ -507,7 +507,7 @@ impl Accidental {
 
     /// Sets the accidental name. Standard names update `alter` and `modifier`;
     /// non-standard names are preserved without changing them.
-    pub fn set_name(&mut self, name: impl Into<String>) -> ExceptionResult<()> {
+    pub fn set_name(&mut self, name: impl Into<String>) -> Result<()> {
         self.set_allowing_non_standard_value(name.into())
     }
 
@@ -518,7 +518,7 @@ impl Accidental {
 
     /// Sets the semitone alteration. Standard values update `name` and
     /// `modifier`; non-standard values are preserved without changing them.
-    pub fn set_alter(&mut self, alter: f64) -> ExceptionResult<()> {
+    pub fn set_alter(&mut self, alter: f64) -> Result<()> {
         self.set_allowing_non_standard_value(alter)
     }
 
@@ -596,9 +596,9 @@ impl Accidental {
     }
 
     /// Sets the accidental display type.
-    pub fn set_display_type(&mut self, value: &str) -> ExceptionResult<()> {
+    pub fn set_display_type(&mut self, value: &str) -> Result<()> {
         self._display_type = display_type_from_str(value).ok_or_else(|| {
-            Exception::Accidental(format!("Supplied display type is not supported: {value:?}"))
+            Error::Accidental(format!("Supplied display type is not supported: {value:?}"))
         })?;
         self.inform_client();
         Ok(())
@@ -622,9 +622,9 @@ impl Accidental {
     }
 
     /// Sets the display style.
-    pub fn set_display_style(&mut self, value: &str) -> ExceptionResult<()> {
+    pub fn set_display_style(&mut self, value: &str) -> Result<()> {
         self.display_style = display_style_from_str(value).ok_or_else(|| {
-            Exception::Accidental(format!(
+            Error::Accidental(format!(
                 "Supplied display style is not supported: {value:?}"
             ))
         })?;
@@ -638,7 +638,7 @@ impl Accidental {
     }
 
     /// Sets the display size.
-    pub fn set_display_size(&mut self, value: &str) -> ExceptionResult<()> {
+    pub fn set_display_size(&mut self, value: &str) -> Result<()> {
         self.display_size = display_size_from_str(value)?;
         self.inform_client();
         Ok(())
@@ -650,9 +650,9 @@ impl Accidental {
     }
 
     /// Sets the display location.
-    pub fn set_display_location(&mut self, value: &str) -> ExceptionResult<()> {
+    pub fn set_display_location(&mut self, value: &str) -> Result<()> {
         self.display_location = display_location_from_str(value).ok_or_else(|| {
-            Exception::Accidental(format!(
+            Error::Accidental(format!(
                 "Supplied display location is not supported: {value:?}"
             ))
         })?;
@@ -742,7 +742,7 @@ fn display_size_to_string(value: &DisplaySize) -> String {
     }
 }
 
-fn display_size_from_str(value: &str) -> ExceptionResult<DisplaySize> {
+fn display_size_from_str(value: &str) -> Result<DisplaySize> {
     match value {
         "full" => Ok(DisplaySize::Full),
         "cue" => Ok(DisplaySize::Cue),
@@ -751,7 +751,7 @@ fn display_size_from_str(value: &str) -> ExceptionResult<DisplaySize> {
             .parse::<FloatType>()
             .map(DisplaySize::Percentage)
             .map_err(|_| {
-                Exception::Accidental(format!("Supplied display size is not supported: {value:?}"))
+                Error::Accidental(format!("Supplied display size is not supported: {value:?}"))
             }),
     }
 }
@@ -794,7 +794,7 @@ impl SlottedObjectMixinTrait for Accidental {}
 pub(crate) trait IntoAccidental: Display + Clone {
     fn accidental_args(self, allow_non_standard_values: bool) -> Option<(String, FloatType)>;
     fn is_accidental(&self) -> bool;
-    fn into_accidental(self) -> ExceptionResult<Accidental>;
+    fn into_accidental(self) -> Result<Accidental>;
     fn accidental(self) -> Accidental;
 }
 
@@ -811,7 +811,7 @@ impl IntoAccidental for i8 {
         false
     }
 
-    fn into_accidental(self) -> ExceptionResult<Accidental> {
+    fn into_accidental(self) -> Result<Accidental> {
         Accidental::new(self)
     }
 
@@ -833,7 +833,7 @@ impl IntoAccidental for FloatType {
         false
     }
 
-    fn into_accidental(self) -> ExceptionResult<Accidental> {
+    fn into_accidental(self) -> Result<Accidental> {
         Accidental::new(self)
     }
 
@@ -851,7 +851,7 @@ impl IntoAccidental for &str {
         false
     }
 
-    fn into_accidental(self) -> ExceptionResult<Accidental> {
+    fn into_accidental(self) -> Result<Accidental> {
         Accidental::new(self)
     }
 
@@ -873,7 +873,7 @@ impl IntoAccidental for String {
         false
     }
 
-    fn into_accidental(self) -> ExceptionResult<Accidental> {
+    fn into_accidental(self) -> Result<Accidental> {
         Accidental::new(self)
     }
 
@@ -891,7 +891,7 @@ impl IntoAccidental for Accidental {
         true
     }
 
-    fn into_accidental(self) -> ExceptionResult<Accidental> {
+    fn into_accidental(self) -> Result<Accidental> {
         panic!("don't call into_accidental on an accidental");
     }
 
@@ -915,7 +915,7 @@ impl IntoAccidental for AccidentalSpecifier {
         matches!(self, AccidentalSpecifier::Accidental(_))
     }
 
-    fn into_accidental(self) -> ExceptionResult<Accidental> {
+    fn into_accidental(self) -> Result<Accidental> {
         Accidental::new(self)
     }
 

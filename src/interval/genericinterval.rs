@@ -1,7 +1,7 @@
 use crate::{
     base::Music21ObjectTrait,
     common::{numbertools::MUSICAL_ORDINAL_STRINGS, stringtools::get_num_from_str},
-    exception::{Exception, ExceptionResult},
+    error::{Error, Result},
     note::Note,
     pitch::Pitch,
     prebase::ProtoM21ObjectTrait,
@@ -29,7 +29,7 @@ impl GenericInterval {
     }
 
     ///default value is "Unison"
-    pub(crate) fn from_string(value: String) -> ExceptionResult<Self> {
+    pub(crate) fn from_string(value: String) -> Result<Self> {
         let mut slf = Self {
             intervalbase: IntervalBase::new(),
             _value: 1,
@@ -40,7 +40,7 @@ impl GenericInterval {
         Ok(slf)
     }
 
-    pub(crate) fn from_int(value: IntegerType) -> ExceptionResult<Self> {
+    pub(crate) fn from_int(value: IntegerType) -> Result<Self> {
         let mut slf = Self {
             intervalbase: IntervalBase::new(),
             _value: 1,
@@ -66,9 +66,9 @@ impl GenericInterval {
         }
     }
 
-    fn value_setter(&mut self, value: IntegerType) -> ExceptionResult<()> {
+    fn value_setter(&mut self, value: IntegerType) -> Result<()> {
         if value == 0 {
-            return Err(Exception::Interval("Interval cannot be zero".to_owned()));
+            return Err(Error::Interval("Interval cannot be zero".to_owned()));
         }
         self._value = value;
         Ok(())
@@ -195,7 +195,7 @@ fn convert_generic(value: IntegerType) -> IntegerType {
 }
 
 impl IntervalBaseTrait for GenericInterval {
-    fn transpose_note(self, note1: Note) -> ExceptionResult<Note> {
+    fn transpose_note(self, note1: Note) -> Result<Note> {
         let specifier = if self.is_perfectable() {
             Specifier::Perfect
         } else {
@@ -207,7 +207,7 @@ impl IntervalBaseTrait for GenericInterval {
         interval.transpose_note(note1)
     }
 
-    fn transpose_pitch(self, pitch1: Pitch) -> ExceptionResult<Pitch> {
+    fn transpose_pitch(self, pitch1: Pitch) -> Result<Pitch> {
         let specifier = if self.is_perfectable() {
             Specifier::Perfect
         } else {
@@ -219,13 +219,13 @@ impl IntervalBaseTrait for GenericInterval {
         interval.transpose_pitch(&pitch1, false, Some(4))
     }
 
-    fn transpose_pitch_in_place(self, pitch1: &mut Pitch) -> ExceptionResult<()> {
+    fn transpose_pitch_in_place(self, pitch1: &mut Pitch) -> Result<()> {
         let transposed = self.transpose_pitch(pitch1.clone())?;
         *pitch1 = transposed;
         Ok(())
     }
 
-    fn reverse(self) -> ExceptionResult<Self>
+    fn reverse(self) -> Result<Self>
     where
         Self: Sized,
     {

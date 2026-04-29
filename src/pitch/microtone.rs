@@ -2,7 +2,7 @@ use super::{IntegerType, convert_harmonic_to_cents};
 
 use crate::common::objects::slottedobjectmixin::{SlottedObjectMixin, SlottedObjectMixinTrait};
 use crate::defaults::FloatType;
-use crate::exception::{Exception, ExceptionResult};
+use crate::error::{Error, Result};
 use crate::prebase::{ProtoM21Object, ProtoM21ObjectTrait};
 use std::fmt::{Display, Formatter};
 
@@ -74,7 +74,7 @@ pub struct Microtone {
 
 impl Microtone {
     /// Creates a microtone with no harmonic shift.
-    pub fn new(specifier: impl Into<MicrotoneSpecifier>) -> ExceptionResult<Self> {
+    pub fn new(specifier: impl Into<MicrotoneSpecifier>) -> Result<Self> {
         match specifier.into() {
             MicrotoneSpecifier::Microtone(microtone) => Ok(microtone),
             specifier => Self::with_harmonic_shift(specifier, 1),
@@ -85,7 +85,7 @@ impl Microtone {
     pub fn with_harmonic_shift(
         specifier: impl Into<MicrotoneSpecifier>,
         harmonic_shift: i32,
-    ) -> ExceptionResult<Self> {
+    ) -> Result<Self> {
         match specifier.into() {
             MicrotoneSpecifier::Cents(cents) => {
                 Self::from_cent_shift(Some(cents), Some(harmonic_shift))
@@ -103,7 +103,7 @@ impl Microtone {
     pub(crate) fn from_cent_shift<T>(
         cents_or_string: Option<T>,
         harmonic_shift: Option<IntegerType>,
-    ) -> ExceptionResult<Self>
+    ) -> Result<Self>
     where
         T: IntoCentShift,
     {
@@ -152,13 +152,13 @@ impl Microtone {
         self._harmonic_shift = harmonic_shift;
     }
 
-    fn parse_string(value: String) -> ExceptionResult<FloatType> {
+    fn parse_string(value: String) -> Result<FloatType> {
         let value = value.replace(MICROTONE_OPEN, "");
         let value = value.replace(MICROTONE_CLOSE, "");
         let first = match value.chars().next() {
             Some(first) => first,
             None => {
-                return Err(Exception::Microtone(format!(
+                return Err(Error::Microtone(format!(
                     "input to Microtone was empty: {value}"
                 )));
             }
@@ -167,23 +167,23 @@ impl Microtone {
         let cent_value = if first == '+' || first.is_ascii_digit() {
             let (num, _) = crate::common::stringtools::get_num_from_str(&value, "0123456789.");
             if num.is_empty() {
-                return Err(Exception::Microtone(format!(
+                return Err(Error::Microtone(format!(
                     "no numbers found in string value: {value}"
                 )));
             }
             num.parse::<FloatType>()
-                .map_err(|e| Exception::Microtone(e.to_string()))?
+                .map_err(|e| Error::Microtone(e.to_string()))?
         } else if first == '-' {
             let trimmed: String = value.chars().skip(1).collect();
             let (num, _) = crate::common::stringtools::get_num_from_str(&trimmed, "0123456789.");
             if num.is_empty() {
-                return Err(Exception::Microtone(format!(
+                return Err(Error::Microtone(format!(
                     "no numbers found in string value: {value}"
                 )));
             }
             let parsed = num
                 .parse::<FloatType>()
-                .map_err(|e| Exception::Microtone(e.to_string()))?;
+                .map_err(|e| Error::Microtone(e.to_string()))?;
             -parsed
         } else {
             0.0
@@ -250,7 +250,7 @@ pub(crate) trait IntoCentShift {
     ///
     /// This method assumes that `is_microtone()` is `false`.
     /// Calling this method when `is_microtone()` is `true` will panic.
-    fn into_microtone(self) -> ExceptionResult<Microtone>;
+    fn into_microtone(self) -> Result<Microtone>;
     /// Returns the contained microtone.
     ///
     /// # Panics
@@ -269,7 +269,7 @@ impl IntoCentShift for String {
         false
     }
 
-    fn into_microtone(self) -> ExceptionResult<Microtone> {
+    fn into_microtone(self) -> Result<Microtone> {
         Microtone::from_cent_shift(Some(self), None)
     }
 
@@ -287,7 +287,7 @@ impl IntoCentShift for &str {
         false
     }
 
-    fn into_microtone(self) -> ExceptionResult<Microtone> {
+    fn into_microtone(self) -> Result<Microtone> {
         Microtone::from_cent_shift(Some(self), None)
     }
 
@@ -305,7 +305,7 @@ impl IntoCentShift for IntegerType {
         false
     }
 
-    fn into_microtone(self) -> ExceptionResult<Microtone> {
+    fn into_microtone(self) -> Result<Microtone> {
         Microtone::from_cent_shift(Some(self), None)
     }
 
@@ -323,7 +323,7 @@ impl IntoCentShift for FloatType {
         false
     }
 
-    fn into_microtone(self) -> ExceptionResult<Microtone> {
+    fn into_microtone(self) -> Result<Microtone> {
         Microtone::from_cent_shift(Some(self), None)
     }
 
@@ -341,7 +341,7 @@ impl IntoCentShift for Microtone {
         true
     }
 
-    fn into_microtone(self) -> ExceptionResult<Microtone> {
+    fn into_microtone(self) -> Result<Microtone> {
         panic!("don't call this on Microtones");
     }
 
@@ -363,7 +363,7 @@ impl IntoCentShift for MicrotoneSpecifier {
         matches!(self, MicrotoneSpecifier::Microtone(_))
     }
 
-    fn into_microtone(self) -> ExceptionResult<Microtone> {
+    fn into_microtone(self) -> Result<Microtone> {
         Microtone::new(self)
     }
 

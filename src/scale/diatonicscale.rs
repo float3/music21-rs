@@ -1,4 +1,4 @@
-use crate::{chord::Chord, defaults::IntegerType, exception::ExceptionResult, pitch::Pitch};
+use crate::{chord::Chord, defaults::IntegerType, error::Result, pitch::Pitch};
 
 use super::concretescale::ConcreteScale;
 
@@ -24,15 +24,15 @@ impl DiatonicScale {
         self.concrete.tonic()
     }
 
-    pub(crate) fn pitch_from_degree(&self, degree: usize) -> ExceptionResult<Pitch> {
+    pub(crate) fn pitch_from_degree(&self, degree: usize) -> Result<Pitch> {
         self.concrete.pitch_from_degree(degree)
     }
 
-    pub(crate) fn pitches(&self) -> ExceptionResult<Vec<Pitch>> {
+    pub(crate) fn pitches(&self) -> Result<Vec<Pitch>> {
         self.concrete.pitches()
     }
 
-    pub(crate) fn triad_from_degree(&self, degree: usize) -> ExceptionResult<Chord> {
+    pub(crate) fn triad_from_degree(&self, degree: usize) -> Result<Chord> {
         let notes = vec![
             self.pitch_from_degree(degree)?,
             self.pitch_from_degree(degree + 2)?,
@@ -41,7 +41,7 @@ impl DiatonicScale {
         Chord::new(notes.as_slice())
     }
 
-    pub(crate) fn seventh_chord_from_degree(&self, degree: usize) -> ExceptionResult<Chord> {
+    pub(crate) fn seventh_chord_from_degree(&self, degree: usize) -> Result<Chord> {
         let notes = vec![
             self.pitch_from_degree(degree)?,
             self.pitch_from_degree(degree + 2)?,

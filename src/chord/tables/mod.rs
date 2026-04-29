@@ -1,6 +1,6 @@
 mod generated;
 
-use crate::exception::Exception;
+use crate::error::Error;
 
 use generated::*;
 use std::{collections::HashMap, sync::LazyLock};
@@ -194,12 +194,12 @@ static CARDINALITY_TO_CHORD_MEMBERS: CardinalityToChordMembers = LazyLock::new(|
 
 fn forte_index_to_inversions_available(card: usize, index: u8) -> Result<Vec<Sign>, Exception> {
     if !(1..=13).contains(&card) {
-        return Err(Exception::ChordTables(format!(
+        return Err(Error::ChordTables(format!(
             "cardinality {card} not valid"
         )));
     }
     if index < 1 || index > MAXIMUM_INDEX_NUMBER_WITHOUT_INVERSION_EQUIVALENCE[card] {
-        return Err(Exception::ChordTables(format!(
+        return Err(Error::ChordTables(format!(
             "index {index} not valid for cardinality {card}"
         )));
     }
@@ -223,13 +223,13 @@ fn validate_address(address: (u8, u8, Option<i8>)) -> Result<(u8, u8, Sign), Exc
     let inversion = address.2.and_then(Sign::from_i8);
 
     if !(1..=12).contains(&card) {
-        return Err(Exception::ChordTables(format!(
+        return Err(Error::ChordTables(format!(
             "cardinality {card} not valid"
         )));
     }
 
     if index < 1 || index > MAXIMUM_INDEX_NUMBER_WITHOUT_INVERSION_EQUIVALENCE[card as usize] {
-        return Err(Exception::ChordTables(format!("index {index} not valid")));
+        return Err(Error::ChordTables(format!("index {index} not valid")));
     }
 
     let inversions_available = forte_index_to_inversions_available(card as usize, index)?;
@@ -238,7 +238,7 @@ fn validate_address(address: (u8, u8, Option<i8>)) -> Result<(u8, u8, Sign), Exc
         if inversions_available.contains(&inv) {
             inv
         } else {
-            return Err(Exception::ChordTables(format!(
+            return Err(Error::ChordTables(format!(
                 "inversion {} not valid",
                 inv.as_i8()
             )));
@@ -275,7 +275,7 @@ pub(crate) fn seek_chord_tables_address(
     ordered_pitch_classes: &[u8],
 ) -> Result<ChordTableAddress, Exception> {
     if ordered_pitch_classes.is_empty() {
-        return Err(Exception::ChordTables(
+        return Err(Error::ChordTables(
             "cannot access chord tables address for Chord with 0 pitches".to_string(),
         ));
     }
@@ -350,7 +350,7 @@ pub(crate) fn seek_chord_tables_address(
         }
     }
 
-    Err(Exception::ChordTables(format!(
+    Err(Error::ChordTables(format!(
         "cannot find a chord table address for {ordered_pitch_classes:?}"
     )))
 }
@@ -389,7 +389,7 @@ pub(crate) fn transposed_normal_form_from_address(
         .get(card as usize)
         .and_then(|bucket| bucket.get(&(index, inversion)))
         .ok_or_else(|| {
-            Exception::ChordTables(format!(
+            Error::ChordTables(format!(
                 "cannot resolve normal form for address ({card}, {index}, {})",
                 inversion.as_i8()
             ))
@@ -405,7 +405,7 @@ pub(crate) fn interval_class_vector_from_address(
         .get(card as usize)
         .and_then(|bucket| bucket.get(&(index, inversion)))
         .ok_or_else(|| {
-            Exception::ChordTables(format!(
+            Error::ChordTables(format!(
                 "cannot resolve interval class vector for address ({card}, {index}, {})",
                 inversion.as_i8()
             ))

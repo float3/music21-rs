@@ -1,6 +1,6 @@
 use crate::{
     defaults::IntegerType,
-    exception::{Exception, ExceptionResult},
+    error::{Error, Result},
 };
 
 #[derive(Clone, Debug)]
@@ -69,7 +69,7 @@ impl Specifier {
         }
     }
 
-    pub(crate) fn semitones_above_perfect(&self) -> ExceptionResult<IntegerType> {
+    pub(crate) fn semitones_above_perfect(&self) -> Result<IntegerType> {
         match self {
             Specifier::Perfect => Ok(0),
             Specifier::Augmented => Ok(1),
@@ -80,13 +80,13 @@ impl Specifier {
             Specifier::DoubleDiminished => Ok(-2),
             Specifier::TripleDiminished => Ok(-3),
             Specifier::QuadrupleDiminished => Ok(-4),
-            _ => Err(Exception::Interval(format!(
+            _ => Err(Error::Interval(format!(
                 "{self:?} cannot be compared to Perfect"
             ))),
         }
     }
 
-    pub(crate) fn semitones_above_major(&self) -> ExceptionResult<IntegerType> {
+    pub(crate) fn semitones_above_major(&self) -> Result<IntegerType> {
         match self {
             Specifier::Major => Ok(0),
             Specifier::Minor => Ok(-1),
@@ -98,7 +98,7 @@ impl Specifier {
             Specifier::DoubleDiminished => Ok(-3),
             Specifier::TripleDiminished => Ok(-4),
             Specifier::QuadrupleDiminished => Ok(-5),
-            _ => Err(Exception::Interval(format!(
+            _ => Err(Error::Interval(format!(
                 "{self:?} cannot be compared to Major"
             ))),
         }

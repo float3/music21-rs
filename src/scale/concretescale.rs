@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     defaults::IntegerType,
-    exception::{Exception, ExceptionResult},
+    error::{Error, Result},
     pitch::Pitch,
     stepname::StepName,
 };
@@ -27,9 +27,9 @@ impl ConcreteScale {
         &self.tonic
     }
 
-    pub(crate) fn pitch_from_degree(&self, degree: usize) -> ExceptionResult<Pitch> {
+    pub(crate) fn pitch_from_degree(&self, degree: usize) -> Result<Pitch> {
         if degree == 0 {
-            return Err(Exception::Ordinal("Scale degree must be >= 1".to_string()));
+            return Err(Error::Ordinal("Scale degree must be >= 1".to_string()));
         }
 
         let tonic_step_idx = self.tonic.step().step_to_dnn_offset() - 1;
@@ -55,14 +55,14 @@ impl ConcreteScale {
         )
     }
 
-    pub(crate) fn pitches(&self) -> ExceptionResult<Vec<Pitch>> {
+    pub(crate) fn pitches(&self) -> Result<Vec<Pitch>> {
         (1..=8)
             .map(|degree| self.pitch_from_degree(degree))
             .collect()
     }
 }
 
-fn diatonic_number_to_step_and_octave(dn: IntegerType) -> ExceptionResult<(StepName, IntegerType)> {
+fn diatonic_number_to_step_and_octave(dn: IntegerType) -> Result<(StepName, IntegerType)> {
     if dn == 0 {
         return Ok((StepName::B, -1));
     }

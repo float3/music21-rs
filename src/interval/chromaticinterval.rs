@@ -1,5 +1,5 @@
 use crate::{
-    base::Music21ObjectTrait, defaults::IntegerType, exception::ExceptionResult, note::Note,
+    base::Music21ObjectTrait, defaults::IntegerType, error::Result, note::Note,
     pitch::Pitch, prebase::ProtoM21ObjectTrait,
 };
 
@@ -28,13 +28,13 @@ impl ChromaticInterval {
 }
 
 impl IntervalBaseTrait for ChromaticInterval {
-    fn transpose_note(self, note1: Note) -> ExceptionResult<Note> {
+    fn transpose_note(self, note1: Note) -> Result<Note> {
         let mut cloned = note1.clone();
         cloned._pitch = self.transpose_pitch(note1._pitch)?;
         Ok(cloned)
     }
 
-    fn transpose_pitch(self, pitch1: Pitch) -> ExceptionResult<Pitch> {
+    fn transpose_pitch(self, pitch1: Pitch) -> Result<Pitch> {
         let mut p_out = Pitch::new(
             Some((pitch1.ps() + self.semitones as f64).round() as IntegerType),
             None,
@@ -52,12 +52,12 @@ impl IntervalBaseTrait for ChromaticInterval {
         Ok(p_out)
     }
 
-    fn transpose_pitch_in_place(self, pitch1: &mut Pitch) -> ExceptionResult<()> {
+    fn transpose_pitch_in_place(self, pitch1: &mut Pitch) -> Result<()> {
         *pitch1 = self.transpose_pitch(pitch1.clone())?;
         Ok(())
     }
 
-    fn reverse(self) -> ExceptionResult<Self>
+    fn reverse(self) -> Result<Self>
     where
         Self: Sized,
     {

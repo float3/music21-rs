@@ -1,7 +1,7 @@
 use crate::{
     base::Music21ObjectTrait,
     defaults::{IntegerType, UnsignedIntegerType},
-    exception::{Exception, ExceptionResult},
+    error::{Error, Result},
     note::Note,
     pitch::Pitch,
     prebase::ProtoM21ObjectTrait,
@@ -19,7 +19,7 @@ pub(crate) struct DiatonicInterval {
 }
 
 impl DiatonicInterval {
-    pub(crate) fn get_chromatic(&self) -> ExceptionResult<ChromaticInterval> {
+    pub(crate) fn get_chromatic(&self) -> Result<ChromaticInterval> {
         let octave_offset = (self.generic.staff_distance().abs() / 7) as UnsignedIntegerType;
         let semitones_start =
             semitones_generic(self.generic.simple_undirected() as UnsignedIntegerType)?;
@@ -64,7 +64,7 @@ impl DiatonicInterval {
     }
 }
 
-fn semitones_generic(r#in: UnsignedIntegerType) -> ExceptionResult<UnsignedIntegerType> {
+fn semitones_generic(r#in: UnsignedIntegerType) -> Result<UnsignedIntegerType> {
     match r#in {
         1 => Ok(0),
         2 => Ok(2),
@@ -73,32 +73,32 @@ fn semitones_generic(r#in: UnsignedIntegerType) -> ExceptionResult<UnsignedInteg
         5 => Ok(7),
         6 => Ok(9),
         7 => Ok(11),
-        _ => Err(Exception::Interval(format!(
+        _ => Err(Error::Interval(format!(
             "Invalid diatonic interval: {in}"
         ))),
     }
 }
 
 impl IntervalBaseTrait for DiatonicInterval {
-    fn transpose_note(self, note1: Note) -> ExceptionResult<Note> {
+    fn transpose_note(self, note1: Note) -> Result<Note> {
         let interval =
             super::Interval::from_diatonic_and_chromatic(self.clone(), self.get_chromatic()?)?;
         interval.transpose_note(note1)
     }
 
-    fn transpose_pitch(self, pitch1: Pitch) -> ExceptionResult<Pitch> {
+    fn transpose_pitch(self, pitch1: Pitch) -> Result<Pitch> {
         let interval =
             super::Interval::from_diatonic_and_chromatic(self.clone(), self.get_chromatic()?)?;
         interval.transpose_pitch(&pitch1, false, Some(4))
     }
 
-    fn transpose_pitch_in_place(self, pitch1: &mut Pitch) -> ExceptionResult<()> {
+    fn transpose_pitch_in_place(self, pitch1: &mut Pitch) -> Result<()> {
         let transposed = self.transpose_pitch(pitch1.clone())?;
         *pitch1 = transposed;
         Ok(())
     }
 
-    fn reverse(self) -> ExceptionResult<Self>
+    fn reverse(self) -> Result<Self>
     where
         Self: Sized,
     {

@@ -21,7 +21,12 @@ pub(crate) mod defaults;
 pub(crate) mod display;
 pub(crate) mod duration;
 /// Error and result types used by the crate.
-pub mod exception;
+pub mod error;
+#[deprecated(note = "use the `error` module and crate-level `Error`/`Result` re-exports")]
+pub mod exception {
+    #[allow(deprecated)]
+    pub use crate::error::{Error, Exception, ExceptionResult, Result};
+}
 pub(crate) mod fraction_pow;
 pub(crate) mod interval;
 pub(crate) mod key;
@@ -40,7 +45,7 @@ pub mod tuningsystem;
 // pub(crate) mod macros;
 
 pub use chord::{Chord, IntoNote, IntoNotes, KnownChordType};
-pub use exception::{Exception, ExceptionResult};
+pub use error::{Error, Result};
 pub use note::Note;
 pub use pitch::{
     Accidental, AccidentalSpecifier, Microtone, MicrotoneSpecifier, Pitch, PitchClass,

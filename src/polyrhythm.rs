@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 
 use crate::chord::Chord;
 use crate::defaults::{FloatType, IntegerType, UnsignedIntegerType};
-use crate::exception::{Exception, ExceptionResult};
+use crate::error::{Error, Result};
 use crate::interval::{Interval, IntervalArgument};
 use crate::note::IntoPitch;
 use crate::pitch::Pitch;
@@ -39,18 +39,18 @@ impl Polyrhythm {
     pub fn new(
         base: UnsignedIntegerType,
         subdivisions: &[UnsignedIntegerType],
-    ) -> ExceptionResult<Self> {
+    ) -> Result<Self> {
         if base == 0 {
-            return Err(Exception::Polyrhythm("Base must be nonzero".into()));
+            return Err(Error::Polyrhythm("Base must be nonzero".into()));
         }
         if subdivisions.is_empty() {
-            return Err(Exception::Polyrhythm(
+            return Err(Error::Polyrhythm(
                 "At least one subdivision is required".into(),
             ));
         }
         for &sub in subdivisions {
             if sub == 0 {
-                return Err(Exception::Polyrhythm("Subdivision must be nonzero".into()));
+                return Err(Error::Polyrhythm("Subdivision must be nonzero".into()));
             }
         }
         let cycle = subdivisions.iter().fold(1, |acc, &x| lcm(acc, x));
@@ -68,7 +68,7 @@ impl Polyrhythm {
         base: UnsignedIntegerType,
         tempo: UnsignedIntegerType,
         subdivisions: &[UnsignedIntegerType],
-    ) -> ExceptionResult<Self> {
+    ) -> Result<Self> {
         let mut poly = Self::new(base, subdivisions)?;
         poly.set_tempo(tempo)?;
         Ok(poly)
@@ -80,14 +80,14 @@ impl Polyrhythm {
         base: UnsignedIntegerType,
         tempo: UnsignedIntegerType,
         subdivisions: &[UnsignedIntegerType],
-    ) -> ExceptionResult<Self> {
+    ) -> Result<Self> {
         Self::new_with_tempo(base, tempo, subdivisions)
     }
 
     /// Sets the tempo in beats per minute.
-    pub fn set_tempo(&mut self, tempo: UnsignedIntegerType) -> ExceptionResult<()> {
+    pub fn set_tempo(&mut self, tempo: UnsignedIntegerType) -> Result<()> {
         if tempo == 0 {
-            return Err(Exception::Polyrhythm("Tempo must be nonzero".into()));
+            return Err(Error::Polyrhythm("Tempo must be nonzero".into()));
         }
         self.tempo = Some(tempo);
         Ok(())
@@ -125,15 +125,15 @@ impl Polyrhythm {
     }
 
     /// Returns the duration of one measure (in seconds)
-    pub fn measure_duration(&self) -> ExceptionResult<FloatType> {
+    pub fn measure_duration(&self) -> Result<FloatType> {
         match self.tempo {
             Some(tempo) => Ok(self.base as FloatType * 60.0 / (tempo as FloatType)),
-            None => Err(Exception::Polyrhythm("Tempo not set".into())),
+            None => Err(Error::Polyrhythm("Tempo not set".into())),
         }
     }
 
     /// Returns the duration of one tick (smallest subdivision unit) in seconds.
-    pub fn tick_duration(&self) -> ExceptionResult<FloatType> {
+    pub fn tick_duration(&self) -> Result<FloatType> {
         Ok(self.measure_duration()? / self.cycle as FloatType)
     }
 
@@ -144,7 +144,7 @@ impl Polyrhythm {
 
     /// Returns beat timings (in seconds) for each subdivision voice over one
     /// full measure.
-    pub fn beat_timings(&self) -> ExceptionResult<Vec<Vec<FloatType>>> {
+    pub fn beat_timings(&self) -> Result<Vec<Vec<FloatType>>> {
         let tick_duration = self.tick_duration()?;
         Ok(self
             .components
@@ -159,7 +159,7 @@ impl Polyrhythm {
     }
 
     /// Returns all tick events in one full cycle.
-    pub fn events_one_cycle(&self) -> ExceptionResult<Vec<PolyrhythmEvent>> {
+    pub fn events_one_cycle(&self) -> Result<Vec<PolyrhythmEvent>> {
         let tick_duration = self.tick_duration()?;
         Ok((0..self.cycle)
             .map(|tick| {
@@ -200,7 +200,7 @@ impl Polyrhythm {
             .collect()
     }
 
-    fn chord_from_base_pitch(&self, base_pitch: Pitch) -> ExceptionResult<Chord> {
+    fn chord_from_base_pitch(&self, base_pitch: Pitch) -> Result<Chord> {
         let mut offsets = BTreeSet::new();
         for &sub in &self.components {
             let interval = self.cycle / sub;
@@ -225,7 +225,7 @@ impl Polyrhythm {
     }
 
     /// Converts one polyrhythm cycle into a chord above `base`.
-    pub fn as_chord<T>(&self, base: T) -> ExceptionResult<Chord>
+    pub fn as_chord<T>(&self, base: T) -> Result<Chord>
     where
         T: IntoPitch,
     {
@@ -233,7 +233,7 @@ impl Polyrhythm {
     }
 
     /// Converts one polyrhythm cycle into a pitch collection above `base`.
-    pub fn as_polypitch<T>(&self, base: T) -> ExceptionResult<Chord>
+    pub fn as_polypitch<T>(&self, base: T) -> Result<Chord>
     where
         T: IntoPitch,
     {

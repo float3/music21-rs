@@ -4,8 +4,8 @@ pub(crate) mod tables;
 use crate::base::Music21ObjectTrait;
 use crate::defaults::IntegerType;
 use crate::duration::Duration;
-use crate::exception::Exception;
-use crate::exception::ExceptionResult;
+use crate::error::Error;
+use crate::error::Result;
 use crate::interval::{Interval, PitchOrNote};
 use crate::key::Key;
 use crate::key::keysignature::KeySignature;
@@ -56,7 +56,7 @@ impl Chord {
     ///
     /// Empty inputs are valid: pass `""`, an empty vector or slice, or
     /// `Option::<&str>::None` to construct an empty chord.
-    pub fn new<T>(notes: T) -> ExceptionResult<Self>
+    pub fn new<T>(notes: T) -> Result<Self>
     where
         T: IntoNotes + Clone,
     {
@@ -76,7 +76,7 @@ impl Chord {
     }
 
     /// Builds an empty chord.
-    pub fn empty() -> ExceptionResult<Self> {
+    pub fn empty() -> Result<Self> {
         Self::new(Option::<&str>::None)
     }
 
@@ -95,37 +95,37 @@ impl Chord {
     }
 
     /// Builds a chord from one string such as `"C E G"`.
-    pub fn from_pitch_names(notes: &str) -> ExceptionResult<Self> {
+    pub fn from_pitch_names(notes: &str) -> Result<Self> {
         Self::new(notes)
     }
 
     /// Builds a chord from borrowed pitch-name strings.
-    pub fn from_names(notes: &[&str]) -> ExceptionResult<Self> {
+    pub fn from_names(notes: &[&str]) -> Result<Self> {
         Self::new(notes)
     }
 
     /// Builds a chord from owned pitch-name strings.
-    pub fn from_strings(notes: &[String]) -> ExceptionResult<Self> {
+    pub fn from_strings(notes: &[String]) -> Result<Self> {
         Self::new(notes)
     }
 
     /// Builds a chord from pitches.
-    pub fn from_pitches(pitches: &[Pitch]) -> ExceptionResult<Self> {
+    pub fn from_pitches(pitches: &[Pitch]) -> Result<Self> {
         Self::new(pitches)
     }
 
     /// Builds a chord from notes.
-    pub fn from_notes(notes: &[Note]) -> ExceptionResult<Self> {
+    pub fn from_notes(notes: &[Note]) -> Result<Self> {
         Self::new(notes)
     }
 
     /// Builds a chord by flattening the notes from other chords.
-    pub fn from_chords(chords: &[Chord]) -> ExceptionResult<Self> {
+    pub fn from_chords(chords: &[Chord]) -> Result<Self> {
         Self::new(chords)
     }
 
     /// Builds a chord from MIDI pitch numbers.
-    pub fn from_midi_numbers(notes: &[i32]) -> ExceptionResult<Self> {
+    pub fn from_midi_numbers(notes: &[i32]) -> Result<Self> {
         Self::new(notes)
     }
 
@@ -509,7 +509,7 @@ impl Chord {
         &self,
         tonic: &str,
         mode: Option<&str>,
-    ) -> ExceptionResult<Option<Self>> {
+    ) -> Result<Option<Self>> {
         Ok(self.resolution_chords(tonic, mode)?.into_iter().next())
     }
 
@@ -521,7 +521,7 @@ impl Chord {
     /// sonorities resolve up by semitone to a diatonic triad. Italian, French,
     /// German, and Swiss-style augmented-sixth sonorities in context resolve to
     /// the dominant triad.
-    pub fn resolution_chords(&self, tonic: &str, mode: Option<&str>) -> ExceptionResult<Vec<Self>> {
+    pub fn resolution_chords(&self, tonic: &str, mode: Option<&str>) -> Result<Vec<Self>> {
         let key = Key::from_tonic_mode(tonic, mode)?;
 
         if self.is_contextual_augmented_sixth(&key)? {
@@ -554,7 +554,7 @@ impl Chord {
     fn simplify_enharmonics(
         self,
         key_context: Option<KeySignature>,
-    ) -> ExceptionResult<Option<Self>> {
+    ) -> Result<Option<Self>> {
         self.clone().simplify_enharmonics_in_place(key_context)?;
         Ok(Some(self))
     }
@@ -562,7 +562,7 @@ impl Chord {
     fn simplify_enharmonics_in_place(
         &mut self,
         key_context: Option<KeySignature>,
-    ) -> ExceptionResult<()> {
+    ) -> Result<()> {
         match crate::pitch::simplify_multiple_enharmonics(&self.pitches(), None, key_context) {
             Ok(pitches) => {
                 for (i, pitch) in pitches.iter().enumerate() {
@@ -572,7 +572,7 @@ impl Chord {
                 }
                 Ok(())
             }
-            Err(err) => Err(Exception::Chord(format!(
+            Err(err) => Err(Error::Chord(format!(
                 "simplifying multiple enharmonics failed because of {err}"
             ))),
         }
@@ -608,7 +608,7 @@ impl Chord {
         self.find_root_pitch().map(Self::display_pitch_name)
     }
 
-    fn resolve_by_root_motion(&self, key: &Key, semitones: u8) -> ExceptionResult<Option<Self>> {
+    fn resolve_by_root_motion(&self, key: &Key, semitones: u8) -> Result<Option<Self>> {
         let Some(root_pitch) = self.find_root_pitch() else {
             return Ok(None);
         };
@@ -616,7 +616,7 @@ impl Chord {
         Self::triad_for_key_pitch_class(key, target_pc)
     }
 
-    fn triad_for_key_pitch_class(key: &Key, target_pc: u8) -> ExceptionResult<Option<Self>> {
+    fn triad_for_key_pitch_class(key: &Key, target_pc: u8) -> Result<Option<Self>> {
         for degree in 1..=7 {
             let degree_pitch = key.pitch_from_degree(degree)?;
             if Self::pitch_class(&degree_pitch) == target_pc {
@@ -689,7 +689,7 @@ impl Chord {
             .all(|interval| chord_pcs.contains(&((root_pc + interval) % 12)))
     }
 
-    fn is_contextual_augmented_sixth(&self, key: &Key) -> ExceptionResult<bool> {
+    fn is_contextual_augmented_sixth(&self, key: &Key) -> Result<bool> {
         let chord_pcs = self.pitch_class_set();
         if chord_pcs.len() < 3 || chord_pcs.len() > 4 {
             return Ok(false);
@@ -944,47 +944,47 @@ pub trait IntoNote {
     const FROM_INTEGER_PITCH: bool = false;
 
     /// Converts the value into a note.
-    fn try_into_note(self) -> ExceptionResult<Note>;
+    fn try_into_note(self) -> Result<Note>;
 }
 
 impl IntoNote for Note {
-    fn try_into_note(self) -> ExceptionResult<Note> {
+    fn try_into_note(self) -> Result<Note> {
         Ok(self)
     }
 }
 
 impl IntoNote for &Note {
-    fn try_into_note(self) -> ExceptionResult<Note> {
+    fn try_into_note(self) -> Result<Note> {
         Ok(self.clone())
     }
 }
 
 impl IntoNote for Pitch {
-    fn try_into_note(self) -> ExceptionResult<Note> {
+    fn try_into_note(self) -> Result<Note> {
         Note::new(Some(self), None, None, None)
     }
 }
 
 impl IntoNote for &Pitch {
-    fn try_into_note(self) -> ExceptionResult<Note> {
+    fn try_into_note(self) -> Result<Note> {
         Note::new(Some(self.clone()), None, None, None)
     }
 }
 
 impl IntoNote for String {
-    fn try_into_note(self) -> ExceptionResult<Note> {
+    fn try_into_note(self) -> Result<Note> {
         Note::new(Some(self), None, None, None)
     }
 }
 
 impl IntoNote for &String {
-    fn try_into_note(self) -> ExceptionResult<Note> {
+    fn try_into_note(self) -> Result<Note> {
         Note::new(Some(self.to_string()), None, None, None)
     }
 }
 
 impl IntoNote for &str {
-    fn try_into_note(self) -> ExceptionResult<Note> {
+    fn try_into_note(self) -> Result<Note> {
         Note::new(Some(self), None, None, None)
     }
 }
@@ -992,7 +992,7 @@ impl IntoNote for &str {
 impl IntoNote for IntegerType {
     const FROM_INTEGER_PITCH: bool = true;
 
-    fn try_into_note(self) -> ExceptionResult<Note> {
+    fn try_into_note(self) -> Result<Note> {
         Note::new(Some(self), None, None, None)
     }
 }
@@ -1009,7 +1009,7 @@ pub trait IntoNotes {
     type Notes: IntoIterator<Item = Note>;
 
     /// Converts the input into notes.
-    fn try_into_notes(self) -> ExceptionResult<Self::Notes>;
+    fn try_into_notes(self) -> Result<Self::Notes>;
 }
 
 impl<T> IntoNotes for Option<T>
@@ -1020,7 +1020,7 @@ where
 
     type Notes = Vec<Note>;
 
-    fn try_into_notes(self) -> ExceptionResult<Self::Notes> {
+    fn try_into_notes(self) -> Result<Self::Notes> {
         match self {
             Some(notes) => Ok(notes.try_into_notes()?.into_iter().collect()),
             None => Ok(Vec::new()),
@@ -1036,11 +1036,11 @@ where
 
     type Notes = Vec<Note>;
 
-    fn try_into_notes(self) -> ExceptionResult<Self::Notes> {
+    fn try_into_notes(self) -> Result<Self::Notes> {
         let mut notes = self
             .into_iter()
             .map(IntoNote::try_into_note)
-            .collect::<ExceptionResult<Vec<_>>>()?;
+            .collect::<Result<Vec<_>>>()?;
         if Self::FROM_INTEGER_PITCHES {
             simplify_integer_notes(&mut notes)?;
         }
@@ -1048,7 +1048,7 @@ where
     }
 }
 
-fn simplify_integer_notes(notes: &mut [Note]) -> ExceptionResult<()> {
+fn simplify_integer_notes(notes: &mut [Note]) -> Result<()> {
     if notes.is_empty() {
         return Ok(());
     }
@@ -1075,7 +1075,7 @@ impl IntoNotes for &[Pitch] {
     fn try_into_notes(self) -> Result<Self::Notes, Exception> {
         self.iter()
             .map(|pitch| Note::new(Some(pitch.clone()), None, None, None))
-            .collect::<ExceptionResult<Vec<_>>>()
+            .collect::<Result<Vec<_>>>()
     }
 }
 
@@ -1101,7 +1101,7 @@ impl IntoNotes for &[String] {
     fn try_into_notes(self) -> Result<Self::Notes, Exception> {
         self.iter()
             .map(|s| Note::new(Some(s.to_string()), None, None, None))
-            .collect::<ExceptionResult<Vec<_>>>()
+            .collect::<Result<Vec<_>>>()
     }
 }
 
@@ -1159,7 +1159,7 @@ impl IntoNotes for &[IntegerType] {
         let mut notes = self
             .iter()
             .map(|i| Note::new(Some(*i), None, None, None))
-            .collect::<ExceptionResult<Vec<_>>>()?;
+            .collect::<Result<Vec<_>>>()?;
         simplify_integer_notes(&mut notes)?;
         Ok(notes)
     }

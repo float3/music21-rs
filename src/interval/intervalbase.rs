@@ -1,6 +1,6 @@
 use crate::{
     base::{Music21Object, Music21ObjectTrait},
-    exception::{Exception, ExceptionResult},
+    error::{Error, Result},
     note::Note,
     pitch::Pitch,
     prebase::ProtoM21ObjectTrait,
@@ -20,35 +20,35 @@ impl IntervalBase {
 }
 
 pub(crate) trait IntervalBaseTrait: Music21ObjectTrait {
-    fn transpose_note(self, note1: Note) -> ExceptionResult<Note>;
-    fn transpose_pitch(self, pitch1: Pitch) -> ExceptionResult<Pitch>;
-    fn transpose_pitch_in_place(self, pitch1: &mut Pitch) -> ExceptionResult<()>;
-    fn reverse(self) -> ExceptionResult<Self>
+    fn transpose_note(self, note1: Note) -> Result<Note>;
+    fn transpose_pitch(self, pitch1: Pitch) -> Result<Pitch>;
+    fn transpose_pitch_in_place(self, pitch1: &mut Pitch) -> Result<()>;
+    fn reverse(self) -> Result<Self>
     where
         Self: Sized;
 }
 
 impl IntervalBaseTrait for IntervalBase {
-    fn transpose_note(self, note1: Note) -> ExceptionResult<Note> {
-        Err(Exception::Interval(
+    fn transpose_note(self, note1: Note) -> Result<Note> {
+        Err(Error::Interval(
             "IntervalBase cannot transpose a note directly".to_string(),
         ))
     }
 
-    fn transpose_pitch(self, pitch1: Pitch) -> ExceptionResult<Pitch> {
-        Err(Exception::Interval(
+    fn transpose_pitch(self, pitch1: Pitch) -> Result<Pitch> {
+        Err(Error::Interval(
             "IntervalBase cannot transpose a pitch directly".to_string(),
         ))
     }
 
-    fn transpose_pitch_in_place(self, pitch1: &mut Pitch) -> ExceptionResult<()> {
-        Err(Exception::Interval(
+    fn transpose_pitch_in_place(self, pitch1: &mut Pitch) -> Result<()> {
+        Err(Error::Interval(
             "IntervalBase cannot transpose a pitch in place directly".to_string(),
         ))
     }
 
-    fn reverse(self) -> ExceptionResult<Self> {
-        Err(Exception::Interval(
+    fn reverse(self) -> Result<Self> {
+        Err(Error::Interval(
             "IntervalBase cannot reverse directly".to_string(),
         ))
     }

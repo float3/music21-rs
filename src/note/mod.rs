@@ -4,7 +4,7 @@ pub(crate) mod notrest;
 use crate::base::Music21ObjectTrait;
 use crate::defaults::IntegerType;
 use crate::duration::Duration;
-use crate::exception::ExceptionResult;
+use crate::error::Result;
 use crate::pitch::Pitch;
 use crate::prebase::ProtoM21ObjectTrait;
 
@@ -25,12 +25,12 @@ pub struct Note {
 
 impl Note {
     /// Builds a note from a pitch name such as `"C#4"` or `"E-"`.
-    pub fn from_name(name: impl Into<String>) -> ExceptionResult<Self> {
+    pub fn from_name(name: impl Into<String>) -> Result<Self> {
         Self::new(Option::<Pitch>::None, None, None, Some(name.into()))
     }
 
     /// Builds a note from an existing [`Pitch`].
-    pub fn from_pitch(pitch: Pitch) -> ExceptionResult<Self> {
+    pub fn from_pitch(pitch: Pitch) -> Result<Self> {
         Self::new(Some(pitch), None, None, None)
     }
 
@@ -54,7 +54,7 @@ impl Note {
         duration: Option<Duration>,
         name: Option<String>,
         name_with_octave: Option<String>,
-    ) -> ExceptionResult<Self>
+    ) -> Result<Self>
     where
         T: IntoPitch,
     {
@@ -148,17 +148,17 @@ impl ProtoM21ObjectTrait for Note {}
 impl Music21ObjectTrait for Note {}
 
 pub(crate) trait IntoPitch {
-    fn into_pitch(self) -> ExceptionResult<Pitch>;
+    fn into_pitch(self) -> Result<Pitch>;
 }
 
 impl IntoPitch for Pitch {
-    fn into_pitch(self) -> ExceptionResult<Pitch> {
+    fn into_pitch(self) -> Result<Pitch> {
         Ok(self.clone())
     }
 }
 
 impl IntoPitch for String {
-    fn into_pitch(self) -> ExceptionResult<Pitch> {
+    fn into_pitch(self) -> Result<Pitch> {
         Pitch::new(
             Some(self),
             None,
@@ -174,7 +174,7 @@ impl IntoPitch for String {
 }
 
 impl IntoPitch for &str {
-    fn into_pitch(self) -> ExceptionResult<Pitch> {
+    fn into_pitch(self) -> Result<Pitch> {
         Pitch::new(
             Some(self),
             None,
@@ -190,7 +190,7 @@ impl IntoPitch for &str {
 }
 
 impl IntoPitch for IntegerType {
-    fn into_pitch(self) -> ExceptionResult<Pitch> {
+    fn into_pitch(self) -> Result<Pitch> {
         Pitch::new(
             Some(self),
             None,

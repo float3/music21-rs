@@ -29,7 +29,7 @@ let chord = Chord::new("C E G")?;
 assert_eq!(chord.pitched_common_name(), "C-major triad");
 assert_eq!(chord.common_name(), "major triad");
 
-# Ok::<(), music21_rs::Exception>(())
+# Ok::<(), music21_rs::Error>(())
 ```
 
 A chord can also report related analytical views:
@@ -43,7 +43,7 @@ println!("{}", chord.pitched_common_name());
 println!("{:?}", chord.normal_form());
 println!("{:?}", chord.interval_vector());
 
-# Ok::<(), music21_rs::Exception>(())
+# Ok::<(), music21_rs::Error>(())
 ```
 
 ## Browser Demos

@@ -10,8 +10,8 @@ use crate::defaults::PITCH_OCTAVE;
 use crate::defaults::PITCH_SPACE_SIGNIFICANT_DIGITS;
 use crate::defaults::PITCH_STEP;
 use crate::defaults::UnsignedIntegerType;
-use crate::exception::Exception;
-use crate::exception::ExceptionResult;
+use crate::error::Error;
+use crate::error::Result;
 use crate::interval::Interval;
 use crate::interval::IntervalArgument;
 use crate::interval::PitchOrNote;
@@ -166,7 +166,7 @@ impl PitchOptions {
     }
 
     /// Builds a [`Pitch`] from the collected options.
-    pub fn build(self) -> ExceptionResult<Pitch> {
+    pub fn build(self) -> Result<Pitch> {
         Pitch::from_options(self)
     }
 }
@@ -199,7 +199,7 @@ impl PartialEq for Pitch {
 
 impl Pitch {
     /// Builds a pitch from [`PitchOptions`].
-    pub fn from_options(options: PitchOptions) -> ExceptionResult<Self> {
+    pub fn from_options(options: PitchOptions) -> Result<Self> {
         let step = options.step.map(StepName::try_from).transpose()?;
 
         Self::new(
@@ -221,7 +221,7 @@ impl Pitch {
     }
 
     /// Builds a pitch from a name such as `"C#4"` or `"E-"`.
-    pub fn from_name(name: impl Into<String>) -> ExceptionResult<Self> {
+    pub fn from_name(name: impl Into<String>) -> Result<Self> {
         Self::new(
             Some(name.into()),
             None,
@@ -236,7 +236,7 @@ impl Pitch {
     }
 
     /// Builds a pitch from a pitch-space number.
-    pub fn from_number(number: f64) -> ExceptionResult<Self> {
+    pub fn from_number(number: f64) -> Result<Self> {
         Self::new(
             Some(PitchName::Number(number)),
             None,
@@ -251,7 +251,7 @@ impl Pitch {
     }
 
     /// Builds a pitch from a diatonic step.
-    pub fn from_step(step: char) -> ExceptionResult<Self> {
+    pub fn from_step(step: char) -> Result<Self> {
         Self::new(
             Option::<String>::None,
             Some(StepName::try_from(step)?),
@@ -266,17 +266,17 @@ impl Pitch {
     }
 
     /// Builds a pitch from a pitch name and explicit octave.
-    pub fn from_name_and_octave(name: impl Into<String>, octave: i32) -> ExceptionResult<Self> {
+    pub fn from_name_and_octave(name: impl Into<String>, octave: i32) -> Result<Self> {
         PitchOptions::new().name(name.into()).octave(octave).build()
     }
 
     /// Builds a pitch from a pitch class.
-    pub fn from_pitch_class(pitch_class: impl Into<PitchClassSpecifier>) -> ExceptionResult<Self> {
+    pub fn from_pitch_class(pitch_class: impl Into<PitchClassSpecifier>) -> Result<Self> {
         PitchOptions::new().pitch_class(pitch_class).build()
     }
 
     /// Builds a pitch from a MIDI note number.
-    pub fn from_midi(midi: i32) -> ExceptionResult<Self> {
+    pub fn from_midi(midi: i32) -> Result<Self> {
         Self::new(
             Option::<String>::None,
             None,
@@ -291,7 +291,7 @@ impl Pitch {
     }
 
     /// Builds a pitch from a pitch-space value.
-    pub fn from_pitch_space(ps: f64) -> ExceptionResult<Self> {
+    pub fn from_pitch_space(ps: f64) -> Result<Self> {
         Self::new(
             Option::<String>::None,
             None,
@@ -316,7 +316,7 @@ impl Pitch {
         midi: Option<IntegerType>,
         ps: Option<FloatType>,
         fundamental: Option<Pitch>,
-    ) -> ExceptionResult<Self>
+    ) -> Result<Self>
     where
         T: IntoPitchName,
         U: IntoAccidental,
@@ -409,7 +409,7 @@ impl Pitch {
         }
         if has_explicit_microtone {
             let Some(mt) = pitch._microtone.clone() else {
-                return Err(Exception::Pitch(
+                return Err(Error::Pitch(
                     "microtone was expected but missing".to_string(),
                 ));
             };
@@ -444,7 +444,7 @@ impl Pitch {
         format!("{:?}{}", self._step, self._accidental.modifier())
     }
 
-    fn name_setter(&mut self, usr_str: &str) -> ExceptionResult<()> {
+    fn name_setter(&mut self, usr_str: &str) -> Result<()> {
         let usr_str = usr_str.trim();
 
         let digit_index = usr_str
@@ -454,7 +454,7 @@ impl Pitch {
 
         let (pitch_part, octave_part) = if let Some(i) = digit_index {
             if i == 0 {
-                return Err(Exception::Pitch(format!(
+                return Err(Error::Pitch(format!(
                     "Cannot have octave given before pitch name in {usr_str:?}"
                 )));
             }
@@ -465,7 +465,7 @@ impl Pitch {
 
         // Process the pitch part.
         let mut pitch_chars = pitch_part.chars();
-        let step = pitch_chars.next().ok_or(Exception::Pitch(format!(
+        let step = pitch_chars.next().ok_or(Error::Pitch(format!(
             "Cannot make a name out of {pitch_part:?}"
         )))?;
         self.step_setter(StepName::try_from(step)?);
@@ -480,7 +480,7 @@ impl Pitch {
         if !octave_part.is_empty() {
             let octave = octave_part
                 .parse::<IntegerType>()
-                .map_err(|_| Exception::Pitch(format!("Cannot parse {octave_part:?} to octave")))?;
+                .map_err(|_| Error::Pitch(format!("Cannot parse {octave_part:?} to octave")))?;
             self.octave_setter(Some(octave));
         }
 
@@ -528,7 +528,7 @@ impl Pitch {
     fn get_all_common_enharmonics(
         &mut self,
         alter_limit: FloatType,
-    ) -> ExceptionResult<Vec<Pitch>> {
+    ) -> Result<Vec<Pitch>> {
         let mut post = Vec::new();
 
         let simplified = self.clone().simplify_enharmonic(false)?;
@@ -622,7 +622,7 @@ impl Pitch {
         self.inform_client();
     }
 
-    fn pitch_class_setter(&mut self, pc: PitchClassSpecifier) -> ExceptionResult<()> {
+    fn pitch_class_setter(&mut self, pc: PitchClassSpecifier) -> Result<()> {
         self.pitch_class_value_setter(PitchClass::new(pc)?.number());
         Ok(())
     }
@@ -660,7 +660,7 @@ impl Pitch {
         self.inform_client();
     }
 
-    fn simplify_enharmonic(&mut self, most_common: bool) -> ExceptionResult<Pitch> {
+    fn simplify_enharmonic(&mut self, most_common: bool) -> Result<Pitch> {
         const EXCLUDED_NAMES: [&str; 4] = ["E#", "B#", "C-", "F-"];
         if self._accidental._alter.abs().partial_cmp(&2.0) != Some(Ordering::Less)
             || EXCLUDED_NAMES.contains(&self.name().as_str())
@@ -698,28 +698,28 @@ impl Pitch {
         Ok(self.clone())
     }
 
-    fn simplify_enharmonic_in_place(&mut self, most_common: bool) -> ExceptionResult<()> {
+    fn simplify_enharmonic_in_place(&mut self, most_common: bool) -> Result<()> {
         *self = self.simplify_enharmonic(most_common)?;
         Ok(())
     }
 
-    fn get_higher_enharmonic(&self) -> ExceptionResult<Pitch> {
+    fn get_higher_enharmonic(&self) -> Result<Pitch> {
         self._get_enharmonic_helper(true)
     }
 
-    fn get_higher_enharmonic_in_place(&mut self) -> ExceptionResult<()> {
+    fn get_higher_enharmonic_in_place(&mut self) -> Result<()> {
         self._get_enharmonic_helper_in_place(true)
     }
 
-    fn get_lower_enharmonic(&self) -> ExceptionResult<Pitch> {
+    fn get_lower_enharmonic(&self) -> Result<Pitch> {
         self._get_enharmonic_helper(false)
     }
 
-    fn get_lower_enharmonic_in_place(&mut self) -> ExceptionResult<()> {
+    fn get_lower_enharmonic_in_place(&mut self) -> Result<()> {
         self._get_enharmonic_helper_in_place(false)
     }
 
-    fn _get_enharmonic_helper(&self, up: bool) -> ExceptionResult<Pitch> {
+    fn _get_enharmonic_helper(&self, up: bool) -> Result<Pitch> {
         let interval_string = match up {
             true => IntervalString::Up,
             false => IntervalString::Down,
@@ -749,7 +749,7 @@ impl Pitch {
         Ok(p)
     }
 
-    fn _get_enharmonic_helper_in_place(&mut self, up: bool) -> ExceptionResult<()> {
+    fn _get_enharmonic_helper_in_place(&mut self, up: bool) -> Result<()> {
         *self = self._get_enharmonic_helper(up)?;
         Ok(())
     }
@@ -949,13 +949,13 @@ fn normalize_midi(midi: IntegerType) -> IntegerType {
     }
 }
 
-type CriterionFunction = fn(&[Pitch]) -> ExceptionResult<FloatType>;
+type CriterionFunction = fn(&[Pitch]) -> Result<FloatType>;
 
 pub(crate) fn simplify_multiple_enharmonics(
     pitches: &[Pitch],
     criterion: Option<CriterionFunction>,
     key_context: Option<KeySignature>,
-) -> ExceptionResult<Vec<Pitch>> {
+) -> Result<Vec<Pitch>> {
     let mut old_pitches: Vec<Pitch> = pitches.to_vec();
     if old_pitches.is_empty() {
         return Ok(Vec::new());
@@ -990,10 +990,10 @@ pub(crate) fn simplify_multiple_enharmonics(
 fn brute_force_enharmonics_search(
     old_pitches: &mut [Pitch],
     score_func: CriterionFunction,
-) -> ExceptionResult<Vec<Pitch>> {
-    let all_possible_pitches: ExceptionResult<Vec<Vec<Pitch>>> = old_pitches[1..]
+) -> Result<Vec<Pitch>> {
+    let all_possible_pitches: Result<Vec<Vec<Pitch>>> = old_pitches[1..]
         .iter_mut()
-        .map(|p| -> ExceptionResult<Vec<Pitch>> {
+        .map(|p| -> Result<Vec<Pitch>> {
             let mut enharmonics = p.get_all_common_enharmonics(2 as FloatType)?;
             enharmonics.insert(0, p.clone());
             Ok(enharmonics)
@@ -1021,13 +1021,13 @@ fn brute_force_enharmonics_search(
 fn greedy_enharmonics_search(
     old_pitches: &mut [Pitch],
     score_func: CriterionFunction,
-) -> ExceptionResult<Vec<Pitch>> {
+) -> Result<Vec<Pitch>> {
     let mut new_pitches = vec![];
 
     if let Some(first) = old_pitches.first() {
         new_pitches.push(first.clone());
     } else {
-        return Err(Exception::Pitch(
+        return Err(Error::Pitch(
             "can't perform greedy enharmonics search on empty pitches".into(),
         ));
     }
@@ -1049,13 +1049,13 @@ fn greedy_enharmonics_search(
             }
         }
         let best_candidate = best_candidate
-            .ok_or_else(|| Exception::Pitch("candidates list is unexpectedly empty".to_string()))?;
+            .ok_or_else(|| Error::Pitch("candidates list is unexpectedly empty".to_string()))?;
         new_pitches.push(best_candidate.clone());
     }
     Ok(new_pitches)
 }
 
-fn default_dissonance_score(pitches: &[Pitch]) -> ExceptionResult<FloatType> {
+fn default_dissonance_score(pitches: &[Pitch]) -> Result<FloatType> {
     dissonance_score(pitches, true, true, true)
 }
 
@@ -1064,7 +1064,7 @@ fn dissonance_score(
     small_pythagorean_ratio: bool,
     accidental_penalty: bool,
     triad_award: bool,
-) -> ExceptionResult<FloatType> {
+) -> Result<FloatType> {
     let mut score_accidentals: FloatType = 0.0;
     let mut score_ratio: FloatType = 0.0;
     let mut score_triad: FloatType = 0.0;
@@ -1130,7 +1130,7 @@ fn dissonance_score(
             + triad_award as IntegerType) as FloatType)
 }
 
-fn pythagorean_denominator_log(interval: &Interval) -> ExceptionResult<FloatType> {
+fn pythagorean_denominator_log(interval: &Interval) -> Result<FloatType> {
     let start_pitch = Pitch::new(
         Some("C1".to_string()),
         None,

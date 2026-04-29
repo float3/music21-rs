@@ -21,7 +21,7 @@ use crate::base::Music21ObjectTrait;
 use crate::common::numbertools::MUSICAL_ORDINAL_STRINGS;
 use crate::common::stringtools::get_num_from_str;
 use crate::defaults::UnsignedIntegerType;
-use crate::exception::{Exception, ExceptionResult};
+use crate::error::{Error, Result};
 use crate::prebase::ProtoM21ObjectTrait;
 use crate::{
     defaults::{FloatType, FractionType, IntegerType},
@@ -69,7 +69,7 @@ fn convert_staff_distance_to_interval(staff_dist: IntegerType) -> IntegerType {
     }
 }
 
-fn notes_to_generic(p1: &Pitch, p2: &Pitch) -> ExceptionResult<GenericInterval> {
+fn notes_to_generic(p1: &Pitch, p2: &Pitch) -> Result<GenericInterval> {
     let dnn1 = p1.step().step_to_dnn_offset() + (7 * p1.octave().unwrap_or(4));
     let dnn2 = p2.step().step_to_dnn_offset() + (7 * p2.octave().unwrap_or(4));
     let staff_dist = dnn2 - dnn1;
@@ -83,7 +83,7 @@ fn notes_to_chromatic(p1: &Pitch, p2: &Pitch) -> ChromaticInterval {
 fn specifier_from_generic_chromatic(
     g_int: &GenericInterval,
     c_int: &ChromaticInterval,
-) -> ExceptionResult<Specifier> {
+) -> Result<Specifier> {
     let note_vals: [IntegerType; 7] = [0, 2, 4, 5, 7, 9, 11];
     let normal_semis = note_vals[(g_int.simple_undirected() - 1) as usize]
         + 12 * g_int.simple_steps_and_octaves().1;
@@ -118,7 +118,7 @@ fn specifier_from_generic_chromatic(
             -2 => Ok(Specifier::DoubleDiminished),
             -3 => Ok(Specifier::TripleDiminished),
             -4 => Ok(Specifier::QuadrupleDiminished),
-            _ => Err(Exception::Interval(format!(
+            _ => Err(Error::Interval(format!(
                 "cannot get specifier from perfectable diff {diff}"
             ))),
         }
@@ -134,7 +134,7 @@ fn specifier_from_generic_chromatic(
             -3 => Ok(Specifier::DoubleDiminished),
             -4 => Ok(Specifier::TripleDiminished),
             -5 => Ok(Specifier::QuadrupleDiminished),
-            _ => Err(Exception::Interval(format!(
+            _ => Err(Error::Interval(format!(
                 "cannot get specifier from major diff {diff}"
             ))),
         }
@@ -144,7 +144,7 @@ fn specifier_from_generic_chromatic(
 fn intervals_to_diatonic(
     g_int: &GenericInterval,
     c_int: &ChromaticInterval,
-) -> ExceptionResult<DiatonicInterval> {
+) -> Result<DiatonicInterval> {
     let specifier = specifier_from_generic_chromatic(g_int, c_int)?;
     Ok(DiatonicInterval::new(specifier, g_int))
 }
@@ -173,7 +173,7 @@ pub(crate) fn convert_semitone_to_specifier_generic(
 }
 
 impl Interval {
-    pub(crate) fn between(start: PitchOrNote, end: PitchOrNote) -> ExceptionResult<Self> {
+    pub(crate) fn between(start: PitchOrNote, end: PitchOrNote) -> Result<Self> {
         let start_pitch = extract_pitch(start);
         let end_pitch = extract_pitch(end);
         let generic = notes_to_generic(&start_pitch, &end_pitch)?;
@@ -192,7 +192,7 @@ impl Interval {
     pub(crate) fn from_diatonic_and_chromatic(
         diatonic: DiatonicInterval,
         chromatic: ChromaticInterval,
-    ) -> ExceptionResult<Interval> {
+    ) -> Result<Interval> {
         Ok(Self {
             implicit_diatonic: false,
             diatonic,
@@ -202,7 +202,7 @@ impl Interval {
         })
     }
 
-    pub fn new(arg: IntervalArgument) -> ExceptionResult<Interval> {
+    pub fn new(arg: IntervalArgument) -> Result<Interval> {
         match arg {
             IntervalArgument::Str(str) => {
                 let name = str;
@@ -227,10 +227,10 @@ impl Interval {
                     pitch_end: None,
                 })
             }
-            IntervalArgument::Pitch(_pitch) => Err(Exception::Interval(
+            IntervalArgument::Pitch(_pitch) => Err(Error::Interval(
                 "Constructing Interval from a single Pitch is not supported".to_string(),
             )),
-            IntervalArgument::Note(_note) => Err(Exception::Interval(
+            IntervalArgument::Note(_note) => Err(Error::Interval(
                 "Constructing Interval from a single Note is not supported".to_string(),
             )),
         }
@@ -255,7 +255,7 @@ impl Interval {
         p: &Pitch,
         reverse: bool,
         max_accidental: Option<IntegerType>,
-    ) -> ExceptionResult<Pitch> {
+    ) -> Result<Pitch> {
         if reverse {
             return self.reverse()?.transpose_pitch(p, false, Some(4));
         }
@@ -328,7 +328,7 @@ impl Interval {
         arg: &mut Pitch,
         reverse: bool,
         max_accidental: Option<IntegerType>,
-    ) -> ExceptionResult<()> {
+    ) -> Result<()> {
         *arg = self.clone().transpose_pitch(arg, reverse, max_accidental)?;
         Ok(())
     }
@@ -336,7 +336,7 @@ impl Interval {
 
 fn _string_to_diatonic_chromatic(
     mut value: String,
-) -> ExceptionResult<(DiatonicInterval, ChromaticInterval, bool)> {
+) -> Result<(DiatonicInterval, ChromaticInterval, bool)> {
     let mut inferred = false;
     let mut dir_scale = 1;
 
@@ -395,7 +395,7 @@ fn _string_to_diatonic_chromatic(
 }
 
 impl IntervalBaseTrait for Interval {
-    fn reverse(self) -> ExceptionResult<Self>
+    fn reverse(self) -> Result<Self>
     where
         Self: Sized,
     {
@@ -409,17 +409,17 @@ impl IntervalBaseTrait for Interval {
         }
     }
 
-    fn transpose_note(self, note1: Note) -> ExceptionResult<Note> {
+    fn transpose_note(self, note1: Note) -> Result<Note> {
         let mut cloned = note1.clone();
         cloned._pitch = Interval::transpose_pitch(self, &note1._pitch, false, Some(4))?;
         Ok(cloned)
     }
 
-    fn transpose_pitch(self, pitch1: Pitch) -> ExceptionResult<Pitch> {
+    fn transpose_pitch(self, pitch1: Pitch) -> Result<Pitch> {
         Interval::transpose_pitch(self, &pitch1, false, Some(4))
     }
 
-    fn transpose_pitch_in_place(self, pitch1: &mut Pitch) -> ExceptionResult<()> {
+    fn transpose_pitch_in_place(self, pitch1: &mut Pitch) -> Result<()> {
         *pitch1 = Interval::transpose_pitch(self, pitch1, false, Some(4))?;
         Ok(())
     }
@@ -429,7 +429,7 @@ impl Music21ObjectTrait for Interval {}
 
 impl ProtoM21ObjectTrait for Interval {}
 
-pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> ExceptionResult<FractionType> {
+pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> Result<FractionType> {
     let start_pitch = Pitch::new(
         Some("C1".to_string()),
         None,
@@ -469,7 +469,7 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> ExceptionResu
     for counter in 0..37 {
         if end_pitch_up.name() == end_pitch_wanted.name() {
             if counter > 18 {
-                return Err(Exception::Interval(format!(
+                return Err(Error::Interval(format!(
                     "pythagorean ratio for {} exceeds integer range",
                     end_pitch_wanted.name()
                 )));
@@ -484,7 +484,7 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> ExceptionResu
             break;
         } else if end_pitch_down.name() == end_pitch_wanted.name() {
             if counter > 18 {
-                return Err(Exception::Interval(format!(
+                return Err(Error::Interval(format!(
                     "pythagorean ratio for {} exceeds integer range",
                     end_pitch_wanted.name()
                 )));
@@ -510,7 +510,7 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> ExceptionResu
     let (found_pitch, found_ratio) = match found {
         Some(val) => val,
         None => {
-            return Err(Exception::Interval(format!(
+            return Err(Error::Interval(format!(
                 "Could not find a pythagorean ratio for {interval:?}"
             )));
         }
