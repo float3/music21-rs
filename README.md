@@ -4,83 +4,99 @@
 [![Crates.io](https://img.shields.io/crates/v/music21-rs.svg)](https://crates.io/crates/music21-rs)
 [![docs.rs](https://docs.rs/music21-rs/badge.svg)](https://docs.rs/music21-rs)
 
-`music21-rs` is a work-in-progress Rust port of selected parts of [music21](https://github.com/cuthbertLab/music21), currently focused on chord naming and supporting pitch/chord infrastructure.
+`music21-rs` is a Rust library inspired by selected parts of Python's
+[`music21`](https://github.com/cuthbertLab/music21). The current focus is chord
+analysis, pitch handling, polyrhythm helpers, and tuning-system utilities.
 
-## Status
+The crate is still young, so APIs may move while the port fills out.
 
-- The project is under active development.
-- APIs are still evolving and may change between releases.
-- The Python `music21` repository is used as a reference source and is included as a git submodule at [`music21/`](./music21).
+## Using the crate
 
-## Quick Start
+Add the crate to your project:
+
+```bash
+cargo add music21-rs
+```
+
+Create a chord from a compact pitch string and ask for the same common-name
+style used by `music21`:
 
 ```rust
-use music21_rs::chord::Chord;
+use music21_rs::Chord;
 
 let chord = Chord::new("C E G")?;
+
 assert_eq!(chord.pitched_common_name(), "C-major triad");
+assert_eq!(chord.common_name(), "major triad");
 
-let augmented = Chord::new("C E G#")?;
-assert_eq!(
-    augmented.pitched_common_names(),
-    ["C-augmented triad", "C-equal 3-part octave division"]
-);
-
-let empty = Chord::new("")?;
-assert_eq!(empty.pitched_common_name(), "empty chord");
-# Ok::<(), music21_rs::exception::Exception>(())
+# Ok::<(), music21_rs::Exception>(())
 ```
 
-## Examples
+A chord can also report related analytical views:
 
-- [Chord Inspector web demo](./examples/chord/) builds with `wasm-pack` and is published with the generated docs on GitHub Pages.
-- [Polyrhythm Lab web demo](./examples/polyrhythm/) maps rhythm cycles to chord/polypitch sets and links them back to the chord inspector.
-- [Tuning Explorer web demo](./examples/tuning/) compares music21-rs tuning systems and plays their scales in the browser.
-- [Polyrhythm sound example](./examples/polyrhythmsound.rs) demonstrates the polyrhythm helpers.
+```rust
+use music21_rs::Chord;
 
-## Development
+let chord = Chord::new("C E- G B-")?;
 
-### Prerequisites
+println!("{}", chord.pitched_common_name());
+println!("{:?}", chord.normal_form());
+println!("{:?}", chord.interval_vector());
 
-- Rust (stable toolchain; see [`rust-toolchain.toml`](./rust-toolchain.toml))
-- Git
+# Ok::<(), music21_rs::Exception>(())
+```
 
-### Clone
+## Browser Demos
+
+The live browser demos are published at
+[float3.github.io/music21-rs](https://float3.github.io/music21-rs/).
+
+The `examples/` directory contains a small set of interactive tools:
+
+- [Chord Inspector](./examples/chord/) names chords, shows Forte/normal-form
+  data, suggests simple resolution chords, plays the result, and renders staff
+  notation.
+- [Polyrhythm Lab](./examples/polyrhythm/) lets you enter ratios such as
+  `4:5:6`, play the cycle, and compare the rhythm to its equivalent pitch-set
+  relationship.
+- [Tuning Explorer](./examples/tuning/) lists the tuning systems exposed by the
+  crate and plays each scale from a chosen root frequency.
+
+The examples are also wired into the GitHub Pages build, with
+[examples/index.html](./examples/index.html) as the local landing page.
+
+## Local Development
+
+Use the Rust toolchain pinned in [rust-toolchain.toml](./rust-toolchain.toml).
 
 ```bash
-git clone https://github.com/float3/music21-rs.git
-cd music21-rs
+cargo test
+```
+
+For parity work against upstream `music21`, initialize the reference submodule
+and run the Python-backed checks:
+
+```bash
 git submodule update --init --recursive
-```
-
-### Nix Development Shell (Optional)
-
-If you use Nix, the repository includes a flake-based development shell with Rust
-tooling, Python, and bindgen dependencies:
-
-```bash
-nix develop
-```
-
-Inside the shell, `PYO3_PYTHON` is set automatically to the Nix-provided Python
-interpreter for Python-backed build/test flows.
-
-### Optional Python-Backed Validation
-
-Some generation and parity checks can use Python via the `python` feature:
-
-```bash
 cargo test --features python
 ```
 
+If you use Nix, `nix develop` opens a shell with the Rust and Python pieces used
+by the repository's CI setup.
+
 ## Project Layout
 
-- `src/`: main Rust library
-- `src/bin/test.rs`: regression-style executable checks for chord naming
-- `utils/`: shared helper crate for build/test support
-- `music21/`: Python reference submodule
-- `build.rs`: optional table generation logic
+- [src/chord/](./src/chord/) chord construction, naming, set-class helpers, and
+  resolution suggestions
+- [src/pitch/](./src/pitch/) pitch spelling, accidentals, and pitch-space helpers
+- [src/polyrhythm.rs](./src/polyrhythm.rs) polyrhythm timing and pitch-ratio
+  conversion
+- [src/tuningsystem.rs](./src/tuningsystem.rs) tuning-system ratios and
+  frequency helpers
+- [examples/](./examples/) browser tools and the small polyrhythm sound example
+- [music21/](./music21/) optional upstream reference submodule
 
 ## Credits
 
-Thanks to Michael Scott Asato Cuthbert and all `music21` contributors for their work in computational musicology and for the `music21` library.
+Thanks to Michael Scott Asato Cuthbert and all `music21` contributors for their
+work in computational musicology and for the original Python library.
