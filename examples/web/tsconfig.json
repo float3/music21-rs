@@ -7,5 +7,11 @@
     "strict": true,
     "target": "ES2022"
   },
-  "include": ["./help-tooltips.ts", "./chords/app.ts"]
+  "include": [
+    "./help-tooltips.ts",
+    "./chord/app.ts",
+    "./chords/app.ts",
+    "./polyrhythm/app.ts",
+    "./tuning/app.ts"
+  ]
 }

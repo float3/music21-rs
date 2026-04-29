@@ -1,0 +1,19 @@
+{
+  "name": "web",
+  "version": "1.0.0",
+  "description": "",
+  "main": "help-tooltips.js",
+  "scripts": {
+    "build": "wasm-pack build . --target web --out-dir pkg --release && tsc -p tsconfig.json",
+    "build:dev": "wasm-pack build . --target web --out-dir pkg --dev && tsc -p tsconfig.json",
+    "build:wasm": "wasm-pack build . --target web --out-dir pkg --release",
+    "build:wasm:dev": "wasm-pack build . --target web --out-dir pkg --dev",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  }
+}

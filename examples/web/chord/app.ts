@@ -1,0 +1,1175 @@
+// @ts-nocheck
+import "../help-tooltips.js";
+import init, { analyze_chord, analyze_chord_with_key } from "../pkg/music21_rs_web.js";
+
+const input = document.querySelector("#chord-input");
+const keyInput = document.querySelector("#key-input");
+const estimateKey = document.querySelector("#estimate-key");
+const form = document.querySelector("#form");
+const share = document.querySelector("#share");
+const playChord = document.querySelector("#play-chord");
+const midiStatus = document.querySelector("#midi-status");
+const historyOptions = document.querySelector("#chord-history");
+const error = document.querySelector("#error");
+const browserLink = document.querySelector("#browser-link");
+const polyrhythmLink = document.querySelector("#polyrhythm-link");
+const tuningLink = document.querySelector("#tuning-link");
+const openPolyrhythm = document.querySelector("#open-polyrhythm");
+const facts = document.querySelector("#facts");
+const pitchedNames = document.querySelector("#pitched-names");
+const resolutionChords = document.querySelector("#resolution-chords");
+const guitarFingering = document.querySelector("#guitar-fingering");
+const pitches = document.querySelector("#pitches");
+const keyboard = document.querySelector("#keyboard");
+const notation = document.querySelector("#notation");
+const randomChord = document.querySelector("#random-chord");
+const randomMinNotes = document.querySelector("#random-min-notes");
+const randomMaxNotes = document.querySelector("#random-max-notes");
+const examples = document.querySelector("#examples");
+const history = document.querySelector("#history");
+const clearHistory = document.querySelector("#clear-history");
+const pcNames = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"];
+const pcAltNames = ["B#", "Db", "D", "D#", "Fb", "E#", "Gb", "G", "G#", "Bbb", "A#", "Cb"];
+const inputPitchNames = ["C", "C#", "D", "E-", "E", "F", "F#", "G", "A-", "A", "B-", "B"];
+const blackKeys = new Set([1, 3, 6, 8, 10]);
+const chordParam = "chord";
+const keyParam = "key";
+const vexChordsUrl = "https://cdn.jsdelivr.net/npm/vexchords@1.2.0/dist/vexchords.dev.js";
+const historyStorageKey = "music21-rs.chordInspector.history";
+const maxHistoryItems = 24;
+let shareResetTimer = null;
+let currentAnalysis = null;
+let guitarRenderToken = 0;
+let vexChordsPromise = null;
+let audioContext = null;
+let activeChordNodes = [];
+let nextChordPlaybackMode = "arpeggio";
+let midiAccess = null;
+let heldMidiNotes = new Map();
+let chordHistory = loadChordHistory();
+let chordHistoryLabels = new Map();
+
+if (!window.location.pathname.includes("/chord/")) {
+  browserLink.href = "./chords/";
+  polyrhythmLink.href = "./polyrhythm/";
+  tuningLink.href = "./tuning/";
+}
+
+function text(value) {
+  if (value === null || value === undefined) return "Not available";
+  if (Array.isArray(value)) return value.length ? value.join(", ") : "Not available";
+  return String(value);
+}
+
+function renderChips(node, values) {
+  node.replaceChildren();
+  const list = values && values.length ? values : ["Not available"];
+  for (const value of list) {
+    const chip = document.createElement("span");
+    chip.className = "chip";
+    chip.textContent = value;
+    node.appendChild(chip);
+  }
+}
+
+function renderFacts(data) {
+  const helpText = {
+    "Forte class": "A catalog label for the chord's pitch-class set, grouping transpositionally or inversionally related sets.",
+    "Normal form": "The chord's pitch classes rotated into their most compact ascending order.",
+    "Interval-class vector": "A six-number count of the unordered interval classes contained inside the pitch-class set.",
+  };
+  const rows = [
+    ["Chord symbol", data.chord_symbol],
+    ["Common name", data.common_name],
+    ["Root", data.root_pitch_name],
+    ["Bass", data.bass_pitch_name],
+    ["Inversion", data.inversion_name ?? data.inversion],
+    ["Key context", data.key_context],
+    ["Key estimate", data.key_estimate],
+    ["Forte class", data.forte_class],
+    ["Normal form", data.normal_form],
+    ["Interval-class vector", data.interval_class_vector],
+  ];
+  facts.replaceChildren();
+  for (const [label, value] of rows) {
+    const item = document.createElement("div");
+    item.className = "fact";
+    const labelNode = document.createElement("span");
+    labelNode.textContent = label;
+    if (helpText[label]) {
+      const help = document.createElement("button");
+      help.type = "button";
+      help.className = "help";
+      help.textContent = "?";
+      help.dataset.help = helpText[label];
+      help.setAttribute("aria-label", `${label}: ${helpText[label]}`);
+      labelNode.appendChild(help);
+    }
+    const valueNode = document.createElement("strong");
+    valueNode.textContent = text(value);
+    item.append(labelNode, valueNode);
+    facts.appendChild(item);
+  }
+}
+
+function renderResolutions(data) {
+  resolutionChords.replaceChildren();
+  const values = data.resolution_chords || [];
+  if (!values.length) {
+    const empty = document.createElement("span");
+    empty.className = "resolution-chip unavailable";
+    empty.textContent = "Not available";
+    resolutionChords.appendChild(empty);
+    return;
+  }
+
+  for (const value of values) {
+    const item = document.createElement("div");
+    item.className = "resolution-item";
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "resolution-chip";
+    const name = document.createElement("strong");
+    name.textContent = value.pitched_common_name;
+    const context = document.createElement("span");
+    context.textContent = value.key_context;
+    const pitchesText = document.createElement("small");
+    pitchesText.textContent = text(value.pitch_names);
+    button.append(name, context, pitchesText);
+    item.addEventListener("pointerenter", () => showResolutionMotion(value));
+    item.addEventListener("pointerleave", clearResolutionMotion);
+    item.addEventListener("focusin", () => showResolutionMotion(value));
+    item.addEventListener("focusout", (event) => {
+      if (!item.contains(event.relatedTarget)) clearResolutionMotion();
+    });
+    button.addEventListener("click", async () => {
+      clearResolutionMotion();
+      await openResolution(value);
+    });
+
+    const preview = document.createElement("button");
+    preview.type = "button";
+    preview.className = "resolution-play";
+    preview.textContent = "Play";
+    preview.setAttribute(
+      "aria-label",
+      `Play current chord then ${value.pitched_common_name}`,
+    );
+    preview.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      await playResolutionPreview(value);
+    });
+
+    item.append(button, preview);
+    resolutionChords.appendChild(item);
+  }
+}
+
+function formatHz(value) {
+  return Number.isFinite(value) ? `${value.toFixed(3)} Hz` : "Not available";
+}
+
+function formatCents(value) {
+  if (!Number.isFinite(value)) return "";
+  const rounded = Math.abs(value) < 0.005 ? 0 : value;
+  return `${rounded > 0 ? "+" : ""}${rounded.toFixed(2)} cents`;
+}
+
+function renderFrequencyCell(pitch) {
+  const td = document.createElement("td");
+  td.className = "frequency-cell";
+  const list = document.createElement("div");
+  list.className = "tuning-list";
+  const tuningFrequencies =
+    pitch.tuning_frequencies && pitch.tuning_frequencies.length
+      ? pitch.tuning_frequencies
+      : [
+          {
+            name: "Equal temperament",
+            frequency_hz: pitch.frequency_hz,
+            cents_from_equal_temperament: 0,
+          },
+        ];
+
+  for (const tuning of tuningFrequencies) {
+    const row = document.createElement("div");
+    row.className = "tuning-row";
+    const name = document.createElement("span");
+    name.className = "tuning-name";
+    name.textContent = tuning.name;
+    const hz = document.createElement("span");
+    hz.className = "tuning-hz";
+    hz.textContent = formatHz(tuning.frequency_hz);
+    row.append(name, hz);
+
+    if (Math.abs(tuning.cents_from_equal_temperament) >= 0.005) {
+      const cents = document.createElement("span");
+      cents.className = "tuning-cents";
+      cents.textContent = formatCents(tuning.cents_from_equal_temperament);
+      row.appendChild(cents);
+    }
+
+    list.appendChild(row);
+  }
+
+  td.appendChild(list);
+  return td;
+}
+
+function renderPitches(data) {
+  pitches.replaceChildren();
+  for (const pitch of data.pitches) {
+    const tr = document.createElement("tr");
+    const cells = [
+      pitch.index + 1,
+      displayPitchName(pitch.name_with_octave || pitch.name),
+      pitch.midi,
+      pitch.octave ?? "None",
+      pitch.pitch_space.toFixed(3),
+    ];
+    for (const cell of cells) {
+      const td = document.createElement("td");
+      td.textContent = cell;
+      tr.appendChild(td);
+    }
+    tr.appendChild(renderFrequencyCell(pitch));
+    for (const cell of [pitch.pitch_class, pitch.alter.toFixed(3)]) {
+      const td = document.createElement("td");
+      td.textContent = cell;
+      tr.appendChild(td);
+    }
+    pitches.appendChild(tr);
+  }
+}
+
+function displayPitchName(value) {
+  const match = String(value ?? "").match(/^([A-G])([#-]*)(-?\d+)?$/);
+  if (!match) return String(value ?? "");
+  return `${match[1]}${match[2].replaceAll("-", "b")}${match[3] ?? ""}`;
+}
+
+function renderKeyboard(activeClasses) {
+  const active = new Set(activeClasses);
+  keyboard.replaceChildren();
+  for (let index = 0; index < 24; index += 1) {
+    const pitchClass = index % 12;
+    const name = pcNames[pitchClass];
+    const key = document.createElement("button");
+    key.type = "button";
+    key.className = `key${blackKeys.has(pitchClass) ? " black" : ""}${active.has(pitchClass) ? " active" : ""}`;
+    const primary = document.createElement("span");
+    primary.className = "key-name";
+    primary.textContent = name;
+    const alternate = document.createElement("span");
+    alternate.className = "key-alt";
+    alternate.textContent = pcAltNames[pitchClass] === name ? "" : pcAltNames[pitchClass];
+    const octave = document.createElement("span");
+    octave.className = "key-octave";
+    octave.textContent = index < 12 ? "I" : "II";
+    key.append(primary, alternate, octave);
+    key.title = active.has(pitchClass)
+      ? `Remove ${name}`
+      : `Add ${inputPitchNames[pitchClass]}`;
+    key.addEventListener("click", () => {
+      togglePitchClass(pitchClass);
+    });
+    keyboard.appendChild(key);
+  }
+}
+
+async function renderGuitarFingering(fingering) {
+  const renderToken = ++guitarRenderToken;
+  guitarFingering.replaceChildren();
+  if (!fingering) {
+    const empty = document.createElement("div");
+    empty.className = "guitar-empty";
+    empty.textContent = "Not available";
+    guitarFingering.appendChild(empty);
+    return;
+  }
+
+  const chart = document.createElement("div");
+  chart.id = "guitar-fingering-chart";
+  chart.className = "guitar-chart";
+  guitarFingering.appendChild(chart);
+
+  const vex = await loadVexChordsRenderer();
+  if (renderToken !== guitarRenderToken) return;
+  if (vex) {
+    try {
+      drawVexChord(vex, `#${chart.id}`, fingering);
+    } catch (err) {
+      renderGuitarUnavailable(chart, err);
+    }
+  } else {
+    renderGuitarUnavailable(chart);
+  }
+
+  const covered = document.createElement("div");
+  covered.className = "guitar-note-list";
+  for (const pitchClass of fingering.covered_pitch_classes || []) {
+    const note = document.createElement("span");
+    note.className = "guitar-note";
+    note.textContent = displayPitchClassName(pitchClass);
+    covered.appendChild(note);
+  }
+  guitarFingering.appendChild(covered);
+
+  if (fingering.omitted_pitch_classes?.length) {
+    const omitted = document.createElement("div");
+    omitted.className = "guitar-note-list guitar-omitted";
+    const label = document.createElement("span");
+    label.textContent = "Omitted";
+    omitted.appendChild(label);
+    for (const pitchClass of fingering.omitted_pitch_classes) {
+      const note = document.createElement("span");
+      note.className = "guitar-note";
+      note.textContent = displayPitchClassName(pitchClass);
+      omitted.appendChild(note);
+    }
+    guitarFingering.appendChild(omitted);
+  }
+}
+
+function renderGuitarUnavailable(node, reason = null) {
+  if (reason) console.error("VexChords render failed", reason);
+  node.replaceChildren();
+  const empty = document.createElement("div");
+  empty.className = "guitar-empty";
+  empty.textContent = reason
+    ? `Guitar chart failed: ${reason instanceof Error ? reason.message : String(reason)}`
+    : "VexChords unavailable";
+  node.appendChild(empty);
+}
+
+function vexChordsRenderer() {
+  return window.vexchords || window.VexChords || window.Vexchords || null;
+}
+
+function loadVexChordsRenderer() {
+  const globalRenderer = normalizeVexChordsRenderer(vexChordsRenderer());
+  if (globalRenderer) return Promise.resolve(globalRenderer);
+  vexChordsPromise ||= loadScript(vexChordsUrl)
+    .then(() => normalizeVexChordsRenderer(vexChordsRenderer()))
+    .catch((err) => {
+      console.error("VexChords load failed", err);
+      return null;
+    });
+  return vexChordsPromise;
+}
+
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector(`script[src="${src}"]`);
+    if (existing) {
+      existing.addEventListener("load", resolve, { once: true });
+      existing.addEventListener("error", () => reject(new Error(`Failed to load ${src}`)), {
+        once: true,
+      });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = src;
+    script.async = true;
+    script.addEventListener("load", resolve, { once: true });
+    script.addEventListener("error", () => reject(new Error(`Failed to load ${src}`)), {
+      once: true,
+    });
+    document.head.appendChild(script);
+  });
+}
+
+function normalizeVexChordsRenderer(module) {
+  for (const candidate of [
+    module,
+    module?.default,
+    module?.vexchords,
+    module?.default?.default,
+  ]) {
+    if (!candidate) continue;
+    if (typeof candidate.draw === "function") {
+      return { draw: candidate.draw.bind(candidate) };
+    }
+    if (typeof candidate.ChordBox === "function") {
+      return { ChordBox: candidate.ChordBox };
+    }
+    if (typeof candidate === "function") {
+      return { ChordBox: candidate };
+    }
+  }
+  return null;
+}
+
+function drawVexChord(vex, selector, fingering) {
+  const chord = vexChordForFingering(fingering);
+  const options = vexChordOptions(fingering);
+  if (typeof vex.draw === "function") {
+    vex.draw(selector, chord, options);
+    return;
+  }
+  if (typeof vex.ChordBox === "function") {
+    const chordBox = new vex.ChordBox(selector, options);
+    chordBox.draw(chord);
+    return;
+  }
+  throw new Error("VexChords renderer has no draw API");
+}
+
+function vexChordOptions(fingering) {
+  return {
+    width: 190,
+    height: 220,
+    numStrings: Math.max(1, (fingering.strings || []).length),
+    numFrets: 5,
+    showTuning: true,
+    defaultColor: "#151515",
+    bgColor: "#ffffff",
+    strokeColor: "#0f766e",
+    textColor: "#151515",
+    stringColor: "#61646b",
+    fretColor: "#61646b",
+    labelColor: "#61646b",
+  };
+}
+
+function vexChordForFingering(fingering) {
+  const position = fingering.base_fret > 1 ? fingering.base_fret : 0;
+  const barres = vexBarresForFingering(fingering, position);
+  return {
+    chord: (fingering.strings || []).map((string) => [
+      string.string_number,
+      vexFretValue(string.fret, position),
+    ]),
+    position,
+    bars: barres,
+    barres,
+    tuning: (fingering.strings || []).map((string) => vexTuningLabel(string.string_name)),
+  };
+}
+
+function vexTuningLabel(value) {
+  return String(value ?? "").replace(/-?\d+$/, "");
+}
+
+function vexFretValue(fret, position) {
+  if (fret === null || fret === undefined) return "x";
+  if (fret === 0 || position <= 1) return fret;
+  return fret - position + 1;
+}
+
+function vexBarresForFingering(fingering, position) {
+  const groups = new Map();
+  for (const string of fingering.strings || []) {
+    if (!Number.isFinite(string.fret) || string.fret <= 0 || !Number.isFinite(string.finger)) {
+      continue;
+    }
+    const fret = vexFretValue(string.fret, position);
+    const key = `${string.finger}:${fret}`;
+    const strings = groups.get(key) || [];
+    strings.push(string.string_number);
+    groups.set(key, strings);
+  }
+
+  const barres = [];
+  for (const [key, strings] of groups) {
+    if (strings.length < 2) continue;
+    const sorted = strings.sort((left, right) => right - left);
+    const isContiguous = sorted.every((string, index) => index === 0 || sorted[index - 1] - string === 1);
+    if (!isContiguous) continue;
+    const [, fret] = key.split(":");
+    barres.push({
+      fromString: sorted[0],
+      toString: sorted[sorted.length - 1],
+      fret: Number(fret),
+    });
+  }
+  return barres;
+}
+
+function displayPitchClassName(pitchClass) {
+  return pcNames[((pitchClass % 12) + 12) % 12];
+}
+
+function togglePitchClass(pitchClass) {
+  const tokens = chordInputTokens(input.value);
+  const hasPitchClass = tokens.some((token) => pitchClassFromName(token) === pitchClass);
+  if (hasPitchClass) {
+    input.value = tokens
+      .filter((token) => pitchClassFromName(token) !== pitchClass)
+      .join(" ");
+  } else {
+    const pitchName = inputPitchNames[pitchClass];
+    input.value = tokens.length ? `${tokens.join(" ")} ${pitchName}` : pitchName;
+  }
+  resetShareButton();
+  analyze({ remember: Boolean(normalizeChordInput(input.value)) });
+}
+
+function chordInputTokens(value) {
+  return normalizeChordInput(value)
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function addPitchToChord(pitchName) {
+  const current = normalizeChordInput(input.value);
+  input.value = current ? `${current} ${pitchName}` : pitchName;
+  resetShareButton();
+  analyze({ remember: true });
+}
+
+function renderNotation(data, resolutionAnalysis = null) {
+  notation.replaceChildren();
+  const sourcePitches = data.pitches || [];
+  const targetPitches = resolutionAnalysis?.pitches || null;
+  const abc = targetPitches
+    ? buildResolutionAbc(sourcePitches, targetPitches)
+    : buildAbc(sourcePitches);
+  const renderAbc = window.ABCJS?.renderAbc || window.abcjs?.renderAbc;
+  if (!renderAbc) {
+    const fallback = document.createElement("div");
+    fallback.className = "notation-fallback";
+    fallback.textContent = "Notation unavailable";
+    notation.appendChild(fallback);
+    return;
+  }
+
+  try {
+    renderAbc("notation", abc, {
+      responsive: "resize",
+      staffwidth: Math.max(360, notation.clientWidth - 20),
+      scale: 0.95,
+    });
+  } catch {
+    const fallback = document.createElement("div");
+    fallback.className = "notation-fallback";
+    fallback.textContent = "Notation unavailable";
+    notation.appendChild(fallback);
+  }
+}
+
+function clearResolutionMotion() {
+  if (currentAnalysis) renderNotation(currentAnalysis);
+}
+
+function showResolutionMotion(resolution) {
+  if (!currentAnalysis) return;
+  let resolutionAnalysis;
+  try {
+    resolutionAnalysis = analyze_chord_with_key(chordValueForResolution(resolution), currentKeyContext());
+  } catch {
+    clearResolutionMotion();
+    return;
+  }
+
+  renderNotation(currentAnalysis, resolutionAnalysis);
+}
+
+function buildResolutionAbc(sourcePitches, targetPitches) {
+  const sourceNames = sourcePitches.map((pitch) => pitch.name_with_octave || pitch.name);
+  const targetNames = targetPitches.map((pitch) => pitch.name_with_octave || pitch.name);
+  const sourceNotes = sourceNames.map(abcNote).filter(Boolean);
+  const targetNotes = targetNames.map(abcNote).filter(Boolean);
+  const sourceChord = sourceNotes.length ? `[${sourceNotes.join("")}]4` : "z4";
+  const targetChord = targetNotes.length ? `[${targetNotes.join("")}]4` : "z4";
+  return `X:1\nL:1/4\nM:4/4\nK:C clef=${chooseClef([...sourceNames, ...targetNames])}\n${sourceChord} | ${targetChord} |]\n`;
+}
+
+function buildAbc(pitchData) {
+  const pitchNames = pitchData.map((pitch) => pitch.name_with_octave || pitch.name);
+  const notes = pitchData
+    .map((pitch) => abcNote(pitch.name_with_octave || pitch.name))
+    .filter(Boolean);
+  const chord = notes.length ? `[${notes.join("")}]4` : "z4";
+  return `X:1\nL:1/4\nM:4/4\nK:C clef=${chooseClef(pitchNames)}\n${chord} |]\n`;
+}
+
+function chooseClef(pitchNames) {
+  const midiValues = pitchNames.map(pitchMidi).filter(Number.isFinite);
+  if (!midiValues.length) return "treble";
+  const average = midiValues.reduce((sum, value) => sum + value, 0) / midiValues.length;
+  const lowest = Math.min(...midiValues);
+  return average < 60 || lowest < 48 ? "bass" : "treble";
+}
+
+function pitchMidi(value) {
+  const trimmed = String(value).trim();
+  const midiNumber = Number.parseInt(trimmed, 10);
+  if (/^-?\d+$/.test(trimmed) && Number.isFinite(midiNumber)) {
+    return midiNumber;
+  }
+  const match = trimmed.match(/^([A-G])([#b-]*)(-?\d+)?$/);
+  if (!match) return Number.NaN;
+  const natural = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }[match[1]];
+  const accidental = match[2]
+    .split("")
+    .reduce((sum, char) => sum + (char === "#" ? 1 : -1), 0);
+  const octave = match[3] === undefined ? 4 : Number.parseInt(match[3], 10);
+  if (!Number.isFinite(octave)) return Number.NaN;
+  return (octave + 1) * 12 + natural + accidental;
+}
+
+function abcNote(value) {
+  const match = String(value).trim().match(/^([A-G])([#b-]*)(-?\d+)?$/);
+  if (!match) return "";
+
+  const step = match[1];
+  const accidental = match[2]
+    .split("")
+    .map((char) => (char === "#" ? "^" : "_"))
+    .join("");
+  const octave = match[3] === undefined ? 4 : Number.parseInt(match[3], 10);
+  if (!Number.isFinite(octave)) return "";
+
+  if (octave >= 5) {
+    return `${accidental}${step.toLowerCase()}${"'".repeat(octave - 5)}`;
+  }
+  return `${accidental}${step}${",".repeat(Math.max(0, 4 - octave))}`;
+}
+
+function render(data) {
+  currentAnalysis = data;
+  error.style.display = "none";
+  renderFacts(data);
+  renderChips(pitchedNames, data.pitched_common_names);
+  renderResolutions(data);
+  void renderGuitarFingering(data.guitar_fingering);
+  renderPitches(data);
+  renderKeyboard(data.pitch_classes);
+  renderNotation(data);
+  renderPolyrhythmLink(data);
+}
+
+function renderPolyrhythmLink(data) {
+  const rhythm = data.polyrhythm_input || "1";
+  const url = new URL("../polyrhythm/", window.location.href);
+  url.searchParams.set("rhythm", rhythm);
+  openPolyrhythm.href = url.href;
+}
+
+function getSharedChord() {
+  const params = new URLSearchParams(window.location.search);
+  return params.has(chordParam) ? (params.get(chordParam) ?? "") : null;
+}
+
+function getSharedKey() {
+  const params = new URLSearchParams(window.location.search);
+  return params.has(keyParam) ? (params.get(keyParam) ?? "") : null;
+}
+
+function buildShareUrl(value, keyValue = keyInput.value) {
+  const url = new URL(window.location.href);
+  url.searchParams.set(chordParam, value);
+  const key = normalizeKeyInput(keyValue);
+  if (key) {
+    url.searchParams.set(keyParam, key);
+  } else {
+    url.searchParams.delete(keyParam);
+  }
+  return url;
+}
+
+function syncShareUrl() {
+  const url = buildShareUrl(input.value);
+  window.history.replaceState({ chord: input.value, key: keyInput.value }, "", url.href);
+  return url.href;
+}
+
+function normalizeChordInput(value) {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+function normalizeKeyInput(value) {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+function currentKeyContext() {
+  return normalizeKeyInput(keyInput.value);
+}
+
+function loadChordHistory() {
+  try {
+    const raw = window.localStorage?.getItem(historyStorageKey);
+    if (!raw) return [];
+    const values = JSON.parse(raw);
+    if (!Array.isArray(values)) return [];
+
+    const seen = new Set();
+    return values
+      .map((value) => (typeof value === "string" ? normalizeChordInput(value) : ""))
+      .filter((value) => {
+        if (!value || seen.has(value)) return false;
+        seen.add(value);
+        return true;
+      })
+      .slice(0, maxHistoryItems);
+  } catch {
+    return [];
+  }
+}
+
+function saveChordHistory() {
+  try {
+    window.localStorage?.setItem(historyStorageKey, JSON.stringify(chordHistory));
+  } catch {
+    // Browsers can deny localStorage; history still works for this page view.
+  }
+}
+
+function renderChordHistory() {
+  historyOptions.replaceChildren();
+  history.replaceChildren();
+  clearHistory.hidden = chordHistory.length === 0;
+
+  for (const value of chordHistory) {
+    const label = chordHistoryLabels.get(value) || historyLabelForChord(value);
+    const option = document.createElement("option");
+    option.value = value;
+    historyOptions.appendChild(option);
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = label;
+    button.title = "Previous chord";
+    button.addEventListener("click", () => {
+      input.value = value;
+      resetShareButton();
+      analyze({ remember: true });
+    });
+    history.appendChild(button);
+  }
+}
+
+function clearChordHistory() {
+  chordHistory = [];
+  chordHistoryLabels.clear();
+  saveChordHistory();
+  renderChordHistory();
+}
+
+function historyLabelForChord(value) {
+  try {
+    const data = analyze_chord(value);
+    const label = data.pitched_common_names?.[0] || data.pitched_common_name || value;
+    chordHistoryLabels.set(value, label);
+    return label;
+  } catch {
+    return value;
+  }
+}
+
+function rememberChord(value) {
+  const normalized = normalizeChordInput(value);
+  if (!normalized) return;
+  historyLabelForChord(normalized);
+
+  chordHistory = [
+    normalized,
+    ...chordHistory.filter((historyValue) => historyValue !== normalized),
+  ].slice(0, maxHistoryItems);
+  saveChordHistory();
+  renderChordHistory();
+}
+
+function resetShareButton() {
+  share.textContent = "Copy link";
+  share.classList.remove("copied");
+}
+
+function markShareCopied() {
+  share.textContent = "Copied";
+  share.classList.add("copied");
+  if (shareResetTimer) clearTimeout(shareResetTimer);
+  shareResetTimer = setTimeout(resetShareButton, 1600);
+}
+
+async function writeClipboard(value) {
+  if (navigator.clipboard?.writeText && window.isSecureContext) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = value;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.top = "-1000px";
+  document.body.appendChild(textarea);
+  textarea.select();
+  try {
+    if (!document.execCommand("copy")) {
+      throw new Error("Copy command failed");
+    }
+  } finally {
+    textarea.remove();
+  }
+}
+
+async function ensureAudio() {
+  const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextConstructor) {
+    error.textContent = "Audio is not available in this browser.";
+    error.style.display = "block";
+    return false;
+  }
+
+  try {
+    audioContext ||= new AudioContextConstructor();
+    if (audioContext.state === "suspended") {
+      await audioContext.resume();
+    }
+  } catch {
+    error.textContent = "Audio playback needs a browser click first.";
+    error.style.display = "block";
+    return false;
+  }
+  return true;
+}
+
+function stopChordPlayback() {
+  for (const node of activeChordNodes) {
+    try {
+      node.stop();
+    } catch {
+      // Already stopped.
+    }
+  }
+  activeChordNodes = [];
+}
+
+function chordValueForResolution(resolution) {
+  return (resolution.pitch_names || []).join(" ");
+}
+
+function frequenciesFromAnalysis(analysis) {
+  return (analysis?.pitches ?? [])
+    .map((pitch) => pitch.frequency_hz)
+    .filter((frequency) => Number.isFinite(frequency) && frequency > 0);
+}
+
+function scheduleChordFrequencies(frequencies, startTime, duration) {
+  const gainPerVoice = Math.min(0.18, 0.52 / Math.sqrt(frequencies.length));
+  const attackEnd = startTime + 0.018;
+  const releaseStart = startTime + Math.max(0.08, duration - 0.1);
+  const stopTime = startTime + duration + 0.08;
+
+  for (const frequency of frequencies) {
+    const oscillator = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    oscillator.type = "triangle";
+    oscillator.frequency.setValueAtTime(frequency, startTime);
+    gain.gain.setValueAtTime(0.0001, startTime);
+    gain.gain.exponentialRampToValueAtTime(gainPerVoice, attackEnd);
+    gain.gain.exponentialRampToValueAtTime(0.0001, releaseStart);
+    oscillator.connect(gain).connect(audioContext.destination);
+    oscillator.start(startTime);
+    oscillator.stop(stopTime);
+    activeChordNodes.push(oscillator);
+    oscillator.addEventListener("ended", () => {
+      activeChordNodes = activeChordNodes.filter((node) => node !== oscillator);
+    });
+  }
+}
+
+function arpeggioDuration(frequencies) {
+  const step = 0.14;
+  const noteDuration = 0.64;
+  return Math.max(noteDuration, (frequencies.length - 1) * step + noteDuration);
+}
+
+function scheduleArpeggioFrequencies(frequencies, startTime) {
+  const step = 0.14;
+  const noteDuration = 0.64;
+
+  frequencies.forEach((frequency, index) => {
+    scheduleChordFrequencies([frequency], startTime + index * step, noteDuration);
+  });
+}
+
+function scheduleFrequencyItem(item, startTime) {
+  if (item.mode === "arpeggio") {
+    scheduleArpeggioFrequencies(item.frequencies, startTime);
+    return arpeggioDuration(item.frequencies);
+  }
+
+  scheduleChordFrequencies(item.frequencies, startTime, item.duration);
+  return item.duration;
+}
+
+async function playFrequencySequence(sequence) {
+  const playable = sequence.filter((item) => item.frequencies.length);
+  if (playable.length !== sequence.length) {
+    error.textContent = "No pitched notes to play.";
+    error.style.display = "block";
+    return;
+  }
+  if (!(await ensureAudio())) return;
+
+  stopChordPlayback();
+  error.style.display = "none";
+  let startTime = audioContext.currentTime;
+  for (const item of playable) {
+    startTime += scheduleFrequencyItem(item, startTime) + (item.gapAfter ?? 0);
+  }
+}
+
+async function playCurrentChord(mode = "block") {
+  if (!currentAnalysis && !analyze({ remember: false })) return;
+  const frequencies = frequenciesFromAnalysis(currentAnalysis);
+  await playFrequencySequence([{ frequencies, duration: 1.45, mode }]);
+}
+
+function updatePlayChordButton() {
+  playChord.textContent =
+    nextChordPlaybackMode === "arpeggio" ? "Play arpeggio" : "Play chord";
+  playChord.setAttribute(
+    "aria-label",
+    nextChordPlaybackMode === "arpeggio"
+      ? "Play the current chord as an arpeggio"
+      : "Play the current chord as a block chord",
+  );
+}
+
+async function playCurrentChordFromButton() {
+  const mode = nextChordPlaybackMode;
+  nextChordPlaybackMode = mode === "arpeggio" ? "block" : "arpeggio";
+  updatePlayChordButton();
+  await playCurrentChord(mode);
+}
+
+async function playResolutionPreview(resolution) {
+  if (!currentAnalysis && !analyze({ remember: false })) return;
+  let resolutionAnalysis;
+  try {
+    resolutionAnalysis = analyze_chord_with_key(chordValueForResolution(resolution), currentKeyContext());
+  } catch (err) {
+    error.textContent = err instanceof Error ? err.message : String(err);
+    error.style.display = "block";
+    return;
+  }
+
+  await playFrequencySequence([
+    { frequencies: frequenciesFromAnalysis(currentAnalysis), duration: 1.0, gapAfter: 0.16 },
+    { frequencies: frequenciesFromAnalysis(resolutionAnalysis), duration: 1.45 },
+  ]);
+}
+
+async function openResolution(resolution) {
+  const chordValue = chordValueForResolution(resolution);
+  input.value = chordValue;
+  resetShareButton();
+  window.history.pushState({ chord: chordValue }, "", buildShareUrl(chordValue).href);
+  if (analyze({ syncUrl: false, remember: true })) {
+    await playCurrentChord();
+  }
+}
+
+async function startMidiInput() {
+  if (!navigator.requestMIDIAccess) {
+    setMidiStatus("Web MIDI unavailable in this browser");
+    return;
+  }
+
+  setMidiStatus("Requesting MIDI access");
+  try {
+    midiAccess = await navigator.requestMIDIAccess({ sysex: false });
+    heldMidiNotes = new Map();
+    wireMidiInputs();
+    midiAccess.onstatechange = () => {
+      wireMidiInputs();
+      setMidiStatus(midiInputStatus());
+    };
+    setMidiStatus(midiInputStatus());
+  } catch (err) {
+    setMidiStatus(err instanceof Error ? err.message : "MIDI access denied");
+  }
+}
+
+function wireMidiInputs() {
+  if (!midiAccess) return;
+  if (!connectedMidiInputs().length) heldMidiNotes.clear();
+  for (const inputDevice of midiAccess.inputs.values()) {
+    inputDevice.onmidimessage = inputDevice.state === "disconnected" ? null : handleMidiMessage;
+  }
+  setMidiStatus(midiInputStatus());
+}
+
+function midiInputStatus() {
+  if (!midiAccess) return "MIDI idle";
+  const names = connectedMidiInputs().map((inputDevice) => inputDevice.name || "MIDI input");
+  if (!names.length) return "No MIDI inputs found";
+  return `Listening: ${names.join(", ")}`;
+}
+
+function connectedMidiInputs() {
+  if (!midiAccess) return [];
+  return [...midiAccess.inputs.values()].filter((inputDevice) => inputDevice.state !== "disconnected");
+}
+
+function handleMidiMessage(event) {
+  const [status, note, velocity] = event.data;
+  const command = status & 0xf0;
+  if (command === 0xb0 && (note === 0x7b || note === 0x7e || note === 0x7f)) {
+    heldMidiNotes.clear();
+    setMidiStatus(`${midiInputStatus()} - released`);
+    return;
+  }
+
+  if (command === 0x90 && velocity > 0) {
+    heldMidiNotes.set(note, velocity);
+  } else if (command === 0x80 || (command === 0x90 && velocity === 0)) {
+    heldMidiNotes.delete(note);
+  } else {
+    return;
+  }
+
+  analyzeHeldMidiNotes();
+}
+
+function analyzeHeldMidiNotes() {
+  const notes = [...heldMidiNotes.keys()].sort((a, b) => a - b);
+  if (!notes.length) {
+    setMidiStatus(`${midiInputStatus()} - released`);
+    return;
+  }
+
+  input.value = `midi: ${notes.join(" ")}`;
+  resetShareButton();
+  analyze({ syncUrl: false, remember: false });
+  setMidiStatus(`${midiInputStatus()} - ${notes.join(" ")}`);
+}
+
+function setMidiStatus(message) {
+  midiStatus.textContent = message;
+}
+
+function estimateKeyContext() {
+  let estimatedAnalysis;
+  try {
+    estimatedAnalysis = analyze_chord(input.value);
+  } catch (err) {
+    error.textContent = err instanceof Error ? err.message : String(err);
+    error.style.display = "block";
+    return;
+  }
+
+  const estimate = normalizeKeyInput(estimatedAnalysis.key_estimate ?? "");
+  if (!estimate) {
+    error.textContent = "No key estimate available for this chord.";
+    error.style.display = "block";
+    return;
+  }
+
+  keyInput.value = estimate;
+  resetShareButton();
+  analyze({ remember: false });
+}
+
+function analyze({ syncUrl = true, remember = false } = {}) {
+  const chordValue = input.value;
+  try {
+    render(analyze_chord_with_key(chordValue, currentKeyContext()));
+    if (syncUrl) syncShareUrl();
+    if (remember) rememberChord(chordValue);
+    return true;
+  } catch (err) {
+    error.textContent = err instanceof Error ? err.message : String(err);
+    error.style.display = "block";
+    return false;
+  }
+}
+
+function clampInteger(value, min, max, fallback) {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
+}
+
+function randomNoteCount() {
+  let min = clampInteger(randomMinNotes.value, 1, 12, 3);
+  let max = clampInteger(randomMaxNotes.value, 1, 12, 6);
+  if (min > max) [min, max] = [max, min];
+  randomMinNotes.value = min;
+  randomMaxNotes.value = max;
+  return min + Math.floor(Math.random() * (max - min + 1));
+}
+
+function generateRandomChord() {
+  const rootIndex = Math.floor(Math.random() * inputPitchNames.length);
+  const noteCount = randomNoteCount();
+  const intervals = new Set([0]);
+  while (intervals.size < noteCount) {
+    intervals.add(Math.floor(Math.random() * 12));
+  }
+  return [...intervals]
+    .sort((a, b) => a - b)
+    .map((interval) => inputPitchNames[(rootIndex + interval) % inputPitchNames.length])
+    .join(" ");
+}
+
+for (const value of [
+  "C E G",
+  "C E- G",
+  "C E G#",
+  "G2 B2 D3 F3",
+  "midi: 60 64 67",
+  "",
+]) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = value === "" ? "empty" : value;
+  button.addEventListener("click", () => {
+    input.value = value;
+    analyze({ remember: true });
+  });
+  examples.appendChild(button);
+}
+
+randomChord.addEventListener("click", () => {
+  input.value = generateRandomChord();
+  resetShareButton();
+  analyze({ remember: true });
+});
+clearHistory.addEventListener("click", clearChordHistory);
+playChord.addEventListener("click", playCurrentChordFromButton);
+estimateKey.addEventListener("click", estimateKeyContext);
+updatePlayChordButton();
+
+form.addEventListener("submit", (event) => {
+  event.preventDefault();
+  analyze({ remember: true });
+});
+
+input.addEventListener("input", resetShareButton);
+keyInput.addEventListener("input", resetShareButton);
+
+share.addEventListener("click", async () => {
+  const href = syncShareUrl();
+  try {
+    await writeClipboard(href);
+    error.style.display = "none";
+    markShareCopied();
+  } catch {
+    error.textContent = "The URL has been updated in your address bar.";
+    error.style.display = "block";
+  }
+});
+
+window.addEventListener("popstate", () => {
+  const sharedChord = getSharedChord();
+  if (sharedChord !== null) {
+    input.value = sharedChord;
+    keyInput.value = getSharedKey() ?? "";
+    analyze({ syncUrl: false });
+  }
+});
+
+await init();
+renderChordHistory();
+const sharedChord = getSharedChord();
+if (sharedChord !== null) input.value = sharedChord;
+const sharedKey = getSharedKey();
+if (sharedKey !== null) keyInput.value = sharedKey;
+analyze({ syncUrl: false });
+void startMidiInput();

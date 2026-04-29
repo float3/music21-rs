@@ -233,10 +233,13 @@ jobs:
           cp examples/web/help-tooltips.js target/pages/help-tooltips.js
           cp examples/web/index.html target/pages/index.html
           cp examples/web/chord/index.html target/pages/chord/index.html
+          cp examples/web/chord/app.js target/pages/chord/app.js
           cp examples/web/chords/index.html target/pages/chords/index.html
           cp examples/web/chords/app.js target/pages/chords/app.js
           cp examples/web/polyrhythm/index.html target/pages/polyrhythm/index.html
+          cp examples/web/polyrhythm/app.js target/pages/polyrhythm/app.js
           cp examples/web/tuning/index.html target/pages/tuning/index.html
+          cp examples/web/tuning/app.js target/pages/tuning/app.js
           cp -R examples/web/pkg target/pages/pkg
 
       - name: Smoke check demo site
@@ -256,9 +259,12 @@ jobs:
               "pkg/music21_rs_web_bg.wasm",
               "help-tooltips.js",
               "docs/music21_rs/index.html",
+              "chord/app.js",
               "chords/app.js",
               "polyrhythm/index.html",
+              "polyrhythm/app.js",
               "tuning/index.html",
+              "tuning/app.js",
           ]
 
           missing = [name for name in required_files if not (root / name).is_file()]
@@ -267,11 +273,14 @@ jobs:
 
           file_checks = {
               "index.html": ["chord/", "chords/", "polyrhythm/", "tuning/"],
-              "chord/index.html": ["../pkg/music21_rs_web.js", "../chords/", "../polyrhythm/"],
+              "chord/index.html": ["./app.js", "../chords/", "../polyrhythm/"],
+              "chord/app.js": ["../pkg/music21_rs_web.js"],
               "chords/index.html": ["./app.js", "../chord/"],
               "chords/app.js": ["../pkg/music21_rs_web.js"],
-              "polyrhythm/index.html": ["../pkg/music21_rs_web.js"],
-              "tuning/index.html": ["../pkg/music21_rs_web.js"],
+              "polyrhythm/index.html": ["./app.js"],
+              "polyrhythm/app.js": ["../pkg/music21_rs_web.js"],
+              "tuning/index.html": ["./app.js"],
+              "tuning/app.js": ["../pkg/music21_rs_web.js"],
           }
 
           for name, needles in file_checks.items():

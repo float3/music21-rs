@@ -88,7 +88,7 @@
 
       .toolbar {
         display: grid;
-        grid-template-columns: minmax(180px, 1fr) minmax(190px, 230px) 120px auto auto;
+        grid-template-columns: minmax(180px, 1fr) minmax(190px, 230px) 120px auto auto auto;
         gap: 12px;
         align-items: end;
         padding: 14px;
@@ -153,6 +153,7 @@
       }
 
       .toggle-button.active,
+      .toggle-button.copied,
       .toggle-button:hover {
         border-color: var(--accent);
         background: #ecfdf5;
@@ -194,7 +195,8 @@
       }
 
       .table-wrap {
-        overflow-x: visible;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
       }
 
       table {
@@ -268,6 +270,17 @@
           "SFMono-Regular", Consolas, "Liberation Mono", ui-monospace,
           monospace;
         font-size: 13px;
+      }
+
+      .symbol {
+        font-weight: 800;
+        white-space: normal;
+      }
+
+      .key-estimate {
+        color: #2f4858;
+        font-size: 13px;
+        font-weight: 760;
       }
 
       .help {
@@ -365,7 +378,7 @@
 
         td {
           display: grid;
-          grid-template-columns: 112px minmax(0, 1fr);
+          grid-template-columns: 104px minmax(0, 1fr);
           gap: 10px;
           padding: 7px 12px;
         }
@@ -383,30 +396,38 @@
         }
 
         td:nth-child(2)::before {
-          content: "Aliases";
+          content: "Symbol";
         }
 
         td:nth-child(3)::before {
-          content: "Class";
+          content: "Key estimate";
         }
 
         td:nth-child(4)::before {
-          content: "Pitches";
+          content: "Aliases";
         }
 
         td:nth-child(5)::before {
-          content: "Inversions";
+          content: "Class";
         }
 
         td:nth-child(6)::before {
-          content: "Resolutions";
+          content: "Pitches";
         }
 
         td:nth-child(7)::before {
-          content: "Normal Form";
+          content: "Inversions";
         }
 
         td:nth-child(8)::before {
+          content: "Resolutions";
+        }
+
+        td:nth-child(9)::before {
+          content: "Normal Form";
+        }
+
+        td:nth-child(10)::before {
           content: "Interval Vector";
         }
 
@@ -414,7 +435,7 @@
 
       @media (max-width: 760px) {
         .shell {
-          width: min(100vw - 20px, 720px);
+          width: min(100vw - 24px, 720px);
           padding-top: 16px;
         }
 
@@ -430,15 +451,42 @@
 
         .top-links {
           justify-content: start;
+          gap: 8px;
+          width: 100%;
+        }
+
+        .top-links a {
+          display: inline-flex;
+          align-items: center;
+          min-height: 34px;
+          padding: 0 10px;
+          border: 1px solid var(--line);
+          border-radius: 8px;
+          background: var(--panel);
         }
 
         h1 {
           font-size: 26px;
         }
 
+        .toggle-button {
+          width: 100%;
+        }
+
         .count {
           justify-content: flex-start;
           text-align: left;
+        }
+      }
+
+      @media (max-width: 420px) {
+        td {
+          grid-template-columns: 1fr;
+          gap: 4px;
+        }
+
+        td::before {
+          font-size: 10px;
         }
       }
     </style>
@@ -493,6 +541,9 @@
         <button id="named-only" class="toggle-button" type="button" aria-pressed="false">
           Named only
         </button>
+        <button id="share-filters" class="toggle-button" type="button">
+          Copy link
+        </button>
         <div class="count" id="count">Loading...</div>
       </section>
 
@@ -500,18 +551,22 @@
         <div class="table-wrap">
           <table>
             <colgroup>
-              <col style="width: 15%" />
+              <col style="width: 13%" />
               <col style="width: 12%" />
-              <col style="width: 7%" />
-              <col style="width: 11%" />
-              <col style="width: 14%" />
-              <col style="width: 17%" />
+              <col style="width: 9%" />
+              <col style="width: 10%" />
+              <col style="width: 6%" />
+              <col style="width: 10%" />
               <col style="width: 11%" />
               <col style="width: 13%" />
+              <col style="width: 8%" />
+              <col style="width: 8%" />
             </colgroup>
             <thead>
               <tr>
                 <th>Name</th>
+                <th>Symbol</th>
+                <th>Key estimate</th>
                 <th>Aliases</th>
                 <th>
                   Class

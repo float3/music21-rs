@@ -100,7 +100,7 @@
 
       @media (max-width: 720px) {
         .shell {
-          width: min(100vw - 20px, 680px);
+          width: min(100vw - 24px, 680px);
           padding-top: 16px;
         }
 
@@ -113,6 +113,27 @@
 
         h1 {
           font-size: 26px;
+        }
+
+        .docs-link {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-height: 38px;
+          justify-self: start;
+          padding: 0 12px;
+          border: 1px solid var(--line);
+          border-radius: 8px;
+          background: var(--panel);
+        }
+
+        .tool {
+          min-height: 138px;
+          padding: 16px;
+        }
+
+        .tool h2 {
+          font-size: 18px;
         }
       }
     </style>

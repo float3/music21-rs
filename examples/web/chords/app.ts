@@ -1,10 +1,14 @@
 import "../help-tooltips.js";
-import init, { analyze_chord, known_chords } from "../pkg/music21_rs_web.js";
+import init, { known_chords } from "../pkg/music21_rs_web.js";
 
 type KnownChord = {
   id: string;
   primary_common_name: string;
   common_names: string[];
+  chord_symbol?: string | null;
+  key_estimate?: string | null;
+  resolution_chords?: ResolutionChord[];
+  inversion_labels?: Array<string | null>;
   cardinality: number;
   forte_class: string;
   normal_form: number[];
@@ -32,28 +36,24 @@ type ResolutionChord = {
   pitch_classes: number[];
 };
 
-type ChordAnalysis = {
-  common_name?: string;
-  resolution_chords?: ResolutionChord[];
-};
-
 const search = mustQuery<HTMLInputElement>("#search");
 const minCardinality = mustQuery<HTMLSelectElement>("#min-cardinality");
 const maxCardinality = mustQuery<HTMLSelectElement>("#max-cardinality");
 const root = mustQuery<HTMLSelectElement>("#root");
 const namedOnly = mustQuery<HTMLButtonElement>("#named-only");
+const shareFilters = mustQuery<HTMLButtonElement>("#share-filters");
 const count = mustQuery<HTMLElement>("#count");
 const rows = mustQuery<HTMLTableSectionElement>("#rows");
 const error = mustQuery<HTMLElement>("#error");
 
 let allChords: KnownChord[] = [];
 let showNamedOnly = false;
-const resolutionCache = new Map<string, ResolutionChord[]>();
-const inversionLabelCache = new Map<string, string>();
+let shareResetTimer: number | null = null;
 
 const chordBaseHref = window.location.pathname.endsWith(".html")
   ? "../chord/index.html"
   : "../chord/";
+const filterParamNames = ["q", "min", "max", "root", "named"];
 const pitchInputNames = [
   "C",
   "D-",
@@ -95,11 +95,181 @@ function selectedRootPitchClass(): number {
   return Number(root.value) || 0;
 }
 
+function selectedRootName(): string {
+  return pitchDisplayNames[selectedRootPitchClass()] ?? "C";
+}
+
+function selectedRootShift(): number {
+  return selectedRootPitchClass();
+}
+
+function selectHasValue(select: HTMLSelectElement, value: string): boolean {
+  return Array.from(select.options).some((option) => option.value === value);
+}
+
+function rootValueFromParam(value: string | null): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+
+  const numeric = Number(trimmed);
+  if (Number.isInteger(numeric) && numeric >= 0 && numeric <= 11) {
+    return String(numeric);
+  }
+
+  const normalized = trimmed.replaceAll("-", "b").toLocaleLowerCase();
+  const index = pitchDisplayNames.findIndex(
+    (name) => name.toLocaleLowerCase() === normalized,
+  );
+  return index >= 0 ? String(index) : null;
+}
+
+function setNamedOnly(value: boolean): void {
+  showNamedOnly = value;
+  namedOnly.classList.toggle("active", showNamedOnly);
+  namedOnly.setAttribute("aria-pressed", String(showNamedOnly));
+  namedOnly.textContent = showNamedOnly ? "Showing named" : "Named only";
+}
+
+function applyFiltersFromUrl(): void {
+  const params = new URLSearchParams(window.location.search);
+  search.value = params.get("q") ?? "";
+
+  const min = params.get("min");
+  if (min && selectHasValue(minCardinality, min)) {
+    minCardinality.value = min;
+  }
+
+  const max = params.get("max");
+  if (max && selectHasValue(maxCardinality, max)) {
+    maxCardinality.value = max;
+  }
+
+  if (Number(minCardinality.value) > Number(maxCardinality.value)) {
+    maxCardinality.value = minCardinality.value;
+  }
+
+  const rootValue = rootValueFromParam(params.get("root"));
+  if (rootValue !== null) {
+    root.value = rootValue;
+  }
+
+  setNamedOnly(
+    ["1", "true", "yes"].includes(
+      (params.get("named") ?? "").trim().toLocaleLowerCase(),
+    ),
+  );
+}
+
+function currentFilterUrl(): URL {
+  const url = new URL(window.location.href);
+  for (const name of filterParamNames) {
+    url.searchParams.delete(name);
+  }
+
+  const query = search.value.trim();
+  if (query) url.searchParams.set("q", query);
+  if (minCardinality.value !== "1") {
+    url.searchParams.set("min", minCardinality.value);
+  }
+  if (maxCardinality.value !== "12") {
+    url.searchParams.set("max", maxCardinality.value);
+  }
+  if (selectedRootPitchClass() !== 0) {
+    url.searchParams.set("root", selectedRootName());
+  }
+  if (showNamedOnly) {
+    url.searchParams.set("named", "1");
+  }
+
+  return url;
+}
+
+function syncFilterUrl(): URL {
+  const url = currentFilterUrl();
+  window.history.replaceState({ chordBrowserFilters: true }, "", url);
+  return url;
+}
+
+function renderAndSyncFilters(): void {
+  renderRows();
+  syncFilterUrl();
+  resetShareButton();
+}
+
+function wrapPitchClass(pitchClass: number): number {
+  return ((pitchClass % 12) + 12) % 12;
+}
+
 function pitchNameAt(midi: number, names: string[], withOctave: boolean): string {
-  const pitchClass = ((midi % 12) + 12) % 12;
+  const pitchClass = wrapPitchClass(midi);
   if (!withOctave) return names[pitchClass];
   const octave = Math.floor(midi / 12) - 1;
   return `${names[pitchClass]}${octave}`;
+}
+
+function pitchClassForName(name: string): number | null {
+  const normalized = name.replaceAll("-", "b");
+  const base = normalized[0];
+  const basePitchClasses: Record<string, number> = {
+    C: 0,
+    D: 2,
+    E: 4,
+    F: 5,
+    G: 7,
+    A: 9,
+    B: 11,
+  };
+  const basePitchClass = basePitchClasses[base];
+  if (basePitchClass === undefined) return null;
+
+  let pitchClass = basePitchClass;
+  for (const accidental of normalized.slice(1)) {
+    if (accidental === "#") pitchClass += 1;
+    else if (accidental === "b") pitchClass -= 1;
+    else return null;
+  }
+
+  return wrapPitchClass(pitchClass);
+}
+
+function transposePitchName(
+  value: string,
+  shift = selectedRootShift(),
+  names = pitchDisplayNames,
+): string {
+  const match = value.match(/^([A-G](?:[#b-]*))(-?\d+)?$/);
+  if (!match) return value;
+
+  const pitchClass = pitchClassForName(match[1]);
+  if (pitchClass === null) return value;
+
+  const octaveText = match[2];
+  if (octaveText === undefined) {
+    return names[wrapPitchClass(pitchClass + shift)];
+  }
+
+  const octave = Number(octaveText);
+  const midi = (octave + 1) * 12 + pitchClass + shift;
+  return `${names[wrapPitchClass(midi)]}${Math.floor(midi / 12) - 1}`;
+}
+
+function transposeLeadingPitchName(value: string): string {
+  return value.replace(/^([A-G](?:[#b-]*))(?=-|\b)/, (name) =>
+    transposePitchName(name),
+  );
+}
+
+function transposeKeyText(value: string | null | undefined): string {
+  if (!value) return "Not available";
+  return value.replace(
+    /\b([A-G](?:[#b-]*))(?=\s+(?:major|minor)\b)/g,
+    (name) => transposePitchName(name),
+  );
+}
+
+function transposeCChordSymbol(value: string | null | undefined): string {
+  if (!value) return "Not available";
+  return value.replace(/^C/, pitchDisplayNames[selectedRootPitchClass()]);
 }
 
 function realizedChord(chord: KnownChord, inversion = 0): RealizedChord {
@@ -133,47 +303,8 @@ function inversionLabel(index: number): string {
   return `${index}th`;
 }
 
-function normalizedChordName(name: string): string {
-  return name.trim().replace(/\s+/g, " ").toLocaleLowerCase();
-}
-
-function displayInversionName(name: string): string {
-  const normalized = name.trim().replace(/\s+/g, " ");
-  return normalized.replace(/^\S/, (letter) => letter.toLocaleLowerCase());
-}
-
 function uniqueInversionName(chord: KnownChord, inversion: number): string | null {
-  const realized = realizedChord(chord, inversion);
-  if (!realized.midi.length) return null;
-
-  const cacheKey = `${selectedRootPitchClass()}:${chord.id}:${inversion}`;
-  const cached = inversionLabelCache.get(cacheKey);
-  if (cached !== undefined) return cached || null;
-
-  try {
-    const analysis = analyze_chord(`midi: ${realized.midi.join(" ")}`) as ChordAnalysis;
-    const commonName = analysis.common_name?.trim();
-    if (!commonName || normalizedChordName(commonName) === "unknown chord") {
-      inversionLabelCache.set(cacheKey, "");
-      return null;
-    }
-
-    const ownNames = new Set(
-      [chord.primary_common_name, ...(chord.common_names ?? [])].map(
-        normalizedChordName,
-      ),
-    );
-    if (!ownNames.has(normalizedChordName(commonName))) {
-      const label = displayInversionName(commonName);
-      inversionLabelCache.set(cacheKey, label);
-      return label;
-    }
-  } catch {
-    // Fall back to the plain inversion number below.
-  }
-
-  inversionLabelCache.set(cacheKey, "");
-  return null;
+  return chord.inversion_labels?.[inversion] || null;
 }
 
 function inversionButtonLabel(chord: KnownChord, inversion: number): string {
@@ -184,6 +315,8 @@ function textSearch(chord: KnownChord): string {
   return [
     chord.primary_common_name,
     ...(chord.common_names ?? []),
+    chord.chord_symbol ?? "",
+    chord.key_estimate ?? "",
     chord.forte_class,
     `[${(chord.normal_form ?? []).join(", ")}]`,
     `[${(chord.interval_class_vector ?? []).join(", ")}]`,
@@ -242,7 +375,7 @@ function syncCardinalityRange(changed: "min" | "max"): void {
 function openUrl(chord: KnownChord, inversion = 0): string {
   const url = new URL(chordBaseHref, window.location.href);
   const realized = realizedChord(chord, inversion);
-  url.searchParams.set("chord", `midi: ${realized.midi.join(" ")}`);
+  url.searchParams.set("chord", realized.inputNames.join(" "));
   return url.href;
 }
 
@@ -252,23 +385,30 @@ function resolutionUrl(resolution: ResolutionChord): string {
   return url.href;
 }
 
+function transposeResolutionChord(resolution: ResolutionChord): ResolutionChord {
+  return {
+    ...resolution,
+    pitched_common_name: transposeLeadingPitchName(resolution.pitched_common_name),
+    key_context: transposeKeyText(resolution.key_context),
+    pitch_names: resolution.pitch_names.map((name) =>
+      transposePitchName(name, selectedRootShift(), pitchInputNames),
+    ),
+    pitch_classes: resolution.pitch_classes.map((pitchClass) =>
+      wrapPitchClass(pitchClass + selectedRootShift()),
+    ),
+  };
+}
+
+function chordSymbolFor(chord: KnownChord): string {
+  return transposeCChordSymbol(chord.chord_symbol);
+}
+
+function keyEstimateFor(chord: KnownChord): string {
+  return transposeKeyText(chord.key_estimate);
+}
+
 function resolutionChords(chord: KnownChord): ResolutionChord[] {
-  const realized = realizedChord(chord, 0);
-  if (!realized.midi.length) return [];
-
-  const cacheKey = `${selectedRootPitchClass()}:${chord.id}`;
-  const cached = resolutionCache.get(cacheKey);
-  if (cached) return cached;
-
-  try {
-    const analysis = analyze_chord(`midi: ${realized.midi.join(" ")}`) as ChordAnalysis;
-    const resolutions = analysis.resolution_chords ?? [];
-    resolutionCache.set(cacheKey, resolutions);
-    return resolutions;
-  } catch {
-    resolutionCache.set(cacheKey, []);
-    return [];
-  }
+  return (chord.resolution_chords ?? []).map(transposeResolutionChord);
 }
 
 function renderChips(values: string[]): HTMLDivElement {
@@ -297,6 +437,46 @@ function renderResolutions(chord: KnownChord): HTMLDivElement {
   return wrap;
 }
 
+function resetShareButton(): void {
+  shareFilters.textContent = "Copy link";
+  shareFilters.classList.remove("copied");
+  if (shareResetTimer !== null) {
+    window.clearTimeout(shareResetTimer);
+    shareResetTimer = null;
+  }
+}
+
+function markShareCopied(): void {
+  shareFilters.textContent = "Copied";
+  shareFilters.classList.add("copied");
+  if (shareResetTimer !== null) {
+    window.clearTimeout(shareResetTimer);
+  }
+  shareResetTimer = window.setTimeout(resetShareButton, 1600);
+}
+
+async function writeClipboard(value: string): Promise<void> {
+  if (navigator.clipboard?.writeText && window.isSecureContext) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = value;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.top = "-1000px";
+  document.body.appendChild(textarea);
+  textarea.select();
+  try {
+    if (!document.execCommand("copy")) {
+      throw new Error("Copy command failed");
+    }
+  } finally {
+    textarea.remove();
+  }
+}
+
 function renderRows(): void {
   const query = search.value.trim().toLocaleLowerCase();
   const { minimum, maximum } = selectedCardinalityRange();
@@ -311,6 +491,8 @@ function renderRows(): void {
     );
     const dynamicSearchText = [
       chord.searchText,
+      chordSymbolFor(chord),
+      keyEstimateFor(chord),
       realized.displayNames.join(" "),
       realizedWithoutOctaves.join(" "),
     ]
@@ -331,6 +513,16 @@ function renderRows(): void {
     nameLink.textContent = chord.primary_common_name;
     name.appendChild(nameLink);
     tr.appendChild(name);
+
+    const symbol = document.createElement("td");
+    symbol.className = "symbol mono";
+    symbol.textContent = chordSymbolFor(chord);
+    tr.appendChild(symbol);
+
+    const keyEstimate = document.createElement("td");
+    keyEstimate.className = "key-estimate";
+    keyEstimate.textContent = keyEstimateFor(chord);
+    tr.appendChild(keyEstimate);
 
     const aliases = document.createElement("td");
     aliases.appendChild(renderChips(chord.common_names.slice(1)));
@@ -395,6 +587,8 @@ async function main(): Promise<void> {
     renderCardinalityOptions(allChords);
     minCardinality.value = "1";
     maxCardinality.value = "12";
+    applyFiltersFromUrl();
+    syncFilterUrl();
     renderRows();
   } catch (err) {
     error.textContent = err instanceof Error ? err.message : String(err);
@@ -403,21 +597,33 @@ async function main(): Promise<void> {
   }
 }
 
-search.addEventListener("input", renderRows);
+search.addEventListener("input", renderAndSyncFilters);
 minCardinality.addEventListener("change", () => {
   syncCardinalityRange("min");
-  renderRows();
+  renderAndSyncFilters();
 });
 maxCardinality.addEventListener("change", () => {
   syncCardinalityRange("max");
-  renderRows();
+  renderAndSyncFilters();
 });
-root.addEventListener("change", renderRows);
+root.addEventListener("change", renderAndSyncFilters);
 namedOnly.addEventListener("click", () => {
-  showNamedOnly = !showNamedOnly;
-  namedOnly.classList.toggle("active", showNamedOnly);
-  namedOnly.setAttribute("aria-pressed", String(showNamedOnly));
-  namedOnly.textContent = showNamedOnly ? "Showing named" : "Named only";
+  setNamedOnly(!showNamedOnly);
+  renderAndSyncFilters();
+});
+shareFilters.addEventListener("click", async () => {
+  const url = syncFilterUrl();
+  try {
+    await writeClipboard(url.href);
+    error.style.display = "none";
+    markShareCopied();
+  } catch {
+    error.textContent = "The filter URL has been updated in your address bar.";
+    error.style.display = "block";
+  }
+});
+window.addEventListener("popstate", () => {
+  applyFiltersFromUrl();
   renderRows();
 });
 
