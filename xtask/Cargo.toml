@@ -1,0 +1,17 @@
+[package]
+authors = ["hill <hill@hilll.dev>"]
+description = "Repository maintenance tasks for music21-rs"
+edition = "2024"
+license-file = "../LICENSE"
+name = "xtask"
+publish = false
+repository = "https://github.com/float3/music21-rs"
+version = "0.1.0"
+
+[features]
+default = ["python"]
+python = []
+
+[dependencies]
+pyo3 = { version = "0.28.3", features = ["auto-initialize"] }
+reqwest = { version = "0.13.3", features = ["blocking"] }

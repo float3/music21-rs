@@ -84,6 +84,13 @@ git submodule update --init --recursive
 cargo test --features python
 ```
 
+Chord table code is committed to the repository so normal builds do not need
+Python. To regenerate the table source from upstream `music21`, run:
+
+```bash
+cargo run -p xtask -- regenerate-tables
+```
+
 If you use Nix, `nix develop` opens a shell with the Rust and Python pieces used
 by the repository's CI setup.
 

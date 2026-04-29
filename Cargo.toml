@@ -12,11 +12,11 @@ repository = "https://github.com/float3/music21-rs"
 version = "0.2.0"
 
 [workspace]
-members = ["utils", "examples/web"]
+members = ["utils", "examples/web", "xtask"]
 
 [features]
 default = ["serde"]
-python = ["dep:pyo3", "dep:reqwest", "dep:sha2"]
+python = []
 serde = ["dep:serde"]
 
 [dependencies]
@@ -27,11 +27,6 @@ num-traits = "0.2.19"
 ordered-float = "5.3.0"
 regex = "1.12.3"
 serde = { version = "1.0.228", optional = true, features = ["derive"] }
-
-[build-dependencies]
-pyo3 = { version = "0.28.3", features = ["auto-initialize"], optional = true }
-reqwest = { version = "0.13.3", features = ["blocking"], optional = true }
-sha2 = { version = "0.11.0", optional = true }
 
 [dev-dependencies]
 pyo3 = { version = "0.28.3", features = ["auto-initialize", "abi3-py39"] }
