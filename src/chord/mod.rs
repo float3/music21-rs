@@ -1656,9 +1656,14 @@ mod tests {
     fn chord_symbols_return_symbol_names() {
         let major_seventh = Chord::new("C E G B").unwrap();
         let petrushka = Chord::new("C4 D4 Eb4 F#4 Ab4 A4").unwrap();
+        let slash_chord = Chord::new("F4 C5 D5 E-5").unwrap();
 
         assert_eq!(major_seventh.chord_symbol().as_deref(), Some("Cmaj7"));
         assert_eq!(petrushka.chord_symbol().as_deref(), Some("Cdim9 add(#5)"));
+        assert_eq!(
+            slash_chord.chord_symbol().as_deref(),
+            Some("Dm7(no5) add(b9)/F")
+        );
     }
 
     #[test]

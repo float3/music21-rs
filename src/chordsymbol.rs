@@ -69,6 +69,8 @@ pub struct ChordSymbol {
     extensions: Vec<u8>,
     alterations: Vec<ChordAlteration>,
     #[cfg_attr(feature = "serde", serde(default))]
+    omissions: Vec<u8>,
+    #[cfg_attr(feature = "serde", serde(default))]
     additions: Vec<ChordAlteration>,
 }
 
@@ -249,6 +251,7 @@ impl ChordSymbol {
         let root = Pitch::from_name(root_name)?;
         let suffix_without_additions = strip_addition_groups(suffix);
         let additions = parse_additions(suffix);
+        let omissions = parse_omissions(suffix);
         let alterations = parse_alterations(&suffix_without_additions);
         let extensions = parse_extensions(&suffix_without_additions, &alterations);
         let quality = parse_quality(&suffix_without_additions, &alterations);
@@ -260,6 +263,7 @@ impl ChordSymbol {
             quality,
             extensions,
             alterations,
+            omissions,
             additions,
         })
     }
@@ -292,6 +296,11 @@ impl ChordSymbol {
     /// Returns parsed alterations.
     pub fn alterations(&self) -> &[ChordAlteration] {
         &self.alterations
+    }
+
+    /// Returns degrees omitted with `no...` or `omit...` markers.
+    pub fn omissions(&self) -> &[u8] {
+        &self.omissions
     }
 
     /// Returns parsed added tones from `add(...)` groups.
@@ -333,10 +342,13 @@ impl ChordSymbol {
             .map(|name| Interval::from_name(name)?.transpose_pitch(&self.root))
             .collect::<Result<Vec<_>>>()?;
 
-        if let Some(bass) = &self.bass
-            && pitches.iter().all(|pitch| pitch.name() != bass.name())
-        {
-            pitches.insert(0, bass.clone());
+        if let Some(bass) = &self.bass {
+            if let Some(index) = pitches.iter().position(|pitch| pitch.name() == bass.name()) {
+                let bass = pitches.remove(index);
+                pitches.insert(0, bass);
+            } else {
+                pitches.insert(0, bass.clone());
+            }
         }
 
         Chord::new(pitches.as_slice())
@@ -359,35 +371,42 @@ impl ChordSymbol {
             .iter()
             .any(|degree| matches!(degree, 7 | 9 | 11 | 13));
 
-        match self.quality {
+        let intervals = match self.quality {
             ChordQuality::Major => {
                 if has_seventh {
-                    vec!["P1", "M3", fifth, "M7"]
+                    vec![(1, "P1"), (3, "M3"), (5, fifth), (7, "M7")]
                 } else {
-                    vec!["P1", "M3", fifth]
+                    vec![(1, "P1"), (3, "M3"), (5, fifth)]
                 }
             }
             ChordQuality::Minor => {
                 if has_seventh {
-                    vec!["P1", "m3", fifth, "m7"]
+                    vec![(1, "P1"), (3, "m3"), (5, fifth), (7, "m7")]
                 } else {
-                    vec!["P1", "m3", fifth]
+                    vec![(1, "P1"), (3, "m3"), (5, fifth)]
                 }
             }
-            ChordQuality::Dominant => vec!["P1", "M3", fifth, "m7"],
+            ChordQuality::Dominant => vec![(1, "P1"), (3, "M3"), (5, fifth), (7, "m7")],
             ChordQuality::Diminished => {
                 if has_seventh {
-                    vec!["P1", "m3", "d5", "d7"]
+                    vec![(1, "P1"), (3, "m3"), (5, "d5"), (7, "d7")]
                 } else {
-                    vec!["P1", "m3", "d5"]
+                    vec![(1, "P1"), (3, "m3"), (5, "d5")]
                 }
             }
-            ChordQuality::Augmented => vec!["P1", "M3", "a5"],
-            ChordQuality::HalfDiminished => vec!["P1", "m3", "d5", "m7"],
-            ChordQuality::Suspended2 => vec!["P1", "M2", fifth],
-            ChordQuality::Suspended4 => vec!["P1", "P4", fifth],
-            ChordQuality::Power => vec!["P1", fifth],
-        }
+            ChordQuality::Augmented => vec![(1, "P1"), (3, "M3"), (5, "a5")],
+            ChordQuality::HalfDiminished => vec![(1, "P1"), (3, "m3"), (5, "d5"), (7, "m7")],
+            ChordQuality::Suspended2 => vec![(1, "P1"), (2, "M2"), (5, fifth)],
+            ChordQuality::Suspended4 => vec![(1, "P1"), (4, "P4"), (5, fifth)],
+            ChordQuality::Power => vec![(1, "P1"), (5, fifth)],
+        };
+
+        intervals
+            .into_iter()
+            .filter_map(|(degree, interval)| {
+                (!self.omissions.contains(&degree)).then_some(interval)
+            })
+            .collect()
     }
 }
 
@@ -421,6 +440,13 @@ fn chord_symbol_spellings_for_root(chord: &Chord, explicit_root: Option<u8>) -> 
 
     let pitch_class_set = pitch_classes.iter().copied().collect::<BTreeSet<_>>();
     let first_pitch_class = pitches.first().map(pitch_class);
+    let bass_pitch = pitches.iter().min_by(|left, right| {
+        left.ps()
+            .partial_cmp(&right.ps())
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    let bass_pitch_class = bass_pitch.map(pitch_class);
+    let bass_name = bass_pitch.map(|pitch| pitch.name().replace('-', "b"));
     let root_pitch_class = chord
         .root_pitch_name()
         .and_then(|name| Pitch::from_name(name).ok())
@@ -465,15 +491,24 @@ fn chord_symbol_spellings_for_root(chord: &Chord, explicit_root: Option<u8>) -> 
         }
 
         for recipe in SYMBOL_RECIPES {
-            if !recipe
-                .intervals
-                .iter()
-                .all(|interval| intervals.contains(interval))
-            {
+            let omissions = symbol_omissions(recipe, &intervals);
+            if !recipe.intervals.iter().all(|interval| {
+                intervals.contains(interval)
+                    || omitted_interval_degree(*interval, recipe)
+                        .is_some_and(|degree| omissions.contains(&degree))
+            }) {
                 continue;
             }
 
-            let recipe_set = recipe.intervals.iter().copied().collect::<HashSet<_>>();
+            let recipe_set = recipe
+                .intervals
+                .iter()
+                .copied()
+                .filter(|interval| {
+                    !omitted_interval_degree(*interval, recipe)
+                        .is_some_and(|degree| omissions.contains(&degree))
+                })
+                .collect::<HashSet<_>>();
             let additions = intervals
                 .iter()
                 .copied()
@@ -481,14 +516,23 @@ fn chord_symbol_spellings_for_root(chord: &Chord, explicit_root: Option<u8>) -> 
                 .filter_map(|interval| addition_label(interval, recipe))
                 .collect::<Vec<_>>();
 
-            if additions.len() != intervals.len() - recipe.intervals.len() {
+            if additions.len() != intervals.len() - recipe_set.len() {
                 continue;
             }
             if is_overfit_dense_symbol(&intervals, recipe, &additions) {
                 continue;
             }
 
-            let figure = symbol_figure(&root_name, recipe.suffix, &additions);
+            let slash_bass = bass_name
+                .as_deref()
+                .filter(|_| explicit_root.is_none() && Some(root) != bass_pitch_class);
+            let figure = symbol_figure(
+                &root_name,
+                recipe.suffix,
+                &omissions,
+                &additions,
+                slash_bass,
+            );
             let root_bonus = if explicit_root.is_some() {
                 0
             } else {
@@ -496,9 +540,10 @@ fn chord_symbol_spellings_for_root(chord: &Chord, explicit_root: Option<u8>) -> 
                     + usize::from(Some(root) != first_pitch_class)
             };
             let score = additions.len() * 16
+                + omissions.len() * 8
                 + recipe.rank as usize
                 + root_bonus
-                + recipe.intervals.len().saturating_sub(intervals.len());
+                + recipe_set.len().saturating_sub(intervals.len());
             candidates.push(SymbolCandidate { figure, score });
         }
     }
@@ -545,12 +590,66 @@ fn is_overfit_dense_symbol(
     contradictory_additions >= 2
 }
 
-fn symbol_figure(root_name: &str, suffix: &str, additions: &[&'static str]) -> String {
+fn symbol_omissions(recipe: &SymbolRecipe, intervals: &BTreeSet<u8>) -> Vec<u8> {
+    recipe
+        .intervals
+        .iter()
+        .copied()
+        .filter(|interval| !intervals.contains(interval))
+        .filter_map(|interval| omitted_interval_degree(interval, recipe))
+        .collect()
+}
+
+fn omitted_interval_degree(interval: u8, recipe: &SymbolRecipe) -> Option<u8> {
+    if interval != 7 {
+        return None;
+    }
+    if !recipe.intervals.contains(&3) && !recipe.intervals.contains(&4) {
+        return None;
+    }
+    if !recipe
+        .intervals
+        .iter()
+        .any(|interval| matches!(interval, 10 | 11))
+    {
+        return None;
+    }
+    if recipe.suffix.contains("dim")
+        || recipe.suffix.contains("b5")
+        || recipe.suffix.contains("aug")
+    {
+        return None;
+    }
+    Some(5)
+}
+
+fn symbol_figure(
+    root_name: &str,
+    suffix: &str,
+    omissions: &[u8],
+    additions: &[&'static str],
+    bass_name: Option<&str>,
+) -> String {
     let mut figure = format!("{root_name}{suffix}");
+    if !omissions.is_empty() {
+        figure.push_str("(no");
+        figure.push_str(
+            &omissions
+                .iter()
+                .map(u8::to_string)
+                .collect::<Vec<_>>()
+                .join(",no"),
+        );
+        figure.push(')');
+    }
     if !additions.is_empty() {
         figure.push_str(" add(");
         figure.push_str(&additions.join(","));
         figure.push(')');
+    }
+    if let Some(bass_name) = bass_name {
+        figure.push('/');
+        figure.push_str(bass_name);
     }
     figure
 }
@@ -754,6 +853,48 @@ fn parse_additions(suffix: &str) -> Vec<ChordAlteration> {
     }
 
     additions
+}
+
+fn parse_omissions(suffix: &str) -> Vec<u8> {
+    let lower = suffix.to_ascii_lowercase();
+    let bytes = lower.as_bytes();
+    let mut omissions = Vec::new();
+    let mut cursor = 0;
+
+    while cursor < bytes.len() {
+        let marker_len = if bytes[cursor..].starts_with(b"omit") {
+            4
+        } else if bytes[cursor..].starts_with(b"no") {
+            2
+        } else {
+            cursor += 1;
+            continue;
+        };
+
+        cursor += marker_len;
+        while cursor < bytes.len() && (bytes[cursor].is_ascii_whitespace() || bytes[cursor] == b'(')
+        {
+            cursor += 1;
+        }
+
+        let degree_start = cursor;
+        while cursor < bytes.len() && bytes[cursor].is_ascii_digit() {
+            cursor += 1;
+        }
+        if degree_start == cursor {
+            continue;
+        }
+
+        if let Ok(degree) = std::str::from_utf8(&bytes[degree_start..cursor])
+            .unwrap_or_default()
+            .parse::<u8>()
+            && !omissions.contains(&degree)
+        {
+            omissions.push(degree);
+        }
+    }
+
+    omissions
 }
 
 fn parse_addition_token(token: &str) -> Option<ChordAlteration> {
@@ -984,6 +1125,38 @@ mod tests {
                 .first()
                 .map(String::as_str),
             Some("C9")
+        );
+    }
+
+    #[test]
+    fn generated_symbols_use_inferred_root_and_slash_bass() {
+        let chord = Chord::new("F4 C5 D5 E-5").unwrap();
+        let names = chord_symbol_spellings(&chord);
+
+        assert_eq!(
+            names.first().map(String::as_str),
+            Some("Dm7(no5) add(b9)/F")
+        );
+        assert_eq!(
+            ChordSymbol::parse("Dm7(no5) add(b9)/F")
+                .unwrap()
+                .to_chord()
+                .unwrap()
+                .pitches()
+                .first()
+                .map(Pitch::name)
+                .as_deref(),
+            Some("F")
+        );
+        assert_eq!(
+            ChordSymbol::parse("Dm7(no5) add(b9)/F")
+                .unwrap()
+                .to_chord()
+                .unwrap()
+                .pitch_classes()
+                .into_iter()
+                .collect::<BTreeSet<_>>(),
+            [0, 2, 3, 5].into_iter().collect()
         );
     }
 
