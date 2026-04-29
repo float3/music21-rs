@@ -1,15 +1,14 @@
 use super::Chord;
 use super::IntegerType;
-use super::IntoNote;
 use super::Pitch;
 
 use crate::base::Music21ObjectTrait;
 use crate::duration::Duration;
 use crate::error::Result;
-use crate::note::Note;
 use crate::note::generalnote::GeneralNoteTrait;
 use crate::note::notrest::NotRest;
 use crate::note::notrest::NotRestTrait;
+use crate::note::{IntoNote, Note};
 use crate::prebase::ProtoM21ObjectTrait;
 
 use std::collections::HashMap;
@@ -28,10 +27,7 @@ pub(crate) struct ChordBase {
 }
 
 impl ChordBase {
-    pub(crate) fn new<T>(
-        notes: Option<T>,
-        duration: &Option<Duration>,
-    ) -> Result<Arc<Self>>
+    pub(crate) fn new<T>(notes: Option<T>, duration: &Option<Duration>) -> Result<Arc<Self>>
     where
         T: IntoNotRests,
     {

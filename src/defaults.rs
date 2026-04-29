@@ -1,13 +1,13 @@
 use crate::stepname::StepName;
 use fraction::GenericFraction;
 
-pub(crate) type IntegerType = i32;
-pub(crate) type UnsignedIntegerType = u32;
-pub(crate) type FloatType = f64;
+pub type IntegerType = i32;
+pub type UnsignedIntegerType = u32;
+pub type FloatType = f64;
 
-pub(crate) type FractionType = GenericFraction<IntegerType>;
+pub type FractionType = GenericFraction<IntegerType>;
 
-pub(crate) type Octave = Option<IntegerType>;
+pub type Octave = Option<IntegerType>;
 
 /// CD track level precision
 pub(crate) const LIMIT_OFFSET_DENOMINATOR: UnsignedIntegerType = 65535;

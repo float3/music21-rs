@@ -50,15 +50,13 @@ impl StepName {
             7 => Ok(StepName::G),
             9 => Ok(StepName::A),
             11 => Ok(StepName::B),
-            _ => Err(Error::StepName(format!(
-                "ref doesn't match any step: {n}"
-            ))),
+            _ => Err(Error::StepName(format!("ref doesn't match any step: {n}"))),
         }
     }
 }
 
 impl TryFrom<u8> for StepName {
-    type Error = Exception;
+    type Error = crate::error::Error;
 
     fn try_from(value: u8) -> Result<Self> {
         match value {
@@ -77,7 +75,7 @@ impl TryFrom<u8> for StepName {
 }
 
 impl TryFrom<char> for StepName {
-    type Error = Exception;
+    type Error = crate::error::Error;
 
     fn try_from(value: char) -> Result<Self> {
         match value.to_ascii_uppercase() {

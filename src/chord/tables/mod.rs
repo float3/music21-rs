@@ -1,5 +1,6 @@
 mod generated;
 
+use crate::defaults::IntegerType;
 use crate::error::Error;
 
 use generated::*;
@@ -192,11 +193,9 @@ static CARDINALITY_TO_CHORD_MEMBERS: CardinalityToChordMembers = LazyLock::new(|
     cardinality_to_chord_members
 });
 
-fn forte_index_to_inversions_available(card: usize, index: u8) -> Result<Vec<Sign>, Exception> {
+fn forte_index_to_inversions_available(card: usize, index: u8) -> Result<Vec<Sign>, Error> {
     if !(1..=13).contains(&card) {
-        return Err(Error::ChordTables(format!(
-            "cardinality {card} not valid"
-        )));
+        return Err(Error::ChordTables(format!("cardinality {card} not valid")));
     }
     if index < 1 || index > MAXIMUM_INDEX_NUMBER_WITHOUT_INVERSION_EQUIVALENCE[card] {
         return Err(Error::ChordTables(format!(
@@ -217,15 +216,13 @@ fn forte_index_to_inversions_available(card: usize, index: u8) -> Result<Vec<Sig
     Ok(inversions)
 }
 
-fn validate_address(address: (u8, u8, Option<i8>)) -> Result<(u8, u8, Sign), Exception> {
+fn validate_address(address: (u8, u8, Option<i8>)) -> Result<(u8, u8, Sign), Error> {
     let card = address.0;
     let index = address.1;
     let inversion = address.2.and_then(Sign::from_i8);
 
     if !(1..=12).contains(&card) {
-        return Err(Error::ChordTables(format!(
-            "cardinality {card} not valid"
-        )));
+        return Err(Error::ChordTables(format!("cardinality {card} not valid")));
     }
 
     if index < 1 || index > MAXIMUM_INDEX_NUMBER_WITHOUT_INVERSION_EQUIVALENCE[card as usize] {
@@ -273,7 +270,7 @@ fn pitch_classes_to_bools(pcs: &[u8]) -> [bool; 12] {
 
 pub(crate) fn seek_chord_tables_address(
     ordered_pitch_classes: &[u8],
-) -> Result<ChordTableAddress, Exception> {
+) -> Result<ChordTableAddress, Error> {
     if ordered_pitch_classes.is_empty() {
         return Err(Error::ChordTables(
             "cannot access chord tables address for Chord with 0 pitches".to_string(),
@@ -296,7 +293,9 @@ pub(crate) fn seek_chord_tables_address(
         let test_set_original_pc = test_set[0] % 12;
         let test_set_transposed: Vec<u8> = test_set
             .iter()
-            .map(|x| ((*x as i32 - test_set_original_pc as i32).rem_euclid(12)) as u8)
+            .map(|x| {
+                ((*x as IntegerType - test_set_original_pc as IntegerType).rem_euclid(12)) as u8
+            })
             .collect();
 
         let mut test_set_invert: Vec<u8> =
@@ -357,7 +356,7 @@ pub(crate) fn seek_chord_tables_address(
 
 pub(crate) fn address_to_common_names(
     address: ChordTableAddress,
-) -> Result<Option<Vec<&'static str>>, Exception> {
+) -> Result<Option<Vec<&'static str>>, Error> {
     let (card, index, inversion) = validate_address((address.0, address.1, Some(address.2)))?;
     Ok(TN_INDEX_TO_CHORD_INFO
         .get(&(card, index, inversion))
@@ -368,7 +367,7 @@ pub(crate) fn address_to_common_names(
 pub(crate) fn address_to_forte_name(
     address: ChordTableAddress,
     classification: &str,
-) -> Result<String, Exception> {
+) -> Result<String, Error> {
     let (card, index, inversion) = validate_address((address.0, address.1, Some(address.2)))?;
     let inversion_suffix = match classification.to_ascii_lowercase().as_str() {
         "tn" => match inversion {
@@ -383,7 +382,7 @@ pub(crate) fn address_to_forte_name(
 
 pub(crate) fn transposed_normal_form_from_address(
     address: ChordTableAddress,
-) -> Result<Vec<u8>, Exception> {
+) -> Result<Vec<u8>, Error> {
     let (card, index, inversion) = validate_address((address.0, address.1, Some(address.2)))?;
     let entry = CARDINALITY_TO_CHORD_MEMBERS
         .get(card as usize)
@@ -399,7 +398,7 @@ pub(crate) fn transposed_normal_form_from_address(
 
 pub(crate) fn interval_class_vector_from_address(
     address: ChordTableAddress,
-) -> Result<Vec<u8>, Exception> {
+) -> Result<Vec<u8>, Error> {
     let (card, index, inversion) = validate_address((address.0, address.1, Some(address.2)))?;
     let entry = CARDINALITY_TO_CHORD_MEMBERS
         .get(card as usize)

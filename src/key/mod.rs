@@ -1,8 +1,8 @@
 use keysignature::{KeySignature, KeySignatureTrait, pitch_to_sharps};
 
 use crate::{
-    base::Music21ObjectTrait, chord::Chord, defaults::IntegerType, error::Result,
-    pitch::Pitch, prebase::ProtoM21ObjectTrait, scale::diatonicscale::DiatonicScale,
+    base::Music21ObjectTrait, chord::Chord, defaults::IntegerType, error::Result, pitch::Pitch,
+    prebase::ProtoM21ObjectTrait, scale::diatonicscale::DiatonicScale,
 };
 
 pub(crate) mod keysignature;
@@ -28,7 +28,7 @@ impl Key {
             Some(tonic.to_string()),
             None,
             None,
-            Option::<i8>::None,
+            Option::<IntegerType>::None,
             Option::<IntegerType>::None,
             None,
             None,

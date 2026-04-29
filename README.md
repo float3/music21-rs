@@ -18,13 +18,13 @@ Add the crate to your project:
 cargo add music21-rs
 ```
 
-Create a chord from a compact pitch string and ask for the same common-name
+Parse a compact pitch string into a chord and ask for the same common-name
 style used by `music21`:
 
 ```rust
 use music21_rs::Chord;
 
-let chord = Chord::new("C E G")?;
+let chord: Chord = "C E G".parse()?;
 
 assert_eq!(chord.pitched_common_name(), "C-major triad");
 assert_eq!(chord.common_name(), "major triad");
@@ -37,11 +37,11 @@ A chord can also report related analytical views:
 ```rust
 use music21_rs::Chord;
 
-let chord = Chord::new("C E- G B-")?;
+let chord = Chord::try_from("C E- G B-")?;
 
 println!("{}", chord.pitched_common_name());
 println!("{:?}", chord.normal_form());
-println!("{:?}", chord.interval_vector());
+println!("{:?}", chord.interval_class_vector());
 
 # Ok::<(), music21_rs::Error>(())
 ```
@@ -94,7 +94,7 @@ by the repository's CI setup.
 - [src/pitch/](./src/pitch/) pitch spelling, accidentals, and pitch-space helpers
 - [src/polyrhythm.rs](./src/polyrhythm.rs) polyrhythm timing and pitch-ratio
   conversion
-- [src/tuningsystem.rs](./src/tuningsystem.rs) tuning-system ratios and
+- [src/tuningsystem/](./src/tuningsystem/) tuning-system ratios and
   frequency helpers
 - [examples/web/](./examples/web/) browser tools
 - [examples/polyrhythmsound.rs](./examples/polyrhythmsound.rs) small

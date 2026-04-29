@@ -1,6 +1,5 @@
 use music21_rs::{
-    COMMON_TWELVE_TONE_TUNING_SYSTEMS, Chord, Result, Fraction, KnownChordType, Pitch,
-    TuningSystem,
+    COMMON_TWELVE_TONE_TUNING_SYSTEMS, Chord, Fraction, KnownChordType, Pitch, Result, TuningSystem,
 };
 use serde::Serialize;
 use std::collections::BTreeSet;
@@ -96,7 +95,7 @@ pub fn analyze_chord(input: &str) -> Result<JsValue, JsValue> {
     let chord = if let Some(midi_numbers) = midi_numbers.as_deref() {
         Chord::from_midi_numbers(midi_numbers)
     } else {
-        Chord::new(input)
+        input.parse::<Chord>()
     }
     .map_err(|err| JsValue::from_str(&err.to_string()))?;
     let common_name = chord.common_name();
@@ -114,7 +113,7 @@ pub fn analyze_chord(input: &str) -> Result<JsValue, JsValue> {
         pitched_common_names: chord.pitched_common_names(),
         pitch_classes: chord.pitch_classes(),
         root_pitch_name,
-        bass_pitch_name: chord.bass_pitch_name_public(),
+        bass_pitch_name: chord.bass_pitch_name(),
         forte_class: chord.forte_class(),
         normal_form: chord.normal_form(),
         interval_class_vector: chord.interval_class_vector(),
@@ -433,10 +432,7 @@ fn tuning_system_description(id: &str) -> &'static str {
     }
 }
 
-fn display_pitch_for_sequence(
-    pitch: Pitch,
-    last_pitch_space: &mut Option<i32>,
-) -> Result<Pitch> {
+fn display_pitch_for_sequence(pitch: Pitch, last_pitch_space: &mut Option<i32>) -> Result<Pitch> {
     if pitch.octave().is_some() {
         *last_pitch_space = Some(pitch.ps().round() as i32);
         return Ok(pitch);
@@ -449,7 +445,7 @@ fn display_pitch_for_sequence(
     }
 
     *last_pitch_space = Some(pitch_space);
-    Pitch::from_name(format!("{}{}", pitch.name(), (pitch_space / 12) - 1))
+    format!("{}{}", pitch.name(), (pitch_space / 12) - 1).parse()
 }
 
 fn estimate_key(root: Option<&str>, common_name: &str) -> Option<String> {
@@ -712,7 +708,7 @@ fn step_index(name: &str) -> Option<i32> {
 }
 
 fn pitch_class_from_name(name: &str) -> Option<u8> {
-    Pitch::from_name(name)
+    name.parse::<Pitch>()
         .ok()
         .map(|pitch| (pitch.ps().round() as i32).rem_euclid(12) as u8)
 }

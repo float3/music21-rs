@@ -20,8 +20,8 @@ where
         + Zero
         + std::ops::Mul<Output = T>
         + std::ops::Div<Output = T>,
-    I: Signed + Integer + Copy + FromPrimitive + From<i32>,
-    U: Unsigned + Integer + Copy + FromPrimitive + From<u32>,
+    I: Signed + Integer + Copy + FromPrimitive + From<crate::defaults::IntegerType>,
+    U: Unsigned + Integer + Copy + FromPrimitive + From<crate::defaults::UnsignedIntegerType>,
     F: Float + Copy + FromPrimitive,
 {
     fn pow(&self, exp: U) -> Self {
@@ -131,7 +131,7 @@ mod tests {
 
     #[test]
     fn test_pow_unsigned() {
-        let frac: GenericFraction<i32> = GenericFraction::new(2, 3);
+        let frac: GenericFraction<IntegerType> = GenericFraction::new(2, 3);
         assert_eq!(
             FractionPow::<IntegerType, FloatType, UnsignedIntegerType>::pow(
                 &frac,
@@ -164,7 +164,7 @@ mod tests {
 
     #[test]
     fn test_pow_signed() {
-        let frac: GenericFraction<i32> = GenericFraction::new(3, 4);
+        let frac: GenericFraction<IntegerType> = GenericFraction::new(3, 4);
         assert_eq!(
             FractionPow::<IntegerType, FloatType, UnsignedIntegerType>::powi(&frac, 0),
             GenericFraction::new(1, 1)
@@ -181,7 +181,7 @@ mod tests {
 
     #[test]
     fn test_pow_float() {
-        let frac: GenericFraction<i32> = GenericFraction::new(3, 5);
+        let frac: GenericFraction<IntegerType> = GenericFraction::new(3, 5);
         assert_eq!(
             FractionPow::<IntegerType, FloatType, UnsignedIntegerType>::powf(&frac, 0.0),
             GenericFraction::new(1, 1)
@@ -203,7 +203,7 @@ mod tests {
 
     #[test]
     fn test_nan_behavior() {
-        let nan_frac: GenericFraction<i32> = GenericFraction::NaN;
+        let nan_frac: GenericFraction<IntegerType> = GenericFraction::NaN;
         assert!(matches!(
             FractionPow::<IntegerType, FloatType, UnsignedIntegerType>::pow(
                 &nan_frac,
@@ -223,8 +223,8 @@ mod tests {
 
     #[test]
     fn test_infinity_behavior() {
-        let pos_inf: GenericFraction<i32> = Infinity(Sign::Plus);
-        let neg_inf: GenericFraction<i32> = Infinity(Sign::Minus);
+        let pos_inf: GenericFraction<IntegerType> = Infinity(Sign::Plus);
+        let neg_inf: GenericFraction<IntegerType> = Infinity(Sign::Minus);
 
         // For pow and powi, Infinity returns Infinity with the same sign.
         assert_eq!(

@@ -4,7 +4,6 @@
 #![allow(unused_results)]
 #![allow(unreachable_code)]
 #![allow(unused_macros)]
-#![allow(private_bounds)]
 //! Rust helpers inspired by selected parts of Python's `music21`.
 //!
 //! The crate currently focuses on pitch construction, chord naming and
@@ -44,9 +43,12 @@ pub mod tuningsystem;
 // #[macro_use]
 // pub(crate) mod macros;
 
-pub use chord::{Chord, IntoNote, IntoNotes, KnownChordType};
+pub use chord::{Chord, IntoNotes, KnownChordType};
+pub use defaults::{FloatType, FractionType, IntegerType, Octave, UnsignedIntegerType};
 pub use error::{Error, Result};
-pub use note::Note;
+#[allow(deprecated)]
+pub use error::{Exception, ExceptionResult};
+pub use note::{IntoNote, Note};
 pub use pitch::{
     Accidental, AccidentalSpecifier, Microtone, MicrotoneSpecifier, Pitch, PitchClass,
     PitchClassSpecifier, PitchName, PitchOptions,

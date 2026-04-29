@@ -5,6 +5,7 @@ use crate::defaults::FloatType;
 use crate::error::{Error, Result};
 use crate::prebase::{ProtoM21Object, ProtoM21ObjectTrait};
 use std::fmt::{Display, Formatter};
+use std::str::FromStr;
 
 const MICROTONE_OPEN: &str = "(";
 const MICROTONE_CLOSE: &str = ")";
@@ -14,7 +15,7 @@ const MICROTONE_CLOSE: &str = ")";
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum MicrotoneSpecifier {
     /// A cent offset from the notated pitch.
-    Cents(f64),
+    Cents(FloatType),
     /// A textual cent offset such as `"+20c"` or `"(-33.333)"`.
     Text(String),
     /// An existing microtone to clone.
@@ -84,14 +85,14 @@ impl Microtone {
     /// Creates a microtone with an explicit harmonic shift.
     pub fn with_harmonic_shift(
         specifier: impl Into<MicrotoneSpecifier>,
-        harmonic_shift: i32,
+        harmonic_shift: IntegerType,
     ) -> Result<Self> {
         match specifier.into() {
             MicrotoneSpecifier::Cents(cents) => {
                 Self::from_cent_shift(Some(cents), Some(harmonic_shift))
             }
             MicrotoneSpecifier::Text(text) => {
-                Self::from_cent_shift(Some(text), Some(harmonic_shift))
+                Self::from_cent_shift(Some(Self::parse_string(text)?), Some(harmonic_shift))
             }
             MicrotoneSpecifier::Microtone(mut microtone) => {
                 microtone._harmonic_shift = harmonic_shift;
@@ -143,12 +144,12 @@ impl Microtone {
     }
 
     /// Returns the harmonic shift.
-    pub fn harmonic_shift(&self) -> i32 {
+    pub fn harmonic_shift(&self) -> IntegerType {
         self._harmonic_shift
     }
 
     /// Sets the harmonic shift.
-    pub fn set_harmonic_shift(&mut self, harmonic_shift: i32) {
+    pub fn set_harmonic_shift(&mut self, harmonic_shift: IntegerType) {
         self._harmonic_shift = harmonic_shift;
     }
 
@@ -194,7 +195,7 @@ impl Microtone {
 
 impl Display for Microtone {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let rounded = self._cent_shift.round() as i32;
+        let rounded = self._cent_shift.round() as IntegerType;
         let mut text = if self._cent_shift >= 0.0 {
             format!("+{rounded}c")
         } else {
@@ -218,7 +219,47 @@ impl Display for Microtone {
     }
 }
 
-fn ordinal_suffix(value: i32) -> &'static str {
+impl FromStr for Microtone {
+    type Err = Error;
+
+    fn from_str(value: &str) -> Result<Self> {
+        Self::new(value)
+    }
+}
+
+impl TryFrom<&str> for Microtone {
+    type Error = Error;
+
+    fn try_from(value: &str) -> Result<Self> {
+        Self::new(value)
+    }
+}
+
+impl TryFrom<String> for Microtone {
+    type Error = Error;
+
+    fn try_from(value: String) -> Result<Self> {
+        Self::new(value)
+    }
+}
+
+impl TryFrom<IntegerType> for Microtone {
+    type Error = Error;
+
+    fn try_from(value: IntegerType) -> Result<Self> {
+        Self::new(value)
+    }
+}
+
+impl TryFrom<FloatType> for Microtone {
+    type Error = Error;
+
+    fn try_from(value: FloatType) -> Result<Self> {
+        Self::new(value)
+    }
+}
+
+fn ordinal_suffix(value: IntegerType) -> &'static str {
     if (value % 100).abs() >= 11 && (value % 100).abs() <= 13 {
         return "th";
     }
@@ -270,7 +311,7 @@ impl IntoCentShift for String {
     }
 
     fn into_microtone(self) -> Result<Microtone> {
-        Microtone::from_cent_shift(Some(self), None)
+        Microtone::new(self)
     }
 
     fn microtone(self) -> Microtone {
@@ -288,7 +329,7 @@ impl IntoCentShift for &str {
     }
 
     fn into_microtone(self) -> Result<Microtone> {
-        Microtone::from_cent_shift(Some(self), None)
+        Microtone::new(self)
     }
 
     fn microtone(self) -> Microtone {
@@ -406,5 +447,16 @@ mod tests {
         let microtone = Microtone::with_harmonic_shift(12.5, 5).unwrap();
         let clone = Microtone::new(MicrotoneSpecifier::from(microtone.clone())).unwrap();
         assert_eq!(clone, microtone);
+    }
+
+    #[test]
+    fn microtone_supports_rust_conversion_traits_and_errors() {
+        let parsed: Microtone = "(+12c)".parse().unwrap();
+        assert_eq!(parsed.cent_shift(), 12.0);
+
+        let from_cents = Microtone::try_from(-25.0).unwrap();
+        assert_eq!(from_cents.to_string(), "(-25c)");
+
+        assert!(Microtone::try_from("+c").is_err());
     }
 }

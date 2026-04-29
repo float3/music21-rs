@@ -1,21 +1,23 @@
+use crate::defaults::{FloatType, IntegerType, UnsignedIntegerType};
+
 use std::str::FromStr;
 
 /// Default octave size for twelve-tone systems.
-pub const OCTAVE_SIZE: u32 = 12;
+pub const OCTAVE_SIZE: UnsignedIntegerType = 12;
 
 /// Frequency of middle C in hertz.
-pub const C4: f64 = 261.6256;
+pub const C4: FloatType = 261.6256;
 /// Frequency of C0 in hertz.
-pub const C0: f64 = C4 / 16.0;
+pub const C0: FloatType = C4 / 16.0;
 /// Frequency of C-1 in hertz.
-pub const CN1: f64 = C4 / 32.0;
+pub const CN1: FloatType = C4 / 32.0;
 
 /// Frequency of A4 in hertz.
-pub const A4: f64 = 440.0;
+pub const A4: FloatType = 440.0;
 /// Frequency of A0 in hertz.
-pub const A0: f64 = A4 / 16.0;
+pub const A0: FloatType = A4 / 16.0;
 /// Frequency of A-1 in hertz.
-pub const AN1: f64 = A4 / 32.0;
+pub const AN1: FloatType = A4 / 32.0;
 
 /// Degree labels for a twelve-tone chromatic octave.
 pub const TWELVE_TONE_NAMES: [&str; 12] = [
@@ -40,21 +42,25 @@ pub const COMMON_TWELVE_TONE_TUNING_SYSTEMS: [TuningSystem; 4] = [
 /// A ratio-like value used by tuning tables.
 pub struct Fraction {
     /// Numerator for a rational ratio, or exponent numerator when `base` is set.
-    pub numerator: u32,
+    pub numerator: UnsignedIntegerType,
     /// Denominator for a rational ratio, or exponent denominator when `base` is set.
-    pub denominator: u32,
+    pub denominator: UnsignedIntegerType,
     /// Exponential base. A value of `0` means use `numerator / denominator`.
-    pub base: u32,
+    pub base: UnsignedIntegerType,
 }
 
 impl Fraction {
     /// Creates a rational fraction.
-    pub const fn new(numerator: u32, denominator: u32) -> Self {
+    pub const fn new(numerator: UnsignedIntegerType, denominator: UnsignedIntegerType) -> Self {
         Self::new_with_base(numerator, denominator, 0)
     }
 
     /// Creates a fraction with an optional exponential base.
-    pub const fn new_with_base(numerator: u32, denominator: u32, base: u32) -> Self {
+    pub const fn new_with_base(
+        numerator: UnsignedIntegerType,
+        denominator: UnsignedIntegerType,
+        base: UnsignedIntegerType,
+    ) -> Self {
         Self {
             numerator,
             denominator,
@@ -63,33 +69,33 @@ impl Fraction {
     }
 
     /// Returns the numerator.
-    pub const fn numerator(&self) -> u32 {
+    pub const fn numerator(&self) -> UnsignedIntegerType {
         self.numerator
     }
 
     /// Returns the denominator.
-    pub const fn denominator(&self) -> u32 {
+    pub const fn denominator(&self) -> UnsignedIntegerType {
         self.denominator
     }
 
     /// Returns the exponential base, or `0` for rational ratios.
-    pub const fn base(&self) -> u32 {
+    pub const fn base(&self) -> UnsignedIntegerType {
         self.base
     }
 
     /// Converts this value into a floating-point ratio.
-    pub fn ratio(self) -> f64 {
+    pub fn ratio(self) -> FloatType {
         self.into()
     }
 
     /// Returns this fraction shifted upward by `octaves`.
-    pub fn with_octaves(mut self, octaves: u32) -> Self {
+    pub fn with_octaves(mut self, octaves: UnsignedIntegerType) -> Self {
         if octaves == 0 {
             return self;
         }
 
         if self.base == 0 {
-            let multiplier = 2u32
+            let multiplier = (2 as UnsignedIntegerType)
                 .checked_pow(octaves)
                 .expect("octave multiplier exceeds u32 range");
             self.numerator = self
@@ -111,24 +117,37 @@ impl Fraction {
     }
 }
 
-impl From<Fraction> for f64 {
+impl From<Fraction> for FloatType {
     fn from(frac: Fraction) -> Self {
         if frac.base == 0 {
-            frac.numerator as f64 / frac.denominator as f64
+            frac.numerator as FloatType / frac.denominator as FloatType
         } else {
-            (frac.base as f64).powf(frac.numerator as f64 / frac.denominator as f64)
+            (frac.base as FloatType)
+                .powf(frac.numerator as FloatType / frac.denominator as FloatType)
         }
     }
 }
 
-impl From<(u32, u32)> for Fraction {
-    fn from(frac: (u32, u32)) -> Self {
+impl From<(UnsignedIntegerType, UnsignedIntegerType)> for Fraction {
+    fn from(frac: (UnsignedIntegerType, UnsignedIntegerType)) -> Self {
         Self::new(frac.0, frac.1)
     }
 }
 
-impl From<(u32, u32, u32)> for Fraction {
-    fn from(frac: (u32, u32, u32)) -> Self {
+impl
+    From<(
+        UnsignedIntegerType,
+        UnsignedIntegerType,
+        UnsignedIntegerType,
+    )> for Fraction
+{
+    fn from(
+        frac: (
+            UnsignedIntegerType,
+            UnsignedIntegerType,
+            UnsignedIntegerType,
+        ),
+    ) -> Self {
         Self::new_with_base(frac.0, frac.1, frac.2)
     }
 }
@@ -140,12 +159,12 @@ pub enum TuningSystem {
     /// Equal temperament with a configurable octave size.
     EqualTemperament {
         /// Number of equal divisions in each octave.
-        octave_size: u32,
+        octave_size: UnsignedIntegerType,
     },
     /// Recursive equal temperament with a configurable octave size.
     RecursiveEqualTemperament {
         /// Number of equal divisions in each octave.
-        octave_size: u32,
+        octave_size: UnsignedIntegerType,
     },
     /// Six-tone equal temperament.
     WholeTone,
@@ -210,7 +229,7 @@ impl TuningSystem {
     }
 
     /// Returns the frequency ratio for a degree index.
-    pub fn ratio(self, index: usize) -> f64 {
+    pub fn ratio(self, index: usize) -> FloatType {
         get_ratio(self, index, None)
     }
 
@@ -220,37 +239,37 @@ impl TuningSystem {
     }
 
     /// Returns a display label for a degree index.
-    pub fn label(self, index: u32) -> String {
+    pub fn label(self, index: UnsignedIntegerType) -> String {
         get_label(self, index, None)
     }
 
     /// Returns the octave number containing a degree index.
-    pub fn octave(self, index: u32) -> u32 {
+    pub fn octave(self, index: UnsignedIntegerType) -> UnsignedIntegerType {
         index / self.octave_size()
     }
 
     /// Returns the frequency in hertz for a degree index.
-    pub fn frequency(self, index: u32) -> f64 {
+    pub fn frequency(self, index: UnsignedIntegerType) -> FloatType {
         get_frequency(self, index, None)
     }
 
     /// Returns the frequency in hertz for a fractional degree index.
-    pub fn frequency_at(self, index: f64) -> f64 {
+    pub fn frequency_at(self, index: FloatType) -> FloatType {
         get_frequency_at(self, index, None)
     }
 
     /// Returns cents offset from equal temperament for a degree index.
-    pub fn cents(self, index: u32) -> f64 {
+    pub fn cents(self, index: UnsignedIntegerType) -> FloatType {
         get_cents(self, index, None)
     }
 
     /// Returns cents offset from equal temperament for a fractional degree index.
-    pub fn cents_at(self, index: f64) -> f64 {
+    pub fn cents_at(self, index: FloatType) -> FloatType {
         get_cents_at(self, index, None)
     }
 
     /// Returns the number of degrees in one octave for this tuning system.
-    pub fn octave_size(self) -> u32 {
+    pub fn octave_size(self) -> UnsignedIntegerType {
         match self {
             Self::EqualTemperament { octave_size }
             | Self::RecursiveEqualTemperament { octave_size } => octave_size,
@@ -288,7 +307,7 @@ impl TuningSystem {
         }
     }
 
-    fn degree_label(self, index: u32, octave_size: u32) -> String {
+    fn degree_label(self, index: UnsignedIntegerType, octave_size: UnsignedIntegerType) -> String {
         if octave_size == 0 {
             return default_degree_label(OCTAVE_SIZE, index);
         }
@@ -336,22 +355,26 @@ impl FromStr for TuningSystem {
 }
 
 /// Creates an equal-temperament fraction for `tone` within `octave_size`.
-pub fn equal_temperament(tone: u32, octave_size: u32) -> Fraction {
+pub fn equal_temperament(tone: UnsignedIntegerType, octave_size: UnsignedIntegerType) -> Fraction {
     Fraction::new_with_base(tone, octave_size, 2)
 }
 
 /// Creates a twelve-tone equal-temperament fraction.
-pub fn equal_temperament_12(tone: u32) -> Fraction {
+pub fn equal_temperament_12(tone: UnsignedIntegerType) -> Fraction {
     equal_temperament(tone, 12)
 }
 
 /// Creates an equal-temperament fraction using [`OCTAVE_SIZE`].
-pub fn equal_temperament_default(tone: u32) -> Fraction {
+pub fn equal_temperament_default(tone: UnsignedIntegerType) -> Fraction {
     equal_temperament(tone, OCTAVE_SIZE)
 }
 
 /// Returns the frequency ratio for a tuning-system degree.
-pub fn get_ratio(tuning_system: TuningSystem, index: usize, size: Option<u32>) -> f64 {
+pub fn get_ratio(
+    tuning_system: TuningSystem,
+    index: usize,
+    size: Option<UnsignedIntegerType>,
+) -> FloatType {
     get_fraction(tuning_system, index, size).into()
 }
 
@@ -359,17 +382,27 @@ pub fn get_ratio(tuning_system: TuningSystem, index: usize, size: Option<u32>) -
 ///
 /// The optional `size` overrides the tuning system's octave size for
 /// equal-temperament-style systems.
-pub fn get_fraction(tuning_system: TuningSystem, index: usize, size: Option<u32>) -> Fraction {
+pub fn get_fraction(
+    tuning_system: TuningSystem,
+    index: usize,
+    size: Option<UnsignedIntegerType>,
+) -> Fraction {
     match tuning_system {
         TuningSystem::EqualTemperament { octave_size }
-        | TuningSystem::RecursiveEqualTemperament { octave_size } => {
-            equal_temperament(index_to_u32(index), size.unwrap_or(octave_size))
+        | TuningSystem::RecursiveEqualTemperament { octave_size } => equal_temperament(
+            index_to_unsigned_integer(index),
+            size.unwrap_or(octave_size),
+        ),
+        TuningSystem::WholeTone => {
+            equal_temperament(index_to_unsigned_integer(index), size.unwrap_or(6))
         }
-        TuningSystem::WholeTone => equal_temperament(index_to_u32(index), size.unwrap_or(6)),
-        TuningSystem::QuarterTone => equal_temperament(index_to_u32(index), size.unwrap_or(24)),
-        TuningSystem::StepMethod => {
-            equal_temperament(index_to_u32(index), size.unwrap_or(OCTAVE_SIZE))
+        TuningSystem::QuarterTone => {
+            equal_temperament(index_to_unsigned_integer(index), size.unwrap_or(24))
         }
+        TuningSystem::StepMethod => equal_temperament(
+            index_to_unsigned_integer(index),
+            size.unwrap_or(OCTAVE_SIZE),
+        ),
         _ => get_fraction_from_table(tuning_system, index),
     }
 }
@@ -378,7 +411,11 @@ pub fn get_fraction(tuning_system: TuningSystem, index: usize, size: Option<u32>
 ///
 /// The optional `size` overrides the tuning system's octave size for label
 /// calculation.
-pub fn get_label(tuning_system: TuningSystem, index: u32, size: Option<u32>) -> String {
+pub fn get_label(
+    tuning_system: TuningSystem,
+    index: UnsignedIntegerType,
+    size: Option<UnsignedIntegerType>,
+) -> String {
     let octave_size = size.unwrap_or_else(|| tuning_system.octave_size());
     assert!(octave_size > 0, "octave_size must be greater than zero");
     degree_name_with_octave(
@@ -391,42 +428,58 @@ pub fn get_label(tuning_system: TuningSystem, index: u32, size: Option<u32>) -> 
 ///
 /// The optional `size` overrides the tuning system's octave size for
 /// equal-temperament-style systems.
-pub fn get_frequency(tuning_system: TuningSystem, index: u32, size: Option<u32>) -> f64 {
-    get_frequency_at(tuning_system, f64::from(index), size)
+pub fn get_frequency(
+    tuning_system: TuningSystem,
+    index: UnsignedIntegerType,
+    size: Option<UnsignedIntegerType>,
+) -> FloatType {
+    get_frequency_at(tuning_system, FloatType::from(index), size)
 }
 
 /// Returns the frequency in hertz for a fractional tuning-system degree.
 ///
 /// Integer degrees use the tuning system table exactly. Fractional degrees are
 /// interpolated by equal-temperament distance within the same octave.
-pub fn get_frequency_at(tuning_system: TuningSystem, index: f64, size: Option<u32>) -> f64 {
+pub fn get_frequency_at(
+    tuning_system: TuningSystem,
+    index: FloatType,
+    size: Option<UnsignedIntegerType>,
+) -> FloatType {
     assert!(index.is_finite(), "degree index must be finite");
     let octave_size = size.unwrap_or_else(|| tuning_system.octave_size());
     assert!(octave_size > 0, "octave_size must be greater than zero");
 
     if tuning_system.ratio_table().is_none() {
-        return CN1 * 2.0_f64.powf(index / f64::from(octave_size));
+        return CN1 * (2.0 as FloatType).powf(index / FloatType::from(octave_size));
     }
 
-    let base_index = index.floor() as i32;
-    let fractional_degree = index - f64::from(base_index);
+    let base_index = index.floor() as IntegerType;
+    let fractional_degree = index - FloatType::from(base_index);
     CN1 * get_ratio_at_integer_index(tuning_system, base_index)
-        * 2.0_f64.powf(fractional_degree / f64::from(octave_size))
+        * (2.0 as FloatType).powf(fractional_degree / FloatType::from(octave_size))
 }
 
 /// Returns cents offset from equal temperament for a tuning-system degree.
 ///
 /// The optional `size` overrides the tuning system's octave size for the
 /// equal-temperament comparison.
-pub fn get_cents(tuning_system: TuningSystem, index: u32, size: Option<u32>) -> f64 {
-    get_cents_at(tuning_system, f64::from(index), size)
+pub fn get_cents(
+    tuning_system: TuningSystem,
+    index: UnsignedIntegerType,
+    size: Option<UnsignedIntegerType>,
+) -> FloatType {
+    get_cents_at(tuning_system, FloatType::from(index), size)
 }
 
 /// Returns cents offset from equal temperament for a fractional degree index.
 ///
 /// The optional `size` overrides the octave size of the equal-temperament
 /// comparison.
-pub fn get_cents_at(tuning_system: TuningSystem, index: f64, size: Option<u32>) -> f64 {
+pub fn get_cents_at(
+    tuning_system: TuningSystem,
+    index: FloatType,
+    size: Option<UnsignedIntegerType>,
+) -> FloatType {
     let octave_size = size.unwrap_or_else(|| tuning_system.octave_size());
     assert!(octave_size > 0, "octave_size must be greater than zero");
     let reference_freq = get_frequency_at(
@@ -443,25 +496,25 @@ fn get_fraction_from_table(tuning_system: TuningSystem, index: usize) -> Fractio
         .ratio_table()
         .expect("tuning system does not have a ratio table");
     let len = table.len();
-    let octaves = (index / len) as u32;
+    let octaves = (index / len) as UnsignedIntegerType;
     table[index % len].with_octaves(octaves)
 }
 
-fn get_ratio_at_integer_index(tuning_system: TuningSystem, index: i32) -> f64 {
+fn get_ratio_at_integer_index(tuning_system: TuningSystem, index: IntegerType) -> FloatType {
     let table = tuning_system
         .ratio_table()
         .expect("tuning system does not have a ratio table");
-    let len = i32::try_from(table.len()).expect("ratio table length exceeds i32 range");
+    let len = IntegerType::try_from(table.len()).expect("ratio table length exceeds i32 range");
     let octave = index.div_euclid(len);
     let degree = index.rem_euclid(len) as usize;
-    table[degree].ratio() * 2.0_f64.powi(octave)
+    table[degree].ratio() * (2.0 as FloatType).powi(octave)
 }
 
-fn index_to_u32(index: usize) -> u32 {
-    u32::try_from(index).expect("tone index exceeds u32 range")
+fn index_to_unsigned_integer(index: usize) -> UnsignedIntegerType {
+    UnsignedIntegerType::try_from(index).expect("tone index exceeds u32 range")
 }
 
-fn default_degree_label(octave_size: u32, index: u32) -> String {
+fn default_degree_label(octave_size: UnsignedIntegerType, index: UnsignedIntegerType) -> String {
     if octave_size == OCTAVE_SIZE {
         TWELVE_TONE_NAMES[(index % OCTAVE_SIZE) as usize].to_string()
     } else {
@@ -469,7 +522,7 @@ fn default_degree_label(octave_size: u32, index: u32) -> String {
     }
 }
 
-fn degree_name_with_octave(degree_label: &str, octave: u32) -> String {
+fn degree_name_with_octave(degree_label: &str, octave: UnsignedIntegerType) -> String {
     let adjusted_octave = i64::from(octave) - 1;
     let generic_degree_label = degree_label
         .strip_prefix('T')
@@ -769,7 +822,7 @@ mod tests {
 
     #[test]
     fn ratio_helpers_cover_octaves() {
-        let two_one: f64 = Fraction::new(2, 1).into();
+        let two_one: FloatType = Fraction::new(2, 1).into();
         assert_eq!(get_ratio(TuningSystem::JustIntonation, 12, None), two_one);
         assert_eq!(get_ratio(TuningSystem::JustIntonation24, 24, None), two_one);
         assert_eq!(
@@ -803,11 +856,16 @@ mod tests {
     fn non_twelve_tone_systems_keep_system_octaves_and_labels() {
         assert_eq!(TuningSystem::WholeTone.label(1), "DN1");
         assert_eq!(TuningSystem::WholeTone.octave_size(), 6);
-        assert!((TuningSystem::WholeTone.ratio(1) - 2.0_f64.powf(1.0 / 6.0)).abs() < 1e-12);
+        assert!(
+            (TuningSystem::WholeTone.ratio(1) - (2.0 as FloatType).powf(1.0 / 6.0)).abs() < 1e-12
+        );
 
         assert_eq!(TuningSystem::QuarterTone.label(13), "T13ON1");
         assert_eq!(TuningSystem::QuarterTone.octave_size(), 24);
-        assert!((TuningSystem::QuarterTone.ratio(13) - 2.0_f64.powf(13.0 / 24.0)).abs() < 1e-12);
+        assert!(
+            (TuningSystem::QuarterTone.ratio(13) - (2.0 as FloatType).powf(13.0 / 24.0)).abs()
+                < 1e-12
+        );
 
         assert_eq!(TuningSystem::Thai.label(7), "T0O0");
         assert_eq!(TuningSystem::Thai.octave_size(), 7);

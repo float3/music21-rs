@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    defaults::IntegerType,
+    defaults::{FloatType, IntegerType},
     error::{Error, Result},
     pitch::Pitch,
     stepname::StepName,
@@ -46,7 +46,7 @@ impl ConcreteScale {
             Some(name),
             None,
             None,
-            Option::<i8>::None,
+            Option::<IntegerType>::None,
             Option::<IntegerType>::None,
             None,
             None,
@@ -72,7 +72,7 @@ fn diatonic_number_to_step_and_octave(dn: IntegerType) -> Result<(StepName, Inte
         return Ok((StepName::try_from((step_number + 1) as u8)?, octave));
     }
 
-    let octave = (dn as f64 / 7.0).trunc() as IntegerType;
+    let octave = (dn as FloatType / 7.0).trunc() as IntegerType;
     let step_number = (dn - 1) - (octave * 7);
     Ok((StepName::try_from((step_number + 1) as u8)?, octave - 1))
 }
@@ -86,7 +86,7 @@ mod tests {
             Some(name.to_string()),
             None,
             None,
-            Option::<i8>::None,
+            Option::<IntegerType>::None,
             Option::<IntegerType>::None,
             None,
             None,

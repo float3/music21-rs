@@ -6,7 +6,7 @@ use rodio::{
 use std::{thread::sleep, time::Duration};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut poly = Polyrhythm::new_with_time_signature(4, 120, &[6, 8])?;
+    let mut poly = Polyrhythm::from_time_signature(4, 120, &[6, 8])?;
     let tick_duration = Duration::from_secs_f32(poly.tick_duration()? as f32);
 
     let stream_handle = OutputStreamBuilder::open_default_stream()?;

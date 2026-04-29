@@ -1,6 +1,10 @@
 use crate::{
-    base::Music21ObjectTrait, defaults::IntegerType, error::Result, note::Note,
-    pitch::Pitch, prebase::ProtoM21ObjectTrait,
+    base::Music21ObjectTrait,
+    defaults::{FloatType, IntegerType},
+    error::Result,
+    note::Note,
+    pitch::Pitch,
+    prebase::ProtoM21ObjectTrait,
 };
 
 use super::{IntervalBaseTrait, diatonicinterval::DiatonicInterval, intervalbase::IntervalBase};
@@ -36,10 +40,10 @@ impl IntervalBaseTrait for ChromaticInterval {
 
     fn transpose_pitch(self, pitch1: Pitch) -> Result<Pitch> {
         let mut p_out = Pitch::new(
-            Some((pitch1.ps() + self.semitones as f64).round() as IntegerType),
+            Some((pitch1.ps() + self.semitones as FloatType).round() as IntegerType),
             None,
             None,
-            Option::<i8>::None,
+            Option::<IntegerType>::None,
             Option::<IntegerType>::None,
             None,
             None,
@@ -78,7 +82,7 @@ mod tests {
             Some(name.to_string()),
             None,
             None,
-            Option::<i8>::None,
+            Option::<IntegerType>::None,
             Option::<IntegerType>::None,
             None,
             None,

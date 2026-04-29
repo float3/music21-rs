@@ -73,9 +73,7 @@ fn semitones_generic(r#in: UnsignedIntegerType) -> Result<UnsignedIntegerType> {
         5 => Ok(7),
         6 => Ok(9),
         7 => Ok(11),
-        _ => Err(Error::Interval(format!(
-            "Invalid diatonic interval: {in}"
-        ))),
+        _ => Err(Error::Interval(format!("Invalid diatonic interval: {in}"))),
     }
 }
 

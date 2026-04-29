@@ -5,7 +5,6 @@ use crate::chord::Chord;
 use crate::defaults::{FloatType, IntegerType, UnsignedIntegerType};
 use crate::error::{Error, Result};
 use crate::interval::{Interval, IntervalArgument};
-use crate::note::IntoPitch;
 use crate::pitch::Pitch;
 
 #[derive(Debug, Clone)]
@@ -36,10 +35,7 @@ pub struct PolyrhythmEvent {
 
 impl Polyrhythm {
     /// Creates a polyrhythm from a base meter and nonzero subdivisions.
-    pub fn new(
-        base: UnsignedIntegerType,
-        subdivisions: &[UnsignedIntegerType],
-    ) -> Result<Self> {
+    pub fn new(base: UnsignedIntegerType, subdivisions: &[UnsignedIntegerType]) -> Result<Self> {
         if base == 0 {
             return Err(Error::Polyrhythm("Base must be nonzero".into()));
         }
@@ -64,24 +60,40 @@ impl Polyrhythm {
     }
 
     /// Creates a polyrhythm and assigns a nonzero tempo in beats per minute.
+    #[deprecated(note = "use `Polyrhythm::new(...).and_then(|p| p.with_tempo(...))`")]
     pub fn new_with_tempo(
         base: UnsignedIntegerType,
         tempo: UnsignedIntegerType,
         subdivisions: &[UnsignedIntegerType],
     ) -> Result<Self> {
-        let mut poly = Self::new(base, subdivisions)?;
-        poly.set_tempo(tempo)?;
-        Ok(poly)
+        Self::new(base, subdivisions)?.with_tempo(tempo)
     }
 
     /// Constructs a new Polyrhythm given a time signature, tempo, and
     /// subdivisions.
+    #[deprecated(note = "use `Polyrhythm::from_time_signature`")]
     pub fn new_with_time_signature(
         base: UnsignedIntegerType,
         tempo: UnsignedIntegerType,
         subdivisions: &[UnsignedIntegerType],
     ) -> Result<Self> {
-        Self::new_with_tempo(base, tempo, subdivisions)
+        Self::from_time_signature(base, tempo, subdivisions)
+    }
+
+    /// Creates a polyrhythm from a time-signature numerator, tempo, and
+    /// subdivision voices.
+    pub fn from_time_signature(
+        beats_per_measure: UnsignedIntegerType,
+        tempo: UnsignedIntegerType,
+        subdivisions: &[UnsignedIntegerType],
+    ) -> Result<Self> {
+        Self::new(beats_per_measure, subdivisions)?.with_tempo(tempo)
+    }
+
+    /// Returns this polyrhythm with a nonzero tempo in beats per minute.
+    pub fn with_tempo(mut self, tempo: UnsignedIntegerType) -> Result<Self> {
+        self.set_tempo(tempo)?;
+        Ok(self)
     }
 
     /// Sets the tempo in beats per minute.
@@ -138,7 +150,13 @@ impl Polyrhythm {
     }
 
     /// Returns the number of ticks in one full cycle (measure).
+    #[deprecated(note = "use `cycle_len`")]
     pub fn cycle_duration(&self) -> UnsignedIntegerType {
+        self.cycle_len()
+    }
+
+    /// Returns the number of ticks in one full cycle.
+    pub fn cycle_len(&self) -> UnsignedIntegerType {
         self.cycle
     }
 
@@ -159,7 +177,13 @@ impl Polyrhythm {
     }
 
     /// Returns all tick events in one full cycle.
+    #[deprecated(note = "use `events`")]
     pub fn events_one_cycle(&self) -> Result<Vec<PolyrhythmEvent>> {
+        self.events()
+    }
+
+    /// Returns all tick events in one full cycle.
+    pub fn events(&self) -> Result<Vec<PolyrhythmEvent>> {
         let tick_duration = self.tick_duration()?;
         Ok((0..self.cycle)
             .map(|tick| {
@@ -181,7 +205,13 @@ impl Polyrhythm {
     }
 
     /// Returns ticks where at least `min_simultaneous` components trigger.
+    #[deprecated(note = "use `coincidence_ticks`")]
     pub fn coincidence_ticks_one_cycle(&self, min_simultaneous: usize) -> Vec<UnsignedIntegerType> {
+        self.coincidence_ticks(min_simultaneous)
+    }
+
+    /// Returns ticks where at least `min_simultaneous` components trigger.
+    pub fn coincidence_ticks(&self, min_simultaneous: usize) -> Vec<UnsignedIntegerType> {
         if min_simultaneous == 0 {
             return (0..self.cycle).collect();
         }
@@ -212,7 +242,7 @@ impl Polyrhythm {
             }
         }
 
-        let notes: Result<Vec<Pitch>, Exception> = offsets
+        let notes: Result<Vec<Pitch>, Error> = offsets
             .into_iter()
             .map(|offset| {
                 let interval = Interval::new(IntervalArgument::Int(offset))?;
@@ -225,19 +255,41 @@ impl Polyrhythm {
     }
 
     /// Converts one polyrhythm cycle into a chord above `base`.
+    #[deprecated(note = "use `to_chord`")]
     pub fn as_chord<T>(&self, base: T) -> Result<Chord>
     where
-        T: IntoPitch,
+        T: TryInto<Pitch>,
+        T::Error: Into<Error>,
     {
-        self.chord_from_base_pitch(base.into_pitch()?)
+        self.to_chord(base)
     }
 
     /// Converts one polyrhythm cycle into a pitch collection above `base`.
+    #[deprecated(note = "use `to_polypitch`")]
     pub fn as_polypitch<T>(&self, base: T) -> Result<Chord>
     where
-        T: IntoPitch,
+        T: TryInto<Pitch>,
+        T::Error: Into<Error>,
     {
-        self.as_chord(base)
+        self.to_polypitch(base)
+    }
+
+    /// Converts one polyrhythm cycle into a chord above `base`.
+    pub fn to_chord<T>(&self, base: T) -> Result<Chord>
+    where
+        T: TryInto<Pitch>,
+        T::Error: Into<Error>,
+    {
+        self.chord_from_base_pitch(base.try_into().map_err(Into::into)?)
+    }
+
+    /// Converts one polyrhythm cycle into a pitch collection above `base`.
+    pub fn to_polypitch<T>(&self, base: T) -> Result<Chord>
+    where
+        T: TryInto<Pitch>,
+        T::Error: Into<Error>,
+    {
+        self.to_chord(base)
     }
 }
 
@@ -267,10 +319,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_new_with_time_signature() {
-        let poly = Polyrhythm::new_with_time_signature(4, 120, &[2, 3]).unwrap();
+    fn test_from_time_signature() {
+        let poly = Polyrhythm::from_time_signature(4, 120, &[2, 3]).unwrap();
         // For subdivisions 2 and 3, lcm is 6 ticks per measure.
-        assert_eq!(poly.cycle_duration(), 6);
+        assert_eq!(poly.cycle_len(), 6);
         // tick_duration = (4 * 60 / 120) / 6 = (4 * 0.5) / 6 = 2 / 6 ≈ 0.3333 sec.
         let tick_dur = poly.tick_duration().unwrap();
         assert!((tick_dur - 0.3333).abs() < 0.01);
@@ -290,14 +342,14 @@ mod tests {
     }
 
     #[test]
-    fn test_new_with_tempo_sets_tempo() {
-        let poly = Polyrhythm::new_with_tempo(4, 90, &[3, 4]).unwrap();
+    fn test_with_tempo_sets_tempo() {
+        let poly = Polyrhythm::new(4, &[3, 4]).unwrap().with_tempo(90).unwrap();
         assert_eq!(poly.tempo(), Some(90));
     }
 
     #[test]
     fn test_beat_timings_are_spaced_by_component_interval() {
-        let poly = Polyrhythm::new_with_time_signature(4, 120, &[2, 3]).unwrap();
+        let poly = Polyrhythm::from_time_signature(4, 120, &[2, 3]).unwrap();
         let timings = poly.beat_timings().unwrap();
         assert_eq!(timings.len(), 2);
         assert_eq!(timings[0].len(), 2);
@@ -307,9 +359,9 @@ mod tests {
     }
 
     #[test]
-    fn test_events_one_cycle() {
-        let poly = Polyrhythm::new_with_time_signature(4, 120, &[2, 3]).unwrap();
-        let events = poly.events_one_cycle().unwrap();
+    fn test_events() {
+        let poly = Polyrhythm::from_time_signature(4, 120, &[2, 3]).unwrap();
+        let events = poly.events().unwrap();
         assert_eq!(events.len(), 6);
         assert_eq!(events[0].triggers, vec![true, true]);
         assert_eq!(events[1].triggers, vec![false, false]);
@@ -318,16 +370,16 @@ mod tests {
     }
 
     #[test]
-    fn test_coincidence_ticks_one_cycle() {
-        let poly = Polyrhythm::new_with_time_signature(4, 120, &[2, 3]).unwrap();
-        assert_eq!(poly.coincidence_ticks_one_cycle(2), vec![0]);
-        assert_eq!(poly.coincidence_ticks_one_cycle(1), vec![0, 2, 3, 4]);
+    fn test_coincidence_ticks() {
+        let poly = Polyrhythm::from_time_signature(4, 120, &[2, 3]).unwrap();
+        assert_eq!(poly.coincidence_ticks(2), vec![0]);
+        assert_eq!(poly.coincidence_ticks(1), vec![0, 2, 3, 4]);
     }
 
     #[test]
-    fn test_as_chord_is_public_and_works() {
-        let poly = Polyrhythm::new_with_time_signature(4, 120, &[2, 3, 4]).unwrap();
-        let chord = poly.as_chord("C4").unwrap();
+    fn test_to_chord_is_public_and_works() {
+        let poly = Polyrhythm::from_time_signature(4, 120, &[2, 3, 4]).unwrap();
+        let chord = poly.to_chord("C4").unwrap();
         assert!(!chord.pitched_common_name().is_empty());
     }
 }

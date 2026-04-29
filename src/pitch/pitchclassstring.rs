@@ -66,7 +66,7 @@ impl From<PitchClassString> for IntegerType {
 }
 
 impl TryFrom<char> for PitchClassString {
-    type Error = Exception;
+    type Error = crate::error::Error;
 
     fn try_from(c: char) -> Result<Self, Self::Error> {
         match c {
@@ -78,9 +78,7 @@ impl TryFrom<char> for PitchClassString {
             'B' => Ok(PitchClassString::B),
             'e' => Ok(PitchClassString::e),
             'E' => Ok(PitchClassString::E),
-            _ => Err(Error::PitchClassString(format!(
-                "Invalid pitch class: {c}"
-            ))),
+            _ => Err(Error::PitchClassString(format!("Invalid pitch class: {c}"))),
         }
     }
 }

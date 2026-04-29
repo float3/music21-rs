@@ -1,3 +1,5 @@
+use crate::defaults::IntegerType;
+
 #[derive(PartialEq, Copy, Clone)]
 pub(crate) enum Direction {
     Descending = -1,
@@ -14,8 +16,8 @@ impl Direction {
         }
     }
 
-    pub(crate) fn as_int(&self) -> i32 {
-        *self as i32
+    pub(crate) fn as_int(&self) -> IntegerType {
+        *self as IntegerType
     }
 }
 
@@ -25,9 +27,9 @@ mod tests {
 
     #[test]
     fn test_direction_int() {
-        assert_eq!(Direction::Descending as i32, -1);
-        assert_eq!(Direction::Oblique as i32, 0);
-        assert_eq!(Direction::Ascending as i32, 1);
+        assert_eq!(Direction::Descending as IntegerType, -1);
+        assert_eq!(Direction::Oblique as IntegerType, 0);
+        assert_eq!(Direction::Ascending as IntegerType, 1);
     }
 
     #[test]

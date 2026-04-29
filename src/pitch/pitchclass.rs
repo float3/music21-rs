@@ -5,13 +5,14 @@ use crate::{
 
 use super::pitchclassstring::PitchClassString;
 use std::fmt::{Display, Formatter};
+use std::str::FromStr;
 
 /// Input accepted by [`PitchClass::new`] and pitch-class builders.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum PitchClassSpecifier {
     /// A numeric pitch class.
-    Number(f64),
+    Number(FloatType),
     /// A string pitch class, including `A`/`T` for 10 and `B`/`E` for 11.
     String(String),
     /// An existing pitch class to clone.
@@ -80,6 +81,62 @@ impl Display for PitchClassSpecifier {
     }
 }
 
+impl FromStr for PitchClass {
+    type Err = Error;
+
+    fn from_str(value: &str) -> Result<Self> {
+        Self::new(value)
+    }
+}
+
+impl TryFrom<&str> for PitchClass {
+    type Error = Error;
+
+    fn try_from(value: &str) -> Result<Self> {
+        Self::new(value)
+    }
+}
+
+impl TryFrom<String> for PitchClass {
+    type Error = Error;
+
+    fn try_from(value: String) -> Result<Self> {
+        Self::new(value)
+    }
+}
+
+impl TryFrom<char> for PitchClass {
+    type Error = Error;
+
+    fn try_from(value: char) -> Result<Self> {
+        Self::new(value)
+    }
+}
+
+impl TryFrom<IntegerType> for PitchClass {
+    type Error = Error;
+
+    fn try_from(value: IntegerType) -> Result<Self> {
+        Self::new(value)
+    }
+}
+
+impl TryFrom<u8> for PitchClass {
+    type Error = Error;
+
+    fn try_from(value: u8) -> Result<Self> {
+        Self::new(value)
+    }
+}
+
+impl TryFrom<FloatType> for PitchClass {
+    type Error = Error;
+
+    fn try_from(value: FloatType) -> Result<Self> {
+        Self::new(value)
+    }
+}
+
 /// A normalized pitch-class value.
 ///
 /// Pitch classes wrap into the range `0 <= pc < 12`. Integer pitch classes
@@ -139,7 +196,7 @@ impl Display for PitchClass {
     }
 }
 
-pub(crate) fn convert_pitch_class_to_str(pc: i32) -> String {
+pub(crate) fn convert_pitch_class_to_str(pc: IntegerType) -> String {
     // Mimic Python's modulo: always a non-negative remainder.
     let pc = pc.rem_euclid(12);
     format!("{pc:X}")
@@ -155,7 +212,7 @@ fn pitch_class_to_string(pc: FloatType) -> String {
 }
 
 fn normalize_pitch_class(pc: FloatType) -> FloatType {
-    let factor = (10 as FloatType).powi(PITCH_SPACE_SIGNIFICANT_DIGITS as i32);
+    let factor = (10 as FloatType).powi(PITCH_SPACE_SIGNIFICANT_DIGITS as IntegerType);
     let normalized = (pc.rem_euclid(12.0) * factor).round() / factor;
     if normalized == 12.0 { 0.0 } else { normalized }
 }
@@ -179,7 +236,7 @@ fn trim_float(value: FloatType) -> String {
 }
 
 pub(crate) fn convert_ps_to_oct(ps: FloatType) -> IntegerType {
-    let factor = (10 as FloatType).powi(PITCH_SPACE_SIGNIFICANT_DIGITS as i32);
+    let factor = (10 as FloatType).powi(PITCH_SPACE_SIGNIFICANT_DIGITS as IntegerType);
     let ps_rounded = (ps * factor).round() / factor;
     (ps_rounded / 12.0).floor() as IntegerType - 1
 }
@@ -236,5 +293,17 @@ mod tests {
         let pitch_class = PitchClass::new(14).unwrap();
         let clone = PitchClass::new(PitchClassSpecifier::from(pitch_class)).unwrap();
         assert_eq!(clone, pitch_class);
+    }
+
+    #[test]
+    fn pitch_class_supports_rust_conversion_traits() {
+        let parsed: PitchClass = "A".parse().unwrap();
+        assert_eq!(parsed.integer(), Some(10));
+
+        let from_char = PitchClass::try_from('B').unwrap();
+        assert_eq!(from_char.number(), 11.0);
+
+        let from_number = PitchClass::try_from(13).unwrap();
+        assert_eq!(from_number.string(), "1");
     }
 }

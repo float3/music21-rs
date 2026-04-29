@@ -11,6 +11,8 @@ use crate::prebase::ProtoM21ObjectTrait;
 use generalnote::GeneralNoteTrait;
 use notrest::{NotRest, NotRestTrait};
 use std::collections::HashMap;
+use std::fmt::{Display, Formatter};
+use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Debug)]
@@ -73,7 +75,7 @@ impl Note {
                     Some(name),
                     None,
                     None,
-                    Option::<i8>::None,
+                    Option::<IntegerType>::None,
                     Option::<IntegerType>::None,
                     None,
                     None,
@@ -147,6 +149,122 @@ impl ProtoM21ObjectTrait for Note {}
 
 impl Music21ObjectTrait for Note {}
 
+impl FromStr for Note {
+    type Err = crate::error::Error;
+
+    fn from_str(value: &str) -> Result<Self> {
+        Self::from_name(value)
+    }
+}
+
+impl TryFrom<&str> for Note {
+    type Error = crate::error::Error;
+
+    fn try_from(value: &str) -> Result<Self> {
+        Self::from_name(value)
+    }
+}
+
+impl TryFrom<String> for Note {
+    type Error = crate::error::Error;
+
+    fn try_from(value: String) -> Result<Self> {
+        Self::from_name(value)
+    }
+}
+
+impl TryFrom<Pitch> for Note {
+    type Error = crate::error::Error;
+
+    fn try_from(value: Pitch) -> Result<Self> {
+        Self::from_pitch(value)
+    }
+}
+
+impl TryFrom<&Pitch> for Note {
+    type Error = crate::error::Error;
+
+    fn try_from(value: &Pitch) -> Result<Self> {
+        Self::from_pitch(value.clone())
+    }
+}
+
+impl TryFrom<IntegerType> for Note {
+    type Error = crate::error::Error;
+
+    fn try_from(value: IntegerType) -> Result<Self> {
+        Note::new(Some(value), None, None, None)
+    }
+}
+
+impl Display for Note {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.pitch_name_with_octave())
+    }
+}
+
+/// Converts a single note-like value into a [`Note`].
+///
+/// This is useful when constructing vectors or other collections that are
+/// later passed to APIs such as `Chord::new`.
+pub trait IntoNote {
+    /// Whether this value came from an integer pitch class or MIDI-like number.
+    const FROM_INTEGER_PITCH: bool = false;
+
+    /// Converts the value into a note.
+    fn try_into_note(self) -> Result<Note>;
+}
+
+impl IntoNote for Note {
+    fn try_into_note(self) -> Result<Note> {
+        Ok(self)
+    }
+}
+
+impl IntoNote for &Note {
+    fn try_into_note(self) -> Result<Note> {
+        Ok(self.clone())
+    }
+}
+
+impl IntoNote for Pitch {
+    fn try_into_note(self) -> Result<Note> {
+        Note::new(Some(self), None, None, None)
+    }
+}
+
+impl IntoNote for &Pitch {
+    fn try_into_note(self) -> Result<Note> {
+        Note::new(Some(self.clone()), None, None, None)
+    }
+}
+
+impl IntoNote for String {
+    fn try_into_note(self) -> Result<Note> {
+        Note::new(Some(self), None, None, None)
+    }
+}
+
+impl IntoNote for &String {
+    fn try_into_note(self) -> Result<Note> {
+        Note::new(Some(self.to_string()), None, None, None)
+    }
+}
+
+impl IntoNote for &str {
+    fn try_into_note(self) -> Result<Note> {
+        Note::new(Some(self), None, None, None)
+    }
+}
+
+impl IntoNote for IntegerType {
+    const FROM_INTEGER_PITCH: bool = true;
+
+    fn try_into_note(self) -> Result<Note> {
+        Note::new(Some(self), None, None, None)
+    }
+}
+
 pub(crate) trait IntoPitch {
     fn into_pitch(self) -> Result<Pitch>;
 }
@@ -163,7 +281,7 @@ impl IntoPitch for String {
             Some(self),
             None,
             None,
-            Option::<i8>::None,
+            Option::<IntegerType>::None,
             Option::<IntegerType>::None,
             None,
             None,
@@ -179,7 +297,7 @@ impl IntoPitch for &str {
             Some(self),
             None,
             None,
-            Option::<i8>::None,
+            Option::<IntegerType>::None,
             Option::<IntegerType>::None,
             None,
             None,
@@ -195,7 +313,7 @@ impl IntoPitch for IntegerType {
             Some(self),
             None,
             None,
-            Option::<i8>::None,
+            Option::<IntegerType>::None,
             Option::<IntegerType>::None,
             None,
             None,
@@ -207,8 +325,10 @@ impl IntoPitch for IntegerType {
 
 #[cfg(test)]
 mod tests {
-    use super::Note;
+    use super::{IntoNote, Note};
     use crate::chord::chordbase::ChordBase;
+    use crate::defaults::IntegerType;
+    use crate::pitch::Pitch;
     use std::sync::Arc;
 
     #[test]
@@ -235,5 +355,87 @@ mod tests {
         note.pitch_changed();
 
         assert_eq!(chord.cache_len_for_test(), 0);
+    }
+
+    #[test]
+    fn into_note_accepts_note_like_inputs() {
+        fn from_integer_pitch<T: IntoNote>() -> bool {
+            T::FROM_INTEGER_PITCH
+        }
+
+        assert!(!from_integer_pitch::<&str>());
+        assert!(from_integer_pitch::<IntegerType>());
+
+        let note = Note::from_name("C4").unwrap();
+        assert_eq!(
+            note.clone()
+                .try_into_note()
+                .unwrap()
+                .pitch_name_with_octave(),
+            "C4"
+        );
+
+        let borrowed_note = Note::from_name("D4").unwrap();
+        assert_eq!(
+            (&borrowed_note)
+                .try_into_note()
+                .unwrap()
+                .pitch_name_with_octave(),
+            "D4"
+        );
+
+        let pitch = Pitch::from_name("E4").unwrap();
+        assert_eq!(
+            pitch.try_into_note().unwrap().pitch_name_with_octave(),
+            "E4"
+        );
+
+        let borrowed_pitch = Pitch::from_name("F4").unwrap();
+        assert_eq!(
+            (&borrowed_pitch)
+                .try_into_note()
+                .unwrap()
+                .pitch_name_with_octave(),
+            "F4"
+        );
+
+        assert_eq!(
+            "G4".to_string()
+                .try_into_note()
+                .unwrap()
+                .pitch_name_with_octave(),
+            "G4"
+        );
+
+        let owned_name = "A4".to_string();
+        assert_eq!(
+            (&owned_name)
+                .try_into_note()
+                .unwrap()
+                .pitch_name_with_octave(),
+            "A4"
+        );
+
+        assert_eq!("B4".try_into_note().unwrap().pitch_name_with_octave(), "B4");
+
+        assert_eq!(
+            (60 as IntegerType)
+                .try_into_note()
+                .unwrap()
+                .pitch_name_with_octave(),
+            "C4"
+        );
+    }
+
+    #[test]
+    fn note_supports_rust_conversion_traits() {
+        let parsed: Note = "C#4".parse().unwrap();
+        assert_eq!(parsed.to_string(), "C#4");
+
+        let from_pitch = Note::try_from(Pitch::from_name("D4").unwrap()).unwrap();
+        assert_eq!(from_pitch.pitch_name_with_octave(), "D4");
+
+        let from_integer = Note::try_from(60 as IntegerType).unwrap();
+        assert_eq!(from_integer.pitch_name_with_octave(), "C4");
     }
 }

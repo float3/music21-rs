@@ -47,7 +47,7 @@ pub(crate) fn sharps_to_pitch(sharp_count: IntegerType) -> Result<Pitch> {
             Some("C".to_string()),
             None,
             None,
-            Option::<i8>::None,
+            Option::<IntegerType>::None,
             Option::<IntegerType>::None,
             None,
             None,
@@ -60,7 +60,7 @@ pub(crate) fn sharps_to_pitch(sharp_count: IntegerType) -> Result<Pitch> {
         Some("C".to_string()),
         None,
         None,
-        Option::<i8>::None,
+        Option::<IntegerType>::None,
         Option::<IntegerType>::None,
         None,
         None,
@@ -82,10 +82,7 @@ pub(crate) fn sharps_to_pitch(sharp_count: IntegerType) -> Result<Pitch> {
     Ok(pitch)
 }
 
-pub(crate) fn pitch_to_sharps(
-    pitch_value: &Pitch,
-    mode: Option<&str>,
-) -> Result<IntegerType> {
+pub(crate) fn pitch_to_sharps(pitch_value: &Pitch, mode: Option<&str>) -> Result<IntegerType> {
     let step_index = FIFTHS_ORDER_SHARP
         .iter()
         .position(|step| *step == pitch_value.step())
@@ -105,15 +102,12 @@ pub(crate) fn pitch_to_sharps(
     Ok(sharps)
 }
 
-pub(crate) fn pitch_name_to_sharps(
-    pitch_name: &str,
-    mode: Option<&str>,
-) -> Result<IntegerType> {
+pub(crate) fn pitch_name_to_sharps(pitch_name: &str, mode: Option<&str>) -> Result<IntegerType> {
     let pitch = Pitch::new(
         Some(pitch_name.to_string()),
         None,
         None,
-        Option::<i8>::None,
+        Option::<IntegerType>::None,
         Option::<IntegerType>::None,
         None,
         None,
@@ -148,7 +142,7 @@ impl KeySignature {
                     Some("C".to_string()),
                     None,
                     None,
-                    Option::<i8>::None,
+                    Option::<IntegerType>::None,
                     Option::<IntegerType>::None,
                     None,
                     None,
@@ -162,11 +156,7 @@ impl KeySignature {
         })
     }
 
-    pub(crate) fn try_as_key(
-        &self,
-        mode: Option<&str>,
-        tonic: Option<&str>,
-    ) -> Result<Key> {
+    pub(crate) fn try_as_key(&self, mode: Option<&str>, tonic: Option<&str>) -> Result<Key> {
         let our_sharps = self.sharps;
 
         let resolved_mode = if mode.is_none() && tonic.is_none() {

@@ -37,6 +37,8 @@ use num_traits::ToPrimitive;
 use ordered_float::OrderedFloat;
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::fmt::{Display, Formatter};
+use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::LazyLock;
 use std::sync::Mutex;
@@ -54,7 +56,7 @@ pub enum PitchName {
     /// A written pitch name such as `"C#4"` or `"E-"`.
     Name(String),
     /// A pitch-space number, where 60 corresponds to middle C.
-    Number(f64),
+    Number(FloatType),
 }
 
 impl From<&str> for PitchName {
@@ -90,7 +92,7 @@ pub struct PitchOptions {
     /// Diatonic step name.
     pub step: Option<char>,
     /// Octave number.
-    pub octave: Option<i32>,
+    pub octave: Octave,
     /// Accidental name or alteration.
     pub accidental: Option<AccidentalSpecifier>,
     /// Microtone cent offset.
@@ -98,9 +100,9 @@ pub struct PitchOptions {
     /// Pitch class to realize as a pitch.
     pub pitch_class: Option<PitchClassSpecifier>,
     /// MIDI note number.
-    pub midi: Option<i32>,
+    pub midi: Option<IntegerType>,
     /// Pitch-space value.
-    pub ps: Option<f64>,
+    pub ps: Option<FloatType>,
     /// Fundamental pitch used for harmonic construction.
     pub fundamental: Option<Pitch>,
 }
@@ -124,7 +126,7 @@ impl PitchOptions {
     }
 
     /// Sets the octave.
-    pub fn octave(mut self, octave: i32) -> Self {
+    pub fn octave(mut self, octave: IntegerType) -> Self {
         self.octave = Some(octave);
         self
     }
@@ -148,14 +150,20 @@ impl PitchOptions {
     }
 
     /// Sets the MIDI note number.
-    pub fn midi(mut self, midi: i32) -> Self {
+    pub fn midi(mut self, midi: IntegerType) -> Self {
         self.midi = Some(midi);
         self
     }
 
     /// Sets the pitch-space value.
-    pub fn ps(mut self, ps: f64) -> Self {
+    pub fn ps(mut self, ps: FloatType) -> Self {
         self.ps = Some(ps);
+        self
+    }
+
+    /// Sets the pitch-space value.
+    pub fn pitch_space(mut self, pitch_space: FloatType) -> Self {
+        self.ps = Some(pitch_space);
         self
     }
 
@@ -197,6 +205,60 @@ impl PartialEq for Pitch {
     }
 }
 
+impl FromStr for Pitch {
+    type Err = Error;
+
+    fn from_str(value: &str) -> Result<Self> {
+        Self::from_name(value)
+    }
+}
+
+impl TryFrom<&str> for Pitch {
+    type Error = Error;
+
+    fn try_from(value: &str) -> Result<Self> {
+        Self::from_name(value)
+    }
+}
+
+impl TryFrom<String> for Pitch {
+    type Error = Error;
+
+    fn try_from(value: String) -> Result<Self> {
+        Self::from_name(value)
+    }
+}
+
+impl TryFrom<&Pitch> for Pitch {
+    type Error = Error;
+
+    fn try_from(value: &Pitch) -> Result<Self> {
+        Ok(value.clone())
+    }
+}
+
+impl TryFrom<IntegerType> for Pitch {
+    type Error = Error;
+
+    fn try_from(value: IntegerType) -> Result<Self> {
+        Self::from_midi(value)
+    }
+}
+
+impl TryFrom<FloatType> for Pitch {
+    type Error = Error;
+
+    fn try_from(value: FloatType) -> Result<Self> {
+        Self::from_pitch_space(value)
+    }
+}
+
+impl Display for Pitch {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name_with_octave())
+    }
+}
+
 impl Pitch {
     /// Builds a pitch from [`PitchOptions`].
     pub fn from_options(options: PitchOptions) -> Result<Self> {
@@ -226,7 +288,7 @@ impl Pitch {
             Some(name.into()),
             None,
             None,
-            Option::<i8>::None,
+            Option::<IntegerType>::None,
             Option::<IntegerType>::None,
             None,
             None,
@@ -236,12 +298,12 @@ impl Pitch {
     }
 
     /// Builds a pitch from a pitch-space number.
-    pub fn from_number(number: f64) -> Result<Self> {
+    pub fn from_number(number: FloatType) -> Result<Self> {
         Self::new(
             Some(PitchName::Number(number)),
             None,
             None,
-            Option::<i8>::None,
+            Option::<IntegerType>::None,
             Option::<IntegerType>::None,
             None,
             None,
@@ -256,7 +318,7 @@ impl Pitch {
             Option::<String>::None,
             Some(StepName::try_from(step)?),
             None,
-            Option::<i8>::None,
+            Option::<IntegerType>::None,
             Option::<IntegerType>::None,
             None,
             None,
@@ -266,7 +328,7 @@ impl Pitch {
     }
 
     /// Builds a pitch from a pitch name and explicit octave.
-    pub fn from_name_and_octave(name: impl Into<String>, octave: i32) -> Result<Self> {
+    pub fn from_name_and_octave(name: impl Into<String>, octave: IntegerType) -> Result<Self> {
         PitchOptions::new().name(name.into()).octave(octave).build()
     }
 
@@ -276,12 +338,12 @@ impl Pitch {
     }
 
     /// Builds a pitch from a MIDI note number.
-    pub fn from_midi(midi: i32) -> Result<Self> {
+    pub fn from_midi(midi: IntegerType) -> Result<Self> {
         Self::new(
             Option::<String>::None,
             None,
             None,
-            Option::<i8>::None,
+            Option::<IntegerType>::None,
             Option::<IntegerType>::None,
             None,
             Some(midi),
@@ -291,12 +353,12 @@ impl Pitch {
     }
 
     /// Builds a pitch from a pitch-space value.
-    pub fn from_pitch_space(ps: f64) -> Result<Self> {
+    pub fn from_pitch_space(ps: FloatType) -> Result<Self> {
         Self::new(
             Option::<String>::None,
             None,
             None,
-            Option::<i8>::None,
+            Option::<IntegerType>::None,
             Option::<IntegerType>::None,
             None,
             None,
@@ -525,10 +587,7 @@ impl Pitch {
         self.inform_client()
     }
 
-    fn get_all_common_enharmonics(
-        &mut self,
-        alter_limit: FloatType,
-    ) -> Result<Vec<Pitch>> {
+    fn get_all_common_enharmonics(&mut self, alter_limit: FloatType) -> Result<Vec<Pitch>> {
         let mut post = Vec::new();
 
         let simplified = self.clone().simplify_enharmonic(false)?;
@@ -587,6 +646,11 @@ impl Pitch {
 
     /// Returns the pitch-space value for this pitch.
     pub fn ps(&self) -> FloatType {
+        self.pitch_space()
+    }
+
+    /// Returns the pitch-space value for this pitch.
+    pub fn pitch_space(&self) -> FloatType {
         let octave = self._octave.unwrap_or(PITCH_OCTAVE as IntegerType);
         ((octave + 1) * 12) as FloatType + self._step.step_ref() as FloatType + self.alter()
     }
@@ -603,7 +667,7 @@ impl Pitch {
     /// The pitch-space value is used as the tuning-system degree index, so this
     /// is most musically meaningful for twelve-tone systems.
     pub fn frequency_hz_in(&self, tuning_system: TuningSystem) -> FloatType {
-        tuning_system.frequency_at(self.ps())
+        tuning_system.frequency_at(self.pitch_space())
     }
 
     fn step_setter(&mut self, step_name: StepName) {
@@ -931,7 +995,7 @@ fn convert_ps_to_step<T: Num + ToPrimitive>(
 }
 
 fn round_to_digits(value: FloatType, digits: UnsignedIntegerType) -> FloatType {
-    let factor = (10 as FloatType).powi(digits as i32);
+    let factor = (10 as FloatType).powi(digits as IntegerType);
     (value * factor).round() / factor
 }
 
@@ -1135,7 +1199,7 @@ fn pythagorean_denominator_log(interval: &Interval) -> Result<FloatType> {
         Some("C1".to_string()),
         None,
         None,
-        Option::<i8>::None,
+        Option::<IntegerType>::None,
         Option::<IntegerType>::None,
         None,
         None,
@@ -1163,8 +1227,8 @@ fn pythagorean_denominator_log(interval: &Interval) -> Result<FloatType> {
     let denominator_threes = if fifth_count < 0 { -fifth_count } else { 0 };
     denominator_twos = (denominator_twos - octave_adjust).max(0);
 
-    Ok(denominator_twos as FloatType * 2.0_f64.ln()
-        + denominator_threes as FloatType * 3.0_f64.ln())
+    Ok(denominator_twos as FloatType * (2.0 as FloatType).ln()
+        + denominator_threes as FloatType * (3.0 as FloatType).ln())
 }
 
 fn convert_harmonic_to_cents(_harmonic_shift: IntegerType) -> IntegerType {
@@ -1192,7 +1256,7 @@ mod tests {
                 Some(0),
                 None,
                 None,
-                Option::<i8>::None,
+                Option::<IntegerType>::None,
                 Option::<IntegerType>::None,
                 None,
                 None,
@@ -1204,7 +1268,7 @@ mod tests {
                 Some(1),
                 None,
                 None,
-                Option::<i8>::None,
+                Option::<IntegerType>::None,
                 Option::<IntegerType>::None,
                 None,
                 None,
@@ -1216,7 +1280,7 @@ mod tests {
                 Some(2),
                 None,
                 None,
-                Option::<i8>::None,
+                Option::<IntegerType>::None,
                 Option::<IntegerType>::None,
                 None,
                 None,
@@ -1228,7 +1292,7 @@ mod tests {
                 Some(3),
                 None,
                 None,
-                Option::<i8>::None,
+                Option::<IntegerType>::None,
                 Option::<IntegerType>::None,
                 None,
                 None,
@@ -1240,7 +1304,7 @@ mod tests {
                 Some(4),
                 None,
                 None,
-                Option::<i8>::None,
+                Option::<IntegerType>::None,
                 Option::<IntegerType>::None,
                 None,
                 None,
@@ -1252,7 +1316,7 @@ mod tests {
                 Some(5),
                 None,
                 None,
-                Option::<i8>::None,
+                Option::<IntegerType>::None,
                 Option::<IntegerType>::None,
                 None,
                 None,
@@ -1264,7 +1328,7 @@ mod tests {
                 Some(12),
                 None,
                 None,
-                Option::<i8>::None,
+                Option::<IntegerType>::None,
                 Option::<IntegerType>::None,
                 None,
                 None,
@@ -1276,7 +1340,7 @@ mod tests {
                 Some(13),
                 None,
                 None,
-                Option::<i8>::None,
+                Option::<IntegerType>::None,
                 Option::<IntegerType>::None,
                 None,
                 None,
@@ -1292,7 +1356,7 @@ mod tests {
                 Some(0),
                 None,
                 None,
-                Option::<i8>::None,
+                Option::<IntegerType>::None,
                 Option::<IntegerType>::None,
                 None,
                 None,
@@ -1303,7 +1367,7 @@ mod tests {
                 Some(1),
                 None,
                 None,
-                Option::<i8>::None,
+                Option::<IntegerType>::None,
                 Option::<IntegerType>::None,
                 None,
                 None,
@@ -1314,7 +1378,7 @@ mod tests {
                 Some(2),
                 None,
                 None,
-                Option::<i8>::None,
+                Option::<IntegerType>::None,
                 Option::<IntegerType>::None,
                 None,
                 None,
@@ -1325,7 +1389,7 @@ mod tests {
                 Some(12),
                 None,
                 None,
-                Option::<i8>::None,
+                Option::<IntegerType>::None,
                 Option::<IntegerType>::None,
                 None,
                 None,
@@ -1336,7 +1400,7 @@ mod tests {
                 Some(13),
                 None,
                 None,
-                Option::<i8>::None,
+                Option::<IntegerType>::None,
                 Option::<IntegerType>::None,
                 None,
                 None,
@@ -1359,7 +1423,7 @@ mod tests {
             Some("C4".to_string()),
             None,
             None,
-            Option::<i8>::None,
+            Option::<IntegerType>::None,
             Option::<IntegerType>::None,
             None,
             None,
@@ -1413,12 +1477,27 @@ mod tests {
     }
 
     #[test]
+    fn pitch_supports_rust_conversion_traits() {
+        let parsed: Pitch = "C#4".parse().unwrap();
+        assert_eq!(parsed.to_string(), "C#4");
+
+        let midi = Pitch::try_from(60 as IntegerType).unwrap();
+        assert_eq!(midi.name_with_octave(), "C4");
+
+        let pitch_space = Pitch::try_from(61.5).unwrap();
+        assert_eq!(pitch_space.pitch_space(), 61.5);
+
+        let built = Pitch::builder().pitch_space(60.0).build().unwrap();
+        assert_eq!(built.name_with_octave(), "C4");
+    }
+
+    #[test]
     fn test_higher_enharmonic_helper() {
         let c_sharp = Pitch::new(
             Some("C#3".to_string()),
             None,
             None,
-            Option::<i8>::None,
+            Option::<IntegerType>::None,
             Option::<IntegerType>::None,
             None,
             None,

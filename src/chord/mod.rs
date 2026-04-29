@@ -2,22 +2,24 @@ pub(crate) mod chordbase;
 pub(crate) mod tables;
 
 use crate::base::Music21ObjectTrait;
-use crate::defaults::IntegerType;
+use crate::defaults::{FloatType, IntegerType};
 use crate::duration::Duration;
 use crate::error::Error;
 use crate::error::Result;
 use crate::interval::{Interval, PitchOrNote};
 use crate::key::Key;
 use crate::key::keysignature::KeySignature;
-use crate::note::Note;
 use crate::note::generalnote::GeneralNoteTrait;
 use crate::note::notrest::NotRestTrait;
+use crate::note::{IntoNote, Note};
 use crate::pitch::Pitch;
 use crate::prebase::ProtoM21ObjectTrait;
 
 use chordbase::ChordBase;
 use chordbase::ChordBaseTrait;
 
+use std::fmt::{Display, Formatter};
+use std::str::FromStr;
 use std::sync::Arc;
 
 #[derive(Debug, Clone)]
@@ -49,6 +51,76 @@ pub struct KnownChordType {
     pub normal_form: Vec<u8>,
     /// Six-entry interval-class vector.
     pub interval_class_vector: Vec<u8>,
+}
+
+impl FromStr for Chord {
+    type Err = Error;
+
+    fn from_str(value: &str) -> Result<Self> {
+        Self::new(value)
+    }
+}
+
+impl TryFrom<&str> for Chord {
+    type Error = Error;
+
+    fn try_from(value: &str) -> Result<Self> {
+        Self::new(value)
+    }
+}
+
+impl TryFrom<String> for Chord {
+    type Error = Error;
+
+    fn try_from(value: String) -> Result<Self> {
+        Self::new(value)
+    }
+}
+
+impl TryFrom<&[Pitch]> for Chord {
+    type Error = Error;
+
+    fn try_from(value: &[Pitch]) -> Result<Self> {
+        Self::new(value)
+    }
+}
+
+impl TryFrom<&[Note]> for Chord {
+    type Error = Error;
+
+    fn try_from(value: &[Note]) -> Result<Self> {
+        Self::new(value)
+    }
+}
+
+impl TryFrom<&[IntegerType]> for Chord {
+    type Error = Error;
+
+    fn try_from(value: &[IntegerType]) -> Result<Self> {
+        Self::new(value)
+    }
+}
+
+impl TryFrom<&[&str]> for Chord {
+    type Error = Error;
+
+    fn try_from(value: &[&str]) -> Result<Self> {
+        Self::new(value)
+    }
+}
+
+impl TryFrom<&[String]> for Chord {
+    type Error = Error;
+
+    fn try_from(value: &[String]) -> Result<Self> {
+        Self::new(value)
+    }
+}
+
+impl Display for Chord {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.pitched_common_name())
+    }
 }
 
 impl Chord {
@@ -125,7 +197,7 @@ impl Chord {
     }
 
     /// Builds a chord from MIDI pitch numbers.
-    pub fn from_midi_numbers(notes: &[i32]) -> Result<Self> {
+    pub fn from_midi_numbers(notes: &[IntegerType]) -> Result<Self> {
         Self::new(notes)
     }
 
@@ -223,7 +295,7 @@ impl Chord {
         if self
             ._notes
             .iter()
-            .any(|n| (n._pitch.alter() - n._pitch.alter().round()).abs() > f64::EPSILON)
+            .any(|n| (n._pitch.alter() - n._pitch.alter().round()).abs() > FloatType::EPSILON)
         {
             return "microtonal chord".to_string();
         }
@@ -251,7 +323,7 @@ impl Chord {
             let pitch_pses = self
                 ._notes
                 .iter()
-                .map(|n| n._pitch.ps().round() as i32)
+                .map(|n| n._pitch.ps().round() as IntegerType)
                 .collect::<std::collections::BTreeSet<_>>();
 
             if pitch_names.len() == 1 {
@@ -343,7 +415,7 @@ impl Chord {
         let pitch_pses = self
             ._notes
             .iter()
-            .map(|n| n._pitch.ps().round() as i32)
+            .map(|n| n._pitch.ps().round() as IntegerType)
             .collect::<std::collections::BTreeSet<_>>();
 
         let Some(p0) = self._notes.first().map(|n| &n._pitch) else {
@@ -412,6 +484,11 @@ impl Chord {
         self._notes.iter().map(|note| note._pitch.clone()).collect()
     }
 
+    /// Returns the notes in input order.
+    pub fn notes(&self) -> &[Note] {
+        &self._notes
+    }
+
     /// Returns the inferred root pitch name when the chord has one.
     ///
     /// Returns `None` for empty chords, where there is no pitch from which a
@@ -423,6 +500,14 @@ impl Chord {
     /// Returns the lowest pitch name in the chord.
     ///
     /// Returns `None` for empty chords, where there is no bass pitch.
+    pub fn bass_pitch_name(&self) -> Option<String> {
+        self.bass_pitch().map(Self::display_pitch_name)
+    }
+
+    /// Returns the lowest pitch name in the chord.
+    ///
+    /// Returns `None` for empty chords, where there is no bass pitch.
+    #[deprecated(note = "use `bass_pitch_name`")]
     pub fn bass_pitch_name_public(&self) -> Option<String> {
         self.bass_pitch_name()
     }
@@ -473,9 +558,9 @@ impl Chord {
                     .partial_cmp(&b._pitch.ps())
                     .unwrap_or(std::cmp::Ordering::Equal)
             })
-            .map(|n| (n._pitch.ps().round() as i32).rem_euclid(12) as u8)?;
+            .map(|n| (n._pitch.ps().round() as IntegerType).rem_euclid(12) as u8)?;
 
-        let interval = ((bass_pc as i32 - root_pc as i32).rem_euclid(12)) as u8;
+        let interval = ((bass_pc as IntegerType - root_pc as IntegerType).rem_euclid(12)) as u8;
         match interval {
             0 => Some(0),
             3 | 4 => Some(1),
@@ -505,11 +590,7 @@ impl Chord {
     /// directly: dominant-function sonorities, leading-tone diminished
     /// sonorities, and contextual augmented-sixth sonorities. Unsupported
     /// chords return `Ok(None)`.
-    pub fn resolution_chord(
-        &self,
-        tonic: &str,
-        mode: Option<&str>,
-    ) -> Result<Option<Self>> {
+    pub fn resolution_chord(&self, tonic: &str, mode: Option<&str>) -> Result<Option<Self>> {
         Ok(self.resolution_chords(tonic, mode)?.into_iter().next())
     }
 
@@ -551,18 +632,12 @@ impl Chord {
         Ok(Self::deduplicate_resolution_chords(resolutions))
     }
 
-    fn simplify_enharmonics(
-        self,
-        key_context: Option<KeySignature>,
-    ) -> Result<Option<Self>> {
+    fn simplify_enharmonics(self, key_context: Option<KeySignature>) -> Result<Option<Self>> {
         self.clone().simplify_enharmonics_in_place(key_context)?;
         Ok(Some(self))
     }
 
-    fn simplify_enharmonics_in_place(
-        &mut self,
-        key_context: Option<KeySignature>,
-    ) -> Result<()> {
+    fn simplify_enharmonics_in_place(&mut self, key_context: Option<KeySignature>) -> Result<()> {
         match crate::pitch::simplify_multiple_enharmonics(&self.pitches(), None, key_context) {
             Ok(pitches) => {
                 for (i, pitch) in pitches.iter().enumerate() {
@@ -582,15 +657,11 @@ impl Chord {
         let mut pcs = self
             ._notes
             .iter()
-            .map(|note| (note._pitch.ps().round() as i32).rem_euclid(12) as u8)
+            .map(|note| (note._pitch.ps().round() as IntegerType).rem_euclid(12) as u8)
             .collect::<Vec<_>>();
         pcs.sort_unstable();
         pcs.dedup();
         pcs
-    }
-
-    fn bass_pitch_name(&self) -> Option<String> {
-        self.bass_pitch().map(Self::display_pitch_name)
     }
 
     fn bass_pitch(&self) -> Option<&Pitch> {
@@ -796,7 +867,7 @@ impl Chord {
 
         let ordered_chord_steps = [3, 5, 7, 2, 4, 6];
         let mut best_note = non_duplicating_notes[0];
-        let mut best_score = f64::NEG_INFINITY;
+        let mut best_score = FloatType::NEG_INFINITY;
 
         for note in non_duplicating_notes {
             let this_step_num = Self::step_num(&note._pitch);
@@ -804,7 +875,7 @@ impl Chord {
             for (root_index, chord_step_test) in ordered_chord_steps.iter().enumerate() {
                 let target = (this_step_num + chord_step_test - 1).rem_euclid(7);
                 if step_nums_to_notes.contains_key(&target) {
-                    score += 1.0 / (root_index as f64 + 6.0);
+                    score += 1.0 / (root_index as FloatType + 6.0);
                 }
             }
             if score > best_score {
@@ -828,7 +899,7 @@ impl Chord {
             .collect::<std::collections::BTreeSet<u8>>();
 
         let mut best_pc: Option<u8> = None;
-        let mut best_score: i32 = i32::MIN;
+        let mut best_score: IntegerType = IntegerType::MIN;
 
         for candidate in &ordered_pcs {
             let mut score = 0;
@@ -837,8 +908,8 @@ impl Chord {
             visited.insert(current);
 
             for _ in 0..ordered_pcs.len() {
-                let minor_third = ((current as i32 + 3).rem_euclid(12)) as u8;
-                let major_third = ((current as i32 + 4).rem_euclid(12)) as u8;
+                let minor_third = ((current as IntegerType + 3).rem_euclid(12)) as u8;
+                let major_third = ((current as IntegerType + 4).rem_euclid(12)) as u8;
                 if pc_set.contains(&minor_third) && !visited.contains(&minor_third) {
                     score += 2;
                     current = minor_third;
@@ -855,7 +926,9 @@ impl Chord {
             }
 
             let has_fifth_like = [6_u8, 7_u8, 8_u8].iter().any(|delta| {
-                pc_set.contains(&(((*candidate as i32 + *delta as i32).rem_euclid(12)) as u8))
+                pc_set.contains(
+                    &(((*candidate as IntegerType + *delta as IntegerType).rem_euclid(12)) as u8),
+                )
             });
             if has_fifth_like {
                 score += 1;
@@ -871,7 +944,7 @@ impl Chord {
     }
 
     fn pitch_class(pitch: &Pitch) -> u8 {
-        (pitch.ps().round() as i32).rem_euclid(12) as u8
+        (pitch.ps().round() as IntegerType).rem_euclid(12) as u8
     }
 
     fn pitch_class_mask(&self) -> u16 {
@@ -880,7 +953,7 @@ impl Chord {
             .fold(0_u16, |mask, pc| mask | (1_u16 << pc))
     }
 
-    fn step_num(pitch: &Pitch) -> i32 {
+    fn step_num(pitch: &Pitch) -> IntegerType {
         pitch.step().step_to_dnn_offset() - 1
     }
 
@@ -934,68 +1007,6 @@ impl GeneralNoteTrait for Chord {
 impl Music21ObjectTrait for Chord {}
 
 impl ProtoM21ObjectTrait for Chord {}
-
-/// Converts a single note-like value into a [`Note`].
-///
-/// This is useful when constructing vectors or other collections that are
-/// later passed to [`Chord::new`].
-pub trait IntoNote {
-    /// Whether this value came from an integer pitch class or MIDI-like number.
-    const FROM_INTEGER_PITCH: bool = false;
-
-    /// Converts the value into a note.
-    fn try_into_note(self) -> Result<Note>;
-}
-
-impl IntoNote for Note {
-    fn try_into_note(self) -> Result<Note> {
-        Ok(self)
-    }
-}
-
-impl IntoNote for &Note {
-    fn try_into_note(self) -> Result<Note> {
-        Ok(self.clone())
-    }
-}
-
-impl IntoNote for Pitch {
-    fn try_into_note(self) -> Result<Note> {
-        Note::new(Some(self), None, None, None)
-    }
-}
-
-impl IntoNote for &Pitch {
-    fn try_into_note(self) -> Result<Note> {
-        Note::new(Some(self.clone()), None, None, None)
-    }
-}
-
-impl IntoNote for String {
-    fn try_into_note(self) -> Result<Note> {
-        Note::new(Some(self), None, None, None)
-    }
-}
-
-impl IntoNote for &String {
-    fn try_into_note(self) -> Result<Note> {
-        Note::new(Some(self.to_string()), None, None, None)
-    }
-}
-
-impl IntoNote for &str {
-    fn try_into_note(self) -> Result<Note> {
-        Note::new(Some(self), None, None, None)
-    }
-}
-
-impl IntoNote for IntegerType {
-    const FROM_INTEGER_PITCH: bool = true;
-
-    fn try_into_note(self) -> Result<Note> {
-        Note::new(Some(self), None, None, None)
-    }
-}
 
 /// Converts a supported chord input into notes.
 ///
@@ -1072,7 +1083,7 @@ fn simplify_integer_notes(notes: &mut [Note]) -> Result<()> {
 impl IntoNotes for &[Pitch] {
     type Notes = Vec<Note>;
 
-    fn try_into_notes(self) -> Result<Self::Notes, Exception> {
+    fn try_into_notes(self) -> Result<Self::Notes, Error> {
         self.iter()
             .map(|pitch| Note::new(Some(pitch.clone()), None, None, None))
             .collect::<Result<Vec<_>>>()
@@ -1082,7 +1093,7 @@ impl IntoNotes for &[Pitch] {
 impl IntoNotes for &[Note] {
     type Notes = Vec<Note>;
 
-    fn try_into_notes(self) -> Result<Self::Notes, Exception> {
+    fn try_into_notes(self) -> Result<Self::Notes, Error> {
         Ok(self.to_vec())
     }
 }
@@ -1090,7 +1101,7 @@ impl IntoNotes for &[Note] {
 impl IntoNotes for &[Chord] {
     type Notes = Vec<Note>;
 
-    fn try_into_notes(self) -> Result<Self::Notes, Exception> {
+    fn try_into_notes(self) -> Result<Self::Notes, Error> {
         Ok(self.iter().flat_map(|chord| chord._notes.clone()).collect())
     }
 }
@@ -1098,7 +1109,7 @@ impl IntoNotes for &[Chord] {
 impl IntoNotes for &[String] {
     type Notes = Vec<Note>;
 
-    fn try_into_notes(self) -> Result<Self::Notes, Exception> {
+    fn try_into_notes(self) -> Result<Self::Notes, Error> {
         self.iter()
             .map(|s| Note::new(Some(s.to_string()), None, None, None))
             .collect::<Result<Vec<_>>>()
@@ -1108,7 +1119,7 @@ impl IntoNotes for &[String] {
 impl IntoNotes for String {
     type Notes = Vec<Note>;
 
-    fn try_into_notes(self) -> Result<Self::Notes, Exception> {
+    fn try_into_notes(self) -> Result<Self::Notes, Error> {
         if self.trim().is_empty() {
             Ok(Vec::new())
         } else if self.contains(char::is_whitespace) {
@@ -1125,7 +1136,7 @@ impl IntoNotes for String {
 impl IntoNotes for &[&str] {
     type Notes = Vec<Note>;
 
-    fn try_into_notes(self) -> Result<Self::Notes, Exception> {
+    fn try_into_notes(self) -> Result<Self::Notes, Error> {
         let mut vec = vec![];
         for str in self {
             vec.append(&mut str.try_into_notes()?);
@@ -1137,7 +1148,7 @@ impl IntoNotes for &[&str] {
 impl IntoNotes for &str {
     type Notes = Vec<Note>;
 
-    fn try_into_notes(self) -> Result<Self::Notes, Exception> {
+    fn try_into_notes(self) -> Result<Self::Notes, Error> {
         if self.trim().is_empty() {
             Ok(Vec::new())
         } else if self.contains(char::is_whitespace) {
@@ -1155,7 +1166,7 @@ impl IntoNotes for &[IntegerType] {
 
     type Notes = Vec<Note>;
 
-    fn try_into_notes(self) -> Result<Self::Notes, Exception> {
+    fn try_into_notes(self) -> Result<Self::Notes, Error> {
         let mut notes = self
             .iter()
             .map(|i| Note::new(Some(*i), None, None, None))
@@ -1263,7 +1274,7 @@ mod tests {
     fn chord_metadata_methods_have_forte_and_inversion() {
         let chord = Chord::new("C E G").unwrap();
         assert_eq!(chord.root_pitch_name().as_deref(), Some("C"));
-        assert_eq!(chord.bass_pitch_name_public().as_deref(), Some("C"));
+        assert_eq!(chord.bass_pitch_name().as_deref(), Some("C"));
         assert_eq!(chord.inversion(), Some(0));
         assert_eq!(chord.inversion_name().as_deref(), Some("root position"));
         assert_eq!(chord.forte_class().as_deref(), Some("3-11B"));
@@ -1273,6 +1284,20 @@ mod tests {
                 .iter()
                 .any(|name| name == "major triad")
         );
+    }
+
+    #[test]
+    fn chord_supports_rust_conversion_traits() {
+        let parsed: Chord = "C E G".parse().unwrap();
+        assert_eq!(parsed.to_string(), "C-major triad");
+        assert_eq!(parsed.notes().len(), 3);
+
+        let from_str = Chord::try_from("C E G").unwrap();
+        assert_eq!(from_str.pitched_common_name(), "C-major triad");
+
+        let midi = [60, 64, 67];
+        let from_slice = Chord::try_from(midi.as_slice()).unwrap();
+        assert_eq!(from_slice.pitched_common_name(), "C-major triad");
     }
 
     #[test]

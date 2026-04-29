@@ -1,4 +1,4 @@
-use music21_rs::chord::Chord;
+use music21_rs::{IntegerType, chord::Chord};
 
 struct StrCase {
     notes: &'static str,
@@ -7,7 +7,7 @@ struct StrCase {
 }
 
 struct IntCase {
-    notes: &'static [i32],
+    notes: &'static [IntegerType],
     // Hardcoded from Python music21 reference behavior.
     expected: &'static str,
 }

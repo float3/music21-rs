@@ -1,12 +1,13 @@
 use super::Pitch;
 
 use crate::common::objects::slottedobjectmixin::{SlottedObjectMixin, SlottedObjectMixinTrait};
-use crate::defaults::FloatType;
+use crate::defaults::{FloatType, IntegerType};
 use crate::display::{DisplayLocation, DisplaySize, DisplayStyle, DisplayType};
 use crate::error::{Error, Result};
 use crate::prebase::{ProtoM21Object, ProtoM21ObjectTrait};
 
 use std::fmt::{Display, Formatter};
+use std::str::FromStr;
 use std::sync::Arc;
 
 enum AccidentalEnum {
@@ -287,7 +288,7 @@ pub enum AccidentalSpecifier {
     /// An accidental name, modifier, alternate name, or unicode accidental.
     Name(String),
     /// A semitone alteration such as `1.0` for sharp or `-0.5` for half-flat.
-    Alter(f64),
+    Alter(FloatType),
     /// An existing accidental to clone.
     Accidental(Accidental),
 }
@@ -310,14 +311,14 @@ impl From<i8> for AccidentalSpecifier {
     }
 }
 
-impl From<i32> for AccidentalSpecifier {
-    fn from(value: i32) -> Self {
+impl From<IntegerType> for AccidentalSpecifier {
+    fn from(value: IntegerType) -> Self {
         Self::Alter(value as FloatType)
     }
 }
 
-impl From<f64> for AccidentalSpecifier {
-    fn from(value: f64) -> Self {
+impl From<FloatType> for AccidentalSpecifier {
+    fn from(value: FloatType) -> Self {
         Self::Alter(value)
     }
 }
@@ -369,6 +370,54 @@ impl PartialEq for Accidental {
 impl PartialOrd for Accidental {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         self._alter.partial_cmp(&other._alter)
+    }
+}
+
+impl FromStr for Accidental {
+    type Err = Error;
+
+    fn from_str(value: &str) -> Result<Self> {
+        Self::new(value)
+    }
+}
+
+impl TryFrom<&str> for Accidental {
+    type Error = Error;
+
+    fn try_from(value: &str) -> Result<Self> {
+        Self::new(value)
+    }
+}
+
+impl TryFrom<String> for Accidental {
+    type Error = Error;
+
+    fn try_from(value: String) -> Result<Self> {
+        Self::new(value)
+    }
+}
+
+impl TryFrom<IntegerType> for Accidental {
+    type Error = Error;
+
+    fn try_from(value: IntegerType) -> Result<Self> {
+        Self::new(value)
+    }
+}
+
+impl TryFrom<i8> for Accidental {
+    type Error = Error;
+
+    fn try_from(value: i8) -> Result<Self> {
+        Self::new(value)
+    }
+}
+
+impl TryFrom<FloatType> for Accidental {
+    type Error = Error;
+
+    fn try_from(value: FloatType) -> Result<Self> {
+        Self::new(value)
     }
 }
 
@@ -512,13 +561,13 @@ impl Accidental {
     }
 
     /// Returns the semitone alteration from the natural step.
-    pub fn alter(&self) -> f64 {
+    pub fn alter(&self) -> FloatType {
         self._alter
     }
 
     /// Sets the semitone alteration. Standard values update `name` and
     /// `modifier`; non-standard values are preserved without changing them.
-    pub fn set_alter(&mut self, alter: f64) -> Result<()> {
+    pub fn set_alter(&mut self, alter: FloatType) -> Result<()> {
         self.set_allowing_non_standard_value(alter)
     }
 
@@ -569,7 +618,7 @@ impl Accidental {
     }
 
     /// Sets `alter` without updating `name` or `modifier`.
-    pub fn set_alter_independently(&mut self, alter: f64) {
+    pub fn set_alter_independently(&mut self, alter: FloatType) {
         self._alter = alter;
         self.inform_client();
     }
@@ -820,6 +869,28 @@ impl IntoAccidental for i8 {
     }
 }
 
+impl IntoAccidental for IntegerType {
+    fn accidental_args(self, allow_non_standard_values: bool) -> Option<(String, FloatType)> {
+        match i8::try_from(self).ok().and_then(AccidentalEnum::from_int) {
+            Some(acci) => Some(acci.to_name_and_alter()),
+            _ if allow_non_standard_values => Some(("".to_owned(), self as FloatType)),
+            _ => None,
+        }
+    }
+
+    fn is_accidental(&self) -> bool {
+        false
+    }
+
+    fn into_accidental(self) -> Result<Accidental> {
+        Accidental::new(self)
+    }
+
+    fn accidental(self) -> Accidental {
+        panic!("call into_accidental instead")
+    }
+}
+
 impl IntoAccidental for FloatType {
     fn accidental_args(self, allow_non_standard_values: bool) -> Option<(String, FloatType)> {
         match AccidentalEnum::from_float(self) {
@@ -968,6 +1039,18 @@ mod tests {
         let acc_natural = 0.into_accidental().unwrap();
         assert_eq!(acc_natural._name, "natural");
         assert_eq!(acc_natural._alter, 0.0);
+    }
+
+    #[test]
+    fn accidental_supports_rust_conversion_traits() {
+        let parsed: Accidental = "#".parse().unwrap();
+        assert_eq!(parsed.name(), "sharp");
+
+        let from_str = Accidental::try_from("flat").unwrap();
+        assert_eq!(from_str.modifier(), "-");
+
+        let from_alter = Accidental::try_from(-0.5).unwrap();
+        assert_eq!(from_alter.name(), "half-flat");
     }
 
     #[test]

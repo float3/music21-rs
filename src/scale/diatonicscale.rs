@@ -61,7 +61,7 @@ mod tests {
             Some(name.to_string()),
             None,
             None,
-            Option::<i8>::None,
+            Option::<IntegerType>::None,
             Option::<IntegerType>::None,
             None,
             None,

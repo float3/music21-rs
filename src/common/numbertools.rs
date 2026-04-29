@@ -20,7 +20,7 @@ macro_rules! define_ordinals {
         }
 
         impl TryFrom<UnsignedIntegerType> for $name {
-            type Error = Exception;
+            type Error = crate::error::Error;
             fn try_from(value: UnsignedIntegerType) -> Result<Self, Self::Error> {
                 const VARIANTS: &[$name] = &[$($name::$variant),*];
                 let idx = value as usize;
@@ -37,7 +37,7 @@ macro_rules! define_ordinals {
         }
 
         impl TryFrom<&str> for $name {
-            type Error = Exception;
+            type Error = crate::error::Error;
             fn try_from(value: &str) -> Result<Self, Self::Error> {
                 match value.to_lowercase().as_str() {
                     $(
