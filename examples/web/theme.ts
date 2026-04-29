@@ -71,47 +71,7 @@ function syncButton(button: HTMLButtonElement, theme: ThemeChoice): void {
   button.setAttribute("aria-pressed", String(resolved === "dark"));
 }
 
-function installThemeStyles(): void {
-  if (document.getElementById("music21-theme-style")) return;
-
-  const style = document.createElement("style");
-  style.id = "music21-theme-style";
-  style.textContent = `
-    .theme-toggle {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 34px;
-      padding: 0 12px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel);
-      color: var(--accent-strong);
-      cursor: pointer;
-      font: inherit;
-      font-size: 13px;
-      font-weight: 800;
-      white-space: nowrap;
-    }
-
-    .theme-toggle:hover,
-    .theme-toggle:focus-visible {
-      border-color: var(--accent);
-      background: var(--accent-soft);
-      outline: none;
-    }
-
-    @media (max-width: 760px) {
-      .theme-toggle {
-        justify-self: start;
-      }
-    }
-  `;
-  document.head.appendChild(style);
-}
-
 export function setupThemeToggle(): void {
-  installThemeStyles();
   let theme = storedTheme();
   applyTheme(theme);
 
