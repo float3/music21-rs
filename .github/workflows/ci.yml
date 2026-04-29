@@ -201,11 +201,9 @@ jobs:
         run: cargo doc --workspace --no-deps
 
       - name: Install wasm-pack
-        if: github.event_name == 'push'
         run: cargo install wasm-pack --locked
 
-      - name: Build Pages site
-        if: github.event_name == 'push'
+      - name: Build demo site
         shell: bash
         run: |
           set -euo pipefail
@@ -224,6 +222,44 @@ jobs:
           pushd examples/chord
           wasm-pack build --release --target web --out-dir ../../target/pages/chord/pkg
           popd
+
+      - name: Smoke check demo site
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path("target/pages")
+          required_files = [
+              "index.html",
+              "chord/index.html",
+              "chord/pkg/music21_rs_chord_web.js",
+              "chord/pkg/music21_rs_chord_web_bg.wasm",
+              "docs/music21_rs/index.html",
+              "polyrhythm/index.html",
+              "tuning/index.html",
+          ]
+
+          missing = [name for name in required_files if not (root / name).is_file()]
+          if missing:
+              raise SystemExit(f"missing demo build output: {', '.join(missing)}")
+
+          html_checks = {
+              "index.html": ["chord/", "polyrhythm/", "tuning/"],
+              "chord/index.html": ["./pkg/music21_rs_chord_web.js", "../polyrhythm/"],
+              "polyrhythm/index.html": ["../chord/pkg/music21_rs_chord_web.js"],
+              "tuning/index.html": ["../chord/pkg/music21_rs_chord_web.js"],
+          }
+
+          for name, needles in html_checks.items():
+              text = (root / name).read_text(encoding="utf-8")
+              missing_needles = [needle for needle in needles if needle not in text]
+              if missing_needles:
+                  joined = ", ".join(missing_needles)
+                  raise SystemExit(f"{name} is missing expected demo references: {joined}")
+          PY
 
       - name: Configure Pages
         if: github.event_name == 'push'
