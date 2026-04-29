@@ -1,6 +1,11 @@
 import "../help-tooltips.js";
 import "../theme.js";
-import init, { analyze_chord, analyze_chord_with_key } from "../pkg/music21_rs_web.js";
+import init, {
+  analyze_chord,
+  analyze_chord_with_key,
+  chord_resolution_abc,
+  pitch_midi_number,
+} from "../pkg/music21_rs_web.js";
 
 type TuningFrequencyInfo = {
   name: string;
@@ -79,6 +84,7 @@ type ChordAnalysis = {
   polyrhythm_input: string;
   resolution_chords: ResolutionChordInfo[];
   pitches: PitchInfo[];
+  abc_notation: string;
 };
 
 type VexChordOptions = Record<string, string | number | boolean>;
@@ -691,16 +697,18 @@ function keyboardPitchName(midi: number): string {
 function toggleKeyboardPitch(midi: number): void {
   if (isMidiChordInput(input.value)) {
     const tokens = midiInputTokens(input.value);
-    const hasPitch = tokens.some((token) => pitchMidi(token) === midi);
+    const hasPitch = tokens.some((token) => midiNumberForInputToken(token) === midi);
     const nextTokens = hasPitch
-      ? tokens.filter((token) => pitchMidi(token) !== midi)
+      ? tokens.filter((token) => midiNumberForInputToken(token) !== midi)
       : [...tokens, String(midi)];
     input.value = nextTokens.length ? `midi: ${nextTokens.join(" ")}` : "";
   } else {
     const tokens = chordInputTokens(input.value);
-    const hasPitch = tokens.some((token) => pitchMidi(token) === midi);
+    const hasPitch = tokens.some((token) => midiNumberForInputToken(token) === midi);
     if (hasPitch) {
-      input.value = tokens.filter((token) => pitchMidi(token) !== midi).join(" ");
+      input.value = tokens
+        .filter((token) => midiNumberForInputToken(token) !== midi)
+        .join(" ");
     } else {
       const pitchName = keyboardPitchName(midi);
       input.value = tokens.length ? `${tokens.join(" ")} ${pitchName}` : pitchName;
@@ -722,6 +730,14 @@ function midiInputTokens(value: string): string[] {
   return body.split(/[\s,]+/).filter((token) => /^-?\d+$/.test(token));
 }
 
+function midiNumberForInputToken(value: string): number | null {
+  try {
+    return pitch_midi_number(value);
+  } catch {
+    return null;
+  }
+}
+
 function chordInputTokens(value: string): string[] {
   return normalizeChordInput(value)
     .split(/\s+/)
@@ -740,11 +756,9 @@ function renderNotation(
   resolutionAnalysis: ChordAnalysis | null = null,
 ): void {
   notation.replaceChildren();
-  const sourcePitches = data.pitches || [];
-  const targetPitches = resolutionAnalysis?.pitches || null;
-  const abc = targetPitches
-    ? buildResolutionAbc(sourcePitches, targetPitches)
-    : buildAbc(sourcePitches);
+  const abc = resolutionAnalysis
+    ? chord_resolution_abc(data.input, resolutionAnalysis.input)
+    : data.abc_notation;
   const renderAbc = window.ABCJS?.renderAbc || window.abcjs?.renderAbc;
   if (!renderAbc) {
     const fallback = document.createElement("div");
@@ -786,80 +800,6 @@ function showResolutionMotion(resolution: ResolutionChordInfo): void {
   }
 
   renderNotation(currentAnalysis, resolutionAnalysis);
-}
-
-function buildResolutionAbc(sourcePitches: PitchInfo[], targetPitches: PitchInfo[]): string {
-  const sourceNames = sourcePitches.map((pitch) => pitch.name_with_octave || pitch.name);
-  const targetNames = targetPitches.map((pitch) => pitch.name_with_octave || pitch.name);
-  const sourceNotes = sourceNames.map(abcNote).filter(Boolean);
-  const targetNotes = targetNames.map(abcNote).filter(Boolean);
-  const sourceChord = sourceNotes.length ? `[${sourceNotes.join("")}]4` : "z4";
-  const targetChord = targetNotes.length ? `[${targetNotes.join("")}]4` : "z4";
-  return `X:1\nL:1/4\nM:4/4\nK:C clef=${chooseClef([...sourceNames, ...targetNames])}\n${sourceChord} | ${targetChord} |]\n`;
-}
-
-function buildAbc(pitchData: PitchInfo[]): string {
-  const pitchNames = pitchData.map((pitch) => pitch.name_with_octave || pitch.name);
-  const notes = pitchData
-    .map((pitch) => abcNote(pitch.name_with_octave || pitch.name))
-    .filter(Boolean);
-  const chord = notes.length ? `[${notes.join("")}]4` : "z4";
-  return `X:1\nL:1/4\nM:4/4\nK:C clef=${chooseClef(pitchNames)}\n${chord} |]\n`;
-}
-
-function chooseClef(pitchNames: string[]): string {
-  const midiValues = pitchNames
-    .map(pitchMidi)
-    .filter((value): value is number => Number.isFinite(value));
-  if (!midiValues.length) return "treble";
-  const average = midiValues.reduce((sum, value) => sum + value, 0) / midiValues.length;
-  const lowest = Math.min(...midiValues);
-  return average < 60 || lowest < 48 ? "bass" : "treble";
-}
-
-function pitchMidi(value: string | number): number {
-  const trimmed = String(value).trim();
-  const midiNumber = Number.parseInt(trimmed, 10);
-  if (/^-?\d+$/.test(trimmed) && Number.isFinite(midiNumber)) {
-    return midiNumber;
-  }
-  const match = trimmed.match(/^([A-G])([#b-]*)(-?\d+)?$/);
-  if (!match) return Number.NaN;
-  const naturalPitchClasses: Record<string, number> = {
-    C: 0,
-    D: 2,
-    E: 4,
-    F: 5,
-    G: 7,
-    A: 9,
-    B: 11,
-  };
-  const natural = naturalPitchClasses[match[1]];
-  if (natural === undefined) return Number.NaN;
-  const accidental = match[2]
-    .split("")
-    .reduce((sum, char) => sum + (char === "#" ? 1 : -1), 0);
-  const octave = match[3] === undefined ? 4 : Number.parseInt(match[3], 10);
-  if (!Number.isFinite(octave)) return Number.NaN;
-  return (octave + 1) * 12 + natural + accidental;
-}
-
-function abcNote(value: string | number): string {
-  const match = String(value).trim().match(/^([A-G])([#b-]*)(-?\d+)?$/);
-  if (!match) return "";
-
-  const step = match[1];
-  const accidental = match[2]
-    .split("")
-    .map((char) => (char === "#" ? "^" : "_"))
-    .join("");
-  const octave = match[3] === undefined ? 4 : Number.parseInt(match[3], 10);
-  if (!Number.isFinite(octave)) return "";
-
-  if (octave >= 5) {
-    return `${accidental}${step.toLowerCase()}${"'".repeat(octave - 5)}`;
-  }
-  return `${accidental}${step}${",".repeat(Math.max(0, 4 - octave))}`;
 }
 
 function render(data: ChordAnalysis): void {

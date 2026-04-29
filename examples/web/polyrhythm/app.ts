@@ -346,6 +346,8 @@ function buildAnalysis() {
     ratioTones,
     pitches,
     chordInput: libraryAnalysis.chord_input ?? pitches.join(" "),
+    chordAbcNotation: libraryAnalysis.chord_abc_notation ?? "",
+    rhythmAbcNotation: libraryAnalysis.rhythm_abc_notation ?? "",
   };
 }
 
@@ -381,7 +383,7 @@ function renderChips(node, values) {
   }
 }
 
-function renderNotation(pitchNames) {
+function renderNotation(abc) {
   chordNotation.replaceChildren();
   const renderAbc = window.ABCJS?.renderAbc || window.abcjs?.renderAbc;
   if (!renderAbc) {
@@ -393,7 +395,7 @@ function renderNotation(pitchNames) {
   }
 
   try {
-    renderAbc("chord-notation", buildAbc(pitchNames), {
+    renderAbc("chord-notation", abc || "X:1\nL:1/4\nM:4/4\nK:C clef=treble\nz4 |]\n", {
       responsive: "resize",
       staffwidth: Math.max(280, chordNotation.clientWidth - 8),
       scale: 0.9,
@@ -418,7 +420,7 @@ function renderRhythmNotation(data) {
   }
 
   try {
-    renderAbc("rhythm-notation", buildRhythmAbc(data), {
+    renderAbc("rhythm-notation", data.rhythmAbcNotation || "X:1\nL:1/4\nM:4/4\nK:C clef=perc style=x\nV:1 name=\"1\" clef=perc style=x\nB |]\n", {
       responsive: "resize",
       staffwidth: Math.max(360, rhythmNotation.clientWidth - 20),
       scale: 0.88,
@@ -447,106 +449,6 @@ function displayEventsForCycle(data) {
     });
   }
   return events;
-}
-
-function buildRhythmAbc(data) {
-  const lines = [
-    "X:1",
-    "L:1/4",
-    `M:${data.base}/4`,
-    "K:C clef=perc style=x",
-  ];
-
-  for (const [index, component] of data.components.entries()) {
-    lines.push(`V:${index + 1} name="${component}" clef=perc style=x`);
-    lines.push(`${buildRhythmVoiceAbc(component, data.base)} |]`);
-  }
-
-  return `${lines.join("\n")}\n`;
-}
-
-function buildRhythmVoiceAbc(component, base) {
-  if (component === base) {
-    return Array.from({ length: component }, () => "B").join(" ");
-  }
-
-  if (component === 1) {
-    return `B${base}`;
-  }
-
-  if (component <= 9) {
-    const notes = Array.from({ length: component }, () => "B").join(" ");
-    return `(${component}:${base}:${component}${notes}`;
-  }
-
-  const duration = abcDuration(base, component);
-  return Array.from({ length: component }, (_, index) => {
-    const label = index === 0 ? `"^${component}:${base}"` : "";
-    return `${label}B${duration}`;
-  }).join(" ");
-}
-
-function abcDuration(numerator, denominator) {
-  const divisor = durationGcd(Math.abs(numerator), Math.abs(denominator));
-  const top = numerator / divisor;
-  const bottom = denominator / divisor;
-
-  if (bottom === 1) {
-    return top === 1 ? "" : String(top);
-  }
-
-  return top === 1 ? `/${bottom}` : `${top}/${bottom}`;
-}
-
-function durationGcd(a, b) {
-  while (b !== 0) {
-    [a, b] = [b, a % b];
-  }
-  return Math.abs(a);
-}
-
-function buildAbc(pitchNames) {
-  const notes = pitchNames.map(abcNote).filter(Boolean);
-  const chord = notes.length ? `[${notes.join("")}]4` : "z4";
-  return `X:1\nL:1/4\nM:4/4\nK:C clef=${chooseClef(pitchNames)}\n${chord} |]\n`;
-}
-
-function chooseClef(pitchNames) {
-  const midiValues = pitchNames.map(pitchMidi).filter(Number.isFinite);
-  if (!midiValues.length) return "treble";
-  const average = midiValues.reduce((sum, value) => sum + value, 0) / midiValues.length;
-  const lowest = Math.min(...midiValues);
-  return average < 60 || lowest < 48 ? "bass" : "treble";
-}
-
-function pitchMidi(value) {
-  const match = String(value).trim().match(/^([A-G])([#-]*)(-?\d+)?$/);
-  if (!match) return Number.NaN;
-  const natural = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }[match[1]];
-  const accidental = match[2]
-    .split("")
-    .reduce((sum, char) => sum + (char === "#" ? 1 : -1), 0);
-  const octave = match[3] === undefined ? 4 : Number.parseInt(match[3], 10);
-  if (!Number.isFinite(octave)) return Number.NaN;
-  return (octave + 1) * 12 + natural + accidental;
-}
-
-function abcNote(value) {
-  const match = String(value).trim().match(/^([A-G])([#-]*)(-?\d+)?$/);
-  if (!match) return "";
-
-  const step = match[1];
-  const accidental = match[2]
-    .split("")
-    .map((char) => (char === "#" ? "^" : "_"))
-    .join("");
-  const octave = match[3] === undefined ? 4 : Number.parseInt(match[3], 10);
-  if (!Number.isFinite(octave)) return "";
-
-  if (octave >= 5) {
-    return `${accidental}${step.toLowerCase()}${"'".repeat(octave - 5)}`;
-  }
-  return `${accidental}${step}${",".repeat(Math.max(0, 4 - octave))}`;
 }
 
 function chordPageUrl(chordInput) {
@@ -671,7 +573,7 @@ async function renderChord(data) {
   }
 
   chordName.textContent = name;
-  renderNotation(data.pitches);
+  renderNotation(data.chordAbcNotation);
   renderChips(chordPitches, data.pitches);
   renderChips(chordRatios, data.ratioTones.map((tone) => `${tone.component}`));
   chordLink.href = chordPageUrl(data.chordInput);

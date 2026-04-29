@@ -12,6 +12,8 @@
 // #![feature(negative_impls)]
 // #![feature(specialization)]
 // #![feature(lazy_get)]
+/// ABC notation export helpers.
+pub mod abc;
 /// Key-finding and compact analysis helpers.
 pub mod analysis;
 pub(crate) mod base;
@@ -60,6 +62,10 @@ pub mod tuningsystem;
 // #[macro_use]
 // pub(crate) mod macros;
 
+pub use abc::{
+    AbcClef, abc_chord, abc_chord_document, abc_chord_resolution_document, abc_clef_for_pitches,
+    abc_duration, abc_note, abc_polyrhythm_document, abc_polyrhythm_voice,
+};
 pub use analysis::{KeyEstimate, estimate_key_from_chords, estimate_key_from_pitches};
 pub use chord::{
     Chord, ChordResolutionSuggestion, GuitarFingering, GuitarStringFingering, GuitarTuning,

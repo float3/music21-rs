@@ -665,6 +665,11 @@ impl Pitch {
         ((octave + 1) * 12) as FloatType + self._step.step_ref() as FloatType + self.alter()
     }
 
+    /// Returns the nearest MIDI note number for this pitch.
+    pub fn midi(&self) -> IntegerType {
+        self.pitch_space().round() as IntegerType
+    }
+
     /// Returns this pitch's twelve-tone equal-temperament frequency in hertz.
     pub fn frequency_hz(&self) -> FloatType {
         self.frequency_hz_in(TuningSystem::EqualTemperament {
@@ -1493,9 +1498,11 @@ mod tests {
 
         let midi = Pitch::try_from(60 as IntegerType).unwrap();
         assert_eq!(midi.name_with_octave(), "C4");
+        assert_eq!(midi.midi(), 60);
 
         let pitch_space = Pitch::try_from(61.5).unwrap();
         assert_eq!(pitch_space.pitch_space(), 61.5);
+        assert_eq!(pitch_space.midi(), 62);
 
         let built = Pitch::builder().pitch_space(60.0).build().unwrap();
         assert_eq!(built.name_with_octave(), "C4");

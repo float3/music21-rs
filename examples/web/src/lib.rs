@@ -1,8 +1,9 @@
 //! WebAssembly bindings for the browser examples.
 
 use music21_rs::{
-    ALL_TUNING_SYSTEMS, COMMON_TWELVE_TONE_TUNING_SYSTEMS, Chord, ChordResolutionSuggestion, Key,
-    KnownChordType, Pitch, Polyrhythm, Result, pitch_class_name,
+    ALL_TUNING_SYSTEMS, COMMON_TWELVE_TONE_TUNING_SYSTEMS, Chord, ChordResolutionSuggestion, Error,
+    Key, KnownChordType, Pitch, Polyrhythm, Result, abc_chord_document,
+    abc_chord_resolution_document, abc_polyrhythm_document, pitch_class_name,
 };
 use serde::Serialize;
 use std::collections::BTreeSet;
@@ -68,6 +69,7 @@ struct ChordAnalysis {
     polyrhythm_input: String,
     resolution_chords: Vec<ResolutionChordInfo>,
     pitches: Vec<PitchInfo>,
+    abc_notation: String,
 }
 
 #[derive(Serialize)]
@@ -146,6 +148,8 @@ struct PolyrhythmAnalysisInfo {
     ratio_tones: Vec<PolyrhythmRatioToneInfo>,
     pitches: Vec<String>,
     chord_input: String,
+    chord_abc_notation: String,
+    rhythm_abc_notation: String,
 }
 
 #[derive(Serialize)]
@@ -175,13 +179,7 @@ pub fn analyze_chord_with_key(input: &str, key_context: &str) -> Result<JsValue,
 }
 
 fn analyze_chord_inner(input: &str, key_context: Option<&str>) -> Result<JsValue, JsValue> {
-    let midi_numbers = parse_midi_input(input);
-    let chord = if let Some(midi_numbers) = midi_numbers.as_deref() {
-        Chord::new(midi_numbers)
-    } else {
-        input.parse::<Chord>()
-    }
-    .map_err(|err| JsValue::from_str(&err.to_string()))?;
+    let chord = chord_from_input(input).map_err(|err| JsValue::from_str(&err.to_string()))?;
     let common_name = chord.common_name();
     let root_pitch_name = chord.root_pitch_name();
     let chord_symbols = chord.chord_symbols();
@@ -205,8 +203,11 @@ fn analyze_chord_inner(input: &str, key_context: Option<&str>) -> Result<JsValue
     .map(resolution_chord_info)
     .collect();
 
-    let pitches =
-        display_pitch_infos(chord.pitches()).map_err(|err| JsValue::from_str(&err.to_string()))?;
+    let display_pitches = display_pitches_for_sequence(chord.pitches())
+        .map_err(|err| JsValue::from_str(&err.to_string()))?;
+    let abc_notation =
+        abc_chord_document(&display_pitches).map_err(|err| JsValue::from_str(&err.to_string()))?;
+    let pitches = pitch_infos(&display_pitches);
 
     serde_wasm_bindgen::to_value(&ChordAnalysis {
         input: input.to_string(),
@@ -232,8 +233,29 @@ fn analyze_chord_inner(input: &str, key_context: Option<&str>) -> Result<JsValue
         polyrhythm_input: chord.polyrhythm_ratio_string(),
         resolution_chords,
         pitches,
+        abc_notation,
     })
     .map_err(|err| JsValue::from_str(&err.to_string()))
+}
+
+#[wasm_bindgen]
+/// Returns the MIDI number represented by a pitch name or integer token.
+pub fn pitch_midi_number(input: &str) -> Result<i32, JsValue> {
+    parse_pitch_midi_number(input).map_err(|err| JsValue::from_str(&err.to_string()))
+}
+
+#[wasm_bindgen]
+/// Returns a two-bar ABC excerpt showing one chord followed by another.
+pub fn chord_resolution_abc(source: &str, target: &str) -> Result<String, JsValue> {
+    let source = chord_from_input(source).map_err(|err| JsValue::from_str(&err.to_string()))?;
+    let target = chord_from_input(target).map_err(|err| JsValue::from_str(&err.to_string()))?;
+    let source_pitches = display_pitches_for_sequence(source.pitches())
+        .map_err(|err| JsValue::from_str(&err.to_string()))?;
+    let target_pitches = display_pitches_for_sequence(target.pitches())
+        .map_err(|err| JsValue::from_str(&err.to_string()))?;
+
+    abc_chord_resolution_document(&source_pitches, &target_pitches)
+        .map_err(|err| JsValue::from_str(&err.to_string()))
 }
 
 #[wasm_bindgen]
@@ -531,11 +553,16 @@ pub fn analyze_polyrhythm(
     let analysis = polyrhythm
         .analysis()
         .map_err(|err| JsValue::from_str(&err.to_string()))?;
-    let pitches = polyrhythm
+    let ratio_pitches = polyrhythm
         .ratio_pitches(root)
-        .map_err(|err| JsValue::from_str(&err.to_string()))?
-        .into_iter()
-        .map(|pitch| pitch.name_with_octave())
+        .map_err(|err| JsValue::from_str(&err.to_string()))?;
+    let chord_abc_notation =
+        abc_chord_document(&ratio_pitches).map_err(|err| JsValue::from_str(&err.to_string()))?;
+    let rhythm_abc_notation = abc_polyrhythm_document(&analysis.components, analysis.base)
+        .map_err(|err| JsValue::from_str(&err.to_string()))?;
+    let pitches = ratio_pitches
+        .iter()
+        .map(Pitch::name_with_octave)
         .collect::<Vec<_>>();
     let chord_input = pitches.join(" ");
 
@@ -566,42 +593,58 @@ pub fn analyze_polyrhythm(
             .collect(),
         pitches,
         chord_input,
+        chord_abc_notation,
+        rhythm_abc_notation,
     })
     .map_err(|err| JsValue::from_str(&err.to_string()))
 }
 
-fn display_pitch_infos(pitches: Vec<Pitch>) -> Result<Vec<PitchInfo>> {
-    let mut last_pitch_space: Option<i32> = None;
-    let mut infos = Vec::with_capacity(pitches.len());
-
-    for (index, pitch) in pitches.into_iter().enumerate() {
-        let display_pitch = display_pitch_for_sequence(pitch, &mut last_pitch_space)?;
-        let pitch_space = display_pitch.ps();
-        let tuning_frequencies = COMMON_TWELVE_TONE_TUNING_SYSTEMS
-            .iter()
-            .copied()
-            .map(|tuning_system| TuningFrequencyInfo {
-                name: tuning_system.display_name(),
-                frequency_hz: display_pitch.frequency_hz_in(tuning_system),
-                cents_from_equal_temperament: tuning_system.cents_at(pitch_space),
-            })
-            .collect();
-
-        infos.push(PitchInfo {
-            index,
-            name: display_pitch.name(),
-            name_with_octave: display_pitch.name_with_octave(),
-            midi: pitch_space.round() as i32,
-            octave: display_pitch.octave(),
-            pitch_space,
-            pitch_class: (pitch_space.round() as i32).rem_euclid(12) as u8,
-            alter: display_pitch.alter(),
-            frequency_hz: display_pitch.frequency_hz(),
-            tuning_frequencies,
-        });
+fn chord_from_input(input: &str) -> Result<Chord> {
+    if let Some(midi_numbers) = parse_midi_input(input) {
+        Chord::new(midi_numbers.as_slice())
+    } else {
+        input.parse()
     }
+}
 
-    Ok(infos)
+fn display_pitches_for_sequence(pitches: Vec<Pitch>) -> Result<Vec<Pitch>> {
+    let mut last_pitch_space: Option<i32> = None;
+    pitches
+        .into_iter()
+        .map(|pitch| display_pitch_for_sequence(pitch, &mut last_pitch_space))
+        .collect()
+}
+
+fn pitch_infos(pitches: &[Pitch]) -> Vec<PitchInfo> {
+    pitches
+        .iter()
+        .enumerate()
+        .map(|(index, display_pitch)| {
+            let pitch_space = display_pitch.ps();
+            let tuning_frequencies = COMMON_TWELVE_TONE_TUNING_SYSTEMS
+                .iter()
+                .copied()
+                .map(|tuning_system| TuningFrequencyInfo {
+                    name: tuning_system.display_name(),
+                    frequency_hz: display_pitch.frequency_hz_in(tuning_system),
+                    cents_from_equal_temperament: tuning_system.cents_at(pitch_space),
+                })
+                .collect();
+
+            PitchInfo {
+                index,
+                name: display_pitch.name(),
+                name_with_octave: display_pitch.name_with_octave(),
+                midi: pitch_space.round() as i32,
+                octave: display_pitch.octave(),
+                pitch_space,
+                pitch_class: (pitch_space.round() as i32).rem_euclid(12) as u8,
+                alter: display_pitch.alter(),
+                frequency_hz: display_pitch.frequency_hz(),
+                tuning_frequencies,
+            }
+        })
+        .collect()
 }
 
 fn parse_midi_input(input: &str) -> Option<Vec<i32>> {
@@ -631,6 +674,20 @@ fn parse_midi_input(input: &str) -> Option<Vec<i32>> {
         .map(str::parse::<i32>)
         .collect::<Result<Vec<_>, _>>()
         .ok()
+}
+
+fn parse_pitch_midi_number(input: &str) -> Result<i32> {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return Err(Error::Pitch("pitch token cannot be empty".to_string()));
+    }
+    if trimmed.chars().all(|ch| ch == '-' || ch.is_ascii_digit()) {
+        return trimmed
+            .parse::<i32>()
+            .map_err(|err| Error::Pitch(format!("invalid MIDI number {trimmed:?}: {err}")));
+    }
+
+    Pitch::from_name(trimmed).map(|pitch| pitch.midi())
 }
 
 fn estimated_key_for_chord(chord: &Chord) -> Option<Key> {
@@ -760,7 +817,10 @@ fn display_pitch_for_sequence(pitch: Pitch, last_pitch_space: &mut Option<i32>) 
 
 #[cfg(test)]
 mod tests {
-    use super::{display_key_context, estimated_key_for_chord, known_chord_info, parse_midi_input};
+    use super::{
+        chord_from_input, display_key_context, display_pitches_for_sequence,
+        estimated_key_for_chord, known_chord_info, parse_midi_input, parse_pitch_midi_number,
+    };
     use music21_rs::{Chord, KnownChordType};
 
     #[test]
@@ -769,6 +829,29 @@ mod tests {
         assert_eq!(parse_midi_input("midi: 60,64,67"), Some(vec![60, 64, 67]));
         assert_eq!(parse_midi_input("MIDI 60 64 67"), Some(vec![60, 64, 67]));
         assert_eq!(parse_midi_input("C E G"), None);
+    }
+
+    #[test]
+    fn chord_input_helpers_parse_midi_and_pitch_names() {
+        assert_eq!(
+            chord_from_input("midi: 60 64 67").unwrap().pitch_classes(),
+            vec![0, 4, 7]
+        );
+        assert_eq!(parse_pitch_midi_number("72").unwrap(), 72);
+        assert_eq!(parse_pitch_midi_number("C5").unwrap(), 72);
+        assert!(parse_pitch_midi_number("not-a-pitch").is_err());
+    }
+
+    #[test]
+    fn display_pitches_for_sequence_adds_concrete_octaves() {
+        let chord = Chord::new("C D E").unwrap();
+        let names = display_pitches_for_sequence(chord.pitches())
+            .unwrap()
+            .into_iter()
+            .map(|pitch| pitch.name_with_octave())
+            .collect::<Vec<_>>();
+
+        assert_eq!(names, vec!["C4", "D4", "E4"]);
     }
 
     #[test]
