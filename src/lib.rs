@@ -39,11 +39,12 @@ pub mod tuningsystem;
 // #[macro_use]
 // pub(crate) mod macros;
 
-pub use chord::{Chord, IntoNote, IntoNotes};
+pub use chord::{Chord, IntoNote, IntoNotes, KnownChordType};
 pub use exception::{Exception, ExceptionResult};
 pub use note::Note;
 pub use pitch::{
-    Pitch, PitchAccidental, PitchClassSpecifier, PitchMicrotone, PitchName, PitchOptions,
+    Accidental, AccidentalSpecifier, Microtone, MicrotoneSpecifier, Pitch, PitchClass,
+    PitchClassSpecifier, PitchName, PitchOptions,
 };
 pub use polyrhythm::{Polyrhythm, PolyrhythmEvent};
 pub use tuningsystem::{COMMON_TWELVE_TONE_TUNING_SYSTEMS, Fraction, TuningSystem};

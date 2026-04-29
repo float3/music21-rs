@@ -101,7 +101,7 @@
 
       .input-row {
         display: grid;
-        grid-template-columns: minmax(180px, 1fr) auto auto auto;
+        grid-template-columns: minmax(180px, 1fr) auto auto auto auto;
         gap: 10px;
         margin-bottom: 10px;
       }
@@ -118,6 +118,7 @@
 
       #analyze,
       #share,
+      #midi-toggle,
       #play-chord {
         height: 46px;
         padding: 0 18px;
@@ -138,6 +139,7 @@
       }
 
       #share,
+      #midi-toggle,
       #play-chord {
         border: 1px solid var(--line);
         background: var(--panel);
@@ -146,9 +148,19 @@
 
       #share:hover,
       #share.copied,
+      #midi-toggle:hover,
+      #midi-toggle.active,
       #play-chord:hover {
         border-color: var(--accent);
         background: #ecfdf5;
+      }
+
+      .midi-status {
+        grid-column: 1 / -1;
+        min-height: 18px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
       }
 
       .suggestions {
@@ -345,6 +357,13 @@
         padding: 14px 16px;
       }
 
+      .resolution-item {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px;
+        align-items: stretch;
+      }
+
       .resolution-chip {
         display: grid;
         gap: 4px;
@@ -356,6 +375,7 @@
         color: var(--ink);
         text-align: left;
         cursor: pointer;
+        text-decoration: none;
       }
 
       .resolution-chip:hover {
@@ -380,6 +400,22 @@
       .resolution-chip.unavailable:hover {
         border-color: var(--line);
         background: #f9fafb;
+      }
+
+      .resolution-play {
+        min-width: 62px;
+        padding: 0 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        color: var(--accent-strong);
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .resolution-play:hover {
+        border-color: var(--accent);
+        background: #ecfdf5;
       }
 
       .action-row {
@@ -423,6 +459,37 @@
         overflow: visible;
       }
 
+      .pitches-section table {
+        min-width: 980px;
+        table-layout: fixed;
+      }
+
+      .pitch-col-index {
+        width: 42px;
+      }
+
+      .pitch-col-name {
+        width: 94px;
+      }
+
+      .pitch-col-midi,
+      .pitch-col-octave {
+        width: 66px;
+      }
+
+      .pitch-col-space {
+        width: 98px;
+      }
+
+      .pitch-col-frequency {
+        width: auto;
+      }
+
+      .pitch-col-class,
+      .pitch-col-alter {
+        width: 78px;
+      }
+
       .pitches-section th .help::after {
         right: 0;
         left: auto;
@@ -454,27 +521,10 @@
         padding: 10px 8px;
       }
 
-      .pitches-section th:nth-child(1),
-      .pitches-section td:nth-child(1) {
-        width: 42px;
-      }
-
-      .pitches-section th:nth-child(3),
-      .pitches-section td:nth-child(3),
-      .pitches-section th:nth-child(6),
-      .pitches-section td:nth-child(6),
-      .pitches-section th:nth-child(7),
-      .pitches-section td:nth-child(7) {
-        width: 78px;
-      }
-
-      .pitches-section th:nth-child(4),
-      .pitches-section td:nth-child(4) {
-        width: 96px;
-      }
-
       .frequency-cell {
-        min-width: 0;
+        min-width: 260px;
+        overflow-wrap: normal;
+        word-break: normal;
       }
 
       .tuning-list {
@@ -484,7 +534,7 @@
 
       .tuning-row {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-columns: minmax(140px, 1fr) auto;
         gap: 10px;
         align-items: baseline;
       }
@@ -492,6 +542,9 @@
       .tuning-name {
         color: var(--muted);
         font-size: 12px;
+        overflow-wrap: normal;
+        white-space: nowrap;
+        word-break: normal;
       }
 
       .tuning-hz {
@@ -576,6 +629,7 @@
       }
 
       #notation {
+        position: relative;
         min-height: 132px;
         padding: 6px 16px 12px;
       }
@@ -636,8 +690,13 @@
 
         #analyze,
         #share,
+        #midi-toggle,
         #play-chord {
           width: 100%;
+        }
+
+        .midi-status {
+          grid-column: auto;
         }
 
         .pitches-section th,
@@ -646,23 +705,23 @@
           font-size: 12px;
         }
 
-        .pitches-section th:nth-child(1),
-        .pitches-section td:nth-child(1) {
+        .pitch-col-index {
           width: 30px;
         }
 
-        .pitches-section th:nth-child(3),
-        .pitches-section td:nth-child(3),
-        .pitches-section th:nth-child(6),
-        .pitches-section td:nth-child(6),
-        .pitches-section th:nth-child(7),
-        .pitches-section td:nth-child(7) {
+        .pitch-col-midi,
+        .pitch-col-octave,
+        .pitch-col-class,
+        .pitch-col-alter {
           width: 52px;
         }
 
-        .pitches-section th:nth-child(4),
-        .pitches-section td:nth-child(4) {
+        .pitch-col-space {
           width: 64px;
+        }
+
+        .frequency-cell {
+          min-width: 220px;
         }
       }
     </style>
@@ -675,6 +734,7 @@
           <h1>Chord Inspector</h1>
         </div>
         <nav class="top-links">
+          <a id="browser-link" class="docs-link" href="../chords/index.html">Chord Browser</a>
           <a id="polyrhythm-link" class="docs-link" href="../polyrhythm/index.html">Polyrhythm</a>
           <a id="tuning-link" class="docs-link" href="../tuning/index.html">Tuning</a>
           <a class="docs-link" href="../docs/music21_rs/index.html">Rust docs</a>
@@ -682,11 +742,13 @@
       </header>
 
       <form id="form" class="input-row">
-        <input id="chord-input" value="C E G#" autocomplete="off" list="chord-history" />
+        <input id="chord-input" value="C E G#" autocomplete="off" list="chord-history" placeholder="C E G or midi: 60 64 67" />
         <datalist id="chord-history"></datalist>
         <button id="analyze" type="submit">Analyze</button>
         <button id="play-chord" type="button">Play chord</button>
+        <button id="midi-toggle" type="button">Use MIDI</button>
         <button id="share" type="button">Copy link</button>
+        <span id="midi-status" class="midi-status">MIDI idle</span>
       </form>
 
       <div class="suggestions">
@@ -735,10 +797,21 @@
         <section class="pitches-section">
           <h2>Pitches</h2>
           <table>
+            <colgroup>
+              <col class="pitch-col-index" />
+              <col class="pitch-col-name" />
+              <col class="pitch-col-midi" />
+              <col class="pitch-col-octave" />
+              <col class="pitch-col-space" />
+              <col class="pitch-col-frequency" />
+              <col class="pitch-col-class" />
+              <col class="pitch-col-alter" />
+            </colgroup>
             <thead>
               <tr>
                 <th>#</th>
                 <th>Name</th>
+                <th>MIDI</th>
                 <th>Octave</th>
                 <th>
                   Pitch Space
@@ -750,7 +823,15 @@
                   >?</button>
                 </th>
                 <th>Frequency</th>
-                <th>Class</th>
+                <th>
+                  Class
+                  <button
+                    class="help"
+                    type="button"
+                    aria-label="Class: pitch-class number from 0 to 11, where C is 0, C-sharp or D-flat is 1, and B is 11."
+                    data-help="Pitch-class number from 0 to 11: C is 0, C-sharp or D-flat is 1, and B is 11."
+                  >?</button>
+                </th>
                 <th>
                   Alter
                   <button
@@ -770,14 +851,18 @@
 
     <script src="https://cdn.jsdelivr.net/npm/abcjs@6.5.2/dist/abcjs-basic-min.js"></script>
     <script type="module">
+      import "../help-tooltips.js";
       import init, { analyze_chord } from "../pkg/music21_rs_web.js";
 
       const input = document.querySelector("#chord-input");
       const form = document.querySelector("#form");
       const share = document.querySelector("#share");
       const playChord = document.querySelector("#play-chord");
+      const midiToggle = document.querySelector("#midi-toggle");
+      const midiStatus = document.querySelector("#midi-status");
       const historyOptions = document.querySelector("#chord-history");
       const error = document.querySelector("#error");
+      const browserLink = document.querySelector("#browser-link");
       const polyrhythmLink = document.querySelector("#polyrhythm-link");
       const tuningLink = document.querySelector("#tuning-link");
       const openPolyrhythm = document.querySelector("#open-polyrhythm");
@@ -804,10 +889,13 @@
       let currentAnalysis = null;
       let audioContext = null;
       let activeChordNodes = [];
+      let midiAccess = null;
+      let heldMidiNotes = new Map();
       let chordHistory = loadChordHistory();
       let chordHistoryLabels = new Map();
 
       if (!window.location.pathname.includes("/chord/")) {
+        browserLink.href = "./chords/";
         polyrhythmLink.href = "./polyrhythm/";
         tuningLink.href = "./tuning/";
       }
@@ -879,6 +967,8 @@
         }
 
         for (const value of values) {
+          const item = document.createElement("div");
+          item.className = "resolution-item";
           const button = document.createElement("button");
           button.type = "button";
           button.className = "resolution-chip";
@@ -889,12 +979,32 @@
           const pitchesText = document.createElement("small");
           pitchesText.textContent = text(value.pitch_names);
           button.append(name, context, pitchesText);
-          button.addEventListener("click", () => {
-            input.value = value.pitch_names.join(" ");
-            resetShareButton();
-            analyze({ remember: true });
+          item.addEventListener("pointerenter", () => showResolutionMotion(value));
+          item.addEventListener("pointerleave", clearResolutionMotion);
+          item.addEventListener("focusin", () => showResolutionMotion(value));
+          item.addEventListener("focusout", (event) => {
+            if (!item.contains(event.relatedTarget)) clearResolutionMotion();
           });
-          resolutionChords.appendChild(button);
+          button.addEventListener("click", async () => {
+            clearResolutionMotion();
+            await openResolution(value);
+          });
+
+          const preview = document.createElement("button");
+          preview.type = "button";
+          preview.className = "resolution-play";
+          preview.textContent = "Play";
+          preview.setAttribute(
+            "aria-label",
+            `Play current chord then ${value.pitched_common_name}`,
+          );
+          preview.addEventListener("click", async (event) => {
+            event.stopPropagation();
+            await playResolutionPreview(value);
+          });
+
+          item.append(button, preview);
+          resolutionChords.appendChild(item);
         }
       }
 
@@ -955,7 +1065,8 @@
           const tr = document.createElement("tr");
           const cells = [
             pitch.index + 1,
-            pitch.name_with_octave || pitch.name,
+            displayPitchName(pitch.name_with_octave || pitch.name),
+            pitch.midi,
             pitch.octave ?? "None",
             pitch.pitch_space.toFixed(3),
           ];
@@ -972,6 +1083,12 @@
           }
           pitches.appendChild(tr);
         }
+      }
+
+      function displayPitchName(value) {
+        const match = String(value ?? "").match(/^([A-G])([#-]*)(-?\d+)?$/);
+        if (!match) return String(value ?? "");
+        return `${match[1]}${match[2].replaceAll("-", "b")}${match[3] ?? ""}`;
       }
 
       function renderKeyboard(activeClasses) {
@@ -1024,9 +1141,13 @@
         analyze({ remember: true });
       }
 
-      function renderNotation(data) {
+      function renderNotation(data, resolutionAnalysis = null) {
         notation.replaceChildren();
-        const abc = buildAbc(data.pitches || []);
+        const sourcePitches = data.pitches || [];
+        const targetPitches = resolutionAnalysis?.pitches || null;
+        const abc = targetPitches
+          ? buildResolutionAbc(sourcePitches, targetPitches)
+          : buildAbc(sourcePitches);
         const renderAbc = window.ABCJS?.renderAbc || window.abcjs?.renderAbc;
         if (!renderAbc) {
           const fallback = document.createElement("div");
@@ -1050,6 +1171,33 @@
         }
       }
 
+      function clearResolutionMotion() {
+        if (currentAnalysis) renderNotation(currentAnalysis);
+      }
+
+      function showResolutionMotion(resolution) {
+        if (!currentAnalysis) return;
+        let resolutionAnalysis;
+        try {
+          resolutionAnalysis = analyze_chord(chordValueForResolution(resolution));
+        } catch {
+          clearResolutionMotion();
+          return;
+        }
+
+        renderNotation(currentAnalysis, resolutionAnalysis);
+      }
+
+      function buildResolutionAbc(sourcePitches, targetPitches) {
+        const sourceNames = sourcePitches.map((pitch) => pitch.name_with_octave || pitch.name);
+        const targetNames = targetPitches.map((pitch) => pitch.name_with_octave || pitch.name);
+        const sourceNotes = sourceNames.map(abcNote).filter(Boolean);
+        const targetNotes = targetNames.map(abcNote).filter(Boolean);
+        const sourceChord = sourceNotes.length ? `[${sourceNotes.join("")}]2` : "z2";
+        const targetChord = targetNotes.length ? `[${targetNotes.join("")}]2` : "z2";
+        return `X:1\nL:1/4\nM:4/4\nK:C clef=${chooseClef([...sourceNames, ...targetNames])}\n${sourceChord} ${targetChord} |]\n`;
+      }
+
       function buildAbc(pitchData) {
         const pitchNames = pitchData.map((pitch) => pitch.name_with_octave || pitch.name);
         const notes = pitchData
@@ -1068,7 +1216,12 @@
       }
 
       function pitchMidi(value) {
-        const match = String(value).trim().match(/^([A-G])([#b-]*)(-?\d+)?$/);
+        const trimmed = String(value).trim();
+        const midiNumber = Number.parseInt(trimmed, 10);
+        if (/^-?\d+$/.test(trimmed) && Number.isFinite(midiNumber)) {
+          return midiNumber;
+        }
+        const match = trimmed.match(/^([A-G])([#b-]*)(-?\d+)?$/);
         if (!match) return Number.NaN;
         const natural = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }[match[1]];
         const accidental = match[2]
@@ -1320,9 +1473,15 @@
           return false;
         }
 
-        audioContext ||= new AudioContextConstructor();
-        if (audioContext.state === "suspended") {
-          await audioContext.resume();
+        try {
+          audioContext ||= new AudioContextConstructor();
+          if (audioContext.state === "suspended") {
+            await audioContext.resume();
+          }
+        } catch {
+          error.textContent = "Audio playback needs a browser click first.";
+          error.style.display = "block";
+          return false;
         }
         return true;
       }
@@ -1338,38 +1497,150 @@
         activeChordNodes = [];
       }
 
-      async function playCurrentChord() {
-        if (!currentAnalysis && !analyze({ remember: false })) return;
-        const frequencies = (currentAnalysis?.pitches ?? [])
+      function chordValueForResolution(resolution) {
+        return (resolution.pitch_names || []).join(" ");
+      }
+
+      function frequenciesFromAnalysis(analysis) {
+        return (analysis?.pitches ?? [])
           .map((pitch) => pitch.frequency_hz)
           .filter((frequency) => Number.isFinite(frequency) && frequency > 0);
-        if (!frequencies.length) {
-          error.textContent = "No pitched notes to play.";
-          error.style.display = "block";
-          return;
-        }
-        if (!await ensureAudio()) return;
+      }
 
-        stopChordPlayback();
-        error.style.display = "none";
-        const now = audioContext.currentTime;
+      function scheduleChordFrequencies(frequencies, startTime, duration) {
         const gainPerVoice = Math.min(0.18, 0.52 / Math.sqrt(frequencies.length));
+        const attackEnd = startTime + 0.018;
+        const releaseStart = startTime + Math.max(0.08, duration - 0.1);
+        const stopTime = startTime + duration + 0.08;
+
         for (const frequency of frequencies) {
           const oscillator = audioContext.createOscillator();
           const gain = audioContext.createGain();
           oscillator.type = "triangle";
-          oscillator.frequency.setValueAtTime(frequency, now);
-          gain.gain.setValueAtTime(0.0001, now);
-          gain.gain.exponentialRampToValueAtTime(gainPerVoice, now + 0.018);
-          gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.35);
+          oscillator.frequency.setValueAtTime(frequency, startTime);
+          gain.gain.setValueAtTime(0.0001, startTime);
+          gain.gain.exponentialRampToValueAtTime(gainPerVoice, attackEnd);
+          gain.gain.exponentialRampToValueAtTime(0.0001, releaseStart);
           oscillator.connect(gain).connect(audioContext.destination);
-          oscillator.start(now);
-          oscillator.stop(now + 1.45);
+          oscillator.start(startTime);
+          oscillator.stop(stopTime);
           activeChordNodes.push(oscillator);
           oscillator.addEventListener("ended", () => {
             activeChordNodes = activeChordNodes.filter((node) => node !== oscillator);
           });
         }
+      }
+
+      async function playFrequencySequence(sequence) {
+        const playable = sequence.filter((item) => item.frequencies.length);
+        if (playable.length !== sequence.length) {
+          error.textContent = "No pitched notes to play.";
+          error.style.display = "block";
+          return;
+        }
+        if (!(await ensureAudio())) return;
+
+        stopChordPlayback();
+        error.style.display = "none";
+        let startTime = audioContext.currentTime;
+        for (const item of playable) {
+          scheduleChordFrequencies(item.frequencies, startTime, item.duration);
+          startTime += item.duration + (item.gapAfter ?? 0);
+        }
+      }
+
+      async function playCurrentChord() {
+        if (!currentAnalysis && !analyze({ remember: false })) return;
+        const frequencies = frequenciesFromAnalysis(currentAnalysis);
+        await playFrequencySequence([{ frequencies, duration: 1.45 }]);
+      }
+
+      async function playResolutionPreview(resolution) {
+        if (!currentAnalysis && !analyze({ remember: false })) return;
+        let resolutionAnalysis;
+        try {
+          resolutionAnalysis = analyze_chord(chordValueForResolution(resolution));
+        } catch (err) {
+          error.textContent = err instanceof Error ? err.message : String(err);
+          error.style.display = "block";
+          return;
+        }
+
+        await playFrequencySequence([
+          { frequencies: frequenciesFromAnalysis(currentAnalysis), duration: 1.0, gapAfter: 0.16 },
+          { frequencies: frequenciesFromAnalysis(resolutionAnalysis), duration: 1.45 },
+        ]);
+      }
+
+      async function openResolution(resolution) {
+        const chordValue = chordValueForResolution(resolution);
+        input.value = chordValue;
+        resetShareButton();
+        window.history.pushState({ chord: chordValue }, "", buildShareUrl(chordValue).href);
+        if (analyze({ syncUrl: false, remember: true })) {
+          await playCurrentChord();
+        }
+      }
+
+      async function enableMidi() {
+        if (!navigator.requestMIDIAccess) {
+          setMidiStatus("Web MIDI unavailable in this browser");
+          return;
+        }
+
+        try {
+          midiAccess = await navigator.requestMIDIAccess({ sysex: false });
+          heldMidiNotes = new Map();
+          wireMidiInputs();
+          midiAccess.onstatechange = wireMidiInputs;
+          midiToggle.classList.add("active");
+          midiToggle.textContent = "MIDI on";
+          setMidiStatus(midiInputStatus());
+        } catch (err) {
+          setMidiStatus(err instanceof Error ? err.message : "MIDI access denied");
+        }
+      }
+
+      function wireMidiInputs() {
+        if (!midiAccess) return;
+        for (const inputDevice of midiAccess.inputs.values()) {
+          inputDevice.onmidimessage = handleMidiMessage;
+        }
+        setMidiStatus(midiInputStatus());
+      }
+
+      function midiInputStatus() {
+        if (!midiAccess) return "MIDI idle";
+        const names = [...midiAccess.inputs.values()].map((inputDevice) => inputDevice.name || "MIDI input");
+        if (!names.length) return "No MIDI inputs found";
+        return `Listening: ${names.join(", ")}`;
+      }
+
+      function handleMidiMessage(event) {
+        const [status, note, velocity] = event.data;
+        const command = status & 0xf0;
+        if (command === 0x90 && velocity > 0) {
+          heldMidiNotes.set(note, velocity);
+        } else if (command === 0x80 || (command === 0x90 && velocity === 0)) {
+          heldMidiNotes.delete(note);
+        } else {
+          return;
+        }
+
+        const notes = [...heldMidiNotes.keys()].sort((a, b) => a - b);
+        if (!notes.length) {
+          setMidiStatus(`${midiInputStatus()} - released`);
+          return;
+        }
+
+        input.value = `midi: ${notes.join(" ")}`;
+        resetShareButton();
+        analyze({ remember: false });
+        setMidiStatus(`${midiInputStatus()} - ${notes.join(" ")}`);
+      }
+
+      function setMidiStatus(message) {
+        midiStatus.textContent = message;
       }
 
       function analyze({ syncUrl = true, remember = false } = {}) {
@@ -1419,6 +1690,7 @@
         "C E- G",
         "C E G#",
         "G2 B2 D3 F3",
+        "midi: 60 64 67",
         "",
       ]) {
         const button = document.createElement("button");
@@ -1438,6 +1710,7 @@
       });
       clearHistory.addEventListener("click", clearChordHistory);
       playChord.addEventListener("click", playCurrentChord);
+      midiToggle.addEventListener("click", enableMidi);
 
       form.addEventListener("submit", (event) => {
         event.preventDefault();

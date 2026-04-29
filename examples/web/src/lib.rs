@@ -1,5 +1,6 @@
 use music21_rs::{
-    COMMON_TWELVE_TONE_TUNING_SYSTEMS, Chord, ExceptionResult, Fraction, Pitch, TuningSystem,
+    COMMON_TWELVE_TONE_TUNING_SYSTEMS, Chord, ExceptionResult, Fraction, KnownChordType, Pitch,
+    TuningSystem,
 };
 use serde::Serialize;
 use std::collections::BTreeSet;
@@ -17,6 +18,7 @@ struct PitchInfo {
     index: usize,
     name: String,
     name_with_octave: String,
+    midi: i32,
     octave: Option<i32>,
     pitch_space: f64,
     pitch_class: u8,
@@ -54,6 +56,21 @@ struct ChordAnalysis {
 }
 
 #[derive(Serialize)]
+struct KnownChordInfo {
+    id: String,
+    primary_common_name: String,
+    common_names: Vec<String>,
+    cardinality: u8,
+    forte_class: String,
+    normal_form: Vec<u8>,
+    interval_class_vector: Vec<u8>,
+    pitch_classes: Vec<u8>,
+    pitch_names: Vec<String>,
+    display_pitch_names: Vec<String>,
+    chord_input: String,
+}
+
+#[derive(Serialize)]
 struct TuningSystemInfo {
     id: &'static str,
     name: &'static str,
@@ -75,7 +92,13 @@ struct TuningDegreeInfo {
 
 #[wasm_bindgen]
 pub fn analyze_chord(input: &str) -> Result<JsValue, JsValue> {
-    let chord = Chord::new(input).map_err(|err| JsValue::from_str(&err.to_string()))?;
+    let midi_numbers = parse_midi_input(input);
+    let chord = if let Some(midi_numbers) = midi_numbers.as_deref() {
+        Chord::from_midi_numbers(midi_numbers)
+    } else {
+        Chord::new(input)
+    }
+    .map_err(|err| JsValue::from_str(&err.to_string()))?;
     let common_name = chord.common_name();
     let root_pitch_name = chord.root_pitch_name();
     let key_estimate = estimate_key(root_pitch_name.as_deref(), &common_name);
@@ -102,6 +125,137 @@ pub fn analyze_chord(input: &str) -> Result<JsValue, JsValue> {
         pitches,
     })
     .map_err(|err| JsValue::from_str(&err.to_string()))
+}
+
+#[wasm_bindgen]
+pub fn known_chords() -> Result<JsValue, JsValue> {
+    let chords = Chord::known_chord_types()
+        .into_iter()
+        .flat_map(|chord| {
+            dyad_browser_variants(&chord).unwrap_or_else(|| vec![known_chord_info_for_type(&chord)])
+        })
+        .collect::<Vec<_>>();
+
+    serde_wasm_bindgen::to_value(&chords).map_err(|err| JsValue::from_str(&err.to_string()))
+}
+
+fn known_chord_info_for_type(chord: &KnownChordType) -> KnownChordInfo {
+    let primary_common_name = chord
+        .common_names
+        .first()
+        .cloned()
+        .unwrap_or_else(|| format!("forte class {}", chord.forte_class));
+    known_chord_info(
+        chord,
+        primary_common_name,
+        chord.common_names.clone(),
+        chord.normal_form.clone(),
+        "normal",
+    )
+}
+
+fn known_chord_info(
+    chord: &KnownChordType,
+    primary_common_name: String,
+    common_names: Vec<String>,
+    pitch_classes: Vec<u8>,
+    id_suffix: &str,
+) -> KnownChordInfo {
+    let pitch_names = pitch_classes
+        .iter()
+        .map(|pitch_class| pitch_class_name(*pitch_class).to_string())
+        .collect::<Vec<_>>();
+    let display_pitch_names = pitch_names
+        .iter()
+        .map(|name| display_pitch_name(name))
+        .collect::<Vec<_>>();
+    KnownChordInfo {
+        id: format!("{}:{id_suffix}:{primary_common_name}", chord.forte_class),
+        primary_common_name,
+        common_names,
+        cardinality: chord.cardinality,
+        forte_class: chord.forte_class.clone(),
+        normal_form: chord.normal_form.clone(),
+        interval_class_vector: chord.interval_class_vector.clone(),
+        pitch_classes,
+        chord_input: pitch_names.join(" "),
+        pitch_names,
+        display_pitch_names,
+    }
+}
+
+fn dyad_browser_variants(chord: &KnownChordType) -> Option<Vec<KnownChordInfo>> {
+    if chord.cardinality != 2 || chord.normal_form.len() != 2 {
+        return None;
+    }
+
+    let span = (chord.normal_form[1] + 12 - chord.normal_form[0]) % 12;
+    let interval_class = span.min(12 - span);
+    let variants = match interval_class {
+        1 => vec![
+            (
+                "minor second",
+                vec!["m2", "half step", "semitone", "interval class 1"],
+                vec![0, 1],
+            ),
+            ("major seventh", vec!["M7", "interval class 1"], vec![0, 11]),
+        ],
+        2 => vec![
+            (
+                "major second",
+                vec!["M2", "whole step", "whole tone", "interval class 2"],
+                vec![0, 2],
+            ),
+            ("minor seventh", vec!["m7", "interval class 2"], vec![0, 10]),
+        ],
+        3 => vec![
+            ("minor third", vec!["m3", "interval class 3"], vec![0, 3]),
+            ("major sixth", vec!["M6", "interval class 3"], vec![0, 9]),
+        ],
+        4 => vec![
+            ("major third", vec!["M3", "interval class 4"], vec![0, 4]),
+            ("minor sixth", vec!["m6", "interval class 4"], vec![0, 8]),
+        ],
+        5 => vec![
+            ("perfect fourth", vec!["P4", "interval class 5"], vec![0, 5]),
+            ("perfect fifth", vec!["P5", "interval class 5"], vec![0, 7]),
+        ],
+        6 => vec![(
+            "tritone",
+            vec![
+                "diminished fifth",
+                "augmented fourth",
+                "d5",
+                "A4",
+                "interval class 6",
+            ],
+            vec![0, 6],
+        )],
+        _ => return None,
+    };
+
+    Some(
+        variants
+            .into_iter()
+            .map(|(primary, aliases, pitch_classes)| {
+                let names = ordered_unique_names(
+                    std::iter::once(primary.to_string())
+                        .chain(aliases.into_iter().map(str::to_string)),
+                );
+                known_chord_info(chord, primary.to_string(), names, pitch_classes, primary)
+            })
+            .collect(),
+    )
+}
+
+fn ordered_unique_names(names: impl IntoIterator<Item = String>) -> Vec<String> {
+    let mut unique = Vec::new();
+    for name in names {
+        if !unique.contains(&name) {
+            unique.push(name);
+        }
+    }
+    unique
 }
 
 #[wasm_bindgen]
@@ -167,6 +321,7 @@ fn display_pitch_infos(pitches: Vec<Pitch>) -> ExceptionResult<Vec<PitchInfo>> {
             index,
             name: display_pitch.name(),
             name_with_octave: display_pitch.name_with_octave(),
+            midi: pitch_space.round() as i32,
             octave: display_pitch.octave(),
             pitch_space,
             pitch_class: (pitch_space.round() as i32).rem_euclid(12) as u8,
@@ -177,6 +332,35 @@ fn display_pitch_infos(pitches: Vec<Pitch>) -> ExceptionResult<Vec<PitchInfo>> {
     }
 
     Ok(infos)
+}
+
+fn parse_midi_input(input: &str) -> Option<Vec<i32>> {
+    let trimmed = input.trim();
+    let lower = trimmed.to_ascii_lowercase();
+    let trimmed = if lower.starts_with("midi:") {
+        trimmed[5..].trim()
+    } else if lower.starts_with("midi ") {
+        trimmed[4..].trim()
+    } else {
+        trimmed
+    };
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let tokens = trimmed
+        .split(|character: char| character.is_ascii_whitespace() || character == ',')
+        .filter(|token| !token.is_empty())
+        .collect::<Vec<_>>();
+    if tokens.is_empty() {
+        return None;
+    }
+
+    tokens
+        .into_iter()
+        .map(str::parse::<i32>)
+        .collect::<Result<Vec<_>, _>>()
+        .ok()
 }
 
 fn all_tuning_systems() -> [(&'static str, TuningSystem); 17] {
@@ -281,25 +465,15 @@ fn estimate_key(root: Option<&str>, common_name: &str) -> Option<String> {
 
 fn suggested_resolution_chords(chord: &Chord) -> Vec<ResolutionChordInfo> {
     let names = common_names_with_primary(chord);
-    let is_dominant_seventh = names.iter().any(|name| {
-        matches!(
-            name.as_str(),
-            "dominant seventh chord" | "major minor seventh chord"
-        )
-    });
-    let is_leading_tone_seventh = names.iter().any(|name| {
-        matches!(
-            name.as_str(),
-            "diminished seventh chord" | "half-diminished seventh chord"
-        )
-    });
+    let is_dominant_function = is_dominant_function_sonority(chord, &names);
+    let is_leading_tone_function = is_leading_tone_function_sonority(chord, &names);
     let is_augmented_sixth = is_augmented_sixth_spelling(chord);
 
     let mut suggestions = Vec::new();
     let mut seen = BTreeSet::new();
 
     if !is_augmented_sixth && let Some(root_pc) = root_pitch_class(chord) {
-        if is_dominant_seventh {
+        if is_dominant_function {
             add_target_key_resolutions(
                 chord,
                 (root_pc + 5) % 12,
@@ -309,7 +483,7 @@ fn suggested_resolution_chords(chord: &Chord) -> Vec<ResolutionChordInfo> {
             );
         }
 
-        if is_leading_tone_seventh {
+        if is_leading_tone_function {
             add_target_key_resolutions(
                 chord,
                 (root_pc + 1) % 12,
@@ -423,6 +597,50 @@ fn root_pitch_class(chord: &Chord) -> Option<u8> {
         .and_then(pitch_class_from_name)
 }
 
+fn is_dominant_function_sonority(chord: &Chord, names: &[String]) -> bool {
+    let has_explicit_dominant_name = names.iter().any(|name| {
+        matches!(
+            name.as_str(),
+            "dominant seventh chord"
+                | "major minor seventh chord"
+                | "incomplete dominant-seventh chord"
+        )
+    });
+    let has_dominant_family_name = names
+        .iter()
+        .any(|name| name.contains("dominant") || name == "major-minor");
+
+    has_explicit_dominant_name
+        || (has_dominant_family_name
+            && root_pitch_class(chord)
+                .is_some_and(|root_pc| has_intervals_above_root(chord, root_pc, &[4, 10])))
+}
+
+fn is_leading_tone_function_sonority(chord: &Chord, names: &[String]) -> bool {
+    let has_explicit_leading_tone_name = names.iter().any(|name| {
+        matches!(
+            name.as_str(),
+            "diminished triad"
+                | "diminished seventh chord"
+                | "half-diminished seventh chord"
+                | "incomplete half-diminished seventh chord"
+        )
+    });
+    let has_diminished_family_name = names.iter().any(|name| name.contains("diminished"));
+
+    has_explicit_leading_tone_name
+        || (has_diminished_family_name
+            && root_pitch_class(chord)
+                .is_some_and(|root_pc| has_intervals_above_root(chord, root_pc, &[3, 6])))
+}
+
+fn has_intervals_above_root(chord: &Chord, root_pc: u8, intervals: &[u8]) -> bool {
+    let pitch_classes = chord.pitch_classes().into_iter().collect::<BTreeSet<_>>();
+    intervals
+        .iter()
+        .all(|interval| pitch_classes.contains(&((root_pc + interval) % 12)))
+}
+
 fn is_augmented_sixth_spelling(chord: &Chord) -> bool {
     let pitches = chord.pitches();
     for (index, lower) in pitches.iter().enumerate() {
@@ -510,3 +728,16 @@ fn display_pitch_name(name: &str) -> String {
 const CANDIDATE_TONICS: [&str; 12] = [
     "C", "D-", "D", "E-", "E", "F", "F#", "G", "A-", "A", "B-", "B",
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::parse_midi_input;
+
+    #[test]
+    fn parse_midi_input_accepts_plain_prefixed_and_csv_values() {
+        assert_eq!(parse_midi_input("60 64 67"), Some(vec![60, 64, 67]));
+        assert_eq!(parse_midi_input("midi: 60,64,67"), Some(vec![60, 64, 67]));
+        assert_eq!(parse_midi_input("MIDI 60 64 67"), Some(vec![60, 64, 67]));
+        assert_eq!(parse_midi_input("C E G"), None);
+    }
+}

@@ -201,11 +201,10 @@ impl AccidentalEnum {
             "\u{266f}\u{1d132}" => Some(AccidentalEnum::OneAndAHalfSharp),
             "\u{266f}" => Some(AccidentalEnum::Sharp),
             "\u{1d12b}\u{1d12b}" => Some(AccidentalEnum::QuadrupleFlat),
-            "\u{266d}" => Some(AccidentalEnum::TripleFlat),
+            "\u{266d}" => Some(AccidentalEnum::Flat),
             "\u{1d12b}" => Some(AccidentalEnum::DoubleFlat),
             "\u{266d}\u{1d132}" => Some(AccidentalEnum::OneAndAHalfFlat),
             "\u{1d132}" => Some(AccidentalEnum::HalfSharp),
-            "\u{1d132}" => Some(AccidentalEnum::HalfFlat),
             "\u{266e}" => Some(AccidentalEnum::Natural),
             _ => None,
         }
@@ -281,9 +280,72 @@ impl AccidentalEnum {
     }
 }
 
+/// Input accepted by [`Accidental::new`] and [`Accidental::set`].
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum AccidentalSpecifier {
+    /// An accidental name, modifier, alternate name, or unicode accidental.
+    Name(String),
+    /// A semitone alteration such as `1.0` for sharp or `-0.5` for half-flat.
+    Alter(f64),
+    /// An existing accidental to clone.
+    Accidental(Accidental),
+}
+
+impl From<&str> for AccidentalSpecifier {
+    fn from(value: &str) -> Self {
+        Self::Name(value.to_string())
+    }
+}
+
+impl From<String> for AccidentalSpecifier {
+    fn from(value: String) -> Self {
+        Self::Name(value)
+    }
+}
+
+impl From<i8> for AccidentalSpecifier {
+    fn from(value: i8) -> Self {
+        Self::Alter(value as FloatType)
+    }
+}
+
+impl From<i32> for AccidentalSpecifier {
+    fn from(value: i32) -> Self {
+        Self::Alter(value as FloatType)
+    }
+}
+
+impl From<f64> for AccidentalSpecifier {
+    fn from(value: f64) -> Self {
+        Self::Alter(value)
+    }
+}
+
+impl From<Accidental> for AccidentalSpecifier {
+    fn from(value: Accidental) -> Self {
+        Self::Accidental(value)
+    }
+}
+
+impl Display for AccidentalSpecifier {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Name(name) => write!(f, "{name}"),
+            Self::Alter(alter) => write!(f, "{alter}"),
+            Self::Accidental(accidental) => write!(f, "{accidental}"),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub(crate) struct Accidental {
+/// Symbolic and numerical accidental information for a pitch.
+///
+/// This mirrors the main behavior of Python music21's
+/// `music21.pitch.Accidental`: a standard accidental has a `name`, `modifier`,
+/// and semitone `alter`; names compare by spelling while ordering uses `alter`.
+pub struct Accidental {
     proto: ProtoM21Object,
     slottedobjectmixin: SlottedObjectMixin,
     _display_type: DisplayType,
@@ -304,11 +366,21 @@ impl PartialEq for Accidental {
     }
 }
 
+impl PartialOrd for Accidental {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self._alter.partial_cmp(&other._alter)
+    }
+}
+
 impl Accidental {
-    pub(crate) fn new<T>(specifier: T) -> ExceptionResult<Self>
-    where
-        T: IntoAccidental,
-    {
+    /// Creates an accidental from a name, modifier, alternate name, unicode
+    /// symbol, semitone alteration, or another accidental.
+    pub fn new(specifier: impl Into<AccidentalSpecifier>) -> ExceptionResult<Self> {
+        let specifier = specifier.into();
+        if let AccidentalSpecifier::Accidental(accidental) = specifier {
+            return Ok(accidental);
+        }
+
         let mut acci = Self {
             proto: ProtoM21Object::new(),
             slottedobjectmixin: SlottedObjectMixin::new(),
@@ -323,51 +395,273 @@ impl Accidental {
             _alter: 0.0,
         };
 
-        acci.set(specifier, false)?;
+        acci.set_specifier(specifier, false)?;
         Ok(acci)
     }
 
-    fn set<T>(&mut self, name: T, allow_non_standard_value: bool) -> ExceptionResult<()>
-    where
-        T: IntoAccidental,
-    {
-        let acci_tuple = name.clone().accidental_args(allow_non_standard_value);
+    /// Returns the standard accidental names known to music21.
+    pub fn list_names() -> Vec<&'static str> {
+        let mut names = [
+            "double-flat",
+            "double-sharp",
+            "flat",
+            "half-flat",
+            "half-sharp",
+            "natural",
+            "one-and-a-half-flat",
+            "one-and-a-half-sharp",
+            "quadruple-flat",
+            "quadruple-sharp",
+            "sharp",
+            "triple-flat",
+            "triple-sharp",
+        ];
+        names.sort_unstable();
+        names.to_vec()
+    }
 
-        if allow_non_standard_value {
-            assert!(acci_tuple.is_some());
+    /// Returns whether `name` is a supported accidental name, modifier, or
+    /// alternate music21/LilyPond-style accidental name.
+    pub fn is_valid_name(name: &str) -> bool {
+        AccidentalEnum::from_string(&name.to_lowercase()).is_some()
+    }
+
+    /// Converts a supported accidental spelling to its standard music21 name.
+    pub fn standardize_name(name: &str) -> ExceptionResult<String> {
+        AccidentalEnum::from_string(&name.to_lowercase())
+            .map(|accidental| accidental.to_name().to_string())
+            .ok_or_else(|| {
+                Exception::Accidental(format!("{name:?} is not a supported accidental type"))
+            })
+    }
+
+    /// Changes this accidental to a supported accidental.
+    pub fn set(&mut self, specifier: impl Into<AccidentalSpecifier>) -> ExceptionResult<()> {
+        self.set_specifier(specifier.into(), false)
+    }
+
+    /// Changes this accidental, preserving non-standard names or alteration
+    /// values in the same way Python music21's `allowNonStandardValue=True`
+    /// does.
+    pub fn set_allowing_non_standard_value(
+        &mut self,
+        specifier: impl Into<AccidentalSpecifier>,
+    ) -> ExceptionResult<()> {
+        self.set_specifier(specifier.into(), true)
+    }
+
+    fn set_specifier(
+        &mut self,
+        specifier: AccidentalSpecifier,
+        allow_non_standard_value: bool,
+    ) -> ExceptionResult<()> {
+        if let AccidentalSpecifier::Accidental(accidental) = specifier {
+            *self = accidental;
+            self.inform_client();
+            return Ok(());
         }
 
-        match acci_tuple {
-            Some(acci_tuple) => {
-                self._name = acci_tuple.0;
-                self._alter = acci_tuple.1;
-            }
-            None => {
-                return Err(Exception::Accidental(format!(
-                    "{name} is not a supported accidental type"
-                )));
-            }
+        if let Some(accidental) = Self::specifier_to_standard(&specifier) {
+            self._name = accidental.to_name().to_string();
+            self._alter = accidental.to_alter();
+            self._modifier = accidental.to_modifier().to_string();
+            self.inform_client();
+            return Ok(());
         }
 
-        let name: Option<AccidentalEnum> = AccidentalEnum::from_name(&self._name);
-
-        match name {
-            Some(n) => self._modifier = n.to_modifier().to_owned(),
-            None => panic!("Expected name to be Some"),
+        if !allow_non_standard_value {
+            return Err(Exception::Accidental(format!(
+                "{specifier} is not a supported accidental type"
+            )));
         }
 
-        if let Some(client) = &self._client {
-            client.inform_client();
+        match specifier {
+            AccidentalSpecifier::Name(name) => self._name = name.to_lowercase(),
+            AccidentalSpecifier::Alter(alter) => self._alter = alter,
+            AccidentalSpecifier::Accidental(_) => unreachable!(),
         }
-
+        self.inform_client();
         Ok(())
     }
 
-    pub(crate) fn modifier(&self) -> &str {
+    fn specifier_to_standard(specifier: &AccidentalSpecifier) -> Option<AccidentalEnum> {
+        match specifier {
+            AccidentalSpecifier::Name(name) => AccidentalEnum::from_string(&name.to_lowercase()),
+            AccidentalSpecifier::Alter(alter) => AccidentalEnum::from_float(*alter),
+            AccidentalSpecifier::Accidental(accidental) => {
+                AccidentalEnum::from_name(accidental.name())
+            }
+        }
+    }
+
+    fn inform_client(&self) {
+        if let Some(client) = &self._client {
+            client.inform_client();
+        }
+    }
+
+    /// Returns the standard or non-standard accidental name.
+    pub fn name(&self) -> &str {
+        &self._name
+    }
+
+    /// Sets the accidental name. Standard names update `alter` and `modifier`;
+    /// non-standard names are preserved without changing them.
+    pub fn set_name(&mut self, name: impl Into<String>) -> ExceptionResult<()> {
+        self.set_allowing_non_standard_value(name.into())
+    }
+
+    /// Returns the semitone alteration from the natural step.
+    pub fn alter(&self) -> f64 {
+        self._alter
+    }
+
+    /// Sets the semitone alteration. Standard values update `name` and
+    /// `modifier`; non-standard values are preserved without changing them.
+    pub fn set_alter(&mut self, alter: f64) -> ExceptionResult<()> {
+        self.set_allowing_non_standard_value(alter)
+    }
+
+    /// Returns the music21 modifier string, such as `#`, `-`, `##`, or `~`.
+    pub fn modifier(&self) -> &str {
         &self._modifier
     }
 
-    pub(crate) fn natural() -> Accidental {
+    /// Sets the modifier. Unknown modifiers are preserved without changing the
+    /// name or alteration, matching Python music21.
+    pub fn set_modifier(&mut self, modifier: impl Into<String>) {
+        let modifier = modifier.into();
+        if let Some(accidental) = AccidentalEnum::from_modifier(&modifier) {
+            self._name = accidental.to_name().to_string();
+            self._alter = accidental.to_alter();
+            self._modifier = accidental.to_modifier().to_string();
+        } else {
+            self._modifier = modifier;
+        }
+        self.inform_client();
+    }
+
+    /// Returns a unicode representation of the accidental.
+    pub fn unicode(&self) -> String {
+        AccidentalEnum::from_modifier(&self._modifier)
+            .map(|accidental| accidental.to_unicode().to_string())
+            .unwrap_or_else(|| self._modifier.clone())
+    }
+
+    /// Returns the most complete accidental name. This is currently the same as
+    /// [`Self::name`], like Python music21.
+    pub fn full_name(&self) -> &str {
+        self.name()
+    }
+
+    /// Returns whether this accidental describes a twelve-tone alteration.
+    pub fn is_twelve_tone(&self) -> bool {
+        !matches!(
+            self._name.as_str(),
+            "half-sharp" | "one-and-a-half-sharp" | "half-flat" | "one-and-a-half-flat"
+        )
+    }
+
+    /// Sets `name` without updating `alter` or `modifier`.
+    pub fn set_name_independently(&mut self, name: impl Into<String>) {
+        self._name = name.into();
+        self.inform_client();
+    }
+
+    /// Sets `alter` without updating `name` or `modifier`.
+    pub fn set_alter_independently(&mut self, alter: f64) {
+        self._alter = alter;
+        self.inform_client();
+    }
+
+    /// Sets `modifier` without updating `name` or `alter`.
+    pub fn set_modifier_independently(&mut self, modifier: impl Into<String>) {
+        self._modifier = modifier.into();
+        self.inform_client();
+    }
+
+    /// Copies display-related settings from another accidental.
+    pub fn inherit_display(&mut self, other: &Accidental) {
+        self._display_type = other._display_type.clone();
+        self._display_status = other._display_status;
+        self.display_style = other.display_style.clone();
+        self.display_size = other.display_size.clone();
+        self.display_location = other.display_location.clone();
+        self.inform_client();
+    }
+
+    /// Returns the accidental display type.
+    pub fn display_type(&self) -> &'static str {
+        display_type_to_str(&self._display_type)
+    }
+
+    /// Sets the accidental display type.
+    pub fn set_display_type(&mut self, value: &str) -> ExceptionResult<()> {
+        self._display_type = display_type_from_str(value).ok_or_else(|| {
+            Exception::Accidental(format!("Supplied display type is not supported: {value:?}"))
+        })?;
+        self.inform_client();
+        Ok(())
+    }
+
+    /// Returns whether notation processing has decided to display this
+    /// accidental. `None` means no decision has been made.
+    pub fn display_status(&self) -> Option<bool> {
+        self._display_status
+    }
+
+    /// Sets the display status.
+    pub fn set_display_status(&mut self, value: Option<bool>) {
+        self._display_status = value;
+        self.inform_client();
+    }
+
+    /// Returns the display style.
+    pub fn display_style(&self) -> &'static str {
+        display_style_to_str(&self.display_style)
+    }
+
+    /// Sets the display style.
+    pub fn set_display_style(&mut self, value: &str) -> ExceptionResult<()> {
+        self.display_style = display_style_from_str(value).ok_or_else(|| {
+            Exception::Accidental(format!(
+                "Supplied display style is not supported: {value:?}"
+            ))
+        })?;
+        self.inform_client();
+        Ok(())
+    }
+
+    /// Returns the display size.
+    pub fn display_size(&self) -> String {
+        display_size_to_string(&self.display_size)
+    }
+
+    /// Sets the display size.
+    pub fn set_display_size(&mut self, value: &str) -> ExceptionResult<()> {
+        self.display_size = display_size_from_str(value)?;
+        self.inform_client();
+        Ok(())
+    }
+
+    /// Returns the display location.
+    pub fn display_location(&self) -> &'static str {
+        display_location_to_str(&self.display_location)
+    }
+
+    /// Sets the display location.
+    pub fn set_display_location(&mut self, value: &str) -> ExceptionResult<()> {
+        self.display_location = display_location_from_str(value).ok_or_else(|| {
+            Exception::Accidental(format!(
+                "Supplied display location is not supported: {value:?}"
+            ))
+        })?;
+        self.inform_client();
+        Ok(())
+    }
+
+    /// Returns a natural accidental.
+    pub fn natural() -> Accidental {
         let x = Accidental::new("natural");
         assert!(x.is_ok());
         match x {
@@ -376,7 +670,8 @@ impl Accidental {
         }
     }
 
-    pub(crate) fn flat() -> Accidental {
+    /// Returns a flat accidental.
+    pub fn flat() -> Accidental {
         let x = Accidental::new("flat");
         assert!(x.is_ok());
         match x {
@@ -384,13 +679,99 @@ impl Accidental {
             Err(err) => panic!("creating a flat Accidental should never fail: {err}"),
         }
     }
-    pub(crate) fn sharp() -> Accidental {
+
+    /// Returns a sharp accidental.
+    pub fn sharp() -> Accidental {
         let x = Accidental::new("sharp");
         assert!(x.is_ok());
         match x {
             Ok(val) => val,
             Err(err) => panic!("creating a sharp Accidental should never fail: {err}"),
         }
+    }
+}
+
+fn display_type_to_str(value: &DisplayType) -> &'static str {
+    match value {
+        DisplayType::Normal => "normal",
+        DisplayType::Always => "always",
+        DisplayType::Never => "never",
+        DisplayType::UnlessRepeated => "unless-repeated",
+        DisplayType::EvenTied => "even-tied",
+        DisplayType::IfAbsolutelyNecessary => "if-absolutely-necessary",
+    }
+}
+
+fn display_type_from_str(value: &str) -> Option<DisplayType> {
+    match value {
+        "normal" => Some(DisplayType::Normal),
+        "always" => Some(DisplayType::Always),
+        "never" => Some(DisplayType::Never),
+        "unless-repeated" => Some(DisplayType::UnlessRepeated),
+        "even-tied" => Some(DisplayType::EvenTied),
+        "if-absolutely-necessary" => Some(DisplayType::IfAbsolutelyNecessary),
+        _ => None,
+    }
+}
+
+fn display_style_to_str(value: &DisplayStyle) -> &'static str {
+    match value {
+        DisplayStyle::Normal => "normal",
+        DisplayStyle::Parentheses => "parentheses",
+        DisplayStyle::Bracket => "bracket",
+        DisplayStyle::Both => "both",
+    }
+}
+
+fn display_style_from_str(value: &str) -> Option<DisplayStyle> {
+    match value {
+        "normal" => Some(DisplayStyle::Normal),
+        "parentheses" => Some(DisplayStyle::Parentheses),
+        "bracket" => Some(DisplayStyle::Bracket),
+        "both" => Some(DisplayStyle::Both),
+        _ => None,
+    }
+}
+
+fn display_size_to_string(value: &DisplaySize) -> String {
+    match value {
+        DisplaySize::Full => "full".to_string(),
+        DisplaySize::Cue => "cue".to_string(),
+        DisplaySize::Large => "large".to_string(),
+        DisplaySize::Percentage(percentage) => percentage.to_string(),
+    }
+}
+
+fn display_size_from_str(value: &str) -> ExceptionResult<DisplaySize> {
+    match value {
+        "full" => Ok(DisplaySize::Full),
+        "cue" => Ok(DisplaySize::Cue),
+        "large" => Ok(DisplaySize::Large),
+        _ => value
+            .parse::<FloatType>()
+            .map(DisplaySize::Percentage)
+            .map_err(|_| {
+                Exception::Accidental(format!("Supplied display size is not supported: {value:?}"))
+            }),
+    }
+}
+
+fn display_location_to_str(value: &DisplayLocation) -> &'static str {
+    match value {
+        DisplayLocation::Normal => "normal",
+        DisplayLocation::Above => "above",
+        DisplayLocation::Ficta => "ficta",
+        DisplayLocation::Below => "below",
+    }
+}
+
+fn display_location_from_str(value: &str) -> Option<DisplayLocation> {
+    match value {
+        "normal" => Some(DisplayLocation::Normal),
+        "above" => Some(DisplayLocation::Above),
+        "ficta" => Some(DisplayLocation::Ficta),
+        "below" => Some(DisplayLocation::Below),
+        _ => None,
     }
 }
 
@@ -519,6 +900,33 @@ impl IntoAccidental for Accidental {
     }
 }
 
+impl IntoAccidental for AccidentalSpecifier {
+    fn accidental_args(self, allow_non_standard_values: bool) -> Option<(String, FloatType)> {
+        match self {
+            AccidentalSpecifier::Name(name) => name.accidental_args(allow_non_standard_values),
+            AccidentalSpecifier::Alter(alter) => alter.accidental_args(allow_non_standard_values),
+            AccidentalSpecifier::Accidental(accidental) => {
+                accidental.accidental_args(allow_non_standard_values)
+            }
+        }
+    }
+
+    fn is_accidental(&self) -> bool {
+        matches!(self, AccidentalSpecifier::Accidental(_))
+    }
+
+    fn into_accidental(self) -> ExceptionResult<Accidental> {
+        Accidental::new(self)
+    }
+
+    fn accidental(self) -> Accidental {
+        match self {
+            AccidentalSpecifier::Accidental(accidental) => accidental,
+            _ => panic!("call into_accidental instead"),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{Accidental, IntoAccidental};
@@ -634,5 +1042,65 @@ mod tests {
         let acc_double_flat: Accidental = String::into_accidental("eses".to_string()).unwrap();
         assert_eq!(acc_double_flat._name, "double-flat");
         assert_eq!(acc_double_flat._alter, -2.0);
+    }
+
+    #[test]
+    fn public_api_matches_music21_accidental_basics() {
+        let mut accidental = Accidental::new("sharp").unwrap();
+        assert_eq!(accidental.name(), "sharp");
+        assert_eq!(accidental.alter(), 1.0);
+        assert_eq!(accidental.modifier(), "#");
+        assert_eq!(accidental.unicode(), "\u{266f}");
+        assert_eq!(accidental.full_name(), "sharp");
+        assert!(accidental.is_twelve_tone());
+
+        accidental.set("--").unwrap();
+        assert_eq!(accidental.name(), "double-flat");
+        assert_eq!(accidental.alter(), -2.0);
+        assert_eq!(accidental.modifier(), "--");
+
+        accidental.set("quarter-sharp").unwrap();
+        assert_eq!(accidental.name(), "half-sharp");
+        assert_eq!(accidental.alter(), 0.5);
+        assert!(!accidental.is_twelve_tone());
+    }
+
+    #[test]
+    fn public_api_preserves_non_standard_values_when_requested() {
+        let mut accidental = Accidental::new("flat").unwrap();
+        accidental
+            .set_allowing_non_standard_value("flat-flat-up")
+            .unwrap();
+        assert_eq!(accidental.name(), "flat-flat-up");
+        assert_eq!(accidental.alter(), -1.0);
+        assert_eq!(accidental.modifier(), "-");
+
+        accidental.set_alter(-0.9).unwrap();
+        assert_eq!(accidental.name(), "flat-flat-up");
+        assert_eq!(accidental.alter(), -0.9);
+        assert_eq!(accidental.modifier(), "-");
+
+        accidental.set_modifier("&");
+        assert_eq!(accidental.name(), "flat-flat-up");
+        assert_eq!(accidental.alter(), -0.9);
+        assert_eq!(accidental.modifier(), "&");
+    }
+
+    #[test]
+    fn public_api_supports_display_metadata() {
+        let mut source = Accidental::new("double-flat").unwrap();
+        source.set_display_type("always").unwrap();
+        source.set_display_status(Some(true));
+        source.set_display_style("parentheses").unwrap();
+        source.set_display_size("cue").unwrap();
+        source.set_display_location("above").unwrap();
+
+        let mut target = Accidental::new("sharp").unwrap();
+        target.inherit_display(&source);
+        assert_eq!(target.display_type(), "always");
+        assert_eq!(target.display_status(), Some(true));
+        assert_eq!(target.display_style(), "parentheses");
+        assert_eq!(target.display_size(), "cue");
+        assert_eq!(target.display_location(), "above");
     }
 }

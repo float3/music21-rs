@@ -35,6 +35,22 @@ pub struct Chord {
     from_integer_pitches: bool,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// An unpitched chord type known to the music21-derived chord table.
+pub struct KnownChordType {
+    /// Number of distinct pitch classes in the chord type.
+    pub cardinality: u8,
+    /// Unpitched common-name aliases in music21 table order.
+    pub common_names: Vec<String>,
+    /// Forte class for this transposition-normal entry, such as `"3-11B"`.
+    pub forte_class: String,
+    /// Transposed normal form pitch classes.
+    pub normal_form: Vec<u8>,
+    /// Six-entry interval-class vector.
+    pub interval_class_vector: Vec<u8>,
+}
+
 impl Chord {
     /// Builds a chord from any supported note collection.
     ///
@@ -62,6 +78,20 @@ impl Chord {
     /// Builds an empty chord.
     pub fn empty() -> ExceptionResult<Self> {
         Self::new(Option::<&str>::None)
+    }
+
+    /// Returns the unpitched chord types known to the music21-derived table.
+    pub fn known_chord_types() -> Vec<KnownChordType> {
+        tables::known_chord_table_entries()
+            .into_iter()
+            .map(|entry| KnownChordType {
+                cardinality: entry.cardinality,
+                common_names: entry.common_names.into_iter().map(str::to_string).collect(),
+                forte_class: entry.forte_class,
+                normal_form: entry.normal_form,
+                interval_class_vector: entry.interval_class_vector,
+            })
+            .collect()
     }
 
     /// Builds a chord from one string such as `"C E G"`.
@@ -472,8 +502,9 @@ impl Chord {
     ///
     /// This is intentionally conservative rather than a universal harmonic
     /// oracle. It covers the resolution families that music21 exposes most
-    /// directly: dominant sevenths, leading-tone seventh chords, and contextual
-    /// augmented-sixth sonorities. Unsupported chords return `Ok(None)`.
+    /// directly: dominant-function sonorities, leading-tone diminished
+    /// sonorities, and contextual augmented-sixth sonorities. Unsupported
+    /// chords return `Ok(None)`.
     pub fn resolution_chord(
         &self,
         tonic: &str,
@@ -484,12 +515,12 @@ impl Chord {
 
     /// Returns likely tonal resolution chords in the given key.
     ///
-    /// Dominant seventh chords resolve by root motion up a perfect fourth to a
-    /// diatonic triad in the supplied key, so secondary dominants such as
-    /// `D7` in C major resolve to the G-major triad. Fully diminished and
-    /// half-diminished leading-tone seventh chords resolve up by semitone to a
-    /// diatonic triad. Italian, French, German, and Swiss-style augmented-sixth
-    /// sonorities in context resolve to the dominant triad.
+    /// Dominant-function chords resolve by root motion up a perfect fourth to
+    /// a diatonic triad in the supplied key, so secondary dominants such as
+    /// `D7` in C major resolve to the G-major triad. Leading-tone diminished
+    /// sonorities resolve up by semitone to a diatonic triad. Italian, French,
+    /// German, and Swiss-style augmented-sixth sonorities in context resolve to
+    /// the dominant triad.
     pub fn resolution_chords(&self, tonic: &str, mode: Option<&str>) -> ExceptionResult<Vec<Self>> {
         let key = Key::from_tonic_mode(tonic, mode)?;
 
@@ -499,7 +530,7 @@ impl Chord {
 
         let mut resolutions = Vec::new();
 
-        let dominant_resolution = if self.is_dominant_seventh_sonority() {
+        let dominant_resolution = if self.is_dominant_function_sonority() {
             self.resolve_by_root_motion(&key, 5)?
         } else {
             None
@@ -508,7 +539,7 @@ impl Chord {
             resolutions.push(chord);
         }
 
-        let leading_tone_resolution = if self.is_leading_tone_seventh_sonority() {
+        let leading_tone_resolution = if self.is_leading_tone_function_sonority() {
             self.resolve_by_root_motion(&key, 1)?
         } else {
             None
@@ -608,18 +639,54 @@ impl Chord {
         deduped
     }
 
-    fn is_dominant_seventh_sonority(&self) -> bool {
-        self.has_common_name("dominant seventh chord")
-            || self.has_common_name("major minor seventh chord")
+    fn is_dominant_function_sonority(&self) -> bool {
+        let names = self.common_names_with_primary();
+        let has_explicit_dominant_name = names.iter().any(|name| {
+            matches!(
+                name.as_str(),
+                "dominant seventh chord"
+                    | "major minor seventh chord"
+                    | "incomplete dominant-seventh chord"
+            )
+        });
+        let has_dominant_family_name = names
+            .iter()
+            .any(|name| name.contains("dominant") || name == "major-minor");
+
+        has_explicit_dominant_name
+            || (has_dominant_family_name && self.has_intervals_above_root(&[4, 10]))
     }
 
-    fn is_leading_tone_seventh_sonority(&self) -> bool {
-        self.has_common_name("diminished seventh chord")
-            || self.has_common_name("half-diminished seventh chord")
+    fn is_leading_tone_function_sonority(&self) -> bool {
+        let names = self.common_names_with_primary();
+        let has_explicit_leading_tone_name = names.iter().any(|name| {
+            matches!(
+                name.as_str(),
+                "diminished triad"
+                    | "diminished seventh chord"
+                    | "half-diminished seventh chord"
+                    | "incomplete half-diminished seventh chord"
+            )
+        });
+        let has_diminished_family_name = names.iter().any(|name| name.contains("diminished"));
+
+        has_explicit_leading_tone_name
+            || (has_diminished_family_name && self.has_intervals_above_root(&[3, 6]))
     }
 
     fn has_common_name(&self, expected: &str) -> bool {
         self.common_name() == expected || self.common_names().iter().any(|name| name == expected)
+    }
+
+    fn has_intervals_above_root(&self, intervals: &[u8]) -> bool {
+        let Some(root_pitch) = self.find_root_pitch() else {
+            return false;
+        };
+        let root_pc = Self::pitch_class(root_pitch);
+        let chord_pcs = self.pitch_class_set();
+        intervals
+            .iter()
+            .all(|interval| chord_pcs.contains(&((root_pc + interval) % 12)))
     }
 
     fn is_contextual_augmented_sixth(&self, key: &Key) -> ExceptionResult<bool> {
@@ -1209,6 +1276,23 @@ mod tests {
     }
 
     #[test]
+    fn known_chord_types_include_music21_table_names() {
+        let known = Chord::known_chord_types();
+        assert_eq!(known.len(), 351);
+        assert!(
+            known
+                .iter()
+                .any(|entry| entry.common_names.iter().any(|name| name == "major triad"))
+        );
+        assert!(known.iter().any(|entry| {
+            entry
+                .common_names
+                .iter()
+                .any(|name| name == "dominant seventh chord")
+        }));
+    }
+
+    #[test]
     fn chord_first_inversion_detected() {
         let chord = Chord::new("E3 G3 C4").unwrap();
         assert_eq!(chord.inversion(), Some(1));
@@ -1240,6 +1324,18 @@ mod tests {
     }
 
     #[test]
+    fn dominant_extensions_resolve_to_tonic() {
+        let dominant_ninth = Chord::new("G2 B2 D3 F3 A3").unwrap();
+        let dominant_eleventh = Chord::new("G2 B2 D3 F3 A3 C4").unwrap();
+        let dominant_thirteenth = Chord::new("G2 B2 D3 F3 A3 C4 E4").unwrap();
+
+        for chord in [dominant_ninth, dominant_eleventh, dominant_thirteenth] {
+            let resolution = chord.resolution_chord("C", Some("major")).unwrap().unwrap();
+            assert_eq!(resolution.pitched_common_name(), "C-major triad");
+        }
+    }
+
+    #[test]
     fn leading_tone_sevenths_resolve_by_semitone() {
         let fully_diminished = Chord::new("B3 D4 F4 A-4").unwrap();
         let half_diminished = Chord::new("B3 D4 F4 A4").unwrap();
@@ -1260,6 +1356,14 @@ mod tests {
                 .pitched_common_name(),
             "C-major triad"
         );
+    }
+
+    #[test]
+    fn leading_tone_diminished_triad_resolves_by_semitone() {
+        let chord = Chord::new("B3 D4 F4").unwrap();
+        let resolution = chord.resolution_chord("C", Some("major")).unwrap().unwrap();
+
+        assert_eq!(resolution.pitched_common_name(), "C-major triad");
     }
 
     #[test]

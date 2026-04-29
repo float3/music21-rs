@@ -53,9 +53,12 @@ The live browser demos are published at
 
 The `examples/` directory contains a small set of interactive tools:
 
-- [Chord Inspector](./examples/web/chord/) names chords, shows Forte/normal-form
-  data, suggests simple resolution chords, plays the result, and renders staff
-  notation.
+- [Chord Inspector](./examples/web/chord/) names chords from pitch names, MIDI
+  numbers, or Web MIDI input; shows Forte/normal-form data; suggests simple
+  resolution chords; plays the result; and renders staff notation.
+- [Chord Browser](./examples/web/chords/) lists the chord types known to the
+  music21-derived chord table, realizes them from a chosen root, and opens root
+  position or inversions in the inspector.
 - [Polyrhythm Lab](./examples/web/polyrhythm/) lets you enter ratios such as
   `4:5:6`, play the cycle, and compare the rhythm to its equivalent pitch-set
   relationship.

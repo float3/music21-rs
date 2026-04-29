@@ -132,6 +132,15 @@ type TnIndexToChordInfo = LazyLock<HashMap<U8U8SB, Option<Vec<&'static str>>>>;
 type MaximumIndexNumberWithoutInversionEquivalence = LazyLock<Vec<u8>>;
 type MaximumIndexNumberWithInversionEquivalence = LazyLock<Vec<u8>>;
 
+#[derive(Debug, Clone)]
+pub(crate) struct KnownChordTableEntry {
+    pub(crate) cardinality: u8,
+    pub(crate) common_names: Vec<&'static str>,
+    pub(crate) forte_class: String,
+    pub(crate) normal_form: Vec<u8>,
+    pub(crate) interval_class_vector: Vec<u8>,
+}
+
 static CARDINALITY_TO_CHORD_MEMBERS: CardinalityToChordMembers = LazyLock::new(|| {
     use std::collections::HashMap;
     let mut cardinality_to_chord_members: [HashMap<U8SB, Pcivicv>; 13] = Default::default();
@@ -402,6 +411,29 @@ pub(crate) fn interval_class_vector_from_address(
             ))
         })?;
     Ok(entry.2.to_vec())
+}
+
+pub(crate) fn known_chord_table_entries() -> Vec<KnownChordTableEntry> {
+    let mut entries = TN_INDEX_TO_CHORD_INFO
+        .iter()
+        .filter_map(|(&(cardinality, index, inversion), common_names)| {
+            let common_names = common_names.clone().unwrap_or_default();
+            let address = (cardinality, index, inversion.as_i8(), None);
+            Some((
+                (cardinality, index, inversion.as_i8()),
+                KnownChordTableEntry {
+                    cardinality,
+                    common_names,
+                    forte_class: address_to_forte_name(address, "tn").ok()?,
+                    normal_form: transposed_normal_form_from_address(address).ok()?,
+                    interval_class_vector: interval_class_vector_from_address(address).ok()?,
+                },
+            ))
+        })
+        .collect::<Vec<_>>();
+
+    entries.sort_by_key(|(sort_key, _)| *sort_key);
+    entries.into_iter().map(|(_, entry)| entry).collect()
 }
 
 // include!("./generated.rs");

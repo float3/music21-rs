@@ -24,11 +24,12 @@ use crate::stepname::StepName;
 use crate::tuningsystem::OCTAVE_SIZE;
 use crate::tuningsystem::TuningSystem;
 
-use accidental::Accidental;
 use accidental::IntoAccidental;
+pub use accidental::{Accidental, AccidentalSpecifier};
 use microtone::IntoCentShift;
-use microtone::Microtone;
+pub use microtone::{Microtone, MicrotoneSpecifier};
 use pitchclass::convert_ps_to_oct;
+pub use pitchclass::{PitchClass, PitchClassSpecifier};
 
 use itertools::Itertools;
 use num::Num;
@@ -36,7 +37,6 @@ use num_traits::ToPrimitive;
 use ordered_float::OrderedFloat;
 use std::cmp::Ordering;
 use std::collections::HashMap;
-use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 use std::sync::LazyLock;
 use std::sync::Mutex;
@@ -81,158 +81,6 @@ impl From<FloatType> for PitchName {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// Input accepted as an accidental name or semitone alteration.
-pub enum PitchAccidental {
-    /// An accidental name or symbol such as `"sharp"` or `"#"`.
-    Name(String),
-    /// A semitone alteration, such as `1.0` for sharp.
-    Alter(f64),
-}
-
-impl From<&str> for PitchAccidental {
-    fn from(value: &str) -> Self {
-        Self::Name(value.to_string())
-    }
-}
-
-impl From<String> for PitchAccidental {
-    fn from(value: String) -> Self {
-        Self::Name(value)
-    }
-}
-
-impl From<i8> for PitchAccidental {
-    fn from(value: i8) -> Self {
-        Self::Alter(value as FloatType)
-    }
-}
-
-impl From<IntegerType> for PitchAccidental {
-    fn from(value: IntegerType) -> Self {
-        Self::Alter(value as FloatType)
-    }
-}
-
-impl From<FloatType> for PitchAccidental {
-    fn from(value: FloatType) -> Self {
-        Self::Alter(value)
-    }
-}
-
-impl Display for PitchAccidental {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Name(name) => write!(f, "{name}"),
-            Self::Alter(alter) => write!(f, "{alter}"),
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// Input accepted as a microtone value.
-pub enum PitchMicrotone {
-    /// A cent offset from the notated pitch.
-    Cents(f64),
-    /// A textual cent offset.
-    Text(String),
-}
-
-impl From<&str> for PitchMicrotone {
-    fn from(value: &str) -> Self {
-        Self::Text(value.to_string())
-    }
-}
-
-impl From<String> for PitchMicrotone {
-    fn from(value: String) -> Self {
-        Self::Text(value)
-    }
-}
-
-impl From<IntegerType> for PitchMicrotone {
-    fn from(value: IntegerType) -> Self {
-        Self::Cents(value as FloatType)
-    }
-}
-
-impl From<FloatType> for PitchMicrotone {
-    fn from(value: FloatType) -> Self {
-        Self::Cents(value)
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// Input accepted for pitch-class construction.
-pub enum PitchClassSpecifier {
-    /// A numeric pitch class.
-    Number(f64),
-    /// A string pitch class, including `A`/`T` for 10 and `B`/`E` for 11.
-    String(String),
-}
-
-impl PitchClassSpecifier {
-    fn to_number(&self) -> ExceptionResult<f64> {
-        match self {
-            Self::Number(value) => Ok(*value),
-            Self::String(value) => {
-                let value = value.trim();
-                match value {
-                    "a" | "A" | "t" | "T" => Ok(10.0),
-                    "b" | "B" | "e" | "E" => Ok(11.0),
-                    _ => value
-                        .parse::<IntegerType>()
-                        .map(|value| value as FloatType)
-                        .map_err(|err| {
-                            Exception::PitchClass(format!(
-                                "cannot parse pitch class {value:?}: {err}"
-                            ))
-                        }),
-                }
-            }
-        }
-    }
-}
-
-impl From<IntegerType> for PitchClassSpecifier {
-    fn from(value: IntegerType) -> Self {
-        Self::Number(value as FloatType)
-    }
-}
-
-impl From<u8> for PitchClassSpecifier {
-    fn from(value: u8) -> Self {
-        Self::Number(value as FloatType)
-    }
-}
-
-impl From<FloatType> for PitchClassSpecifier {
-    fn from(value: FloatType) -> Self {
-        Self::Number(value)
-    }
-}
-
-impl From<char> for PitchClassSpecifier {
-    fn from(value: char) -> Self {
-        Self::String(value.to_string())
-    }
-}
-
-impl From<&str> for PitchClassSpecifier {
-    fn from(value: &str) -> Self {
-        Self::String(value.to_string())
-    }
-}
-
-impl From<String> for PitchClassSpecifier {
-    fn from(value: String) -> Self {
-        Self::String(value)
-    }
-}
-
 #[derive(Clone, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Builder options for constructing a [`Pitch`].
@@ -244,9 +92,9 @@ pub struct PitchOptions {
     /// Octave number.
     pub octave: Option<i32>,
     /// Accidental name or alteration.
-    pub accidental: Option<PitchAccidental>,
+    pub accidental: Option<AccidentalSpecifier>,
     /// Microtone cent offset.
-    pub microtone: Option<PitchMicrotone>,
+    pub microtone: Option<MicrotoneSpecifier>,
     /// Pitch class to realize as a pitch.
     pub pitch_class: Option<PitchClassSpecifier>,
     /// MIDI note number.
@@ -282,13 +130,13 @@ impl PitchOptions {
     }
 
     /// Sets the accidental.
-    pub fn accidental(mut self, accidental: impl Into<PitchAccidental>) -> Self {
+    pub fn accidental(mut self, accidental: impl Into<AccidentalSpecifier>) -> Self {
         self.accidental = Some(accidental.into());
         self
     }
 
     /// Sets the microtone.
-    pub fn microtone(mut self, microtone: impl Into<PitchMicrotone>) -> Self {
+    pub fn microtone(mut self, microtone: impl Into<MicrotoneSpecifier>) -> Self {
         self.microtone = Some(microtone.into());
         self
     }
@@ -516,7 +364,7 @@ impl Pitch {
             self_accidental = Some(if acc.is_accidental() {
                 acc.accidental()
             } else {
-                Accidental::new(acc)?
+                acc.into_accidental()?
             });
         } else if self_accidental.is_none() {
             self_accidental = Some(Accidental::new("natural")?);
@@ -652,6 +500,26 @@ impl Pitch {
         post
     }
 
+    /// Returns this pitch's accidental object.
+    ///
+    /// Unlike Python music21, this crate stores an explicit natural accidental
+    /// for natural pitches.
+    pub fn accidental(&self) -> &Accidental {
+        &self._accidental
+    }
+
+    /// Returns this pitch's microtone adjustment, when present.
+    pub fn microtone(&self) -> Option<&Microtone> {
+        self._microtone.as_ref()
+    }
+
+    /// Returns this pitch's normalized pitch class.
+    pub fn pitch_class(&self) -> PitchClass {
+        PitchClass::from_number(self.ps()).unwrap_or_else(|err| {
+            panic!("pitch-space value should always map to pitch class: {err}")
+        })
+    }
+
     pub(crate) fn octave_setter(&mut self, octave: Octave) {
         self._octave = octave;
         self.inform_client()
@@ -755,7 +623,7 @@ impl Pitch {
     }
 
     fn pitch_class_setter(&mut self, pc: PitchClassSpecifier) -> ExceptionResult<()> {
-        self.pitch_class_value_setter(pc.to_number()?);
+        self.pitch_class_value_setter(PitchClass::new(pc)?.number());
         Ok(())
     }
 
@@ -992,48 +860,6 @@ impl IntoPitchName for String {
     }
 }
 
-impl IntoAccidental for PitchAccidental {
-    fn accidental_args(self, allow_non_standard_values: bool) -> Option<(String, FloatType)> {
-        match self {
-            PitchAccidental::Name(name) => name.accidental_args(allow_non_standard_values),
-            PitchAccidental::Alter(alter) => alter.accidental_args(allow_non_standard_values),
-        }
-    }
-
-    fn is_accidental(&self) -> bool {
-        false
-    }
-
-    fn into_accidental(self) -> ExceptionResult<Accidental> {
-        Accidental::new(self)
-    }
-
-    fn accidental(self) -> Accidental {
-        panic!("call into_accidental instead")
-    }
-}
-
-impl IntoCentShift for PitchMicrotone {
-    fn into_cent_shift(self) -> FloatType {
-        match self {
-            PitchMicrotone::Cents(cents) => cents,
-            PitchMicrotone::Text(text) => text.into_cent_shift(),
-        }
-    }
-
-    fn is_microtone(&self) -> bool {
-        false
-    }
-
-    fn into_microtone(self) -> ExceptionResult<Microtone> {
-        Microtone::new(Some(self), None)
-    }
-
-    fn microtone(self) -> Microtone {
-        panic!("call into_microtone instead")
-    }
-}
-
 impl IntoPitchName for &str {
     fn into_name(self) -> PitchParameteres {
         PitchParameteres {
@@ -1098,7 +924,7 @@ fn convert_ps_to_step<T: Num + ToPrimitive>(
         .unwrap_or_else(|err| panic!("pitch class should map to a step: {err}"));
     let accidental = Accidental::new(accidental_alter)
         .unwrap_or_else(|err| panic!("accidental conversion should not fail: {err}"));
-    let microtone = Microtone::new(Some(micro * 100.0), None)
+    let microtone = Microtone::from_cent_shift(Some(micro * 100.0), None)
         .unwrap_or_else(|err| panic!("microtone conversion should not fail: {err}"));
 
     (step, accidental, microtone, octave_shift)
@@ -1355,7 +1181,9 @@ mod tests {
     use crate::interval::{Interval, IntervalArgument};
     use crate::tuningsystem::TuningSystem;
 
-    use super::{Pitch, convert_harmonic_to_cents, simplify_multiple_enharmonics};
+    use super::{
+        Accidental, Microtone, Pitch, convert_harmonic_to_cents, simplify_multiple_enharmonics,
+    };
 
     #[test]
     fn simplify_multiple_enharmonics_test() {
@@ -1552,6 +1380,36 @@ mod tests {
         let e4 = Pitch::from_name("E4").unwrap();
         assert!((e4.frequency_hz_in(TuningSystem::FiveLimit) - 327.032).abs() < 0.001);
         assert!(e4.frequency_hz_in(TuningSystem::FiveLimit) < e4.frequency_hz());
+    }
+
+    #[test]
+    fn pitch_exposes_accidental_object() {
+        let custom_accidental = Accidental::new("half-flat").unwrap();
+        let pitch = Pitch::builder()
+            .step('D')
+            .accidental(custom_accidental.clone())
+            .octave(4)
+            .build()
+            .unwrap();
+
+        assert_eq!(pitch.name_with_octave(), "D`4");
+        assert_eq!(pitch.accidental(), &custom_accidental);
+        assert_eq!(pitch.accidental().name(), "half-flat");
+        assert_eq!(pitch.accidental().alter(), -0.5);
+    }
+
+    #[test]
+    fn pitch_exposes_microtone_object() {
+        let microtone = Microtone::new(-25.0).unwrap();
+        let pitch = Pitch::builder()
+            .name("G#4")
+            .microtone(microtone.clone())
+            .build()
+            .unwrap();
+
+        assert_eq!(pitch.microtone(), Some(&microtone));
+        assert_eq!(pitch.microtone().unwrap().to_string(), "(-25c)");
+        assert_eq!(pitch.alter(), 0.75);
     }
 
     #[test]

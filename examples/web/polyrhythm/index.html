@@ -632,6 +632,7 @@
       </div>
       <nav class="top-links">
         <a id="chord-link-top" href="../chord/index.html">Chord Inspector</a>
+        <a id="browser-link-top" href="../chords/index.html">Chord Browser</a>
         <a id="tuning-link-top" href="../tuning/index.html">Tuning</a>
         <a id="docs-link" href="../docs/music21_rs/index.html">Rust docs</a>
       </nav>
@@ -754,6 +755,8 @@
 
   <script src="https://cdn.jsdelivr.net/npm/abcjs@6.5.2/dist/abcjs-basic-min.js"></script>
   <script type="module">
+    import "../help-tooltips.js";
+
     const rhythmInput = document.querySelector("#rhythm-input");
     const baseInput = document.querySelector("#base-input");
     const tempoInput = document.querySelector("#tempo-input");
@@ -780,6 +783,7 @@
     const chordRatios = document.querySelector("#chord-ratios");
     const chordLink = document.querySelector("#chord-link");
     const chordLinkTop = document.querySelector("#chord-link-top");
+    const browserLinkTop = document.querySelector("#browser-link-top");
     const tuningLinkTop = document.querySelector("#tuning-link-top");
     const docsLink = document.querySelector("#docs-link");
     const cycleGrid = document.querySelector("#cycle-grid");
@@ -806,6 +810,7 @@
       || window.location.protocol === "file:";
     const chordBaseHref = isLocalExample ? "../chord/index.html" : "../chord/";
     chordLinkTop.href = chordBaseHref;
+    browserLinkTop.href = isLocalExample ? "../chords/index.html" : "../chords/";
     tuningLinkTop.href = isLocalExample ? "../tuning/index.html" : "../tuning/";
     docsLink.href = "../docs/music21_rs/index.html";
 
