@@ -31,50 +31,50 @@
 
       @media (prefers-color-scheme: dark) {
         :root:not([data-theme="light"]) {
-          --ink: #edf5f3;
-          --muted: #aab7b4;
-          --line: #2c3b3a;
-          --panel: #131c1b;
-          --panel-soft: #172321;
-          --panel-softer: #0e1716;
-          --soft: #0b1110;
-          --accent: #2dd4bf;
-          --accent-strong: #7dded4;
-          --accent-soft: #123632;
-          --accent-line: #247970;
-          --warn: #ffb4a8;
-          --warn-soft: #351916;
-          --warn-line: #7f332c;
-          --warn-strong: #ffb4a8;
-          --key-black: #050807;
-          --key-black-active: #7dded4;
-          --tooltip-bg: #050807;
-          --tooltip-ink: #edf5f3;
-          --wash: rgba(45, 212, 191, 0.12);
+          --ink: #f2f5f7;
+          --muted: #aab2bd;
+          --line: #343945;
+          --panel: #181b22;
+          --panel-soft: #20242d;
+          --panel-softer: #11141a;
+          --soft: #101217;
+          --accent: #f2b84b;
+          --accent-strong: #ffd166;
+          --accent-soft: #2d2618;
+          --accent-line: #806024;
+          --warn: #ffb0a0;
+          --warn-soft: #321b19;
+          --warn-line: #8a4037;
+          --warn-strong: #ffc4b8;
+          --key-black: #05070c;
+          --key-black-active: #ffd166;
+          --tooltip-bg: #080a0f;
+          --tooltip-ink: #f2f5f7;
+          --wash: rgba(242, 184, 75, 0.08);
         }
       }
 
       :root[data-theme="dark"] {
-        --ink: #edf5f3;
-        --muted: #aab7b4;
-        --line: #2c3b3a;
-        --panel: #131c1b;
-        --panel-soft: #172321;
-        --panel-softer: #0e1716;
-        --soft: #0b1110;
-        --accent: #2dd4bf;
-        --accent-strong: #7dded4;
-        --accent-soft: #123632;
-        --accent-line: #247970;
-        --warn: #ffb4a8;
-        --warn-soft: #351916;
-        --warn-line: #7f332c;
-        --warn-strong: #ffb4a8;
-        --key-black: #050807;
-        --key-black-active: #7dded4;
-        --tooltip-bg: #050807;
-        --tooltip-ink: #edf5f3;
-        --wash: rgba(45, 212, 191, 0.12);
+        --ink: #f2f5f7;
+        --muted: #aab2bd;
+        --line: #343945;
+        --panel: #181b22;
+        --panel-soft: #20242d;
+        --panel-softer: #11141a;
+        --soft: #101217;
+        --accent: #f2b84b;
+        --accent-strong: #ffd166;
+        --accent-soft: #2d2618;
+        --accent-line: #806024;
+        --warn: #ffb0a0;
+        --warn-soft: #321b19;
+        --warn-line: #8a4037;
+        --warn-strong: #ffc4b8;
+        --key-black: #05070c;
+        --key-black-active: #ffd166;
+        --tooltip-bg: #080a0f;
+        --tooltip-ink: #f2f5f7;
+        --wash: rgba(242, 184, 75, 0.08);
       }
 
       * {
@@ -324,7 +324,7 @@
         display: grid;
         grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
         gap: 18px;
-        align-items: start;
+        align-items: stretch;
       }
 
       section {
@@ -540,7 +540,6 @@
         table-layout: fixed;
       }
 
-      .notation-section,
       .pitches-section {
         grid-column: 1 / -1;
       }
@@ -760,6 +759,40 @@
         height: auto;
       }
 
+      :root[data-theme="dark"] .guitar-chart svg text {
+        fill: var(--ink);
+      }
+
+      :root[data-theme="dark"] .guitar-chart svg [fill="#000"],
+      :root[data-theme="dark"] .guitar-chart svg [fill="#000000"],
+      :root[data-theme="dark"] .guitar-chart svg [fill="black"] {
+        fill: var(--ink);
+      }
+
+      :root[data-theme="dark"] .guitar-chart svg [stroke="#000"],
+      :root[data-theme="dark"] .guitar-chart svg [stroke="#000000"],
+      :root[data-theme="dark"] .guitar-chart svg [stroke="black"] {
+        stroke: var(--ink);
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) .guitar-chart svg text {
+          fill: var(--ink);
+        }
+
+        :root:not([data-theme="light"]) .guitar-chart svg [fill="#000"],
+        :root:not([data-theme="light"]) .guitar-chart svg [fill="#000000"],
+        :root:not([data-theme="light"]) .guitar-chart svg [fill="black"] {
+          fill: var(--ink);
+        }
+
+        :root:not([data-theme="light"]) .guitar-chart svg [stroke="#000"],
+        :root:not([data-theme="light"]) .guitar-chart svg [stroke="#000000"],
+        :root:not([data-theme="light"]) .guitar-chart svg [stroke="black"] {
+          stroke: var(--ink);
+        }
+      }
+
       .guitar-note-list {
         display: flex;
         flex-wrap: wrap;
@@ -848,7 +881,6 @@
           grid-template-columns: 1fr;
         }
 
-        .notation-section,
         .pitches-section {
           grid-column: auto;
         }
