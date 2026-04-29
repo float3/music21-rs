@@ -1,4 +1,5 @@
 import "../help-tooltips.js";
+import "../theme.js";
 import init, { analyze_chord, analyze_chord_with_key } from "../pkg/music21_rs_web.js";
 
 type TuningFrequencyInfo = {
@@ -399,6 +400,13 @@ function displayPitchName(value: unknown): string {
   return `${match[1]}${match[2].replaceAll("-", "b")}${match[3] ?? ""}`;
 }
 
+function cssVar(name: string, fallback: string): string {
+  return (
+    getComputedStyle(document.documentElement).getPropertyValue(name).trim() ||
+    fallback
+  );
+}
+
 function renderKeyboard(activeClasses: number[]): void {
   const active = new Set(activeClasses);
   keyboard.replaceChildren();
@@ -577,19 +585,23 @@ function drawVexChord(
 }
 
 function vexChordOptions(fingering: GuitarFingeringInfo): VexChordOptions {
+  const ink = cssVar("--ink", "#151515");
+  const panel = cssVar("--panel", "#ffffff");
+  const accent = cssVar("--accent", "#0f766e");
+  const muted = cssVar("--muted", "#61646b");
   return {
     width: 190,
     height: 220,
     numStrings: Math.max(1, (fingering.strings || []).length),
     numFrets: 5,
     showTuning: true,
-    defaultColor: "#151515",
-    bgColor: "#ffffff",
-    strokeColor: "#0f766e",
-    textColor: "#151515",
-    stringColor: "#61646b",
-    fretColor: "#61646b",
-    labelColor: "#61646b",
+    defaultColor: ink,
+    bgColor: panel,
+    strokeColor: accent,
+    textColor: ink,
+    stringColor: muted,
+    fretColor: muted,
+    labelColor: muted,
   };
 }
 
@@ -851,6 +863,11 @@ function render(data: ChordAnalysis): void {
   renderNotation(data);
   renderPolyrhythmLink(data);
 }
+
+document.addEventListener("music21-theme-change", () => {
+  if (!currentAnalysis) return;
+  void renderGuitarFingering(currentAnalysis.guitar_fingering);
+});
 
 function renderPolyrhythmLink(data: ChordAnalysis): void {
   const rhythm = data.polyrhythm_input || "1";

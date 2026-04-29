@@ -1,4 +1,6 @@
 // @ts-nocheck
+import "../theme.js";
+
 const systemsNode = document.querySelector("#systems");
 const summary = document.querySelector("#summary");
 const systemTitle = document.querySelector("#system-title");

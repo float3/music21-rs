@@ -20,10 +20,10 @@ function ensureTooltipStyles(): void {
       width: max-content;
       max-width: min(340px, calc(100vw - 24px));
       padding: 9px 10px;
-      border: 1px solid rgba(255, 255, 255, 0.16);
+      border: 1px solid var(--line, rgba(255, 255, 255, 0.16));
       border-radius: 8px;
-      background: #171717;
-      color: #fff;
+      background: var(--tooltip-bg, #171717);
+      color: var(--tooltip-ink, #ffffff);
       box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       font-size: 12px;

@@ -1,4 +1,5 @@
 import "../help-tooltips.js";
+import "../theme.js";
 import init, { known_chords } from "../pkg/music21_rs_web.js";
 
 type KnownChord = {

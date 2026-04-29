@@ -9,6 +9,7 @@
   },
   "include": [
     "./help-tooltips.ts",
+    "./theme.ts",
     "./chord/app.ts",
     "./chords/app.ts",
     "./polyrhythm/app.ts",

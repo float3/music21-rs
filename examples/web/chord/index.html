@@ -6,15 +6,75 @@
     <title>music21-rs Chord Inspector</title>
     <style>
       :root {
-        color-scheme: light;
+        color-scheme: light dark;
         --ink: #151515;
         --muted: #61646b;
         --line: #d9dde5;
         --panel: #ffffff;
+        --panel-soft: #f9fafb;
+        --panel-softer: #ffffff;
         --soft: #f4f6f8;
         --accent: #0f766e;
         --accent-strong: #0b5f59;
+        --accent-soft: #ecfdf5;
+        --accent-line: #b7d8d4;
         --warn: #b42318;
+        --warn-soft: #fff3f1;
+        --warn-line: #f3b0aa;
+        --warn-strong: #8a1f17;
+        --key-black: #202329;
+        --key-black-active: #99f6e4;
+        --tooltip-bg: #171717;
+        --tooltip-ink: #ffffff;
+        --wash: rgba(15, 118, 110, 0.08);
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) {
+          --ink: #edf5f3;
+          --muted: #aab7b4;
+          --line: #2c3b3a;
+          --panel: #131c1b;
+          --panel-soft: #172321;
+          --panel-softer: #0e1716;
+          --soft: #0b1110;
+          --accent: #2dd4bf;
+          --accent-strong: #7dded4;
+          --accent-soft: #123632;
+          --accent-line: #247970;
+          --warn: #ffb4a8;
+          --warn-soft: #351916;
+          --warn-line: #7f332c;
+          --warn-strong: #ffb4a8;
+          --key-black: #050807;
+          --key-black-active: #7dded4;
+          --tooltip-bg: #050807;
+          --tooltip-ink: #edf5f3;
+          --wash: rgba(45, 212, 191, 0.12);
+        }
+      }
+
+      :root[data-theme="dark"] {
+        --ink: #edf5f3;
+        --muted: #aab7b4;
+        --line: #2c3b3a;
+        --panel: #131c1b;
+        --panel-soft: #172321;
+        --panel-softer: #0e1716;
+        --soft: #0b1110;
+        --accent: #2dd4bf;
+        --accent-strong: #7dded4;
+        --accent-soft: #123632;
+        --accent-line: #247970;
+        --warn: #ffb4a8;
+        --warn-soft: #351916;
+        --warn-line: #7f332c;
+        --warn-strong: #ffb4a8;
+        --key-black: #050807;
+        --key-black-active: #7dded4;
+        --tooltip-bg: #050807;
+        --tooltip-ink: #edf5f3;
+        --wash: rgba(45, 212, 191, 0.12);
       }
 
       * {
@@ -26,7 +86,7 @@
         min-height: 100vh;
         color: var(--ink);
         background:
-          linear-gradient(90deg, rgba(15, 118, 110, 0.08), transparent 32rem),
+          linear-gradient(90deg, var(--wash), transparent 32rem),
           var(--soft);
         font-family:
           Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
@@ -83,7 +143,7 @@
 
       .home-link:hover {
         border-color: var(--accent);
-        background: #ecfdf5;
+        background: var(--accent-soft);
       }
 
       .top-links {
@@ -152,7 +212,7 @@
       #share.copied,
       #play-chord:hover {
         border-color: var(--accent);
-        background: #ecfdf5;
+        background: var(--accent-soft);
       }
 
       .midi-status {
@@ -220,14 +280,14 @@
       }
 
       .history button {
-        border-color: #b7d8d4;
-        background: #ecfdf5;
+        border-color: var(--accent-line);
+        background: var(--accent-soft);
         color: var(--accent-strong);
       }
 
       .clear-history {
         justify-self: start;
-        color: #8a1f17;
+        color: var(--warn-strong);
       }
 
       .layout {
@@ -293,9 +353,9 @@
         justify-content: center;
         width: 16px;
         height: 16px;
-        border: 1px solid #b7d8d4;
+        border: 1px solid var(--accent-line);
         border-radius: 50%;
-        background: #ecfdf5;
+        background: var(--accent-soft);
         color: var(--accent-strong);
         font-size: 11px;
         font-weight: 900;
@@ -312,8 +372,8 @@
         padding: 9px 10px;
         border: 1px solid var(--line);
         border-radius: 8px;
-        background: var(--ink);
-        color: #fff;
+        background: var(--tooltip-bg);
+        color: var(--tooltip-ink);
         box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
         content: attr(data-help);
         font-size: 12px;
@@ -347,7 +407,7 @@
         padding: 7px 9px;
         border: 1px solid var(--line);
         border-radius: 999px;
-        background: #f9fafb;
+        background: var(--panel-soft);
         font-size: 13px;
       }
 
@@ -371,7 +431,7 @@
         padding: 10px 12px;
         border: 1px solid var(--line);
         border-radius: 8px;
-        background: #f9fafb;
+        background: var(--panel-soft);
         color: var(--ink);
         text-align: left;
         cursor: pointer;
@@ -380,7 +440,7 @@
 
       .resolution-chip:hover {
         border-color: var(--accent);
-        background: #ecfdf5;
+        background: var(--accent-soft);
       }
 
       .resolution-chip strong {
@@ -399,7 +459,7 @@
 
       .resolution-chip.unavailable:hover {
         border-color: var(--line);
-        background: #f9fafb;
+        background: var(--panel-soft);
       }
 
       .resolution-play {
@@ -415,7 +475,7 @@
 
       .resolution-play:hover {
         border-color: var(--accent);
-        background: #ecfdf5;
+        background: var(--accent-soft);
       }
 
       .action-row {
@@ -441,7 +501,7 @@
 
       .button-link:hover {
         border-color: var(--accent);
-        background: #ecfdf5;
+        background: var(--accent-soft);
       }
 
       table {
@@ -577,7 +637,7 @@
         height: 104px;
         border: 1px solid var(--line);
         border-radius: 0 0 5px 5px;
-        background: #fff;
+        background: var(--panel-softer);
         color: var(--muted);
         display: flex;
         flex-direction: column;
@@ -610,7 +670,7 @@
 
       .key.black {
         height: 70px;
-        background: #202329;
+        background: var(--key-black);
         color: #fff;
       }
 
@@ -621,8 +681,8 @@
       }
 
       .key.black.active {
-        box-shadow: inset 0 -6px 0 #2dd4bf;
-        color: #99f6e4;
+        box-shadow: inset 0 -6px 0 var(--key-black-active);
+        color: var(--key-black-active);
       }
 
       .key.black .key-alt,
@@ -630,7 +690,7 @@
       .key.black.active .key-alt,
       .key.black.active .key-octave,
       .key.black:hover .key-alt {
-        color: #99f6e4;
+        color: var(--key-black-active);
       }
 
       .key:hover {
@@ -639,7 +699,7 @@
       }
 
       .key.black:hover {
-        color: #99f6e4;
+        color: var(--key-black-active);
       }
 
       .guitar-panel {
@@ -671,7 +731,7 @@
         padding: 5px 8px;
         border: 1px solid var(--line);
         border-radius: 999px;
-        background: #f9fafb;
+        background: var(--panel-soft);
         color: var(--ink);
         font-size: 12px;
         font-weight: 700;
@@ -697,6 +757,19 @@
         display: block;
         width: 100%;
         height: auto;
+        color: var(--ink);
+      }
+
+      #notation svg [fill="#000"],
+      #notation svg [fill="#000000"],
+      #notation svg [fill="black"] {
+        fill: currentColor;
+      }
+
+      #notation svg [stroke="#000"],
+      #notation svg [stroke="#000000"],
+      #notation svg [stroke="black"] {
+        stroke: currentColor;
       }
 
       .notation-fallback {
@@ -709,9 +782,9 @@
         display: none;
         margin: 0 0 16px;
         padding: 12px 14px;
-        border: 1px solid #f3b0aa;
+        border: 1px solid var(--warn-line);
         border-radius: 8px;
-        background: #fff3f1;
+        background: var(--warn-soft);
         color: var(--warn);
         font-weight: 700;
       }

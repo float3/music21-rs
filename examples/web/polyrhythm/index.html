@@ -7,17 +7,84 @@
   <title>music21-rs Polyrhythm Lab</title>
   <style>
     :root {
-      color-scheme: light;
+      color-scheme: light dark;
       --ink: #161616;
       --muted: #60646c;
       --line: #d9dde5;
       --panel: #ffffff;
+      --panel-soft: #f9fafb;
       --soft: #f5f7f9;
       --accent: #0f766e;
       --accent-strong: #0b5f59;
       --accent-soft: #e6fffb;
+      --accent-line: #b7d8d4;
       --warn: #b42318;
+      --warn-soft: #fff3f1;
+      --warn-line: #f3b0aa;
+      --warn-strong: #8a1f17;
+      --muted-soft: #f1f5f9;
+      --muted-line: #cbd5e1;
+      --tick-bg: #f9fafb;
+      --tick-hit-line: #99d6ce;
+      --tick-ghost: #ffffff;
+      --tooltip-bg: #171717;
+      --tooltip-ink: #ffffff;
+      --wash: rgba(15, 118, 110, 0.08);
       --pulse: #f59e0b;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --ink: #edf5f3;
+        --muted: #aab7b4;
+        --line: #2c3b3a;
+        --panel: #131c1b;
+        --panel-soft: #172321;
+        --soft: #0b1110;
+        --accent: #2dd4bf;
+        --accent-strong: #7dded4;
+        --accent-soft: #123632;
+        --accent-line: #2a6c65;
+        --warn: #ffb4a8;
+        --warn-soft: #351817;
+        --warn-line: #7f352d;
+        --warn-strong: #ffc8bf;
+        --muted-soft: #182220;
+        --muted-line: #334441;
+        --tick-bg: #0f1817;
+        --tick-hit-line: #2c8479;
+        --tick-ghost: #111a19;
+        --tooltip-bg: #050807;
+        --tooltip-ink: #edf5f3;
+        --wash: rgba(45, 212, 191, 0.08);
+        --pulse: #fbbf24;
+      }
+    }
+
+    :root[data-theme="dark"] {
+      --ink: #edf5f3;
+      --muted: #aab7b4;
+      --line: #2c3b3a;
+      --panel: #131c1b;
+      --panel-soft: #172321;
+      --soft: #0b1110;
+      --accent: #2dd4bf;
+      --accent-strong: #7dded4;
+      --accent-soft: #123632;
+      --accent-line: #2a6c65;
+      --warn: #ffb4a8;
+      --warn-soft: #351817;
+      --warn-line: #7f352d;
+      --warn-strong: #ffc8bf;
+      --muted-soft: #182220;
+      --muted-line: #334441;
+      --tick-bg: #0f1817;
+      --tick-hit-line: #2c8479;
+      --tick-ghost: #111a19;
+      --tooltip-bg: #050807;
+      --tooltip-ink: #edf5f3;
+      --wash: rgba(45, 212, 191, 0.08);
+      --pulse: #fbbf24;
     }
 
     * {
@@ -29,7 +96,7 @@
       min-height: 100vh;
       color: var(--ink);
       background:
-        linear-gradient(90deg, rgba(15, 118, 110, 0.08), transparent 34rem),
+        linear-gradient(90deg, var(--wash), transparent 34rem),
         var(--soft);
       font-family:
         Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
@@ -233,14 +300,14 @@
     }
 
     .history button {
-      border-color: #b7d8d4;
-      background: #ecfdf5;
+      border-color: var(--accent-line);
+      background: var(--accent-soft);
       color: var(--accent-strong);
     }
 
     .clear-history {
       margin: -8px 0 18px;
-      color: #8a1f17;
+      color: var(--warn-strong);
     }
 
     .random-row button {
@@ -266,9 +333,9 @@
       display: none;
       margin: 0 0 16px;
       padding: 12px 14px;
-      border: 1px solid #f3b0aa;
+      border: 1px solid var(--warn-line);
       border-radius: 8px;
-      background: #fff3f1;
+      background: var(--warn-soft);
       color: var(--warn);
       font-weight: 700;
     }
@@ -306,9 +373,9 @@
       height: 16px;
       min-width: 16px;
       padding: 0;
-      border: 1px solid #b7d8d4;
+      border: 1px solid var(--accent-line);
       border-radius: 50%;
-      background: #ecfdf5;
+      background: var(--accent-soft);
       color: var(--accent-strong);
       font-size: 11px;
       font-weight: 900;
@@ -326,8 +393,8 @@
       padding: 9px 10px;
       border: 1px solid var(--line);
       border-radius: 8px;
-      background: var(--ink);
-      color: #fff;
+      background: var(--tooltip-bg);
+      color: var(--tooltip-ink);
       box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
       content: attr(data-help);
       font-size: 12px;
@@ -403,7 +470,7 @@
       padding: 7px 9px;
       border: 1px solid var(--line);
       border-radius: 999px;
-      background: #f9fafb;
+      background: var(--panel-soft);
       font-size: 13px;
     }
 
@@ -422,6 +489,25 @@
       display: block;
       width: 100%;
       height: auto;
+      color: var(--ink);
+    }
+
+    #chord-notation svg [fill="#000"],
+    #chord-notation svg [fill="#000000"],
+    #chord-notation svg [fill="black"],
+    #rhythm-notation svg [fill="#000"],
+    #rhythm-notation svg [fill="#000000"],
+    #rhythm-notation svg [fill="black"] {
+      fill: currentColor;
+    }
+
+    #chord-notation svg [stroke="#000"],
+    #chord-notation svg [stroke="#000000"],
+    #chord-notation svg [stroke="black"],
+    #rhythm-notation svg [stroke="#000"],
+    #rhythm-notation svg [stroke="#000000"],
+    #rhythm-notation svg [stroke="black"] {
+      stroke: currentColor;
     }
 
     .notation-fallback {
@@ -459,8 +545,8 @@
     }
 
     .voice-row.muted .tick.hit {
-      background: #f1f5f9;
-      border-color: #cbd5e1;
+      background: var(--muted-soft);
+      border-color: var(--muted-line);
     }
 
     .voice-controls {
@@ -483,8 +569,8 @@
     }
 
     .voice-mute[aria-pressed="true"] {
-      border-color: #cbd5e1;
-      background: #f1f5f9;
+      border-color: var(--muted-line);
+      background: var(--muted-soft);
       color: var(--muted);
     }
 
@@ -515,16 +601,16 @@
       height: 24px;
       border: 1px solid var(--line);
       border-radius: 4px;
-      background: #f9fafb;
+      background: var(--tick-bg);
     }
 
     .tick.hit {
       background: var(--accent-soft);
-      border-color: #99d6ce;
+      border-color: var(--tick-hit-line);
     }
 
     .tick.ghost {
-      background: #fff;
+      background: var(--tick-ghost);
       border-style: dashed;
       opacity: 0.42;
     }

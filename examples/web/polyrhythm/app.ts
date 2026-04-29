@@ -1,5 +1,6 @@
 // @ts-nocheck
 import "../help-tooltips.js";
+import "../theme.js";
 
 const rhythmInput = document.querySelector("#rhythm-input");
 const baseInput = document.querySelector("#base-input");

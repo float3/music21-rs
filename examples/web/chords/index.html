@@ -6,15 +6,63 @@
     <title>Chord Browser - music21-rs</title>
     <style>
       :root {
-        color-scheme: light;
+        color-scheme: light dark;
         --ink: #151515;
         --muted: #62666f;
         --line: #d9dde5;
         --panel: #ffffff;
+        --panel-soft: #f9fafb;
+        --panel-softer: #ffffff;
         --soft: #f4f6f8;
         --accent: #0f766e;
         --accent-strong: #0b5f59;
+        --accent-soft: #ecfdf5;
+        --row-hover: #f1f8f6;
         --danger: #b42318;
+        --mono: #3b3f47;
+        --strong-muted: #2f4858;
+        --tooltip-bg: #171717;
+        --tooltip-ink: #ffffff;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) {
+          --ink: #edf5f3;
+          --muted: #aab7b4;
+          --line: #2c3b3a;
+          --panel: #131c1b;
+          --panel-soft: #172321;
+          --panel-softer: #0e1716;
+          --soft: #0b1110;
+          --accent: #2dd4bf;
+          --accent-strong: #7dded4;
+          --accent-soft: #123632;
+          --row-hover: #152b28;
+          --danger: #ffb4a8;
+          --mono: #c0d0cd;
+          --strong-muted: #b6d9d3;
+          --tooltip-bg: #050807;
+          --tooltip-ink: #edf5f3;
+        }
+      }
+
+      :root[data-theme="dark"] {
+        --ink: #edf5f3;
+        --muted: #aab7b4;
+        --line: #2c3b3a;
+        --panel: #131c1b;
+        --panel-soft: #172321;
+        --panel-softer: #0e1716;
+        --soft: #0b1110;
+        --accent: #2dd4bf;
+        --accent-strong: #7dded4;
+        --accent-soft: #123632;
+        --row-hover: #152b28;
+        --danger: #ffb4a8;
+        --mono: #c0d0cd;
+        --strong-muted: #b6d9d3;
+        --tooltip-bg: #050807;
+        --tooltip-ink: #edf5f3;
       }
 
       * {
@@ -109,7 +157,7 @@
         min-height: 40px;
         border: 1px solid var(--line);
         border-radius: 6px;
-        background: #fff;
+        background: var(--panel-softer);
         color: var(--ink);
         font: inherit;
         padding: 8px 10px;
@@ -144,7 +192,7 @@
         padding: 8px 12px;
         border: 1px solid var(--line);
         border-radius: 6px;
-        background: #fff;
+        background: var(--panel-softer);
         color: var(--accent-strong);
         cursor: pointer;
         font: inherit;
@@ -156,7 +204,7 @@
       .toggle-button.copied,
       .toggle-button:hover {
         border-color: var(--accent);
-        background: #ecfdf5;
+        background: var(--accent-soft);
       }
 
       .inversion-buttons {
@@ -180,7 +228,7 @@
         padding: 4px 8px;
         border: 1px solid var(--line);
         border-radius: 6px;
-        background: #fff;
+        background: var(--panel-softer);
         color: var(--accent-strong);
         font-size: 12px;
         font-weight: 760;
@@ -191,7 +239,7 @@
       .mini-button:hover,
       .mini-button:focus-visible {
         border-color: var(--accent);
-        background: #ecfdf5;
+        background: var(--accent-soft);
       }
 
       .table-wrap {
@@ -219,11 +267,11 @@
         font-size: 12px;
         text-transform: uppercase;
         letter-spacing: 0;
-        background: #f9fafb;
+        background: var(--panel-soft);
       }
 
       tbody tr:hover {
-        background: #f1f8f6;
+        background: var(--row-hover);
       }
 
       .name {
@@ -245,8 +293,8 @@
         padding: 3px 8px;
         border: 1px solid var(--line);
         border-radius: 6px;
-        background: #fff;
-        color: #333840;
+        background: var(--panel-softer);
+        color: var(--ink);
         font-size: 12px;
         font-weight: 650;
         line-height: 1.25;
@@ -265,7 +313,7 @@
       }
 
       .mono {
-        color: #3b3f47;
+        color: var(--mono);
         font-family:
           "SFMono-Regular", Consolas, "Liberation Mono", ui-monospace,
           monospace;
@@ -278,13 +326,13 @@
       }
 
       .key-estimate {
-        color: #2f4858;
+        color: var(--strong-muted);
         font-size: 13px;
         font-weight: 760;
       }
 
       .roman-numeral {
-        color: #333840;
+        color: var(--ink);
         font-size: 13px;
         font-weight: 760;
       }
@@ -296,9 +344,9 @@
         height: 18px;
         margin-left: 5px;
         place-items: center;
-        border: 1px solid #aeb6c3;
+        border: 1px solid var(--line);
         border-radius: 50%;
-        background: #fff;
+        background: var(--panel-softer);
         color: var(--muted);
         cursor: help;
         font-size: 12px;
@@ -316,8 +364,8 @@
         max-width: min(260px, calc(100vw - 40px));
         padding: 10px 12px;
         border-radius: 6px;
-        background: #171717;
-        color: #fff;
+        background: var(--tooltip-bg);
+        color: var(--tooltip-ink);
         content: attr(data-help);
         font-size: 12px;
         font-weight: 650;
