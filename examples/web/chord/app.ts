@@ -1,33 +1,177 @@
-// @ts-nocheck
 import "../help-tooltips.js";
 import init, { analyze_chord, analyze_chord_with_key } from "../pkg/music21_rs_web.js";
 
-const input = document.querySelector("#chord-input");
-const keyInput = document.querySelector("#key-input");
-const estimateKey = document.querySelector("#estimate-key");
-const form = document.querySelector("#form");
-const share = document.querySelector("#share");
-const playChord = document.querySelector("#play-chord");
-const midiStatus = document.querySelector("#midi-status");
-const historyOptions = document.querySelector("#chord-history");
-const error = document.querySelector("#error");
-const browserLink = document.querySelector("#browser-link");
-const polyrhythmLink = document.querySelector("#polyrhythm-link");
-const tuningLink = document.querySelector("#tuning-link");
-const openPolyrhythm = document.querySelector("#open-polyrhythm");
-const facts = document.querySelector("#facts");
-const pitchedNames = document.querySelector("#pitched-names");
-const resolutionChords = document.querySelector("#resolution-chords");
-const guitarFingering = document.querySelector("#guitar-fingering");
-const pitches = document.querySelector("#pitches");
-const keyboard = document.querySelector("#keyboard");
-const notation = document.querySelector("#notation");
-const randomChord = document.querySelector("#random-chord");
-const randomMinNotes = document.querySelector("#random-min-notes");
-const randomMaxNotes = document.querySelector("#random-max-notes");
-const examples = document.querySelector("#examples");
-const history = document.querySelector("#history");
-const clearHistory = document.querySelector("#clear-history");
+type TuningFrequencyInfo = {
+  name: string;
+  frequency_hz: number;
+  cents_from_equal_temperament: number;
+};
+
+type PitchInfo = {
+  index: number;
+  name: string;
+  name_with_octave: string;
+  midi: number;
+  octave: number | null;
+  pitch_space: number;
+  pitch_class: number;
+  alter: number;
+  frequency_hz: number;
+  tuning_frequencies?: TuningFrequencyInfo[];
+};
+
+type ResolutionChordInfo = {
+  pitched_common_name: string;
+  key_context: string;
+  pitch_names: string[];
+  pitch_classes: number[];
+};
+
+type RomanNumeralInfo = {
+  figure: string;
+  key_context: string;
+};
+
+type GuitarStringFingeringInfo = {
+  string_number: number;
+  string_name: string;
+  open_pitch_space: number;
+  open_pitch_class: number;
+  fret: number | null;
+  finger: number | null;
+  pitch_space: number | null;
+  pitch_class: number | null;
+  pitch_name: string | null;
+};
+
+type GuitarFingeringInfo = {
+  strings: GuitarStringFingeringInfo[];
+  base_fret: number;
+  fret_span: number;
+  covered_pitch_spaces: number[];
+  omitted_pitch_spaces: number[];
+  covered_pitch_classes: number[];
+  omitted_pitch_classes: number[];
+};
+
+type ChordAnalysis = {
+  input: string;
+  common_name: string;
+  common_names: string[];
+  pitched_common_name: string;
+  pitched_common_names: string[];
+  chord_symbol: string | null;
+  chord_symbols: string[];
+  pitch_classes: number[];
+  root_pitch_name: string | null;
+  bass_pitch_name: string | null;
+  forte_class: string | null;
+  normal_form: number[] | null;
+  interval_class_vector: number[] | null;
+  inversion: number | null;
+  inversion_name: string | null;
+  key_context: string | null;
+  key_estimate: string | null;
+  roman_numeral_context: RomanNumeralInfo | null;
+  roman_numeral_estimate: RomanNumeralInfo | null;
+  guitar_fingering: GuitarFingeringInfo | null;
+  polyrhythm_input: string;
+  resolution_chords: ResolutionChordInfo[];
+  pitches: PitchInfo[];
+};
+
+type VexChordOptions = Record<string, string | number | boolean>;
+type VexChordDefinition = {
+  chord: Array<[number, number | "x"]>;
+  position: number;
+  bars: VexBarre[];
+  barres: VexBarre[];
+  tuning: string[];
+};
+type VexBarre = {
+  fromString: number;
+  toString: number;
+  fret: number;
+};
+type VexChordBox = {
+  draw: (chord: VexChordDefinition) => void;
+};
+type VexChordBoxConstructor = new (
+  selector: string,
+  options: VexChordOptions,
+) => VexChordBox;
+type VexRenderer = {
+  draw?: (
+    selector: string,
+    chord: VexChordDefinition,
+    options: VexChordOptions,
+  ) => void;
+  ChordBox?: VexChordBoxConstructor;
+};
+
+type AbcRenderer = (
+  target: string,
+  abc: string,
+  options: { responsive: string; staffwidth: number; scale: number },
+) => unknown;
+
+type PlaybackMode = "arpeggio" | "block";
+type FrequencySequenceItem = {
+  frequencies: number[];
+  duration: number;
+  mode?: PlaybackMode;
+  gapAfter?: number;
+};
+type AnalyzeOptions = {
+  syncUrl?: boolean;
+  remember?: boolean;
+};
+
+declare global {
+  interface Window {
+    vexchords?: unknown;
+    VexChords?: unknown;
+    Vexchords?: unknown;
+    ABCJS?: { renderAbc?: AbcRenderer };
+    abcjs?: { renderAbc?: AbcRenderer };
+    webkitAudioContext?: typeof AudioContext;
+  }
+}
+
+function mustQuery<T extends Element>(selector: string): T {
+  const element = document.querySelector<T>(selector);
+  if (!element) {
+    throw new Error(`Missing required element: ${selector}`);
+  }
+  return element;
+}
+
+const input = mustQuery<HTMLInputElement>("#chord-input");
+const keyInput = mustQuery<HTMLInputElement>("#key-input");
+const estimateKey = mustQuery<HTMLButtonElement>("#estimate-key");
+const form = mustQuery<HTMLFormElement>("#form");
+const share = mustQuery<HTMLButtonElement>("#share");
+const playChord = mustQuery<HTMLButtonElement>("#play-chord");
+const midiStatus = mustQuery<HTMLElement>("#midi-status");
+const historyOptions = mustQuery<HTMLDataListElement>("#chord-history");
+const error = mustQuery<HTMLElement>("#error");
+const browserLink = mustQuery<HTMLAnchorElement>("#browser-link");
+const polyrhythmLink = mustQuery<HTMLAnchorElement>("#polyrhythm-link");
+const tuningLink = mustQuery<HTMLAnchorElement>("#tuning-link");
+const openPolyrhythm = mustQuery<HTMLAnchorElement>("#open-polyrhythm");
+const facts = mustQuery<HTMLElement>("#facts");
+const pitchedNames = mustQuery<HTMLElement>("#pitched-names");
+const resolutionChords = mustQuery<HTMLElement>("#resolution-chords");
+const guitarFingering = mustQuery<HTMLElement>("#guitar-fingering");
+const pitches = mustQuery<HTMLTableSectionElement>("#pitches");
+const keyboard = mustQuery<HTMLElement>("#keyboard");
+const notation = mustQuery<HTMLElement>("#notation");
+const randomChord = mustQuery<HTMLButtonElement>("#random-chord");
+const randomMinNotes = mustQuery<HTMLInputElement>("#random-min-notes");
+const randomMaxNotes = mustQuery<HTMLInputElement>("#random-max-notes");
+const examples = mustQuery<HTMLElement>("#examples");
+const history = mustQuery<HTMLElement>("#history");
+const clearHistory = mustQuery<HTMLButtonElement>("#clear-history");
 const pcNames = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"];
 const pcAltNames = ["B#", "Db", "D", "D#", "Fb", "E#", "Gb", "G", "G#", "Bbb", "A#", "Cb"];
 const inputPitchNames = ["C", "C#", "D", "E-", "E", "F", "F#", "G", "A-", "A", "B-", "B"];
@@ -37,17 +181,17 @@ const keyParam = "key";
 const vexChordsUrl = "https://cdn.jsdelivr.net/npm/vexchords@1.2.0/dist/vexchords.dev.js";
 const historyStorageKey = "music21-rs.chordInspector.history";
 const maxHistoryItems = 24;
-let shareResetTimer = null;
-let currentAnalysis = null;
+let shareResetTimer: number | null = null;
+let currentAnalysis: ChordAnalysis | null = null;
 let guitarRenderToken = 0;
-let vexChordsPromise = null;
-let audioContext = null;
-let activeChordNodes = [];
-let nextChordPlaybackMode = "arpeggio";
-let midiAccess = null;
-let heldMidiNotes = new Map();
+let vexChordsPromise: Promise<VexRenderer | null> | null = null;
+let audioContext: AudioContext | null = null;
+let activeChordNodes: OscillatorNode[] = [];
+let nextChordPlaybackMode: PlaybackMode = "arpeggio";
+let midiAccess: MIDIAccess | null = null;
+let heldMidiNotes = new Map<number, number>();
 let chordHistory = loadChordHistory();
-let chordHistoryLabels = new Map();
+let chordHistoryLabels = new Map<string, string>();
 
 if (!window.location.pathname.includes("/chord/")) {
   browserLink.href = "./chords/";
@@ -55,18 +199,18 @@ if (!window.location.pathname.includes("/chord/")) {
   tuningLink.href = "./tuning/";
 }
 
-function text(value) {
+function text(value: unknown): string {
   if (value === null || value === undefined) return "Not available";
   if (Array.isArray(value)) return value.length ? value.join(", ") : "Not available";
   return String(value);
 }
 
-function romanText(value) {
+function romanText(value: RomanNumeralInfo | null | undefined): string {
   if (!value?.figure) return "Not available";
   return value.key_context ? `${value.figure} in ${value.key_context}` : value.figure;
 }
 
-function renderChips(node, values) {
+function renderChips(node: HTMLElement, values: string[] | null | undefined): void {
   node.replaceChildren();
   const list = values && values.length ? values : ["Not available"];
   for (const value of list) {
@@ -77,13 +221,13 @@ function renderChips(node, values) {
   }
 }
 
-function renderFacts(data) {
-  const helpText = {
+function renderFacts(data: ChordAnalysis): void {
+  const helpText: Record<string, string> = {
     "Forte class": "A catalog label for the chord's pitch-class set, grouping transpositionally or inversionally related sets.",
     "Normal form": "The chord's pitch classes rotated into their most compact ascending order.",
     "Interval-class vector": "A six-number count of the unordered interval classes contained inside the pitch-class set.",
   };
-  const rows = [
+  const rows: Array<[string, unknown]> = [
     ["Chord symbol", data.chord_symbol],
     ["Common name", data.common_name],
     ["Root", data.root_pitch_name],
@@ -119,7 +263,7 @@ function renderFacts(data) {
   }
 }
 
-function renderResolutions(data) {
+function renderResolutions(data: ChordAnalysis): void {
   resolutionChords.replaceChildren();
   const values = data.resolution_chords || [];
   if (!values.length) {
@@ -147,7 +291,7 @@ function renderResolutions(data) {
     item.addEventListener("pointerleave", clearResolutionMotion);
     item.addEventListener("focusin", () => showResolutionMotion(value));
     item.addEventListener("focusout", (event) => {
-      if (!item.contains(event.relatedTarget)) clearResolutionMotion();
+      if (!item.contains(event.relatedTarget as Node | null)) clearResolutionMotion();
     });
     button.addEventListener("click", async () => {
       clearResolutionMotion();
@@ -172,17 +316,17 @@ function renderResolutions(data) {
   }
 }
 
-function formatHz(value) {
+function formatHz(value: number): string {
   return Number.isFinite(value) ? `${value.toFixed(3)} Hz` : "Not available";
 }
 
-function formatCents(value) {
+function formatCents(value: number): string {
   if (!Number.isFinite(value)) return "";
   const rounded = Math.abs(value) < 0.005 ? 0 : value;
   return `${rounded > 0 ? "+" : ""}${rounded.toFixed(2)} cents`;
 }
 
-function renderFrequencyCell(pitch) {
+function renderFrequencyCell(pitch: PitchInfo): HTMLTableCellElement {
   const td = document.createElement("td");
   td.className = "frequency-cell";
   const list = document.createElement("div");
@@ -223,7 +367,7 @@ function renderFrequencyCell(pitch) {
   return td;
 }
 
-function renderPitches(data) {
+function renderPitches(data: ChordAnalysis): void {
   pitches.replaceChildren();
   for (const pitch of data.pitches) {
     const tr = document.createElement("tr");
@@ -236,26 +380,26 @@ function renderPitches(data) {
     ];
     for (const cell of cells) {
       const td = document.createElement("td");
-      td.textContent = cell;
+      td.textContent = String(cell);
       tr.appendChild(td);
     }
     tr.appendChild(renderFrequencyCell(pitch));
     for (const cell of [pitch.pitch_class, pitch.alter.toFixed(3)]) {
       const td = document.createElement("td");
-      td.textContent = cell;
+      td.textContent = String(cell);
       tr.appendChild(td);
     }
     pitches.appendChild(tr);
   }
 }
 
-function displayPitchName(value) {
+function displayPitchName(value: unknown): string {
   const match = String(value ?? "").match(/^([A-G])([#-]*)(-?\d+)?$/);
   if (!match) return String(value ?? "");
   return `${match[1]}${match[2].replaceAll("-", "b")}${match[3] ?? ""}`;
 }
 
-function renderKeyboard(activeClasses) {
+function renderKeyboard(activeClasses: number[]): void {
   const active = new Set(activeClasses);
   keyboard.replaceChildren();
   for (let index = 0; index < 24; index += 1) {
@@ -284,7 +428,7 @@ function renderKeyboard(activeClasses) {
   }
 }
 
-async function renderGuitarFingering(fingering) {
+async function renderGuitarFingering(fingering: GuitarFingeringInfo | null): Promise<void> {
   const renderToken = ++guitarRenderToken;
   guitarFingering.replaceChildren();
   if (!fingering) {
@@ -338,7 +482,7 @@ async function renderGuitarFingering(fingering) {
   }
 }
 
-function renderGuitarUnavailable(node, reason = null) {
+function renderGuitarUnavailable(node: HTMLElement, reason: unknown = null): void {
   if (reason) console.error("VexChords render failed", reason);
   node.replaceChildren();
   const empty = document.createElement("div");
@@ -349,11 +493,11 @@ function renderGuitarUnavailable(node, reason = null) {
   node.appendChild(empty);
 }
 
-function vexChordsRenderer() {
+function vexChordsRenderer(): unknown {
   return window.vexchords || window.VexChords || window.Vexchords || null;
 }
 
-function loadVexChordsRenderer() {
+function loadVexChordsRenderer(): Promise<VexRenderer | null> {
   const globalRenderer = normalizeVexChordsRenderer(vexChordsRenderer());
   if (globalRenderer) return Promise.resolve(globalRenderer);
   vexChordsPromise ||= loadScript(vexChordsUrl)
@@ -365,11 +509,11 @@ function loadVexChordsRenderer() {
   return vexChordsPromise;
 }
 
-function loadScript(src) {
+function loadScript(src: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const existing = document.querySelector(`script[src="${src}"]`);
     if (existing) {
-      existing.addEventListener("load", resolve, { once: true });
+      existing.addEventListener("load", () => resolve(), { once: true });
       existing.addEventListener("error", () => reject(new Error(`Failed to load ${src}`)), {
         once: true,
       });
@@ -379,7 +523,7 @@ function loadScript(src) {
     const script = document.createElement("script");
     script.src = src;
     script.async = true;
-    script.addEventListener("load", resolve, { once: true });
+    script.addEventListener("load", () => resolve(), { once: true });
     script.addEventListener("error", () => reject(new Error(`Failed to load ${src}`)), {
       once: true,
     });
@@ -387,28 +531,37 @@ function loadScript(src) {
   });
 }
 
-function normalizeVexChordsRenderer(module) {
+function normalizeVexChordsRenderer(module: unknown): VexRenderer | null {
+  const moduleRecord = module as Record<string, unknown> | null | undefined;
+  const defaultRecord = moduleRecord?.default as Record<string, unknown> | null | undefined;
   for (const candidate of [
     module,
-    module?.default,
-    module?.vexchords,
-    module?.default?.default,
+    moduleRecord?.default,
+    moduleRecord?.vexchords,
+    defaultRecord?.default,
   ]) {
     if (!candidate) continue;
-    if (typeof candidate.draw === "function") {
-      return { draw: candidate.draw.bind(candidate) };
+    const candidateRecord = candidate as Record<string, unknown>;
+    if (typeof candidateRecord.draw === "function") {
+      return {
+        draw: candidateRecord.draw.bind(candidate) as VexRenderer["draw"],
+      };
     }
-    if (typeof candidate.ChordBox === "function") {
-      return { ChordBox: candidate.ChordBox };
+    if (typeof candidateRecord.ChordBox === "function") {
+      return { ChordBox: candidateRecord.ChordBox as VexChordBoxConstructor };
     }
     if (typeof candidate === "function") {
-      return { ChordBox: candidate };
+      return { ChordBox: candidate as VexChordBoxConstructor };
     }
   }
   return null;
 }
 
-function drawVexChord(vex, selector, fingering) {
+function drawVexChord(
+  vex: VexRenderer,
+  selector: string,
+  fingering: GuitarFingeringInfo,
+): void {
   const chord = vexChordForFingering(fingering);
   const options = vexChordOptions(fingering);
   if (typeof vex.draw === "function") {
@@ -423,7 +576,7 @@ function drawVexChord(vex, selector, fingering) {
   throw new Error("VexChords renderer has no draw API");
 }
 
-function vexChordOptions(fingering) {
+function vexChordOptions(fingering: GuitarFingeringInfo): VexChordOptions {
   return {
     width: 190,
     height: 220,
@@ -440,7 +593,7 @@ function vexChordOptions(fingering) {
   };
 }
 
-function vexChordForFingering(fingering) {
+function vexChordForFingering(fingering: GuitarFingeringInfo): VexChordDefinition {
   const position = fingering.base_fret > 1 ? fingering.base_fret : 0;
   const barres = vexBarresForFingering(fingering, position);
   return {
@@ -455,30 +608,41 @@ function vexChordForFingering(fingering) {
   };
 }
 
-function vexTuningLabel(value) {
+function vexTuningLabel(value: string | null | undefined): string {
   return String(value ?? "").replace(/-?\d+$/, "");
 }
 
-function vexFretValue(fret, position) {
+function vexFretValue(fret: number | null | undefined, position: number): number | "x" {
   if (fret === null || fret === undefined) return "x";
   if (fret === 0 || position <= 1) return fret;
   return fret - position + 1;
 }
 
-function vexBarresForFingering(fingering, position) {
-  const groups = new Map();
+function vexBarresForFingering(
+  fingering: GuitarFingeringInfo,
+  position: number,
+): VexBarre[] {
+  const groups = new Map<string, number[]>();
   for (const string of fingering.strings || []) {
-    if (!Number.isFinite(string.fret) || string.fret <= 0 || !Number.isFinite(string.finger)) {
+    const fretValue = string.fret;
+    const finger = string.finger;
+    if (
+      fretValue === null ||
+      finger === null ||
+      !Number.isFinite(fretValue) ||
+      fretValue <= 0 ||
+      !Number.isFinite(finger)
+    ) {
       continue;
     }
-    const fret = vexFretValue(string.fret, position);
-    const key = `${string.finger}:${fret}`;
+    const fret = vexFretValue(fretValue, position);
+    const key = `${finger}:${fret}`;
     const strings = groups.get(key) || [];
     strings.push(string.string_number);
     groups.set(key, strings);
   }
 
-  const barres = [];
+  const barres: VexBarre[] = [];
   for (const [key, strings] of groups) {
     if (strings.length < 2) continue;
     const sorted = strings.sort((left, right) => right - left);
@@ -494,11 +658,33 @@ function vexBarresForFingering(fingering, position) {
   return barres;
 }
 
-function displayPitchClassName(pitchClass) {
+function displayPitchClassName(pitchClass: number): string {
   return pcNames[((pitchClass % 12) + 12) % 12];
 }
 
-function togglePitchClass(pitchClass) {
+function pitchClassFromName(value: string): number | null {
+  const match = value.trim().replaceAll("-", "b").match(/^([A-G])([#b]*)(-?\d+)?$/);
+  if (!match) return null;
+
+  const naturalPitchClasses: Record<string, number> = {
+    C: 0,
+    D: 2,
+    E: 4,
+    F: 5,
+    G: 7,
+    A: 9,
+    B: 11,
+  };
+  const natural = naturalPitchClasses[match[1]];
+  if (natural === undefined) return null;
+
+  const accidental = match[2]
+    .split("")
+    .reduce((sum, char) => sum + (char === "#" ? 1 : -1), 0);
+  return ((natural + accidental) % 12 + 12) % 12;
+}
+
+function togglePitchClass(pitchClass: number): void {
   const tokens = chordInputTokens(input.value);
   const hasPitchClass = tokens.some((token) => pitchClassFromName(token) === pitchClass);
   if (hasPitchClass) {
@@ -513,20 +699,23 @@ function togglePitchClass(pitchClass) {
   analyze({ remember: Boolean(normalizeChordInput(input.value)) });
 }
 
-function chordInputTokens(value) {
+function chordInputTokens(value: string): string[] {
   return normalizeChordInput(value)
     .split(/\s+/)
     .filter(Boolean);
 }
 
-function addPitchToChord(pitchName) {
+function addPitchToChord(pitchName: string): void {
   const current = normalizeChordInput(input.value);
   input.value = current ? `${current} ${pitchName}` : pitchName;
   resetShareButton();
   analyze({ remember: true });
 }
 
-function renderNotation(data, resolutionAnalysis = null) {
+function renderNotation(
+  data: ChordAnalysis,
+  resolutionAnalysis: ChordAnalysis | null = null,
+): void {
   notation.replaceChildren();
   const sourcePitches = data.pitches || [];
   const targetPitches = resolutionAnalysis?.pitches || null;
@@ -560,11 +749,14 @@ function clearResolutionMotion() {
   if (currentAnalysis) renderNotation(currentAnalysis);
 }
 
-function showResolutionMotion(resolution) {
+function showResolutionMotion(resolution: ResolutionChordInfo): void {
   if (!currentAnalysis) return;
   let resolutionAnalysis;
   try {
-    resolutionAnalysis = analyze_chord_with_key(chordValueForResolution(resolution), currentKeyContext());
+    resolutionAnalysis = analyze_chord_with_key(
+      chordValueForResolution(resolution),
+      currentKeyContext(),
+    ) as ChordAnalysis;
   } catch {
     clearResolutionMotion();
     return;
@@ -573,7 +765,7 @@ function showResolutionMotion(resolution) {
   renderNotation(currentAnalysis, resolutionAnalysis);
 }
 
-function buildResolutionAbc(sourcePitches, targetPitches) {
+function buildResolutionAbc(sourcePitches: PitchInfo[], targetPitches: PitchInfo[]): string {
   const sourceNames = sourcePitches.map((pitch) => pitch.name_with_octave || pitch.name);
   const targetNames = targetPitches.map((pitch) => pitch.name_with_octave || pitch.name);
   const sourceNotes = sourceNames.map(abcNote).filter(Boolean);
@@ -583,7 +775,7 @@ function buildResolutionAbc(sourcePitches, targetPitches) {
   return `X:1\nL:1/4\nM:4/4\nK:C clef=${chooseClef([...sourceNames, ...targetNames])}\n${sourceChord} | ${targetChord} |]\n`;
 }
 
-function buildAbc(pitchData) {
+function buildAbc(pitchData: PitchInfo[]): string {
   const pitchNames = pitchData.map((pitch) => pitch.name_with_octave || pitch.name);
   const notes = pitchData
     .map((pitch) => abcNote(pitch.name_with_octave || pitch.name))
@@ -592,15 +784,17 @@ function buildAbc(pitchData) {
   return `X:1\nL:1/4\nM:4/4\nK:C clef=${chooseClef(pitchNames)}\n${chord} |]\n`;
 }
 
-function chooseClef(pitchNames) {
-  const midiValues = pitchNames.map(pitchMidi).filter(Number.isFinite);
+function chooseClef(pitchNames: string[]): string {
+  const midiValues = pitchNames
+    .map(pitchMidi)
+    .filter((value): value is number => Number.isFinite(value));
   if (!midiValues.length) return "treble";
   const average = midiValues.reduce((sum, value) => sum + value, 0) / midiValues.length;
   const lowest = Math.min(...midiValues);
   return average < 60 || lowest < 48 ? "bass" : "treble";
 }
 
-function pitchMidi(value) {
+function pitchMidi(value: string | number): number {
   const trimmed = String(value).trim();
   const midiNumber = Number.parseInt(trimmed, 10);
   if (/^-?\d+$/.test(trimmed) && Number.isFinite(midiNumber)) {
@@ -608,7 +802,17 @@ function pitchMidi(value) {
   }
   const match = trimmed.match(/^([A-G])([#b-]*)(-?\d+)?$/);
   if (!match) return Number.NaN;
-  const natural = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }[match[1]];
+  const naturalPitchClasses: Record<string, number> = {
+    C: 0,
+    D: 2,
+    E: 4,
+    F: 5,
+    G: 7,
+    A: 9,
+    B: 11,
+  };
+  const natural = naturalPitchClasses[match[1]];
+  if (natural === undefined) return Number.NaN;
   const accidental = match[2]
     .split("")
     .reduce((sum, char) => sum + (char === "#" ? 1 : -1), 0);
@@ -617,7 +821,7 @@ function pitchMidi(value) {
   return (octave + 1) * 12 + natural + accidental;
 }
 
-function abcNote(value) {
+function abcNote(value: string | number): string {
   const match = String(value).trim().match(/^([A-G])([#b-]*)(-?\d+)?$/);
   if (!match) return "";
 
@@ -635,7 +839,7 @@ function abcNote(value) {
   return `${accidental}${step}${",".repeat(Math.max(0, 4 - octave))}`;
 }
 
-function render(data) {
+function render(data: ChordAnalysis): void {
   currentAnalysis = data;
   error.style.display = "none";
   renderFacts(data);
@@ -648,24 +852,24 @@ function render(data) {
   renderPolyrhythmLink(data);
 }
 
-function renderPolyrhythmLink(data) {
+function renderPolyrhythmLink(data: ChordAnalysis): void {
   const rhythm = data.polyrhythm_input || "1";
   const url = new URL("../polyrhythm/", window.location.href);
   url.searchParams.set("rhythm", rhythm);
   openPolyrhythm.href = url.href;
 }
 
-function getSharedChord() {
+function getSharedChord(): string | null {
   const params = new URLSearchParams(window.location.search);
   return params.has(chordParam) ? (params.get(chordParam) ?? "") : null;
 }
 
-function getSharedKey() {
+function getSharedKey(): string | null {
   const params = new URLSearchParams(window.location.search);
   return params.has(keyParam) ? (params.get(keyParam) ?? "") : null;
 }
 
-function buildShareUrl(value, keyValue = keyInput.value) {
+function buildShareUrl(value: string, keyValue = keyInput.value): URL {
   const url = new URL(window.location.href);
   url.searchParams.set(chordParam, value);
   const key = normalizeKeyInput(keyValue);
@@ -677,32 +881,32 @@ function buildShareUrl(value, keyValue = keyInput.value) {
   return url;
 }
 
-function syncShareUrl() {
+function syncShareUrl(): string {
   const url = buildShareUrl(input.value);
   window.history.replaceState({ chord: input.value, key: keyInput.value }, "", url.href);
   return url.href;
 }
 
-function normalizeChordInput(value) {
+function normalizeChordInput(value: string): string {
   return value.trim().replace(/\s+/g, " ");
 }
 
-function normalizeKeyInput(value) {
+function normalizeKeyInput(value: string): string {
   return value.trim().replace(/\s+/g, " ");
 }
 
-function currentKeyContext() {
+function currentKeyContext(): string {
   return normalizeKeyInput(keyInput.value);
 }
 
-function loadChordHistory() {
+function loadChordHistory(): string[] {
   try {
     const raw = window.localStorage?.getItem(historyStorageKey);
     if (!raw) return [];
     const values = JSON.parse(raw);
     if (!Array.isArray(values)) return [];
 
-    const seen = new Set();
+    const seen = new Set<string>();
     return values
       .map((value) => (typeof value === "string" ? normalizeChordInput(value) : ""))
       .filter((value) => {
@@ -716,7 +920,7 @@ function loadChordHistory() {
   }
 }
 
-function saveChordHistory() {
+function saveChordHistory(): void {
   try {
     window.localStorage?.setItem(historyStorageKey, JSON.stringify(chordHistory));
   } catch {
@@ -724,7 +928,7 @@ function saveChordHistory() {
   }
 }
 
-function renderChordHistory() {
+function renderChordHistory(): void {
   historyOptions.replaceChildren();
   history.replaceChildren();
   clearHistory.hidden = chordHistory.length === 0;
@@ -748,16 +952,16 @@ function renderChordHistory() {
   }
 }
 
-function clearChordHistory() {
+function clearChordHistory(): void {
   chordHistory = [];
   chordHistoryLabels.clear();
   saveChordHistory();
   renderChordHistory();
 }
 
-function historyLabelForChord(value) {
+function historyLabelForChord(value: string): string {
   try {
-    const data = analyze_chord(value);
+    const data = analyze_chord(value) as ChordAnalysis;
     const label = data.pitched_common_names?.[0] || data.pitched_common_name || value;
     chordHistoryLabels.set(value, label);
     return label;
@@ -766,7 +970,7 @@ function historyLabelForChord(value) {
   }
 }
 
-function rememberChord(value) {
+function rememberChord(value: string): void {
   const normalized = normalizeChordInput(value);
   if (!normalized) return;
   historyLabelForChord(normalized);
@@ -779,19 +983,19 @@ function rememberChord(value) {
   renderChordHistory();
 }
 
-function resetShareButton() {
+function resetShareButton(): void {
   share.textContent = "Copy link";
   share.classList.remove("copied");
 }
 
-function markShareCopied() {
+function markShareCopied(): void {
   share.textContent = "Copied";
   share.classList.add("copied");
   if (shareResetTimer) clearTimeout(shareResetTimer);
   shareResetTimer = setTimeout(resetShareButton, 1600);
 }
 
-async function writeClipboard(value) {
+async function writeClipboard(value: string): Promise<void> {
   if (navigator.clipboard?.writeText && window.isSecureContext) {
     await navigator.clipboard.writeText(value);
     return;
@@ -813,7 +1017,7 @@ async function writeClipboard(value) {
   }
 }
 
-async function ensureAudio() {
+async function ensureAudio(): Promise<boolean> {
   const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
   if (!AudioContextConstructor) {
     error.textContent = "Audio is not available in this browser.";
@@ -834,7 +1038,7 @@ async function ensureAudio() {
   return true;
 }
 
-function stopChordPlayback() {
+function stopChordPlayback(): void {
   for (const node of activeChordNodes) {
     try {
       node.stop();
@@ -845,31 +1049,37 @@ function stopChordPlayback() {
   activeChordNodes = [];
 }
 
-function chordValueForResolution(resolution) {
+function chordValueForResolution(resolution: ResolutionChordInfo): string {
   return (resolution.pitch_names || []).join(" ");
 }
 
-function frequenciesFromAnalysis(analysis) {
+function frequenciesFromAnalysis(analysis: ChordAnalysis | null): number[] {
   return (analysis?.pitches ?? [])
     .map((pitch) => pitch.frequency_hz)
     .filter((frequency) => Number.isFinite(frequency) && frequency > 0);
 }
 
-function scheduleChordFrequencies(frequencies, startTime, duration) {
+function scheduleChordFrequencies(
+  frequencies: number[],
+  startTime: number,
+  duration: number,
+): void {
+  const context = audioContext;
+  if (!context) return;
   const gainPerVoice = Math.min(0.18, 0.52 / Math.sqrt(frequencies.length));
   const attackEnd = startTime + 0.018;
   const releaseStart = startTime + Math.max(0.08, duration - 0.1);
   const stopTime = startTime + duration + 0.08;
 
   for (const frequency of frequencies) {
-    const oscillator = audioContext.createOscillator();
-    const gain = audioContext.createGain();
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
     oscillator.type = "triangle";
     oscillator.frequency.setValueAtTime(frequency, startTime);
     gain.gain.setValueAtTime(0.0001, startTime);
     gain.gain.exponentialRampToValueAtTime(gainPerVoice, attackEnd);
     gain.gain.exponentialRampToValueAtTime(0.0001, releaseStart);
-    oscillator.connect(gain).connect(audioContext.destination);
+    oscillator.connect(gain).connect(context.destination);
     oscillator.start(startTime);
     oscillator.stop(stopTime);
     activeChordNodes.push(oscillator);
@@ -879,13 +1089,13 @@ function scheduleChordFrequencies(frequencies, startTime, duration) {
   }
 }
 
-function arpeggioDuration(frequencies) {
+function arpeggioDuration(frequencies: number[]): number {
   const step = 0.14;
   const noteDuration = 0.64;
   return Math.max(noteDuration, (frequencies.length - 1) * step + noteDuration);
 }
 
-function scheduleArpeggioFrequencies(frequencies, startTime) {
+function scheduleArpeggioFrequencies(frequencies: number[], startTime: number): void {
   const step = 0.14;
   const noteDuration = 0.64;
 
@@ -894,7 +1104,7 @@ function scheduleArpeggioFrequencies(frequencies, startTime) {
   });
 }
 
-function scheduleFrequencyItem(item, startTime) {
+function scheduleFrequencyItem(item: FrequencySequenceItem, startTime: number): number {
   if (item.mode === "arpeggio") {
     scheduleArpeggioFrequencies(item.frequencies, startTime);
     return arpeggioDuration(item.frequencies);
@@ -904,7 +1114,7 @@ function scheduleFrequencyItem(item, startTime) {
   return item.duration;
 }
 
-async function playFrequencySequence(sequence) {
+async function playFrequencySequence(sequence: FrequencySequenceItem[]): Promise<void> {
   const playable = sequence.filter((item) => item.frequencies.length);
   if (playable.length !== sequence.length) {
     error.textContent = "No pitched notes to play.";
@@ -915,19 +1125,23 @@ async function playFrequencySequence(sequence) {
 
   stopChordPlayback();
   error.style.display = "none";
-  let startTime = audioContext.currentTime;
+  const context = audioContext;
+  if (!context) return;
+  let startTime = context.currentTime;
   for (const item of playable) {
     startTime += scheduleFrequencyItem(item, startTime) + (item.gapAfter ?? 0);
   }
 }
 
-async function playCurrentChord(mode = "block") {
+async function playCurrentChord(mode: PlaybackMode = "block"): Promise<void> {
   if (!currentAnalysis && !analyze({ remember: false })) return;
-  const frequencies = frequenciesFromAnalysis(currentAnalysis);
+  const analysis = currentAnalysis;
+  if (!analysis) return;
+  const frequencies = frequenciesFromAnalysis(analysis);
   await playFrequencySequence([{ frequencies, duration: 1.45, mode }]);
 }
 
-function updatePlayChordButton() {
+function updatePlayChordButton(): void {
   playChord.textContent =
     nextChordPlaybackMode === "arpeggio" ? "Play arpeggio" : "Play chord";
   playChord.setAttribute(
@@ -938,18 +1152,23 @@ function updatePlayChordButton() {
   );
 }
 
-async function playCurrentChordFromButton() {
+async function playCurrentChordFromButton(): Promise<void> {
   const mode = nextChordPlaybackMode;
   nextChordPlaybackMode = mode === "arpeggio" ? "block" : "arpeggio";
   updatePlayChordButton();
   await playCurrentChord(mode);
 }
 
-async function playResolutionPreview(resolution) {
+async function playResolutionPreview(resolution: ResolutionChordInfo): Promise<void> {
   if (!currentAnalysis && !analyze({ remember: false })) return;
-  let resolutionAnalysis;
+  const analysis = currentAnalysis;
+  if (!analysis) return;
+  let resolutionAnalysis: ChordAnalysis;
   try {
-    resolutionAnalysis = analyze_chord_with_key(chordValueForResolution(resolution), currentKeyContext());
+    resolutionAnalysis = analyze_chord_with_key(
+      chordValueForResolution(resolution),
+      currentKeyContext(),
+    ) as ChordAnalysis;
   } catch (err) {
     error.textContent = err instanceof Error ? err.message : String(err);
     error.style.display = "block";
@@ -957,12 +1176,12 @@ async function playResolutionPreview(resolution) {
   }
 
   await playFrequencySequence([
-    { frequencies: frequenciesFromAnalysis(currentAnalysis), duration: 1.0, gapAfter: 0.16 },
+    { frequencies: frequenciesFromAnalysis(analysis), duration: 1.0, gapAfter: 0.16 },
     { frequencies: frequenciesFromAnalysis(resolutionAnalysis), duration: 1.45 },
   ]);
 }
 
-async function openResolution(resolution) {
+async function openResolution(resolution: ResolutionChordInfo): Promise<void> {
   const chordValue = chordValueForResolution(resolution);
   input.value = chordValue;
   resetShareButton();
@@ -972,7 +1191,7 @@ async function openResolution(resolution) {
   }
 }
 
-async function startMidiInput() {
+async function startMidiInput(): Promise<void> {
   if (!navigator.requestMIDIAccess) {
     setMidiStatus("Web MIDI unavailable in this browser");
     return;
@@ -983,7 +1202,8 @@ async function startMidiInput() {
     midiAccess = await navigator.requestMIDIAccess({ sysex: false });
     heldMidiNotes = new Map();
     wireMidiInputs();
-    midiAccess.onstatechange = () => {
+    const access = midiAccess;
+    access.onstatechange = () => {
       wireMidiInputs();
       setMidiStatus(midiInputStatus());
     };
@@ -993,29 +1213,33 @@ async function startMidiInput() {
   }
 }
 
-function wireMidiInputs() {
+function wireMidiInputs(): void {
   if (!midiAccess) return;
   if (!connectedMidiInputs().length) heldMidiNotes.clear();
   for (const inputDevice of midiAccess.inputs.values()) {
-    inputDevice.onmidimessage = inputDevice.state === "disconnected" ? null : handleMidiMessage;
+    inputDevice.onmidimessage =
+      inputDevice.state === "disconnected" ? null : handleMidiMessage;
   }
   setMidiStatus(midiInputStatus());
 }
 
-function midiInputStatus() {
+function midiInputStatus(): string {
   if (!midiAccess) return "MIDI idle";
   const names = connectedMidiInputs().map((inputDevice) => inputDevice.name || "MIDI input");
   if (!names.length) return "No MIDI inputs found";
   return `Listening: ${names.join(", ")}`;
 }
 
-function connectedMidiInputs() {
+function connectedMidiInputs(): MIDIInput[] {
   if (!midiAccess) return [];
   return [...midiAccess.inputs.values()].filter((inputDevice) => inputDevice.state !== "disconnected");
 }
 
-function handleMidiMessage(event) {
-  const [status, note, velocity] = event.data;
+function handleMidiMessage(event: MIDIMessageEvent): void {
+  if (!event.data) return;
+  const status = event.data[0] ?? 0;
+  const note = event.data[1] ?? 0;
+  const velocity = event.data[2] ?? 0;
   const command = status & 0xf0;
   if (command === 0xb0 && (note === 0x7b || note === 0x7e || note === 0x7f)) {
     heldMidiNotes.clear();
@@ -1034,7 +1258,7 @@ function handleMidiMessage(event) {
   analyzeHeldMidiNotes();
 }
 
-function analyzeHeldMidiNotes() {
+function analyzeHeldMidiNotes(): void {
   const notes = [...heldMidiNotes.keys()].sort((a, b) => a - b);
   if (!notes.length) {
     setMidiStatus(`${midiInputStatus()} - released`);
@@ -1047,14 +1271,14 @@ function analyzeHeldMidiNotes() {
   setMidiStatus(`${midiInputStatus()} - ${notes.join(" ")}`);
 }
 
-function setMidiStatus(message) {
+function setMidiStatus(message: string): void {
   midiStatus.textContent = message;
 }
 
-function estimateKeyContext() {
-  let estimatedAnalysis;
+function estimateKeyContext(): void {
+  let estimatedAnalysis: ChordAnalysis;
   try {
-    estimatedAnalysis = analyze_chord(input.value);
+    estimatedAnalysis = analyze_chord(input.value) as ChordAnalysis;
   } catch (err) {
     error.textContent = err instanceof Error ? err.message : String(err);
     error.style.display = "block";
@@ -1073,10 +1297,10 @@ function estimateKeyContext() {
   analyze({ remember: false });
 }
 
-function analyze({ syncUrl = true, remember = false } = {}) {
+function analyze({ syncUrl = true, remember = false }: AnalyzeOptions = {}): boolean {
   const chordValue = input.value;
   try {
-    render(analyze_chord_with_key(chordValue, currentKeyContext()));
+    render(analyze_chord_with_key(chordValue, currentKeyContext()) as ChordAnalysis);
     if (syncUrl) syncShareUrl();
     if (remember) rememberChord(chordValue);
     return true;
@@ -1087,22 +1311,22 @@ function analyze({ syncUrl = true, remember = false } = {}) {
   }
 }
 
-function clampInteger(value, min, max, fallback) {
+function clampInteger(value: string, min: number, max: number, fallback: number): number {
   const parsed = Number.parseInt(value, 10);
   if (!Number.isFinite(parsed)) return fallback;
   return Math.min(max, Math.max(min, parsed));
 }
 
-function randomNoteCount() {
+function randomNoteCount(): number {
   let min = clampInteger(randomMinNotes.value, 1, 12, 3);
   let max = clampInteger(randomMaxNotes.value, 1, 12, 6);
   if (min > max) [min, max] = [max, min];
-  randomMinNotes.value = min;
-  randomMaxNotes.value = max;
+  randomMinNotes.value = String(min);
+  randomMaxNotes.value = String(max);
   return min + Math.floor(Math.random() * (max - min + 1));
 }
 
-function generateRandomChord() {
+function generateRandomChord(): string {
   const rootIndex = Math.floor(Math.random() * inputPitchNames.length);
   const noteCount = randomNoteCount();
   const intervals = new Set([0]);
