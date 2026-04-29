@@ -93,7 +93,7 @@ struct TuningDegreeInfo {
 pub fn analyze_chord(input: &str) -> Result<JsValue, JsValue> {
     let midi_numbers = parse_midi_input(input);
     let chord = if let Some(midi_numbers) = midi_numbers.as_deref() {
-        Chord::from_midi_numbers(midi_numbers)
+        Chord::new(midi_numbers)
     } else {
         input.parse::<Chord>()
     }

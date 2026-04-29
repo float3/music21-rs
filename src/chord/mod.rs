@@ -166,41 +166,6 @@ impl Chord {
             .collect()
     }
 
-    /// Builds a chord from one string such as `"C E G"`.
-    pub fn from_pitch_names(notes: &str) -> Result<Self> {
-        Self::new(notes)
-    }
-
-    /// Builds a chord from borrowed pitch-name strings.
-    pub fn from_names(notes: &[&str]) -> Result<Self> {
-        Self::new(notes)
-    }
-
-    /// Builds a chord from owned pitch-name strings.
-    pub fn from_strings(notes: &[String]) -> Result<Self> {
-        Self::new(notes)
-    }
-
-    /// Builds a chord from pitches.
-    pub fn from_pitches(pitches: &[Pitch]) -> Result<Self> {
-        Self::new(pitches)
-    }
-
-    /// Builds a chord from notes.
-    pub fn from_notes(notes: &[Note]) -> Result<Self> {
-        Self::new(notes)
-    }
-
-    /// Builds a chord by flattening the notes from other chords.
-    pub fn from_chords(chords: &[Chord]) -> Result<Self> {
-        Self::new(chords)
-    }
-
-    /// Builds a chord from MIDI pitch numbers.
-    pub fn from_midi_numbers(notes: &[IntegerType]) -> Result<Self> {
-        Self::new(notes)
-    }
-
     /// Returns the primary music21-style common name with a pitch prefix.
     pub fn pitched_common_name(&self) -> String {
         self.pitched_name_for_common_name(&self.common_name())
