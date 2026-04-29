@@ -208,7 +208,7 @@ impl Chord {
     ///
     /// This is separate from [`Self::pitched_common_name`]: common names follow
     /// the music21/Forte tables, while chord symbols are compact harmonic
-    /// spellings such as `Cmaj7`, `F#m7b5`, or `Cdim9 add(#5)`.
+    /// spellings such as `Cmaj7`, `F#m7b5`, or `D7b9#11/C`.
     pub fn chord_symbol(&self) -> Option<String> {
         self.chord_symbols().into_iter().next()
     }
@@ -1659,7 +1659,7 @@ mod tests {
         let slash_chord = Chord::new("F4 C5 D5 E-5").unwrap();
 
         assert_eq!(major_seventh.chord_symbol().as_deref(), Some("Cmaj7"));
-        assert_eq!(petrushka.chord_symbol().as_deref(), Some("Cdim9 add(#5)"));
+        assert_eq!(petrushka.chord_symbol().as_deref(), Some("D7b9#11/C"));
         assert_eq!(
             slash_chord.chord_symbol().as_deref(),
             Some("Dm7(no5) add(b9)/F")

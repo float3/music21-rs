@@ -7,7 +7,7 @@ use crate::{
     interval::Interval,
     pitch::{Pitch, pitch_class_name},
 };
-use std::collections::{BTreeSet, HashSet};
+use std::collections::BTreeSet;
 
 /// Tertian quality parsed from a chord symbol.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -74,165 +74,28 @@ pub struct ChordSymbol {
     additions: Vec<ChordAlteration>,
 }
 
-struct SymbolRecipe {
-    suffix: &'static str,
-    intervals: &'static [u8],
-    rank: u8,
-}
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct SymbolCandidate {
     figure: String,
     score: usize,
 }
 
-const SYMBOL_RECIPES: &[SymbolRecipe] = &[
-    SymbolRecipe {
-        suffix: "maj13",
-        intervals: &[0, 2, 4, 5, 7, 9, 11],
-        rank: 0,
-    },
-    SymbolRecipe {
-        suffix: "13",
-        intervals: &[0, 2, 4, 5, 7, 9, 10],
-        rank: 0,
-    },
-    SymbolRecipe {
-        suffix: "m13",
-        intervals: &[0, 2, 3, 5, 7, 9, 10],
-        rank: 0,
-    },
-    SymbolRecipe {
-        suffix: "dim13",
-        intervals: &[0, 2, 3, 5, 6, 9],
-        rank: 2,
-    },
-    SymbolRecipe {
-        suffix: "maj11",
-        intervals: &[0, 2, 4, 5, 7, 11],
-        rank: 0,
-    },
-    SymbolRecipe {
-        suffix: "11",
-        intervals: &[0, 2, 4, 5, 7, 10],
-        rank: 0,
-    },
-    SymbolRecipe {
-        suffix: "m11",
-        intervals: &[0, 2, 3, 5, 7, 10],
-        rank: 0,
-    },
-    SymbolRecipe {
-        suffix: "dim11",
-        intervals: &[0, 2, 3, 5, 6, 9],
-        rank: 2,
-    },
-    SymbolRecipe {
-        suffix: "maj9",
-        intervals: &[0, 2, 4, 7, 11],
-        rank: 0,
-    },
-    SymbolRecipe {
-        suffix: "9",
-        intervals: &[0, 2, 4, 7, 10],
-        rank: 0,
-    },
-    SymbolRecipe {
-        suffix: "m9",
-        intervals: &[0, 2, 3, 7, 10],
-        rank: 0,
-    },
-    SymbolRecipe {
-        suffix: "dim9",
-        intervals: &[0, 2, 3, 6, 9],
-        rank: 0,
-    },
-    SymbolRecipe {
-        suffix: "m9b5",
-        intervals: &[0, 2, 3, 6, 10],
-        rank: 1,
-    },
-    SymbolRecipe {
-        suffix: "maj7",
-        intervals: &[0, 4, 7, 11],
-        rank: 0,
-    },
-    SymbolRecipe {
-        suffix: "7",
-        intervals: &[0, 4, 7, 10],
-        rank: 0,
-    },
-    SymbolRecipe {
-        suffix: "m7",
-        intervals: &[0, 3, 7, 10],
-        rank: 0,
-    },
-    SymbolRecipe {
-        suffix: "m(maj7)",
-        intervals: &[0, 3, 7, 11],
-        rank: 1,
-    },
-    SymbolRecipe {
-        suffix: "dim7",
-        intervals: &[0, 3, 6, 9],
-        rank: 0,
-    },
-    SymbolRecipe {
-        suffix: "m7b5",
-        intervals: &[0, 3, 6, 10],
-        rank: 0,
-    },
-    SymbolRecipe {
-        suffix: "6",
-        intervals: &[0, 4, 7, 9],
-        rank: 1,
-    },
-    SymbolRecipe {
-        suffix: "m6",
-        intervals: &[0, 3, 7, 9],
-        rank: 1,
-    },
-    SymbolRecipe {
-        suffix: "",
-        intervals: &[0, 4, 7],
-        rank: 0,
-    },
-    SymbolRecipe {
-        suffix: "m",
-        intervals: &[0, 3, 7],
-        rank: 0,
-    },
-    SymbolRecipe {
-        suffix: "dim",
-        intervals: &[0, 3, 6],
-        rank: 0,
-    },
-    SymbolRecipe {
-        suffix: "aug",
-        intervals: &[0, 4, 8],
-        rank: 0,
-    },
-    SymbolRecipe {
-        suffix: "sus2",
-        intervals: &[0, 2, 7],
-        rank: 1,
-    },
-    SymbolRecipe {
-        suffix: "sus4",
-        intervals: &[0, 5, 7],
-        rank: 1,
-    },
-    SymbolRecipe {
-        suffix: "5",
-        intervals: &[0, 7],
-        rank: 3,
-    },
-    SymbolRecipe {
-        suffix: "",
-        intervals: &[0],
-        rank: 9,
-    },
-];
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct SymbolAnalysis {
+    suffix: String,
+    core_intervals: BTreeSet<u8>,
+    omissions: Vec<u8>,
+    alteration_count: usize,
+    rank: usize,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct SymbolContext {
+    has_major_third: bool,
+    has_minor_third: bool,
+    has_perfect_fifth: bool,
+    has_flat_fifth: bool,
+}
 
 impl ChordSymbol {
     /// Parses a chord symbol such as `"Cmaj7"`, `"F#m7b5"`, or `"Bb7#11"`.
@@ -413,7 +276,7 @@ impl ChordSymbol {
 /// Returns ranked chord-symbol names for a chord.
 ///
 /// This complements music21-style common names with compact symbolic spellings
-/// such as `Cmaj7`, `F#m7b5`, or `Cdim9 add(#5)`. Dense pitch-class sets
+/// such as `Cmaj7`, `F#m7b5`, or `D7b9#11/C`. Dense pitch-class sets
 /// return no symbols when every candidate would overfit contradictory
 /// extensions.
 pub(crate) fn chord_symbol_spellings(chord: &Chord) -> Vec<String> {
@@ -490,36 +353,19 @@ fn chord_symbol_spellings_for_root(chord: &Chord, explicit_root: Option<u8>) -> 
             continue;
         }
 
-        for recipe in SYMBOL_RECIPES {
-            let omissions = symbol_omissions(recipe, &intervals);
-            if !recipe.intervals.iter().all(|interval| {
-                intervals.contains(interval)
-                    || omitted_interval_degree(*interval, recipe)
-                        .is_some_and(|degree| omissions.contains(&degree))
-            }) {
-                continue;
-            }
-
-            let recipe_set = recipe
-                .intervals
-                .iter()
-                .copied()
-                .filter(|interval| {
-                    !omitted_interval_degree(*interval, recipe)
-                        .is_some_and(|degree| omissions.contains(&degree))
-                })
-                .collect::<HashSet<_>>();
+        for analysis in symbol_analyses_for_intervals(&intervals) {
+            let context = SymbolContext::from_intervals(&analysis.core_intervals);
             let additions = intervals
                 .iter()
                 .copied()
-                .filter(|interval| !recipe_set.contains(interval))
-                .filter_map(|interval| addition_label(interval, recipe))
+                .filter(|interval| !analysis.core_intervals.contains(interval))
+                .filter_map(|interval| addition_label(interval, context))
                 .collect::<Vec<_>>();
 
-            if additions.len() != intervals.len() - recipe_set.len() {
+            if additions.len() != intervals.len() - analysis.core_intervals.len() {
                 continue;
             }
-            if is_overfit_dense_symbol(&intervals, recipe, &additions) {
+            if is_overfit_dense_symbol(&intervals, &additions, &analysis) {
                 continue;
             }
 
@@ -528,8 +374,8 @@ fn chord_symbol_spellings_for_root(chord: &Chord, explicit_root: Option<u8>) -> 
                 .filter(|_| explicit_root.is_none() && Some(root) != bass_pitch_class);
             let figure = symbol_figure(
                 &root_name,
-                recipe.suffix,
-                &omissions,
+                &analysis.suffix,
+                &analysis.omissions,
                 &additions,
                 slash_bass,
             );
@@ -540,10 +386,10 @@ fn chord_symbol_spellings_for_root(chord: &Chord, explicit_root: Option<u8>) -> 
                     + usize::from(Some(root) != first_pitch_class)
             };
             let score = additions.len() * 16
-                + omissions.len() * 8
-                + recipe.rank as usize
-                + root_bonus
-                + recipe_set.len().saturating_sub(intervals.len());
+                + analysis.omissions.len() * 8
+                + analysis.alteration_count * 2
+                + analysis.rank
+                + root_bonus;
             candidates.push(SymbolCandidate { figure, score });
         }
     }
@@ -567,60 +413,234 @@ fn chord_symbol_spellings_for_root(chord: &Chord, explicit_root: Option<u8>) -> 
     names
 }
 
+fn symbol_analyses_for_intervals(intervals: &BTreeSet<u8>) -> Vec<SymbolAnalysis> {
+    let mut analyses = Vec::new();
+
+    push_major_analyses(intervals, &mut analyses);
+    push_dominant_analyses(intervals, &mut analyses);
+    push_minor_analyses(intervals, &mut analyses);
+    push_diminished_analyses(intervals, &mut analyses);
+    push_half_diminished_analyses(intervals, &mut analyses);
+    push_augmented_analyses(intervals, &mut analyses);
+    push_suspended_analyses(intervals, &mut analyses);
+    push_power_analysis(intervals, &mut analyses);
+    push_root_analysis(intervals, &mut analyses);
+
+    analyses
+}
+
+fn push_major_analyses(intervals: &BTreeSet<u8>, analyses: &mut Vec<SymbolAnalysis>) {
+    if !intervals.contains(&4) || !intervals.contains(&7) {
+        return;
+    }
+
+    if intervals.contains(&11) {
+        let mut suffix = "maj7".to_string();
+        let mut core = vec![0, 4, 7, 11];
+        add_highest_natural_extension(intervals, &mut suffix, &mut core, "maj");
+        push_analysis(analyses, suffix, &core, Vec::new(), 0, 0);
+    } else if !intervals.contains(&10) {
+        if intervals.contains(&9) {
+            push_analysis(analyses, "6", &[0, 4, 7, 9], Vec::new(), 0, 1);
+        } else {
+            push_analysis(analyses, "", &[0, 4, 7], Vec::new(), 0, 0);
+        }
+    }
+}
+
+fn push_dominant_analyses(intervals: &BTreeSet<u8>, analyses: &mut Vec<SymbolAnalysis>) {
+    if !intervals.contains(&4) || !intervals.contains(&10) {
+        return;
+    }
+
+    let mut suffix = "7".to_string();
+    let mut core = vec![0, 4, 10];
+    let mut omissions = Vec::new();
+    let mut alteration_count = 0;
+
+    add_highest_natural_extension(intervals, &mut suffix, &mut core, "");
+
+    if intervals.contains(&7) {
+        core.push(7);
+    } else if intervals.contains(&6) {
+        core.push(6);
+        suffix.push_str("b5");
+        alteration_count += 1;
+    } else if intervals.contains(&8) {
+        core.push(8);
+        suffix.push_str("#5");
+        alteration_count += 1;
+    } else {
+        omissions.push(5);
+    }
+
+    alteration_count += add_dominant_alterations(intervals, &mut suffix, &mut core);
+
+    push_analysis(analyses, suffix, &core, omissions, alteration_count, 0);
+}
+
+fn push_minor_analyses(intervals: &BTreeSet<u8>, analyses: &mut Vec<SymbolAnalysis>) {
+    if !intervals.contains(&3) {
+        return;
+    }
+
+    if intervals.contains(&10) {
+        let mut suffix = "m7".to_string();
+        let mut core = vec![0, 3, 10];
+        let omissions = if intervals.contains(&7) {
+            core.push(7);
+            Vec::new()
+        } else {
+            vec![5]
+        };
+        add_highest_natural_extension(intervals, &mut suffix, &mut core, "m");
+        push_analysis(analyses, suffix, &core, omissions, 0, 0);
+    } else if intervals.contains(&11) && intervals.contains(&7) {
+        push_analysis(analyses, "m(maj7)", &[0, 3, 7, 11], Vec::new(), 0, 1);
+    } else if intervals.contains(&7) {
+        if intervals.contains(&9) {
+            push_analysis(analyses, "m6", &[0, 3, 7, 9], Vec::new(), 0, 1);
+        } else {
+            push_analysis(analyses, "m", &[0, 3, 7], Vec::new(), 0, 0);
+        }
+    }
+}
+
+fn push_diminished_analyses(intervals: &BTreeSet<u8>, analyses: &mut Vec<SymbolAnalysis>) {
+    if !intervals.contains(&3) || !intervals.contains(&6) {
+        return;
+    }
+
+    if intervals.contains(&9) {
+        if intervals.contains(&2) {
+            push_analysis(analyses, "dim9", &[0, 2, 3, 6, 9], Vec::new(), 0, 0);
+        } else {
+            push_analysis(analyses, "dim7", &[0, 3, 6, 9], Vec::new(), 0, 0);
+        }
+    } else {
+        push_analysis(analyses, "dim", &[0, 3, 6], Vec::new(), 0, 0);
+    }
+}
+
+fn push_half_diminished_analyses(intervals: &BTreeSet<u8>, analyses: &mut Vec<SymbolAnalysis>) {
+    if !intervals.contains(&3) || !intervals.contains(&6) || !intervals.contains(&10) {
+        return;
+    }
+
+    if intervals.contains(&2) {
+        push_analysis(analyses, "m9b5", &[0, 2, 3, 6, 10], Vec::new(), 0, 1);
+    } else {
+        push_analysis(analyses, "m7b5", &[0, 3, 6, 10], Vec::new(), 0, 0);
+    }
+}
+
+fn push_augmented_analyses(intervals: &BTreeSet<u8>, analyses: &mut Vec<SymbolAnalysis>) {
+    if !intervals.contains(&4) || !intervals.contains(&8) {
+        return;
+    }
+
+    if intervals.contains(&10) {
+        push_analysis(analyses, "7#5", &[0, 4, 8, 10], Vec::new(), 1, 0);
+    } else if intervals.contains(&11) {
+        push_analysis(analyses, "maj7#5", &[0, 4, 8, 11], Vec::new(), 1, 0);
+    } else {
+        push_analysis(analyses, "aug", &[0, 4, 8], Vec::new(), 0, 0);
+    }
+}
+
+fn push_suspended_analyses(intervals: &BTreeSet<u8>, analyses: &mut Vec<SymbolAnalysis>) {
+    if intervals.contains(&3) || intervals.contains(&4) || !intervals.contains(&7) {
+        return;
+    }
+
+    if intervals.contains(&2) {
+        push_analysis(analyses, "sus2", &[0, 2, 7], Vec::new(), 0, 1);
+    }
+    if intervals.contains(&5) {
+        push_analysis(analyses, "sus4", &[0, 5, 7], Vec::new(), 0, 1);
+    }
+}
+
+fn push_power_analysis(intervals: &BTreeSet<u8>, analyses: &mut Vec<SymbolAnalysis>) {
+    if intervals.contains(&7) {
+        push_analysis(analyses, "5", &[0, 7], Vec::new(), 0, 3);
+    }
+}
+
+fn push_root_analysis(_intervals: &BTreeSet<u8>, analyses: &mut Vec<SymbolAnalysis>) {
+    push_analysis(analyses, "", &[0], Vec::new(), 0, 9);
+}
+
+fn push_analysis(
+    analyses: &mut Vec<SymbolAnalysis>,
+    suffix: impl Into<String>,
+    core_intervals: &[u8],
+    omissions: Vec<u8>,
+    alteration_count: usize,
+    rank: usize,
+) {
+    analyses.push(SymbolAnalysis {
+        suffix: suffix.into(),
+        core_intervals: core_intervals.iter().copied().collect(),
+        omissions,
+        alteration_count,
+        rank,
+    });
+}
+
+fn add_highest_natural_extension(
+    intervals: &BTreeSet<u8>,
+    suffix: &mut String,
+    core: &mut Vec<u8>,
+    family_prefix: &str,
+) {
+    if intervals.contains(&9) {
+        *suffix = format!("{family_prefix}13");
+        core.push(9);
+    } else if intervals.contains(&5) {
+        *suffix = format!("{family_prefix}11");
+        core.push(5);
+    } else if intervals.contains(&2) {
+        *suffix = format!("{family_prefix}9");
+        core.push(2);
+    }
+}
+
+fn add_dominant_alterations(
+    intervals: &BTreeSet<u8>,
+    suffix: &mut String,
+    core: &mut Vec<u8>,
+) -> usize {
+    let mut count = 0;
+    for (interval, label) in [(1, "b9"), (3, "#9")] {
+        if intervals.contains(&interval) {
+            suffix.push_str(label);
+            core.push(interval);
+            count += 1;
+        }
+    }
+
+    if intervals.contains(&7) && intervals.contains(&6) {
+        suffix.push_str("#11");
+        core.push(6);
+        count += 1;
+    }
+    if intervals.contains(&7) && intervals.contains(&8) {
+        suffix.push_str("b13");
+        core.push(8);
+        count += 1;
+    }
+
+    count
+}
+
 fn is_overfit_dense_symbol(
     intervals: &BTreeSet<u8>,
-    recipe: &SymbolRecipe,
     additions: &[&'static str],
+    analysis: &SymbolAnalysis,
 ) -> bool {
-    if intervals.len() >= 8 && additions.len() >= 3 {
-        return true;
-    }
-
-    let recipe_degrees = recipe
-        .intervals
-        .iter()
-        .filter_map(|interval| symbolic_degree_for_interval(*interval, recipe))
-        .collect::<HashSet<_>>();
-    let contradictory_additions = additions
-        .iter()
-        .filter_map(|addition| symbolic_degree_for_label(addition))
-        .filter(|degree| recipe_degrees.contains(degree))
-        .count();
-
-    contradictory_additions >= 2
-}
-
-fn symbol_omissions(recipe: &SymbolRecipe, intervals: &BTreeSet<u8>) -> Vec<u8> {
-    recipe
-        .intervals
-        .iter()
-        .copied()
-        .filter(|interval| !intervals.contains(interval))
-        .filter_map(|interval| omitted_interval_degree(interval, recipe))
-        .collect()
-}
-
-fn omitted_interval_degree(interval: u8, recipe: &SymbolRecipe) -> Option<u8> {
-    if interval != 7 {
-        return None;
-    }
-    if !recipe.intervals.contains(&3) && !recipe.intervals.contains(&4) {
-        return None;
-    }
-    if !recipe
-        .intervals
-        .iter()
-        .any(|interval| matches!(interval, 10 | 11))
-    {
-        return None;
-    }
-    if recipe.suffix.contains("dim")
-        || recipe.suffix.contains("b5")
-        || recipe.suffix.contains("aug")
-    {
-        return None;
-    }
-    Some(5)
+    intervals.len() >= 8
+        && additions.len() + analysis.alteration_count + analysis.omissions.len() >= 3
 }
 
 fn symbol_figure(
@@ -654,44 +674,29 @@ fn symbol_figure(
     figure
 }
 
-fn symbolic_degree_for_interval(interval: u8, recipe: &SymbolRecipe) -> Option<u8> {
-    match interval {
-        0 => Some(1),
-        1 | 2 => Some(9),
-        3 | 4 => Some(3),
-        5 => Some(11),
-        6..=8 => Some(5),
-        9 if recipe.suffix.starts_with("dim") => Some(7),
-        9 => Some(13),
-        10 | 11 => Some(7),
-        _ => None,
+impl SymbolContext {
+    fn from_intervals(intervals: &BTreeSet<u8>) -> Self {
+        Self {
+            has_major_third: intervals.contains(&4),
+            has_minor_third: intervals.contains(&3),
+            has_perfect_fifth: intervals.contains(&7),
+            has_flat_fifth: intervals.contains(&6),
+        }
     }
 }
 
-fn symbolic_degree_for_label(label: &str) -> Option<u8> {
-    let digits = label
-        .chars()
-        .filter(char::is_ascii_digit)
-        .collect::<String>();
-    digits.parse().ok()
-}
-
-fn addition_label(interval: u8, recipe: &SymbolRecipe) -> Option<&'static str> {
-    let has_major_third = recipe.intervals.contains(&4);
-    let has_minor_third = recipe.intervals.contains(&3);
-    let has_perfect_fifth = recipe.intervals.contains(&7);
-    let has_flat_fifth = recipe.intervals.contains(&6);
-
+fn addition_label(interval: u8, context: SymbolContext) -> Option<&'static str> {
     match interval {
         1 => Some("b9"),
         2 => Some("9"),
-        3 if has_major_third => Some("#9"),
-        3 if !has_minor_third => Some("b3"),
-        4 if !has_major_third => Some("3"),
+        3 if context.has_major_third => Some("#9"),
+        3 if !context.has_minor_third => Some("b3"),
+        4 if !context.has_major_third => Some("3"),
         5 => Some("11"),
-        6 if has_perfect_fifth => Some("#11"),
-        6 if !has_flat_fifth => Some("b5"),
-        7 if !has_perfect_fifth => Some("5"),
+        6 if context.has_perfect_fifth => Some("#11"),
+        6 if !context.has_flat_fifth => Some("b5"),
+        7 if !context.has_perfect_fifth => Some("5"),
+        8 if context.has_perfect_fifth => Some("b13"),
         8 => Some("#5"),
         9 => Some("13"),
         10 => Some("b7"),
@@ -1101,12 +1106,29 @@ mod tests {
     }
 
     #[test]
+    fn parses_altered_dominant_with_slash_bass() {
+        let symbol = ChordSymbol::parse("D7b9#11/C").unwrap();
+        assert_eq!(symbol.root().name(), "D");
+        assert_eq!(symbol.bass().map(Pitch::name).as_deref(), Some("C"));
+        assert_eq!(symbol.quality(), ChordQuality::Dominant);
+        assert_eq!(symbol.extensions(), &[7, 9, 11]);
+        assert_eq!(
+            symbol.alterations(),
+            &[ChordAlteration::new(9, -1), ChordAlteration::new(11, 1)]
+        );
+        assert_eq!(
+            symbol.to_chord().unwrap().pitch_classes(),
+            vec![0, 2, 3, 6, 8, 9]
+        );
+    }
+
+    #[test]
     fn generates_petrushka_chord_symbol_name() {
         let chord = Chord::new("C4 D4 Eb4 F#4 Ab4 A4").unwrap();
         let names = chord_symbol_spellings(&chord);
 
-        assert_eq!(names.first().map(String::as_str), Some("Cdim9 add(#5)"));
-        assert!(names.iter().any(|name| name == "Cdim9 add(#5)"));
+        assert_eq!(names.first().map(String::as_str), Some("D7b9#11/C"));
+        assert!(names.iter().any(|name| name == "D7b9#11/C"));
     }
 
     #[test]
