@@ -38,6 +38,12 @@ struct ResolutionChordInfo {
 }
 
 #[derive(Serialize)]
+struct RomanNumeralInfo {
+    figure: String,
+    key_context: String,
+}
+
+#[derive(Serialize)]
 struct ChordAnalysis {
     input: String,
     common_name: String,
@@ -56,6 +62,8 @@ struct ChordAnalysis {
     inversion_name: Option<String>,
     key_context: Option<String>,
     key_estimate: Option<String>,
+    roman_numeral_context: Option<RomanNumeralInfo>,
+    roman_numeral_estimate: Option<RomanNumeralInfo>,
     guitar_fingering: Option<GuitarFingeringInfo>,
     polyrhythm_input: String,
     resolution_chords: Vec<ResolutionChordInfo>,
@@ -93,6 +101,7 @@ struct KnownChordInfo {
     common_names: Vec<String>,
     chord_symbol: Option<String>,
     key_estimate: Option<String>,
+    roman_numeral_estimate: Option<RomanNumeralInfo>,
     resolution_chords: Vec<ResolutionChordInfo>,
     inversion_labels: Vec<Option<String>>,
     cardinality: u8,
@@ -179,7 +188,14 @@ fn analyze_chord_inner(input: &str, key_context: Option<&str>) -> Result<JsValue
     let chord_symbol = chord_symbols.first().cloned();
     let key_context = parse_key_context(key_context)?;
     let key_context_display = key_context.as_ref().map(display_key_context);
-    let key_estimate = key_estimate_for_chord(&chord);
+    let estimated_key = estimated_key_for_chord(&chord);
+    let key_estimate = estimated_key.as_ref().map(display_key_context);
+    let roman_numeral_context = key_context
+        .as_ref()
+        .and_then(|key| roman_numeral_for_chord(&chord, key));
+    let roman_numeral_estimate = estimated_key
+        .as_ref()
+        .and_then(|key| roman_numeral_for_chord(&chord, key));
     let resolution_chords = match key_context.as_ref() {
         Some(key) => chord.resolution_suggestions_in_key(key),
         None => chord.resolution_suggestions(),
@@ -210,6 +226,8 @@ fn analyze_chord_inner(input: &str, key_context: Option<&str>) -> Result<JsValue
         inversion_name: chord.inversion_name(),
         key_context: key_context_display,
         key_estimate,
+        roman_numeral_context,
+        roman_numeral_estimate,
         guitar_fingering: chord.guitar_fingering().map(guitar_fingering_info),
         polyrhythm_input: chord.polyrhythm_ratio_string(),
         resolution_chords,
@@ -265,7 +283,17 @@ fn known_chord_info(
     let chord_symbol = realized_chord
         .as_ref()
         .and_then(|chord| chord.chord_symbol_with_root(0).ok().flatten());
-    let key_estimate = realized_chord.as_ref().and_then(key_estimate_for_chord);
+    let estimated_key = realized_chord.as_ref().and_then(estimated_key_for_chord);
+    let key_estimate = estimated_key.as_ref().map(display_key_context);
+    let roman_numeral_estimate = realized_chord
+        .as_ref()
+        .zip(estimated_key.as_ref())
+        .and_then(|(chord, key)| {
+            pitch_names
+                .first()
+                .and_then(|name| Pitch::from_name(name).ok())
+                .and_then(|root| roman_numeral_for_chord_with_root(chord, key, &root))
+        });
     let resolution_chords = realized_chord
         .as_ref()
         .and_then(|chord| chord.resolution_suggestions().ok())
@@ -281,6 +309,7 @@ fn known_chord_info(
         common_names,
         chord_symbol,
         key_estimate,
+        roman_numeral_estimate,
         resolution_chords,
         inversion_labels,
         cardinality: chord.cardinality,
@@ -604,22 +633,48 @@ fn parse_midi_input(input: &str) -> Option<Vec<i32>> {
         .ok()
 }
 
-fn key_estimate_for_chord(chord: &Chord) -> Option<String> {
-    music21_rs::estimate_key_from_chords(std::slice::from_ref(chord))
+fn estimated_key_for_chord(chord: &Chord) -> Option<Key> {
+    let estimated_key = music21_rs::estimate_key_from_chords(std::slice::from_ref(chord))
         .ok()?
         .first()
-        .map(|estimate| {
-            let estimated_tonic = estimate.key().tonic();
-            let tonic_name = chord
-                .root_pitch_name()
-                .and_then(|root_name| {
-                    let root = Pitch::from_name(&root_name).ok()?;
-                    same_pitch_class(&root, &estimated_tonic)
-                        .then(|| display_pitch_name(&root_name))
-                })
-                .unwrap_or_else(|| display_pitch_name(&estimated_tonic.name()));
-            format!("{} {}", tonic_name, estimate.key().mode())
+        .map(|estimate| estimate.key().clone())?;
+    let estimated_tonic = estimated_key.tonic();
+    let mode = estimated_key.mode().to_string();
+    let respelled_key = chord
+        .root_pitch_name()
+        .and_then(|root_name| {
+            let root = Pitch::from_name(&root_name).ok()?;
+            same_pitch_class(&root, &estimated_tonic).then_some(root_name)
         })
+        .and_then(|root_name| {
+            Key::from_tonic_mode(&display_pitch_name(&root_name), Some(mode.as_str())).ok()
+        });
+    Some(respelled_key.unwrap_or(estimated_key))
+}
+
+fn roman_numeral_for_chord(chord: &Chord, key: &Key) -> Option<RomanNumeralInfo> {
+    music21_rs::analyze_chord(chord, key.clone())
+        .ok()
+        .flatten()
+        .map(roman_numeral_info)
+}
+
+fn roman_numeral_for_chord_with_root(
+    chord: &Chord,
+    key: &Key,
+    root: &Pitch,
+) -> Option<RomanNumeralInfo> {
+    music21_rs::analyze_chord_with_root(chord, key.clone(), root)
+        .ok()
+        .flatten()
+        .map(roman_numeral_info)
+}
+
+fn roman_numeral_info(roman_numeral: music21_rs::RomanNumeral) -> RomanNumeralInfo {
+    RomanNumeralInfo {
+        figure: roman_numeral.figure().to_string(),
+        key_context: display_key_context(roman_numeral.key()),
+    }
 }
 
 fn same_pitch_class(left: &Pitch, right: &Pitch) -> bool {
@@ -705,7 +760,7 @@ fn display_pitch_for_sequence(pitch: Pitch, last_pitch_space: &mut Option<i32>) 
 
 #[cfg(test)]
 mod tests {
-    use super::{key_estimate_for_chord, known_chord_info, parse_midi_input};
+    use super::{display_key_context, estimated_key_for_chord, known_chord_info, parse_midi_input};
     use music21_rs::{Chord, KnownChordType};
 
     #[test]
@@ -717,7 +772,7 @@ mod tests {
     }
 
     #[test]
-    fn known_chord_info_includes_symbol_and_key_estimate() {
+    fn known_chord_info_includes_symbol_key_estimate_and_roman_numeral() {
         let chord = KnownChordType {
             cardinality: 3,
             forte_class: "3-11".to_string(),
@@ -735,6 +790,12 @@ mod tests {
 
         assert_eq!(info.chord_symbol.as_deref(), Some("C"));
         assert_eq!(info.key_estimate.as_deref(), Some("C major"));
+        assert_eq!(
+            info.roman_numeral_estimate
+                .as_ref()
+                .map(|roman| roman.figure.as_str()),
+            Some("I")
+        );
         assert_eq!(info.inversion_labels.len(), 3);
         assert!(info.resolution_chords.is_empty());
     }
@@ -782,6 +843,12 @@ mod tests {
     fn key_estimate_prefers_chord_root_spelling() {
         let chord = Chord::new("D-4 F4 A-4").unwrap();
 
-        assert_eq!(key_estimate_for_chord(&chord).as_deref(), Some("Db major"));
+        assert_eq!(
+            estimated_key_for_chord(&chord)
+                .as_ref()
+                .map(display_key_context)
+                .as_deref(),
+            Some("Db major")
+        );
     }
 }

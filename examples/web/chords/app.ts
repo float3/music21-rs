@@ -7,6 +7,7 @@ type KnownChord = {
   common_names: string[];
   chord_symbol?: string | null;
   key_estimate?: string | null;
+  roman_numeral_estimate?: RomanNumeral | null;
   resolution_chords?: ResolutionChord[];
   inversion_labels?: Array<string | null>;
   cardinality: number;
@@ -16,6 +17,11 @@ type KnownChord = {
   pitch_classes?: number[];
   display_pitch_names: string[];
   searchText?: string;
+};
+
+type RomanNumeral = {
+  figure: string;
+  key_context: string;
 };
 
 type RealizedChord = {
@@ -317,6 +323,8 @@ function textSearch(chord: KnownChord): string {
     ...(chord.common_names ?? []),
     chord.chord_symbol ?? "",
     chord.key_estimate ?? "",
+    chord.roman_numeral_estimate?.figure ?? "",
+    chord.roman_numeral_estimate?.key_context ?? "",
     chord.forte_class,
     `[${(chord.normal_form ?? []).join(", ")}]`,
     `[${(chord.interval_class_vector ?? []).join(", ")}]`,
@@ -407,6 +415,13 @@ function keyEstimateFor(chord: KnownChord): string {
   return transposeKeyText(chord.key_estimate);
 }
 
+function romanNumeralFor(chord: KnownChord): string {
+  const roman = chord.roman_numeral_estimate;
+  if (!roman?.figure) return "Not available";
+  const keyContext = transposeKeyText(roman.key_context);
+  return keyContext === "Not available" ? roman.figure : `${roman.figure} in ${keyContext}`;
+}
+
 function resolutionChords(chord: KnownChord): ResolutionChord[] {
   return (chord.resolution_chords ?? []).map(transposeResolutionChord);
 }
@@ -493,6 +508,7 @@ function renderRows(): void {
       chord.searchText,
       chordSymbolFor(chord),
       keyEstimateFor(chord),
+      romanNumeralFor(chord),
       realized.displayNames.join(" "),
       realizedWithoutOctaves.join(" "),
     ]
@@ -523,6 +539,11 @@ function renderRows(): void {
     keyEstimate.className = "key-estimate";
     keyEstimate.textContent = keyEstimateFor(chord);
     tr.appendChild(keyEstimate);
+
+    const roman = document.createElement("td");
+    roman.className = "roman-numeral";
+    roman.textContent = romanNumeralFor(chord);
+    tr.appendChild(roman);
 
     const aliases = document.createElement("td");
     aliases.appendChild(renderChips(chord.common_names.slice(1)));

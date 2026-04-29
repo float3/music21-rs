@@ -283,6 +283,12 @@
         font-weight: 760;
       }
 
+      .roman-numeral {
+        color: #333840;
+        font-size: 13px;
+        font-weight: 760;
+      }
+
       .help {
         position: relative;
         display: inline-grid;
@@ -404,30 +410,34 @@
         }
 
         td:nth-child(4)::before {
-          content: "Aliases";
+          content: "Roman";
         }
 
         td:nth-child(5)::before {
-          content: "Class";
+          content: "Aliases";
         }
 
         td:nth-child(6)::before {
-          content: "Pitches";
+          content: "Class";
         }
 
         td:nth-child(7)::before {
-          content: "Inversions";
+          content: "Pitches";
         }
 
         td:nth-child(8)::before {
-          content: "Resolutions";
+          content: "Inversions";
         }
 
         td:nth-child(9)::before {
-          content: "Normal Form";
+          content: "Resolutions";
         }
 
         td:nth-child(10)::before {
+          content: "Normal Form";
+        }
+
+        td:nth-child(11)::before {
           content: "Interval Vector";
         }
 
@@ -552,21 +562,23 @@
           <table>
             <colgroup>
               <col style="width: 13%" />
-              <col style="width: 12%" />
-              <col style="width: 9%" />
-              <col style="width: 10%" />
-              <col style="width: 6%" />
-              <col style="width: 10%" />
-              <col style="width: 11%" />
               <col style="width: 13%" />
               <col style="width: 8%" />
               <col style="width: 8%" />
+              <col style="width: 8%" />
+              <col style="width: 6%" />
+              <col style="width: 9%" />
+              <col style="width: 10%" />
+              <col style="width: 12%" />
+              <col style="width: 6%" />
+              <col style="width: 7%" />
             </colgroup>
             <thead>
               <tr>
                 <th>Name</th>
                 <th>Symbol</th>
                 <th>Key estimate</th>
+                <th>Roman</th>
                 <th>Aliases</th>
                 <th>
                   Class

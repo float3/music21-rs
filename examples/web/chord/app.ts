@@ -61,6 +61,11 @@ function text(value) {
   return String(value);
 }
 
+function romanText(value) {
+  if (!value?.figure) return "Not available";
+  return value.key_context ? `${value.figure} in ${value.key_context}` : value.figure;
+}
+
 function renderChips(node, values) {
   node.replaceChildren();
   const list = values && values.length ? values : ["Not available"];
@@ -85,7 +90,9 @@ function renderFacts(data) {
     ["Bass", data.bass_pitch_name],
     ["Inversion", data.inversion_name ?? data.inversion],
     ["Key context", data.key_context],
+    ["Roman numeral (context)", romanText(data.roman_numeral_context)],
     ["Key estimate", data.key_estimate],
+    ["Roman numeral (estimate)", romanText(data.roman_numeral_estimate)],
     ["Forte class", data.forte_class],
     ["Normal form", data.normal_form],
     ["Interval-class vector", data.interval_class_vector],

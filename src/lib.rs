@@ -84,7 +84,7 @@ pub use pitch::{
 };
 pub use polyrhythm::{Polyrhythm, PolyrhythmAnalysis, PolyrhythmEvent, PolyrhythmRatioTone};
 pub use rest::Rest;
-pub use roman::{RomanNumeral, analyze_chord};
+pub use roman::{RomanNumeral, analyze_chord, analyze_chord_with_root};
 pub use scale::DiatonicScale;
 pub use stream::{Stream, StreamElement, StreamEvent};
 pub use tuningsystem::{
