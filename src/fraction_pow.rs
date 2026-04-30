@@ -26,7 +26,7 @@ where
 {
     fn pow(&self, exp: U) -> Self {
         match *self {
-            GenericFraction::Rational(_, ref ratio) => {
+            GenericFraction::Rational(_, _) => {
                 let mut exp_val = exp;
                 let mut result = GenericFraction::new(T::one(), T::one());
                 let two = U::from(2);

@@ -29,19 +29,19 @@ pub(crate) trait IntervalBaseTrait: Music21ObjectTrait {
 }
 
 impl IntervalBaseTrait for IntervalBase {
-    fn transpose_note(self, note1: Note) -> Result<Note> {
+    fn transpose_note(self, _note1: Note) -> Result<Note> {
         Err(Error::Interval(
             "IntervalBase cannot transpose a note directly".to_string(),
         ))
     }
 
-    fn transpose_pitch(self, pitch1: Pitch) -> Result<Pitch> {
+    fn transpose_pitch(self, _pitch1: Pitch) -> Result<Pitch> {
         Err(Error::Interval(
             "IntervalBase cannot transpose a pitch directly".to_string(),
         ))
     }
 
-    fn transpose_pitch_in_place(self, pitch1: &mut Pitch) -> Result<()> {
+    fn transpose_pitch_in_place(self, _pitch1: &mut Pitch) -> Result<()> {
         Err(Error::Interval(
             "IntervalBase cannot transpose a pitch in place directly".to_string(),
         ))

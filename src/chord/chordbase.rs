@@ -164,9 +164,8 @@ where
     fn into_not_rests(
         self,
         duration: &Option<Duration>,
-        quick_duration: bool,
+        _quick_duration: bool,
     ) -> Result<(&Option<Duration>, Option<Duration>, Self::T)> {
-        let _ = quick_duration;
         let notes = self
             .into_iter()
             .map(|note| {
@@ -233,7 +232,7 @@ impl IntoNotRests for &[String] {
     fn into_not_rests(
         self,
         duration: &Option<Duration>,
-        quick_duration: bool,
+        _quick_duration: bool,
     ) -> Result<(&Option<Duration>, Option<Duration>, Self::T)> {
         let notes = self
             .iter()
@@ -254,7 +253,7 @@ impl IntoNotRests for &[&str] {
     fn into_not_rests(
         self,
         duration: &Option<Duration>,
-        quick_duration: bool,
+        _quick_duration: bool,
     ) -> Result<(&Option<Duration>, Option<Duration>, Self::T)> {
         let notes = self
             .iter()
@@ -273,7 +272,7 @@ impl IntoNotRests for &[Pitch] {
     fn into_not_rests(
         self,
         duration: &Option<Duration>,
-        quick_duration: bool,
+        _quick_duration: bool,
     ) -> Result<(&Option<Duration>, Option<Duration>, Self::T)> {
         let notes = self
             .iter()
@@ -292,9 +291,8 @@ impl IntoNotRests for &[Note] {
     fn into_not_rests(
         self,
         duration: &Option<Duration>,
-        quick_duration: bool,
+        _quick_duration: bool,
     ) -> Result<(&Option<Duration>, Option<Duration>, Self::T)> {
-        let _ = quick_duration;
         let notes = self.iter().map(|n| n.get_super().clone()).collect();
         Ok((duration, duration.clone(), notes))
     }
@@ -354,7 +352,7 @@ impl IntoNotRests for &[NotRest] {
     fn into_not_rests(
         self,
         duration: &Option<Duration>,
-        quick_duration: bool,
+        _quick_duration: bool,
     ) -> Result<(&Option<Duration>, Option<Duration>, Self::T)> {
         Ok((duration, duration.clone(), self.to_vec()))
     }
@@ -365,7 +363,7 @@ impl IntoNotRests for &[IntegerType] {
     fn into_not_rests(
         self,
         duration: &Option<Duration>,
-        quick_duration: bool,
+        _quick_duration: bool,
     ) -> Result<(&Option<Duration>, Option<Duration>, Self::T)> {
         let notes = self
             .iter()

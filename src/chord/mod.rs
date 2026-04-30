@@ -658,14 +658,6 @@ impl Chord {
         self.bass_pitch().map(Self::display_pitch_name)
     }
 
-    /// Returns the lowest pitch name in the chord.
-    ///
-    /// Returns `None` for empty chords, where there is no bass pitch.
-    #[deprecated(note = "use `bass_pitch_name`")]
-    pub fn bass_pitch_name_public(&self) -> Option<String> {
-        self.bass_pitch_name()
-    }
-
     /// Returns the Forte class, such as `"3-11B"`, when available.
     ///
     /// Returns `None` when the chord's pitch-class set has no Forte-table

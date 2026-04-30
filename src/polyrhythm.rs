@@ -93,27 +93,6 @@ impl Polyrhythm {
         })
     }
 
-    /// Creates a polyrhythm and assigns a nonzero tempo in beats per minute.
-    #[deprecated(note = "use `Polyrhythm::new(...).and_then(|p| p.with_tempo(...))`")]
-    pub fn new_with_tempo(
-        base: UnsignedIntegerType,
-        tempo: UnsignedIntegerType,
-        subdivisions: &[UnsignedIntegerType],
-    ) -> Result<Self> {
-        Self::new(base, subdivisions)?.with_tempo(tempo)
-    }
-
-    /// Constructs a new Polyrhythm given a time signature, tempo, and
-    /// subdivisions.
-    #[deprecated(note = "use `Polyrhythm::from_time_signature`")]
-    pub fn new_with_time_signature(
-        base: UnsignedIntegerType,
-        tempo: UnsignedIntegerType,
-        subdivisions: &[UnsignedIntegerType],
-    ) -> Result<Self> {
-        Self::from_time_signature(base, tempo, subdivisions)
-    }
-
     /// Creates a polyrhythm from a time-signature numerator, tempo, and
     /// subdivision voices.
     pub fn from_time_signature(
@@ -183,12 +162,6 @@ impl Polyrhythm {
         Ok(self.measure_duration()? / self.cycle as FloatType)
     }
 
-    /// Returns the number of ticks in one full cycle (measure).
-    #[deprecated(note = "use `cycle_len`")]
-    pub fn cycle_duration(&self) -> UnsignedIntegerType {
-        self.cycle_len()
-    }
-
     /// Returns the number of ticks in one full cycle.
     pub fn cycle_len(&self) -> UnsignedIntegerType {
         self.cycle
@@ -208,12 +181,6 @@ impl Polyrhythm {
                     .collect()
             })
             .collect())
-    }
-
-    /// Returns all tick events in one full cycle.
-    #[deprecated(note = "use `events`")]
-    pub fn events_one_cycle(&self) -> Result<Vec<PolyrhythmEvent>> {
-        self.events()
     }
 
     /// Returns all tick events in one full cycle.
@@ -329,12 +296,6 @@ impl Polyrhythm {
     }
 
     /// Returns ticks where at least `min_simultaneous` components trigger.
-    #[deprecated(note = "use `coincidence_ticks`")]
-    pub fn coincidence_ticks_one_cycle(&self, min_simultaneous: usize) -> Vec<UnsignedIntegerType> {
-        self.coincidence_ticks(min_simultaneous)
-    }
-
-    /// Returns ticks where at least `min_simultaneous` components trigger.
     pub fn coincidence_ticks(&self, min_simultaneous: usize) -> Vec<UnsignedIntegerType> {
         if min_simultaneous == 0 {
             return (0..self.cycle).collect();
@@ -376,26 +337,6 @@ impl Polyrhythm {
 
         let notes = notes?;
         Chord::new(notes.as_slice())
-    }
-
-    /// Converts one polyrhythm cycle into a chord above `base`.
-    #[deprecated(note = "use `to_chord`")]
-    pub fn as_chord<T>(&self, base: T) -> Result<Chord>
-    where
-        T: TryInto<Pitch>,
-        T::Error: Into<Error>,
-    {
-        self.to_chord(base)
-    }
-
-    /// Converts one polyrhythm cycle into a pitch collection above `base`.
-    #[deprecated(note = "use `to_polypitch`")]
-    pub fn as_polypitch<T>(&self, base: T) -> Result<Chord>
-    where
-        T: TryInto<Pitch>,
-        T::Error: Into<Error>,
-    {
-        self.to_polypitch(base)
     }
 
     /// Converts one polyrhythm cycle into a chord above `base`.
@@ -575,27 +516,5 @@ mod tests {
         assert_eq!(poly.next(), Some((1, vec![false, true])));
         poly.reset();
         assert_eq!(poly.current_tick(), 0);
-    }
-
-    #[allow(deprecated)]
-    #[test]
-    fn deprecated_polyrhythm_aliases_delegate_to_new_names() {
-        let poly = Polyrhythm::new_with_tempo(4, 120, &[2, 3]).unwrap();
-        assert_eq!(poly.cycle_duration(), poly.cycle_len());
-        assert_eq!(poly.events_one_cycle().unwrap(), poly.events().unwrap());
-        assert_eq!(
-            poly.coincidence_ticks_one_cycle(1),
-            poly.coincidence_ticks(1)
-        );
-
-        let timed = Polyrhythm::new_with_time_signature(4, 120, &[2, 3, 4]).unwrap();
-        assert_eq!(
-            timed.as_chord("C4").unwrap().pitch_classes(),
-            timed.to_chord("C4").unwrap().pitch_classes()
-        );
-        assert_eq!(
-            timed.as_polypitch("C4").unwrap().pitch_classes(),
-            timed.to_polypitch("C4").unwrap().pitch_classes()
-        );
     }
 }

@@ -73,13 +73,6 @@ impl From<Infallible> for Error {
     }
 }
 
-#[deprecated(note = "use music21_rs::Error instead")]
-pub use Error as Exception;
-
-#[deprecated(note = "use music21_rs::Result instead")]
-/// Deprecated alias for [`Result`].
-pub type ExceptionResult<T> = Result<T>;
-
 #[cfg(test)]
 mod tests {
     use super::*;

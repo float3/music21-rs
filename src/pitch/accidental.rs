@@ -954,7 +954,7 @@ impl IntoAccidental for String {
 }
 
 impl IntoAccidental for Accidental {
-    fn accidental_args(self, allow_non_standard_values: bool) -> Option<(String, FloatType)> {
+    fn accidental_args(self, _allow_non_standard_values: bool) -> Option<(String, FloatType)> {
         Some((self._name, self._alter))
     }
 

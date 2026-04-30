@@ -502,8 +502,6 @@ fn _string_to_diatonic_chromatic(
         value = value.replace('-', "");
         dir_scale = -1;
     }
-    let mut value_lower = value.to_lowercase();
-
     // Remove directional words:
     {
         let descending_re = Regex::new(r"(?i)descending\s*").unwrap();
@@ -517,7 +515,7 @@ fn _string_to_diatonic_chromatic(
             }
         }
     }
-    value_lower = value.to_lowercase();
+    let value_lower = value.to_lowercase();
 
     // Handle whole/half abbreviations:
     if value_lower == "w" || value_lower == "whole" || value_lower == "tone" {

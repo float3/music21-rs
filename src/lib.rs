@@ -1,9 +1,6 @@
+// The port still carries internal music21 compatibility scaffolding that is
+// intentionally exposed only as APIs fill in.
 #![allow(dead_code)]
-#![allow(unused_variables)]
-#![allow(unused_assignments)]
-#![allow(unused_results)]
-#![allow(unreachable_code)]
-#![allow(unused_macros)]
 //! Rust helpers inspired by selected parts of Python's `music21`.
 //!
 //! The crate currently focuses on pitch construction, chord naming and
@@ -28,12 +25,7 @@ pub(crate) mod display;
 pub mod duration;
 /// Error and result types used by the crate.
 pub mod error;
-/// Deprecated compatibility exports for the old exception-style API.
-#[deprecated(note = "use the `error` module and crate-level `Error`/`Result` re-exports")]
-pub mod exception {
-    #[allow(deprecated)]
-    pub use crate::error::{Error, Exception, ExceptionResult, Result};
-}
+
 pub(crate) mod fraction_pow;
 /// Public interval parsing, naming and transposition helpers.
 pub mod interval;
@@ -75,8 +67,6 @@ pub use chordsymbol::{ChordAlteration, ChordQuality, ChordSymbol};
 pub use defaults::{FloatType, FractionType, IntegerType, Octave, UnsignedIntegerType};
 pub use duration::Duration;
 pub use error::{Error, Result};
-#[allow(deprecated)]
-pub use error::{Exception, ExceptionResult};
 pub use interval::{Interval, IntervalDirection};
 pub use key::{Key, KeySignature};
 pub use midi::{
