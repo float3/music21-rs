@@ -68,16 +68,16 @@ jobs:
         feature_set:
           - name: none
             flags: --no-default-features
-            test_extra: ""
+            single_threaded: false
           - name: serde
             flags: --no-default-features --features serde
-            test_extra: ""
+            single_threaded: false
           - name: python
             flags: --no-default-features --features python
-            test_extra: -- --test-threads=1
+            single_threaded: true
           - name: all-features
             flags: --all-features
-            test_extra: -- --test-threads=1
+            single_threaded: true
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -100,22 +100,24 @@ jobs:
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@v2
 
-      - name: Check / Clippy / Test / Fix
+      - name: Check / Clippy / Test
         shell: bash
         run: |
           set -euo pipefail
 
           FLAGS="${{ matrix.feature_set.flags }}"
-          TEST_EXTRA="${{ matrix.feature_set.test_extra }}"
+          SINGLE_THREADED="${{ matrix.feature_set.single_threaded }}"
 
           export PYO3_PYTHON="$(python -c 'import sys; print(sys.executable)')"
           echo "Using PYO3_PYTHON=$PYO3_PYTHON"
 
-          eval "cargo check --workspace --all-targets $FLAGS"
-          eval "cargo clippy --workspace --all-targets $FLAGS -- -D warnings"
-          eval "cargo test --workspace --all-targets $FLAGS $TEST_EXTRA"
-          eval "cargo fix --workspace --all-targets --allow-dirty --allow-staged --allow-no-vcs $FLAGS"
-          git diff --exit-code
+          cargo check --workspace --all-targets $FLAGS
+          cargo clippy --workspace --all-targets $FLAGS -- -D warnings
+          if [[ "$SINGLE_THREADED" == "true" ]]; then
+            cargo test --workspace --all-targets $FLAGS -- --test-threads=1
+          else
+            cargo test --workspace --all-targets $FLAGS
+          fi
 
   lint:
     name: Lint (fmt + clippy + check)

@@ -2,11 +2,16 @@
 /venv/
 /__pycache__/
 /examples/web/pkg/
+/examples/web/pkg-*/
 /examples/web/chord/pkg/
+/examples/web/*.js
+/examples/web/chord/*.js
+/examples/web/chords/*.js
+/examples/web/polyrhythm/*.js
+/examples/web/tuning/*.js
 
 # OS/editor noise
 .DS_Store
 Thumbs.db
 .idea/
-*.js
-.codex
+.codex/

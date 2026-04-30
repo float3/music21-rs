@@ -1,19 +1,14 @@
 {
-  "name": "web",
-  "version": "1.0.0",
-  "description": "",
-  "main": "help-tooltips.js",
+  "name": "music21-rs-web",
+  "version": "0.0.0",
+  "description": "Browser demos for music21-rs",
+  "private": true,
+  "license": "AGPL-3.0-only",
   "scripts": {
-    "build": "wasm-pack build . --target web --out-dir pkg --release && tsc -p tsconfig.json",
-    "build:dev": "wasm-pack build . --target web --out-dir pkg --dev && tsc -p tsconfig.json",
+    "build": "wasm-pack build . --target web --out-dir pkg --release && npx --yes --package typescript@5.9.3 tsc -p tsconfig.json",
+    "build:dev": "wasm-pack build . --target web --out-dir pkg --dev && npx --yes --package typescript@5.9.3 tsc -p tsconfig.json",
     "build:wasm": "wasm-pack build . --target web --out-dir pkg --release",
     "build:wasm:dev": "wasm-pack build . --target web --out-dir pkg --dev",
-    "typecheck": "tsc -p tsconfig.json"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "devDependencies": {
-    "typescript": "^6.0.3"
+    "typecheck": "npx --yes --package typescript@5.9.3 tsc -p tsconfig.json"
   }
 }
