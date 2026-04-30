@@ -207,8 +207,8 @@ impl Chord {
     /// Returns the preferred chord symbol, when available.
     ///
     /// This is separate from [`Self::pitched_common_name`]: common names follow
-    /// the music21/Forte tables, while chord symbols are compact harmonic
-    /// spellings such as `Cmaj7`, `F#m7b5`, or `D7b9#11/C`.
+    /// the music21/Forte tables, while chord symbols use music21-style
+    /// figures such as `Cmaj7`, `F#m7b5`, or `Ddom7dim5/CaddA,E-`.
     pub fn chord_symbol(&self) -> Option<String> {
         self.chord_symbols().into_iter().next()
     }
@@ -1659,24 +1659,24 @@ mod tests {
         let slash_chord = Chord::new("F4 C5 D5 E-5").unwrap();
 
         assert_eq!(major_seventh.chord_symbol().as_deref(), Some("Cmaj7"));
-        assert_eq!(petrushka.chord_symbol().as_deref(), Some("D7b9#11/C"));
         assert_eq!(
-            slash_chord.chord_symbol().as_deref(),
-            Some("Dm7(no5) add(b9)/F")
+            petrushka.chord_symbol().as_deref(),
+            Some("Ddom7dim5/CaddA,E-")
         );
+        assert_eq!(slash_chord.chord_symbol().as_deref(), None);
     }
 
     #[test]
     fn chord_symbols_with_root_accept_pitch_names() {
-        let chord = Chord::new("A C").unwrap();
+        let chord = Chord::new("G3 C4 E4").unwrap();
 
         assert_eq!(
-            chord.chord_symbol_with_root("A").unwrap().as_deref(),
-            Some("A add(b3)")
+            chord.chord_symbol_with_root("C").unwrap().as_deref(),
+            Some("C/G")
         );
         assert_eq!(
-            chord.chord_symbol_with_root("C").unwrap().as_deref(),
-            Some("C add(13)")
+            chord.chord_symbol_with_root(0).unwrap().as_deref(),
+            Some("C/G")
         );
     }
 

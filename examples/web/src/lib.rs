@@ -974,16 +974,12 @@ mod tests {
     }
 
     #[test]
-    fn known_chord_info_uses_c_root_for_chord_symbols() {
+    fn known_chord_info_uses_music21_figures_with_c_root() {
         let cases = [
-            ("major sixth", vec![0, 9], "C add(13)"),
-            ("tritone", vec![0, 6], "C add(b5)"),
-            ("major second", vec![0, 2], "C add(9)"),
-            (
-                "incomplete dominant-seventh chord",
-                vec![0, 3, 5],
-                "C add(b3,11)",
-            ),
+            ("major triad", vec![0, 4, 7], Some("C")),
+            ("dominant seventh chord", vec![0, 4, 7, 10], Some("C7")),
+            ("power chord", vec![0, 7], Some("Cpower")),
+            ("major sixth", vec![0, 9], None),
         ];
 
         for (name, pitch_classes, expected_symbol) in cases {
@@ -1002,13 +998,15 @@ mod tests {
                 "normal",
             );
 
-            assert_eq!(info.chord_symbol.as_deref(), Some(expected_symbol));
-            assert!(
-                info.chord_symbol
-                    .as_deref()
-                    .is_some_and(|symbol| symbol.starts_with('C')),
-                "{name} should be rooted at C in the browser table"
-            );
+            assert_eq!(info.chord_symbol.as_deref(), expected_symbol);
+            if expected_symbol.is_some() {
+                assert!(
+                    info.chord_symbol
+                        .as_deref()
+                        .is_some_and(|symbol| symbol.starts_with('C')),
+                    "{name} should be rooted at C in the browser table"
+                );
+            }
         }
     }
 

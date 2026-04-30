@@ -772,17 +772,17 @@ mod tests {
     fn analyzes_with_explicit_root_for_browser_style_sets() {
         let key = Key::from_tonic_mode("C", "major").unwrap();
         let root = Pitch::from_name("C").unwrap();
-        let chord = Chord::new("C D").unwrap();
+        let chord = Chord::new("C E G").unwrap();
         let rn = RomanNumeral::analyze_with_root(&chord, key.clone(), &root)
             .unwrap()
             .unwrap();
-        assert_eq!(rn.figure(), "I add(9)");
+        assert_eq!(rn.figure(), "I");
 
-        let sixth = Chord::new("C A").unwrap();
-        let rn = RomanNumeral::analyze_with_root(&sixth, key, &root)
+        let seventh = Chord::new("C E G B-").unwrap();
+        let rn = RomanNumeral::analyze_with_root(&seventh, key, &root)
             .unwrap()
             .unwrap();
-        assert_eq!(rn.figure(), "I add(13)");
+        assert_eq!(rn.figure(), "I7");
     }
 
     #[test]
