@@ -204,6 +204,10 @@ const defaultGuitarTuning = "E2 A2 D3 G3 B3 E4";
 const vexChordsUrl = "https://cdn.jsdelivr.net/npm/vexchords@1.2.0/dist/vexchords.dev.js";
 const historyStorageKey = "music21-rs.chordInspector.history";
 const maxHistoryItems = 24;
+const randomNoteLimitMin = 1;
+const randomNoteLimitMax = 12;
+const randomNoteDefaultMin = 3;
+const randomNoteDefaultMax = 6;
 let shareResetTimer: number | null = null;
 let currentAnalysis: ChordAnalysis | null = null;
 let guitarRenderToken = 0;
@@ -1415,12 +1419,48 @@ function clampInteger(value: string, min: number, max: number, fallback: number)
   return Math.min(max, Math.max(min, parsed));
 }
 
-function randomNoteCount(): number {
-  let min = clampInteger(randomMinNotes.value, 1, 12, 3);
-  let max = clampInteger(randomMaxNotes.value, 1, 12, 6);
-  if (min > max) [min, max] = [max, min];
+type RandomBoundInput = "min" | "max";
+
+function normalizeRandomNoteBounds(changed?: RandomBoundInput): { min: number; max: number } {
+  let min = clampInteger(
+    randomMinNotes.value,
+    randomNoteLimitMin,
+    randomNoteLimitMax,
+    randomNoteDefaultMin,
+  );
+  let max = clampInteger(
+    randomMaxNotes.value,
+    randomNoteLimitMin,
+    randomNoteLimitMax,
+    randomNoteDefaultMax,
+  );
+  const activeBound =
+    changed ??
+    (document.activeElement === randomMaxNotes
+      ? "max"
+      : document.activeElement === randomMinNotes
+        ? "min"
+        : "min");
+
+  if (min > max) {
+    if (activeBound === "max") {
+      min = max;
+    } else {
+      max = min;
+    }
+  }
+
   randomMinNotes.value = String(min);
   randomMaxNotes.value = String(max);
+  randomMinNotes.min = String(randomNoteLimitMin);
+  randomMinNotes.max = String(max);
+  randomMaxNotes.min = String(min);
+  randomMaxNotes.max = String(randomNoteLimitMax);
+  return { min, max };
+}
+
+function randomNoteCount(): number {
+  const { min, max } = normalizeRandomNoteBounds();
   return min + Math.floor(Math.random() * (max - min + 1));
 }
 
@@ -1455,6 +1495,11 @@ for (const value of [
   examples.appendChild(button);
 }
 
+normalizeRandomNoteBounds();
+randomMinNotes.addEventListener("input", () => normalizeRandomNoteBounds("min"));
+randomMinNotes.addEventListener("change", () => normalizeRandomNoteBounds("min"));
+randomMaxNotes.addEventListener("input", () => normalizeRandomNoteBounds("max"));
+randomMaxNotes.addEventListener("change", () => normalizeRandomNoteBounds("max"));
 randomChord.addEventListener("click", () => {
   input.value = generateRandomChord();
   resetShareButton();
