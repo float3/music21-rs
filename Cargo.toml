@@ -30,5 +30,5 @@ serde = { version = "1.0.228", optional = true, features = ["derive"] }
 [dev-dependencies]
 pyo3 = { version = "0.28.3", features = ["auto-initialize", "abi3-py39"] }
 reqwest = { version = "0.13.3", features = ["blocking"] }
-rodio = "0.21.1"
+rodio = "0.22.2"
 sha2 = "0.11.0"
