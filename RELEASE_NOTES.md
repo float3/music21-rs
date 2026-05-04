@@ -1,3 +1,19 @@
+# music21-rs 0.2.1
+
+This patch release fixes a Pythagorean tuning table ordering issue and improves
+the Tuning Explorer browser workflow.
+
+## Highlights
+
+- Fixed the Pythagorean tuning ratios so the twelve-tone chromatic degrees stay
+  in ascending frequency order, including `Bb` below `B`.
+- Added shareable URLs to the Tuning Explorer, preserving the selected tuning
+  system, root frequency, and selected degree.
+- Added a major-scale playback button for twelve-tone tuning systems, with
+  nearest-degree suggestions for non-twelve-tone systems.
+- Updated twelve-tone Tuning Explorer labels to use unambiguous flat spellings
+  such as `Bb4`.
+
 # music21-rs 0.2.0
 
 This release continues the browser-demo work from `0.1.x` and cleans up several
