@@ -941,12 +941,16 @@ dependencies = [
  "num",
  "num-traits",
  "ordered-float",
- "pyo3",
  "regex",
- "reqwest",
- "rodio",
  "serde",
- "sha2",
+]
+
+[[package]]
+name = "music21-rs-audio-example"
+version = "0.0.0"
+dependencies = [
+ "music21-rs",
+ "rodio",
 ]
 
 [[package]]
