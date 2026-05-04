@@ -52,12 +52,11 @@ let mutedTracks = new Set();
 
 populateRootSelector();
 
-const isLocalExample = ["127.0.0.1", "localhost"].includes(window.location.hostname)
-  || window.location.protocol === "file:";
-const chordBaseHref = isLocalExample ? "../chord/index.html" : "../chord/";
+const isFileExample = window.location.protocol === "file:";
+const chordBaseHref = isFileExample ? "../chord/index.html" : "../chord/";
 chordLinkTop.href = chordBaseHref;
-browserLinkTop.href = isLocalExample ? "../chords/index.html" : "../chords/";
-tuningLinkTop.href = isLocalExample ? "../tuning/index.html" : "../tuning/";
+browserLinkTop.href = isFileExample ? "../chords/index.html" : "../chords/";
+tuningLinkTop.href = isFileExample ? "../tuning/index.html" : "../tuning/";
 docsLink.href = "../docs/music21_rs/index.html";
 
 for (const value of examplesList) {

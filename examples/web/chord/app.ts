@@ -220,7 +220,13 @@ let heldMidiNotes = new Map<number, number>();
 let chordHistory = loadChordHistory();
 let chordHistoryLabels = new Map<string, string>();
 
-if (!window.location.pathname.includes("/chord/")) {
+const isFileExample = window.location.protocol === "file:";
+
+if (isFileExample) {
+  browserLink.href = "../chords/index.html";
+  polyrhythmLink.href = "../polyrhythm/index.html";
+  tuningLink.href = "../tuning/index.html";
+} else if (!window.location.pathname.includes("/chord/")) {
   browserLink.href = "./chords/";
   polyrhythmLink.href = "./polyrhythm/";
   tuningLink.href = "./tuning/";
@@ -841,7 +847,10 @@ document.addEventListener("music21-theme-change", () => {
 
 function renderPolyrhythmLink(data: ChordAnalysis): void {
   const rhythm = data.polyrhythm_input || "1";
-  const url = new URL("../polyrhythm/", window.location.href);
+  const url = new URL(
+    isFileExample ? "../polyrhythm/index.html" : "../polyrhythm/",
+    window.location.href,
+  );
   url.searchParams.set("rhythm", rhythm);
   openPolyrhythm.href = url.href;
 }

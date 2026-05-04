@@ -57,7 +57,7 @@ let allChords: KnownChord[] = [];
 let showNamedOnly = false;
 let shareResetTimer: number | null = null;
 
-const chordBaseHref = window.location.pathname.endsWith(".html")
+const chordBaseHref = window.location.protocol === "file:"
   ? "../chord/index.html"
   : "../chord/";
 const filterParamNames = ["q", "min", "max", "root", "named"];

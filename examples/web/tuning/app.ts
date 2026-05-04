@@ -15,9 +15,7 @@ const shareButton = document.querySelector("#share");
 const error = document.querySelector("#error");
 const docsLink = document.querySelector("#docs-link");
 
-const isLocalExample = ["127.0.0.1", "localhost"].includes(window.location.hostname)
-  || window.location.protocol === "file:";
-docsLink.href = isLocalExample ? "../docs/music21_rs/index.html" : "../docs/music21_rs/index.html";
+docsLink.href = "../docs/music21_rs/index.html";
 
 const defaultRootFrequency = 261.6256;
 const systemParam = "system";
