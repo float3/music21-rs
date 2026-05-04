@@ -1,10 +1,8 @@
 use crate::{
-    base::{Music21Object, Music21ObjectTrait},
     defaults::IntegerType,
     error::{Error, Result},
     interval::{Interval, IntervalArgument},
     pitch::Pitch,
-    prebase::ProtoM21ObjectTrait,
     scale::FIFTHS_ORDER_SHARP,
 };
 
@@ -126,17 +124,13 @@ pub fn pitch_name_to_sharps(pitch_name: &str, mode: Option<&str>) -> Result<Inte
 ///
 /// Flats are represented as negative sharps, so B-flat major has `-2`.
 pub struct KeySignature {
-    music21object: Music21Object,
     sharps: IntegerType,
 }
 
 impl KeySignature {
     /// Creates a key signature from a sharp count.
     pub fn new(sharps: IntegerType) -> Self {
-        Self {
-            music21object: Music21Object::new(),
-            sharps,
-        }
+        Self { sharps }
     }
 
     /// Returns the number of sharps, with flats as negative values.
@@ -194,14 +188,6 @@ impl KeySignature {
         Ok(Key::new(tonic_pitch, &resolved_mode, our_sharps))
     }
 }
-
-pub(crate) trait KeySignatureTrait: Music21ObjectTrait {}
-
-impl KeySignatureTrait for KeySignature {}
-
-impl Music21ObjectTrait for KeySignature {}
-
-impl ProtoM21ObjectTrait for KeySignature {}
 
 #[cfg(test)]
 mod tests {

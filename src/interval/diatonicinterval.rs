@@ -1,10 +1,7 @@
 use crate::{
-    base::Music21ObjectTrait,
     defaults::{IntegerType, UnsignedIntegerType},
     error::{Error, Result},
-    note::Note,
     pitch::Pitch,
-    prebase::ProtoM21ObjectTrait,
 };
 
 use super::{
@@ -78,22 +75,10 @@ fn semitones_generic(r#in: UnsignedIntegerType) -> Result<UnsignedIntegerType> {
 }
 
 impl IntervalBaseTrait for DiatonicInterval {
-    fn transpose_note(self, note1: Note) -> Result<Note> {
-        let interval =
-            super::Interval::from_diatonic_and_chromatic(self.clone(), self.get_chromatic()?)?;
-        interval.transpose_note(note1)
-    }
-
     fn transpose_pitch(self, pitch1: Pitch) -> Result<Pitch> {
         let interval =
             super::Interval::from_diatonic_and_chromatic(self.clone(), self.get_chromatic()?)?;
         interval.transpose_pitch_with_options(&pitch1, false, Some(4))
-    }
-
-    fn transpose_pitch_in_place(self, pitch1: &mut Pitch) -> Result<()> {
-        let transposed = self.transpose_pitch(pitch1.clone())?;
-        *pitch1 = transposed;
-        Ok(())
     }
 
     fn reverse(self) -> Result<Self>
@@ -110,10 +95,6 @@ impl IntervalBaseTrait for DiatonicInterval {
         }
     }
 }
-
-impl Music21ObjectTrait for DiatonicInterval {}
-
-impl ProtoM21ObjectTrait for DiatonicInterval {}
 
 #[cfg(test)]
 mod tests {

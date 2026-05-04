@@ -1,13 +1,10 @@
-use keysignature::KeySignatureTrait;
 pub use keysignature::{KeySignature, pitch_name_to_sharps, pitch_to_sharps, sharps_to_pitch};
 
 use crate::{
-    base::Music21ObjectTrait,
     chord::Chord,
     defaults::IntegerType,
     error::{Error, Result},
     pitch::Pitch,
-    prebase::ProtoM21ObjectTrait,
     scale::diatonicscale::DiatonicScale,
 };
 use std::str::FromStr;
@@ -155,10 +152,6 @@ impl Key {
         }
     }
 }
-
-impl KeySignatureTrait for Key {}
-impl Music21ObjectTrait for Key {}
-impl ProtoM21ObjectTrait for Key {}
 
 impl FromStr for Key {
     type Err = Error;

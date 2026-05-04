@@ -1,26 +1,19 @@
 use crate::{
-    base::Music21ObjectTrait,
     defaults::{FloatType, IntegerType},
     error::Result,
-    note::Note,
     pitch::Pitch,
-    prebase::ProtoM21ObjectTrait,
 };
 
-use super::{IntervalBaseTrait, diatonicinterval::DiatonicInterval, intervalbase::IntervalBase};
+use super::{IntervalBaseTrait, diatonicinterval::DiatonicInterval};
 
 #[derive(Clone, Debug)]
 pub(crate) struct ChromaticInterval {
-    intervalbase: IntervalBase,
     pub(crate) semitones: IntegerType,
 }
 
 impl ChromaticInterval {
     pub(crate) fn new(semitones: IntegerType) -> Self {
-        Self {
-            intervalbase: IntervalBase::new(),
-            semitones,
-        }
+        Self { semitones }
     }
 
     pub(crate) fn get_diatonic(&self) -> DiatonicInterval {
@@ -32,12 +25,6 @@ impl ChromaticInterval {
 }
 
 impl IntervalBaseTrait for ChromaticInterval {
-    fn transpose_note(self, note1: Note) -> Result<Note> {
-        let mut cloned = note1.clone();
-        cloned._pitch = self.transpose_pitch(note1._pitch)?;
-        Ok(cloned)
-    }
-
     fn transpose_pitch(self, pitch1: Pitch) -> Result<Pitch> {
         let mut p_out = Pitch::new(
             Some((pitch1.ps() + self.semitones as FloatType).round() as IntegerType),
@@ -56,11 +43,6 @@ impl IntervalBaseTrait for ChromaticInterval {
         Ok(p_out)
     }
 
-    fn transpose_pitch_in_place(self, pitch1: &mut Pitch) -> Result<()> {
-        *pitch1 = self.transpose_pitch(pitch1.clone())?;
-        Ok(())
-    }
-
     fn reverse(self) -> Result<Self>
     where
         Self: Sized,
@@ -68,10 +50,6 @@ impl IntervalBaseTrait for ChromaticInterval {
         Ok(Self::new(-self.semitones))
     }
 }
-
-impl Music21ObjectTrait for ChromaticInterval {}
-
-impl ProtoM21ObjectTrait for ChromaticInterval {}
 
 #[cfg(test)]
 mod tests {

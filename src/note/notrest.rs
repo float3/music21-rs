@@ -1,10 +1,8 @@
 use super::generalnote::GeneralNote;
 use super::generalnote::GeneralNoteTrait;
 
-use crate::base::Music21ObjectTrait;
 use crate::chord::chordbase::ChordBase;
 use crate::duration::Duration;
-use crate::prebase::ProtoM21ObjectTrait;
 
 use std::sync::Arc;
 
@@ -25,10 +23,6 @@ impl NotRest {
     }
 }
 
-pub(crate) trait NotRestTrait: GeneralNoteTrait {}
-
-impl NotRestTrait for NotRest {}
-
 impl GeneralNoteTrait for NotRest {
     fn duration(&self) -> &Option<Duration> {
         self.general_note.duration()
@@ -38,7 +32,3 @@ impl GeneralNoteTrait for NotRest {
         self.general_note.set_duration(duration);
     }
 }
-
-impl Music21ObjectTrait for NotRest {}
-
-impl ProtoM21ObjectTrait for NotRest {}

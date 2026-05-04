@@ -1,9 +1,7 @@
 use super::{IntegerType, convert_harmonic_to_cents};
 
-use crate::common::objects::slottedobjectmixin::{SlottedObjectMixin, SlottedObjectMixinTrait};
 use crate::defaults::FloatType;
 use crate::error::{Error, Result};
-use crate::prebase::{ProtoM21Object, ProtoM21ObjectTrait};
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
@@ -67,8 +65,6 @@ impl Display for MicrotoneSpecifier {
 /// A microtonal pitch adjustment measured in cents, optionally shifted by a
 /// harmonic like Python music21's `music21.pitch.Microtone`.
 pub struct Microtone {
-    proto: ProtoM21Object,
-    slottedobjectmixin: SlottedObjectMixin,
     _cent_shift: FloatType,
     _harmonic_shift: IntegerType,
 }
@@ -116,8 +112,6 @@ impl Microtone {
         };
 
         Ok(Self {
-            proto: ProtoM21Object::new(),
-            slottedobjectmixin: SlottedObjectMixin::new(),
             _cent_shift,
             _harmonic_shift,
         })
@@ -277,10 +271,6 @@ impl PartialEq for Microtone {
         self.cents() == other.cents()
     }
 }
-
-impl ProtoM21ObjectTrait for Microtone {}
-
-impl SlottedObjectMixinTrait for Microtone {}
 
 pub(crate) trait IntoCentShift {
     fn into_cent_shift(self) -> FloatType;

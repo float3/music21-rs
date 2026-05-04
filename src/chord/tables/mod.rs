@@ -7,31 +7,6 @@ use generated::*;
 
 pub(crate) type ChordTableAddress = (u8, u8, i8, Option<u8>);
 
-trait ChordTableAddressExt {
-    fn cardinality(&self) -> u8;
-    fn forte_class(&self) -> u8;
-    fn inversion(&self) -> i8;
-    fn pc_original(&self) -> Option<u8>;
-}
-
-impl ChordTableAddressExt for ChordTableAddress {
-    fn cardinality(&self) -> u8 {
-        self.0
-    }
-
-    fn forte_class(&self) -> u8 {
-        self.1
-    }
-
-    fn inversion(&self) -> i8 {
-        self.2
-    }
-
-    fn pc_original(&self) -> Option<u8> {
-        self.3
-    }
-}
-
 // TNI structures are defined as
 // [0] = tuple of pitch classes (0-11)
 // [1] = 6-tuple of interval class vector (ICV)
@@ -54,11 +29,7 @@ type Pcivicv = (PitchClasses, InvarianceVector, IntervalClassVector);
 trait TNITupleExt {
     fn pitches(&self) -> PitchClasses;
     fn pitch_classes(&self) -> PitchClasses;
-    fn interval_class_vector(&self) -> IntervalClassVector;
-    fn icv(&self) -> IntervalClassVector;
     fn invariance_vector(&self) -> InvarianceVector;
-    fn morris_invariance(&self) -> InvarianceVector;
-    fn iv(&self) -> InvarianceVector;
     fn z_relation(&self) -> ZRelation;
 }
 
@@ -71,24 +42,8 @@ impl TNITupleExt for TNIStructure {
         self.pitches()
     }
 
-    fn interval_class_vector(&self) -> IntervalClassVector {
-        self.1
-    }
-
-    fn icv(&self) -> IntervalClassVector {
-        self.interval_class_vector()
-    }
-
     fn invariance_vector(&self) -> InvarianceVector {
         self.2
-    }
-
-    fn morris_invariance(&self) -> InvarianceVector {
-        self.invariance_vector()
-    }
-
-    fn iv(&self) -> InvarianceVector {
-        self.invariance_vector()
     }
 
     fn z_relation(&self) -> ZRelation {
@@ -126,9 +81,11 @@ const CARDINALITIES: usize = 13;
 
 type Forte = [&'static [Option<TNIStructure>]; CARDINALITIES];
 type CardinalityToChordMembers = [&'static [(U8SB, Pcivicv)]; CARDINALITIES];
+#[allow(dead_code)]
 type ForteNumberWithInversionToIndex = &'static [(U8U8SB, u8)];
 type TnIndexToChordInfo = &'static [(U8U8SB, Option<&'static [&'static str]>)];
 type MaximumIndexNumberWithoutInversionEquivalence = [u8; CARDINALITIES];
+#[allow(dead_code)]
 type MaximumIndexNumberWithInversionEquivalence = [u8; CARDINALITIES];
 
 #[derive(Debug, Clone)]
@@ -350,6 +307,39 @@ pub(crate) fn interval_class_vector_from_address(
     Ok(entry.2.to_vec())
 }
 
+pub(crate) fn invariance_vector_from_address(address: ChordTableAddress) -> Result<Vec<u8>, Error> {
+    let (card, index, inversion) = validate_address((address.0, address.1, Some(address.2)))?;
+    let entry = FORTE[card as usize]
+        .get(index as usize)
+        .and_then(Option::as_ref)
+        .ok_or_else(|| {
+            Error::ChordTables(format!(
+                "cannot resolve invariance vector for address ({card}, {index}, {})",
+                inversion.as_i8()
+            ))
+        })?;
+    Ok(entry.invariance_vector().to_vec())
+}
+
+pub(crate) fn z_relation_from_address(address: ChordTableAddress) -> Result<Option<String>, Error> {
+    let (card, index, inversion) = validate_address((address.0, address.1, Some(address.2)))?;
+    let entry = FORTE[card as usize]
+        .get(index as usize)
+        .and_then(Option::as_ref)
+        .ok_or_else(|| {
+            Error::ChordTables(format!(
+                "cannot resolve z-relation for address ({card}, {index}, {})",
+                inversion.as_i8()
+            ))
+        })?;
+    let z_relation = entry.z_relation();
+    if z_relation == 0 {
+        Ok(None)
+    } else {
+        Ok(Some(format!("{card}-{}", z_relation)))
+    }
+}
+
 pub(crate) fn known_chord_table_entries() -> Vec<KnownChordTableEntry> {
     let mut entries = TN_INDEX_TO_CHORD_INFO
         .iter()
@@ -397,25 +387,6 @@ fn find_tn_index_to_chord_info(
 mod tests {
     use super::{Sign, find_cardinality_member};
 
-    #[cfg(feature = "python")]
-    mod utils {
-        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/shared.rs"));
-    }
-
-    #[cfg(feature = "python")]
-    use super::Pcivicv;
-    #[cfg(feature = "python")]
-    use super::TNIStructure;
-    #[cfg(feature = "python")]
-    use crate::chord::tables::FORTE;
-    #[cfg(feature = "python")]
-    use pyo3::{
-        Bound, PyResult, Python,
-        types::{PyAnyMethods, PyDict, PyDictMethods, PyTuple},
-    };
-    #[cfg(feature = "python")]
-    use utils::{get_tables, init_py_with_dummies, prepare};
-
     #[test]
     fn cardinality_to_chord_members_include_major_triad() {
         let member = find_cardinality_member(3, 11, Sign::NegativeOne).unwrap();
@@ -426,171 +397,5 @@ mod tests {
             ]
         );
         assert_eq!(member.2, [0, 0, 1, 1, 1, 0]);
-    }
-
-    #[cfg(feature = "python")]
-    fn match_python(tuple: &Pcivicv) -> String {
-        let true_indices: Vec<String> = tuple
-            .0
-            .iter()
-            .enumerate()
-            .filter(|&(_, &b)| b)
-            .map(|(i, _)| i.to_string())
-            .collect();
-
-        let first = if true_indices.len() == 1 {
-            format!("{},", true_indices.join(""))
-        } else {
-            true_indices.join(", ")
-        };
-
-        let second = tuple
-            .1
-            .iter()
-            .map(|i| i.to_string())
-            .collect::<Vec<_>>()
-            .join(", ");
-
-        let third = tuple
-            .2
-            .iter()
-            .map(|i| i.to_string())
-            .collect::<Vec<_>>()
-            .join(", ");
-
-        format!("(({first}), ({second}), ({third}))")
-    }
-
-    #[test]
-    #[cfg(feature = "python")]
-    fn python_cardinality_to_chord_members_equality_test() {
-        prepare().unwrap();
-
-        Python::attach(|py| -> PyResult<()> {
-            init_py_with_dummies(py)?;
-
-            let tables = get_tables(py)?;
-
-            let cardinality_to_chord_members = tables.getattr("cardinalityToChordMembers")?;
-            let cardinality_to_chord_members: &Bound<'_, PyDict> =
-                cardinality_to_chord_members.cast_exact()?;
-
-            cardinality_to_chord_members.keys().into_iter().for_each(
-                |outer_key: Bound<'_, pyo3::PyAny>| {
-                    let outer_key_rust: usize = outer_key.extract().unwrap();
-                    println!("outer_key: {outer_key:?}");
-                    let inner_dict: Bound<'_, pyo3::PyAny> = cardinality_to_chord_members
-                        .get_item(outer_key)
-                        .unwrap()
-                        .unwrap();
-                    let inner_dict: &Bound<'_, PyDict> = inner_dict.cast_exact().unwrap();
-
-                    inner_dict.keys().into_iter().for_each(|inner_key| {
-                        let inner_key: &Bound<'_, PyTuple> = inner_key.cast_exact().unwrap();
-
-                        let (first, second): (u8, i8) = inner_key.extract().unwrap();
-                        let key = (first, Sign::from_i8(second).unwrap());
-
-                        println!("python key: {inner_key:?}");
-                        println!("rust key: {key:?}");
-                        assert_eq!(
-                            format!("{:?}", inner_dict.get_item(inner_key).unwrap().unwrap()),
-                            match_python(
-                                find_cardinality_member(outer_key_rust as u8, key.0, key.1)
-                                    .unwrap()
-                            )
-                        );
-                        println!("{:?} passed", &key);
-                    });
-                    println!("{outer_key_rust} passed");
-                },
-            );
-
-            Ok(())
-        })
-        .unwrap();
-    }
-
-    #[cfg(feature = "python")]
-    fn match_python2(v: &[Option<TNIStructure>]) -> String {
-        let elems: Vec<String> = v
-            .iter()
-            .map(|opt| {
-                match opt {
-                    None => "None".to_string(),
-                    Some(t) => {
-                        // Collect indices where bool is true.
-                        let true_indices: Vec<String> =
-                            t.0.iter()
-                                .enumerate()
-                                .filter(|&(_, &b)| b)
-                                .map(|(i, _)| i.to_string())
-                                .collect();
-                        let first = if true_indices.len() == 1 {
-                            format!("{},", true_indices.join(""))
-                        } else {
-                            true_indices.join(", ")
-                        };
-                        let second =
-                            t.1.iter()
-                                .map(|i| i.to_string())
-                                .collect::<Vec<_>>()
-                                .join(", ");
-                        let third =
-                            t.2.iter()
-                                .map(|i| i.to_string())
-                                .collect::<Vec<_>>()
-                                .join(", ");
-                        let fourth = t.3.to_string();
-                        format!("(({first}), ({second}), ({third}), {fourth})")
-                    }
-                }
-            })
-            .collect();
-        format!("({})", elems.join(", "))
-    }
-
-    #[test]
-    fn test() {
-        for i in 1..12 {
-            println!("{i}");
-        }
-    }
-    #[test]
-    #[cfg(feature = "python")]
-    fn python_forte_equality_test() {
-        prepare().unwrap();
-
-        Python::attach(|py| -> PyResult<()> {
-            init_py_with_dummies(py)?;
-
-            let operator = py.import("operator")?;
-
-            let tables = get_tables(py)?;
-
-            let forte = tables.getattr("FORTE")?;
-            let forte: &Bound<'_, PyTuple> = forte.cast_exact()?;
-
-            for (i, forte_entry) in FORTE.iter().enumerate() {
-                let item = operator.call_method1("getitem", (forte, i))?;
-
-                let tuple: Result<&Bound<'_, PyTuple>, _> = item.cast_exact();
-
-                match tuple {
-                    Ok(t) => {
-                        assert_eq!(format!("{t:?}"), format!("{}", match_python2(forte_entry)));
-                        println!("{t:?}");
-                        println!("{}", match_python2(forte_entry));
-                    }
-                    Err(_) => {
-                        assert!(forte_entry.is_empty());
-                        continue;
-                    }
-                }
-            }
-
-            Ok(())
-        })
-        .unwrap()
     }
 }

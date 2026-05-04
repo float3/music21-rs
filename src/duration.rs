@@ -1,8 +1,6 @@
 use crate::{
-    common::objects::slottedobjectmixin::{SlottedObjectMixin, SlottedObjectMixinTrait},
     defaults::{FloatType, IntegerType},
     error::{Error, Result},
-    prebase::{ProtoM21Object, ProtoM21ObjectTrait},
 };
 
 #[derive(Clone, Debug)]
@@ -12,8 +10,6 @@ use crate::{
 /// A quarter note has a quarter length of `1.0`; an eighth note is `0.5`;
 /// a whole note is `4.0`.
 pub struct Duration {
-    proto: ProtoM21Object,
-    mixin: SlottedObjectMixin,
     quarter_length: FloatType,
 }
 
@@ -26,11 +22,7 @@ impl Duration {
             )));
         }
 
-        Ok(Self {
-            proto: ProtoM21Object::new(),
-            mixin: SlottedObjectMixin::new(),
-            quarter_length,
-        })
+        Ok(Self { quarter_length })
     }
 
     /// Returns a quarter-note duration.
@@ -68,8 +60,6 @@ impl Duration {
 impl Default for Duration {
     fn default() -> Self {
         Self {
-            proto: ProtoM21Object::new(),
-            mixin: SlottedObjectMixin::new(),
             quarter_length: 1.0,
         }
     }
@@ -96,10 +86,6 @@ impl TryFrom<IntegerType> for Duration {
         Self::new(value as FloatType)
     }
 }
-
-impl ProtoM21ObjectTrait for Duration {}
-
-impl SlottedObjectMixinTrait for Duration {}
 
 #[cfg(test)]
 mod tests {

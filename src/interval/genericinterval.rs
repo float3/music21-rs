@@ -1,20 +1,16 @@
 use crate::{
-    base::Music21ObjectTrait,
-    common::{numbertools::MUSICAL_ORDINAL_STRINGS, stringtools::get_num_from_str},
+    common::numbertools::MUSICAL_ORDINAL_STRINGS,
     error::{Error, Result},
-    note::Note,
     pitch::Pitch,
-    prebase::ProtoM21ObjectTrait,
 };
 
 use super::{
     IntegerType, IntervalBaseTrait, diatonicinterval::DiatonicInterval, direction::Direction,
-    intervalbase::IntervalBase, specifier::Specifier,
+    specifier::Specifier,
 };
 
 #[derive(Clone, Debug)]
 pub(crate) struct GenericInterval {
-    pub(crate) intervalbase: IntervalBase,
     _value: IntegerType,
 }
 
@@ -28,23 +24,8 @@ impl GenericInterval {
         }
     }
 
-    ///default value is "Unison"
-    pub(crate) fn from_string(value: String) -> Result<Self> {
-        let mut slf = Self {
-            intervalbase: IntervalBase::new(),
-            _value: 1,
-        };
-
-        slf.value_setter(convert_generic_string(value))?;
-
-        Ok(slf)
-    }
-
     pub(crate) fn from_int(value: IntegerType) -> Result<Self> {
-        let mut slf = Self {
-            intervalbase: IntervalBase::new(),
-            _value: 1,
-        };
+        let mut slf = Self { _value: 1 };
 
         slf.value_setter(convert_generic(value))?;
 
@@ -150,44 +131,6 @@ fn name_from_interval_number(value: IntegerType) -> String {
     format!("{value}{suffix}")
 }
 
-fn convert_generic_string(value: String) -> IntegerType {
-    let mut normalized = value.trim().to_lowercase();
-    if normalized.is_empty() {
-        return 0;
-    }
-
-    let mut direction_scalar = 1;
-    if normalized.contains("descending") {
-        direction_scalar = -1;
-        normalized = normalized.replace("descending", "").trim().to_string();
-    } else if normalized.contains("ascending") {
-        normalized = normalized.replace("ascending", "").trim().to_string();
-    } else if normalized.starts_with('-') {
-        direction_scalar = -1;
-        normalized = normalized.trim_start_matches('-').trim().to_string();
-    }
-
-    if let Ok(number) = normalized.parse::<IntegerType>() {
-        return number * direction_scalar;
-    }
-
-    for (idx, ordinal) in MUSICAL_ORDINAL_STRINGS.iter().enumerate() {
-        if normalized == ordinal.to_lowercase() {
-            return (idx as IntegerType) * direction_scalar;
-        }
-    }
-
-    let (digits, remain) = get_num_from_str(&normalized, "0123456789");
-    let remain = remain.trim().to_lowercase();
-    if !digits.is_empty() && matches!(remain.as_str(), "" | "st" | "nd" | "rd" | "th") {
-        return digits
-            .parse::<IntegerType>()
-            .map_or(0, |number| number * direction_scalar);
-    }
-
-    0
-}
-
 fn convert_generic(value: IntegerType) -> IntegerType {
     let post = value;
     let direction_scalar = Direction::Ascending;
@@ -195,18 +138,6 @@ fn convert_generic(value: IntegerType) -> IntegerType {
 }
 
 impl IntervalBaseTrait for GenericInterval {
-    fn transpose_note(self, note1: Note) -> Result<Note> {
-        let specifier = if self.is_perfectable() {
-            Specifier::Perfect
-        } else {
-            Specifier::Major
-        };
-        let diatonic = self.get_diatonic(specifier);
-        let chromatic = diatonic.get_chromatic()?;
-        let interval = super::Interval::from_diatonic_and_chromatic(diatonic, chromatic)?;
-        interval.transpose_note(note1)
-    }
-
     fn transpose_pitch(self, pitch1: Pitch) -> Result<Pitch> {
         let specifier = if self.is_perfectable() {
             Specifier::Perfect
@@ -217,12 +148,6 @@ impl IntervalBaseTrait for GenericInterval {
         let chromatic = diatonic.get_chromatic()?;
         let interval = super::Interval::from_diatonic_and_chromatic(diatonic, chromatic)?;
         interval.transpose_pitch_with_options(&pitch1, false, Some(4))
-    }
-
-    fn transpose_pitch_in_place(self, pitch1: &mut Pitch) -> Result<()> {
-        let transposed = self.transpose_pitch(pitch1.clone())?;
-        *pitch1 = transposed;
-        Ok(())
     }
 
     fn reverse(self) -> Result<Self>
@@ -236,10 +161,6 @@ impl IntervalBaseTrait for GenericInterval {
         }
     }
 }
-
-impl Music21ObjectTrait for GenericInterval {}
-
-impl ProtoM21ObjectTrait for GenericInterval {}
 
 #[cfg(test)]
 mod tests {
@@ -262,16 +183,5 @@ mod tests {
         assert!(GenericInterval::from_int(4).unwrap().is_perfectable());
         assert!(GenericInterval::from_int(12).unwrap().is_perfectable());
         assert!(!GenericInterval::from_int(3).unwrap().is_perfectable());
-    }
-
-    #[test]
-    fn generic_interval_from_string() {
-        assert_eq!(
-            GenericInterval::from_string("Descending Twelfth".to_string())
-                .unwrap()
-                .staff_distance(),
-            -11
-        );
-        assert!(GenericInterval::from_string("not-an-interval".to_string()).is_err());
     }
 }

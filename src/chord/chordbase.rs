@@ -2,14 +2,11 @@ use super::Chord;
 use super::IntegerType;
 use super::Pitch;
 
-use crate::base::Music21ObjectTrait;
 use crate::duration::Duration;
 use crate::error::Result;
 use crate::note::generalnote::GeneralNoteTrait;
 use crate::note::notrest::NotRest;
-use crate::note::notrest::NotRestTrait;
 use crate::note::{IntoNote, Note};
-use crate::prebase::ProtoM21ObjectTrait;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -99,12 +96,6 @@ impl ChordBase {
     }
 }
 
-pub(crate) trait ChordBaseTrait {}
-
-impl ChordBaseTrait for ChordBase {}
-
-impl NotRestTrait for ChordBase {}
-
 impl GeneralNoteTrait for ChordBase {
     fn duration(&self) -> &Option<Duration> {
         self.notrest.duration()
@@ -114,10 +105,6 @@ impl GeneralNoteTrait for ChordBase {
         self.notrest.set_duration(duration);
     }
 }
-
-impl Music21ObjectTrait for ChordBase {}
-
-impl ProtoM21ObjectTrait for ChordBase {}
 
 pub(crate) trait IntoNotRests {
     type T: IntoIterator<Item = NotRest>;

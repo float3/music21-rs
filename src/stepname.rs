@@ -20,11 +20,6 @@ pub(crate) enum StepName {
 pub(crate) type StepType = IntegerType;
 
 impl StepName {
-    pub(crate) fn dnn_offset_to_step(n: StepType) -> Result<Self> {
-        Self::try_from((n + 1) as u8)
-            .map_err(|_| Error::StepName(format!("dnn offset doesn't match step: {n}")))
-    }
-
     pub(crate) fn step_to_dnn_offset(&self) -> StepType {
         *self as StepType
     }
@@ -97,26 +92,6 @@ impl TryFrom<char> for StepName {
 mod tests {
     use super::*;
     use std::convert::TryFrom;
-
-    #[test]
-    fn test_dnn_offset_to_step() {
-        // Valid offsets: 0..=6 map to C, D, E, F, G, A, B respectively.
-        assert_eq!(StepName::dnn_offset_to_step(0).unwrap(), StepName::C);
-        assert_eq!(StepName::dnn_offset_to_step(1).unwrap(), StepName::D);
-        assert_eq!(StepName::dnn_offset_to_step(2).unwrap(), StepName::E);
-        assert_eq!(StepName::dnn_offset_to_step(3).unwrap(), StepName::F);
-        assert_eq!(StepName::dnn_offset_to_step(4).unwrap(), StepName::G);
-        assert_eq!(StepName::dnn_offset_to_step(5).unwrap(), StepName::A);
-        assert_eq!(StepName::dnn_offset_to_step(6).unwrap(), StepName::B);
-
-        // Invalid offset.
-        let err = StepName::dnn_offset_to_step(7).unwrap_err();
-        if let Error::StepName(msg) = err {
-            assert!(msg.contains("dnn offset doesn't match step"));
-        } else {
-            panic!("Unexpected error variant");
-        }
-    }
 
     #[test]
     fn test_step_to_dnn_offset() {
