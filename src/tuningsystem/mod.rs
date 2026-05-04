@@ -697,10 +697,10 @@ pub const PYTHAGOREAN_TUNING: [Fraction; 12] = [
     Fraction::new(4, 3),
     Fraction::new(729, 512),
     Fraction::new(3, 2),
+    Fraction::new(128, 81),
     Fraction::new(27, 16),
     Fraction::new(16, 9),
     Fraction::new(243, 128),
-    Fraction::new(15, 8),
 ];
 
 /// Twelve-tone five-limit tuning ratios.
@@ -1039,6 +1039,25 @@ mod tests {
             assert!(!system.description().is_empty());
             assert!(system.octave_size() > 0);
             assert_eq!(system.to_string(), system.id());
+        }
+    }
+
+    #[test]
+    fn twelve_tone_systems_keep_chromatic_ratios_ascending() {
+        for system in ALL_TUNING_SYSTEMS
+            .into_iter()
+            .filter(|system| system.octave_size() == OCTAVE_SIZE)
+        {
+            let mut previous = system.ratio(0);
+            for degree in 1..=OCTAVE_SIZE {
+                let ratio = system.ratio(degree as usize);
+                assert!(
+                    ratio > previous,
+                    "{} degree {degree} ratio {ratio} should be higher than {previous}",
+                    system.id()
+                );
+                previous = ratio;
+            }
         }
     }
 }
