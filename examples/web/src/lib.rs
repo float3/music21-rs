@@ -2,11 +2,10 @@
 
 use music21_rs::{
     ALL_TUNING_SYSTEMS, Chord, ChordResolutionSuggestion, Error, GuitarTuning, Key, KnownChordType,
-    Pitch, Polyrhythm, Result, TuningSystem, abc_chord_document, abc_chord_resolution_document,
-    abc_polyrhythm_document, pitch_class_name,
+    Pitch, Polyrhythm, Result, TuningSystem, abc_chord, abc_duration, pitch_class_name,
 };
 use serde::Serialize;
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, fmt};
 use wasm_bindgen::prelude::*;
 
 #[derive(Serialize)]
@@ -172,6 +171,127 @@ struct PolyrhythmRatioToneInfo {
     component: u32,
     offset: i32,
     ratio: f64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WebAbcClef {
+    Treble,
+    Bass,
+}
+
+impl fmt::Display for WebAbcClef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Treble => f.write_str("treble"),
+            Self::Bass => f.write_str("bass"),
+        }
+    }
+}
+
+fn abc_clef_for_pitches(pitches: &[Pitch]) -> WebAbcClef {
+    if pitches.is_empty() {
+        return WebAbcClef::Treble;
+    }
+
+    let midi_values = pitches.iter().map(Pitch::midi).collect::<Vec<_>>();
+    let total = midi_values.iter().sum::<i32>();
+    let average = total as f64 / midi_values.len() as f64;
+    let lowest = midi_values.iter().min().copied().unwrap_or(60);
+
+    if average < 60.0 || lowest < 48 {
+        WebAbcClef::Bass
+    } else {
+        WebAbcClef::Treble
+    }
+}
+
+fn abc_chord_bar_token(pitches: &[Pitch]) -> Result<String> {
+    Ok(format!("{}{}", abc_chord(pitches)?, abc_duration(4, 1)?))
+}
+
+fn abc_chord_document(pitches: &[Pitch]) -> Result<String> {
+    Ok(format!(
+        "X:1\nL:1/4\nM:4/4\nK:C clef={}\n{} |]\n",
+        abc_clef_for_pitches(pitches),
+        abc_chord_bar_token(pitches)?
+    ))
+}
+
+fn abc_chord_resolution_document(source: &[Pitch], target: &[Pitch]) -> Result<String> {
+    let mut combined = Vec::with_capacity(source.len() + target.len());
+    combined.extend_from_slice(source);
+    combined.extend_from_slice(target);
+
+    Ok(format!(
+        "X:1\nL:1/4\nM:4/4\nK:C clef={}\n{} | {} |]\n",
+        abc_clef_for_pitches(&combined),
+        abc_chord_bar_token(source)?,
+        abc_chord_bar_token(target)?
+    ))
+}
+
+fn abc_polyrhythm_voice(component: u32, base: u32) -> Result<String> {
+    if component == 0 || base == 0 {
+        return Err(Error::Polyrhythm(
+            "ABC polyrhythm components must be positive".to_string(),
+        ));
+    }
+
+    if component == base {
+        return Ok(std::iter::repeat_n("B", component as usize)
+            .collect::<Vec<_>>()
+            .join(" "));
+    }
+
+    if component == 1 {
+        return Ok(format!("B{base}"));
+    }
+
+    if component <= 9 {
+        let notes = std::iter::repeat_n("B", component as usize)
+            .collect::<Vec<_>>()
+            .join(" ");
+        return Ok(format!("({component}:{base}:{component}{notes}"));
+    }
+
+    let duration = abc_duration(base, component)?;
+    Ok((0..component)
+        .map(|index| {
+            let label = if index == 0 {
+                format!("\"^{component}:{base}\"")
+            } else {
+                String::new()
+            };
+            format!("{label}B{duration}")
+        })
+        .collect::<Vec<_>>()
+        .join(" "))
+}
+
+fn abc_polyrhythm_document(components: &[u32], base: u32) -> Result<String> {
+    if components.is_empty() {
+        return Err(Error::Polyrhythm(
+            "ABC polyrhythm document requires at least one component".to_string(),
+        ));
+    }
+
+    let mut lines = vec![
+        "X:1".to_string(),
+        "L:1/4".to_string(),
+        format!("M:{base}/4"),
+        "K:C clef=perc style=x".to_string(),
+    ];
+
+    for (index, component) in components.iter().enumerate() {
+        lines.push(format!(
+            "V:{} name=\"{}\" clef=perc style=x",
+            index + 1,
+            component
+        ));
+        lines.push(format!("{} |]", abc_polyrhythm_voice(*component, base)?));
+    }
+
+    Ok(format!("{}\n", lines.join("\n")))
 }
 
 #[wasm_bindgen]
