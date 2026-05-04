@@ -11,6 +11,7 @@ const rootFrequency = document.querySelector("#root-frequency");
 const tempoInput = document.querySelector("#tempo");
 const waveform = document.querySelector("#waveform");
 const stopButton = document.querySelector("#stop");
+const shareButton = document.querySelector("#share");
 const error = document.querySelector("#error");
 const docsLink = document.querySelector("#docs-link");
 
@@ -18,12 +19,20 @@ const isLocalExample = ["127.0.0.1", "localhost"].includes(window.location.hostn
   || window.location.protocol === "file:";
 docsLink.href = isLocalExample ? "../docs/music21_rs/index.html" : "../docs/music21_rs/index.html";
 
+const defaultRootFrequency = 261.6256;
+const systemParam = "system";
+const rootFrequencyParam = "root";
+const degreeParam = "degree";
+const majorScaleSemitones = [0, 2, 4, 5, 7, 9, 11, 12];
+const twelveToneFlatNames = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+
 let tuningSystems = [];
 let selectedSystemId = "";
 let selectedDegree = 0;
 let audioContext = null;
 let activeNodes = [];
 let activeTimers = [];
+let shareResetTimer = null;
 
 function showError(message) {
   error.textContent = message;
@@ -44,7 +53,7 @@ function selectedSystem() {
   return tuningSystems.find((system) => system.id === selectedSystemId) ?? tuningSystems[0];
 }
 
-async function loadTuningSystems() {
+async function loadTuningSystems({ syncUrl = false } = {}) {
   const candidates = ["../pkg/music21_rs_web.js"];
   let lastError = null;
   for (const candidate of candidates) {
@@ -54,7 +63,7 @@ async function loadTuningSystems() {
       if (typeof module.tuning_systems !== "function") {
         throw new Error("The current WASM package does not expose tuning_systems yet.");
       }
-      const frequency = clampNumber(rootFrequency.value, 20, 2000, 261.6256);
+      const frequency = clampNumber(rootFrequency.value, 20, 2000, defaultRootFrequency);
       rootFrequency.value = frequency;
       tuningSystems = module.tuning_systems(frequency);
       if (!selectedSystemId || !tuningSystems.some((system) => system.id === selectedSystemId)) {
@@ -62,6 +71,7 @@ async function loadTuningSystems() {
       }
       clearError();
       render();
+      if (syncUrl) syncShareUrl();
       return;
     } catch (err) {
       lastError = err;
@@ -92,7 +102,9 @@ function renderSystemList() {
       stopPlayback();
       selectedSystemId = system.id;
       selectedDegree = 0;
+      resetShareButton();
       render();
+      syncShareUrl();
     });
     systemsNode.appendChild(button);
   }
@@ -101,6 +113,7 @@ function renderSystemList() {
 function renderSelectedSystem() {
   const system = selectedSystem();
   if (!system) return;
+  selectedDegree = normalizeSelectedDegree(system, selectedDegree);
   systemTitle.textContent = system.name;
   renderSummary(system);
   renderScale(system);
@@ -134,13 +147,15 @@ function renderScale(system) {
     button.type = "button";
     button.className = `degree-button${degree.degree === selectedDegree ? " active" : ""}`;
     const label = document.createElement("strong");
-    label.textContent = degree.label;
+    label.textContent = displayDegreeLabel(system, degree);
     const frequency = document.createElement("small");
     frequency.textContent = `${formatFrequency(degree.frequency_hz)} Hz`;
     button.append(label, frequency);
     button.addEventListener("click", () => {
       selectedDegree = degree.degree;
+      resetShareButton();
       renderScale(system);
+      syncShareUrl();
       playDegree(degree);
     });
     scaleStrip.appendChild(button);
@@ -148,10 +163,26 @@ function renderScale(system) {
 
   const playButton = document.createElement("button");
   playButton.type = "button";
-  playButton.className = "degree-button active";
+  playButton.className = "degree-button scale-action";
   playButton.innerHTML = "<strong>Play scale</strong><small>all degrees</small>";
   playButton.addEventListener("click", () => playScale(system));
   scaleStrip.appendChild(playButton);
+
+  const majorButton = document.createElement("button");
+  majorButton.type = "button";
+  majorButton.className = "degree-button scale-action";
+  const isTwelveTone = Number(system.octave_size) === 12;
+  const majorLabel = document.createElement("strong");
+  majorLabel.textContent = isTwelveTone ? "Play major" : "Nearest major";
+  const majorHint = document.createElement("small");
+  majorHint.textContent = isTwelveTone ? "C D E F G A B" : "suggested degrees";
+  const suggestedDegrees = suggestedMajorScaleDegrees(system).map((degree) => degree.degree);
+  majorButton.title = isTwelveTone
+    ? "Play the major scale"
+    : `Suggested nearest major-scale degrees: ${suggestedDegrees.join(", ")}`;
+  majorButton.append(majorLabel, majorHint);
+  majorButton.addEventListener("click", () => playMajorScale(system));
+  scaleStrip.appendChild(majorButton);
 }
 
 function renderDegrees(system) {
@@ -160,7 +191,7 @@ function renderDegrees(system) {
     const row = document.createElement("tr");
     for (const value of [
       degree.degree,
-      degree.label,
+      displayDegreeLabel(system, degree),
       degree.ratio_label,
       `${formatFrequency(degree.frequency_hz)} Hz`,
     ]) {
@@ -180,7 +211,9 @@ function renderDegrees(system) {
     play.textContent = "Play";
     play.addEventListener("click", () => {
       selectedDegree = degree.degree;
+      resetShareButton();
       renderScale(system);
+      syncShareUrl();
       playDegree(degree);
     });
     playCell.appendChild(play);
@@ -214,6 +247,113 @@ function formatCents(value) {
   return value > 0 ? `+${rounded}` : rounded;
 }
 
+function displayDegreeLabel(system, degree) {
+  if (Number(system.octave_size) !== 12) return degree.label;
+  const degreeNumber = Number(degree.degree);
+  const noteName = twelveToneFlatNames[((degreeNumber % 12) + 12) % 12];
+  const octave = 4 + Math.floor(degreeNumber / 12);
+  return `${noteName}${octave}`;
+}
+
+function normalizeSelectedDegree(system, degreeValue) {
+  const degree = Number.parseInt(String(degreeValue), 10);
+  if (system.degrees.some((candidate) => candidate.degree === degree)) return degree;
+  return 0;
+}
+
+function suggestedMajorScaleDegrees(system) {
+  const octaveSize = Math.max(1, Number(system.octave_size) || 12);
+  const degreeNumbers = majorScaleSemitones
+    .map((semitone, index) => {
+      if (Number(system.octave_size) === 12) return semitone;
+      if (index === majorScaleSemitones.length - 1) return octaveSize;
+      return Math.round((semitone * octaveSize) / 12);
+    })
+    .filter((degree, index, degrees) => degrees.indexOf(degree) === index);
+
+  return degreeNumbers
+    .map((degreeNumber) => system.degrees.find((degree) => degree.degree === degreeNumber))
+    .filter(Boolean);
+}
+
+function getSharedSystemId() {
+  const params = new URLSearchParams(window.location.search);
+  return params.has(systemParam) ? (params.get(systemParam) ?? "") : null;
+}
+
+function getSharedRootFrequency() {
+  const params = new URLSearchParams(window.location.search);
+  if (!params.has(rootFrequencyParam)) return null;
+  return clampNumber(params.get(rootFrequencyParam), 20, 2000, defaultRootFrequency);
+}
+
+function getSharedDegree() {
+  const params = new URLSearchParams(window.location.search);
+  if (!params.has(degreeParam)) return null;
+  const degree = Number.parseInt(params.get(degreeParam) ?? "", 10);
+  return Number.isFinite(degree) && degree >= 0 ? degree : 0;
+}
+
+function buildShareUrl() {
+  const system = selectedSystem();
+  const url = new URL(window.location.href);
+  if (system) url.searchParams.set(systemParam, system.id);
+  url.searchParams.set(
+    rootFrequencyParam,
+    String(clampNumber(rootFrequency.value, 20, 2000, defaultRootFrequency)),
+  );
+  if (selectedDegree > 0) {
+    url.searchParams.set(degreeParam, String(selectedDegree));
+  } else {
+    url.searchParams.delete(degreeParam);
+  }
+  return url;
+}
+
+function syncShareUrl() {
+  const url = buildShareUrl();
+  window.history.replaceState(
+    {
+      degree: selectedDegree,
+      rootFrequency: rootFrequency.value,
+      system: selectedSystemId,
+    },
+    "",
+    url.href,
+  );
+  return url.href;
+}
+
+function resetShareButton() {
+  shareButton.textContent = "Share tuning";
+  shareButton.classList.remove("copied");
+}
+
+function markShareCopied() {
+  shareButton.textContent = "Copied";
+  shareButton.classList.add("copied");
+  if (shareResetTimer) clearTimeout(shareResetTimer);
+  shareResetTimer = setTimeout(resetShareButton, 1600);
+}
+
+async function writeClipboard(value) {
+  if (navigator.clipboard?.writeText && window.isSecureContext) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = value;
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  textarea.setAttribute("readonly", "");
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand("copy");
+  textarea.remove();
+  if (!copied) throw new Error("Copy failed");
+}
+
 async function ensureAudio() {
   const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
   if (!AudioContextConstructor) {
@@ -241,10 +381,20 @@ async function playDegree(degree) {
 
 async function playScale(system) {
   if (!await ensureAudio()) return;
+  playDegrees(system, system.degrees);
+}
+
+async function playMajorScale(system) {
+  if (!await ensureAudio()) return;
+  playDegrees(system, suggestedMajorScaleDegrees(system));
+}
+
+function playDegrees(system, degrees) {
   stopPlayback();
+  if (!degrees.length) return;
   const duration = noteDurationSeconds();
   const start = audioContext.currentTime + 0.04;
-  system.degrees.forEach((degree, index) => {
+  degrees.forEach((degree, index) => {
     const timer = window.setTimeout(() => {
       selectedDegree = degree.degree;
       renderScale(system);
@@ -289,9 +439,39 @@ function stopPlayback() {
 controls.addEventListener("submit", (event) => {
   event.preventDefault();
   stopPlayback();
-  loadTuningSystems();
+  resetShareButton();
+  loadTuningSystems({ syncUrl: true });
 });
 stopButton.addEventListener("click", stopPlayback);
-rootFrequency.addEventListener("change", loadTuningSystems);
+rootFrequency.addEventListener("change", () => {
+  resetShareButton();
+  loadTuningSystems({ syncUrl: true });
+});
+
+shareButton.addEventListener("click", async () => {
+  const href = syncShareUrl();
+  try {
+    await writeClipboard(href);
+    clearError();
+    markShareCopied();
+  } catch {
+    showError("The URL has been updated in your address bar.");
+  }
+});
+
+window.addEventListener("popstate", () => {
+  const sharedRootFrequency = getSharedRootFrequency();
+  rootFrequency.value = sharedRootFrequency ?? defaultRootFrequency;
+  selectedSystemId = getSharedSystemId() ?? "";
+  selectedDegree = getSharedDegree() ?? 0;
+  stopPlayback();
+  resetShareButton();
+  loadTuningSystems();
+});
+
+const sharedRootFrequency = getSharedRootFrequency();
+if (sharedRootFrequency !== null) rootFrequency.value = sharedRootFrequency;
+selectedSystemId = getSharedSystemId() ?? "";
+selectedDegree = getSharedDegree() ?? 0;
 
 loadTuningSystems();

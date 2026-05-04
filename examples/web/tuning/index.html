@@ -8,7 +8,7 @@
   <style>
     .controls {
       display: grid;
-      grid-template-columns: minmax(150px, 0.8fr) minmax(120px, 0.55fr) minmax(120px, 0.55fr) auto auto;
+      grid-template-columns: minmax(150px, 0.8fr) minmax(120px, 0.55fr) minmax(120px, 0.55fr) auto auto auto;
       gap: 10px;
       align-items: end;
       margin-bottom: 18px;
@@ -65,6 +65,7 @@
     }
 
     .secondary:hover,
+    .secondary.copied,
     .button-link:hover {
       border-color: var(--accent);
       background: var(--accent-soft);
@@ -183,12 +184,16 @@
     .degree-button {
       display: grid;
       height: 58px;
+      min-width: 0;
       align-content: center;
       gap: 2px;
       padding: 6px 8px;
       border: 1px solid var(--line);
       background: var(--panel-soft);
       color: var(--ink);
+      line-height: 1.15;
+      overflow: hidden;
+      white-space: normal;
     }
 
     .degree-button:hover,
@@ -201,6 +206,15 @@
       color: var(--muted);
       font-size: 11px;
       font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+
+    .degree-button strong {
+      overflow-wrap: anywhere;
+    }
+
+    .degree-button.scale-action {
+      grid-column: span 2;
     }
 
     .table-wrap {
@@ -447,6 +461,7 @@
       </label>
       <button class="primary" type="submit">Reload</button>
       <button id="stop" class="secondary" type="button">Stop</button>
+      <button id="share" class="secondary" type="button">Share tuning</button>
     </form>
 
     <p class="error" id="error"></p>
