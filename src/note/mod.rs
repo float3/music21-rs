@@ -1,15 +1,13 @@
 pub(crate) mod generalnote;
 pub(crate) mod notrest;
 
-use crate::base::Music21ObjectTrait;
 use crate::defaults::IntegerType;
 use crate::duration::Duration;
 use crate::error::Result;
 use crate::pitch::Pitch;
-use crate::prebase::ProtoM21ObjectTrait;
 
 use generalnote::GeneralNoteTrait;
-use notrest::{NotRest, NotRestTrait};
+use notrest::NotRest;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
@@ -145,12 +143,6 @@ impl Note {
     }
 }
 
-pub(crate) trait NoteTrait: NotRestTrait {}
-
-impl NoteTrait for Note {}
-
-impl NotRestTrait for Note {}
-
 impl GeneralNoteTrait for Note {
     fn duration(&self) -> &Option<Duration> {
         self.notrest.duration()
@@ -160,10 +152,6 @@ impl GeneralNoteTrait for Note {
         self.notrest.set_duration(duration);
     }
 }
-
-impl ProtoM21ObjectTrait for Note {}
-
-impl Music21ObjectTrait for Note {}
 
 impl FromStr for Note {
     type Err = crate::error::Error;

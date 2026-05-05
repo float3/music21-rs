@@ -1,16 +1,18 @@
-#[allow(unused)]
 mod module {
     #[cfg(feature = "python")]
     use pyo3::{prelude::*, types::PyModule};
     use std::error::Error;
     #[cfg(feature = "python")]
     use std::ffi::OsStr;
+    #[cfg(feature = "python")]
     use std::path::Path;
     use std::process::Command;
     use std::str::from_utf8;
     #[cfg(feature = "python")]
     use std::sync::LazyLock;
+    #[cfg(feature = "python")]
     use std::sync::atomic::AtomicBool;
+    #[cfg(feature = "python")]
     use std::sync::atomic::Ordering;
 
     #[cfg(feature = "python")]
@@ -63,6 +65,7 @@ mod module {
             .unwrap_or(false)
     }
 
+    #[cfg(feature = "python")]
     fn git_clone() -> Result<(), Box<dyn Error>> {
         if Path::new("./music21").exists() {
             println!("Repository already cloned.");
@@ -138,8 +141,10 @@ mod module {
         }
     }
 
+    #[cfg(feature = "python")]
     static PREPARED: AtomicBool = AtomicBool::new(false);
 
+    #[cfg(feature = "python")]
     pub fn prepare() -> Result<(), Box<dyn Error>> {
         if PREPARED.load(Ordering::Acquire) {
             return Ok(());
@@ -287,5 +292,4 @@ mod module {
     }
 }
 
-#[allow(unused_imports)]
 pub use module::*;

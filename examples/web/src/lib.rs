@@ -2,12 +2,16 @@
 
 use music21_rs::{
     ALL_TUNING_SYSTEMS, Chord, ChordResolutionSuggestion, Error, GuitarTuning, Key, KnownChordType,
-    Pitch, Polyrhythm, Result, TuningSystem, abc_chord_document, abc_chord_resolution_document,
-    abc_polyrhythm_document, pitch_class_name,
+    Pitch, Polyrhythm, Result, TuningSystem, abc_chord, abc_duration, pitch_class_name,
 };
 use serde::Serialize;
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, fmt};
 use wasm_bindgen::prelude::*;
+
+const RECURSIVE_JUST_INTONATION_ID: &str = "RecursiveJustIntonation";
+const RECURSIVE_JUST_INTONATION_NAME: &str = "Recursive just intonation";
+const RECURSIVE_JUST_INTONATION_DESCRIPTION: &str =
+    "Chord-contextual just intonation retuned from the inferred chord root.";
 
 #[derive(Serialize)]
 struct TuningFrequencyInfo {
@@ -174,6 +178,127 @@ struct PolyrhythmRatioToneInfo {
     ratio: f64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WebAbcClef {
+    Treble,
+    Bass,
+}
+
+impl fmt::Display for WebAbcClef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Treble => f.write_str("treble"),
+            Self::Bass => f.write_str("bass"),
+        }
+    }
+}
+
+fn abc_clef_for_pitches(pitches: &[Pitch]) -> WebAbcClef {
+    if pitches.is_empty() {
+        return WebAbcClef::Treble;
+    }
+
+    let midi_values = pitches.iter().map(Pitch::midi).collect::<Vec<_>>();
+    let total = midi_values.iter().sum::<i32>();
+    let average = total as f64 / midi_values.len() as f64;
+    let lowest = midi_values.iter().min().copied().unwrap_or(60);
+
+    if average < 60.0 || lowest < 48 {
+        WebAbcClef::Bass
+    } else {
+        WebAbcClef::Treble
+    }
+}
+
+fn abc_chord_bar_token(pitches: &[Pitch]) -> Result<String> {
+    Ok(format!("{}{}", abc_chord(pitches)?, abc_duration(4, 1)?))
+}
+
+fn abc_chord_document(pitches: &[Pitch]) -> Result<String> {
+    Ok(format!(
+        "X:1\nL:1/4\nM:4/4\nK:C clef={}\n{} |]\n",
+        abc_clef_for_pitches(pitches),
+        abc_chord_bar_token(pitches)?
+    ))
+}
+
+fn abc_chord_resolution_document(source: &[Pitch], target: &[Pitch]) -> Result<String> {
+    let mut combined = Vec::with_capacity(source.len() + target.len());
+    combined.extend_from_slice(source);
+    combined.extend_from_slice(target);
+
+    Ok(format!(
+        "X:1\nL:1/4\nM:4/4\nK:C clef={}\n{} | {} |]\n",
+        abc_clef_for_pitches(&combined),
+        abc_chord_bar_token(source)?,
+        abc_chord_bar_token(target)?
+    ))
+}
+
+fn abc_polyrhythm_voice(component: u32, base: u32) -> Result<String> {
+    if component == 0 || base == 0 {
+        return Err(Error::Polyrhythm(
+            "ABC polyrhythm components must be positive".to_string(),
+        ));
+    }
+
+    if component == base {
+        return Ok(std::iter::repeat_n("B", component as usize)
+            .collect::<Vec<_>>()
+            .join(" "));
+    }
+
+    if component == 1 {
+        return Ok(format!("B{base}"));
+    }
+
+    if component <= 9 {
+        let notes = std::iter::repeat_n("B", component as usize)
+            .collect::<Vec<_>>()
+            .join(" ");
+        return Ok(format!("({component}:{base}:{component}{notes}"));
+    }
+
+    let duration = abc_duration(base, component)?;
+    Ok((0..component)
+        .map(|index| {
+            let label = if index == 0 {
+                format!("\"^{component}:{base}\"")
+            } else {
+                String::new()
+            };
+            format!("{label}B{duration}")
+        })
+        .collect::<Vec<_>>()
+        .join(" "))
+}
+
+fn abc_polyrhythm_document(components: &[u32], base: u32) -> Result<String> {
+    if components.is_empty() {
+        return Err(Error::Polyrhythm(
+            "ABC polyrhythm document requires at least one component".to_string(),
+        ));
+    }
+
+    let mut lines = vec![
+        "X:1".to_string(),
+        "L:1/4".to_string(),
+        format!("M:{base}/4"),
+        "K:C clef=perc style=x".to_string(),
+    ];
+
+    for (index, component) in components.iter().enumerate() {
+        lines.push(format!(
+            "V:{} name=\"{}\" clef=perc style=x",
+            index + 1,
+            component
+        ));
+        lines.push(format!("{} |]", abc_polyrhythm_voice(*component, base)?));
+    }
+
+    Ok(format!("{}\n", lines.join("\n")))
+}
+
 #[wasm_bindgen]
 /// Analyzes a chord input string or MIDI-number list for the chord analyzer page.
 pub fn analyze_chord(input: &str) -> Result<JsValue, JsValue> {
@@ -231,7 +356,13 @@ fn analyze_chord_inner(
         .map_err(|err| JsValue::from_str(&err.to_string()))?;
     let abc_notation =
         abc_chord_document(&display_pitches).map_err(|err| JsValue::from_str(&err.to_string()))?;
-    let pitches = pitch_infos(&display_pitches);
+    let recursive_just_intonation_frequencies = Chord::new(display_pitches.as_slice())
+        .ok()
+        .and_then(|display_chord| display_chord.recursive_just_intonation_frequencies().ok());
+    let pitches = pitch_infos(
+        &display_pitches,
+        recursive_just_intonation_frequencies.as_deref(),
+    );
     let guitar_fingering = match guitar_tuning.as_ref() {
         Some(tuning) => chord.guitar_fingering_with_tuning(tuning),
         None => chord.guitar_fingering(),
@@ -569,13 +700,18 @@ pub fn tuning_systems(root_frequency_hz: f64) -> Result<JsValue, JsValue> {
 #[wasm_bindgen]
 /// Returns the built-in twelve-tone tuning systems usable for chord playback.
 pub fn twelve_tone_tuning_systems() -> Result<JsValue, JsValue> {
-    let systems = twelve_tone_systems()
+    let mut systems = twelve_tone_systems()
         .map(|tuning_system| PlayableTuningSystemInfo {
             id: tuning_system.id(),
             name: tuning_system.display_name(),
             description: tuning_system.description(),
         })
         .collect::<Vec<_>>();
+    systems.push(PlayableTuningSystemInfo {
+        id: RECURSIVE_JUST_INTONATION_ID,
+        name: RECURSIVE_JUST_INTONATION_NAME,
+        description: RECURSIVE_JUST_INTONATION_DESCRIPTION,
+    });
 
     serde_wasm_bindgen::to_value(&systems).map_err(|err| JsValue::from_str(&err.to_string()))
 }
@@ -657,20 +793,31 @@ fn display_pitches_for_sequence(pitches: Vec<Pitch>) -> Result<Vec<Pitch>> {
         .collect()
 }
 
-fn pitch_infos(pitches: &[Pitch]) -> Vec<PitchInfo> {
+fn pitch_infos(pitches: &[Pitch], recursive_just_intonation: Option<&[f64]>) -> Vec<PitchInfo> {
     pitches
         .iter()
         .enumerate()
         .map(|(index, display_pitch)| {
             let pitch_space = display_pitch.ps();
-            let tuning_frequencies = twelve_tone_systems()
+            let mut tuning_frequencies = twelve_tone_systems()
                 .map(|tuning_system| TuningFrequencyInfo {
                     id: tuning_system.id(),
                     name: tuning_system.display_name(),
                     frequency_hz: display_pitch.frequency_hz_in(tuning_system),
                     cents_from_equal_temperament: tuning_system.cents_at(pitch_space),
                 })
-                .collect();
+                .collect::<Vec<_>>();
+            if let Some(frequency_hz) =
+                recursive_just_intonation.and_then(|frequencies| frequencies.get(index).copied())
+            {
+                tuning_frequencies.push(TuningFrequencyInfo {
+                    id: RECURSIVE_JUST_INTONATION_ID,
+                    name: RECURSIVE_JUST_INTONATION_NAME,
+                    frequency_hz,
+                    cents_from_equal_temperament: 1200.0
+                        * (frequency_hz / display_pitch.frequency_hz()).log2(),
+                });
+            }
 
             PitchInfo {
                 index,
@@ -878,9 +1025,10 @@ fn display_pitch_for_sequence(pitch: Pitch, last_pitch_space: &mut Option<i32>) 
 #[cfg(test)]
 mod tests {
     use super::{
-        chord_from_input, display_key_context, display_pitches_for_sequence,
-        estimated_key_for_chord, known_chord_info, parse_guitar_tuning, parse_midi_input,
-        parse_pitch_midi_number, pitch_infos, twelve_tone_systems,
+        RECURSIVE_JUST_INTONATION_ID, chord_from_input, display_key_context,
+        display_pitches_for_sequence, estimated_key_for_chord, known_chord_info,
+        parse_guitar_tuning, parse_midi_input, parse_pitch_midi_number, pitch_infos,
+        twelve_tone_systems,
     };
     use music21_rs::{Chord, KnownChordType, Pitch};
 
@@ -919,15 +1067,16 @@ mod tests {
     #[test]
     fn pitch_infos_include_all_twelve_tone_tuning_ids() {
         let pitch: Pitch = "C4".parse().unwrap();
-        let infos = pitch_infos(&[pitch]);
+        let infos = pitch_infos(&[pitch], Some(&[261.6256]));
         let ids = infos[0]
             .tuning_frequencies
             .iter()
             .map(|tuning| tuning.id)
             .collect::<Vec<_>>();
-        let expected_ids = twelve_tone_systems()
+        let mut expected_ids = twelve_tone_systems()
             .map(|tuning_system| tuning_system.id())
             .collect::<Vec<_>>();
+        expected_ids.push(RECURSIVE_JUST_INTONATION_ID);
 
         assert_eq!(ids, expected_ids);
     }

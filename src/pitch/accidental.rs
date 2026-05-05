@@ -1,10 +1,8 @@
 use super::Pitch;
 
-use crate::common::objects::slottedobjectmixin::{SlottedObjectMixin, SlottedObjectMixinTrait};
 use crate::defaults::{FloatType, IntegerType};
 use crate::display::{DisplayLocation, DisplaySize, DisplayStyle, DisplayType};
 use crate::error::{Error, Result};
-use crate::prebase::{ProtoM21Object, ProtoM21ObjectTrait};
 
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
@@ -82,43 +80,6 @@ impl AccidentalEnum {
         }
     }
 
-    fn from_alter(f: FloatType) -> Option<Self> {
-        match f {
-            -4.0 => Some(AccidentalEnum::QuadrupleFlat),
-            -3.0 => Some(AccidentalEnum::TripleFlat),
-            -2.0 => Some(AccidentalEnum::DoubleFlat),
-            -1.5 => Some(AccidentalEnum::OneAndAHalfFlat),
-            -1.0 => Some(AccidentalEnum::Flat),
-            -0.5 => Some(AccidentalEnum::HalfFlat),
-            0.0 => Some(AccidentalEnum::Natural),
-            0.5 => Some(AccidentalEnum::HalfSharp),
-            1.0 => Some(AccidentalEnum::Sharp),
-            1.5 => Some(AccidentalEnum::OneAndAHalfSharp),
-            2.0 => Some(AccidentalEnum::DoubleSharp),
-            3.0 => Some(AccidentalEnum::TripleSharp),
-            4.0 => Some(AccidentalEnum::QuadrupleSharp),
-            _ => None,
-        }
-    }
-
-    fn to_alter_str(&self) -> &'static str {
-        match self {
-            AccidentalEnum::Natural => "0.0",
-            AccidentalEnum::HalfSharp => "0.5",
-            AccidentalEnum::Sharp => "1.0",
-            AccidentalEnum::OneAndAHalfSharp => "1.5",
-            AccidentalEnum::DoubleSharp => "2.0",
-            AccidentalEnum::TripleSharp => "3.0",
-            AccidentalEnum::QuadrupleSharp => "4.0",
-            AccidentalEnum::HalfFlat => "-0.5",
-            AccidentalEnum::Flat => "-1.0",
-            AccidentalEnum::OneAndAHalfFlat => "-1.5",
-            AccidentalEnum::DoubleFlat => "-2.0",
-            AccidentalEnum::TripleFlat => "-3.0",
-            AccidentalEnum::QuadrupleFlat => "-4.0",
-        }
-    }
-
     fn from_alter_str(s: &str) -> Option<Self> {
         match s {
             "-4.0" => Some(AccidentalEnum::QuadrupleFlat),
@@ -193,7 +154,6 @@ impl AccidentalEnum {
         }
     }
 
-    #[allow(unreachable_patterns)]
     fn from_unicode(s: &str) -> Option<Self> {
         match s {
             "\u{1d12a}\u{1d12a}" => Some(AccidentalEnum::QuadrupleSharp),
@@ -234,21 +194,6 @@ impl AccidentalEnum {
         }
     }
 
-    fn from_int(i: i8) -> Option<Self> {
-        match i {
-            -4 => Some(AccidentalEnum::QuadrupleFlat),
-            -3 => Some(AccidentalEnum::TripleFlat),
-            -2 => Some(AccidentalEnum::DoubleFlat),
-            -1 => Some(AccidentalEnum::Flat),
-            0 => Some(AccidentalEnum::Natural),
-            1 => Some(AccidentalEnum::Sharp),
-            2 => Some(AccidentalEnum::DoubleSharp),
-            3 => Some(AccidentalEnum::TripleSharp),
-            4 => Some(AccidentalEnum::QuadrupleSharp),
-            _ => None,
-        }
-    }
-
     fn from_float(f: FloatType) -> Option<Self> {
         match f {
             -4.0 => Some(AccidentalEnum::QuadrupleFlat),
@@ -274,10 +219,6 @@ impl AccidentalEnum {
             .or_else(|| AccidentalEnum::from_alter_str(s))
             .or_else(|| AccidentalEnum::from_unicode(s))
             .or_else(|| AccidentalEnum::from_alternate_name(s))
-    }
-
-    fn to_name_and_alter(&self) -> (String, FloatType) {
-        (self.to_name().to_string(), self.to_alter())
     }
 }
 
@@ -347,8 +288,6 @@ impl Display for AccidentalSpecifier {
 /// `music21.pitch.Accidental`: a standard accidental has a `name`, `modifier`,
 /// and semitone `alter`; names compare by spelling while ordering uses `alter`.
 pub struct Accidental {
-    proto: ProtoM21Object,
-    slottedobjectmixin: SlottedObjectMixin,
     _display_type: DisplayType,
     _display_status: Option<bool>,
     display_style: DisplayStyle,
@@ -431,8 +370,6 @@ impl Accidental {
         }
 
         let mut acci = Self {
-            proto: ProtoM21Object::new(),
-            slottedobjectmixin: SlottedObjectMixin::new(),
             _display_type: DisplayType::Normal,
             _display_status: None,
             display_style: DisplayStyle::Normal,
@@ -836,26 +773,13 @@ impl std::fmt::Display for Accidental {
     }
 }
 
-impl ProtoM21ObjectTrait for Accidental {}
-
-impl SlottedObjectMixinTrait for Accidental {}
-
 pub(crate) trait IntoAccidental: Display + Clone {
-    fn accidental_args(self, allow_non_standard_values: bool) -> Option<(String, FloatType)>;
     fn is_accidental(&self) -> bool;
     fn into_accidental(self) -> Result<Accidental>;
     fn accidental(self) -> Accidental;
 }
 
 impl IntoAccidental for i8 {
-    fn accidental_args(self, allow_non_standard_values: bool) -> Option<(String, FloatType)> {
-        match AccidentalEnum::from_int(self) {
-            Some(acci) => Some(acci.to_name_and_alter()),
-            _ if allow_non_standard_values => Some(("".to_owned(), self as FloatType)),
-            _ => None,
-        }
-    }
-
     fn is_accidental(&self) -> bool {
         false
     }
@@ -870,14 +794,6 @@ impl IntoAccidental for i8 {
 }
 
 impl IntoAccidental for IntegerType {
-    fn accidental_args(self, allow_non_standard_values: bool) -> Option<(String, FloatType)> {
-        match i8::try_from(self).ok().and_then(AccidentalEnum::from_int) {
-            Some(acci) => Some(acci.to_name_and_alter()),
-            _ if allow_non_standard_values => Some(("".to_owned(), self as FloatType)),
-            _ => None,
-        }
-    }
-
     fn is_accidental(&self) -> bool {
         false
     }
@@ -892,14 +808,6 @@ impl IntoAccidental for IntegerType {
 }
 
 impl IntoAccidental for FloatType {
-    fn accidental_args(self, allow_non_standard_values: bool) -> Option<(String, FloatType)> {
-        match AccidentalEnum::from_float(self) {
-            Some(acci) => Some(acci.to_name_and_alter()),
-            _ if allow_non_standard_values => Some(("".to_owned(), self)),
-            _ => None,
-        }
-    }
-
     fn is_accidental(&self) -> bool {
         false
     }
@@ -914,10 +822,6 @@ impl IntoAccidental for FloatType {
 }
 
 impl IntoAccidental for &str {
-    fn accidental_args(self, allow_non_standard_values: bool) -> Option<(String, FloatType)> {
-        self.to_string().accidental_args(allow_non_standard_values)
-    }
-
     fn is_accidental(&self) -> bool {
         false
     }
@@ -932,14 +836,6 @@ impl IntoAccidental for &str {
 }
 
 impl IntoAccidental for String {
-    fn accidental_args(self, allow_non_standard_values: bool) -> Option<(String, FloatType)> {
-        match AccidentalEnum::from_string(self.to_lowercase().as_str()) {
-            Some(acci) => Some(acci.to_name_and_alter()),
-            _ if allow_non_standard_values => Some((self, 0.0)),
-            _ => None,
-        }
-    }
-
     fn is_accidental(&self) -> bool {
         false
     }
@@ -954,10 +850,6 @@ impl IntoAccidental for String {
 }
 
 impl IntoAccidental for Accidental {
-    fn accidental_args(self, _allow_non_standard_values: bool) -> Option<(String, FloatType)> {
-        Some((self._name, self._alter))
-    }
-
     fn is_accidental(&self) -> bool {
         true
     }
@@ -972,16 +864,6 @@ impl IntoAccidental for Accidental {
 }
 
 impl IntoAccidental for AccidentalSpecifier {
-    fn accidental_args(self, allow_non_standard_values: bool) -> Option<(String, FloatType)> {
-        match self {
-            AccidentalSpecifier::Name(name) => name.accidental_args(allow_non_standard_values),
-            AccidentalSpecifier::Alter(alter) => alter.accidental_args(allow_non_standard_values),
-            AccidentalSpecifier::Accidental(accidental) => {
-                accidental.accidental_args(allow_non_standard_values)
-            }
-        }
-    }
-
     fn is_accidental(&self) -> bool {
         matches!(self, AccidentalSpecifier::Accidental(_))
     }

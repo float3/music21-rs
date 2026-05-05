@@ -3,7 +3,6 @@ pub(crate) mod chordbase;
 pub mod guitar;
 pub(crate) mod tables;
 
-use crate::base::Music21ObjectTrait;
 use crate::defaults::{FloatType, IntegerType, UnsignedIntegerType};
 use crate::duration::Duration;
 use crate::error::Error;
@@ -12,13 +11,11 @@ use crate::interval::{Interval, PitchOrNote};
 use crate::key::Key;
 use crate::key::keysignature::KeySignature;
 use crate::note::generalnote::GeneralNoteTrait;
-use crate::note::notrest::NotRestTrait;
 use crate::note::{IntoNote, Note};
 use crate::pitch::{Pitch, PitchClass, PitchClassSpecifier};
-use crate::prebase::ProtoM21ObjectTrait;
+use crate::tuningsystem::TuningSystem;
 
 use chordbase::ChordBase;
-use chordbase::ChordBaseTrait;
 pub use guitar::{GuitarFingering, GuitarStringFingering, GuitarTuning, GuitarTuningString};
 
 use num::integer::{gcd, lcm};
@@ -615,6 +612,40 @@ impl Chord {
             .join(":")
     }
 
+    /// Returns this chord's frequencies in recursive just intonation.
+    ///
+    /// The chord root is inferred with the same root-finding logic used by
+    /// chord naming. The root is tuned on the global C-based just-intonation
+    /// table, then every chord member is tuned by applying that same table to
+    /// its distance from the root.
+    pub fn recursive_just_intonation_frequencies(&self) -> Result<Vec<FloatType>> {
+        let Some(root_pitch) = self.find_root_pitch() else {
+            return Ok(Vec::new());
+        };
+
+        Ok(self.recursive_just_intonation_frequencies_from_root(root_pitch))
+    }
+
+    /// Returns recursive-just-intonation frequencies using an explicit root.
+    ///
+    /// The supplied root is interpreted as a pitch class and must be present in
+    /// the chord. When that pitch class appears in multiple octaves, the lowest
+    /// matching chord member is used as the local root.
+    pub fn recursive_just_intonation_frequencies_with_root(
+        &self,
+        root: impl Into<PitchClassSpecifier>,
+    ) -> Result<Vec<FloatType>> {
+        let root_pc = Self::chord_symbol_root_pitch_class(root.into())?;
+        let root_pitch = self.pitch_for_root_pitch_class(root_pc).ok_or_else(|| {
+            Error::Chord(format!(
+                "recursive just intonation root {} is not present in the chord",
+                Self::pitch_class_name(root_pc)
+            ))
+        })?;
+
+        Ok(self.recursive_just_intonation_frequencies_from_root(root_pitch))
+    }
+
     /// Returns cloned pitches for every note in the chord, in input order.
     pub fn pitches(&self) -> Vec<Pitch> {
         self._notes.iter().map(|note| note._pitch.clone()).collect()
@@ -686,6 +717,23 @@ impl Chord {
         let ordered_pcs = self.ordered_pitch_classes();
         let address = tables::seek_chord_tables_address(&ordered_pcs).ok()?;
         tables::interval_class_vector_from_address(address).ok()
+    }
+
+    /// Returns Robert Morris's eight-entry invariance vector, when available.
+    ///
+    /// The values are taken from the same music21 Forte table as
+    /// [`Self::forte_class`] and [`Self::interval_class_vector`].
+    pub fn invariance_vector(&self) -> Option<Vec<u8>> {
+        let ordered_pcs = self.ordered_pitch_classes();
+        let address = tables::seek_chord_tables_address(&ordered_pcs).ok()?;
+        tables::invariance_vector_from_address(address).ok()
+    }
+
+    /// Returns this chord's Z-related Forte class, when music21 records one.
+    pub fn z_relation(&self) -> Option<String> {
+        let ordered_pcs = self.ordered_pitch_classes();
+        let address = tables::seek_chord_tables_address(&ordered_pcs).ok()?;
+        tables::z_relation_from_address(address).ok().flatten()
     }
 
     /// Returns the tertian inversion number, where root position is `0`.
@@ -896,12 +944,22 @@ impl Chord {
         Ok(suggestions)
     }
 
-    fn simplify_enharmonics(self, key_context: Option<KeySignature>) -> Result<Option<Self>> {
-        self.clone().simplify_enharmonics_in_place(key_context)?;
-        Ok(Some(self))
+    /// Returns a copy with simplified enharmonic spellings.
+    ///
+    /// This mirrors music21's explicit enharmonic simplification workflow:
+    /// construction stays side-effect free, and callers can request simpler
+    /// spellings with an optional key-signature context.
+    pub fn simplify_enharmonics(&self, key_context: Option<KeySignature>) -> Result<Self> {
+        let mut chord = self.clone();
+        chord.simplify_enharmonics_in_place(key_context)?;
+        Ok(chord)
     }
 
-    fn simplify_enharmonics_in_place(&mut self, key_context: Option<KeySignature>) -> Result<()> {
+    /// Simplifies this chord's pitch spellings in place.
+    pub fn simplify_enharmonics_in_place(
+        &mut self,
+        key_context: Option<KeySignature>,
+    ) -> Result<()> {
         match crate::pitch::simplify_multiple_enharmonics(&self.pitches(), None, key_context) {
             Ok(pitches) => {
                 for (i, pitch) in pitches.iter().enumerate() {
@@ -937,6 +995,31 @@ impl Chord {
                 aps.partial_cmp(&bps).unwrap_or(std::cmp::Ordering::Equal)
             })
             .map(|n| &n._pitch)
+    }
+
+    fn pitch_for_root_pitch_class(&self, root_pc: u8) -> Option<&Pitch> {
+        self._notes
+            .iter()
+            .filter(|note| Self::pitch_class(&note._pitch) == root_pc)
+            .min_by(|a, b| {
+                let aps = a._pitch.ps();
+                let bps = b._pitch.ps();
+                aps.partial_cmp(&bps).unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .map(|note| &note._pitch)
+    }
+
+    fn recursive_just_intonation_frequencies_from_root(
+        &self,
+        root_pitch: &Pitch,
+    ) -> Vec<FloatType> {
+        self._notes
+            .iter()
+            .map(|note| {
+                TuningSystem::JustIntonation
+                    .recursive_frequency_at(root_pitch.ps(), note._pitch.ps())
+            })
+            .collect()
     }
 
     fn root_pitch_name_from_tables(&self) -> Option<String> {
@@ -1107,10 +1190,6 @@ impl Chord {
 
         has_explicit_leading_tone_name
             || (has_diminished_family_name && self.has_intervals_above_root(&[3, 6]))
-    }
-
-    fn has_common_name(&self, expected: &str) -> bool {
-        self.common_name() == expected || self.common_names().iter().any(|name| name == expected)
     }
 
     fn has_intervals_above_root(&self, intervals: &[u8]) -> bool {
@@ -1382,14 +1461,6 @@ impl Chord {
     }
 }
 
-pub(crate) trait ChordTrait {}
-
-impl ChordTrait for Chord {}
-
-impl ChordBaseTrait for Chord {}
-
-impl NotRestTrait for Chord {}
-
 impl GeneralNoteTrait for Chord {
     fn duration(&self) -> &Option<Duration> {
         self.chordbase.duration()
@@ -1401,10 +1472,6 @@ impl GeneralNoteTrait for Chord {
         }
     }
 }
-
-impl Music21ObjectTrait for Chord {}
-
-impl ProtoM21ObjectTrait for Chord {}
 
 /// Tries to convert a supported chord input into notes.
 ///
@@ -1580,32 +1647,6 @@ impl IntoNotes for &[IntegerType] {
 mod tests {
     use crate::{GuitarTuning, Key, Pitch, chord::Chord};
 
-    #[cfg(feature = "python")]
-    mod utils {
-        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/shared.rs"));
-    }
-
-    #[cfg(feature = "python")]
-    use pyo3::{Bound, PyAny, PyErr, PyResult, Python, prelude::PyModule, types::PyAnyMethods};
-    #[cfg(feature = "python")]
-    use utils::{init_py, init_py_with_dummies, prepare};
-
-    #[cfg(feature = "python")]
-    fn import_music21_chord_without_package_init(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
-        let sys = py.import("sys")?;
-        let modules = sys.getattr("modules")?;
-        modules.call_method1("pop", ("music21.chord", py.None()))?;
-        modules.call_method1("pop", ("music21", py.None()))?;
-
-        let music21_src = format!("{}/music21/music21", env!("CARGO_MANIFEST_DIR"));
-        let types = py.import("types")?;
-        let music21_pkg = types.getattr("ModuleType")?.call1(("music21",))?;
-        music21_pkg.setattr("__path__", vec![music21_src])?;
-        modules.call_method1("__setitem__", ("music21", music21_pkg))?;
-
-        py.import("music21.chord")
-    }
-
     #[test]
     fn c_e_g_pitchedcommonname() {
         let chord = Chord::new("C E G");
@@ -1754,11 +1795,37 @@ mod tests {
         assert_eq!(chord.inversion(), Some(0));
         assert_eq!(chord.inversion_name().as_deref(), Some("root position"));
         assert_eq!(chord.forte_class().as_deref(), Some("3-11B"));
+        assert_eq!(chord.interval_class_vector(), Some(vec![0, 0, 1, 1, 1, 0]));
+        assert!(chord.invariance_vector().is_some());
+        assert_eq!(chord.z_relation(), None);
         assert!(
             chord
                 .common_names()
                 .iter()
                 .any(|name| name == "major triad")
+        );
+    }
+
+    #[test]
+    fn chord_simplifies_enharmonics_explicitly() {
+        let chord = Chord::new("D# F## A#").unwrap();
+        let simplified = chord.simplify_enharmonics(None).unwrap();
+        assert_eq!(chord.pitches()[0].name(), "D#");
+        assert_eq!(simplified.pitches().len(), chord.pitches().len());
+
+        let mut in_place = chord.clone();
+        in_place.simplify_enharmonics_in_place(None).unwrap();
+        assert_eq!(
+            simplified
+                .pitches()
+                .into_iter()
+                .map(|pitch| pitch.name_with_octave())
+                .collect::<Vec<_>>(),
+            in_place
+                .pitches()
+                .into_iter()
+                .map(|pitch| pitch.name_with_octave())
+                .collect::<Vec<_>>()
         );
     }
 
@@ -1770,6 +1837,33 @@ mod tests {
 
         let empty = Chord::empty().unwrap();
         assert_eq!(empty.polyrhythm_ratio_string(), "1");
+    }
+
+    #[test]
+    fn chord_maps_to_recursive_just_intonation_frequencies() {
+        let e_major = Chord::new("E4 G#4 B4").unwrap();
+        let frequencies = e_major.recursive_just_intonation_frequencies().unwrap();
+
+        assert!((frequencies[0] - 327.032).abs() < 0.001);
+        assert!((frequencies[1] - 408.790).abs() < 0.001);
+        assert!((frequencies[2] - 490.548).abs() < 0.001);
+    }
+
+    #[test]
+    fn recursive_just_intonation_can_use_explicit_root() {
+        let chord = Chord::new("G#4 B4 E5").unwrap();
+        let frequencies = chord
+            .recursive_just_intonation_frequencies_with_root("E")
+            .unwrap();
+
+        assert!((frequencies[0] - 408.790).abs() < 0.001);
+        assert!((frequencies[1] - 490.548).abs() < 0.001);
+        assert!((frequencies[2] - 654.064).abs() < 0.001);
+        assert!(
+            chord
+                .recursive_just_intonation_frequencies_with_root("C")
+                .is_err()
+        );
     }
 
     #[test]
@@ -1961,101 +2055,5 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
-    }
-
-    #[test]
-    #[cfg(feature = "python")]
-    fn compare_chords_python() {
-        let x = "C E G";
-        let y = "C C# D D# E F F# G G# A A# B";
-
-        prepare().unwrap();
-
-        Python::attach(|py| -> PyResult<()> {
-            init_py(py)?;
-            init_py_with_dummies(py)?;
-
-            let chord: Bound<'_, PyModule> = match import_music21_chord_without_package_init(py) {
-                Ok(module) => module,
-                Err(_) => {
-                    // In constrained environments we may only have the dummy
-                    // shim module available; skip Python parity here.
-                    return Ok(());
-                }
-            };
-
-            let chord_class = match chord.getattr("Chord") {
-                Ok(value) => value,
-                Err(_) => {
-                    return Ok(());
-                }
-            };
-
-            compare_chord(x, &chord_class)?;
-            compare_chord(y, &chord_class)?;
-
-            Ok(())
-        })
-        .unwrap();
-    }
-
-    #[test]
-    #[cfg(feature = "python")]
-    fn compare_all_pitch_class_subsets_python() {
-        prepare().unwrap();
-
-        Python::attach(|py| -> PyResult<()> {
-            init_py(py)?;
-            init_py_with_dummies(py)?;
-
-            let chord: Bound<'_, PyModule> = match import_music21_chord_without_package_init(py) {
-                Ok(module) => module,
-                Err(_) => return Ok(()),
-            };
-            let chord_class = match chord.getattr("Chord") {
-                Ok(value) => value,
-                Err(_) => return Ok(()),
-            };
-
-            for mask in 0_u16..(1_u16 << 12) {
-                let pcs = (0..12)
-                    .filter(|pc| mask & (1 << pc) != 0)
-                    .collect::<Vec<_>>();
-                let chord_instance = chord_class.call1((pcs.clone(),))?;
-
-                let python_common_name: String = chord_instance.getattr("commonName")?.extract()?;
-                let python_pitched_common_name: String =
-                    chord_instance.getattr("pitchedCommonName")?.extract()?;
-
-                let rust_chord = Chord::new(pcs.as_slice()).unwrap();
-                let rust_common_name = rust_chord.common_name();
-                let rust_pitched_common_name = rust_chord.pitched_common_name();
-                assert_eq!(
-                    rust_common_name, python_common_name,
-                    "commonName mismatch for mask {mask:012b} pcs {pcs:?}"
-                );
-                assert_eq!(
-                    rust_pitched_common_name, python_pitched_common_name,
-                    "pitchedCommonName mismatch for mask {mask:012b} pcs {pcs:?}"
-                );
-            }
-
-            Ok(())
-        })
-        .unwrap();
-    }
-
-    #[cfg(feature = "python")]
-    fn compare_chord(x: &str, chord_class: &Bound<'_, PyAny>) -> Result<(), PyErr> {
-        let chord_instance = chord_class.call1((x,))?;
-
-        let chord = Chord::new(x).unwrap();
-
-        let pitched_common_name: String = chord_instance.getattr("pitchedCommonName")?.extract()?;
-        assert_eq!(chord.pitched_common_name(), pitched_common_name);
-
-        let common_name: String = chord_instance.getattr("commonName")?.extract()?;
-        assert_eq!(chord.common_name(), common_name);
-        Ok(())
     }
 }

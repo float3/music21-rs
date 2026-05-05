@@ -9,7 +9,6 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 default = []
-python = ["music21-rs/python"]
 serde = ["music21-rs/serde"]
 
 [dependencies]

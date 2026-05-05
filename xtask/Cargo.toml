@@ -9,7 +9,7 @@ repository = "https://github.com/float3/music21-rs"
 version = "0.1.0"
 
 [features]
-default = ["python"]
+default = []
 python = ["dep:pyo3", "dep:reqwest"]
 
 [dependencies]

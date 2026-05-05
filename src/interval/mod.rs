@@ -10,20 +10,15 @@ use chromaticinterval::ChromaticInterval;
 use diatonicinterval::DiatonicInterval;
 use genericinterval::GenericInterval;
 use intervalbase::IntervalBaseTrait;
-use regex::Regex;
 use specifier::Specifier;
 
 use std::str::FromStr;
 use std::sync::Mutex;
 use std::{cmp::Ordering, collections::HashMap, sync::LazyLock};
 
-use crate::base::Music21ObjectTrait;
-
 use crate::common::numbertools::MUSICAL_ORDINAL_STRINGS;
 use crate::common::stringtools::get_num_from_str;
-use crate::defaults::UnsignedIntegerType;
 use crate::error::{Error, Result};
-use crate::prebase::ProtoM21ObjectTrait;
 use crate::{
     defaults::{FloatType, FractionType, IntegerType},
     fraction_pow::FractionPow,
@@ -85,8 +80,6 @@ pub(crate) enum PitchOrNote {
 pub(crate) enum IntervalArgument {
     Str(String),
     Int(IntegerType),
-    Pitch(Pitch),
-    Note(Note),
 }
 
 static PYTHAGOREAN_CACHE: LazyLock<Mutex<HashMap<String, (Pitch, FractionType)>>> =
@@ -97,6 +90,71 @@ fn extract_pitch(arg: PitchOrNote) -> Pitch {
         PitchOrNote::Pitch(pitch) => pitch,
         PitchOrNote::Note(note) => note._pitch,
     }
+}
+
+fn strip_direction_word(value: &str, word: &str) -> (String, bool) {
+    replace_case_insensitive(value, word, "", false, true)
+}
+
+fn replace_music_ordinal(value: &str, ordinal: &str, replacement: &str) -> (String, bool) {
+    replace_case_insensitive(value, ordinal, replacement, true, true)
+}
+
+fn replace_case_insensitive(
+    value: &str,
+    needle: &str,
+    replacement: &str,
+    consume_leading_whitespace: bool,
+    consume_trailing_whitespace: bool,
+) -> (String, bool) {
+    let needle_lower = needle.to_ascii_lowercase();
+    let value_lower = value.to_ascii_lowercase();
+    let mut output = String::with_capacity(value.len());
+    let mut pos = 0;
+    let mut replaced = false;
+
+    while let Some(relative_start) = value_lower[pos..].find(&needle_lower) {
+        let match_start = pos + relative_start;
+        let match_end = match_start + needle.len();
+        let mut copy_end = match_start;
+        let mut next_pos = match_end;
+
+        if consume_leading_whitespace {
+            while copy_end > pos {
+                let Some(ch) = value[pos..copy_end].chars().next_back() else {
+                    break;
+                };
+                if !ch.is_whitespace() {
+                    break;
+                }
+                copy_end -= ch.len_utf8();
+            }
+        }
+
+        if consume_trailing_whitespace {
+            while next_pos < value.len() {
+                let Some(ch) = value[next_pos..].chars().next() else {
+                    break;
+                };
+                if !ch.is_whitespace() {
+                    break;
+                }
+                next_pos += ch.len_utf8();
+            }
+        }
+
+        output.push_str(&value[pos..copy_end]);
+        output.push_str(replacement);
+        pos = next_pos;
+        replaced = true;
+    }
+
+    if !replaced {
+        return (value.to_string(), false);
+    }
+
+    output.push_str(&value[pos..]);
+    (output, true)
 }
 
 fn convert_staff_distance_to_interval(staff_dist: IntegerType) -> IntegerType {
@@ -265,12 +323,6 @@ impl Interval {
                     pitch_end: None,
                 })
             }
-            IntervalArgument::Pitch(_pitch) => Err(Error::Interval(
-                "Constructing Interval from a single Pitch is not supported".to_string(),
-            )),
-            IntervalArgument::Note(_note) => Err(Error::Interval(
-                "Constructing Interval from a single Note is not supported".to_string(),
-            )),
         }
     }
 
@@ -342,6 +394,14 @@ impl Interval {
     /// Returns the same interval in the opposite direction.
     pub fn reversed(&self) -> Result<Self> {
         self.clone().reverse()
+    }
+
+    /// Returns the Pythagorean tuning ratio for this interval.
+    ///
+    /// The ratio is expressed as a rational fraction built from pure fifths,
+    /// matching the helper music21 uses for enharmonic scoring.
+    pub fn pythagorean_ratio(&self) -> Result<FractionType> {
+        interval_to_pythagorean_ratio(self.clone())
     }
 
     /// Transposes a pitch by this interval.
@@ -446,15 +506,9 @@ impl Interval {
         Ok(pitch2)
     }
 
-    pub(crate) fn transpose_pitch_in_place(
-        &self,
-        arg: &mut Pitch,
-        reverse: bool,
-        max_accidental: Option<IntegerType>,
-    ) -> Result<()> {
-        *arg = self
-            .clone()
-            .transpose_pitch_with_options(arg, reverse, max_accidental)?;
+    /// Transposes a pitch in place by this interval.
+    pub fn transpose_pitch_in_place(&self, pitch: &mut Pitch) -> Result<()> {
+        *pitch = self.transpose_pitch(pitch)?;
         Ok(())
     }
 }
@@ -504,14 +558,14 @@ fn _string_to_diatonic_chromatic(
     }
     // Remove directional words:
     {
-        let descending_re = Regex::new(r"(?i)descending\s*").unwrap();
-        if descending_re.is_match(&value) {
-            value = descending_re.replace_all(&value, "").to_string();
+        let (without_descending, found_descending) = strip_direction_word(&value, "descending");
+        if found_descending {
+            value = without_descending;
             dir_scale = -1;
         } else {
-            let ascending_re = Regex::new(r"(?i)ascending\s*").unwrap();
-            if ascending_re.is_match(&value) {
-                value = ascending_re.replace_all(&value, "").to_string();
+            let (without_ascending, found_ascending) = strip_direction_word(&value, "ascending");
+            if found_ascending {
+                value = without_ascending;
             }
         }
     }
@@ -528,10 +582,10 @@ fn _string_to_diatonic_chromatic(
 
     // Replace any music ordinal in the string with its index.
     for (i, ordinal) in MUSICAL_ORDINAL_STRINGS.iter().enumerate() {
-        if value.to_lowercase().contains(&ordinal.to_lowercase()) {
-            let pattern = format!(r"(?i)\s*{}\s*", regex::escape(ordinal));
-            let re = Regex::new(&pattern).unwrap();
-            value = re.replace_all(&value, i.to_string().as_str()).to_string();
+        let replacement = i.to_string();
+        let (next_value, replaced) = replace_music_ordinal(&value, ordinal, &replacement);
+        if replaced {
+            value = next_value;
         }
     }
 
@@ -564,26 +618,10 @@ impl IntervalBaseTrait for Interval {
         }
     }
 
-    fn transpose_note(self, note1: Note) -> Result<Note> {
-        let mut cloned = note1.clone();
-        cloned._pitch =
-            Interval::transpose_pitch_with_options(self, &note1._pitch, false, Some(4))?;
-        Ok(cloned)
-    }
-
     fn transpose_pitch(self, pitch1: Pitch) -> Result<Pitch> {
         Interval::transpose_pitch_with_options(self, &pitch1, false, Some(4))
     }
-
-    fn transpose_pitch_in_place(self, pitch1: &mut Pitch) -> Result<()> {
-        *pitch1 = Interval::transpose_pitch_with_options(self, pitch1, false, Some(4))?;
-        Ok(())
-    }
 }
-
-impl Music21ObjectTrait for Interval {}
-
-impl ProtoM21ObjectTrait for Interval {}
 
 pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> Result<FractionType> {
     let start_pitch = Pitch::new(
@@ -610,7 +648,7 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> Result<Fracti
 
     if let Some((cached_pitch, cached_ratio)) = cache.get(&end_pitch_wanted.name()).cloned() {
         let octaves = (end_pitch_wanted.ps() - cached_pitch.ps()) / 12.0;
-        let octave_multiplier = FractionPow::<IntegerType, FloatType, UnsignedIntegerType>::powi(
+        let octave_multiplier = FractionPow::<IntegerType>::powi(
             &FractionType::new(2 as IntegerType, 1 as IntegerType),
             octaves as IntegerType,
         );
@@ -633,10 +671,7 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> Result<Fracti
             }
             found = Some((
                 end_pitch_up.clone(),
-                FractionPow::<IntegerType, FloatType, UnsignedIntegerType>::powi(
-                    &FractionType::new(3i32, 2i32),
-                    counter,
-                ),
+                FractionPow::<IntegerType>::powi(&FractionType::new(3i32, 2i32), counter),
             ));
             break;
         } else if end_pitch_down.name() == end_pitch_wanted.name() {
@@ -648,10 +683,7 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> Result<Fracti
             }
             found = Some((
                 end_pitch_down.clone(),
-                FractionPow::<IntegerType, FloatType, UnsignedIntegerType>::powi(
-                    &FractionType::new(2i32, 3i32),
-                    counter,
-                ),
+                FractionPow::<IntegerType>::powi(&FractionType::new(2i32, 3i32), counter),
             ));
             break;
         } else {
@@ -681,10 +713,8 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> Result<Fracti
     );
 
     let octaves = (end_pitch_wanted.ps() - found_pitch.ps()) / 12.0;
-    let octave_multiplier = FractionPow::<IntegerType, FloatType, UnsignedIntegerType>::powi(
-        &FractionType::new(2i32, 1i32),
-        octaves as IntegerType,
-    );
+    let octave_multiplier =
+        FractionPow::<IntegerType>::powi(&FractionType::new(2i32, 1i32), octaves as IntegerType);
 
     Ok(found_ratio * octave_multiplier)
 }
@@ -716,6 +746,21 @@ mod tests {
     }
 
     #[test]
+    fn interval_parser_accepts_direction_words_and_ordinals() {
+        let descending = Interval::from_name("Descending Perfect Twelfth").unwrap();
+        assert_eq!(descending.semitones(), -19);
+        assert_eq!(descending.generic_number(), -5);
+
+        let ascending = Interval::from_name("ascending Major Second").unwrap();
+        assert_eq!(ascending.semitones(), 2);
+        assert_eq!(ascending.generic_number(), 2);
+
+        let major_third = Interval::from_name("Major Third").unwrap();
+        assert_eq!(major_third.semitones(), 4);
+        assert_eq!(major_third.generic_number(), 3);
+    }
+
+    #[test]
     fn interval_from_int_is_implicit_diatonic() {
         let interval = Interval::new(IntervalArgument::Int(1)).unwrap();
         assert!(interval.implicit_diatonic);
@@ -740,17 +785,30 @@ mod tests {
     }
 
     #[test]
+    fn interval_transpose_pitch_in_place() {
+        let mut c4 = pitch("C4");
+        Interval::from_name("M2")
+            .unwrap()
+            .transpose_pitch_in_place(&mut c4)
+            .unwrap();
+        assert_eq!(c4.name_with_octave(), "D4");
+    }
+
+    #[test]
+    fn interval_pythagorean_ratio() {
+        let ratio = Interval::from_name("P5")
+            .unwrap()
+            .pythagorean_ratio()
+            .unwrap();
+        assert_eq!(ratio, FractionType::new(3, 2));
+    }
+
+    #[test]
     fn interval_inverts_oblique_unison() {
         let unison = Interval::from_name("P1").unwrap();
         let inverted = unison.inversion().unwrap();
 
         assert_eq!(inverted.semitones(), 0);
         assert_eq!(inverted.generic_number(), 1);
-    }
-
-    #[test]
-    fn interval_single_pitch_constructor_is_rejected() {
-        let result = Interval::new(IntervalArgument::Pitch(pitch("C4")));
-        assert!(result.is_err());
     }
 }
