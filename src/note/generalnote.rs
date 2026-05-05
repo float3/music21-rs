@@ -1,26 +1,20 @@
-use crate::{
-    base::{Music21Object, Music21ObjectTrait},
-    duration::Duration,
-    prebase::ProtoM21ObjectTrait,
-};
+use crate::duration::Duration;
 
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct GeneralNote {
-    music21object: Music21Object,
     _duration: Option<Duration>,
 }
 
 impl GeneralNote {
     pub(crate) fn new(duration: Option<Duration>) -> Self {
         Self {
-            music21object: Music21Object::new(),
             _duration: duration,
         }
     }
 }
 
-pub(crate) trait GeneralNoteTrait: Music21ObjectTrait {
+pub(crate) trait GeneralNoteTrait {
     fn duration(&self) -> &Option<Duration>;
     fn set_duration(&mut self, duration: &Duration);
 }
@@ -34,7 +28,3 @@ impl GeneralNoteTrait for GeneralNote {
         self._duration = Some(duration.clone());
     }
 }
-
-impl Music21ObjectTrait for GeneralNote {}
-
-impl ProtoM21ObjectTrait for GeneralNote {}

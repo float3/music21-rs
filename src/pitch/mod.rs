@@ -18,8 +18,6 @@ use crate::interval::PitchOrNote;
 use crate::interval::intervalstring::IntervalString;
 use crate::key::keysignature::KeySignature;
 use crate::note::Note;
-use crate::prebase::ProtoM21Object;
-use crate::prebase::ProtoM21ObjectTrait;
 use crate::stepname::StepName;
 use crate::tuningsystem::OCTAVE_SIZE;
 use crate::tuningsystem::TuningSystem;
@@ -193,7 +191,6 @@ impl PitchOptions {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// A musical pitch with spelling, octave, accidental and optional microtone.
 pub struct Pitch {
-    proto: ProtoM21Object,
     _step: StepName,
     _octave: Octave,
     _overriden_freq440: Option<FloatType>,
@@ -452,7 +449,6 @@ impl Pitch {
 
         // --- Step 2: Construct Pitch with initial values ---
         let mut pitch = Pitch {
-            proto: ProtoM21Object::new(),
             _step: self_step,
             _overriden_freq440: None,
             _accidental: self_accidental.clone().unwrap(),
@@ -739,7 +735,19 @@ impl Pitch {
         self.inform_client();
     }
 
-    fn simplify_enharmonic(&mut self, most_common: bool) -> Result<Pitch> {
+    /// Returns a simpler enharmonic spelling of this pitch.
+    ///
+    /// When `most_common` is true, common spellings such as `E-` are preferred
+    /// over less common equivalents such as `D#`, following music21's
+    /// `Pitch.simplifyEnharmonic` behavior.
+    pub fn simplify_enharmonic(&self, most_common: bool) -> Result<Pitch> {
+        let mut pitch = self.clone();
+        pitch.simplify_enharmonic_in_place(most_common)?;
+        Ok(pitch)
+    }
+
+    /// Simplifies this pitch's enharmonic spelling in place.
+    pub fn simplify_enharmonic_in_place(&mut self, most_common: bool) -> Result<()> {
         const EXCLUDED_NAMES: [&str; 4] = ["E#", "B#", "C-", "F-"];
         if self._accidental._alter.abs().partial_cmp(&2.0) != Some(Ordering::Less)
             || EXCLUDED_NAMES.contains(&self.name().as_str())
@@ -774,27 +782,26 @@ impl Pitch {
             }
         }
 
-        Ok(self.clone())
-    }
-
-    fn simplify_enharmonic_in_place(&mut self, most_common: bool) -> Result<()> {
-        *self = self.simplify_enharmonic(most_common)?;
         Ok(())
     }
 
-    fn get_higher_enharmonic(&self) -> Result<Pitch> {
+    /// Returns the next higher enharmonic spelling.
+    pub fn get_higher_enharmonic(&self) -> Result<Pitch> {
         self._get_enharmonic_helper(true)
     }
 
-    fn get_higher_enharmonic_in_place(&mut self) -> Result<()> {
+    /// Replaces this pitch with its next higher enharmonic spelling.
+    pub fn get_higher_enharmonic_in_place(&mut self) -> Result<()> {
         self._get_enharmonic_helper_in_place(true)
     }
 
-    fn get_lower_enharmonic(&self) -> Result<Pitch> {
+    /// Returns the next lower enharmonic spelling.
+    pub fn get_lower_enharmonic(&self) -> Result<Pitch> {
         self._get_enharmonic_helper(false)
     }
 
-    fn get_lower_enharmonic_in_place(&mut self) -> Result<()> {
+    /// Replaces this pitch with its next lower enharmonic spelling.
+    pub fn get_lower_enharmonic_in_place(&mut self) -> Result<()> {
         self._get_enharmonic_helper_in_place(false)
     }
 
@@ -857,8 +864,6 @@ impl Default for Pitch {
             .expect("default Pitch construction should never fail")
     }
 }
-
-impl ProtoM21ObjectTrait for Pitch {}
 
 pub(crate) struct PitchParameteres {
     pub(crate) name: Option<String>,
@@ -1509,7 +1514,7 @@ mod tests {
     }
 
     #[test]
-    fn test_higher_enharmonic_helper() {
+    fn pitch_exposes_enharmonic_helpers() {
         let c_sharp = Pitch::new(
             Some("C#3".to_string()),
             None,
@@ -1524,5 +1529,18 @@ mod tests {
         .unwrap();
         let out = c_sharp.get_higher_enharmonic().unwrap();
         assert_eq!(out.name_with_octave(), "D-3");
+
+        let mut d_flat = out;
+        d_flat.get_lower_enharmonic_in_place().unwrap();
+        assert_eq!(d_flat.name_with_octave(), "C#3");
+
+        let d_sharp = Pitch::from_name("D#4").unwrap();
+        assert_eq!(
+            d_sharp
+                .simplify_enharmonic(true)
+                .unwrap()
+                .name_with_octave(),
+            "E-4"
+        );
     }
 }

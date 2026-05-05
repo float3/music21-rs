@@ -1,6 +1,3 @@
-// The port still carries internal music21 compatibility scaffolding that is
-// intentionally exposed only as APIs fill in.
-#![allow(dead_code)]
 //! Rust helpers inspired by selected parts of Python's `music21`.
 //!
 //! The crate currently focuses on pitch construction, chord naming and
@@ -13,7 +10,6 @@
 pub mod abc;
 /// Key-finding and compact analysis helpers.
 pub mod analysis;
-pub(crate) mod base;
 /// Chord construction, common-name analysis and chord input conversion traits.
 pub mod chord;
 /// Lead-sheet chord-symbol parsing.
@@ -39,7 +35,6 @@ pub mod note;
 pub mod pitch;
 /// Polyrhythm timing and pitch-set helpers.
 pub mod polyrhythm;
-pub(crate) mod prebase;
 /// Silent duration-bearing musical event.
 pub mod rest;
 /// Roman numeral parsing and compact harmonic analysis.
@@ -55,8 +50,8 @@ pub mod tuningsystem;
 // pub(crate) mod macros;
 
 pub use abc::{
-    AbcClef, abc_chord, abc_chord_document, abc_chord_resolution_document, abc_clef_for_pitches,
-    abc_duration, abc_note, abc_polyrhythm_document, abc_polyrhythm_voice,
+    abc_chord, abc_duration, abc_note, abc_rest, pitch_name_from_abc_note,
+    pitch_names_from_abc_chord,
 };
 pub use analysis::{KeyEstimate, estimate_key_from_chords, estimate_key_from_pitches};
 pub use chord::{
