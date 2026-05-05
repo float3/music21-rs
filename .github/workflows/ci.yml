@@ -72,19 +72,12 @@ jobs:
           - name: none
             flags: --no-default-features
             single_threaded: false
-            requires_python: false
           - name: serde
             flags: --no-default-features --features serde
             single_threaded: false
-            requires_python: false
-          - name: regex
-            flags: --no-default-features --features regex
-            single_threaded: false
-            requires_python: false
           - name: all-features
             flags: --all-features
-            single_threaded: true
-            requires_python: true
+            single_threaded: false
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -99,12 +92,6 @@ jobs:
       - name: Install Linux audio dependencies
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev pkg-config
 
-      - name: Setup Python
-        if: matrix.feature_set.requires_python == true
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.13"
-
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@v2
 
@@ -116,11 +103,6 @@ jobs:
           FLAGS="${{ matrix.feature_set.flags }}"
           SINGLE_THREADED="${{ matrix.feature_set.single_threaded }}"
 
-          if [[ "${{ matrix.feature_set.requires_python }}" == "true" ]]; then
-            export PYO3_PYTHON="$(python -c 'import sys; print(sys.executable)')"
-            echo "Using PYO3_PYTHON=$PYO3_PYTHON"
-          fi
-
           cargo check --workspace --all-targets $FLAGS
           cargo clippy --workspace --all-targets $FLAGS -- -D warnings
           if [[ "$SINGLE_THREADED" == "true" ]]; then
@@ -128,6 +110,35 @@ jobs:
           else
             cargo test --workspace --all-targets $FLAGS
           fi
+
+  python-parity:
+    name: Python Parity
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run Python parity tests
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          export PYO3_PYTHON="$(python -c 'import sys; print(sys.executable)')"
+          echo "Using PYO3_PYTHON=$PYO3_PYTHON"
+          cargo test --manifest-path python-parity/Cargo.toml -- --test-threads=1
 
   lint:
     name: Lint (fmt + clippy + check)
@@ -322,6 +333,7 @@ jobs:
       - nix
       - stable-check
       - feature-matrix
+      - python-parity
       - lint
       - test
       - docs
@@ -345,6 +357,7 @@ jobs:
       - nix
       - stable-check
       - feature-matrix
+      - python-parity
       - lint
       - test
       - docs

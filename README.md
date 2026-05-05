@@ -19,7 +19,7 @@ cargo add music21-rs
 ```
 
 The default feature set is empty. Enable `serde` when you need serialization
-support, or `regex` when you want interval parsing to use the regex-backed path.
+support.
 
 Parse a compact pitch string into a chord and ask for the same common-name
 style used by `music21`:
@@ -98,10 +98,13 @@ cargo test
 ```
 
 For parity work against upstream `music21`, initialize the reference submodule.
-Normal library tests do not require Python.
+Normal library tests do not require Python, and the `music21-rs` crate does not
+have a Python feature. Python parity checks live in the separate local
+`python-parity` package:
 
 ```bash
 git submodule update --init --recursive
+cargo test --manifest-path python-parity/Cargo.toml -- --test-threads=1
 ```
 
 Chord table code is committed to the repository so normal builds do not need

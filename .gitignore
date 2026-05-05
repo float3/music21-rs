@@ -1,4 +1,5 @@
 /target/
+/python-parity/target/
 /venv/
 /__pycache__/
 /examples/web/pkg/
