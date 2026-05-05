@@ -13,6 +13,7 @@ use crate::key::keysignature::KeySignature;
 use crate::note::generalnote::GeneralNoteTrait;
 use crate::note::{IntoNote, Note};
 use crate::pitch::{Pitch, PitchClass, PitchClassSpecifier};
+use crate::tuningsystem::TuningSystem;
 
 use chordbase::ChordBase;
 pub use guitar::{GuitarFingering, GuitarStringFingering, GuitarTuning, GuitarTuningString};
@@ -611,6 +612,40 @@ impl Chord {
             .join(":")
     }
 
+    /// Returns this chord's frequencies in recursive just intonation.
+    ///
+    /// The chord root is inferred with the same root-finding logic used by
+    /// chord naming. The root is tuned on the global C-based just-intonation
+    /// table, then every chord member is tuned by applying that same table to
+    /// its distance from the root.
+    pub fn recursive_just_intonation_frequencies(&self) -> Result<Vec<FloatType>> {
+        let Some(root_pitch) = self.find_root_pitch() else {
+            return Ok(Vec::new());
+        };
+
+        Ok(self.recursive_just_intonation_frequencies_from_root(root_pitch))
+    }
+
+    /// Returns recursive-just-intonation frequencies using an explicit root.
+    ///
+    /// The supplied root is interpreted as a pitch class and must be present in
+    /// the chord. When that pitch class appears in multiple octaves, the lowest
+    /// matching chord member is used as the local root.
+    pub fn recursive_just_intonation_frequencies_with_root(
+        &self,
+        root: impl Into<PitchClassSpecifier>,
+    ) -> Result<Vec<FloatType>> {
+        let root_pc = Self::chord_symbol_root_pitch_class(root.into())?;
+        let root_pitch = self.pitch_for_root_pitch_class(root_pc).ok_or_else(|| {
+            Error::Chord(format!(
+                "recursive just intonation root {} is not present in the chord",
+                Self::pitch_class_name(root_pc)
+            ))
+        })?;
+
+        Ok(self.recursive_just_intonation_frequencies_from_root(root_pitch))
+    }
+
     /// Returns cloned pitches for every note in the chord, in input order.
     pub fn pitches(&self) -> Vec<Pitch> {
         self._notes.iter().map(|note| note._pitch.clone()).collect()
@@ -960,6 +995,31 @@ impl Chord {
                 aps.partial_cmp(&bps).unwrap_or(std::cmp::Ordering::Equal)
             })
             .map(|n| &n._pitch)
+    }
+
+    fn pitch_for_root_pitch_class(&self, root_pc: u8) -> Option<&Pitch> {
+        self._notes
+            .iter()
+            .filter(|note| Self::pitch_class(&note._pitch) == root_pc)
+            .min_by(|a, b| {
+                let aps = a._pitch.ps();
+                let bps = b._pitch.ps();
+                aps.partial_cmp(&bps).unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .map(|note| &note._pitch)
+    }
+
+    fn recursive_just_intonation_frequencies_from_root(
+        &self,
+        root_pitch: &Pitch,
+    ) -> Vec<FloatType> {
+        self._notes
+            .iter()
+            .map(|note| {
+                TuningSystem::JustIntonation
+                    .recursive_frequency_at(root_pitch.ps(), note._pitch.ps())
+            })
+            .collect()
     }
 
     fn root_pitch_name_from_tables(&self) -> Option<String> {
@@ -1777,6 +1837,33 @@ mod tests {
 
         let empty = Chord::empty().unwrap();
         assert_eq!(empty.polyrhythm_ratio_string(), "1");
+    }
+
+    #[test]
+    fn chord_maps_to_recursive_just_intonation_frequencies() {
+        let e_major = Chord::new("E4 G#4 B4").unwrap();
+        let frequencies = e_major.recursive_just_intonation_frequencies().unwrap();
+
+        assert!((frequencies[0] - 327.032).abs() < 0.001);
+        assert!((frequencies[1] - 408.790).abs() < 0.001);
+        assert!((frequencies[2] - 490.548).abs() < 0.001);
+    }
+
+    #[test]
+    fn recursive_just_intonation_can_use_explicit_root() {
+        let chord = Chord::new("G#4 B4 E5").unwrap();
+        let frequencies = chord
+            .recursive_just_intonation_frequencies_with_root("E")
+            .unwrap();
+
+        assert!((frequencies[0] - 408.790).abs() < 0.001);
+        assert!((frequencies[1] - 490.548).abs() < 0.001);
+        assert!((frequencies[2] - 654.064).abs() < 0.001);
+        assert!(
+            chord
+                .recursive_just_intonation_frequencies_with_root("C")
+                .is_err()
+        );
     }
 
     #[test]

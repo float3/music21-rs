@@ -352,6 +352,17 @@ impl TuningSystem {
         get_frequency_at(self, index, None)
     }
 
+    /// Returns the frequency in hertz for `index` in a recursive root context.
+    ///
+    /// The `root_index` is first tuned from the global C-based table, then the
+    /// distance from `root_index` to `index` is tuned from the same table again.
+    /// For equal temperament this is identical to [`Self::frequency_at`]. For
+    /// ratio-table systems such as [`Self::JustIntonation`], the result is a
+    /// chord-contextual frequency.
+    pub fn recursive_frequency_at(self, root_index: FloatType, index: FloatType) -> FloatType {
+        get_recursive_frequency_at(self, root_index, index, None)
+    }
+
     /// Returns cents offset from equal temperament for a degree index.
     pub fn cents(self, index: UnsignedIntegerType) -> FloatType {
         get_cents(self, index, None)
@@ -360,6 +371,11 @@ impl TuningSystem {
     /// Returns cents offset from equal temperament for a fractional degree index.
     pub fn cents_at(self, index: FloatType) -> FloatType {
         get_cents_at(self, index, None)
+    }
+
+    /// Returns cents offset from equal temperament in a recursive root context.
+    pub fn recursive_cents_at(self, root_index: FloatType, index: FloatType) -> FloatType {
+        get_recursive_cents_at(self, root_index, index, None)
     }
 
     /// Returns the number of degrees in one octave for this tuning system.
@@ -545,17 +561,42 @@ pub fn get_frequency_at(
     index: FloatType,
     size: Option<UnsignedIntegerType>,
 ) -> FloatType {
+    CN1 * get_ratio_at(tuning_system, index, size)
+}
+
+/// Returns the recursive frequency in hertz for a fractional tuning degree.
+///
+/// This treats `root_index` as a local tonic: the root is tuned from the global
+/// C-based table, and the note's distance above or below that root is tuned
+/// using the same system again.
+pub fn get_recursive_frequency_at(
+    tuning_system: TuningSystem,
+    root_index: FloatType,
+    index: FloatType,
+    size: Option<UnsignedIntegerType>,
+) -> FloatType {
+    assert!(root_index.is_finite(), "root degree index must be finite");
+    assert!(index.is_finite(), "degree index must be finite");
+    CN1 * get_ratio_at(tuning_system, root_index, size)
+        * get_ratio_at(tuning_system, index - root_index, size)
+}
+
+fn get_ratio_at(
+    tuning_system: TuningSystem,
+    index: FloatType,
+    size: Option<UnsignedIntegerType>,
+) -> FloatType {
     assert!(index.is_finite(), "degree index must be finite");
     let octave_size = size.unwrap_or_else(|| tuning_system.octave_size());
     assert!(octave_size > 0, "octave_size must be greater than zero");
 
     if tuning_system.ratio_table().is_none() {
-        return CN1 * (2.0 as FloatType).powf(index / FloatType::from(octave_size));
+        return (2.0 as FloatType).powf(index / FloatType::from(octave_size));
     }
 
     let base_index = index.floor() as IntegerType;
     let fractional_degree = index - FloatType::from(base_index);
-    CN1 * get_ratio_at_integer_index(tuning_system, base_index)
+    get_ratio_at_integer_index(tuning_system, base_index)
         * (2.0 as FloatType).powf(fractional_degree / FloatType::from(octave_size))
 }
 
@@ -588,6 +629,24 @@ pub fn get_cents_at(
         Some(octave_size),
     );
     let comparison_freq = get_frequency_at(tuning_system, index, size);
+    1200.0 * (comparison_freq / reference_freq).log2()
+}
+
+/// Returns cents offset from equal temperament in a recursive root context.
+pub fn get_recursive_cents_at(
+    tuning_system: TuningSystem,
+    root_index: FloatType,
+    index: FloatType,
+    size: Option<UnsignedIntegerType>,
+) -> FloatType {
+    let octave_size = size.unwrap_or_else(|| tuning_system.octave_size());
+    assert!(octave_size > 0, "octave_size must be greater than zero");
+    let reference_freq = get_frequency_at(
+        TuningSystem::EqualTemperament { octave_size },
+        index,
+        Some(octave_size),
+    );
+    let comparison_freq = get_recursive_frequency_at(tuning_system, root_index, index, size);
     1200.0 * (comparison_freq / reference_freq).log2()
 }
 
@@ -918,6 +977,32 @@ mod tests {
             (TuningSystem::PythagoreanTuning.frequency_at(67.0) - (C4 * 3.0 / 2.0)).abs() < 0.0001
         );
         assert!(TuningSystem::FiveLimit.cents_at(64.0) < -13.0);
+    }
+
+    #[test]
+    fn recursive_frequency_helpers_apply_table_from_local_root() {
+        let just = TuningSystem::JustIntonation;
+        let fixed_g_sharp = just.frequency_at(68.0);
+        let recursive_g_sharp = just.recursive_frequency_at(64.0, 68.0);
+
+        assert!((recursive_g_sharp - (C4 * 25.0 / 16.0)).abs() < 0.0001);
+        assert!((1200.0 * (recursive_g_sharp / fixed_g_sharp).log2() + 34.2827).abs() < 0.001);
+        assert!((just.recursive_frequency_at(65.0, 60.0) - C4).abs() < 0.0001);
+    }
+
+    #[test]
+    fn recursive_equal_temperament_matches_fixed_equal_temperament() {
+        let equal = TuningSystem::EqualTemperament {
+            octave_size: OCTAVE_SIZE,
+        };
+
+        for (root, index) in [(60.0, 67.0), (64.0, 68.0), (65.0, 60.0)] {
+            assert!(
+                (equal.recursive_frequency_at(root, index) - equal.frequency_at(index)).abs()
+                    < 1e-10
+            );
+            assert!(equal.recursive_cents_at(root, index).abs() < 1e-10);
+        }
     }
 
     #[test]
