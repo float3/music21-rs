@@ -1,0 +1,9 @@
+[package]
+edition = "2024"
+name = "music21-rs-audio-example"
+publish = false
+version = "0.0.0"
+
+[dependencies]
+music21-rs = { path = "../..", default-features = false }
+rodio = "0.22.2"

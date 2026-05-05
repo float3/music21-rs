@@ -2,7 +2,7 @@
 authors = ["hill <hill@hilll.dev>"]
 description = "Rust helpers inspired by music21 for chord, pitch, polyrhythm, and tuning analysis"
 edition = "2024"
-include = ["/src", "./utils/src/lib.rs", "/examples", "shared.rs"]
+include = ["/src", "/data/chord_tables.toml", "./utils/src/lib.rs", "/examples", "shared.rs"]
 keywords = ["music", "chords", "music21"]
 license-file = "LICENSE"
 name = "music21-rs"
@@ -11,11 +11,11 @@ repository = "https://github.com/float3/music21-rs"
 version = "0.2.1"
 
 [workspace]
-members = ["utils", "examples/web", "xtask"]
+members = ["utils", "examples/audio", "examples/web", "xtask"]
 
 [features]
-default = ["serde"]
-python = []
+default = []
+regex = ["dep:regex"]
 serde = ["dep:serde"]
 
 [dependencies]
@@ -24,11 +24,5 @@ itertools = "0.14.0"
 num = "0.4.3"
 num-traits = "0.2.19"
 ordered-float = "5.3.0"
-regex = "1.12.3"
+regex = { version = "1.12.3", optional = true }
 serde = { version = "1.0.228", optional = true, features = ["derive"] }
-
-[dev-dependencies]
-pyo3 = { version = "0.28.3", features = ["auto-initialize", "abi3-py39"] }
-reqwest = { version = "0.13.3", features = ["blocking"] }
-rodio = "0.22.2"
-sha2 = "0.11.0"
