@@ -4,7 +4,7 @@ name = "music21-rs-python-parity"
 publish = false
 version = "0.0.0"
 
-[dev-dependencies]
+[dependencies]
 music21-rs = { path = "..", default-features = false }
 serde = { version = "1.0.228", features = ["derive"] }
 toml = "1.1"
