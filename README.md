@@ -18,6 +18,9 @@ Add the crate to your project:
 cargo add music21-rs
 ```
 
+The default feature set is empty. Enable `serde` when you need serialization
+support, or `regex` when you want interval parsing to use the regex-backed path.
+
 Parse a compact pitch string into a chord and ask for the same common-name
 style used by `music21`:
 
@@ -42,6 +45,22 @@ let chord = Chord::try_from("C E- G B-")?;
 println!("{}", chord.pitched_common_name());
 println!("{:?}", chord.normal_form());
 println!("{:?}", chord.interval_class_vector());
+println!("{:?}", chord.invariance_vector());
+
+# Ok::<(), music21_rs::Error>(())
+```
+
+Music21-style spelling helpers are exposed directly on library types:
+
+```rust
+use music21_rs::{Interval, Pitch};
+
+let mut pitch = Pitch::from_name("C#4")?;
+pitch.get_higher_enharmonic_in_place()?;
+assert_eq!(pitch.name_with_octave(), "D-4");
+
+let fifth = Interval::from_name("P5")?;
+assert_eq!(fifth.pythagorean_ratio()?.to_string(), "3/2");
 
 # Ok::<(), music21_rs::Error>(())
 ```
@@ -64,6 +83,8 @@ The `examples/` directory contains a small set of interactive tools:
   relationship.
 - [Tuning Explorer](./examples/web/tuning/) lists the tuning systems exposed by the
   crate and plays each scale from a chosen root frequency.
+- [Audio Polyrhythm Example](./examples/audio/) plays a small polyrhythm
+  through the default audio device.
 
 The examples are also wired into the GitHub Pages build, with
 [examples/web/index.html](./examples/web/index.html) as the local landing page.
@@ -76,19 +97,18 @@ Use the Rust toolchain pinned in [rust-toolchain.toml](./rust-toolchain.toml).
 cargo test
 ```
 
-For parity work against upstream `music21`, initialize the reference submodule
-and run the Python-backed checks:
+For parity work against upstream `music21`, initialize the reference submodule.
+Normal library tests do not require Python.
 
 ```bash
 git submodule update --init --recursive
-cargo test --features python
 ```
 
 Chord table code is committed to the repository so normal builds do not need
 Python. To regenerate the table source from upstream `music21`, run:
 
 ```bash
-cargo run -p xtask -- regenerate-tables
+cargo run -p xtask --features python -- regenerate-tables
 ```
 
 That command refreshes [data/chord_tables.toml](./data/chord_tables.toml) and
@@ -99,10 +119,10 @@ To emit Rust from the committed TOML without touching Python, run:
 cargo run -p xtask -- emit-tables
 ```
 
-To skip compiling the Python extraction path entirely, run:
+To verify that the committed Rust source matches the TOML, run:
 
 ```bash
-cargo run -p xtask --no-default-features -- emit-tables
+cargo run -p xtask -- verify-tables
 ```
 
 If you use Nix, `nix develop` opens a shell with the Rust and Python pieces used
@@ -118,8 +138,7 @@ by the repository's CI setup.
 - [src/tuningsystem/](./src/tuningsystem/) tuning-system ratios and
   frequency helpers
 - [examples/web/](./examples/web/) browser tools
-- [examples/polyrhythmsound.rs](./examples/polyrhythmsound.rs) small
-  polyrhythm sound example
+- [examples/audio/](./examples/audio/) small polyrhythm sound example
 - [music21/](./music21/) optional upstream reference submodule
 
 ## Credits

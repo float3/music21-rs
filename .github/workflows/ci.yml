@@ -53,6 +53,9 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install Linux audio dependencies
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev pkg-config
+
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@v2
 
@@ -69,15 +72,19 @@ jobs:
           - name: none
             flags: --no-default-features
             single_threaded: false
+            requires_python: false
           - name: serde
             flags: --no-default-features --features serde
             single_threaded: false
-          - name: python
-            flags: --no-default-features --features python
-            single_threaded: true
+            requires_python: false
+          - name: regex
+            flags: --no-default-features --features regex
+            single_threaded: false
+            requires_python: false
           - name: all-features
             flags: --all-features
             single_threaded: true
+            requires_python: true
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -93,6 +100,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev pkg-config
 
       - name: Setup Python
+        if: matrix.feature_set.requires_python == true
         uses: actions/setup-python@v6
         with:
           python-version: "3.13"
@@ -108,8 +116,10 @@ jobs:
           FLAGS="${{ matrix.feature_set.flags }}"
           SINGLE_THREADED="${{ matrix.feature_set.single_threaded }}"
 
-          export PYO3_PYTHON="$(python -c 'import sys; print(sys.executable)')"
-          echo "Using PYO3_PYTHON=$PYO3_PYTHON"
+          if [[ "${{ matrix.feature_set.requires_python }}" == "true" ]]; then
+            export PYO3_PYTHON="$(python -c 'import sys; print(sys.executable)')"
+            echo "Using PYO3_PYTHON=$PYO3_PYTHON"
+          fi
 
           cargo check --workspace --all-targets $FLAGS
           cargo clippy --workspace --all-targets $FLAGS -- -D warnings
@@ -136,23 +146,17 @@ jobs:
       - name: Install Linux audio dependencies
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev pkg-config
 
-      - name: Setup Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.13"
-
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@v2
-
-      - name: Configure PyO3 Python
-        shell: bash
-        run: echo "PYO3_PYTHON=$(python -c 'import sys; print(sys.executable)')" >> "$GITHUB_ENV"
 
       - name: Check formatting
         run: cargo fmt --all -- --check
 
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Verify generated chord tables
+        run: cargo run -p xtask -- verify-tables
 
       - name: Cargo check
         run: cargo check --workspace --all-targets
@@ -197,6 +201,9 @@ jobs:
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux audio dependencies
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev pkg-config
 
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@v2
