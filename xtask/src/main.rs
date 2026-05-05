@@ -20,7 +20,7 @@ use std::path::{Path, PathBuf};
 
 use shared::run_command;
 #[cfg(feature = "python")]
-use shared::{Tables, get_tables, init_py_with_dummies, prepare};
+use shared::{Tables, get_tables, init_py, init_py_with_dummies, prepare};
 
 const CARDINALITIES: usize = 13;
 
@@ -121,6 +121,7 @@ fn regenerate_tables(workspace_root: &Path) -> Result<(), Box<dyn Error>> {
 
     let data_path = table_data_path(workspace_root);
     let mut data = Python::attach(|py| -> PyResult<ChordTablesData> {
+        init_py(py)?;
         init_py_with_dummies(py)?;
         let tables = get_tables(py)?;
         extract_chord_tables(py, &tables)

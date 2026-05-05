@@ -154,7 +154,6 @@ impl AccidentalEnum {
         }
     }
 
-    #[allow(unreachable_patterns)]
     fn from_unicode(s: &str) -> Option<Self> {
         match s {
             "\u{1d12a}\u{1d12a}" => Some(AccidentalEnum::QuadrupleSharp),
