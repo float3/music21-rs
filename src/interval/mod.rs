@@ -10,8 +10,6 @@ use chromaticinterval::ChromaticInterval;
 use diatonicinterval::DiatonicInterval;
 use genericinterval::GenericInterval;
 use intervalbase::IntervalBaseTrait;
-#[cfg(feature = "regex")]
-use regex::Regex;
 use specifier::Specifier;
 
 use std::str::FromStr;
@@ -94,41 +92,14 @@ fn extract_pitch(arg: PitchOrNote) -> Pitch {
     }
 }
 
-#[cfg(feature = "regex")]
-fn strip_direction_word(value: &str, word: &str) -> (String, bool) {
-    let pattern = format!(r"(?i){}\s*", regex::escape(word));
-    let re = Regex::new(&pattern).expect("direction pattern is valid");
-    let found = re.is_match(value);
-    if found {
-        (re.replace_all(value, "").to_string(), true)
-    } else {
-        (value.to_string(), false)
-    }
-}
-
-#[cfg(not(feature = "regex"))]
 fn strip_direction_word(value: &str, word: &str) -> (String, bool) {
     replace_case_insensitive(value, word, "", false, true)
 }
 
-#[cfg(feature = "regex")]
-fn replace_music_ordinal(value: &str, ordinal: &str, replacement: &str) -> (String, bool) {
-    let pattern = format!(r"(?i)\s*{}\s*", regex::escape(ordinal));
-    let re = Regex::new(&pattern).expect("ordinal pattern is valid");
-    let found = re.is_match(value);
-    if found {
-        (re.replace_all(value, replacement).to_string(), true)
-    } else {
-        (value.to_string(), false)
-    }
-}
-
-#[cfg(not(feature = "regex"))]
 fn replace_music_ordinal(value: &str, ordinal: &str, replacement: &str) -> (String, bool) {
     replace_case_insensitive(value, ordinal, replacement, true, true)
 }
 
-#[cfg(not(feature = "regex"))]
 fn replace_case_insensitive(
     value: &str,
     needle: &str,
@@ -772,6 +743,21 @@ mod tests {
         let interval = Interval::new(IntervalArgument::Str("M3".to_string())).unwrap();
         assert_eq!(interval.chromatic.semitones, 4);
         assert!(!interval.implicit_diatonic);
+    }
+
+    #[test]
+    fn interval_parser_accepts_direction_words_and_ordinals() {
+        let descending = Interval::from_name("Descending Perfect Twelfth").unwrap();
+        assert_eq!(descending.semitones(), -19);
+        assert_eq!(descending.generic_number(), -5);
+
+        let ascending = Interval::from_name("ascending Major Second").unwrap();
+        assert_eq!(ascending.semitones(), 2);
+        assert_eq!(ascending.generic_number(), 2);
+
+        let major_third = Interval::from_name("Major Third").unwrap();
+        assert_eq!(major_third.semitones(), 4);
+        assert_eq!(major_third.generic_number(), 3);
     }
 
     #[test]

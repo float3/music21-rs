@@ -1647,29 +1647,6 @@ impl IntoNotes for &[IntegerType] {
 mod tests {
     use crate::{GuitarTuning, Key, Pitch, chord::Chord};
 
-    #[cfg(feature = "python")]
-    use utils::pyo3::{
-        Bound, PyAny, PyErr, PyResult, Python, prelude::PyModule, types::PyAnyMethods,
-    };
-    #[cfg(feature = "python")]
-    use utils::{init_py, init_py_with_dummies, prepare};
-
-    #[cfg(feature = "python")]
-    fn import_music21_chord_without_package_init(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
-        let sys = py.import("sys")?;
-        let modules = sys.getattr("modules")?;
-        modules.call_method1("pop", ("music21.chord", py.None()))?;
-        modules.call_method1("pop", ("music21", py.None()))?;
-
-        let music21_src = format!("{}/music21/music21", env!("CARGO_MANIFEST_DIR"));
-        let types = py.import("types")?;
-        let music21_pkg = types.getattr("ModuleType")?.call1(("music21",))?;
-        music21_pkg.setattr("__path__", vec![music21_src])?;
-        modules.call_method1("__setitem__", ("music21", music21_pkg))?;
-
-        py.import("music21.chord")
-    }
-
     #[test]
     fn c_e_g_pitchedcommonname() {
         let chord = Chord::new("C E G");
@@ -2078,79 +2055,5 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
-    }
-
-    #[test]
-    #[cfg(feature = "python")]
-    fn compares_named_chords_with_python_music21() {
-        prepare().unwrap();
-
-        Python::attach(|py| -> PyResult<()> {
-            init_py(py)?;
-            init_py_with_dummies(py)?;
-
-            let chord = import_music21_chord_without_package_init(py)?;
-            let chord_class = chord.getattr("Chord")?;
-
-            for chord_input in ["C E G", "C C# D D# E F F# G G# A A# B"] {
-                compare_chord(chord_input, &chord_class)?;
-            }
-
-            Ok(())
-        })
-        .unwrap();
-    }
-
-    #[test]
-    #[cfg(feature = "python")]
-    fn compares_all_pitch_class_subsets_with_python_music21() {
-        prepare().unwrap();
-
-        Python::attach(|py| -> PyResult<()> {
-            init_py(py)?;
-            init_py_with_dummies(py)?;
-
-            let chord = import_music21_chord_without_package_init(py)?;
-            let chord_class = chord.getattr("Chord")?;
-
-            for mask in 0_u16..(1_u16 << 12) {
-                let pcs = (0..12)
-                    .filter(|pc| mask & (1 << pc) != 0)
-                    .collect::<Vec<_>>();
-                let chord_instance = chord_class.call1((pcs.clone(),))?;
-
-                let python_common_name: String = chord_instance.getattr("commonName")?.extract()?;
-                let python_pitched_common_name: String =
-                    chord_instance.getattr("pitchedCommonName")?.extract()?;
-
-                let rust_chord = Chord::new(pcs.as_slice()).unwrap();
-                assert_eq!(
-                    rust_chord.common_name(),
-                    python_common_name,
-                    "commonName mismatch for mask {mask:012b} pcs {pcs:?}"
-                );
-                assert_eq!(
-                    rust_chord.pitched_common_name(),
-                    python_pitched_common_name,
-                    "pitchedCommonName mismatch for mask {mask:012b} pcs {pcs:?}"
-                );
-            }
-
-            Ok(())
-        })
-        .unwrap();
-    }
-
-    #[cfg(feature = "python")]
-    fn compare_chord(chord_input: &str, chord_class: &Bound<'_, PyAny>) -> Result<(), PyErr> {
-        let chord_instance = chord_class.call1((chord_input,))?;
-        let python_common_name: String = chord_instance.getattr("commonName")?.extract()?;
-        let python_pitched_common_name: String =
-            chord_instance.getattr("pitchedCommonName")?.extract()?;
-
-        let chord = Chord::new(chord_input).unwrap();
-        assert_eq!(chord.common_name(), python_common_name);
-        assert_eq!(chord.pitched_common_name(), python_pitched_common_name);
-        Ok(())
     }
 }
