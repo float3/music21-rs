@@ -15,6 +15,7 @@ members = ["utils", "examples/audio", "examples/web", "xtask"]
 
 [features]
 default = []
+python = ["utils/python"]
 regex = ["dep:regex"]
 serde = ["dep:serde"]
 
@@ -26,3 +27,6 @@ num-traits = "0.2.19"
 ordered-float = "5.3.0"
 regex = { version = "1.12.3", optional = true }
 serde = { version = "1.0.228", optional = true, features = ["derive"] }
+
+[dev-dependencies]
+utils = { path = "utils" }

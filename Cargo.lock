@@ -943,6 +943,7 @@ dependencies = [
  "ordered-float",
  "regex",
  "serde",
+ "utils",
 ]
 
 [[package]]

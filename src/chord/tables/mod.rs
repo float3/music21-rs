@@ -387,6 +387,16 @@ fn find_tn_index_to_chord_info(
 mod tests {
     use super::{Sign, find_cardinality_member};
 
+    #[cfg(feature = "python")]
+    use super::{FORTE, Pcivicv, TNIStructure};
+    #[cfg(feature = "python")]
+    use utils::pyo3::{
+        Bound, PyResult, Python,
+        types::{PyAnyMethods, PyDict, PyDictMethods, PyTuple, PyTupleMethods},
+    };
+    #[cfg(feature = "python")]
+    use utils::{get_tables, init_py_with_dummies, prepare};
+
     #[test]
     fn cardinality_to_chord_members_include_major_triad() {
         let member = find_cardinality_member(3, 11, Sign::NegativeOne).unwrap();
@@ -397,5 +407,127 @@ mod tests {
             ]
         );
         assert_eq!(member.2, [0, 0, 1, 1, 1, 0]);
+    }
+
+    #[test]
+    #[cfg(feature = "python")]
+    fn python_cardinality_to_chord_members_match_music21() {
+        prepare().unwrap();
+
+        Python::attach(|py| -> PyResult<()> {
+            init_py_with_dummies(py)?;
+
+            let tables = get_tables(py)?;
+            let cardinality_to_chord_members = tables.getattr("cardinalityToChordMembers")?;
+            let cardinality_to_chord_members: &Bound<'_, PyDict> =
+                cardinality_to_chord_members.cast_exact()?;
+
+            for outer_key in cardinality_to_chord_members.keys() {
+                let cardinality: u8 = outer_key.extract()?;
+                let inner_dict = cardinality_to_chord_members
+                    .get_item(&outer_key)?
+                    .expect("music21 table key disappeared");
+                let inner_dict: &Bound<'_, PyDict> = inner_dict.cast_exact()?;
+
+                for inner_key in inner_dict.keys() {
+                    let (index, inversion_raw): (u8, i8) = inner_key.extract()?;
+                    let inversion =
+                        Sign::from_i8(inversion_raw).expect("music21 returned invalid inversion");
+                    let python_member: (Vec<u8>, Vec<u8>, Vec<u8>) = inner_dict
+                        .get_item(&inner_key)?
+                        .expect("music21 member key disappeared")
+                        .extract()?;
+                    let rust_member = find_cardinality_member(cardinality, index, inversion)
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "missing Rust member for cardinality {cardinality}, index {index}, inversion {inversion_raw}"
+                            )
+                        });
+
+                    assert_eq!(
+                        rust_pcivicv(rust_member),
+                        python_member,
+                        "cardinality {cardinality}, index {index}, inversion {inversion_raw}"
+                    );
+                }
+            }
+
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    #[test]
+    #[cfg(feature = "python")]
+    fn python_forte_table_matches_music21() {
+        prepare().unwrap();
+
+        Python::attach(|py| -> PyResult<()> {
+            init_py_with_dummies(py)?;
+
+            let tables = get_tables(py)?;
+            let forte = tables.getattr("FORTE")?;
+            let forte: &Bound<'_, PyTuple> = forte.cast_exact()?;
+
+            for (cardinality, rust_entry) in FORTE.iter().enumerate() {
+                let python_entry = forte.get_item(cardinality)?;
+                if python_entry.is_none() {
+                    assert!(
+                        rust_entry.is_empty(),
+                        "music21 has no FORTE entry for cardinality {cardinality}, but Rust does"
+                    );
+                    continue;
+                }
+
+                let python_entry: Vec<Option<(Vec<u8>, Vec<u8>, Vec<u8>, u8)>> =
+                    python_entry.extract()?;
+                assert_eq!(
+                    rust_forte_entry(rust_entry),
+                    python_entry,
+                    "FORTE mismatch for cardinality {cardinality}"
+                );
+            }
+
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    #[cfg(feature = "python")]
+    fn rust_pcivicv(tuple: &Pcivicv) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
+        (
+            pitch_classes_from_bools(&tuple.0),
+            tuple.1.to_vec(),
+            tuple.2.to_vec(),
+        )
+    }
+
+    #[cfg(feature = "python")]
+    fn rust_forte_entry(
+        entry: &[Option<TNIStructure>],
+    ) -> Vec<Option<(Vec<u8>, Vec<u8>, Vec<u8>, u8)>> {
+        entry
+            .iter()
+            .map(|tuple| tuple.as_ref().map(rust_tni))
+            .collect()
+    }
+
+    #[cfg(feature = "python")]
+    fn rust_tni(tuple: &TNIStructure) -> (Vec<u8>, Vec<u8>, Vec<u8>, u8) {
+        (
+            pitch_classes_from_bools(&tuple.0),
+            tuple.1.to_vec(),
+            tuple.2.to_vec(),
+            tuple.3,
+        )
+    }
+
+    #[cfg(feature = "python")]
+    fn pitch_classes_from_bools(pitch_classes: &[bool; 12]) -> Vec<u8> {
+        pitch_classes
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, present)| present.then_some(idx as u8))
+            .collect()
     }
 }
