@@ -15,7 +15,7 @@ serde = ["music21-rs/serde"]
 music21-rs = { path = "../..", default-features = false }
 serde = { version = "1.0.228", features = ["derive"] }
 serde-wasm-bindgen = "0.6.5"
-wasm-bindgen = "0.2.105"
+wasm-bindgen = "0.2.121"
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = ["--enable-bulk-memory", "--enable-nontrapping-float-to-int", "-Os"]

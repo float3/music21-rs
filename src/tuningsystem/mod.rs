@@ -44,18 +44,16 @@ pub const ALL_TUNING_SYSTEMS: [TuningSystem; 17] = [
     TuningSystem::EqualTemperament {
         octave_size: OCTAVE_SIZE,
     },
-    TuningSystem::RecursiveEqualTemperament {
-        octave_size: OCTAVE_SIZE,
-    },
     TuningSystem::WholeTone,
     TuningSystem::QuarterTone,
     TuningSystem::JustIntonation,
+    TuningSystem::RecursiveJustIntonation,
+    TuningSystem::TwelveTetRootedJust,
     TuningSystem::JustIntonation24,
     TuningSystem::PythagoreanTuning,
     TuningSystem::FiveLimit,
     TuningSystem::ElevenLimit,
     TuningSystem::FortyThreeTone,
-    TuningSystem::StepMethod,
     TuningSystem::Javanese,
     TuningSystem::Thai,
     TuningSystem::Indian,
@@ -209,11 +207,6 @@ pub enum TuningSystem {
         /// Number of equal divisions in each octave.
         octave_size: UnsignedIntegerType,
     },
-    /// Recursive equal temperament with a configurable octave size.
-    RecursiveEqualTemperament {
-        /// Number of equal divisions in each octave.
-        octave_size: UnsignedIntegerType,
-    },
     /// Six-tone equal temperament.
     WholeTone,
     /// Twenty-four-tone equal temperament.
@@ -234,8 +227,10 @@ pub enum TuningSystem {
     /// Forty-three-tone ratio table.
     FortyThreeTone,
 
-    /// Twelve-tone step-method equal temperament.
-    StepMethod,
+    /// Twelve-tone recursive just intonation table.
+    RecursiveJustIntonation,
+    /// Twelve-tone just-intervals table rooted on twelve-tone equal temperament.
+    TwelveTetRootedJust,
 
     // Ethnic scales.
     /// Five-tone Javanese equal-temperament approximation.
@@ -257,7 +252,6 @@ impl TuningSystem {
     pub fn id(self) -> &'static str {
         match self {
             Self::EqualTemperament { .. } => "EqualTemperament",
-            Self::RecursiveEqualTemperament { .. } => "RecursiveEqualTemperament",
             Self::WholeTone => "WholeTone",
             Self::QuarterTone => "QuarterTone",
             Self::JustIntonation => "JustIntonation",
@@ -266,7 +260,8 @@ impl TuningSystem {
             Self::FiveLimit => "FiveLimit",
             Self::ElevenLimit => "ElevenLimit",
             Self::FortyThreeTone => "FortyThreeTone",
-            Self::StepMethod => "StepMethod",
+            Self::RecursiveJustIntonation => "RecursiveJustIntonation",
+            Self::TwelveTetRootedJust => "TwelveTetRootedJust",
             Self::Javanese => "Javanese",
             Self::Thai => "Thai",
             Self::Indian => "Indian",
@@ -280,7 +275,6 @@ impl TuningSystem {
     pub fn display_name(self) -> &'static str {
         match self {
             Self::EqualTemperament { .. } => "Equal temperament",
-            Self::RecursiveEqualTemperament { .. } => "Recursive equal temperament",
             Self::WholeTone => "Whole tone",
             Self::QuarterTone => "Quarter tone",
             Self::JustIntonation => "Just intonation",
@@ -289,7 +283,8 @@ impl TuningSystem {
             Self::FiveLimit => "Five-limit",
             Self::ElevenLimit => "Eleven-limit",
             Self::FortyThreeTone => "Forty-three tone",
-            Self::StepMethod => "Step method",
+            Self::RecursiveJustIntonation => "Recursive just intonation",
+            Self::TwelveTetRootedJust => "12-TET-rooted just intervals",
             Self::Javanese => "Javanese",
             Self::Thai => "Thai",
             Self::Indian => "Indian",
@@ -303,7 +298,6 @@ impl TuningSystem {
     pub fn description(self) -> &'static str {
         match self {
             Self::EqualTemperament { .. } => "Twelve equal divisions of the octave.",
-            Self::RecursiveEqualTemperament { .. } => "Equal temperament calculated recursively.",
             Self::WholeTone => "Six equal whole-tone steps per octave.",
             Self::QuarterTone => "Twenty-four equal quarter-tone steps per octave.",
             Self::JustIntonation => "A twelve-tone just-intonation ratio table.",
@@ -312,7 +306,12 @@ impl TuningSystem {
             Self::FiveLimit => "A twelve-tone table using five-limit just ratios.",
             Self::ElevenLimit => "A twenty-nine-tone table using eleven-limit ratios.",
             Self::FortyThreeTone => "A forty-three-tone ratio table.",
-            Self::StepMethod => "A twelve-tone equal-temperament step method.",
+            Self::RecursiveJustIntonation => {
+                "Chord-contextual recursive just intonation using a twelve-tone table."
+            }
+            Self::TwelveTetRootedJust => {
+                "A twelve-tone just-intonation interval table rooted on twelve-tone equal temperament."
+            }
             Self::Javanese => "A five-tone Javanese equal-temperament approximation.",
             Self::Thai => "A seven-tone Thai equal-temperament approximation.",
             Self::Indian => "A seven-tone Indian scale ratio table.",
@@ -381,8 +380,7 @@ impl TuningSystem {
     /// Returns the number of degrees in one octave for this tuning system.
     pub fn octave_size(self) -> UnsignedIntegerType {
         match self {
-            Self::EqualTemperament { octave_size }
-            | Self::RecursiveEqualTemperament { octave_size } => octave_size,
+            Self::EqualTemperament { octave_size } => octave_size,
             Self::WholeTone => 6,
             Self::QuarterTone | Self::JustIntonation24 => 24,
             Self::FortyThreeTone => 43,
@@ -390,9 +388,11 @@ impl TuningSystem {
             Self::Javanese => 5,
             Self::Thai | Self::Indian | Self::IndianAlt => 7,
             Self::Indian22 | Self::IndianFull => 22,
-            Self::JustIntonation | Self::PythagoreanTuning | Self::FiveLimit | Self::StepMethod => {
-                OCTAVE_SIZE
-            }
+            Self::JustIntonation
+            | Self::PythagoreanTuning
+            | Self::FiveLimit
+            | Self::RecursiveJustIntonation
+            | Self::TwelveTetRootedJust => OCTAVE_SIZE,
         }
     }
 
@@ -404,16 +404,14 @@ impl TuningSystem {
             Self::FiveLimit => Some(&FIVE_LIMIT),
             Self::ElevenLimit => Some(&ELEVEN_LIMIT),
             Self::FortyThreeTone => Some(&FORTY_THREE_TONE),
+            Self::RecursiveJustIntonation => Some(&JUST_INTONATION),
+            Self::TwelveTetRootedJust => Some(&JUST_INTONATION),
             Self::Javanese => Some(&JAVANESE),
             Self::Thai => Some(&THAI),
             Self::Indian => Some(&INDIAN_SCALE),
             Self::IndianAlt => Some(&INDIA_SCALE_ALT),
             Self::Indian22 | Self::IndianFull => Some(&INDIAN_SCALE_22),
-            Self::EqualTemperament { .. }
-            | Self::RecursiveEqualTemperament { .. }
-            | Self::WholeTone
-            | Self::QuarterTone
-            | Self::StepMethod => None,
+            Self::EqualTemperament { .. } | Self::WholeTone | Self::QuarterTone => None,
         }
     }
 
@@ -447,9 +445,6 @@ impl FromStr for TuningSystem {
             "EqualTemperament" => Ok(Self::EqualTemperament {
                 octave_size: OCTAVE_SIZE,
             }),
-            "RecursiveEqualTemperament" => Ok(Self::RecursiveEqualTemperament {
-                octave_size: OCTAVE_SIZE,
-            }),
             "WholeTone" => Ok(Self::WholeTone),
             "QuarterTone" => Ok(Self::QuarterTone),
             "JustIntonation" => Ok(Self::JustIntonation),
@@ -458,7 +453,9 @@ impl FromStr for TuningSystem {
             "FiveLimit" => Ok(Self::FiveLimit),
             "ElevenLimit" => Ok(Self::ElevenLimit),
             "FortyThreeTone" => Ok(Self::FortyThreeTone),
-            "StepMethod" => Ok(Self::StepMethod),
+            "RecursiveJustIntonation" => Ok(Self::RecursiveJustIntonation),
+            "TwelveTetRootedJust" => Ok(Self::TwelveTetRootedJust),
+            "StepMethod" => Ok(Self::RecursiveJustIntonation),
             "Javanese" => Ok(Self::Javanese),
             "Thai" => Ok(Self::Thai),
             "Indian" => Ok(Self::Indian),
@@ -504,8 +501,7 @@ pub fn get_fraction(
     size: Option<UnsignedIntegerType>,
 ) -> Fraction {
     match tuning_system {
-        TuningSystem::EqualTemperament { octave_size }
-        | TuningSystem::RecursiveEqualTemperament { octave_size } => equal_temperament(
+        TuningSystem::EqualTemperament { octave_size } => equal_temperament(
             index_to_unsigned_integer(index),
             size.unwrap_or(octave_size),
         ),
@@ -515,10 +511,9 @@ pub fn get_fraction(
         TuningSystem::QuarterTone => {
             equal_temperament(index_to_unsigned_integer(index), size.unwrap_or(24))
         }
-        TuningSystem::StepMethod => equal_temperament(
-            index_to_unsigned_integer(index),
-            size.unwrap_or(OCTAVE_SIZE),
-        ),
+        TuningSystem::RecursiveJustIntonation | TuningSystem::TwelveTetRootedJust => {
+            get_fraction_from_table(tuning_system, index)
+        }
         _ => get_fraction_from_table(tuning_system, index),
     }
 }
@@ -577,8 +572,17 @@ pub fn get_recursive_frequency_at(
 ) -> FloatType {
     assert!(root_index.is_finite(), "root degree index must be finite");
     assert!(index.is_finite(), "degree index must be finite");
-    CN1 * get_ratio_at(tuning_system, root_index, size)
-        * get_ratio_at(tuning_system, index - root_index, size)
+    if tuning_system == TuningSystem::TwelveTetRootedJust {
+        let octave_size = size.unwrap_or_else(|| tuning_system.octave_size());
+        get_frequency_at(
+            TuningSystem::EqualTemperament { octave_size },
+            root_index,
+            size,
+        ) * get_ratio_at(TuningSystem::JustIntonation, index - root_index, size)
+    } else {
+        CN1 * get_ratio_at(tuning_system, root_index, size)
+            * get_ratio_at(tuning_system, index - root_index, size)
+    }
 }
 
 fn get_ratio_at(
@@ -1117,7 +1121,6 @@ mod tests {
 
     #[test]
     fn tuning_system_display_names_cover_variants() {
-        assert_eq!(ALL_TUNING_SYSTEMS.len(), 17);
         for system in ALL_TUNING_SYSTEMS {
             assert!(!system.id().is_empty());
             assert!(!system.display_name().is_empty());
