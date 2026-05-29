@@ -713,7 +713,7 @@ pub const JUST_INTONATION: [Fraction; 12] = [
     Fraction::new(9, 8),
     Fraction::new(19, 16),
     Fraction::new(5, 4),
-    Fraction::new(4, 3),
+    Fraction::new(21, 16),
     Fraction::new(11, 8),
     Fraction::new(3, 2),
     Fraction::new(13, 8),
