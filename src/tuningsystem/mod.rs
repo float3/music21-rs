@@ -1,3 +1,5 @@
+pub mod adaptive;
+
 use crate::defaults::{FloatType, IntegerType, UnsignedIntegerType};
 use crate::error::{Error, Result};
 
@@ -26,6 +28,16 @@ pub const TWELVE_TONE_NAMES: [&str; 12] = [
     "C", "C#/Db", "D", "D#/Eb", "E", "F", "F#/Gb", "G", "G#/Ab", "A", "A#/Bb", "B",
 ];
 
+/// Degree labels for a twelve-tone chromatic octave using sharps.
+pub const TWELVE_TONE_NAMES_SHARP: [&str; 12] = [
+    "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
+];
+
+/// Degree labels for a twelve-tone chromatic octave using flats.
+pub const TWELVE_TONE_NAMES_FLAT: [&str; 12] = [
+    "C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B",
+];
+
 /// Degree labels for a whole-tone octave.
 pub const WHOLE_TONE_NAMES: [&str; 6] = ["C", "D", "E", "F#/Gb", "G#/Ab", "A#/Bb"];
 
@@ -40,14 +52,13 @@ pub const COMMON_TWELVE_TONE_TUNING_SYSTEMS: [TuningSystem; 4] = [
 ];
 
 /// All built-in tuning systems in canonical display order.
-pub const ALL_TUNING_SYSTEMS: [TuningSystem; 17] = [
+pub const ALL_TUNING_SYSTEMS: [TuningSystem; 16] = [
     TuningSystem::EqualTemperament {
         octave_size: OCTAVE_SIZE,
     },
     TuningSystem::WholeTone,
     TuningSystem::QuarterTone,
     TuningSystem::JustIntonation,
-    TuningSystem::RecursiveJustIntonation,
     TuningSystem::TwelveTetRootedJust,
     TuningSystem::JustIntonation24,
     TuningSystem::PythagoreanTuning,
@@ -227,8 +238,6 @@ pub enum TuningSystem {
     /// Forty-three-tone ratio table.
     FortyThreeTone,
 
-    /// Twelve-tone recursive just intonation table.
-    RecursiveJustIntonation,
     /// Twelve-tone just-intervals table rooted on twelve-tone equal temperament.
     TwelveTetRootedJust,
 
@@ -260,7 +269,6 @@ impl TuningSystem {
             Self::FiveLimit => "FiveLimit",
             Self::ElevenLimit => "ElevenLimit",
             Self::FortyThreeTone => "FortyThreeTone",
-            Self::RecursiveJustIntonation => "RecursiveJustIntonation",
             Self::TwelveTetRootedJust => "TwelveTetRootedJust",
             Self::Javanese => "Javanese",
             Self::Thai => "Thai",
@@ -283,7 +291,6 @@ impl TuningSystem {
             Self::FiveLimit => "Five-limit",
             Self::ElevenLimit => "Eleven-limit",
             Self::FortyThreeTone => "Forty-three tone",
-            Self::RecursiveJustIntonation => "Recursive just intonation",
             Self::TwelveTetRootedJust => "12-TET-rooted just intervals",
             Self::Javanese => "Javanese",
             Self::Thai => "Thai",
@@ -306,9 +313,6 @@ impl TuningSystem {
             Self::FiveLimit => "A twelve-tone table using five-limit just ratios.",
             Self::ElevenLimit => "A twenty-nine-tone table using eleven-limit ratios.",
             Self::FortyThreeTone => "A forty-three-tone ratio table.",
-            Self::RecursiveJustIntonation => {
-                "Chord-contextual recursive just intonation using a twelve-tone table."
-            }
             Self::TwelveTetRootedJust => {
                 "A twelve-tone just-intonation interval table rooted on twelve-tone equal temperament."
             }
@@ -351,17 +355,6 @@ impl TuningSystem {
         get_frequency_at(self, index, None)
     }
 
-    /// Returns the frequency in hertz for `index` in a recursive root context.
-    ///
-    /// The `root_index` is first tuned from the global C-based table, then the
-    /// distance from `root_index` to `index` is tuned from the same table again.
-    /// For equal temperament this is identical to [`Self::frequency_at`]. For
-    /// ratio-table systems such as [`Self::JustIntonation`], the result is a
-    /// chord-contextual frequency.
-    pub fn recursive_frequency_at(self, root_index: FloatType, index: FloatType) -> FloatType {
-        get_recursive_frequency_at(self, root_index, index, None)
-    }
-
     /// Returns cents offset from equal temperament for a degree index.
     pub fn cents(self, index: UnsignedIntegerType) -> FloatType {
         get_cents(self, index, None)
@@ -370,11 +363,6 @@ impl TuningSystem {
     /// Returns cents offset from equal temperament for a fractional degree index.
     pub fn cents_at(self, index: FloatType) -> FloatType {
         get_cents_at(self, index, None)
-    }
-
-    /// Returns cents offset from equal temperament in a recursive root context.
-    pub fn recursive_cents_at(self, root_index: FloatType, index: FloatType) -> FloatType {
-        get_recursive_cents_at(self, root_index, index, None)
     }
 
     /// Returns the number of degrees in one octave for this tuning system.
@@ -391,7 +379,6 @@ impl TuningSystem {
             Self::JustIntonation
             | Self::PythagoreanTuning
             | Self::FiveLimit
-            | Self::RecursiveJustIntonation
             | Self::TwelveTetRootedJust => OCTAVE_SIZE,
         }
     }
@@ -404,7 +391,6 @@ impl TuningSystem {
             Self::FiveLimit => Some(&FIVE_LIMIT),
             Self::ElevenLimit => Some(&ELEVEN_LIMIT),
             Self::FortyThreeTone => Some(&FORTY_THREE_TONE),
-            Self::RecursiveJustIntonation => Some(&JUST_INTONATION),
             Self::TwelveTetRootedJust => Some(&JUST_INTONATION),
             Self::Javanese => Some(&JAVANESE),
             Self::Thai => Some(&THAI),
@@ -453,9 +439,7 @@ impl FromStr for TuningSystem {
             "FiveLimit" => Ok(Self::FiveLimit),
             "ElevenLimit" => Ok(Self::ElevenLimit),
             "FortyThreeTone" => Ok(Self::FortyThreeTone),
-            "RecursiveJustIntonation" => Ok(Self::RecursiveJustIntonation),
             "TwelveTetRootedJust" => Ok(Self::TwelveTetRootedJust),
-            "StepMethod" => Ok(Self::RecursiveJustIntonation),
             "Javanese" => Ok(Self::Javanese),
             "Thai" => Ok(Self::Thai),
             "Indian" => Ok(Self::Indian),
@@ -511,9 +495,7 @@ pub fn get_fraction(
         TuningSystem::QuarterTone => {
             equal_temperament(index_to_unsigned_integer(index), size.unwrap_or(24))
         }
-        TuningSystem::RecursiveJustIntonation | TuningSystem::TwelveTetRootedJust => {
-            get_fraction_from_table(tuning_system, index)
-        }
+        TuningSystem::TwelveTetRootedJust => get_fraction_from_table(tuning_system, index),
         _ => get_fraction_from_table(tuning_system, index),
     }
 }
@@ -733,19 +715,19 @@ pub const JUST_INTONATION_24: [Fraction; 24] = [
     Fraction::new(19, 16),
     Fraction::new(39, 32),
     Fraction::new(5, 4),
-    Fraction::new(41, 32),
-    Fraction::new(4, 3),
+    Fraction::new(21, 16),
+    Fraction::new(43, 32),
     Fraction::new(11, 8),
     Fraction::new(45, 32),
-    Fraction::new(93, 64),
+    Fraction::new(23, 16),
     Fraction::new(3, 2),
-    Fraction::new(99, 64),
+    Fraction::new(25, 16),
     Fraction::new(51, 32),
-    Fraction::new(105, 64),
+    Fraction::new(13, 8),
     Fraction::new(27, 16),
-    Fraction::new(111, 64),
+    Fraction::new(7, 4),
     Fraction::new(57, 32),
-    Fraction::new(117, 64),
+    Fraction::new(29, 16),
     Fraction::new(15, 8),
     Fraction::new(31, 16),
 ];
@@ -981,32 +963,6 @@ mod tests {
             (TuningSystem::PythagoreanTuning.frequency_at(67.0) - (C4 * 3.0 / 2.0)).abs() < 0.0001
         );
         assert!(TuningSystem::FiveLimit.cents_at(64.0) < -13.0);
-    }
-
-    #[test]
-    fn recursive_frequency_helpers_apply_table_from_local_root() {
-        let just = TuningSystem::JustIntonation;
-        let fixed_g_sharp = just.frequency_at(68.0);
-        let recursive_g_sharp = just.recursive_frequency_at(64.0, 68.0);
-
-        assert!((recursive_g_sharp - (C4 * 25.0 / 16.0)).abs() < 0.0001);
-        assert!((1200.0 * (recursive_g_sharp / fixed_g_sharp).log2() + 34.2827).abs() < 0.001);
-        assert!((just.recursive_frequency_at(65.0, 60.0) - C4).abs() < 0.0001);
-    }
-
-    #[test]
-    fn recursive_equal_temperament_matches_fixed_equal_temperament() {
-        let equal = TuningSystem::EqualTemperament {
-            octave_size: OCTAVE_SIZE,
-        };
-
-        for (root, index) in [(60.0, 67.0), (64.0, 68.0), (65.0, 60.0)] {
-            assert!(
-                (equal.recursive_frequency_at(root, index) - equal.frequency_at(index)).abs()
-                    < 1e-10
-            );
-            assert!(equal.recursive_cents_at(root, index).abs() < 1e-10);
-        }
     }
 
     #[test]
