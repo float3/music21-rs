@@ -2,6 +2,7 @@ pub mod adaptive;
 
 use crate::defaults::{FloatType, IntegerType, UnsignedIntegerType};
 use crate::error::{Error, Result};
+use crate::tuningsystem::adaptive::AdaptiveTuningSystem;
 
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
@@ -51,15 +52,74 @@ pub const COMMON_TWELVE_TONE_TUNING_SYSTEMS: [TuningSystem; 4] = [
     TuningSystem::FiveLimit,
 ];
 
+/// Either a normal tuning system or a context-sensitive adaptive tuning system.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum AnyTuningSystem {
+    Fixed(TuningSystem),
+    Adaptive(AdaptiveTuningSystem),
+}
+
+impl AnyTuningSystem {
+    pub fn frequency_at(
+        self,
+        context: FloatType,
+        index: FloatType,
+        size: Option<UnsignedIntegerType>,
+    ) -> FloatType {
+        match self {
+            Self::Fixed(tuning_system) => {
+                let _ = context;
+                get_frequency_at(tuning_system, index, size)
+            }
+            Self::Adaptive(adaptive_tuning_system) => {
+                adaptive_tuning_system.frequency_at(context, index, size)
+            }
+        }
+    }
+
+    pub fn cents_at(
+        self,
+        context: FloatType,
+        index: FloatType,
+        size: Option<UnsignedIntegerType>,
+    ) -> FloatType {
+        match self {
+            Self::Fixed(tuning_system) => {
+                let _ = context;
+                tuning_system.cents_at(index)
+            }
+            Self::Adaptive(adaptive_tuning_system) => {
+                adaptive_tuning_system.cents_at(context, index, size)
+            }
+        }
+    }
+
+    pub fn is_adaptive(self) -> bool {
+        matches!(self, Self::Adaptive(_))
+    }
+}
+
+impl From<TuningSystem> for AnyTuningSystem {
+    fn from(tuning_system: TuningSystem) -> Self {
+        Self::Fixed(tuning_system)
+    }
+}
+
+impl From<AdaptiveTuningSystem> for AnyTuningSystem {
+    fn from(adaptive_tuning_system: AdaptiveTuningSystem) -> Self {
+        Self::Adaptive(adaptive_tuning_system)
+    }
+}
+
 /// All built-in tuning systems in canonical display order.
-pub const ALL_TUNING_SYSTEMS: [TuningSystem; 16] = [
+pub const ALL_TUNING_SYSTEMS: [TuningSystem; 15] = [
     TuningSystem::EqualTemperament {
         octave_size: OCTAVE_SIZE,
     },
     TuningSystem::WholeTone,
     TuningSystem::QuarterTone,
     TuningSystem::JustIntonation,
-    TuningSystem::TwelveTetRootedJust,
     TuningSystem::JustIntonation24,
     TuningSystem::PythagoreanTuning,
     TuningSystem::FiveLimit,
@@ -238,9 +298,6 @@ pub enum TuningSystem {
     /// Forty-three-tone ratio table.
     FortyThreeTone,
 
-    /// Twelve-tone just-intervals table rooted on twelve-tone equal temperament.
-    TwelveTetRootedJust,
-
     // Ethnic scales.
     /// Five-tone Javanese equal-temperament approximation.
     Javanese,
@@ -269,7 +326,6 @@ impl TuningSystem {
             Self::FiveLimit => "FiveLimit",
             Self::ElevenLimit => "ElevenLimit",
             Self::FortyThreeTone => "FortyThreeTone",
-            Self::TwelveTetRootedJust => "TwelveTetRootedJust",
             Self::Javanese => "Javanese",
             Self::Thai => "Thai",
             Self::Indian => "Indian",
@@ -291,7 +347,6 @@ impl TuningSystem {
             Self::FiveLimit => "Five-limit",
             Self::ElevenLimit => "Eleven-limit",
             Self::FortyThreeTone => "Forty-three tone",
-            Self::TwelveTetRootedJust => "12-TET-rooted just intervals",
             Self::Javanese => "Javanese",
             Self::Thai => "Thai",
             Self::Indian => "Indian",
@@ -313,9 +368,6 @@ impl TuningSystem {
             Self::FiveLimit => "A twelve-tone table using five-limit just ratios.",
             Self::ElevenLimit => "A twenty-nine-tone table using eleven-limit ratios.",
             Self::FortyThreeTone => "A forty-three-tone ratio table.",
-            Self::TwelveTetRootedJust => {
-                "A twelve-tone just-intonation interval table rooted on twelve-tone equal temperament."
-            }
             Self::Javanese => "A five-tone Javanese equal-temperament approximation.",
             Self::Thai => "A seven-tone Thai equal-temperament approximation.",
             Self::Indian => "A seven-tone Indian scale ratio table.",
@@ -376,10 +428,7 @@ impl TuningSystem {
             Self::Javanese => 5,
             Self::Thai | Self::Indian | Self::IndianAlt => 7,
             Self::Indian22 | Self::IndianFull => 22,
-            Self::JustIntonation
-            | Self::PythagoreanTuning
-            | Self::FiveLimit
-            | Self::TwelveTetRootedJust => OCTAVE_SIZE,
+            Self::JustIntonation | Self::PythagoreanTuning | Self::FiveLimit => OCTAVE_SIZE,
         }
     }
 
@@ -391,7 +440,6 @@ impl TuningSystem {
             Self::FiveLimit => Some(&FIVE_LIMIT),
             Self::ElevenLimit => Some(&ELEVEN_LIMIT),
             Self::FortyThreeTone => Some(&FORTY_THREE_TONE),
-            Self::TwelveTetRootedJust => Some(&JUST_INTONATION),
             Self::Javanese => Some(&JAVANESE),
             Self::Thai => Some(&THAI),
             Self::Indian => Some(&INDIAN_SCALE),
@@ -439,7 +487,6 @@ impl FromStr for TuningSystem {
             "FiveLimit" => Ok(Self::FiveLimit),
             "ElevenLimit" => Ok(Self::ElevenLimit),
             "FortyThreeTone" => Ok(Self::FortyThreeTone),
-            "TwelveTetRootedJust" => Ok(Self::TwelveTetRootedJust),
             "Javanese" => Ok(Self::Javanese),
             "Thai" => Ok(Self::Thai),
             "Indian" => Ok(Self::Indian),
@@ -495,7 +542,6 @@ pub fn get_fraction(
         TuningSystem::QuarterTone => {
             equal_temperament(index_to_unsigned_integer(index), size.unwrap_or(24))
         }
-        TuningSystem::TwelveTetRootedJust => get_fraction_from_table(tuning_system, index),
         _ => get_fraction_from_table(tuning_system, index),
     }
 }
@@ -539,32 +585,6 @@ pub fn get_frequency_at(
     size: Option<UnsignedIntegerType>,
 ) -> FloatType {
     CN1 * get_ratio_at(tuning_system, index, size)
-}
-
-/// Returns the recursive frequency in hertz for a fractional tuning degree.
-///
-/// This treats `root_index` as a local tonic: the root is tuned from the global
-/// C-based table, and the note's distance above or below that root is tuned
-/// using the same system again.
-pub fn get_recursive_frequency_at(
-    tuning_system: TuningSystem,
-    root_index: FloatType,
-    index: FloatType,
-    size: Option<UnsignedIntegerType>,
-) -> FloatType {
-    assert!(root_index.is_finite(), "root degree index must be finite");
-    assert!(index.is_finite(), "degree index must be finite");
-    if tuning_system == TuningSystem::TwelveTetRootedJust {
-        let octave_size = size.unwrap_or_else(|| tuning_system.octave_size());
-        get_frequency_at(
-            TuningSystem::EqualTemperament { octave_size },
-            root_index,
-            size,
-        ) * get_ratio_at(TuningSystem::JustIntonation, index - root_index, size)
-    } else {
-        CN1 * get_ratio_at(tuning_system, root_index, size)
-            * get_ratio_at(tuning_system, index - root_index, size)
-    }
 }
 
 fn get_ratio_at(
@@ -615,24 +635,6 @@ pub fn get_cents_at(
         Some(octave_size),
     );
     let comparison_freq = get_frequency_at(tuning_system, index, size);
-    1200.0 * (comparison_freq / reference_freq).log2()
-}
-
-/// Returns cents offset from equal temperament in a recursive root context.
-pub fn get_recursive_cents_at(
-    tuning_system: TuningSystem,
-    root_index: FloatType,
-    index: FloatType,
-    size: Option<UnsignedIntegerType>,
-) -> FloatType {
-    let octave_size = size.unwrap_or_else(|| tuning_system.octave_size());
-    assert!(octave_size > 0, "octave_size must be greater than zero");
-    let reference_freq = get_frequency_at(
-        TuningSystem::EqualTemperament { octave_size },
-        index,
-        Some(octave_size),
-    );
-    let comparison_freq = get_recursive_frequency_at(tuning_system, root_index, index, size);
     1200.0 * (comparison_freq / reference_freq).log2()
 }
 
