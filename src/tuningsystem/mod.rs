@@ -827,7 +827,7 @@ pub const FORTY_THREE_TONE: [Fraction; 43] = [
     Fraction::new(16, 11),
     Fraction::new(40, 27),
     Fraction::new(3, 2),
-    Fraction::new(23, 21),
+    Fraction::new(32, 21),
     Fraction::new(14, 9),
     Fraction::new(11, 7),
     Fraction::new(8, 5),
@@ -836,7 +836,7 @@ pub const FORTY_THREE_TONE: [Fraction; 43] = [
     Fraction::new(27, 16),
     Fraction::new(12, 7),
     Fraction::new(7, 4),
-    Fraction::new(16, 8),
+    Fraction::new(16, 9),
     Fraction::new(9, 5),
     Fraction::new(20, 11),
     Fraction::new(11, 6),
@@ -1100,6 +1100,24 @@ mod tests {
                 assert!(
                     ratio > previous,
                     "{} degree {degree} ratio {ratio} should be higher than {previous}",
+                    system.id()
+                );
+                previous = ratio;
+            }
+        }
+    }
+
+    #[test]
+    fn all_ratio_tables_keep_degrees_strictly_ascending_within_the_octave() {
+        for system in ALL_TUNING_SYSTEMS {
+            let octave_size = system.octave_size();
+            let mut previous = system.ratio(0);
+            for degree in 1..=octave_size {
+                let ratio = system.ratio(degree as usize);
+                assert!(
+                    ratio > previous,
+                    "{} degree {degree} ratio {ratio} should be higher than {previous} \
+                     (a table entry is likely mistranscribed)",
                     system.id()
                 );
                 previous = ratio;
