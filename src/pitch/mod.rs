@@ -15,9 +15,7 @@ use crate::error::Result;
 use crate::interval::Interval;
 use crate::interval::IntervalArgument;
 use crate::interval::PitchOrNote;
-use crate::interval::intervalstring::IntervalString;
 use crate::key::keysignature::KeySignature;
-use crate::note::Note;
 use crate::stepname::StepName;
 use crate::tuningsystem::OCTAVE_SIZE;
 use crate::tuningsystem::TuningSystem;
@@ -34,12 +32,10 @@ use num::Num;
 use num_traits::ToPrimitive;
 use ordered_float::OrderedFloat;
 use std::cmp::Ordering;
-use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::LazyLock;
-use std::sync::Mutex;
 
 /// Canonical pitch names for chromatic pitch classes.
 pub const CHROMATIC_PITCH_CLASS_NAMES: [&str; 12] = [
@@ -51,11 +47,14 @@ pub fn pitch_class_name(pitch_class: u8) -> &'static str {
     CHROMATIC_PITCH_CLASS_NAMES[pitch_class as usize % 12]
 }
 
-// TODO: rework this, don't use a HashMap for two possible inputs, either figure
-// out what the -d2 and d2 intervals are beforehand or caculate them and store
-// them each in a static
-static TRANSPOSITIONAL_INTERVALS: LazyLock<Mutex<HashMap<IntervalString, Interval>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+/// The two intervals enharmonic respelling can ever need: a diminished second
+/// up and the same interval down.
+static DIMINISHED_SECOND_UP: LazyLock<Interval> = LazyLock::new(|| {
+    Interval::new(IntervalArgument::Str("d2".to_string())).expect("d2 is a valid interval")
+});
+static DIMINISHED_SECOND_DOWN: LazyLock<Interval> = LazyLock::new(|| {
+    Interval::new(IntervalArgument::Str("-d2".to_string())).expect("-d2 is a valid interval")
+});
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -196,8 +195,6 @@ pub struct Pitch {
     _overriden_freq440: Option<FloatType>,
     _accidental: Accidental,
     _microtone: Option<Microtone>,
-    #[cfg_attr(feature = "serde", serde(skip))]
-    _client: Option<Arc<Note>>,
     spelling_is_infered: bool,
     #[cfg_attr(feature = "serde", serde(skip))]
     fundamental: Option<Arc<Pitch>>,
@@ -454,7 +451,6 @@ impl Pitch {
             _accidental: self_accidental.clone().unwrap(),
             _microtone: self_microtone,
             _octave: self_octave,
-            _client: None,
             spelling_is_infered: self_spelling_is_inferred,
             fundamental: None,
         };
@@ -590,7 +586,6 @@ impl Pitch {
 
     pub(crate) fn octave_setter(&mut self, octave: Octave) {
         self._octave = octave;
-        self.inform_client()
     }
 
     fn get_all_common_enharmonics(&mut self, alter_limit: FloatType) -> Result<Vec<Pitch>> {
@@ -626,12 +621,6 @@ impl Pitch {
         }
 
         Ok(post)
-    }
-
-    fn inform_client(&self) {
-        if let Some(ref client) = self._client {
-            client.pitch_changed();
-        }
     }
 
     pub(crate) fn transpose(&self, clone: Interval) -> Pitch {
@@ -684,17 +673,14 @@ impl Pitch {
     fn step_setter(&mut self, step_name: StepName) {
         self._step = step_name;
         self.spelling_is_infered = true;
-        self.inform_client();
     }
 
     fn accidental_setter(&mut self, value: Accidental) {
         self._accidental = value;
-        self.inform_client();
     }
 
     fn microtone_setter(&mut self, mt: Microtone) {
         self._microtone = Some(mt);
-        self.inform_client();
     }
 
     fn pitch_class_setter(&mut self, pc: PitchClassSpecifier) -> Result<()> {
@@ -707,12 +693,10 @@ impl Pitch {
         self._step = step;
         self._accidental = accidental;
         self.spelling_is_infered = true;
-        self.inform_client();
     }
 
     fn fundamental_setter(&mut self, f: Pitch) {
         self.fundamental = Some(Arc::new(f));
-        self.inform_client();
     }
 
     fn midi_setter(&mut self, m: IntegerType) {
@@ -732,7 +716,6 @@ impl Pitch {
         let octave = convert_ps_to_oct(p) + octave_shift;
         self._octave = Some(octave);
         self.spelling_is_infered = true;
-        self.inform_client();
     }
 
     /// Returns a simpler enharmonic spelling of this pitch.
@@ -806,24 +789,10 @@ impl Pitch {
     }
 
     fn _get_enharmonic_helper(&self, up: bool) -> Result<Pitch> {
-        let interval_string = match up {
-            true => IntervalString::Up,
-            false => IntervalString::Down,
-        };
-
-        let mut dict = match TRANSPOSITIONAL_INTERVALS.lock() {
-            Ok(dict) => dict,
-            Err(err) => err.into_inner(),
-        };
-
-        let interval: Interval = match dict.get(&interval_string) {
-            None => {
-                let interval =
-                    Interval::new(IntervalArgument::Str(interval_string.clone().string()))?;
-                dict.insert(interval_string.clone(), interval.clone());
-                interval
-            }
-            Some(interval) => interval.to_owned(),
+        let interval = if up {
+            DIMINISHED_SECOND_UP.clone()
+        } else {
+            DIMINISHED_SECOND_DOWN.clone()
         };
 
         let octave_stored = self._octave;
