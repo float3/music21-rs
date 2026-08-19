@@ -19,9 +19,9 @@ default = []
 serde = ["dep:serde"]
 
 [dependencies]
-fraction = "0.15.4"
-itertools = "0.14.0"
+fraction = "0.16.0"
+itertools = "0.15.0"
 num = "0.4.3"
 num-traits = "0.2.19"
 ordered-float = "5.3.0"
-serde = { version = "1.0.228", optional = true, features = ["derive"] }
+serde = { version = "1.0.229", optional = true, features = ["derive"] }

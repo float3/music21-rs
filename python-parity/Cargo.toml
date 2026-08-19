@@ -6,6 +6,6 @@ version = "0.0.0"
 
 [dependencies]
 music21-rs = { path = "..", default-features = false }
-serde = { version = "1.0.228", features = ["derive"] }
+serde = { version = "1.0.229", features = ["derive"] }
 toml = "1.1"
 utils = { path = "../utils", features = ["python"] }
