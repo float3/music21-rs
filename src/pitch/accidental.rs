@@ -1,12 +1,9 @@
-use super::Pitch;
-
 use crate::defaults::{FloatType, IntegerType};
 use crate::display::{DisplayLocation, DisplaySize, DisplayStyle, DisplayType};
 use crate::error::{Error, Result};
 
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
-use std::sync::Arc;
 
 enum AccidentalEnum {
     Natural,
@@ -293,8 +290,6 @@ pub struct Accidental {
     display_style: DisplayStyle,
     display_size: DisplaySize,
     display_location: DisplayLocation,
-    #[cfg_attr(feature = "serde", serde(skip))]
-    _client: Option<Arc<Pitch>>,
     _name: String,
     _modifier: String,
     pub(crate) _alter: FloatType,
@@ -375,7 +370,6 @@ impl Accidental {
             display_style: DisplayStyle::Normal,
             display_size: DisplaySize::Full,
             display_location: DisplayLocation::Normal,
-            _client: None,
             _name: "".to_string(),
             _modifier: "".to_string(),
             _alter: 0.0,
@@ -443,7 +437,6 @@ impl Accidental {
     ) -> Result<()> {
         if let AccidentalSpecifier::Accidental(accidental) = specifier {
             *self = accidental;
-            self.inform_client();
             return Ok(());
         }
 
@@ -451,7 +444,6 @@ impl Accidental {
             self._name = accidental.to_name().to_string();
             self._alter = accidental.to_alter();
             self._modifier = accidental.to_modifier().to_string();
-            self.inform_client();
             return Ok(());
         }
 
@@ -466,7 +458,6 @@ impl Accidental {
             AccidentalSpecifier::Alter(alter) => self._alter = alter,
             AccidentalSpecifier::Accidental(_) => unreachable!(),
         }
-        self.inform_client();
         Ok(())
     }
 
@@ -477,12 +468,6 @@ impl Accidental {
             AccidentalSpecifier::Accidental(accidental) => {
                 AccidentalEnum::from_name(accidental.name())
             }
-        }
-    }
-
-    fn inform_client(&self) {
-        if let Some(client) = &self._client {
-            client.inform_client();
         }
     }
 
@@ -524,7 +509,6 @@ impl Accidental {
         } else {
             self._modifier = modifier;
         }
-        self.inform_client();
     }
 
     /// Returns a unicode representation of the accidental.
@@ -551,19 +535,16 @@ impl Accidental {
     /// Sets `name` without updating `alter` or `modifier`.
     pub fn set_name_independently(&mut self, name: impl Into<String>) {
         self._name = name.into();
-        self.inform_client();
     }
 
     /// Sets `alter` without updating `name` or `modifier`.
     pub fn set_alter_independently(&mut self, alter: FloatType) {
         self._alter = alter;
-        self.inform_client();
     }
 
     /// Sets `modifier` without updating `name` or `alter`.
     pub fn set_modifier_independently(&mut self, modifier: impl Into<String>) {
         self._modifier = modifier.into();
-        self.inform_client();
     }
 
     /// Copies display-related settings from another accidental.
@@ -573,7 +554,6 @@ impl Accidental {
         self.display_style = other.display_style.clone();
         self.display_size = other.display_size.clone();
         self.display_location = other.display_location.clone();
-        self.inform_client();
     }
 
     /// Returns the accidental display type.
@@ -586,7 +566,6 @@ impl Accidental {
         self._display_type = display_type_from_str(value).ok_or_else(|| {
             Error::Accidental(format!("Supplied display type is not supported: {value:?}"))
         })?;
-        self.inform_client();
         Ok(())
     }
 
@@ -599,7 +578,6 @@ impl Accidental {
     /// Sets the display status.
     pub fn set_display_status(&mut self, value: Option<bool>) {
         self._display_status = value;
-        self.inform_client();
     }
 
     /// Returns the display style.
@@ -614,7 +592,6 @@ impl Accidental {
                 "Supplied display style is not supported: {value:?}"
             ))
         })?;
-        self.inform_client();
         Ok(())
     }
 
@@ -626,7 +603,6 @@ impl Accidental {
     /// Sets the display size.
     pub fn set_display_size(&mut self, value: &str) -> Result<()> {
         self.display_size = display_size_from_str(value)?;
-        self.inform_client();
         Ok(())
     }
 
@@ -642,7 +618,6 @@ impl Accidental {
                 "Supplied display location is not supported: {value:?}"
             ))
         })?;
-        self.inform_client();
         Ok(())
     }
 
