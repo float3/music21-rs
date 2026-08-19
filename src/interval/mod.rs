@@ -455,7 +455,7 @@ impl Interval {
         let step_number = (new_dnn - 1).rem_euclid(7);
         let new_step = crate::stepname::StepName::try_from((step_number + 1) as u8)?;
 
-        let step_char = format!("{new_step:?}");
+        let step_char = new_step.as_char();
         let mut pitch2 = Pitch::new(
             Some(format!("{step_char}{new_octave}")),
             None,

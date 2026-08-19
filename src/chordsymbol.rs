@@ -464,36 +464,33 @@ impl ChordSymbol {
 
     /// Realizes the chord symbol as a [`Chord`].
     pub fn to_chord(&self) -> Result<Chord> {
-        let mut interval_names = self.base_intervals();
+        let mut intervals = self.base_intervals();
 
         for extension in [6, 9, 11, 13] {
             if self.extensions.contains(&extension)
                 && !self.alterations.iter().any(|alt| alt.degree == extension)
             {
-                interval_names.push(default_extension_interval(extension));
+                intervals.push((extension, default_extension_interval(extension)));
             }
         }
 
         for alteration in &self.alterations {
-            if alteration.degree == 5 && matches!(self.quality, ChordQuality::HalfDiminished) {
-                continue;
-            }
             if alteration.degree == 5 {
                 continue;
             }
-            interval_names.push(altered_interval(alteration)?);
+            intervals.push(altered_interval(alteration)?);
         }
 
         for addition in &self.additions {
-            interval_names.push(added_interval(addition)?);
+            intervals.push(added_interval(addition)?);
         }
 
-        interval_names.sort_unstable_by_key(|name| interval_sort_key(name));
-        interval_names.dedup();
+        intervals.sort_unstable_by_key(|(degree, _)| *degree);
+        intervals.dedup();
 
-        let mut pitches = interval_names
+        let mut pitches = intervals
             .into_iter()
-            .map(|name| Interval::from_name(name)?.transpose_pitch(&self.root))
+            .map(|(_, name)| Interval::from_name(name)?.transpose_pitch(&self.root))
             .collect::<Result<Vec<_>>>()?;
 
         if let Some(bass) = &self.bass {
@@ -508,7 +505,7 @@ impl ChordSymbol {
         Chord::new(pitches.as_slice())
     }
 
-    fn base_intervals(&self) -> Vec<&'static str> {
+    fn base_intervals(&self) -> Vec<(u8, &'static str)> {
         let altered_fifth = self
             .alterations
             .iter()
@@ -557,9 +554,7 @@ impl ChordSymbol {
 
         intervals
             .into_iter()
-            .filter_map(|(degree, interval)| {
-                (!self.omissions.contains(&degree)).then_some(interval)
-            })
+            .filter(|(degree, _)| !self.omissions.contains(degree))
             .collect()
     }
 }
@@ -1391,22 +1386,22 @@ fn default_extension_interval(degree: u8) -> &'static str {
     }
 }
 
-fn altered_interval(alteration: &ChordAlteration) -> Result<&'static str> {
+fn altered_interval(alteration: &ChordAlteration) -> Result<(u8, &'static str)> {
     match (alteration.degree, alteration.semitones) {
-        (5, -1) => Ok("d5"),
-        (5, 1) => Ok("a5"),
-        (9, -1) => Ok("m9"),
-        (9, 1) => Ok("a9"),
-        (11, 1) => Ok("a11"),
-        (13, -1) => Ok("m13"),
-        (13, 1) => Ok("a13"),
+        (5, -1) => Ok((5, "d5")),
+        (5, 1) => Ok((5, "a5")),
+        (9, -1) => Ok((9, "m9")),
+        (9, 1) => Ok((9, "a9")),
+        (11, 1) => Ok((11, "a11")),
+        (13, -1) => Ok((13, "m13")),
+        (13, 1) => Ok((13, "a13")),
         _ => Err(Error::Chord(format!(
             "unsupported chord-symbol alteration {alteration:?}"
         ))),
     }
 }
 
-fn added_interval(addition: &ChordAlteration) -> Result<&'static str> {
+fn added_interval(addition: &ChordAlteration) -> Result<(u8, &'static str)> {
     let degree = match addition.degree {
         2 => 9,
         4 => 11,
@@ -1415,35 +1410,27 @@ fn added_interval(addition: &ChordAlteration) -> Result<&'static str> {
     };
 
     match (degree, addition.semitones) {
-        (3, -1) => Ok("m3"),
-        (3, 0) => Ok("M3"),
-        (3, 1) => Ok("a3"),
-        (5, -1) => Ok("d5"),
-        (5, 0) => Ok("P5"),
-        (5, 1) => Ok("a5"),
-        (7, -1) => Ok("m7"),
-        (7, 0) => Ok("M7"),
-        (9, -1) => Ok("m9"),
-        (9, 0) => Ok("M9"),
-        (9, 1) => Ok("a9"),
-        (11, -1) => Ok("d11"),
-        (11, 0) => Ok("P11"),
-        (11, 1) => Ok("a11"),
-        (13, -1) => Ok("m13"),
-        (13, 0) => Ok("M13"),
-        (13, 1) => Ok("a13"),
+        (3, -1) => Ok((degree, "m3")),
+        (3, 0) => Ok((degree, "M3")),
+        (3, 1) => Ok((degree, "a3")),
+        (5, -1) => Ok((degree, "d5")),
+        (5, 0) => Ok((degree, "P5")),
+        (5, 1) => Ok((degree, "a5")),
+        (7, -1) => Ok((degree, "m7")),
+        (7, 0) => Ok((degree, "M7")),
+        (9, -1) => Ok((degree, "m9")),
+        (9, 0) => Ok((degree, "M9")),
+        (9, 1) => Ok((degree, "a9")),
+        (11, -1) => Ok((degree, "d11")),
+        (11, 0) => Ok((degree, "P11")),
+        (11, 1) => Ok((degree, "a11")),
+        (13, -1) => Ok((degree, "m13")),
+        (13, 0) => Ok((degree, "M13")),
+        (13, 1) => Ok((degree, "a13")),
         _ => Err(Error::Chord(format!(
             "unsupported chord-symbol added tone {addition:?}"
         ))),
     }
-}
-
-fn interval_sort_key(name: &str) -> u8 {
-    name.chars()
-        .filter(|ch| ch.is_ascii_digit())
-        .collect::<String>()
-        .parse::<u8>()
-        .unwrap_or(1)
 }
 
 #[cfg(test)]
