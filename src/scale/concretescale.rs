@@ -40,7 +40,7 @@ impl ConcreteScale {
         let (step, octave) = diatonic_number_to_step_and_octave(target_dnn)?;
         let alter = *self.altered_steps.get(&step).unwrap_or(&0);
         let modifier = accidental_modifier_from_alter(alter);
-        let name = format!("{step:?}{modifier}{octave}");
+        let name = format!("{}{modifier}{octave}", step.as_char());
 
         Pitch::new(
             Some(name),
