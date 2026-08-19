@@ -20,7 +20,7 @@ serde = ["dep:serde"]
 
 [dependencies]
 fraction = "0.15.4"
-itertools = "0.14.0"
+itertools = "0.15.0"
 num = "0.4.3"
 num-traits = "0.2.19"
 ordered-float = "5.3.0"
