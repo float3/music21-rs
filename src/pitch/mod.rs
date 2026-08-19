@@ -505,7 +505,7 @@ impl Pitch {
 
     /// Returns the pitch name without octave, such as `"F#"` or `"B-"`.
     pub fn name(&self) -> String {
-        format!("{:?}{}", self._step, self._accidental.modifier())
+        format!("{}{}", self._step.as_char(), self._accidental.modifier())
     }
 
     fn name_setter(&mut self, usr_str: &str) -> Result<()> {

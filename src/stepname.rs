@@ -24,6 +24,22 @@ impl StepName {
         *self as StepType
     }
 
+    /// Returns the letter this step is written with.
+    ///
+    /// Pitch names are part of the crate's public output, so they are spelled
+    /// here explicitly rather than being read back out of the `Debug` impl.
+    pub(crate) fn as_char(&self) -> char {
+        match self {
+            StepName::C => 'C',
+            StepName::D => 'D',
+            StepName::E => 'E',
+            StepName::F => 'F',
+            StepName::G => 'G',
+            StepName::A => 'A',
+            StepName::B => 'B',
+        }
+    }
+
     pub(crate) fn step_ref(&self) -> StepType {
         match self {
             StepName::C => 0,
