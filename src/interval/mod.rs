@@ -3,7 +3,6 @@ pub(crate) mod diatonicinterval;
 pub(crate) mod direction;
 pub(crate) mod genericinterval;
 pub(crate) mod intervalbase;
-pub(crate) mod intervalstring;
 pub(crate) mod specifier;
 
 use chromaticinterval::ChromaticInterval;

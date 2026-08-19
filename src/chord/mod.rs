@@ -1,4 +1,3 @@
-pub(crate) mod chordbase;
 /// Guitar tuning and fingering helpers.
 pub mod guitar;
 pub(crate) mod tables;
@@ -14,13 +13,11 @@ use crate::note::generalnote::GeneralNoteTrait;
 use crate::note::{IntoNote, Note};
 use crate::pitch::{Pitch, PitchClass, PitchClassSpecifier};
 
-use chordbase::ChordBase;
 pub use guitar::{GuitarFingering, GuitarStringFingering, GuitarTuning, GuitarTuningString};
 
 use num::integer::{gcd, lcm};
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
-use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -30,9 +27,8 @@ use std::sync::Arc;
 /// pitch names, slices of pitches or notes, MIDI pitch numbers, vectors, and
 /// `None` for an empty chord.
 pub struct Chord {
-    #[cfg_attr(feature = "serde", serde(skip))]
-    chordbase: Arc<ChordBase>,
     _notes: Vec<Note>,
+    duration: Option<Duration>,
     #[cfg_attr(feature = "serde", serde(skip))]
     from_integer_pitches: bool,
 }
@@ -151,8 +147,8 @@ impl Chord {
             .map(|notes| notes.into_iter().collect::<Vec<Note>>())?;
 
         let chord = Self {
-            chordbase: ChordBase::new(Some(chord_notes.as_slice()), &None)?,
             _notes: chord_notes,
+            duration: None,
             from_integer_pitches: T::FROM_INTEGER_PITCHES,
         };
         // Keep construction side-effect free like music21's Chord constructor.
@@ -623,14 +619,12 @@ impl Chord {
 
     /// Returns the chord duration when one has been assigned.
     pub fn duration(&self) -> Option<&Duration> {
-        self.chordbase.duration().as_ref()
+        self.duration.as_ref()
     }
 
     /// Assigns a duration to the chord.
     pub fn set_duration(&mut self, duration: Duration) {
-        if let Some(chordbase) = Arc::get_mut(&mut self.chordbase) {
-            chordbase.set_duration(&duration);
-        }
+        self.duration = Some(duration);
     }
 
     /// Returns a copy of this chord with the supplied duration.
@@ -1403,13 +1397,11 @@ impl Chord {
 
 impl GeneralNoteTrait for Chord {
     fn duration(&self) -> &Option<Duration> {
-        self.chordbase.duration()
+        &self.duration
     }
 
     fn set_duration(&mut self, duration: &Duration) {
-        if let Some(chordbase) = Arc::get_mut(&mut self.chordbase) {
-            chordbase.set_duration(duration);
-        }
+        self.duration = Some(duration.clone());
     }
 }
 
@@ -1585,7 +1577,24 @@ impl IntoNotes for &[IntegerType] {
 
 #[cfg(test)]
 mod tests {
-    use crate::{GuitarTuning, Key, Pitch, chord::Chord};
+    use crate::{Duration, GuitarTuning, Key, Pitch, chord::Chord};
+
+    #[test]
+    fn set_duration_applies_to_non_empty_chords() {
+        // Regression: the duration used to live behind an `Arc<ChordBase>` that
+        // every note in the chord also held a reference to, so `Arc::get_mut`
+        // returned `None` and the setter silently did nothing for any chord
+        // that actually had notes in it.
+        for input in ["", "C", "C E G", "C E G B-"] {
+            let mut chord = Chord::new(input).unwrap();
+            chord.set_duration(Duration::whole());
+            assert_eq!(
+                chord.duration().map(Duration::quarter_length),
+                Some(4.0),
+                "set_duration on {input:?}"
+            );
+        }
+    }
 
     #[test]
     fn c_e_g_pitchedcommonname() {
