@@ -26,17 +26,8 @@ impl ChromaticInterval {
 
 impl IntervalBaseTrait for ChromaticInterval {
     fn transpose_pitch(self, pitch1: Pitch) -> Result<Pitch> {
-        let mut p_out = Pitch::new(
-            Some((pitch1.ps() + self.semitones as FloatType).round() as IntegerType),
-            None,
-            None,
-            Option::<IntegerType>::None,
-            Option::<IntegerType>::None,
-            None,
-            None,
-            None,
-            None,
-        )?;
+        let mut p_out =
+            Pitch::from_number((pitch1.ps() + self.semitones as FloatType).round() as FloatType)?;
         if pitch1.octave().is_none() {
             p_out.octave_setter(None);
         }
@@ -56,18 +47,7 @@ mod tests {
     use super::*;
 
     fn pitch(name: &str) -> Pitch {
-        Pitch::new(
-            Some(name.to_string()),
-            None,
-            None,
-            Option::<IntegerType>::None,
-            Option::<IntegerType>::None,
-            None,
-            None,
-            None,
-            None,
-        )
-        .expect("valid pitch")
+        Pitch::from_name(name.to_string()).expect("valid pitch")
     }
 
     #[test]

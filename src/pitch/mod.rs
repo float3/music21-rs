@@ -372,7 +372,10 @@ impl Pitch {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn new<T, U, V>(
+    /// The positional constructor music21's keyword-argument `__init__` was
+    /// transliterated from. Private on purpose: reach a `Pitch` through the
+    /// named helpers below or through `PitchOptions`.
+    fn new<T, U, V>(
         name: Option<T>,
         step: Option<StepName>,
         octave: Octave,
@@ -1183,17 +1186,7 @@ fn dissonance_score(
 }
 
 fn pythagorean_denominator_log(interval: &Interval) -> Result<FloatType> {
-    let start_pitch = Pitch::new(
-        Some("C1".to_string()),
-        None,
-        None,
-        Option::<IntegerType>::None,
-        Option::<IntegerType>::None,
-        None,
-        None,
-        None,
-        None,
-    )?;
+    let start_pitch = Pitch::from_name("C1".to_string())?;
     let end_pitch = interval.transpose_pitch_with_options(&start_pitch, false, Some(4))?;
 
     let natural_fifths = match end_pitch.step() {
@@ -1238,161 +1231,23 @@ mod tests {
     #[test]
     fn simplify_multiple_enharmonics_test() {
         let more_than_five = vec![
-            Pitch::new(
-                Some(0),
-                None,
-                None,
-                Option::<IntegerType>::None,
-                Option::<IntegerType>::None,
-                None,
-                None,
-                None,
-                None,
-            )
-            .unwrap(),
-            Pitch::new(
-                Some(1),
-                None,
-                None,
-                Option::<IntegerType>::None,
-                Option::<IntegerType>::None,
-                None,
-                None,
-                None,
-                None,
-            )
-            .unwrap(),
-            Pitch::new(
-                Some(2),
-                None,
-                None,
-                Option::<IntegerType>::None,
-                Option::<IntegerType>::None,
-                None,
-                None,
-                None,
-                None,
-            )
-            .unwrap(),
-            Pitch::new(
-                Some(3),
-                None,
-                None,
-                Option::<IntegerType>::None,
-                Option::<IntegerType>::None,
-                None,
-                None,
-                None,
-                None,
-            )
-            .unwrap(),
-            Pitch::new(
-                Some(4),
-                None,
-                None,
-                Option::<IntegerType>::None,
-                Option::<IntegerType>::None,
-                None,
-                None,
-                None,
-                None,
-            )
-            .unwrap(),
-            Pitch::new(
-                Some(5),
-                None,
-                None,
-                Option::<IntegerType>::None,
-                Option::<IntegerType>::None,
-                None,
-                None,
-                None,
-                None,
-            )
-            .unwrap(),
-            Pitch::new(
-                Some(12),
-                None,
-                None,
-                Option::<IntegerType>::None,
-                Option::<IntegerType>::None,
-                None,
-                None,
-                None,
-                None,
-            )
-            .unwrap(),
-            Pitch::new(
-                Some(13),
-                None,
-                None,
-                Option::<IntegerType>::None,
-                Option::<IntegerType>::None,
-                None,
-                None,
-                None,
-                None,
-            )
-            .unwrap(),
+            Pitch::from_number(0.0).unwrap(),
+            Pitch::from_number(1.0).unwrap(),
+            Pitch::from_number(2.0).unwrap(),
+            Pitch::from_number(3.0).unwrap(),
+            Pitch::from_number(4.0).unwrap(),
+            Pitch::from_number(5.0).unwrap(),
+            Pitch::from_number(12.0).unwrap(),
+            Pitch::from_number(13.0).unwrap(),
         ];
 
         let _x = simplify_multiple_enharmonics(&more_than_five, None, None);
         let _less_than_five = [
-            Pitch::new(
-                Some(0),
-                None,
-                None,
-                Option::<IntegerType>::None,
-                Option::<IntegerType>::None,
-                None,
-                None,
-                None,
-                None,
-            ),
-            Pitch::new(
-                Some(1),
-                None,
-                None,
-                Option::<IntegerType>::None,
-                Option::<IntegerType>::None,
-                None,
-                None,
-                None,
-                None,
-            ),
-            Pitch::new(
-                Some(2),
-                None,
-                None,
-                Option::<IntegerType>::None,
-                Option::<IntegerType>::None,
-                None,
-                None,
-                None,
-                None,
-            ),
-            Pitch::new(
-                Some(12),
-                None,
-                None,
-                Option::<IntegerType>::None,
-                Option::<IntegerType>::None,
-                None,
-                None,
-                None,
-                None,
-            ),
-            Pitch::new(
-                Some(13),
-                None,
-                None,
-                Option::<IntegerType>::None,
-                Option::<IntegerType>::None,
-                None,
-                None,
-                None,
-                None,
-            ),
+            Pitch::from_number(0.0),
+            Pitch::from_number(1.0),
+            Pitch::from_number(2.0),
+            Pitch::from_number(12.0),
+            Pitch::from_number(13.0),
         ];
     }
 
@@ -1405,18 +1260,7 @@ mod tests {
 
     #[test]
     fn test_pitch_transpose_interval() {
-        let c4 = Pitch::new(
-            Some("C4".to_string()),
-            None,
-            None,
-            Option::<IntegerType>::None,
-            Option::<IntegerType>::None,
-            None,
-            None,
-            None,
-            None,
-        )
-        .unwrap();
+        let c4 = Pitch::from_name("C4".to_string()).unwrap();
         let m3 = Interval::new(IntervalArgument::Str("m3".to_string())).unwrap();
         let out = c4.transpose(m3);
         assert_eq!(out.name_with_octave(), "E-4");
@@ -1481,18 +1325,7 @@ mod tests {
 
     #[test]
     fn pitch_exposes_enharmonic_helpers() {
-        let c_sharp = Pitch::new(
-            Some("C#3".to_string()),
-            None,
-            None,
-            Option::<IntegerType>::None,
-            Option::<IntegerType>::None,
-            None,
-            None,
-            None,
-            None,
-        )
-        .unwrap();
+        let c_sharp = Pitch::from_name("C#3".to_string()).unwrap();
         let out = c_sharp.get_higher_enharmonic().unwrap();
         assert_eq!(out.name_with_octave(), "D-3");
 

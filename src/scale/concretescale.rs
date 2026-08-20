@@ -42,17 +42,7 @@ impl ConcreteScale {
         let modifier = accidental_modifier_from_alter(alter);
         let name = format!("{}{modifier}{octave}", step.as_char());
 
-        Pitch::new(
-            Some(name),
-            None,
-            None,
-            Option::<IntegerType>::None,
-            Option::<IntegerType>::None,
-            None,
-            None,
-            None,
-            None,
-        )
+        Pitch::from_name(name)
     }
 
     pub(crate) fn pitches(&self) -> Result<Vec<Pitch>> {
@@ -82,18 +72,7 @@ mod tests {
     use super::*;
 
     fn pitch(name: &str) -> Pitch {
-        Pitch::new(
-            Some(name.to_string()),
-            None,
-            None,
-            Option::<IntegerType>::None,
-            Option::<IntegerType>::None,
-            None,
-            None,
-            None,
-            None,
-        )
-        .expect("valid pitch")
+        Pitch::from_name(name.to_string()).expect("valid pitch")
     }
 
     #[test]

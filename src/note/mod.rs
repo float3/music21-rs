@@ -1,7 +1,7 @@
 pub(crate) mod generalnote;
 pub(crate) mod notrest;
 
-use crate::defaults::IntegerType;
+use crate::defaults::{FloatType, IntegerType};
 use crate::duration::Duration;
 use crate::error::Result;
 use crate::pitch::Pitch;
@@ -81,17 +81,7 @@ impl Note {
                     },
                 };
 
-                Pitch::new(
-                    Some(name),
-                    None,
-                    None,
-                    Option::<IntegerType>::None,
-                    Option::<IntegerType>::None,
-                    None,
-                    None,
-                    None,
-                    None,
-                )?
+                Pitch::from_name(name)?
             }),
         }?;
 
@@ -240,49 +230,19 @@ impl IntoPitch for Pitch {
 
 impl IntoPitch for String {
     fn into_pitch(self) -> Result<Pitch> {
-        Pitch::new(
-            Some(self),
-            None,
-            None,
-            Option::<IntegerType>::None,
-            Option::<IntegerType>::None,
-            None,
-            None,
-            None,
-            None,
-        )
+        Pitch::from_name(self)
     }
 }
 
 impl IntoPitch for &str {
     fn into_pitch(self) -> Result<Pitch> {
-        Pitch::new(
-            Some(self),
-            None,
-            None,
-            Option::<IntegerType>::None,
-            Option::<IntegerType>::None,
-            None,
-            None,
-            None,
-            None,
-        )
+        Pitch::from_name(self)
     }
 }
 
 impl IntoPitch for IntegerType {
     fn into_pitch(self) -> Result<Pitch> {
-        Pitch::new(
-            Some(self),
-            None,
-            None,
-            Option::<IntegerType>::None,
-            Option::<IntegerType>::None,
-            None,
-            None,
-            None,
-            None,
-        )
+        Pitch::from_number(self as FloatType)
     }
 }
 
