@@ -192,7 +192,6 @@ impl PitchOptions {
 pub struct Pitch {
     _step: StepName,
     _octave: Octave,
-    _overriden_freq440: Option<FloatType>,
     _accidental: Accidental,
     _microtone: Option<Microtone>,
     spelling_is_infered: bool,
@@ -450,7 +449,6 @@ impl Pitch {
         // --- Step 2: Construct Pitch with initial values ---
         let mut pitch = Pitch {
             _step: self_step,
-            _overriden_freq440: None,
             _accidental: self_accidental.clone().unwrap(),
             _microtone: self_microtone,
             _octave: self_octave,
@@ -699,6 +697,11 @@ impl Pitch {
 
     fn fundamental_setter(&mut self, f: Pitch) {
         self.fundamental = Some(Arc::new(f));
+    }
+
+    /// Returns the fundamental this pitch was built against, when one was set.
+    pub fn fundamental(&self) -> Option<&Pitch> {
+        self.fundamental.as_deref()
     }
 
     fn midi_setter(&mut self, m: IntegerType) {
@@ -1227,6 +1230,20 @@ mod tests {
     use super::{
         Accidental, Microtone, Pitch, convert_harmonic_to_cents, simplify_multiple_enharmonics,
     };
+
+    #[test]
+    fn fundamental_round_trips_through_the_builder() {
+        let pitch = Pitch::builder()
+            .name("E4")
+            .fundamental(Pitch::from_name("C2").unwrap())
+            .build()
+            .unwrap();
+        assert_eq!(
+            pitch.fundamental().map(Pitch::name_with_octave),
+            Some("C2".to_string())
+        );
+        assert_eq!(Pitch::from_name("E4").unwrap().fundamental(), None);
+    }
 
     #[test]
     fn simplify_multiple_enharmonics_test() {
