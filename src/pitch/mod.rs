@@ -626,12 +626,12 @@ impl Pitch {
         Ok(post)
     }
 
-    pub(crate) fn transpose(&self, clone: Interval) -> Pitch {
-        let mut p = clone
+    pub(crate) fn transpose(&self, interval: &Interval) -> Pitch {
+        let mut p = interval
             .transpose_pitch_with_options(self, false, Some(4))
             .unwrap_or_else(|_| self.clone());
 
-        if !clone.implicit_diatonic {
+        if !interval.implicit_diatonic {
             p.spelling_is_infered = self.spelling_is_infered;
         }
         if p.spelling_is_infered {
@@ -1262,7 +1262,7 @@ mod tests {
     fn test_pitch_transpose_interval() {
         let c4 = Pitch::from_name("C4".to_string()).unwrap();
         let m3 = Interval::new(IntervalArgument::Str("m3".to_string())).unwrap();
-        let out = c4.transpose(m3);
+        let out = c4.transpose(&m3);
         assert_eq!(out.name_with_octave(), "E-4");
     }
 
