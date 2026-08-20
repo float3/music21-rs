@@ -86,8 +86,22 @@ cargo run -p xtask -- verify-tables                          # assert generated.
   touches dependencies must commit the updated `Cargo.lock`.
 - **nix** — `nix flake check` plus `alejandra --check .` on the Nix files.
 
-`docs` builds rustdoc and the wasm-pack web examples, `pages` publishes
-them, and `release` handles crates.io; those are not correctness gates.
+`docs` builds rustdoc and the wasm-pack web examples and `pages` publishes
+them; neither is a correctness gate.
+
+`release` runs on pushes to master and compares `package.version` in
+`Cargo.toml` against the previous commit's. If it changed, it tags
+`v<version>` and cuts a GitHub release with generated notes — so **merging a
+version bump to master publishes a release**. It does not run `cargo
+publish`; crates.io is still a manual step. When bumping, add the matching
+section at the top of `RELEASE_NOTES.md` and refresh both `Cargo.lock` and
+`python-parity/Cargo.lock` (that crate is outside the workspace and pins
+`music21-rs` by path, so its lockfile carries the version too).
+
+Note that `fraction` is a *public* dependency — `FractionType` is re-exported
+from the crate root and returned by `Interval::pythagorean_ratio` — so
+bumping it is a breaking change for downstreams and needs a minor bump,
+not a patch.
 
 Running `cargo fmt --all`, the clippy line, `cargo test --workspace
 --all-targets`, and `xtask verify-tables` locally covers everything except
