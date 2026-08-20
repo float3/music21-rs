@@ -428,15 +428,14 @@ impl Pitch {
             self_octave = Some(oct);
         }
 
-        if let Some(acc) = accidental {
-            self_accidental = Some(if acc.is_accidental() {
-                acc.accidental()
-            } else {
-                acc.into_accidental()?
-            });
-        } else if self_accidental.is_none() {
-            self_accidental = Some(Accidental::new("natural")?);
-        }
+        let self_accidental: Accidental = match accidental {
+            Some(acc) if acc.is_accidental() => acc.accidental(),
+            Some(acc) => acc.into_accidental()?,
+            None => match self_accidental {
+                Some(acc) => acc,
+                None => Accidental::new("natural")?,
+            },
+        };
 
         if let Some(mt) = microtone {
             self_microtone = Some(if mt.is_microtone() {
@@ -449,7 +448,7 @@ impl Pitch {
         // --- Step 2: Construct Pitch with initial values ---
         let mut pitch = Pitch {
             _step: self_step,
-            _accidental: self_accidental.clone().unwrap(),
+            _accidental: self_accidental,
             _microtone: self_microtone,
             _octave: self_octave,
             spelling_is_infered: self_spelling_is_inferred,
