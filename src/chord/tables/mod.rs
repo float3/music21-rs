@@ -81,11 +81,9 @@ const CARDINALITIES: usize = 13;
 
 type Forte = [&'static [Option<TNIStructure>]; CARDINALITIES];
 type CardinalityToChordMembers = [&'static [(U8SB, Pcivicv)]; CARDINALITIES];
-#[allow(dead_code)]
 type ForteNumberWithInversionToIndex = &'static [(U8U8SB, u8)];
 type TnIndexToChordInfo = &'static [(U8U8SB, Option<&'static [&'static str]>)];
 type MaximumIndexNumberWithoutInversionEquivalence = [u8; CARDINALITIES];
-#[allow(dead_code)]
 type MaximumIndexNumberWithInversionEquivalence = [u8; CARDINALITIES];
 
 #[derive(Debug, Clone)]
