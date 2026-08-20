@@ -405,8 +405,7 @@ impl Interval {
 
     /// Transposes a pitch by this interval.
     pub fn transpose_pitch(&self, pitch: &Pitch) -> Result<Pitch> {
-        self.clone()
-            .transpose_pitch_with_options(pitch, false, Some(4))
+        self.transpose_pitch_with_options(pitch, false, Some(4))
     }
 
     /// Transposes a note by this interval.
@@ -431,20 +430,21 @@ impl Interval {
     /// reverse default is false
     /// maxAccidental default is 4
     pub(crate) fn transpose_pitch_with_options(
-        self,
+        &self,
         p: &Pitch,
         reverse: bool,
         max_accidental: Option<IntegerType>,
     ) -> Result<Pitch> {
         if reverse {
             return self
+                .clone()
                 .reverse()?
                 .transpose_pitch_with_options(p, false, Some(4));
         }
         let max_accidental = max_accidental.unwrap_or(4);
 
         if self.implicit_diatonic {
-            return self.chromatic.transpose_pitch(p.clone());
+            return self.chromatic.clone().transpose_pitch(p.clone());
         }
 
         let use_implicit_octave = p.octave().is_none();
@@ -618,7 +618,7 @@ impl IntervalBaseTrait for Interval {
     }
 
     fn transpose_pitch(self, pitch1: Pitch) -> Result<Pitch> {
-        Interval::transpose_pitch_with_options(self, &pitch1, false, Some(4))
+        Interval::transpose_pitch_with_options(&self, &pitch1, false, Some(4))
     }
 }
 
@@ -635,10 +635,7 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> Result<Fracti
         None,
     )?;
 
-    let end_pitch_wanted =
-        interval
-            .clone()
-            .transpose_pitch_with_options(&start_pitch, false, Some(4))?;
+    let end_pitch_wanted = interval.transpose_pitch_with_options(&start_pitch, false, Some(4))?;
 
     let mut cache = match PYTHAGOREAN_CACHE.lock() {
         Ok(cache) => cache,
@@ -686,14 +683,9 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> Result<Fracti
             ));
             break;
         } else {
-            end_pitch_up =
-                fifth_up
-                    .clone()
-                    .transpose_pitch_with_options(&end_pitch_up, false, Some(4))?;
+            end_pitch_up = fifth_up.transpose_pitch_with_options(&end_pitch_up, false, Some(4))?;
             end_pitch_down =
-                fifth_down
-                    .clone()
-                    .transpose_pitch_with_options(&end_pitch_down, false, Some(4))?;
+                fifth_down.transpose_pitch_with_options(&end_pitch_down, false, Some(4))?;
         }
     }
 

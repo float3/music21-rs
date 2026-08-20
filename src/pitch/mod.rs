@@ -625,7 +625,6 @@ impl Pitch {
 
     pub(crate) fn transpose(&self, clone: Interval) -> Pitch {
         let mut p = clone
-            .clone()
             .transpose_pitch_with_options(self, false, Some(4))
             .unwrap_or_else(|_| self.clone());
 
@@ -789,10 +788,10 @@ impl Pitch {
     }
 
     fn _get_enharmonic_helper(&self, up: bool) -> Result<Pitch> {
-        let interval = if up {
-            DIMINISHED_SECOND_UP.clone()
+        let interval: &Interval = if up {
+            &DIMINISHED_SECOND_UP
         } else {
-            DIMINISHED_SECOND_DOWN.clone()
+            &DIMINISHED_SECOND_DOWN
         };
 
         let octave_stored = self._octave;
@@ -1195,9 +1194,7 @@ fn pythagorean_denominator_log(interval: &Interval) -> Result<FloatType> {
         None,
         None,
     )?;
-    let end_pitch = interval
-        .clone()
-        .transpose_pitch_with_options(&start_pitch, false, Some(4))?;
+    let end_pitch = interval.transpose_pitch_with_options(&start_pitch, false, Some(4))?;
 
     let natural_fifths = match end_pitch.step() {
         StepName::C => 0,
