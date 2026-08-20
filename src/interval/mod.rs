@@ -582,7 +582,7 @@ fn _string_to_diatonic_chromatic(
     let (found, remain) = get_num_from_str(&value, "0123456789");
     let generic_number: IntegerType = found
         .parse::<IntegerType>()
-        .expect("Failed to parse number")
+        .map_err(|_| Error::Interval(format!("cannot read an interval number from {value:?}")))?
         * dir_scale;
     let spec = Specifier::parse(remain);
 
@@ -705,6 +705,19 @@ mod tests {
 
     fn pitch(name: &str) -> Pitch {
         Pitch::from_name(name.to_string()).expect("valid pitch")
+    }
+
+    #[test]
+    fn malformed_interval_names_error_instead_of_panicking() {
+        // Regression: the generic number was pulled out of the string with
+        // `.expect("Failed to parse number")`, so any name with no digits in it
+        // panicked out of a Result-returning public API.
+        for bad in ["", "X", "perfect", "?!", "MM"] {
+            assert!(
+                Interval::from_name(bad).is_err(),
+                "Interval::from_name({bad:?}) should be an error"
+            );
+        }
     }
 
     #[test]
