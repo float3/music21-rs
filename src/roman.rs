@@ -8,6 +8,11 @@ use crate::{
     pitch::Pitch,
 };
 use std::fmt;
+use std::sync::LazyLock;
+
+/// Parsed once: inverting a chord walks this interval one pitch at a time.
+static OCTAVE_UP: LazyLock<Interval> =
+    LazyLock::new(|| Interval::from_name("P8").expect("P8 is a valid interval"));
 
 /// A parsed Roman numeral in a key.
 #[derive(Clone, Debug)]
@@ -194,7 +199,7 @@ impl RomanNumeral {
 
         for _ in 0..self.inversion.min(pitches.len().saturating_sub(1) as u8) {
             let pitch = pitches.remove(0);
-            let transposed = Interval::from_name("P8")?.transpose_pitch(&pitch)?;
+            let transposed = OCTAVE_UP.transpose_pitch(&pitch)?;
             pitches.push(transposed);
         }
 

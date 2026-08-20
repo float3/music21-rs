@@ -263,7 +263,7 @@ impl Polyrhythm {
             .into_iter()
             .map(|tone| {
                 let interval = Interval::new(IntervalArgument::Int(tone.offset))?;
-                Ok(base_pitch.transpose(interval))
+                Ok(base_pitch.transpose(&interval))
             })
             .collect()
     }
@@ -331,7 +331,7 @@ impl Polyrhythm {
             .into_iter()
             .map(|offset| {
                 let interval = Interval::new(IntervalArgument::Int(offset))?;
-                Ok(base_pitch.transpose(interval))
+                Ok(base_pitch.transpose(&interval))
             })
             .collect();
 

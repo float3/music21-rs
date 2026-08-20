@@ -56,7 +56,7 @@ pub fn sharps_to_pitch(sharp_count: IntegerType) -> Result<Pitch> {
     };
 
     for _ in 0..sharp_count.abs() {
-        pitch = pitch.transpose(interval.clone());
+        pitch = pitch.transpose(&interval);
         pitch.octave_setter(None);
     }
     Ok(pitch)
