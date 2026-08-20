@@ -1,3 +1,82 @@
+# music21-rs 0.3.0
+
+This release removes a layer of music21's Python runtime that had been
+transliterated into Rust without ever being connected to anything, and fixes
+two bugs that were hiding inside it. The minor bump is required because
+`fraction` is a public dependency: `FractionType` is re-exported from the
+crate root and returned by `Interval::pythagorean_ratio`, so moving to
+`fraction` 0.16 is a breaking change for callers who name those types.
+
+## Breaking Changes
+
+- Updated `fraction` to 0.16 and `itertools` to 0.15. `FractionType`
+  (`fraction::GenericFraction<IntegerType>`) appears in the public API, so
+  downstream crates that mention it must move to `fraction` 0.16 as well.
+- `Interval::from_name` and `Interval::new` now return `Error::Interval` for
+  a name with no interval number in it, instead of panicking. Code that
+  relied on the panic (`""`, `"X"`, `"perfect"`) now sees an `Err`.
+
+## Bug Fixes
+
+- Fixed `Chord::set_duration` and `Chord::with_duration`, which silently did
+  nothing on any chord that had notes in it. The chord's duration lived
+  behind an `Arc<ChordBase>` that every note in the chord also referenced, so
+  the `Arc::get_mut` in the setter never succeeded. `Chord::new("C E G")
+  .with_duration(Duration::whole())` returned a chord with no duration; only
+  the empty chord worked. The same reference cycle leaked each chord's
+  internal note list.
+- Fixed `Interval::from_name` panicking out of a `Result`-returning API on
+  malformed interval names.
+- `PitchOptions::fundamental` now does something. The value was stored on
+  `Pitch` and had no reader anywhere in the crate, so it could be set but
+  never observed. Added `Pitch::fundamental()`.
+
+## Highlights
+
+- Added `Pitch::fundamental()`.
+- Pitch names are no longer formatted out of a `#[derive(Debug)]` impl.
+  `Pitch::name` and the ABC and scale helpers now spell the step letter
+  explicitly, so the output no longer depends on `StepName`'s variant names.
+- Transposition no longer clones the interval. `Interval::transpose_pitch`
+  and `Pitch::transpose` read the interval through a reference internally
+  instead of taking it by value, so a `Chord` or scale walk no longer copies
+  a diatonic/chromatic pair per note. Public signatures are unchanged.
+- `interval_to_pythagorean_ratio` no longer holds its cache lock across the
+  circle-of-fifths walk, so concurrent callers queue only on the map access,
+  and no longer re-parses `"P5"`/`"-P5"` from strings on every call.
+- Removed roughly 600 lines of unreachable internals: the `_client` observer
+  chains on `Pitch` and `Accidental` (only ever assigned `None`), the
+  `HashMap<String, String>` caches on `Note` and `ChordBase` (never read),
+  `ChordBase._overrides`, `Pitch._overriden_freq440`, and the `ChordBase` /
+  `IntoNotRests` layer that duplicated the note list `Chord` already held.
+
+# music21-rs 0.2.2
+
+This release reworks the tuning-system API around context-dependent tunings
+and moves the Python parity suite out of the main workspace.
+
+## Breaking Changes
+
+- Removed the `TuningSystem::StepMethod` and
+  `TuningSystem::RecursiveEqualTemperament` variants, both of which computed
+  plain equal temperament. `ALL_TUNING_SYSTEMS` is now 15 entries rather
+  than 17.
+
+## Highlights
+
+- Added the `tuningsystem::adaptive` module and `AdaptiveTuningSystem` for
+  tunings whose frequencies depend on harmonic context, plus the
+  `AnyTuningSystem` enum unifying those with the fixed ratio-table systems,
+  with `frequency_at`, `cents_at`, and `is_adaptive`.
+- Added `TWELVE_TONE_NAMES_SHARP` and `TWELVE_TONE_NAMES_FLAT`.
+- Improved Just Intonation ratio accuracy.
+- Moved the Python parity tests into a separate `python-parity` package
+  outside the cargo workspace, so `cargo test` and `cargo check` on the
+  library no longer pull in pyo3.
+- Added `xtask verify-tables`, which CI runs to assert the committed chord
+  table source still matches `data/chord_tables.toml`.
+- Removed the dormant internal `base` and `prebase` modules.
+
 # music21-rs 0.2.1
 
 This patch release fixes a Pythagorean tuning table ordering issue and improves
