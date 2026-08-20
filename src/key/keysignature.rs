@@ -43,30 +43,10 @@ pub fn mode_sharps_alter(mode: &str) -> Option<IntegerType> {
 /// Returns the major-key tonic pitch for a key-signature sharp count.
 pub fn sharps_to_pitch(sharp_count: IntegerType) -> Result<Pitch> {
     if sharp_count == 0 {
-        return Pitch::new(
-            Some("C".to_string()),
-            None,
-            None,
-            Option::<IntegerType>::None,
-            Option::<IntegerType>::None,
-            None,
-            None,
-            None,
-            None,
-        );
+        return Pitch::from_name("C".to_string());
     }
 
-    let mut pitch = Pitch::new(
-        Some("C".to_string()),
-        None,
-        None,
-        Option::<IntegerType>::None,
-        Option::<IntegerType>::None,
-        None,
-        None,
-        None,
-        None,
-    )?;
+    let mut pitch = Pitch::from_name("C".to_string())?;
     pitch.octave_setter(None);
 
     let interval = if sharp_count > 0 {
@@ -105,17 +85,7 @@ pub fn pitch_to_sharps(pitch_value: &Pitch, mode: Option<&str>) -> Result<Intege
 
 /// Returns the key-signature sharp count for a tonic pitch name and optional mode.
 pub fn pitch_name_to_sharps(pitch_name: &str, mode: Option<&str>) -> Result<IntegerType> {
-    let pitch = Pitch::new(
-        Some(pitch_name.to_string()),
-        None,
-        None,
-        Option::<IntegerType>::None,
-        Option::<IntegerType>::None,
-        None,
-        None,
-        None,
-        None,
-    )?;
+    let pitch = Pitch::from_name(pitch_name.to_string())?;
     pitch_to_sharps(&pitch, mode)
 }
 
@@ -142,18 +112,7 @@ impl KeySignature {
     pub fn as_key(&self, mode: &str) -> Key {
         self.try_as_key(Some(mode), None).unwrap_or_else(|_| {
             Key::new(
-                Pitch::new(
-                    Some("C".to_string()),
-                    None,
-                    None,
-                    Option::<IntegerType>::None,
-                    Option::<IntegerType>::None,
-                    None,
-                    None,
-                    None,
-                    None,
-                )
-                .expect("C is valid pitch"),
+                Pitch::from_name("C".to_string()).expect("C is valid pitch"),
                 "major",
                 0,
             )

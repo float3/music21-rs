@@ -64,18 +64,7 @@ mod tests {
     use super::*;
 
     fn pitch(name: &str) -> Pitch {
-        Pitch::new(
-            Some(name.to_string()),
-            None,
-            None,
-            Option::<IntegerType>::None,
-            Option::<IntegerType>::None,
-            None,
-            None,
-            None,
-            None,
-        )
-        .expect("valid pitch")
+        Pitch::from_name(name.to_string()).expect("valid pitch")
     }
 
     #[test]

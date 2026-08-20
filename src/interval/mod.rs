@@ -456,17 +456,7 @@ impl Interval {
         let new_step = crate::stepname::StepName::try_from((step_number + 1) as u8)?;
 
         let step_char = new_step.as_char();
-        let mut pitch2 = Pitch::new(
-            Some(format!("{step_char}{new_octave}")),
-            None,
-            None,
-            Option::<IntegerType>::None,
-            Option::<IntegerType>::None,
-            None,
-            None,
-            None,
-            None,
-        )?;
+        let mut pitch2 = Pitch::from_name(format!("{step_char}{new_octave}"))?;
 
         let mut half_steps_to_fix = self.chromatic.semitones as FloatType - (pitch2.ps() - p.ps());
         while half_steps_to_fix >= 12.0 {
@@ -485,17 +475,7 @@ impl Interval {
             } else {
                 let accidental = crate::pitch::accidental::Accidental::new(rounded_fix as i8)?;
                 let accidental_modifier = accidental.modifier().to_string();
-                pitch2 = Pitch::new(
-                    Some(format!("{step_char}{accidental_modifier}{new_octave}")),
-                    None,
-                    None,
-                    Option::<IntegerType>::None,
-                    Option::<IntegerType>::None,
-                    None,
-                    None,
-                    None,
-                    None,
-                )?;
+                pitch2 = Pitch::from_name(format!("{step_char}{accidental_modifier}{new_octave}"))?;
             }
         }
 
@@ -623,17 +603,7 @@ impl IntervalBaseTrait for Interval {
 }
 
 pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> Result<FractionType> {
-    let start_pitch = Pitch::new(
-        Some("C1".to_string()),
-        None,
-        None,
-        Option::<IntegerType>::None,
-        Option::<IntegerType>::None,
-        None,
-        None,
-        None,
-        None,
-    )?;
+    let start_pitch = Pitch::from_name("C1".to_string())?;
 
     let end_pitch_wanted = interval.transpose_pitch_with_options(&start_pitch, false, Some(4))?;
 
@@ -715,18 +685,7 @@ mod tests {
     use super::*;
 
     fn pitch(name: &str) -> Pitch {
-        Pitch::new(
-            Some(name.to_string()),
-            None,
-            None,
-            Option::<IntegerType>::None,
-            Option::<IntegerType>::None,
-            None,
-            None,
-            None,
-            None,
-        )
-        .expect("valid pitch")
+        Pitch::from_name(name.to_string()).expect("valid pitch")
     }
 
     #[test]
