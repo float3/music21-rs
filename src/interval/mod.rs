@@ -84,6 +84,16 @@ pub(crate) enum IntervalArgument {
 static PYTHAGOREAN_CACHE: LazyLock<Mutex<HashMap<String, (Pitch, FractionType)>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
+/// The pure fifths the Pythagorean walk steps by, parsed once rather than
+/// re-parsed from "P5"/"-P5" on every call into a function that is cached
+/// precisely because it is expensive.
+static PERFECT_FIFTH_UP: LazyLock<Interval> = LazyLock::new(|| {
+    Interval::new(IntervalArgument::Str("P5".to_string())).expect("P5 is a valid interval")
+});
+static PERFECT_FIFTH_DOWN: LazyLock<Interval> = LazyLock::new(|| {
+    Interval::new(IntervalArgument::Str("-P5".to_string())).expect("-P5 is a valid interval")
+});
+
 fn extract_pitch(arg: PitchOrNote) -> Pitch {
     match arg {
         PitchOrNote::Pitch(pitch) => pitch,
@@ -607,12 +617,20 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> Result<Fracti
 
     let end_pitch_wanted = interval.transpose_pitch_with_options(&start_pitch, false, Some(4))?;
 
-    let mut cache = match PYTHAGOREAN_CACHE.lock() {
-        Ok(cache) => cache,
-        Err(poisoned) => poisoned.into_inner(),
+    let wanted_name = end_pitch_wanted.name();
+
+    // Scoped so the lock is released before the walk below. Holding it across
+    // the whole computation would make concurrent callers queue behind each
+    // other for the expensive part, not just for the map access.
+    let cached = {
+        let cache = match PYTHAGOREAN_CACHE.lock() {
+            Ok(cache) => cache,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        cache.get(&wanted_name).cloned()
     };
 
-    if let Some((cached_pitch, cached_ratio)) = cache.get(&end_pitch_wanted.name()).cloned() {
+    if let Some((cached_pitch, cached_ratio)) = cached {
         let octaves = (end_pitch_wanted.ps() - cached_pitch.ps()) / 12.0;
         let octave_multiplier = FractionPow::<IntegerType>::powi(
             &FractionType::new(2 as IntegerType, 1 as IntegerType),
@@ -624,15 +642,14 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> Result<Fracti
     let mut end_pitch_up = start_pitch.clone();
     let mut end_pitch_down = start_pitch.clone();
     let mut found: Option<(Pitch, FractionType)> = None;
-    let fifth_up = Interval::new(IntervalArgument::Str("P5".to_string()))?;
-    let fifth_down = Interval::new(IntervalArgument::Str("-P5".to_string()))?;
+    let fifth_up: &Interval = &PERFECT_FIFTH_UP;
+    let fifth_down: &Interval = &PERFECT_FIFTH_DOWN;
 
     for counter in 0..37 {
-        if end_pitch_up.name() == end_pitch_wanted.name() {
+        if end_pitch_up.name() == wanted_name {
             if counter > 18 {
                 return Err(Error::Interval(format!(
-                    "pythagorean ratio for {} exceeds integer range",
-                    end_pitch_wanted.name()
+                    "pythagorean ratio for {wanted_name} exceeds integer range"
                 )));
             }
             found = Some((
@@ -640,11 +657,10 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> Result<Fracti
                 FractionPow::<IntegerType>::powi(&FractionType::new(3i32, 2i32), counter),
             ));
             break;
-        } else if end_pitch_down.name() == end_pitch_wanted.name() {
+        } else if end_pitch_down.name() == wanted_name {
             if counter > 18 {
                 return Err(Error::Interval(format!(
-                    "pythagorean ratio for {} exceeds integer range",
-                    end_pitch_wanted.name()
+                    "pythagorean ratio for {wanted_name} exceeds integer range"
                 )));
             }
             found = Some((
@@ -668,10 +684,13 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> Result<Fracti
         }
     };
 
-    cache.insert(
-        end_pitch_wanted.name().clone(),
-        (found_pitch.clone(), found_ratio),
-    );
+    {
+        let mut cache = match PYTHAGOREAN_CACHE.lock() {
+            Ok(cache) => cache,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        cache.insert(wanted_name, (found_pitch.clone(), found_ratio));
+    }
 
     let octaves = (end_pitch_wanted.ps() - found_pitch.ps()) / 12.0;
     let octave_multiplier =
