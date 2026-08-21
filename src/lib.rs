@@ -79,6 +79,7 @@ pub use roman::{RomanNumeral, analyze_chord, analyze_chord_with_root};
 pub use scale::{DiatonicScale, Scale, ScaleType};
 pub use stream::{Stream, StreamElement, StreamEvent};
 pub use tuningsystem::{
-    ALL_TUNING_SYSTEMS, COMMON_TWELVE_TONE_TUNING_SYSTEMS, Fraction, TuningSystem,
+    ALL_TUNING_SYSTEMS, COMMON_TWELVE_TONE_TUNING_SYSTEMS, Fraction, HISTORICAL_TEMPERAMENTS,
+    TuningSystem,
     scala::{ScalaArchive, ScalaDegree, ScalaScale},
 };

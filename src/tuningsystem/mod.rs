@@ -57,6 +57,20 @@ pub const COMMON_TWELVE_TONE_TUNING_SYSTEMS: [TuningSystem; 4] = [
     TuningSystem::FiveLimit,
 ];
 
+/// Historical keyboard temperaments, oldest first.
+///
+/// These are the well temperaments and meantone tunings that Western keyboard
+/// music was actually written for, transcribed from the Scala archive in the
+/// `music21` reference submodule. All are twelve-tone.
+pub const HISTORICAL_TEMPERAMENTS: [TuningSystem; 6] = [
+    TuningSystem::QuarterCommaMeantone,
+    TuningSystem::WerckmeisterIII,
+    TuningSystem::Rameau,
+    TuningSystem::KirnbergerIII,
+    TuningSystem::Vallotti,
+    TuningSystem::YoungII,
+];
+
 /// Either a normal tuning system or a context-sensitive adaptive tuning system.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -118,7 +132,7 @@ impl From<AdaptiveTuningSystem> for AnyTuningSystem {
 }
 
 /// All built-in tuning systems in canonical display order.
-pub const ALL_TUNING_SYSTEMS: [TuningSystem; 15] = [
+pub const ALL_TUNING_SYSTEMS: [TuningSystem; 21] = [
     TuningSystem::EqualTemperament {
         octave_size: OCTAVE_SIZE,
     },
@@ -136,6 +150,12 @@ pub const ALL_TUNING_SYSTEMS: [TuningSystem; 15] = [
     TuningSystem::IndianAlt,
     TuningSystem::Indian22,
     TuningSystem::IndianFull,
+    TuningSystem::QuarterCommaMeantone,
+    TuningSystem::WerckmeisterIII,
+    TuningSystem::Rameau,
+    TuningSystem::KirnbergerIII,
+    TuningSystem::Vallotti,
+    TuningSystem::YoungII,
 ];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -316,6 +336,20 @@ pub enum TuningSystem {
     Indian22,
     /// Full twenty-two-tone Indian scale table.
     IndianFull,
+
+    // Historical keyboard temperaments, transcribed from the Scala archive.
+    /// Twelve-tone quarter-comma meantone temperament (Aaron, 1523).
+    QuarterCommaMeantone,
+    /// Twelve-tone Werckmeister III well temperament (1681).
+    WerckmeisterIII,
+    /// Twelve-tone Rameau modified meantone temperament (1725).
+    Rameau,
+    /// Twelve-tone Kirnberger III well temperament (1744).
+    KirnbergerIII,
+    /// Twelve-tone Vallotti well temperament (c. 1754).
+    Vallotti,
+    /// Twelve-tone Thomas Young well temperament no. 2 (1799).
+    YoungII,
 }
 
 impl TuningSystem {
@@ -337,6 +371,12 @@ impl TuningSystem {
             Self::IndianAlt => "IndianAlt",
             Self::Indian22 => "Indian22",
             Self::IndianFull => "IndianFull",
+            Self::QuarterCommaMeantone => "QuarterCommaMeantone",
+            Self::WerckmeisterIII => "WerckmeisterIII",
+            Self::Rameau => "Rameau",
+            Self::KirnbergerIII => "KirnbergerIII",
+            Self::Vallotti => "Vallotti",
+            Self::YoungII => "YoungII",
         }
     }
 
@@ -358,6 +398,12 @@ impl TuningSystem {
             Self::IndianAlt => "Indian alternate",
             Self::Indian22 => "Indian 22",
             Self::IndianFull => "Indian full",
+            Self::QuarterCommaMeantone => "Quarter-comma meantone",
+            Self::WerckmeisterIII => "Werckmeister III",
+            Self::Rameau => "Rameau",
+            Self::KirnbergerIII => "Kirnberger III",
+            Self::Vallotti => "Vallotti",
+            Self::YoungII => "Young II",
         }
     }
 
@@ -379,6 +425,14 @@ impl TuningSystem {
             Self::IndianAlt => "An alternate seven-tone Indian scale ratio table.",
             Self::Indian22 => "A twenty-two-tone Indian scale ratio table.",
             Self::IndianFull => "The full twenty-two-tone Indian scale table.",
+            Self::QuarterCommaMeantone => {
+                "A twelve-tone quarter-comma meantone temperament (Aaron, 1523)."
+            }
+            Self::WerckmeisterIII => "A twelve-tone Werckmeister III well temperament (1681).",
+            Self::Rameau => "A twelve-tone Rameau modified meantone temperament (1725).",
+            Self::KirnbergerIII => "A twelve-tone Kirnberger III well temperament (1744).",
+            Self::Vallotti => "A twelve-tone Vallotti well temperament (c. 1754).",
+            Self::YoungII => "A twelve-tone Thomas Young well temperament no. 2 (1799).",
         }
     }
 
@@ -433,6 +487,12 @@ impl TuningSystem {
             Self::Javanese => 5,
             Self::Thai | Self::Indian | Self::IndianAlt => 7,
             Self::Indian22 | Self::IndianFull => 22,
+            Self::QuarterCommaMeantone
+            | Self::WerckmeisterIII
+            | Self::Rameau
+            | Self::KirnbergerIII
+            | Self::Vallotti
+            | Self::YoungII => OCTAVE_SIZE,
             Self::JustIntonation | Self::PythagoreanTuning | Self::FiveLimit => OCTAVE_SIZE,
         }
     }
@@ -450,6 +510,12 @@ impl TuningSystem {
             Self::Indian => Some(&INDIAN_SCALE),
             Self::IndianAlt => Some(&INDIA_SCALE_ALT),
             Self::Indian22 | Self::IndianFull => Some(&INDIAN_SCALE_22),
+            Self::QuarterCommaMeantone => Some(&QUARTER_COMMA_MEANTONE),
+            Self::WerckmeisterIII => Some(&WERCKMEISTER_III),
+            Self::Rameau => Some(&RAMEAU),
+            Self::KirnbergerIII => Some(&KIRNBERGER_III),
+            Self::Vallotti => Some(&VALLOTTI),
+            Self::YoungII => Some(&YOUNG_II),
             Self::EqualTemperament { .. } | Self::WholeTone | Self::QuarterTone => None,
         }
     }
@@ -498,6 +564,12 @@ impl FromStr for TuningSystem {
             "IndianAlt" => Ok(Self::IndianAlt),
             "Indian22" => Ok(Self::Indian22),
             "IndianFull" => Ok(Self::IndianFull),
+            "QuarterCommaMeantone" => Ok(Self::QuarterCommaMeantone),
+            "WerckmeisterIII" => Ok(Self::WerckmeisterIII),
+            "Rameau" => Ok(Self::Rameau),
+            "KirnbergerIII" => Ok(Self::KirnbergerIII),
+            "Vallotti" => Ok(Self::Vallotti),
+            "YoungII" => Ok(Self::YoungII),
             _ => Err(Error::TuningSystem(format!("unknown tuning system {s:?}"))),
         }
     }
@@ -724,6 +796,83 @@ pub const INDIAN_SCALE_NAMES: [&str; 7] = ["Sa", "Re", "Ga", "Ma", "Pa", "Dha", 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Cents above the tonic for a degree of a twelve-tone table.
+    fn cents_at_degree(system: TuningSystem, degree: usize) -> FloatType {
+        1200.0 * system.ratio(degree).log2()
+    }
+
+    #[test]
+    fn historical_temperaments_match_their_published_values() {
+        // Major third and perfect fifth above C, in cents, as given in the
+        // standard literature. Just values for reference: M3 386.314,
+        // P5 701.955; equal temperament: 400.000 and 700.000.
+        let cases = [
+            (TuningSystem::QuarterCommaMeantone, 386.314, 696.578),
+            (TuningSystem::WerckmeisterIII, 390.225, 696.090),
+            (TuningSystem::Rameau, 386.314, 696.578),
+            (TuningSystem::KirnbergerIII, 386.314, 696.578),
+            (TuningSystem::Vallotti, 392.180, 698.045),
+            (TuningSystem::YoungII, 392.180, 698.045),
+        ];
+
+        for (system, major_third, fifth) in cases {
+            let actual_third = cents_at_degree(system, 4);
+            let actual_fifth = cents_at_degree(system, 7);
+            assert!(
+                (actual_third - major_third).abs() < 0.001,
+                "{} major third: expected {major_third}, got {actual_third}",
+                system.display_name()
+            );
+            assert!(
+                (actual_fifth - fifth).abs() < 0.001,
+                "{} fifth: expected {fifth}, got {actual_fifth}",
+                system.display_name()
+            );
+        }
+    }
+
+    #[test]
+    fn quarter_comma_meantone_and_kirnberger_have_a_pure_major_third() {
+        // The defining property of both: C-E is the just 5/4 (386.314 cents).
+        //
+        // Not exactly 5/4, though. The Scala archive writes these degrees in
+        // cents to five decimal places rather than as an exact ratio, so the
+        // table carries 386.31371 cents. That is 4e-6 cents shy of just - some
+        // nine orders of magnitude below anything audible - but it is not the
+        // rational 5/4, and a test asserting exact equality would be asserting
+        // something the source data does not contain.
+        for system in [
+            TuningSystem::QuarterCommaMeantone,
+            TuningSystem::KirnbergerIII,
+        ] {
+            let cents = cents_at_degree(system, 4);
+            assert!(
+                (cents - 386.313_714).abs() < 0.001,
+                "{} major third should be the just 386.314 cents, got {cents}",
+                system.display_name()
+            );
+        }
+    }
+
+    #[test]
+    fn every_historical_temperament_is_wired_up() {
+        for system in HISTORICAL_TEMPERAMENTS {
+            assert_eq!(system.octave_size(), OCTAVE_SIZE, "{system:?}");
+            assert!(system.ratio_table().is_some(), "{system:?} has no table");
+            assert_eq!(system.ratio_table().unwrap().len(), 12, "{system:?}");
+            assert!(!system.description().is_empty(), "{system:?}");
+            assert_eq!(
+                TuningSystem::from_str(system.id()).unwrap(),
+                system,
+                "{system:?} does not round-trip through its id"
+            );
+            assert!(
+                ALL_TUNING_SYSTEMS.contains(&system),
+                "{system:?} missing from ALL_TUNING_SYSTEMS"
+            );
+        }
+    }
 
     #[test]
     fn equal_temperament_degree_helpers_work_without_tone_objects() {
