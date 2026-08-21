@@ -5,11 +5,15 @@ use crate::{defaults::IntegerType, stepname::StepName};
 pub(crate) mod concretescale;
 /// Diatonic scale construction and harmonization helpers.
 pub mod diatonicscale;
+pub mod hexatonicblues;
 /// The named scales music21 exposes, realized from a tonic.
 pub mod scaletype;
+pub mod stepscale;
 
 pub use diatonicscale::DiatonicScale;
+pub use hexatonicblues::{BluesForm, WeightedHexatonicBlues};
 pub use scaletype::{Scale, ScaleType};
+pub use stepscale::StepScale;
 
 pub(crate) const FIFTHS_ORDER_SHARP: [StepName; 7] = [
     StepName::F,
