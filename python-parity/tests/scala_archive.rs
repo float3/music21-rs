@@ -4,7 +4,7 @@
 //! `music21` submodule, and `cargo test` on the library must work without it.
 //! It needs no Python, unlike the parity suite next to it.
 
-use music21_rs::ScalaScale;
+use music21_rs::{ScalaArchive, ScalaScale};
 
 use std::path::{Path, PathBuf};
 
@@ -127,4 +127,68 @@ fn reads_partch_43_as_the_committed_tuning_table_does() {
             pair[1]
         );
     }
+}
+
+/// Search results verified against `music21.scale.scala.search` on this same
+/// archive snapshot.
+const SEARCH_EXPECTATIONS: [(&str, usize); 12] = [
+    ("mbira", 8),
+    ("slendro", 54),
+    ("partch", 13),
+    ("pyth", 16),
+    ("indian", 39),
+    ("ji", 58),
+    ("bohlen", 35),
+    ("mbira banda", 2),
+    ("partch_43.scl", 1),
+    ("xenakis", 3),
+    ("harrison", 19),
+    ("GAMELAN", 1),
+];
+
+#[test]
+fn archive_search_matches_music21_on_the_real_corpus() {
+    let dir = archive_dir();
+    if !dir.is_dir() {
+        panic!(
+            "{} is missing; run `git submodule update --init --recursive`",
+            dir.display()
+        );
+    }
+
+    let mut archive = ScalaArchive::new();
+    for entry in std::fs::read_dir(&dir).expect("archive directory is readable") {
+        let path = entry.expect("directory entry is readable").path();
+        if path.extension().and_then(|ext| ext.to_str()) != Some("scl") {
+            continue;
+        }
+        let name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .expect("scl file has a UTF-8 name")
+            .to_string();
+        if KNOWN_BAD.contains(&name.as_str()) {
+            continue;
+        }
+        let bytes = std::fs::read(&path).expect("scl file is readable");
+        archive
+            .insert(name, &bytes)
+            .expect("archive file parses");
+    }
+
+    assert!(archive.len() > 3_000, "only {} scales indexed", archive.len());
+
+    for (target, expected) in SEARCH_EXPECTATIONS {
+        let hits = archive.search(target);
+        assert_eq!(
+            hits.len(),
+            expected,
+            "search({target:?}) returned {:?}",
+            &hits[..hits.len().min(6)]
+        );
+    }
+
+    // The exact-name case must return that file, not merely something like it.
+    assert_eq!(archive.search("partch_43.scl"), ["partch_43.scl"]);
+    assert!(archive.search("zzz-nothing-matches-this").is_empty());
 }

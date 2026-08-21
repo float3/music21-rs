@@ -80,5 +80,5 @@ pub use scale::{DiatonicScale, Scale, ScaleType};
 pub use stream::{Stream, StreamElement, StreamEvent};
 pub use tuningsystem::{
     ALL_TUNING_SYSTEMS, COMMON_TWELVE_TONE_TUNING_SYSTEMS, Fraction, TuningSystem,
-    scala::{ScalaDegree, ScalaScale},
+    scala::{ScalaArchive, ScalaDegree, ScalaScale},
 };

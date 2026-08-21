@@ -212,6 +212,13 @@ the flat-side apotome spelling the archive does not carry, and
 Scala-derived table, change which `.scl` it points at — editing its
 ratios directly will be overwritten on the next regenerate.
 
+`scala::ScalaArchive` indexes a caller-supplied set of `.scl` files and
+mirrors music21's `scale.scala.search`. **The ~3900-file Scala archive is
+deliberately not bundled with the crate.** music21's own
+to downstream redistribution. Do not add the archive to `include` in
+`Cargo.toml` or vendor it into `data/` without resolving that first.
+Callers point `ScalaArchive` at their own copy.
+
 `scala::ScalaScale` is the runtime counterpart: it parses `.scl` text into
 owned degrees decided at runtime, where the fixed tables are compile-time
 constants. Its degrees are `ScalaDegree::Ratio` or `ScalaDegree::Cents`,
@@ -220,6 +227,8 @@ an integer `Fraction`. It also keeps the repeat interval separate as
 `period()` rather than as a degree, since not every Scala scale repeats at
 an octave. The library does no file IO — `parse_bytes` takes the bytes, and
 the caller reads the file. Keep it that way; `examples/web` is wasm.
+`parse_bytes` decodes latin-1, not UTF-8: the Scala format is defined as
+ISO-8859-1 and 73 archive files are not valid UTF-8.
 
 `JAVANESE` and `THAI` are *not* in that file. They use
 `Fraction::new_with_base` to express equal-temperament approximations
