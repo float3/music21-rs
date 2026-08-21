@@ -1,5 +1,7 @@
 pub mod adaptive;
 mod generated;
+/// Runtime parsing of Scala `.scl` scale files.
+pub mod scala;
 
 pub use generated::*;
 

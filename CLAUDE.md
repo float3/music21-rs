@@ -92,7 +92,9 @@ cargo run -p xtask -- verify-tuning-tables      # assert generated.rs matches th
   that only compiles with default features fails here.
 - **test** — `cargo test --workspace --all-targets` on ubuntu *and* windows.
 - **python-parity** — the excluded crate, run single-threaded against the
-  submodule.
+  submodule. It is the home for any test that needs the submodule, not just
+  Python ones: `tests/scala_archive.rs` parses all ~3900 `.scl` files with
+  `ScalaScale` and needs no Python at all.
 - **stable-check** — `cargo check --workspace --locked`, so a change that
   touches dependencies must commit the updated `Cargo.lock`.
 - **nix** — `nix flake check` plus `alejandra --check .` on the Nix files.
@@ -184,6 +186,15 @@ the flat-side apotome spelling the archive does not carry, and
 `JUST_INTONATION_24` has no counterpart there). To correct a
 Scala-derived table, change which `.scl` it points at — editing its
 ratios directly will be overwritten on the next regenerate.
+
+`scala::ScalaScale` is the runtime counterpart: it parses `.scl` text into
+owned degrees decided at runtime, where the fixed tables are compile-time
+constants. Its degrees are `ScalaDegree::Ratio` or `ScalaDegree::Cents`,
+because 1813 of the ~3900 archive files are written in cents and cannot be
+an integer `Fraction`. It also keeps the repeat interval separate as
+`period()` rather than as a degree, since not every Scala scale repeats at
+an octave. The library does no file IO — `parse_bytes` takes the bytes, and
+the caller reads the file. Keep it that way; `examples/web` is wasm.
 
 `JAVANESE` and `THAI` are *not* in that file. They use
 `Fraction::new_with_base` to express equal-temperament approximations
