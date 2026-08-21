@@ -1,0 +1,404 @@
+# Expected scale realizations, generated from music21 by
+# `python-parity/generate_scale_expectations.py`. Checked in so the
+# library can be verified without importing music21.
+#
+# music21 11.0.0b8
+
+[[scale]]
+scale_type = "Major"
+music21_class = "MajorScale"
+cases = [
+    { tonic = "C4", pitches = ["C4", "D4", "E4", "F4", "G4", "A4", "B4", "C5"] },
+    { tonic = "G4", pitches = ["G4", "A4", "B4", "C5", "D5", "E5", "F#5", "G5"] },
+    { tonic = "D4", pitches = ["D4", "E4", "F#4", "G4", "A4", "B4", "C#5", "D5"] },
+    { tonic = "A4", pitches = ["A4", "B4", "C#5", "D5", "E5", "F#5", "G#5", "A5"] },
+    { tonic = "E4", pitches = ["E4", "F#4", "G#4", "A4", "B4", "C#5", "D#5", "E5"] },
+    { tonic = "B4", pitches = ["B4", "C#5", "D#5", "E5", "F#5", "G#5", "A#5", "B5"] },
+    { tonic = "F#4", pitches = ["F#4", "G#4", "A#4", "B4", "C#5", "D#5", "E#5", "F#5"] },
+    { tonic = "C#4", pitches = ["C#4", "D#4", "E#4", "F#4", "G#4", "A#4", "B#4", "C#5"] },
+    { tonic = "F4", pitches = ["F4", "G4", "A4", "B-4", "C5", "D5", "E5", "F5"] },
+    { tonic = "B-4", pitches = ["B-4", "C5", "D5", "E-5", "F5", "G5", "A5", "B-5"] },
+    { tonic = "E-4", pitches = ["E-4", "F4", "G4", "A-4", "B-4", "C5", "D5", "E-5"] },
+    { tonic = "A-4", pitches = ["A-4", "B-4", "C5", "D-5", "E-5", "F5", "G5", "A-5"] },
+    { tonic = "D-4", pitches = ["D-4", "E-4", "F4", "G-4", "A-4", "B-4", "C5", "D-5"] },
+    { tonic = "G-4", pitches = ["G-4", "A-4", "B-4", "C-5", "D-5", "E-5", "F5", "G-5"] },
+    { tonic = "C-4", pitches = ["C-4", "D-4", "E-4", "F-4", "G-4", "A-4", "B-4", "C-5"] },
+]
+
+[[scale]]
+scale_type = "Minor"
+music21_class = "MinorScale"
+cases = [
+    { tonic = "C4", pitches = ["C4", "D4", "E-4", "F4", "G4", "A-4", "B-4", "C5"] },
+    { tonic = "G4", pitches = ["G4", "A4", "B-4", "C5", "D5", "E-5", "F5", "G5"] },
+    { tonic = "D4", pitches = ["D4", "E4", "F4", "G4", "A4", "B-4", "C5", "D5"] },
+    { tonic = "A4", pitches = ["A4", "B4", "C5", "D5", "E5", "F5", "G5", "A5"] },
+    { tonic = "E4", pitches = ["E4", "F#4", "G4", "A4", "B4", "C5", "D5", "E5"] },
+    { tonic = "B4", pitches = ["B4", "C#5", "D5", "E5", "F#5", "G5", "A5", "B5"] },
+    { tonic = "F#4", pitches = ["F#4", "G#4", "A4", "B4", "C#5", "D5", "E5", "F#5"] },
+    { tonic = "C#4", pitches = ["C#4", "D#4", "E4", "F#4", "G#4", "A4", "B4", "C#5"] },
+    { tonic = "F4", pitches = ["F4", "G4", "A-4", "B-4", "C5", "D-5", "E-5", "F5"] },
+    { tonic = "B-4", pitches = ["B-4", "C5", "D-5", "E-5", "F5", "G-5", "A-5", "B-5"] },
+    { tonic = "E-4", pitches = ["E-4", "F4", "G-4", "A-4", "B-4", "C-5", "D-5", "E-5"] },
+    { tonic = "A-4", pitches = ["A-4", "B-4", "C-5", "D-5", "E-5", "F-5", "G-5", "A-5"] },
+    { tonic = "D-4", pitches = ["D-4", "E-4", "F-4", "G-4", "A-4", "B--4", "C-5", "D-5"] },
+    { tonic = "G-4", pitches = ["G-4", "A-4", "B--4", "C-5", "D-5", "E--5", "F-5", "G-5"] },
+    { tonic = "C-4", pitches = ["C-4", "D-4", "E--4", "F-4", "G-4", "A--4", "B--4", "C-5"] },
+]
+
+[[scale]]
+scale_type = "Dorian"
+music21_class = "DorianScale"
+cases = [
+    { tonic = "C4", pitches = ["C4", "D4", "E-4", "F4", "G4", "A4", "B-4", "C5"] },
+    { tonic = "G4", pitches = ["G4", "A4", "B-4", "C5", "D5", "E5", "F5", "G5"] },
+    { tonic = "D4", pitches = ["D4", "E4", "F4", "G4", "A4", "B4", "C5", "D5"] },
+    { tonic = "A4", pitches = ["A4", "B4", "C5", "D5", "E5", "F#5", "G5", "A5"] },
+    { tonic = "E4", pitches = ["E4", "F#4", "G4", "A4", "B4", "C#5", "D5", "E5"] },
+    { tonic = "B4", pitches = ["B4", "C#5", "D5", "E5", "F#5", "G#5", "A5", "B5"] },
+    { tonic = "F#4", pitches = ["F#4", "G#4", "A4", "B4", "C#5", "D#5", "E5", "F#5"] },
+    { tonic = "C#4", pitches = ["C#4", "D#4", "E4", "F#4", "G#4", "A#4", "B4", "C#5"] },
+    { tonic = "F4", pitches = ["F4", "G4", "A-4", "B-4", "C5", "D5", "E-5", "F5"] },
+    { tonic = "B-4", pitches = ["B-4", "C5", "D-5", "E-5", "F5", "G5", "A-5", "B-5"] },
+    { tonic = "E-4", pitches = ["E-4", "F4", "G-4", "A-4", "B-4", "C5", "D-5", "E-5"] },
+    { tonic = "A-4", pitches = ["A-4", "B-4", "C-5", "D-5", "E-5", "F5", "G-5", "A-5"] },
+    { tonic = "D-4", pitches = ["D-4", "E-4", "F-4", "G-4", "A-4", "B-4", "C-5", "D-5"] },
+    { tonic = "G-4", pitches = ["G-4", "A-4", "B--4", "C-5", "D-5", "E-5", "F-5", "G-5"] },
+    { tonic = "C-4", pitches = ["C-4", "D-4", "E--4", "F-4", "G-4", "A-4", "B--4", "C-5"] },
+]
+
+[[scale]]
+scale_type = "Phrygian"
+music21_class = "PhrygianScale"
+cases = [
+    { tonic = "C4", pitches = ["C4", "D-4", "E-4", "F4", "G4", "A-4", "B-4", "C5"] },
+    { tonic = "G4", pitches = ["G4", "A-4", "B-4", "C5", "D5", "E-5", "F5", "G5"] },
+    { tonic = "D4", pitches = ["D4", "E-4", "F4", "G4", "A4", "B-4", "C5", "D5"] },
+    { tonic = "A4", pitches = ["A4", "B-4", "C5", "D5", "E5", "F5", "G5", "A5"] },
+    { tonic = "E4", pitches = ["E4", "F4", "G4", "A4", "B4", "C5", "D5", "E5"] },
+    { tonic = "B4", pitches = ["B4", "C5", "D5", "E5", "F#5", "G5", "A5", "B5"] },
+    { tonic = "F#4", pitches = ["F#4", "G4", "A4", "B4", "C#5", "D5", "E5", "F#5"] },
+    { tonic = "C#4", pitches = ["C#4", "D4", "E4", "F#4", "G#4", "A4", "B4", "C#5"] },
+    { tonic = "F4", pitches = ["F4", "G-4", "A-4", "B-4", "C5", "D-5", "E-5", "F5"] },
+    { tonic = "B-4", pitches = ["B-4", "C-5", "D-5", "E-5", "F5", "G-5", "A-5", "B-5"] },
+    { tonic = "E-4", pitches = ["E-4", "F-4", "G-4", "A-4", "B-4", "C-5", "D-5", "E-5"] },
+    { tonic = "A-4", pitches = ["A-4", "B--4", "C-5", "D-5", "E-5", "F-5", "G-5", "A-5"] },
+    { tonic = "D-4", pitches = ["D-4", "E--4", "F-4", "G-4", "A-4", "B--4", "C-5", "D-5"] },
+    { tonic = "G-4", pitches = ["G-4", "A--4", "B--4", "C-5", "D-5", "E--5", "F-5", "G-5"] },
+    { tonic = "C-4", pitches = ["C-4", "D--4", "E--4", "F-4", "G-4", "A--4", "B--4", "C-5"] },
+]
+
+[[scale]]
+scale_type = "Lydian"
+music21_class = "LydianScale"
+cases = [
+    { tonic = "C4", pitches = ["C4", "D4", "E4", "F#4", "G4", "A4", "B4", "C5"] },
+    { tonic = "G4", pitches = ["G4", "A4", "B4", "C#5", "D5", "E5", "F#5", "G5"] },
+    { tonic = "D4", pitches = ["D4", "E4", "F#4", "G#4", "A4", "B4", "C#5", "D5"] },
+    { tonic = "A4", pitches = ["A4", "B4", "C#5", "D#5", "E5", "F#5", "G#5", "A5"] },
+    { tonic = "E4", pitches = ["E4", "F#4", "G#4", "A#4", "B4", "C#5", "D#5", "E5"] },
+    { tonic = "B4", pitches = ["B4", "C#5", "D#5", "E#5", "F#5", "G#5", "A#5", "B5"] },
+    { tonic = "F#4", pitches = ["F#4", "G#4", "A#4", "B#4", "C#5", "D#5", "E#5", "F#5"] },
+    { tonic = "C#4", pitches = ["C#4", "D#4", "E#4", "F##4", "G#4", "A#4", "B#4", "C#5"] },
+    { tonic = "F4", pitches = ["F4", "G4", "A4", "B4", "C5", "D5", "E5", "F5"] },
+    { tonic = "B-4", pitches = ["B-4", "C5", "D5", "E5", "F5", "G5", "A5", "B-5"] },
+    { tonic = "E-4", pitches = ["E-4", "F4", "G4", "A4", "B-4", "C5", "D5", "E-5"] },
+    { tonic = "A-4", pitches = ["A-4", "B-4", "C5", "D5", "E-5", "F5", "G5", "A-5"] },
+    { tonic = "D-4", pitches = ["D-4", "E-4", "F4", "G4", "A-4", "B-4", "C5", "D-5"] },
+    { tonic = "G-4", pitches = ["G-4", "A-4", "B-4", "C5", "D-5", "E-5", "F5", "G-5"] },
+    { tonic = "C-4", pitches = ["C-4", "D-4", "E-4", "F4", "G-4", "A-4", "B-4", "C-5"] },
+]
+
+[[scale]]
+scale_type = "Mixolydian"
+music21_class = "MixolydianScale"
+cases = [
+    { tonic = "C4", pitches = ["C4", "D4", "E4", "F4", "G4", "A4", "B-4", "C5"] },
+    { tonic = "G4", pitches = ["G4", "A4", "B4", "C5", "D5", "E5", "F5", "G5"] },
+    { tonic = "D4", pitches = ["D4", "E4", "F#4", "G4", "A4", "B4", "C5", "D5"] },
+    { tonic = "A4", pitches = ["A4", "B4", "C#5", "D5", "E5", "F#5", "G5", "A5"] },
+    { tonic = "E4", pitches = ["E4", "F#4", "G#4", "A4", "B4", "C#5", "D5", "E5"] },
+    { tonic = "B4", pitches = ["B4", "C#5", "D#5", "E5", "F#5", "G#5", "A5", "B5"] },
+    { tonic = "F#4", pitches = ["F#4", "G#4", "A#4", "B4", "C#5", "D#5", "E5", "F#5"] },
+    { tonic = "C#4", pitches = ["C#4", "D#4", "E#4", "F#4", "G#4", "A#4", "B4", "C#5"] },
+    { tonic = "F4", pitches = ["F4", "G4", "A4", "B-4", "C5", "D5", "E-5", "F5"] },
+    { tonic = "B-4", pitches = ["B-4", "C5", "D5", "E-5", "F5", "G5", "A-5", "B-5"] },
+    { tonic = "E-4", pitches = ["E-4", "F4", "G4", "A-4", "B-4", "C5", "D-5", "E-5"] },
+    { tonic = "A-4", pitches = ["A-4", "B-4", "C5", "D-5", "E-5", "F5", "G-5", "A-5"] },
+    { tonic = "D-4", pitches = ["D-4", "E-4", "F4", "G-4", "A-4", "B-4", "C-5", "D-5"] },
+    { tonic = "G-4", pitches = ["G-4", "A-4", "B-4", "C-5", "D-5", "E-5", "F-5", "G-5"] },
+    { tonic = "C-4", pitches = ["C-4", "D-4", "E-4", "F-4", "G-4", "A-4", "B--4", "C-5"] },
+]
+
+[[scale]]
+scale_type = "Locrian"
+music21_class = "LocrianScale"
+cases = [
+    { tonic = "C4", pitches = ["C4", "D-4", "E-4", "F4", "G-4", "A-4", "B-4", "C5"] },
+    { tonic = "G4", pitches = ["G4", "A-4", "B-4", "C5", "D-5", "E-5", "F5", "G5"] },
+    { tonic = "D4", pitches = ["D4", "E-4", "F4", "G4", "A-4", "B-4", "C5", "D5"] },
+    { tonic = "A4", pitches = ["A4", "B-4", "C5", "D5", "E-5", "F5", "G5", "A5"] },
+    { tonic = "E4", pitches = ["E4", "F4", "G4", "A4", "B-4", "C5", "D5", "E5"] },
+    { tonic = "B4", pitches = ["B4", "C5", "D5", "E5", "F5", "G5", "A5", "B5"] },
+    { tonic = "F#4", pitches = ["F#4", "G4", "A4", "B4", "C5", "D5", "E5", "F#5"] },
+    { tonic = "C#4", pitches = ["C#4", "D4", "E4", "F#4", "G4", "A4", "B4", "C#5"] },
+    { tonic = "F4", pitches = ["F4", "G-4", "A-4", "B-4", "C-5", "D-5", "E-5", "F5"] },
+    { tonic = "B-4", pitches = ["B-4", "C-5", "D-5", "E-5", "F-5", "G-5", "A-5", "B-5"] },
+    { tonic = "E-4", pitches = ["E-4", "F-4", "G-4", "A-4", "B--4", "C-5", "D-5", "E-5"] },
+    { tonic = "A-4", pitches = ["A-4", "B--4", "C-5", "D-5", "E--5", "F-5", "G-5", "A-5"] },
+    { tonic = "D-4", pitches = ["D-4", "E--4", "F-4", "G-4", "A--4", "B--4", "C-5", "D-5"] },
+    { tonic = "G-4", pitches = ["G-4", "A--4", "B--4", "C-5", "D--5", "E--5", "F-5", "G-5"] },
+    { tonic = "C-4", pitches = ["C-4", "D--4", "E--4", "F-4", "G--4", "A--4", "B--4", "C-5"] },
+]
+
+[[scale]]
+scale_type = "Hypodorian"
+music21_class = "HypodorianScale"
+cases = [
+    { tonic = "C4", pitches = ["C4", "D4", "E-4", "F4", "G4", "A4", "B-4", "C5"] },
+    { tonic = "G4", pitches = ["G4", "A4", "B-4", "C5", "D5", "E5", "F5", "G5"] },
+    { tonic = "D4", pitches = ["D4", "E4", "F4", "G4", "A4", "B4", "C5", "D5"] },
+    { tonic = "A4", pitches = ["A4", "B4", "C5", "D5", "E5", "F#5", "G5", "A5"] },
+    { tonic = "E4", pitches = ["E4", "F#4", "G4", "A4", "B4", "C#5", "D5", "E5"] },
+    { tonic = "B4", pitches = ["B4", "C#5", "D5", "E5", "F#5", "G#5", "A5", "B5"] },
+    { tonic = "F#4", pitches = ["F#4", "G#4", "A4", "B4", "C#5", "D#5", "E5", "F#5"] },
+    { tonic = "C#4", pitches = ["C#4", "D#4", "E4", "F#4", "G#4", "A#4", "B4", "C#5"] },
+    { tonic = "F4", pitches = ["F4", "G4", "A-4", "B-4", "C5", "D5", "E-5", "F5"] },
+    { tonic = "B-4", pitches = ["B-4", "C5", "D-5", "E-5", "F5", "G5", "A-5", "B-5"] },
+    { tonic = "E-4", pitches = ["E-4", "F4", "G-4", "A-4", "B-4", "C5", "D-5", "E-5"] },
+    { tonic = "A-4", pitches = ["A-4", "B-4", "C-5", "D-5", "E-5", "F5", "G-5", "A-5"] },
+    { tonic = "D-4", pitches = ["D-4", "E-4", "F-4", "G-4", "A-4", "B-4", "C-5", "D-5"] },
+    { tonic = "G-4", pitches = ["G-4", "A-4", "B--4", "C-5", "D-5", "E-5", "F-5", "G-5"] },
+    { tonic = "C-4", pitches = ["C-4", "D-4", "E--4", "F-4", "G-4", "A-4", "B--4", "C-5"] },
+]
+
+[[scale]]
+scale_type = "Hypophrygian"
+music21_class = "HypophrygianScale"
+cases = [
+    { tonic = "C4", pitches = ["C4", "D-4", "E-4", "F4", "G4", "A-4", "B-4", "C5"] },
+    { tonic = "G4", pitches = ["G4", "A-4", "B-4", "C5", "D5", "E-5", "F5", "G5"] },
+    { tonic = "D4", pitches = ["D4", "E-4", "F4", "G4", "A4", "B-4", "C5", "D5"] },
+    { tonic = "A4", pitches = ["A4", "B-4", "C5", "D5", "E5", "F5", "G5", "A5"] },
+    { tonic = "E4", pitches = ["E4", "F4", "G4", "A4", "B4", "C5", "D5", "E5"] },
+    { tonic = "B4", pitches = ["B4", "C5", "D5", "E5", "F#5", "G5", "A5", "B5"] },
+    { tonic = "F#4", pitches = ["F#4", "G4", "A4", "B4", "C#5", "D5", "E5", "F#5"] },
+    { tonic = "C#4", pitches = ["C#4", "D4", "E4", "F#4", "G#4", "A4", "B4", "C#5"] },
+    { tonic = "F4", pitches = ["F4", "G-4", "A-4", "B-4", "C5", "D-5", "E-5", "F5"] },
+    { tonic = "B-4", pitches = ["B-4", "C-5", "D-5", "E-5", "F5", "G-5", "A-5", "B-5"] },
+    { tonic = "E-4", pitches = ["E-4", "F-4", "G-4", "A-4", "B-4", "C-5", "D-5", "E-5"] },
+    { tonic = "A-4", pitches = ["A-4", "B--4", "C-5", "D-5", "E-5", "F-5", "G-5", "A-5"] },
+    { tonic = "D-4", pitches = ["D-4", "E--4", "F-4", "G-4", "A-4", "B--4", "C-5", "D-5"] },
+    { tonic = "G-4", pitches = ["G-4", "A--4", "B--4", "C-5", "D-5", "E--5", "F-5", "G-5"] },
+    { tonic = "C-4", pitches = ["C-4", "D--4", "E--4", "F-4", "G-4", "A--4", "B--4", "C-5"] },
+]
+
+[[scale]]
+scale_type = "Hypolydian"
+music21_class = "HypolydianScale"
+cases = [
+    { tonic = "C4", pitches = ["C4", "D4", "E4", "F#4", "G4", "A4", "B4", "C5"] },
+    { tonic = "G4", pitches = ["G4", "A4", "B4", "C#5", "D5", "E5", "F#5", "G5"] },
+    { tonic = "D4", pitches = ["D4", "E4", "F#4", "G#4", "A4", "B4", "C#5", "D5"] },
+    { tonic = "A4", pitches = ["A4", "B4", "C#5", "D#5", "E5", "F#5", "G#5", "A5"] },
+    { tonic = "E4", pitches = ["E4", "F#4", "G#4", "A#4", "B4", "C#5", "D#5", "E5"] },
+    { tonic = "B4", pitches = ["B4", "C#5", "D#5", "E#5", "F#5", "G#5", "A#5", "B5"] },
+    { tonic = "F#4", pitches = ["F#4", "G#4", "A#4", "B#4", "C#5", "D#5", "E#5", "F#5"] },
+    { tonic = "C#4", pitches = ["C#4", "D#4", "E#4", "F##4", "G#4", "A#4", "B#4", "C#5"] },
+    { tonic = "F4", pitches = ["F4", "G4", "A4", "B4", "C5", "D5", "E5", "F5"] },
+    { tonic = "B-4", pitches = ["B-4", "C5", "D5", "E5", "F5", "G5", "A5", "B-5"] },
+    { tonic = "E-4", pitches = ["E-4", "F4", "G4", "A4", "B-4", "C5", "D5", "E-5"] },
+    { tonic = "A-4", pitches = ["A-4", "B-4", "C5", "D5", "E-5", "F5", "G5", "A-5"] },
+    { tonic = "D-4", pitches = ["D-4", "E-4", "F4", "G4", "A-4", "B-4", "C5", "D-5"] },
+    { tonic = "G-4", pitches = ["G-4", "A-4", "B-4", "C5", "D-5", "E-5", "F5", "G-5"] },
+    { tonic = "C-4", pitches = ["C-4", "D-4", "E-4", "F4", "G-4", "A-4", "B-4", "C-5"] },
+]
+
+[[scale]]
+scale_type = "Hypomixolydian"
+music21_class = "HypomixolydianScale"
+cases = [
+    { tonic = "C4", pitches = ["C4", "D4", "E4", "F4", "G4", "A4", "B-4", "C5"] },
+    { tonic = "G4", pitches = ["G4", "A4", "B4", "C5", "D5", "E5", "F5", "G5"] },
+    { tonic = "D4", pitches = ["D4", "E4", "F#4", "G4", "A4", "B4", "C5", "D5"] },
+    { tonic = "A4", pitches = ["A4", "B4", "C#5", "D5", "E5", "F#5", "G5", "A5"] },
+    { tonic = "E4", pitches = ["E4", "F#4", "G#4", "A4", "B4", "C#5", "D5", "E5"] },
+    { tonic = "B4", pitches = ["B4", "C#5", "D#5", "E5", "F#5", "G#5", "A5", "B5"] },
+    { tonic = "F#4", pitches = ["F#4", "G#4", "A#4", "B4", "C#5", "D#5", "E5", "F#5"] },
+    { tonic = "C#4", pitches = ["C#4", "D#4", "E#4", "F#4", "G#4", "A#4", "B4", "C#5"] },
+    { tonic = "F4", pitches = ["F4", "G4", "A4", "B-4", "C5", "D5", "E-5", "F5"] },
+    { tonic = "B-4", pitches = ["B-4", "C5", "D5", "E-5", "F5", "G5", "A-5", "B-5"] },
+    { tonic = "E-4", pitches = ["E-4", "F4", "G4", "A-4", "B-4", "C5", "D-5", "E-5"] },
+    { tonic = "A-4", pitches = ["A-4", "B-4", "C5", "D-5", "E-5", "F5", "G-5", "A-5"] },
+    { tonic = "D-4", pitches = ["D-4", "E-4", "F4", "G-4", "A-4", "B-4", "C-5", "D-5"] },
+    { tonic = "G-4", pitches = ["G-4", "A-4", "B-4", "C-5", "D-5", "E-5", "F-5", "G-5"] },
+    { tonic = "C-4", pitches = ["C-4", "D-4", "E-4", "F-4", "G-4", "A-4", "B--4", "C-5"] },
+]
+
+[[scale]]
+scale_type = "Hypolocrian"
+music21_class = "HypolocrianScale"
+cases = [
+    { tonic = "C4", pitches = ["C4", "D-4", "E-4", "F4", "G-4", "A-4", "B-4", "C5"] },
+    { tonic = "G4", pitches = ["G4", "A-4", "B-4", "C5", "D-5", "E-5", "F5", "G5"] },
+    { tonic = "D4", pitches = ["D4", "E-4", "F4", "G4", "A-4", "B-4", "C5", "D5"] },
+    { tonic = "A4", pitches = ["A4", "B-4", "C5", "D5", "E-5", "F5", "G5", "A5"] },
+    { tonic = "E4", pitches = ["E4", "F4", "G4", "A4", "B-4", "C5", "D5", "E5"] },
+    { tonic = "B4", pitches = ["B4", "C5", "D5", "E5", "F5", "G5", "A5", "B5"] },
+    { tonic = "F#4", pitches = ["F#4", "G4", "A4", "B4", "C5", "D5", "E5", "F#5"] },
+    { tonic = "C#4", pitches = ["C#4", "D4", "E4", "F#4", "G4", "A4", "B4", "C#5"] },
+    { tonic = "F4", pitches = ["F4", "G-4", "A-4", "B-4", "C-5", "D-5", "E-5", "F5"] },
+    { tonic = "B-4", pitches = ["B-4", "C-5", "D-5", "E-5", "F-5", "G-5", "A-5", "B-5"] },
+    { tonic = "E-4", pitches = ["E-4", "F-4", "G-4", "A-4", "B--4", "C-5", "D-5", "E-5"] },
+    { tonic = "A-4", pitches = ["A-4", "B--4", "C-5", "D-5", "E--5", "F-5", "G-5", "A-5"] },
+    { tonic = "D-4", pitches = ["D-4", "E--4", "F-4", "G-4", "A--4", "B--4", "C-5", "D-5"] },
+    { tonic = "G-4", pitches = ["G-4", "A--4", "B--4", "C-5", "D--5", "E--5", "F-5", "G-5"] },
+    { tonic = "C-4", pitches = ["C-4", "D--4", "E--4", "F-4", "G--4", "A--4", "B--4", "C-5"] },
+]
+
+[[scale]]
+scale_type = "Hypoaeolian"
+music21_class = "HypoaeolianScale"
+cases = [
+    { tonic = "C4", pitches = ["C4", "D4", "E-4", "F4", "G4", "A-4", "B-4", "C5"] },
+    { tonic = "G4", pitches = ["G4", "A4", "B-4", "C5", "D5", "E-5", "F5", "G5"] },
+    { tonic = "D4", pitches = ["D4", "E4", "F4", "G4", "A4", "B-4", "C5", "D5"] },
+    { tonic = "A4", pitches = ["A4", "B4", "C5", "D5", "E5", "F5", "G5", "A5"] },
+    { tonic = "E4", pitches = ["E4", "F#4", "G4", "A4", "B4", "C5", "D5", "E5"] },
+    { tonic = "B4", pitches = ["B4", "C#5", "D5", "E5", "F#5", "G5", "A5", "B5"] },
+    { tonic = "F#4", pitches = ["F#4", "G#4", "A4", "B4", "C#5", "D5", "E5", "F#5"] },
+    { tonic = "C#4", pitches = ["C#4", "D#4", "E4", "F#4", "G#4", "A4", "B4", "C#5"] },
+    { tonic = "F4", pitches = ["F4", "G4", "A-4", "B-4", "C5", "D-5", "E-5", "F5"] },
+    { tonic = "B-4", pitches = ["B-4", "C5", "D-5", "E-5", "F5", "G-5", "A-5", "B-5"] },
+    { tonic = "E-4", pitches = ["E-4", "F4", "G-4", "A-4", "B-4", "C-5", "D-5", "E-5"] },
+    { tonic = "A-4", pitches = ["A-4", "B-4", "C-5", "D-5", "E-5", "F-5", "G-5", "A-5"] },
+    { tonic = "D-4", pitches = ["D-4", "E-4", "F-4", "G-4", "A-4", "B--4", "C-5", "D-5"] },
+    { tonic = "G-4", pitches = ["G-4", "A-4", "B--4", "C-5", "D-5", "E--5", "F-5", "G-5"] },
+    { tonic = "C-4", pitches = ["C-4", "D-4", "E--4", "F-4", "G-4", "A--4", "B--4", "C-5"] },
+]
+
+[[scale]]
+scale_type = "HarmonicMinor"
+music21_class = "HarmonicMinorScale"
+cases = [
+    { tonic = "C4", pitches = ["C4", "D4", "E-4", "F4", "G4", "A-4", "B4", "C5"] },
+    { tonic = "G4", pitches = ["G4", "A4", "B-4", "C5", "D5", "E-5", "F#5", "G5"] },
+    { tonic = "D4", pitches = ["D4", "E4", "F4", "G4", "A4", "B-4", "C#5", "D5"] },
+    { tonic = "A4", pitches = ["A4", "B4", "C5", "D5", "E5", "F5", "G#5", "A5"] },
+    { tonic = "E4", pitches = ["E4", "F#4", "G4", "A4", "B4", "C5", "D#5", "E5"] },
+    { tonic = "B4", pitches = ["B4", "C#5", "D5", "E5", "F#5", "G5", "A#5", "B5"] },
+    { tonic = "F#4", pitches = ["F#4", "G#4", "A4", "B4", "C#5", "D5", "E#5", "F#5"] },
+    { tonic = "C#4", pitches = ["C#4", "D#4", "E4", "F#4", "G#4", "A4", "B#4", "C#5"] },
+    { tonic = "F4", pitches = ["F4", "G4", "A-4", "B-4", "C5", "D-5", "E5", "F5"] },
+    { tonic = "B-4", pitches = ["B-4", "C5", "D-5", "E-5", "F5", "G-5", "A5", "B-5"] },
+    { tonic = "E-4", pitches = ["E-4", "F4", "G-4", "A-4", "B-4", "C-5", "D5", "E-5"] },
+    { tonic = "A-4", pitches = ["A-4", "B-4", "C-5", "D-5", "E-5", "F-5", "G5", "A-5"] },
+    { tonic = "D-4", pitches = ["D-4", "E-4", "F-4", "G-4", "A-4", "B--4", "C5", "D-5"] },
+    { tonic = "G-4", pitches = ["G-4", "A-4", "B--4", "C-5", "D-5", "E--5", "F5", "G-5"] },
+    { tonic = "C-4", pitches = ["C-4", "D-4", "E--4", "F-4", "G-4", "A--4", "B-4", "C-5"] },
+]
+
+[[scale]]
+scale_type = "MelodicMinor"
+music21_class = "MelodicMinorScale"
+cases = [
+    { tonic = "C4", pitches = ["C4", "D4", "E-4", "F4", "G4", "A4", "B4", "C5"] },
+    { tonic = "G4", pitches = ["G4", "A4", "B-4", "C5", "D5", "E5", "F#5", "G5"] },
+    { tonic = "D4", pitches = ["D4", "E4", "F4", "G4", "A4", "B4", "C#5", "D5"] },
+    { tonic = "A4", pitches = ["A4", "B4", "C5", "D5", "E5", "F#5", "G#5", "A5"] },
+    { tonic = "E4", pitches = ["E4", "F#4", "G4", "A4", "B4", "C#5", "D#5", "E5"] },
+    { tonic = "B4", pitches = ["B4", "C#5", "D5", "E5", "F#5", "G#5", "A#5", "B5"] },
+    { tonic = "F#4", pitches = ["F#4", "G#4", "A4", "B4", "C#5", "D#5", "E#5", "F#5"] },
+    { tonic = "C#4", pitches = ["C#4", "D#4", "E4", "F#4", "G#4", "A#4", "B#4", "C#5"] },
+    { tonic = "F4", pitches = ["F4", "G4", "A-4", "B-4", "C5", "D5", "E5", "F5"] },
+    { tonic = "B-4", pitches = ["B-4", "C5", "D-5", "E-5", "F5", "G5", "A5", "B-5"] },
+    { tonic = "E-4", pitches = ["E-4", "F4", "G-4", "A-4", "B-4", "C5", "D5", "E-5"] },
+    { tonic = "A-4", pitches = ["A-4", "B-4", "C-5", "D-5", "E-5", "F5", "G5", "A-5"] },
+    { tonic = "D-4", pitches = ["D-4", "E-4", "F-4", "G-4", "A-4", "B-4", "C5", "D-5"] },
+    { tonic = "G-4", pitches = ["G-4", "A-4", "B--4", "C-5", "D-5", "E-5", "F5", "G-5"] },
+    { tonic = "C-4", pitches = ["C-4", "D-4", "E--4", "F-4", "G-4", "A-4", "B-4", "C-5"] },
+]
+
+[[scale]]
+scale_type = "Chromatic"
+music21_class = "ChromaticScale"
+cases = [
+    { tonic = "C4", pitches = ["C4", "C#4", "D4", "E-4", "E4", "F4", "F#4", "G4", "A-4", "A4", "B-4", "B4", "C5"] },
+    { tonic = "G4", pitches = ["G4", "A-4", "A4", "B-4", "B4", "C5", "C#5", "D5", "E-5", "E5", "F5", "F#5", "G5"] },
+    { tonic = "D4", pitches = ["D4", "E-4", "E4", "F4", "F#4", "G4", "A-4", "A4", "B-4", "B4", "C5", "C#5", "D5"] },
+    { tonic = "A4", pitches = ["A4", "B-4", "B4", "C5", "C#5", "D5", "E-5", "E5", "F5", "F#5", "G5", "A-5", "A5"] },
+    { tonic = "E4", pitches = ["E4", "F4", "F#4", "G4", "A-4", "A4", "B-4", "B4", "C5", "C#5", "D5", "E-5", "E5"] },
+    { tonic = "B4", pitches = ["B4", "C5", "C#5", "D5", "E-5", "E5", "F5", "F#5", "G5", "A-5", "A5", "B-5", "B5"] },
+    { tonic = "F#4", pitches = ["F#4", "G4", "A-4", "A4", "B-4", "B4", "C5", "C#5", "D5", "E-5", "E5", "F5", "F#5"] },
+    { tonic = "C#4", pitches = ["C#4", "D4", "E-4", "E4", "F4", "F#4", "G4", "A-4", "A4", "B-4", "B4", "C5", "C#5"] },
+    { tonic = "F4", pitches = ["F4", "F#4", "G4", "A-4", "A4", "B-4", "B4", "C5", "C#5", "D5", "E-5", "E5", "F5"] },
+    { tonic = "B-4", pitches = ["B-4", "B4", "C5", "C#5", "D5", "E-5", "E5", "F5", "F#5", "G5", "A-5", "A5", "B-5"] },
+    { tonic = "E-4", pitches = ["E-4", "E4", "F4", "F#4", "G4", "A-4", "A4", "B-4", "B4", "C5", "C#5", "D5", "E-5"] },
+    { tonic = "A-4", pitches = ["A-4", "A4", "B-4", "B4", "C5", "C#5", "D5", "E-5", "E5", "F5", "F#5", "G5", "A-5"] },
+    { tonic = "D-4", pitches = ["D-4", "D4", "E-4", "E4", "F4", "F#4", "G4", "A-4", "A4", "B-4", "B4", "C5", "C#5"] },
+    { tonic = "G-4", pitches = ["G-4", "G4", "A-4", "A4", "B-4", "B4", "C5", "C#5", "D5", "E-5", "E5", "F5", "F#5"] },
+    { tonic = "C-4", pitches = ["C-4", "C4", "C#4", "D4", "E-4", "E4", "F4", "F#4", "G4", "A-4", "A4", "B-4", "B4"] },
+]
+
+[[scale]]
+scale_type = "WholeTone"
+music21_class = "WholeToneScale"
+cases = [
+    { tonic = "C4", pitches = ["C4", "D4", "E4", "F#4", "G#4", "A#4", "B#4"] },
+    { tonic = "G4", pitches = ["G4", "A4", "B4", "C#5", "D#5", "E#5", "G5"] },
+    { tonic = "D4", pitches = ["D4", "E4", "F#4", "G#4", "A#4", "B#4", "D5"] },
+    { tonic = "A4", pitches = ["A4", "B4", "C#5", "D#5", "E#5", "G5", "A5"] },
+    { tonic = "E4", pitches = ["E4", "F#4", "G#4", "A#4", "B#4", "D5", "E5"] },
+    { tonic = "B4", pitches = ["B4", "C#5", "D#5", "E#5", "G5", "A5", "B5"] },
+    { tonic = "F#4", pitches = ["F#4", "G#4", "A#4", "B#4", "D5", "E5", "F#5"] },
+    { tonic = "C#4", pitches = ["C#4", "D#4", "E#4", "G4", "A4", "B4", "C#5"] },
+    { tonic = "F4", pitches = ["F4", "G4", "A4", "B4", "C#5", "D#5", "E#5"] },
+    { tonic = "B-4", pitches = ["B-4", "C5", "D5", "E5", "F#5", "G#5", "A#5"] },
+    { tonic = "E-4", pitches = ["E-4", "F4", "G4", "A4", "B4", "C#5", "D#5"] },
+    { tonic = "A-4", pitches = ["A-4", "B-4", "C5", "D5", "E5", "F#5", "G#5"] },
+    { tonic = "D-4", pitches = ["D-4", "E-4", "F4", "G4", "A4", "B4", "C#5"] },
+    { tonic = "G-4", pitches = ["G-4", "A-4", "B-4", "C5", "D5", "E5", "F#5"] },
+    { tonic = "C-4", pitches = ["C-4", "D-4", "E-4", "F4", "G4", "A4", "B4"] },
+]
+
+[[scale]]
+scale_type = "Octatonic"
+music21_class = "OctatonicScale"
+cases = [
+    { tonic = "C4", pitches = ["C4", "D4", "E-4", "F4", "G-4", "A-4", "A4", "B4", "C5"] },
+    { tonic = "G4", pitches = ["G4", "A4", "B-4", "C5", "D-5", "E-5", "F-5", "G-5", "G5"] },
+    { tonic = "D4", pitches = ["D4", "E4", "F4", "G4", "A-4", "B-4", "C-5", "D-5", "D5"] },
+    { tonic = "A4", pitches = ["A4", "B4", "C5", "D5", "E-5", "F5", "G-5", "A-5", "A5"] },
+    { tonic = "E4", pitches = ["E4", "F#4", "G4", "A4", "B-4", "C5", "D-5", "E-5", "F-5"] },
+    { tonic = "B4", pitches = ["B4", "C#5", "D5", "E5", "F5", "G5", "A-5", "B-5", "C-6"] },
+    { tonic = "F#4", pitches = ["F#4", "G#4", "A4", "B4", "C5", "D5", "E-5", "F5", "G-5"] },
+    { tonic = "C#4", pitches = ["C#4", "D#4", "E4", "F#4", "G4", "A4", "B-4", "C5", "D-5"] },
+    { tonic = "F4", pitches = ["F4", "G4", "A-4", "B-4", "C-5", "D-5", "D5", "E5", "F5"] },
+    { tonic = "B-4", pitches = ["B-4", "C5", "D-5", "E-5", "F-5", "G-5", "G5", "A5", "B-5"] },
+    { tonic = "E-4", pitches = ["E-4", "F4", "G-4", "A-4", "A4", "B4", "C5", "D5", "E-5"] },
+    { tonic = "A-4", pitches = ["A-4", "B-4", "C-5", "D-5", "D5", "E5", "F5", "G5", "A-5"] },
+    { tonic = "D-4", pitches = ["D-4", "E-4", "F-4", "G-4", "G4", "A4", "B-4", "C5", "D-5"] },
+    { tonic = "G-4", pitches = ["G-4", "A-4", "A4", "B4", "C5", "D5", "E-5", "F5", "G-5"] },
+    { tonic = "C-4", pitches = ["C-4", "D-4", "D4", "E4", "F4", "G4", "A-4", "B-4", "C-5"] },
+]
+
+[[scale]]
+scale_type = "RagAsawari"
+music21_class = "RagAsawari"
+cases = [
+    { tonic = "C4", pitches = ["C4", "D4", "F4", "G4", "A-4", "C5"] },
+    { tonic = "G4", pitches = ["G4", "A4", "C5", "D5", "E-5", "G5"] },
+    { tonic = "D4", pitches = ["D4", "E4", "G4", "A4", "B-4", "D5"] },
+    { tonic = "A4", pitches = ["A4", "B4", "D5", "E5", "F5", "A5"] },
+    { tonic = "E4", pitches = ["E4", "F#4", "A4", "B4", "C5", "E5"] },
+    { tonic = "B4", pitches = ["B4", "C#5", "E5", "F#5", "G5", "B5"] },
+    { tonic = "F#4", pitches = ["F#4", "G#4", "B4", "C#5", "D5", "F#5"] },
+    { tonic = "C#4", pitches = ["C#4", "E-4", "F#4", "G#4", "A4", "C#5"] },
+    { tonic = "F4", pitches = ["F4", "G4", "B-4", "C5", "C#5", "F5"] },
+    { tonic = "B-4", pitches = ["B-4", "C5", "E-5", "F5", "F#5", "B-5"] },
+    { tonic = "E-4", pitches = ["E-4", "F4", "A-4", "B-4", "B4", "E-5"] },
+    { tonic = "A-4", pitches = ["A-4", "B-4", "C#5", "E-5", "E5", "G#5"] },
+    { tonic = "D-4", pitches = ["D-4", "E-4", "F#4", "G#4", "A4", "C#5"] },
+    { tonic = "G-4", pitches = ["G-4", "A-4", "B4", "C#5", "D5", "F#5"] },
+    { tonic = "C-4", pitches = ["C-4", "C#4", "E4", "F#4", "G4", "B4"] },
+]
