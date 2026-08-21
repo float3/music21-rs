@@ -169,6 +169,9 @@ jobs:
       - name: Verify generated chord tables
         run: cargo run -p xtask -- verify-tables
 
+      - name: Verify generated tuning tables
+        run: cargo run -p xtask -- verify-tuning-tables
+
       - name: Cargo check
         run: cargo check --workspace --all-targets
 

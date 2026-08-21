@@ -1,0 +1,247 @@
+# Source of truth for the tuning-system ratio tables.
+#
+# Regenerate with `cargo run -p xtask -- regenerate-tuning-tables`, which
+# re-reads every table that declares `scala_file` from music21's Scala
+# archive in the `music21` submodule. Tables without one are maintained by
+# hand and are carried through untouched.
+#
+# Emit the Rust with `cargo run -p xtask -- emit-tuning-tables`.
+
+[[table]]
+name = "JUST_INTONATION"
+doc = "Twelve-tone just intonation ratios."
+scala_file = "carlos_harm.scl"
+scala_description = "Carlos Harmonic & Ben Johnston's scale of 'Blues' from Suite f.micr.piano (1977) & David Beardsley's scale of 'Science Friction'"
+ratios = [
+    [1, 1],
+    [17, 16],
+    [9, 8],
+    [19, 16],
+    [5, 4],
+    [21, 16],
+    [11, 8],
+    [3, 2],
+    [13, 8],
+    [27, 16],
+    [7, 4],
+    [15, 8],
+]
+
+[[table]]
+name = "JUST_INTONATION_24"
+doc = "Twenty-four-tone just intonation ratios."
+note = "no counterpart in the Scala archive"
+ratios = [
+    [1, 1],
+    [33, 32],
+    [17, 16],
+    [35, 32],
+    [9, 8],
+    [37, 32],
+    [19, 16],
+    [39, 32],
+    [5, 4],
+    [21, 16],
+    [43, 32],
+    [11, 8],
+    [45, 32],
+    [23, 16],
+    [3, 2],
+    [25, 16],
+    [51, 32],
+    [13, 8],
+    [27, 16],
+    [7, 4],
+    [57, 32],
+    [29, 16],
+    [15, 8],
+    [31, 16],
+]
+
+[[table]]
+name = "PYTHAGOREAN_TUNING"
+doc = "Twelve-tone Pythagorean tuning ratios."
+note = "flat-side spelling (256/243, 128/81); the Scala archive only carries the sharp-side apotome spelling in pyth_12.scl"
+ratios = [
+    [1, 1],
+    [256, 243],
+    [9, 8],
+    [32, 27],
+    [81, 64],
+    [4, 3],
+    [729, 512],
+    [3, 2],
+    [128, 81],
+    [27, 16],
+    [16, 9],
+    [243, 128],
+]
+
+[[table]]
+name = "FIVE_LIMIT"
+doc = "Twelve-tone five-limit tuning ratios."
+scala_file = "riley_albion.scl"
+scala_description = "Terry Riley's Harp of New Albion scale, inverse Malcolm's Monochord, 1/1 on C#"
+ratios = [
+    [1, 1],
+    [16, 15],
+    [9, 8],
+    [6, 5],
+    [5, 4],
+    [4, 3],
+    [64, 45],
+    [3, 2],
+    [8, 5],
+    [5, 3],
+    [16, 9],
+    [15, 8],
+]
+
+[[table]]
+name = "ELEVEN_LIMIT"
+doc = "Twenty-nine-tone eleven-limit tuning ratios."
+scala_file = "partch_29.scl"
+scala_description = "Partch/Ptolemy 11-limit Diamond"
+ratios = [
+    [1, 1],
+    [12, 11],
+    [11, 10],
+    [10, 9],
+    [9, 8],
+    [8, 7],
+    [7, 6],
+    [6, 5],
+    [11, 9],
+    [5, 4],
+    [14, 11],
+    [9, 7],
+    [4, 3],
+    [11, 8],
+    [7, 5],
+    [10, 7],
+    [16, 11],
+    [3, 2],
+    [14, 9],
+    [11, 7],
+    [8, 5],
+    [18, 11],
+    [5, 3],
+    [12, 7],
+    [7, 4],
+    [16, 9],
+    [9, 5],
+    [20, 11],
+    [11, 6],
+]
+
+[[table]]
+name = "FORTY_THREE_TONE"
+doc = "Forty-three-tone tuning ratios."
+scala_file = "partch_43.scl"
+scala_description = "Harry Partch's 43-tone pure scale"
+ratios = [
+    [1, 1],
+    [81, 80],
+    [33, 32],
+    [21, 20],
+    [16, 15],
+    [12, 11],
+    [11, 10],
+    [10, 9],
+    [9, 8],
+    [8, 7],
+    [7, 6],
+    [32, 27],
+    [6, 5],
+    [11, 9],
+    [5, 4],
+    [14, 11],
+    [9, 7],
+    [21, 16],
+    [4, 3],
+    [27, 20],
+    [11, 8],
+    [7, 5],
+    [10, 7],
+    [16, 11],
+    [40, 27],
+    [3, 2],
+    [32, 21],
+    [14, 9],
+    [11, 7],
+    [8, 5],
+    [18, 11],
+    [5, 3],
+    [27, 16],
+    [12, 7],
+    [7, 4],
+    [16, 9],
+    [9, 5],
+    [20, 11],
+    [11, 6],
+    [15, 8],
+    [40, 21],
+    [64, 33],
+    [160, 81],
+]
+
+[[table]]
+name = "INDIAN_SCALE"
+doc = "Seven-tone Indian scale ratios."
+scala_file = "ptolemy.scl"
+scala_description = "Intense Diatonic Syntonon, also Zarlino's scale"
+ratios = [
+    [1, 1],
+    [9, 8],
+    [5, 4],
+    [4, 3],
+    [3, 2],
+    [5, 3],
+    [15, 8],
+]
+
+[[table]]
+name = "INDIA_SCALE_ALT"
+doc = "Alternate seven-tone Indian scale ratios."
+scala_file = "indian-sagrama.scl"
+scala_description = "Indian mode Sa-grama (Sa Ri Ga Ma Pa Dha Ni Sa), inverse of Didymus' diatonic"
+ratios = [
+    [1, 1],
+    [9, 8],
+    [5, 4],
+    [4, 3],
+    [3, 2],
+    [27, 16],
+    [15, 8],
+]
+
+[[table]]
+name = "INDIAN_SCALE_22"
+doc = "Twenty-two-tone Indian scale ratios."
+scala_file = "indian.scl"
+scala_description = "Indian shruti scale"
+ratios = [
+    [1, 1],
+    [256, 243],
+    [16, 15],
+    [10, 9],
+    [9, 8],
+    [32, 27],
+    [6, 5],
+    [5, 4],
+    [81, 64],
+    [4, 3],
+    [27, 20],
+    [45, 32],
+    [729, 512],
+    [3, 2],
+    [128, 81],
+    [8, 5],
+    [5, 3],
+    [27, 16],
+    [16, 9],
+    [9, 5],
+    [15, 8],
+    [243, 128],
+]
+

@@ -128,6 +128,15 @@ To verify that the committed Rust source matches the TOML, run:
 cargo run -p xtask -- verify-tables
 ```
 
+The tuning-system ratio tables follow the same pattern, sourced from the Scala
+archive shipped inside the `music21` submodule rather than from Python:
+
+```bash
+cargo run -p xtask -- regenerate-tuning-tables
+cargo run -p xtask -- emit-tuning-tables
+cargo run -p xtask -- verify-tuning-tables
+```
+
 If you use Nix, `nix develop` opens a shell with the Rust and Python pieces used
 by the repository's CI setup.
 

@@ -70,12 +70,23 @@ cargo run -p xtask -- emit-tables                           # data/chord_tables.
 cargo run -p xtask -- verify-tables                          # assert generated.rs matches the TOML (CI runs this in lint)
 ```
 
+Tuning table pipeline. Same three-stage shape, but sourced from the Scala
+archive in the submodule rather than Python, so `regenerate` needs no
+`--features python`:
+
+```bash
+cargo run -p xtask -- regenerate-tuning-tables  # scala/scl/*.scl -> data/tuning_tables.toml -> src/tuningsystem/generated.rs
+cargo run -p xtask -- emit-tuning-tables        # data/tuning_tables.toml -> generated.rs only, no submodule
+cargo run -p xtask -- verify-tuning-tables      # assert generated.rs matches the TOML (CI runs this in lint)
+```
+
 ## What CI gates
 
 `.github/workflows/ci.yml` is the only workflow. A change must survive:
 
 - **lint** — `cargo fmt --all -- --check`, clippy with `-D warnings`,
-  `xtask verify-tables`, `cargo check --workspace --all-targets`.
+  `xtask verify-tables`, `xtask verify-tuning-tables`,
+  `cargo check --workspace --all-targets`.
 - **feature-matrix** — check + clippy + test under `--no-default-features`,
   `--no-default-features --features serde`, and `--all-features`. A change
   that only compiles with default features fails here.
@@ -104,7 +115,7 @@ bumping it is a breaking change for downstreams and needs a minor bump,
 not a patch.
 
 Running `cargo fmt --all`, the clippy line, `cargo test --workspace
---all-targets`, and `xtask verify-tables` locally covers everything except
+--all-targets`, and both `xtask verify-*` commands locally covers everything except
 the feature matrix and the Nix job.
 
 ## Architecture
@@ -162,12 +173,26 @@ not in a parallel trait.
 **Tuning systems (`src/tuningsystem/`)**: `TuningSystem` covers fixed
 ratio-table/equal-temperament systems; `adaptive::AdaptiveTuningSystem`
 covers systems whose frequency depends on harmonic context (e.g. recursive
-just intonation); `AnyTuningSystem` unifies the two. Ratio tables (Just
-Intonation, Pythagorean, Partch's 43-tone scale, etc.) are hand-transcribed
-constant arrays — when adding or editing one, verify it against the
-canonical source (e.g. `music21/music21/scale/scala/scl/*.scl`), since
-`ALL_TUNING_SYSTEMS`-driven tests only catch a bad entry if it breaks
-strict ascending order within the octave.
+just intonation); `AnyTuningSystem` unifies the two.
+
+The nine integer-ratio tables live in `src/tuningsystem/generated.rs`,
+emitted from `data/tuning_tables.toml` — never hand-edit either. Seven of
+the nine declare a `scala_file` and are re-read from music21's Scala
+archive by `xtask regenerate-tuning-tables`; the other two are
+hand-maintained and carry a `note` saying why (`PYTHAGOREAN_TUNING` uses
+the flat-side apotome spelling the archive does not carry, and
+`JUST_INTONATION_24` has no counterpart there). To correct a
+Scala-derived table, change which `.scl` it points at — editing its
+ratios directly will be overwritten on the next regenerate.
+
+`JAVANESE` and `THAI` are *not* in that file. They use
+`Fraction::new_with_base` to express equal-temperament approximations
+(2^(i/5), 2^(i/7)) rather than integer ratios, so they stay in `mod.rs`.
+
+This matters because the `ALL_TUNING_SYSTEMS`-driven tests only catch a
+bad entry if it breaks strict ascending order within the octave — two
+mistranscribed Partch ratios shipped and passed CI for exactly that
+reason. `verify-tuning-tables` is what closes that gap.
 
 **Feature flags**: default features are empty. `serde` (on `music21-rs`)
 adds `Serialize`/`Deserialize` to public types. `python` (on `utils`,

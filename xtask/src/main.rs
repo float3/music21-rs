@@ -1,5 +1,7 @@
 //! Development task runner for regenerating committed chord-table artifacts.
 
+mod tuning;
+
 mod shared {
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../shared.rs"));
 }
@@ -85,6 +87,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         Some("regenerate-tables") => regenerate_tables(&workspace_root),
         Some("emit-tables") => emit_tables(&workspace_root),
         Some("verify-tables") => verify_tables(&workspace_root),
+        Some("regenerate-tuning-tables") => regenerate_tuning_tables(&workspace_root),
+        Some("emit-tuning-tables") => emit_tuning_tables(&workspace_root),
+        Some("verify-tuning-tables") => verify_tuning_tables(&workspace_root),
         Some("-h") | Some("--help") | None => {
             print_help();
             Ok(())
@@ -98,6 +103,75 @@ fn print_help() {
     eprintln!("  cargo run -p xtask --features python -- regenerate-tables");
     eprintln!("  cargo run -p xtask -- emit-tables");
     eprintln!("  cargo run -p xtask -- verify-tables");
+    eprintln!("  cargo run -p xtask -- regenerate-tuning-tables");
+    eprintln!("  cargo run -p xtask -- emit-tuning-tables");
+    eprintln!("  cargo run -p xtask -- verify-tuning-tables");
+}
+
+/// Re-reads the Scala-derived tuning tables from the submodule, rewrites the
+/// TOML, and emits the Rust. Needs the submodule but not Python.
+fn regenerate_tuning_tables(workspace_root: &Path) -> Result<(), Box<dyn Error>> {
+    let data = tuning::regenerate(workspace_root)?;
+    tuning::write(&tuning::data_path(workspace_root), &data)?;
+    emit_tuning_rust(workspace_root, &data)
+}
+
+fn emit_tuning_tables(workspace_root: &Path) -> Result<(), Box<dyn Error>> {
+    let data = tuning::read(&tuning::data_path(workspace_root))?;
+    emit_tuning_rust(workspace_root, &data)
+}
+
+fn verify_tuning_tables(workspace_root: &Path) -> Result<(), Box<dyn Error>> {
+    let data = tuning::read(&tuning::data_path(workspace_root))?;
+    let expected = formatted_tuning_rust(workspace_root, &data)?;
+    let path = tuning::generated_path(workspace_root);
+    let actual = fs::read_to_string(&path)?;
+
+    if actual != expected {
+        return Err(format!(
+            "{} is out of date; run `cargo run -p xtask -- emit-tuning-tables`",
+            path.display()
+        )
+        .into());
+    }
+
+    println!(
+        "Committed Rust tuning tables match {}",
+        tuning::data_path(workspace_root).display()
+    );
+    Ok(())
+}
+
+fn emit_tuning_rust(
+    workspace_root: &Path,
+    data: &tuning::TuningTables,
+) -> Result<(), Box<dyn Error>> {
+    let path = tuning::generated_path(workspace_root);
+    fs::write(&path, formatted_tuning_rust(workspace_root, data)?)?;
+    println!("Rust tuning tables regenerated at {}", path.display());
+    Ok(())
+}
+
+fn formatted_tuning_rust(
+    workspace_root: &Path,
+    data: &tuning::TuningTables,
+) -> Result<String, Box<dyn Error>> {
+    let scratch_dir = workspace_root.join("target/xtask");
+    fs::create_dir_all(&scratch_dir)?;
+    let scratch_path = scratch_dir.join(format!("tuning-{}.rs", std::process::id()));
+
+    fs::write(&scratch_path, tuning::render(data))?;
+    let rustfmt_path = scratch_path
+        .to_str()
+        .ok_or_else(|| "tuning table scratch path is not valid UTF-8".to_string())?;
+    run_command(
+        &["rustfmt", rustfmt_path],
+        "rustfmt generated tuning tables",
+    )?;
+
+    let formatted = fs::read_to_string(&scratch_path);
+    let _ = fs::remove_file(&scratch_path);
+    Ok(formatted?)
 }
 
 fn workspace_root() -> Result<PathBuf, Box<dyn Error>> {
