@@ -172,6 +172,31 @@ trait for chord inputs (strings, slices, MIDI integers, `Option<T>`);
 `IntoNote` is its per-note counterpart. Add new chord input types there,
 not in a parallel trait.
 
+**Scales (`src/scale/`)**: `ScaleType` is the port of music21's
+`ConcreteScale` subclasses — 19 of them, realized from a tonic by `Scale`.
+Each is a list of *step* intervals matching music21's `IntervalNetwork`
+edges, plus the `pitchSimplification` that network applies (`Exact`,
+`MaxAccidental`, `MostCommon`). Both halves matter: the steps alone give
+the right pitch classes but the wrong spelling for scales that run out of
+accidentals, and deriving steps from music21's already-simplified output
+is circular — read them off the network, not off `getPitches`.
+
+Spelling is verified against `data/scale_expectations.toml`, generated
+from music21 by `python-parity/generate_scale_expectations.py` and checked
+in because a full `music21.scale` import needs music21's real dependencies
+(the chord-table bridge stubs those out and cannot reach it). The
+`scale_parity` test needs neither Python nor the submodule. When adding a
+`ScaleType`, regenerate the fixture — a test asserts every variant is
+covered.
+
+Note interval names here use the crate's lowercase augmented spelling
+(`a2`), not music21's `A2`; `Interval::from_name("A2")` panics rather than
+erroring, which is a live bug in a `Result`-returning API.
+
+`DiatonicScale`/`ConcreteScale` are the older, separate path: they derive
+pitches from a key signature, so they only express the seven diatonic
+modes. Prefer `Scale`/`ScaleType` for new work.
+
 **Tuning systems (`src/tuningsystem/`)**: `TuningSystem` covers fixed
 ratio-table/equal-temperament systems; `adaptive::AdaptiveTuningSystem`
 covers systems whose frequency depends on harmonic context (e.g. recursive

@@ -76,7 +76,7 @@ pub use pitch::{
 pub use polyrhythm::{Polyrhythm, PolyrhythmAnalysis, PolyrhythmEvent, PolyrhythmRatioTone};
 pub use rest::Rest;
 pub use roman::{RomanNumeral, analyze_chord, analyze_chord_with_root};
-pub use scale::DiatonicScale;
+pub use scale::{DiatonicScale, Scale, ScaleType};
 pub use stream::{Stream, StreamElement, StreamEvent};
 pub use tuningsystem::{
     ALL_TUNING_SYSTEMS, COMMON_TWELVE_TONE_TUNING_SYSTEMS, Fraction, TuningSystem,
