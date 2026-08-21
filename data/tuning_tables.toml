@@ -245,3 +245,123 @@ ratios = [
     [243, 128],
 ]
 
+[[table]]
+name = "QUARTER_COMMA_MEANTONE"
+doc = "Twelve-tone quarter-comma meantone temperament (Aaron, 1523)."
+scala_file = "meanquar.scl"
+scala_description = "1/4-comma meantone scale. Pietro Aaron's temp. (1523). 6/5 beats twice 3/2"
+ratios = [
+    [1, 1],
+    [76049, 1200000, 2],
+    [3219281, 20000000, 2],
+    [10342157, 40000000, 2],
+    [38631371, 120000000, 2],
+    [16780719, 40000000, 2],
+    [57947057, 120000000, 2],
+    [23219281, 40000000, 2],
+    [77262743, 120000000, 2],
+    [29657843, 40000000, 2],
+    [16780719, 20000000, 2],
+    [54144607, 60000000, 2],
+]
+
+[[table]]
+name = "WERCKMEISTER_III"
+doc = "Twelve-tone Werckmeister III well temperament (1681)."
+scala_file = "werck3.scl"
+scala_description = "Andreas Werckmeister's temperament III (the most famous one, 1681)"
+ratios = [
+    [1, 1],
+    [256, 243],
+    [3203, 20000, 2],
+    [32, 27],
+    [5203, 16000, 2],
+    [4, 3],
+    [1024, 729],
+    [23203, 40000, 2],
+    [128, 81],
+    [88826999, 120000000, 2],
+    [16, 9],
+    [18203, 20000, 2],
+]
+
+[[table]]
+name = "RAMEAU"
+doc = "Twelve-tone Rameau modified meantone temperament (1725)."
+scala_file = "rameau.scl"
+scala_description = "Rameau's modified meantone temperament (1725)"
+ratios = [
+    [1, 1],
+    [14467, 200000, 2],
+    [193157, 1200000, 2],
+    [1489, 6000, 2],
+    [5, 4],
+    [251711, 600000, 2],
+    [194949, 400000, 2],
+    [348289, 600000, 2],
+    [262919, 400000, 2],
+    [177947, 240000, 2],
+    [1006843, 1200000, 2],
+    [90241, 100000, 2],
+]
+
+[[table]]
+name = "KIRNBERGER_III"
+doc = "Twelve-tone Kirnberger III well temperament (1744)."
+scala_file = "kirnberger3.scl"
+scala_description = "Kirnberger 3: 1/4 synt. comma (1744)"
+ratios = [
+    [1, 1],
+    [135, 128],
+    [3219281, 20000000, 2],
+    [32, 27],
+    [5, 4],
+    [4, 3],
+    [45, 32],
+    [23219281, 40000000, 2],
+    [405, 256],
+    [29657843, 40000000, 2],
+    [16, 9],
+    [15, 8],
+]
+
+[[table]]
+name = "VALLOTTI"
+doc = "Twelve-tone Vallotti well temperament (c. 1754)."
+scala_file = "vallotti.scl"
+scala_description = "Vallotti & Young scale (Vallotti version)"
+ratios = [
+    [1, 1],
+    [18827, 240000, 2],
+    [19609, 120000, 2],
+    [59609, 240000, 2],
+    [19609, 60000, 2],
+    [100391, 240000, 2],
+    [29609, 60000, 2],
+    [139609, 240000, 2],
+    [79609, 120000, 2],
+    [59609, 80000, 2],
+    [5, 6, 2],
+    [43609, 48000, 2],
+]
+
+[[table]]
+name = "YOUNG_II"
+doc = "Twelve-tone Thomas Young well temperament no. 2 (1799)."
+scala_file = "young2.scl"
+scala_description = "Thomas Young well temperament no.2 (1799)"
+ratios = [
+    [1, 1],
+    [18827, 240000, 2],
+    [19609, 120000, 2],
+    [59609, 240000, 2],
+    [19609, 60000, 2],
+    [5, 12, 2],
+    [29609, 60000, 2],
+    [139609, 240000, 2],
+    [79609, 120000, 2],
+    [59609, 80000, 2],
+    [5, 6, 2],
+    [18203, 20000, 2],
+]
+

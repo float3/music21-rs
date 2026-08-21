@@ -27,8 +27,12 @@ pub(crate) struct TuningTable {
     /// Why this table has no Scala source, when it has none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) note: Option<String>,
-    /// Ratios as `[numerator, denominator]`, starting at `1/1`.
-    pub(crate) ratios: Vec<[u32; 2]>,
+    /// Degrees, starting at `1/1`.
+    ///
+    /// `[numerator, denominator]` is an exact ratio. `[numerator, denominator,
+    /// 2]` is `2^(numerator/denominator)`, which is how a scale written in
+    /// cents is carried: `c` cents becomes `2^(c/1200)`.
+    pub(crate) ratios: Vec<Vec<u32>>,
 }
 
 /// The whole `data/tuning_tables.toml` document.
@@ -60,9 +64,10 @@ pub(crate) fn read(path: &Path) -> Result<TuningTables, Box<dyn Error>> {
 /// a leading `1/1` and no trailing octave - so it can be compared directly
 /// against a committed table.
 ///
-/// Returns `Err` for cents-based scales, which the integer-ratio `Fraction`
-/// used by the tables cannot represent.
-pub(crate) fn parse_scl(contents: &str) -> Result<Vec<[u32; 2]>, Box<dyn Error>> {
+/// Cents entries become `[numerator, denominator, 2]`, meaning
+/// `2^(numerator/denominator)` - the exponent form `Fraction` already supports
+/// through its `base` field.
+pub(crate) fn parse_scl(contents: &str) -> Result<Vec<Vec<u32>>, Box<dyn Error>> {
     let lines: Vec<&str> = contents
         .lines()
         .map(str::trim)
@@ -90,15 +95,17 @@ pub(crate) fn parse_scl(contents: &str) -> Result<Vec<[u32; 2]>, Box<dyn Error>>
         .into());
     }
 
-    let mut ratios = vec![[1, 1]];
+    let mut ratios: Vec<Vec<u32>> = vec![vec![1, 1]];
     for entry in &entries {
-        let token = entry.split_whitespace().next().unwrap_or_default();
+        let token = entry.split('!').next().unwrap_or_default();
+        let token = token.split_whitespace().next().unwrap_or_default();
         if token.contains('.') {
-            return Err("scl file is cents-based, not a pure ratio scale".into());
+            ratios.push(cents_to_exponent(token)?);
+            continue;
         }
         let ratio = match token.split_once('/') {
-            Some((numerator, denominator)) => [numerator.parse()?, denominator.parse()?],
-            None => [token.parse()?, 1],
+            Some((numerator, denominator)) => vec![numerator.parse()?, denominator.parse()?],
+            None => vec![token.parse()?, 1],
         };
         ratios.push(ratio);
     }
@@ -106,6 +113,46 @@ pub(crate) fn parse_scl(contents: &str) -> Result<Vec<[u32; 2]>, Box<dyn Error>>
     // Drop the trailing octave; the crate's tables stop one degree short of it.
     ratios.pop();
     Ok(ratios)
+}
+
+/// Converts a cents literal into an exact `2^(numerator/denominator)` exponent.
+///
+/// `c` cents is `2^(c/1200)`, so a value with `k` decimal places becomes
+/// `c * 10^k` over `1200 * 10^k`, reduced. The conversion is exact rather than
+/// rounded, because these tables are the crate's source of truth.
+fn cents_to_exponent(token: &str) -> Result<Vec<u32>, Box<dyn Error>> {
+    let (whole, fraction) = token.split_once('.').unwrap_or((token, ""));
+    let fraction = fraction.trim_end_matches('0');
+    let decimals = u32::try_from(fraction.len())?;
+
+    let scale = 10u64
+        .checked_pow(decimals)
+        .ok_or("cents value has too many decimals")?;
+    let whole: u64 = if whole.is_empty() { 0 } else { whole.parse()? };
+    let fraction: u64 = if fraction.is_empty() {
+        0
+    } else {
+        fraction.parse()?
+    };
+
+    let numerator = whole
+        .checked_mul(scale)
+        .and_then(|value| value.checked_add(fraction))
+        .ok_or("cents value is too large")?;
+    let denominator = 1200u64
+        .checked_mul(scale)
+        .ok_or("cents value is too large")?;
+
+    let divisor = gcd(numerator, denominator).max(1);
+    Ok(vec![
+        u32::try_from(numerator / divisor)?,
+        u32::try_from(denominator / divisor)?,
+        2,
+    ])
+}
+
+fn gcd(a: u64, b: u64) -> u64 {
+    if b == 0 { a } else { gcd(b, a % b) }
 }
 
 /// Re-reads every table that declares a `scala_file` from the submodule.
@@ -185,8 +232,9 @@ pub(crate) fn write(path: &Path, data: &TuningTables) -> Result<(), Box<dyn Erro
             writeln!(out, "note = {}", toml_string(note))?;
         }
         writeln!(out, "ratios = [")?;
-        for [numerator, denominator] in &table.ratios {
-            writeln!(out, "    [{numerator}, {denominator}],")?;
+        for degree in &table.ratios {
+            let rendered: Vec<String> = degree.iter().map(u32::to_string).collect();
+            writeln!(out, "    [{}],", rendered.join(", "))?;
         }
         writeln!(out, "]\n")?;
     }
@@ -221,8 +269,17 @@ pub(crate) fn render(data: &TuningTables) -> String {
             table.name,
             table.ratios.len()
         );
-        for [numerator, denominator] in &table.ratios {
-            let _ = writeln!(out, "    Fraction::new({numerator}, {denominator}),");
+        for degree in &table.ratios {
+            let _ = match degree.as_slice() {
+                [numerator, denominator] => {
+                    writeln!(out, "    Fraction::new({numerator}, {denominator}),")
+                }
+                [numerator, denominator, base] => writeln!(
+                    out,
+                    "    Fraction::new_with_base({numerator}, {denominator}, {base}),"
+                ),
+                other => panic!("a tuning degree needs 2 or 3 numbers, got {other:?}"),
+            };
         }
         out.push_str("];\n\n");
     }
@@ -231,24 +288,55 @@ pub(crate) fn render(data: &TuningTables) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_scl;
+    use super::{cents_to_exponent, parse_scl};
 
     #[test]
     fn parses_ratios_into_the_crate_convention() {
         // 1/1 becomes explicit, the trailing octave is dropped.
         let scl = "! test.scl\n!\nA test scale\n 3\n!\n 9/8\n 3/2\n 2/1\n";
-        assert_eq!(parse_scl(scl).unwrap(), vec![[1, 1], [9, 8], [3, 2]]);
+        assert_eq!(
+            parse_scl(scl).unwrap(),
+            vec![vec![1, 1], vec![9, 8], vec![3, 2]]
+        );
     }
 
     #[test]
     fn accepts_bare_integers_as_whole_ratios() {
         let scl = "!\nA test scale\n 2\n 3\n 2/1\n";
-        assert_eq!(parse_scl(scl).unwrap(), vec![[1, 1], [3, 1]]);
+        assert_eq!(parse_scl(scl).unwrap(), vec![vec![1, 1], vec![3, 1]]);
     }
 
     #[test]
-    fn rejects_cents_based_scales() {
-        let scl = "!\nA cents scale\n 2\n 701.955\n 2/1\n";
-        assert!(parse_scl(scl).is_err());
+    fn carries_cents_as_a_base_two_exponent() {
+        // 600 cents is exactly half an octave, so 2^(1/2).
+        let scl = "!\nA cents scale\n 2\n 600.0\n 2/1\n";
+        assert_eq!(parse_scl(scl).unwrap(), vec![vec![1, 1], vec![1, 2, 2]]);
+    }
+
+    #[test]
+    fn mixes_ratio_and_cents_degrees() {
+        // werck3.scl opens exactly like this.
+        let scl = "!\nMixed\n 3\n 256/243\n 192.18000\n 2/1\n";
+        let parsed = parse_scl(scl).unwrap();
+        assert_eq!(parsed[1], vec![256, 243]);
+        assert_eq!(parsed[2].len(), 3, "cents degree carries a base");
+    }
+
+    #[test]
+    fn cents_conversion_is_exact_and_reduced() {
+        assert_eq!(cents_to_exponent("1200.0").unwrap(), vec![1, 1, 2]);
+        assert_eq!(cents_to_exponent("600").unwrap(), vec![1, 2, 2]);
+        assert_eq!(cents_to_exponent("100.0").unwrap(), vec![1, 12, 2]);
+        // 192.18 / 1200 = 19218 / 120000, reduced by 6.
+        assert_eq!(
+            cents_to_exponent("192.18000").unwrap(),
+            vec![3203, 20000, 2]
+        );
+    }
+
+    #[test]
+    fn ignores_an_inline_bang_comment() {
+        let scl = "!\nCommented\n 2\n 3/2!the fifth\n 2/1\n";
+        assert_eq!(parse_scl(scl).unwrap(), vec![vec![1, 1], vec![3, 2]]);
     }
 }

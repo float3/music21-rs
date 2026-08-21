@@ -230,6 +230,22 @@ the caller reads the file. Keep it that way; `examples/web` is wasm.
 `parse_bytes` decodes latin-1, not UTF-8: the Scala format is defined as
 ISO-8859-1 and 73 archive files are not valid UTF-8.
 
+`HISTORICAL_TEMPERAMENTS` holds six well temperaments and meantone
+tunings (Aaron 1523 through Young 1799) transcribed from the Scala
+archive. These are pre-1800 historical tunings documented in the
+scholarly literature, curated deliberately — this is *not* a licence to
+bulk-import the archive, which stays out of the crate for the reasons
+above.
+
+Degrees may be exact ratios or cents. `Fraction`'s `base` field carries
+cents as `2^(numerator/denominator)`, so `c` cents becomes
+`c/1200` reduced — the conversion in `xtask` is exact rather than rounded.
+Werckmeister III mixes both: its Pythagorean degrees stay rational while
+the tempered ones are cents. Note this means a table sourced from cents
+is only as exact as the archive's decimals — quarter-comma meantone's
+major third is 386.31371 cents, not the rational 5/4, so assert on cents
+with a tolerance rather than on ratio equality.
+
 `JAVANESE` and `THAI` are *not* in that file. They use
 `Fraction::new_with_base` to express equal-temperament approximations
 (2^(i/5), 2^(i/7)) rather than integer ratios, so they stay in `mod.rs`.

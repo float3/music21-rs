@@ -220,3 +220,111 @@ pub const INDIAN_SCALE_22: [Fraction; 22] = [
     Fraction::new(15, 8),
     Fraction::new(243, 128),
 ];
+
+/// Twelve-tone quarter-comma meantone temperament (Aaron, 1523).
+///
+/// Derived from `meanquar.scl` in music21's Scala archive: 1/4-comma meantone scale. Pietro Aaron's temp. (1523). 6/5 beats twice 3/2
+pub const QUARTER_COMMA_MEANTONE: [Fraction; 12] = [
+    Fraction::new(1, 1),
+    Fraction::new_with_base(76049, 1200000, 2),
+    Fraction::new_with_base(3219281, 20000000, 2),
+    Fraction::new_with_base(10342157, 40000000, 2),
+    Fraction::new_with_base(38631371, 120000000, 2),
+    Fraction::new_with_base(16780719, 40000000, 2),
+    Fraction::new_with_base(57947057, 120000000, 2),
+    Fraction::new_with_base(23219281, 40000000, 2),
+    Fraction::new_with_base(77262743, 120000000, 2),
+    Fraction::new_with_base(29657843, 40000000, 2),
+    Fraction::new_with_base(16780719, 20000000, 2),
+    Fraction::new_with_base(54144607, 60000000, 2),
+];
+
+/// Twelve-tone Werckmeister III well temperament (1681).
+///
+/// Derived from `werck3.scl` in music21's Scala archive: Andreas Werckmeister's temperament III (the most famous one, 1681)
+pub const WERCKMEISTER_III: [Fraction; 12] = [
+    Fraction::new(1, 1),
+    Fraction::new(256, 243),
+    Fraction::new_with_base(3203, 20000, 2),
+    Fraction::new(32, 27),
+    Fraction::new_with_base(5203, 16000, 2),
+    Fraction::new(4, 3),
+    Fraction::new(1024, 729),
+    Fraction::new_with_base(23203, 40000, 2),
+    Fraction::new(128, 81),
+    Fraction::new_with_base(88826999, 120000000, 2),
+    Fraction::new(16, 9),
+    Fraction::new_with_base(18203, 20000, 2),
+];
+
+/// Twelve-tone Rameau modified meantone temperament (1725).
+///
+/// Derived from `rameau.scl` in music21's Scala archive: Rameau's modified meantone temperament (1725)
+pub const RAMEAU: [Fraction; 12] = [
+    Fraction::new(1, 1),
+    Fraction::new_with_base(14467, 200000, 2),
+    Fraction::new_with_base(193157, 1200000, 2),
+    Fraction::new_with_base(1489, 6000, 2),
+    Fraction::new(5, 4),
+    Fraction::new_with_base(251711, 600000, 2),
+    Fraction::new_with_base(194949, 400000, 2),
+    Fraction::new_with_base(348289, 600000, 2),
+    Fraction::new_with_base(262919, 400000, 2),
+    Fraction::new_with_base(177947, 240000, 2),
+    Fraction::new_with_base(1006843, 1200000, 2),
+    Fraction::new_with_base(90241, 100000, 2),
+];
+
+/// Twelve-tone Kirnberger III well temperament (1744).
+///
+/// Derived from `kirnberger3.scl` in music21's Scala archive: Kirnberger 3: 1/4 synt. comma (1744)
+pub const KIRNBERGER_III: [Fraction; 12] = [
+    Fraction::new(1, 1),
+    Fraction::new(135, 128),
+    Fraction::new_with_base(3219281, 20000000, 2),
+    Fraction::new(32, 27),
+    Fraction::new(5, 4),
+    Fraction::new(4, 3),
+    Fraction::new(45, 32),
+    Fraction::new_with_base(23219281, 40000000, 2),
+    Fraction::new(405, 256),
+    Fraction::new_with_base(29657843, 40000000, 2),
+    Fraction::new(16, 9),
+    Fraction::new(15, 8),
+];
+
+/// Twelve-tone Vallotti well temperament (c. 1754).
+///
+/// Derived from `vallotti.scl` in music21's Scala archive: Vallotti & Young scale (Vallotti version)
+pub const VALLOTTI: [Fraction; 12] = [
+    Fraction::new(1, 1),
+    Fraction::new_with_base(18827, 240000, 2),
+    Fraction::new_with_base(19609, 120000, 2),
+    Fraction::new_with_base(59609, 240000, 2),
+    Fraction::new_with_base(19609, 60000, 2),
+    Fraction::new_with_base(100391, 240000, 2),
+    Fraction::new_with_base(29609, 60000, 2),
+    Fraction::new_with_base(139609, 240000, 2),
+    Fraction::new_with_base(79609, 120000, 2),
+    Fraction::new_with_base(59609, 80000, 2),
+    Fraction::new_with_base(5, 6, 2),
+    Fraction::new_with_base(43609, 48000, 2),
+];
+
+/// Twelve-tone Thomas Young well temperament no. 2 (1799).
+///
+/// Derived from `young2.scl` in music21's Scala archive: Thomas Young well temperament no.2 (1799)
+pub const YOUNG_II: [Fraction; 12] = [
+    Fraction::new(1, 1),
+    Fraction::new_with_base(18827, 240000, 2),
+    Fraction::new_with_base(19609, 120000, 2),
+    Fraction::new_with_base(59609, 240000, 2),
+    Fraction::new_with_base(19609, 60000, 2),
+    Fraction::new_with_base(5, 12, 2),
+    Fraction::new_with_base(29609, 60000, 2),
+    Fraction::new_with_base(139609, 240000, 2),
+    Fraction::new_with_base(79609, 120000, 2),
+    Fraction::new_with_base(59609, 80000, 2),
+    Fraction::new_with_base(5, 6, 2),
+    Fraction::new_with_base(18203, 20000, 2),
+];
