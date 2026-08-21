@@ -28,6 +28,7 @@ pub mod interval;
 /// Public key and key-signature helpers.
 pub mod key;
 /// Minimal MIDI import/export helpers.
+pub mod meter;
 pub mod midi;
 /// Note construction and pitch access helpers.
 pub mod note;
@@ -67,6 +68,7 @@ pub use duration::{Duration, DurationType};
 pub use error::{Error, Result};
 pub use interval::{Interval, IntervalDirection};
 pub use key::{Key, KeySignature};
+pub use meter::{BeatDivision, TimeSignature};
 pub use midi::{
     DEFAULT_TICKS_PER_QUARTER, MidiNote, midi_notes_from_stream, read_midi_bytes,
     read_midi_bytes_with_tempo, stream_from_midi_notes, write_midi_bytes,

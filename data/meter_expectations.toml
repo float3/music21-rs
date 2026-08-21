@@ -1,0 +1,1395 @@
+# Expected time-signature properties, generated from music21 by
+# `python-parity/generate_scale_expectations.py`. The crate derives these
+# from the numerator and denominator alone; music21 derives them from a
+# MeterSequence partition tree, so this file is what proves the shortcut
+# agrees with the tree.
+#
+# music21 11.0.0b8
+
+music21_version = "11.0.0b8"
+
+[[meter]]
+ratio = "1/1"
+bar_quarter_length = 4.0
+beat_count = 1
+beat_quarter_length = 4.0
+beat_division_count = 1
+beat_count_name = "Single"
+beat_division_count_name = "Other"
+classification = "Other Single"
+beat_offsets = [0.0]
+
+[[meter]]
+ratio = "2/1"
+bar_quarter_length = 8.0
+beat_count = 2
+beat_quarter_length = 4.0
+beat_division_count = 2
+beat_count_name = "Duple"
+beat_division_count_name = "Simple"
+classification = "Simple Duple"
+beat_offsets = [0.0, 4.0]
+
+[[meter]]
+ratio = "3/1"
+bar_quarter_length = 12.0
+beat_count = 3
+beat_quarter_length = 4.0
+beat_division_count = 2
+beat_count_name = "Triple"
+beat_division_count_name = "Simple"
+classification = "Simple Triple"
+beat_offsets = [0.0, 4.0, 8.0]
+
+[[meter]]
+ratio = "4/1"
+bar_quarter_length = 16.0
+beat_count = 4
+beat_quarter_length = 4.0
+beat_division_count = 2
+beat_count_name = "Quadruple"
+beat_division_count_name = "Simple"
+classification = "Simple Quadruple"
+beat_offsets = [0.0, 4.0, 8.0, 12.0]
+
+[[meter]]
+ratio = "5/1"
+bar_quarter_length = 20.0
+beat_count = 5
+beat_quarter_length = 4.0
+beat_division_count = 2
+beat_count_name = "Quintuple"
+beat_division_count_name = "Simple"
+classification = "Simple Quintuple"
+beat_offsets = [0.0, 4.0, 8.0, 12.0, 16.0]
+
+[[meter]]
+ratio = "6/1"
+bar_quarter_length = 24.0
+beat_count = 2
+beat_quarter_length = 12.0
+beat_division_count = 3
+beat_count_name = "Duple"
+beat_division_count_name = "Compound"
+classification = "Compound Duple"
+beat_offsets = [0.0, 12.0]
+
+[[meter]]
+ratio = "7/1"
+bar_quarter_length = 28.0
+beat_count = 7
+beat_quarter_length = 4.0
+beat_division_count = 2
+beat_count_name = "Septuple"
+beat_division_count_name = "Simple"
+classification = "Simple Septuple"
+beat_offsets = [0.0, 4.0, 8.0, 12.0, 16.0, 20.0, 24.0]
+
+[[meter]]
+ratio = "8/1"
+bar_quarter_length = 32.0
+beat_count = 8
+beat_quarter_length = 4.0
+beat_division_count = 2
+beat_count_name = "Octuple"
+beat_division_count_name = "Simple"
+classification = "Simple Octuple"
+beat_offsets = [0.0, 4.0, 8.0, 12.0, 16.0, 20.0, 24.0, 28.0]
+
+[[meter]]
+ratio = "9/1"
+bar_quarter_length = 36.0
+beat_count = 3
+beat_quarter_length = 12.0
+beat_division_count = 3
+beat_count_name = "Triple"
+beat_division_count_name = "Compound"
+classification = "Compound Triple"
+beat_offsets = [0.0, 12.0, 24.0]
+
+[[meter]]
+ratio = "10/1"
+bar_quarter_length = 40.0
+beat_count = 10
+beat_quarter_length = 4.0
+beat_division_count = 2
+beat_count_name = "10-uple"
+beat_division_count_name = "Simple"
+classification = "Simple 10-uple"
+beat_offsets = [0.0, 4.0, 8.0, 12.0, 16.0, 20.0, 24.0, 28.0, 32.0, 36.0]
+
+[[meter]]
+ratio = "11/1"
+bar_quarter_length = 44.0
+beat_count = 11
+beat_quarter_length = 4.0
+beat_division_count = 2
+beat_count_name = "11-uple"
+beat_division_count_name = "Simple"
+classification = "Simple 11-uple"
+beat_offsets = [0.0, 4.0, 8.0, 12.0, 16.0, 20.0, 24.0, 28.0, 32.0, 36.0, 40.0]
+
+[[meter]]
+ratio = "12/1"
+bar_quarter_length = 48.0
+beat_count = 4
+beat_quarter_length = 12.0
+beat_division_count = 3
+beat_count_name = "Quadruple"
+beat_division_count_name = "Compound"
+classification = "Compound Quadruple"
+beat_offsets = [0.0, 12.0, 24.0, 36.0]
+
+[[meter]]
+ratio = "13/1"
+bar_quarter_length = 52.0
+beat_count = 13
+beat_quarter_length = 4.0
+beat_division_count = 2
+beat_count_name = "13-uple"
+beat_division_count_name = "Simple"
+classification = "Simple 13-uple"
+beat_offsets = [0.0, 4.0, 8.0, 12.0, 16.0, 20.0, 24.0, 28.0, 32.0, 36.0, 40.0, 44.0, 48.0]
+
+[[meter]]
+ratio = "14/1"
+bar_quarter_length = 56.0
+beat_count = 14
+beat_quarter_length = 4.0
+beat_division_count = 2
+beat_count_name = "14-uple"
+beat_division_count_name = "Simple"
+classification = "Simple 14-uple"
+beat_offsets = [0.0, 4.0, 8.0, 12.0, 16.0, 20.0, 24.0, 28.0, 32.0, 36.0, 40.0, 44.0, 48.0, 52.0]
+
+[[meter]]
+ratio = "15/1"
+bar_quarter_length = 60.0
+beat_count = 5
+beat_quarter_length = 12.0
+beat_division_count = 3
+beat_count_name = "Quintuple"
+beat_division_count_name = "Compound"
+classification = "Compound Quintuple"
+beat_offsets = [0.0, 12.0, 24.0, 36.0, 48.0]
+
+[[meter]]
+ratio = "16/1"
+bar_quarter_length = 64.0
+beat_count = 16
+beat_quarter_length = 4.0
+beat_division_count = 2
+beat_count_name = "16-uple"
+beat_division_count_name = "Simple"
+classification = "Simple 16-uple"
+beat_offsets = [0.0, 4.0, 8.0, 12.0, 16.0, 20.0, 24.0, 28.0, 32.0, 36.0, 40.0, 44.0, 48.0, 52.0, 56.0, 60.0]
+
+[[meter]]
+ratio = "18/1"
+bar_quarter_length = 72.0
+beat_count = 6
+beat_quarter_length = 12.0
+beat_division_count = 3
+beat_count_name = "Sextuple"
+beat_division_count_name = "Compound"
+classification = "Compound Sextuple"
+beat_offsets = [0.0, 12.0, 24.0, 36.0, 48.0, 60.0]
+
+[[meter]]
+ratio = "20/1"
+bar_quarter_length = 80.0
+beat_count = 20
+beat_quarter_length = 4.0
+beat_division_count = 2
+beat_count_name = "20-uple"
+beat_division_count_name = "Simple"
+classification = "Simple 20-uple"
+beat_offsets = [0.0, 4.0, 8.0, 12.0, 16.0, 20.0, 24.0, 28.0, 32.0, 36.0, 40.0, 44.0, 48.0, 52.0, 56.0, 60.0, 64.0, 68.0, 72.0, 76.0]
+
+[[meter]]
+ratio = "21/1"
+bar_quarter_length = 84.0
+beat_count = 7
+beat_quarter_length = 12.0
+beat_division_count = 3
+beat_count_name = "Septuple"
+beat_division_count_name = "Compound"
+classification = "Compound Septuple"
+beat_offsets = [0.0, 12.0, 24.0, 36.0, 48.0, 60.0, 72.0]
+
+[[meter]]
+ratio = "24/1"
+bar_quarter_length = 96.0
+beat_count = 8
+beat_quarter_length = 12.0
+beat_division_count = 3
+beat_count_name = "Octuple"
+beat_division_count_name = "Compound"
+classification = "Compound Octuple"
+beat_offsets = [0.0, 12.0, 24.0, 36.0, 48.0, 60.0, 72.0, 84.0]
+
+[[meter]]
+ratio = "27/1"
+bar_quarter_length = 108.0
+beat_count = 9
+beat_quarter_length = 12.0
+beat_division_count = 3
+beat_count_name = "9-uple"
+beat_division_count_name = "Compound"
+classification = "Compound 9-uple"
+beat_offsets = [0.0, 12.0, 24.0, 36.0, 48.0, 60.0, 72.0, 84.0, 96.0]
+
+[[meter]]
+ratio = "1/2"
+bar_quarter_length = 2.0
+beat_count = 1
+beat_quarter_length = 2.0
+beat_division_count = 1
+beat_count_name = "Single"
+beat_division_count_name = "Other"
+classification = "Other Single"
+beat_offsets = [0.0]
+
+[[meter]]
+ratio = "2/2"
+bar_quarter_length = 4.0
+beat_count = 2
+beat_quarter_length = 2.0
+beat_division_count = 2
+beat_count_name = "Duple"
+beat_division_count_name = "Simple"
+classification = "Simple Duple"
+beat_offsets = [0.0, 2.0]
+
+[[meter]]
+ratio = "3/2"
+bar_quarter_length = 6.0
+beat_count = 3
+beat_quarter_length = 2.0
+beat_division_count = 2
+beat_count_name = "Triple"
+beat_division_count_name = "Simple"
+classification = "Simple Triple"
+beat_offsets = [0.0, 2.0, 4.0]
+
+[[meter]]
+ratio = "4/2"
+bar_quarter_length = 8.0
+beat_count = 4
+beat_quarter_length = 2.0
+beat_division_count = 2
+beat_count_name = "Quadruple"
+beat_division_count_name = "Simple"
+classification = "Simple Quadruple"
+beat_offsets = [0.0, 2.0, 4.0, 6.0]
+
+[[meter]]
+ratio = "5/2"
+bar_quarter_length = 10.0
+beat_count = 5
+beat_quarter_length = 2.0
+beat_division_count = 2
+beat_count_name = "Quintuple"
+beat_division_count_name = "Simple"
+classification = "Simple Quintuple"
+beat_offsets = [0.0, 2.0, 4.0, 6.0, 8.0]
+
+[[meter]]
+ratio = "6/2"
+bar_quarter_length = 12.0
+beat_count = 2
+beat_quarter_length = 6.0
+beat_division_count = 3
+beat_count_name = "Duple"
+beat_division_count_name = "Compound"
+classification = "Compound Duple"
+beat_offsets = [0.0, 6.0]
+
+[[meter]]
+ratio = "7/2"
+bar_quarter_length = 14.0
+beat_count = 7
+beat_quarter_length = 2.0
+beat_division_count = 2
+beat_count_name = "Septuple"
+beat_division_count_name = "Simple"
+classification = "Simple Septuple"
+beat_offsets = [0.0, 2.0, 4.0, 6.0, 8.0, 10.0, 12.0]
+
+[[meter]]
+ratio = "8/2"
+bar_quarter_length = 16.0
+beat_count = 8
+beat_quarter_length = 2.0
+beat_division_count = 2
+beat_count_name = "Octuple"
+beat_division_count_name = "Simple"
+classification = "Simple Octuple"
+beat_offsets = [0.0, 2.0, 4.0, 6.0, 8.0, 10.0, 12.0, 14.0]
+
+[[meter]]
+ratio = "9/2"
+bar_quarter_length = 18.0
+beat_count = 3
+beat_quarter_length = 6.0
+beat_division_count = 3
+beat_count_name = "Triple"
+beat_division_count_name = "Compound"
+classification = "Compound Triple"
+beat_offsets = [0.0, 6.0, 12.0]
+
+[[meter]]
+ratio = "10/2"
+bar_quarter_length = 20.0
+beat_count = 10
+beat_quarter_length = 2.0
+beat_division_count = 2
+beat_count_name = "10-uple"
+beat_division_count_name = "Simple"
+classification = "Simple 10-uple"
+beat_offsets = [0.0, 2.0, 4.0, 6.0, 8.0, 10.0, 12.0, 14.0, 16.0, 18.0]
+
+[[meter]]
+ratio = "11/2"
+bar_quarter_length = 22.0
+beat_count = 11
+beat_quarter_length = 2.0
+beat_division_count = 2
+beat_count_name = "11-uple"
+beat_division_count_name = "Simple"
+classification = "Simple 11-uple"
+beat_offsets = [0.0, 2.0, 4.0, 6.0, 8.0, 10.0, 12.0, 14.0, 16.0, 18.0, 20.0]
+
+[[meter]]
+ratio = "12/2"
+bar_quarter_length = 24.0
+beat_count = 4
+beat_quarter_length = 6.0
+beat_division_count = 3
+beat_count_name = "Quadruple"
+beat_division_count_name = "Compound"
+classification = "Compound Quadruple"
+beat_offsets = [0.0, 6.0, 12.0, 18.0]
+
+[[meter]]
+ratio = "13/2"
+bar_quarter_length = 26.0
+beat_count = 13
+beat_quarter_length = 2.0
+beat_division_count = 2
+beat_count_name = "13-uple"
+beat_division_count_name = "Simple"
+classification = "Simple 13-uple"
+beat_offsets = [0.0, 2.0, 4.0, 6.0, 8.0, 10.0, 12.0, 14.0, 16.0, 18.0, 20.0, 22.0, 24.0]
+
+[[meter]]
+ratio = "14/2"
+bar_quarter_length = 28.0
+beat_count = 14
+beat_quarter_length = 2.0
+beat_division_count = 2
+beat_count_name = "14-uple"
+beat_division_count_name = "Simple"
+classification = "Simple 14-uple"
+beat_offsets = [0.0, 2.0, 4.0, 6.0, 8.0, 10.0, 12.0, 14.0, 16.0, 18.0, 20.0, 22.0, 24.0, 26.0]
+
+[[meter]]
+ratio = "15/2"
+bar_quarter_length = 30.0
+beat_count = 5
+beat_quarter_length = 6.0
+beat_division_count = 3
+beat_count_name = "Quintuple"
+beat_division_count_name = "Compound"
+classification = "Compound Quintuple"
+beat_offsets = [0.0, 6.0, 12.0, 18.0, 24.0]
+
+[[meter]]
+ratio = "16/2"
+bar_quarter_length = 32.0
+beat_count = 16
+beat_quarter_length = 2.0
+beat_division_count = 2
+beat_count_name = "16-uple"
+beat_division_count_name = "Simple"
+classification = "Simple 16-uple"
+beat_offsets = [0.0, 2.0, 4.0, 6.0, 8.0, 10.0, 12.0, 14.0, 16.0, 18.0, 20.0, 22.0, 24.0, 26.0, 28.0, 30.0]
+
+[[meter]]
+ratio = "18/2"
+bar_quarter_length = 36.0
+beat_count = 6
+beat_quarter_length = 6.0
+beat_division_count = 3
+beat_count_name = "Sextuple"
+beat_division_count_name = "Compound"
+classification = "Compound Sextuple"
+beat_offsets = [0.0, 6.0, 12.0, 18.0, 24.0, 30.0]
+
+[[meter]]
+ratio = "20/2"
+bar_quarter_length = 40.0
+beat_count = 20
+beat_quarter_length = 2.0
+beat_division_count = 2
+beat_count_name = "20-uple"
+beat_division_count_name = "Simple"
+classification = "Simple 20-uple"
+beat_offsets = [0.0, 2.0, 4.0, 6.0, 8.0, 10.0, 12.0, 14.0, 16.0, 18.0, 20.0, 22.0, 24.0, 26.0, 28.0, 30.0, 32.0, 34.0, 36.0, 38.0]
+
+[[meter]]
+ratio = "21/2"
+bar_quarter_length = 42.0
+beat_count = 7
+beat_quarter_length = 6.0
+beat_division_count = 3
+beat_count_name = "Septuple"
+beat_division_count_name = "Compound"
+classification = "Compound Septuple"
+beat_offsets = [0.0, 6.0, 12.0, 18.0, 24.0, 30.0, 36.0]
+
+[[meter]]
+ratio = "24/2"
+bar_quarter_length = 48.0
+beat_count = 8
+beat_quarter_length = 6.0
+beat_division_count = 3
+beat_count_name = "Octuple"
+beat_division_count_name = "Compound"
+classification = "Compound Octuple"
+beat_offsets = [0.0, 6.0, 12.0, 18.0, 24.0, 30.0, 36.0, 42.0]
+
+[[meter]]
+ratio = "27/2"
+bar_quarter_length = 54.0
+beat_count = 9
+beat_quarter_length = 6.0
+beat_division_count = 3
+beat_count_name = "9-uple"
+beat_division_count_name = "Compound"
+classification = "Compound 9-uple"
+beat_offsets = [0.0, 6.0, 12.0, 18.0, 24.0, 30.0, 36.0, 42.0, 48.0]
+
+[[meter]]
+ratio = "1/4"
+bar_quarter_length = 1.0
+beat_count = 1
+beat_quarter_length = 1.0
+beat_division_count = 1
+beat_count_name = "Single"
+beat_division_count_name = "Other"
+classification = "Other Single"
+beat_offsets = [0.0]
+
+[[meter]]
+ratio = "2/4"
+bar_quarter_length = 2.0
+beat_count = 2
+beat_quarter_length = 1.0
+beat_division_count = 2
+beat_count_name = "Duple"
+beat_division_count_name = "Simple"
+classification = "Simple Duple"
+beat_offsets = [0.0, 1.0]
+
+[[meter]]
+ratio = "3/4"
+bar_quarter_length = 3.0
+beat_count = 3
+beat_quarter_length = 1.0
+beat_division_count = 2
+beat_count_name = "Triple"
+beat_division_count_name = "Simple"
+classification = "Simple Triple"
+beat_offsets = [0.0, 1.0, 2.0]
+
+[[meter]]
+ratio = "4/4"
+bar_quarter_length = 4.0
+beat_count = 4
+beat_quarter_length = 1.0
+beat_division_count = 2
+beat_count_name = "Quadruple"
+beat_division_count_name = "Simple"
+classification = "Simple Quadruple"
+beat_offsets = [0.0, 1.0, 2.0, 3.0]
+
+[[meter]]
+ratio = "5/4"
+bar_quarter_length = 5.0
+beat_count = 5
+beat_quarter_length = 1.0
+beat_division_count = 2
+beat_count_name = "Quintuple"
+beat_division_count_name = "Simple"
+classification = "Simple Quintuple"
+beat_offsets = [0.0, 1.0, 2.0, 3.0, 4.0]
+
+[[meter]]
+ratio = "6/4"
+bar_quarter_length = 6.0
+beat_count = 2
+beat_quarter_length = 3.0
+beat_division_count = 3
+beat_count_name = "Duple"
+beat_division_count_name = "Compound"
+classification = "Compound Duple"
+beat_offsets = [0.0, 3.0]
+
+[[meter]]
+ratio = "7/4"
+bar_quarter_length = 7.0
+beat_count = 7
+beat_quarter_length = 1.0
+beat_division_count = 2
+beat_count_name = "Septuple"
+beat_division_count_name = "Simple"
+classification = "Simple Septuple"
+beat_offsets = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+
+[[meter]]
+ratio = "8/4"
+bar_quarter_length = 8.0
+beat_count = 8
+beat_quarter_length = 1.0
+beat_division_count = 2
+beat_count_name = "Octuple"
+beat_division_count_name = "Simple"
+classification = "Simple Octuple"
+beat_offsets = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0]
+
+[[meter]]
+ratio = "9/4"
+bar_quarter_length = 9.0
+beat_count = 3
+beat_quarter_length = 3.0
+beat_division_count = 3
+beat_count_name = "Triple"
+beat_division_count_name = "Compound"
+classification = "Compound Triple"
+beat_offsets = [0.0, 3.0, 6.0]
+
+[[meter]]
+ratio = "10/4"
+bar_quarter_length = 10.0
+beat_count = 10
+beat_quarter_length = 1.0
+beat_division_count = 2
+beat_count_name = "10-uple"
+beat_division_count_name = "Simple"
+classification = "Simple 10-uple"
+beat_offsets = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
+
+[[meter]]
+ratio = "11/4"
+bar_quarter_length = 11.0
+beat_count = 11
+beat_quarter_length = 1.0
+beat_division_count = 2
+beat_count_name = "11-uple"
+beat_division_count_name = "Simple"
+classification = "Simple 11-uple"
+beat_offsets = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]
+
+[[meter]]
+ratio = "12/4"
+bar_quarter_length = 12.0
+beat_count = 4
+beat_quarter_length = 3.0
+beat_division_count = 3
+beat_count_name = "Quadruple"
+beat_division_count_name = "Compound"
+classification = "Compound Quadruple"
+beat_offsets = [0.0, 3.0, 6.0, 9.0]
+
+[[meter]]
+ratio = "13/4"
+bar_quarter_length = 13.0
+beat_count = 13
+beat_quarter_length = 1.0
+beat_division_count = 2
+beat_count_name = "13-uple"
+beat_division_count_name = "Simple"
+classification = "Simple 13-uple"
+beat_offsets = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0]
+
+[[meter]]
+ratio = "14/4"
+bar_quarter_length = 14.0
+beat_count = 14
+beat_quarter_length = 1.0
+beat_division_count = 2
+beat_count_name = "14-uple"
+beat_division_count_name = "Simple"
+classification = "Simple 14-uple"
+beat_offsets = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0]
+
+[[meter]]
+ratio = "15/4"
+bar_quarter_length = 15.0
+beat_count = 5
+beat_quarter_length = 3.0
+beat_division_count = 3
+beat_count_name = "Quintuple"
+beat_division_count_name = "Compound"
+classification = "Compound Quintuple"
+beat_offsets = [0.0, 3.0, 6.0, 9.0, 12.0]
+
+[[meter]]
+ratio = "16/4"
+bar_quarter_length = 16.0
+beat_count = 16
+beat_quarter_length = 1.0
+beat_division_count = 2
+beat_count_name = "16-uple"
+beat_division_count_name = "Simple"
+classification = "Simple 16-uple"
+beat_offsets = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0]
+
+[[meter]]
+ratio = "18/4"
+bar_quarter_length = 18.0
+beat_count = 6
+beat_quarter_length = 3.0
+beat_division_count = 3
+beat_count_name = "Sextuple"
+beat_division_count_name = "Compound"
+classification = "Compound Sextuple"
+beat_offsets = [0.0, 3.0, 6.0, 9.0, 12.0, 15.0]
+
+[[meter]]
+ratio = "20/4"
+bar_quarter_length = 20.0
+beat_count = 20
+beat_quarter_length = 1.0
+beat_division_count = 2
+beat_count_name = "20-uple"
+beat_division_count_name = "Simple"
+classification = "Simple 20-uple"
+beat_offsets = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0]
+
+[[meter]]
+ratio = "21/4"
+bar_quarter_length = 21.0
+beat_count = 7
+beat_quarter_length = 3.0
+beat_division_count = 3
+beat_count_name = "Septuple"
+beat_division_count_name = "Compound"
+classification = "Compound Septuple"
+beat_offsets = [0.0, 3.0, 6.0, 9.0, 12.0, 15.0, 18.0]
+
+[[meter]]
+ratio = "24/4"
+bar_quarter_length = 24.0
+beat_count = 8
+beat_quarter_length = 3.0
+beat_division_count = 3
+beat_count_name = "Octuple"
+beat_division_count_name = "Compound"
+classification = "Compound Octuple"
+beat_offsets = [0.0, 3.0, 6.0, 9.0, 12.0, 15.0, 18.0, 21.0]
+
+[[meter]]
+ratio = "27/4"
+bar_quarter_length = 27.0
+beat_count = 9
+beat_quarter_length = 3.0
+beat_division_count = 3
+beat_count_name = "9-uple"
+beat_division_count_name = "Compound"
+classification = "Compound 9-uple"
+beat_offsets = [0.0, 3.0, 6.0, 9.0, 12.0, 15.0, 18.0, 21.0, 24.0]
+
+[[meter]]
+ratio = "1/8"
+bar_quarter_length = 0.5
+beat_count = 1
+beat_quarter_length = 0.5
+beat_division_count = 1
+beat_count_name = "Single"
+beat_division_count_name = "Other"
+classification = "Other Single"
+beat_offsets = [0.0]
+
+[[meter]]
+ratio = "2/8"
+bar_quarter_length = 1.0
+beat_count = 2
+beat_quarter_length = 0.5
+beat_division_count = 2
+beat_count_name = "Duple"
+beat_division_count_name = "Simple"
+classification = "Simple Duple"
+beat_offsets = [0.0, 0.5]
+
+[[meter]]
+ratio = "3/8"
+bar_quarter_length = 1.5
+beat_count = 1
+beat_quarter_length = 1.5
+beat_division_count = 1
+beat_count_name = "Single"
+beat_division_count_name = "Other"
+classification = "Other Single"
+beat_offsets = [0.0]
+
+[[meter]]
+ratio = "4/8"
+bar_quarter_length = 2.0
+beat_count = 4
+beat_quarter_length = 0.5
+beat_division_count = 2
+beat_count_name = "Quadruple"
+beat_division_count_name = "Simple"
+classification = "Simple Quadruple"
+beat_offsets = [0.0, 0.5, 1.0, 1.5]
+
+[[meter]]
+ratio = "5/8"
+bar_quarter_length = 2.5
+beat_count = 5
+beat_quarter_length = 0.5
+beat_division_count = 2
+beat_count_name = "Quintuple"
+beat_division_count_name = "Simple"
+classification = "Simple Quintuple"
+beat_offsets = [0.0, 0.5, 1.0, 1.5, 2.0]
+
+[[meter]]
+ratio = "6/8"
+bar_quarter_length = 3.0
+beat_count = 2
+beat_quarter_length = 1.5
+beat_division_count = 3
+beat_count_name = "Duple"
+beat_division_count_name = "Compound"
+classification = "Compound Duple"
+beat_offsets = [0.0, 1.5]
+
+[[meter]]
+ratio = "7/8"
+bar_quarter_length = 3.5
+beat_count = 7
+beat_quarter_length = 0.5
+beat_division_count = 2
+beat_count_name = "Septuple"
+beat_division_count_name = "Simple"
+classification = "Simple Septuple"
+beat_offsets = [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
+
+[[meter]]
+ratio = "8/8"
+bar_quarter_length = 4.0
+beat_count = 8
+beat_quarter_length = 0.5
+beat_division_count = 2
+beat_count_name = "Octuple"
+beat_division_count_name = "Simple"
+classification = "Simple Octuple"
+beat_offsets = [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5]
+
+[[meter]]
+ratio = "9/8"
+bar_quarter_length = 4.5
+beat_count = 3
+beat_quarter_length = 1.5
+beat_division_count = 3
+beat_count_name = "Triple"
+beat_division_count_name = "Compound"
+classification = "Compound Triple"
+beat_offsets = [0.0, 1.5, 3.0]
+
+[[meter]]
+ratio = "10/8"
+bar_quarter_length = 5.0
+beat_count = 10
+beat_quarter_length = 0.5
+beat_division_count = 2
+beat_count_name = "10-uple"
+beat_division_count_name = "Simple"
+classification = "Simple 10-uple"
+beat_offsets = [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5]
+
+[[meter]]
+ratio = "11/8"
+bar_quarter_length = 5.5
+beat_count = 11
+beat_quarter_length = 0.5
+beat_division_count = 2
+beat_count_name = "11-uple"
+beat_division_count_name = "Simple"
+classification = "Simple 11-uple"
+beat_offsets = [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0]
+
+[[meter]]
+ratio = "12/8"
+bar_quarter_length = 6.0
+beat_count = 4
+beat_quarter_length = 1.5
+beat_division_count = 3
+beat_count_name = "Quadruple"
+beat_division_count_name = "Compound"
+classification = "Compound Quadruple"
+beat_offsets = [0.0, 1.5, 3.0, 4.5]
+
+[[meter]]
+ratio = "13/8"
+bar_quarter_length = 6.5
+beat_count = 13
+beat_quarter_length = 0.5
+beat_division_count = 2
+beat_count_name = "13-uple"
+beat_division_count_name = "Simple"
+classification = "Simple 13-uple"
+beat_offsets = [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0]
+
+[[meter]]
+ratio = "14/8"
+bar_quarter_length = 7.0
+beat_count = 14
+beat_quarter_length = 0.5
+beat_division_count = 2
+beat_count_name = "14-uple"
+beat_division_count_name = "Simple"
+classification = "Simple 14-uple"
+beat_offsets = [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5]
+
+[[meter]]
+ratio = "15/8"
+bar_quarter_length = 7.5
+beat_count = 5
+beat_quarter_length = 1.5
+beat_division_count = 3
+beat_count_name = "Quintuple"
+beat_division_count_name = "Compound"
+classification = "Compound Quintuple"
+beat_offsets = [0.0, 1.5, 3.0, 4.5, 6.0]
+
+[[meter]]
+ratio = "16/8"
+bar_quarter_length = 8.0
+beat_count = 16
+beat_quarter_length = 0.5
+beat_division_count = 2
+beat_count_name = "16-uple"
+beat_division_count_name = "Simple"
+classification = "Simple 16-uple"
+beat_offsets = [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5]
+
+[[meter]]
+ratio = "18/8"
+bar_quarter_length = 9.0
+beat_count = 6
+beat_quarter_length = 1.5
+beat_division_count = 3
+beat_count_name = "Sextuple"
+beat_division_count_name = "Compound"
+classification = "Compound Sextuple"
+beat_offsets = [0.0, 1.5, 3.0, 4.5, 6.0, 7.5]
+
+[[meter]]
+ratio = "20/8"
+bar_quarter_length = 10.0
+beat_count = 20
+beat_quarter_length = 0.5
+beat_division_count = 2
+beat_count_name = "20-uple"
+beat_division_count_name = "Simple"
+classification = "Simple 20-uple"
+beat_offsets = [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5]
+
+[[meter]]
+ratio = "21/8"
+bar_quarter_length = 10.5
+beat_count = 7
+beat_quarter_length = 1.5
+beat_division_count = 3
+beat_count_name = "Septuple"
+beat_division_count_name = "Compound"
+classification = "Compound Septuple"
+beat_offsets = [0.0, 1.5, 3.0, 4.5, 6.0, 7.5, 9.0]
+
+[[meter]]
+ratio = "24/8"
+bar_quarter_length = 12.0
+beat_count = 8
+beat_quarter_length = 1.5
+beat_division_count = 3
+beat_count_name = "Octuple"
+beat_division_count_name = "Compound"
+classification = "Compound Octuple"
+beat_offsets = [0.0, 1.5, 3.0, 4.5, 6.0, 7.5, 9.0, 10.5]
+
+[[meter]]
+ratio = "27/8"
+bar_quarter_length = 13.5
+beat_count = 9
+beat_quarter_length = 1.5
+beat_division_count = 3
+beat_count_name = "9-uple"
+beat_division_count_name = "Compound"
+classification = "Compound 9-uple"
+beat_offsets = [0.0, 1.5, 3.0, 4.5, 6.0, 7.5, 9.0, 10.5, 12.0]
+
+[[meter]]
+ratio = "1/16"
+bar_quarter_length = 0.25
+beat_count = 1
+beat_quarter_length = 0.25
+beat_division_count = 1
+beat_count_name = "Single"
+beat_division_count_name = "Other"
+classification = "Other Single"
+beat_offsets = [0.0]
+
+[[meter]]
+ratio = "2/16"
+bar_quarter_length = 0.5
+beat_count = 2
+beat_quarter_length = 0.25
+beat_division_count = 2
+beat_count_name = "Duple"
+beat_division_count_name = "Simple"
+classification = "Simple Duple"
+beat_offsets = [0.0, 0.25]
+
+[[meter]]
+ratio = "3/16"
+bar_quarter_length = 0.75
+beat_count = 1
+beat_quarter_length = 0.75
+beat_division_count = 1
+beat_count_name = "Single"
+beat_division_count_name = "Other"
+classification = "Other Single"
+beat_offsets = [0.0]
+
+[[meter]]
+ratio = "4/16"
+bar_quarter_length = 1.0
+beat_count = 4
+beat_quarter_length = 0.25
+beat_division_count = 2
+beat_count_name = "Quadruple"
+beat_division_count_name = "Simple"
+classification = "Simple Quadruple"
+beat_offsets = [0.0, 0.25, 0.5, 0.75]
+
+[[meter]]
+ratio = "5/16"
+bar_quarter_length = 1.25
+beat_count = 5
+beat_quarter_length = 0.25
+beat_division_count = 2
+beat_count_name = "Quintuple"
+beat_division_count_name = "Simple"
+classification = "Simple Quintuple"
+beat_offsets = [0.0, 0.25, 0.5, 0.75, 1.0]
+
+[[meter]]
+ratio = "6/16"
+bar_quarter_length = 1.5
+beat_count = 2
+beat_quarter_length = 0.75
+beat_division_count = 3
+beat_count_name = "Duple"
+beat_division_count_name = "Compound"
+classification = "Compound Duple"
+beat_offsets = [0.0, 0.75]
+
+[[meter]]
+ratio = "7/16"
+bar_quarter_length = 1.75
+beat_count = 7
+beat_quarter_length = 0.25
+beat_division_count = 2
+beat_count_name = "Septuple"
+beat_division_count_name = "Simple"
+classification = "Simple Septuple"
+beat_offsets = [0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5]
+
+[[meter]]
+ratio = "8/16"
+bar_quarter_length = 2.0
+beat_count = 8
+beat_quarter_length = 0.25
+beat_division_count = 2
+beat_count_name = "Octuple"
+beat_division_count_name = "Simple"
+classification = "Simple Octuple"
+beat_offsets = [0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75]
+
+[[meter]]
+ratio = "9/16"
+bar_quarter_length = 2.25
+beat_count = 3
+beat_quarter_length = 0.75
+beat_division_count = 3
+beat_count_name = "Triple"
+beat_division_count_name = "Compound"
+classification = "Compound Triple"
+beat_offsets = [0.0, 0.75, 1.5]
+
+[[meter]]
+ratio = "10/16"
+bar_quarter_length = 2.5
+beat_count = 10
+beat_quarter_length = 0.25
+beat_division_count = 2
+beat_count_name = "10-uple"
+beat_division_count_name = "Simple"
+classification = "Simple 10-uple"
+beat_offsets = [0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25]
+
+[[meter]]
+ratio = "11/16"
+bar_quarter_length = 2.75
+beat_count = 11
+beat_quarter_length = 0.25
+beat_division_count = 2
+beat_count_name = "11-uple"
+beat_division_count_name = "Simple"
+classification = "Simple 11-uple"
+beat_offsets = [0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5]
+
+[[meter]]
+ratio = "12/16"
+bar_quarter_length = 3.0
+beat_count = 4
+beat_quarter_length = 0.75
+beat_division_count = 3
+beat_count_name = "Quadruple"
+beat_division_count_name = "Compound"
+classification = "Compound Quadruple"
+beat_offsets = [0.0, 0.75, 1.5, 2.25]
+
+[[meter]]
+ratio = "13/16"
+bar_quarter_length = 3.25
+beat_count = 13
+beat_quarter_length = 0.25
+beat_division_count = 2
+beat_count_name = "13-uple"
+beat_division_count_name = "Simple"
+classification = "Simple 13-uple"
+beat_offsets = [0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0]
+
+[[meter]]
+ratio = "14/16"
+bar_quarter_length = 3.5
+beat_count = 14
+beat_quarter_length = 0.25
+beat_division_count = 2
+beat_count_name = "14-uple"
+beat_division_count_name = "Simple"
+classification = "Simple 14-uple"
+beat_offsets = [0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0, 3.25]
+
+[[meter]]
+ratio = "15/16"
+bar_quarter_length = 3.75
+beat_count = 5
+beat_quarter_length = 0.75
+beat_division_count = 3
+beat_count_name = "Quintuple"
+beat_division_count_name = "Compound"
+classification = "Compound Quintuple"
+beat_offsets = [0.0, 0.75, 1.5, 2.25, 3.0]
+
+[[meter]]
+ratio = "16/16"
+bar_quarter_length = 4.0
+beat_count = 16
+beat_quarter_length = 0.25
+beat_division_count = 2
+beat_count_name = "16-uple"
+beat_division_count_name = "Simple"
+classification = "Simple 16-uple"
+beat_offsets = [0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75]
+
+[[meter]]
+ratio = "18/16"
+bar_quarter_length = 4.5
+beat_count = 6
+beat_quarter_length = 0.75
+beat_division_count = 3
+beat_count_name = "Sextuple"
+beat_division_count_name = "Compound"
+classification = "Compound Sextuple"
+beat_offsets = [0.0, 0.75, 1.5, 2.25, 3.0, 3.75]
+
+[[meter]]
+ratio = "20/16"
+bar_quarter_length = 5.0
+beat_count = 20
+beat_quarter_length = 0.25
+beat_division_count = 2
+beat_count_name = "20-uple"
+beat_division_count_name = "Simple"
+classification = "Simple 20-uple"
+beat_offsets = [0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0, 4.25, 4.5, 4.75]
+
+[[meter]]
+ratio = "21/16"
+bar_quarter_length = 5.25
+beat_count = 7
+beat_quarter_length = 0.75
+beat_division_count = 3
+beat_count_name = "Septuple"
+beat_division_count_name = "Compound"
+classification = "Compound Septuple"
+beat_offsets = [0.0, 0.75, 1.5, 2.25, 3.0, 3.75, 4.5]
+
+[[meter]]
+ratio = "24/16"
+bar_quarter_length = 6.0
+beat_count = 8
+beat_quarter_length = 0.75
+beat_division_count = 3
+beat_count_name = "Octuple"
+beat_division_count_name = "Compound"
+classification = "Compound Octuple"
+beat_offsets = [0.0, 0.75, 1.5, 2.25, 3.0, 3.75, 4.5, 5.25]
+
+[[meter]]
+ratio = "27/16"
+bar_quarter_length = 6.75
+beat_count = 9
+beat_quarter_length = 0.75
+beat_division_count = 3
+beat_count_name = "9-uple"
+beat_division_count_name = "Compound"
+classification = "Compound 9-uple"
+beat_offsets = [0.0, 0.75, 1.5, 2.25, 3.0, 3.75, 4.5, 5.25, 6.0]
+
+[[meter]]
+ratio = "1/32"
+bar_quarter_length = 0.125
+beat_count = 1
+beat_quarter_length = 0.125
+beat_division_count = 1
+beat_count_name = "Single"
+beat_division_count_name = "Other"
+classification = "Other Single"
+beat_offsets = [0.0]
+
+[[meter]]
+ratio = "2/32"
+bar_quarter_length = 0.25
+beat_count = 2
+beat_quarter_length = 0.125
+beat_division_count = 2
+beat_count_name = "Duple"
+beat_division_count_name = "Simple"
+classification = "Simple Duple"
+beat_offsets = [0.0, 0.125]
+
+[[meter]]
+ratio = "3/32"
+bar_quarter_length = 0.375
+beat_count = 1
+beat_quarter_length = 0.375
+beat_division_count = 1
+beat_count_name = "Single"
+beat_division_count_name = "Other"
+classification = "Other Single"
+beat_offsets = [0.0]
+
+[[meter]]
+ratio = "4/32"
+bar_quarter_length = 0.5
+beat_count = 4
+beat_quarter_length = 0.125
+beat_division_count = 2
+beat_count_name = "Quadruple"
+beat_division_count_name = "Simple"
+classification = "Simple Quadruple"
+beat_offsets = [0.0, 0.125, 0.25, 0.375]
+
+[[meter]]
+ratio = "5/32"
+bar_quarter_length = 0.625
+beat_count = 5
+beat_quarter_length = 0.125
+beat_division_count = 2
+beat_count_name = "Quintuple"
+beat_division_count_name = "Simple"
+classification = "Simple Quintuple"
+beat_offsets = [0.0, 0.125, 0.25, 0.375, 0.5]
+
+[[meter]]
+ratio = "6/32"
+bar_quarter_length = 0.75
+beat_count = 2
+beat_quarter_length = 0.375
+beat_division_count = 3
+beat_count_name = "Duple"
+beat_division_count_name = "Compound"
+classification = "Compound Duple"
+beat_offsets = [0.0, 0.375]
+
+[[meter]]
+ratio = "7/32"
+bar_quarter_length = 0.875
+beat_count = 7
+beat_quarter_length = 0.125
+beat_division_count = 2
+beat_count_name = "Septuple"
+beat_division_count_name = "Simple"
+classification = "Simple Septuple"
+beat_offsets = [0.0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75]
+
+[[meter]]
+ratio = "8/32"
+bar_quarter_length = 1.0
+beat_count = 8
+beat_quarter_length = 0.125
+beat_division_count = 2
+beat_count_name = "Octuple"
+beat_division_count_name = "Simple"
+classification = "Simple Octuple"
+beat_offsets = [0.0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875]
+
+[[meter]]
+ratio = "9/32"
+bar_quarter_length = 1.125
+beat_count = 3
+beat_quarter_length = 0.375
+beat_division_count = 3
+beat_count_name = "Triple"
+beat_division_count_name = "Compound"
+classification = "Compound Triple"
+beat_offsets = [0.0, 0.375, 0.75]
+
+[[meter]]
+ratio = "10/32"
+bar_quarter_length = 1.25
+beat_count = 10
+beat_quarter_length = 0.125
+beat_division_count = 2
+beat_count_name = "10-uple"
+beat_division_count_name = "Simple"
+classification = "Simple 10-uple"
+beat_offsets = [0.0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125]
+
+[[meter]]
+ratio = "11/32"
+bar_quarter_length = 1.375
+beat_count = 11
+beat_quarter_length = 0.125
+beat_division_count = 2
+beat_count_name = "11-uple"
+beat_division_count_name = "Simple"
+classification = "Simple 11-uple"
+beat_offsets = [0.0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25]
+
+[[meter]]
+ratio = "12/32"
+bar_quarter_length = 1.5
+beat_count = 4
+beat_quarter_length = 0.375
+beat_division_count = 3
+beat_count_name = "Quadruple"
+beat_division_count_name = "Compound"
+classification = "Compound Quadruple"
+beat_offsets = [0.0, 0.375, 0.75, 1.125]
+
+[[meter]]
+ratio = "13/32"
+bar_quarter_length = 1.625
+beat_count = 13
+beat_quarter_length = 0.125
+beat_division_count = 2
+beat_count_name = "13-uple"
+beat_division_count_name = "Simple"
+classification = "Simple 13-uple"
+beat_offsets = [0.0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.375, 1.5]
+
+[[meter]]
+ratio = "14/32"
+bar_quarter_length = 1.75
+beat_count = 14
+beat_quarter_length = 0.125
+beat_division_count = 2
+beat_count_name = "14-uple"
+beat_division_count_name = "Simple"
+classification = "Simple 14-uple"
+beat_offsets = [0.0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.375, 1.5, 1.625]
+
+[[meter]]
+ratio = "15/32"
+bar_quarter_length = 1.875
+beat_count = 5
+beat_quarter_length = 0.375
+beat_division_count = 3
+beat_count_name = "Quintuple"
+beat_division_count_name = "Compound"
+classification = "Compound Quintuple"
+beat_offsets = [0.0, 0.375, 0.75, 1.125, 1.5]
+
+[[meter]]
+ratio = "16/32"
+bar_quarter_length = 2.0
+beat_count = 16
+beat_quarter_length = 0.125
+beat_division_count = 2
+beat_count_name = "16-uple"
+beat_division_count_name = "Simple"
+classification = "Simple 16-uple"
+beat_offsets = [0.0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.375, 1.5, 1.625, 1.75, 1.875]
+
+[[meter]]
+ratio = "18/32"
+bar_quarter_length = 2.25
+beat_count = 6
+beat_quarter_length = 0.375
+beat_division_count = 3
+beat_count_name = "Sextuple"
+beat_division_count_name = "Compound"
+classification = "Compound Sextuple"
+beat_offsets = [0.0, 0.375, 0.75, 1.125, 1.5, 1.875]
+
+[[meter]]
+ratio = "20/32"
+bar_quarter_length = 2.5
+beat_count = 20
+beat_quarter_length = 0.125
+beat_division_count = 2
+beat_count_name = "20-uple"
+beat_division_count_name = "Simple"
+classification = "Simple 20-uple"
+beat_offsets = [0.0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.0, 1.125, 1.25, 1.375, 1.5, 1.625, 1.75, 1.875, 2.0, 2.125, 2.25, 2.375]
+
+[[meter]]
+ratio = "21/32"
+bar_quarter_length = 2.625
+beat_count = 7
+beat_quarter_length = 0.375
+beat_division_count = 3
+beat_count_name = "Septuple"
+beat_division_count_name = "Compound"
+classification = "Compound Septuple"
+beat_offsets = [0.0, 0.375, 0.75, 1.125, 1.5, 1.875, 2.25]
+
+[[meter]]
+ratio = "24/32"
+bar_quarter_length = 3.0
+beat_count = 8
+beat_quarter_length = 0.375
+beat_division_count = 3
+beat_count_name = "Octuple"
+beat_division_count_name = "Compound"
+classification = "Compound Octuple"
+beat_offsets = [0.0, 0.375, 0.75, 1.125, 1.5, 1.875, 2.25, 2.625]
+
+[[meter]]
+ratio = "27/32"
+bar_quarter_length = 3.375
+beat_count = 9
+beat_quarter_length = 0.375
+beat_division_count = 3
+beat_count_name = "9-uple"
+beat_division_count_name = "Compound"
+classification = "Compound 9-uple"
+beat_offsets = [0.0, 0.375, 0.75, 1.125, 1.5, 1.875, 2.25, 2.625, 3.0]
