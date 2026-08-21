@@ -29,6 +29,7 @@ use super::Fraction;
 use crate::defaults::{FloatType, IntegerType, UnsignedIntegerType};
 use crate::error::{Error, Result};
 
+use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
@@ -228,12 +229,14 @@ impl ScalaScale {
         })
     }
 
-    /// Parses the raw bytes of a `.scl` file, replacing invalid UTF-8.
+    /// Parses the raw bytes of a `.scl` file.
     ///
-    /// Much of the Scala archive predates UTF-8 and carries Latin-1 bytes in
-    /// its description lines; 73 of the ~3900 files music21 ships are not valid
-    /// UTF-8. Degree lines are always ASCII, so a lossy conversion affects only
-    /// the description text.
+    /// The Scala format is defined as latin-1 (ISO-8859-1), which music21's
+    /// `scale.scala` module states explicitly, and 73 of the ~3900 files it
+    /// ships are not valid UTF-8. Bytes are therefore decoded as latin-1 rather
+    /// than as UTF-8, so accented characters in description lines survive
+    /// instead of becoming replacement characters. Degree lines are ASCII in
+    /// either reading, so numbers are unaffected.
     ///
     /// This crate does no file IO of its own, so read the file yourself:
     ///
@@ -245,7 +248,9 @@ impl ScalaScale {
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     pub fn parse_bytes(bytes: &[u8]) -> Result<Self> {
-        Self::parse(&String::from_utf8_lossy(bytes))
+        // In latin-1 every byte is its own code point, so this cannot fail.
+        let text: String = bytes.iter().map(|&byte| byte as char).collect();
+        Self::parse(&text)
     }
 
     /// Returns the scale's description line.
@@ -318,6 +323,140 @@ impl FromStr for ScalaScale {
 impl Display for ScalaScale {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} ({} degrees)", self.description, self.degrees.len())
+    }
+}
+
+/// A searchable collection of Scala scales, keyed by file name.
+///
+/// This is the runtime counterpart to music21's `scale.scala` module, whose
+/// `search` and `getPaths` helpers index the Scala scale archive. The archive
+/// itself is **not** bundled with this crate — see the note below — so the
+/// caller supplies the files and this type indexes whatever it is given, which
+/// also keeps the crate free of file IO and usable from wasm.
+///
+/// ```
+/// use music21_rs::ScalaArchive;
+///
+/// let mut archive = ScalaArchive::new();
+/// archive.insert("mbira_banda.scl", b"Mbira Banda\n 1\n 2/1\n")?;
+/// archive.insert("slendro5_2.scl", b"Slendro\n 1\n 2/1\n")?;
+///
+/// assert_eq!(archive.search("mbira"), ["mbira_banda.scl"]);
+/// assert!(archive.get("slendro5_2.scl").is_some());
+/// # Ok::<(), music21_rs::Error>(())
+/// ```
+///
+///
+/// music21 ships ~3900 `.scl` files, but its own
+/// extend automatically to downstream redistribution, so this crate indexes the
+/// files rather than carrying them. The complete archive is published at
+#[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct ScalaArchive {
+    scales: BTreeMap<String, ScalaScale>,
+}
+
+impl ScalaArchive {
+    /// Creates an empty archive.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Parses and indexes one `.scl` file under the given name.
+    ///
+    /// The name is the file name as music21 refers to it, such as
+    /// `"partch_43.scl"`. Returns the scale it replaced, if any.
+    pub fn insert(
+        &mut self,
+        file_name: impl Into<String>,
+        bytes: &[u8],
+    ) -> Result<Option<ScalaScale>> {
+        let file_name = file_name.into();
+        let scale = ScalaScale::parse_bytes(bytes)
+            .map_err(|error| Error::TuningSystem(format!("{file_name}: {error}")))?;
+        Ok(self.scales.insert(file_name, scale))
+    }
+
+    /// Indexes an already-parsed scale under the given name.
+    pub fn insert_scale(
+        &mut self,
+        file_name: impl Into<String>,
+        scale: ScalaScale,
+    ) -> Option<ScalaScale> {
+        self.scales.insert(file_name.into(), scale)
+    }
+
+    /// Returns the scale stored under a file name.
+    pub fn get(&self, file_name: &str) -> Option<&ScalaScale> {
+        self.scales.get(file_name)
+    }
+
+    /// Returns every indexed file name, in sorted order.
+    pub fn names(&self) -> impl Iterator<Item = &str> {
+        self.scales.keys().map(String::as_str)
+    }
+
+    /// Returns every indexed scale with its file name, in sorted order.
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &ScalaScale)> {
+        self.scales
+            .iter()
+            .map(|(name, scale)| (name.as_str(), scale))
+    }
+
+    /// Returns the number of indexed scales.
+    pub fn len(&self) -> usize {
+        self.scales.len()
+    }
+
+    /// Returns whether the archive is empty.
+    pub fn is_empty(&self) -> bool {
+        self.scales.is_empty()
+    }
+
+    /// Finds file names matching a search string, as music21's
+    /// `scale.scala.search` does.
+    ///
+    /// Spaces in the target are ignored, an exact file-name match is preferred,
+    /// and the remaining matches are substring hits against the name with its
+    /// extension dropped and against a form with `_` and `-` removed. Results
+    /// are sorted.
+    pub fn search(&self, target: &str) -> Vec<&str> {
+        let target = target.replace(' ', "").to_lowercase();
+        let mut matches = Vec::new();
+
+        for name in self.scales.keys() {
+            if name.to_lowercase() == target {
+                matches.push(name.as_str());
+            }
+        }
+
+        for name in self.scales.keys() {
+            if matches.contains(&name.as_str()) {
+                continue;
+            }
+            let stem = name.strip_suffix(".scl").unwrap_or(name).to_lowercase();
+            let squashed = stem.replace(['_', '-'], "");
+            if stem.contains(&target) || squashed.contains(&target) {
+                matches.push(name.as_str());
+            }
+        }
+
+        matches.sort_unstable();
+        matches
+    }
+}
+
+impl Extend<(String, ScalaScale)> for ScalaArchive {
+    fn extend<T: IntoIterator<Item = (String, ScalaScale)>>(&mut self, iter: T) {
+        self.scales.extend(iter);
+    }
+}
+
+impl FromIterator<(String, ScalaScale)> for ScalaArchive {
+    fn from_iter<T: IntoIterator<Item = (String, ScalaScale)>>(iter: T) -> Self {
+        Self {
+            scales: iter.into_iter().collect(),
+        }
     }
 }
 
@@ -458,6 +597,75 @@ mod tests {
         }
     }
 
+    fn archive_of(names: &[&str]) -> ScalaArchive {
+        let mut archive = ScalaArchive::new();
+        for name in names {
+            archive
+                .insert(*name, b"A scale\n 1\n 2/1\n")
+                .expect("fixture scale parses");
+        }
+        archive
+    }
+
+    #[test]
+    fn archive_indexes_and_retrieves_by_file_name() {
+        let archive = archive_of(&["partch_43.scl", "slendro5_2.scl"]);
+        assert_eq!(archive.len(), 2);
+        assert!(archive.get("partch_43.scl").is_some());
+        assert!(archive.get("missing.scl").is_none());
+        assert_eq!(
+            archive.names().collect::<Vec<_>>(),
+            ["partch_43.scl", "slendro5_2.scl"]
+        );
+    }
+
+    #[test]
+    fn archive_search_matches_music21_semantics() {
+        let archive = archive_of(&[
+            "mbira_banda.scl",
+            "mbira_banda2.scl",
+            "mbira_zimb.scl",
+            "slendro5_2.scl",
+            "partch_43.scl",
+        ]);
+
+        // Substring hit against the stem.
+        assert_eq!(
+            archive.search("mbira"),
+            ["mbira_banda.scl", "mbira_banda2.scl", "mbira_zimb.scl"]
+        );
+        // Spaces in the target are ignored.
+        assert_eq!(
+            archive.search("mbira banda"),
+            ["mbira_banda.scl", "mbira_banda2.scl"]
+        );
+        // Underscores and hyphens are ignored on the indexed side.
+        assert_eq!(
+            archive.search("mbirabanda"),
+            ["mbira_banda.scl", "mbira_banda2.scl"]
+        );
+        // Matching is case-insensitive.
+        assert_eq!(archive.search("PARTCH"), ["partch_43.scl"]);
+        // An exact file name matches.
+        assert_eq!(archive.search("slendro5_2.scl"), ["slendro5_2.scl"]);
+        assert!(archive.search("nothing-here").is_empty());
+    }
+
+    #[test]
+    fn archive_reports_the_offending_file_on_a_parse_error() {
+        let mut archive = ScalaArchive::new();
+        let error = archive
+            .insert("broken.scl", b"Broken\n not-a-number\n")
+            .expect_err("should reject");
+        assert!(error.to_string().contains("broken.scl"), "{error}");
+    }
+
+    #[test]
+    fn decodes_latin1_description_bytes() {
+        // 0xE9 is latin-1 "e-acute"; the Scala format is defined as latin-1.
+        let scale = ScalaScale::parse_bytes(b"Caf\xe9\n 1\n 2/1\n").unwrap();
+        assert_eq!(scale.description(), "Caf\u{e9}");
+    }
     #[test]
     fn round_trips_through_from_str() {
         let scale: ScalaScale = FIFTH_AND_OCTAVE.parse().unwrap();
