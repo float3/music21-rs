@@ -1,6 +1,6 @@
 # Expected scale realizations, generated from music21 by
-# `python-parity/generate_scale_expectations.py`. Checked in so the
-# library can be verified without importing music21.
+# `cargo run -p xtask --features python -- regenerate-fixtures`.
+# Checked in so the library can be verified without importing music21.
 #
 # music21 11.0.0b8
 
@@ -425,3 +425,4 @@ cases = [
     { tonic = "G-4", pitches = ["G-4", "G4", "A#4", "B#4", "D#5", "E#5", "D#5", "F#5"] },
     { tonic = "C-4", pitches = ["C-4", "C4", "D#4", "E#4", "G#4", "A#4", "G#4", "B4"] },
 ]
+

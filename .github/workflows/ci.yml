@@ -172,6 +172,9 @@ jobs:
       - name: Verify generated tuning tables
         run: cargo run -p xtask -- verify-tuning-tables
 
+      - name: Verify bundled Scala archive index
+        run: cargo run -p xtask -- verify-scala-archive
+
       - name: Cargo check
         run: cargo check --workspace --all-targets
 
