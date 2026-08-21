@@ -65,6 +65,29 @@ assert_eq!(fifth.pythagorean_ratio()?.to_string(), "3/2");
 # Ok::<(), music21_rs::Error>(())
 ```
 
+Scala `.scl` scale files can be loaded at runtime, including the several
+thousand shipped inside the `music21` reference submodule:
+
+```rust
+use music21_rs::ScalaScale;
+
+let scale = ScalaScale::parse("A fifth and an octave
+ 2
+ 3/2
+ 2/1
+")?;
+
+assert_eq!(scale.len(), 2);
+assert_eq!(scale.ratio_at(1), 1.5);
+assert_eq!(scale.frequency_at(440.0, 1), 660.0);
+
+# Ok::<(), music21_rs::Error>(())
+```
+
+Degrees keep their written form, so an exact ratio stays exact while a scale
+written in cents stays in cents. The crate performs no file IO itself; read the
+bytes and hand them to `ScalaScale::parse_bytes`.
+
 ## Browser Demos
 
 The live browser demos are published at
