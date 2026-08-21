@@ -396,16 +396,55 @@ fn suffix_has_seventh(suffix: &str) -> bool {
         || suffix.contains("42")
 }
 
+/// music21's `roman.figureShorthands`, mapping a full figured-bass string to
+/// the abbreviation musicians actually write.
+///
+/// This is the table the inversion logic used to approximate with
+/// `suffix.contains("64")`-style probes, which read `642` as a second inversion
+/// because `64` matched before `42` was ever tested. Normalizing through the
+/// real table removes that ordering hazard rather than reshuffling the probes.
+const FIGURE_SHORTHANDS: [(&str, &str); 20] = [
+    ("53", ""),
+    ("3", ""),
+    ("63", "6"),
+    ("753", "7"),
+    ("75", "7"),
+    ("73", "7"),
+    ("9753", "9"),
+    ("975", "9"),
+    ("953", "9"),
+    ("97", "9"),
+    ("95", "9"),
+    ("93", "9"),
+    ("653", "65"),
+    ("6b53", "6b5"),
+    ("643", "43"),
+    ("642", "42"),
+    ("bb7b5b3", "o7"),
+    ("b7b5b3", "\u{00f8}7"),
+    ("bb7b53", "o7"),
+    ("b7b53", "\u{00f8}7"),
+];
+
+/// Returns the shorthand for a figure, or the figure itself when it has none.
+fn normalize_figure(figure: &str) -> &str {
+    FIGURE_SHORTHANDS
+        .iter()
+        .find(|(full, _)| *full == figure)
+        .map_or(figure, |(_, short)| *short)
+}
+
 fn parse_inversion(suffix: &str) -> u8 {
     let suffix = strip_roman_addition_groups(suffix);
-    if suffix.contains("64") || suffix.contains("43") {
-        2
-    } else if suffix.contains("65") || suffix.contains('6') {
-        1
-    } else if suffix.contains("42") {
-        3
-    } else {
-        0
+    // Only the figured-bass digits decide the inversion; quality marks such as
+    // `o`, `+` and the half-diminished sign ride along in the suffix.
+    let digits: String = suffix.chars().filter(char::is_ascii_digit).collect();
+
+    match normalize_figure(&digits) {
+        "42" => 3,
+        "43" | "64" => 2,
+        "65" | "6" => 1,
+        _ => 0,
     }
 }
 
@@ -803,6 +842,33 @@ mod tests {
         let german = Chord::new("A- C E- F#").unwrap();
         let rn = RomanNumeral::analyze(&german, key).unwrap().unwrap();
         assert_eq!(rn.figure(), "Ger+6");
+    }
+
+    #[test]
+    fn figured_bass_shorthands_give_music21_inversions() {
+        // Captured from music21's RomanNumeral(...).inversion(). `V642` is the
+        // case the old `contains("64")` probe got wrong: it matched `64` and
+        // reported a second inversion where music21 reports a third.
+        let key = Key::from_tonic_mode("C", "major").unwrap();
+        for (figure, expected) in [
+            ("V", 0),
+            ("V6", 1),
+            ("V64", 2),
+            ("V7", 0),
+            ("V65", 1),
+            ("V43", 2),
+            ("V42", 3),
+            ("V642", 3),
+            ("V653", 1),
+            ("V643", 2),
+            ("V63", 1),
+            ("V53", 0),
+            ("V9", 0),
+        ] {
+            let numeral = RomanNumeral::new(figure, key.clone())
+                .unwrap_or_else(|err| panic!("{figure} should parse: {err}"));
+            assert_eq!(numeral.inversion(), expected, "{figure}");
+        }
     }
 
     #[test]
