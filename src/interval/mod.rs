@@ -584,7 +584,7 @@ fn _string_to_diatonic_chromatic(
         .parse::<IntegerType>()
         .map_err(|_| Error::Interval(format!("cannot read an interval number from {value:?}")))?
         * dir_scale;
-    let spec = Specifier::parse(remain);
+    let spec = Specifier::parse(&remain)?;
 
     let g_interval = GenericInterval::from_int(generic_number)?;
     let d_interval = g_interval.get_diatonic(spec);
@@ -792,5 +792,67 @@ mod tests {
 
         assert_eq!(inverted.semitones(), 0);
         assert_eq!(inverted.generic_number(), 1);
+    }
+    #[test]
+    fn specifier_case_matters_only_for_major_versus_minor() {
+        // Verified against music21: it accepts either case for every specifier
+        // letter, and m/M is the sole pair where case changes the interval.
+        for (lower, upper) in [
+            ("p5", "P5"),
+            ("a2", "A2"),
+            ("d5", "D5"),
+            ("aa2", "AA2"),
+            ("dd5", "DD5"),
+            ("aaa2", "AAA2"),
+            ("ddd5", "DDD5"),
+        ] {
+            let a = Interval::from_name(lower).expect("lowercase parses");
+            let b = Interval::from_name(upper).expect("uppercase parses");
+            assert_eq!(a.semitones(), b.semitones(), "{lower} vs {upper}");
+            assert_eq!(a.name(), b.name(), "{lower} vs {upper}");
+        }
+
+        // The carve-out: these must stay different.
+        let minor = Interval::from_name("m3").expect("m3 parses");
+        let major = Interval::from_name("M3").expect("M3 parses");
+        assert_eq!(minor.semitones(), 3);
+        assert_eq!(major.semitones(), 4);
+    }
+
+    #[test]
+    fn an_unknown_specifier_errors_instead_of_panicking() {
+        for name in ["Q5", "x3", "5", "zz2"] {
+            assert!(
+                Interval::from_name(name).is_err(),
+                "{name:?} should be rejected, not panic"
+            );
+        }
+    }
+
+    #[test]
+    fn a_hyphen_anywhere_makes_an_interval_name_descending() {
+        // Verified against music21: it parses every form below identically,
+        // so these assertions pin parity rather than a local accident. The
+        // prefix form is this crate's convention; "M-2" is where music21's
+        // directedName puts the hyphen.
+        for name in ["-M2", "M-2"] {
+            let interval = Interval::from_name(name).expect("descending name parses");
+            assert_eq!(interval.semitones(), -2, "{name}");
+            assert_eq!(interval.generic_number(), -2, "{name}");
+        }
+
+        // Count and position are both irrelevant: hyphens do not cancel, so
+        // repeating one leaves the interval descending rather than flipping it
+        // back. music21 agrees on both spellings.
+        for name in ["--M2", "-M-2"] {
+            let interval = Interval::from_name(name).expect("repeated hyphen parses");
+            assert_eq!(interval.semitones(), -2, "{name}");
+        }
+
+        // A specifier other than major is unaffected by where the hyphen sits.
+        assert_eq!(
+            Interval::from_name("d-5").expect("d-5 parses").semitones(),
+            -6
+        );
     }
 }

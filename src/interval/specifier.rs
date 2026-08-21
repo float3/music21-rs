@@ -36,20 +36,37 @@ impl Specifier {
         }
     }
 
-    pub(crate) fn parse(remain: String) -> Self {
-        match remain.as_str() {
-            "Perfect" | "p" | "P" => Specifier::Perfect,
-            "Major" | "M" => Specifier::Major,
-            "Minor" | "m" => Specifier::Minor,
-            "Augmented" | "a" => Specifier::Augmented,
-            "Diminished" | "d" => Specifier::Diminished,
-            "Double Augmented" | "aa" => Specifier::DoubleAugmented,
-            "Double Diminished" | "dd" => Specifier::DoubleDiminished,
-            "Triple Augmented" | "aaa" => Specifier::TripleAugmented,
-            "Triple Diminished" | "ddd" => Specifier::TripleDiminished,
-            "Quadruple Augmented" | "aaaa" => Specifier::QuadrupleAugmented,
-            "Quadruple Diminished" | "dddd" => Specifier::QuadrupleDiminished,
-            val => panic!("Invalid specifier: {val}"),
+    /// Parses a specifier prefix such as `"P"`, `"m"`, or `"AA"`.
+    ///
+    /// Case is significant only for `m`/`M`: minor and major are the one pair
+    /// where both spellings already denote different intervals. Every other
+    /// specifier accepts either case, which is exactly the distinction music21
+    /// draws — `a2`/`A2`, `d5`/`D5`, `p5`/`P5` and the doubled and tripled
+    /// forms all parse there, while `m3` and `M3` stay distinct. Lowercasing
+    /// the input wholesale would silently turn every major third minor.
+    pub(crate) fn parse(remain: &str) -> Result<Self> {
+        // Handled before the case fold, which would collapse them together.
+        match remain {
+            "M" => return Ok(Specifier::Major),
+            "m" => return Ok(Specifier::Minor),
+            _ => {}
+        }
+
+        match remain.to_ascii_lowercase().as_str() {
+            "perfect" | "p" => Ok(Specifier::Perfect),
+            "major" => Ok(Specifier::Major),
+            "minor" => Ok(Specifier::Minor),
+            "augmented" | "a" => Ok(Specifier::Augmented),
+            "diminished" | "d" => Ok(Specifier::Diminished),
+            "double augmented" | "aa" => Ok(Specifier::DoubleAugmented),
+            "double diminished" | "dd" => Ok(Specifier::DoubleDiminished),
+            "triple augmented" | "aaa" => Ok(Specifier::TripleAugmented),
+            "triple diminished" | "ddd" => Ok(Specifier::TripleDiminished),
+            "quadruple augmented" | "aaaa" => Ok(Specifier::QuadrupleAugmented),
+            "quadruple diminished" | "dddd" => Ok(Specifier::QuadrupleDiminished),
+            _ => Err(Error::Interval(format!(
+                "unknown interval specifier {remain:?}"
+            ))),
         }
     }
 
