@@ -41,6 +41,7 @@ pub mod rest;
 pub mod roman;
 /// Public scale helpers.
 pub mod scale;
+pub mod sieve;
 pub(crate) mod stepname;
 /// Small ordered timeline container.
 pub mod stream;
@@ -79,6 +80,7 @@ pub use polyrhythm::{Polyrhythm, PolyrhythmAnalysis, PolyrhythmEvent, Polyrhythm
 pub use rest::Rest;
 pub use roman::{RomanNumeral, analyze_chord, analyze_chord_with_root};
 pub use scale::{DiatonicScale, Scale, ScaleType};
+pub use sieve::Sieve;
 pub use stream::{Stream, StreamElement, StreamEvent};
 pub use tuningsystem::{
     ALL_TUNING_SYSTEMS, COMMON_TWELVE_TONE_TUNING_SYSTEMS, Fraction, HISTORICAL_TEMPERAMENTS,

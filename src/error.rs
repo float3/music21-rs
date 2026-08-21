@@ -37,6 +37,10 @@ pub enum Error {
     Midi(String),
     /// Error associated with analysis helpers.
     Analysis(String),
+    /// Error associated with time-signature parsing or beat lookup.
+    Meter(String),
+    /// Error associated with Xenakis sieve parsing or evaluation.
+    Sieve(String),
 }
 
 impl fmt::Display for Error {
@@ -57,6 +61,8 @@ impl fmt::Display for Error {
             Error::TuningSystem(msg) => write!(f, "TuningSystem error: {msg}"),
             Error::Midi(msg) => write!(f, "Midi error: {msg}"),
             Error::Analysis(msg) => write!(f, "Analysis error: {msg}"),
+            Error::Meter(msg) => write!(f, "Meter error: {msg}"),
+            Error::Sieve(msg) => write!(f, "Sieve error: {msg}"),
         }
     }
 }
