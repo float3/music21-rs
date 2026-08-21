@@ -74,11 +74,26 @@ pub struct ChordSymbol {
     additions: Vec<ChordAlteration>,
 }
 
+/// A chord type from music21's `harmony.CHORD_TYPES` table.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct Music21ChordType {
-    kind: &'static str,
-    notation: &'static str,
-    abbreviation: &'static str,
+pub struct Music21ChordType {
+    /// music21's kind name, such as `"dominant-seventh"`.
+    pub kind: &'static str,
+    /// Scale-degree notation, such as `"1,3,5,-7"`.
+    pub notation: &'static str,
+    /// music21's first abbreviation for this kind, such as `"7"`.
+    ///
+    /// music21 lists several per kind; this is the first, which is the one it
+    /// uses when writing a figure.
+    pub abbreviation: &'static str,
+}
+
+/// Returns every chord type this crate knows from music21's harmony tables.
+///
+/// The table mirrors music21's `harmony.CHORD_TYPES` and is verified against it
+/// by `python-parity`'s `chord_type_parity` test.
+pub fn known_chord_symbol_types() -> &'static [Music21ChordType] {
+    MUSIC21_CHORD_TYPES
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

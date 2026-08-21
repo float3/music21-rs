@@ -1,0 +1,261 @@
+# Expected chord types, generated from music21 by
+# `python-parity/generate_scale_expectations.py`. The crate keeps its own
+# copy of this table in src/chordsymbol.rs; the parity test compares them
+# so the hand-maintained copy cannot drift from upstream unnoticed.
+#
+# music21 11.0.0b8
+
+[[chord_type]]
+kind = "major"
+notation = "1,3,5"
+abbreviations = ["", "M", "maj"]
+
+[[chord_type]]
+kind = "minor"
+notation = "1,-3,5"
+abbreviations = ["m", "min"]
+
+[[chord_type]]
+kind = "augmented"
+notation = "1,3,#5"
+abbreviations = ["+", "aug"]
+
+[[chord_type]]
+kind = "diminished"
+notation = "1,-3,-5"
+abbreviations = ["dim", "o"]
+
+[[chord_type]]
+kind = "dominant-seventh"
+notation = "1,3,5,-7"
+abbreviations = ["7", "dom7"]
+
+[[chord_type]]
+kind = "major-seventh"
+notation = "1,3,5,7"
+abbreviations = ["maj7", "M7"]
+
+[[chord_type]]
+kind = "minor-major-seventh"
+notation = "1,-3,5,7"
+abbreviations = ["mM7", "m#7", "minmaj7"]
+
+[[chord_type]]
+kind = "minor-seventh"
+notation = "1,-3,5,-7"
+abbreviations = ["m7", "min7"]
+
+[[chord_type]]
+kind = "augmented-major-seventh"
+notation = "1,3,#5,7"
+abbreviations = ["+M7", "augmaj7"]
+
+[[chord_type]]
+kind = "augmented-seventh"
+notation = "1,3,#5,-7"
+abbreviations = ["7+", "+7", "aug7"]
+
+[[chord_type]]
+kind = "half-diminished-seventh"
+notation = "1,-3,-5,-7"
+abbreviations = ["ø7", "m7b5"]
+
+[[chord_type]]
+kind = "diminished-seventh"
+notation = "1,-3,-5,--7"
+abbreviations = ["o7", "dim7"]
+
+[[chord_type]]
+kind = "seventh-flat-five"
+notation = "1,3,-5,-7"
+abbreviations = ["dom7dim5"]
+
+[[chord_type]]
+kind = "major-sixth"
+notation = "1,3,5,6"
+abbreviations = ["6"]
+
+[[chord_type]]
+kind = "minor-sixth"
+notation = "1,-3,5,6"
+abbreviations = ["m6", "min6"]
+
+[[chord_type]]
+kind = "major-ninth"
+notation = "1,3,5,7,9"
+abbreviations = ["M9", "Maj9"]
+
+[[chord_type]]
+kind = "dominant-ninth"
+notation = "1,3,5,-7,9"
+abbreviations = ["9", "dom9"]
+
+[[chord_type]]
+kind = "minor-major-ninth"
+notation = "1,-3,5,7,9"
+abbreviations = ["mM9", "minmaj9"]
+
+[[chord_type]]
+kind = "minor-ninth"
+notation = "1,-3,5,-7,9"
+abbreviations = ["m9", "min9"]
+
+[[chord_type]]
+kind = "augmented-major-ninth"
+notation = "1,3,#5,7,9"
+abbreviations = ["+M9", "augmaj9"]
+
+[[chord_type]]
+kind = "augmented-dominant-ninth"
+notation = "1,3,#5,-7,9"
+abbreviations = ["9#5", "+9", "aug9"]
+
+[[chord_type]]
+kind = "half-diminished-ninth"
+notation = "1,-3,-5,-7,9"
+abbreviations = ["ø9"]
+
+[[chord_type]]
+kind = "half-diminished-minor-ninth"
+notation = "1,-3,-5,-7,-9"
+abbreviations = ["øb9"]
+
+[[chord_type]]
+kind = "diminished-ninth"
+notation = "1,-3,-5,--7,9"
+abbreviations = ["o9", "dim9"]
+
+[[chord_type]]
+kind = "diminished-minor-ninth"
+notation = "1,-3,-5,--7,-9"
+abbreviations = ["ob9", "dimb9"]
+
+[[chord_type]]
+kind = "dominant-11th"
+notation = "1,3,5,-7,9,11"
+abbreviations = ["11", "dom11"]
+
+[[chord_type]]
+kind = "major-11th"
+notation = "1,3,5,7,9,11"
+abbreviations = ["M11", "Maj11"]
+
+[[chord_type]]
+kind = "minor-major-11th"
+notation = "1,-3,5,7,9,11"
+abbreviations = ["mM11", "minmaj11"]
+
+[[chord_type]]
+kind = "minor-11th"
+notation = "1,-3,5,-7,9,11"
+abbreviations = ["m11", "min11"]
+
+[[chord_type]]
+kind = "augmented-major-11th"
+notation = "1,3,#5,7,9,11"
+abbreviations = ["+M11", "augmaj11"]
+
+[[chord_type]]
+kind = "augmented-11th"
+notation = "1,3,#5,-7,9,11"
+abbreviations = ["+11", "aug11"]
+
+[[chord_type]]
+kind = "half-diminished-11th"
+notation = "1,-3,-5,-7,9,11"
+abbreviations = ["ø11"]
+
+[[chord_type]]
+kind = "diminished-11th"
+notation = "1,-3,-5,--7,9,11"
+abbreviations = ["o11", "dim11"]
+
+[[chord_type]]
+kind = "major-13th"
+notation = "1,3,5,7,9,11,13"
+abbreviations = ["M13", "Maj13"]
+
+[[chord_type]]
+kind = "dominant-13th"
+notation = "1,3,5,-7,9,11,13"
+abbreviations = ["13", "dom13"]
+
+[[chord_type]]
+kind = "minor-major-13th"
+notation = "1,-3,5,7,9,11,13"
+abbreviations = ["mM13", "minmaj13"]
+
+[[chord_type]]
+kind = "minor-13th"
+notation = "1,-3,5,-7,9,11,13"
+abbreviations = ["m13", "min13"]
+
+[[chord_type]]
+kind = "augmented-major-13th"
+notation = "1,3,#5,7,9,11,13"
+abbreviations = ["+M13", "augmaj13"]
+
+[[chord_type]]
+kind = "augmented-dominant-13th"
+notation = "1,3,#5,-7,9,11,13"
+abbreviations = ["+13", "aug13"]
+
+[[chord_type]]
+kind = "half-diminished-13th"
+notation = "1,-3,-5,-7,9,11,13"
+abbreviations = ["ø13"]
+
+[[chord_type]]
+kind = "suspended-second"
+notation = "1,2,5"
+abbreviations = ["sus2"]
+
+[[chord_type]]
+kind = "suspended-fourth"
+notation = "1,4,5"
+abbreviations = ["sus", "sus4"]
+
+[[chord_type]]
+kind = "suspended-fourth-seventh"
+notation = "1,4,5,-7"
+abbreviations = ["7sus", "7sus4"]
+
+[[chord_type]]
+kind = "Neapolitan"
+notation = "1,-2,3,-5"
+abbreviations = ["N6"]
+
+[[chord_type]]
+kind = "Italian"
+notation = "1,#4,-6"
+abbreviations = ["It+6", "It"]
+
+[[chord_type]]
+kind = "French"
+notation = "1,2,#4,-6"
+abbreviations = ["Fr+6", "Fr"]
+
+[[chord_type]]
+kind = "German"
+notation = "1,-3,#4,-6"
+abbreviations = ["Gr+6", "Ger"]
+
+[[chord_type]]
+kind = "pedal"
+notation = "1"
+abbreviations = ["pedal"]
+
+[[chord_type]]
+kind = "power"
+notation = "1,5"
+abbreviations = ["power"]
+
+[[chord_type]]
+kind = "Tristan"
+notation = "1,#4,#6,#9"
+abbreviations = ["tristan"]
+
+[aliases]
+"dominant" = "dominant-seventh"
+"major-minor" = "minor-major-seventh"
+"half-diminished" = "half-diminished-seventh"

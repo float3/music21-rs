@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Regenerates data/scale_expectations.toml from the music21 submodule.
+"""Regenerates the music21 expectation fixtures from the submodule.
+
+Writes data/scale_expectations.toml and data/chord_type_expectations.toml.
 
 The library's scale tables are verified against this file, so it is the
 ground truth for what music21 actually produces. Unlike the chord-table
@@ -14,7 +16,7 @@ during a build:
 Run from the repository root.
 """
 import sys; sys.path.insert(0,'music21')
-from music21 import scale, pitch
+from music21 import scale, pitch, harmony
 
 RS_TO_M21 = {
  "Major":"MajorScale","Minor":"MinorScale","Dorian":"DorianScale","Phrygian":"PhrygianScale",
@@ -46,3 +48,27 @@ for rs, m21 in RS_TO_M21.items():
     out.append("")
 open("data/scale_expectations.toml","w",encoding="utf-8").write("\n".join(out))
 print("wrote data/scale_expectations.toml:", len(RS_TO_M21), "scales x", len(TONICS), "tonics")
+
+
+# ---------------------------------------------------------------- chord types
+out = ["# Expected chord types, generated from music21 by",
+       "# `python-parity/generate_scale_expectations.py`. The crate keeps its own",
+       "# copy of this table in src/chordsymbol.rs; the parity test compares them",
+       "# so the hand-maintained copy cannot drift from upstream unnoticed.",
+       "#",
+       f"# music21 {__import__('music21').__version__}",
+       ""]
+for kind, (notation, abbreviations) in harmony.CHORD_TYPES.items():
+    out.append("[[chord_type]]")
+    out.append(f'kind = "{kind}"')
+    out.append(f'notation = "{notation}"')
+    joined = ", ".join(f'"{a}"' for a in abbreviations)
+    out.append(f"abbreviations = [{joined}]")
+    out.append("")
+out.append("[aliases]")
+for alias, target in harmony.CHORD_ALIASES.items():
+    out.append(f'"{alias}" = "{target}"')
+out.append("")
+open("data/chord_type_expectations.toml", "w", encoding="utf-8").write(chr(10).join(out))
+print("wrote data/chord_type_expectations.toml:", len(harmony.CHORD_TYPES), "types,",
+      len(harmony.CHORD_ALIASES), "aliases")
