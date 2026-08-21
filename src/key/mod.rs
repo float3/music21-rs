@@ -1,4 +1,6 @@
-pub use keysignature::{KeySignature, pitch_name_to_sharps, pitch_to_sharps, sharps_to_pitch};
+pub use keysignature::{
+    KeySignature, mode_sharps_alter, pitch_name_to_sharps, pitch_to_sharps, sharps_to_pitch,
+};
 
 use crate::{
     chord::Chord,
