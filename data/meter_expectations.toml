@@ -1,8 +1,8 @@
 # Expected time-signature properties, generated from music21 by
-# `python-parity/generate_scale_expectations.py`. The crate derives these
-# from the numerator and denominator alone; music21 derives them from a
-# MeterSequence partition tree, so this file is what proves the shortcut
-# agrees with the tree.
+# `cargo run -p xtask --features python -- regenerate-fixtures`.
+# The crate derives these from the numerator and denominator alone;
+# music21 derives them from a MeterSequence partition tree, so this
+# file is what proves the shortcut agrees with the tree.
 #
 # music21 11.0.0b8
 
@@ -1393,3 +1393,4 @@ beat_count_name = "9-uple"
 beat_division_count_name = "Compound"
 classification = "Compound 9-uple"
 beat_offsets = [0.0, 0.375, 0.75, 1.125, 1.5, 1.875, 2.25, 2.625, 3.0]
+

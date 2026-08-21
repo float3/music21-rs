@@ -10,9 +10,16 @@ use std::path::{Path, PathBuf};
 
 /// Files in the archive that are not valid Scala and are expected to fail.
 ///
-/// `sparschuh-stanhope.scl` writes a degree as `697//441`, and `xxx.scl`
-/// declares zero degrees.
-const KNOWN_BAD: [&str; 2] = ["sparschuh-stanhope.scl", "xxx.scl"];
+/// Empty, and that is the point: every file in the pinned archive now parses.
+///
+/// `sparschuh-stanhope.scl` was listed here for writing a degree as `697//441`
+/// with a doubled slash. Upstream fixed it in cuthbertLab/music21#2003, which
+/// this submodule pin now includes, so the entry is gone.
+///
+/// `xxx.scl` was listed for declaring zero degrees. That is legal Scala —
+/// music21 reads it as a scale with no pitches — and rejecting it was a bug in
+/// this crate, since fixed.
+const KNOWN_BAD: [&str; 0] = [];
 
 fn archive_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -32,6 +39,7 @@ fn parses_the_whole_scala_archive() {
     }
 
     let mut parsed = 0usize;
+    let mut empty = 0usize;
     let mut unexpected_failures = Vec::new();
     let mut unexpected_successes = Vec::new();
 
@@ -53,15 +61,14 @@ fn parses_the_whole_scala_archive() {
 
         match (ScalaScale::parse(&String::from_utf8_lossy(&bytes)), expected_bad) {
             (Ok(scale), false) => {
-                assert!(
-                    !scale.degrees().is_empty(),
-                    "{name} parsed to an empty scale"
-                );
-                assert_eq!(
-                    scale.degrees()[0].ratio(),
-                    1.0,
-                    "{name} does not start at the unison"
-                );
+                // A file may legally declare zero degrees; `xxx.scl` does, and
+                // music21 reads it the same way. Such a scale has no unison to
+                // check, so only non-empty ones get the degree assertions.
+                if let Some(first) = scale.degrees().first() {
+                    assert_eq!(first.ratio(), 1.0, "{name} does not start at the unison");
+                } else {
+                    empty += 1;
+                }
                 assert!(
                     scale.period().ratio() > 0.0,
                     "{name} has a non-positive period"
@@ -84,6 +91,9 @@ fn parses_the_whole_scala_archive() {
         unexpected_successes.is_empty(),
         "files listed in KNOWN_BAD now parse and should be removed from it: {unexpected_successes:?}"
     );
+    // Exactly one archive file declares zero degrees. If that changes, the
+    // "empty is legal" carve-out above is covering more than it should.
+    assert_eq!(empty, 1, "expected only xxx.scl to declare zero degrees");
     // Guards against the walk silently finding nothing if the layout moves.
     assert!(
         parsed > 3_000,

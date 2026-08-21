@@ -2,7 +2,12 @@
 authors = ["hill <hill@hilll.dev>"]
 description = "Rust helpers inspired by music21 for chord, pitch, polyrhythm, and tuning analysis"
 edition = "2024"
-include = ["/src", "/data/chord_tables.toml", "/examples"]
+include = [
+    "/src",
+    "/data/chord_tables.toml",
+    "/data/scala_archive.toml",
+    "/examples",
+]
 keywords = ["music", "chords", "music21"]
 license-file = "LICENSE"
 name = "music21-rs"
@@ -16,6 +21,7 @@ members = ["utils", "examples/audio", "examples/web", "xtask"]
 
 [features]
 default = []
+scala-archive = []
 serde = ["dep:serde"]
 
 [dependencies]

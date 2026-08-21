@@ -169,6 +169,23 @@ pub struct ScalaScale {
 }
 
 impl ScalaScale {
+    /// Builds a scale from already-split parts.
+    ///
+    /// Used by the bundled archive, whose degrees were separated from the file
+    /// structure when the archive was generated.
+    #[cfg(feature = "scala-archive")]
+    pub(crate) fn from_parts(
+        description: String,
+        degrees: Vec<ScalaDegree>,
+        period: ScalaDegree,
+    ) -> Self {
+        Self {
+            description,
+            degrees,
+            period,
+        }
+    }
+
     /// Parses the contents of a `.scl` file.
     ///
     /// Both ratio and cents degrees are accepted. Lines beginning with `!` are
@@ -192,12 +209,6 @@ impl ScalaScale {
             .map_err(|_| {
                 Error::TuningSystem(format!("invalid scala degree count {count_line:?}"))
             })?;
-        if count == 0 {
-            return Err(Error::TuningSystem(
-                "scala file declares zero degrees".to_string(),
-            ));
-        }
-
         let entries: Vec<&str> = lines
             .iter()
             .skip(2)
@@ -218,8 +229,12 @@ impl ScalaScale {
         }
 
         // Scala's last entry is the repeat interval, not a degree of the scale.
-        let period = parsed.pop().expect("count is non-zero");
-        let mut degrees = vec![ScalaDegree::Ratio(Fraction::new(1, 1))];
+        // A file may legitimately declare zero degrees, in which case there is
+        // neither a degree list nor a repeat interval to read.
+        let (mut degrees, period) = match parsed.pop() {
+            Some(period) => (vec![ScalaDegree::Ratio(Fraction::new(1, 1))], period),
+            None => (Vec::new(), ScalaDegree::Ratio(Fraction::new(1, 1))),
+        };
         degrees.append(&mut parsed);
 
         Ok(Self {
@@ -278,7 +293,8 @@ impl ScalaScale {
 
     /// Returns whether the scale has no degrees.
     ///
-    /// Always `false` for a parsed scale, since a zero-degree file is rejected.
+    /// A Scala file may declare zero degrees — the archive's `xxx.scl` does,
+    /// and music21 reads it as a scale with no pitches.
     pub fn is_empty(&self) -> bool {
         self.degrees.is_empty()
     }
@@ -287,7 +303,13 @@ impl ScalaScale {
     ///
     /// Indices outside one period wrap, shifting by the [period](Self::period)
     /// for each wrap. Negative indices run below the root.
+    ///
+    /// A scale with no degrees has nothing to wrap through, so every index
+    /// returns the root ratio of `1.0`.
     pub fn ratio_at(&self, index: IntegerType) -> FloatType {
+        if self.degrees.is_empty() {
+            return 1.0;
+        }
         let len = self.degrees.len() as IntegerType;
         let periods = index.div_euclid(len);
         let degree = index.rem_euclid(len) as usize;
@@ -345,11 +367,6 @@ impl Display for ScalaScale {
 /// assert!(archive.get("slendro5_2.scl").is_some());
 /// # Ok::<(), music21_rs::Error>(())
 /// ```
-///
-///
-/// music21 ships ~3900 `.scl` files, but its own
-/// extend automatically to downstream redistribution, so this crate indexes the
-/// files rather than carrying them. The complete archive is published at
 #[derive(Clone, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ScalaArchive {
@@ -413,6 +430,48 @@ impl ScalaArchive {
         self.scales.is_empty()
     }
 
+    /// Builds an archive from the `.scl` files bundled with the crate.
+    ///
+    /// Only available under the non-default `scala-archive` feature, which adds
+    /// roughly a megabyte of scale data to the build. Without it, supply the
+    /// files yourself with [`ScalaArchive::insert`].
+    ///
+    /// Use [`ScalaArchive::bundled_with_failures`] to see any scale that fails
+    /// to load rather than silently dropping it.
+    #[cfg(feature = "scala-archive")]
+    pub fn bundled() -> Self {
+        Self::bundled_with_failures().0
+    }
+
+    /// Builds an archive from the bundled files, reporting the ones that fail.
+    ///
+    /// The failures are a fixed property of the bundled data, so the returned
+    /// list is the same on every call.
+    #[cfg(feature = "scala-archive")]
+    pub fn bundled_with_failures() -> (Self, Vec<(&'static str, Error)>) {
+        let mut archive = Self::new();
+        let mut failures = Vec::new();
+        for (file_name, description, degrees, period) in crate::tuningsystem::scala_bundled::SCALES
+        {
+            match build_bundled(description, degrees, period) {
+                Ok(scale) => {
+                    archive.insert_scale(file_name, scale);
+                }
+                Err(error) => failures.push((file_name, error)),
+            }
+        }
+        (archive, failures)
+    }
+
+    /// Returns the number of `.scl` files bundled with the crate.
+    ///
+    /// Counts files without parsing them, so this includes the one that
+    /// [`ScalaArchive::bundled`] skips.
+    #[cfg(feature = "scala-archive")]
+    pub fn bundled_len() -> usize {
+        crate::tuningsystem::scala_bundled::SCALES.len()
+    }
+
     /// Finds file names matching a search string, as music21's
     /// `scale.scala.search` does.
     ///
@@ -446,6 +505,23 @@ impl ScalaArchive {
     }
 }
 
+/// Rebuilds a [`ScalaScale`] from the tokens emitted into `scala_bundled`.
+///
+/// The generator already split description, degrees and period, so this only
+/// has to parse each degree token — no Scala file structure is involved.
+#[cfg(feature = "scala-archive")]
+fn build_bundled(description: &str, degrees: &[&str], period: &str) -> Result<ScalaScale> {
+    let degrees = degrees
+        .iter()
+        .map(|token| ScalaDegree::parse(token))
+        .collect::<Result<Vec<_>>>()?;
+    Ok(ScalaScale::from_parts(
+        description.to_string(),
+        degrees,
+        ScalaDegree::parse(period)?,
+    ))
+}
+
 impl Extend<(String, ScalaScale)> for ScalaArchive {
     fn extend<T: IntoIterator<Item = (String, ScalaScale)>>(&mut self, iter: T) {
         self.scales.extend(iter);
@@ -460,8 +536,87 @@ impl FromIterator<(String, ScalaScale)> for ScalaArchive {
     }
 }
 
+#[cfg(all(test, feature = "scala-archive"))]
+mod bundled_tests {
+    use super::ScalaArchive;
+
+    #[test]
+    fn the_whole_bundled_archive_parses() {
+        let (archive, failures) = ScalaArchive::bundled_with_failures();
+        let names: Vec<&str> = failures.iter().map(|(name, _)| *name).collect();
+        // Every scale in the bundle parses. `sparschuh-stanhope.scl` used to
+        // fail here for writing a degree as `697//441`; upstream fixed it in
+        // cuthbertLab/music21#2003. `xxx.scl` declares zero degrees, which is
+        // legal Scala and which music21 accepts too.
+        assert_eq!(names, [] as [&str; 0]);
+        assert_eq!(archive.len(), ScalaArchive::bundled_len());
+        assert_eq!(ScalaArchive::bundled_len(), 3932);
+    }
+
+    #[test]
+    fn the_bundled_archive_carries_the_scales_the_tuning_tables_cite() {
+        let archive = ScalaArchive::bundled();
+        for name in [
+            "partch_43.scl",
+            "partch_29.scl",
+            "werck3.scl",
+            "vallotti.scl",
+            "meanquar.scl",
+            "ptolemy.scl",
+            "pyth_12.scl",
+            "kirnberger3.scl",
+            "rameau.scl",
+            "young2.scl",
+            "carlos_harm.scl",
+            "riley_albion.scl",
+            "indian.scl",
+            "indian-sagrama.scl",
+        ] {
+            assert!(
+                archive.get(name).is_some(),
+                "{name} missing from the bundle"
+            );
+        }
+    }
+
+    #[test]
+    fn bundled_file_names_are_sorted_and_unique() {
+        let names: Vec<&str> = crate::tuningsystem::scala_bundled::SCALES
+            .iter()
+            .map(|(name, _, _, _)| *name)
+            .collect();
+        let mut sorted = names.clone();
+        sorted.sort_unstable();
+        sorted.dedup();
+        assert_eq!(names, sorted, "bundled file list must be sorted and unique");
+    }
+}
+
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn accepts_a_scale_declaring_zero_degrees() {
+        // music21 reads the archive's xxx.scl as a scale with no pitches, so
+        // the count line being `0` is legal rather than malformed.
+        let scale = ScalaScale::parse(
+            "! xxx.scl
+!
+Saved scale from Scala
+ 0
+!
+",
+        )
+        .expect("a zero-degree file parses");
+        assert!(scale.is_empty());
+        assert_eq!(scale.len(), 0);
+        assert_eq!(scale.description(), "Saved scale from Scala");
+        // Nothing to wrap through, so every index is the root.
+        assert_eq!(scale.ratio_at(0), 1.0);
+        assert_eq!(scale.ratio_at(7), 1.0);
+        assert_eq!(scale.ratio_at(-3), 1.0);
+    }
+
     use super::*;
 
     const FIFTH_AND_OCTAVE: &str = "! example.scl\n!\nA fifth and an octave\n 2\n!\n 3/2\n 2/1\n";
@@ -586,7 +741,6 @@ mod tests {
             "Only a description\n",       // no count
             "Bad count\n not-a-number\n", // unparseable count
             "Too few\n 4\n 3/2\n 2/1\n",  // count exceeds the listed degrees
-            "Zero\n 0\n",                 // no degrees
             "Bad ratio\n 1\n 3/0\n",      // zero denominator
             "Bad ratio\n 1\n 1/2/3\n",    // not a ratio
         ] {

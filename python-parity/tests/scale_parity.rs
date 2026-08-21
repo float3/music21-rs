@@ -1,7 +1,7 @@
 //! Checks every [`ScaleType`] against what music21 actually produces.
 //!
 //! The expectations in `data/scale_expectations.toml` are generated from the
-//! music21 submodule by `python-parity/generate_scale_expectations.py`. They
+//! music21 submodule by `cargo run -p xtask --features python -- regenerate-fixtures`. They
 //! are committed because a full `music21.scale` import needs music21's own
 //! dependencies, which the chord-table bridge deliberately stubs out. This test
 //! therefore needs neither Python nor the submodule — only the checked-in file.
@@ -113,6 +113,6 @@ fn every_scale_type_is_covered_by_the_fixture() {
     assert_eq!(
         declared, covered,
         "every ScaleType needs expectations; regenerate with \
-         python-parity/generate_scale_expectations.py"
+         cargo run -p xtask --features python -- regenerate-fixtures"
     );
 }

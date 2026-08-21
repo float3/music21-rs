@@ -2,6 +2,8 @@ pub mod adaptive;
 mod generated;
 /// Runtime parsing of Scala `.scl` scale files.
 pub mod scala;
+#[cfg(feature = "scala-archive")]
+pub mod scala_bundled;
 
 pub use generated::*;
 

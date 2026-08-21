@@ -1,5 +1,8 @@
 //! Development task runner for regenerating committed chord-table artifacts.
 
+#[cfg(feature = "python")]
+mod fixtures;
+mod scala_archive;
 mod tuning;
 
 mod shared {
@@ -90,6 +93,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         Some("regenerate-tuning-tables") => regenerate_tuning_tables(&workspace_root),
         Some("emit-tuning-tables") => emit_tuning_tables(&workspace_root),
         Some("verify-tuning-tables") => verify_tuning_tables(&workspace_root),
+        Some("regenerate-scala-archive") => regenerate_scala_archive(&workspace_root),
+        Some("emit-scala-archive") => emit_scala_archive(&workspace_root),
+        Some("verify-scala-archive") => verify_scala_archive(&workspace_root),
+        Some("regenerate-fixtures") => regenerate_fixtures(&workspace_root),
+        Some("regenerate-all") => regenerate_all(&workspace_root),
         Some("-h") | Some("--help") | None => {
             print_help();
             Ok(())
@@ -106,6 +114,94 @@ fn print_help() {
     eprintln!("  cargo run -p xtask -- regenerate-tuning-tables");
     eprintln!("  cargo run -p xtask -- emit-tuning-tables");
     eprintln!("  cargo run -p xtask -- verify-tuning-tables");
+    eprintln!("  cargo run -p xtask -- regenerate-scala-archive");
+    eprintln!("  cargo run -p xtask -- emit-scala-archive");
+    eprintln!("  cargo run -p xtask -- verify-scala-archive");
+    eprintln!("  cargo run -p xtask -- regenerate-fixtures");
+    eprintln!("  cargo run -p xtask --features python -- regenerate-all");
+}
+
+/// Regenerates every music21 expectation fixture under `data/`.
+///
+/// Driven through pyo3 rather than a Python script: this repository contains no
+/// Python source, so anything that has to ask music21 a question asks it from
+/// Rust.
+#[cfg(feature = "python")]
+fn regenerate_fixtures(workspace_root: &Path) -> Result<(), Box<dyn Error>> {
+    let written = fixtures::regenerate(workspace_root)?;
+    println!("Expectation fixtures regenerated ({} files)", written.len());
+    Ok(())
+}
+
+#[cfg(not(feature = "python"))]
+fn regenerate_fixtures(_: &Path) -> Result<(), Box<dyn Error>> {
+    Err(
+        "regenerate-fixtures requires xtask's python feature; run `cargo run -p xtask --features python -- regenerate-fixtures`"
+            .into(),
+    )
+}
+
+/// Runs every regeneration stage, in dependency order.
+///
+/// Needs the `python` feature for the chord tables, the submodule for the
+/// tuning tables and fixtures, and `.m21venv` for the fixtures.
+fn regenerate_all(workspace_root: &Path) -> Result<(), Box<dyn Error>> {
+    regenerate_tables(workspace_root)?;
+    regenerate_tuning_tables(workspace_root)?;
+    emit_scala_archive(workspace_root)?;
+    regenerate_fixtures(workspace_root)?;
+    println!(
+        "
+All generated tables, indexes and fixtures are up to date."
+    );
+    Ok(())
+}
+
+/// Path of the generated bundled-archive index.
+/// Rebuilds `data/scala_archive.toml` from the submodule, then re-emits Rust.
+///
+/// Reads whatever `.scl` files the submodule currently has, so upstream adding
+/// or correcting scales needs no change here.
+fn regenerate_scala_archive(workspace_root: &Path) -> Result<(), Box<dyn Error>> {
+    let data = scala_archive::regenerate(workspace_root)?;
+    scala_archive::write(&scala_archive::data_path(workspace_root), &data)?;
+    emit_scala_rust(workspace_root, &data)
+}
+
+fn emit_scala_archive(workspace_root: &Path) -> Result<(), Box<dyn Error>> {
+    let data = scala_archive::read(&scala_archive::data_path(workspace_root))?;
+    emit_scala_rust(workspace_root, &data)
+}
+
+fn verify_scala_archive(workspace_root: &Path) -> Result<(), Box<dyn Error>> {
+    let data = scala_archive::read(&scala_archive::data_path(workspace_root))?;
+    let expected = scala_archive::render(&data);
+    let path = scala_archive::generated_path(workspace_root);
+    let actual = fs::read_to_string(&path)?;
+
+    if actual != expected {
+        return Err(format!(
+            "{} is out of date; run `cargo run -p xtask -- emit-scala-archive`",
+            path.display()
+        )
+        .into());
+    }
+
+    println!(
+        "Committed Scala archive index matches {}",
+        scala_archive::data_path(workspace_root).display()
+    );
+    Ok(())
+}
+
+fn emit_scala_rust(
+    workspace_root: &Path,
+    data: &scala_archive::ScalaArchiveData,
+) -> Result<(), Box<dyn Error>> {
+    let path = scala_archive::generated_path(workspace_root);
+    fs::write(&path, scala_archive::render(data))?;
+    println!("Bundled Scala archive regenerated at {}", path.display());
+    Ok(())
 }
 
 /// Re-reads the Scala-derived tuning tables from the submodule, rewrites the

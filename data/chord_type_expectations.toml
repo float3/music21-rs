@@ -1,7 +1,8 @@
 # Expected chord types, generated from music21 by
-# `python-parity/generate_scale_expectations.py`. The crate keeps its own
-# copy of this table in src/chordsymbol.rs; the parity test compares them
-# so the hand-maintained copy cannot drift from upstream unnoticed.
+# `cargo run -p xtask --features python -- regenerate-fixtures`.
+# The crate keeps its own copy of this table in src/chordsymbol.rs;
+# the parity test compares them so the hand-maintained copy cannot
+# drift from upstream unnoticed.
 #
 # music21 11.0.0b8
 
@@ -261,3 +262,4 @@ abbreviations = ["tristan"]
 "dominant" = "dominant-seventh"
 "major-minor" = "minor-major-seventh"
 "half-diminished" = "half-diminished-seventh"
+

@@ -12,11 +12,14 @@
 use std::path::{Path, PathBuf};
 
 /// Fixtures generated from music21, all of which must carry a version stamp.
-const VERSIONED_FIXTURES: [&str; 4] = [
+const VERSIONED_FIXTURES: [&str; 5] = [
     "data/scale_expectations.toml",
     "data/chord_type_expectations.toml",
     "data/meter_expectations.toml",
     "data/table_expectations.toml",
+    // Not an expectation fixture but generated from the submodule all the same,
+    // so a submodule bump has to refresh it too.
+    "data/scala_archive.toml",
 ];
 
 fn repo_root() -> PathBuf {
@@ -72,7 +75,7 @@ fn fixture_version(relative: &str) -> String {
 
     panic!(
         "{relative} has no `music21_version` stamp; regenerate it with \
-         python-parity/generate_scale_expectations.py"
+         cargo run -p xtask --features python -- regenerate-fixtures"
     );
 }
 
@@ -91,7 +94,7 @@ fn every_fixture_was_generated_from_the_pinned_submodule() {
     assert!(
         stale.is_empty(),
         "{} fixture(s) are stale; regenerate with \
-         `python-parity/generate_scale_expectations.py`:\n    {}",
+         `cargo run -p xtask --features python -- regenerate-fixtures`:\n    {}",
         stale.len(),
         stale.join("\n    ")
     );
