@@ -1,6 +1,7 @@
 //! The named scales music21 exposes as `ConcreteScale` subclasses.
 //!
-//! Each scale is a sequence of step intervals walked upward from the tonic,
+//! Each scale is a sequence of step intervals walked from the tonic (upward,
+//! except for the one descending step Rag Marwa's network contains),
 //! matching the edges of music21's `IntervalNetwork`, plus the pitch
 //! simplification that network applies. Both together are needed: the steps
 //! alone give the right pitch classes but the wrong spelling for scales that
@@ -29,7 +30,7 @@ enum Simplification {
 
 /// Distinct step intervals used by the scale tables, parsed once.
 static STEP_INTERVALS: LazyLock<HashMap<&'static str, Interval>> = LazyLock::new(|| {
-    ["m2", "M2", "a2", "m3", "M3"]
+    ["m2", "M2", "a2", "m3", "M3", "-M2"]
         .into_iter()
         .map(|name| {
             let interval =
@@ -92,11 +93,17 @@ pub enum ScaleType {
     Octatonic,
     /// Rag Asawari, as a five-tone ascending scale.
     RagAsawari,
+    /// Rag Marwa, as a seven-step ascending scale.
+    ///
+    /// Not monotonic: music21's ascending network dips back down a major
+    /// second from the sixth degree before rising a minor third to the octave,
+    /// so the realized pitches repeat a note and briefly descend.
+    RagMarwa,
 }
 
 impl ScaleType {
     /// Every scale type, in declaration order.
-    pub const ALL: [ScaleType; 19] = [
+    pub const ALL: [ScaleType; 20] = [
         Self::Major,
         Self::Minor,
         Self::Dorian,
@@ -116,6 +123,7 @@ impl ScaleType {
         Self::WholeTone,
         Self::Octatonic,
         Self::RagAsawari,
+        Self::RagMarwa,
     ];
 
     /// Returns the music21 class name for this scale.
@@ -140,10 +148,14 @@ impl ScaleType {
             Self::WholeTone => "WholeToneScale",
             Self::Octatonic => "OctatonicScale",
             Self::RagAsawari => "RagAsawari",
+            Self::RagMarwa => "RagMarwa",
         }
     }
 
-    /// Returns the step intervals walked upward from the tonic.
+    /// Returns the step intervals walked from the tonic.
+    ///
+    /// Almost every scale ascends throughout; Rag Marwa is the exception, and
+    /// carries one descending step (`-M2`), matching its network edge.
     ///
     /// These are music21's `IntervalNetwork` edges, not the intervals between
     /// the pitches it finally reports — the two differ wherever simplification
@@ -168,13 +180,16 @@ impl ScaleType {
             Self::WholeTone => &["M2"; 6],
             Self::Octatonic => &["M2", "m2", "M2", "m2", "M2", "m2", "M2", "m2"],
             Self::RagAsawari => &["M2", "m3", "M2", "m2", "M3"],
+            // The sixth step is music21's `M-2` edge: a descending major
+            // second inside an otherwise ascending network.
+            Self::RagMarwa => &["m2", "a2", "M2", "m3", "M2", "-M2", "m3"],
         }
     }
 
     /// Returns how this scale respells pitches, matching music21's network.
     fn simplification(self) -> Simplification {
         match self {
-            Self::WholeTone | Self::Octatonic => Simplification::MaxAccidental,
+            Self::WholeTone | Self::Octatonic | Self::RagMarwa => Simplification::MaxAccidental,
             Self::Chromatic | Self::RagAsawari => Simplification::MostCommon,
             _ => Simplification::Exact,
         }
@@ -402,6 +417,20 @@ mod tests {
         assert_eq!(
             names(ScaleType::RagAsawari, "C4"),
             ["C", "D", "F", "G", "A-", "C"]
+        );
+    }
+
+    #[test]
+    fn rag_marwa_dips_below_its_sixth_degree() {
+        // music21's ascending network steps down a M2 from B before closing on
+        // C, so A appears twice and the line is not monotonic.
+        assert_eq!(
+            names(ScaleType::RagMarwa, "C4"),
+            ["C", "D-", "E", "F#", "A", "B", "A", "C"]
+        );
+        assert_eq!(
+            names(ScaleType::RagMarwa, "E-4"),
+            ["E-", "F-", "G", "A", "C", "D", "C", "E-"]
         );
     }
 
