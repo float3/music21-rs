@@ -1668,10 +1668,16 @@ mod tests {
         let fingering = chord.guitar_fingering().unwrap();
 
         assert_eq!(fingering.strings.len(), 6);
-        assert_eq!(fingering.covered_pitch_spaces, vec![60, 64, 67]);
+        // A voicing sounds chord *tones*, in whatever octave falls under the
+        // hand — it is not required to reproduce the written octaves, which is
+        // what used to confine every shape to the top three strings.
         assert_eq!(fingering.covered_pitch_classes, vec![0, 4, 7]);
-        assert!(fingering.omitted_pitch_spaces.is_empty());
         assert!(fingering.omitted_pitch_classes.is_empty());
+        assert!(
+            fingering.covered_pitch_spaces.len() >= 3,
+            "expected a full voicing, got {:?}",
+            fingering.covered_pitch_spaces
+        );
         assert!(
             fingering
                 .strings
@@ -1701,8 +1707,68 @@ mod tests {
 
         assert_eq!(fingering.strings.len(), 6);
         assert_eq!(fingering.strings[0].string_name, "D2");
-        assert_eq!(fingering.covered_pitch_spaces, vec![50, 57, 62]);
-        assert!(fingering.omitted_pitch_spaces.is_empty());
+        assert_eq!(fingering.covered_pitch_classes, vec![2, 9]);
+        assert!(fingering.omitted_pitch_classes.is_empty());
+    }
+
+    /// Renders a fingering as the `x 3 2 0 1 0` notation guitarists read.
+    fn shape(notes: &str) -> String {
+        Chord::new(notes)
+            .unwrap()
+            .guitar_fingering()
+            .unwrap()
+            .strings
+            .iter()
+            .map(|string| match string.fret {
+                None => "x".to_string(),
+                Some(fret) => fret.to_string(),
+            })
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
+    #[test]
+    fn guitar_fingering_finds_the_standard_open_chords() {
+        // The shapes any player would name for these chords. Before voicings
+        // were matched by pitch class these all came back as `x x x n n n`.
+        assert_eq!(shape("C E G"), "x 3 2 0 1 0");
+        assert_eq!(shape("A C# E"), "x 0 2 2 2 0");
+        assert_eq!(shape("E G# B"), "0 2 2 1 0 0");
+        assert_eq!(shape("D F# A"), "x x 0 2 3 2");
+        assert_eq!(shape("A C E"), "x 0 2 2 1 0");
+        assert_eq!(shape("E G B"), "0 2 2 0 0 0");
+        assert_eq!(shape("D F A"), "x x 0 2 3 1");
+        assert_eq!(shape("G B D F"), "3 2 0 0 0 1");
+        assert_eq!(shape("C E G B"), "x 3 2 0 0 0");
+        assert_eq!(shape("A C E G"), "x 0 2 0 1 0");
+    }
+
+    #[test]
+    fn guitar_fingering_keeps_every_chord_tone() {
+        // A seventh chord that silently dropped its seventh was the other half
+        // of the old scoring: omitting a written octave was punished a thousand
+        // times harder than omitting an actual chord tone.
+        for notes in ["G B D F", "C E G B-", "A C E G", "C E G B", "B D F"] {
+            let fingering = Chord::new(notes).unwrap().guitar_fingering().unwrap();
+            assert!(
+                fingering.omitted_pitch_classes.is_empty(),
+                "{notes} dropped {:?}",
+                fingering.omitted_pitch_classes
+            );
+        }
+    }
+
+    #[test]
+    fn guitar_fingering_puts_the_root_in_the_bass_for_open_chords() {
+        for (notes, root) in [("C E G", 0), ("G B D", 7), ("E G# B", 4), ("A C E", 9)] {
+            let fingering = Chord::new(notes).unwrap().guitar_fingering().unwrap();
+            let bass = fingering
+                .strings
+                .iter()
+                .find_map(|string| string.fret.and(string.pitch_class))
+                .expect("a sounding string");
+            assert_eq!(bass, root, "{notes} should sound its root lowest");
+        }
     }
 
     #[test]
