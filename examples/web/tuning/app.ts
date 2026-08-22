@@ -14,6 +14,13 @@ const stopButton = document.querySelector("#stop");
 const shareButton = document.querySelector("#share");
 const error = document.querySelector("#error");
 const docsLink = document.querySelector("#docs-link");
+const scalaCount = document.querySelector("#scala-count");
+const scalaSearch = document.querySelector("#scala-search");
+const scalaResults = document.querySelector("#scala-results");
+const scalaMore = document.querySelector("#scala-more");
+const scalaFile = document.querySelector("#scala-file");
+const scalaText = document.querySelector("#scala-text");
+const scalaLoadText = document.querySelector("#scala-load-text");
 
 docsLink.href = "../docs/music21_rs/index.html";
 
@@ -31,6 +38,8 @@ let audioContext = null;
 let activeNodes = [];
 let activeTimers = [];
 let shareResetTimer = null;
+let wasm = null;
+const scalaResultLimit = 60;
 
 function showError(message) {
   error.textContent = message;
@@ -58,6 +67,7 @@ async function loadTuningSystems({ syncUrl = false } = {}) {
     try {
       const module = await import(new URL(candidate, window.location.href).href);
       await module.default();
+      wasm = module;
       if (typeof module.tuning_systems !== "function") {
         throw new Error("The current WASM package does not expose tuning_systems yet.");
       }
@@ -69,6 +79,7 @@ async function loadTuningSystems({ syncUrl = false } = {}) {
       }
       clearError();
       render();
+      initScalaArchive();
       if (syncUrl) syncShareUrl();
       return;
     } catch (err) {
@@ -473,3 +484,131 @@ selectedSystemId = getSharedSystemId() ?? "";
 selectedDegree = getSharedDegree() ?? 0;
 
 loadTuningSystems();
+
+
+/// Reshapes a Scala scale into the object the rest of this page already renders.
+///
+/// Doing the conversion here rather than adding a second render path means the
+/// degree table, playback, keyboard selection and share links all work on an
+/// archive scale without knowing it is one.
+function scalaToSystem(info) {
+  const equalStep = info.degree_count > 0 ? 1200 / info.degree_count : 100;
+  return {
+    id: `scala:${info.file}`,
+    name: info.file.replace(/\.scl$/, ""),
+    description: info.description || "(no description in the file)",
+    octave_size: info.degree_count,
+    root_frequency_hz: info.root_frequency_hz,
+    degrees: info.degrees.map((degree) => ({
+      degree: degree.degree,
+      label: degree.label,
+      ratio: degree.ratio,
+      ratio_label: degree.is_exact_ratio ? degree.label : `${degree.cents.toFixed(3)}¢`,
+      frequency_hz: degree.frequency_hz,
+      cents_from_equal_temperament: degree.cents - degree.degree * equalStep,
+    })),
+  };
+}
+
+/// Adds a scale to the list and selects it, replacing any earlier load of it.
+function adoptScalaSystem(info) {
+  const system = scalaToSystem(info);
+  const existing = tuningSystems.findIndex((candidate) => candidate.id === system.id);
+  if (existing >= 0) {
+    tuningSystems[existing] = system;
+  } else {
+    tuningSystems.push(system);
+  }
+  stopPlayback();
+  selectedSystemId = system.id;
+  selectedDegree = 0;
+  resetShareButton();
+  clearError();
+  render();
+  syncShareUrl();
+}
+
+function initScalaArchive() {
+  if (!wasm || typeof wasm.scala_archive_len !== "function") {
+    scalaCount.textContent = "This WASM package was built without the Scala archive.";
+    return;
+  }
+  scalaCount.textContent = `${wasm.scala_archive_len().toLocaleString()} scales bundled.`;
+  renderScalaResults("");
+}
+
+function renderScalaResults(query) {
+  if (!wasm || typeof wasm.scala_archive_index !== "function") return;
+  let matches;
+  try {
+    matches = wasm.scala_archive_index(query, scalaResultLimit);
+  } catch (err) {
+    showError(err instanceof Error ? err.message : String(err));
+    return;
+  }
+
+  scalaResults.replaceChildren();
+  for (const entry of matches) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `system-button${`scala:${entry.file}` === selectedSystemId ? " active" : ""}`;
+    const name = document.createElement("strong");
+    name.textContent = entry.file.replace(/\.scl$/, "");
+    const meta = document.createElement("span");
+    meta.textContent = `${entry.degree_count} degrees`;
+    const description = document.createElement("small");
+    description.textContent = entry.description || "(no description)";
+    button.append(name, meta, description);
+    button.addEventListener("click", () => loadScalaScale(entry.file));
+    scalaResults.appendChild(button);
+  }
+
+  if (matches.length === 0) {
+    scalaMore.textContent = query.trim() ? `No scale matches "${query}".` : "";
+  } else if (matches.length >= scalaResultLimit) {
+    scalaMore.textContent = `Showing the first ${scalaResultLimit}. Narrow the search to see more.`;
+  } else {
+    scalaMore.textContent = `${matches.length} match${matches.length === 1 ? "" : "es"}.`;
+  }
+}
+
+function loadScalaScale(file) {
+  if (!wasm || typeof wasm.scala_scale !== "function") return;
+  const frequency = clampNumber(rootFrequency.value, 20, 2000, defaultRootFrequency);
+  try {
+    adoptScalaSystem(wasm.scala_scale(file, frequency));
+    renderScalaResults(scalaSearch.value);
+  } catch (err) {
+    showError(err instanceof Error ? err.message : String(err));
+  }
+}
+
+function loadScalaText(fileName, contents) {
+  if (!wasm || typeof wasm.parse_scala_scale !== "function") return;
+  if (!contents.trim()) {
+    showError("Paste the contents of a .scl file first.");
+    return;
+  }
+  const frequency = clampNumber(rootFrequency.value, 20, 2000, defaultRootFrequency);
+  try {
+    adoptScalaSystem(wasm.parse_scala_scale(fileName, contents, frequency));
+  } catch (err) {
+    showError(err instanceof Error ? err.message : String(err));
+  }
+}
+
+scalaSearch.addEventListener("input", () => renderScalaResults(scalaSearch.value));
+
+scalaLoadText.addEventListener("click", () => {
+  loadScalaText("pasted.scl", scalaText.value);
+});
+
+scalaFile.addEventListener("change", async () => {
+  const file = scalaFile.files?.[0];
+  if (!file) return;
+  try {
+    loadScalaText(file.name, await file.text());
+  } catch (err) {
+    showError(err instanceof Error ? err.message : String(err));
+  }
+});
