@@ -207,8 +207,7 @@ Entries carry `source = "music21"`.
 
 ### Plainsound Hexatone
 
-The remaining 62 scales in `data/scala_archive.toml`, and the `.scl` files under
-`data/scala_extra/`, come from
+The remaining 62 scales in `data/scala_archive.toml` come from
 [Plainsound Hexatone](https://github.com/PLAINSOUND/hexatone) — a microtonal
 MIDI isomorphic keyboard designed and programmed by
 [Marc Sabat](https://www.plainsound.org), licensed

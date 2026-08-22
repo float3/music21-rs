@@ -567,7 +567,7 @@ mod bundled_tests {
         // legal Scala and which music21 accepts too.
         assert_eq!(names, [] as [&str; 0]);
         assert_eq!(archive.len(), ScalaArchive::bundled_len());
-        // 3932 from music21 plus 62 vendored into data/scala_extra.
+        // 3932 from the music21 submodule plus 62 from the hexatone one.
         assert_eq!(ScalaArchive::bundled_len(), 3994);
     }
 

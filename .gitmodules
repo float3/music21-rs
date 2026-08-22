@@ -1,3 +1,7 @@
 [submodule "music21"]
 	path = music21
 	url = https://github.com/cuthbertLab/music21.git
+[submodule "hexatone"]
+	path = hexatone
+	url = https://github.com/PLAINSOUND/hexatone.git
+	shallow = true
