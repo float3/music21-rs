@@ -14,6 +14,23 @@
       margin-bottom: 18px;
     }
 
+    .hint {
+      margin: 0 0 0.5rem;
+      font-size: 0.85rem;
+      opacity: 0.75;
+    }
+
+    #scala-results {
+      max-height: 22rem;
+      overflow-y: auto;
+    }
+
+    #scala-text {
+      width: 100%;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.8rem;
+    }
+
     .field {
       display: grid;
       gap: 5px;
@@ -470,6 +487,28 @@
       <section>
         <h2>Tuning Systems</h2>
         <div class="systems" id="systems"></div>
+
+        <h2 id="scala-heading">Scala Archive</h2>
+        <p class="hint" id="scala-count">Loading the archive&hellip;</p>
+        <label class="field">
+          <span>Search scales</span>
+          <input id="scala-search" type="search" placeholder="mbira, slendro, partch, pyth&hellip;" autocomplete="off" />
+        </label>
+        <div class="systems" id="scala-results"></div>
+        <p class="hint" id="scala-more"></p>
+
+        <h2>Your Own Scale</h2>
+        <p class="hint">Load a <code>.scl</code> file, or paste its text.</p>
+        <label class="field">
+          <span>Scala file</span>
+          <input id="scala-file" type="file" accept=".scl,text/plain" />
+        </label>
+        <label class="field">
+          <span>Scala text</span>
+          <textarea id="scala-text" rows="6" spellcheck="false"
+            placeholder="! my.scl&#10;!&#10;My scale&#10; 3&#10;!&#10; 9/8&#10; 3/2&#10; 2/1"></textarea>
+        </label>
+        <button type="button" id="scala-load-text" class="secondary">Use pasted scale</button>
       </section>
 
       <div class="detail">

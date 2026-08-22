@@ -2,7 +2,8 @@
 
 use music21_rs::{
     ALL_TUNING_SYSTEMS, Chord, ChordResolutionSuggestion, Error, GuitarTuning, Key, KnownChordType,
-    Pitch, Polyrhythm, Result, TuningSystem, abc_chord, abc_duration, pitch_class_name,
+    Pitch, Polyrhythm, Result, ScalaArchive, ScalaScale, TuningSystem, abc_chord, abc_duration,
+    pitch_class_name,
 };
 use serde::Serialize;
 use std::{collections::BTreeSet, fmt};
@@ -1171,4 +1172,145 @@ mod tests {
             Some("Db major")
         );
     }
+}
+
+/// One entry in the Scala archive listing, without its degrees.
+///
+/// Kept light on purpose: the browser lists thousands of these, and pulling the
+/// degrees for all of them would move megabytes across the wasm boundary for a
+/// list the user mostly scrolls past.
+#[derive(Serialize)]
+struct ScalaScaleSummary {
+    file: String,
+    description: String,
+    degree_count: usize,
+}
+
+/// A realized Scala scale, with one entry per degree plus the closing period.
+#[derive(Serialize)]
+struct ScalaScaleInfo {
+    file: String,
+    description: String,
+    degree_count: usize,
+    period_ratio: f64,
+    period_cents: f64,
+    root_frequency_hz: f64,
+    degrees: Vec<ScalaDegreeInfo>,
+}
+
+#[derive(Serialize)]
+struct ScalaDegreeInfo {
+    degree: usize,
+    /// `"3/2"` for an exact ratio, or the cents value the file gave.
+    label: String,
+    /// Whether the archive wrote this degree as an exact ratio.
+    is_exact_ratio: bool,
+    ratio: f64,
+    cents: f64,
+    frequency_hz: f64,
+}
+
+fn archive() -> &'static ScalaArchive {
+    use std::sync::OnceLock;
+    static ARCHIVE: OnceLock<ScalaArchive> = OnceLock::new();
+    ARCHIVE.get_or_init(ScalaArchive::bundled)
+}
+
+fn describe_scale(file: &str, scale: &ScalaScale, root_frequency_hz: f64) -> ScalaScaleInfo {
+    let degrees = scale
+        .degrees()
+        .iter()
+        .enumerate()
+        .map(|(degree, entry)| ScalaDegreeInfo {
+            degree,
+            label: entry.to_string(),
+            is_exact_ratio: entry.as_fraction().is_some(),
+            ratio: entry.ratio(),
+            cents: entry.cents(),
+            frequency_hz: root_frequency_hz * entry.ratio(),
+        })
+        .collect();
+
+    ScalaScaleInfo {
+        file: file.to_string(),
+        description: scale.description().to_string(),
+        degree_count: scale.len(),
+        period_ratio: scale.period().ratio(),
+        period_cents: scale.period().cents(),
+        root_frequency_hz,
+        degrees,
+    }
+}
+
+fn check_root_frequency(root_frequency_hz: f64) -> Result<(), JsValue> {
+    if !root_frequency_hz.is_finite() || root_frequency_hz <= 0.0 {
+        return Err(JsValue::from_str(
+            "root frequency must be a positive number",
+        ));
+    }
+    Ok(())
+}
+
+#[wasm_bindgen]
+/// Returns how many Scala scales are bundled with the crate.
+pub fn scala_archive_len() -> usize {
+    archive().len()
+}
+
+#[wasm_bindgen]
+/// Lists bundled Scala scales, optionally filtered by a search string.
+///
+/// An empty `query` lists everything. Matching follows music21's
+/// `scale.scala.search`: spaces are ignored, an exact file name wins, and the
+/// rest are substring hits against the name with and without separators.
+pub fn scala_archive_index(query: &str, limit: usize) -> std::result::Result<JsValue, JsValue> {
+    let archive = archive();
+    let names: Vec<&str> = if query.trim().is_empty() {
+        archive.names().collect()
+    } else {
+        archive.search(query)
+    };
+
+    let summaries = names
+        .into_iter()
+        .take(if limit == 0 { usize::MAX } else { limit })
+        .filter_map(|file| {
+            let scale = archive.get(file)?;
+            Some(ScalaScaleSummary {
+                file: file.to_string(),
+                description: scale.description().to_string(),
+                degree_count: scale.len(),
+            })
+        })
+        .collect::<Vec<_>>();
+
+    serde_wasm_bindgen::to_value(&summaries).map_err(|err| JsValue::from_str(&err.to_string()))
+}
+
+#[wasm_bindgen]
+/// Realizes one bundled Scala scale from a root frequency.
+pub fn scala_scale(file: &str, root_frequency_hz: f64) -> std::result::Result<JsValue, JsValue> {
+    check_root_frequency(root_frequency_hz)?;
+    let scale = archive()
+        .get(file)
+        .ok_or_else(|| JsValue::from_str(&format!("no bundled scale named {file}")))?;
+    let info = describe_scale(file, scale, root_frequency_hz);
+    serde_wasm_bindgen::to_value(&info).map_err(|err| JsValue::from_str(&err.to_string()))
+}
+
+#[wasm_bindgen]
+/// Realizes a Scala scale from `.scl` text the user supplied.
+///
+/// Takes the file's text rather than a path: the browser has no filesystem, and
+/// the crate does no IO of its own either.
+pub fn parse_scala_scale(
+    file_name: &str,
+    contents: &str,
+    root_frequency_hz: f64,
+) -> std::result::Result<JsValue, JsValue> {
+    check_root_frequency(root_frequency_hz)?;
+    let scale = ScalaScale::parse(contents)
+        .map_err(|error| JsValue::from_str(&format!("{file_name}: {error}")))?;
+    let info = describe_scale(file_name, &scale, root_frequency_hz);
+    serde_wasm_bindgen::to_value(&info).map_err(|err| JsValue::from_str(&err.to_string()))
 }
