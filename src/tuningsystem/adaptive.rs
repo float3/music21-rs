@@ -26,10 +26,10 @@ pub enum AdaptiveTuningSystem {
 
 /// Recursive just intonation:
 ///
-/// `frequency = C_base * JustIntonation[root] * JustIntonation[local_degree]`
+/// `frequency = C_base * CarlosHarmonic[root] * CarlosHarmonic[local_degree]`
 pub const RECURSIVE_JI: AdaptiveTuningSystem = AdaptiveTuningSystem::Recursive {
-    root_tuning_system: TuningSystem::JustIntonation,
-    local_tuning_system: TuningSystem::JustIntonation,
+    root_tuning_system: TuningSystem::CarlosHarmonic,
+    local_tuning_system: TuningSystem::CarlosHarmonic,
 };
 
 impl AdaptiveTuningSystem {

@@ -85,7 +85,7 @@ pub use scale::{BluesForm, DiatonicScale, Scale, ScaleType, StepScale, WeightedH
 pub use sieve::Sieve;
 pub use stream::{Stream, StreamElement, StreamEvent};
 pub use tuningsystem::{
-    ALL_TUNING_SYSTEMS, COMMON_TWELVE_TONE_TUNING_SYSTEMS, Fraction, HISTORICAL_TEMPERAMENTS,
-    TuningSystem,
+    ALL_TUNING_SYSTEMS, COMMON_EQUAL_TEMPERAMENTS, COMMON_TWELVE_TONE_TUNING_SYSTEMS, Fraction,
+    HISTORICAL_TEMPERAMENTS, TuningSystem,
     scala::{ScalaArchive, ScalaDegree, ScalaScale},
 };

@@ -3,10 +3,10 @@
 
 use super::Fraction;
 
-/// Twelve-tone just intonation ratios.
+/// Twelve-tone harmonic-series scale (Wendy Carlos's Harmonic).
 ///
 /// Derived from `carlos_harm.scl` in music21's Scala archive: Carlos Harmonic & Ben Johnston's scale of 'Blues' from Suite f.micr.piano (1977) & David Beardsley's scale of 'Science Friction'
-pub const JUST_INTONATION: [Fraction; 12] = [
+pub const CARLOS_HARMONIC: [Fraction; 12] = [
     Fraction::new(1, 1),
     Fraction::new(17, 16),
     Fraction::new(9, 8),
@@ -21,8 +21,8 @@ pub const JUST_INTONATION: [Fraction; 12] = [
     Fraction::new(15, 8),
 ];
 
-/// Twenty-four-tone just intonation ratios.
-pub const JUST_INTONATION_24: [Fraction; 24] = [
+/// Twenty-four-tone harmonic-series scale.
+pub const CARLOS_HARMONIC_24: [Fraction; 24] = [
     Fraction::new(1, 1),
     Fraction::new(33, 32),
     Fraction::new(17, 16),
@@ -167,10 +167,10 @@ pub const FORTY_THREE_TONE: [Fraction; 43] = [
     Fraction::new(160, 81),
 ];
 
-/// Seven-tone Indian scale ratios.
+/// Ptolemy's intense diatonic, also Zarlino's just major scale.
 ///
 /// Derived from `ptolemy.scl` in music21's Scala archive: Intense Diatonic Syntonon, also Zarlino's scale
-pub const INDIAN_SCALE: [Fraction; 7] = [
+pub const PTOLEMY_INTENSE_DIATONIC: [Fraction; 7] = [
     Fraction::new(1, 1),
     Fraction::new(9, 8),
     Fraction::new(5, 4),
@@ -327,4 +327,148 @@ pub const YOUNG_II: [Fraction; 12] = [
     Fraction::new_with_base(59609, 80000, 2),
     Fraction::new_with_base(5, 6, 2),
     Fraction::new_with_base(18203, 20000, 2),
+];
+
+/// Twelve-tone third-comma meantone temperament (Salinas, 1577).
+///
+/// Derived from `meanthird.scl` in music21's Scala archive: 1/3-comma meantone scale (Salinas)
+pub const THIRD_COMMA_MEANTONE: [Fraction; 12] = [
+    Fraction::new(1, 1),
+    Fraction::new_with_base(3175183, 60000000, 2),
+    Fraction::new_with_base(296207, 1875000, 2),
+    Fraction::new(6, 5),
+    Fraction::new_with_base(2527633, 8000000, 2),
+    Fraction::new_with_base(1578793, 3750000, 2),
+    Fraction::new(25, 18),
+    Fraction::new_with_base(2171207, 3750000, 2),
+    Fraction::new_with_base(2527633, 4000000, 2),
+    Fraction::new(5, 3),
+    Fraction::new_with_base(1578793, 1875000, 2),
+    Fraction::new_with_base(107393119, 120000000, 2),
+];
+
+/// Twelve-tone sixth-comma meantone temperament (Salinas, 1577).
+///
+/// Derived from `meansixth.scl` in music21's Scala archive: 1/6-comma meantone scale (tritonic temperament of Salinas)
+pub const SIXTH_COMMA_MEANTONE: [Fraction; 12] = [
+    Fraction::new(1, 1),
+    Fraction::new_with_base(8859433, 120000000, 2),
+    Fraction::new_with_base(4918531, 30000000, 2),
+    Fraction::new_with_base(5081469, 20000000, 2),
+    Fraction::new_with_base(4918531, 15000000, 2),
+    Fraction::new_with_base(25081469, 60000000, 2),
+    Fraction::new(45, 32),
+    Fraction::new_with_base(34918531, 60000000, 2),
+    Fraction::new_with_base(5246433, 8000000, 2),
+    Fraction::new_with_base(14918531, 20000000, 2),
+    Fraction::new_with_base(25081469, 30000000, 2),
+    Fraction::new_with_base(10918531, 12000000, 2),
+];
+
+/// Twelve-tone Werckmeister IV well temperament (1681).
+///
+/// Derived from `werck4.scl` in music21's Scala archive: Andreas Werckmeister's temperament IV
+pub const WERCKMEISTER_IV: [Fraction; 12] = [
+    Fraction::new(1, 1),
+    Fraction::new_with_base(2746833, 40000000, 2),
+    Fraction::new_with_base(19609, 120000, 2),
+    Fraction::new(32, 27),
+    Fraction::new_with_base(19609, 60000, 2),
+    Fraction::new(4, 3),
+    Fraction::new(1024, 729),
+    Fraction::new_with_base(138827, 240000, 2),
+    Fraction::new_with_base(26145333, 40000000, 2),
+    Fraction::new_with_base(35609, 48000, 2),
+    Fraction::new_with_base(100391, 120000, 2),
+    Fraction::new(4096, 2187),
+];
+
+/// Twelve-tone Werckmeister V well temperament (1681).
+///
+/// Derived from `werck5.scl` in music21's Scala archive: Andreas Werckmeister's temperament V
+pub const WERCKMEISTER_V: [Fraction; 12] = [
+    Fraction::new(1, 1),
+    Fraction::new_with_base(3203, 40000, 2),
+    Fraction::new(9, 8),
+    Fraction::new_with_base(1, 4, 2),
+    Fraction::new_with_base(13203, 40000, 2),
+    Fraction::new_with_base(16797, 40000, 2),
+    Fraction::new_with_base(1, 2, 2),
+    Fraction::new(3, 2),
+    Fraction::new(128, 81),
+    Fraction::new_with_base(3, 4, 2),
+    Fraction::new_with_base(66797, 80000, 2),
+    Fraction::new_with_base(73203, 80000, 2),
+];
+
+/// Twelve-tone Kirnberger I well temperament (1766).
+///
+/// Derived from `kirnberger1.scl` in music21's Scala archive: Kirnberger's temperament 1 (1766)
+pub const KIRNBERGER_I: [Fraction; 12] = [
+    Fraction::new(1, 1),
+    Fraction::new(256, 243),
+    Fraction::new(9, 8),
+    Fraction::new(32, 27),
+    Fraction::new(5, 4),
+    Fraction::new(4, 3),
+    Fraction::new(45, 32),
+    Fraction::new(3, 2),
+    Fraction::new(128, 81),
+    Fraction::new_with_base(111889, 150000, 2),
+    Fraction::new(16, 9),
+    Fraction::new(15, 8),
+];
+
+/// Twelve-tone Neidhardt I well temperament (1724).
+///
+/// Derived from `neidhardt1.scl` in music21's Scala archive: Neidhardt I temperament (1724)
+pub const NEIDHARDT_I: [Fraction; 12] = [
+    Fraction::new(1, 1),
+    Fraction::new_with_base(18827, 240000, 2),
+    Fraction::new_with_base(19609, 120000, 2),
+    Fraction::new_with_base(29609, 120000, 2),
+    Fraction::new_with_base(19609, 60000, 2),
+    Fraction::new(4, 3),
+    Fraction::new_with_base(29609, 60000, 2),
+    Fraction::new_with_base(139609, 240000, 2),
+    Fraction::new_with_base(79609, 120000, 2),
+    Fraction::new_with_base(59609, 80000, 2),
+    Fraction::new(16, 9),
+    Fraction::new_with_base(18203, 20000, 2),
+];
+
+/// Twelve-tone Gottfried Silbermann temperament no. 1 (c. 1730).
+///
+/// Derived from `silbermann1.scl` in music21's Scala archive: Gottfried Silbermann's temperament nr. 1
+pub const SILBERMANN: [Fraction; 12] = [
+    Fraction::new(1, 1),
+    Fraction::new_with_base(8729249, 120000000, 2),
+    Fraction::new_with_base(1, 6, 2),
+    Fraction::new_with_base(15391, 60000, 2),
+    Fraction::new_with_base(5203, 16000, 2),
+    Fraction::new_with_base(201173, 480000, 2),
+    Fraction::new_with_base(23609, 48000, 2),
+    Fraction::new_with_base(7, 12, 2),
+    Fraction::new_with_base(26145333, 40000000, 2),
+    Fraction::new_with_base(71609, 96000, 2),
+    Fraction::new_with_base(201173, 240000, 2),
+    Fraction::new_with_base(43609, 48000, 2),
+];
+
+/// Twelve-tone Lehman-Bach temperament (2005).
+///
+/// Derived from `lehman-bach.scl` in music21's Scala archive: Brad Lehman's Bach squiggle keyboard temperament (2005)
+pub const LEHMAN_BACH: [Fraction; 12] = [
+    Fraction::new(1, 1),
+    Fraction::new_with_base(19609, 240000, 2),
+    Fraction::new_with_base(19609, 120000, 2),
+    Fraction::new_with_base(59609, 240000, 2),
+    Fraction::new_with_base(19609, 60000, 2),
+    Fraction::new_with_base(100391, 240000, 2),
+    Fraction::new_with_base(59609, 120000, 2),
+    Fraction::new_with_base(139609, 240000, 2),
+    Fraction::new_with_base(53203, 80000, 2),
+    Fraction::new_with_base(59609, 80000, 2),
+    Fraction::new_with_base(199609, 240000, 2),
+    Fraction::new_with_base(218827, 240000, 2),
 ];
