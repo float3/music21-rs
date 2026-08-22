@@ -39,7 +39,8 @@ let activeNodes = [];
 let activeTimers = [];
 let shareResetTimer = null;
 let wasm = null;
-const scalaResultLimit = 60;
+// 0 means no cap: the archive list shows every scale that matches.
+const scalaResultLimit = 0;
 
 function showError(message) {
   error.textContent = message;
@@ -547,7 +548,10 @@ function renderScalaResults(query) {
     return;
   }
 
-  scalaResults.replaceChildren();
+  // Build into a fragment and attach once. Appending each button to the live
+  // list instead costs a layout pass per scale, which is thousands of them
+  // when nothing is filtered.
+  const fragment = document.createDocumentFragment();
   for (const entry of matches) {
     const button = document.createElement("button");
     button.type = "button";
@@ -560,15 +564,17 @@ function renderScalaResults(query) {
     description.textContent = entry.description || "(no description)";
     button.append(name, meta, description);
     button.addEventListener("click", () => loadScalaScale(entry.file));
-    scalaResults.appendChild(button);
+    fragment.appendChild(button);
   }
+  scalaResults.replaceChildren(fragment);
 
   if (matches.length === 0) {
     scalaMore.textContent = query.trim() ? `No scale matches "${query}".` : "";
-  } else if (matches.length >= scalaResultLimit) {
-    scalaMore.textContent = `Showing the first ${scalaResultLimit}. Narrow the search to see more.`;
   } else {
-    scalaMore.textContent = `${matches.length} match${matches.length === 1 ? "" : "es"}.`;
+    const label = matches.length === 1 ? "scale" : "scales";
+    scalaMore.textContent = query.trim()
+      ? `${matches.length.toLocaleString()} matching ${label}.`
+      : `Showing all ${matches.length.toLocaleString()} ${label}.`;
   }
 }
 
@@ -597,7 +603,18 @@ function loadScalaText(fileName, contents) {
   }
 }
 
-scalaSearch.addEventListener("input", () => renderScalaResults(scalaSearch.value));
+let scalaSearchTimer = null;
+
+// Rendering the unfiltered archive is ~15,000 DOM nodes and takes a few hundred
+// milliseconds, so it must not run on every keystroke. Deleting a query back to
+// empty would otherwise stutter once per character.
+scalaSearch.addEventListener("input", () => {
+  if (scalaSearchTimer !== null) window.clearTimeout(scalaSearchTimer);
+  scalaSearchTimer = window.setTimeout(() => {
+    scalaSearchTimer = null;
+    renderScalaResults(scalaSearch.value);
+  }, 150);
+});
 
 scalaLoadText.addEventListener("click", () => {
   loadScalaText("pasted.scl", scalaText.value);
