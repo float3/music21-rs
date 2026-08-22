@@ -176,7 +176,53 @@ by the repository's CI setup.
 - [examples/audio/](./examples/audio/) small polyrhythm sound example
 - [music21/](./music21/) optional upstream reference submodule
 
-## Credits
+## Credits and third-party data
 
-Thanks to Michael Scott Asato Cuthbert and all `music21` contributors for their
-work in computational musicology and for the original Python library.
+`music21-rs` is released under the [AGPL-3.0](./LICENSE). It ports behaviour
+from, and bundles data derived from, the projects below. Each remains under its
+own licence and copyright; the terms here describe those works, not this crate.
+
+### music21
+
+Chord tables, scale definitions, time-signature behaviour and the expectation
+fixtures used to test them are all derived from
+[music21](https://github.com/cuthbertLab/music21), the Python library for
+computational musicology by Michael Scott Asato Cuthbert and contributors,
+licensed [BSD-3-Clause](https://github.com/cuthbertLab/music21/blob/master/LICENSE).
+
+It is pinned here as a git submodule (currently `v10.5.0-319`) and is the source
+of truth for `data/chord_tables.toml`, `data/*_expectations.toml`, and the
+generated Rust emitted from them. Thanks to Michael Scott Asato Cuthbert and all
+`music21` contributors for the original library.
+
+### The Scala scale archive
+
+`data/scala_archive.toml` bundles 3,994 scales. 3,932 of them come from the
+[Scala](https://www.huygens-fokker.org/scala/) scale archive as distributed with
+music21, which includes it by kind permission of Manuel Op de Coul. music21
+states that it "assumes no copyright or change in original licensing" for those
+files, and that some may carry restrictions; the complete archive is published by
+the [Huygens-Fokker Foundation](https://www.huygens-fokker.org/docs/scales.zip).
+Entries carry `source = "music21"`.
+
+### Plainsound Hexatone
+
+The remaining 62 scales in `data/scala_archive.toml`, and the `.scl` files under
+`data/scala_extra/`, come from
+[Plainsound Hexatone](https://github.com/PLAINSOUND/hexatone) — a microtonal
+MIDI isomorphic keyboard designed and programmed by
+[Marc Sabat](https://www.plainsound.org), licensed
+[GPL-3.0](https://www.gnu.org/licenses/gpl-3.0.en.html). They are curated just
+intonation, harmonic-series, meantone and equal-division scales, several
+credited in their own descriptions to Wilson, Fokker, Vicentino, Farabi and
+others. Entries carry `source = "vendored"`.
+
+Those files remain under GPL-3.0 within this work, as AGPL-3.0 section 13
+provides for.
+
+### Contributed back
+
+Header-format fixes for five of the Hexatone scale files were sent upstream as
+[PLAINSOUND/hexatone#3](https://github.com/PLAINSOUND/hexatone/pull/3), and a
+malformed ratio in the Scala archive as
+[cuthbertLab/music21#2003](https://github.com/cuthbertLab/music21/pull/2003).
