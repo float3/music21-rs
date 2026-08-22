@@ -86,6 +86,23 @@ impl ScalaDegree {
             return Err(Error::TuningSystem("empty scala degree".to_string()));
         }
 
+        // Scala also writes equal-tempered steps as `n\m`, meaning `n` steps of
+        // `m`-EDO. `1\41` is one step of 41-EDO, or 29.268 cents.
+        if let Some((steps, divisions)) = token.split_once('\\') {
+            let steps: FloatType = steps.trim().parse().map_err(|_| {
+                Error::TuningSystem(format!("invalid scala step count in {token:?}"))
+            })?;
+            let divisions: FloatType = divisions.trim().parse().map_err(|_| {
+                Error::TuningSystem(format!("invalid scala division count in {token:?}"))
+            })?;
+            if divisions == 0.0 {
+                return Err(Error::TuningSystem(format!(
+                    "scala degree {token:?} divides the octave into zero steps"
+                )));
+            }
+            return Ok(Self::Cents(CENTS_PER_OCTAVE * steps / divisions));
+        }
+
         if token.contains('.') {
             let cents: FloatType = token
                 .parse()
@@ -550,7 +567,8 @@ mod bundled_tests {
         // legal Scala and which music21 accepts too.
         assert_eq!(names, [] as [&str; 0]);
         assert_eq!(archive.len(), ScalaArchive::bundled_len());
-        assert_eq!(ScalaArchive::bundled_len(), 3932);
+        // 3932 from music21 plus 62 vendored into data/scala_extra.
+        assert_eq!(ScalaArchive::bundled_len(), 3994);
     }
 
     #[test]
@@ -732,6 +750,19 @@ Saved scale from Scala
         let scale = ScalaScale::parse_bytes(bytes).unwrap();
         assert!(scale.description().starts_with("Caf"));
         assert_eq!(scale.len(), 1);
+    }
+
+    #[test]
+    fn reads_equal_tempered_step_notation() {
+        // `n\\m` is n steps of m-EDO, which several archives use for EDO files.
+        let scale = ScalaScale::parse("41-EDO\n 2\n 1\\41\n 41\\41\n").unwrap();
+        assert!((scale.degrees()[1].cents() - 1200.0 / 41.0).abs() < 1e-9);
+        assert!((scale.period().cents() - 1200.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn rejects_a_zero_division_step() {
+        assert!(ScalaScale::parse("Bad\n 1\\0\n").is_err());
     }
 
     #[test]
