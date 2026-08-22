@@ -17,6 +17,26 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+/// Where a bundled scale came from.
+///
+/// The music21 submodule supplies the bulk of the archive; `data/scala_extra`
+/// holds scales vendored from elsewhere, which a submodule bump must not wipe.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum ScaleSource {
+    Music21,
+    Vendored,
+}
+
+impl ScaleSource {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Music21 => "music21",
+            Self::Vendored => "vendored",
+        }
+    }
+}
+
 /// One scale, as stored in `data/scala_archive.toml`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct ArchiveScale {
@@ -31,6 +51,8 @@ pub(crate) struct ArchiveScale {
     pub(crate) degrees: Vec<String>,
     /// The interval the scale repeats at, in the same notation.
     pub(crate) period: String,
+    /// Which directory this scale was read from.
+    pub(crate) source: ScaleSource,
 }
 
 /// The whole `data/scala_archive.toml` document.
@@ -51,6 +73,81 @@ pub(crate) fn generated_path(workspace_root: &Path) -> PathBuf {
 
 fn submodule_scl_dir(workspace_root: &Path) -> PathBuf {
     workspace_root.join("music21/music21/scale/scala/scl")
+}
+
+/// Scales vendored into this repository rather than taken from the submodule.
+fn vendored_scl_dir(workspace_root: &Path) -> PathBuf {
+    workspace_root.join("data/scala_extra")
+}
+
+/// Decodes `.scl` bytes, preferring UTF-8 and falling back to latin-1.
+///
+/// The Scala format is defined as latin-1 and 73 of music21's files are not
+/// valid UTF-8, but files written this century generally are — the vendored
+/// ones use ♭, ♯ and curly apostrophes. Decoding those as latin-1 turns each
+/// UTF-8 byte into its own character and produces mojibake, so valid UTF-8 is
+/// taken at face value and only the rest falls back.
+fn decode(bytes: &[u8]) -> String {
+    match std::str::from_utf8(bytes) {
+        Ok(text) => text.to_string(),
+        Err(_) => bytes.iter().map(|&byte| byte as char).collect(),
+    }
+}
+
+/// Escapes a string as a TOML basic string.
+///
+/// Not `{:?}`: Rust's `Debug` writes non-printable characters as `\u{99}`,
+/// which TOML rejects because it wants exactly four hex digits after `\u`.
+fn toml_string(value: &str) -> String {
+    let mut out = String::with_capacity(value.len() + 2);
+    out.push('"');
+    for character in value.chars() {
+        match character {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            control if (control as u32) < 0x20 || control as u32 == 0x7f => {
+                let _ = write!(out, "\\u{:04X}", control as u32);
+            }
+            character => out.push(character),
+        }
+    }
+    out.push('"');
+    out
+}
+
+/// Reads every `.scl` file in one directory, in sorted order.
+fn read_directory(
+    dir: &Path,
+    source: ScaleSource,
+    scale: &mut Vec<ArchiveScale>,
+    failures: &mut Vec<String>,
+) -> Result<(), Box<dyn Error>> {
+    let mut names: Vec<String> = fs::read_dir(dir)?
+        .map(|entry| entry.map(|entry| entry.file_name().to_string_lossy().into_owned()))
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .filter(|name| name.ends_with(".scl"))
+        .collect();
+    names.sort_unstable();
+
+    for file in names {
+        let bytes = fs::read(dir.join(&file))?;
+        let text = decode(&bytes);
+        match parse_scl(&text) {
+            Ok((description, degrees, period)) => scale.push(ArchiveScale {
+                file,
+                description,
+                degrees,
+                period,
+                source,
+            }),
+            Err(error) => failures.push(format!("{file}: {error}")),
+        }
+    }
+    Ok(())
 }
 
 pub(crate) fn read(path: &Path) -> Result<ScalaArchiveData, Box<dyn Error>> {
@@ -88,21 +185,62 @@ fn parse_scl(contents: &str) -> Result<(String, Vec<String>, String), Box<dyn Er
         .filter(|line| !line.starts_with('!'))
         .collect();
 
-    let description = lines.first().unwrap_or(&"").trim().to_string();
-    let count_line = lines.get(1).ok_or("scl file has no degree count")?;
-    let count: usize = count_line
-        .split_whitespace()
-        .next()
-        .unwrap_or_default()
-        .parse()
-        .map_err(|_| format!("invalid degree count {count_line:?}"))?;
+    // The format is description, count, then degrees. Real files break that in
+    // three ways, so the strict reading is tried first and the fallbacks only
+    // run when it fails — a file that parses today cannot start parsing
+    // differently.
+    let (description, count, entries): (String, usize, Vec<&str>) = match lines
+        .get(1)
+        .and_then(|line| line.split_whitespace().next())
+        .and_then(|token| token.parse::<usize>().ok())
+    {
+        Some(count) => (
+            lines.first().unwrap_or(&"").to_string(),
+            count,
+            lines.iter().skip(2).copied().collect(),
+        ),
+        None => {
+            // Blank lines are only skipped on this path: a file may legitimately
+            // have an empty description, and dropping blanks up front would read
+            // its first degree as the count.
+            let dense: Vec<&str> = lines.iter().copied().filter(|l| !l.is_empty()).collect();
+            let number = |index: usize| {
+                dense
+                    .get(index)
+                    .and_then(|line| line.split_whitespace().next())
+                    .and_then(|token| token.parse::<usize>().ok())
+            };
+            if let Some(count) = number(1) {
+                // A blank line sat between the description and the count.
+                (
+                    dense[0].to_string(),
+                    count,
+                    dense.iter().skip(2).copied().collect(),
+                )
+            } else if let Some(count) = number(0) {
+                // The description was written as a `!` comment, so it was
+                // stripped and the count now leads.
+                (
+                    String::new(),
+                    count,
+                    dense.iter().skip(1).copied().collect(),
+                )
+            } else {
+                // No count line at all: take it from the degrees present.
+                let entries: Vec<&str> = dense.iter().skip(1).copied().collect();
+                (
+                    dense.first().unwrap_or(&"").to_string(),
+                    entries.len(),
+                    entries,
+                )
+            }
+        }
+    };
 
-    let entries: Vec<&str> = lines
-        .iter()
-        .skip(2)
+    let entries: Vec<&str> = entries
+        .into_iter()
         .filter(|line| !line.is_empty())
         .take(count)
-        .copied()
         .collect();
     if entries.len() != count {
         return Err(format!("declares {count} degrees but lists {}", entries.len()).into());
@@ -116,12 +254,7 @@ fn parse_scl(contents: &str) -> Result<(String, Vec<String>, String), Box<dyn Er
         if token.is_empty() {
             return Err("empty degree".into());
         }
-        degrees.push(if token.contains('.') || token.contains('/') {
-            token.to_string()
-        } else {
-            // A bare integer is that many over one.
-            format!("{token}/1")
-        });
+        degrees.push(normalize_degree(token)?);
     }
 
     // A zero-degree file is legal Scala; it has no repeat interval to take.
@@ -131,6 +264,27 @@ fn parse_scl(contents: &str) -> Result<(String, Vec<String>, String), Box<dyn Er
         "2/1".to_string()
     };
     Ok((description, degrees, period))
+}
+
+/// Normalizes one degree token into a ratio or a cents value.
+///
+/// Scala also writes equal-tempered steps as `n\m`, meaning `n` steps of
+/// `m`-EDO. Those are converted to cents here so the emitted archive only ever
+/// contains the two forms the library understands.
+fn normalize_degree(token: &str) -> Result<String, Box<dyn Error>> {
+    if let Some((steps, divisions)) = token.split_once('\\') {
+        let steps: f64 = steps.trim().parse()?;
+        let divisions: f64 = divisions.trim().parse()?;
+        if divisions == 0.0 {
+            return Err(format!("degree {token:?} divides the octave into zero steps").into());
+        }
+        return Ok(format!("{:.5}", 1200.0 * steps / divisions));
+    }
+    if token.contains('.') || token.contains('/') {
+        return Ok(token.to_string());
+    }
+    // A bare integer is that many over one.
+    Ok(format!("{token}/1"))
 }
 
 /// Rebuilds the archive TOML from whatever `.scl` files the submodule has.
@@ -144,44 +298,42 @@ pub(crate) fn regenerate(workspace_root: &Path) -> Result<ScalaArchiveData, Box<
         .into());
     }
 
-    let mut names: Vec<String> = fs::read_dir(&dir)?
-        .map(|entry| entry.map(|entry| entry.file_name().to_string_lossy().into_owned()))
-        .collect::<Result<Vec<_>, _>>()?
-        .into_iter()
-        .filter(|name| name.ends_with(".scl"))
-        .collect();
-    names.sort_unstable();
-    if names.is_empty() {
-        return Err(format!("no .scl files under {}", dir.display()).into());
+    let mut scale = Vec::new();
+    let mut failures = Vec::new();
+    read_directory(&dir, ScaleSource::Music21, &mut scale, &mut failures)?;
+    let from_submodule = scale.len();
+
+    let vendored = vendored_scl_dir(workspace_root);
+    if vendored.is_dir() {
+        read_directory(&vendored, ScaleSource::Vendored, &mut scale, &mut failures)?;
     }
 
-    let mut scale = Vec::with_capacity(names.len());
-    let mut skipped = Vec::new();
-    for file in names {
-        // The archive is latin-1, and 73 files are not valid UTF-8.
-        let bytes = fs::read(dir.join(&file))?;
-        let text: String = bytes.iter().map(|&byte| byte as char).collect();
-        match parse_scl(&text) {
-            Ok((description, degrees, period)) => scale.push(ArchiveScale {
-                file,
-                description,
-                degrees,
-                period,
-            }),
-            Err(error) => skipped.push(format!("{file}: {error}")),
-        }
-    }
-
-    if !skipped.is_empty() {
+    if !failures.is_empty() {
         return Err(format!(
             "{} archive files could not be parsed:\n  {}",
-            skipped.len(),
-            skipped.join("\n  ")
+            failures.len(),
+            failures.join("\n  ")
         )
         .into());
     }
 
-    println!("  {} scales read from {}", scale.len(), dir.display());
+    // A vendored scale must not silently shadow one from the submodule.
+    let mut seen = std::collections::BTreeSet::new();
+    let duplicates: Vec<&str> = scale
+        .iter()
+        .filter(|entry| !seen.insert(entry.file.as_str()))
+        .map(|entry| entry.file.as_str())
+        .collect();
+    if !duplicates.is_empty() {
+        return Err(format!("duplicate scale file names: {duplicates:?}").into());
+    }
+
+    scale.sort_by(|left, right| left.file.cmp(&right.file));
+
+    println!(
+        "  {from_submodule} scales from the submodule, {} vendored",
+        scale.len() - from_submodule
+    );
     Ok(ScalaArchiveData {
         music21_version: music21_version(workspace_root)?,
         scale,
@@ -207,11 +359,16 @@ pub(crate) fn write(path: &Path, data: &ScalaArchiveData) -> Result<(), Box<dyn 
     writeln!(out, "music21_version = {:?}\n", data.music21_version)?;
     for scale in &data.scale {
         writeln!(out, "[[scale]]")?;
-        writeln!(out, "file = {:?}", scale.file)?;
-        writeln!(out, "description = {:?}", scale.description)?;
-        let degrees: Vec<String> = scale.degrees.iter().map(|d| format!("{d:?}")).collect();
+        writeln!(out, "file = {}", toml_string(&scale.file))?;
+        writeln!(out, "description = {}", toml_string(&scale.description))?;
+        let degrees: Vec<String> = scale
+            .degrees
+            .iter()
+            .map(|degree| toml_string(degree))
+            .collect();
         writeln!(out, "degrees = [{}]", degrees.join(", "))?;
-        writeln!(out, "period = {:?}\n", scale.period)?;
+        writeln!(out, "period = {}", toml_string(&scale.period))?;
+        writeln!(out, "source = {}\n", toml_string(scale.source.as_str()))?;
     }
     fs::write(path, out)?;
     println!("Scala archive TOML written to {}", path.display());
@@ -245,7 +402,11 @@ pub(crate) fn render(data: &ScalaArchiveData) -> String {
         data.scale.len()
     );
     for scale in &data.scale {
-        let degrees: Vec<String> = scale.degrees.iter().map(|d| format!("{d:?}")).collect();
+        let degrees: Vec<String> = scale
+            .degrees
+            .iter()
+            .map(|degree| toml_string(degree))
+            .collect();
         let _ = writeln!(
             out,
             "    ({:?}, {:?}, &[{}], {:?}),",
@@ -295,6 +456,44 @@ mod tests {
         assert_eq!(degrees, ["1/1", "2957/2048"]);
     }
 
+    #[test]
+    fn skips_a_blank_line_before_the_count() {
+        // 53edo.scl leaves a blank line between description and count.
+        let scl = "!\nFifty-three\n\n 2\n 3/2\n 2/1\n";
+        let (description, degrees, _) = parse_scl(scl).unwrap();
+        assert_eq!(description, "Fifty-three");
+        assert_eq!(degrees, ["1/1", "3/2"]);
+    }
+
+    #[test]
+    fn accepts_a_description_written_as_a_comment() {
+        // 55edo.scl and 43-MT-1_5-Comma.scl put the description behind a `!`,
+        // so it is stripped and the count leads.
+        let scl = "! only a comment\n 2\n 3/2\n 2/1\n";
+        let (description, degrees, period) = parse_scl(scl).unwrap();
+        assert_eq!(description, "");
+        assert_eq!(degrees, ["1/1", "3/2"]);
+        assert_eq!(period, "2/1");
+    }
+
+    #[test]
+    fn infers_a_missing_count_from_the_degrees() {
+        // 41edo.scl has no count line at all.
+        let scl = "!\nNo count here\n 9/8\n 3/2\n 2/1\n";
+        let (description, degrees, period) = parse_scl(scl).unwrap();
+        assert_eq!(description, "No count here");
+        assert_eq!(degrees, ["1/1", "9/8", "3/2"]);
+        assert_eq!(period, "2/1");
+    }
+
+    #[test]
+    fn converts_equal_tempered_step_notation_to_cents() {
+        let scl = "!\nForty-one\n 2\n 1\\41\n 41\\41\n";
+        let (_, degrees, period) = parse_scl(scl).unwrap();
+        // 1200 / 41 = 29.26829
+        assert_eq!(degrees, ["1/1", "29.26829"]);
+        assert_eq!(period, "1200.00000");
+    }
     #[test]
     fn accepts_a_zero_degree_file() {
         // xxx.scl declares no degrees; music21 reads it as a scale with none.
