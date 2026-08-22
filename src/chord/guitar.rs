@@ -192,63 +192,56 @@ pub(crate) fn suggested_guitar_fingering_with_tuning(
         .and_then(|name| Pitch::from_name(name).ok())
         .map(|pitch| pitch_class(&pitch));
 
-    let mut candidates = Vec::new();
-    for base_fret in 0..=(MAX_FRET - MAX_FRET_SPAN) {
-        let options = tuning
-            .strings()
-            .iter()
-            .map(|string| string_choices(string.pitch_space, &target_pitch_spaces, base_fret))
-            .collect::<Vec<_>>();
-        collect_candidates(
-            &options,
-            0,
-            Vec::with_capacity(tuning.len()),
-            &target_pitch_spaces,
-            &target_pitch_classes,
-            root_pitch_class,
-            tuning,
-            &mut candidates,
-        );
-    }
+    let options = tuning
+        .strings()
+        .iter()
+        .map(|string| string_choices(string.pitch_space, &target_pitch_classes))
+        .collect::<Vec<_>>();
 
-    candidates.sort_by(|left, right| {
-        left.score
-            .cmp(&right.score)
-            .then_with(|| {
-                left.fingering
-                    .omitted_pitch_classes
-                    .len()
-                    .cmp(&right.fingering.omitted_pitch_classes.len())
-            })
-            .then_with(|| left.fingering.base_fret.cmp(&right.fingering.base_fret))
-            .then_with(|| left.fingering.fret_span.cmp(&right.fingering.fret_span))
-    });
-    candidates
-        .into_iter()
-        .next()
-        .map(|candidate| candidate.fingering)
+    let mut best: Option<Candidate> = None;
+    let mut current = Vec::with_capacity(tuning.len());
+    collect_candidates(
+        &options,
+        0,
+        &mut current,
+        &target_pitch_spaces,
+        &target_pitch_classes,
+        root_pitch_class,
+        tuning,
+        &mut best,
+    );
+
+    best.map(|candidate| candidate.fingering)
 }
 
+/// Frets on one string that sound a chord tone, plus the option of muting it.
+///
+/// Matches by **pitch class**, not by absolute pitch. A guitar voicing uses
+/// whatever octave of a chord tone falls under the hand — requiring the exact
+/// written octave is what confined this to the top three strings and made every
+/// shape a high-position stack with the bass strings muted.
+///
+/// The whole neck is enumerated once and each shape's position is derived from
+/// the frets it uses, rather than sweeping a window across the neck: the
+/// windows overlap heavily, so sweeping found every shape five times over.
 fn string_choices(
     open_pitch_space: IntegerType,
-    target: &BTreeSet<IntegerType>,
-    base_fret: u8,
+    target_pitch_classes: &BTreeSet<u8>,
 ) -> Vec<StringChoice> {
     let mut choices = vec![StringChoice {
         fret: None,
         pitch_space: None,
         pitch_class: None,
     }];
-    let first_fret = if base_fret == 0 { 0 } else { base_fret };
-    let last_fret = (base_fret + MAX_FRET_SPAN).min(MAX_FRET);
 
-    for fret in first_fret..=last_fret {
+    for fret in 0..=MAX_FRET {
         let pitch_space = open_pitch_space + IntegerType::from(fret);
-        if target.contains(&pitch_space) {
+        let pitch_class = pitch_space.rem_euclid(12) as u8;
+        if target_pitch_classes.contains(&pitch_class) {
             choices.push(StringChoice {
                 fret: Some(fret),
                 pitch_space: Some(pitch_space),
-                pitch_class: Some(pitch_space.rem_euclid(12) as u8),
+                pitch_class: Some(pitch_class),
             });
         }
     }
@@ -259,48 +252,87 @@ fn string_choices(
 fn collect_candidates(
     options: &[Vec<StringChoice>],
     string_index: usize,
-    current: Vec<StringChoice>,
+    current: &mut Vec<StringChoice>,
     target_pitch_spaces: &BTreeSet<IntegerType>,
     target_pitch_classes: &BTreeSet<u8>,
     root_pitch_class: Option<u8>,
     tuning: &GuitarTuning,
-    candidates: &mut Vec<Candidate>,
+    best: &mut Option<Candidate>,
 ) {
     if string_index == options.len() {
+        let bound = best.as_ref().map_or(usize::MAX, |best| best.score);
         if let Some(candidate) = score_candidate(
             current,
             target_pitch_spaces,
             target_pitch_classes,
             root_pitch_class,
             tuning,
-        ) {
-            candidates.push(candidate);
+            bound,
+        ) && best
+            .as_ref()
+            .is_none_or(|current| candidate.score < current.score)
+        {
+            *best = Some(candidate);
         }
         return;
     }
 
     for choice in &options[string_index] {
-        let mut next = current.clone();
-        next.push(choice.clone());
+        // Prune on the fret span before recursing. A partial shape whose
+        // fretted notes already exceed a hand's reach cannot be rescued by
+        // anything the remaining strings do, and this is what keeps the search
+        // small now that every octave of a chord tone is a candidate.
+        if let Some(fret) = choice.fret.filter(|fret| *fret > 0) {
+            let (mut low, mut high) = (fret, fret);
+            for played in current.iter().filter_map(|c| c.fret.filter(|f| *f > 0)) {
+                low = low.min(played);
+                high = high.max(played);
+            }
+            if high - low > MAX_FRET_SPAN {
+                continue;
+            }
+        }
+
+        current.push(choice.clone());
         collect_candidates(
             options,
             string_index + 1,
-            next,
+            current,
             target_pitch_spaces,
             target_pitch_classes,
             root_pitch_class,
             tuning,
-            candidates,
+            best,
         );
+        current.pop();
     }
 }
 
+fn unreachable_same_fret_pairs(fretted_positions: &[(usize, u8)]) -> usize {
+    let mut count = 0;
+    for (index, (left_string, fret)) in fretted_positions.iter().enumerate() {
+        for (right_string, right_fret) in fretted_positions.iter().skip(index + 1) {
+            if right_fret != fret || right_string.saturating_sub(*left_string) < 3 {
+                continue;
+            }
+            let crossed = fretted_positions.iter().any(|(between, between_fret)| {
+                between > left_string && between < right_string && between_fret > fret
+            });
+            if crossed {
+                count += 1;
+            }
+        }
+    }
+    count
+}
+
 fn score_candidate(
-    choices: Vec<StringChoice>,
+    choices: &[StringChoice],
     target_pitch_spaces: &BTreeSet<IntegerType>,
     target_pitch_classes: &BTreeSet<u8>,
     root_pitch_class: Option<u8>,
     tuning: &GuitarTuning,
+    bound: usize,
 ) -> Option<Candidate> {
     let sounding_indices = choices
         .iter()
@@ -331,7 +363,6 @@ fn score_candidate(
         .iter()
         .filter_map(|choice| choice.fret.filter(|fret| *fret > 0))
         .collect::<Vec<_>>();
-    let finger_assignment = finger_assignment(&choices)?;
     let base_fret = fretted.iter().copied().min().unwrap_or(0);
     let fret_span = fretted
         .iter()
@@ -344,7 +375,7 @@ fn score_candidate(
         .iter()
         .filter(|choice| choice.fret.is_none())
         .count();
-    let internal_mutes = internal_muted_string_count(&choices, &sounding_indices);
+    let internal_mutes = internal_muted_string_count(choices, &sounding_indices);
     let bass_pitch_class = sounding_indices
         .first()
         .and_then(|index| choices[*index].pitch_class);
@@ -357,23 +388,72 @@ fn score_candidate(
         .saturating_sub(covered_pitch_spaces.len());
     let fret_sum = fretted.iter().map(|fret| *fret as usize).sum::<usize>();
 
-    let mut score = omitted_pitch_spaces.len() * 1000
-        + usize::from(root_is_missing) * 250
-        + usize::from(bass_is_not_root) * 45
-        + internal_mutes * 40
-        + muted_count * 6
-        + fret_span as usize * 8
-        + base_fret as usize * 3
+    // Scored as a guitarist would judge a shape, not as a pitch-set match.
+    //
+    // Missing a chord *tone* is the real fault; missing the written octave of
+    // one is not, because a voicing is free to place chord tones wherever they
+    // fall under the hand. Weighting octaves instead is what produced
+    // three-string shapes high up the neck that dropped sevenths.
+    let open_strings = choices
+        .iter()
+        .filter(|choice| choice.fret == Some(0))
+        .count();
+
+    // Everything above is cheap. Bail before assigning fingers if the shape
+    // cannot beat the incumbent anyway — that assignment is the expensive part
+    // of the search, and most shapes lose on chord tones long before it.
+    let cheap_floor = omitted_pitch_classes.len() * 1000
+        + usize::from(root_is_missing) * 400
+        + internal_mutes * 120
+        + muted_count * 30;
+    // The final score can still fall below this floor, because open strings are
+    // rewarded by subtraction, so allow for the largest bonus a six-string shape
+    // could earn. Pruning tighter than this would drop voicings that win.
+    const MAX_OPEN_BONUS: usize = 6 * 12;
+    if cheap_floor.saturating_sub(MAX_OPEN_BONUS) >= bound {
+        return None;
+    }
+
+    let finger_assignment = finger_assignment(choices)?;
+
+    let unreachable = unreachable_same_fret_pairs(
+        &choices
+            .iter()
+            .enumerate()
+            .filter_map(|(index, choice)| {
+                choice
+                    .fret
+                    .filter(|fret| *fret > 0)
+                    .map(|fret| (index, fret))
+            })
+            .collect::<Vec<_>>(),
+    );
+
+    let penalties = unreachable * 300
+        + omitted_pitch_classes.len() * 1000
+        + usize::from(root_is_missing) * 400
+        + internal_mutes * 120
+        + muted_count * 30
+        + usize::from(bass_is_not_root) * 60
+        + fret_span as usize * 12
+        + base_fret as usize * 6
         + fretted.len() * 2
         + duplicate_count
         + fret_sum;
 
-    if covered_pitch_spaces.len() == target_pitch_spaces.len() {
-        score = score.saturating_sub(50);
-    }
+    // Open strings ring and cost no finger, so first-position shapes should
+    // beat the equivalent barre when both are available. That only holds near
+    // the nut: an open string mixed into a shape held at the seventh fret is a
+    // stretch across the neck, not a convenience, so the reward tapers off and
+    // then becomes a penalty.
+    let score = if base_fret <= 2 {
+        penalties.saturating_sub(open_strings * 12)
+    } else {
+        penalties + open_strings * 20
+    };
 
     let strings = choices
-        .into_iter()
+        .iter()
         .enumerate()
         .map(|(index, choice)| {
             let tuning_string = &tuning.strings()[index];
