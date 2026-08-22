@@ -54,9 +54,27 @@ pub const COMMON_TWELVE_TONE_TUNING_SYSTEMS: [TuningSystem; 4] = [
     TuningSystem::EqualTemperament {
         octave_size: OCTAVE_SIZE,
     },
-    TuningSystem::JustIntonation,
+    TuningSystem::CarlosHarmonic,
     TuningSystem::PythagoreanTuning,
     TuningSystem::FiveLimit,
+];
+
+/// The equal divisions of the octave that xenharmonic practice actually uses.
+///
+/// Any EDO is already expressible as
+/// `TuningSystem::EqualTemperament { octave_size: n }`; this names the ones
+/// worth reaching for. 19 and 31 support meantone, 22 deliberately does not,
+/// 53 gets 5-limit harmony almost exact, and 72 is the usual choice for
+/// notating 11-limit music.
+pub const COMMON_EQUAL_TEMPERAMENTS: [TuningSystem; 8] = [
+    TuningSystem::EqualTemperament { octave_size: 12 },
+    TuningSystem::EqualTemperament { octave_size: 19 },
+    TuningSystem::EqualTemperament { octave_size: 22 },
+    TuningSystem::EqualTemperament { octave_size: 24 },
+    TuningSystem::EqualTemperament { octave_size: 31 },
+    TuningSystem::EqualTemperament { octave_size: 41 },
+    TuningSystem::EqualTemperament { octave_size: 53 },
+    TuningSystem::EqualTemperament { octave_size: 72 },
 ];
 
 /// Historical keyboard temperaments, oldest first.
@@ -64,13 +82,21 @@ pub const COMMON_TWELVE_TONE_TUNING_SYSTEMS: [TuningSystem; 4] = [
 /// These are the well temperaments and meantone tunings that Western keyboard
 /// music was actually written for, transcribed from the Scala archive in the
 /// `music21` reference submodule. All are twelve-tone.
-pub const HISTORICAL_TEMPERAMENTS: [TuningSystem; 6] = [
+pub const HISTORICAL_TEMPERAMENTS: [TuningSystem; 14] = [
     TuningSystem::QuarterCommaMeantone,
     TuningSystem::WerckmeisterIII,
     TuningSystem::Rameau,
     TuningSystem::KirnbergerIII,
     TuningSystem::Vallotti,
     TuningSystem::YoungII,
+    TuningSystem::ThirdCommaMeantone,
+    TuningSystem::SixthCommaMeantone,
+    TuningSystem::WerckmeisterIV,
+    TuningSystem::WerckmeisterV,
+    TuningSystem::KirnbergerI,
+    TuningSystem::NeidhardtI,
+    TuningSystem::Silbermann,
+    TuningSystem::LehmanBach,
 ];
 
 /// Either a normal tuning system or a context-sensitive adaptive tuning system.
@@ -134,30 +160,37 @@ impl From<AdaptiveTuningSystem> for AnyTuningSystem {
 }
 
 /// All built-in tuning systems in canonical display order.
-pub const ALL_TUNING_SYSTEMS: [TuningSystem; 21] = [
+pub const ALL_TUNING_SYSTEMS: [TuningSystem; 28] = [
     TuningSystem::EqualTemperament {
         octave_size: OCTAVE_SIZE,
     },
     TuningSystem::WholeTone,
     TuningSystem::QuarterTone,
-    TuningSystem::JustIntonation,
-    TuningSystem::JustIntonation24,
+    TuningSystem::CarlosHarmonic,
+    TuningSystem::CarlosHarmonic24,
     TuningSystem::PythagoreanTuning,
     TuningSystem::FiveLimit,
     TuningSystem::ElevenLimit,
     TuningSystem::FortyThreeTone,
     TuningSystem::Javanese,
     TuningSystem::Thai,
-    TuningSystem::Indian,
+    TuningSystem::PtolemyIntenseDiatonic,
     TuningSystem::IndianAlt,
     TuningSystem::Indian22,
-    TuningSystem::IndianFull,
     TuningSystem::QuarterCommaMeantone,
     TuningSystem::WerckmeisterIII,
     TuningSystem::Rameau,
     TuningSystem::KirnbergerIII,
     TuningSystem::Vallotti,
     TuningSystem::YoungII,
+    TuningSystem::ThirdCommaMeantone,
+    TuningSystem::SixthCommaMeantone,
+    TuningSystem::WerckmeisterIV,
+    TuningSystem::WerckmeisterV,
+    TuningSystem::KirnbergerI,
+    TuningSystem::NeidhardtI,
+    TuningSystem::Silbermann,
+    TuningSystem::LehmanBach,
 ];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -310,10 +343,14 @@ pub enum TuningSystem {
     /// Twenty-four-tone equal temperament.
     QuarterTone,
 
-    /// Twelve-tone just intonation table.
-    JustIntonation,
-    /// Twenty-four-tone just intonation table.
-    JustIntonation24,
+    /// Twelve-tone harmonic-series scale (Wendy Carlos's Harmonic).
+    ///
+    /// Not just intonation, despite its former name: the degrees are the
+    /// harmonic series 16:17:18:19:20:21:22:24:26:27:28:30, which reaches the
+    /// 19-limit. [`TuningSystem::FiveLimit`] is the classical 12-tone JI scale.
+    CarlosHarmonic,
+    /// Twenty-four-tone harmonic-series scale.
+    CarlosHarmonic24,
     /// Twelve-tone Pythagorean tuning table.
     PythagoreanTuning,
 
@@ -330,14 +367,15 @@ pub enum TuningSystem {
     Javanese,
     /// Seven-tone Thai equal-temperament approximation.
     Thai,
-    /// Seven-tone Indian scale table.
-    Indian,
-    /// Alternate seven-tone Indian scale table.
+    /// Ptolemy's intense diatonic, also Zarlino's just major scale.
+    ///
+    /// Greek and Renaissance European, despite once being filed here as an
+    /// Indian scale — the archive names it `ptolemy.scl`.
+    PtolemyIntenseDiatonic,
+    /// Alternate seven-tone PtolemyIntenseDiatonic scale table.
     IndianAlt,
-    /// Twenty-two-tone Indian scale table.
+    /// Twenty-two-tone PtolemyIntenseDiatonic scale table.
     Indian22,
-    /// Full twenty-two-tone Indian scale table.
-    IndianFull,
 
     // Historical keyboard temperaments, transcribed from the Scala archive.
     /// Twelve-tone quarter-comma meantone temperament (Aaron, 1523).
@@ -352,6 +390,22 @@ pub enum TuningSystem {
     Vallotti,
     /// Twelve-tone Thomas Young well temperament no. 2 (1799).
     YoungII,
+    /// A twelve-tone third-comma meantone temperament (Salinas, 1577).
+    ThirdCommaMeantone,
+    /// A twelve-tone sixth-comma meantone temperament (Salinas, 1577).
+    SixthCommaMeantone,
+    /// A twelve-tone Werckmeister IV well temperament (1681).
+    WerckmeisterIV,
+    /// A twelve-tone Werckmeister V well temperament (1681).
+    WerckmeisterV,
+    /// A twelve-tone Kirnberger I well temperament (1766).
+    KirnbergerI,
+    /// A twelve-tone Neidhardt I well temperament (1724).
+    NeidhardtI,
+    /// A twelve-tone Gottfried Silbermann temperament no. 1 (c. 1730).
+    Silbermann,
+    /// A twelve-tone Lehman-Bach temperament (2005).
+    LehmanBach,
 }
 
 impl TuningSystem {
@@ -361,24 +415,31 @@ impl TuningSystem {
             Self::EqualTemperament { .. } => "EqualTemperament",
             Self::WholeTone => "WholeTone",
             Self::QuarterTone => "QuarterTone",
-            Self::JustIntonation => "JustIntonation",
-            Self::JustIntonation24 => "JustIntonation24",
+            Self::CarlosHarmonic => "CarlosHarmonic",
+            Self::CarlosHarmonic24 => "CarlosHarmonic24",
             Self::PythagoreanTuning => "PythagoreanTuning",
             Self::FiveLimit => "FiveLimit",
             Self::ElevenLimit => "ElevenLimit",
             Self::FortyThreeTone => "FortyThreeTone",
             Self::Javanese => "Javanese",
             Self::Thai => "Thai",
-            Self::Indian => "Indian",
+            Self::PtolemyIntenseDiatonic => "PtolemyIntenseDiatonic",
             Self::IndianAlt => "IndianAlt",
             Self::Indian22 => "Indian22",
-            Self::IndianFull => "IndianFull",
             Self::QuarterCommaMeantone => "QuarterCommaMeantone",
             Self::WerckmeisterIII => "WerckmeisterIII",
             Self::Rameau => "Rameau",
             Self::KirnbergerIII => "KirnbergerIII",
             Self::Vallotti => "Vallotti",
             Self::YoungII => "YoungII",
+            Self::ThirdCommaMeantone => "ThirdCommaMeantone",
+            Self::SixthCommaMeantone => "SixthCommaMeantone",
+            Self::WerckmeisterIV => "WerckmeisterIV",
+            Self::WerckmeisterV => "WerckmeisterV",
+            Self::KirnbergerI => "KirnbergerI",
+            Self::NeidhardtI => "NeidhardtI",
+            Self::Silbermann => "Silbermann",
+            Self::LehmanBach => "LehmanBach",
         }
     }
 
@@ -388,24 +449,31 @@ impl TuningSystem {
             Self::EqualTemperament { .. } => "Equal temperament",
             Self::WholeTone => "Whole tone",
             Self::QuarterTone => "Quarter tone",
-            Self::JustIntonation => "Just intonation",
-            Self::JustIntonation24 => "Just intonation 24",
+            Self::CarlosHarmonic => "Carlos Harmonic",
+            Self::CarlosHarmonic24 => "Carlos Harmonic 24",
             Self::PythagoreanTuning => "Pythagorean",
             Self::FiveLimit => "Five-limit",
-            Self::ElevenLimit => "Eleven-limit",
-            Self::FortyThreeTone => "Forty-three tone",
+            Self::ElevenLimit => "Partch 11-limit diamond",
+            Self::FortyThreeTone => "Partch 43-tone",
             Self::Javanese => "Javanese",
             Self::Thai => "Thai",
-            Self::Indian => "Indian",
-            Self::IndianAlt => "Indian alternate",
-            Self::Indian22 => "Indian 22",
-            Self::IndianFull => "Indian full",
+            Self::PtolemyIntenseDiatonic => "Ptolemy intense diatonic",
+            Self::IndianAlt => "Indian Sa-grama",
+            Self::Indian22 => "Indian shruti",
             Self::QuarterCommaMeantone => "Quarter-comma meantone",
             Self::WerckmeisterIII => "Werckmeister III",
             Self::Rameau => "Rameau",
             Self::KirnbergerIII => "Kirnberger III",
             Self::Vallotti => "Vallotti",
             Self::YoungII => "Young II",
+            Self::ThirdCommaMeantone => "Third-comma meantone",
+            Self::SixthCommaMeantone => "Sixth-comma meantone",
+            Self::WerckmeisterIV => "Werckmeister IV",
+            Self::WerckmeisterV => "Werckmeister V",
+            Self::KirnbergerI => "Kirnberger I",
+            Self::NeidhardtI => "Neidhardt I",
+            Self::Silbermann => "Silbermann",
+            Self::LehmanBach => "Lehman-Bach",
         }
     }
 
@@ -415,18 +483,19 @@ impl TuningSystem {
             Self::EqualTemperament { .. } => "Twelve equal divisions of the octave.",
             Self::WholeTone => "Six equal whole-tone steps per octave.",
             Self::QuarterTone => "Twenty-four equal quarter-tone steps per octave.",
-            Self::JustIntonation => "A twelve-tone just-intonation ratio table.",
-            Self::JustIntonation24 => "A twenty-four-tone just-intonation ratio table.",
+            Self::CarlosHarmonic => "A twelve-tone harmonic-series scale, reaching the 19-limit.",
+            Self::CarlosHarmonic24 => "A twenty-four-tone harmonic-series scale.",
             Self::PythagoreanTuning => "A twelve-tone tuning table built from pure fifths.",
             Self::FiveLimit => "A twelve-tone table using five-limit just ratios.",
-            Self::ElevenLimit => "A twenty-nine-tone table using eleven-limit ratios.",
-            Self::FortyThreeTone => "A forty-three-tone ratio table.",
+            Self::ElevenLimit => "Harry Partch's twenty-nine-tone 11-limit tonality diamond.",
+            Self::FortyThreeTone => "Harry Partch's forty-three-tone pure scale.",
             Self::Javanese => "A five-tone Javanese equal-temperament approximation.",
             Self::Thai => "A seven-tone Thai equal-temperament approximation.",
-            Self::Indian => "A seven-tone Indian scale ratio table.",
-            Self::IndianAlt => "An alternate seven-tone Indian scale ratio table.",
-            Self::Indian22 => "A twenty-two-tone Indian scale ratio table.",
-            Self::IndianFull => "The full twenty-two-tone Indian scale table.",
+            Self::PtolemyIntenseDiatonic => {
+                "Ptolemy's intense diatonic, also Zarlino's just major scale."
+            }
+            Self::IndianAlt => "The Indian Sa-grama mode, the inverse of Didymus' diatonic.",
+            Self::Indian22 => "The twenty-two-shruti Indian scale.",
             Self::QuarterCommaMeantone => {
                 "A twelve-tone quarter-comma meantone temperament (Aaron, 1523)."
             }
@@ -435,6 +504,18 @@ impl TuningSystem {
             Self::KirnbergerIII => "A twelve-tone Kirnberger III well temperament (1744).",
             Self::Vallotti => "A twelve-tone Vallotti well temperament (c. 1754).",
             Self::YoungII => "A twelve-tone Thomas Young well temperament no. 2 (1799).",
+            Self::ThirdCommaMeantone => {
+                "A twelve-tone third-comma meantone temperament (Salinas, 1577)."
+            }
+            Self::SixthCommaMeantone => {
+                "A twelve-tone sixth-comma meantone temperament (Salinas, 1577)."
+            }
+            Self::WerckmeisterIV => "A twelve-tone Werckmeister IV well temperament (1681).",
+            Self::WerckmeisterV => "A twelve-tone Werckmeister V well temperament (1681).",
+            Self::KirnbergerI => "A twelve-tone Kirnberger I well temperament (1766).",
+            Self::NeidhardtI => "A twelve-tone Neidhardt I well temperament (1724).",
+            Self::Silbermann => "A twelve-tone Gottfried Silbermann temperament no. 1 (c. 1730).",
+            Self::LehmanBach => "A twelve-tone Lehman-Bach temperament (2005).",
         }
     }
 
@@ -483,41 +564,57 @@ impl TuningSystem {
         match self {
             Self::EqualTemperament { octave_size } => octave_size,
             Self::WholeTone => 6,
-            Self::QuarterTone | Self::JustIntonation24 => 24,
+            Self::QuarterTone | Self::CarlosHarmonic24 => 24,
             Self::FortyThreeTone => 43,
             Self::ElevenLimit => 29,
             Self::Javanese => 5,
-            Self::Thai | Self::Indian | Self::IndianAlt => 7,
-            Self::Indian22 | Self::IndianFull => 22,
+            Self::Thai | Self::PtolemyIntenseDiatonic | Self::IndianAlt => 7,
+            Self::Indian22 => 22,
             Self::QuarterCommaMeantone
             | Self::WerckmeisterIII
             | Self::Rameau
             | Self::KirnbergerIII
             | Self::Vallotti
-            | Self::YoungII => OCTAVE_SIZE,
-            Self::JustIntonation | Self::PythagoreanTuning | Self::FiveLimit => OCTAVE_SIZE,
+            | Self::YoungII
+            | Self::ThirdCommaMeantone
+            | Self::SixthCommaMeantone
+            | Self::WerckmeisterIV
+            | Self::WerckmeisterV
+            | Self::KirnbergerI
+            | Self::NeidhardtI
+            | Self::Silbermann
+            | Self::LehmanBach => OCTAVE_SIZE,
+            Self::CarlosHarmonic | Self::PythagoreanTuning | Self::FiveLimit => OCTAVE_SIZE,
         }
     }
 
     fn ratio_table(self) -> Option<&'static [Fraction]> {
         match self {
-            Self::JustIntonation => Some(&JUST_INTONATION),
-            Self::JustIntonation24 => Some(&JUST_INTONATION_24),
+            Self::CarlosHarmonic => Some(&CARLOS_HARMONIC),
+            Self::CarlosHarmonic24 => Some(&CARLOS_HARMONIC_24),
             Self::PythagoreanTuning => Some(&PYTHAGOREAN_TUNING),
             Self::FiveLimit => Some(&FIVE_LIMIT),
             Self::ElevenLimit => Some(&ELEVEN_LIMIT),
             Self::FortyThreeTone => Some(&FORTY_THREE_TONE),
             Self::Javanese => Some(&JAVANESE),
             Self::Thai => Some(&THAI),
-            Self::Indian => Some(&INDIAN_SCALE),
+            Self::PtolemyIntenseDiatonic => Some(&PTOLEMY_INTENSE_DIATONIC),
             Self::IndianAlt => Some(&INDIA_SCALE_ALT),
-            Self::Indian22 | Self::IndianFull => Some(&INDIAN_SCALE_22),
+            Self::Indian22 => Some(&INDIAN_SCALE_22),
             Self::QuarterCommaMeantone => Some(&QUARTER_COMMA_MEANTONE),
             Self::WerckmeisterIII => Some(&WERCKMEISTER_III),
             Self::Rameau => Some(&RAMEAU),
             Self::KirnbergerIII => Some(&KIRNBERGER_III),
             Self::Vallotti => Some(&VALLOTTI),
             Self::YoungII => Some(&YOUNG_II),
+            Self::ThirdCommaMeantone => Some(&THIRD_COMMA_MEANTONE),
+            Self::SixthCommaMeantone => Some(&SIXTH_COMMA_MEANTONE),
+            Self::WerckmeisterIV => Some(&WERCKMEISTER_IV),
+            Self::WerckmeisterV => Some(&WERCKMEISTER_V),
+            Self::KirnbergerI => Some(&KIRNBERGER_I),
+            Self::NeidhardtI => Some(&NEIDHARDT_I),
+            Self::Silbermann => Some(&SILBERMANN),
+            Self::LehmanBach => Some(&LEHMAN_BACH),
             Self::EqualTemperament { .. } | Self::WholeTone | Self::QuarterTone => None,
         }
     }
@@ -530,7 +627,7 @@ impl TuningSystem {
         let degree = index % octave_size;
         match self {
             Self::WholeTone if octave_size == 6 => WHOLE_TONE_NAMES[degree as usize].to_string(),
-            Self::Indian | Self::IndianAlt if octave_size == 7 => {
+            Self::PtolemyIntenseDiatonic | Self::IndianAlt if octave_size == 7 => {
                 INDIAN_SCALE_NAMES[degree as usize].to_string()
             }
             _ => default_degree_label(octave_size, index),
@@ -554,24 +651,31 @@ impl FromStr for TuningSystem {
             }),
             "WholeTone" => Ok(Self::WholeTone),
             "QuarterTone" => Ok(Self::QuarterTone),
-            "JustIntonation" => Ok(Self::JustIntonation),
-            "JustIntonation24" => Ok(Self::JustIntonation24),
+            "CarlosHarmonic" => Ok(Self::CarlosHarmonic),
+            "CarlosHarmonic24" => Ok(Self::CarlosHarmonic24),
             "PythagoreanTuning" => Ok(Self::PythagoreanTuning),
             "FiveLimit" => Ok(Self::FiveLimit),
             "ElevenLimit" => Ok(Self::ElevenLimit),
             "FortyThreeTone" => Ok(Self::FortyThreeTone),
             "Javanese" => Ok(Self::Javanese),
             "Thai" => Ok(Self::Thai),
-            "Indian" => Ok(Self::Indian),
+            "PtolemyIntenseDiatonic" => Ok(Self::PtolemyIntenseDiatonic),
             "IndianAlt" => Ok(Self::IndianAlt),
             "Indian22" => Ok(Self::Indian22),
-            "IndianFull" => Ok(Self::IndianFull),
             "QuarterCommaMeantone" => Ok(Self::QuarterCommaMeantone),
             "WerckmeisterIII" => Ok(Self::WerckmeisterIII),
             "Rameau" => Ok(Self::Rameau),
             "KirnbergerIII" => Ok(Self::KirnbergerIII),
             "Vallotti" => Ok(Self::Vallotti),
             "YoungII" => Ok(Self::YoungII),
+            "ThirdCommaMeantone" => Ok(Self::ThirdCommaMeantone),
+            "SixthCommaMeantone" => Ok(Self::SixthCommaMeantone),
+            "WerckmeisterIV" => Ok(Self::WerckmeisterIV),
+            "WerckmeisterV" => Ok(Self::WerckmeisterV),
+            "KirnbergerI" => Ok(Self::KirnbergerI),
+            "NeidhardtI" => Ok(Self::NeidhardtI),
+            "Silbermann" => Ok(Self::Silbermann),
+            "LehmanBach" => Ok(Self::LehmanBach),
             _ => Err(Error::TuningSystem(format!("unknown tuning system {s:?}"))),
         }
     }
@@ -792,7 +896,7 @@ pub const THAI: [Fraction; 7] = [
     Fraction::new_with_base(6, 7, 2),
 ];
 
-/// Degree labels for the seven-tone Indian scale.
+/// Degree labels for the seven-tone PtolemyIntenseDiatonic scale.
 pub const INDIAN_SCALE_NAMES: [&str; 7] = ["Sa", "Re", "Ga", "Ma", "Pa", "Dha", "Ni"];
 
 #[cfg(test)]
@@ -802,6 +906,52 @@ mod tests {
     /// Cents above the tonic for a degree of a twelve-tone table.
     fn cents_at_degree(system: TuningSystem, degree: usize) -> FloatType {
         1200.0 * system.ratio(degree).log2()
+    }
+
+    #[test]
+    fn meantone_fifths_match_their_comma_fractions() {
+        // A 1/n-comma meantone narrows the pure fifth by 1/n of the syntonic
+        // comma (21.506 cents). Checking the arithmetic rather than a quoted
+        // table catches a table pointed at the wrong Scala file.
+        const PURE_FIFTH: FloatType = 701.955;
+        const SYNTONIC_COMMA: FloatType = 21.506;
+        for (system, divisor) in [
+            (TuningSystem::ThirdCommaMeantone, 3.0),
+            (TuningSystem::QuarterCommaMeantone, 4.0),
+            (TuningSystem::SixthCommaMeantone, 6.0),
+        ] {
+            let expected = PURE_FIFTH - SYNTONIC_COMMA / divisor;
+            let actual = cents_at_degree(system, 7);
+            assert!(
+                (actual - expected).abs() < 0.01,
+                "{} fifth: expected {expected:.3}, got {actual:.3}",
+                system.display_name()
+            );
+        }
+    }
+
+    #[test]
+    fn kirnberger_i_keeps_its_pure_fifth_and_third() {
+        // Kirnberger I is the outlier of the well temperaments: it leaves the
+        // C-G fifth pure rather than tempering it.
+        assert!((cents_at_degree(TuningSystem::KirnbergerI, 7) - 701.955).abs() < 0.01);
+        assert!((cents_at_degree(TuningSystem::KirnbergerI, 4) - 386.314).abs() < 0.01);
+    }
+
+    #[test]
+    fn common_equal_temperaments_divide_the_octave_evenly() {
+        for system in COMMON_EQUAL_TEMPERAMENTS {
+            let size = system.octave_size();
+            let step = 1200.0 / FloatType::from(size);
+            for degree in 0..size as usize {
+                let expected = step * degree as FloatType;
+                let actual = cents_at_degree(system, degree);
+                assert!(
+                    (actual - expected).abs() < 0.001,
+                    "{size}-EDO degree {degree}: expected {expected:.3}, got {actual:.3}"
+                );
+            }
+        }
     }
 
     #[test]
@@ -922,8 +1072,8 @@ mod tests {
     #[test]
     fn ratio_helpers_cover_octaves() {
         let two_one: FloatType = Fraction::new(2, 1).into();
-        assert_eq!(get_ratio(TuningSystem::JustIntonation, 12, None), two_one);
-        assert_eq!(get_ratio(TuningSystem::JustIntonation24, 24, None), two_one);
+        assert_eq!(get_ratio(TuningSystem::CarlosHarmonic, 12, None), two_one);
+        assert_eq!(get_ratio(TuningSystem::CarlosHarmonic24, 24, None), two_one);
         assert_eq!(
             get_ratio(
                 TuningSystem::EqualTemperament {
@@ -982,9 +1132,9 @@ mod tests {
 
     #[test]
     fn table_ratios_shift_by_real_octaves() {
-        assert_eq!(TuningSystem::JustIntonation.ratio(19), 3.0);
+        assert_eq!(TuningSystem::CarlosHarmonic.ratio(19), 3.0);
         assert_eq!(TuningSystem::FortyThreeTone.ratio(68), 3.0);
-        assert_eq!(TuningSystem::Indian.ratio(8), 2.25);
+        assert_eq!(TuningSystem::PtolemyIntenseDiatonic.ratio(8), 2.25);
     }
 
     #[test]
@@ -1006,9 +1156,9 @@ mod tests {
         assert_eq!(TuningSystem::Thai.octave_size(), 7);
         assert_eq!(TuningSystem::Thai.ratio(7), 2.0);
 
-        assert_eq!(TuningSystem::Indian.label(8), "Re0");
-        assert_eq!(TuningSystem::Indian.octave_size(), 7);
-        assert_eq!(TuningSystem::Indian.ratio(8), 2.25);
+        assert_eq!(TuningSystem::PtolemyIntenseDiatonic.label(8), "Re0");
+        assert_eq!(TuningSystem::PtolemyIntenseDiatonic.octave_size(), 7);
+        assert_eq!(TuningSystem::PtolemyIntenseDiatonic.ratio(8), 2.25);
 
         assert_eq!(TuningSystem::FortyThreeTone.label(68), "T25O0");
         assert_eq!(TuningSystem::FortyThreeTone.octave_size(), 43);

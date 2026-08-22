@@ -8,8 +8,8 @@
 # Emit the Rust with `cargo run -p xtask -- emit-tuning-tables`.
 
 [[table]]
-name = "JUST_INTONATION"
-doc = "Twelve-tone just intonation ratios."
+name = "CARLOS_HARMONIC"
+doc = "Twelve-tone harmonic-series scale (Wendy Carlos's Harmonic)."
 scala_file = "carlos_harm.scl"
 scala_description = "Carlos Harmonic & Ben Johnston's scale of 'Blues' from Suite f.micr.piano (1977) & David Beardsley's scale of 'Science Friction'"
 ratios = [
@@ -28,8 +28,8 @@ ratios = [
 ]
 
 [[table]]
-name = "JUST_INTONATION_24"
-doc = "Twenty-four-tone just intonation ratios."
+name = "CARLOS_HARMONIC_24"
+doc = "Twenty-four-tone harmonic-series scale."
 note = "no counterpart in the Scala archive"
 ratios = [
     [1, 1],
@@ -186,8 +186,8 @@ ratios = [
 ]
 
 [[table]]
-name = "INDIAN_SCALE"
-doc = "Seven-tone Indian scale ratios."
+name = "PTOLEMY_INTENSE_DIATONIC"
+doc = "Ptolemy's intense diatonic, also Zarlino's just major scale."
 scala_file = "ptolemy.scl"
 scala_description = "Intense Diatonic Syntonon, also Zarlino's scale"
 ratios = [
@@ -363,5 +363,165 @@ ratios = [
     [59609, 80000, 2],
     [5, 6, 2],
     [18203, 20000, 2],
+]
+
+[[table]]
+name = "THIRD_COMMA_MEANTONE"
+doc = "Twelve-tone third-comma meantone temperament (Salinas, 1577)."
+scala_file = "meanthird.scl"
+scala_description = "1/3-comma meantone scale (Salinas)"
+ratios = [
+    [1, 1],
+    [3175183, 60000000, 2],
+    [296207, 1875000, 2],
+    [6, 5],
+    [2527633, 8000000, 2],
+    [1578793, 3750000, 2],
+    [25, 18],
+    [2171207, 3750000, 2],
+    [2527633, 4000000, 2],
+    [5, 3],
+    [1578793, 1875000, 2],
+    [107393119, 120000000, 2],
+]
+
+[[table]]
+name = "SIXTH_COMMA_MEANTONE"
+doc = "Twelve-tone sixth-comma meantone temperament (Salinas, 1577)."
+scala_file = "meansixth.scl"
+scala_description = "1/6-comma meantone scale (tritonic temperament of Salinas)"
+ratios = [
+    [1, 1],
+    [8859433, 120000000, 2],
+    [4918531, 30000000, 2],
+    [5081469, 20000000, 2],
+    [4918531, 15000000, 2],
+    [25081469, 60000000, 2],
+    [45, 32],
+    [34918531, 60000000, 2],
+    [5246433, 8000000, 2],
+    [14918531, 20000000, 2],
+    [25081469, 30000000, 2],
+    [10918531, 12000000, 2],
+]
+
+[[table]]
+name = "WERCKMEISTER_IV"
+doc = "Twelve-tone Werckmeister IV well temperament (1681)."
+scala_file = "werck4.scl"
+scala_description = "Andreas Werckmeister's temperament IV"
+ratios = [
+    [1, 1],
+    [2746833, 40000000, 2],
+    [19609, 120000, 2],
+    [32, 27],
+    [19609, 60000, 2],
+    [4, 3],
+    [1024, 729],
+    [138827, 240000, 2],
+    [26145333, 40000000, 2],
+    [35609, 48000, 2],
+    [100391, 120000, 2],
+    [4096, 2187],
+]
+
+[[table]]
+name = "WERCKMEISTER_V"
+doc = "Twelve-tone Werckmeister V well temperament (1681)."
+scala_file = "werck5.scl"
+scala_description = "Andreas Werckmeister's temperament V"
+ratios = [
+    [1, 1],
+    [3203, 40000, 2],
+    [9, 8],
+    [1, 4, 2],
+    [13203, 40000, 2],
+    [16797, 40000, 2],
+    [1, 2, 2],
+    [3, 2],
+    [128, 81],
+    [3, 4, 2],
+    [66797, 80000, 2],
+    [73203, 80000, 2],
+]
+
+[[table]]
+name = "KIRNBERGER_I"
+doc = "Twelve-tone Kirnberger I well temperament (1766)."
+scala_file = "kirnberger1.scl"
+scala_description = "Kirnberger's temperament 1 (1766)"
+ratios = [
+    [1, 1],
+    [256, 243],
+    [9, 8],
+    [32, 27],
+    [5, 4],
+    [4, 3],
+    [45, 32],
+    [3, 2],
+    [128, 81],
+    [111889, 150000, 2],
+    [16, 9],
+    [15, 8],
+]
+
+[[table]]
+name = "NEIDHARDT_I"
+doc = "Twelve-tone Neidhardt I well temperament (1724)."
+scala_file = "neidhardt1.scl"
+scala_description = "Neidhardt I temperament (1724)"
+ratios = [
+    [1, 1],
+    [18827, 240000, 2],
+    [19609, 120000, 2],
+    [29609, 120000, 2],
+    [19609, 60000, 2],
+    [4, 3],
+    [29609, 60000, 2],
+    [139609, 240000, 2],
+    [79609, 120000, 2],
+    [59609, 80000, 2],
+    [16, 9],
+    [18203, 20000, 2],
+]
+
+[[table]]
+name = "SILBERMANN"
+doc = "Twelve-tone Gottfried Silbermann temperament no. 1 (c. 1730)."
+scala_file = "silbermann1.scl"
+scala_description = "Gottfried Silbermann's temperament nr. 1"
+ratios = [
+    [1, 1],
+    [8729249, 120000000, 2],
+    [1, 6, 2],
+    [15391, 60000, 2],
+    [5203, 16000, 2],
+    [201173, 480000, 2],
+    [23609, 48000, 2],
+    [7, 12, 2],
+    [26145333, 40000000, 2],
+    [71609, 96000, 2],
+    [201173, 240000, 2],
+    [43609, 48000, 2],
+]
+
+[[table]]
+name = "LEHMAN_BACH"
+doc = "Twelve-tone Lehman-Bach temperament (2005)."
+scala_file = "lehman-bach.scl"
+scala_description = "Brad Lehman's Bach squiggle keyboard temperament (2005)"
+ratios = [
+    [1, 1],
+    [19609, 240000, 2],
+    [19609, 120000, 2],
+    [59609, 240000, 2],
+    [19609, 60000, 2],
+    [100391, 240000, 2],
+    [59609, 120000, 2],
+    [139609, 240000, 2],
+    [53203, 80000, 2],
+    [59609, 80000, 2],
+    [199609, 240000, 2],
+    [218827, 240000, 2],
 ]
 
