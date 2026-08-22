@@ -19,20 +19,21 @@ use std::path::{Path, PathBuf};
 
 /// Where a bundled scale came from.
 ///
-/// The music21 submodule supplies the bulk of the archive; `data/scala_extra`
-/// holds scales vendored from elsewhere, which a submodule bump must not wipe.
+/// Both are git submodules, read the same way: the music21 archive supplies the
+/// bulk of the scales and Plainsound Hexatone supplies a curated set. Neither is
+/// stored in this repository; only the parsed result is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) enum ScaleSource {
     Music21,
-    Vendored,
+    Hexatone,
 }
 
 impl ScaleSource {
     fn as_str(self) -> &'static str {
         match self {
             Self::Music21 => "music21",
-            Self::Vendored => "vendored",
+            Self::Hexatone => "hexatone",
         }
     }
 }
@@ -75,9 +76,9 @@ fn submodule_scl_dir(workspace_root: &Path) -> PathBuf {
     workspace_root.join("music21/music21/scale/scala/scl")
 }
 
-/// Scales vendored into this repository rather than taken from the submodule.
-fn vendored_scl_dir(workspace_root: &Path) -> PathBuf {
-    workspace_root.join("data/scala_extra")
+/// Scales from the Plainsound Hexatone submodule.
+fn hexatone_scl_dir(workspace_root: &Path) -> PathBuf {
+    workspace_root.join("hexatone/scales")
 }
 
 /// Decodes `.scl` bytes, preferring UTF-8 and falling back to latin-1.
@@ -303,10 +304,15 @@ pub(crate) fn regenerate(workspace_root: &Path) -> Result<ScalaArchiveData, Box<
     read_directory(&dir, ScaleSource::Music21, &mut scale, &mut failures)?;
     let from_submodule = scale.len();
 
-    let vendored = vendored_scl_dir(workspace_root);
-    if vendored.is_dir() {
-        read_directory(&vendored, ScaleSource::Vendored, &mut scale, &mut failures)?;
+    let hexatone = hexatone_scl_dir(workspace_root);
+    if !hexatone.is_dir() {
+        return Err(format!(
+            "{} is missing; run `git submodule update --init --recursive`",
+            hexatone.display()
+        )
+        .into());
     }
+    read_directory(&hexatone, ScaleSource::Hexatone, &mut scale, &mut failures)?;
 
     if !failures.is_empty() {
         return Err(format!(
@@ -331,7 +337,7 @@ pub(crate) fn regenerate(workspace_root: &Path) -> Result<ScalaArchiveData, Box<
     scale.sort_by(|left, right| left.file.cmp(&right.file));
 
     println!(
-        "  {from_submodule} scales from the submodule, {} vendored",
+        "  {from_submodule} scales from music21, {} from hexatone",
         scale.len() - from_submodule
     );
     Ok(ScalaArchiveData {
