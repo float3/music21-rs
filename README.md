@@ -222,6 +222,7 @@ provides for.
 ### Contributed back
 
 Header-format fixes for five of the Hexatone scale files were sent upstream as
-[PLAINSOUND/hexatone#3](https://github.com/PLAINSOUND/hexatone/pull/3), and a
+[PLAINSOUND/hexatone#3](https://github.com/PLAINSOUND/hexatone/pull/3) — until
+that lands, the `hexatone` submodule tracks a fork branch carrying it — and a
 malformed ratio in the Scala archive as
 [cuthbertLab/music21#2003](https://github.com/cuthbertLab/music21/pull/2003).
