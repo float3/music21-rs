@@ -1,550 +1,591 @@
 <!doctype html>
 <html lang="en">
-
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>music21-rs Tuning Explorer</title>
-  <style>
-    .controls {
-      display: grid;
-      grid-template-columns: minmax(150px, 0.8fr) minmax(120px, 0.55fr) minmax(120px, 0.55fr) auto auto auto;
-      gap: 10px;
-      align-items: end;
-      margin-bottom: 18px;
-    }
-
-    .hint {
-      margin: 0 0 0.5rem;
-      font-size: 0.85rem;
-      opacity: 0.75;
-    }
-
-    #scala-results {
-      max-height: 22rem;
-      overflow-y: auto;
-    }
-
-    #scala-text {
-      width: 100%;
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-      font-size: 0.8rem;
-    }
-
-    .field {
-      display: grid;
-      gap: 5px;
-    }
-
-    .field span {
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 700;
-      text-transform: uppercase;
-    }
-
-    input,
-    select {
-      min-width: 0;
-      height: 44px;
-      padding: 0 12px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel);
-      color: var(--ink);
-    }
-
-    button,
-    .button-link {
-      height: 44px;
-      padding: 0 16px;
-      border-radius: 8px;
-      font-weight: 700;
-      cursor: pointer;
-      white-space: nowrap;
-    }
-
-    .primary {
-      border: 0;
-      background: var(--accent);
-      color: #fff;
-    }
-
-    .primary:hover {
-      background: var(--accent-strong);
-    }
-
-    .secondary,
-    .button-link {
-      border: 1px solid var(--line);
-      background: var(--panel);
-      color: var(--accent-strong);
-    }
-
-    .secondary:hover,
-    .secondary.copied,
-    .button-link:hover {
-      border-color: var(--accent);
-      background: var(--accent-soft);
-    }
-
-    .layout {
-      display: grid;
-      grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.45fr);
-      gap: 18px;
-      align-items: start;
-    }
-
-    section {
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel);
-      overflow: hidden;
-    }
-
-    section h2 {
-      margin: 0;
-      padding: 14px 16px;
-      border-bottom: 1px solid var(--line);
-      font-size: 15px;
-    }
-
-    .error {
-      display: none;
-      margin: 0 0 16px;
-      padding: 12px 14px;
-      border: 1px solid var(--warn-line);
-      border-radius: 8px;
-      background: var(--warn-soft);
-      color: var(--warn);
-      font-weight: 700;
-    }
-
-    .systems {
-      display: grid;
-      gap: 1px;
-      max-height: calc(100vh - 190px);
-      overflow: auto;
-      background: var(--line);
-    }
-
-    .system-button {
-      display: grid;
-      height: auto;
-      min-height: 76px;
-      gap: 5px;
-      padding: 12px;
-      border: 0;
-      border-radius: 0;
-      background: var(--panel);
-      color: var(--ink);
-      text-align: left;
-      white-space: normal;
-    }
-
-    .system-button:hover,
-    .system-button.active {
-      background: var(--accent-soft);
-    }
-
-    .system-button strong {
-      font-size: 14px;
-    }
-
-    .system-button span,
-    .system-button small {
-      color: var(--muted);
-      font-size: 12px;
-      line-height: 1.35;
-    }
-
-    .detail {
-      display: grid;
-      gap: 18px;
-    }
-
-    .summary {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 1px;
-      background: var(--line);
-    }
-
-    .fact {
-      min-height: 74px;
-      padding: 12px;
-      background: var(--panel);
-    }
-
-    .fact span {
-      display: block;
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 700;
-      text-transform: uppercase;
-    }
-
-    .fact strong {
-      display: block;
-      margin-top: 6px;
-      overflow-wrap: anywhere;
-      font-size: 16px;
-    }
-
-    .scale-strip {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
-      gap: 8px;
-      padding: 14px 16px 16px;
-    }
-
-    .degree-button {
-      display: grid;
-      height: 58px;
-      min-width: 0;
-      align-content: center;
-      gap: 2px;
-      padding: 6px 8px;
-      border: 1px solid var(--line);
-      background: var(--panel-soft);
-      color: var(--ink);
-      line-height: 1.15;
-      overflow: hidden;
-      white-space: normal;
-    }
-
-    .degree-button:hover,
-    .degree-button.active {
-      border-color: var(--accent);
-      background: var(--accent-soft);
-    }
-
-    .degree-button small {
-      color: var(--muted);
-      font-size: 11px;
-      font-weight: 700;
-      overflow-wrap: anywhere;
-    }
-
-    .degree-button strong {
-      overflow-wrap: anywhere;
-    }
-
-    .degree-button.scale-action {
-      grid-column: span 2;
-    }
-
-    .table-wrap {
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      table-layout: fixed;
-    }
-
-    th {
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 700;
-      text-transform: uppercase;
-    }
-
-    th,
-    td {
-      padding: 10px 12px;
-      border-bottom: 1px solid var(--line);
-      text-align: left;
-      vertical-align: middle;
-      overflow-wrap: anywhere;
-    }
-
-    td {
-      font-variant-numeric: tabular-nums;
-    }
-
-    th:nth-child(1),
-    td:nth-child(1) {
-      width: 74px;
-    }
-
-    th:nth-child(4),
-    td:nth-child(4),
-    th:nth-child(5),
-    td:nth-child(5) {
-      width: 116px;
-    }
-
-    .cents {
-      display: grid;
-      gap: 4px;
-    }
-
-    .cents-value {
-      font-weight: 700;
-    }
-
-    .cents-track {
-      height: 5px;
-      border-radius: 999px;
-      background: var(--track-bg);
-      overflow: hidden;
-    }
-
-    .cents-fill {
-      display: block;
-      height: 100%;
-      width: 0;
-      border-radius: 999px;
-      background: var(--accent);
-    }
-
-    .cents-fill.negative {
-      background: var(--pulse);
-    }
-
-    @media (max-width: 860px) {
-      .shell {
-        width: min(100vw - 24px, 680px);
-        padding-top: 14px;
-      }
-
-      header,
-      .layout,
-      .summary {
-        display: grid;
-        grid-template-columns: 1fr;
-        align-items: start;
-      }
-
-      .controls {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        align-items: end;
-      }
-
-      h1 {
-        font-size: 26px;
-      }
-
-      .top-links {
-        justify-content: start;
-        gap: 8px;
-        width: 100%;
-      }
-
-      .top-links a {
-        display: inline-flex;
-        align-items: center;
-        min-height: 34px;
-        padding: 0 10px;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: var(--panel);
-      }
-
-      button,
-      .button-link {
-        width: 100%;
-      }
-
-      .systems {
-        max-height: 310px;
-      }
-
-      colgroup,
-      thead {
-        display: none;
-      }
-
-      table,
-      tbody,
-      tr,
-      td {
-        display: block;
-        width: 100%;
-      }
-
-      tr {
-        padding: 8px 0;
-        border-bottom: 1px solid var(--line);
-      }
-
-      tr:last-child {
-        border-bottom: 0;
-      }
-
-      td {
-        display: grid;
-        grid-template-columns: 86px minmax(0, 1fr);
-        gap: 10px;
-        padding: 7px 12px;
-        border-bottom: 0;
-      }
-
-      td::before {
-        color: var(--muted);
-        font-size: 11px;
-        font-weight: 800;
-        text-transform: uppercase;
-      }
-
-      td:nth-child(1)::before {
-        content: "Degree";
-      }
-
-      td:nth-child(2)::before {
-        content: "Label";
-      }
-
-      td:nth-child(3)::before {
-        content: "Ratio";
-      }
-
-      td:nth-child(4)::before {
-        content: "Hz";
-      }
-
-      td:nth-child(5)::before {
-        content: "Cents";
-      }
-
-      td:nth-child(6)::before {
-        content: "Play";
-      }
-
-      th:nth-child(1),
-      td:nth-child(1),
-      th:nth-child(4),
-      td:nth-child(4),
-      th:nth-child(5),
-      td:nth-child(5) {
-        width: 100%;
-      }
-    }
-
-    @media (max-width: 480px) {
-      .controls {
-        grid-template-columns: 1fr;
-      }
-
-      td {
-        grid-template-columns: 1fr;
-        gap: 4px;
-      }
-
-      .systems {
-        max-height: 260px;
-      }
-    }
-  </style>
-  <link rel="stylesheet" href="../theme.css" />
-</head>
-
-<body class="page-tuning">
-  <main class="shell">
-    <header>
-      <div class="title-row">
-        <a class="home-link" href="../">Home</a>
-        <h1>Tuning Explorer</h1>
-      </div>
-      <nav class="top-links">
-        <a href="../chord/">Chord Inspector</a>
-        <a href="../chords/">Chord Browser</a>
-        <a href="../polyrhythm/">Polyrhythm</a>
-        <a id="docs-link" href="../docs/music21_rs/index.html">Rust docs</a>
-      </nav>
-    </header>
-
-    <form id="controls" class="controls">
-      <label class="field">
-        <span>Root C4 Hz</span>
-        <input id="root-frequency" type="number" min="20" max="2000" step="0.0001" value="261.6256" />
-      </label>
-      <label class="field">
-        <span>Tempo</span>
-        <input id="tempo" type="number" min="40" max="320" value="150" />
-      </label>
-      <label class="field">
-        <span>Wave</span>
-        <select id="waveform">
-          <option value="sine">Sine</option>
-          <option value="triangle">Triangle</option>
-          <option value="square">Square</option>
-          <option value="sawtooth">Sawtooth</option>
-        </select>
-      </label>
-      <button class="primary" type="submit">Reload</button>
-      <button id="stop" class="secondary" type="button">Stop</button>
-      <button id="share" class="secondary" type="button">Share tuning</button>
-    </form>
-
-    <p class="error" id="error"></p>
-
-    <div class="layout">
-      <section>
-        <h2>Tuning Systems</h2>
-        <div class="systems" id="systems"></div>
-
-        <h2 id="scala-heading">Scala Archive</h2>
-        <p class="hint" id="scala-count">Loading the archive&hellip;</p>
-        <label class="field">
-          <span>Search scales</span>
-          <input id="scala-search" type="search" placeholder="mbira, slendro, partch, pyth&hellip;" autocomplete="off" />
-        </label>
-        <div class="systems" id="scala-results"></div>
-        <p class="hint" id="scala-more"></p>
-
-        <h2>Your Own Scale</h2>
-        <p class="hint">Load a <code>.scl</code> file, or paste its text.</p>
-        <label class="field">
-          <span>Scala file</span>
-          <input id="scala-file" type="file" accept=".scl,text/plain" />
-        </label>
-        <label class="field">
-          <span>Scala text</span>
-          <textarea id="scala-text" rows="6" spellcheck="false"
-            placeholder="! my.scl&#10;!&#10;My scale&#10; 3&#10;!&#10; 9/8&#10; 3/2&#10; 2/1"></textarea>
-        </label>
-        <button type="button" id="scala-load-text" class="secondary">Use pasted scale</button>
-      </section>
-
-      <div class="detail">
-        <section>
-          <h2 id="system-title">Loading</h2>
-          <div class="summary" id="summary"></div>
-        </section>
-
-        <section>
-          <h2>Scale</h2>
-          <div class="scale-strip" id="scale-strip"></div>
-        </section>
-
-        <section>
-          <h2>Degrees</h2>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Degree</th>
-                  <th>Label</th>
-                  <th>Ratio</th>
-                  <th>Hz</th>
-                  <th>Cents</th>
-                  <th>Play</th>
-                </tr>
-              </thead>
-              <tbody id="degrees"></tbody>
-            </table>
-          </div>
-        </section>
-      </div>
-    </div>
-  </main>
-
-  <script type="module" src="./app.js"></script>
-</body>
-
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>music21-rs Tuning Explorer</title>
+        <style>
+            .controls {
+                display: grid;
+                grid-template-columns: minmax(150px, 0.8fr) minmax(
+                        120px,
+                        0.55fr
+                    ) minmax(120px, 0.55fr) auto auto auto;
+                gap: 10px;
+                align-items: end;
+                margin-bottom: 18px;
+            }
+
+            .hint {
+                margin: 0 0 0.5rem;
+                font-size: 0.85rem;
+                opacity: 0.75;
+            }
+
+            #scala-results {
+                max-height: 22rem;
+                overflow-y: auto;
+            }
+
+            #scala-text {
+                width: 100%;
+                font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                font-size: 0.8rem;
+            }
+
+            .field {
+                display: grid;
+                gap: 5px;
+            }
+
+            .field span {
+                color: var(--muted);
+                font-size: 12px;
+                font-weight: 700;
+                text-transform: uppercase;
+            }
+
+            input,
+            select {
+                min-width: 0;
+                height: 44px;
+                padding: 0 12px;
+                border: 1px solid var(--line);
+                border-radius: 8px;
+                background: var(--panel);
+                color: var(--ink);
+            }
+
+            button,
+            .button-link {
+                height: 44px;
+                padding: 0 16px;
+                border-radius: 8px;
+                font-weight: 700;
+                cursor: pointer;
+                white-space: nowrap;
+            }
+
+            .primary {
+                border: 0;
+                background: var(--accent);
+                color: #fff;
+            }
+
+            .primary:hover {
+                background: var(--accent-strong);
+            }
+
+            .secondary,
+            .button-link {
+                border: 1px solid var(--line);
+                background: var(--panel);
+                color: var(--accent-strong);
+            }
+
+            .secondary:hover,
+            .secondary.copied,
+            .button-link:hover {
+                border-color: var(--accent);
+                background: var(--accent-soft);
+            }
+
+            .layout {
+                display: grid;
+                grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.45fr);
+                gap: 18px;
+                align-items: start;
+            }
+
+            section {
+                border: 1px solid var(--line);
+                border-radius: 8px;
+                background: var(--panel);
+                overflow: hidden;
+            }
+
+            section h2 {
+                margin: 0;
+                padding: 14px 16px;
+                border-bottom: 1px solid var(--line);
+                font-size: 15px;
+            }
+
+            .error {
+                display: none;
+                margin: 0 0 16px;
+                padding: 12px 14px;
+                border: 1px solid var(--warn-line);
+                border-radius: 8px;
+                background: var(--warn-soft);
+                color: var(--warn);
+                font-weight: 700;
+            }
+
+            .systems {
+                display: grid;
+                gap: 1px;
+                max-height: calc(100vh - 190px);
+                overflow: auto;
+                background: var(--line);
+            }
+
+            .system-button {
+                display: grid;
+                height: auto;
+                min-height: 76px;
+                gap: 5px;
+                padding: 12px;
+                border: 0;
+                border-radius: 0;
+                background: var(--panel);
+                color: var(--ink);
+                text-align: left;
+                white-space: normal;
+            }
+
+            .system-button:hover,
+            .system-button.active {
+                background: var(--accent-soft);
+            }
+
+            .system-button strong {
+                font-size: 14px;
+            }
+
+            .system-button span,
+            .system-button small {
+                color: var(--muted);
+                font-size: 12px;
+                line-height: 1.35;
+            }
+
+            .detail {
+                display: grid;
+                gap: 18px;
+            }
+
+            .summary {
+                display: grid;
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+                gap: 1px;
+                background: var(--line);
+            }
+
+            .fact {
+                min-height: 74px;
+                padding: 12px;
+                background: var(--panel);
+            }
+
+            .fact span {
+                display: block;
+                color: var(--muted);
+                font-size: 12px;
+                font-weight: 700;
+                text-transform: uppercase;
+            }
+
+            .fact strong {
+                display: block;
+                margin-top: 6px;
+                overflow-wrap: anywhere;
+                font-size: 16px;
+            }
+
+            .scale-strip {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+                gap: 8px;
+                padding: 14px 16px 16px;
+            }
+
+            .degree-button {
+                display: grid;
+                height: 58px;
+                min-width: 0;
+                align-content: center;
+                gap: 2px;
+                padding: 6px 8px;
+                border: 1px solid var(--line);
+                background: var(--panel-soft);
+                color: var(--ink);
+                line-height: 1.15;
+                overflow: hidden;
+                white-space: normal;
+            }
+
+            .degree-button:hover,
+            .degree-button.active {
+                border-color: var(--accent);
+                background: var(--accent-soft);
+            }
+
+            .degree-button small {
+                color: var(--muted);
+                font-size: 11px;
+                font-weight: 700;
+                overflow-wrap: anywhere;
+            }
+
+            .degree-button strong {
+                overflow-wrap: anywhere;
+            }
+
+            .degree-button.scale-action {
+                grid-column: span 2;
+            }
+
+            .table-wrap {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                table-layout: fixed;
+            }
+
+            th {
+                color: var(--muted);
+                font-size: 12px;
+                font-weight: 700;
+                text-transform: uppercase;
+            }
+
+            th,
+            td {
+                padding: 10px 12px;
+                border-bottom: 1px solid var(--line);
+                text-align: left;
+                vertical-align: middle;
+                overflow-wrap: anywhere;
+            }
+
+            td {
+                font-variant-numeric: tabular-nums;
+            }
+
+            th:nth-child(1),
+            td:nth-child(1) {
+                width: 74px;
+            }
+
+            th:nth-child(4),
+            td:nth-child(4),
+            th:nth-child(5),
+            td:nth-child(5) {
+                width: 116px;
+            }
+
+            .cents {
+                display: grid;
+                gap: 4px;
+            }
+
+            .cents-value {
+                font-weight: 700;
+            }
+
+            .cents-track {
+                height: 5px;
+                border-radius: 999px;
+                background: var(--track-bg);
+                overflow: hidden;
+            }
+
+            .cents-fill {
+                display: block;
+                height: 100%;
+                width: 0;
+                border-radius: 999px;
+                background: var(--accent);
+            }
+
+            .cents-fill.negative {
+                background: var(--pulse);
+            }
+
+            @media (max-width: 860px) {
+                .shell {
+                    width: min(100vw - 24px, 680px);
+                    padding-top: 14px;
+                }
+
+                header,
+                .layout,
+                .summary {
+                    display: grid;
+                    grid-template-columns: 1fr;
+                    align-items: start;
+                }
+
+                .controls {
+                    display: grid;
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                    align-items: end;
+                }
+
+                h1 {
+                    font-size: 26px;
+                }
+
+                .top-links {
+                    justify-content: start;
+                    gap: 8px;
+                    width: 100%;
+                }
+
+                .top-links a {
+                    display: inline-flex;
+                    align-items: center;
+                    min-height: 34px;
+                    padding: 0 10px;
+                    border: 1px solid var(--line);
+                    border-radius: 8px;
+                    background: var(--panel);
+                }
+
+                button,
+                .button-link {
+                    width: 100%;
+                }
+
+                .systems {
+                    max-height: 310px;
+                }
+
+                colgroup,
+                thead {
+                    display: none;
+                }
+
+                table,
+                tbody,
+                tr,
+                td {
+                    display: block;
+                    width: 100%;
+                }
+
+                tr {
+                    padding: 8px 0;
+                    border-bottom: 1px solid var(--line);
+                }
+
+                tr:last-child {
+                    border-bottom: 0;
+                }
+
+                td {
+                    display: grid;
+                    grid-template-columns: 86px minmax(0, 1fr);
+                    gap: 10px;
+                    padding: 7px 12px;
+                    border-bottom: 0;
+                }
+
+                td::before {
+                    color: var(--muted);
+                    font-size: 11px;
+                    font-weight: 800;
+                    text-transform: uppercase;
+                }
+
+                td:nth-child(1)::before {
+                    content: "Degree";
+                }
+
+                td:nth-child(2)::before {
+                    content: "Label";
+                }
+
+                td:nth-child(3)::before {
+                    content: "Ratio";
+                }
+
+                td:nth-child(4)::before {
+                    content: "Hz";
+                }
+
+                td:nth-child(5)::before {
+                    content: "Cents";
+                }
+
+                td:nth-child(6)::before {
+                    content: "Play";
+                }
+
+                th:nth-child(1),
+                td:nth-child(1),
+                th:nth-child(4),
+                td:nth-child(4),
+                th:nth-child(5),
+                td:nth-child(5) {
+                    width: 100%;
+                }
+            }
+
+            @media (max-width: 480px) {
+                .controls {
+                    grid-template-columns: 1fr;
+                }
+
+                td {
+                    grid-template-columns: 1fr;
+                    gap: 4px;
+                }
+
+                .systems {
+                    max-height: 260px;
+                }
+            }
+        </style>
+        <link rel="stylesheet" href="../theme.css" />
+    </head>
+
+    <body class="page-tuning">
+        <main class="shell">
+            <header>
+                <div class="title-row">
+                    <a class="home-link" href="../">Home</a>
+                    <h1>Tuning Explorer</h1>
+                </div>
+                <nav class="top-links">
+                    <a href="../chord/">Chord Inspector</a>
+                    <a href="../chords/">Chord Browser</a>
+                    <a href="../polyrhythm/">Polyrhythm</a>
+                    <a id="docs-link" href="../docs/music21_rs/index.html"
+                        >Rust docs</a
+                    >
+                </nav>
+            </header>
+
+            <form id="controls" class="controls">
+                <label class="field">
+                    <span>Root C4 Hz</span>
+                    <input
+                        id="root-frequency"
+                        type="number"
+                        min="20"
+                        max="2000"
+                        step="0.0001"
+                        value="261.6256"
+                    />
+                </label>
+                <label class="field">
+                    <span>Tempo</span>
+                    <input
+                        id="tempo"
+                        type="number"
+                        min="40"
+                        max="320"
+                        value="150"
+                    />
+                </label>
+                <label class="field">
+                    <span>Wave</span>
+                    <select id="waveform">
+                        <option value="sine">Sine</option>
+                        <option value="triangle">Triangle</option>
+                        <option value="square">Square</option>
+                        <option value="sawtooth">Sawtooth</option>
+                    </select>
+                </label>
+                <button class="primary" type="submit">Reload</button>
+                <button id="stop" class="secondary" type="button">Stop</button>
+                <button id="share" class="secondary" type="button">
+                    Share tuning
+                </button>
+            </form>
+
+            <p class="error" id="error"></p>
+
+            <div class="layout">
+                <section>
+                    <h2>Tuning Systems</h2>
+                    <div class="systems" id="systems"></div>
+
+                    <h2 id="scala-heading">Scala Archive</h2>
+                    <p class="hint" id="scala-count">
+                        Loading the archive&hellip;
+                    </p>
+                    <label class="field">
+                        <span>Search scales</span>
+                        <input
+                            id="scala-search"
+                            type="search"
+                            placeholder="mbira, slendro, partch, pyth&hellip;"
+                            autocomplete="off"
+                        />
+                    </label>
+                    <div class="systems" id="scala-results"></div>
+                    <p class="hint" id="scala-more"></p>
+
+                    <h2>Your Own Scale</h2>
+                    <p class="hint">
+                        Load a <code>.scl</code> file, or paste its text.
+                    </p>
+                    <label class="field">
+                        <span>Scala file</span>
+                        <input
+                            id="scala-file"
+                            type="file"
+                            accept=".scl,text/plain"
+                        />
+                    </label>
+                    <label class="field">
+                        <span>Scala text</span>
+                        <textarea
+                            id="scala-text"
+                            rows="6"
+                            spellcheck="false"
+                            placeholder="! my.scl&#10;!&#10;My scale&#10; 3&#10;!&#10; 9/8&#10; 3/2&#10; 2/1"
+                        ></textarea>
+                    </label>
+                    <button
+                        type="button"
+                        id="scala-load-text"
+                        class="secondary"
+                    >
+                        Use pasted scale
+                    </button>
+                </section>
+
+                <div class="detail">
+                    <section>
+                        <h2 id="system-title">Loading</h2>
+                        <div class="summary" id="summary"></div>
+                    </section>
+
+                    <section>
+                        <h2>Scale</h2>
+                        <div class="scale-strip" id="scale-strip"></div>
+                    </section>
+
+                    <section>
+                        <h2>Degrees</h2>
+                        <div class="table-wrap">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Degree</th>
+                                        <th>Label</th>
+                                        <th>Ratio</th>
+                                        <th>Hz</th>
+                                        <th>Cents</th>
+                                        <th>Play</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="degrees"></tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </main>
+
+        <script type="module" src="./app.js"></script>
+    </body>
 </html>

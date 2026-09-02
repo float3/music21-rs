@@ -1,738 +1,802 @@
 <!doctype html>
 <html lang="en">
-
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>music21-rs Polyrhythm Lab</title>
-  <style>
-    .controls {
-      display: grid;
-      grid-template-columns: minmax(220px, 1fr) repeat(4, minmax(84px, auto)) repeat(4, auto);
-      gap: 10px;
-      align-items: end;
-      margin-bottom: 10px;
-    }
-
-    .field {
-      display: grid;
-      gap: 5px;
-    }
-
-    .field span {
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 700;
-      text-transform: uppercase;
-    }
-
-    input,
-    select {
-      min-width: 0;
-      height: 44px;
-      padding: 0 12px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel);
-      color: var(--ink);
-    }
-
-    button,
-    .button-link {
-      height: 44px;
-      padding: 0 16px;
-      border-radius: 8px;
-      font-weight: 700;
-      cursor: pointer;
-      white-space: nowrap;
-    }
-
-    .primary {
-      border: 0;
-      background: var(--accent);
-      color: #fff;
-    }
-
-    .primary:hover {
-      background: var(--accent-strong);
-    }
-
-    .secondary,
-    .button-link {
-      border: 1px solid var(--line);
-      background: var(--panel);
-      color: var(--accent-strong);
-    }
-
-    .button-link {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      text-decoration: none;
-    }
-
-    .secondary:hover,
-    .button-link:hover,
-    .secondary.copied {
-      border-color: var(--accent);
-      background: var(--accent-soft);
-    }
-
-    .examples {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-bottom: 18px;
-    }
-
-    .history {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-bottom: 18px;
-    }
-
-    .history:empty,
-    .clear-history[hidden] {
-      display: none;
-    }
-
-    .random-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      align-items: end;
-      margin-bottom: 10px;
-    }
-
-    .random-setting {
-      display: grid;
-      gap: 4px;
-      min-width: 126px;
-    }
-
-    .random-setting span {
-      color: var(--muted);
-      font-size: 11px;
-      font-weight: 800;
-      text-transform: uppercase;
-    }
-
-    .random-pair {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 4px;
-    }
-
-    .examples button,
-    .history button,
-    .clear-history {
-      height: auto;
-      padding: 7px 10px;
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      background: var(--panel);
-      color: var(--ink);
-    }
-
-    .history button {
-      border-color: var(--accent-line);
-      background: var(--accent-soft);
-      color: var(--accent-strong);
-    }
-
-    .clear-history {
-      margin: -8px 0 18px;
-      color: var(--warn-strong);
-    }
-
-    .random-row button {
-      height: auto;
-      padding: 7px 10px;
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      background: var(--panel);
-      color: var(--accent-strong);
-    }
-
-    .random-row input {
-      width: 58px;
-      height: 32px;
-      padding: 0 8px;
-      border-radius: 999px;
-      font-size: 13px;
-      font-weight: 700;
-      text-align: center;
-    }
-
-    .error {
-      display: none;
-      margin: 0 0 16px;
-      padding: 12px 14px;
-      border: 1px solid var(--warn-line);
-      border-radius: 8px;
-      background: var(--warn-soft);
-      color: var(--warn);
-      font-weight: 700;
-    }
-
-    .layout {
-      display: grid;
-      grid-template-columns: minmax(0, 1.15fr) minmax(300px, 0.85fr);
-      gap: 18px;
-      align-items: start;
-    }
-
-    section {
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel);
-      overflow: visible;
-    }
-
-    section h2 {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      margin: 0;
-      padding: 14px 16px;
-      border-bottom: 1px solid var(--line);
-      font-size: 15px;
-    }
-
-    .help {
-      position: relative;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 16px;
-      height: 16px;
-      min-width: 16px;
-      padding: 0;
-      border: 1px solid var(--accent-line);
-      border-radius: 50%;
-      background: var(--accent-soft);
-      color: var(--accent-strong);
-      font-size: 11px;
-      font-weight: 900;
-      line-height: 1;
-      cursor: help;
-    }
-
-    .help::after {
-      position: absolute;
-      z-index: 20;
-      left: 50%;
-      bottom: calc(100% + 8px);
-      width: max-content;
-      max-width: min(340px, calc(100vw - 40px));
-      padding: 9px 10px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--tooltip-bg);
-      color: var(--tooltip-ink);
-      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
-      content: attr(data-help);
-      font-size: 12px;
-      font-weight: 600;
-      line-height: 1.35;
-      text-transform: none;
-      text-align: left;
-      white-space: normal;
-      transform: translateX(-50%);
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.12s ease;
-    }
-
-    .help:hover::after,
-    .help:focus-visible::after {
-      opacity: 1;
-    }
-
-    .rhythm-notation-section,
-    .cycle-section,
-    .events-section {
-      grid-column: 1 / -1;
-    }
-
-    .facts {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 1px;
-      background: var(--line);
-    }
-
-    .fact {
-      min-height: 74px;
-      padding: 12px;
-      background: var(--panel);
-    }
-
-    .fact span {
-      display: block;
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 700;
-      text-transform: uppercase;
-    }
-
-    .fact strong {
-      display: block;
-      margin-top: 6px;
-      overflow-wrap: anywhere;
-      font-size: 16px;
-    }
-
-    .chord-panel {
-      display: grid;
-      gap: 12px;
-      padding: 14px 16px 16px;
-    }
-
-    .chord-name {
-      margin: 0;
-      font-size: 24px;
-      line-height: 1.1;
-    }
-
-    .chip-list {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-
-    .chip {
-      padding: 7px 9px;
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      background: var(--panel-soft);
-      font-size: 13px;
-    }
-
-    #chord-notation {
-      min-height: 126px;
-      padding: 2px 0 0;
-    }
-
-    #rhythm-notation {
-      min-height: 170px;
-      padding: 8px 16px 14px;
-    }
-
-    #chord-notation svg,
-    #rhythm-notation svg {
-      display: block;
-      width: 100%;
-      height: auto;
-      color: var(--ink);
-    }
-
-    #chord-notation svg [fill="#000"],
-    #chord-notation svg [fill="#000000"],
-    #chord-notation svg [fill="black"],
-    #rhythm-notation svg [fill="#000"],
-    #rhythm-notation svg [fill="#000000"],
-    #rhythm-notation svg [fill="black"] {
-      fill: currentColor;
-    }
-
-    #chord-notation svg [stroke="#000"],
-    #chord-notation svg [stroke="#000000"],
-    #chord-notation svg [stroke="black"],
-    #rhythm-notation svg [stroke="#000"],
-    #rhythm-notation svg [stroke="#000000"],
-    #rhythm-notation svg [stroke="black"] {
-      stroke: currentColor;
-    }
-
-    .notation-fallback {
-      padding: 22px 0;
-      color: var(--muted);
-      font-weight: 700;
-    }
-
-    .cycle-wrap {
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-      padding: 14px 16px 16px;
-    }
-
-    .cycle-grid {
-      display: grid;
-      gap: 8px;
-      min-width: 640px;
-    }
-
-    .cycle-grid.compact {
-      min-width: min(760px, 100%);
-    }
-
-    .voice-row {
-      display: grid;
-      grid-template-columns: 150px minmax(0, 1fr);
-      gap: 10px;
-      align-items: center;
-      cursor: pointer;
-    }
-
-    .voice-row.muted {
-      opacity: 0.54;
-    }
-
-    .voice-row.muted .tick.hit {
-      background: var(--muted-soft);
-      border-color: var(--muted-line);
-    }
-
-    .voice-controls {
-      display: grid;
-      grid-template-columns: minmax(44px, 1fr) 54px 28px;
-      gap: 5px;
-      align-items: center;
-    }
-
-    .voice-mute,
-    .voice-remove {
-      height: 28px;
-      padding: 0;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      background: var(--panel);
-      color: var(--accent-strong);
-      font-size: 11px;
-      font-weight: 800;
-    }
-
-    .voice-mute[aria-pressed="true"] {
-      border-color: var(--muted-line);
-      background: var(--muted-soft);
-      color: var(--muted);
-    }
-
-    .voice-remove {
-      color: var(--warn);
-    }
-
-    .voice-number {
-      width: 100%;
-      height: 28px;
-      padding: 0 6px;
-      border-radius: 6px;
-      font-size: 12px;
-      font-weight: 800;
-      text-align: center;
-    }
-
-    .tick-row {
-      display: grid;
-      gap: 3px;
-    }
-
-    .tick-row.compact {
-      gap: 4px;
-    }
-
-    .tick {
-      height: 24px;
-      border: 1px solid var(--line);
-      border-radius: 4px;
-      background: var(--tick-bg);
-    }
-
-    .tick.hit {
-      background: var(--accent-soft);
-      border-color: var(--tick-hit-line);
-    }
-
-    .tick.ghost {
-      background: var(--tick-ghost);
-      border-style: dashed;
-      opacity: 0.42;
-    }
-
-    .tick.active {
-      border-color: var(--pulse);
-      box-shadow: inset 0 0 0 2px var(--pulse);
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      table-layout: fixed;
-    }
-
-    th {
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 700;
-      text-transform: uppercase;
-    }
-
-    th,
-    td {
-      padding: 10px 12px;
-      border-bottom: 1px solid var(--line);
-      text-align: left;
-      vertical-align: top;
-      overflow-wrap: anywhere;
-    }
-
-    td {
-      font-variant-numeric: tabular-nums;
-    }
-
-    .events-section th:nth-child(1),
-    .events-section td:nth-child(1),
-    .events-section th:nth-child(2),
-    .events-section td:nth-child(2) {
-      width: 100px;
-    }
-
-    @media (max-width: 860px) {
-      .shell {
-        width: min(100vw - 24px, 680px);
-        padding-top: 14px;
-      }
-
-      header,
-      .layout,
-      .facts {
-        grid-template-columns: 1fr;
-      }
-
-      .controls {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-
-      .controls .field:first-child {
-        grid-column: 1 / -1;
-      }
-
-      header {
-        display: grid;
-        align-items: start;
-      }
-
-      h1 {
-        font-size: 26px;
-      }
-
-      .top-links {
-        justify-content: start;
-        gap: 8px;
-        width: 100%;
-      }
-
-      .top-links a {
-        display: inline-flex;
-        align-items: center;
-        min-height: 34px;
-        padding: 0 10px;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: var(--panel);
-      }
-
-      .rhythm-notation-section,
-      .cycle-section,
-      .events-section {
-        grid-column: auto;
-      }
-
-      button,
-      .button-link {
-        width: 100%;
-      }
-
-      .voice-row {
-        grid-template-columns: 118px minmax(0, 1fr);
-      }
-
-      .voice-controls {
-        grid-template-columns: minmax(38px, 1fr) 46px 28px;
-      }
-
-      .cycle-grid {
-        min-width: 520px;
-      }
-
-      .events-section {
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-      }
-
-      .events-section table {
-        min-width: 560px;
-      }
-
-      .voice-controls button {
-        width: auto;
-      }
-
-      .random-row button {
-        width: auto;
-      }
-
-      .examples button,
-      .clear-history {
-        width: auto;
-      }
-    }
-
-    @media (max-width: 480px) {
-      .controls {
-        grid-template-columns: 1fr;
-      }
-
-      .random-setting {
-        min-width: min(100%, 150px);
-      }
-
-      .cycle-wrap {
-        padding-inline: 10px;
-      }
-
-      .cycle-grid {
-        min-width: 460px;
-      }
-    }
-  </style>
-  <link rel="stylesheet" href="../theme.css" />
-</head>
-
-<body class="page-polyrhythm">
-  <main class="shell">
-    <header>
-      <div class="title-row">
-        <a class="home-link" href="../">Home</a>
-        <h1>Polyrhythm Lab</h1>
-      </div>
-      <nav class="top-links">
-        <a id="chord-link-top" href="../chord/">Chord Inspector</a>
-        <a id="browser-link-top" href="../chords/">Chord Browser</a>
-        <a id="tuning-link-top" href="../tuning/">Tuning</a>
-        <a id="docs-link" href="../docs/music21_rs/index.html">Rust docs</a>
-      </nav>
-    </header>
-
-    <form id="form" class="controls">
-      <label class="field">
-        <span>Polyrhythm</span>
-        <input id="rhythm-input" value="3:4:5" autocomplete="off" />
-      </label>
-      <label class="field">
-        <span>Base</span>
-        <input id="base-input" type="number" min="1" max="16" value="4" />
-      </label>
-      <label class="field">
-        <span>Tempo</span>
-        <input id="tempo-input" type="number" min="20" max="260" value="120" />
-      </label>
-      <label class="field">
-        <span>Cycles</span>
-        <input id="cycles-input" type="number" min="1" max="16" value="2" />
-      </label>
-      <label class="field">
-        <span>Root</span>
-        <select id="root-input">
-          <option>C4</option>
-          <option>D-4</option>
-          <option>D4</option>
-          <option>E-4</option>
-          <option>E4</option>
-          <option>F4</option>
-          <option>F#4</option>
-          <option>G4</option>
-          <option>A-4</option>
-          <option>A4</option>
-          <option>B-4</option>
-          <option>B4</option>
-        </select>
-      </label>
-      <button class="primary" type="submit">Update</button>
-      <button id="share" class="secondary" type="button">Copy link</button>
-      <button id="play" class="secondary" type="button">Play</button>
-      <button id="stop" class="secondary" type="button">Stop</button>
-    </form>
-
-      <div class="random-row">
-        <button id="random-polyrhythm" type="button">Random polyrhythm</button>
-        <label class="random-setting">
-          <span>Tracks</span>
-          <span class="random-pair">
-            <input id="random-track-min" type="number" min="1" max="8" value="2" aria-label="Minimum random tracks" />
-            <input id="random-track-max" type="number" min="1" max="8" value="5" aria-label="Maximum random tracks" />
-          </span>
-        </label>
-        <label class="random-setting">
-          <span>Subdivision</span>
-          <span class="random-pair">
-            <input id="random-subdivision-min" type="number" min="1" max="64" value="2" aria-label="Minimum random subdivision" />
-            <input id="random-subdivision-max" type="number" min="1" max="64" value="13" aria-label="Maximum random subdivision" />
-          </span>
-        </label>
-      </div>
-      <div class="examples" id="examples"></div>
-      <div class="history" id="history"></div>
-      <button id="clear-history" class="clear-history" type="button" hidden>Clear history</button>
-      <p class="error" id="error"></p>
-
-    <div class="layout">
-      <section>
-        <h2>Summary</h2>
-        <div class="facts" id="facts"></div>
-      </section>
-
-      <section>
-        <h2>
-          Chord Equivalent
-          <button
-            class="help"
-            type="button"
-            aria-label="Polypitch equals polyrhythm: rhythm numbers are frequency ratios. Divide by the smallest number, convert with 12 times log base 2 of the ratio, then round. 4:5:6 becomes a major triad."
-            data-help="Polypitch = polyrhythm: the rhythm numbers are treated as frequency ratios. Divide each number by the smallest one, convert with 12 * log2(ratio), then round to the nearest pitch. 4:5:6 becomes 1:5/4:3/2, a major triad."
-          >?</button>
-        </h2>
-        <div class="chord-panel">
-          <p class="chord-name" id="chord-name">Not available</p>
-          <div id="chord-notation"></div>
-          <div class="chip-list" id="chord-pitches"></div>
-          <div class="chip-list" id="chord-ratios"></div>
-          <a id="chord-link" class="button-link" href="../chord/">Open chord</a>
-        </div>
-      </section>
-
-      <section class="rhythm-notation-section">
-        <h2>Rhythm Notation</h2>
-        <div id="rhythm-notation"></div>
-      </section>
-
-      <section class="cycle-section">
-        <h2>Cycle</h2>
-        <div class="cycle-wrap">
-          <div class="cycle-grid" id="cycle-grid"></div>
-        </div>
-      </section>
-
-      <section class="events-section">
-        <h2>Events</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Tick</th>
-              <th>Time</th>
-              <th>Voices</th>
-            </tr>
-          </thead>
-          <tbody id="events"></tbody>
-        </table>
-      </section>
-    </div>
-  </main>
-
-  <script src="https://cdn.jsdelivr.net/npm/abcjs@6.5.2/dist/abcjs-basic-min.js"></script>
-  <script type="module" src="./app.js"></script>
-</body>
-
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>music21-rs Polyrhythm Lab</title>
+        <style>
+            .controls {
+                display: grid;
+                grid-template-columns: minmax(220px, 1fr) repeat(
+                        4,
+                        minmax(84px, auto)
+                    ) repeat(4, auto);
+                gap: 10px;
+                align-items: end;
+                margin-bottom: 10px;
+            }
+
+            .field {
+                display: grid;
+                gap: 5px;
+            }
+
+            .field span {
+                color: var(--muted);
+                font-size: 12px;
+                font-weight: 700;
+                text-transform: uppercase;
+            }
+
+            input,
+            select {
+                min-width: 0;
+                height: 44px;
+                padding: 0 12px;
+                border: 1px solid var(--line);
+                border-radius: 8px;
+                background: var(--panel);
+                color: var(--ink);
+            }
+
+            button,
+            .button-link {
+                height: 44px;
+                padding: 0 16px;
+                border-radius: 8px;
+                font-weight: 700;
+                cursor: pointer;
+                white-space: nowrap;
+            }
+
+            .primary {
+                border: 0;
+                background: var(--accent);
+                color: #fff;
+            }
+
+            .primary:hover {
+                background: var(--accent-strong);
+            }
+
+            .secondary,
+            .button-link {
+                border: 1px solid var(--line);
+                background: var(--panel);
+                color: var(--accent-strong);
+            }
+
+            .button-link {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                text-decoration: none;
+            }
+
+            .secondary:hover,
+            .button-link:hover,
+            .secondary.copied {
+                border-color: var(--accent);
+                background: var(--accent-soft);
+            }
+
+            .examples {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+                margin-bottom: 18px;
+            }
+
+            .history {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+                margin-bottom: 18px;
+            }
+
+            .history:empty,
+            .clear-history[hidden] {
+                display: none;
+            }
+
+            .random-row {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+                align-items: end;
+                margin-bottom: 10px;
+            }
+
+            .random-setting {
+                display: grid;
+                gap: 4px;
+                min-width: 126px;
+            }
+
+            .random-setting span {
+                color: var(--muted);
+                font-size: 11px;
+                font-weight: 800;
+                text-transform: uppercase;
+            }
+
+            .random-pair {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 4px;
+            }
+
+            .examples button,
+            .history button,
+            .clear-history {
+                height: auto;
+                padding: 7px 10px;
+                border: 1px solid var(--line);
+                border-radius: 999px;
+                background: var(--panel);
+                color: var(--ink);
+            }
+
+            .history button {
+                border-color: var(--accent-line);
+                background: var(--accent-soft);
+                color: var(--accent-strong);
+            }
+
+            .clear-history {
+                margin: -8px 0 18px;
+                color: var(--warn-strong);
+            }
+
+            .random-row button {
+                height: auto;
+                padding: 7px 10px;
+                border: 1px solid var(--line);
+                border-radius: 999px;
+                background: var(--panel);
+                color: var(--accent-strong);
+            }
+
+            .random-row input {
+                width: 58px;
+                height: 32px;
+                padding: 0 8px;
+                border-radius: 999px;
+                font-size: 13px;
+                font-weight: 700;
+                text-align: center;
+            }
+
+            .error {
+                display: none;
+                margin: 0 0 16px;
+                padding: 12px 14px;
+                border: 1px solid var(--warn-line);
+                border-radius: 8px;
+                background: var(--warn-soft);
+                color: var(--warn);
+                font-weight: 700;
+            }
+
+            .layout {
+                display: grid;
+                grid-template-columns: minmax(0, 1.15fr) minmax(300px, 0.85fr);
+                gap: 18px;
+                align-items: start;
+            }
+
+            section {
+                border: 1px solid var(--line);
+                border-radius: 8px;
+                background: var(--panel);
+                overflow: visible;
+            }
+
+            section h2 {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                margin: 0;
+                padding: 14px 16px;
+                border-bottom: 1px solid var(--line);
+                font-size: 15px;
+            }
+
+            .help {
+                position: relative;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 16px;
+                height: 16px;
+                min-width: 16px;
+                padding: 0;
+                border: 1px solid var(--accent-line);
+                border-radius: 50%;
+                background: var(--accent-soft);
+                color: var(--accent-strong);
+                font-size: 11px;
+                font-weight: 900;
+                line-height: 1;
+                cursor: help;
+            }
+
+            .help::after {
+                position: absolute;
+                z-index: 20;
+                left: 50%;
+                bottom: calc(100% + 8px);
+                width: max-content;
+                max-width: min(340px, calc(100vw - 40px));
+                padding: 9px 10px;
+                border: 1px solid var(--line);
+                border-radius: 8px;
+                background: var(--tooltip-bg);
+                color: var(--tooltip-ink);
+                box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+                content: attr(data-help);
+                font-size: 12px;
+                font-weight: 600;
+                line-height: 1.35;
+                text-transform: none;
+                text-align: left;
+                white-space: normal;
+                transform: translateX(-50%);
+                opacity: 0;
+                pointer-events: none;
+                transition: opacity 0.12s ease;
+            }
+
+            .help:hover::after,
+            .help:focus-visible::after {
+                opacity: 1;
+            }
+
+            .rhythm-notation-section,
+            .cycle-section,
+            .events-section {
+                grid-column: 1 / -1;
+            }
+
+            .facts {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 1px;
+                background: var(--line);
+            }
+
+            .fact {
+                min-height: 74px;
+                padding: 12px;
+                background: var(--panel);
+            }
+
+            .fact span {
+                display: block;
+                color: var(--muted);
+                font-size: 12px;
+                font-weight: 700;
+                text-transform: uppercase;
+            }
+
+            .fact strong {
+                display: block;
+                margin-top: 6px;
+                overflow-wrap: anywhere;
+                font-size: 16px;
+            }
+
+            .chord-panel {
+                display: grid;
+                gap: 12px;
+                padding: 14px 16px 16px;
+            }
+
+            .chord-name {
+                margin: 0;
+                font-size: 24px;
+                line-height: 1.1;
+            }
+
+            .chip-list {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+
+            .chip {
+                padding: 7px 9px;
+                border: 1px solid var(--line);
+                border-radius: 999px;
+                background: var(--panel-soft);
+                font-size: 13px;
+            }
+
+            #chord-notation {
+                min-height: 126px;
+                padding: 2px 0 0;
+            }
+
+            #rhythm-notation {
+                min-height: 170px;
+                padding: 8px 16px 14px;
+            }
+
+            #chord-notation svg,
+            #rhythm-notation svg {
+                display: block;
+                width: 100%;
+                height: auto;
+                color: var(--ink);
+            }
+
+            #chord-notation svg [fill="#000"],
+            #chord-notation svg [fill="#000000"],
+            #chord-notation svg [fill="black"],
+            #rhythm-notation svg [fill="#000"],
+            #rhythm-notation svg [fill="#000000"],
+            #rhythm-notation svg [fill="black"] {
+                fill: currentColor;
+            }
+
+            #chord-notation svg [stroke="#000"],
+            #chord-notation svg [stroke="#000000"],
+            #chord-notation svg [stroke="black"],
+            #rhythm-notation svg [stroke="#000"],
+            #rhythm-notation svg [stroke="#000000"],
+            #rhythm-notation svg [stroke="black"] {
+                stroke: currentColor;
+            }
+
+            .notation-fallback {
+                padding: 22px 0;
+                color: var(--muted);
+                font-weight: 700;
+            }
+
+            .cycle-wrap {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                padding: 14px 16px 16px;
+            }
+
+            .cycle-grid {
+                display: grid;
+                gap: 8px;
+                min-width: 640px;
+            }
+
+            .cycle-grid.compact {
+                min-width: min(760px, 100%);
+            }
+
+            .voice-row {
+                display: grid;
+                grid-template-columns: 150px minmax(0, 1fr);
+                gap: 10px;
+                align-items: center;
+                cursor: pointer;
+            }
+
+            .voice-row.muted {
+                opacity: 0.54;
+            }
+
+            .voice-row.muted .tick.hit {
+                background: var(--muted-soft);
+                border-color: var(--muted-line);
+            }
+
+            .voice-controls {
+                display: grid;
+                grid-template-columns: minmax(44px, 1fr) 54px 28px;
+                gap: 5px;
+                align-items: center;
+            }
+
+            .voice-mute,
+            .voice-remove {
+                height: 28px;
+                padding: 0;
+                border: 1px solid var(--line);
+                border-radius: 6px;
+                background: var(--panel);
+                color: var(--accent-strong);
+                font-size: 11px;
+                font-weight: 800;
+            }
+
+            .voice-mute[aria-pressed="true"] {
+                border-color: var(--muted-line);
+                background: var(--muted-soft);
+                color: var(--muted);
+            }
+
+            .voice-remove {
+                color: var(--warn);
+            }
+
+            .voice-number {
+                width: 100%;
+                height: 28px;
+                padding: 0 6px;
+                border-radius: 6px;
+                font-size: 12px;
+                font-weight: 800;
+                text-align: center;
+            }
+
+            .tick-row {
+                display: grid;
+                gap: 3px;
+            }
+
+            .tick-row.compact {
+                gap: 4px;
+            }
+
+            .tick {
+                height: 24px;
+                border: 1px solid var(--line);
+                border-radius: 4px;
+                background: var(--tick-bg);
+            }
+
+            .tick.hit {
+                background: var(--accent-soft);
+                border-color: var(--tick-hit-line);
+            }
+
+            .tick.ghost {
+                background: var(--tick-ghost);
+                border-style: dashed;
+                opacity: 0.42;
+            }
+
+            .tick.active {
+                border-color: var(--pulse);
+                box-shadow: inset 0 0 0 2px var(--pulse);
+            }
+
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                table-layout: fixed;
+            }
+
+            th {
+                color: var(--muted);
+                font-size: 12px;
+                font-weight: 700;
+                text-transform: uppercase;
+            }
+
+            th,
+            td {
+                padding: 10px 12px;
+                border-bottom: 1px solid var(--line);
+                text-align: left;
+                vertical-align: top;
+                overflow-wrap: anywhere;
+            }
+
+            td {
+                font-variant-numeric: tabular-nums;
+            }
+
+            .events-section th:nth-child(1),
+            .events-section td:nth-child(1),
+            .events-section th:nth-child(2),
+            .events-section td:nth-child(2) {
+                width: 100px;
+            }
+
+            @media (max-width: 860px) {
+                .shell {
+                    width: min(100vw - 24px, 680px);
+                    padding-top: 14px;
+                }
+
+                header,
+                .layout,
+                .facts {
+                    grid-template-columns: 1fr;
+                }
+
+                .controls {
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                }
+
+                .controls .field:first-child {
+                    grid-column: 1 / -1;
+                }
+
+                header {
+                    display: grid;
+                    align-items: start;
+                }
+
+                h1 {
+                    font-size: 26px;
+                }
+
+                .top-links {
+                    justify-content: start;
+                    gap: 8px;
+                    width: 100%;
+                }
+
+                .top-links a {
+                    display: inline-flex;
+                    align-items: center;
+                    min-height: 34px;
+                    padding: 0 10px;
+                    border: 1px solid var(--line);
+                    border-radius: 8px;
+                    background: var(--panel);
+                }
+
+                .rhythm-notation-section,
+                .cycle-section,
+                .events-section {
+                    grid-column: auto;
+                }
+
+                button,
+                .button-link {
+                    width: 100%;
+                }
+
+                .voice-row {
+                    grid-template-columns: 118px minmax(0, 1fr);
+                }
+
+                .voice-controls {
+                    grid-template-columns: minmax(38px, 1fr) 46px 28px;
+                }
+
+                .cycle-grid {
+                    min-width: 520px;
+                }
+
+                .events-section {
+                    overflow-x: auto;
+                    -webkit-overflow-scrolling: touch;
+                }
+
+                .events-section table {
+                    min-width: 560px;
+                }
+
+                .voice-controls button {
+                    width: auto;
+                }
+
+                .random-row button {
+                    width: auto;
+                }
+
+                .examples button,
+                .clear-history {
+                    width: auto;
+                }
+            }
+
+            @media (max-width: 480px) {
+                .controls {
+                    grid-template-columns: 1fr;
+                }
+
+                .random-setting {
+                    min-width: min(100%, 150px);
+                }
+
+                .cycle-wrap {
+                    padding-inline: 10px;
+                }
+
+                .cycle-grid {
+                    min-width: 460px;
+                }
+            }
+        </style>
+        <link rel="stylesheet" href="../theme.css" />
+    </head>
+
+    <body class="page-polyrhythm">
+        <main class="shell">
+            <header>
+                <div class="title-row">
+                    <a class="home-link" href="../">Home</a>
+                    <h1>Polyrhythm Lab</h1>
+                </div>
+                <nav class="top-links">
+                    <a id="chord-link-top" href="../chord/">Chord Inspector</a>
+                    <a id="browser-link-top" href="../chords/">Chord Browser</a>
+                    <a id="tuning-link-top" href="../tuning/">Tuning</a>
+                    <a id="docs-link" href="../docs/music21_rs/index.html"
+                        >Rust docs</a
+                    >
+                </nav>
+            </header>
+
+            <form id="form" class="controls">
+                <label class="field">
+                    <span>Polyrhythm</span>
+                    <input id="rhythm-input" value="3:4:5" autocomplete="off" />
+                </label>
+                <label class="field">
+                    <span>Base</span>
+                    <input
+                        id="base-input"
+                        type="number"
+                        min="1"
+                        max="16"
+                        value="4"
+                    />
+                </label>
+                <label class="field">
+                    <span>Tempo</span>
+                    <input
+                        id="tempo-input"
+                        type="number"
+                        min="20"
+                        max="260"
+                        value="120"
+                    />
+                </label>
+                <label class="field">
+                    <span>Cycles</span>
+                    <input
+                        id="cycles-input"
+                        type="number"
+                        min="1"
+                        max="16"
+                        value="2"
+                    />
+                </label>
+                <label class="field">
+                    <span>Root</span>
+                    <select id="root-input">
+                        <option>C4</option>
+                        <option>D-4</option>
+                        <option>D4</option>
+                        <option>E-4</option>
+                        <option>E4</option>
+                        <option>F4</option>
+                        <option>F#4</option>
+                        <option>G4</option>
+                        <option>A-4</option>
+                        <option>A4</option>
+                        <option>B-4</option>
+                        <option>B4</option>
+                    </select>
+                </label>
+                <button class="primary" type="submit">Update</button>
+                <button id="share" class="secondary" type="button">
+                    Copy link
+                </button>
+                <button id="play" class="secondary" type="button">Play</button>
+                <button id="stop" class="secondary" type="button">Stop</button>
+            </form>
+
+            <div class="random-row">
+                <button id="random-polyrhythm" type="button">
+                    Random polyrhythm
+                </button>
+                <label class="random-setting">
+                    <span>Tracks</span>
+                    <span class="random-pair">
+                        <input
+                            id="random-track-min"
+                            type="number"
+                            min="1"
+                            max="8"
+                            value="2"
+                            aria-label="Minimum random tracks"
+                        />
+                        <input
+                            id="random-track-max"
+                            type="number"
+                            min="1"
+                            max="8"
+                            value="5"
+                            aria-label="Maximum random tracks"
+                        />
+                    </span>
+                </label>
+                <label class="random-setting">
+                    <span>Subdivision</span>
+                    <span class="random-pair">
+                        <input
+                            id="random-subdivision-min"
+                            type="number"
+                            min="1"
+                            max="64"
+                            value="2"
+                            aria-label="Minimum random subdivision"
+                        />
+                        <input
+                            id="random-subdivision-max"
+                            type="number"
+                            min="1"
+                            max="64"
+                            value="13"
+                            aria-label="Maximum random subdivision"
+                        />
+                    </span>
+                </label>
+            </div>
+            <div class="examples" id="examples"></div>
+            <div class="history" id="history"></div>
+            <button
+                id="clear-history"
+                class="clear-history"
+                type="button"
+                hidden
+            >
+                Clear history
+            </button>
+            <p class="error" id="error"></p>
+
+            <div class="layout">
+                <section>
+                    <h2>Summary</h2>
+                    <div class="facts" id="facts"></div>
+                </section>
+
+                <section>
+                    <h2>
+                        Chord Equivalent
+                        <button
+                            class="help"
+                            type="button"
+                            aria-label="Polypitch equals polyrhythm: rhythm numbers are frequency ratios. Divide by the smallest number, convert with 12 times log base 2 of the ratio, then round. 4:5:6 becomes a major triad."
+                            data-help="Polypitch = polyrhythm: the rhythm numbers are treated as frequency ratios. Divide each number by the smallest one, convert with 12 * log2(ratio), then round to the nearest pitch. 4:5:6 becomes 1:5/4:3/2, a major triad."
+                        >
+                            ?
+                        </button>
+                    </h2>
+                    <div class="chord-panel">
+                        <p class="chord-name" id="chord-name">Not available</p>
+                        <div id="chord-notation"></div>
+                        <div class="chip-list" id="chord-pitches"></div>
+                        <div class="chip-list" id="chord-ratios"></div>
+                        <a id="chord-link" class="button-link" href="../chord/"
+                            >Open chord</a
+                        >
+                    </div>
+                </section>
+
+                <section class="rhythm-notation-section">
+                    <h2>Rhythm Notation</h2>
+                    <div id="rhythm-notation"></div>
+                </section>
+
+                <section class="cycle-section">
+                    <h2>Cycle</h2>
+                    <div class="cycle-wrap">
+                        <div class="cycle-grid" id="cycle-grid"></div>
+                    </div>
+                </section>
+
+                <section class="events-section">
+                    <h2>Events</h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Tick</th>
+                                <th>Time</th>
+                                <th>Voices</th>
+                            </tr>
+                        </thead>
+                        <tbody id="events"></tbody>
+                    </table>
+                </section>
+            </div>
+        </main>
+
+        <script src="https://cdn.jsdelivr.net/npm/abcjs@6.5.2/dist/abcjs-basic-min.js"></script>
+        <script type="module" src="./app.js"></script>
+    </body>
 </html>

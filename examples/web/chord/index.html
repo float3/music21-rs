@@ -1,1012 +1,1087 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>music21-rs Chord Inspector</title>
-    <link rel="modulepreload" href="./app.js" />
-    <link rel="modulepreload" href="../pkg/music21_rs_web.js" />
-    <link rel="preload" href="../pkg/music21_rs_web_bg.wasm" as="fetch" type="application/wasm" crossorigin />
-    <style>
-      .control-panel {
-        display: grid;
-        gap: 10px;
-        margin-bottom: 10px;
-      }
-
-      .input-row {
-        display: grid;
-        grid-template-columns: minmax(180px, 1fr) minmax(120px, 0.38fr) auto auto auto auto;
-        gap: 10px;
-      }
-
-      .options-row {
-        display: grid;
-        grid-template-columns: minmax(180px, 0.42fr) minmax(260px, 1fr);
-        gap: 10px;
-      }
-
-      .option-field {
-        display: grid;
-        gap: 5px;
-        min-width: 0;
-      }
-
-      .option-field span {
-        color: var(--muted);
-        font-size: 12px;
-        font-weight: 800;
-      }
-
-      #chord-input,
-      #key-input,
-      #sound-tuning,
-      #guitar-tuning {
-        min-width: 0;
-        height: 46px;
-        padding: 0 14px;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: var(--panel);
-        color: var(--ink);
-      }
-
-      #sound-tuning {
-        cursor: pointer;
-      }
-
-      #analyze,
-      #estimate-key,
-      #share,
-      #play-chord {
-        height: 46px;
-        padding: 0 18px;
-        border-radius: 8px;
-        font-weight: 700;
-        cursor: pointer;
-        white-space: nowrap;
-      }
-
-      #analyze {
-        border: 0;
-        background: var(--accent);
-        color: #fff;
-      }
-
-      #analyze:hover {
-        background: var(--accent-strong);
-      }
-
-      #estimate-key,
-      #share,
-      #play-chord {
-        border: 1px solid var(--line);
-        background: var(--panel);
-        color: var(--accent-strong);
-      }
-
-      #estimate-key:hover,
-      #share:hover,
-      #share.copied,
-      #play-chord:hover {
-        border-color: var(--accent);
-        background: var(--accent-soft);
-      }
-
-      .midi-status {
-        grid-column: 1 / -1;
-        min-height: 18px;
-        color: var(--muted);
-        font-size: 12px;
-        font-weight: 700;
-      }
-
-      .suggestions {
-        display: grid;
-        gap: 8px;
-        margin-bottom: 22px;
-      }
-
-      .random-controls {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 8px;
-      }
-
-      .random-controls label {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        color: var(--muted);
-        font-size: 13px;
-        font-weight: 700;
-      }
-
-      .random-controls input {
-        width: 58px;
-        height: 34px;
-        padding: 0 8px;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: var(--panel);
-        color: var(--ink);
-      }
-
-      .examples,
-      .history {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-      }
-
-      .history:empty,
-      .clear-history[hidden] {
-        display: none;
-      }
-
-      .examples button,
-      .random-controls button,
-      .history button,
-      .clear-history {
-        padding: 7px 10px;
-        border: 1px solid var(--line);
-        border-radius: 999px;
-        background: var(--panel);
-        color: var(--ink);
-        cursor: pointer;
-      }
-
-      .history button {
-        border-color: var(--accent-line);
-        background: var(--accent-soft);
-        color: var(--accent-strong);
-      }
-
-      .clear-history {
-        justify-self: start;
-        color: var(--warn-strong);
-      }
-
-      .layout {
-        display: grid;
-        grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
-        gap: 18px;
-        align-items: stretch;
-      }
-
-      section {
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: var(--panel);
-        overflow: hidden;
-      }
-
-      section h2 {
-        margin: 0;
-        padding: 14px 16px;
-        border-bottom: 1px solid var(--line);
-        font-size: 15px;
-        letter-spacing: 0;
-      }
-
-      .facts {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 1px;
-        background: var(--line);
-      }
-
-      .summary-section {
-        overflow: visible;
-      }
-
-      .fact {
-        min-height: 74px;
-        padding: 12px;
-        background: var(--panel);
-      }
-
-      .fact span {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        color: var(--muted);
-        font-size: 12px;
-        font-weight: 700;
-        text-transform: uppercase;
-      }
-
-      .fact strong {
-        display: block;
-        margin-top: 6px;
-        overflow-wrap: anywhere;
-        font-size: 16px;
-      }
-
-      .help {
-        position: relative;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 16px;
-        height: 16px;
-        border: 1px solid var(--accent-line);
-        border-radius: 50%;
-        background: var(--accent-soft);
-        color: var(--accent-strong);
-        font-size: 11px;
-        font-weight: 900;
-        line-height: 1;
-        cursor: help;
-      }
-
-      .help::after {
-        position: absolute;
-        z-index: 4;
-        left: 50%;
-        bottom: calc(100% + 8px);
-        width: min(260px, calc(100vw - 40px));
-        padding: 9px 10px;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: var(--tooltip-bg);
-        color: var(--tooltip-ink);
-        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
-        content: attr(data-help);
-        font-size: 12px;
-        font-weight: 600;
-        line-height: 1.35;
-        text-transform: none;
-        transform: translateX(-50%);
-        opacity: 0;
-        pointer-events: none;
-        transition: opacity 0.12s ease;
-      }
-
-      .help:hover::after,
-      .help:focus-visible::after {
-        opacity: 1;
-      }
-
-      .fact .help::after {
-        left: 0;
-        transform: translateX(-8px);
-      }
-
-      .list {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        padding: 14px 16px;
-      }
-
-      .chip {
-        padding: 7px 9px;
-        border: 1px solid var(--line);
-        border-radius: 999px;
-        background: var(--panel-soft);
-        font-size: 13px;
-      }
-
-      .resolution-list {
-        display: grid;
-        gap: 8px;
-        padding: 14px 16px;
-      }
-
-      .resolution-item {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        gap: 8px;
-        align-items: stretch;
-      }
-
-      .resolution-chip {
-        display: grid;
-        gap: 4px;
-        width: 100%;
-        padding: 10px 12px;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: var(--panel-soft);
-        color: var(--ink);
-        text-align: left;
-        cursor: pointer;
-        text-decoration: none;
-      }
-
-      .resolution-chip:hover {
-        border-color: var(--accent);
-        background: var(--accent-soft);
-      }
-
-      .resolution-chip strong {
-        font-size: 14px;
-      }
-
-      .resolution-chip span,
-      .resolution-chip small {
-        color: var(--muted);
-        font-size: 12px;
-      }
-
-      .resolution-chip.unavailable {
-        cursor: default;
-      }
-
-      .resolution-chip.unavailable:hover {
-        border-color: var(--line);
-        background: var(--panel-soft);
-      }
-
-      .resolution-play {
-        min-width: 62px;
-        padding: 0 12px;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: var(--panel);
-        color: var(--accent-strong);
-        font-weight: 700;
-        cursor: pointer;
-      }
-
-      .resolution-play:hover {
-        border-color: var(--accent);
-        background: var(--accent-soft);
-      }
-
-      .action-row {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        padding: 14px 16px 16px;
-      }
-
-      .button-link {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-height: 40px;
-        padding: 0 14px;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: var(--panel);
-        color: var(--accent-strong);
-        font-weight: 700;
-        text-decoration: none;
-      }
-
-      .button-link:hover {
-        border-color: var(--accent);
-        background: var(--accent-soft);
-      }
-
-      table {
-        width: 100%;
-        border-collapse: collapse;
-        table-layout: fixed;
-      }
-
-      .pitches-section {
-        grid-column: 1 / -1;
-      }
-
-      .pitches-section {
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-      }
-
-      .pitches-section table {
-        min-width: 980px;
-        table-layout: fixed;
-      }
-
-      .pitch-col-index {
-        width: 42px;
-      }
-
-      .pitch-col-name {
-        width: 94px;
-      }
-
-      .pitch-col-midi,
-      .pitch-col-octave {
-        width: 66px;
-      }
-
-      .pitch-col-space {
-        width: 98px;
-      }
-
-      .pitch-col-frequency {
-        width: auto;
-      }
-
-      .pitch-col-class,
-      .pitch-col-alter {
-        width: 78px;
-      }
-
-      .pitches-section th .help::after {
-        right: 0;
-        left: auto;
-        transform: translateX(8px);
-      }
-
-      th {
-        color: var(--muted);
-        font-size: 12px;
-        font-weight: 700;
-        text-transform: uppercase;
-      }
-
-      th,
-      td {
-        padding: 10px 12px;
-        border-bottom: 1px solid var(--line);
-        text-align: left;
-        vertical-align: top;
-        overflow-wrap: anywhere;
-      }
-
-      td {
-        font-variant-numeric: tabular-nums;
-      }
-
-      .pitches-section th,
-      .pitches-section td {
-        padding: 10px 8px;
-      }
-
-      .frequency-cell {
-        min-width: 260px;
-        overflow-wrap: normal;
-        word-break: normal;
-      }
-
-      .tuning-list {
-        display: grid;
-        gap: 5px;
-      }
-
-      .tuning-row {
-        display: grid;
-        grid-template-columns: minmax(140px, 1fr) auto;
-        gap: 10px;
-        align-items: baseline;
-      }
-
-      .tuning-row.selected {
-        color: var(--accent-strong);
-      }
-
-      .tuning-row.selected .tuning-name,
-      .tuning-row.selected .tuning-cents {
-        color: var(--accent-strong);
-      }
-
-      .tuning-name {
-        color: var(--muted);
-        font-size: 12px;
-        overflow-wrap: normal;
-        white-space: nowrap;
-        word-break: normal;
-      }
-
-      .tuning-hz {
-        font-weight: 700;
-        white-space: nowrap;
-      }
-
-      .tuning-cents {
-        grid-column: 2;
-        justify-self: end;
-        color: var(--muted);
-        font-size: 11px;
-      }
-
-      .keyboard {
-        position: relative;
-        display: grid;
-        grid-template-columns: repeat(24, minmax(26px, 1fr));
-        gap: 2px;
-        min-width: 760px;
-        padding: 14px 16px 18px;
-      }
-
-      .keyboard-scroll {
-        overflow-x: auto;
-      }
-
-      .key {
-        height: 104px;
-        border: 1px solid var(--line);
-        border-radius: 0 0 5px 5px;
-        background: var(--panel-softer);
-        color: var(--muted);
-        display: flex;
-        flex-direction: column;
-        align-items: end;
-        justify-content: center;
-        gap: 3px;
-        padding-bottom: 8px;
-        font-size: 12px;
-        font-weight: 700;
-        cursor: pointer;
-      }
-
-      .key-name,
-      .key-alt {
-        display: block;
-        line-height: 1;
-      }
-
-      .key-alt {
-        color: var(--muted);
-        font-size: 10px;
-        font-weight: 700;
-      }
-
-      .key-octave {
-        color: var(--muted);
-        font-size: 10px;
-        font-weight: 800;
-      }
-
-      .key.black {
-        height: 70px;
-        background: var(--key-black);
-        color: #fff;
-      }
-
-      .key.active {
-        border-color: var(--accent);
-        box-shadow: inset 0 -6px 0 var(--accent);
-        color: var(--accent-strong);
-      }
-
-      .key.black.active {
-        box-shadow: inset 0 -6px 0 var(--key-black-active);
-        color: var(--key-black-active);
-      }
-
-      .key.black .key-alt,
-      .key.black .key-octave,
-      .key.black.active .key-alt,
-      .key.black.active .key-octave,
-      .key.black:hover .key-alt {
-        color: var(--key-black-active);
-      }
-
-      .key:hover {
-        border-color: var(--accent);
-        color: var(--accent-strong);
-      }
-
-      .key.black:hover {
-        color: var(--key-black-active);
-      }
-
-      .guitar-panel {
-        display: grid;
-        gap: 12px;
-        padding: 14px 16px 16px;
-      }
-
-      .guitar-chart {
-        display: flex;
-        min-height: 220px;
-        align-items: center;
-        justify-content: center;
-      }
-
-      .guitar-chart svg {
-        display: block;
-        max-width: 100%;
-        height: auto;
-      }
-
-      .guitar-note-list {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 7px;
-      }
-
-      .guitar-note {
-        padding: 5px 8px;
-        border: 1px solid var(--line);
-        border-radius: 999px;
-        background: var(--panel-soft);
-        color: var(--ink);
-        font-size: 12px;
-        font-weight: 700;
-      }
-
-      .guitar-omitted {
-        color: var(--warn);
-      }
-
-      .guitar-empty {
-        padding: 14px 16px;
-        color: var(--muted);
-        font-weight: 700;
-      }
-
-      #notation {
-        position: relative;
-        min-height: 132px;
-        padding: 6px 16px 12px;
-      }
-
-      #notation svg {
-        display: block;
-        width: 100%;
-        height: auto;
-        color: var(--ink);
-      }
-
-      #notation svg [fill="#000"],
-      #notation svg [fill="#000000"],
-      #notation svg [fill="black"] {
-        fill: currentColor;
-      }
-
-      #notation svg [stroke="#000"],
-      #notation svg [stroke="#000000"],
-      #notation svg [stroke="black"] {
-        stroke: currentColor;
-      }
-
-      .notation-fallback {
-        padding: 28px 0;
-        color: var(--muted);
-        font-weight: 700;
-      }
-
-      .error {
-        display: none;
-        margin: 0 0 16px;
-        padding: 12px 14px;
-        border: 1px solid var(--warn-line);
-        border-radius: 8px;
-        background: var(--warn-soft);
-        color: var(--warn);
-        font-weight: 700;
-      }
-
-      @media (max-width: 760px) {
-        .shell {
-          width: min(100vw - 24px, 680px);
-          padding-top: 14px;
-        }
-
-        header,
-        .layout,
-        .facts {
-          grid-template-columns: 1fr;
-        }
-
-        .input-row {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-
-        .options-row {
-          grid-template-columns: 1fr;
-        }
-
-        .pitches-section {
-          grid-column: auto;
-        }
-
-        header {
-          display: grid;
-          align-items: start;
-        }
-
-        .top-links {
-          justify-content: start;
-          gap: 8px;
-          width: 100%;
-        }
-
-        .docs-link {
-          display: inline-flex;
-          align-items: center;
-          min-height: 34px;
-          padding: 0 10px;
-          border: 1px solid var(--line);
-          border-radius: 8px;
-          background: var(--panel);
-        }
-
-        h1 {
-          font-size: 26px;
-        }
-
-        #chord-input,
-        #key-input,
-        #analyze,
-        .midi-status {
-          grid-column: 1 / -1;
-        }
-
-        #analyze,
-        #estimate-key,
-        #share,
-        #play-chord {
-          width: 100%;
-        }
-
-        .midi-status {
-          grid-column: 1 / -1;
-        }
-
-        .keyboard {
-          min-width: 560px;
-        }
-
-        .pitches-section colgroup,
-        .pitches-section thead {
-          display: none;
-        }
-
-        .pitches-section table,
-        .pitches-section tbody,
-        .pitches-section tr,
-        .pitches-section td {
-          display: block;
-          width: 100%;
-          min-width: 0;
-        }
-
-        .pitches-section table {
-          min-width: 0;
-        }
-
-        .pitches-section tr {
-          padding: 8px 0;
-          border-bottom: 1px solid var(--line);
-        }
-
-        .pitches-section tr:last-child {
-          border-bottom: 0;
-        }
-
-        .pitches-section td {
-          display: grid;
-          grid-template-columns: 92px minmax(0, 1fr);
-          gap: 10px;
-          padding: 7px 12px;
-          border-bottom: 0;
-          font-size: 13px;
-        }
-
-        .pitches-section td::before {
-          color: var(--muted);
-          font-size: 11px;
-          font-weight: 800;
-          text-transform: uppercase;
-        }
-
-        .pitches-section td:nth-child(1)::before {
-          content: "#";
-        }
-
-        .pitches-section td:nth-child(2)::before {
-          content: "Name";
-        }
-
-        .pitches-section td:nth-child(3)::before {
-          content: "MIDI";
-        }
-
-        .pitches-section td:nth-child(4)::before {
-          content: "Octave";
-        }
-
-        .pitches-section td:nth-child(5)::before {
-          content: "Space";
-        }
-
-        .pitches-section td:nth-child(6)::before {
-          content: "Frequency";
-        }
-
-        .pitches-section td:nth-child(7)::before {
-          content: "Class";
-        }
-
-        .pitches-section td:nth-child(8)::before {
-          content: "Alter";
-        }
-
-        .frequency-cell {
-          min-width: 0;
-        }
-
-        .tuning-row {
-          grid-template-columns: minmax(0, 1fr);
-          gap: 2px;
-        }
-
-        .tuning-cents {
-          grid-column: auto;
-          justify-self: start;
-        }
-      }
-
-      @media (max-width: 420px) {
-        .input-row {
-          grid-template-columns: 1fr;
-        }
-
-        #estimate-key,
-        #share,
-        #play-chord {
-          grid-column: 1;
-        }
-      }
-    </style>
-    <link rel="stylesheet" href="../theme.css" />
-  </head>
-  <body class="page-chord">
-    <main class="shell">
-      <header>
-        <div class="title-row">
-          <a class="home-link" href="../">Home</a>
-          <h1>Chord Inspector</h1>
-        </div>
-        <nav class="top-links">
-          <a id="browser-link" class="docs-link" href="../chords/">Chord Browser</a>
-          <a id="polyrhythm-link" class="docs-link" href="../polyrhythm/">Polyrhythm</a>
-          <a id="tuning-link" class="docs-link" href="../tuning/">Tuning</a>
-          <a class="docs-link" href="../docs/music21_rs/index.html">Rust docs</a>
-        </nav>
-      </header>
-
-      <form id="form" class="control-panel">
-        <div class="input-row">
-          <input id="chord-input" value="C E G#" autocomplete="off" list="chord-history" placeholder="C E G or midi: 60 64 67" />
-          <datalist id="chord-history"></datalist>
-          <input id="key-input" autocomplete="off" list="key-examples" placeholder="Key: C major" aria-label="Key context" />
-          <button id="estimate-key" type="button">Estimate key</button>
-          <datalist id="key-examples">
-            <option value="C major"></option>
-            <option value="A minor"></option>
-            <option value="G major"></option>
-            <option value="Eb major"></option>
-            <option value="F# minor"></option>
-          </datalist>
-          <button id="analyze" type="submit">Analyze</button>
-          <button id="play-chord" type="button">Play chord</button>
-          <button id="share" type="button">Copy link</button>
-          <span id="midi-status" class="midi-status">MIDI idle</span>
-        </div>
-        <div class="options-row">
-          <label class="option-field" for="sound-tuning">
-            <span>Sound tuning</span>
-            <select id="sound-tuning" aria-label="Sound tuning"></select>
-          </label>
-          <label class="option-field" for="guitar-tuning">
-            <span>Guitar tuning</span>
-            <input id="guitar-tuning" value="E2 A2 D3 G3 B3 E4" autocomplete="off" list="guitar-tuning-presets" aria-label="Guitar tuning" />
-          </label>
-          <datalist id="guitar-tuning-presets">
-            <option value="E2 A2 D3 G3 B3 E4"></option>
-            <option value="D2 A2 D3 G3 B3 E4"></option>
-            <option value="D2 A2 D3 G3 A3 D4"></option>
-            <option value="D2 G2 D3 G3 B3 D4"></option>
-          </datalist>
-        </div>
-      </form>
-
-      <div class="suggestions">
-        <div class="random-controls">
-          <button id="random-chord" type="button">Random chord</button>
-          <label for="random-min-notes">Min</label>
-          <input id="random-min-notes" type="number" min="1" max="12" value="3" />
-          <label for="random-max-notes">Max</label>
-          <input id="random-max-notes" type="number" min="1" max="12" value="6" />
-        </div>
-        <div class="examples" id="examples"></div>
-        <div class="history" id="history"></div>
-        <button id="clear-history" class="clear-history" type="button" hidden>Clear history</button>
-      </div>
-      <p class="error" id="error"></p>
-
-      <div class="layout">
-        <section>
-          <h2>Pitched Names</h2>
-          <div class="list" id="pitched-names"></div>
-        </section>
-
-        <section>
-          <h2>Piano</h2>
-          <div class="keyboard-scroll">
-            <div class="keyboard" id="keyboard"></div>
-          </div>
-          <div class="action-row">
-            <a id="open-polyrhythm" class="button-link" href="../polyrhythm/">Open as polyrhythm</a>
-          </div>
-        </section>
-
-        <section class="guitar-section">
-          <h2>Guitar Fingering</h2>
-          <div class="guitar-panel" id="guitar-fingering"></div>
-        </section>
-
-        <section class="summary-section">
-          <h2>Summary</h2>
-          <div class="facts" id="facts"></div>
-        </section>
-
-        <section>
-          <h2>Suggested Resolutions</h2>
-          <div class="resolution-list" id="resolution-chords"></div>
-        </section>
-
-        <section class="notation-section">
-          <h2>Notation</h2>
-          <div id="notation"></div>
-        </section>
-
-        <section class="pitches-section">
-          <h2>Pitches</h2>
-          <table>
-            <colgroup>
-              <col class="pitch-col-index" />
-              <col class="pitch-col-name" />
-              <col class="pitch-col-midi" />
-              <col class="pitch-col-octave" />
-              <col class="pitch-col-space" />
-              <col class="pitch-col-frequency" />
-              <col class="pitch-col-class" />
-              <col class="pitch-col-alter" />
-            </colgroup>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Name</th>
-                <th>MIDI</th>
-                <th>Octave</th>
-                <th>
-                  Pitch Space
-                  <button
-                    class="help"
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>music21-rs Chord Inspector</title>
+        <link rel="modulepreload" href="./app.js" />
+        <link rel="modulepreload" href="../pkg/music21_rs_web.js" />
+        <link
+            rel="preload"
+            href="../pkg/music21_rs_web_bg.wasm"
+            as="fetch"
+            type="application/wasm"
+            crossorigin
+        />
+        <style>
+            .control-panel {
+                display: grid;
+                gap: 10px;
+                margin-bottom: 10px;
+            }
+
+            .input-row {
+                display: grid;
+                grid-template-columns: minmax(180px, 1fr) minmax(
+                        120px,
+                        0.38fr
+                    ) auto auto auto auto;
+                gap: 10px;
+            }
+
+            .options-row {
+                display: grid;
+                grid-template-columns: minmax(180px, 0.42fr) minmax(260px, 1fr);
+                gap: 10px;
+            }
+
+            .option-field {
+                display: grid;
+                gap: 5px;
+                min-width: 0;
+            }
+
+            .option-field span {
+                color: var(--muted);
+                font-size: 12px;
+                font-weight: 800;
+            }
+
+            #chord-input,
+            #key-input,
+            #sound-tuning,
+            #guitar-tuning {
+                min-width: 0;
+                height: 46px;
+                padding: 0 14px;
+                border: 1px solid var(--line);
+                border-radius: 8px;
+                background: var(--panel);
+                color: var(--ink);
+            }
+
+            #sound-tuning {
+                cursor: pointer;
+            }
+
+            #analyze,
+            #estimate-key,
+            #share,
+            #play-chord {
+                height: 46px;
+                padding: 0 18px;
+                border-radius: 8px;
+                font-weight: 700;
+                cursor: pointer;
+                white-space: nowrap;
+            }
+
+            #analyze {
+                border: 0;
+                background: var(--accent);
+                color: #fff;
+            }
+
+            #analyze:hover {
+                background: var(--accent-strong);
+            }
+
+            #estimate-key,
+            #share,
+            #play-chord {
+                border: 1px solid var(--line);
+                background: var(--panel);
+                color: var(--accent-strong);
+            }
+
+            #estimate-key:hover,
+            #share:hover,
+            #share.copied,
+            #play-chord:hover {
+                border-color: var(--accent);
+                background: var(--accent-soft);
+            }
+
+            .midi-status {
+                grid-column: 1 / -1;
+                min-height: 18px;
+                color: var(--muted);
+                font-size: 12px;
+                font-weight: 700;
+            }
+
+            .suggestions {
+                display: grid;
+                gap: 8px;
+                margin-bottom: 22px;
+            }
+
+            .random-controls {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 8px;
+            }
+
+            .random-controls label {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                color: var(--muted);
+                font-size: 13px;
+                font-weight: 700;
+            }
+
+            .random-controls input {
+                width: 58px;
+                height: 34px;
+                padding: 0 8px;
+                border: 1px solid var(--line);
+                border-radius: 8px;
+                background: var(--panel);
+                color: var(--ink);
+            }
+
+            .examples,
+            .history {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+
+            .history:empty,
+            .clear-history[hidden] {
+                display: none;
+            }
+
+            .examples button,
+            .random-controls button,
+            .history button,
+            .clear-history {
+                padding: 7px 10px;
+                border: 1px solid var(--line);
+                border-radius: 999px;
+                background: var(--panel);
+                color: var(--ink);
+                cursor: pointer;
+            }
+
+            .history button {
+                border-color: var(--accent-line);
+                background: var(--accent-soft);
+                color: var(--accent-strong);
+            }
+
+            .clear-history {
+                justify-self: start;
+                color: var(--warn-strong);
+            }
+
+            .layout {
+                display: grid;
+                grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+                gap: 18px;
+                align-items: stretch;
+            }
+
+            section {
+                border: 1px solid var(--line);
+                border-radius: 8px;
+                background: var(--panel);
+                overflow: hidden;
+            }
+
+            section h2 {
+                margin: 0;
+                padding: 14px 16px;
+                border-bottom: 1px solid var(--line);
+                font-size: 15px;
+                letter-spacing: 0;
+            }
+
+            .facts {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 1px;
+                background: var(--line);
+            }
+
+            .summary-section {
+                overflow: visible;
+            }
+
+            .fact {
+                min-height: 74px;
+                padding: 12px;
+                background: var(--panel);
+            }
+
+            .fact span {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                color: var(--muted);
+                font-size: 12px;
+                font-weight: 700;
+                text-transform: uppercase;
+            }
+
+            .fact strong {
+                display: block;
+                margin-top: 6px;
+                overflow-wrap: anywhere;
+                font-size: 16px;
+            }
+
+            .help {
+                position: relative;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 16px;
+                height: 16px;
+                border: 1px solid var(--accent-line);
+                border-radius: 50%;
+                background: var(--accent-soft);
+                color: var(--accent-strong);
+                font-size: 11px;
+                font-weight: 900;
+                line-height: 1;
+                cursor: help;
+            }
+
+            .help::after {
+                position: absolute;
+                z-index: 4;
+                left: 50%;
+                bottom: calc(100% + 8px);
+                width: min(260px, calc(100vw - 40px));
+                padding: 9px 10px;
+                border: 1px solid var(--line);
+                border-radius: 8px;
+                background: var(--tooltip-bg);
+                color: var(--tooltip-ink);
+                box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+                content: attr(data-help);
+                font-size: 12px;
+                font-weight: 600;
+                line-height: 1.35;
+                text-transform: none;
+                transform: translateX(-50%);
+                opacity: 0;
+                pointer-events: none;
+                transition: opacity 0.12s ease;
+            }
+
+            .help:hover::after,
+            .help:focus-visible::after {
+                opacity: 1;
+            }
+
+            .fact .help::after {
+                left: 0;
+                transform: translateX(-8px);
+            }
+
+            .list {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+                padding: 14px 16px;
+            }
+
+            .chip {
+                padding: 7px 9px;
+                border: 1px solid var(--line);
+                border-radius: 999px;
+                background: var(--panel-soft);
+                font-size: 13px;
+            }
+
+            .resolution-list {
+                display: grid;
+                gap: 8px;
+                padding: 14px 16px;
+            }
+
+            .resolution-item {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto;
+                gap: 8px;
+                align-items: stretch;
+            }
+
+            .resolution-chip {
+                display: grid;
+                gap: 4px;
+                width: 100%;
+                padding: 10px 12px;
+                border: 1px solid var(--line);
+                border-radius: 8px;
+                background: var(--panel-soft);
+                color: var(--ink);
+                text-align: left;
+                cursor: pointer;
+                text-decoration: none;
+            }
+
+            .resolution-chip:hover {
+                border-color: var(--accent);
+                background: var(--accent-soft);
+            }
+
+            .resolution-chip strong {
+                font-size: 14px;
+            }
+
+            .resolution-chip span,
+            .resolution-chip small {
+                color: var(--muted);
+                font-size: 12px;
+            }
+
+            .resolution-chip.unavailable {
+                cursor: default;
+            }
+
+            .resolution-chip.unavailable:hover {
+                border-color: var(--line);
+                background: var(--panel-soft);
+            }
+
+            .resolution-play {
+                min-width: 62px;
+                padding: 0 12px;
+                border: 1px solid var(--line);
+                border-radius: 8px;
+                background: var(--panel);
+                color: var(--accent-strong);
+                font-weight: 700;
+                cursor: pointer;
+            }
+
+            .resolution-play:hover {
+                border-color: var(--accent);
+                background: var(--accent-soft);
+            }
+
+            .action-row {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 10px;
+                padding: 14px 16px 16px;
+            }
+
+            .button-link {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                min-height: 40px;
+                padding: 0 14px;
+                border: 1px solid var(--line);
+                border-radius: 8px;
+                background: var(--panel);
+                color: var(--accent-strong);
+                font-weight: 700;
+                text-decoration: none;
+            }
+
+            .button-link:hover {
+                border-color: var(--accent);
+                background: var(--accent-soft);
+            }
+
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                table-layout: fixed;
+            }
+
+            .pitches-section {
+                grid-column: 1 / -1;
+            }
+
+            .pitches-section {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            .pitches-section table {
+                min-width: 980px;
+                table-layout: fixed;
+            }
+
+            .pitch-col-index {
+                width: 42px;
+            }
+
+            .pitch-col-name {
+                width: 94px;
+            }
+
+            .pitch-col-midi,
+            .pitch-col-octave {
+                width: 66px;
+            }
+
+            .pitch-col-space {
+                width: 98px;
+            }
+
+            .pitch-col-frequency {
+                width: auto;
+            }
+
+            .pitch-col-class,
+            .pitch-col-alter {
+                width: 78px;
+            }
+
+            .pitches-section th .help::after {
+                right: 0;
+                left: auto;
+                transform: translateX(8px);
+            }
+
+            th {
+                color: var(--muted);
+                font-size: 12px;
+                font-weight: 700;
+                text-transform: uppercase;
+            }
+
+            th,
+            td {
+                padding: 10px 12px;
+                border-bottom: 1px solid var(--line);
+                text-align: left;
+                vertical-align: top;
+                overflow-wrap: anywhere;
+            }
+
+            td {
+                font-variant-numeric: tabular-nums;
+            }
+
+            .pitches-section th,
+            .pitches-section td {
+                padding: 10px 8px;
+            }
+
+            .frequency-cell {
+                min-width: 260px;
+                overflow-wrap: normal;
+                word-break: normal;
+            }
+
+            .tuning-list {
+                display: grid;
+                gap: 5px;
+            }
+
+            .tuning-row {
+                display: grid;
+                grid-template-columns: minmax(140px, 1fr) auto;
+                gap: 10px;
+                align-items: baseline;
+            }
+
+            .tuning-row.selected {
+                color: var(--accent-strong);
+            }
+
+            .tuning-row.selected .tuning-name,
+            .tuning-row.selected .tuning-cents {
+                color: var(--accent-strong);
+            }
+
+            .tuning-name {
+                color: var(--muted);
+                font-size: 12px;
+                overflow-wrap: normal;
+                white-space: nowrap;
+                word-break: normal;
+            }
+
+            .tuning-hz {
+                font-weight: 700;
+                white-space: nowrap;
+            }
+
+            .tuning-cents {
+                grid-column: 2;
+                justify-self: end;
+                color: var(--muted);
+                font-size: 11px;
+            }
+
+            .keyboard {
+                position: relative;
+                display: grid;
+                grid-template-columns: repeat(24, minmax(26px, 1fr));
+                gap: 2px;
+                min-width: 760px;
+                padding: 14px 16px 18px;
+            }
+
+            .keyboard-scroll {
+                overflow-x: auto;
+            }
+
+            .key {
+                height: 104px;
+                border: 1px solid var(--line);
+                border-radius: 0 0 5px 5px;
+                background: var(--panel-softer);
+                color: var(--muted);
+                display: flex;
+                flex-direction: column;
+                align-items: end;
+                justify-content: center;
+                gap: 3px;
+                padding-bottom: 8px;
+                font-size: 12px;
+                font-weight: 700;
+                cursor: pointer;
+            }
+
+            .key-name,
+            .key-alt {
+                display: block;
+                line-height: 1;
+            }
+
+            .key-alt {
+                color: var(--muted);
+                font-size: 10px;
+                font-weight: 700;
+            }
+
+            .key-octave {
+                color: var(--muted);
+                font-size: 10px;
+                font-weight: 800;
+            }
+
+            .key.black {
+                height: 70px;
+                background: var(--key-black);
+                color: #fff;
+            }
+
+            .key.active {
+                border-color: var(--accent);
+                box-shadow: inset 0 -6px 0 var(--accent);
+                color: var(--accent-strong);
+            }
+
+            .key.black.active {
+                box-shadow: inset 0 -6px 0 var(--key-black-active);
+                color: var(--key-black-active);
+            }
+
+            .key.black .key-alt,
+            .key.black .key-octave,
+            .key.black.active .key-alt,
+            .key.black.active .key-octave,
+            .key.black:hover .key-alt {
+                color: var(--key-black-active);
+            }
+
+            .key:hover {
+                border-color: var(--accent);
+                color: var(--accent-strong);
+            }
+
+            .key.black:hover {
+                color: var(--key-black-active);
+            }
+
+            .guitar-panel {
+                display: grid;
+                gap: 12px;
+                padding: 14px 16px 16px;
+            }
+
+            .guitar-chart {
+                display: flex;
+                min-height: 220px;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .guitar-chart svg {
+                display: block;
+                max-width: 100%;
+                height: auto;
+            }
+
+            .guitar-note-list {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 7px;
+            }
+
+            .guitar-note {
+                padding: 5px 8px;
+                border: 1px solid var(--line);
+                border-radius: 999px;
+                background: var(--panel-soft);
+                color: var(--ink);
+                font-size: 12px;
+                font-weight: 700;
+            }
+
+            .guitar-omitted {
+                color: var(--warn);
+            }
+
+            .guitar-empty {
+                padding: 14px 16px;
+                color: var(--muted);
+                font-weight: 700;
+            }
+
+            #notation {
+                position: relative;
+                min-height: 132px;
+                padding: 6px 16px 12px;
+            }
+
+            #notation svg {
+                display: block;
+                width: 100%;
+                height: auto;
+                color: var(--ink);
+            }
+
+            #notation svg [fill="#000"],
+            #notation svg [fill="#000000"],
+            #notation svg [fill="black"] {
+                fill: currentColor;
+            }
+
+            #notation svg [stroke="#000"],
+            #notation svg [stroke="#000000"],
+            #notation svg [stroke="black"] {
+                stroke: currentColor;
+            }
+
+            .notation-fallback {
+                padding: 28px 0;
+                color: var(--muted);
+                font-weight: 700;
+            }
+
+            .error {
+                display: none;
+                margin: 0 0 16px;
+                padding: 12px 14px;
+                border: 1px solid var(--warn-line);
+                border-radius: 8px;
+                background: var(--warn-soft);
+                color: var(--warn);
+                font-weight: 700;
+            }
+
+            @media (max-width: 760px) {
+                .shell {
+                    width: min(100vw - 24px, 680px);
+                    padding-top: 14px;
+                }
+
+                header,
+                .layout,
+                .facts {
+                    grid-template-columns: 1fr;
+                }
+
+                .input-row {
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                }
+
+                .options-row {
+                    grid-template-columns: 1fr;
+                }
+
+                .pitches-section {
+                    grid-column: auto;
+                }
+
+                header {
+                    display: grid;
+                    align-items: start;
+                }
+
+                .top-links {
+                    justify-content: start;
+                    gap: 8px;
+                    width: 100%;
+                }
+
+                .docs-link {
+                    display: inline-flex;
+                    align-items: center;
+                    min-height: 34px;
+                    padding: 0 10px;
+                    border: 1px solid var(--line);
+                    border-radius: 8px;
+                    background: var(--panel);
+                }
+
+                h1 {
+                    font-size: 26px;
+                }
+
+                #chord-input,
+                #key-input,
+                #analyze,
+                .midi-status {
+                    grid-column: 1 / -1;
+                }
+
+                #analyze,
+                #estimate-key,
+                #share,
+                #play-chord {
+                    width: 100%;
+                }
+
+                .midi-status {
+                    grid-column: 1 / -1;
+                }
+
+                .keyboard {
+                    min-width: 560px;
+                }
+
+                .pitches-section colgroup,
+                .pitches-section thead {
+                    display: none;
+                }
+
+                .pitches-section table,
+                .pitches-section tbody,
+                .pitches-section tr,
+                .pitches-section td {
+                    display: block;
+                    width: 100%;
+                    min-width: 0;
+                }
+
+                .pitches-section table {
+                    min-width: 0;
+                }
+
+                .pitches-section tr {
+                    padding: 8px 0;
+                    border-bottom: 1px solid var(--line);
+                }
+
+                .pitches-section tr:last-child {
+                    border-bottom: 0;
+                }
+
+                .pitches-section td {
+                    display: grid;
+                    grid-template-columns: 92px minmax(0, 1fr);
+                    gap: 10px;
+                    padding: 7px 12px;
+                    border-bottom: 0;
+                    font-size: 13px;
+                }
+
+                .pitches-section td::before {
+                    color: var(--muted);
+                    font-size: 11px;
+                    font-weight: 800;
+                    text-transform: uppercase;
+                }
+
+                .pitches-section td:nth-child(1)::before {
+                    content: "#";
+                }
+
+                .pitches-section td:nth-child(2)::before {
+                    content: "Name";
+                }
+
+                .pitches-section td:nth-child(3)::before {
+                    content: "MIDI";
+                }
+
+                .pitches-section td:nth-child(4)::before {
+                    content: "Octave";
+                }
+
+                .pitches-section td:nth-child(5)::before {
+                    content: "Space";
+                }
+
+                .pitches-section td:nth-child(6)::before {
+                    content: "Frequency";
+                }
+
+                .pitches-section td:nth-child(7)::before {
+                    content: "Class";
+                }
+
+                .pitches-section td:nth-child(8)::before {
+                    content: "Alter";
+                }
+
+                .frequency-cell {
+                    min-width: 0;
+                }
+
+                .tuning-row {
+                    grid-template-columns: minmax(0, 1fr);
+                    gap: 2px;
+                }
+
+                .tuning-cents {
+                    grid-column: auto;
+                    justify-self: start;
+                }
+            }
+
+            @media (max-width: 420px) {
+                .input-row {
+                    grid-template-columns: 1fr;
+                }
+
+                #estimate-key,
+                #share,
+                #play-chord {
+                    grid-column: 1;
+                }
+            }
+        </style>
+        <link rel="stylesheet" href="../theme.css" />
+    </head>
+    <body class="page-chord">
+        <main class="shell">
+            <header>
+                <div class="title-row">
+                    <a class="home-link" href="../">Home</a>
+                    <h1>Chord Inspector</h1>
+                </div>
+                <nav class="top-links">
+                    <a id="browser-link" class="docs-link" href="../chords/"
+                        >Chord Browser</a
+                    >
+                    <a
+                        id="polyrhythm-link"
+                        class="docs-link"
+                        href="../polyrhythm/"
+                        >Polyrhythm</a
+                    >
+                    <a id="tuning-link" class="docs-link" href="../tuning/"
+                        >Tuning</a
+                    >
+                    <a class="docs-link" href="../docs/music21_rs/index.html"
+                        >Rust docs</a
+                    >
+                </nav>
+            </header>
+
+            <form id="form" class="control-panel">
+                <div class="input-row">
+                    <input
+                        id="chord-input"
+                        value="C E G#"
+                        autocomplete="off"
+                        list="chord-history"
+                        placeholder="C E G or midi: 60 64 67"
+                    />
+                    <datalist id="chord-history"></datalist>
+                    <input
+                        id="key-input"
+                        autocomplete="off"
+                        list="key-examples"
+                        placeholder="Key: C major"
+                        aria-label="Key context"
+                    />
+                    <button id="estimate-key" type="button">
+                        Estimate key
+                    </button>
+                    <datalist id="key-examples">
+                        <option value="C major"></option>
+                        <option value="A minor"></option>
+                        <option value="G major"></option>
+                        <option value="Eb major"></option>
+                        <option value="F# minor"></option>
+                    </datalist>
+                    <button id="analyze" type="submit">Analyze</button>
+                    <button id="play-chord" type="button">Play chord</button>
+                    <button id="share" type="button">Copy link</button>
+                    <span id="midi-status" class="midi-status">MIDI idle</span>
+                </div>
+                <div class="options-row">
+                    <label class="option-field" for="sound-tuning">
+                        <span>Sound tuning</span>
+                        <select
+                            id="sound-tuning"
+                            aria-label="Sound tuning"
+                        ></select>
+                    </label>
+                    <label class="option-field" for="guitar-tuning">
+                        <span>Guitar tuning</span>
+                        <input
+                            id="guitar-tuning"
+                            value="E2 A2 D3 G3 B3 E4"
+                            autocomplete="off"
+                            list="guitar-tuning-presets"
+                            aria-label="Guitar tuning"
+                        />
+                    </label>
+                    <datalist id="guitar-tuning-presets">
+                        <option value="E2 A2 D3 G3 B3 E4"></option>
+                        <option value="D2 A2 D3 G3 B3 E4"></option>
+                        <option value="D2 A2 D3 G3 A3 D4"></option>
+                        <option value="D2 G2 D3 G3 B3 D4"></option>
+                    </datalist>
+                </div>
+            </form>
+
+            <div class="suggestions">
+                <div class="random-controls">
+                    <button id="random-chord" type="button">
+                        Random chord
+                    </button>
+                    <label for="random-min-notes">Min</label>
+                    <input
+                        id="random-min-notes"
+                        type="number"
+                        min="1"
+                        max="12"
+                        value="3"
+                    />
+                    <label for="random-max-notes">Max</label>
+                    <input
+                        id="random-max-notes"
+                        type="number"
+                        min="1"
+                        max="12"
+                        value="6"
+                    />
+                </div>
+                <div class="examples" id="examples"></div>
+                <div class="history" id="history"></div>
+                <button
+                    id="clear-history"
+                    class="clear-history"
                     type="button"
-                    aria-label="Pitch Space: music21 numeric pitch height where C4 is 60 and each semitone changes the value by 1."
-                    data-help="music21 numeric pitch height: C4 is 60, and each semitone changes the value by 1."
-                  >?</button>
-                </th>
-                <th>Frequency</th>
-                <th>
-                  Class
-                  <button
-                    class="help"
-                    type="button"
-                    aria-label="Class: pitch-class number from 0 to 11, where C is 0, C-sharp or D-flat is 1, and B is 11."
-                    data-help="Pitch-class number from 0 to 11: C is 0, C-sharp or D-flat is 1, and B is 11."
-                  >?</button>
-                </th>
-                <th>
-                  Alter
-                  <button
-                    class="help"
-                    type="button"
-                    aria-label="Alter: accidental offset from the natural note in semitones."
-                    data-help="Accidental offset from the natural note in semitones: -1 is flat, 0 is natural, 1 is sharp."
-                  >?</button>
-                </th>
-              </tr>
-            </thead>
-            <tbody id="pitches"></tbody>
-          </table>
-        </section>
-      </div>
-    </main>
+                    hidden
+                >
+                    Clear history
+                </button>
+            </div>
+            <p class="error" id="error"></p>
 
-    <script src="https://cdn.jsdelivr.net/npm/abcjs@6.5.2/dist/abcjs-basic-min.js"></script>
-    <script type="module" src="./app.js"></script>
-  </body>
+            <div class="layout">
+                <section>
+                    <h2>Pitched Names</h2>
+                    <div class="list" id="pitched-names"></div>
+                </section>
+
+                <section>
+                    <h2>Piano</h2>
+                    <div class="keyboard-scroll">
+                        <div class="keyboard" id="keyboard"></div>
+                    </div>
+                    <div class="action-row">
+                        <a
+                            id="open-polyrhythm"
+                            class="button-link"
+                            href="../polyrhythm/"
+                            >Open as polyrhythm</a
+                        >
+                    </div>
+                </section>
+
+                <section class="guitar-section">
+                    <h2>Guitar Fingering</h2>
+                    <div class="guitar-panel" id="guitar-fingering"></div>
+                </section>
+
+                <section class="summary-section">
+                    <h2>Summary</h2>
+                    <div class="facts" id="facts"></div>
+                </section>
+
+                <section>
+                    <h2>Suggested Resolutions</h2>
+                    <div class="resolution-list" id="resolution-chords"></div>
+                </section>
+
+                <section class="notation-section">
+                    <h2>Notation</h2>
+                    <div id="notation"></div>
+                </section>
+
+                <section class="pitches-section">
+                    <h2>Pitches</h2>
+                    <table>
+                        <colgroup>
+                            <col class="pitch-col-index" />
+                            <col class="pitch-col-name" />
+                            <col class="pitch-col-midi" />
+                            <col class="pitch-col-octave" />
+                            <col class="pitch-col-space" />
+                            <col class="pitch-col-frequency" />
+                            <col class="pitch-col-class" />
+                            <col class="pitch-col-alter" />
+                        </colgroup>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Name</th>
+                                <th>MIDI</th>
+                                <th>Octave</th>
+                                <th>
+                                    Pitch Space
+                                    <button
+                                        class="help"
+                                        type="button"
+                                        aria-label="Pitch Space: music21 numeric pitch height where C4 is 60 and each semitone changes the value by 1."
+                                        data-help="music21 numeric pitch height: C4 is 60, and each semitone changes the value by 1."
+                                    >
+                                        ?
+                                    </button>
+                                </th>
+                                <th>Frequency</th>
+                                <th>
+                                    Class
+                                    <button
+                                        class="help"
+                                        type="button"
+                                        aria-label="Class: pitch-class number from 0 to 11, where C is 0, C-sharp or D-flat is 1, and B is 11."
+                                        data-help="Pitch-class number from 0 to 11: C is 0, C-sharp or D-flat is 1, and B is 11."
+                                    >
+                                        ?
+                                    </button>
+                                </th>
+                                <th>
+                                    Alter
+                                    <button
+                                        class="help"
+                                        type="button"
+                                        aria-label="Alter: accidental offset from the natural note in semitones."
+                                        data-help="Accidental offset from the natural note in semitones: -1 is flat, 0 is natural, 1 is sharp."
+                                    >
+                                        ?
+                                    </button>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody id="pitches"></tbody>
+                    </table>
+                </section>
+            </div>
+        </main>
+
+        <script src="https://cdn.jsdelivr.net/npm/abcjs@6.5.2/dist/abcjs-basic-min.js"></script>
+        <script type="module" src="./app.js"></script>
+    </body>
 </html>

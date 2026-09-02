@@ -1,5 +1,3 @@
 {
-    "python.analysis.extraPaths": [
-        "./music21"
-    ]
+    "python.analysis.extraPaths": ["./music21"]
 }
