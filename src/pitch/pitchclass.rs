@@ -3,7 +3,6 @@ use crate::{
     error::{Error, Result},
 };
 
-use super::pitchclassstring::PitchClassString;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
@@ -219,15 +218,26 @@ fn normalize_pitch_class(pc: FloatType) -> FloatType {
 
 fn parse_pitch_class_string(value: &str) -> Result<FloatType> {
     let value = value.trim();
-    if value.chars().count() == 1
-        && let Ok(pc_string) = PitchClassString::try_from(value.chars().next().unwrap())
+    let mut letters = value.chars();
+    if let (Some(letter), None) = (letters.next(), letters.next())
+        && let Some(number) = pitch_class_letter_number(letter)
     {
-        return Ok(pc_string.to_number() as FloatType);
+        return Ok(number as FloatType);
     }
 
     value
         .parse::<FloatType>()
         .map_err(|err| Error::PitchClass(format!("cannot parse pitch class {value:?}: {err}")))
+}
+
+/// The single-letter spellings music21 accepts for pitch classes ten and
+/// eleven, in either case.
+fn pitch_class_letter_number(letter: char) -> Option<IntegerType> {
+    match letter.to_ascii_lowercase() {
+        'a' | 't' => Some(10),
+        'b' | 'e' => Some(11),
+        _ => None,
+    }
 }
 
 fn trim_float(value: FloatType) -> String {

@@ -1,7 +1,6 @@
 pub(crate) mod accidental;
 pub(crate) mod microtone;
 pub(crate) mod pitchclass;
-pub(crate) mod pitchclassstring;
 
 use crate::defaults::FloatType;
 use crate::defaults::IntegerType;
@@ -13,7 +12,6 @@ use crate::defaults::UnsignedIntegerType;
 use crate::error::Error;
 use crate::error::Result;
 use crate::interval::Interval;
-use crate::interval::IntervalArgument;
 use crate::interval::PitchOrNote;
 use crate::key::keysignature::KeySignature;
 use crate::stepname::StepName;
@@ -47,12 +45,10 @@ pub fn pitch_class_name(pitch_class: u8) -> &'static str {
 
 /// The two intervals enharmonic respelling can ever need: a diminished second
 /// up and the same interval down.
-static DIMINISHED_SECOND_UP: LazyLock<Interval> = LazyLock::new(|| {
-    Interval::new(IntervalArgument::Str("d2".to_string())).expect("d2 is a valid interval")
-});
-static DIMINISHED_SECOND_DOWN: LazyLock<Interval> = LazyLock::new(|| {
-    Interval::new(IntervalArgument::Str("-d2".to_string())).expect("-d2 is a valid interval")
-});
+static DIMINISHED_SECOND_UP: LazyLock<Interval> =
+    LazyLock::new(|| Interval::from_name("d2").expect("d2 is a valid interval"));
+static DIMINISHED_SECOND_DOWN: LazyLock<Interval> =
+    LazyLock::new(|| Interval::from_name("-d2").expect("-d2 is a valid interval"));
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -657,25 +653,25 @@ impl Pitch {
 
     /// Returns the next higher enharmonic spelling.
     pub fn get_higher_enharmonic(&self) -> Result<Pitch> {
-        self._get_enharmonic_helper(true)
+        self.enharmonic_neighbour(true)
     }
 
     /// Replaces this pitch with its next higher enharmonic spelling.
     pub fn get_higher_enharmonic_in_place(&mut self) -> Result<()> {
-        self._get_enharmonic_helper_in_place(true)
+        self.enharmonic_neighbour_in_place(true)
     }
 
     /// Returns the next lower enharmonic spelling.
     pub fn get_lower_enharmonic(&self) -> Result<Pitch> {
-        self._get_enharmonic_helper(false)
+        self.enharmonic_neighbour(false)
     }
 
     /// Replaces this pitch with its next lower enharmonic spelling.
     pub fn get_lower_enharmonic_in_place(&mut self) -> Result<()> {
-        self._get_enharmonic_helper_in_place(false)
+        self.enharmonic_neighbour_in_place(false)
     }
 
-    fn _get_enharmonic_helper(&self, up: bool) -> Result<Pitch> {
+    fn enharmonic_neighbour(&self, up: bool) -> Result<Pitch> {
         let interval: &Interval = if up {
             &DIMINISHED_SECOND_UP
         } else {
@@ -691,8 +687,8 @@ impl Pitch {
         Ok(p)
     }
 
-    fn _get_enharmonic_helper_in_place(&mut self, up: bool) -> Result<()> {
-        *self = self._get_enharmonic_helper(up)?;
+    fn enharmonic_neighbour_in_place(&mut self, up: bool) -> Result<()> {
+        *self = self.enharmonic_neighbour(up)?;
         Ok(())
     }
 
@@ -1045,7 +1041,7 @@ fn convert_harmonic_to_cents(_harmonic_shift: IntegerType) -> IntegerType {
 #[cfg(test)]
 mod tests {
     use crate::defaults::IntegerType;
-    use crate::interval::{Interval, IntervalArgument};
+    use crate::interval::Interval;
     use crate::tuningsystem::TuningSystem;
 
     use super::{
@@ -1099,7 +1095,7 @@ mod tests {
     #[test]
     fn test_pitch_transpose_interval() {
         let c4 = Pitch::from_name("C4".to_string()).unwrap();
-        let m3 = Interval::new(IntervalArgument::Str("m3".to_string())).unwrap();
+        let m3 = Interval::from_name("m3").unwrap();
         let out = c4.transpose(&m3);
         assert_eq!(out.name_with_octave(), "E-4");
     }

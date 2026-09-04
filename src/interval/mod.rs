@@ -76,23 +76,16 @@ pub(crate) enum PitchOrNote {
     Note(Note),
 }
 
-pub(crate) enum IntervalArgument {
-    Str(String),
-    Int(IntegerType),
-}
-
 static PYTHAGOREAN_CACHE: LazyLock<Mutex<HashMap<String, (Pitch, FractionType)>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// The pure fifths the Pythagorean walk steps by, parsed once rather than
 /// re-parsed from "P5"/"-P5" on every call into a function that is cached
 /// precisely because it is expensive.
-static PERFECT_FIFTH_UP: LazyLock<Interval> = LazyLock::new(|| {
-    Interval::new(IntervalArgument::Str("P5".to_string())).expect("P5 is a valid interval")
-});
-static PERFECT_FIFTH_DOWN: LazyLock<Interval> = LazyLock::new(|| {
-    Interval::new(IntervalArgument::Str("-P5".to_string())).expect("-P5 is a valid interval")
-});
+static PERFECT_FIFTH_UP: LazyLock<Interval> =
+    LazyLock::new(|| Interval::from_name("P5").expect("P5 is a valid interval"));
+static PERFECT_FIFTH_DOWN: LazyLock<Interval> =
+    LazyLock::new(|| Interval::from_name("-P5").expect("-P5 is a valid interval"));
 
 fn extract_pitch(arg: PitchOrNote) -> Pitch {
     match arg {
@@ -307,42 +300,29 @@ impl Interval {
         })
     }
 
-    pub(crate) fn new(arg: IntervalArgument) -> Result<Interval> {
-        match arg {
-            IntervalArgument::Str(str) => {
-                let name = str;
-                let (diatonic_new, chromatic_new, inferred) = _string_to_diatonic_chromatic(name)?;
-                Ok(Self {
-                    implicit_diatonic: inferred,
-                    diatonic: diatonic_new,
-                    chromatic: chromatic_new,
-                    pitch_start: None,
-                    pitch_end: None,
-                })
-            }
-            IntervalArgument::Int(int) => {
-                let chromatic = ChromaticInterval::new(int);
-                let diatonic = chromatic.get_diatonic();
-
-                Ok(Self {
-                    implicit_diatonic: true,
-                    diatonic,
-                    chromatic,
-                    pitch_start: None,
-                    pitch_end: None,
-                })
-            }
-        }
-    }
-
     /// Parses an interval name such as `"M3"`, `"P5"`, or `"-m6"`.
     pub fn from_name(name: impl Into<String>) -> Result<Self> {
-        Self::new(IntervalArgument::Str(name.into()))
+        let (diatonic, chromatic, inferred) = parse_interval_name(name.into())?;
+        Ok(Self {
+            implicit_diatonic: inferred,
+            diatonic,
+            chromatic,
+            pitch_start: None,
+            pitch_end: None,
+        })
     }
 
     /// Creates an implicit diatonic interval from a chromatic semitone count.
     pub fn from_semitones(semitones: IntegerType) -> Result<Self> {
-        Self::new(IntervalArgument::Int(semitones))
+        let chromatic = ChromaticInterval::new(semitones);
+        let diatonic = chromatic.get_diatonic();
+        Ok(Self {
+            implicit_diatonic: true,
+            diatonic,
+            chromatic,
+            pitch_start: None,
+            pitch_end: None,
+        })
     }
 
     /// Returns the directed interval from `start` to `end`.
@@ -534,9 +514,7 @@ impl TryFrom<IntegerType> for Interval {
     }
 }
 
-fn _string_to_diatonic_chromatic(
-    mut value: String,
-) -> Result<(DiatonicInterval, ChromaticInterval, bool)> {
+fn parse_interval_name(mut value: String) -> Result<(DiatonicInterval, ChromaticInterval, bool)> {
     let mut inferred = false;
     let mut dir_scale = 1;
 
@@ -722,7 +700,7 @@ mod tests {
 
     #[test]
     fn interval_from_string_has_expected_chromatic() {
-        let interval = Interval::new(IntervalArgument::Str("M3".to_string())).unwrap();
+        let interval = Interval::from_name("M3").unwrap();
         assert_eq!(interval.chromatic.semitones, 4);
         assert!(!interval.implicit_diatonic);
     }
@@ -744,7 +722,7 @@ mod tests {
 
     #[test]
     fn interval_from_int_is_implicit_diatonic() {
-        let interval = Interval::new(IntervalArgument::Int(1)).unwrap();
+        let interval = Interval::from_semitones(1).unwrap();
         assert!(interval.implicit_diatonic);
         assert_eq!(interval.chromatic.semitones, 1);
     }
@@ -761,7 +739,7 @@ mod tests {
     #[test]
     fn interval_transpose_pitch() {
         let c4 = pitch("C4");
-        let m3 = Interval::new(IntervalArgument::Str("m3".to_string())).unwrap();
+        let m3 = Interval::from_name("m3").unwrap();
         let out = m3.transpose_pitch(c4).unwrap();
         assert_eq!(out.name_with_octave(), "E-4");
     }

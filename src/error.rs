@@ -25,8 +25,6 @@ pub enum Error {
     StepName(String),
     /// Error associated with numeric pitch-class parsing.
     PitchClass(String),
-    /// Error associated with pitch-class string parsing.
-    PitchClassString(String),
     /// Error associated with ordinal-name parsing.
     Ordinal(String),
     /// Error associated with polyrhythm construction or timing.
@@ -55,7 +53,6 @@ impl fmt::Display for Error {
             Error::Interval(msg) => write!(f, "Interval error: {msg}"),
             Error::StepName(msg) => write!(f, "StepName error: {msg}"),
             Error::PitchClass(msg) => write!(f, "PitchClass error: {msg}"),
-            Error::PitchClassString(msg) => write!(f, "PitchClassString error: {msg}"),
             Error::Ordinal(msg) => write!(f, "Ordinal error: {msg}"),
             Error::Polyrhythm(msg) => write!(f, "Polyrhythm error: {msg}"),
             Error::TuningSystem(msg) => write!(f, "TuningSystem error: {msg}"),
@@ -133,15 +130,6 @@ mod tests {
     }
 
     #[test]
-    fn test_display_pitchclassstring() {
-        let err = Error::PitchClassString("pitch class error".to_string());
-        assert_eq!(
-            format!("{err}"),
-            "PitchClassString error: pitch class error"
-        );
-    }
-
-    #[test]
     fn test_display_ordinal() {
         let err = Error::Ordinal("ordinal error".to_string());
         assert_eq!(format!("{err}"), "Ordinal error: ordinal error");
@@ -171,7 +159,6 @@ mod tests {
             Error::Interval("interval".to_string()),
             Error::StepName("step".to_string()),
             Error::PitchClass("pitch class".to_string()),
-            Error::PitchClassString("pitch class".to_string()),
             Error::Ordinal("ordinal".to_string()),
             Error::Polyrhythm("polyrhythm".to_string()),
             Error::TuningSystem("tuning system".to_string()),
@@ -217,10 +204,6 @@ mod tests {
             (
                 Error::PitchClass("pitchclass".to_string()),
                 "PitchClass error: pitchclass",
-            ),
-            (
-                Error::PitchClassString("pitchclass".to_string()),
-                "PitchClassString error: pitchclass",
             ),
             (
                 Error::Ordinal("ordinal".to_string()),

@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::chord::Chord;
 use crate::defaults::{FloatType, IntegerType, UnsignedIntegerType};
 use crate::error::{Error, Result};
-use crate::interval::{Interval, IntervalArgument};
+use crate::interval::Interval;
 use crate::pitch::Pitch;
 
 #[derive(Debug, Clone)]
@@ -262,7 +262,7 @@ impl Polyrhythm {
         self.ratio_tones()
             .into_iter()
             .map(|tone| {
-                let interval = Interval::new(IntervalArgument::Int(tone.offset))?;
+                let interval = Interval::from_semitones(tone.offset)?;
                 Ok(base_pitch.transpose(&interval))
             })
             .collect()
@@ -330,7 +330,7 @@ impl Polyrhythm {
         let notes: Result<Vec<Pitch>, Error> = offsets
             .into_iter()
             .map(|offset| {
-                let interval = Interval::new(IntervalArgument::Int(offset))?;
+                let interval = Interval::from_semitones(offset)?;
                 Ok(base_pitch.transpose(&interval))
             })
             .collect();

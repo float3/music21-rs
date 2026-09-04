@@ -1,7 +1,7 @@
 use crate::{
     defaults::IntegerType,
     error::{Error, Result},
-    interval::{Interval, IntervalArgument},
+    interval::Interval,
     pitch::Pitch,
     scale::FIFTHS_ORDER_SHARP,
 };
@@ -50,9 +50,9 @@ pub fn sharps_to_pitch(sharp_count: IntegerType) -> Result<Pitch> {
     pitch.octave_setter(None);
 
     let interval = if sharp_count > 0 {
-        Interval::new(IntervalArgument::Str("P5".to_string()))?
+        Interval::from_name("P5")?
     } else {
-        Interval::new(IntervalArgument::Str("P-5".to_string()))?
+        Interval::from_name("P-5")?
     };
 
     for _ in 0..sharp_count.abs() {
