@@ -1,3 +1,37 @@
+# Unreleased
+
+Cleanup of the Python-shaped plumbing that remained in the pitch, note and
+chord constructors. Nothing musical changes; a handful of signatures do, so
+the next release needs a minor bump.
+
+## Breaking Changes
+
+- `Chord::empty` returns `Chord` rather than `Result<Chord>`; it cannot fail.
+- `Note::from_pitch` returns `Note` rather than `Result<Note>`, and
+  `From<Pitch>` / `From<&Pitch>` replace the `TryFrom` impls that could not
+  fail. `Note::from_number` is new and takes a pitch-space number.
+- Under the `serde` feature, `Pitch`, `Accidental`, `Microtone`, `Chord` and
+  `Note` no longer serialize their fields with a leading underscore
+  (`"step"` rather than `"_step"`). Data written by 0.3.0 will not
+  deserialize unchanged.
+- The `test` binary is gone. It was auto-discovered from `src/bin/test.rs`
+  and shipped with the crate; its checks are now a unit test.
+
+## Internal
+
+- `Pitch::from_options` is the constructor; the nine-argument positional
+  `Pitch::new` and the `IntoAccidental`, `IntoCentShift`, `IntoPitchName` and
+  `IntoPitch` traits, half of whose impls were `panic!()` stubs, are gone.
+- `Interval::from_name` and `from_semitones` build intervals directly rather
+  than through an `IntervalArgument` enum. `IntervalBaseTrait` borrows its
+  interval and pitch instead of consuming them, and `Specifier` is `Copy`.
+- `interval_to_pythagorean_ratio` no longer keeps a process-wide
+  `Mutex<HashMap>` of every ratio it has computed.
+- The chord root-finding walk lives once in `chord::root`; `Chord`,
+  `chordsymbol` and `roman` share it and its `pitch_class` helper.
+- Private fields drop their `_` prefix, and `spelling_is_infered` is spelled
+  correctly.
+
 # music21-rs 0.3.0
 
 This release removes a layer of music21's Python runtime that had been
