@@ -748,116 +748,9 @@ impl std::fmt::Display for Accidental {
     }
 }
 
-pub(crate) trait IntoAccidental: Display + Clone {
-    fn is_accidental(&self) -> bool;
-    fn into_accidental(self) -> Result<Accidental>;
-    fn accidental(self) -> Accidental;
-}
-
-impl IntoAccidental for i8 {
-    fn is_accidental(&self) -> bool {
-        false
-    }
-
-    fn into_accidental(self) -> Result<Accidental> {
-        Accidental::new(self)
-    }
-
-    fn accidental(self) -> Accidental {
-        panic!("call into_accidental instead")
-    }
-}
-
-impl IntoAccidental for IntegerType {
-    fn is_accidental(&self) -> bool {
-        false
-    }
-
-    fn into_accidental(self) -> Result<Accidental> {
-        Accidental::new(self)
-    }
-
-    fn accidental(self) -> Accidental {
-        panic!("call into_accidental instead")
-    }
-}
-
-impl IntoAccidental for FloatType {
-    fn is_accidental(&self) -> bool {
-        false
-    }
-
-    fn into_accidental(self) -> Result<Accidental> {
-        Accidental::new(self)
-    }
-
-    fn accidental(self) -> Accidental {
-        panic!("call into_accidental instead")
-    }
-}
-
-impl IntoAccidental for &str {
-    fn is_accidental(&self) -> bool {
-        false
-    }
-
-    fn into_accidental(self) -> Result<Accidental> {
-        Accidental::new(self)
-    }
-
-    fn accidental(self) -> Accidental {
-        panic!("call into_accidental instead")
-    }
-}
-
-impl IntoAccidental for String {
-    fn is_accidental(&self) -> bool {
-        false
-    }
-
-    fn into_accidental(self) -> Result<Accidental> {
-        Accidental::new(self)
-    }
-
-    fn accidental(self) -> Accidental {
-        panic!("call into_accidental instead")
-    }
-}
-
-impl IntoAccidental for Accidental {
-    fn is_accidental(&self) -> bool {
-        true
-    }
-
-    fn into_accidental(self) -> Result<Accidental> {
-        panic!("don't call into_accidental on an accidental");
-    }
-
-    fn accidental(self) -> Accidental {
-        self
-    }
-}
-
-impl IntoAccidental for AccidentalSpecifier {
-    fn is_accidental(&self) -> bool {
-        matches!(self, AccidentalSpecifier::Accidental(_))
-    }
-
-    fn into_accidental(self) -> Result<Accidental> {
-        Accidental::new(self)
-    }
-
-    fn accidental(self) -> Accidental {
-        match self {
-            AccidentalSpecifier::Accidental(accidental) => accidental,
-            _ => panic!("call into_accidental instead"),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{Accidental, AccidentalSpecifier, IntoAccidental};
+    use super::{Accidental, AccidentalSpecifier};
 
     #[test]
     fn test_natural() {
@@ -885,15 +778,15 @@ mod tests {
 
     #[test]
     fn test_creation_from_int() {
-        let acc_sharp = 1.into_accidental().unwrap();
+        let acc_sharp = Accidental::new(1).unwrap();
         assert_eq!(acc_sharp._name, "sharp");
         assert_eq!(acc_sharp._alter, 1.0);
 
-        let acc_flat = (-1).into_accidental().unwrap();
+        let acc_flat = Accidental::new(-1).unwrap();
         assert_eq!(acc_flat._name, "flat");
         assert_eq!(acc_flat._alter, -1.0);
 
-        let acc_natural = 0.into_accidental().unwrap();
+        let acc_natural = Accidental::new(0).unwrap();
         assert_eq!(acc_natural._name, "natural");
         assert_eq!(acc_natural._alter, 0.0);
     }
@@ -912,30 +805,30 @@ mod tests {
 
     #[test]
     fn test_creation_from_float() {
-        let acc_double_sharp: Accidental = 2.0.into_accidental().unwrap();
+        let acc_double_sharp: Accidental = Accidental::new(2.0).unwrap();
         assert_eq!(acc_double_sharp._name, "double-sharp");
         assert_eq!(acc_double_sharp._alter, 2.0);
 
-        let acc_half_flat: Accidental = (-0.5).into_accidental().unwrap();
+        let acc_half_flat: Accidental = Accidental::new(-0.5).unwrap();
         assert_eq!(acc_half_flat._name, "half-flat");
         assert_eq!(acc_half_flat._alter, -0.5);
     }
 
     #[test]
     fn test_creation_from_str() {
-        let acc1: Accidental = <&str>::into_accidental("sharp").unwrap();
+        let acc1: Accidental = Accidental::new("sharp").unwrap();
         assert_eq!(acc1._name, "sharp");
         assert_eq!(acc1._alter, 1.0);
 
         // Case insensitivity: "Flat" should be accepted as "flat"
-        let acc2: Accidental = <&str>::into_accidental("Flat").unwrap();
+        let acc2: Accidental = Accidental::new("Flat").unwrap();
         assert_eq!(acc2._name, "flat");
         assert_eq!(acc2._alter, -1.0);
     }
 
     #[test]
     fn test_creation_from_string() {
-        let acc: Accidental = String::into_accidental("double-flat".to_string()).unwrap();
+        let acc: Accidental = Accidental::new("double-flat".to_string()).unwrap();
         assert_eq!(acc._name, "double-flat");
         assert_eq!(acc._alter, -2.0);
     }
@@ -967,19 +860,19 @@ mod tests {
     #[test]
     fn test_alternate_names() {
         // Using alternate names from AccidentalEnum::from_alternate_name
-        let acc_sharp: Accidental = String::into_accidental("is".to_string()).unwrap();
+        let acc_sharp: Accidental = Accidental::new("is".to_string()).unwrap();
         assert_eq!(acc_sharp._name, "sharp");
         assert_eq!(acc_sharp._alter, 1.0);
 
-        let acc_double_sharp: Accidental = String::into_accidental("isis".to_string()).unwrap();
+        let acc_double_sharp: Accidental = Accidental::new("isis".to_string()).unwrap();
         assert_eq!(acc_double_sharp._name, "double-sharp");
         assert_eq!(acc_double_sharp._alter, 2.0);
 
-        let acc_triple_sharp: Accidental = String::into_accidental("isisis".to_string()).unwrap();
+        let acc_triple_sharp: Accidental = Accidental::new("isisis".to_string()).unwrap();
         assert_eq!(acc_triple_sharp._name, "triple-sharp");
         assert_eq!(acc_triple_sharp._alter, 3.0);
 
-        let acc_double_flat: Accidental = String::into_accidental("eses".to_string()).unwrap();
+        let acc_double_flat: Accidental = Accidental::new("eses".to_string()).unwrap();
         assert_eq!(acc_double_flat._name, "double-flat");
         assert_eq!(acc_double_flat._alter, -2.0);
     }

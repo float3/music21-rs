@@ -84,11 +84,9 @@ impl Microtone {
         harmonic_shift: IntegerType,
     ) -> Result<Self> {
         match specifier.into() {
-            MicrotoneSpecifier::Cents(cents) => {
-                Self::from_cent_shift(Some(cents), Some(harmonic_shift))
-            }
+            MicrotoneSpecifier::Cents(cents) => Ok(Self::from_cents(cents, harmonic_shift)),
             MicrotoneSpecifier::Text(text) => {
-                Self::from_cent_shift(Some(Self::parse_string(text)?), Some(harmonic_shift))
+                Ok(Self::from_cents(Self::parse_string(text)?, harmonic_shift))
             }
             MicrotoneSpecifier::Microtone(mut microtone) => {
                 microtone._harmonic_shift = harmonic_shift;
@@ -97,24 +95,11 @@ impl Microtone {
         }
     }
 
-    pub(crate) fn from_cent_shift<T>(
-        cents_or_string: Option<T>,
-        harmonic_shift: Option<IntegerType>,
-    ) -> Result<Self>
-    where
-        T: IntoCentShift,
-    {
-        let _harmonic_shift = harmonic_shift.unwrap_or(1);
-
-        let _cent_shift = match cents_or_string {
-            Some(cents_or_string) => cents_or_string.into_cent_shift(),
-            None => 0.0,
-        };
-
-        Ok(Self {
-            _cent_shift,
-            _harmonic_shift,
-        })
+    pub(crate) fn from_cents(cent_shift: FloatType, harmonic_shift: IntegerType) -> Self {
+        Self {
+            _cent_shift: cent_shift,
+            _harmonic_shift: harmonic_shift,
+        }
     }
 
     /// Returns the microtone in accidental alter units, where 100 cents is 1.0.
@@ -272,143 +257,9 @@ impl PartialEq for Microtone {
     }
 }
 
-pub(crate) trait IntoCentShift {
-    fn into_cent_shift(self) -> FloatType;
-    fn is_microtone(&self) -> bool;
-    /// tries to construct a microtone.
-    ///
-    /// # Panics
-    ///
-    /// This method assumes that `is_microtone()` is `false`.
-    /// Calling this method when `is_microtone()` is `true` will panic.
-    fn into_microtone(self) -> Result<Microtone>;
-    /// Returns the contained microtone.
-    ///
-    /// # Panics
-    ///
-    /// This method assumes that `is_microtone()` is `true`.
-    /// Calling this method when `is_microtone()` is `false` will panic.
-    fn microtone(self) -> Microtone;
-}
-
-impl IntoCentShift for String {
-    fn into_cent_shift(self) -> FloatType {
-        Microtone::parse_string(self).unwrap_or(0.0)
-    }
-
-    fn is_microtone(&self) -> bool {
-        false
-    }
-
-    fn into_microtone(self) -> Result<Microtone> {
-        Microtone::new(self)
-    }
-
-    fn microtone(self) -> Microtone {
-        panic!("only call this on Microtones");
-    }
-}
-
-impl IntoCentShift for &str {
-    fn into_cent_shift(self) -> FloatType {
-        Microtone::parse_string(self.to_string()).unwrap_or(0.0)
-    }
-
-    fn is_microtone(&self) -> bool {
-        false
-    }
-
-    fn into_microtone(self) -> Result<Microtone> {
-        Microtone::new(self)
-    }
-
-    fn microtone(self) -> Microtone {
-        panic!("only call this on Microtones");
-    }
-}
-
-impl IntoCentShift for IntegerType {
-    fn into_cent_shift(self) -> FloatType {
-        self as FloatType
-    }
-
-    fn is_microtone(&self) -> bool {
-        false
-    }
-
-    fn into_microtone(self) -> Result<Microtone> {
-        Microtone::from_cent_shift(Some(self), None)
-    }
-
-    fn microtone(self) -> Microtone {
-        panic!("only call this on Microtones");
-    }
-}
-
-impl IntoCentShift for FloatType {
-    fn into_cent_shift(self) -> FloatType {
-        self
-    }
-
-    fn is_microtone(&self) -> bool {
-        false
-    }
-
-    fn into_microtone(self) -> Result<Microtone> {
-        Microtone::from_cent_shift(Some(self), None)
-    }
-
-    fn microtone(self) -> Microtone {
-        panic!("only call this on Microtones");
-    }
-}
-
-impl IntoCentShift for Microtone {
-    fn into_cent_shift(self) -> FloatType {
-        panic!("don't call this on Microtones");
-    }
-
-    fn is_microtone(&self) -> bool {
-        true
-    }
-
-    fn into_microtone(self) -> Result<Microtone> {
-        panic!("don't call this on Microtones");
-    }
-
-    fn microtone(self) -> Microtone {
-        self
-    }
-}
-
-impl IntoCentShift for MicrotoneSpecifier {
-    fn into_cent_shift(self) -> FloatType {
-        match self {
-            MicrotoneSpecifier::Cents(cents) => cents,
-            MicrotoneSpecifier::Text(text) => text.into_cent_shift(),
-            MicrotoneSpecifier::Microtone(microtone) => microtone.cents(),
-        }
-    }
-
-    fn is_microtone(&self) -> bool {
-        matches!(self, MicrotoneSpecifier::Microtone(_))
-    }
-
-    fn into_microtone(self) -> Result<Microtone> {
-        Microtone::new(self)
-    }
-
-    fn microtone(self) -> Microtone {
-        match self {
-            MicrotoneSpecifier::Microtone(microtone) => microtone,
-            _ => panic!("only call this on Microtones"),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{IntoCentShift, Microtone, MicrotoneSpecifier};
+    use super::{Microtone, MicrotoneSpecifier};
 
     #[test]
     fn public_microtone_api_matches_music21_basics() {
@@ -456,8 +307,7 @@ mod tests {
         assert!(Microtone::try_from("").is_err());
         assert!(Microtone::try_from("-c").is_err());
 
-        assert_eq!("not-a-cent-value".into_cent_shift(), 0.0);
-        assert_eq!("+19.5c".to_string().into_cent_shift(), 19.5);
+        assert_eq!(Microtone::new("+19.5c").unwrap().cent_shift(), 19.5);
     }
 
     #[test]
@@ -475,14 +325,12 @@ mod tests {
     }
 
     #[test]
-    fn microtone_specifier_reports_wrapped_microtones() {
-        let wrapped = MicrotoneSpecifier::from(Microtone::new(7).unwrap());
-        assert!(wrapped.is_microtone());
-        assert_eq!(wrapped.clone().into_cent_shift(), 7.0);
-        assert_eq!(wrapped.microtone().cent_shift(), 7.0);
+    fn microtone_specifier_round_trips_wrapped_microtones() {
+        let microtone = Microtone::new(7).unwrap();
+        let wrapped = MicrotoneSpecifier::from(microtone.clone());
+        assert_eq!(Microtone::new(wrapped).unwrap(), microtone);
 
-        assert!(!MicrotoneSpecifier::from(7).is_microtone());
-        assert_eq!(25.into_microtone().unwrap().cent_shift(), 25.0);
-        assert_eq!((-12.5).into_microtone().unwrap().cent_shift(), -12.5);
+        assert_eq!(Microtone::new(25).unwrap().cent_shift(), 25.0);
+        assert_eq!(Microtone::new(-12.5).unwrap().cent_shift(), -12.5);
     }
 }

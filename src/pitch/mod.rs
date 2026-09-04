@@ -20,9 +20,7 @@ use crate::stepname::StepName;
 use crate::tuningsystem::OCTAVE_SIZE;
 use crate::tuningsystem::TuningSystem;
 
-use accidental::IntoAccidental;
 pub use accidental::{Accidental, AccidentalSpecifier};
-use microtone::IntoCentShift;
 pub use microtone::{Microtone, MicrotoneSpecifier};
 use pitchclass::convert_ps_to_oct;
 pub use pitchclass::{PitchClass, PitchClassSpecifier};
@@ -264,20 +262,80 @@ impl Display for Pitch {
 
 impl Pitch {
     /// Builds a pitch from [`PitchOptions`].
+    ///
+    /// This is the port of music21's keyword-argument `Pitch.__init__`: a
+    /// `name` wins over an explicit `step`, and `octave`, `accidental`,
+    /// `microtone`, `pitch_class`, `midi` and `ps` are applied afterwards
+    /// in that order.
     pub fn from_options(options: PitchOptions) -> Result<Self> {
-        let step = options.step.map(StepName::try_from).transpose()?;
-
-        Self::new(
-            options.name,
+        let PitchOptions {
+            name,
             step,
-            options.octave,
-            options.accidental,
-            options.microtone,
-            options.pitch_class,
-            options.midi,
-            options.ps,
-            options.fundamental,
-        )
+            octave,
+            accidental,
+            microtone,
+            pitch_class,
+            midi,
+            ps,
+            fundamental,
+        } = options;
+        let explicit_step = step.map(StepName::try_from).transpose()?;
+        let has_explicit_octave = octave.is_some();
+        let has_explicit_accidental = accidental.is_some();
+
+        let parsed = name.map(PitchParameters::from).unwrap_or_default();
+        let name = parsed.name;
+        let step = if name.is_some() || parsed.step.is_some() {
+            parsed.step
+        } else {
+            explicit_step
+        }
+        .unwrap_or(PITCH_STEP);
+        let octave = octave.or(parsed.octave);
+        let accidental = match accidental {
+            Some(accidental) => Accidental::new(accidental)?,
+            None => parsed.accidental.unwrap_or_default(),
+        };
+        let microtone = microtone.map(Microtone::new).transpose()?;
+
+        let mut pitch = Pitch {
+            _step: step,
+            _accidental: accidental,
+            _microtone: microtone,
+            _octave: octave,
+            spelling_is_infered: parsed.spelling_is_inferred,
+            fundamental: None,
+        };
+
+        if let Some(name) = &name {
+            pitch.name_setter(name)?;
+        }
+        if explicit_step.is_some() || name.is_none() {
+            pitch.step_setter(step);
+        }
+        if has_explicit_octave || name.is_none() {
+            pitch.octave_setter(octave);
+        }
+        if has_explicit_accidental || name.is_none() {
+            pitch.accidental_setter(pitch._accidental.clone());
+        }
+        if let Some(microtone) = pitch._microtone.clone() {
+            pitch.microtone_setter(microtone);
+        }
+        if let Some(pitch_class) = pitch_class {
+            pitch.pitch_class_setter(pitch_class)?;
+        }
+        if let Some(fundamental) = fundamental {
+            pitch.fundamental_setter(fundamental);
+        }
+        if let Some(midi) = midi {
+            pitch.midi_setter(midi);
+        }
+        if let Some(ps) = ps {
+            pitch.ps_setter(ps);
+        }
+
+        Ok(pitch)
     }
 
     /// Creates a [`PitchOptions`] builder.
@@ -287,47 +345,17 @@ impl Pitch {
 
     /// Builds a pitch from a name such as `"C#4"` or `"E-"`.
     pub fn from_name(name: impl Into<String>) -> Result<Self> {
-        Self::new(
-            Some(name.into()),
-            None,
-            None,
-            Option::<IntegerType>::None,
-            Option::<IntegerType>::None,
-            None,
-            None,
-            None,
-            None,
-        )
+        PitchOptions::new().name(name.into()).build()
     }
 
     /// Builds a pitch from a pitch-space number.
     pub fn from_number(number: FloatType) -> Result<Self> {
-        Self::new(
-            Some(PitchName::Number(number)),
-            None,
-            None,
-            Option::<IntegerType>::None,
-            Option::<IntegerType>::None,
-            None,
-            None,
-            None,
-            None,
-        )
+        PitchOptions::new().name(PitchName::Number(number)).build()
     }
 
     /// Builds a pitch from a diatonic step.
     pub fn from_step(step: char) -> Result<Self> {
-        Self::new(
-            Option::<String>::None,
-            Some(StepName::try_from(step)?),
-            None,
-            Option::<IntegerType>::None,
-            Option::<IntegerType>::None,
-            None,
-            None,
-            None,
-            None,
-        )
+        PitchOptions::new().step(step).build()
     }
 
     /// Builds a pitch from a pitch name and explicit octave.
@@ -342,157 +370,12 @@ impl Pitch {
 
     /// Builds a pitch from a MIDI note number.
     pub fn from_midi(midi: IntegerType) -> Result<Self> {
-        Self::new(
-            Option::<String>::None,
-            None,
-            None,
-            Option::<IntegerType>::None,
-            Option::<IntegerType>::None,
-            None,
-            Some(midi),
-            None,
-            None,
-        )
+        PitchOptions::new().midi(midi).build()
     }
 
     /// Builds a pitch from a pitch-space value.
     pub fn from_pitch_space(ps: FloatType) -> Result<Self> {
-        Self::new(
-            Option::<String>::None,
-            None,
-            None,
-            Option::<IntegerType>::None,
-            Option::<IntegerType>::None,
-            None,
-            None,
-            Some(ps),
-            None,
-        )
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    /// The positional constructor music21's keyword-argument `__init__` was
-    /// transliterated from. Private on purpose: reach a `Pitch` through the
-    /// named helpers below or through `PitchOptions`.
-    fn new<T, U, V>(
-        name: Option<T>,
-        step: Option<StepName>,
-        octave: Octave,
-        accidental: Option<U>,
-        microtone: Option<V>,
-        pitch_class: Option<PitchClassSpecifier>,
-        midi: Option<IntegerType>,
-        ps: Option<FloatType>,
-        fundamental: Option<Pitch>,
-    ) -> Result<Self>
-    where
-        T: IntoPitchName,
-        U: IntoAccidental,
-        V: IntoCentShift,
-    {
-        let has_explicit_step = step.is_some();
-        let has_explicit_octave = octave.is_some();
-        let has_explicit_accidental = accidental.is_some();
-        let has_explicit_microtone = microtone.is_some();
-
-        // --- Step 1: Parse parameters ---
-        let mut self_name = None;
-        let mut self_step = PITCH_STEP;
-        let mut self_accidental: Option<Accidental> = None;
-        let mut self_microtone: Option<Microtone> = None;
-        let mut self_spelling_is_inferred = false;
-        let mut self_octave = None;
-        let self_pitch_class = pitch_class;
-        let self_fundamental = fundamental;
-        let self_midi = midi;
-        let self_ps = ps;
-
-        if let Some(name) = name {
-            let x = name.into_name();
-            self_name = x.name;
-            if let Some(step) = x.step {
-                self_step = step;
-            }
-            if let Some(accidental) = x.accidental {
-                self_accidental = Some(accidental);
-            }
-            if let Some(inferred) = x.spelling_is_inferred {
-                self_spelling_is_inferred = inferred;
-            }
-            self_octave = x.octave;
-        } else if let Some(s) = step {
-            self_step = s;
-        }
-
-        if let Some(oct) = octave {
-            self_octave = Some(oct);
-        }
-
-        let self_accidental: Accidental = match accidental {
-            Some(acc) if acc.is_accidental() => acc.accidental(),
-            Some(acc) => acc.into_accidental()?,
-            None => match self_accidental {
-                Some(acc) => acc,
-                None => Accidental::new("natural")?,
-            },
-        };
-
-        if let Some(mt) = microtone {
-            self_microtone = Some(if mt.is_microtone() {
-                mt.microtone()
-            } else {
-                mt.into_microtone()?
-            });
-        }
-
-        // --- Step 2: Construct Pitch with initial values ---
-        let mut pitch = Pitch {
-            _step: self_step,
-            _accidental: self_accidental,
-            _microtone: self_microtone,
-            _octave: self_octave,
-            spelling_is_infered: self_spelling_is_inferred,
-            fundamental: None,
-        };
-
-        // --- Step 3: Call setters in proper order ---
-        if let Some(ref n) = self_name {
-            pitch.name_setter(n)?;
-        }
-
-        if has_explicit_step || self_name.is_none() {
-            pitch.step_setter(self_step);
-        }
-
-        if has_explicit_octave || self_name.is_none() {
-            pitch.octave_setter(self_octave);
-        }
-
-        if has_explicit_accidental || self_name.is_none() {
-            pitch.accidental_setter(pitch._accidental.clone());
-        }
-        if has_explicit_microtone {
-            let Some(mt) = pitch._microtone.clone() else {
-                return Err(Error::Pitch(
-                    "microtone was expected but missing".to_string(),
-                ));
-            };
-            pitch.microtone_setter(mt.clone());
-        }
-        if let Some(pc) = self_pitch_class {
-            pitch.pitch_class_setter(pc)?;
-        }
-        if let Some(f) = self_fundamental {
-            pitch.fundamental_setter(f);
-        }
-        if let Some(m) = self_midi {
-            pitch.midi_setter(m);
-        }
-        if let Some(p) = self_ps {
-            pitch.ps_setter(p);
-        }
-
-        Ok(pitch)
+        PitchOptions::new().ps(ps).build()
     }
 
     /// Returns the pitch name with the octave suffix when one is set.
@@ -838,93 +721,33 @@ impl Default for Pitch {
     }
 }
 
-pub(crate) struct PitchParameteres {
-    pub(crate) name: Option<String>,
-    pub(crate) step: Option<StepName>,
-    pub(crate) accidental: Option<Accidental>,
-    pub(crate) spelling_is_inferred: Option<bool>,
-    pub(crate) octave: Octave,
+#[derive(Default)]
+struct PitchParameters {
+    name: Option<String>,
+    step: Option<StepName>,
+    accidental: Option<Accidental>,
+    spelling_is_inferred: bool,
+    octave: Octave,
 }
 
-pub(crate) trait IntoPitchName {
-    fn into_name(self) -> PitchParameteres;
-}
-
-impl IntoPitchName for Pitch {
-    fn into_name(self) -> PitchParameteres {
-        self.name_with_octave().into_name()
-    }
-}
-
-impl IntoPitchName for PitchName {
-    fn into_name(self) -> PitchParameteres {
-        match self {
-            PitchName::Name(name) => name.into_name(),
-            PitchName::Number(number) => number.into_name(),
-        }
-    }
-}
-
-impl IntoPitchName for IntegerType {
-    fn into_name(self) -> PitchParameteres {
-        let (step_name, accidental, _, _) = convert_ps_to_step(self);
-
-        let octave = if self >= 12 {
-            Some(self / 12 - 1)
-        } else {
-            None
-        };
-
-        PitchParameteres {
-            name: None,
-            step: Some(step_name),
-            accidental: Some(accidental),
-            spelling_is_inferred: Some(true),
-            octave,
-        }
-    }
-}
-
-impl IntoPitchName for FloatType {
-    fn into_name(self) -> PitchParameteres {
-        let (step_name, accidental, _, _) = convert_ps_to_step(self);
-
-        let octave = if self >= 12.0 {
-            Some((self / 12.0) as IntegerType - 1)
-        } else {
-            None
-        };
-
-        PitchParameteres {
-            name: None,
-            step: Some(step_name),
-            accidental: Some(accidental),
-            spelling_is_inferred: Some(true),
-            octave,
-        }
-    }
-}
-
-impl IntoPitchName for String {
-    fn into_name(self) -> PitchParameteres {
-        PitchParameteres {
-            name: Some(self),
-            step: None,
-            accidental: None,
-            spelling_is_inferred: None,
-            octave: None,
-        }
-    }
-}
-
-impl IntoPitchName for &str {
-    fn into_name(self) -> PitchParameteres {
-        PitchParameteres {
-            name: Some(self.to_string()),
-            step: None,
-            accidental: None,
-            spelling_is_inferred: None,
-            octave: None,
+impl From<PitchName> for PitchParameters {
+    fn from(value: PitchName) -> Self {
+        match value {
+            PitchName::Name(name) => Self {
+                name: Some(name),
+                ..Self::default()
+            },
+            PitchName::Number(number) => {
+                let (step, accidental, _, _) = convert_ps_to_step(number);
+                let octave = (number >= 12.0).then(|| (number / 12.0) as IntegerType - 1);
+                Self {
+                    name: None,
+                    step: Some(step),
+                    accidental: Some(accidental),
+                    spelling_is_inferred: true,
+                    octave,
+                }
+            }
         }
     }
 }
@@ -981,8 +804,7 @@ fn convert_ps_to_step<T: Num + ToPrimitive>(
         .unwrap_or_else(|err| panic!("pitch class should map to a step: {err}"));
     let accidental = Accidental::new(accidental_alter)
         .unwrap_or_else(|err| panic!("accidental conversion should not fail: {err}"));
-    let microtone = Microtone::from_cent_shift(Some(micro * 100.0), None)
-        .unwrap_or_else(|err| panic!("microtone conversion should not fail: {err}"));
+    let microtone = Microtone::from_cents(micro * 100.0, 1);
 
     (step, accidental, microtone, octave_shift)
 }
