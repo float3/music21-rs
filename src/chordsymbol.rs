@@ -2,12 +2,13 @@ use std::str::FromStr;
 
 use crate::{
     chord::Chord,
+    chord::root::{bass_pitch, find_root_pitch, pitch_class, step_num},
     defaults::{FloatType, IntegerType},
     error::{Error, Result},
     interval::Interval,
     pitch::Pitch,
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 /// Tertian quality parsed from a chord symbol.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -931,83 +932,6 @@ fn pitch_name_for_music21_degree(root_pitch: &Pitch, degree: u8, semitone: u8) -
         name.push_str(&"-".repeat((-accidental) as usize));
     }
     Some(name)
-}
-
-fn find_root_pitch(pitches: &[Pitch]) -> Option<&Pitch> {
-    let mut non_duplicating_pitches = Vec::new();
-    let mut seen_steps = BTreeSet::new();
-    for pitch in pitches {
-        if seen_steps.insert(step_num(pitch)) {
-            non_duplicating_pitches.push(pitch);
-        }
-    }
-
-    match non_duplicating_pitches.len() {
-        0 => return None,
-        1 => return pitches.first(),
-        7 => return bass_pitch(pitches),
-        _ => {}
-    }
-
-    let mut step_nums_to_pitches = BTreeMap::new();
-    for pitch in &non_duplicating_pitches {
-        step_nums_to_pitches.insert(step_num(pitch), *pitch);
-    }
-    let step_nums = step_nums_to_pitches.keys().copied().collect::<Vec<_>>();
-
-    for start_index in 0..step_nums.len() {
-        let mut all_are_thirds = true;
-        let this_step_num = step_nums[start_index];
-        let mut last_step_num = this_step_num;
-        for end_index in (start_index + 1)..(start_index + step_nums.len()) {
-            let end_step_num = step_nums[end_index % step_nums.len()];
-            if !matches!(end_step_num - last_step_num, 2 | -5) {
-                all_are_thirds = false;
-                break;
-            }
-            last_step_num = end_step_num;
-        }
-        if all_are_thirds {
-            return step_nums_to_pitches.get(&this_step_num).copied();
-        }
-    }
-
-    let ordered_chord_steps = [3, 5, 7, 2, 4, 6];
-    let mut best_pitch = non_duplicating_pitches[0];
-    let mut best_score = FloatType::NEG_INFINITY;
-
-    for pitch in non_duplicating_pitches {
-        let this_step_num = step_num(pitch);
-        let mut score = 0.0;
-        for (root_index, chord_step_test) in ordered_chord_steps.iter().enumerate() {
-            let target = (this_step_num + chord_step_test - 1).rem_euclid(7);
-            if step_nums_to_pitches.contains_key(&target) {
-                score += 1.0 / (root_index as FloatType + 6.0);
-            }
-        }
-        if score > best_score {
-            best_score = score;
-            best_pitch = pitch;
-        }
-    }
-
-    Some(best_pitch)
-}
-
-fn bass_pitch(pitches: &[Pitch]) -> Option<&Pitch> {
-    pitches.iter().min_by(|left, right| {
-        left.ps()
-            .partial_cmp(&right.ps())
-            .unwrap_or(std::cmp::Ordering::Equal)
-    })
-}
-
-fn step_num(pitch: &Pitch) -> IntegerType {
-    pitch.step().step_to_dnn_offset() - 1
-}
-
-fn pitch_class(pitch: &Pitch) -> u8 {
-    (pitch.ps().round() as IntegerType).rem_euclid(12) as u8
 }
 
 impl FromStr for ChordSymbol {

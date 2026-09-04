@@ -12,8 +12,7 @@ use intervalbase::IntervalBaseTrait;
 use specifier::Specifier;
 
 use std::str::FromStr;
-use std::sync::Mutex;
-use std::{cmp::Ordering, collections::HashMap, sync::LazyLock};
+use std::{cmp::Ordering, sync::LazyLock};
 
 use crate::common::numbertools::MUSICAL_ORDINAL_STRINGS;
 use crate::common::stringtools::get_num_from_str;
@@ -76,12 +75,8 @@ pub(crate) enum PitchOrNote {
     Note(Note),
 }
 
-static PYTHAGOREAN_CACHE: LazyLock<Mutex<HashMap<String, (Pitch, FractionType)>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
-
 /// The pure fifths the Pythagorean walk steps by, parsed once rather than
-/// re-parsed from "P5"/"-P5" on every call into a function that is cached
-/// precisely because it is expensive.
+/// re-parsed from "P5"/"-P5" on every call.
 static PERFECT_FIFTH_UP: LazyLock<Interval> =
     LazyLock::new(|| Interval::from_name("P5").expect("P5 is a valid interval"));
 static PERFECT_FIFTH_DOWN: LazyLock<Interval> =
@@ -597,26 +592,6 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> Result<Fracti
 
     let wanted_name = end_pitch_wanted.name();
 
-    // Scoped so the lock is released before the walk below. Holding it across
-    // the whole computation would make concurrent callers queue behind each
-    // other for the expensive part, not just for the map access.
-    let cached = {
-        let cache = match PYTHAGOREAN_CACHE.lock() {
-            Ok(cache) => cache,
-            Err(poisoned) => poisoned.into_inner(),
-        };
-        cache.get(&wanted_name).cloned()
-    };
-
-    if let Some((cached_pitch, cached_ratio)) = cached {
-        let octaves = (end_pitch_wanted.ps() - cached_pitch.ps()) / 12.0;
-        let octave_multiplier = FractionPow::<IntegerType>::powi(
-            &FractionType::new(2 as IntegerType, 1 as IntegerType),
-            octaves as IntegerType,
-        );
-        return Ok(cached_ratio * octave_multiplier);
-    }
-
     let mut end_pitch_up = start_pitch.clone();
     let mut end_pitch_down = start_pitch.clone();
     let mut found: Option<(Pitch, FractionType)> = None;
@@ -661,14 +636,6 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> Result<Fracti
             )));
         }
     };
-
-    {
-        let mut cache = match PYTHAGOREAN_CACHE.lock() {
-            Ok(cache) => cache,
-            Err(poisoned) => poisoned.into_inner(),
-        };
-        cache.insert(wanted_name, (found_pitch.clone(), found_ratio));
-    }
 
     let octaves = (end_pitch_wanted.ps() - found_pitch.ps()) / 12.0;
     let octave_multiplier =

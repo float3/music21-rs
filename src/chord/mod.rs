@@ -1,5 +1,6 @@
 /// Guitar tuning and fingering helpers.
 pub mod guitar;
+pub(crate) mod root;
 pub(crate) mod tables;
 
 use crate::defaults::{FloatType, IntegerType, UnsignedIntegerType};
@@ -139,26 +140,22 @@ impl Chord {
     /// `Option::<&str>::None` to construct an empty chord.
     pub fn new<T>(notes: T) -> Result<Self>
     where
-        T: IntoNotes + Clone,
+        T: IntoNotes,
     {
-        let chord_notes = notes
-            .clone()
-            .try_into_notes()
-            .map(|notes| notes.into_iter().collect::<Vec<Note>>())?;
-
-        let chord = Self {
-            _notes: chord_notes,
+        Ok(Self {
+            _notes: notes.try_into_notes()?.into_iter().collect(),
             duration: None,
             from_integer_pitches: T::FROM_INTEGER_PITCHES,
-        };
-        // Keep construction side-effect free like music21's Chord constructor.
-        // Enharmonic simplification can be requested explicitly later.
-        Ok(chord)
+        })
     }
 
     /// Builds an empty chord.
-    pub fn empty() -> Result<Self> {
-        Self::new(Option::<&str>::None)
+    pub fn empty() -> Self {
+        Self {
+            _notes: Vec::new(),
+            duration: None,
+            from_integer_pitches: false,
+        }
     }
 
     /// Returns the unpitched chord types known to the music21-derived table.
@@ -501,13 +498,13 @@ impl Chord {
         let Some(p0) = self._notes.first().map(|n| &n._pitch) else {
             return "empty chord".to_string();
         };
-        let p0_pitch_class = Self::pitch_class(p0);
+        let p0_pitch_class = root::pitch_class(p0);
 
         let Some(p1) = self
             ._notes
             .iter()
             .skip(1)
-            .find(|n| Self::pitch_class(&n._pitch) != p0_pitch_class)
+            .find(|n| root::pitch_class(&n._pitch) != p0_pitch_class)
             .map(|n| &n._pitch)
         else {
             return "unknown chord".to_string();
@@ -573,7 +570,7 @@ impl Chord {
 
         let root_pc = self
             .find_root_pitch()
-            .map(Self::pitch_class)
+            .map(root::pitch_class)
             .filter(|root_pc| pitch_classes.contains(root_pc))
             .unwrap_or(pitch_classes[0]);
         let mut offsets = pitch_classes
@@ -864,7 +861,7 @@ impl Chord {
             return Ok(suggestions);
         }
 
-        if let Some(root_pc) = self.find_root_pitch().map(Self::pitch_class) {
+        if let Some(root_pc) = self.find_root_pitch().map(root::pitch_class) {
             if self.is_dominant_function_sonority() {
                 let tonic = Self::pitch_class_name((root_pc + 5) % 12);
                 for mode in ["major", "minor"] {
@@ -938,7 +935,7 @@ impl Chord {
         let mut pcs = self
             ._notes
             .iter()
-            .map(|note| (note._pitch.ps().round() as IntegerType).rem_euclid(12) as u8)
+            .map(|note| root::pitch_class(&note._pitch))
             .collect::<Vec<_>>();
         pcs.sort_unstable();
         pcs.dedup();
@@ -946,14 +943,15 @@ impl Chord {
     }
 
     fn bass_pitch(&self) -> Option<&Pitch> {
-        self._notes
-            .iter()
-            .min_by(|a, b| {
-                let aps = a._pitch.ps();
-                let bps = b._pitch.ps();
-                aps.partial_cmp(&bps).unwrap_or(std::cmp::Ordering::Equal)
-            })
-            .map(|n| &n._pitch)
+        root::bass_pitch(self.pitch_refs())
+    }
+
+    fn find_root_pitch(&self) -> Option<&Pitch> {
+        root::find_root_pitch(self.pitch_refs())
+    }
+
+    fn pitch_refs(&self) -> impl Iterator<Item = &Pitch> {
+        self._notes.iter().map(|note| &note._pitch)
     }
 
     fn root_pitch_name_from_tables(&self) -> Option<String> {
@@ -964,7 +962,7 @@ impl Chord {
         let Some(root_pitch) = self.find_root_pitch() else {
             return Ok(None);
         };
-        let target_pc = (Self::pitch_class(root_pitch) + semitones) % 12;
+        let target_pc = (root::pitch_class(root_pitch) + semitones) % 12;
         Self::triad_for_key_pitch_class(key, target_pc)?
             .map(|chord| self.place_resolution_near_source(chord))
             .transpose()
@@ -973,7 +971,7 @@ impl Chord {
     fn triad_for_key_pitch_class(key: &Key, target_pc: u8) -> Result<Option<Self>> {
         for degree in 1..=7 {
             let degree_pitch = key.pitch_from_degree(degree)?;
-            if Self::pitch_class(&degree_pitch) == target_pc {
+            if root::pitch_class(&degree_pitch) == target_pc {
                 return Ok(Some(key.triad_from_degree(degree)?));
             }
         }
@@ -1071,7 +1069,7 @@ impl Chord {
     }
 
     fn is_directed_augmented_sixth(lower: &Pitch, upper: &Pitch) -> bool {
-        let generic_interval = (Self::step_num(upper) - Self::step_num(lower)).rem_euclid(7) + 1;
+        let generic_interval = (root::step_num(upper) - root::step_num(lower)).rem_euclid(7) + 1;
         let semitones = ((upper.ps().round() as IntegerType) - (lower.ps().round() as IntegerType))
             .rem_euclid(12);
         generic_interval == 6 && semitones == 10
@@ -1130,7 +1128,7 @@ impl Chord {
         let Some(root_pitch) = self.find_root_pitch() else {
             return false;
         };
-        let root_pc = Self::pitch_class(root_pitch);
+        let root_pc = root::pitch_class(root_pitch);
         let chord_pcs = self.pitch_class_set();
         intervals
             .iter()
@@ -1143,11 +1141,11 @@ impl Chord {
             return Ok(false);
         }
 
-        let tonic_pc = Self::pitch_class(&key.pitch_from_degree(1)?);
-        let second_pc = Self::pitch_class(&key.pitch_from_degree(2)?);
-        let third_pc = Self::pitch_class(&key.pitch_from_degree(3)?);
-        let fourth_pc = Self::pitch_class(&key.pitch_from_degree(4)?);
-        let sixth_pc = Self::pitch_class(&key.pitch_from_degree(6)?);
+        let tonic_pc = root::pitch_class(&key.pitch_from_degree(1)?);
+        let second_pc = root::pitch_class(&key.pitch_from_degree(2)?);
+        let third_pc = root::pitch_class(&key.pitch_from_degree(3)?);
+        let fourth_pc = root::pitch_class(&key.pitch_from_degree(4)?);
+        let sixth_pc = root::pitch_class(&key.pitch_from_degree(6)?);
 
         let raised_fourth_pc = (fourth_pc + 1) % 12;
         let lowered_sixth_pc = if (sixth_pc + 12 - tonic_pc) % 12 == 9 {
@@ -1199,69 +1197,6 @@ impl Chord {
 
     fn pitch_class_set(&self) -> std::collections::BTreeSet<u8> {
         self.ordered_pitch_classes().into_iter().collect()
-    }
-
-    fn find_root_pitch(&self) -> Option<&Pitch> {
-        let mut non_duplicating_notes: Vec<&Note> = Vec::new();
-        let mut seen_steps = std::collections::HashSet::new();
-        for note in &self._notes {
-            if seen_steps.insert(note._pitch.step()) {
-                non_duplicating_notes.push(note);
-            }
-        }
-
-        match non_duplicating_notes.len() {
-            0 => return None,
-            1 => return self._notes.first().map(|note| &note._pitch),
-            7 => return self.bass_pitch(),
-            _ => {}
-        }
-
-        let mut step_nums_to_notes = std::collections::BTreeMap::new();
-        for note in &non_duplicating_notes {
-            step_nums_to_notes.insert(Self::step_num(&note._pitch), *note);
-        }
-        let step_nums = step_nums_to_notes.keys().copied().collect::<Vec<_>>();
-
-        for start_index in 0..step_nums.len() {
-            let mut all_are_thirds = true;
-            let this_step_num = step_nums[start_index];
-            let mut last_step_num = this_step_num;
-            for end_index in (start_index + 1)..(start_index + step_nums.len()) {
-                let end_step_num = step_nums[end_index % step_nums.len()];
-                if !matches!(end_step_num - last_step_num, 2 | -5) {
-                    all_are_thirds = false;
-                    break;
-                }
-                last_step_num = end_step_num;
-            }
-            if all_are_thirds {
-                return step_nums_to_notes
-                    .get(&this_step_num)
-                    .map(|note| &note._pitch);
-            }
-        }
-
-        let ordered_chord_steps = [3, 5, 7, 2, 4, 6];
-        let mut best_note = non_duplicating_notes[0];
-        let mut best_score = FloatType::NEG_INFINITY;
-
-        for note in non_duplicating_notes {
-            let this_step_num = Self::step_num(&note._pitch);
-            let mut score = 0.0;
-            for (root_index, chord_step_test) in ordered_chord_steps.iter().enumerate() {
-                let target = (this_step_num + chord_step_test - 1).rem_euclid(7);
-                if step_nums_to_notes.contains_key(&target) {
-                    score += 1.0 / (root_index as FloatType + 6.0);
-                }
-            }
-            if score > best_score {
-                best_score = score;
-                best_note = note;
-            }
-        }
-
-        Some(&best_note._pitch)
     }
 
     fn root_pitch_class_tertian(&self) -> Option<u8> {
@@ -1320,10 +1255,6 @@ impl Chord {
         best_pc
     }
 
-    fn pitch_class(pitch: &Pitch) -> u8 {
-        (pitch.ps().round() as IntegerType).rem_euclid(12) as u8
-    }
-
     fn pitch_class_name(pc: u8) -> &'static str {
         CANDIDATE_TONICS[pc as usize % 12]
     }
@@ -1350,10 +1281,6 @@ impl Chord {
         self.ordered_pitch_classes()
             .into_iter()
             .fold(0_u16, |mask, pc| mask | (1_u16 << pc))
-    }
-
-    fn step_num(pitch: &Pitch) -> IntegerType {
-        pitch.step().step_to_dnn_offset() - 1
     }
 
     fn has_pitch_names(&self, expected: &[&str]) -> bool {
@@ -1850,7 +1777,7 @@ mod tests {
         assert_eq!(major.polyrhythm_components(), vec![4, 5, 6]);
         assert_eq!(major.polyrhythm_ratio_string(), "4:5:6");
 
-        let empty = Chord::empty().unwrap();
+        let empty = Chord::empty();
         assert_eq!(empty.polyrhythm_ratio_string(), "1");
     }
 

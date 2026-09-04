@@ -956,10 +956,6 @@ mod tests {
 
         assert!(RomanNumeral::new("", key.clone()).is_err());
         assert!(RomanNumeral::new("Q", key.clone()).is_err());
-        assert!(
-            analyze_chord(&Chord::empty().unwrap(), key)
-                .unwrap()
-                .is_none()
-        );
+        assert!(analyze_chord(&Chord::empty(), key).unwrap().is_none());
     }
 }
