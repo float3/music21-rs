@@ -390,10 +390,35 @@ fn write_small_tables(py: Python<'_>, workspace_root: &Path, version: &str) -> P
         }
     }
 
+    let discrete = py.import("music21.analysis.discrete")?;
+    let mut profiles = 0;
+    for class in discrete
+        .getattr("keyWeightKeyAnalysisClasses")?
+        .try_iter()?
+    {
+        let class = class?;
+        let name: String = class.getattr("__name__")?.extract()?;
+        let instance = class.call0()?;
+        for mode in ["major", "minor"] {
+            let weights: Vec<f64> = instance.call_method1("getWeights", (mode,))?.extract()?;
+            let weights = weights
+                .iter()
+                .map(|weight| float_repr(*weight))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let _ = writeln!(out, "[[key_profile]]");
+            let _ = writeln!(out, "name = {}", toml_string(&name));
+            let _ = writeln!(out, "mode = {}", toml_string(mode));
+            let _ = writeln!(out, "weights = [{weights}]");
+            let _ = writeln!(out);
+        }
+        profiles += 1;
+    }
+
     let path = workspace_root.join("data/table_expectations.toml");
     fs::write(&path, out)?;
     println!(
-        "  wrote {} ({accidentals} accidentals, {mode_count} modes, {specifiers} specifier combos)",
+        "  wrote {} ({accidentals} accidentals, {mode_count} modes, {specifiers} specifier combos, {profiles} key profiles)",
         path.display()
     );
     Ok(path)

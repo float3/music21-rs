@@ -927,6 +927,361 @@ impl Chord {
         }
     }
 
+    /// Returns the root, found the way music21's `Chord.root` finds it.
+    pub fn root(&self) -> Option<&Pitch> {
+        self.find_root_pitch()
+    }
+
+    /// Returns the lowest pitch.
+    pub fn bass(&self) -> Option<&Pitch> {
+        self.bass_pitch()
+    }
+
+    /// Returns the first pitch lying at the given chord step above the root,
+    /// so `3` is the third and `7` the seventh. Steps of eight and above are
+    /// folded down by an octave, so `9` finds a second.
+    pub fn chord_step(&self, step: u8) -> Option<&Pitch> {
+        self.chord_step_from(step, self.root()?)
+    }
+
+    /// Returns the third above the root, if the chord has one.
+    pub fn third(&self) -> Option<&Pitch> {
+        self.chord_step(3)
+    }
+
+    /// Returns the fifth above the root, if the chord has one.
+    pub fn fifth(&self) -> Option<&Pitch> {
+        self.chord_step(5)
+    }
+
+    /// Returns the seventh above the root, if the chord has one.
+    pub fn seventh(&self) -> Option<&Pitch> {
+        self.chord_step(7)
+    }
+
+    /// Returns the semitones from the root to the given chord step, within an
+    /// octave, if the chord has that step.
+    pub fn semitones_from_chord_step(&self, step: u8) -> Option<u8> {
+        let root = self.root()?;
+        let pitch = self.chord_step_from(step, root)?;
+        Some(semitones_above(root, pitch))
+    }
+
+    /// Returns whether the chord has the given step spelled two different
+    /// ways, such as both `E` and `E-` above `C`.
+    pub fn has_repeated_chord_step(&self, step: u8) -> bool {
+        let Some(root) = self.root() else {
+            return false;
+        };
+        let step = fold_chord_step(step);
+        let Some(first) = self
+            .chord_step_from(step, root)
+            .map(|pitch| semitones_above(root, pitch))
+        else {
+            return false;
+        };
+        self.pitch_refs().any(|pitch| {
+            diatonic_steps_above(root, pitch) == step && semitones_above(root, pitch) != first
+        })
+    }
+
+    /// Returns whether two pitches share a pitch class under different names,
+    /// such as `C#` and `D-`.
+    pub fn has_any_enharmonic_spelled_pitches(&self) -> bool {
+        self.pitch_class_set().len() != self.unique_pitch_names().len()
+    }
+
+    /// Returns whether the chord is exactly three distinct pitch names with a
+    /// third and a fifth above the root, of any quality.
+    pub fn is_triad(&self) -> bool {
+        self.unique_pitch_names().len() == 3 && self.third().is_some() && self.fifth().is_some()
+    }
+
+    /// Returns whether the chord is exactly four distinct pitch names with a
+    /// third, fifth and seventh above the root, of any quality.
+    pub fn is_seventh(&self) -> bool {
+        self.unique_pitch_names().len() == 4
+            && self.third().is_some()
+            && self.fifth().is_some()
+            && self.seventh().is_some()
+    }
+
+    /// Returns whether the chord is a correctly spelled major triad.
+    pub fn is_major_triad(&self) -> bool {
+        self.is_triad_of_type((3, 11, -1), 4, 7)
+    }
+
+    /// Returns whether the chord is a correctly spelled minor triad.
+    pub fn is_minor_triad(&self) -> bool {
+        self.is_triad_of_type((3, 11, 1), 3, 7)
+    }
+
+    /// Returns whether the chord is a correctly spelled diminished triad.
+    pub fn is_diminished_triad(&self) -> bool {
+        self.is_triad_of_type((3, 10, 0), 3, 6)
+    }
+
+    /// Returns whether the chord is a correctly spelled augmented triad.
+    pub fn is_augmented_triad(&self) -> bool {
+        self.is_triad_of_type((3, 12, 0), 4, 8)
+    }
+
+    /// Returns whether the chord is a seventh chord whose pitches all lie at
+    /// the given semitone offsets above the root.
+    pub fn is_seventh_of_type(&self, semitones: &[u8]) -> bool {
+        if !self.is_seventh() {
+            return false;
+        }
+        let Some(root) = self.root() else {
+            return false;
+        };
+        self.pitch_refs()
+            .all(|pitch| semitones.contains(&semitones_above(root, pitch)))
+    }
+
+    /// Returns whether the chord is a dominant seventh: a major triad with a
+    /// minor seventh.
+    pub fn is_dominant_seventh(&self) -> bool {
+        self.is_seventh_of_type(&[0, 4, 7, 10])
+    }
+
+    /// Returns whether the chord is a half-diminished seventh.
+    pub fn is_half_diminished_seventh(&self) -> bool {
+        self.is_seventh_of_type(&[0, 3, 6, 10])
+    }
+
+    /// Returns whether the chord is a fully diminished seventh.
+    pub fn is_diminished_seventh(&self) -> bool {
+        self.is_seventh_of_type(&[0, 3, 6, 9])
+    }
+
+    /// Returns whether the chord is only a root and a major third above it.
+    pub fn is_incomplete_major_triad(&self) -> bool {
+        self.is_incomplete_triad_of_type((2, 4), 4)
+    }
+
+    /// Returns whether the chord is only a root and a minor third above it.
+    pub fn is_incomplete_minor_triad(&self) -> bool {
+        self.is_incomplete_triad_of_type((2, 3), 3)
+    }
+
+    /// Returns whether the chord has a third and a fifth above its root. A
+    /// dominant seventh is not a triad but contains one.
+    pub fn contains_triad(&self) -> bool {
+        self.third().is_some() && self.fifth().is_some()
+    }
+
+    /// Returns whether the chord contains a triad and a seventh above its root.
+    pub fn contains_seventh(&self) -> bool {
+        self.contains_triad() && self.seventh().is_some()
+    }
+
+    /// Returns the quality of the triad above the root, following music21's
+    /// `Chord.quality`: incomplete triads still count, and a chord with a
+    /// repeated or missing chord step is [`TriadQuality::Other`].
+    pub fn quality(&self) -> TriadQuality {
+        let Some(third) = self.semitones_from_chord_step(3) else {
+            return TriadQuality::Other;
+        };
+        if self.has_repeated_chord_step(1) || self.has_repeated_chord_step(3) {
+            return TriadQuality::Other;
+        }
+        let Some(fifth) = self.semitones_from_chord_step(5) else {
+            return match third {
+                4 => TriadQuality::Major,
+                3 => TriadQuality::Minor,
+                _ => TriadQuality::Other,
+            };
+        };
+        if self.has_repeated_chord_step(5) {
+            return TriadQuality::Other;
+        }
+        match (third, fifth) {
+            (4, 7) => TriadQuality::Major,
+            (3, 7) => TriadQuality::Minor,
+            (4, 8) => TriadQuality::Augmented,
+            (3, 6) => TriadQuality::Diminished,
+            _ => TriadQuality::Other,
+        }
+    }
+
+    /// Returns whether the chord is consonant in the common-practice sense:
+    /// one pitch name, two whose closed-position interval is consonant, or a
+    /// major or minor triad not in second inversion.
+    pub fn is_consonant(&self) -> bool {
+        let distinct = self.remove_redundant_pitch_names();
+        match distinct.notes.len() {
+            1 => true,
+            2 => {
+                let closed = self.closed_position(None).remove_redundant_pitches();
+                Interval::between_pitches(&closed.notes[0].pitch, &closed.notes[1].pitch)
+                    .is_ok_and(|interval| interval.is_consonant())
+            }
+            3 => (self.is_major_triad() || self.is_minor_triad()) && self.inversion() != Some(2),
+            _ => false,
+        }
+    }
+
+    /// Returns a copy with every pitch brought within an octave above the
+    /// bass, duplicates removed and the notes sorted, as music21's
+    /// `closedPosition` does. `force_octave` moves the bass to that octave
+    /// first, carrying the rest of the chord with it.
+    pub fn closed_position(&self, force_octave: Option<IntegerType>) -> Self {
+        let mut chord = self.clone();
+        let Some(bass_index) = chord.bass_index() else {
+            return chord;
+        };
+        let implicit_octave = crate::defaults::PITCH_OCTAVE as IntegerType;
+        if let Some(force_octave) = force_octave {
+            let bass_octave = chord.notes[bass_index]
+                .pitch
+                .octave()
+                .unwrap_or(implicit_octave);
+            let shift = force_octave - bass_octave;
+            for note in &mut chord.notes {
+                let octave = note.pitch.octave().unwrap_or(implicit_octave);
+                note.pitch.octave_setter(Some(octave + shift));
+            }
+        }
+        let bass_ps = chord.notes[bass_index].pitch.ps();
+        let bass_number = root::diatonic_note_number(&chord.notes[bass_index].pitch);
+        for note in &mut chord.notes {
+            let mut octave = note.pitch.octave().unwrap_or(implicit_octave);
+            note.pitch.octave_setter(Some(octave));
+            while note.pitch.ps() >= bass_ps + 12.0 {
+                octave -= 1;
+                note.pitch.octave_setter(Some(octave));
+            }
+            if root::diatonic_note_number(&note.pitch) < bass_number {
+                note.pitch.octave_setter(Some(octave + 1));
+            }
+        }
+        chord.retain_first_by(Pitch::name_with_octave);
+        chord.sort_ascending_in_place();
+        chord
+    }
+
+    /// Returns a copy keeping the first of every pitch that appears more than
+    /// once with the same name and octave.
+    pub fn remove_redundant_pitches(&self) -> Self {
+        let mut chord = self.clone();
+        chord.retain_first_by(Pitch::name_with_octave);
+        chord
+    }
+
+    /// Returns a copy keeping the first of every pitch name, regardless of
+    /// octave.
+    pub fn remove_redundant_pitch_names(&self) -> Self {
+        let mut chord = self.clone();
+        chord.retain_first_by(Pitch::name);
+        chord
+    }
+
+    /// Returns a copy keeping the first of every pitch class, so `C#` and
+    /// `D-` count as one.
+    pub fn remove_redundant_pitch_classes(&self) -> Self {
+        let mut chord = self.clone();
+        chord.retain_first_by(root::pitch_class);
+        chord
+    }
+
+    /// Returns a copy sorted by staff position and then pitch space, so
+    /// `F##` sorts below `G-`.
+    pub fn sort_ascending(&self) -> Self {
+        let mut chord = self.clone();
+        chord.sort_ascending_in_place();
+        chord
+    }
+
+    fn chord_step_from(&self, step: u8, root: &Pitch) -> Option<&Pitch> {
+        let step = fold_chord_step(step);
+        self.pitch_refs()
+            .find(|pitch| diatonic_steps_above(root, pitch) == step)
+    }
+
+    fn is_triad_of_type(
+        &self,
+        address: (u8, u8, i8),
+        third_semitones: u8,
+        fifth_semitones: u8,
+    ) -> bool {
+        if self.forte_address() != Some(address) {
+            return false;
+        }
+        if !self.is_triad() || self.has_any_enharmonic_spelled_pitches() {
+            return false;
+        }
+        let (Some(root), Some(third), Some(fifth)) = (self.root(), self.third(), self.fifth())
+        else {
+            return false;
+        };
+        semitones_above(root, third) == third_semitones
+            && semitones_above(root, fifth) == fifth_semitones
+    }
+
+    fn is_incomplete_triad_of_type(&self, address: (u8, u8), third_semitones: u8) -> bool {
+        if self
+            .forte_address()
+            .is_none_or(|(card, index, _)| (card, index) != address)
+        {
+            return false;
+        }
+        let (Some(root), Some(_)) = (self.root(), self.third()) else {
+            return false;
+        };
+        self.pitch_refs()
+            .all(|pitch| [0, third_semitones].contains(&semitones_above(root, pitch)))
+    }
+
+    fn forte_address(&self) -> Option<(u8, u8, i8)> {
+        tables::seek_chord_tables_address(&self.ordered_pitch_classes())
+            .ok()
+            .map(|(card, index, inversion, _)| (card, index, inversion))
+    }
+
+    fn unique_pitch_names(&self) -> std::collections::BTreeSet<String> {
+        self.pitch_refs().map(Pitch::name).collect()
+    }
+
+    fn bass_index(&self) -> Option<usize> {
+        self.notes
+            .iter()
+            .enumerate()
+            .min_by(|(_, left), (_, right)| {
+                left.pitch
+                    .ps()
+                    .partial_cmp(&right.pitch.ps())
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .map(|(index, _)| index)
+    }
+
+    fn retain_first_by<K: PartialEq>(&mut self, key: impl Fn(&Pitch) -> K) {
+        let mut seen: Vec<K> = Vec::with_capacity(self.notes.len());
+        self.notes.retain(|note| {
+            let candidate = key(&note.pitch);
+            if seen.contains(&candidate) {
+                false
+            } else {
+                seen.push(candidate);
+                true
+            }
+        });
+    }
+
+    fn sort_ascending_in_place(&mut self) {
+        self.notes.sort_by(|left, right| {
+            root::diatonic_note_number(&left.pitch)
+                .cmp(&root::diatonic_note_number(&right.pitch))
+                .then_with(|| {
+                    left.pitch
+                        .ps()
+                        .partial_cmp(&right.pitch.ps())
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+        });
+    }
+
     fn ordered_pitch_classes(&self) -> Vec<u8> {
         let mut pcs = self
             .notes
@@ -1318,6 +1673,54 @@ impl Chord {
     }
 }
 
+/// The quality of the triad above a chord's root, as music21's
+/// `Chord.quality` reports it.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum TriadQuality {
+    /// A major third with a perfect fifth, or a major third alone.
+    Major,
+    /// A minor third with a perfect fifth, or a minor third alone.
+    Minor,
+    /// A major third with an augmented fifth.
+    Augmented,
+    /// A minor third with a diminished fifth.
+    Diminished,
+    /// Anything else, including a missing third or a repeated chord step.
+    Other,
+}
+
+impl TriadQuality {
+    /// Returns music21's lowercase name for the quality.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Major => "major",
+            Self::Minor => "minor",
+            Self::Augmented => "augmented",
+            Self::Diminished => "diminished",
+            Self::Other => "other",
+        }
+    }
+}
+
+impl Display for TriadQuality {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+fn fold_chord_step(step: u8) -> u8 {
+    if step >= 8 { step - 7 } else { step }
+}
+
+fn diatonic_steps_above(root: &Pitch, pitch: &Pitch) -> u8 {
+    ((root::step_num(pitch) - root::step_num(root)).rem_euclid(7) + 1) as u8
+}
+
+fn semitones_above(root: &Pitch, pitch: &Pitch) -> u8 {
+    (root::pitch_class(pitch) + 12 - root::pitch_class(root)) % 12
+}
+
 /// Tries to convert a supported chord input into notes.
 ///
 /// Implementations are provided for strings, slices, vectors, other chords,
@@ -1488,7 +1891,7 @@ impl IntoNotes for &[IntegerType] {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Duration, GuitarTuning, Key, Pitch, chord::Chord};
+    use crate::{Duration, GuitarTuning, Key, Pitch, chord::Chord, chord::TriadQuality};
 
     #[test]
     fn set_duration_applies_to_non_empty_chords() {
@@ -1505,6 +1908,428 @@ mod tests {
                 "set_duration on {input:?}"
             );
         }
+    }
+
+    struct PredicateCase {
+        notes: &'static str,
+        quality: TriadQuality,
+        flags: [bool; 14],
+        third: Option<&'static str>,
+        fifth: Option<&'static str>,
+        seventh: Option<&'static str>,
+        enharmonic: bool,
+        repeated_third: bool,
+        third_semitones: Option<u8>,
+    }
+
+    #[test]
+    fn triad_and_seventh_predicates_match_music21() {
+        use TriadQuality::*;
+        let t = true;
+        let f = false;
+        let cases = [
+            PredicateCase {
+                notes: "C E G",
+                quality: Major,
+                flags: [t, t, f, f, f, f, f, f, f, t, f, f, t, f],
+                third: Some("E"),
+                fifth: Some("G"),
+                seventh: None,
+                enharmonic: f,
+                repeated_third: f,
+                third_semitones: Some(4),
+            },
+            PredicateCase {
+                notes: "C E- G",
+                quality: Minor,
+                flags: [t, f, t, f, f, f, f, f, f, t, f, f, t, f],
+                third: Some("E-"),
+                fifth: Some("G"),
+                seventh: None,
+                enharmonic: f,
+                repeated_third: f,
+                third_semitones: Some(3),
+            },
+            PredicateCase {
+                notes: "C E- G-",
+                quality: Diminished,
+                flags: [t, f, f, t, f, f, f, f, f, f, f, f, t, f],
+                third: Some("E-"),
+                fifth: Some("G-"),
+                seventh: None,
+                enharmonic: f,
+                repeated_third: f,
+                third_semitones: Some(3),
+            },
+            PredicateCase {
+                notes: "C E G#",
+                quality: Augmented,
+                flags: [t, f, f, f, t, f, f, f, f, f, f, f, t, f],
+                third: Some("E"),
+                fifth: Some("G#"),
+                seventh: None,
+                enharmonic: f,
+                repeated_third: f,
+                third_semitones: Some(4),
+            },
+            PredicateCase {
+                notes: "C4 E4 G4 B-4",
+                quality: Major,
+                flags: [f, f, f, f, f, t, t, f, f, f, f, f, t, t],
+                third: Some("E4"),
+                fifth: Some("G4"),
+                seventh: Some("B-4"),
+                enharmonic: f,
+                repeated_third: f,
+                third_semitones: Some(4),
+            },
+            PredicateCase {
+                notes: "C E- G- B--",
+                quality: Diminished,
+                flags: [f, f, f, f, f, t, f, f, t, f, f, f, t, t],
+                third: Some("E-"),
+                fifth: Some("G-"),
+                seventh: Some("B--"),
+                enharmonic: f,
+                repeated_third: f,
+                third_semitones: Some(3),
+            },
+            PredicateCase {
+                notes: "C E- G- B-",
+                quality: Diminished,
+                flags: [f, f, f, f, f, t, f, t, f, f, f, f, t, t],
+                third: Some("E-"),
+                fifth: Some("G-"),
+                seventh: Some("B-"),
+                enharmonic: f,
+                repeated_third: f,
+                third_semitones: Some(3),
+            },
+            PredicateCase {
+                notes: "C E G B",
+                quality: Major,
+                flags: [f, f, f, f, f, t, f, f, f, f, f, f, t, t],
+                third: Some("E"),
+                fifth: Some("G"),
+                seventh: Some("B"),
+                enharmonic: f,
+                repeated_third: f,
+                third_semitones: Some(4),
+            },
+            PredicateCase {
+                notes: "E G C",
+                quality: Major,
+                flags: [t, t, f, f, f, f, f, f, f, t, f, f, t, f],
+                third: Some("E"),
+                fifth: Some("G"),
+                seventh: None,
+                enharmonic: f,
+                repeated_third: f,
+                third_semitones: Some(4),
+            },
+            PredicateCase {
+                notes: "G C E",
+                quality: Major,
+                flags: [t, t, f, f, f, f, f, f, f, t, f, f, t, f],
+                third: Some("E"),
+                fifth: Some("G"),
+                seventh: None,
+                enharmonic: f,
+                repeated_third: f,
+                third_semitones: Some(4),
+            },
+            PredicateCase {
+                notes: "C E",
+                quality: Major,
+                flags: [f, f, f, f, f, f, f, f, f, t, t, f, f, f],
+                third: Some("E"),
+                fifth: None,
+                seventh: None,
+                enharmonic: f,
+                repeated_third: f,
+                third_semitones: Some(4),
+            },
+            PredicateCase {
+                notes: "C E-",
+                quality: Minor,
+                flags: [f, f, f, f, f, f, f, f, f, t, f, t, f, f],
+                third: Some("E-"),
+                fifth: None,
+                seventh: None,
+                enharmonic: f,
+                repeated_third: f,
+                third_semitones: Some(3),
+            },
+            PredicateCase {
+                notes: "C G",
+                quality: Other,
+                flags: [f, f, f, f, f, f, f, f, f, t, f, f, f, f],
+                third: None,
+                fifth: Some("G"),
+                seventh: None,
+                enharmonic: f,
+                repeated_third: f,
+                third_semitones: None,
+            },
+            PredicateCase {
+                notes: "C F",
+                quality: Other,
+                flags: [f, f, f, f, f, f, f, f, f, f, f, f, f, f],
+                third: None,
+                fifth: Some("C"),
+                seventh: None,
+                enharmonic: f,
+                repeated_third: f,
+                third_semitones: None,
+            },
+            PredicateCase {
+                notes: "C4 F4",
+                quality: Other,
+                flags: [f, f, f, f, f, f, f, f, f, f, f, f, f, f],
+                third: None,
+                fifth: Some("C4"),
+                seventh: None,
+                enharmonic: f,
+                repeated_third: f,
+                third_semitones: None,
+            },
+            PredicateCase {
+                notes: "C E G C5",
+                quality: Major,
+                flags: [t, t, f, f, f, f, f, f, f, t, f, f, t, f],
+                third: Some("E"),
+                fifth: Some("G"),
+                seventh: None,
+                enharmonic: f,
+                repeated_third: f,
+                third_semitones: Some(4),
+            },
+            PredicateCase {
+                notes: "C E E- G",
+                quality: Other,
+                flags: [f, f, f, f, f, f, f, f, f, f, f, f, t, f],
+                third: Some("E"),
+                fifth: Some("G"),
+                seventh: None,
+                enharmonic: f,
+                repeated_third: t,
+                third_semitones: Some(4),
+            },
+            PredicateCase {
+                notes: "B# E G",
+                quality: Other,
+                flags: [t, f, f, f, f, f, f, f, f, f, f, f, t, f],
+                third: Some("G"),
+                fifth: Some("B#"),
+                seventh: None,
+                enharmonic: f,
+                repeated_third: f,
+                third_semitones: Some(3),
+            },
+            PredicateCase {
+                notes: "C F# G",
+                quality: Other,
+                flags: [f, f, f, f, f, f, f, f, f, f, f, f, f, f],
+                third: None,
+                fifth: Some("C"),
+                seventh: None,
+                enharmonic: f,
+                repeated_third: f,
+                third_semitones: None,
+            },
+            PredicateCase {
+                notes: "C E G B- D",
+                quality: Major,
+                flags: [f, f, f, f, f, f, f, f, f, f, f, f, t, t],
+                third: Some("E"),
+                fifth: Some("G"),
+                seventh: Some("B-"),
+                enharmonic: f,
+                repeated_third: f,
+                third_semitones: Some(4),
+            },
+            PredicateCase {
+                notes: "C",
+                quality: Other,
+                flags: [f, f, f, f, f, f, f, f, f, t, f, f, f, f],
+                third: None,
+                fifth: None,
+                seventh: None,
+                enharmonic: f,
+                repeated_third: f,
+                third_semitones: None,
+            },
+            PredicateCase {
+                notes: "E-4 G4 B-4",
+                quality: Major,
+                flags: [t, t, f, f, f, f, f, f, f, t, f, f, t, f],
+                third: Some("G4"),
+                fifth: Some("B-4"),
+                seventh: None,
+                enharmonic: f,
+                repeated_third: f,
+                third_semitones: Some(4),
+            },
+            PredicateCase {
+                notes: "C#4 E4 G4",
+                quality: Diminished,
+                flags: [t, f, f, t, f, f, f, f, f, f, f, f, t, f],
+                third: Some("E4"),
+                fifth: Some("G4"),
+                seventh: None,
+                enharmonic: f,
+                repeated_third: f,
+                third_semitones: Some(3),
+            },
+            PredicateCase {
+                notes: "C4 E4 G4 E5",
+                quality: Major,
+                flags: [t, t, f, f, f, f, f, f, f, t, f, f, t, f],
+                third: Some("E4"),
+                fifth: Some("G4"),
+                seventh: None,
+                enharmonic: f,
+                repeated_third: f,
+                third_semitones: Some(4),
+            },
+            PredicateCase {
+                notes: "C#4 D-4 E4",
+                quality: Minor,
+                flags: [f, f, f, f, f, f, f, f, f, f, f, t, f, f],
+                third: Some("E4"),
+                fifth: None,
+                seventh: None,
+                enharmonic: t,
+                repeated_third: f,
+                third_semitones: Some(3),
+            },
+        ];
+        for case in cases {
+            let chord = Chord::new(case.notes).unwrap();
+            let notes = case.notes;
+            let name = |pitch: Option<&Pitch>| pitch.map(Pitch::name_with_octave);
+            assert_eq!(chord.quality(), case.quality, "{notes} quality");
+            let actual = [
+                chord.is_triad(),
+                chord.is_major_triad(),
+                chord.is_minor_triad(),
+                chord.is_diminished_triad(),
+                chord.is_augmented_triad(),
+                chord.is_seventh(),
+                chord.is_dominant_seventh(),
+                chord.is_half_diminished_seventh(),
+                chord.is_diminished_seventh(),
+                chord.is_consonant(),
+                chord.is_incomplete_major_triad(),
+                chord.is_incomplete_minor_triad(),
+                chord.contains_triad(),
+                chord.contains_seventh(),
+            ];
+            assert_eq!(actual, case.flags, "{notes} predicates");
+            assert_eq!(name(chord.third()).as_deref(), case.third, "{notes} third");
+            assert_eq!(name(chord.fifth()).as_deref(), case.fifth, "{notes} fifth");
+            assert_eq!(
+                name(chord.seventh()).as_deref(),
+                case.seventh,
+                "{notes} seventh"
+            );
+            assert_eq!(
+                chord.has_any_enharmonic_spelled_pitches(),
+                case.enharmonic,
+                "{notes} enharmonic"
+            );
+            assert_eq!(
+                chord.has_repeated_chord_step(3),
+                case.repeated_third,
+                "{notes} repeated third"
+            );
+            assert_eq!(
+                chord.semitones_from_chord_step(3),
+                case.third_semitones,
+                "{notes} third semitones"
+            );
+        }
+
+        let empty = Chord::empty();
+        assert_eq!(empty.quality(), TriadQuality::Other);
+        assert!(!empty.is_triad());
+        assert!(!empty.is_consonant());
+        assert!(empty.third().is_none());
+        assert!(!empty.contains_triad());
+        assert_eq!(TriadQuality::Diminished.to_string(), "diminished");
+    }
+
+    #[test]
+    fn consonance_of_dyads_follows_closed_position() {
+        assert!(Chord::new("C4 C5 E5").unwrap().is_consonant());
+        assert!(!Chord::new("C4 F4 C5").unwrap().is_consonant());
+        assert!(Chord::new("F4 C5").unwrap().is_consonant());
+        assert!(!Chord::new("C4 G3").unwrap().is_consonant());
+    }
+
+    #[test]
+    fn closed_position_matches_music21() {
+        let names = |chord: Chord| {
+            chord
+                .pitches()
+                .iter()
+                .map(Pitch::name_with_octave)
+                .collect::<Vec<_>>()
+        };
+        let cases = [
+            ("C#4 G5 E6", None, vec!["C#4", "E4", "G4"]),
+            ("C#4 G5 E6", Some(2), vec!["C#2", "E2", "G2"]),
+            ("C#4 G5 E6", Some(6), vec!["C#6", "E6", "G6"]),
+            ("C#4 F4 C5 F5", None, vec!["C#4", "F4", "C5"]),
+            ("A B", None, vec!["A4", "B4"]),
+            ("C4 B#7", None, vec!["C4", "B#4"]),
+            ("E4 C5 G5", None, vec!["E4", "G4", "C5"]),
+            (
+                "C3 C#3 E-3 E3 E#3 G3",
+                None,
+                vec!["C3", "C#3", "E-3", "E3", "E#3", "G3"],
+            ),
+            ("G4 C4 E4", Some(5), vec!["C5", "E5", "G5"]),
+            ("C4 E4 G4 C5 E5", None, vec!["C4", "E4", "G4"]),
+            ("C#4 D-4 E4", None, vec!["C#4", "D-4", "E4"]),
+        ];
+        for (notes, force_octave, expected) in cases {
+            let chord = Chord::new(notes).unwrap();
+            assert_eq!(
+                names(chord.closed_position(force_octave)),
+                expected,
+                "{notes}"
+            );
+        }
+        assert!(Chord::empty().closed_position(None).notes().is_empty());
+        assert_eq!(
+            names(
+                Chord::new("C4 E4 C4 E5")
+                    .unwrap()
+                    .remove_redundant_pitches()
+            ),
+            vec!["C4", "E4", "E5"]
+        );
+        assert_eq!(
+            names(
+                Chord::new("C4 E4 C5 E5")
+                    .unwrap()
+                    .remove_redundant_pitch_names()
+            ),
+            vec!["C4", "E4"]
+        );
+        assert_eq!(
+            names(
+                Chord::new("C#4 D-4 E4")
+                    .unwrap()
+                    .remove_redundant_pitch_classes()
+            ),
+            vec!["C#4", "E4"]
+        );
+        assert_eq!(
+            names(Chord::new("G-4 F##4 E4").unwrap().sort_ascending()),
+            vec!["E4", "F##4", "G-4"]
+        );
     }
 
     #[test]

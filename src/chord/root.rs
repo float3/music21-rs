@@ -82,3 +82,12 @@ pub(crate) fn step_num(pitch: &Pitch) -> IntegerType {
 pub(crate) fn pitch_class(pitch: &Pitch) -> u8 {
     (pitch.ps().round() as IntegerType).rem_euclid(12) as u8
 }
+
+/// music21's `diatonicNoteNum`: the staff position counting C0 as 1, with
+/// the implicit octave standing in when none is set.
+pub(crate) fn diatonic_note_number(pitch: &Pitch) -> IntegerType {
+    let octave = pitch
+        .octave()
+        .unwrap_or(crate::defaults::PITCH_OCTAVE as IntegerType);
+    pitch.step().step_to_dnn_offset() + 7 * octave
+}

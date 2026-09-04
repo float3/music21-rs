@@ -4,6 +4,33 @@ Cleanup of the Python-shaped plumbing that remained in the pitch, note and
 chord constructors. Nothing musical changes; a handful of signatures do, so
 the next release needs a minor bump.
 
+## Added
+
+- `Interval` gains music21's compact names (`short_name`, `simple_name`,
+  `semi_simple_name`, `directed_name`), the `is_step`, `is_diatonic_step`,
+  `is_chromatic_step`, `is_skip` and `is_consonant` predicates,
+  `complement`, `interval_class`, and `Interval::sum` / `Interval::difference`
+  for `interval.add` and `interval.subtract`.
+- `Chord` gains `root`, `bass`, `chord_step`, `third`, `fifth`, `seventh`,
+  `semitones_from_chord_step`, `has_repeated_chord_step`,
+  `has_any_enharmonic_spelled_pitches`, the `is_triad` / `is_major_triad` /
+  `is_minor_triad` / `is_diminished_triad` / `is_augmented_triad` /
+  `is_seventh` / `is_dominant_seventh` / `is_half_diminished_seventh` /
+  `is_diminished_seventh` / `is_incomplete_major_triad` /
+  `is_incomplete_minor_triad` / `contains_triad` / `contains_seventh` /
+  `is_consonant` predicates, `quality` returning the new `TriadQuality`, and
+  `closed_position`, `remove_redundant_pitches`,
+  `remove_redundant_pitch_names`, `remove_redundant_pitch_classes` and
+  `sort_ascending`.
+- `voiceleading::VoiceLeadingQuartet` and `MotionType`, a port of music21's
+  two-voice motion classification with parallel and hidden fifth and octave
+  checks, voice crossing and voice overlap.
+- `analysis::KeyProfile` with the five key-finding weight sets music21 ships
+  (Krumhansl-Schmuckler, Aarden-Essen, Simple, Bellman-Budge,
+  Temperley-Kostka-Payne), verified against music21 by the parity fixture,
+  and `estimate_key_from_pitches_with` / `estimate_key_from_chords_with` to
+  choose one.
+
 ## Breaking Changes
 
 - `Chord::empty` returns `Chord` rather than `Result<Chord>`; it cannot fail.

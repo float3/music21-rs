@@ -93,7 +93,7 @@ impl GenericInterval {
         matches!(self.simple_undirected(), 1 | 4 | 5)
     }
 
-    fn directed(&self) -> IntegerType {
+    pub(crate) fn directed(&self) -> IntegerType {
         self.value()
     }
 

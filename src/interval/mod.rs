@@ -400,6 +400,141 @@ impl Interval {
         Ok(out)
     }
 
+    /// Returns music21's compact undirected name, such as `"P5"` or `"m3"`.
+    pub fn short_name(&self) -> String {
+        format!(
+            "{}{}",
+            self.diatonic.specifier.prefix(),
+            self.generic().undirected()
+        )
+    }
+
+    /// Returns the compact name folded into one octave, so a ninth is `"M2"`.
+    pub fn simple_name(&self) -> String {
+        format!(
+            "{}{}",
+            self.diatonic.specifier.prefix(),
+            self.generic().simple_undirected()
+        )
+    }
+
+    /// Returns the compact name folded into one octave, except that octaves
+    /// stay `8` rather than becoming unisons.
+    pub fn semi_simple_name(&self) -> String {
+        format!(
+            "{}{}",
+            self.diatonic.specifier.prefix(),
+            self.generic().semi_simple_undirected()
+        )
+    }
+
+    /// Returns the compact name with music21's direction sign, such as `"m-6"`.
+    pub fn directed_name(&self) -> String {
+        format!(
+            "{}{}",
+            self.diatonic.specifier.prefix(),
+            self.generic().directed()
+        )
+    }
+
+    /// Returns whether this is a second of any quality.
+    pub fn is_diatonic_step(&self) -> bool {
+        self.generic().undirected() == 2
+    }
+
+    /// Returns whether this spans exactly one semitone.
+    pub fn is_chromatic_step(&self) -> bool {
+        self.chromatic.semitones.abs() == 1
+    }
+
+    /// Returns whether this is a step diatonically or chromatically.
+    pub fn is_step(&self) -> bool {
+        self.is_chromatic_step() || self.is_diatonic_step()
+    }
+
+    /// Returns whether this is larger than a second. Unisons are neither
+    /// steps nor skips.
+    pub fn is_skip(&self) -> bool {
+        self.generic().undirected() > 2
+    }
+
+    /// Returns whether this is a common-practice consonance: a perfect unison
+    /// or fifth, or a major or minor third or sixth, in any octave.
+    pub fn is_consonant(&self) -> bool {
+        matches!(
+            (self.diatonic.specifier, self.generic().simple_undirected()),
+            (Specifier::Perfect, 1 | 5) | (Specifier::Major | Specifier::Minor, 3 | 6)
+        )
+    }
+
+    /// Returns the interval that completes this one to an octave, so a major
+    /// third becomes a minor sixth and an octave becomes a unison.
+    pub fn complement(&self) -> Result<Self> {
+        let generic = GenericInterval::from_int(9 - self.generic().semi_simple_undirected())?;
+        let diatonic = DiatonicInterval::new(self.diatonic.specifier.inversion(), &generic);
+        let chromatic = diatonic.get_chromatic()?;
+        Self::from_diatonic_and_chromatic(diatonic, chromatic)
+    }
+
+    /// Returns the interval class, the smaller of the semitone count within an
+    /// octave and its complement, from `0` to `6`.
+    pub fn interval_class(&self) -> IntegerType {
+        let mod12 = self.chromatic.semitones.rem_euclid(12);
+        if mod12 > 6 { 12 - mod12 } else { mod12 }
+    }
+
+    /// Adds intervals end to end, as music21's `interval.add` does.
+    ///
+    /// Direction matters: a perfect fifth followed by a descending perfect
+    /// fourth is a major second.
+    pub fn sum<'a>(intervals: impl IntoIterator<Item = &'a Interval>) -> Result<Self> {
+        let start = Pitch::from_name("C4")?;
+        let mut end = start.clone();
+        let mut any = false;
+        for interval in intervals {
+            end = interval.transpose_pitch(&end)?;
+            any = true;
+        }
+        if !any {
+            return Err(Error::Interval(
+                "cannot add an empty set of intervals".to_string(),
+            ));
+        }
+        Self::between_pitches(&start, &end)
+    }
+
+    /// Subtracts every following interval from the first, as music21's
+    /// `interval.subtract` does.
+    pub fn difference<'a>(intervals: impl IntoIterator<Item = &'a Interval>) -> Result<Self> {
+        let start = Pitch::from_name("C4")?;
+        let mut intervals = intervals.into_iter();
+        let Some(first) = intervals.next() else {
+            return Err(Error::Interval(
+                "cannot subtract an empty set of intervals".to_string(),
+            ));
+        };
+        let mut end = first.transpose_pitch(&start)?;
+        for interval in intervals {
+            end = interval.reversed()?.transpose_pitch(&end)?;
+        }
+        Self::between_pitches(&start, &end)
+    }
+
+    pub(crate) fn simple_key(&self) -> (Specifier, IntegerType) {
+        (self.diatonic.specifier, self.generic().simple_undirected())
+    }
+
+    pub(crate) fn semi_simple_key(&self) -> (Specifier, IntegerType) {
+        (
+            self.diatonic.specifier,
+            self.generic().semi_simple_undirected(),
+        )
+    }
+
+    pub(crate) fn is_perfect_unison(&self) -> bool {
+        self.generic().undirected() == 1 && self.chromatic.semitones == 0
+    }
+
     pub(crate) fn generic(&self) -> &GenericInterval {
         &self.diatonic.generic
     }
@@ -721,6 +856,137 @@ mod tests {
             .transpose_pitch_in_place(&mut c4)
             .unwrap();
         assert_eq!(c4.name_with_octave(), "D4");
+    }
+
+    #[test]
+    fn compact_names_match_music21() {
+        let cases = [
+            ("P5", "P5", "P5", "P5", "P5"),
+            ("M3", "M3", "M3", "M3", "M3"),
+            ("m-6", "m6", "m6", "m6", "m-6"),
+            ("AA4", "AA4", "AA4", "AA4", "AA4"),
+            ("d8", "d8", "d1", "d8", "d8"),
+            ("P8", "P8", "P1", "P8", "P8"),
+            ("M9", "M9", "M2", "M2", "M9"),
+            ("P-5", "P5", "P5", "P5", "P-5"),
+            ("P15", "P15", "P1", "P8", "P15"),
+        ];
+        for (input, short, simple, semi_simple, directed) in cases {
+            let interval = Interval::from_name(input).unwrap();
+            assert_eq!(interval.short_name(), short, "{input}");
+            assert_eq!(interval.simple_name(), simple, "{input}");
+            assert_eq!(interval.semi_simple_name(), semi_simple, "{input}");
+            assert_eq!(interval.directed_name(), directed, "{input}");
+        }
+    }
+
+    #[test]
+    fn complement_and_interval_class_match_music21() {
+        let cases = [
+            ("P5", "P4", 5),
+            ("M3", "m6", 4),
+            ("m-6", "M3", 4),
+            ("AA4", "dd5", 5),
+            ("d8", "A1", 1),
+            ("P8", "P1", 0),
+            ("P1", "P8", 0),
+            ("A1", "d8", 1),
+            ("M9", "m7", 2),
+            ("m2", "M7", 1),
+            ("P15", "P1", 0),
+        ];
+        for (input, complement, interval_class) in cases {
+            let interval = Interval::from_name(input).unwrap();
+            assert_eq!(
+                interval.complement().unwrap().short_name(),
+                complement,
+                "{input}"
+            );
+            assert_eq!(interval.interval_class(), interval_class, "{input}");
+        }
+    }
+
+    #[test]
+    fn step_skip_and_consonance_match_music21() {
+        let cases = [
+            ("P5", false, true, true, false, false),
+            ("M3", false, true, true, false, false),
+            ("AA4", false, true, false, false, false),
+            ("d8", false, true, false, false, false),
+            ("P8", false, true, true, false, false),
+            ("P1", false, false, true, false, false),
+            ("A1", true, false, false, false, true),
+            ("M9", false, true, false, false, false),
+            ("m2", true, false, false, true, true),
+        ];
+        for (input, step, skip, consonant, diatonic_step, chromatic_step) in cases {
+            let interval = Interval::from_name(input).unwrap();
+            assert_eq!(interval.is_step(), step, "{input} step");
+            assert_eq!(interval.is_skip(), skip, "{input} skip");
+            assert_eq!(interval.is_consonant(), consonant, "{input} consonant");
+            assert_eq!(
+                interval.is_diatonic_step(),
+                diatonic_step,
+                "{input} diatonic"
+            );
+            assert_eq!(
+                interval.is_chromatic_step(),
+                chromatic_step,
+                "{input} chromatic"
+            );
+        }
+    }
+
+    #[test]
+    fn sum_and_difference_match_music21() {
+        fn intervals(names: &[&str]) -> Vec<Interval> {
+            names
+                .iter()
+                .map(|name| Interval::from_name(*name).unwrap())
+                .collect()
+        }
+        assert_eq!(
+            Interval::sum(&intervals(&["A2", "P5"]))
+                .unwrap()
+                .short_name(),
+            "A6"
+        );
+        assert_eq!(
+            Interval::sum(&intervals(&["P5", "m2"]))
+                .unwrap()
+                .short_name(),
+            "m6"
+        );
+        assert_eq!(
+            Interval::sum(&intervals(&["W", "W", "H", "W", "W", "W", "H"]))
+                .unwrap()
+                .short_name(),
+            "P8"
+        );
+        assert_eq!(
+            Interval::sum(&intervals(&["P5", "P-4"]))
+                .unwrap()
+                .directed_name(),
+            "M2"
+        );
+        assert!(Interval::sum(&[]).is_err());
+
+        let cases = [
+            (&["P5", "M3"][..], "m3"),
+            (&["P4", "d3"][..], "A2"),
+            (&["M6", "m2", "m2"][..], "AA4"),
+            (&["P4", "M-2"][..], "P5"),
+            (&["A2", "A2"][..], "P1"),
+            (&["P8", "A1"][..], "d8"),
+        ];
+        for (names, expected) in cases {
+            let difference = Interval::difference(&intervals(names)).unwrap();
+            assert_eq!(difference.short_name(), expected, "{names:?}");
+        }
+        let descending_unison = Interval::difference(&intervals(&["P5", "A5"])).unwrap();
+        assert_eq!(descending_unison.directed_name(), "d1");
+        assert_eq!(descending_unison.semitones(), -1);
+        assert!(Interval::difference(&[]).is_err());
     }
 
     #[test]

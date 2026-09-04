@@ -48,6 +48,8 @@ pub(crate) mod stepname;
 pub mod stream;
 /// Tuning-system ratios, labels and frequency helpers.
 pub mod tuningsystem;
+/// Two-voice voice-leading classification and parallel-interval checks.
+pub mod voiceleading;
 // #[macro_use]
 // pub(crate) mod macros;
 
@@ -55,7 +57,10 @@ pub use abc::{
     abc_chord, abc_duration, abc_note, abc_rest, pitch_name_from_abc_note,
     pitch_names_from_abc_chord,
 };
-pub use analysis::{KeyEstimate, estimate_key_from_chords, estimate_key_from_pitches};
+pub use analysis::{
+    KeyEstimate, KeyProfile, estimate_key_from_chords, estimate_key_from_chords_with,
+    estimate_key_from_pitches, estimate_key_from_pitches_with,
+};
 pub use chord::{
     Chord, ChordResolutionSuggestion, GuitarFingering, GuitarStringFingering, GuitarTuning,
     GuitarTuningString, IntoNotes, KnownChordType,
@@ -89,3 +94,4 @@ pub use tuningsystem::{
     HISTORICAL_TEMPERAMENTS, TuningSystem,
     scala::{ScalaArchive, ScalaDegree, ScalaScale},
 };
+pub use voiceleading::{MotionType, VoiceLeadingQuartet};

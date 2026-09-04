@@ -11,7 +11,7 @@
 //! needs neither Python nor the submodule. `fixture_freshness.rs` is what stops
 //! the fixture itself going stale against a bumped submodule.
 
-use music21_rs::{Accidental, Interval, key};
+use music21_rs::{Accidental, Interval, KeyProfile, key};
 use serde::Deserialize;
 
 use std::path::Path;
@@ -21,6 +21,14 @@ struct Expectations {
     accidental: Vec<AccidentalExpectation>,
     mode: Vec<ModeExpectation>,
     specifier: Vec<SpecifierExpectation>,
+    key_profile: Vec<KeyProfileExpectation>,
+}
+
+#[derive(Debug, Deserialize)]
+struct KeyProfileExpectation {
+    name: String,
+    mode: String,
+    weights: Vec<f64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -156,6 +164,56 @@ fn interval_specifiers_match_music21() {
     assert!(
         mismatches.is_empty(),
         "{} interval specifiers differ from music21:\n    {}",
+        mismatches.len(),
+        mismatches.join("\n    ")
+    );
+}
+
+#[test]
+fn key_profiles_match_music21() {
+    let expectations = expectations();
+    let mut mismatches = Vec::new();
+    let mut seen = std::collections::BTreeSet::new();
+
+    for expected in &expectations.key_profile {
+        let Some(profile) = KeyProfile::ALL
+            .into_iter()
+            .find(|profile| profile.music21_class_name() == expected.name)
+        else {
+            mismatches.push(format!("{}: unknown to the crate", expected.name));
+            continue;
+        };
+        seen.insert(profile);
+        let actual = match expected.mode.as_str() {
+            "major" => profile.major_weights(),
+            "minor" => profile.minor_weights(),
+            other => {
+                mismatches.push(format!("{}: unexpected mode {other:?}", expected.name));
+                continue;
+            }
+        };
+        if actual.len() != expected.weights.len()
+            || actual
+                .iter()
+                .zip(&expected.weights)
+                .any(|(left, right)| (left - right).abs() > 1e-9)
+        {
+            mismatches.push(format!(
+                "{} {}: music21 {:?}, crate {:?}",
+                expected.name, expected.mode, expected.weights, actual
+            ));
+        }
+    }
+
+    for profile in KeyProfile::ALL {
+        if !seen.contains(&profile) {
+            mismatches.push(format!("{profile:?}: not in music21's keyWeightKeyAnalysisClasses"));
+        }
+    }
+
+    assert!(
+        mismatches.is_empty(),
+        "{} key profile values differ from music21:\n    {}",
         mismatches.len(),
         mismatches.join("\n    ")
     );

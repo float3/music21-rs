@@ -70,6 +70,24 @@ impl Specifier {
         }
     }
 
+    /// Returns the prefix music21 writes before the interval number, such as
+    /// `"P"`, `"m"` or `"AA"`.
+    pub(crate) fn prefix(self) -> &'static str {
+        match self {
+            Specifier::Perfect => "P",
+            Specifier::Major => "M",
+            Specifier::Minor => "m",
+            Specifier::Augmented => "A",
+            Specifier::Diminished => "d",
+            Specifier::DoubleAugmented => "AA",
+            Specifier::DoubleDiminished => "dd",
+            Specifier::TripleAugmented => "AAA",
+            Specifier::TripleDiminished => "ddd",
+            Specifier::QuadrupleAugmented => "AAAA",
+            Specifier::QuadrupleDiminished => "dddd",
+        }
+    }
+
     pub(crate) fn inversion(&self) -> Self {
         match self {
             Specifier::Perfect => Specifier::Perfect,
