@@ -3,7 +3,7 @@ use crate::{
     error::{Error, Result},
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Specifier {
     Perfect = 1,
     Major = 2,

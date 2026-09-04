@@ -138,7 +138,7 @@ fn convert_generic(value: IntegerType) -> IntegerType {
 }
 
 impl IntervalBaseTrait for GenericInterval {
-    fn transpose_pitch(self, pitch1: Pitch) -> Result<Pitch> {
+    fn transpose_pitch(&self, pitch: &Pitch) -> Result<Pitch> {
         let specifier = if self.is_perfectable() {
             Specifier::Perfect
         } else {
@@ -147,10 +147,10 @@ impl IntervalBaseTrait for GenericInterval {
         let diatonic = self.get_diatonic(specifier);
         let chromatic = diatonic.get_chromatic()?;
         let interval = super::Interval::from_diatonic_and_chromatic(diatonic, chromatic)?;
-        interval.transpose_pitch_with_options(&pitch1, false, Some(4))
+        interval.transpose_pitch_with_options(pitch, false, Some(4))
     }
 
-    fn reverse(self) -> Result<Self>
+    fn reverse(&self) -> Result<Self>
     where
         Self: Sized,
     {

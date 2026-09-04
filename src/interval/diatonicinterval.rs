@@ -75,13 +75,13 @@ fn semitones_generic(r#in: UnsignedIntegerType) -> Result<UnsignedIntegerType> {
 }
 
 impl IntervalBaseTrait for DiatonicInterval {
-    fn transpose_pitch(self, pitch1: Pitch) -> Result<Pitch> {
+    fn transpose_pitch(&self, pitch: &Pitch) -> Result<Pitch> {
         let interval =
             super::Interval::from_diatonic_and_chromatic(self.clone(), self.get_chromatic()?)?;
-        interval.transpose_pitch_with_options(&pitch1, false, Some(4))
+        interval.transpose_pitch_with_options(pitch, false, Some(4))
     }
 
-    fn reverse(self) -> Result<Self>
+    fn reverse(&self) -> Result<Self>
     where
         Self: Sized,
     {

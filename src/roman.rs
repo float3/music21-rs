@@ -1,5 +1,5 @@
 use crate::{
-    chord::Chord,
+    chord::{Chord, root::pitch_class},
     chordsymbol::{ChordQuality, ChordSymbol},
     defaults::IntegerType,
     error::{Error, Result},
@@ -759,10 +759,6 @@ fn normalize_pitch_name(name: &str) -> String {
         }
     }
     normalized
-}
-
-fn pitch_class(pitch: &Pitch) -> u8 {
-    (pitch.ps().round() as IntegerType).rem_euclid(12) as u8
 }
 
 #[cfg(test)]

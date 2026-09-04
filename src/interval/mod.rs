@@ -377,7 +377,7 @@ impl Interval {
 
     /// Returns the same interval in the opposite direction.
     pub fn reversed(&self) -> Result<Self> {
-        self.clone().reverse()
+        self.reverse()
     }
 
     /// Returns the Pythagorean tuning ratio for this interval.
@@ -385,7 +385,7 @@ impl Interval {
     /// The ratio is expressed as a rational fraction built from pure fifths,
     /// matching the helper music21 uses for enharmonic scoring.
     pub fn pythagorean_ratio(&self) -> Result<FractionType> {
-        interval_to_pythagorean_ratio(self.clone())
+        interval_to_pythagorean_ratio(self)
     }
 
     /// Transposes a pitch by this interval.
@@ -422,14 +422,13 @@ impl Interval {
     ) -> Result<Pitch> {
         if reverse {
             return self
-                .clone()
                 .reverse()?
                 .transpose_pitch_with_options(p, false, Some(4));
         }
         let max_accidental = max_accidental.unwrap_or(4);
 
         if self.implicit_diatonic {
-            return self.chromatic.clone().transpose_pitch(p.clone());
+            return self.chromatic.transpose_pitch(p);
         }
 
         let use_implicit_octave = p.octave().is_none();
@@ -566,12 +565,15 @@ fn parse_interval_name(mut value: String) -> Result<(DiatonicInterval, Chromatic
 }
 
 impl IntervalBaseTrait for Interval {
-    fn reverse(self) -> Result<Self>
+    fn reverse(&self) -> Result<Self>
     where
         Self: Sized,
     {
-        if let (Some(start), Some(end)) = (self.pitch_start, self.pitch_end) {
-            Interval::between(PitchOrNote::Pitch(end), PitchOrNote::Pitch(start))
+        if let (Some(start), Some(end)) = (&self.pitch_start, &self.pitch_end) {
+            Interval::between(
+                PitchOrNote::Pitch(end.clone()),
+                PitchOrNote::Pitch(start.clone()),
+            )
         } else {
             Interval::from_diatonic_and_chromatic(
                 self.diatonic.reverse()?,
@@ -580,12 +582,12 @@ impl IntervalBaseTrait for Interval {
         }
     }
 
-    fn transpose_pitch(self, pitch1: Pitch) -> Result<Pitch> {
-        Interval::transpose_pitch_with_options(&self, &pitch1, false, Some(4))
+    fn transpose_pitch(&self, pitch: &Pitch) -> Result<Pitch> {
+        Interval::transpose_pitch(self, pitch)
     }
 }
 
-pub(crate) fn interval_to_pythagorean_ratio(interval: Interval) -> Result<FractionType> {
+pub(crate) fn interval_to_pythagorean_ratio(interval: &Interval) -> Result<FractionType> {
     let start_pitch = Pitch::from_name("C1".to_string())?;
 
     let end_pitch_wanted = interval.transpose_pitch_with_options(&start_pitch, false, Some(4))?;
@@ -707,7 +709,7 @@ mod tests {
     fn interval_transpose_pitch() {
         let c4 = pitch("C4");
         let m3 = Interval::from_name("m3").unwrap();
-        let out = m3.transpose_pitch(c4).unwrap();
+        let out = m3.transpose_pitch(&c4).unwrap();
         assert_eq!(out.name_with_octave(), "E-4");
     }
 
