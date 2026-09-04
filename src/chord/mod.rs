@@ -1407,9 +1407,7 @@ impl IntoNotes for &[Pitch] {
     type Notes = Vec<Note>;
 
     fn try_into_notes(self) -> Result<Self::Notes> {
-        self.iter()
-            .map(|pitch| Note::new(Some(pitch.clone()), None, None, None))
-            .collect::<Result<Vec<_>>>()
+        Ok(self.iter().cloned().map(Note::from_pitch).collect())
     }
 }
 
@@ -1434,7 +1432,7 @@ impl IntoNotes for &[String] {
 
     fn try_into_notes(self) -> Result<Self::Notes> {
         self.iter()
-            .map(|s| Note::new(Some(s.to_string()), None, None, None))
+            .map(|name| Note::from_name(name.as_str()))
             .collect::<Result<Vec<_>>>()
     }
 }
@@ -1451,7 +1449,7 @@ impl IntoNotes for String {
                 .as_slice()
                 .try_into_notes()
         } else {
-            Ok(vec![Note::new(Some(self), None, None, None)?])
+            Ok(vec![Note::from_name(self)?])
         }
     }
 }
@@ -1479,7 +1477,7 @@ impl IntoNotes for &str {
                 .collect::<Vec<&str>>()
                 .try_into_notes()
         } else {
-            Ok(vec![Note::new(Some(self), None, None, None)?])
+            Ok(vec![Note::from_name(self)?])
         }
     }
 }
@@ -1492,7 +1490,7 @@ impl IntoNotes for &[IntegerType] {
     fn try_into_notes(self) -> Result<Self::Notes> {
         let mut notes = self
             .iter()
-            .map(|i| Note::new(Some(*i), None, None, None))
+            .map(|number| Note::from_number(*number as FloatType))
             .collect::<Result<Vec<_>>>()?;
         simplify_integer_notes(&mut notes)?;
         Ok(notes)
@@ -1518,6 +1516,32 @@ mod tests {
                 "set_duration on {input:?}"
             );
         }
+    }
+
+    #[test]
+    fn pitched_common_names_match_the_music21_reference() {
+        let cases = [
+            ("C E G", "C-major triad"),
+            ("C E- G", "C-minor triad"),
+            ("C E G B-", "C-dominant seventh chord"),
+            ("C E G B", "C-major seventh chord"),
+            ("C E- G B-", "C-minor seventh chord"),
+            ("C E- G- B-", "C-half-diminished seventh chord"),
+            ("C E- G- B--", "C-diminished seventh chord"),
+            ("C E G B- D", "C-dominant-ninth"),
+            ("C E G B D", "C-major-ninth chord"),
+            ("C E- G B- D", "C-minor-ninth chord"),
+            ("G2 B2 D3 F3", "G-dominant seventh chord"),
+            ("B2 D3 F3 A3", "B-half-diminished seventh chord"),
+        ];
+        for (notes, expected) in cases {
+            let chord = Chord::new(notes).unwrap();
+            assert_eq!(chord.pitched_common_name(), expected, "{notes}");
+        }
+
+        let integers: &[crate::IntegerType] = &[1, 2, 3, 4, 5, 10];
+        let chord = Chord::new(integers).unwrap();
+        assert_eq!(chord.pitched_common_name(), "forte class 6-36B above C#");
     }
 
     #[test]

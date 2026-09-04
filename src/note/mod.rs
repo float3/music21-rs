@@ -22,12 +22,20 @@ pub struct Note {
 impl Note {
     /// Builds a note from a pitch name such as `"C#4"` or `"E-"`.
     pub fn from_name(name: impl Into<String>) -> Result<Self> {
-        Self::new(Option::<Pitch>::None, None, None, Some(name.into()))
+        Pitch::from_name(name).map(Self::from_pitch)
+    }
+
+    /// Builds a note from a pitch-space number, where 60 is middle C.
+    pub fn from_number(number: FloatType) -> Result<Self> {
+        Pitch::from_number(number).map(Self::from_pitch)
     }
 
     /// Builds a note from an existing [`Pitch`].
-    pub fn from_pitch(pitch: Pitch) -> Result<Self> {
-        Self::new(Some(pitch), None, None, None)
+    pub fn from_pitch(pitch: Pitch) -> Self {
+        Self {
+            notrest: NotRest::new(None),
+            pitch,
+        }
     }
 
     /// Returns the note's pitch.
@@ -59,31 +67,6 @@ impl Note {
     pub fn with_duration(mut self, duration: Duration) -> Self {
         self.set_duration(duration);
         self
-    }
-
-    pub(crate) fn new<T>(
-        pitch: Option<T>,
-        duration: Option<Duration>,
-        name: Option<String>,
-        name_with_octave: Option<String>,
-    ) -> Result<Self>
-    where
-        T: IntoPitch,
-    {
-        let pitch = match pitch {
-            Some(pitch) => pitch.into_pitch()?,
-            None => {
-                let name = name_with_octave
-                    .or(name)
-                    .unwrap_or_else(|| "C4".to_string());
-                Pitch::from_name(name)?
-            }
-        };
-
-        Ok(Self {
-            notrest: NotRest::new(duration),
-            pitch,
-        })
     }
 }
 
@@ -121,18 +104,14 @@ impl TryFrom<String> for Note {
     }
 }
 
-impl TryFrom<Pitch> for Note {
-    type Error = crate::error::Error;
-
-    fn try_from(value: Pitch) -> Result<Self> {
+impl From<Pitch> for Note {
+    fn from(value: Pitch) -> Self {
         Self::from_pitch(value)
     }
 }
 
-impl TryFrom<&Pitch> for Note {
-    type Error = crate::error::Error;
-
-    fn try_from(value: &Pitch) -> Result<Self> {
+impl From<&Pitch> for Note {
+    fn from(value: &Pitch) -> Self {
         Self::from_pitch(value.clone())
     }
 }
@@ -141,7 +120,7 @@ impl TryFrom<IntegerType> for Note {
     type Error = crate::error::Error;
 
     fn try_from(value: IntegerType) -> Result<Self> {
-        Note::new(Some(value), None, None, None)
+        Self::from_number(value as FloatType)
     }
 }
 
@@ -177,31 +156,31 @@ impl IntoNote for &Note {
 
 impl IntoNote for Pitch {
     fn try_into_note(self) -> Result<Note> {
-        Note::new(Some(self), None, None, None)
+        Ok(Note::from_pitch(self))
     }
 }
 
 impl IntoNote for &Pitch {
     fn try_into_note(self) -> Result<Note> {
-        Note::new(Some(self.clone()), None, None, None)
+        Ok(Note::from_pitch(self.clone()))
     }
 }
 
 impl IntoNote for String {
     fn try_into_note(self) -> Result<Note> {
-        Note::new(Some(self), None, None, None)
+        Note::from_name(self)
     }
 }
 
 impl IntoNote for &String {
     fn try_into_note(self) -> Result<Note> {
-        Note::new(Some(self.to_string()), None, None, None)
+        Note::from_name(self.as_str())
     }
 }
 
 impl IntoNote for &str {
     fn try_into_note(self) -> Result<Note> {
-        Note::new(Some(self), None, None, None)
+        Note::from_name(self)
     }
 }
 
@@ -209,35 +188,7 @@ impl IntoNote for IntegerType {
     const FROM_INTEGER_PITCH: bool = true;
 
     fn try_into_note(self) -> Result<Note> {
-        Note::new(Some(self), None, None, None)
-    }
-}
-
-pub(crate) trait IntoPitch {
-    fn into_pitch(self) -> Result<Pitch>;
-}
-
-impl IntoPitch for Pitch {
-    fn into_pitch(self) -> Result<Pitch> {
-        Ok(self.clone())
-    }
-}
-
-impl IntoPitch for String {
-    fn into_pitch(self) -> Result<Pitch> {
-        Pitch::from_name(self)
-    }
-}
-
-impl IntoPitch for &str {
-    fn into_pitch(self) -> Result<Pitch> {
-        Pitch::from_name(self)
-    }
-}
-
-impl IntoPitch for IntegerType {
-    fn into_pitch(self) -> Result<Pitch> {
-        Pitch::from_number(self as FloatType)
+        Note::from_number(self as FloatType)
     }
 }
 
@@ -322,7 +273,7 @@ mod tests {
         let parsed: Note = "C#4".parse().unwrap();
         assert_eq!(parsed.to_string(), "C#4");
 
-        let from_pitch = Note::try_from(Pitch::from_name("D4").unwrap()).unwrap();
+        let from_pitch = Note::from(Pitch::from_name("D4").unwrap());
         assert_eq!(from_pitch.pitch_name_with_octave(), "D4");
 
         let from_integer = Note::try_from(60 as IntegerType).unwrap();

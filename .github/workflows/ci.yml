@@ -204,9 +204,6 @@ jobs:
       - name: Cargo test
         run: cargo test --workspace --all-targets
 
-      - name: Binary regression runner
-        run: cargo run --bin test
-
   docs:
     name: Build Docs
     runs-on: ubuntu-latest

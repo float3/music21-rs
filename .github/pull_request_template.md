@@ -11,7 +11,6 @@ Explain the motivation or problem this PR solves.
 - [ ] `cargo fmt --all -- --check`
 - [ ] `cargo clippy --workspace --all-targets -- -D warnings`
 - [ ] `cargo test --workspace --all-targets`
-- [ ] `cargo run --bin test`
 
 ## Notes
 

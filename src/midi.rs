@@ -97,7 +97,7 @@ pub fn midi_notes_from_stream(stream: &Stream) -> Result<Vec<MidiNote>> {
 pub fn stream_from_midi_notes(notes: &[MidiNote]) -> Result<Stream> {
     let mut stream = Stream::new();
     for midi_note in notes {
-        let note = Note::from_pitch(Pitch::from_midi(midi_note.pitch as IntegerType)?)?
+        let note = Note::from_pitch(Pitch::from_midi(midi_note.pitch as IntegerType)?)
             .with_duration(Duration::new(midi_note.duration)?);
         stream.insert(midi_note.start, note);
     }
