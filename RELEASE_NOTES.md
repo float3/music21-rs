@@ -31,6 +31,11 @@ the next release needs a minor bump.
   `chordsymbol` and `roman` share it and its `pitch_class` helper.
 - Private fields drop their `_` prefix, and `spelling_is_infered` is spelled
   correctly.
+- `Note` is a `Pitch` plus an `Option<Duration>`. The `GeneralNote` and
+  `NotRest` wrapper structs and `GeneralNoteTrait`, mirrored from music21's
+  class hierarchy, are gone; nothing dispatched on them. Under `serde` a
+  note now serializes as `{"pitch", "duration"}` rather than nesting the
+  duration two wrappers deep.
 
 # music21-rs 0.3.0
 

@@ -10,7 +10,6 @@ use crate::error::Result;
 use crate::interval::{Interval, PitchOrNote};
 use crate::key::Key;
 use crate::key::keysignature::KeySignature;
-use crate::note::generalnote::GeneralNoteTrait;
 use crate::note::{IntoNote, Note};
 use crate::pitch::{Pitch, PitchClass, PitchClassSpecifier};
 
@@ -1316,16 +1315,6 @@ impl Chord {
 
     fn display_tonic_name(name: &str) -> String {
         name.replace('-', "b")
-    }
-}
-
-impl GeneralNoteTrait for Chord {
-    fn duration(&self) -> &Option<Duration> {
-        &self.duration
-    }
-
-    fn set_duration(&mut self, duration: &Duration) {
-        self.duration = Some(duration.clone());
     }
 }
 

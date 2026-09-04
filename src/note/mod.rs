@@ -1,13 +1,8 @@
-pub(crate) mod generalnote;
-pub(crate) mod notrest;
-
 use crate::defaults::{FloatType, IntegerType};
 use crate::duration::Duration;
 use crate::error::Result;
 use crate::pitch::Pitch;
 
-use generalnote::GeneralNoteTrait;
-use notrest::NotRest;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
@@ -15,8 +10,8 @@ use std::str::FromStr;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// A pitched note.
 pub struct Note {
-    notrest: NotRest,
     pub(crate) pitch: Pitch,
+    duration: Option<Duration>,
 }
 
 impl Note {
@@ -33,8 +28,8 @@ impl Note {
     /// Builds a note from an existing [`Pitch`].
     pub fn from_pitch(pitch: Pitch) -> Self {
         Self {
-            notrest: NotRest::new(None),
             pitch,
+            duration: None,
         }
     }
 
@@ -55,28 +50,18 @@ impl Note {
 
     /// Returns the note duration when one has been assigned.
     pub fn duration(&self) -> Option<&Duration> {
-        self.notrest.duration().as_ref()
+        self.duration.as_ref()
     }
 
     /// Assigns a duration to the note.
     pub fn set_duration(&mut self, duration: Duration) {
-        self.notrest.set_duration(&duration);
+        self.duration = Some(duration);
     }
 
     /// Returns a copy of this note with the supplied duration.
     pub fn with_duration(mut self, duration: Duration) -> Self {
         self.set_duration(duration);
         self
-    }
-}
-
-impl GeneralNoteTrait for Note {
-    fn duration(&self) -> &Option<Duration> {
-        self.notrest.duration()
-    }
-
-    fn set_duration(&mut self, duration: &Duration) {
-        self.notrest.set_duration(duration);
     }
 }
 
