@@ -751,8 +751,6 @@ impl From<PitchName> for PitchParameters {
 fn convert_ps_to_step<T: Num + ToPrimitive>(
     ps: T,
 ) -> (StepName, Accidental, Microtone, IntegerType) {
-    const NATURAL_PCS: [IntegerType; 7] = [0, 2, 4, 5, 7, 9, 11];
-
     let ps = ps.to_f64().unwrap_or(0.0);
     let (pc, alter, micro) = if ps.fract() == 0.0 {
         ((ps as IntegerType).rem_euclid(12), 0.0, 0.0)
@@ -778,22 +776,14 @@ fn convert_ps_to_step<T: Num + ToPrimitive>(
         (pc, alter, micro)
     };
 
-    let mut octave_shift = 0;
-    let (pc_name, accidental_alter) = if alter == 1.0 && matches!(pc, 4 | 11) {
-        if pc == 11 {
-            octave_shift = 1;
-        }
-        ((pc + 1).rem_euclid(12), 0.0)
-    } else if NATURAL_PCS.contains(&pc) {
-        (pc, alter)
-    } else if [0, 5, 7].contains(&(pc - 1)) && alter >= 1.0 {
-        (pc + 1, alter - 1.0)
-    } else if [0, 5, 7].contains(&(pc - 1)) || ([11, 4].contains(&(pc + 1)) && alter <= -1.0) {
-        (pc - 1, 1.0 + alter)
-    } else if [11, 4].contains(&(pc + 1)) {
-        (pc + 1, -1.0 + alter)
-    } else {
-        panic!("cannot match condition for pitch class: {pc}");
+    let octave_shift = IntegerType::from(pc == 11 && alter == 1.0);
+    let (pc_name, accidental_alter) = match pc {
+        4 | 11 if alter == 1.0 => ((pc + 1).rem_euclid(12), 0.0),
+        1 | 6 | 8 if alter >= 1.0 => (pc + 1, alter - 1.0),
+        1 | 6 | 8 => (pc - 1, 1.0 + alter),
+        3 | 10 if alter <= -1.0 => (pc - 1, 1.0 + alter),
+        3 | 10 => (pc + 1, -1.0 + alter),
+        _ => (pc, alter),
     };
 
     let step = StepName::ref_to_step(pc_name.rem_euclid(12))
@@ -1006,7 +996,7 @@ fn dissonance_score(
 }
 
 fn pythagorean_denominator_log(interval: &Interval) -> Result<FloatType> {
-    let start_pitch = Pitch::from_name("C1".to_string())?;
+    let start_pitch = Pitch::from_name("C1")?;
     let end_pitch = interval.transpose_pitch_with_options(&start_pitch, false, Some(4))?;
 
     let natural_fifths = match end_pitch.step() {
@@ -1094,7 +1084,7 @@ mod tests {
 
     #[test]
     fn test_pitch_transpose_interval() {
-        let c4 = Pitch::from_name("C4".to_string()).unwrap();
+        let c4 = Pitch::from_name("C4").unwrap();
         let m3 = Interval::from_name("m3").unwrap();
         let out = c4.transpose(&m3);
         assert_eq!(out.name_with_octave(), "E-4");
@@ -1159,7 +1149,7 @@ mod tests {
 
     #[test]
     fn pitch_exposes_enharmonic_helpers() {
-        let c_sharp = Pitch::from_name("C#3".to_string()).unwrap();
+        let c_sharp = Pitch::from_name("C#3").unwrap();
         let out = c_sharp.get_higher_enharmonic().unwrap();
         assert_eq!(out.name_with_octave(), "D-3");
 

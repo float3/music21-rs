@@ -588,7 +588,7 @@ impl IntervalBaseTrait for Interval {
 }
 
 pub(crate) fn interval_to_pythagorean_ratio(interval: &Interval) -> Result<FractionType> {
-    let start_pitch = Pitch::from_name("C1".to_string())?;
+    let start_pitch = Pitch::from_name("C1")?;
 
     let end_pitch_wanted = interval.transpose_pitch_with_options(&start_pitch, false, Some(4))?;
 
@@ -651,7 +651,7 @@ mod tests {
     use super::*;
 
     fn pitch(name: &str) -> Pitch {
-        Pitch::from_name(name.to_string()).expect("valid pitch")
+        Pitch::from_name(name).expect("valid pitch")
     }
 
     #[test]

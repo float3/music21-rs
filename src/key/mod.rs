@@ -39,7 +39,7 @@ impl Key {
     where
         M: Into<Option<&'a str>>,
     {
-        let tonic_pitch = Pitch::from_name(tonic.to_string())?;
+        let tonic_pitch = Pitch::from_name(tonic)?;
 
         let mode = mode.into();
         let resolved_mode = match mode {

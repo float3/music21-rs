@@ -64,7 +64,7 @@ mod tests {
     use super::*;
 
     fn pitch(name: &str) -> Pitch {
-        Pitch::from_name(name.to_string()).expect("valid pitch")
+        Pitch::from_name(name).expect("valid pitch")
     }
 
     #[test]

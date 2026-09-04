@@ -43,10 +43,10 @@ pub fn mode_sharps_alter(mode: &str) -> Option<IntegerType> {
 /// Returns the major-key tonic pitch for a key-signature sharp count.
 pub fn sharps_to_pitch(sharp_count: IntegerType) -> Result<Pitch> {
     if sharp_count == 0 {
-        return Pitch::from_name("C".to_string());
+        return Pitch::from_name("C");
     }
 
-    let mut pitch = Pitch::from_name("C".to_string())?;
+    let mut pitch = Pitch::from_name("C")?;
     pitch.octave_setter(None);
 
     let interval = if sharp_count > 0 {
@@ -85,7 +85,7 @@ pub fn pitch_to_sharps(pitch_value: &Pitch, mode: Option<&str>) -> Result<Intege
 
 /// Returns the key-signature sharp count for a tonic pitch name and optional mode.
 pub fn pitch_name_to_sharps(pitch_name: &str, mode: Option<&str>) -> Result<IntegerType> {
-    let pitch = Pitch::from_name(pitch_name.to_string())?;
+    let pitch = Pitch::from_name(pitch_name)?;
     pitch_to_sharps(&pitch, mode)
 }
 
@@ -111,11 +111,7 @@ impl KeySignature {
     /// Converts this signature to a key in the given mode.
     pub fn as_key(&self, mode: &str) -> Key {
         self.try_as_key(Some(mode), None).unwrap_or_else(|_| {
-            Key::new(
-                Pitch::from_name("C".to_string()).expect("C is valid pitch"),
-                "major",
-                0,
-            )
+            Key::new(Pitch::from_name("C").expect("C is valid pitch"), "major", 0)
         })
     }
 
