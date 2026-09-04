@@ -51,11 +51,3 @@ pub(crate) fn altered_steps_from_sharps(sharps: IntegerType) -> HashMap<StepName
     }
     map
 }
-
-pub(crate) fn accidental_modifier_from_alter(alter: IntegerType) -> String {
-    match alter.cmp(&0) {
-        Ordering::Greater => "#".repeat(alter as usize),
-        Ordering::Less => "-".repeat((-alter) as usize),
-        Ordering::Equal => String::new(),
-    }
-}

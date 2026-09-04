@@ -7,7 +7,7 @@ use crate::{
     stepname::StepName,
 };
 
-use super::{accidental_modifier_from_alter, altered_steps_from_sharps};
+use super::altered_steps_from_sharps;
 
 #[derive(Clone, Debug)]
 pub(crate) struct ConcreteScale {
@@ -38,11 +38,12 @@ impl ConcreteScale {
         let target_dnn = tonic_dnn + (degree as IntegerType - 1);
 
         let (step, octave) = diatonic_number_to_step_and_octave(target_dnn)?;
-        let alter = *self.altered_steps.get(&step).unwrap_or(&0);
-        let modifier = accidental_modifier_from_alter(alter);
-        let name = format!("{}{modifier}{octave}", step.as_char());
-
-        Pitch::from_name(name)
+        let alter = self.altered_steps.get(&step).copied().unwrap_or(0);
+        Pitch::builder()
+            .step(step.as_char())
+            .accidental(alter)
+            .octave(octave)
+            .build()
     }
 
     pub(crate) fn pitches(&self) -> Result<Vec<Pitch>> {

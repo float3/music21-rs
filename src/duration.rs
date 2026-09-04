@@ -198,22 +198,22 @@ impl Duration {
 
     /// Returns a quarter-note duration.
     pub fn quarter() -> Self {
-        Self::default()
+        Self::from_type(DurationType::Quarter)
     }
 
     /// Returns a half-note duration.
     pub fn half() -> Self {
-        Self::new(2.0).expect("constant duration is valid")
+        Self::from_type(DurationType::Half)
     }
 
     /// Returns a whole-note duration.
     pub fn whole() -> Self {
-        Self::new(4.0).expect("constant duration is valid")
+        Self::from_type(DurationType::Whole)
     }
 
     /// Returns an eighth-note duration.
     pub fn eighth() -> Self {
-        Self::new(0.5).expect("constant duration is valid")
+        Self::from_type(DurationType::Eighth)
     }
 
     /// Creates a duration from a note-value type.
@@ -252,9 +252,7 @@ impl Duration {
 
 impl Default for Duration {
     fn default() -> Self {
-        Self {
-            quarter_length: 1.0,
-        }
+        Self::quarter()
     }
 }
 
