@@ -30,9 +30,31 @@ the next release needs a minor bump.
   Temperley-Kostka-Payne), verified against music21 by the parity fixture,
   and `estimate_key_from_pitches_with` / `estimate_key_from_chords_with` to
   choose one.
+- `Chord::transpose`, the augmented-sixth family (`is_augmented_sixth`,
+  `is_italian_augmented_sixth`, `is_french_augmented_sixth`,
+  `is_german_augmented_sixth`, `is_swiss_augmented_sixth`), `is_ninth`,
+  `is_transpositionally_symmetrical`, `can_be_dominant_v`, `can_be_tonic`,
+  `has_any_repeated_diatonic_note`, `prime_form`, `prime_form_string`,
+  `forte_class_tni`, `pitch_class_cardinality` and
+  `ordered_pitch_classes_string`.
+- `Interval::directed_simple_name`.
+- `Scale::degree_of`, `degree_of_pitch_class`, `next_pitch_above` and
+  `next_pitch_below`, the realized-scale counterparts of music21's
+  `getScaleDegreeFromPitch` and `nextPitch`.
+- `tempo::MetronomeMark`, `convert_tempo_by_referent` and the
+  `DEFAULT_TEMPO_VALUES` word table, verified against music21 by the parity
+  fixture.
+- `Error::Duration`, `Error::Key`, `Error::Scale` and `Error::Tempo`
+  variants. Duration, mode and scale-degree errors used to be reported as
+  `Error::Ordinal`.
 
 ## Breaking Changes
 
+- `Chord::inversion` now follows music21: it is the chord step the bass
+  occupies above the music21 root, so `C F G` is second inversion and
+  `A- C F#` is first inversion with root `F#`, and it is `None` only for an
+  empty chord. `Chord::bass` picks the written-lowest pitch, so `B#3` is
+  below `C4`.
 - `Chord::empty` returns `Chord` rather than `Result<Chord>`; it cannot fail.
 - `Note::from_pitch` returns `Note` rather than `Result<Note>`, and
   `From<Pitch>` / `From<&Pitch>` replace the `TryFrom` impls that could not

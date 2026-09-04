@@ -415,10 +415,23 @@ fn write_small_tables(py: Python<'_>, workspace_root: &Path, version: &str) -> P
         profiles += 1;
     }
 
+    let tempo = py.import("music21.tempo")?;
+    let tempo_values = tempo.getattr("defaultTempoValues")?.cast_into::<PyDict>()?;
+    let mut tempo_words = 0;
+    for (name, number) in tempo_values.iter() {
+        let name: String = name.extract()?;
+        let number: f64 = number.extract()?;
+        let _ = writeln!(out, "[[tempo]]");
+        let _ = writeln!(out, "name = {}", toml_string(&name));
+        let _ = writeln!(out, "number = {}", float_repr(number));
+        let _ = writeln!(out);
+        tempo_words += 1;
+    }
+
     let path = workspace_root.join("data/table_expectations.toml");
     fs::write(&path, out)?;
     println!(
-        "  wrote {} ({accidentals} accidentals, {mode_count} modes, {specifiers} specifier combos, {profiles} key profiles)",
+        "  wrote {} ({accidentals} accidentals, {mode_count} modes, {specifiers} specifier combos, {profiles} key profiles, {tempo_words} tempo words)",
         path.display()
     );
     Ok(path)

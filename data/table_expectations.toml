@@ -552,3 +552,123 @@ name = "TemperleyKostkaPayne"
 mode = "minor"
 weights = [0.712, 0.084, 0.474, 0.618, 0.049, 0.46, 0.105, 0.747, 0.404, 0.067, 0.133, 0.33]
 
+[[tempo]]
+name = "larghissimo"
+number = 16.0
+
+[[tempo]]
+name = "largamente"
+number = 32.0
+
+[[tempo]]
+name = "grave"
+number = 40.0
+
+[[tempo]]
+name = "molto adagio"
+number = 40.0
+
+[[tempo]]
+name = "largo"
+number = 46.0
+
+[[tempo]]
+name = "lento"
+number = 52.0
+
+[[tempo]]
+name = "adagio"
+number = 56.0
+
+[[tempo]]
+name = "slow"
+number = 56.0
+
+[[tempo]]
+name = "langsam"
+number = 56.0
+
+[[tempo]]
+name = "larghetto"
+number = 60.0
+
+[[tempo]]
+name = "adagietto"
+number = 66.0
+
+[[tempo]]
+name = "andante"
+number = 72.0
+
+[[tempo]]
+name = "andantino"
+number = 80.0
+
+[[tempo]]
+name = "andante moderato"
+number = 83.0
+
+[[tempo]]
+name = "maestoso"
+number = 88.0
+
+[[tempo]]
+name = "moderato"
+number = 92.0
+
+[[tempo]]
+name = "moderate"
+number = 92.0
+
+[[tempo]]
+name = "allegretto"
+number = 108.0
+
+[[tempo]]
+name = "animato"
+number = 120.0
+
+[[tempo]]
+name = "allegro moderato"
+number = 128.0
+
+[[tempo]]
+name = "allegro"
+number = 132.0
+
+[[tempo]]
+name = "fast"
+number = 132.0
+
+[[tempo]]
+name = "schnell"
+number = 132.0
+
+[[tempo]]
+name = "allegrissimo"
+number = 140.0
+
+[[tempo]]
+name = "molto allegro"
+number = 144.0
+
+[[tempo]]
+name = "très vite"
+number = 144.0
+
+[[tempo]]
+name = "vivace"
+number = 160.0
+
+[[tempo]]
+name = "vivacissimo"
+number = 168.0
+
+[[tempo]]
+name = "presto"
+number = 184.0
+
+[[tempo]]
+name = "prestissimo"
+number = 208.0
+

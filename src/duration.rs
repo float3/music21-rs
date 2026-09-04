@@ -170,7 +170,7 @@ impl FromStr for DurationType {
 
     fn from_str(value: &str) -> Result<Self> {
         Self::from_music21_name(value)
-            .ok_or_else(|| Error::Ordinal(format!("unknown duration type {value:?}")))
+            .ok_or_else(|| Error::Duration(format!("unknown duration type {value:?}")))
     }
 }
 
@@ -188,7 +188,7 @@ impl Duration {
     /// Creates a duration from a quarter-length value.
     pub fn new(quarter_length: FloatType) -> Result<Self> {
         if !quarter_length.is_finite() || quarter_length < 0.0 {
-            return Err(Error::Ordinal(format!(
+            return Err(Error::Duration(format!(
                 "duration quarter length must be finite and non-negative, got {quarter_length}"
             )));
         }

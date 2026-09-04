@@ -46,6 +46,8 @@ pub mod sieve;
 pub(crate) mod stepname;
 /// Small ordered timeline container.
 pub mod stream;
+/// Metronome marks and tempo-word conventions.
+pub mod tempo;
 /// Tuning-system ratios, labels and frequency helpers.
 pub mod tuningsystem;
 /// Two-voice voice-leading classification and parallel-interval checks.
@@ -63,7 +65,7 @@ pub use analysis::{
 };
 pub use chord::{
     Chord, ChordResolutionSuggestion, GuitarFingering, GuitarStringFingering, GuitarTuning,
-    GuitarTuningString, IntoNotes, KnownChordType,
+    GuitarTuningString, IntoNotes, KnownChordType, TriadQuality,
 };
 pub use chordsymbol::{
     ChordAlteration, ChordQuality, ChordSymbol, Music21ChordType, known_chord_symbol_types,
@@ -89,6 +91,7 @@ pub use roman::{RomanNumeral, analyze_chord, analyze_chord_with_root};
 pub use scale::{BluesForm, DiatonicScale, Scale, ScaleType, StepScale, WeightedHexatonicBlues};
 pub use sieve::Sieve;
 pub use stream::{Stream, StreamElement, StreamEvent};
+pub use tempo::{DEFAULT_TEMPO_VALUES, MetronomeMark, convert_tempo_by_referent};
 pub use tuningsystem::{
     ALL_TUNING_SYSTEMS, COMMON_EQUAL_TEMPERAMENTS, COMMON_TWELVE_TONE_TUNING_SYSTEMS, Fraction,
     HISTORICAL_TEMPERAMENTS, TuningSystem,

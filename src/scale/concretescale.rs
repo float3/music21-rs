@@ -29,7 +29,7 @@ impl ConcreteScale {
 
     pub(crate) fn pitch_from_degree(&self, degree: usize) -> Result<Pitch> {
         if degree == 0 {
-            return Err(Error::Ordinal("Scale degree must be >= 1".to_string()));
+            return Err(Error::Scale("Scale degree must be >= 1".to_string()));
         }
 
         let tonic_step_idx = self.tonic.step().step_to_dnn_offset() - 1;

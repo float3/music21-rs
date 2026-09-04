@@ -18,6 +18,7 @@ pub use guitar::{GuitarFingering, GuitarStringFingering, GuitarTuning, GuitarTun
 use num::integer::{gcd, lcm};
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
+use std::sync::LazyLock;
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -688,32 +689,12 @@ impl Chord {
         tables::z_relation_from_address(address).ok().flatten()
     }
 
-    /// Returns the tertian inversion number, where root position is `0`.
-    ///
-    /// Returns `None` for empty chords, chords with fewer than three distinct
-    /// pitch classes, or chords whose bass-to-root interval does not match a
-    /// supported tertian inversion.
+    /// Returns the inversion number the way music21 finds it: root position
+    /// is `0`, and the number climbs with the chord step the bass sits on,
+    /// so a bass on the seventh is `3`. `None` only for an empty chord.
     pub fn inversion(&self) -> Option<u8> {
-        let root_pc = self.root_pitch_class_tertian()?;
-        let bass_pc = self
-            .notes
-            .iter()
-            .min_by(|a, b| {
-                a.pitch
-                    .ps()
-                    .partial_cmp(&b.pitch.ps())
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            })
-            .map(|n| (n.pitch.ps().round() as IntegerType).rem_euclid(12) as u8)?;
-
-        let interval = ((bass_pc as IntegerType - root_pc as IntegerType).rem_euclid(12)) as u8;
-        match interval {
-            0 => Some(0),
-            3 | 4 => Some(1),
-            6..=8 => Some(2),
-            9..=11 => Some(3),
-            _ => None,
-        }
+        let bass_to_root = diatonic_steps_above(self.bass()?, self.root()?);
+        Some([0, 3, 6, 2, 5, 1, 4][usize::from(bass_to_root - 1)])
     }
 
     /// Returns a human-readable inversion label.
@@ -1282,6 +1263,193 @@ impl Chord {
         });
     }
 
+    /// Returns a copy with every note transposed by the interval.
+    pub fn transpose(&self, interval: &Interval) -> Result<Self> {
+        let mut chord = self.clone();
+        for note in &mut chord.notes {
+            note.pitch = interval.transpose_pitch(&note.pitch)?;
+        }
+        Ok(chord)
+    }
+
+    /// Returns whether the chord is an Italian, French, German or Swiss
+    /// augmented sixth. Each must be in its conventional inversion unless
+    /// `permit_any_inversion` is set.
+    pub fn is_augmented_sixth(&self, permit_any_inversion: bool) -> bool {
+        match self.pitch_class_cardinality() {
+            3 => self.is_italian_augmented_sixth(permit_any_inversion),
+            4 => {
+                self.is_french_augmented_sixth(permit_any_inversion)
+                    || self.is_german_augmented_sixth(permit_any_inversion)
+                    || self.is_swiss_augmented_sixth(permit_any_inversion)
+            }
+            _ => false,
+        }
+    }
+
+    /// Returns whether the chord is an Italian augmented sixth, such as
+    /// `A- C F#`.
+    pub fn is_italian_augmented_sixth(&self, permit_any_inversion: bool) -> bool {
+        self.is_augmented_sixth_of_type(
+            (3, 8, 1),
+            1,
+            permit_any_inversion,
+            &AUGMENTED_SIXTHS.italian,
+        )
+    }
+
+    /// Returns whether the chord is a French augmented sixth, such as
+    /// `A- C D F#`.
+    pub fn is_french_augmented_sixth(&self, permit_any_inversion: bool) -> bool {
+        self.is_augmented_sixth_of_type(
+            (4, 25, 0),
+            2,
+            permit_any_inversion,
+            &AUGMENTED_SIXTHS.french,
+        )
+    }
+
+    /// Returns whether the chord is a German augmented sixth, such as
+    /// `A- C E- F#`.
+    pub fn is_german_augmented_sixth(&self, permit_any_inversion: bool) -> bool {
+        self.is_augmented_sixth_of_type(
+            (4, 27, -1),
+            1,
+            permit_any_inversion,
+            &AUGMENTED_SIXTHS.german,
+        )
+    }
+
+    /// Returns whether the chord is a Swiss augmented sixth, such as
+    /// `A- C D# F#`.
+    pub fn is_swiss_augmented_sixth(&self, permit_any_inversion: bool) -> bool {
+        self.is_augmented_sixth_of_type(
+            (4, 27, -1),
+            2,
+            permit_any_inversion,
+            &AUGMENTED_SIXTHS.swiss,
+        )
+    }
+
+    /// Returns whether the chord is five distinct pitch names with a third,
+    /// fifth, seventh and ninth above the root.
+    pub fn is_ninth(&self) -> bool {
+        self.unique_pitch_names().len() == 5
+            && self.third().is_some()
+            && self.fifth().is_some()
+            && self.seventh().is_some()
+            && self.chord_step(2).is_some()
+    }
+
+    /// Returns whether some transposition other than the octave maps the
+    /// pitch-class set onto itself. With `require_intervallic_evenness` only
+    /// the evenly spaced sets count, the way Straus defines the property.
+    pub fn is_transpositionally_symmetrical(&self, require_intervallic_evenness: bool) -> bool {
+        let Some((card, index, _)) = self.forte_address() else {
+            return self.notes.is_empty();
+        };
+        if card == 1 {
+            return require_intervallic_evenness;
+        }
+        const EVEN: [(u8, u8); 5] = [(2, 6), (3, 12), (4, 28), (6, 35), (12, 1)];
+        const UNEVEN: [(u8, u8); 10] = [
+            (4, 9),
+            (4, 25),
+            (6, 7),
+            (6, 20),
+            (6, 30),
+            (8, 9),
+            (8, 25),
+            (8, 28),
+            (9, 12),
+            (10, 6),
+        ];
+        EVEN.contains(&(card, index))
+            || (!require_intervallic_evenness && UNEVEN.contains(&(card, index)))
+    }
+
+    /// Returns whether the chord could serve as a dominant: a major triad or
+    /// a dominant seventh.
+    pub fn can_be_dominant_v(&self) -> bool {
+        self.is_major_triad() || self.is_dominant_seventh()
+    }
+
+    /// Returns whether the chord could serve as a tonic: a major or minor
+    /// triad.
+    pub fn can_be_tonic(&self) -> bool {
+        self.is_major_triad() || self.is_minor_triad()
+    }
+
+    /// Returns whether two pitches share a letter under different
+    /// accidentals, such as `E` and `E-`.
+    pub fn has_any_repeated_diatonic_note(&self) -> bool {
+        let steps = self
+            .pitch_refs()
+            .map(Pitch::step)
+            .collect::<std::collections::BTreeSet<_>>();
+        steps.len() != self.unique_pitch_names().len()
+    }
+
+    /// Returns the Forte prime form of the pitch-class set, such as
+    /// `[0, 3, 7]` for any major or minor triad. Empty when the chord has no
+    /// table entry.
+    pub fn prime_form(&self) -> Vec<u8> {
+        tables::seek_chord_tables_address(&self.ordered_pitch_classes())
+            .and_then(tables::prime_form_from_address)
+            .unwrap_or_default()
+    }
+
+    /// Returns the prime form in music21's angle-bracket notation, such as
+    /// `"<037>"`, with `A` and `B` standing for ten and eleven.
+    pub fn prime_form_string(&self) -> String {
+        format_pitch_classes(&self.prime_form())
+    }
+
+    /// Returns the Forte class without the `A`/`B` inversion suffix, such as
+    /// `"3-11"` for both major and minor triads.
+    pub fn forte_class_tni(&self) -> Option<String> {
+        let address = tables::seek_chord_tables_address(&self.ordered_pitch_classes()).ok()?;
+        tables::address_to_forte_name(address, "tni").ok()
+    }
+
+    /// Returns the number of distinct pitch classes.
+    pub fn pitch_class_cardinality(&self) -> usize {
+        self.pitch_class_set().len()
+    }
+
+    /// Returns the distinct pitch classes in ascending order in music21's
+    /// angle-bracket notation, such as `"<047>"`.
+    pub fn ordered_pitch_classes_string(&self) -> String {
+        format_pitch_classes(&self.ordered_pitch_classes())
+    }
+
+    fn is_augmented_sixth_of_type(
+        &self,
+        address: (u8, u8, i8),
+        required_inversion: u8,
+        permit_any_inversion: bool,
+        intervals: &[[Interval; 2]],
+    ) -> bool {
+        if self.forte_address() != Some(address) || self.has_any_enharmonic_spelled_pitches() {
+            return false;
+        }
+        if !permit_any_inversion && self.inversion() != Some(required_inversion) {
+            return false;
+        }
+        let Some(root) = self.root() else {
+            return false;
+        };
+        let steps = [self.third(), self.fifth(), self.seventh()];
+        intervals.iter().zip(steps).all(|(accepted, step)| {
+            step.and_then(|pitch| Interval::between_pitches(root, pitch).ok())
+                .is_some_and(|interval| {
+                    accepted.iter().any(|candidate| {
+                        candidate.directed_simple_key() == interval.directed_simple_key()
+                    })
+                })
+        })
+    }
+
     fn ordered_pitch_classes(&self) -> Vec<u8> {
         let mut pcs = self
             .notes
@@ -1550,62 +1718,6 @@ impl Chord {
         self.ordered_pitch_classes().into_iter().collect()
     }
 
-    fn root_pitch_class_tertian(&self) -> Option<u8> {
-        let ordered_pcs = self.ordered_pitch_classes();
-        if ordered_pcs.len() < 3 {
-            return None;
-        }
-
-        let pc_set = ordered_pcs
-            .iter()
-            .copied()
-            .collect::<std::collections::BTreeSet<u8>>();
-
-        let mut best_pc: Option<u8> = None;
-        let mut best_score: IntegerType = IntegerType::MIN;
-
-        for candidate in &ordered_pcs {
-            let mut score = 0;
-            let mut current = *candidate;
-            let mut visited = std::collections::BTreeSet::new();
-            visited.insert(current);
-
-            for _ in 0..ordered_pcs.len() {
-                let minor_third = ((current as IntegerType + 3).rem_euclid(12)) as u8;
-                let major_third = ((current as IntegerType + 4).rem_euclid(12)) as u8;
-                if pc_set.contains(&minor_third) && !visited.contains(&minor_third) {
-                    score += 2;
-                    current = minor_third;
-                    visited.insert(current);
-                    continue;
-                }
-                if pc_set.contains(&major_third) && !visited.contains(&major_third) {
-                    score += 2;
-                    current = major_third;
-                    visited.insert(current);
-                    continue;
-                }
-                break;
-            }
-
-            let has_fifth_like = [6_u8, 7_u8, 8_u8].iter().any(|delta| {
-                pc_set.contains(
-                    &(((*candidate as IntegerType + *delta as IntegerType).rem_euclid(12)) as u8),
-                )
-            });
-            if has_fifth_like {
-                score += 1;
-            }
-
-            if score > best_score {
-                best_score = score;
-                best_pc = Some(*candidate);
-            }
-        }
-
-        best_pc
-    }
-
     fn pitch_class_name(pc: u8) -> &'static str {
         CANDIDATE_TONICS[pc as usize % 12]
     }
@@ -1719,6 +1831,43 @@ fn diatonic_steps_above(root: &Pitch, pitch: &Pitch) -> u8 {
 
 fn semitones_above(root: &Pitch, pitch: &Pitch) -> u8 {
     (root::pitch_class(pitch) + 12 - root::pitch_class(root)) % 12
+}
+
+struct AugmentedSixthIntervals {
+    italian: [[Interval; 2]; 2],
+    french: [[Interval; 2]; 3],
+    german: [[Interval; 2]; 3],
+    swiss: [[Interval; 2]; 3],
+}
+
+/// The intervals each augmented-sixth type stacks above its root, as music21
+/// spells them: the third and fifth (and seventh) may each be written either
+/// way up.
+static AUGMENTED_SIXTHS: LazyLock<AugmentedSixthIntervals> = LazyLock::new(|| {
+    let pair = |up: &str, down: &str| {
+        [
+            Interval::from_name(up).expect("augmented sixth intervals parse"),
+            Interval::from_name(down).expect("augmented sixth intervals parse"),
+        ]
+    };
+    AugmentedSixthIntervals {
+        italian: [pair("d3", "A-6"), pair("d5", "A-4")],
+        french: [pair("M3", "m-6"), pair("d5", "A-4"), pair("m7", "M-2")],
+        german: [pair("d3", "A-6"), pair("d5", "A-4"), pair("d7", "A-2")],
+        swiss: [pair("m3", "M-6"), pair("dd5", "AA-4"), pair("d7", "A-2")],
+    }
+});
+
+fn format_pitch_classes(pitch_classes: &[u8]) -> String {
+    let mut out = String::with_capacity(pitch_classes.len() + 2);
+    out.push('<');
+    for pitch_class in pitch_classes {
+        out.push_str(&crate::pitch::pitchclass::convert_pitch_class_to_str(
+            IntegerType::from(*pitch_class),
+        ));
+    }
+    out.push('>');
+    out
 }
 
 /// Tries to convert a supported chord input into notes.
@@ -1891,7 +2040,7 @@ impl IntoNotes for &[IntegerType] {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Duration, GuitarTuning, Key, Pitch, chord::Chord, chord::TriadQuality};
+    use crate::{Duration, GuitarTuning, Interval, Key, Pitch, chord::Chord, chord::TriadQuality};
 
     #[test]
     fn set_duration_applies_to_non_empty_chords() {
@@ -2329,6 +2478,323 @@ mod tests {
         assert_eq!(
             names(Chord::new("G-4 F##4 E4").unwrap().sort_ascending()),
             vec!["E4", "F##4", "G-4"]
+        );
+    }
+
+    #[test]
+    fn inversions_match_music21() {
+        let cases = [
+            ("C E G", 0, "C", "C"),
+            ("E G C", 0, "C", "C"),
+            ("G C E", 0, "C", "C"),
+            ("C4 E4 G4 B-4", 0, "C4", "C4"),
+            ("E4 G4 B-4 C5", 1, "C5", "E4"),
+            ("B-3 C4 E4 G4", 3, "C4", "B-3"),
+            ("G3 C4 E4 B-4", 2, "C4", "G3"),
+            ("A-4 C5 F#5", 1, "F#5", "A-4"),
+            ("C5 F#5 A-5", 2, "F#5", "C5"),
+            ("F#4 A-4 C5", 0, "F#4", "F#4"),
+            ("C F G", 2, "F", "C"),
+            ("C4 G4 E5", 0, "C4", "C4"),
+            ("C", 0, "C", "C"),
+            ("G C", 0, "C", "C"),
+            ("E C", 0, "C", "C"),
+            ("F A C E", 2, "F", "C"),
+            ("E4 C5 G5", 1, "C5", "E4"),
+            ("C E G A", 1, "A", "C"),
+            ("C F# G", 2, "F#", "C"),
+            ("D4 F#4 A4 C5 E5", 0, "D4", "D4"),
+            ("A-3 C4 E-4 F#4", 1, "F#4", "A-3"),
+            ("C4 A-4 E-5 F#5", 2, "F#5", "C4"),
+            ("E3 G3 B-3 D-4", 0, "E3", "E3"),
+        ];
+        for (notes, inversion, root, bass) in cases {
+            let chord = Chord::new(notes).unwrap();
+            assert_eq!(chord.inversion(), Some(inversion), "{notes} inversion");
+            assert_eq!(
+                chord.root().map(Pitch::name_with_octave).as_deref(),
+                Some(root),
+                "{notes} root"
+            );
+            assert_eq!(
+                chord.bass().map(Pitch::name_with_octave).as_deref(),
+                Some(bass),
+                "{notes} bass"
+            );
+        }
+        assert_eq!(Chord::empty().inversion(), None);
+        assert_eq!(
+            Chord::new("B#3 C4 E4")
+                .unwrap()
+                .bass()
+                .unwrap()
+                .name_with_octave(),
+            "B#3"
+        );
+    }
+
+    #[test]
+    fn augmented_sixths_and_set_class_helpers_match_music21() {
+        struct Case {
+            notes: &'static str,
+            flags: [bool; 11],
+            prime_form: &'static str,
+            forte_tni: &'static str,
+            cardinality: usize,
+            ordered: &'static str,
+        }
+        let t = true;
+        let f = false;
+        let cases = [
+            Case {
+                notes: "A-4 C5 F#5",
+                flags: [t, t, f, f, f, t, t, f, f, f, f],
+                prime_form: "<026>",
+                forte_tni: "3-8",
+                cardinality: 3,
+                ordered: "<068>",
+            },
+            Case {
+                notes: "A-4 C5 D5 F#5",
+                flags: [t, f, t, f, f, t, f, f, t, f, f],
+                prime_form: "<0268>",
+                forte_tni: "4-25",
+                cardinality: 4,
+                ordered: "<0268>",
+            },
+            Case {
+                notes: "A-4 C5 E-5 F#5",
+                flags: [t, f, f, t, f, t, f, f, f, f, f],
+                prime_form: "<0258>",
+                forte_tni: "4-27",
+                cardinality: 4,
+                ordered: "<0368>",
+            },
+            Case {
+                notes: "A-4 C5 D#5 F#5",
+                flags: [t, f, f, f, t, t, f, f, f, f, f],
+                prime_form: "<0258>",
+                forte_tni: "4-27",
+                cardinality: 4,
+                ordered: "<0368>",
+            },
+            Case {
+                notes: "C4 E4 G4",
+                flags: [f, f, f, f, f, f, f, f, f, t, t],
+                prime_form: "<037>",
+                forte_tni: "3-11",
+                cardinality: 3,
+                ordered: "<047>",
+            },
+            Case {
+                notes: "F#4 A-4 C5",
+                flags: [f, f, f, f, f, t, t, f, f, f, f],
+                prime_form: "<026>",
+                forte_tni: "3-8",
+                cardinality: 3,
+                ordered: "<068>",
+            },
+            Case {
+                notes: "C5 F#5 A-5",
+                flags: [f, f, f, f, f, t, t, f, f, f, f],
+                prime_form: "<026>",
+                forte_tni: "3-8",
+                cardinality: 3,
+                ordered: "<068>",
+            },
+            Case {
+                notes: "A-4 F#5 C6",
+                flags: [t, t, f, f, f, t, t, f, f, f, f],
+                prime_form: "<026>",
+                forte_tni: "3-8",
+                cardinality: 3,
+                ordered: "<068>",
+            },
+            Case {
+                notes: "A-4 C5 E-5 F#5 A-5",
+                flags: [t, f, f, t, f, t, f, f, f, f, f],
+                prime_form: "<0258>",
+                forte_tni: "4-27",
+                cardinality: 4,
+                ordered: "<0368>",
+            },
+            Case {
+                notes: "C E G B- D",
+                flags: [f, f, f, f, f, f, f, t, f, f, f],
+                prime_form: "<02469>",
+                forte_tni: "5-34",
+                cardinality: 5,
+                ordered: "<0247A>",
+            },
+            Case {
+                notes: "C E G B D F",
+                flags: [f, f, f, f, f, f, f, f, f, f, f],
+                prime_form: "<013568>",
+                forte_tni: "6-25",
+                cardinality: 6,
+                ordered: "<02457B>",
+            },
+            Case {
+                notes: "C E G#",
+                flags: [f, f, f, f, f, f, f, f, t, f, f],
+                prime_form: "<048>",
+                forte_tni: "3-12",
+                cardinality: 3,
+                ordered: "<048>",
+            },
+            Case {
+                notes: "C E- G- B--",
+                flags: [f, f, f, f, f, f, f, f, t, f, f],
+                prime_form: "<0369>",
+                forte_tni: "4-28",
+                cardinality: 4,
+                ordered: "<0369>",
+            },
+            Case {
+                notes: "C D E F# G# A#",
+                flags: [f, f, f, f, f, f, f, f, t, f, f],
+                prime_form: "<02468A>",
+                forte_tni: "6-35",
+                cardinality: 6,
+                ordered: "<02468A>",
+            },
+            Case {
+                notes: "C C# D D# E F F# G G# A A# B",
+                flags: [f, f, f, f, f, f, f, f, t, f, f],
+                prime_form: "<0123456789AB>",
+                forte_tni: "12-1",
+                cardinality: 12,
+                ordered: "<0123456789AB>",
+            },
+            Case {
+                notes: "C",
+                flags: [f, f, f, f, f, f, f, f, f, f, f],
+                prime_form: "<0>",
+                forte_tni: "1-1",
+                cardinality: 1,
+                ordered: "<0>",
+            },
+            Case {
+                notes: "B- D F A-",
+                flags: [f, f, f, f, f, f, f, f, f, t, f],
+                prime_form: "<0258>",
+                forte_tni: "4-27",
+                cardinality: 4,
+                ordered: "<258A>",
+            },
+            Case {
+                notes: "C F#",
+                flags: [f, f, f, f, f, f, f, f, t, f, f],
+                prime_form: "<06>",
+                forte_tni: "2-6",
+                cardinality: 2,
+                ordered: "<06>",
+            },
+        ];
+        for case in cases {
+            let chord = Chord::new(case.notes).unwrap();
+            let notes = case.notes;
+            let actual = [
+                chord.is_augmented_sixth(false),
+                chord.is_italian_augmented_sixth(false),
+                chord.is_french_augmented_sixth(false),
+                chord.is_german_augmented_sixth(false),
+                chord.is_swiss_augmented_sixth(false),
+                chord.is_augmented_sixth(true),
+                chord.is_italian_augmented_sixth(true),
+                chord.is_ninth(),
+                chord.is_transpositionally_symmetrical(false),
+                chord.can_be_dominant_v(),
+                chord.can_be_tonic(),
+            ];
+            assert_eq!(actual, case.flags, "{notes}");
+            assert_eq!(
+                chord.prime_form_string(),
+                case.prime_form,
+                "{notes} prime form"
+            );
+            assert_eq!(
+                chord.forte_class_tni().as_deref(),
+                Some(case.forte_tni),
+                "{notes} forte tni"
+            );
+            assert_eq!(chord.pitch_class_cardinality(), case.cardinality, "{notes}");
+            assert_eq!(
+                chord.ordered_pitch_classes_string(),
+                case.ordered,
+                "{notes}"
+            );
+        }
+
+        assert!(
+            Chord::new("C")
+                .unwrap()
+                .is_transpositionally_symmetrical(true)
+        );
+        assert!(
+            !Chord::new("C D-")
+                .unwrap()
+                .is_transpositionally_symmetrical(false)
+        );
+        assert!(
+            Chord::new("A-4 C5 D5 F#5")
+                .unwrap()
+                .is_transpositionally_symmetrical(false)
+        );
+        assert!(
+            !Chord::new("A-4 C5 D5 F#5")
+                .unwrap()
+                .is_transpositionally_symmetrical(true)
+        );
+        assert!(
+            Chord::new("C C# D D# E F F# G G# A A# B")
+                .unwrap()
+                .has_any_repeated_diatonic_note()
+        );
+        assert!(
+            !Chord::new("C E G")
+                .unwrap()
+                .has_any_repeated_diatonic_note()
+        );
+
+        let empty = Chord::empty();
+        assert!(empty.is_transpositionally_symmetrical(false));
+        assert!(empty.prime_form().is_empty());
+        assert_eq!(empty.prime_form_string(), "<>");
+        assert_eq!(empty.forte_class_tni(), None);
+        assert_eq!(empty.pitch_class_cardinality(), 0);
+        assert_eq!(empty.ordered_pitch_classes_string(), "<>");
+    }
+
+    #[test]
+    fn transpose_moves_every_note() {
+        let names = |chord: Chord| {
+            chord
+                .pitches()
+                .iter()
+                .map(Pitch::name_with_octave)
+                .collect::<Vec<_>>()
+        };
+        let chord = Chord::new("C4 E4 G4").unwrap();
+        let up = |name: &str| {
+            chord
+                .transpose(&Interval::from_name(name).unwrap())
+                .unwrap()
+        };
+        assert_eq!(names(up("M2")), vec!["D4", "F#4", "A4"]);
+        assert_eq!(names(up("-m3")), vec!["A3", "C#4", "E4"]);
+        assert_eq!(
+            names(
+                chord
+                    .transpose(&Interval::from_semitones(3).unwrap())
+                    .unwrap()
+            ),
+            vec!["E-4", "G4", "B-4"]
+        );
+        let bare = Chord::new("C E G").unwrap();
+        assert_eq!(
+            names(bare.transpose(&Interval::from_name("P5").unwrap()).unwrap()),
+            vec!["G", "B", "D"]
         );
     }
 

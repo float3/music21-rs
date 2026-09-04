@@ -67,11 +67,17 @@ pub(crate) fn find_root_pitch<'a>(
     Some(best)
 }
 
+/// Finds the written-lowest pitch, as music21's `Chord.bass` does: the lowest
+/// staff position, then the lowest pitch space, keeping the first on a tie.
 pub(crate) fn bass_pitch<'a>(pitches: impl IntoIterator<Item = &'a Pitch>) -> Option<&'a Pitch> {
     pitches.into_iter().min_by(|left, right| {
-        left.ps()
-            .partial_cmp(&right.ps())
-            .unwrap_or(std::cmp::Ordering::Equal)
+        diatonic_note_number(left)
+            .cmp(&diatonic_note_number(right))
+            .then_with(|| {
+                left.ps()
+                    .partial_cmp(&right.ps())
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
     })
 }
 

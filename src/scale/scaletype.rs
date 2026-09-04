@@ -8,6 +8,7 @@
 //! run out of reasonable accidentals, which is why a C whole-tone scale ends
 //! `A#` rather than `B-` but a B whole-tone scale does not end `A##`.
 
+use crate::defaults::{FloatType, IntegerType};
 use crate::error::Result;
 use crate::interval::Interval;
 use crate::pitch::Pitch;
@@ -258,7 +259,7 @@ impl Scale {
     /// Degrees beyond that continue into higher octaves.
     pub fn pitch_at_degree(&self, degree: usize) -> Result<Pitch> {
         if degree == 0 {
-            return Err(crate::error::Error::Ordinal(
+            return Err(crate::error::Error::Scale(
                 "scale degree must be >= 1".to_string(),
             ));
         }
@@ -270,6 +271,100 @@ impl Scale {
             current = advance(&current, steps[index % steps.len()], simplification)?;
         }
         Ok(current)
+    }
+    /// Returns the one-based degree whose pitch name matches, ignoring octave,
+    /// or `None` when the pitch is not in the scale.
+    pub fn degree_of(&self, pitch: &Pitch) -> Result<Option<usize>> {
+        let name = pitch.name();
+        Ok(self
+            .scale_pitches()?
+            .iter()
+            .position(|candidate| candidate.name() == name)
+            .map(|index| index + 1))
+    }
+
+    /// Returns the one-based degree whose pitch class matches, so `F-` finds
+    /// the `E` of C major.
+    pub fn degree_of_pitch_class(&self, pitch: &Pitch) -> Result<Option<usize>> {
+        let pitch_class = pitch.pitch_class().number();
+        Ok(self
+            .scale_pitches()?
+            .iter()
+            .position(|candidate| candidate.pitch_class().number() == pitch_class)
+            .map(|index| index + 1))
+    }
+
+    /// Returns the scale pitch `steps` degrees above `origin`. A pitch outside
+    /// the scale first moves to the nearest scale pitch above it.
+    pub fn next_pitch_above(&self, origin: &Pitch, steps: usize) -> Result<Pitch> {
+        self.pitch_steps_from(origin, steps as IntegerType)
+    }
+
+    /// Returns the scale pitch `steps` degrees below `origin`. A pitch outside
+    /// the scale first moves to the nearest scale pitch below it.
+    pub fn next_pitch_below(&self, origin: &Pitch, steps: usize) -> Result<Pitch> {
+        self.pitch_steps_from(origin, -(steps as IntegerType))
+    }
+
+    fn scale_pitches(&self) -> Result<Vec<Pitch>> {
+        let mut pitches = self.pitches()?;
+        pitches.truncate(self.scale_type.degree_count());
+        Ok(pitches)
+    }
+
+    fn pitch_steps_from(&self, origin: &Pitch, steps: IntegerType) -> Result<Pitch> {
+        if steps == 0 {
+            return Err(crate::error::Error::Scale(
+                "step size must be at least 1".to_string(),
+            ));
+        }
+        let pitches = self.scale_pitches()?;
+        let count = pitches.len() as IntegerType;
+        let origin_ps = origin.ps();
+        let base_shift = ((origin_ps - self.tonic.ps()) / 12.0).floor() as IntegerType;
+        let candidates = (base_shift - 1..=base_shift + 1)
+            .flat_map(|shift| {
+                pitches.iter().enumerate().map(move |(index, pitch)| {
+                    (pitch.ps() + 12.0 * shift as FloatType, index, shift)
+                })
+            })
+            .collect::<Vec<_>>();
+        let ascending = steps > 0;
+        let name = origin.name();
+        let (index, shift, remaining) = match candidates
+            .iter()
+            .find(|(ps, index, _)| pitches[*index].name() == name && (ps - origin_ps).abs() < 1e-9)
+        {
+            Some(&(_, index, shift)) => (index, shift, steps),
+            None => {
+                let neighbour = if ascending {
+                    candidates
+                        .iter()
+                        .filter(|(ps, _, _)| *ps > origin_ps)
+                        .min_by(|left, right| left.0.total_cmp(&right.0))
+                } else {
+                    candidates
+                        .iter()
+                        .filter(|(ps, _, _)| *ps < origin_ps)
+                        .max_by(|left, right| left.0.total_cmp(&right.0))
+                };
+                let &(_, index, shift) = neighbour.ok_or_else(|| {
+                    crate::error::Error::Scale(format!("no scale pitch beside {origin}"))
+                })?;
+                (index, shift, steps - steps.signum())
+            }
+        };
+        let total = index as IntegerType + remaining;
+        let mut pitch = pitches[total.rem_euclid(count) as usize].clone();
+        let octave_shift = shift + total.div_euclid(count);
+        let octave = origin.octave().map(|_| {
+            pitch
+                .octave()
+                .unwrap_or(crate::defaults::PITCH_OCTAVE as IntegerType)
+                + octave_shift
+        });
+        pitch.octave_setter(octave);
+        Ok(pitch)
     }
 }
 
@@ -304,6 +399,58 @@ fn max_alter(pitches: &[Pitch]) -> crate::defaults::IntegerType {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn degrees_and_neighbouring_pitches_match_music21() {
+        let scale = Scale::new(ScaleType::Major, Pitch::from_name("G4").unwrap());
+        let degree = |name: &str| scale.degree_of(&Pitch::from_name(name).unwrap()).unwrap();
+        assert_eq!(degree("G4"), Some(1));
+        assert_eq!(degree("A4"), Some(2));
+        assert_eq!(degree("F#5"), Some(7));
+        assert_eq!(degree("B"), Some(3));
+        assert_eq!(degree("B-4"), None);
+        assert_eq!(degree("E3"), Some(6));
+        assert_eq!(
+            scale
+                .degree_of_pitch_class(&Pitch::from_name("G-4").unwrap())
+                .unwrap(),
+            Some(7)
+        );
+
+        let cases = [
+            ("G4", true, 1, "A4"),
+            ("G4", false, 1, "F#4"),
+            ("F#4", true, 1, "G4"),
+            ("B4", true, 3, "E5"),
+            ("G4", false, 2, "E4"),
+            ("E-4", true, 1, "E4"),
+            ("E-4", false, 1, "D4"),
+            ("B-4", false, 1, "A4"),
+            ("G4", true, 8, "A5"),
+            ("D5", true, 7, "D6"),
+            ("G", true, 1, "A"),
+            ("F#5", true, 1, "G5"),
+            ("C3", false, 4, "F#2"),
+        ];
+        for (origin, ascending, steps, expected) in cases {
+            let origin_pitch = Pitch::from_name(origin).unwrap();
+            let next = if ascending {
+                scale.next_pitch_above(&origin_pitch, steps)
+            } else {
+                scale.next_pitch_below(&origin_pitch, steps)
+            };
+            assert_eq!(
+                next.unwrap().name_with_octave(),
+                expected,
+                "{origin} {ascending} {steps}"
+            );
+        }
+        assert!(
+            scale
+                .next_pitch_above(&Pitch::from_name("G4").unwrap(), 0)
+                .is_err()
+        );
+    }
 
     fn names(scale_type: ScaleType, tonic: &str) -> Vec<String> {
         Scale::new(scale_type, Pitch::from_name(tonic).expect("valid tonic"))

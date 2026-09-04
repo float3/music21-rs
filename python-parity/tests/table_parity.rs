@@ -11,7 +11,7 @@
 //! needs neither Python nor the submodule. `fixture_freshness.rs` is what stops
 //! the fixture itself going stale against a bumped submodule.
 
-use music21_rs::{Accidental, Interval, KeyProfile, key};
+use music21_rs::{Accidental, DEFAULT_TEMPO_VALUES, Interval, KeyProfile, key};
 use serde::Deserialize;
 
 use std::path::Path;
@@ -22,6 +22,13 @@ struct Expectations {
     mode: Vec<ModeExpectation>,
     specifier: Vec<SpecifierExpectation>,
     key_profile: Vec<KeyProfileExpectation>,
+    tempo: Vec<TempoExpectation>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TempoExpectation {
+    name: String,
+    number: f64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -214,6 +221,37 @@ fn key_profiles_match_music21() {
     assert!(
         mismatches.is_empty(),
         "{} key profile values differ from music21:\n    {}",
+        mismatches.len(),
+        mismatches.join("\n    ")
+    );
+}
+
+#[test]
+fn tempo_words_match_music21() {
+    let expectations = expectations();
+    let mut mismatches = Vec::new();
+
+    if expectations.tempo.len() != DEFAULT_TEMPO_VALUES.len() {
+        mismatches.push(format!(
+            "music21 has {} tempo words, the crate {}",
+            expectations.tempo.len(),
+            DEFAULT_TEMPO_VALUES.len()
+        ));
+    }
+    for (position, expected) in expectations.tempo.iter().enumerate() {
+        match DEFAULT_TEMPO_VALUES.get(position) {
+            Some((name, number)) if *name == expected.name && *number == expected.number => {}
+            Some((name, number)) => mismatches.push(format!(
+                "position {position}: music21 {} = {}, crate {name} = {number}",
+                expected.name, expected.number
+            )),
+            None => mismatches.push(format!("{}: missing from the crate", expected.name)),
+        }
+    }
+
+    assert!(
+        mismatches.is_empty(),
+        "{} tempo values differ from music21:\n    {}",
         mismatches.len(),
         mismatches.join("\n    ")
     );

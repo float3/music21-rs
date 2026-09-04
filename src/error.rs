@@ -39,6 +39,14 @@ pub enum Error {
     Meter(String),
     /// Error associated with Xenakis sieve parsing or evaluation.
     Sieve(String),
+    /// Error associated with duration values.
+    Duration(String),
+    /// Error associated with keys and key signatures.
+    Key(String),
+    /// Error associated with scale degrees and realization.
+    Scale(String),
+    /// Error associated with tempo marks.
+    Tempo(String),
 }
 
 impl fmt::Display for Error {
@@ -60,6 +68,10 @@ impl fmt::Display for Error {
             Error::Analysis(msg) => write!(f, "Analysis error: {msg}"),
             Error::Meter(msg) => write!(f, "Meter error: {msg}"),
             Error::Sieve(msg) => write!(f, "Sieve error: {msg}"),
+            Error::Duration(msg) => write!(f, "Duration error: {msg}"),
+            Error::Key(msg) => write!(f, "Key error: {msg}"),
+            Error::Scale(msg) => write!(f, "Scale error: {msg}"),
+            Error::Tempo(msg) => write!(f, "Tempo error: {msg}"),
         }
     }
 }

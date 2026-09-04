@@ -279,6 +279,18 @@ pub(crate) fn address_to_forte_name(
     Ok(format!("{card}-{index}{inversion_suffix}"))
 }
 
+/// The prime form of a set class, which is the same whichever inversion the
+/// address names.
+pub(crate) fn prime_form_from_address(address: ChordTableAddress) -> Result<Vec<u8>, Error> {
+    let (card, index, inversion) = validate_address((address.0, address.1, None))?;
+    let entry = find_cardinality_member(card, index, inversion).ok_or_else(|| {
+        Error::ChordTables(format!(
+            "cannot resolve prime form for address ({card}, {index})"
+        ))
+    })?;
+    Ok(bool_vec_to_pitch_classes(&entry.0))
+}
+
 pub(crate) fn transposed_normal_form_from_address(
     address: ChordTableAddress,
 ) -> Result<Vec<u8>, Error> {

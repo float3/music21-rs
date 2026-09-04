@@ -75,7 +75,7 @@ pub fn pitch_to_sharps(pitch_value: &Pitch, mode: Option<&str>) -> Result<Intege
 
     if let Some(mode) = mode {
         let Some(mode_offset) = mode_sharps_alter(mode) else {
-            return Err(Error::Ordinal(format!("unknown mode {mode}")));
+            return Err(Error::Key(format!("unknown mode {mode}")));
         };
         sharps += mode_offset;
     }
@@ -126,7 +126,7 @@ impl KeySignature {
             let major_sharps = pitch_name_to_sharps(tonic_name, None)?;
             canonical_mode_for_offset(our_sharps - major_sharps)
                 .ok_or_else(|| {
-                    Error::Ordinal(format!(
+                    Error::Key(format!(
                         "Could not solve mode from sharps={} and tonic={}",
                         self.sharps, tonic_name
                     ))
@@ -137,7 +137,7 @@ impl KeySignature {
         };
 
         let sharp_alteration_from_major = mode_sharps_alter(&resolved_mode)
-            .ok_or_else(|| Error::Ordinal(format!("Mode {resolved_mode} is unknown")))?;
+            .ok_or_else(|| Error::Key(format!("Mode {resolved_mode} is unknown")))?;
 
         let tonic_pitch = sharps_to_pitch(our_sharps - sharp_alteration_from_major)?;
         Ok(Key::new(tonic_pitch, &resolved_mode, our_sharps))

@@ -520,6 +520,20 @@ impl Interval {
         Self::between_pitches(&start, &end)
     }
 
+    /// Returns the compact name folded into one octave but keeping the
+    /// direction sign, such as `"A-6"` for a descending augmented thirteenth.
+    pub fn directed_simple_name(&self) -> String {
+        format!(
+            "{}{}",
+            self.diatonic.specifier.prefix(),
+            self.generic().simple_directed()
+        )
+    }
+
+    pub(crate) fn directed_simple_key(&self) -> (Specifier, IntegerType) {
+        (self.diatonic.specifier, self.generic().simple_directed())
+    }
+
     pub(crate) fn simple_key(&self) -> (Specifier, IntegerType) {
         (self.diatonic.specifier, self.generic().simple_undirected())
     }

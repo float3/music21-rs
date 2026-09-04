@@ -49,18 +49,7 @@ impl StreamElement {
                 out.pitch = interval.transpose_pitch(note.pitch())?;
                 Ok(Self::Note(out))
             }
-            Self::Chord(chord) => {
-                let pitches = chord
-                    .pitches()
-                    .iter()
-                    .map(|pitch| interval.transpose_pitch(pitch))
-                    .collect::<Result<Vec<_>>>()?;
-                let mut out = Chord::new(pitches.as_slice())?;
-                if let Some(duration) = chord.duration() {
-                    out.set_duration(duration.clone());
-                }
-                Ok(Self::Chord(out))
-            }
+            Self::Chord(chord) => Ok(Self::Chord(chord.transpose(interval)?)),
             Self::Rest(rest) => Ok(Self::Rest(rest.clone())),
         }
     }
