@@ -85,7 +85,7 @@ static PERFECT_FIFTH_DOWN: LazyLock<Interval> =
 fn extract_pitch(arg: PitchOrNote) -> Pitch {
     match arg {
         PitchOrNote::Pitch(pitch) => pitch,
-        PitchOrNote::Note(note) => note._pitch,
+        PitchOrNote::Note(note) => note.pitch,
     }
 }
 
@@ -396,7 +396,7 @@ impl Interval {
     /// Transposes a note by this interval.
     pub fn transpose_note(&self, note: &Note) -> Result<Note> {
         let mut out = note.clone();
-        out._pitch = self.transpose_pitch(&note._pitch)?;
+        out.pitch = self.transpose_pitch(&note.pitch)?;
         Ok(out)
     }
 

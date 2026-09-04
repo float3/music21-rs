@@ -28,7 +28,7 @@ use std::str::FromStr;
 /// pitch names, slices of pitches or notes, MIDI pitch numbers, vectors, and
 /// `None` for an empty chord.
 pub struct Chord {
-    _notes: Vec<Note>,
+    notes: Vec<Note>,
     duration: Option<Duration>,
     #[cfg_attr(feature = "serde", serde(skip))]
     from_integer_pitches: bool,
@@ -143,7 +143,7 @@ impl Chord {
         T: IntoNotes,
     {
         Ok(Self {
-            _notes: notes.try_into_notes()?.into_iter().collect(),
+            notes: notes.try_into_notes()?.into_iter().collect(),
             duration: None,
             from_integer_pitches: T::FROM_INTEGER_PITCHES,
         })
@@ -152,7 +152,7 @@ impl Chord {
     /// Builds an empty chord.
     pub fn empty() -> Self {
         Self {
-            _notes: Vec::new(),
+            notes: Vec::new(),
             duration: None,
             from_integer_pitches: false,
         }
@@ -267,9 +267,9 @@ impl Chord {
 
         if matches!(name_str, "note" | "unison") {
             return self
-                ._notes
+                .notes
                 .first()
-                .map(|n| n._pitch.name())
+                .map(|n| n.pitch.name())
                 .unwrap_or_else(|| name_str.to_string());
         }
 
@@ -290,9 +290,9 @@ impl Chord {
         }
 
         let root_name = self.root_pitch_name_from_tables().or_else(|| {
-            self._notes
+            self.notes
                 .first()
-                .map(|n| Self::display_pitch_name(&n._pitch))
+                .map(|n| Self::display_pitch_name(&n.pitch))
         });
 
         match root_name {
@@ -370,14 +370,14 @@ impl Chord {
     /// table order. Use [`Self::common_names`] to get every unpitched alias.
     pub fn common_name(&self) -> String {
         if self
-            ._notes
+            .notes
             .iter()
-            .any(|n| (n._pitch.alter() - n._pitch.alter().round()).abs() > FloatType::EPSILON)
+            .any(|n| (n.pitch.alter() - n.pitch.alter().round()).abs() > FloatType::EPSILON)
         {
             return "microtonal chord".to_string();
         }
 
-        if self._notes.is_empty() {
+        if self.notes.is_empty() {
             return "empty chord".to_string();
         }
 
@@ -387,20 +387,20 @@ impl Chord {
         }
 
         if ordered_pcs.len() == 1 {
-            if self._notes.len() == 1 {
+            if self.notes.len() == 1 {
                 return "note".to_string();
             }
 
             let pitch_names = self
-                ._notes
+                .notes
                 .iter()
-                .map(|n| n._pitch.name())
+                .map(|n| n.pitch.name())
                 .collect::<std::collections::BTreeSet<_>>();
 
             let pitch_pses = self
-                ._notes
+                .notes
                 .iter()
-                .map(|n| n._pitch.ps().round() as IntegerType)
+                .map(|n| n.pitch.ps().round() as IntegerType)
                 .collect::<std::collections::BTreeSet<_>>();
 
             if pitch_names.len() == 1 {
@@ -408,11 +408,8 @@ impl Chord {
                     return "unison".to_string();
                 }
                 if pitch_pses.len() == 2 {
-                    return Self::interval_nice_name(
-                        &self._notes[0]._pitch,
-                        &self._notes[1]._pitch,
-                    )
-                    .unwrap_or_else(|| "multiple octaves".to_string());
+                    return Self::interval_nice_name(&self.notes[0].pitch, &self.notes[1].pitch)
+                        .unwrap_or_else(|| "multiple octaves".to_string());
                 }
                 return "multiple octaves".to_string();
             }
@@ -484,28 +481,28 @@ impl Chord {
 
     fn dyad_common_name(&self) -> String {
         let pitch_names = self
-            ._notes
+            .notes
             .iter()
-            .map(|n| n._pitch.name())
+            .map(|n| n.pitch.name())
             .collect::<std::collections::BTreeSet<_>>();
 
         let pitch_pses = self
-            ._notes
+            .notes
             .iter()
-            .map(|n| n._pitch.ps().round() as IntegerType)
+            .map(|n| n.pitch.ps().round() as IntegerType)
             .collect::<std::collections::BTreeSet<_>>();
 
-        let Some(p0) = self._notes.first().map(|n| &n._pitch) else {
+        let Some(p0) = self.notes.first().map(|n| &n.pitch) else {
             return "empty chord".to_string();
         };
         let p0_pitch_class = root::pitch_class(p0);
 
         let Some(p1) = self
-            ._notes
+            .notes
             .iter()
             .skip(1)
-            .find(|n| root::pitch_class(&n._pitch) != p0_pitch_class)
-            .map(|n| &n._pitch)
+            .find(|n| root::pitch_class(&n.pitch) != p0_pitch_class)
+            .map(|n| &n.pitch)
         else {
             return "unknown chord".to_string();
         };
@@ -532,7 +529,7 @@ impl Chord {
                 .unwrap_or_else(|_| "unknown chord".to_string());
         }
 
-        Self::interval_nice_name(&self._notes[0]._pitch, &self._notes[1]._pitch)
+        Self::interval_nice_name(&self.notes[0].pitch, &self.notes[1].pitch)
             .unwrap_or_else(|| "unknown chord".to_string())
     }
 
@@ -606,12 +603,12 @@ impl Chord {
 
     /// Returns cloned pitches for every note in the chord, in input order.
     pub fn pitches(&self) -> Vec<Pitch> {
-        self._notes.iter().map(|note| note._pitch.clone()).collect()
+        self.notes.iter().map(|note| note.pitch.clone()).collect()
     }
 
     /// Returns the notes in input order.
     pub fn notes(&self) -> &[Note] {
-        &self._notes
+        &self.notes
     }
 
     /// Returns the chord duration when one has been assigned.
@@ -700,15 +697,15 @@ impl Chord {
     pub fn inversion(&self) -> Option<u8> {
         let root_pc = self.root_pitch_class_tertian()?;
         let bass_pc = self
-            ._notes
+            .notes
             .iter()
             .min_by(|a, b| {
-                a._pitch
+                a.pitch
                     .ps()
-                    .partial_cmp(&b._pitch.ps())
+                    .partial_cmp(&b.pitch.ps())
                     .unwrap_or(std::cmp::Ordering::Equal)
             })
-            .map(|n| (n._pitch.ps().round() as IntegerType).rem_euclid(12) as u8)?;
+            .map(|n| (n.pitch.ps().round() as IntegerType).rem_euclid(12) as u8)?;
 
         let interval = ((bass_pc as IntegerType - root_pc as IntegerType).rem_euclid(12)) as u8;
         match interval {
@@ -919,8 +916,8 @@ impl Chord {
         match crate::pitch::simplify_multiple_enharmonics(&self.pitches(), None, key_context) {
             Ok(pitches) => {
                 for (i, pitch) in pitches.iter().enumerate() {
-                    if let Some(note) = self._notes.get_mut(i) {
-                        note._pitch = pitch.clone();
+                    if let Some(note) = self.notes.get_mut(i) {
+                        note.pitch = pitch.clone();
                     }
                 }
                 Ok(())
@@ -933,9 +930,9 @@ impl Chord {
 
     fn ordered_pitch_classes(&self) -> Vec<u8> {
         let mut pcs = self
-            ._notes
+            .notes
             .iter()
-            .map(|note| root::pitch_class(&note._pitch))
+            .map(|note| root::pitch_class(&note.pitch))
             .collect::<Vec<_>>();
         pcs.sort_unstable();
         pcs.dedup();
@@ -951,7 +948,7 @@ impl Chord {
     }
 
     fn pitch_refs(&self) -> impl Iterator<Item = &Pitch> {
-        self._notes.iter().map(|note| &note._pitch)
+        self.notes.iter().map(|note| &note.pitch)
     }
 
     fn root_pitch_name_from_tables(&self) -> Option<String> {
@@ -1056,10 +1053,10 @@ impl Chord {
     }
 
     fn has_augmented_sixth_spelling(&self) -> bool {
-        for (index, lower) in self._notes.iter().enumerate() {
-            for upper in self._notes.iter().skip(index + 1) {
-                if Self::is_directed_augmented_sixth(&lower._pitch, &upper._pitch)
-                    || Self::is_directed_augmented_sixth(&upper._pitch, &lower._pitch)
+        for (index, lower) in self.notes.iter().enumerate() {
+            for upper in self.notes.iter().skip(index + 1) {
+                if Self::is_directed_augmented_sixth(&lower.pitch, &upper.pitch)
+                    || Self::is_directed_augmented_sixth(&upper.pitch, &lower.pitch)
                 {
                     return true;
                 }
@@ -1284,14 +1281,14 @@ impl Chord {
     }
 
     fn has_pitch_names(&self, expected: &[&str]) -> bool {
-        if self._notes.len() != expected.len() {
+        if self.notes.len() != expected.len() {
             return false;
         }
 
         let actual = self
-            ._notes
+            .notes
             .iter()
-            .map(|note| note._pitch.name())
+            .map(|note| note.pitch.name())
             .collect::<std::collections::BTreeSet<_>>();
         expected.iter().all(|name| actual.contains(*name))
     }
@@ -1392,7 +1389,7 @@ fn simplify_integer_notes(notes: &mut [Note]) -> Result<()> {
 
     let pitches = notes
         .iter()
-        .map(|note| note._pitch.clone())
+        .map(|note| note.pitch.clone())
         .collect::<Vec<_>>();
     for (note, pitch) in notes
         .iter_mut()
@@ -1400,7 +1397,7 @@ fn simplify_integer_notes(notes: &mut [Note]) -> Result<()> {
             &pitches, None, None,
         )?)
     {
-        note._pitch = pitch;
+        note.pitch = pitch;
     }
 
     Ok(())
@@ -1428,7 +1425,7 @@ impl IntoNotes for &[Chord] {
     type Notes = Vec<Note>;
 
     fn try_into_notes(self) -> Result<Self::Notes> {
-        Ok(self.iter().flat_map(|chord| chord._notes.clone()).collect())
+        Ok(self.iter().flat_map(|chord| chord.notes.clone()).collect())
     }
 }
 

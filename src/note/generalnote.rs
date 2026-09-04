@@ -3,14 +3,12 @@ use crate::duration::Duration;
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct GeneralNote {
-    _duration: Option<Duration>,
+    duration: Option<Duration>,
 }
 
 impl GeneralNote {
     pub(crate) fn new(duration: Option<Duration>) -> Self {
-        Self {
-            _duration: duration,
-        }
+        Self { duration }
     }
 }
 
@@ -21,10 +19,10 @@ pub(crate) trait GeneralNoteTrait {
 
 impl GeneralNoteTrait for GeneralNote {
     fn duration(&self) -> &Option<Duration> {
-        &self._duration
+        &self.duration
     }
 
     fn set_duration(&mut self, duration: &Duration) {
-        self._duration = Some(duration.clone());
+        self.duration = Some(duration.clone());
     }
 }

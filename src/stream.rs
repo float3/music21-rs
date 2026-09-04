@@ -46,7 +46,7 @@ impl StreamElement {
         match self {
             Self::Note(note) => {
                 let mut out = note.clone();
-                out._pitch = interval.transpose_pitch(note.pitch())?;
+                out.pitch = interval.transpose_pitch(note.pitch())?;
                 Ok(Self::Note(out))
             }
             Self::Chord(chord) => {

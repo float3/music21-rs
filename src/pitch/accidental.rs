@@ -285,25 +285,25 @@ impl Display for AccidentalSpecifier {
 /// `music21.pitch.Accidental`: a standard accidental has a `name`, `modifier`,
 /// and semitone `alter`; names compare by spelling while ordering uses `alter`.
 pub struct Accidental {
-    _display_type: DisplayType,
-    _display_status: Option<bool>,
+    display_type: DisplayType,
+    display_status: Option<bool>,
     display_style: DisplayStyle,
     display_size: DisplaySize,
     display_location: DisplayLocation,
-    _name: String,
-    _modifier: String,
-    pub(crate) _alter: FloatType,
+    name: String,
+    modifier: String,
+    pub(crate) alter: FloatType,
 }
 
 impl PartialEq for Accidental {
     fn eq(&self, other: &Self) -> bool {
-        self._name == other._name
+        self.name == other.name
     }
 }
 
 impl PartialOrd for Accidental {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self._alter.partial_cmp(&other._alter)
+        self.alter.partial_cmp(&other.alter)
     }
 }
 
@@ -365,14 +365,14 @@ impl Accidental {
         }
 
         let mut acci = Self {
-            _display_type: DisplayType::Normal,
-            _display_status: None,
+            display_type: DisplayType::Normal,
+            display_status: None,
             display_style: DisplayStyle::Normal,
             display_size: DisplaySize::Full,
             display_location: DisplayLocation::Normal,
-            _name: "".to_string(),
-            _modifier: "".to_string(),
-            _alter: 0.0,
+            name: "".to_string(),
+            modifier: "".to_string(),
+            alter: 0.0,
         };
 
         acci.set_specifier(specifier, false)?;
@@ -441,9 +441,9 @@ impl Accidental {
         }
 
         if let Some(accidental) = Self::specifier_to_standard(&specifier) {
-            self._name = accidental.to_name().to_string();
-            self._alter = accidental.to_alter();
-            self._modifier = accidental.to_modifier().to_string();
+            self.name = accidental.to_name().to_string();
+            self.alter = accidental.to_alter();
+            self.modifier = accidental.to_modifier().to_string();
             return Ok(());
         }
 
@@ -454,8 +454,8 @@ impl Accidental {
         }
 
         match specifier {
-            AccidentalSpecifier::Name(name) => self._name = name.to_lowercase(),
-            AccidentalSpecifier::Alter(alter) => self._alter = alter,
+            AccidentalSpecifier::Name(name) => self.name = name.to_lowercase(),
+            AccidentalSpecifier::Alter(alter) => self.alter = alter,
             AccidentalSpecifier::Accidental(_) => unreachable!(),
         }
         Ok(())
@@ -473,7 +473,7 @@ impl Accidental {
 
     /// Returns the standard or non-standard accidental name.
     pub fn name(&self) -> &str {
-        &self._name
+        &self.name
     }
 
     /// Sets the accidental name. Standard names update `alter` and `modifier`;
@@ -484,7 +484,7 @@ impl Accidental {
 
     /// Returns the semitone alteration from the natural step.
     pub fn alter(&self) -> FloatType {
-        self._alter
+        self.alter
     }
 
     /// Sets the semitone alteration. Standard values update `name` and
@@ -495,7 +495,7 @@ impl Accidental {
 
     /// Returns the music21 modifier string, such as `#`, `-`, `##`, or `~`.
     pub fn modifier(&self) -> &str {
-        &self._modifier
+        &self.modifier
     }
 
     /// Sets the modifier. Unknown modifiers are preserved without changing the
@@ -503,19 +503,19 @@ impl Accidental {
     pub fn set_modifier(&mut self, modifier: impl Into<String>) {
         let modifier = modifier.into();
         if let Some(accidental) = AccidentalEnum::from_modifier(&modifier) {
-            self._name = accidental.to_name().to_string();
-            self._alter = accidental.to_alter();
-            self._modifier = accidental.to_modifier().to_string();
+            self.name = accidental.to_name().to_string();
+            self.alter = accidental.to_alter();
+            self.modifier = accidental.to_modifier().to_string();
         } else {
-            self._modifier = modifier;
+            self.modifier = modifier;
         }
     }
 
     /// Returns a unicode representation of the accidental.
     pub fn unicode(&self) -> String {
-        AccidentalEnum::from_modifier(&self._modifier)
+        AccidentalEnum::from_modifier(&self.modifier)
             .map(|accidental| accidental.to_unicode().to_string())
-            .unwrap_or_else(|| self._modifier.clone())
+            .unwrap_or_else(|| self.modifier.clone())
     }
 
     /// Returns the most complete accidental name. This is currently the same as
@@ -527,30 +527,30 @@ impl Accidental {
     /// Returns whether this accidental describes a twelve-tone alteration.
     pub fn is_twelve_tone(&self) -> bool {
         !matches!(
-            self._name.as_str(),
+            self.name.as_str(),
             "half-sharp" | "one-and-a-half-sharp" | "half-flat" | "one-and-a-half-flat"
         )
     }
 
     /// Sets `name` without updating `alter` or `modifier`.
     pub fn set_name_independently(&mut self, name: impl Into<String>) {
-        self._name = name.into();
+        self.name = name.into();
     }
 
     /// Sets `alter` without updating `name` or `modifier`.
     pub fn set_alter_independently(&mut self, alter: FloatType) {
-        self._alter = alter;
+        self.alter = alter;
     }
 
     /// Sets `modifier` without updating `name` or `alter`.
     pub fn set_modifier_independently(&mut self, modifier: impl Into<String>) {
-        self._modifier = modifier.into();
+        self.modifier = modifier.into();
     }
 
     /// Copies display-related settings from another accidental.
     pub fn inherit_display(&mut self, other: &Accidental) {
-        self._display_type = other._display_type.clone();
-        self._display_status = other._display_status;
+        self.display_type = other.display_type.clone();
+        self.display_status = other.display_status;
         self.display_style = other.display_style.clone();
         self.display_size = other.display_size.clone();
         self.display_location = other.display_location.clone();
@@ -558,12 +558,12 @@ impl Accidental {
 
     /// Returns the accidental display type.
     pub fn display_type(&self) -> &'static str {
-        display_type_to_str(&self._display_type)
+        display_type_to_str(&self.display_type)
     }
 
     /// Sets the accidental display type.
     pub fn set_display_type(&mut self, value: &str) -> Result<()> {
-        self._display_type = display_type_from_str(value).ok_or_else(|| {
+        self.display_type = display_type_from_str(value).ok_or_else(|| {
             Error::Accidental(format!("Supplied display type is not supported: {value:?}"))
         })?;
         Ok(())
@@ -572,12 +572,12 @@ impl Accidental {
     /// Returns whether notation processing has decided to display this
     /// accidental. `None` means no decision has been made.
     pub fn display_status(&self) -> Option<bool> {
-        self._display_status
+        self.display_status
     }
 
     /// Sets the display status.
     pub fn set_display_status(&mut self, value: Option<bool>) {
-        self._display_status = value;
+        self.display_status = value;
     }
 
     /// Returns the display style.
@@ -744,7 +744,7 @@ impl Default for Accidental {
 
 impl std::fmt::Display for Accidental {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self._name)
+        write!(f, "{}", self.name)
     }
 }
 
@@ -755,40 +755,40 @@ mod tests {
     #[test]
     fn test_natural() {
         let acc = Accidental::natural();
-        assert_eq!(acc._name, "natural");
-        assert_eq!(acc._alter, 0.0);
+        assert_eq!(acc.name, "natural");
+        assert_eq!(acc.alter, 0.0);
         assert_eq!(acc.modifier(), "");
     }
 
     #[test]
     fn test_sharp() {
         let acc = Accidental::sharp();
-        assert_eq!(acc._name, "sharp");
-        assert_eq!(acc._alter, 1.0);
+        assert_eq!(acc.name, "sharp");
+        assert_eq!(acc.alter, 1.0);
         assert_eq!(acc.modifier(), "#");
     }
 
     #[test]
     fn test_flat() {
         let acc = Accidental::flat();
-        assert_eq!(acc._name, "flat");
-        assert_eq!(acc._alter, -1.0);
+        assert_eq!(acc.name, "flat");
+        assert_eq!(acc.alter, -1.0);
         assert_eq!(acc.modifier(), "-");
     }
 
     #[test]
     fn test_creation_from_int() {
         let acc_sharp = Accidental::new(1).unwrap();
-        assert_eq!(acc_sharp._name, "sharp");
-        assert_eq!(acc_sharp._alter, 1.0);
+        assert_eq!(acc_sharp.name, "sharp");
+        assert_eq!(acc_sharp.alter, 1.0);
 
         let acc_flat = Accidental::new(-1).unwrap();
-        assert_eq!(acc_flat._name, "flat");
-        assert_eq!(acc_flat._alter, -1.0);
+        assert_eq!(acc_flat.name, "flat");
+        assert_eq!(acc_flat.alter, -1.0);
 
         let acc_natural = Accidental::new(0).unwrap();
-        assert_eq!(acc_natural._name, "natural");
-        assert_eq!(acc_natural._alter, 0.0);
+        assert_eq!(acc_natural.name, "natural");
+        assert_eq!(acc_natural.alter, 0.0);
     }
 
     #[test]
@@ -806,31 +806,31 @@ mod tests {
     #[test]
     fn test_creation_from_float() {
         let acc_double_sharp: Accidental = Accidental::new(2.0).unwrap();
-        assert_eq!(acc_double_sharp._name, "double-sharp");
-        assert_eq!(acc_double_sharp._alter, 2.0);
+        assert_eq!(acc_double_sharp.name, "double-sharp");
+        assert_eq!(acc_double_sharp.alter, 2.0);
 
         let acc_half_flat: Accidental = Accidental::new(-0.5).unwrap();
-        assert_eq!(acc_half_flat._name, "half-flat");
-        assert_eq!(acc_half_flat._alter, -0.5);
+        assert_eq!(acc_half_flat.name, "half-flat");
+        assert_eq!(acc_half_flat.alter, -0.5);
     }
 
     #[test]
     fn test_creation_from_str() {
         let acc1: Accidental = Accidental::new("sharp").unwrap();
-        assert_eq!(acc1._name, "sharp");
-        assert_eq!(acc1._alter, 1.0);
+        assert_eq!(acc1.name, "sharp");
+        assert_eq!(acc1.alter, 1.0);
 
         // Case insensitivity: "Flat" should be accepted as "flat"
         let acc2: Accidental = Accidental::new("Flat").unwrap();
-        assert_eq!(acc2._name, "flat");
-        assert_eq!(acc2._alter, -1.0);
+        assert_eq!(acc2.name, "flat");
+        assert_eq!(acc2.alter, -1.0);
     }
 
     #[test]
     fn test_creation_from_string() {
         let acc: Accidental = Accidental::new("double-flat".to_string()).unwrap();
-        assert_eq!(acc._name, "double-flat");
-        assert_eq!(acc._alter, -2.0);
+        assert_eq!(acc.name, "double-flat");
+        assert_eq!(acc.alter, -2.0);
     }
 
     #[test]
@@ -861,20 +861,20 @@ mod tests {
     fn test_alternate_names() {
         // Using alternate names from AccidentalEnum::from_alternate_name
         let acc_sharp: Accidental = Accidental::new("is".to_string()).unwrap();
-        assert_eq!(acc_sharp._name, "sharp");
-        assert_eq!(acc_sharp._alter, 1.0);
+        assert_eq!(acc_sharp.name, "sharp");
+        assert_eq!(acc_sharp.alter, 1.0);
 
         let acc_double_sharp: Accidental = Accidental::new("isis".to_string()).unwrap();
-        assert_eq!(acc_double_sharp._name, "double-sharp");
-        assert_eq!(acc_double_sharp._alter, 2.0);
+        assert_eq!(acc_double_sharp.name, "double-sharp");
+        assert_eq!(acc_double_sharp.alter, 2.0);
 
         let acc_triple_sharp: Accidental = Accidental::new("isisis".to_string()).unwrap();
-        assert_eq!(acc_triple_sharp._name, "triple-sharp");
-        assert_eq!(acc_triple_sharp._alter, 3.0);
+        assert_eq!(acc_triple_sharp.name, "triple-sharp");
+        assert_eq!(acc_triple_sharp.alter, 3.0);
 
         let acc_double_flat: Accidental = Accidental::new("eses".to_string()).unwrap();
-        assert_eq!(acc_double_flat._name, "double-flat");
-        assert_eq!(acc_double_flat._alter, -2.0);
+        assert_eq!(acc_double_flat.name, "double-flat");
+        assert_eq!(acc_double_flat.alter, -2.0);
     }
 
     #[test]

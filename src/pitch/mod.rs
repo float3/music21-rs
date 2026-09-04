@@ -184,21 +184,21 @@ impl PitchOptions {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// A musical pitch with spelling, octave, accidental and optional microtone.
 pub struct Pitch {
-    _step: StepName,
-    _octave: Octave,
-    _accidental: Accidental,
-    _microtone: Option<Microtone>,
-    spelling_is_infered: bool,
+    step: StepName,
+    octave: Octave,
+    accidental: Accidental,
+    microtone: Option<Microtone>,
+    spelling_is_inferred: bool,
     #[cfg_attr(feature = "serde", serde(skip))]
     fundamental: Option<Arc<Pitch>>,
 }
 
 impl PartialEq for Pitch {
     fn eq(&self, other: &Self) -> bool {
-        self._step == other._step
-            && self._octave == other._octave
-            && self._accidental == other._accidental
-            && self._microtone == other._microtone
+        self.step == other.step
+            && self.octave == other.octave
+            && self.accidental == other.accidental
+            && self.microtone == other.microtone
     }
 }
 
@@ -295,11 +295,11 @@ impl Pitch {
         let microtone = microtone.map(Microtone::new).transpose()?;
 
         let mut pitch = Pitch {
-            _step: step,
-            _accidental: accidental,
-            _microtone: microtone,
-            _octave: octave,
-            spelling_is_infered: parsed.spelling_is_inferred,
+            step,
+            accidental,
+            microtone,
+            octave,
+            spelling_is_inferred: parsed.spelling_is_inferred,
             fundamental: None,
         };
 
@@ -313,9 +313,9 @@ impl Pitch {
             pitch.octave_setter(octave);
         }
         if has_explicit_accidental || name.is_none() {
-            pitch.accidental_setter(pitch._accidental.clone());
+            pitch.accidental_setter(pitch.accidental.clone());
         }
-        if let Some(microtone) = pitch._microtone.clone() {
+        if let Some(microtone) = pitch.microtone.clone() {
             pitch.microtone_setter(microtone);
         }
         if let Some(pitch_class) = pitch_class {
@@ -376,7 +376,7 @@ impl Pitch {
 
     /// Returns the pitch name with the octave suffix when one is set.
     pub fn name_with_octave(&self) -> String {
-        match self._octave {
+        match self.octave {
             Some(octave) => format!("{}{}", self.name(), octave),
             None => self.name(),
         }
@@ -384,7 +384,7 @@ impl Pitch {
 
     /// Returns the pitch name without octave, such as `"F#"` or `"B-"`.
     pub fn name(&self) -> String {
-        format!("{}{}", self._step.as_char(), self._accidental.modifier())
+        format!("{}{}", self.step.as_char(), self.accidental.modifier())
     }
 
     fn name_setter(&mut self, usr_str: &str) -> Result<()> {
@@ -434,9 +434,9 @@ impl Pitch {
     pub fn alter(&self) -> FloatType {
         let mut post = 0.0;
 
-        post += self._accidental._alter;
+        post += self.accidental.alter;
 
-        if let Some(microtone) = &self._microtone {
+        if let Some(microtone) = &self.microtone {
             post += microtone.alter();
         }
 
@@ -448,12 +448,12 @@ impl Pitch {
     /// Unlike Python music21, this crate stores an explicit natural accidental
     /// for natural pitches.
     pub fn accidental(&self) -> &Accidental {
-        &self._accidental
+        &self.accidental
     }
 
     /// Returns this pitch's microtone adjustment, when present.
     pub fn microtone(&self) -> Option<&Microtone> {
-        self._microtone.as_ref()
+        self.microtone.as_ref()
     }
 
     /// Returns this pitch's normalized pitch class.
@@ -464,7 +464,7 @@ impl Pitch {
     }
 
     pub(crate) fn octave_setter(&mut self, octave: Octave) {
-        self._octave = octave;
+        self.octave = octave;
     }
 
     fn get_all_common_enharmonics(&mut self, alter_limit: FloatType) -> Result<Vec<Pitch>> {
@@ -477,7 +477,7 @@ impl Pitch {
 
         let mut higher = self.clone();
         while let Ok(next) = higher.get_higher_enharmonic() {
-            if next._accidental._alter.abs() > alter_limit {
+            if next.accidental.alter.abs() > alter_limit {
                 break;
             }
             if post.contains(&next) {
@@ -489,7 +489,7 @@ impl Pitch {
 
         let mut lower = self.clone();
         while let Ok(next) = lower.get_lower_enharmonic() {
-            if next._accidental._alter.abs() > alter_limit {
+            if next.accidental.alter.abs() > alter_limit {
                 break;
             }
             if post.contains(&next) {
@@ -508,9 +508,9 @@ impl Pitch {
             .unwrap_or_else(|_| self.clone());
 
         if !interval.implicit_diatonic {
-            p.spelling_is_infered = self.spelling_is_infered;
+            p.spelling_is_inferred = self.spelling_is_inferred;
         }
-        if p.spelling_is_infered {
+        if p.spelling_is_inferred {
             let _ = p.simplify_enharmonic_in_place(true);
         }
 
@@ -524,8 +524,8 @@ impl Pitch {
 
     /// Returns the pitch-space value for this pitch.
     pub fn pitch_space(&self) -> FloatType {
-        let octave = self._octave.unwrap_or(PITCH_OCTAVE as IntegerType);
-        ((octave + 1) * 12) as FloatType + self._step.step_ref() as FloatType + self.alter()
+        let octave = self.octave.unwrap_or(PITCH_OCTAVE as IntegerType);
+        ((octave + 1) * 12) as FloatType + self.step.step_ref() as FloatType + self.alter()
     }
 
     /// Returns the nearest MIDI note number for this pitch.
@@ -549,16 +549,16 @@ impl Pitch {
     }
 
     fn step_setter(&mut self, step_name: StepName) {
-        self._step = step_name;
-        self.spelling_is_infered = true;
+        self.step = step_name;
+        self.spelling_is_inferred = true;
     }
 
     fn accidental_setter(&mut self, value: Accidental) {
-        self._accidental = value;
+        self.accidental = value;
     }
 
     fn microtone_setter(&mut self, mt: Microtone) {
-        self._microtone = Some(mt);
+        self.microtone = Some(mt);
     }
 
     fn pitch_class_setter(&mut self, pc: PitchClassSpecifier) -> Result<()> {
@@ -567,10 +567,10 @@ impl Pitch {
     }
 
     fn pitch_class_value_setter(&mut self, pc: FloatType) {
-        let (step, accidental, _microtone, _harmonic_shift) = convert_ps_to_step(pc);
-        self._step = step;
-        self._accidental = accidental;
-        self.spelling_is_infered = true;
+        let (step, accidental, _, _) = convert_ps_to_step(pc);
+        self.step = step;
+        self.accidental = accidental;
+        self.spelling_is_inferred = true;
     }
 
     fn fundamental_setter(&mut self, f: Pitch) {
@@ -588,17 +588,17 @@ impl Pitch {
 
     fn ps_setter(&mut self, p: FloatType) {
         let (step, accidental, microtone, octave_shift) = convert_ps_to_step(p);
-        self._step = step;
-        self._accidental = accidental;
+        self.step = step;
+        self.accidental = accidental;
         if microtone.alter() == 0.0 {
-            self._microtone = None;
+            self.microtone = None;
         } else {
-            self._microtone = Some(microtone);
+            self.microtone = Some(microtone);
         }
 
         let octave = convert_ps_to_oct(p) + octave_shift;
-        self._octave = Some(octave);
-        self.spelling_is_infered = true;
+        self.octave = Some(octave);
+        self.spelling_is_inferred = true;
     }
 
     /// Returns a simpler enharmonic spelling of this pitch.
@@ -615,11 +615,11 @@ impl Pitch {
     /// Simplifies this pitch's enharmonic spelling in place.
     pub fn simplify_enharmonic_in_place(&mut self, most_common: bool) -> Result<()> {
         const EXCLUDED_NAMES: [&str; 4] = ["E#", "B#", "C-", "F-"];
-        if self._accidental._alter.abs().partial_cmp(&2.0) != Some(Ordering::Less)
+        if self.accidental.alter.abs().partial_cmp(&2.0) != Some(Ordering::Less)
             || EXCLUDED_NAMES.contains(&self.name().as_str())
         {
             // by resetting the pitch space value, we get a simpler enharmonic spelling
-            let save_octave = self._octave;
+            let save_octave = self.octave;
             self.ps_setter(self.ps());
             if save_octave.is_none() {
                 self.octave_setter(None);
@@ -678,7 +678,7 @@ impl Pitch {
             &DIMINISHED_SECOND_DOWN
         };
 
-        let octave_stored = self._octave;
+        let octave_stored = self.octave;
 
         let mut p = interval.transpose_pitch_with_options(self, false, None)?;
         if octave_stored.is_none() {
@@ -698,11 +698,11 @@ impl Pitch {
     /// such as `Pitch::from_name("C")`. In calculations, octave-less pitches
     /// use the library default octave.
     pub fn octave(&self) -> Octave {
-        self._octave
+        self.octave
     }
 
     pub(crate) fn step(&self) -> StepName {
-        self._step
+        self.step
     }
 
     pub(crate) fn set_ps(&mut self, p: FloatType) {
@@ -852,7 +852,7 @@ pub(crate) fn simplify_multiple_enharmonics(
     };
 
     for (new_p, old_p) in simplified_pitches.iter_mut().zip(old_pitches) {
-        new_p.spelling_is_infered = old_p.spelling_is_infered;
+        new_p.spelling_is_inferred = old_p.spelling_is_inferred;
     }
 
     if remove_first {
@@ -1030,8 +1030,8 @@ fn pythagorean_denominator_log(interval: &Interval) -> Result<FloatType> {
         + denominator_threes as FloatType * (3.0 as FloatType).ln())
 }
 
-fn convert_harmonic_to_cents(_harmonic_shift: IntegerType) -> IntegerType {
-    let mut value = _harmonic_shift as FloatType;
+fn convert_harmonic_to_cents(harmonic_shift: IntegerType) -> IntegerType {
+    let mut value = harmonic_shift as FloatType;
     if value < 0.0 {
         value = 1.0 / value.abs();
     }

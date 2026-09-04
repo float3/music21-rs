@@ -16,7 +16,7 @@ use std::str::FromStr;
 /// A pitched note.
 pub struct Note {
     notrest: NotRest,
-    pub(crate) _pitch: Pitch,
+    pub(crate) pitch: Pitch,
 }
 
 impl Note {
@@ -32,17 +32,17 @@ impl Note {
 
     /// Returns the note's pitch.
     pub fn pitch(&self) -> &Pitch {
-        &self._pitch
+        &self.pitch
     }
 
     /// Returns the pitch name without an octave, such as `"C#"` or `"E-"`.
     pub fn pitch_name(&self) -> String {
-        self._pitch.name()
+        self.pitch.name()
     }
 
     /// Returns the pitch name with an octave when one is set.
     pub fn pitch_name_with_octave(&self) -> String {
-        self._pitch.name_with_octave()
+        self.pitch.name_with_octave()
     }
 
     /// Returns the note duration when one has been assigned.
@@ -70,24 +70,19 @@ impl Note {
     where
         T: IntoPitch,
     {
-        let _pitch = match pitch {
-            Some(pitch) => pitch.into_pitch(),
-            None => Ok({
-                let name = match name_with_octave {
-                    Some(name_with_octave) => name_with_octave,
-                    None => match name {
-                        Some(name) => name,
-                        None => "C4".to_string(),
-                    },
-                };
-
+        let pitch = match pitch {
+            Some(pitch) => pitch.into_pitch()?,
+            None => {
+                let name = name_with_octave
+                    .or(name)
+                    .unwrap_or_else(|| "C4".to_string());
                 Pitch::from_name(name)?
-            }),
-        }?;
+            }
+        };
 
         Ok(Self {
             notrest: NotRest::new(duration),
-            _pitch,
+            pitch,
         })
     }
 }

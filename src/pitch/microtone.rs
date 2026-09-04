@@ -65,8 +65,8 @@ impl Display for MicrotoneSpecifier {
 /// A microtonal pitch adjustment measured in cents, optionally shifted by a
 /// harmonic like Python music21's `music21.pitch.Microtone`.
 pub struct Microtone {
-    _cent_shift: FloatType,
-    _harmonic_shift: IntegerType,
+    cent_shift: FloatType,
+    harmonic_shift: IntegerType,
 }
 
 impl Microtone {
@@ -89,7 +89,7 @@ impl Microtone {
                 Ok(Self::from_cents(Self::parse_string(text)?, harmonic_shift))
             }
             MicrotoneSpecifier::Microtone(mut microtone) => {
-                microtone._harmonic_shift = harmonic_shift;
+                microtone.harmonic_shift = harmonic_shift;
                 Ok(microtone)
             }
         }
@@ -97,8 +97,8 @@ impl Microtone {
 
     pub(crate) fn from_cents(cent_shift: FloatType, harmonic_shift: IntegerType) -> Self {
         Self {
-            _cent_shift: cent_shift,
-            _harmonic_shift: harmonic_shift,
+            cent_shift,
+            harmonic_shift,
         }
     }
 
@@ -109,27 +109,27 @@ impl Microtone {
 
     /// Returns the total cent displacement, including harmonic shift.
     pub fn cents(&self) -> FloatType {
-        convert_harmonic_to_cents(self._harmonic_shift) as FloatType + self._cent_shift
+        convert_harmonic_to_cents(self.harmonic_shift) as FloatType + self.cent_shift
     }
 
     /// Returns the direct cent shift before harmonic adjustment.
     pub fn cent_shift(&self) -> FloatType {
-        self._cent_shift
+        self.cent_shift
     }
 
     /// Sets the direct cent shift before harmonic adjustment.
     pub fn set_cent_shift(&mut self, cents: FloatType) {
-        self._cent_shift = cents;
+        self.cent_shift = cents;
     }
 
     /// Returns the harmonic shift.
     pub fn harmonic_shift(&self) -> IntegerType {
-        self._harmonic_shift
+        self.harmonic_shift
     }
 
     /// Sets the harmonic shift.
     pub fn set_harmonic_shift(&mut self, harmonic_shift: IntegerType) {
-        self._harmonic_shift = harmonic_shift;
+        self.harmonic_shift = harmonic_shift;
     }
 
     fn parse_string(value: String) -> Result<FloatType> {
@@ -174,8 +174,8 @@ impl Microtone {
 
 impl Display for Microtone {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let rounded = self._cent_shift.round() as IntegerType;
-        let mut text = if self._cent_shift >= 0.0 {
+        let rounded = self.cent_shift.round() as IntegerType;
+        let mut text = if self.cent_shift >= 0.0 {
             format!("+{rounded}c")
         } else {
             let text = format!("{rounded}c");
@@ -186,11 +186,11 @@ impl Display for Microtone {
             }
         };
 
-        if self._harmonic_shift != 1 {
+        if self.harmonic_shift != 1 {
             text.push_str(&format!(
                 "+{}{}H",
-                self._harmonic_shift,
-                ordinal_suffix(self._harmonic_shift)
+                self.harmonic_shift,
+                ordinal_suffix(self.harmonic_shift)
             ));
         }
 

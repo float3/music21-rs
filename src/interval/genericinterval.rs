@@ -11,7 +11,7 @@ use super::{
 
 #[derive(Clone, Debug)]
 pub(crate) struct GenericInterval {
-    _value: IntegerType,
+    value: IntegerType,
 }
 
 impl GenericInterval {
@@ -25,7 +25,7 @@ impl GenericInterval {
     }
 
     pub(crate) fn from_int(value: IntegerType) -> Result<Self> {
-        let mut slf = Self { _value: 1 };
+        let mut slf = Self { value: 1 };
 
         slf.value_setter(convert_generic(value))?;
 
@@ -51,7 +51,7 @@ impl GenericInterval {
         if value == 0 {
             return Err(Error::Interval("Interval cannot be zero".to_owned()));
         }
-        self._value = value;
+        self.value = value;
         Ok(())
     }
 
@@ -98,7 +98,7 @@ impl GenericInterval {
     }
 
     fn value(&self) -> IntegerType {
-        self._value
+        self.value
     }
 
     pub(crate) fn simple_steps_and_octaves(&self) -> (IntegerType, IntegerType) {
