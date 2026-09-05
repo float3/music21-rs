@@ -1659,7 +1659,7 @@ mod tests {
             ),
             (
                 "B----",
-                "Beseseses",
+                "Heseseses",
                 "si quadruplo bemolle",
                 "si quadruple bémol",
                 "si cuádruple bemol",
