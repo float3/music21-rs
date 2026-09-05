@@ -502,19 +502,21 @@ impl Pitch {
         Ok(post)
     }
 
-    pub(crate) fn transpose(&self, interval: &Interval) -> Pitch {
-        let mut p = interval
-            .transpose_pitch_with_options(self, false, Some(4))
-            .unwrap_or_else(|_| self.clone());
+    /// Returns this pitch transposed by the interval, as music21's
+    /// `Pitch.transpose` does: a pitch whose spelling was inferred from a
+    /// number is respelled to its most common enharmonic afterwards, one
+    /// spelled explicitly keeps its accidentals.
+    pub fn transpose(&self, interval: &Interval) -> Result<Pitch> {
+        let mut p = interval.transpose_pitch_with_options(self, false, Some(4))?;
 
         if !interval.implicit_diatonic {
             p.spelling_is_inferred = self.spelling_is_inferred;
         }
         if p.spelling_is_inferred {
-            let _ = p.simplify_enharmonic_in_place(true);
+            p.simplify_enharmonic_in_place(true)?;
         }
 
-        p
+        Ok(p)
     }
 
     /// Returns the pitch-space value for this pitch.
@@ -871,6 +873,137 @@ impl Pitch {
         self.octave_setter(Some(octave + octaves));
     }
 
+    /// Returns the German name, where `B` is `H`, `B-` is `B`, sharps add
+    /// `is` and flats add `es` or `s`. Errors on a microtonal accidental.
+    pub fn german(&self) -> Result<String> {
+        let alter = self.whole_alteration("german")?;
+        let mut step = self.step.as_char().to_string();
+        let mut alter = alter;
+        if self.step == StepName::B {
+            if alter == -1 {
+                alter = 0;
+            } else {
+                step = "H".to_string();
+            }
+        }
+        Ok(match alter {
+            0 => step,
+            alter if alter > 0 => step + &"is".repeat(alter as usize),
+            alter => {
+                let first = if matches!(step.as_str(), "C" | "D" | "F" | "G" | "H") {
+                    "es"
+                } else {
+                    "s"
+                };
+                step + first + &"es".repeat(alter.unsigned_abs() as usize - 1)
+            }
+        })
+    }
+
+    /// Returns the Italian solfège name, such as `"do diesis"` or
+    /// `"si doppio bemolle"`. Errors on a microtonal accidental or more than
+    /// four sharps or flats.
+    pub fn italian(&self) -> Result<String> {
+        let alter = self.whole_alteration("italian")?;
+        let solfege = match self.step {
+            StepName::C => "do",
+            StepName::D => "re",
+            StepName::E => "mi",
+            StepName::F => "fa",
+            StepName::G => "sol",
+            StepName::A => "la",
+            StepName::B => "si",
+        };
+        let cardinality = match alter.unsigned_abs() {
+            0 => return Ok(solfege.to_string()),
+            1 => " ",
+            2 => " doppio ",
+            3 => " triplo ",
+            4 => " quadruplo ",
+            _ => {
+                return Err(Error::Pitch(format!(
+                    "entirely too many accidentals for an Italian name: {self}"
+                )));
+            }
+        };
+        let kind = if alter > 0 { "diesis" } else { "bemolle" };
+        Ok(format!("{solfege}{cardinality}{kind}"))
+    }
+
+    /// Returns the French solfège name, such as `"ré bémol"` or
+    /// `"fa double dièse"`. Errors on a microtonal accidental or more than
+    /// four sharps or flats.
+    pub fn french(&self) -> Result<String> {
+        let alter = self.whole_alteration("french")?;
+        let solfege = match self.step {
+            StepName::D => "ré",
+            other => romance_solfege(other),
+        };
+        let multiplier = match alter.unsigned_abs() {
+            0 => return Ok(solfege.to_string()),
+            1 => "",
+            2 => " double",
+            3 => " triple",
+            4 => " quadruple",
+            _ => {
+                return Err(Error::Pitch(format!(
+                    "entirely too many accidentals for a French name: {self}"
+                )));
+            }
+        };
+        let kind = if alter > 0 { "dièse" } else { "bémol" };
+        Ok(format!("{solfege}{multiplier} {kind}"))
+    }
+
+    /// Returns the Spanish solfège name, such as `"re bemol"` or
+    /// `"fa doble sostenido"`. Errors on a microtonal accidental or more than
+    /// four sharps or flats.
+    pub fn spanish(&self) -> Result<String> {
+        let alter = self.whole_alteration("spanish")?;
+        let solfege = romance_solfege(self.step);
+        let multiplier = match alter.unsigned_abs() {
+            0 => return Ok(solfege.to_string()),
+            1 => "",
+            2 => " doble",
+            3 => " triple",
+            4 => " cuádruple",
+            _ => {
+                return Err(Error::Pitch(format!(
+                    "entirely too many accidentals for a Spanish name: {self}"
+                )));
+            }
+        };
+        let kind = if alter > 0 { "sostenido" } else { "bemol" };
+        Ok(format!("{solfege}{multiplier} {kind}"))
+    }
+
+    /// Returns the name with the accidental as a Unicode symbol, such as
+    /// `"C♯"` or `"G𝄫"`.
+    pub fn unicode_name(&self) -> String {
+        if self.accidental.alter() == 0.0 {
+            return self.step.as_char().to_string();
+        }
+        format!("{}{}", self.step.as_char(), self.accidental.unicode())
+    }
+
+    /// Returns [`Self::unicode_name`] followed by the octave when one is set.
+    pub fn unicode_name_with_octave(&self) -> String {
+        match self.octave {
+            Some(octave) => format!("{}{octave}", self.unicode_name()),
+            None => self.unicode_name(),
+        }
+    }
+
+    fn whole_alteration(&self, language: &str) -> Result<IntegerType> {
+        let alter = self.accidental.alter();
+        if alter.fract() != 0.0 {
+            return Err(Error::Pitch(format!(
+                "{language} names cannot express the microtonal accidental of {self}"
+            )));
+        }
+        Ok(alter as IntegerType)
+    }
+
     /// Returns the stored octave.
     ///
     /// Returns `None` when the pitch was created without an explicit octave,
@@ -924,6 +1057,18 @@ impl From<PitchName> for PitchParameters {
                 }
             }
         }
+    }
+}
+
+fn romance_solfege(step: StepName) -> &'static str {
+    match step {
+        StepName::C => "do",
+        StepName::D => "re",
+        StepName::E => "mi",
+        StepName::F => "fa",
+        StepName::G => "sol",
+        StepName::A => "la",
+        StepName::B => "si",
     }
 }
 
@@ -1460,6 +1605,88 @@ mod tests {
     }
 
     #[test]
+    fn language_names_match_music21() {
+        let cases = [
+            ("C", "C", "do", "do", "do", "C"),
+            ("C#", "Cis", "do diesis", "do dièse", "do sostenido", "C♯"),
+            ("D-", "Des", "re bemolle", "ré bémol", "re bemol", "D♭"),
+            ("B", "H", "si", "si", "si", "B"),
+            ("B-", "B", "si bemolle", "si bémol", "si bemol", "B♭"),
+            ("B#", "His", "si diesis", "si dièse", "si sostenido", "B♯"),
+            ("E-", "Es", "mi bemolle", "mi bémol", "mi bemol", "E♭"),
+            ("A-", "As", "la bemolle", "la bémol", "la bemol", "A♭"),
+            (
+                "F##",
+                "Fisis",
+                "fa doppio diesis",
+                "fa double dièse",
+                "fa doble sostenido",
+                "F𝄪",
+            ),
+            (
+                "G--",
+                "Geses",
+                "sol doppio bemolle",
+                "sol double bémol",
+                "sol doble bemol",
+                "G𝄫",
+            ),
+            (
+                "B--",
+                "Heses",
+                "si doppio bemolle",
+                "si double bémol",
+                "si doble bemol",
+                "B𝄫",
+            ),
+            ("F-", "Fes", "fa bemolle", "fa bémol", "fa bemol", "F♭"),
+            ("E#", "Eis", "mi diesis", "mi dièse", "mi sostenido", "E♯"),
+            (
+                "D##",
+                "Disis",
+                "re doppio diesis",
+                "ré double dièse",
+                "re doble sostenido",
+                "D𝄪",
+            ),
+            (
+                "A####",
+                "Aisisisis",
+                "la quadruplo diesis",
+                "la quadruple dièse",
+                "la cuádruple sostenido",
+                "A𝄪𝄪",
+            ),
+            (
+                "B----",
+                "Beseseses",
+                "si quadruplo bemolle",
+                "si quadruple bémol",
+                "si cuádruple bemol",
+                "B𝄫𝄫",
+            ),
+        ];
+        for (name, german, italian, french, spanish, unicode) in cases {
+            let pitch = Pitch::from_name(name).unwrap();
+            assert_eq!(pitch.german().unwrap(), german, "{name}");
+            assert_eq!(pitch.italian().unwrap(), italian, "{name}");
+            assert_eq!(pitch.french().unwrap(), french, "{name}");
+            assert_eq!(pitch.spanish().unwrap(), spanish, "{name}");
+            assert_eq!(pitch.unicode_name(), unicode, "{name}");
+        }
+        assert_eq!(
+            Pitch::from_name("A#4").unwrap().unicode_name_with_octave(),
+            "A♯4"
+        );
+        assert_eq!(Pitch::from_name("E-5").unwrap().german().unwrap(), "Es");
+        let quarter_sharp = Pitch::from_name("C~").unwrap();
+        assert!(quarter_sharp.german().is_err());
+        assert!(quarter_sharp.italian().is_err());
+        assert!(quarter_sharp.french().is_err());
+        assert!(quarter_sharp.spanish().is_err());
+    }
+
+    #[test]
     fn fundamental_round_trips_through_the_builder() {
         let pitch = Pitch::builder()
             .name("E4")
@@ -1507,7 +1734,7 @@ mod tests {
     fn test_pitch_transpose_interval() {
         let c4 = Pitch::from_name("C4").unwrap();
         let m3 = Interval::from_name("m3").unwrap();
-        let out = c4.transpose(&m3);
+        let out = c4.transpose(&m3).unwrap();
         assert_eq!(out.name_with_octave(), "E-4");
     }
 

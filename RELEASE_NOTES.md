@@ -55,6 +55,14 @@ the next release needs a minor bump.
   `scale`; `Key::tonic_pitch_name_with_case`.
 - `Duration::type_and_dots`, `dots` and `full_name`,
   `DurationType::type_number`, and `quarter_length_to_closest_type`.
+- `ScaleType::derive`, `derive_ranked` and `derive_all` find the tonics on
+  which a scale type contains a set of pitches; `Scale::degree_and_accidental_of`
+  and `Chord::scale_degrees` report degrees with the accidental that departs
+  from the scale's spelling.
+- `Pitch::german`, `italian`, `french`, `spanish`, `unicode_name` and
+  `unicode_name_with_octave`; `Pitch::transpose` is public and returns
+  `Result` instead of swallowing failures.
+- `Note::transpose`, `Key::transpose` and `Key::as_scale`.
 
 ## Bug Fixes
 

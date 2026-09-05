@@ -1,6 +1,7 @@
 use crate::defaults::{FloatType, IntegerType};
 use crate::duration::Duration;
 use crate::error::Result;
+use crate::interval::Interval;
 use crate::pitch::Pitch;
 
 use std::fmt::{Display, Formatter};
@@ -62,6 +63,14 @@ impl Note {
     pub fn with_duration(mut self, duration: Duration) -> Self {
         self.set_duration(duration);
         self
+    }
+
+    /// Returns this note transposed by the interval, keeping its duration.
+    pub fn transpose(&self, interval: &Interval) -> Result<Self> {
+        Ok(Self {
+            pitch: interval.transpose_pitch(&self.pitch)?,
+            duration: self.duration.clone(),
+        })
     }
 }
 
@@ -251,6 +260,18 @@ mod tests {
                 .pitch_name_with_octave(),
             "C4"
         );
+    }
+
+    #[test]
+    fn transposing_a_note_keeps_its_duration() {
+        let note = Note::from_name("C4")
+            .unwrap()
+            .with_duration(crate::Duration::half());
+        let moved = note
+            .transpose(&crate::Interval::from_name("M3").unwrap())
+            .unwrap();
+        assert_eq!(moved.pitch_name_with_octave(), "E4");
+        assert_eq!(moved.duration().unwrap().quarter_length(), 2.0);
     }
 
     #[test]

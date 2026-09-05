@@ -202,6 +202,71 @@ impl ScaleType {
     }
 }
 
+/// The tonics music21's `IntervalNetwork.find` tries, in its order. Ties in
+/// the ranking fall back to this order reversed.
+const SCALE_STARTS: [&str; 15] = [
+    "C", "C#", "D-", "D", "D#", "E-", "E", "F", "F#", "G", "G#", "A", "B-", "B", "C-",
+];
+
+impl ScaleType {
+    /// Ranks every candidate tonic by how many of `pitches` fall in this
+    /// scale type built on it, best first, as music21's `deriveRanked` does.
+    /// Pitches are compared by pitch class and duplicates count separately.
+    pub fn derive_ranked(
+        self,
+        pitches: &[Pitch],
+        limit: Option<usize>,
+    ) -> Result<Vec<(usize, Scale)>> {
+        let targets = pitches
+            .iter()
+            .map(|pitch| pitch.pitch_class().number())
+            .collect::<Vec<_>>();
+        let mut ranked = Vec::with_capacity(SCALE_STARTS.len());
+        for start in SCALE_STARTS {
+            let scale = Scale::new(self, Pitch::from_name(start)?);
+            let classes = scale
+                .pitches()?
+                .iter()
+                .map(|pitch| pitch.pitch_class().number())
+                .collect::<Vec<_>>();
+            let matched = targets
+                .iter()
+                .filter(|target| classes.contains(target))
+                .count();
+            ranked.push((matched, scale));
+        }
+        ranked.sort_by(|left, right| {
+            left.0
+                .cmp(&right.0)
+                .then_with(|| left.1.tonic().ps().total_cmp(&right.1.tonic().ps()))
+        });
+        ranked.reverse();
+        if let Some(limit) = limit {
+            ranked.truncate(limit);
+        }
+        Ok(ranked)
+    }
+
+    /// Returns this scale type on the tonic that fits `pitches` best.
+    pub fn derive(self, pitches: &[Pitch]) -> Result<Scale> {
+        self.derive_ranked(pitches, Some(1))?
+            .pop()
+            .map(|(_, scale)| scale)
+            .ok_or_else(|| crate::error::Error::Scale("no candidate tonics".to_string()))
+    }
+
+    /// Returns every tonic on which this scale type contains all of `pitches`,
+    /// best-ranked first.
+    pub fn derive_all(self, pitches: &[Pitch]) -> Result<Vec<Scale>> {
+        Ok(self
+            .derive_ranked(pitches, None)?
+            .into_iter()
+            .filter(|(matched, _)| *matched == pitches.len())
+            .map(|(_, scale)| scale)
+            .collect())
+    }
+}
+
 /// A named scale realized from a tonic pitch.
 ///
 /// ```
@@ -304,6 +369,35 @@ impl Scale {
     /// the scale first moves to the nearest scale pitch below it.
     pub fn next_pitch_below(&self, origin: &Pitch, steps: usize) -> Result<Pitch> {
         self.pitch_steps_from(origin, -(steps as IntegerType))
+    }
+
+    /// Returns the degree a pitch sits on together with the accidental that
+    /// separates it from the scale's own spelling of that degree, so `E-` in
+    /// C major is degree three with a flat. Errors when no degree shares the
+    /// pitch's letter.
+    pub fn degree_and_accidental_of(
+        &self,
+        pitch: &Pitch,
+    ) -> Result<(usize, Option<crate::pitch::Accidental>)> {
+        if let Some(degree) = self.degree_of(pitch)? {
+            return Ok((degree, None));
+        }
+        let pitches = self.scale_pitches()?;
+        let index = pitches
+            .iter()
+            .position(|candidate| candidate.step() == pitch.step())
+            .ok_or_else(|| {
+                crate::error::Error::Scale(format!(
+                    "cannot get any scale degree for {pitch} in {self:?}"
+                ))
+            })?;
+        let difference = pitch.accidental().alter() - pitches[index].accidental().alter();
+        let accidental = if difference == 0.0 {
+            None
+        } else {
+            Some(crate::pitch::Accidental::new(difference)?)
+        };
+        Ok((index + 1, accidental))
     }
 
     fn scale_pitches(&self) -> Result<Vec<Pitch>> {
@@ -450,6 +544,165 @@ mod tests {
                 .next_pitch_above(&Pitch::from_name("G4").unwrap(), 0)
                 .is_err()
         );
+    }
+
+    #[test]
+    fn derivation_matches_music21() {
+        let pitches = |names: &[&str]| {
+            names
+                .iter()
+                .map(|name| Pitch::from_name(*name).unwrap())
+                .collect::<Vec<_>>()
+        };
+        type Row = (
+            &'static [&'static str],
+            ScaleType,
+            &'static str,
+            [(&'static str, usize); 4],
+            &'static [&'static str],
+        );
+        let cases: [Row; 12] = [
+            (
+                &["C", "E", "G"],
+                ScaleType::Major,
+                "G",
+                [("G", 3), ("F", 3), ("C", 3), ("B-", 2)],
+                &["G", "F", "C"],
+            ),
+            (
+                &["C", "E", "G"],
+                ScaleType::Minor,
+                "A",
+                [("A", 3), ("E", 3), ("D", 3), ("B", 2)],
+                &["A", "E", "D"],
+            ),
+            (
+                &["C", "E", "G"],
+                ScaleType::Dorian,
+                "A",
+                [("A", 3), ("G", 3), ("D", 3), ("B-", 2)],
+                &["A", "G", "D"],
+            ),
+            (
+                &["F#", "A", "C#", "E"],
+                ScaleType::Major,
+                "A",
+                [("A", 4), ("E", 4), ("D", 4), ("B", 3)],
+                &["A", "E", "D"],
+            ),
+            (
+                &["F#", "A", "C#", "E"],
+                ScaleType::Minor,
+                "B",
+                [("B", 4), ("F#", 4), ("D-", 4), ("C#", 4)],
+                &["B", "F#", "D-", "C#", "C-"],
+            ),
+            (
+                &["G#", "B", "D", "F"],
+                ScaleType::HarmonicMinor,
+                "A",
+                [("A", 4), ("F#", 4), ("E-", 4), ("D#", 4)],
+                &["A", "F#", "E-", "D#", "C"],
+            ),
+            (
+                &["B-", "D", "F", "A-"],
+                ScaleType::Major,
+                "E-",
+                [("E-", 4), ("D#", 4), ("B-", 3), ("G#", 3)],
+                &["E-", "D#"],
+            ),
+            (
+                &["B-", "D", "F", "A-"],
+                ScaleType::Dorian,
+                "F",
+                [("F", 4), ("B-", 3), ("G#", 3), ("G", 3)],
+                &["F"],
+            ),
+            (
+                &["C", "D", "E", "F#", "G", "A", "B"],
+                ScaleType::Major,
+                "G",
+                [("G", 7), ("D", 6), ("C", 6), ("A", 5)],
+                &["G"],
+            ),
+            (
+                &["C", "D", "E", "F#", "G", "A", "B"],
+                ScaleType::Minor,
+                "E",
+                [("E", 7), ("B", 6), ("A", 6), ("C-", 6)],
+                &["E"],
+            ),
+            (
+                &["C", "C#", "D"],
+                ScaleType::Major,
+                "B-",
+                [("B-", 2), ("A", 2), ("G#", 2), ("G", 2)],
+                &[],
+            ),
+            (
+                &["E-", "G", "B-"],
+                ScaleType::Major,
+                "B-",
+                [("B-", 3), ("G#", 3), ("E-", 3), ("D#", 3)],
+                &["B-", "G#", "E-", "D#"],
+            ),
+        ];
+        for (names, scale_type, best, ranked, all) in cases {
+            let input = pitches(names);
+            assert_eq!(
+                scale_type.derive(&input).unwrap().tonic().name(),
+                best,
+                "{scale_type:?} {names:?}"
+            );
+            let top = scale_type
+                .derive_ranked(&input, Some(4))
+                .unwrap()
+                .into_iter()
+                .map(|(matched, scale)| (scale.tonic().name(), matched))
+                .collect::<Vec<_>>();
+            let expected = ranked
+                .iter()
+                .map(|(tonic, matched)| (tonic.to_string(), *matched))
+                .collect::<Vec<_>>();
+            assert_eq!(top, expected, "{scale_type:?} {names:?}");
+            let complete = scale_type
+                .derive_all(&input)
+                .unwrap()
+                .iter()
+                .map(|scale| scale.tonic().name())
+                .collect::<Vec<_>>();
+            assert_eq!(complete, all, "{scale_type:?} {names:?}");
+        }
+    }
+
+    #[test]
+    fn degree_with_accidental_matches_music21() {
+        let scale = Scale::new(ScaleType::Major, Pitch::from_name("C4").unwrap());
+        let cases = [
+            ("C4", 1, None),
+            ("D4", 2, None),
+            ("E-4", 3, Some("flat")),
+            ("F#4", 4, Some("sharp")),
+            ("G", 5, None),
+            ("A#", 6, Some("sharp")),
+            ("B-", 7, Some("flat")),
+            ("D--4", 2, Some("double-flat")),
+            ("C#4", 1, Some("sharp")),
+            ("E#4", 3, Some("sharp")),
+        ];
+        for (name, degree, accidental) in cases {
+            let (found, found_accidental) = scale
+                .degree_and_accidental_of(&Pitch::from_name(name).unwrap())
+                .unwrap();
+            assert_eq!(found, degree, "{name}");
+            assert_eq!(
+                found_accidental
+                    .as_ref()
+                    .map(|accidental| accidental.name()),
+                accidental,
+                "{name}"
+            );
+        }
     }
 
     fn names(scale_type: ScaleType, tonic: &str) -> Vec<String> {

@@ -6,8 +6,9 @@ use crate::{
     chord::Chord,
     defaults::IntegerType,
     error::{Error, Result},
+    interval::Interval,
     pitch::Pitch,
-    scale::diatonicscale::DiatonicScale,
+    scale::{Scale, ScaleType, diatonicscale::DiatonicScale},
 };
 use std::str::FromStr;
 
@@ -75,6 +76,32 @@ impl Key {
     /// Returns the key mode.
     pub fn mode(&self) -> &str {
         &self.mode
+    }
+
+    /// Returns this key moved by the interval, keeping its mode.
+    pub fn transpose(&self, interval: &Interval) -> Result<Self> {
+        self.key_signature()
+            .transpose(interval)?
+            .try_as_key(Some(&self.mode), None)
+    }
+
+    /// Returns the [`Scale`] for this key's mode on its tonic. Major and
+    /// minor cover ionian and aeolian; the other church modes map to their
+    /// scale types, and any other mode is an error.
+    pub fn as_scale(&self) -> Result<Scale> {
+        let scale_type = match self.mode.as_str() {
+            "major" | "ionian" => ScaleType::Major,
+            "minor" | "aeolian" => ScaleType::Minor,
+            "dorian" => ScaleType::Dorian,
+            "phrygian" => ScaleType::Phrygian,
+            "lydian" => ScaleType::Lydian,
+            "mixolydian" => ScaleType::Mixolydian,
+            "locrian" => ScaleType::Locrian,
+            other => {
+                return Err(Error::Key(format!("no scale type for mode {other}")));
+            }
+        };
+        Ok(Scale::new(scale_type, self.tonic_pitch.clone()))
     }
 
     /// Returns the tonic name in music21's case convention: upper case for
@@ -228,6 +255,44 @@ fn canonical_key_mode(mode: &str) -> String {
 mod tests {
     use super::*;
     use crate::key::keysignature::pitch_name_to_sharps;
+
+    #[test]
+    fn transposing_a_key_matches_music21() {
+        let cases = [
+            ("C", "M2", "D", 2, "major"),
+            ("c", "P5", "g", -2, "minor"),
+            ("F#", "m2", "G", 1, "major"),
+            ("B-", "-M3", "G-", -6, "major"),
+            ("D", "P8", "D", 2, "major"),
+            ("e", "M6", "c#", 4, "minor"),
+            ("C", "-m2", "B", 5, "major"),
+        ];
+        for (key, interval, tonic, sharps, mode) in cases {
+            let moved = Key::from_tonic(key)
+                .unwrap()
+                .transpose(&Interval::from_name(interval).unwrap())
+                .unwrap();
+            assert_eq!(
+                moved.tonic_pitch_name_with_case(),
+                tonic,
+                "{key} {interval}"
+            );
+            assert_eq!(moved.sharps(), sharps, "{key} {interval}");
+            assert_eq!(moved.mode(), mode, "{key} {interval}");
+        }
+        let dorian = Key::from_tonic_mode("D", "dorian")
+            .unwrap()
+            .as_scale()
+            .unwrap();
+        assert_eq!(dorian.scale_type(), ScaleType::Dorian);
+        assert!(
+            Key::from_tonic_mode("D", "hypodorian").is_err()
+                || Key::from_tonic_mode("D", "hypodorian")
+                    .unwrap()
+                    .as_scale()
+                    .is_err()
+        );
+    }
 
     #[test]
     fn tonic_names_carry_mode_case() {

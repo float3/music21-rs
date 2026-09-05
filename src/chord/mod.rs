@@ -1450,6 +1450,23 @@ impl Chord {
         })
     }
 
+    /// Returns each pitch's degree in `scale` with the accidental that
+    /// separates it from the scale's spelling, as music21's `scaleDegrees`
+    /// does: `C E- G` in C major is `(1, None), (3, flat), (5, None)`. A pitch
+    /// whose letter the scale lacks reports `(None, None)`.
+    pub fn scale_degrees(
+        &self,
+        scale: &crate::scale::Scale,
+    ) -> Result<Vec<(Option<usize>, Option<crate::pitch::Accidental>)>> {
+        self.pitch_refs()
+            .map(|pitch| match scale.degree_and_accidental_of(pitch) {
+                Ok((degree, accidental)) => Ok((Some(degree), accidental)),
+                Err(Error::Scale(_)) => Ok((None, None)),
+                Err(error) => Err(error),
+            })
+            .collect()
+    }
+
     fn ordered_pitch_classes(&self) -> Vec<u8> {
         let mut pcs = self
             .notes
@@ -2796,6 +2813,80 @@ mod tests {
             names(bare.transpose(&Interval::from_name("P5").unwrap()).unwrap()),
             vec!["G", "B", "D"]
         );
+    }
+
+    #[test]
+    fn scale_degrees_match_music21() {
+        let cases = [
+            (
+                "C",
+                "C E G",
+                vec![(Some(1), None), (Some(3), None), (Some(5), None)],
+            ),
+            (
+                "C",
+                "C E- G",
+                vec![(Some(1), None), (Some(3), Some("flat")), (Some(5), None)],
+            ),
+            (
+                "F",
+                "F A C E",
+                vec![
+                    (Some(1), None),
+                    (Some(3), None),
+                    (Some(5), None),
+                    (Some(7), None),
+                ],
+            ),
+            (
+                "a",
+                "G# B D",
+                vec![(Some(7), Some("sharp")), (Some(2), None), (Some(4), None)],
+            ),
+            (
+                "B-",
+                "E- G B-",
+                vec![(Some(4), None), (Some(6), None), (Some(1), None)],
+            ),
+            (
+                "D",
+                "C# E G B-",
+                vec![
+                    (Some(7), None),
+                    (Some(2), None),
+                    (Some(4), None),
+                    (Some(6), Some("flat")),
+                ],
+            ),
+            (
+                "C",
+                "C E G B- D-",
+                vec![
+                    (Some(1), None),
+                    (Some(3), None),
+                    (Some(5), None),
+                    (Some(7), Some("flat")),
+                    (Some(2), Some("flat")),
+                ],
+            ),
+        ];
+        for (key, notes, expected) in cases {
+            let scale = Key::from_tonic(key).unwrap().as_scale().unwrap();
+            let degrees = Chord::new(notes)
+                .unwrap()
+                .scale_degrees(&scale)
+                .unwrap()
+                .into_iter()
+                .map(|(degree, accidental)| (degree, accidental.map(|a| a.name().to_string())))
+                .collect::<Vec<_>>();
+            let expected = expected
+                .into_iter()
+                .map(|(degree, accidental): (Option<usize>, Option<&str>)| {
+                    (degree, accidental.map(str::to_string))
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(degrees, expected, "{key} {notes}");
+        }
     }
 
     #[test]
