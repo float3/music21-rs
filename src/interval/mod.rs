@@ -574,8 +574,6 @@ impl Interval {
                 .reverse()?
                 .transpose_pitch_with_options(p, false, Some(4));
         }
-        let max_accidental = max_accidental.unwrap_or(4);
-
         if self.implicit_diatonic {
             return self.chromatic.transpose_pitch(p);
         }
@@ -603,7 +601,7 @@ impl Interval {
 
         let rounded_fix = half_steps_to_fix.round() as IntegerType;
         if half_steps_to_fix != 0.0 {
-            if rounded_fix.abs() > max_accidental {
+            if max_accidental.is_some_and(|limit| rounded_fix.abs() > limit) {
                 pitch2.set_ps(pitch2.ps() + half_steps_to_fix);
             } else {
                 let accidental = crate::pitch::accidental::Accidental::new(rounded_fix as i8)?;

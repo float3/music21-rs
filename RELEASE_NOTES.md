@@ -47,6 +47,24 @@ the next release needs a minor bump.
 - `Error::Duration`, `Error::Key`, `Error::Scale` and `Error::Tempo`
   variants. Duration, mode and scale-degree errors used to be reported as
   `Error::Ordinal`.
+- `Pitch::from_frequency`, `harmonic`, `harmonic_from_fundamental`,
+  `harmonic_string`, `is_enharmonic`, `all_common_enharmonics`,
+  `transpose_below_target`, `transpose_above_target`, `is_twelve_tone` and
+  `diatonic_note_number`.
+- `KeySignature::altered_pitches`, `accidental_by_step`, `transpose` and
+  `scale`; `Key::tonic_pitch_name_with_case`.
+- `Duration::type_and_dots`, `dots` and `full_name`,
+  `DurationType::type_number`, and `quarter_length_to_closest_type`.
+
+## Bug Fixes
+
+- Pitches built from a name no longer count as having inferred spelling, so
+  `Pitch::transpose` keeps `D-` a flat and `KeySignature::new(-7)` is C-flat
+  major rather than B major.
+- `tuningsystem::C4` is `440 * 2^(-9/12)` to full precision rather than the
+  rounded `261.6256`.
+- Transposing with no accidental limit errors past quadruple accidentals
+  instead of silently respelling, as music21 does.
 
 ## Breaking Changes
 

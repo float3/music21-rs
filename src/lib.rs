@@ -71,7 +71,7 @@ pub use chordsymbol::{
     ChordAlteration, ChordQuality, ChordSymbol, Music21ChordType, known_chord_symbol_types,
 };
 pub use defaults::{FloatType, FractionType, IntegerType, Octave, UnsignedIntegerType};
-pub use duration::{Duration, DurationType};
+pub use duration::{Duration, DurationType, quarter_length_to_closest_type};
 pub use error::{Error, Result};
 pub use interval::{Interval, IntervalDirection};
 pub use key::{Key, KeySignature};

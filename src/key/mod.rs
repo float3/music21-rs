@@ -77,6 +77,17 @@ impl Key {
         &self.mode
     }
 
+    /// Returns the tonic name in music21's case convention: upper case for
+    /// major, lower case for minor, unchanged for other modes.
+    pub fn tonic_pitch_name_with_case(&self) -> String {
+        let name = self.tonic_pitch.name();
+        match self.mode.as_str() {
+            "major" => name.to_uppercase(),
+            "minor" => name.to_lowercase(),
+            _ => name,
+        }
+    }
+
     /// Returns the number of sharps in the key signature.
     pub fn sharps(&self) -> IntegerType {
         self.sharps
@@ -217,6 +228,25 @@ fn canonical_key_mode(mode: &str) -> String {
 mod tests {
     use super::*;
     use crate::key::keysignature::pitch_name_to_sharps;
+
+    #[test]
+    fn tonic_names_carry_mode_case() {
+        let cases = [
+            ("C", "C", "major"),
+            ("c", "c", "minor"),
+            ("F#", "F#", "major"),
+            ("f#", "f#", "minor"),
+            ("B-", "B-", "major"),
+            ("e-", "e-", "minor"),
+        ];
+        for (input, cased, mode) in cases {
+            let key: Key = input.parse().unwrap();
+            assert_eq!(key.tonic_pitch_name_with_case(), cased, "{input}");
+            assert_eq!(key.mode(), mode, "{input}");
+        }
+        let dorian = Key::from_tonic_mode("D", "dorian").unwrap();
+        assert_eq!(dorian.tonic_pitch_name_with_case(), "D");
+    }
 
     #[test]
     fn key_from_tonic_mode() {

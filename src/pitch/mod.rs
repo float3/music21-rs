@@ -550,7 +550,7 @@ impl Pitch {
 
     fn step_setter(&mut self, step_name: StepName) {
         self.step = step_name;
-        self.spelling_is_inferred = true;
+        self.spelling_is_inferred = false;
     }
 
     fn accidental_setter(&mut self, value: Accidental) {
@@ -690,6 +690,185 @@ impl Pitch {
     fn enharmonic_neighbour_in_place(&mut self, up: bool) -> Result<()> {
         *self = self.enharmonic_neighbour(up)?;
         Ok(())
+    }
+
+    /// Builds a pitch from a frequency in hertz, spelled in twelve-tone equal
+    /// temperament at A4 = 440 with any remainder as a microtone.
+    pub fn from_frequency(hertz: FloatType) -> Result<Self> {
+        if hertz.is_nan() || hertz <= 0.0 {
+            return Err(Error::Pitch(format!(
+                "frequency must be greater than zero, got {hertz}"
+            )));
+        }
+        let mut pitch = Pitch::default();
+        pitch.ps_setter(12.0 * (hertz / 440.0).log2() + 69.0);
+        Ok(pitch)
+    }
+
+    /// Returns music21's `diatonicNoteNum`: the staff position counting `C0`
+    /// as `1`, with the implicit octave standing in when none is set.
+    pub fn diatonic_note_number(&self) -> IntegerType {
+        let octave = self.octave.unwrap_or(PITCH_OCTAVE as IntegerType);
+        self.step.step_to_dnn_offset() + 7 * octave
+    }
+
+    /// Returns whether this pitch lies on the twelve-tone grid: no quarter
+    /// tone accidental and no microtone.
+    pub fn is_twelve_tone(&self) -> bool {
+        self.accidental.is_twelve_tone()
+            && self
+                .microtone
+                .as_ref()
+                .is_none_or(|microtone| microtone.cents() == 0.0)
+    }
+
+    /// Returns whether the two pitches sound the same. Without an octave on
+    /// either side only the pitch class is compared.
+    pub fn is_enharmonic(&self, other: &Pitch) -> bool {
+        if self.octave.is_none() || other.octave.is_none() {
+            (other.ps() - self.ps()).rem_euclid(12.0) == 0.0
+        } else {
+            other.ps() == self.ps()
+        }
+    }
+
+    /// Returns the other spellings of this pitch with at most `alter_limit`
+    /// sharps or flats, simplest first, as music21's `getAllCommonEnharmonics`
+    /// lists them.
+    pub fn all_common_enharmonics(&self, alter_limit: IntegerType) -> Vec<Pitch> {
+        let mut found = Vec::new();
+        if let Ok(simplified) = self.simplify_enharmonic(false)
+            && simplified.name() != self.name()
+        {
+            found.push(simplified);
+        }
+        for upward in [true, false] {
+            let mut current = self.clone();
+            while let Ok(next) = current.enharmonic_neighbour(upward) {
+                if next.accidental().alter().abs() > alter_limit as FloatType
+                    || found.contains(&next)
+                {
+                    break;
+                }
+                found.push(next.clone());
+                current = next;
+            }
+        }
+        found
+    }
+
+    /// Returns this pitch moved down by octaves until it is at or below
+    /// `target`. With `minimize` it is then raised back to within an octave.
+    pub fn transpose_below_target(&self, target: &Pitch, minimize: bool) -> Result<Pitch> {
+        let mut pitch = self.octave_bearing_copy("transpose_below_target")?;
+        while pitch.ps() > target.ps() {
+            pitch.shift_octave(-1);
+        }
+        if minimize {
+            while target.ps() - pitch.ps() >= 12.0 {
+                pitch.shift_octave(1);
+            }
+        }
+        Ok(pitch)
+    }
+
+    /// Returns this pitch moved up by octaves until it is at or above
+    /// `target`. With `minimize` it is then lowered back to within an octave.
+    pub fn transpose_above_target(&self, target: &Pitch, minimize: bool) -> Result<Pitch> {
+        let mut pitch = self.octave_bearing_copy("transpose_above_target")?;
+        while pitch.ps() < target.ps() {
+            pitch.shift_octave(1);
+        }
+        if minimize {
+            while pitch.ps() - target.ps() >= 12.0 {
+                pitch.shift_octave(-1);
+            }
+        }
+        Ok(pitch)
+    }
+
+    /// Returns the `number`th harmonic of this pitch as a fundamental, spelled
+    /// to the nearest twelve-tone pitch with the remainder as a microtone and
+    /// this pitch recorded as its fundamental. The first harmonic is the
+    /// pitch itself.
+    pub fn harmonic(&self, number: u32) -> Result<Pitch> {
+        let cent_shift = convert_harmonic_to_cents(number as IntegerType);
+        if cent_shift == 0 {
+            return Ok(self.clone());
+        }
+        let mut shifted = self.clone();
+        let existing = self.microtone.as_ref().map_or(0.0, Microtone::cents);
+        shifted.microtone_setter(Microtone::new(existing + cent_shift as FloatType)?);
+        let mut harmonic = Pitch::from_frequency(shifted.frequency_hz())?;
+        harmonic.fundamental_setter(self.clone());
+        Ok(harmonic)
+    }
+
+    /// Returns which harmonic of `fundamental` this pitch is closest to, and
+    /// the distance to that harmonic in cents: negative when this pitch lies
+    /// above the harmonic, positive when below.
+    pub fn harmonic_from_fundamental(&self, fundamental: &Pitch) -> Result<(u32, FloatType)> {
+        if self.ps() <= fundamental.ps() {
+            return Err(Error::Pitch(format!(
+                "cannot find an equivalent harmonic for a fundamental ({fundamental}) that is not above this Pitch ({self})"
+            )));
+        }
+        let mut found = Vec::new();
+        for number in 1..32 {
+            let candidate = fundamental.harmonic(number)?;
+            let above = candidate.ps() > self.ps();
+            found.push((number, candidate));
+            if above {
+                break;
+            }
+        }
+        let (number, gap) = match found.as_slice() {
+            [(number, only)] => (*number, only.ps() - self.ps()),
+            [.., (lower_number, lower), (higher_number, higher)] => {
+                let below = self.ps() - lower.ps();
+                let above = higher.ps() - self.ps();
+                if below <= above {
+                    (*lower_number, -below.abs())
+                } else {
+                    (*higher_number, above.abs())
+                }
+            }
+            [] => unreachable!("the first harmonic is always collected"),
+        };
+        Ok((
+            number,
+            round_to_digits(gap, PITCH_SPACE_SIGNIFICANT_DIGITS) * 100.0,
+        ))
+    }
+
+    /// Describes this pitch as a harmonic of `fundamental`, or of its own
+    /// fundamental when none is given, in music21's notation: `"3rdH(-2c)/C2"`.
+    pub fn harmonic_string(&self, fundamental: Option<&Pitch>) -> Result<String> {
+        let fundamental = fundamental.or(self.fundamental()).ok_or_else(|| {
+            Error::Pitch("no fundamental is defined for this Pitch: provide one".to_string())
+        })?;
+        let (number, cents) = self.harmonic_from_fundamental(fundamental)?;
+        let suffix = crate::pitch::microtone::ordinal_suffix(number as IntegerType);
+        if cents == 0.0 {
+            Ok(format!("{number}{suffix}H/{fundamental}"))
+        } else {
+            let microtone = Microtone::new(-cents)?;
+            Ok(format!("{number}{suffix}H{microtone}/{fundamental}"))
+        }
+    }
+
+    fn octave_bearing_copy(&self, operation: &str) -> Result<Pitch> {
+        if self.octave.is_none() {
+            return Err(Error::Pitch(format!(
+                "cannot call {operation} with an octaveless Pitch"
+            )));
+        }
+        Ok(self.clone())
+    }
+
+    fn shift_octave(&mut self, octaves: IntegerType) {
+        let octave = self.octave.unwrap_or(PITCH_OCTAVE as IntegerType);
+        self.octave_setter(Some(octave + octaves));
     }
 
     /// Returns the stored octave.
@@ -1030,13 +1209,255 @@ fn convert_harmonic_to_cents(harmonic_shift: IntegerType) -> IntegerType {
 
 #[cfg(test)]
 mod tests {
-    use crate::defaults::IntegerType;
+    use crate::defaults::{FloatType, IntegerType};
     use crate::interval::Interval;
     use crate::tuningsystem::TuningSystem;
 
     use super::{
         Accidental, Microtone, Pitch, convert_harmonic_to_cents, simplify_multiple_enharmonics,
     };
+
+    #[test]
+    fn harmonics_match_music21() {
+        let cases = [
+            ("C2", 1, "C2", None, 65.406),
+            ("C2", 2, "C3", None, 130.813),
+            ("C2", 3, "G3", Some("(+2c)"), 196.224),
+            ("C2", 4, "C4", None, 261.626),
+            ("C2", 5, "E4", Some("(-14c)"), 326.973),
+            ("C2", 6, "G4", Some("(+2c)"), 392.449),
+            ("C2", 7, "A~4", Some("(+19c)"), 457.891),
+            ("C2", 8, "C5", None, 523.251),
+            ("C2", 9, "D5", Some("(+4c)"), 588.688),
+            ("C2", 11, "F~5", Some("(+1c)"), 719.338),
+            ("C2", 13, "G#~5", Some("(-9c)"), 850.515),
+            ("A2", 3, "E4", Some("(+2c)"), 330.009),
+            ("A2", 5, "C#5", Some("(-14c)"), 549.9),
+            ("C", 3, "G5", Some("(+2c)"), 784.897),
+            ("E-3", 7, "C~6", Some("(+19c)"), 1089.054),
+        ];
+        for (fundamental, number, name, microtone, hertz) in cases {
+            let harmonic = Pitch::from_name(fundamental)
+                .unwrap()
+                .harmonic(number)
+                .unwrap();
+            assert_eq!(harmonic.name_with_octave(), name, "{fundamental} {number}");
+            assert_eq!(
+                harmonic.microtone().map(ToString::to_string).as_deref(),
+                microtone,
+                "{fundamental} {number}"
+            );
+            assert!(
+                (harmonic.frequency_hz() - hertz).abs() < 5e-4,
+                "{fundamental} {number}: {}",
+                harmonic.frequency_hz()
+            );
+            assert_eq!(
+                harmonic
+                    .fundamental()
+                    .map(Pitch::name_with_octave)
+                    .as_deref(),
+                (number > 1).then_some(fundamental),
+                "{fundamental} {number}"
+            );
+        }
+    }
+
+    #[test]
+    fn harmonic_from_fundamental_matches_music21() {
+        let cases = [
+            ("G4", "C2", 6, 2.0, "6thH(-2c)/C2"),
+            ("E5", "C2", 10, -14.0, "10thH(+14c)/C2"),
+            ("B-4", "C2", 7, -31.0, "7thH(+31c)/C2"),
+            ("F#5", "C2", 11, -49.0, "11thH(+49c)/C2"),
+            ("C4", "C2", 4, 0.0, "4thH/C2"),
+            ("E4", "A2", 3, 2.0, "3rdH(-2c)/A2"),
+            ("G#4", "A2", 4, 100.0, "4thH(-100c)/A2"),
+            ("A4", "A2", 4, 0.0, "4thH/A2"),
+            ("B3", "C2", 4, 100.0, "4thH(-100c)/C2"),
+            ("D5", "C2", 9, 4.0, "9thH(-4c)/C2"),
+        ];
+        for (target, fundamental, number, cents, text) in cases {
+            let target_pitch = Pitch::from_name(target).unwrap();
+            let fundamental_pitch = Pitch::from_name(fundamental).unwrap();
+            let (found, gap) = target_pitch
+                .harmonic_from_fundamental(&fundamental_pitch)
+                .unwrap();
+            assert_eq!(found, number, "{target} over {fundamental}");
+            assert!(
+                (gap - cents).abs() < 1e-6,
+                "{target} over {fundamental}: {gap}"
+            );
+            assert_eq!(
+                target_pitch
+                    .harmonic_string(Some(&fundamental_pitch))
+                    .unwrap(),
+                text
+            );
+        }
+        let c2 = Pitch::from_name("C2").unwrap();
+        assert!(
+            c2.harmonic_from_fundamental(&Pitch::from_name("C4").unwrap())
+                .is_err()
+        );
+        assert!(c2.harmonic_string(None).is_err());
+        assert_eq!(
+            c2.harmonic(5).unwrap().harmonic_string(None).unwrap(),
+            "5thH/C2"
+        );
+    }
+
+    #[test]
+    fn enharmonic_helpers_match_music21() {
+        let names = |pitches: Vec<Pitch>| {
+            pitches
+                .iter()
+                .map(Pitch::name_with_octave)
+                .collect::<Vec<_>>()
+        };
+        let cases = [
+            (
+                "C#4",
+                vec!["D-4", "B##3"],
+                vec!["D-4"],
+                vec!["D-4", "E---4", "B##3"],
+            ),
+            (
+                "E-",
+                vec!["F--", "D#"],
+                vec!["D#"],
+                vec!["F--", "D#", "C###"],
+            ),
+            ("B#3", vec!["C4"], vec!["C4"], vec!["C4", "A###3"]),
+            ("F##4", vec!["G4"], vec!["G4"], vec!["G4", "E###4"]),
+            (
+                "C4",
+                vec!["D--4", "B#3"],
+                vec!["B#3"],
+                vec!["D--4", "B#3", "A###3"],
+            ),
+            (
+                "G-2",
+                vec!["F#2", "E##2"],
+                vec!["F#2"],
+                vec!["A---2", "F#2", "E##2"],
+            ),
+            (
+                "A4",
+                vec!["B--4", "G##4"],
+                vec![],
+                vec!["B--4", "C---5", "G##4"],
+            ),
+            (
+                "B-4",
+                vec!["C--5", "A#4"],
+                vec!["A#4"],
+                vec!["C--5", "A#4", "G###4"],
+            ),
+            ("E#5", vec!["F5"], vec!["F5"], vec!["F5", "D###5"]),
+            ("D--4", vec!["C4"], vec!["C4"], vec!["C4"]),
+        ];
+        for (name, limit_two, limit_one, limit_three) in cases {
+            let pitch = Pitch::from_name(name).unwrap();
+            assert_eq!(names(pitch.all_common_enharmonics(2)), limit_two, "{name}");
+            assert_eq!(names(pitch.all_common_enharmonics(1)), limit_one, "{name}");
+            assert_eq!(
+                names(pitch.all_common_enharmonics(3)),
+                limit_three,
+                "{name}"
+            );
+        }
+
+        let enharmonic = |left: &str, right: &str| {
+            Pitch::from_name(left)
+                .unwrap()
+                .is_enharmonic(&Pitch::from_name(right).unwrap())
+        };
+        assert!(enharmonic("C#4", "D-4"));
+        assert!(!enharmonic("C#4", "D-5"));
+        assert!(enharmonic("C#", "D-5"));
+        assert!(!enharmonic("C#4", "C4"));
+        assert!(enharmonic("B#3", "C4"));
+        assert!(enharmonic("B#", "C"));
+        assert!(enharmonic("C", "C5"));
+    }
+
+    #[test]
+    fn transposing_to_a_target_matches_music21() {
+        let g3 = Pitch::from_name("G3").unwrap();
+        let below = [
+            ("C4", false, "C3"),
+            ("C4", true, "C3"),
+            ("C6", false, "C3"),
+            ("C6", true, "C3"),
+            ("G3", false, "G3"),
+            ("C2", false, "C2"),
+            ("C2", true, "C3"),
+            ("F4", true, "F3"),
+            ("G4", true, "G3"),
+        ];
+        for (source, minimize, expected) in below {
+            let moved = Pitch::from_name(source)
+                .unwrap()
+                .transpose_below_target(&g3, minimize)
+                .unwrap();
+            assert_eq!(
+                moved.name_with_octave(),
+                expected,
+                "{source} below {minimize}"
+            );
+        }
+        let above = [
+            ("C4", false, "C4"),
+            ("C1", false, "C4"),
+            ("C1", true, "C4"),
+            ("C6", false, "C6"),
+            ("C6", true, "C4"),
+            ("G3", false, "G3"),
+            ("F#3", true, "F#4"),
+        ];
+        for (source, minimize, expected) in above {
+            let moved = Pitch::from_name(source)
+                .unwrap()
+                .transpose_above_target(&g3, minimize)
+                .unwrap();
+            assert_eq!(
+                moved.name_with_octave(),
+                expected,
+                "{source} above {minimize}"
+            );
+        }
+        assert!(
+            Pitch::from_name("C")
+                .unwrap()
+                .transpose_below_target(&g3, false)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn twelve_tone_and_frequency_construction() {
+        assert!(Pitch::from_name("C4").unwrap().is_twelve_tone());
+        assert!(Pitch::from_name("C#4").unwrap().is_twelve_tone());
+        assert!(!Pitch::from_name("C~4").unwrap().is_twelve_tone());
+        assert!(!Pitch::from_name("C`4").unwrap().is_twelve_tone());
+        let detuned = Pitch::builder().name("A4").microtone(25).build().unwrap();
+        assert!(!detuned.is_twelve_tone());
+        assert_eq!(detuned.ps(), 69.25);
+
+        let g4 =
+            Pitch::from_frequency(440.0 * (2.0 as FloatType).powf((67.02 - 69.0) / 12.0)).unwrap();
+        assert_eq!(g4.name_with_octave(), "G4");
+        assert_eq!(g4.microtone().unwrap().to_string(), "(+2c)");
+        assert!((g4.ps() - 67.02).abs() < 1e-6);
+
+        let low = Pitch::from_frequency(100.0).unwrap();
+        assert_eq!(low.name_with_octave(), "G~2");
+        assert_eq!(low.microtone().unwrap().to_string(), "(-15c)");
+        assert!(Pitch::from_frequency(0.0).is_err());
+        assert_eq!(Pitch::from_name("C4").unwrap().diatonic_note_number(), 29);
+        assert_eq!(Pitch::from_name("B#3").unwrap().diatonic_note_number(), 28);
+    }
 
     #[test]
     fn fundamental_round_trips_through_the_builder() {

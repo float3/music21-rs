@@ -18,7 +18,7 @@ use std::str::FromStr;
 pub const OCTAVE_SIZE: UnsignedIntegerType = 12;
 
 /// Frequency of middle C in hertz.
-pub const C4: FloatType = 261.6256;
+pub const C4: FloatType = 261.625_565_300_598_6;
 /// Frequency of C0 in hertz.
 pub const C0: FloatType = C4 / 16.0;
 /// Frequency of C-1 in hertz.
@@ -1036,9 +1036,8 @@ mod tests {
             TuningSystem::EqualTemperament { octave_size: 12 }.octave(0),
             0
         );
-        assert_eq!(
-            TuningSystem::EqualTemperament { octave_size: 12 }.frequency(0),
-            8.1758
+        assert!(
+            (TuningSystem::EqualTemperament { octave_size: 12 }.frequency(0) - CN1).abs() < 1e-12
         );
 
         assert_eq!(

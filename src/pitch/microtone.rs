@@ -238,7 +238,7 @@ impl TryFrom<FloatType> for Microtone {
     }
 }
 
-fn ordinal_suffix(value: IntegerType) -> &'static str {
+pub(crate) fn ordinal_suffix(value: IntegerType) -> &'static str {
     if (value % 100).abs() >= 11 && (value % 100).abs() <= 13 {
         return "th";
     }

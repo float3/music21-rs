@@ -96,6 +96,29 @@ impl DurationType {
         }
     }
 
+    /// Returns music21's type number: how many of this note value make a
+    /// whole note, so a quarter is `4` and a breve `0.5`. `None` for `Zero`.
+    pub fn type_number(self) -> Option<FloatType> {
+        (self != Self::Zero).then(|| 4.0 / self.quarter_length())
+    }
+
+    fn title(self) -> String {
+        let name = self.music21_name();
+        if name.starts_with(|c: char| c.is_ascii_digit()) {
+            return name.to_string();
+        }
+        name.split('-')
+            .map(|word| {
+                let mut chars = word.chars();
+                chars
+                    .next()
+                    .map(|first| first.to_ascii_uppercase().to_string() + chars.as_str())
+                    .unwrap_or_default()
+            })
+            .collect::<Vec<_>>()
+            .join("-")
+    }
+
     /// Returns the length of one undotted note of this type, in quarter lengths.
     pub fn quarter_length(self) -> FloatType {
         match self {
@@ -230,6 +253,46 @@ impl Duration {
         }
     }
 
+    /// Returns the note-value type and dot count that together make exactly
+    /// this length, such as a half note with one dot for `3.0`. `None` for a
+    /// length no single dotted note value has, such as a tuplet or a tie.
+    pub fn type_and_dots(&self) -> Option<(DurationType, u32)> {
+        DurationType::ALL.into_iter().find_map(|duration_type| {
+            (0..=MAX_DOTS)
+                .find(|dots| duration_type.quarter_length_with_dots(*dots) == self.quarter_length)
+                .map(|dots| (duration_type, dots))
+        })
+    }
+
+    /// Returns the augmentation dots on this duration, or `0` when it is not
+    /// a single dotted note value.
+    pub fn dots(&self) -> u32 {
+        self.type_and_dots().map_or(0, |(_, dots)| dots)
+    }
+
+    /// Returns music21's `fullName` for a single note value with dots, such
+    /// as `"Dotted Quarter"`, `"Double Dotted Half"` or `"Imperfect Longa"`.
+    /// `None` for tuplets and tied lengths, which music21 spells out from
+    /// their components.
+    pub fn full_name(&self) -> Option<String> {
+        let (duration_type, dots) = self.type_and_dots()?;
+        let mensural = matches!(duration_type, DurationType::Longa | DurationType::Maxima);
+        let prefix = match dots {
+            0 if mensural => "Imperfect ",
+            1 if mensural => "Perfect ",
+            0 => "",
+            1 => "Dotted ",
+            2 => "Double Dotted ",
+            3 => "Triple Dotted ",
+            _ => "Quadruple Dotted ",
+        };
+        let mut name = format!("{prefix}{}", duration_type.title());
+        if dots >= 3 {
+            name.push_str(&format!(" ({} QL)", mixed_numeral(self.quarter_length)));
+        }
+        Some(name)
+    }
+
     /// Returns the note-value type whose undotted length this duration is.
     ///
     /// Returns `None` for a length that is not a plain note value, such as a
@@ -247,6 +310,64 @@ impl Duration {
     pub fn set_quarter_length(&mut self, quarter_length: FloatType) -> Result<()> {
         *self = Self::new(quarter_length)?;
         Ok(())
+    }
+}
+
+const MAX_DOTS: u32 = 4;
+
+/// Returns the note-value type closest to a quarter length, and whether it is
+/// exact, as music21's `quarterLengthToClosestType` does: a length between two
+/// types reports the longer one, so a triplet quarter is an inexact eighth.
+pub fn quarter_length_to_closest_type(quarter_length: FloatType) -> Result<(DurationType, bool)> {
+    let too_small = || {
+        Error::Duration(format!(
+            "cannot return types smaller than 2048th; quarter length was {quarter_length}"
+        ))
+    };
+    if quarter_length.is_nan() || quarter_length <= 0.0 {
+        return Err(too_small());
+    }
+    let note_length = 4.0 / quarter_length;
+    if let Some(exact) = DurationType::ALL
+        .into_iter()
+        .find(|duration_type| duration_type.type_number() == Some(note_length))
+    {
+        return Ok((exact, true));
+    }
+    let upper_bound = 8.0 / quarter_length;
+    if let Some(closest) = DurationType::ALL.into_iter().find(|duration_type| {
+        duration_type
+            .type_number()
+            .is_some_and(|number| note_length < number && number < upper_bound)
+    }) {
+        return Ok((closest, false));
+    }
+    if quarter_length > 128.0 {
+        return Ok((DurationType::DuplexMaxima, false));
+    }
+    Err(too_small())
+}
+
+/// Writes a quarter length the way music21's `mixedNumeral` does: `"2"`,
+/// `"1/2"`, `"1 3/4"`.
+fn mixed_numeral(value: FloatType) -> String {
+    let whole = value.trunc() as IntegerType;
+    let remainder = value - value.trunc();
+    if remainder == 0.0 {
+        return whole.to_string();
+    }
+    let fractional = (1..=12)
+        .map(|power| 1_u32 << power)
+        .find_map(|denominator| {
+            let numerator = remainder * FloatType::from(denominator);
+            (numerator.fract() == 0.0)
+                .then(|| format!("{}/{denominator}", numerator as IntegerType))
+        })
+        .unwrap_or_else(|| remainder.to_string());
+    if whole == 0 {
+        fractional
+    } else {
+        format!("{whole} {fractional}")
     }
 }
 
@@ -302,6 +423,169 @@ mod tests {
         ("2048th", 0.001953125),
         ("zero", 0.0),
     ];
+
+    #[test]
+    fn dots_types_and_full_names_match_music21() {
+        let cases = [
+            (
+                4.0,
+                Some((DurationType::Whole, 0)),
+                "Whole",
+                (DurationType::Whole, true),
+            ),
+            (
+                2.0,
+                Some((DurationType::Half, 0)),
+                "Half",
+                (DurationType::Half, true),
+            ),
+            (
+                1.0,
+                Some((DurationType::Quarter, 0)),
+                "Quarter",
+                (DurationType::Quarter, true),
+            ),
+            (
+                0.5,
+                Some((DurationType::Eighth, 0)),
+                "Eighth",
+                (DurationType::Eighth, true),
+            ),
+            (
+                0.25,
+                Some((DurationType::Sixteenth, 0)),
+                "16th",
+                (DurationType::Sixteenth, true),
+            ),
+            (
+                3.0,
+                Some((DurationType::Half, 1)),
+                "Dotted Half",
+                (DurationType::Half, false),
+            ),
+            (
+                1.5,
+                Some((DurationType::Quarter, 1)),
+                "Dotted Quarter",
+                (DurationType::Quarter, false),
+            ),
+            (
+                0.75,
+                Some((DurationType::Eighth, 1)),
+                "Dotted Eighth",
+                (DurationType::Eighth, false),
+            ),
+            (
+                6.0,
+                Some((DurationType::Whole, 1)),
+                "Dotted Whole",
+                (DurationType::Whole, false),
+            ),
+            (
+                1.75,
+                Some((DurationType::Quarter, 2)),
+                "Double Dotted Quarter",
+                (DurationType::Quarter, false),
+            ),
+            (
+                0.875,
+                Some((DurationType::Eighth, 2)),
+                "Double Dotted Eighth",
+                (DurationType::Eighth, false),
+            ),
+            (
+                7.0,
+                Some((DurationType::Whole, 2)),
+                "Double Dotted Whole",
+                (DurationType::Whole, false),
+            ),
+            (
+                0.375,
+                Some((DurationType::Sixteenth, 1)),
+                "Dotted 16th",
+                (DurationType::Sixteenth, false),
+            ),
+            (
+                3.5,
+                Some((DurationType::Half, 2)),
+                "Double Dotted Half",
+                (DurationType::Half, false),
+            ),
+            (
+                3.75,
+                Some((DurationType::Half, 3)),
+                "Triple Dotted Half (3 3/4 QL)",
+                (DurationType::Half, false),
+            ),
+            (
+                1.875,
+                Some((DurationType::Quarter, 3)),
+                "Triple Dotted Quarter (1 7/8 QL)",
+                (DurationType::Quarter, false),
+            ),
+            (
+                8.0,
+                Some((DurationType::Breve, 0)),
+                "Breve",
+                (DurationType::Breve, true),
+            ),
+            (
+                16.0,
+                Some((DurationType::Longa, 0)),
+                "Imperfect Longa",
+                (DurationType::Longa, true),
+            ),
+            (
+                24.0,
+                Some((DurationType::Longa, 1)),
+                "Perfect Longa",
+                (DurationType::Longa, false),
+            ),
+        ];
+        for (quarter_length, type_and_dots, full_name, closest) in cases {
+            let duration = Duration::new(quarter_length).unwrap();
+            assert_eq!(duration.type_and_dots(), type_and_dots, "{quarter_length}");
+            assert_eq!(
+                duration.full_name().as_deref(),
+                Some(full_name),
+                "{quarter_length}"
+            );
+            assert_eq!(
+                quarter_length_to_closest_type(quarter_length).unwrap(),
+                closest,
+                "{quarter_length}"
+            );
+        }
+
+        let inexact = [
+            (2.0 / 3.0, DurationType::Eighth),
+            (1.0 / 3.0, DurationType::Sixteenth),
+            (4.0 / 3.0, DurationType::Quarter),
+            (0.2, DurationType::ThirtySecond),
+            (0.4, DurationType::Sixteenth),
+            (1.25, DurationType::Quarter),
+            (5.0, DurationType::Whole),
+            (2.5, DurationType::Half),
+        ];
+        for (quarter_length, closest) in inexact {
+            let duration = Duration::new(quarter_length).unwrap();
+            assert_eq!(duration.type_and_dots(), None, "{quarter_length}");
+            assert_eq!(duration.dots(), 0, "{quarter_length}");
+            assert_eq!(duration.full_name(), None, "{quarter_length}");
+            assert_eq!(
+                quarter_length_to_closest_type(quarter_length).unwrap(),
+                (closest, false),
+                "{quarter_length}"
+            );
+        }
+        assert_eq!(Duration::new(3.75).unwrap().dots(), 3);
+        assert_eq!(
+            quarter_length_to_closest_type(200.0).unwrap(),
+            (DurationType::DuplexMaxima, false)
+        );
+        assert!(quarter_length_to_closest_type(0.0).is_err());
+        assert!(quarter_length_to_closest_type(0.0001).is_err());
+    }
 
     #[test]
     fn duration_types_match_music21s_table() {
