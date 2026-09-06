@@ -33,6 +33,14 @@ pub struct Chord {
     duration: Option<Duration>,
     #[cfg_attr(feature = "serde", serde(skip))]
     from_integer_pitches: bool,
+    /// A root the caller decided on, which wins over the one the pitches
+    /// imply: music21's overridden root, for chords spelled oddly or with
+    /// added notes.
+    #[cfg_attr(feature = "serde", serde(default))]
+    root_override: Option<Pitch>,
+    /// A bass the caller decided on, which wins over the lowest pitch.
+    #[cfg_attr(feature = "serde", serde(default))]
+    bass_override: Option<Pitch>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -59,6 +67,22 @@ pub struct ChordResolutionSuggestion {
     /// Human-readable harmonic context for the suggestion.
     pub key_context: String,
 }
+
+/// Writes a list of pitch classes the way music21's
+/// `Chord.formatVectorString` does, with ten and eleven as `A` and `B`:
+/// `[0, 11]` is `<0B>`.
+pub fn format_vector_string(values: &[u8]) -> String {
+    let digits: String = values
+        .iter()
+        .map(|value| crate::pitch::convert_pitch_class_to_str(*value as IntegerType))
+        .collect();
+    format!("<{digits}>")
+}
+
+/// The perfect fifth the seventh-chord spelling check walks by, parsed once
+/// rather than re-parsed per chord.
+static PERFECT_FIFTH: LazyLock<Interval> =
+    LazyLock::new(|| Interval::from_name("P5").expect("P5 is a valid interval"));
 
 const CANDIDATE_TONICS: [&str; 12] = [
     "C", "D-", "D", "E-", "E", "F", "F#", "G", "A-", "A", "B-", "B",
@@ -147,6 +171,8 @@ impl Chord {
             notes: notes.try_into_notes()?.into_iter().collect(),
             duration: None,
             from_integer_pitches: T::FROM_INTEGER_PITCHES,
+            root_override: None,
+            bass_override: None,
         })
     }
 
@@ -229,6 +255,8 @@ impl Chord {
             notes: Vec::new(),
             duration: None,
             from_integer_pitches: false,
+            root_override: None,
+            bass_override: None,
         }
     }
 
@@ -506,13 +534,126 @@ impl Chord {
             Err(_) => return "unknown chord".to_string(),
         };
 
-        match tables::address_to_common_names(address) {
-            Ok(Some(common_names)) if !common_names.is_empty() => common_names[0].to_string(),
-            _ => match tables::address_to_forte_name(address, "tn") {
-                Ok(forte_name) => format!("forte class {forte_name}"),
-                Err(_) => "unknown chord".to_string(),
+        let common_names: Vec<String> = match tables::address_to_common_names(address) {
+            Ok(Some(names)) => names.iter().map(|name| name.to_string()).collect(),
+            _ => Vec::new(),
+        };
+        let forte_name = tables::address_to_forte_name(address, "tn").ok();
+
+        if let Some(forte_name) = forte_name.as_deref() {
+            if let Some(name) = self.augmented_sixth_common_name(forte_name, &common_names) {
+                return name;
+            }
+            if let Some(first) = common_names.first() {
+                if matches!(forte_name, "4-20" | "4-26") {
+                    return if self.is_seventh_with_perfect_fifths_above_root_and_third() {
+                        first.clone()
+                    } else {
+                        format!("enharmonic equivalent to {first}")
+                    };
+                }
+                if let Some(spelled) = self.spelled_as_named(forte_name) {
+                    return if spelled {
+                        first.clone()
+                    } else {
+                        format!("enharmonic equivalent to {first}")
+                    };
+                }
+            }
+        }
+
+        match common_names.first() {
+            Some(name) => name.clone(),
+            None => match forte_name {
+                Some(forte_name) => format!("forte class {forte_name}"),
+                None => "unknown chord".to_string(),
             },
         }
+    }
+
+    /// music21 names the set classes that carry an augmented sixth by which
+    /// augmented sixth they are actually spelled as, and falls back to
+    /// `enharmonic to` the plain name when the spelling does not match.
+    fn augmented_sixth_common_name(
+        &self,
+        forte_name: &str,
+        common_names: &[String],
+    ) -> Option<String> {
+        let named = |index: usize| common_names.get(index).cloned();
+        let in_inversion = |index: usize| {
+            named(index).map(|name| format!("{name} in {}", self.inversion_text().to_lowercase()))
+        };
+        match forte_name {
+            "4-27B" => {
+                if self.is_dominant_seventh() {
+                    named(0)
+                } else if self.is_german_augmented_sixth(false) {
+                    named(2)
+                } else if self.is_german_augmented_sixth(true) {
+                    in_inversion(2)
+                } else if self.is_swiss_augmented_sixth(false) {
+                    named(3)
+                } else if self.is_swiss_augmented_sixth(true) {
+                    in_inversion(3)
+                } else {
+                    named(0).map(|name| format!("enharmonic to {name}"))
+                }
+            }
+            "4-25" => {
+                if self.is_french_augmented_sixth(false) {
+                    named(1)
+                } else if self.is_french_augmented_sixth(true) {
+                    in_inversion(1)
+                } else {
+                    named(0)
+                }
+            }
+            "3-8A" => {
+                if self.is_italian_augmented_sixth(false, false) {
+                    named(1)
+                } else if self.is_italian_augmented_sixth(true, false) {
+                    in_inversion(1)
+                } else {
+                    named(0)
+                }
+            }
+            _ => None,
+        }
+    }
+
+    /// Whether the chord is spelled as the set class's common name says, for
+    /// the classes where music21 checks: a `3-11B` that is not a major triad
+    /// is only enharmonically one.
+    fn spelled_as_named(&self, forte_name: &str) -> Option<bool> {
+        match forte_name {
+            "3-11A" => Some(self.is_minor_triad()),
+            "3-11B" => Some(self.is_major_triad()),
+            "3-10" => Some(self.is_diminished_triad()),
+            "3-12" => Some(self.is_augmented_triad()),
+            "4-27A" => Some(self.is_half_diminished_seventh()),
+            "4-28" => Some(self.is_diminished_seventh()),
+            "5-27A" | "5-27B" | "5-34" => Some(self.is_ninth()),
+            _ => None,
+        }
+    }
+
+    /// music21's check for the two seventh-chord set classes that can be
+    /// spelled several ways: a real major or minor seventh has a perfect
+    /// fifth above both its root and its third.
+    fn is_seventh_with_perfect_fifths_above_root_and_third(&self) -> bool {
+        if !self.is_seventh() {
+            return false;
+        }
+        let names = self.pitch_names();
+        let has_fifth_above = |pitch: &Pitch| {
+            PERFECT_FIFTH
+                .transpose_pitch(pitch)
+                .is_ok_and(|above| names.contains(&above.name()))
+        };
+        let (Some(root), Some(third)) = (self.root(), self.third()) else {
+            return false;
+        };
+        has_fifth_above(root) && has_fifth_above(third)
     }
 
     fn spelling_common_name_override(&self) -> Option<String> {
@@ -675,6 +816,51 @@ impl Chord {
             .join(":")
     }
 
+    /// Adds pitches or notes to the end of the chord, as music21's
+    /// `Chord.add` does. The chord is not re-sorted: the new notes sit after
+    /// the ones already there.
+    pub fn add<T>(&mut self, notes: T) -> Result<()>
+    where
+        T: IntoNotes,
+    {
+        self.notes.extend(notes.try_into_notes()?);
+        Ok(())
+    }
+
+    /// Removes the first note whose pitch equals this one, as music21's
+    /// `Chord.remove` does, and errors when the chord has no such pitch.
+    pub fn remove(&mut self, pitch: &Pitch) -> Result<()> {
+        let found = self.notes.iter().position(|note| &note.pitch == pitch);
+        match found {
+            Some(index) => {
+                self.notes.remove(index);
+                Ok(())
+            }
+            None => Err(Error::Chord(format!(
+                "Chord.remove(x), x not in chord: {}",
+                pitch.name_with_octave()
+            ))),
+        }
+    }
+
+    /// Removes the first note whose written pitch name matches, as music21's
+    /// `Chord.remove` does with a string.
+    pub fn remove_named(&mut self, name_with_octave: &str) -> Result<()> {
+        let found = self
+            .notes
+            .iter()
+            .position(|note| note.pitch.name_with_octave() == name_with_octave);
+        match found {
+            Some(index) => {
+                self.notes.remove(index);
+                Ok(())
+            }
+            None => Err(Error::Chord(format!(
+                "Chord.remove(x), x not in chord: {name_with_octave}"
+            ))),
+        }
+    }
+
     /// Returns cloned pitches for every note in the chord, in input order.
     pub fn pitches(&self) -> Vec<Pitch> {
         self.notes.iter().map(|note| note.pitch.clone()).collect()
@@ -784,14 +970,37 @@ impl Chord {
     /// Returns a human-readable inversion label.
     ///
     /// Returns `None` whenever [`Self::inversion`] returns `None`.
-    pub fn inversion_name(&self) -> Option<String> {
-        match self.inversion()? {
-            0 => Some("root position".to_string()),
-            1 => Some("first inversion".to_string()),
-            2 => Some("second inversion".to_string()),
-            3 => Some("third inversion".to_string()),
-            _ => None,
+    /// The figured-bass number music21's `inversionName` answers: `53`, `6`
+    /// and `64` for a triad, `7`, `65`, `43` and `42` for a seventh. `None`
+    /// when the chord has no inversion, and an error when it is neither a
+    /// triad nor a seventh, as music21 raises there. For the words, see
+    /// [`Self::inversion_text`].
+    pub fn inversion_name(&self) -> Result<Option<IntegerType>> {
+        let Some(inversion) = self.inversion() else {
+            return Ok(None);
+        };
+        let inversion = usize::from(inversion);
+        if self.is_seventh() || self.seventh().is_some() {
+            return [7, 65, 43, 42]
+                .get(inversion)
+                .copied()
+                .map(Some)
+                .ok_or_else(|| {
+                    Error::Chord(format!("Not a normal inversion for a seventh: {inversion}"))
+                });
         }
+        if self.is_triad() {
+            return [53, 6, 64]
+                .get(inversion)
+                .copied()
+                .map(Some)
+                .ok_or_else(|| {
+                    Error::Chord(format!("Not a normal inversion for a triad: {inversion}"))
+                });
+        }
+        Err(Error::Chord(
+            "Not a triad or Seventh, cannot determine inversion.".to_string(),
+        ))
     }
 
     /// Returns the first likely tonal resolution chord in the given key.
@@ -994,12 +1203,103 @@ impl Chord {
 
     /// Returns the root, found the way music21's `Chord.root` finds it.
     pub fn root(&self) -> Option<&Pitch> {
+        self.root_override
+            .as_ref()
+            .or_else(|| self.find_root_pitch())
+    }
+
+    /// The root the pitches imply, ignoring any override.
+    pub fn found_root(&self) -> Option<&Pitch> {
         self.find_root_pitch()
     }
 
-    /// Returns the lowest pitch.
+    /// Fixes the root the chord reports, or clears the override with `None`:
+    /// music21's `root(newroot)`. The pitch need not be in the chord, which
+    /// is the point of it for oddly spelled or added-note chords.
+    pub fn set_root(&mut self, root: Option<Pitch>) {
+        self.root_override = root;
+    }
+
+    /// Returns the lowest pitch, or the bass a caller fixed with
+    /// [`Self::set_bass`].
     pub fn bass(&self) -> Option<&Pitch> {
+        self.bass_override.as_ref().or_else(|| self.bass_pitch())
+    }
+
+    /// The lowest pitch, ignoring any override.
+    pub fn found_bass(&self) -> Option<&Pitch> {
         self.bass_pitch()
+    }
+
+    /// The bass a caller fixed with [`Self::set_bass`], and nothing when
+    /// none was.
+    pub fn overridden_bass(&self) -> Option<&Pitch> {
+        self.bass_override.as_ref()
+    }
+
+    /// The root a caller fixed with [`Self::set_root`], and nothing when
+    /// none was.
+    pub fn overridden_root(&self) -> Option<&Pitch> {
+        self.root_override.as_ref()
+    }
+
+    /// Fixes the bass the chord reports, or clears the override with `None`:
+    /// music21's `bass(newbass)`. A pitch the chord does not already carry is
+    /// added below the others, as music21 adds it.
+    pub fn set_bass(&mut self, bass: Option<Pitch>) {
+        let Some(bass) = bass else {
+            self.bass_override = None;
+            return;
+        };
+        let known = self
+            .notes
+            .iter()
+            .any(|note| note.pitch.name_with_octave() == bass.name_with_octave());
+        if !known {
+            self.notes.insert(0, Note::from_pitch(bass.clone()));
+        }
+        self.bass_override = Some(bass);
+    }
+
+    /// Rearranges the chord so it stands in the given inversion, raising the
+    /// bass by octaves until it does: music21's `inversion(newInversion)`.
+    /// An inversion the chord cannot reach is an error.
+    pub fn set_inversion(&mut self, inversion: u8) -> Result<()> {
+        self.bass_override = None;
+        let mut runs = self.notes.len() + 2;
+        while self.inversion() != Some(inversion) {
+            if runs == 0 {
+                return Err(Error::Chord(
+                    "Could not invert chord: inversion may not exist".to_string(),
+                ));
+            }
+            runs -= 1;
+            let highest_ps = self
+                .notes
+                .iter()
+                .map(|note| note.pitch.ps())
+                .fold(FloatType::NEG_INFINITY, FloatType::max);
+            let Some(bass_name) = self.bass().map(Pitch::name_with_octave) else {
+                return Err(Error::Chord(
+                    "Could not invert chord: inversion may not exist".to_string(),
+                ));
+            };
+            let Some(index) = self
+                .notes
+                .iter()
+                .position(|note| note.pitch.name_with_octave() == bass_name)
+            else {
+                return Err(Error::Chord(
+                    "Could not invert chord: inversion may not exist".to_string(),
+                ));
+            };
+            while self.notes[index].pitch.ps() < highest_ps {
+                let octave = self.notes[index].pitch.implicit_octave();
+                self.notes[index].pitch.octave_setter(Some(octave + 1));
+            }
+        }
+        *self = self.sort_ascending();
+        Ok(())
     }
 
     /// Returns the first pitch lying at the given chord step above the root,
@@ -1178,7 +1478,7 @@ impl Chord {
         match distinct.notes.len() {
             1 => true,
             2 => {
-                let closed = self.closed_position(None).remove_redundant_pitches();
+                let closed = self.closed_position(None, false).remove_redundant_pitches();
                 Interval::between_pitches(&closed.notes[0].pitch, &closed.notes[1].pitch)
                     .is_ok_and(|interval| interval.is_consonant())
             }
@@ -1191,7 +1491,11 @@ impl Chord {
     /// bass, duplicates removed and the notes sorted, as music21's
     /// `closedPosition` does. `force_octave` moves the bass to that octave
     /// first, carrying the rest of the chord with it.
-    pub fn closed_position(&self, force_octave: Option<IntegerType>) -> Self {
+    pub fn closed_position(
+        &self,
+        force_octave: Option<IntegerType>,
+        leave_redundant_pitches: bool,
+    ) -> Self {
         let mut chord = self.clone();
         let Some(bass_index) = chord.bass_index() else {
             return chord;
@@ -1221,7 +1525,9 @@ impl Chord {
                 note.pitch.octave_setter(Some(octave + 1));
             }
         }
-        chord.retain_first_by(Pitch::name_with_octave);
+        if !leave_redundant_pitches {
+            chord.retain_first_by(Pitch::name_with_octave);
+        }
         chord.sort_ascending_in_place();
         chord
     }
@@ -1256,6 +1562,26 @@ impl Chord {
         let mut chord = self.clone();
         chord.sort_ascending_in_place();
         chord
+    }
+
+    /// The first pitch at the given chord step above a root the caller
+    /// decided on, rather than the one the chord infers: music21's
+    /// `getChordStep(step, testRoot)`.
+    pub fn chord_step_with_root(&self, step: u8, root: &Pitch) -> Option<&Pitch> {
+        self.chord_step_from(step, root)
+    }
+
+    /// The semitone distance from a caller-supplied root to the pitch at the
+    /// given chord step: music21's `semitonesFromChordStep(step, testRoot)`.
+    pub fn semitones_from_chord_step_with_root(&self, step: u8, root: &Pitch) -> Option<u8> {
+        let pitch = self.chord_step_from(step, root)?;
+        Some(semitones_above(root, pitch))
+    }
+
+    /// The inversion measured from a root the caller decided on: music21's
+    /// `inversion(testRoot=...)`.
+    pub fn inversion_from_root(&self, root: &Pitch) -> Option<u8> {
+        self.inversion_with_root(root)
     }
 
     pub(crate) fn chord_step_from(&self, step: u8, root: &Pitch) -> Option<&Pitch> {
@@ -1361,7 +1687,7 @@ impl Chord {
     /// `permit_any_inversion` is set.
     pub fn is_augmented_sixth(&self, permit_any_inversion: bool) -> bool {
         match self.pitch_class_cardinality() {
-            3 => self.is_italian_augmented_sixth(permit_any_inversion),
+            3 => self.is_italian_augmented_sixth(permit_any_inversion, false),
             4 => {
                 self.is_french_augmented_sixth(permit_any_inversion)
                     || self.is_german_augmented_sixth(permit_any_inversion)
@@ -1373,13 +1699,29 @@ impl Chord {
 
     /// Returns whether the chord is an Italian augmented sixth, such as
     /// `A- C F#`.
-    pub fn is_italian_augmented_sixth(&self, permit_any_inversion: bool) -> bool {
-        self.is_augmented_sixth_of_type(
+    pub fn is_italian_augmented_sixth(
+        &self,
+        permit_any_inversion: bool,
+        restrict_doublings: bool,
+    ) -> bool {
+        if !self.is_augmented_sixth_of_type(
             (3, 8, 1),
             1,
             permit_any_inversion,
             &AUGMENTED_SIXTHS.italian,
-        )
+        ) {
+            return false;
+        }
+        if !restrict_doublings {
+            return true;
+        }
+        let (Some(root), Some(third), Some(fifth)) = (self.root(), self.third(), self.fifth())
+        else {
+            return false;
+        };
+        self.pitch_refs().all(|pitch| {
+            pitch.name() == fifth.name() || std::ptr::eq(pitch, third) || std::ptr::eq(pitch, root)
+        })
     }
 
     /// Returns whether the chord is a French augmented sixth, such as
@@ -2288,8 +2630,12 @@ impl Chord {
     /// Returns the chord in closed position with every repeated step raised
     /// an octave, so an eight-note cluster spreads into a scale: music21's
     /// `semiClosedPosition`.
-    pub fn semi_closed_position(&self, force_octave: Option<IntegerType>) -> Self {
-        let mut chord = self.closed_position(force_octave);
+    pub fn semi_closed_position(
+        &self,
+        force_octave: Option<IntegerType>,
+        leave_redundant_pitches: bool,
+    ) -> Self {
+        let mut chord = self.closed_position(force_octave, leave_redundant_pitches);
         let implicit_octave = crate::defaults::PITCH_OCTAVE as IntegerType;
         let mut remaining: Vec<usize> = (0..chord.notes.len()).collect();
         while !remaining.is_empty() {
@@ -2349,6 +2695,16 @@ impl Chord {
         self.notes.iter().map(|note| note.pitch.name()).collect()
     }
 
+    /// The pitch class of every note, in the order the chord holds them and
+    /// with repeats kept: music21's `pitchClasses`. For the sorted, distinct
+    /// list see [`Self::pitch_classes`].
+    pub fn note_pitch_classes(&self) -> Vec<u8> {
+        self.notes
+            .iter()
+            .map(|note| root::pitch_class(&note.pitch))
+            .collect()
+    }
+
     /// Returns music21's `fullName`: the pitches' full names between braces,
     /// followed by the duration's full name when the chord has a duration
     /// that music21 can name.
@@ -2359,7 +2715,12 @@ impl Chord {
             .map(|note| note.pitch.full_name())
             .collect::<Vec<_>>()
             .join(" | ");
-        match self.duration.as_ref().and_then(Duration::full_name) {
+        let duration = self
+            .duration
+            .clone()
+            .unwrap_or_else(Duration::quarter)
+            .full_name();
+        match duration {
             Some(duration) => format!("Chord {{{pitches}}} {duration}"),
             None => format!("Chord {{{pitches}}}"),
         }
@@ -2719,12 +3080,12 @@ mod tests {
         for (notes, expected, expected_forced) in cases {
             let chord = Chord::new(notes).unwrap();
             assert_eq!(
-                octave_names(&chord.semi_closed_position(None)),
+                octave_names(&chord.semi_closed_position(None, false)),
                 expected,
                 "{notes}"
             );
             assert_eq!(
-                octave_names(&chord.semi_closed_position(Some(3))),
+                octave_names(&chord.semi_closed_position(Some(3), false)),
                 expected_forced,
                 "{notes} forced to octave 3"
             );
@@ -2760,10 +3121,12 @@ mod tests {
 
     #[test]
     fn full_name_matches_music21() {
+        // A chord with no duration of its own reads as a quarter, which is
+        // the duration music21 gives every chord by default.
         let chord = Chord::new("C4 E-4 G-4 B--4").unwrap();
         assert_eq!(
             chord.full_name(),
-            "Chord {C in octave 4 | E-flat in octave 4 | G-flat in octave 4 | B-double-flat in octave 4}"
+            "Chord {C in octave 4 | E-flat in octave 4 | G-flat in octave 4 | B-double-flat in octave 4} Quarter"
         );
         let quarter = chord.clone().with_duration(Duration::quarter());
         assert_eq!(
@@ -3183,12 +3546,17 @@ mod tests {
         for (notes, force_octave, expected) in cases {
             let chord = Chord::new(notes).unwrap();
             assert_eq!(
-                names(chord.closed_position(force_octave)),
+                names(chord.closed_position(force_octave, false)),
                 expected,
                 "{notes}"
             );
         }
-        assert!(Chord::empty().closed_position(None).notes().is_empty());
+        assert!(
+            Chord::empty()
+                .closed_position(None, false)
+                .notes()
+                .is_empty()
+        );
         assert_eq!(
             names(
                 Chord::new("C4 E4 C4 E5")
@@ -3434,12 +3802,12 @@ mod tests {
             let notes = case.notes;
             let actual = [
                 chord.is_augmented_sixth(false),
-                chord.is_italian_augmented_sixth(false),
+                chord.is_italian_augmented_sixth(false, false),
                 chord.is_french_augmented_sixth(false),
                 chord.is_german_augmented_sixth(false),
                 chord.is_swiss_augmented_sixth(false),
                 chord.is_augmented_sixth(true),
-                chord.is_italian_augmented_sixth(true),
+                chord.is_italian_augmented_sixth(true, false),
                 chord.is_ninth(),
                 chord.is_transpositionally_symmetrical(false),
                 chord.can_be_dominant_v(),
@@ -3848,7 +4216,8 @@ mod tests {
         assert_eq!(chord.root_pitch_name().as_deref(), Some("C"));
         assert_eq!(chord.bass_pitch_name().as_deref(), Some("C"));
         assert_eq!(chord.inversion(), Some(0));
-        assert_eq!(chord.inversion_name().as_deref(), Some("root position"));
+        assert_eq!(chord.inversion_name().unwrap(), Some(53));
+        assert_eq!(chord.inversion_text(), "Root Position");
         assert_eq!(chord.forte_class().as_deref(), Some("3-11B"));
         assert_eq!(chord.interval_class_vector(), Some(vec![0, 0, 1, 1, 1, 0]));
         assert!(chord.invariance_vector().is_some());
@@ -3934,7 +4303,15 @@ mod tests {
     fn chord_first_inversion_detected() {
         let chord = Chord::new("E3 G3 C4").unwrap();
         assert_eq!(chord.inversion(), Some(1));
-        assert_eq!(chord.inversion_name().as_deref(), Some("first inversion"));
+        assert_eq!(chord.inversion_name().unwrap(), Some(6));
+        assert_eq!(chord.inversion_text(), "First Inversion");
+        assert_eq!(
+            Chord::new("C E G B-").unwrap().inversion_name().unwrap(),
+            Some(7)
+        );
+        // A chord that is neither a triad nor carries a seventh has no
+        // figured-bass number, which music21 reports by raising.
+        assert!(Chord::new("C D E").unwrap().inversion_name().is_err());
     }
 
     #[test]

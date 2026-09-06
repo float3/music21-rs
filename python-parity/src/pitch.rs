@@ -1,12 +1,15 @@
 //! music21's `pitch` module: `Pitch`, `Accidental`, `Microtone` and the
 //! module-level functions, over `music21-rs`.
 
+#![allow(non_snake_case)]
+
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
 use music21_rs::{
-    Accidental as RsAccidental, Interval, Microtone as RsMicrotone, Pitch as RsPitch, PitchOptions,
+    Accidental as RsAccidental, AccidentalDisplayOptions, Interval, Microtone as RsMicrotone,
+    Pitch as RsPitch, PitchOptions,
 };
 
 pyo3::create_exception!(music21_rs_facade, PitchException, PyException);
@@ -50,7 +53,6 @@ pub struct Microtone {
 impl Microtone {
     #[new]
     #[pyo3(signature = (centsOrString = None, harmonicShift = 1))]
-    #[allow(non_snake_case)]
     fn new(centsOrString: Option<&Bound<'_, PyAny>>, harmonicShift: i32) -> PyResult<Self> {
         let inner = match centsOrString {
             None => RsMicrotone::new(0.0),
@@ -84,13 +86,11 @@ impl Microtone {
     }
 
     #[getter]
-    #[allow(non_snake_case)]
     fn harmonicShift(&self) -> i32 {
         self.inner.harmonic_shift()
     }
 
     #[setter]
-    #[allow(non_snake_case)]
     fn set_harmonicShift(&mut self, value: i32) {
         self.inner.set_harmonic_shift(value);
     }
@@ -166,13 +166,11 @@ impl Accidental {
     }
 
     #[staticmethod]
-    #[allow(non_snake_case)]
     fn listNames() -> Vec<&'static str> {
         RsAccidental::list_names()
     }
 
     #[pyo3(signature = (specifier, *, allowNonStandardValue = false))]
-    #[allow(non_snake_case)]
     fn set(&mut self, specifier: &Bound<'_, PyAny>, allowNonStandardValue: bool) -> PyResult<()> {
         if allowNonStandardValue {
             if let Ok(text) = specifier.extract::<String>() {
@@ -190,7 +188,6 @@ impl Accidental {
         Ok(())
     }
 
-    #[allow(non_snake_case)]
     fn isTwelveTone(&self) -> bool {
         self.inner.is_twelve_tone()
     }
@@ -231,31 +228,62 @@ impl Accidental {
     }
 
     #[getter]
-    #[allow(non_snake_case)]
     fn fullName(&self) -> String {
         self.inner.full_name().to_string()
     }
 
+    /// music21's `inheritDisplay`: copies every display setting from another
+    /// accidental.
+    fn inheritDisplay(&mut self, other: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        let Some(other) = other.filter(|other| !other.is_none()) else {
+            return Ok(());
+        };
+        let source = other.extract::<PyRef<Accidental>>()?;
+        self.inner.inherit_display(&source.inner);
+        Ok(())
+    }
+
+    /// music21's `setAttributeIndependently`: writes `name`, `alter` or
+    /// `modifier` without the other two following it. Any other attribute is
+    /// an error, as upstream.
+    fn setAttributeIndependently(
+        &mut self,
+        attribute: &str,
+        value: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
+        match attribute {
+            "name" => self
+                .inner
+                .set_name_independently(value.extract::<String>()?),
+            "alter" => self.inner.set_alter_independently(value.extract::<f64>()?),
+            "modifier" => self
+                .inner
+                .set_modifier_independently(value.extract::<String>()?),
+            other => {
+                return Err(AccidentalException::new_err(format!(
+                    "Cannot set attribute {other} independently of other parts."
+                )));
+            }
+        }
+        Ok(())
+    }
+
     #[getter]
-    #[allow(non_snake_case)]
     fn displayType(&self) -> &'static str {
         self.inner.display_type()
     }
 
     #[setter]
-    #[allow(non_snake_case)]
     fn set_displayType(&mut self, value: &str) -> PyResult<()> {
         self.inner.set_display_type(value).map_err(accidental_error)
     }
 
     #[getter]
-    #[allow(non_snake_case)]
     fn displayStatus(&self) -> Option<bool> {
         self.inner.display_status()
     }
 
     #[setter]
-    #[allow(non_snake_case)]
     fn set_displayStatus(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
         if value.is_none() {
             self.inner.set_display_status(None);
@@ -329,10 +357,6 @@ impl Accidental {
 pub struct Pitch {
     pub(crate) inner: RsPitch,
     pub(crate) spelling_is_inferred: bool,
-    /// music21 keeps no accidental object on a plain letter but does keep an
-    /// explicit natural; the crate stores a natural either way, so this
-    /// remembers which it was.
-    explicit_accidental: bool,
 }
 
 /// Reads a transposition argument the way `Pitch.transpose` does: an interval
@@ -347,6 +371,18 @@ pub(crate) fn interval_from_any(value: &Bound<'_, PyAny>) -> PyResult<Interval> 
                 .map_or_else(|_| "?".to_string(), |r| r.to_string())
         ))
     })
+}
+
+/// Reads an optional sequence of pitch arguments, as the display and key
+/// helpers take them.
+pub(crate) fn pitch_list(value: Option<&Bound<'_, PyAny>>) -> PyResult<Vec<RsPitch>> {
+    let Some(value) = value.filter(|value| !value.is_none()) else {
+        return Ok(Vec::new());
+    };
+    value
+        .try_iter()?
+        .map(|item| pitch_from_any(&item?))
+        .collect()
 }
 
 /// Reads a pitch argument: a facade, a name, or a number.
@@ -374,11 +410,9 @@ pub(crate) fn pitch_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsPitch> {
 
 impl Pitch {
     pub(crate) fn wrap(inner: RsPitch, spelling_is_inferred: bool) -> Self {
-        let explicit_accidental = inner.accidental().alter() != 0.0;
         Self {
             inner,
             spelling_is_inferred,
-            explicit_accidental,
         }
     }
 
@@ -406,7 +440,11 @@ impl Pitch {
         if cents != 0.0 {
             options = options.microtone(cents);
         }
-        options.build().map_err(pitch_error)
+        let mut rebuilt = options.build().map_err(pitch_error)?;
+        if !self.inner.has_accidental() && accidental == "natural" {
+            rebuilt.set_accidental(None);
+        }
+        Ok(rebuilt)
     }
 
     fn step_char(&self) -> char {
@@ -493,11 +531,7 @@ impl Pitch {
             options = options.fundamental(fundamental.inner.clone());
         }
         let inner = options.build().map_err(pitch_error)?;
-        let mut pitch = Self::wrap(inner, inferred);
-        if accidental.is_some_and(|value| !value.is_none()) {
-            pitch.explicit_accidental = true;
-        }
-        Ok(pitch)
+        Ok(Self::wrap(inner, inferred))
     }
 
     // ---- names -----------------------------------------------------------
@@ -522,13 +556,11 @@ impl Pitch {
     }
 
     #[getter]
-    #[allow(non_snake_case)]
     fn nameWithOctave(&self) -> String {
         self.inner.name_with_octave()
     }
 
     #[setter]
-    #[allow(non_snake_case)]
     fn set_nameWithOctave(&mut self, value: &str) -> PyResult<()> {
         if !value.chars().any(|c| c.is_ascii_digit()) {
             return Err(PitchException::new_err(format!(
@@ -541,19 +573,16 @@ impl Pitch {
     }
 
     #[getter]
-    #[allow(non_snake_case)]
     fn unicodeName(&self) -> String {
         self.inner.unicode_name()
     }
 
     #[getter]
-    #[allow(non_snake_case)]
     fn unicodeNameWithOctave(&self) -> String {
         self.inner.unicode_name_with_octave()
     }
 
     #[getter]
-    #[allow(non_snake_case)]
     fn fullName(&self) -> String {
         self.inner.full_name()
     }
@@ -628,32 +657,36 @@ impl Pitch {
     }
 
     #[getter]
-    #[allow(non_snake_case)]
     fn implicitOctave(&self) -> i32 {
         self.inner.implicit_octave()
     }
 
     #[getter]
     fn accidental(&self) -> Option<Accidental> {
-        (self.explicit_accidental || self.inner.accidental().alter() != 0.0).then(|| Accidental {
-            inner: self.inner.accidental().clone(),
-        })
+        self.inner
+            .explicit_accidental()
+            .cloned()
+            .map(Accidental::from_inner)
     }
 
     #[setter]
     fn set_accidental(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
-        let name = match value {
-            None => "natural".to_string(),
-            Some(value) if value.is_none() => "natural".to_string(),
-            Some(value) => accidental_from_any(value)?.name().to_string(),
+        let accidental = match value {
+            None => None,
+            Some(value) if value.is_none() => None,
+            Some(value) => Some(accidental_from_any(value)?),
         };
         self.inner = self.rebuilt(
             self.step_char(),
-            &name,
+            accidental.as_ref().map_or("natural", RsAccidental::name),
             self.inner.octave(),
             self.microtone_cents(),
         )?;
-        self.explicit_accidental = value.is_some_and(|value| !value.is_none());
+        if let Some(accidental) = accidental {
+            self.inner.set_accidental(Some(accidental));
+        } else {
+            self.inner.set_accidental(None);
+        }
         Ok(())
     }
 
@@ -700,13 +733,11 @@ impl Pitch {
     }
 
     #[getter]
-    #[allow(non_snake_case)]
     fn spellingIsInferred(&self) -> bool {
         self.spelling_is_inferred
     }
 
     #[setter]
-    #[allow(non_snake_case)]
     fn set_spellingIsInferred(&mut self, value: bool) {
         self.spelling_is_inferred = value;
     }
@@ -754,13 +785,11 @@ impl Pitch {
     }
 
     #[getter]
-    #[allow(non_snake_case)]
     fn pitchClass(&self) -> i32 {
         self.inner.ps().round_ties_even().rem_euclid(12.0) as i32
     }
 
     #[setter]
-    #[allow(non_snake_case)]
     fn set_pitchClass(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
         let mut options = PitchOptions::new();
         if let Ok(text) = value.extract::<String>() {
@@ -781,25 +810,21 @@ impl Pitch {
     }
 
     #[getter]
-    #[allow(non_snake_case)]
     fn pitchClassString(&self) -> String {
         self.inner.pitch_class_string()
     }
 
     #[setter]
-    #[allow(non_snake_case)]
     fn set_pitchClassString(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
         self.set_pitchClass(value)
     }
 
     #[getter]
-    #[allow(non_snake_case)]
     fn diatonicNoteNum(&self) -> i32 {
         self.inner.diatonic_note_number()
     }
 
     #[setter]
-    #[allow(non_snake_case)]
     fn set_diatonicNoteNum(&mut self, value: i32) -> PyResult<()> {
         let index = (value - 1).rem_euclid(7) as usize;
         let letter = ['C', 'D', 'E', 'F', 'G', 'A', 'B'][index];
@@ -837,18 +862,15 @@ impl Pitch {
 
     // ---- methods ---------------------------------------------------------
 
-    #[allow(non_snake_case)]
     fn isTwelveTone(&self) -> bool {
         self.inner.is_twelve_tone()
     }
 
-    #[allow(non_snake_case)]
     fn getCentShiftFromMidi(&self) -> i32 {
         self.inner.cent_shift_from_midi()
     }
 
     #[pyo3(signature = (value, *, inPlace = false))]
-    #[allow(non_snake_case)]
     fn transpose(
         mut slf: PyRefMut<'_, Self>,
         value: &Bound<'_, PyAny>,
@@ -865,7 +887,6 @@ impl Pitch {
     }
 
     #[pyo3(signature = (*, inPlace = false))]
-    #[allow(non_snake_case)]
     fn getEnharmonic(mut slf: PyRefMut<'_, Self>, inPlace: bool) -> PyResult<Option<Pitch>> {
         let result = slf.inner.get_enharmonic().map_err(pitch_error)?;
         if inPlace {
@@ -877,7 +898,6 @@ impl Pitch {
     }
 
     #[pyo3(signature = (*, inPlace = false))]
-    #[allow(non_snake_case)]
     fn getHigherEnharmonic(mut slf: PyRefMut<'_, Self>, inPlace: bool) -> PyResult<Option<Pitch>> {
         let result = slf.inner.get_higher_enharmonic().map_err(pitch_error)?;
         if inPlace {
@@ -889,7 +909,6 @@ impl Pitch {
     }
 
     #[pyo3(signature = (*, inPlace = false))]
-    #[allow(non_snake_case)]
     fn getLowerEnharmonic(mut slf: PyRefMut<'_, Self>, inPlace: bool) -> PyResult<Option<Pitch>> {
         let result = slf.inner.get_lower_enharmonic().map_err(pitch_error)?;
         if inPlace {
@@ -901,7 +920,6 @@ impl Pitch {
     }
 
     #[pyo3(signature = (*, inPlace = false, mostCommon = false))]
-    #[allow(non_snake_case)]
     fn simplifyEnharmonic(
         mut slf: PyRefMut<'_, Self>,
         inPlace: bool,
@@ -920,13 +938,11 @@ impl Pitch {
         }
     }
 
-    #[allow(non_snake_case)]
     fn isEnharmonic(&self, other: &Bound<'_, PyAny>) -> PyResult<bool> {
         Ok(self.inner.is_enharmonic(&pitch_from_any(other)?))
     }
 
     #[pyo3(signature = (alterLimit = 2))]
-    #[allow(non_snake_case)]
     fn getAllCommonEnharmonics(&self, alterLimit: i32) -> Vec<Pitch> {
         self.inner
             .all_common_enharmonics(alterLimit)
@@ -935,7 +951,6 @@ impl Pitch {
             .collect()
     }
 
-    #[allow(non_snake_case)]
     fn getHarmonic(&self, number: u32) -> PyResult<Pitch> {
         Ok(Pitch::wrap(
             self.inner.harmonic(number).map_err(pitch_error)?,
@@ -943,7 +958,6 @@ impl Pitch {
         ))
     }
 
-    #[allow(non_snake_case)]
     fn harmonicFromFundamental(&self, fundamental: &Bound<'_, PyAny>) -> PyResult<(u32, f64)> {
         self.inner
             .harmonic_from_fundamental(&pitch_from_any(fundamental)?)
@@ -951,7 +965,6 @@ impl Pitch {
     }
 
     #[pyo3(signature = (fundamental = None))]
-    #[allow(non_snake_case)]
     fn harmonicString(&self, fundamental: Option<&Bound<'_, PyAny>>) -> PyResult<String> {
         let fundamental = fundamental
             .filter(|value| !value.is_none())
@@ -962,7 +975,6 @@ impl Pitch {
             .map_err(pitch_error)
     }
 
-    #[allow(non_snake_case)]
     fn harmonicAndFundamentalFromPitch(&self, target: &Bound<'_, PyAny>) -> PyResult<(u32, Pitch)> {
         let (number, fundamental) = self
             .inner
@@ -971,7 +983,6 @@ impl Pitch {
         Ok((number, Pitch::wrap(fundamental, false)))
     }
 
-    #[allow(non_snake_case)]
     fn harmonicAndFundamentalStringFromPitch(
         &self,
         fundamental: &Bound<'_, PyAny>,
@@ -982,7 +993,6 @@ impl Pitch {
     }
 
     #[pyo3(signature = (target, *, minimize = false, inPlace = false))]
-    #[allow(non_snake_case)]
     fn transposeBelowTarget(
         mut slf: PyRefMut<'_, Self>,
         target: &Bound<'_, PyAny>,
@@ -1003,7 +1013,6 @@ impl Pitch {
     }
 
     #[pyo3(signature = (target, *, minimize = false, inPlace = false))]
-    #[allow(non_snake_case)]
     fn transposeAboveTarget(
         mut slf: PyRefMut<'_, Self>,
         target: &Bound<'_, PyAny>,
@@ -1024,7 +1033,6 @@ impl Pitch {
     }
 
     #[pyo3(signature = (*, inPlace = false))]
-    #[allow(non_snake_case)]
     fn convertQuarterTonesToMicrotones(
         mut slf: PyRefMut<'_, Self>,
         inPlace: bool,
@@ -1043,7 +1051,6 @@ impl Pitch {
     }
 
     #[pyo3(signature = (*, inPlace = false))]
-    #[allow(non_snake_case)]
     fn convertMicrotonesToQuarterTones(
         mut slf: PyRefMut<'_, Self>,
         inPlace: bool,
@@ -1061,12 +1068,56 @@ impl Pitch {
         }
     }
 
-    #[allow(non_snake_case)]
     fn informClient(&self) {}
+
+    /// music21's `updateAccidentalDisplay`: decides whether this pitch's
+    /// accidental should be shown, given what came before.
+    #[pyo3(signature = (
+        *,
+        pitchPast = None,
+        pitchPastMeasure = None,
+        otherSimultaneousPitches = None,
+        alteredPitches = None,
+        cautionaryPitchClass = true,
+        cautionaryAll = false,
+        overrideStatus = false,
+        cautionaryNotImmediateRepeat = true,
+        lastNoteWasTied = false,
+    ))]
+    #[allow(clippy::too_many_arguments)]
+    fn updateAccidentalDisplay(
+        &mut self,
+        pitchPast: Option<&Bound<'_, PyAny>>,
+        pitchPastMeasure: Option<&Bound<'_, PyAny>>,
+        otherSimultaneousPitches: Option<&Bound<'_, PyAny>>,
+        alteredPitches: Option<&Bound<'_, PyAny>>,
+        cautionaryPitchClass: bool,
+        cautionaryAll: bool,
+        overrideStatus: bool,
+        cautionaryNotImmediateRepeat: bool,
+        lastNoteWasTied: bool,
+    ) -> PyResult<()> {
+        let past = pitch_list(pitchPast)?;
+        let past_measure = pitch_list(pitchPastMeasure)?;
+        let simultaneous = pitch_list(otherSimultaneousPitches)?;
+        let altered = pitch_list(alteredPitches)?;
+        self.inner
+            .update_accidental_display(&AccidentalDisplayOptions {
+                pitch_past: &past,
+                pitch_past_measure: &past_measure,
+                other_simultaneous_pitches: &simultaneous,
+                altered_pitches: &altered,
+                cautionary_pitch_class: cautionaryPitchClass,
+                cautionary_all: cautionaryAll,
+                override_status: overrideStatus,
+                cautionary_not_immediate_repeat: cautionaryNotImmediateRepeat,
+                last_note_was_tied: lastNoteWasTied,
+            });
+        Ok(())
+    }
 
     /// music21's `_nameInKeySignature`: whether one of the key signature's
     /// altered pitches has this pitch's step and accidental.
-    #[allow(non_snake_case)]
     fn _nameInKeySignature(&self, alteredPitches: &Bound<'_, PyAny>) -> PyResult<bool> {
         if self.accidental().is_none() {
             return Ok(false);
@@ -1088,7 +1139,6 @@ impl Pitch {
 
     /// music21's `_stepInKeySignature`: whether the key signature alters
     /// this pitch's step at all.
-    #[allow(non_snake_case)]
     fn _stepInKeySignature(&self, alteredPitches: &Bound<'_, PyAny>) -> PyResult<bool> {
         for altered in alteredPitches.try_iter()? {
             let step: String = altered?.getattr("step")?.extract()?;
@@ -1119,6 +1169,7 @@ impl Pitch {
         };
         self.inner.name_with_octave() == other.inner.name_with_octave()
             && self.inner.octave() == other.inner.octave()
+            && self.inner.has_accidental() == other.inner.has_accidental()
             && self.microtone_cents() == other.microtone_cents()
     }
 

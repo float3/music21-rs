@@ -373,7 +373,9 @@ fn analyze_chord_inner(
         normal_form: chord.normal_form(),
         interval_class_vector: chord.interval_class_vector(),
         inversion: chord.inversion(),
-        inversion_name: chord.inversion_name(),
+        inversion_name: chord
+            .inversion()
+            .map(|_| chord.inversion_text().to_lowercase()),
         key_context: key_context_display,
         key_estimate,
         roman_numeral_context,

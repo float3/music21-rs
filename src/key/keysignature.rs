@@ -111,32 +111,116 @@ pub fn pitch_name_to_sharps(pitch_name: &str, mode: Option<&str>) -> Result<Inte
 ///
 /// Flats are represented as negative sharps, so B-flat major has `-2`.
 pub struct KeySignature {
-    sharps: IntegerType,
+    sharps: Option<IntegerType>,
+    altered: Option<Vec<Pitch>>,
+    accidentals_apply_only_to_octave: bool,
 }
 
 impl KeySignature {
     /// Creates a key signature from a sharp count.
     pub fn new(sharps: IntegerType) -> Self {
-        Self { sharps }
+        Self {
+            sharps: Some(sharps),
+            altered: None,
+            accidentals_apply_only_to_octave: false,
+        }
     }
 
-    /// Returns the number of sharps, with flats as negative values.
-    pub fn sharps(&self) -> IntegerType {
+    /// Creates a non-traditional key signature from the pitches it alters,
+    /// as music21 does when `alteredPitches` is assigned: `E-` and `G#`
+    /// together, say, which no count of sharps can express. Such a signature
+    /// has no sharp count and no key.
+    pub fn from_altered_pitches(pitches: Vec<Pitch>) -> Self {
+        Self {
+            sharps: None,
+            altered: Some(pitches),
+            accidentals_apply_only_to_octave: false,
+        }
+    }
+
+    /// Returns the number of sharps, with flats as negative values, or
+    /// `None` for a non-traditional signature.
+    pub fn sharps(&self) -> Option<IntegerType> {
         self.sharps
+    }
+
+    /// Replaces the sharp count, turning a non-traditional signature back
+    /// into a traditional one.
+    pub fn set_sharps(&mut self, sharps: IntegerType) {
+        self.sharps = Some(sharps);
+        self.altered = None;
+    }
+
+    /// Replaces the altered pitches, turning the signature non-traditional.
+    pub fn set_altered_pitches(&mut self, pitches: Vec<Pitch>) {
+        self.sharps = None;
+        self.altered = Some(pitches);
+    }
+
+    /// Whether the signature is a list of altered pitches rather than a
+    /// count of sharps or flats.
+    pub fn is_non_traditional(&self) -> bool {
+        self.sharps.is_none()
+    }
+
+    /// Whether the altered pitches of a non-traditional signature carry
+    /// octaves that limit where they apply, as `F#4` altering only that
+    /// octave. music21 records the flag; applying it is a stream's job.
+    pub fn accidentals_apply_only_to_octave(&self) -> bool {
+        self.accidentals_apply_only_to_octave
+    }
+
+    /// Sets whether the altered pitches apply only in their own octave.
+    pub fn set_accidentals_apply_only_to_octave(&mut self, value: bool) {
+        self.accidentals_apply_only_to_octave = value;
+    }
+
+    fn sharps_or_error(&self) -> Result<IntegerType> {
+        self.sharps.ok_or_else(|| {
+            Error::Key(
+                "a non-traditional key signature has no count of sharps or flats".to_string(),
+            )
+        })
+    }
+
+    /// The description music21 prints after `of`: `3 sharps`, `1 flat`,
+    /// `no sharps or flats`, or `pitches: [E-, G#]`.
+    pub fn description(&self) -> String {
+        match self.sharps {
+            None => {
+                let names: Vec<String> = self
+                    .altered
+                    .as_deref()
+                    .unwrap_or_default()
+                    .iter()
+                    .map(Pitch::to_string)
+                    .collect();
+                format!("pitches: [{}]", names.join(", "))
+            }
+            Some(0) => "no sharps or flats".to_string(),
+            Some(1) => "1 sharp".to_string(),
+            Some(-1) => "1 flat".to_string(),
+            Some(n) if n > 1 => format!("{n} sharps"),
+            Some(n) => format!("{} flats", -n),
+        }
     }
 
     /// Returns the pitches this signature alters, in circle-of-fifths order
     /// and without octaves: `F# C# G#` for three sharps, `B- E- A-` for three
-    /// flats.
+    /// flats; a non-traditional signature answers the pitches it was given.
     pub fn altered_pitches(&self) -> Result<Vec<Pitch>> {
-        let (start, interval) = if self.sharps > 0 {
+        if let Some(altered) = &self.altered {
+            return Ok(altered.clone());
+        }
+        let sharps = self.sharps_or_error()?;
+        let (start, interval) = if sharps > 0 {
             ("B", &*PERFECT_FIFTH)
         } else {
             ("F", &*PERFECT_FOURTH)
         };
         let mut current = Pitch::from_name(start)?;
-        let mut altered = Vec::with_capacity(self.sharps.unsigned_abs() as usize);
-        for _ in 0..self.sharps.abs() {
+        let mut altered = Vec::with_capacity(sharps.unsigned_abs() as usize);
+        for _ in 0..sharps.abs() {
             current = interval.transpose_pitch(&current)?;
             current.octave_setter(None);
             altered.push(current.clone());
@@ -152,7 +236,7 @@ impl KeySignature {
             .into_iter()
             .rev()
             .find(|pitch| pitch.step() == step)
-            .map(|pitch| pitch.accidental().clone()))
+            .and_then(|pitch| pitch.explicit_accidental().cloned()))
     }
 
     /// Returns the signature of the major key this one's major tonic moves
@@ -171,16 +255,17 @@ impl KeySignature {
     /// fourth per flat, keeping the pitch's own octave, so `E4` in two sharps
     /// is `F#4` and in three flats `G4`.
     pub fn transpose_pitch_from_c(&self, pitch: &Pitch) -> Result<Pitch> {
-        if self.sharps == 0 {
+        let sharps = self.sharps_or_error()?;
+        if sharps == 0 {
             return Ok(pitch.clone());
         }
-        let step = if self.sharps < 0 {
+        let step = if sharps < 0 {
             &*PERFECT_FOURTH_UP
         } else {
             &*PERFECT_FIFTH_UP
         };
         let mut transposed = pitch.clone();
-        for _ in 0..self.sharps.unsigned_abs() {
+        for _ in 0..sharps.unsigned_abs() {
             transposed = step.transpose_pitch_with_options(&transposed, false, None)?;
         }
         transposed.octave_setter(pitch.octave());
@@ -213,7 +298,7 @@ impl KeySignature {
 
     /// Converts this signature to a key, optionally inferring mode from tonic.
     pub fn try_as_key(&self, mode: Option<&str>, tonic: Option<&str>) -> Result<Key> {
-        let our_sharps = self.sharps;
+        let our_sharps = self.sharps_or_error()?;
 
         let resolved_mode = if mode.is_none() && tonic.is_none() {
             "major".to_string()
@@ -223,8 +308,7 @@ impl KeySignature {
             canonical_mode_for_offset(our_sharps - major_sharps)
                 .ok_or_else(|| {
                     Error::Key(format!(
-                        "Could not solve for mode from sharps={}, tonic={}",
-                        self.sharps, tonic_name
+                        "Could not solve for mode from sharps={our_sharps}, tonic={tonic_name}"
                     ))
                 })?
                 .to_string()
@@ -237,6 +321,79 @@ impl KeySignature {
 
         let tonic_pitch = sharps_to_pitch(our_sharps - sharp_alteration_from_major)?;
         Ok(Key::new(tonic_pitch, &resolved_mode, our_sharps))
+    }
+}
+
+impl std::fmt::Display for KeySignature {
+    /// `KeySignature of 3 sharps`, `KeySignature of pitches: [E-, G#]`.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "KeySignature of {}", self.description())
+    }
+}
+
+#[cfg(test)]
+mod non_traditional_tests {
+    use super::*;
+
+    fn pitches(names: &[&str]) -> Vec<Pitch> {
+        names
+            .iter()
+            .map(|name| Pitch::from_name(*name).unwrap())
+            .collect()
+    }
+
+    #[test]
+    fn a_pitch_list_makes_a_non_traditional_signature() {
+        let unusual = KeySignature::from_altered_pitches(pitches(&["E-", "G#"]));
+        assert!(unusual.is_non_traditional());
+        assert_eq!(unusual.sharps(), None);
+        assert_eq!(unusual.to_string(), "KeySignature of pitches: [E-, G#]");
+        assert_eq!(
+            unusual.accidental_by_step('G').unwrap().unwrap().name(),
+            "sharp"
+        );
+        assert_eq!(unusual.accidental_by_step('A').unwrap(), None);
+        assert!(unusual.try_as_key(Some("major"), None).is_err());
+        assert!(
+            unusual
+                .transpose_pitch_from_c(&Pitch::from_name("C4").unwrap())
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn setting_pitches_and_sharps_switches_kinds() {
+        let mut signature = KeySignature::new(2);
+        assert_eq!(signature.to_string(), "KeySignature of 2 sharps");
+        signature.set_altered_pitches(pitches(&["F#4"]));
+        assert!(signature.is_non_traditional());
+        assert_eq!(signature.to_string(), "KeySignature of pitches: [F#4]");
+        assert!(!signature.accidentals_apply_only_to_octave());
+        signature.set_accidentals_apply_only_to_octave(true);
+        assert!(signature.accidentals_apply_only_to_octave());
+        signature.set_sharps(-1);
+        assert!(!signature.is_non_traditional());
+        assert_eq!(signature.to_string(), "KeySignature of 1 flat");
+        assert_eq!(
+            KeySignature::new(0).to_string(),
+            "KeySignature of no sharps or flats"
+        );
+        assert_eq!(KeySignature::new(-4).description(), "4 flats");
+    }
+
+    #[test]
+    fn traditional_altered_pitches_carry_explicit_accidentals() {
+        let three_sharps = KeySignature::new(3);
+        let altered = three_sharps.altered_pitches().unwrap();
+        assert!(altered.iter().all(Pitch::has_accidental));
+        assert_eq!(
+            three_sharps
+                .accidental_by_step('F')
+                .unwrap()
+                .unwrap()
+                .name(),
+            "sharp"
+        );
     }
 }
 
@@ -413,7 +570,7 @@ mod tests {
                 let moved = signature
                     .transpose(&Interval::from_name(name).unwrap())
                     .unwrap();
-                assert_eq!(moved.sharps(), expected, "{sharps} by {name}");
+                assert_eq!(moved.sharps(), Some(expected), "{sharps} by {name}");
             }
             assert_eq!(signature.scale("major").unwrap().tonic().name(), major);
             assert_eq!(signature.scale("minor").unwrap().tonic().name(), minor);

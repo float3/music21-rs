@@ -1,8 +1,10 @@
 # Unreleased
 
 Cleanup of the Python-shaped plumbing that remained in the pitch, note and
-chord constructors. Nothing musical changes; a handful of signatures do, so
-the next release needs a minor bump.
+chord constructors, and a round of music21 features the crate had not
+modelled: accidental display state, non-traditional key signatures, the
+mutating half of `Chord`, and the interval halves as public types. Several
+signatures change, so the next release needs a minor bump.
 
 ## Added
 
@@ -27,6 +29,34 @@ the next release needs a minor bump.
   from a key signature across, so `F` natural in G major steps up to `G-`.
   `GenericInterval::from_name` reads `"Third"`, `"3rd"` and
   `"Descending Fifth"`.
+- Accidentals carry music21's display state: `Pitch::update_accidental_display`
+  decides whether an accidental should be shown from the pitches before it,
+  the key signature's altered pitches and the cautionary switches
+  (`AccidentalDisplayOptions`), adding a cautionary natural where music21
+  adds one. `Accidental::set_attribute_independently` writes one part of an
+  accidental without the other two following, which is how a `sori` is built.
+- A pitch now knows whether it carries an accidental object at all:
+  `Pitch::has_accidental`, `explicit_accidental`, `explicit_accidental_mut`
+  and `set_accidental`. music21 keeps no accidental on a bare `D` but does
+  keep an explicit `Dn`, and the two are no longer equal.
+  `Pitch::set_accidental_alter` splits a fractional alteration into an
+  accidental and a microtone, and `set_microtone_cents` sets or clears the
+  microtone. `Pitch::name_in_key_signature` and `step_in_key_signature` are
+  music21's key-signature helpers.
+- Non-traditional key signatures: `KeySignature::from_altered_pitches` takes
+  the pitches a signature alters where no count of sharps can express it
+  (`E-` with `G#`), with `is_non_traditional`, `set_altered_pitches`,
+  `set_sharps`, `accidentals_apply_only_to_octave` and a `Display` that
+  writes music21's `KeySignature of pitches: [E-, G#]`.
+- `Chord` gains music21's mutating half: `add`, `remove`, `remove_named`,
+  `set_root`, `set_bass` and `set_inversion`, with `found_root`,
+  `found_bass`, `overridden_root` and `overridden_bass` to tell an inferred
+  answer from one a caller fixed. `chord_step_with_root`,
+  `semitones_from_chord_step_with_root` and `inversion_from_root` are
+  music21's `testRoot` forms, and `note_pitch_classes` is music21's
+  `pitchClasses`, in chord order with repeats kept.
+- `format_vector_string` writes a pitch-class list the way music21's
+  `Chord.formatVectorString` does, with ten and eleven as `A` and `B`.
 - The module functions `notes_to_generic`, `notes_to_chromatic`,
   `intervals_to_diatonic`, `convert_diatonic_number_to_step`,
   `convert_semitone_to_specifier_generic`,
@@ -200,6 +230,25 @@ the next release needs a minor bump.
 - `transpose_pitch_with_options(pitch, true, max_accidental)` honours
   `max_accidental` on the reversed transposition instead of resetting it to
   four.
+- `KeySignature::sharps` returns `Option<IntegerType>`, since a
+  non-traditional signature has no count of sharps. `altered_pitches`,
+  `transpose_pitch_from_c` and `try_as_key` are errors on one.
+- `Chord::inversion_name` is music21's `inversionName`: the figured-bass
+  number (`53`, `6`, `64`, `7`, `65`, `43`, `42`) as
+  `Result<Option<IntegerType>>`, an error for a chord that is neither a triad
+  nor carries a seventh. The words it used to return are `inversion_text`.
+- `Chord::closed_position` and `semi_closed_position` take
+  `leave_redundant_pitches`, and `is_italian_augmented_sixth` takes
+  `restrict_doublings`, matching music21's keyword arguments.
+- `Duration::duration_type` reports the type a dotted value is dotted from,
+  as music21 does: a dotted half is a half with one dot, where it used to be
+  no type at all. `Chord::full_name` names the quarter every chord without a
+  duration of its own implicitly has.
+- `Chord::common_name` names the augmented sixths that share a set class with
+  a seventh chord, and prefixes `enharmonic equivalent to` where the spelling
+  does not match the name, both as music21 does.
+- Pitch classes round half to even, as Python does, so the half-sharp `C~` is
+  pitch class `0` rather than `1`.
 - `Specifier::parse` reports an unknown quality as
   `Cannot find a match for value: 'x'`, and a zero generic interval as
   `The Zeroth is not an interval`, music21's texts.
@@ -212,12 +261,16 @@ the next release needs a minor bump.
   in: 890 of the 920 examples pass, and `python-parity/doctest/pitch.toml`
   pins the passing docstrings. Running them turned up the accidental,
   inferred-spelling, MIDI-folding and negative-octave fixes above.
-- The same harness covers `interval.py` (759 of 771 examples), `key.py`
-  (217 of 253) and `serial.py` (148 of 149), each with a facade module and an
-  expectation file under `python-parity/doctest/`. The interval facade is
-  what made the interval halves public and found the reversed
-  `maxAccidental` and key-aware transposition fixes. `IntervalBaseTrait`,
-  which the facade replaced, is gone.
+- The same harness covers `interval.py` (759 of 771 examples), `chord.py`
+  (827 of 971), `key.py` (230 of 253) and `serial.py` (148 of 149), each with
+  a facade module and an expectation file under `python-parity/doctest/`. The
+  interval facade is what made the interval halves public and found the
+  reversed `maxAccidental` and key-aware transposition fixes;
+  `IntervalBaseTrait`, which it replaced, is gone. The chord facade brought a
+  `note.Note` and `duration.Duration` facade with it, and found the
+  `commonName`, `inversionName`, dotted-duration and pitch-class rounding
+  fixes above. What still fails there is notation the crate does not model —
+  volumes, ties, noteheads, lyrics and stream context.
 - `cargo run -p xtask -- report` writes `target/reports`: the library's test
   coverage from `cargo llvm-cov`, and every public method of the music21
   classes named in `data/feature_map.toml` against the crate's `pub fn`s,

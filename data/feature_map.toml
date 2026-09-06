@@ -21,11 +21,11 @@ getChordStep = "chord_step"
 getZRelation = "z_relation"
 intervalVector = "interval_class_vector"
 orderedPitchClasses = "pitch_classes"
+formatVectorString = "format_vector_string"
+pitchClasses = "note_pitch_classes"
 
 [class.excluded]
-add = "notes are given at construction; a chord is a value here"
 chordTablesAddress = "the table address is internal; every value read off it has its own method"
-formatVectorString = "the vector strings come from interval_vector_string, normal_order_string and prime_form_string"
 getColor = "colour, notehead and stem direction are display state"
 setColor = "colour, notehead and stem direction are display state"
 getNotehead = "colour, notehead and stem direction are display state"
@@ -53,7 +53,6 @@ freq440 = "frequency_hz"
 [class.excluded]
 getStringHarmonic = "reads and writes noteheads on a chord's notes"
 informClient = "observer callback for a containing note; there is none"
-updateAccidentalDisplay = "accidental display state; needs a stream context"
 groups = "stream grouping"
 
 [[class]]
@@ -62,8 +61,6 @@ name = "Accidental"
 rust = ["src/pitch/accidental.rs"]
 
 [class.excluded]
-inheritDisplay = "accidental display state"
-setAttributeIndependently = "accidental display state"
 
 [[class]]
 python = "pitch.py"
@@ -133,7 +130,6 @@ name = "KeySignature"
 rust = ["src/key/keysignature.rs"]
 
 [class.excluded]
-isNonTraditional = "a key signature here is a count of sharps; non-traditional signatures are not modelled"
 
 [[class]]
 python = "key.py"

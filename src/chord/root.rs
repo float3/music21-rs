@@ -86,7 +86,7 @@ pub(crate) fn step_num(pitch: &Pitch) -> IntegerType {
 }
 
 pub(crate) fn pitch_class(pitch: &Pitch) -> u8 {
-    (pitch.ps().round() as IntegerType).rem_euclid(12) as u8
+    (pitch.ps().round_ties_even() as IntegerType).rem_euclid(12) as u8
 }
 
 /// music21's `diatonicNoteNum`: the staff position counting C0 as 1, with

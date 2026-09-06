@@ -52,6 +52,15 @@ pub const SERIAL_NAMES: &[&str] = &[
 ];
 
 /// The names the key facade provides, for swapping into `music21.key`.
+/// The names the `chord` facade replaces in `music21.chord`.
+pub const CHORD_NAMES: &[&str] = &["Chord", "ChordException"];
+
+/// The names the `note` facade replaces in `music21.note`.
+pub const NOTE_NAMES: &[&str] = &["Note", "NoteException"];
+
+/// The names the `note` facade replaces in `music21.duration`.
+pub const DURATION_NAMES: &[&str] = &["Duration"];
+
 /// The names the `interval` facade replaces in `music21.interval`.
 pub const INTERVAL_NAMES: &[&str] = &[
     "Direction",

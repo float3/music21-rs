@@ -68,7 +68,7 @@ pub use analysis::{
 };
 pub use chord::{
     Chord, ChordResolutionSuggestion, GuitarFingering, GuitarStringFingering, GuitarTuning,
-    GuitarTuningString, IntoNotes, KnownChordType, TriadQuality,
+    GuitarTuningString, IntoNotes, KnownChordType, TriadQuality, format_vector_string,
 };
 pub use chordsymbol::{
     ChordAlteration, ChordQuality, ChordSymbol, Music21ChordType, chord_symbol_figure_from_chord,
@@ -92,9 +92,10 @@ pub use midi::{
 };
 pub use note::{IntoNote, Note};
 pub use pitch::{
-    Accidental, AccidentalSpecifier, CHROMATIC_PITCH_CLASS_NAMES, Microtone, MicrotoneSpecifier,
-    Pitch, PitchClass, PitchClassSpecifier, PitchName, PitchOptions, convert_pitch_class_to_str,
-    dissonance_score, pitch_class_name, simplify_multiple_enharmonics,
+    Accidental, AccidentalAttribute, AccidentalDisplayOptions, AccidentalSpecifier,
+    CHROMATIC_PITCH_CLASS_NAMES, Microtone, MicrotoneSpecifier, Pitch, PitchClass,
+    PitchClassSpecifier, PitchName, PitchOptions, convert_pitch_class_to_str, dissonance_score,
+    pitch_class_name, simplify_multiple_enharmonics,
 };
 pub use polyrhythm::{Polyrhythm, PolyrhythmAnalysis, PolyrhythmEvent, PolyrhythmRatioTone};
 pub use rest::Rest;

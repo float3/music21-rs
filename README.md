@@ -114,12 +114,12 @@ The examples are also wired into the GitHub Pages build, with
 
 music21's own doctests can be run against the crate: `python-parity` builds a
 Python module of music21-shaped classes over `music21-rs` and runs the
-docstrings of music21's `pitch.py`, `interval.py`, `key.py` and `serial.py`
-with those in place of music21's. The docstrings that pass are listed under
-`python-parity/doctest/`, and
+docstrings of music21's `pitch.py`, `interval.py`, `chord.py`, `key.py` and
+`serial.py` with those in place of music21's. The docstrings that pass are
+listed under `python-parity/doctest/`, and
 `cargo test --manifest-path python-parity/Cargo.toml --test doctest_pitch`
-(or `doctest_interval`, `doctest_key`, `doctest_serial`) fails when one of
-them stops passing.
+(or `doctest_interval`, `doctest_chord`, `doctest_key`, `doctest_serial`)
+fails when one of them stops passing.
 
 The same site carries [/reports/](https://float3.github.io/music21-rs/reports/):
 the library's test coverage, and every public method of the music21 classes

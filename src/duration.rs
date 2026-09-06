@@ -339,7 +339,7 @@ impl Duration {
     /// Returns `None` for a length that is not a plain note value, such as a
     /// dotted or tuplet duration.
     pub fn duration_type(&self) -> Option<DurationType> {
-        DurationType::from_quarter_length(self.quarter_length)
+        self.type_and_dots().map(|(duration_type, _)| duration_type)
     }
 
     /// Returns the duration in quarter lengths.
@@ -749,12 +749,22 @@ mod tests {
             Duration::from_type_with_dots(DurationType::Half, 1).quarter_length(),
             3.0
         );
-        // A dotted value is not itself a note value.
+        // A dotted value keeps the type it is dotted from, as music21 reads
+        // it: a dotted half is a half with one dot, not a type of its own.
         assert_eq!(
             Duration::from_type_with_dots(DurationType::Half, 1).duration_type(),
-            None
+            Some(DurationType::Half)
         );
-        // Nor is a triplet eighth.
+        assert_eq!(
+            Duration::from_type_with_dots(DurationType::Half, 1).dots(),
+            1
+        );
+        assert_eq!(
+            Duration::new(3.75).unwrap().duration_type(),
+            Some(DurationType::Half)
+        );
+        assert_eq!(Duration::new(3.75).unwrap().dots(), 3);
+        // A triplet eighth is no note value at all.
         assert_eq!(Duration::new(1.0 / 3.0).unwrap().duration_type(), None);
     }
 

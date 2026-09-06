@@ -23,16 +23,6 @@ fn signature_error(error: music21_rs::Error) -> PyErr {
     KeySignatureException::new_err(message(&error))
 }
 
-fn description(sharps: i32) -> String {
-    match sharps {
-        0 => "no sharps or flats".to_string(),
-        1 => "1 sharp".to_string(),
-        -1 => "1 flat".to_string(),
-        n if n > 0 => format!("{n} sharps"),
-        n => format!("{} flats", -n),
-    }
-}
-
 /// music21's `key.KeySignature`.
 #[pyclass(
     name = "KeySignature",
@@ -41,12 +31,18 @@ fn description(sharps: i32) -> String {
     skip_from_py_object
 )]
 pub struct KeySignature {
-    sharps: i32,
+    pub(crate) signature: RsKeySignature,
 }
 
 impl KeySignature {
     fn inner(&self) -> RsKeySignature {
-        RsKeySignature::new(self.sharps)
+        self.signature.clone()
+    }
+
+    fn of(sharps: i32) -> Self {
+        Self {
+            signature: RsKeySignature::new(sharps),
+        }
     }
 }
 
@@ -91,17 +87,37 @@ impl KeySignature {
                 }
             },
         };
-        Ok(Self { sharps })
+        Ok(Self::of(sharps))
     }
 
     #[getter]
-    fn sharps(&self) -> i32 {
-        self.sharps
+    fn sharps(&self) -> Option<i32> {
+        self.signature.sharps()
     }
 
     #[setter]
     fn set_sharps(&mut self, value: Option<i32>) {
-        self.sharps = value.unwrap_or(0);
+        self.signature.set_sharps(value.unwrap_or(0));
+    }
+
+    #[setter]
+    #[allow(non_snake_case)]
+    fn set_alteredPitches(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        self.signature
+            .set_altered_pitches(crate::pitch::pitch_list(Some(value))?);
+        Ok(())
+    }
+
+    #[getter]
+    #[allow(non_snake_case)]
+    fn accidentalsApplyOnlyToOctave(&self) -> bool {
+        self.signature.accidentals_apply_only_to_octave()
+    }
+
+    #[setter]
+    #[allow(non_snake_case)]
+    fn set_accidentalsApplyOnlyToOctave(&mut self, value: bool) {
+        self.signature.set_accidentals_apply_only_to_octave(value);
     }
 
     #[getter]
@@ -119,7 +135,7 @@ impl KeySignature {
     #[getter]
     #[allow(non_snake_case)]
     fn isNonTraditional(&self) -> bool {
-        false
+        self.signature.is_non_traditional()
     }
 
     #[allow(non_snake_case)]
@@ -167,14 +183,14 @@ impl KeySignature {
         let interval = interval_from_any(value)?;
         let transposed = slf.inner().transpose(&interval).map_err(signature_error)?;
         if inPlace {
-            slf.sharps = transposed.sharps();
+            slf.signature = transposed;
             Ok(None)
         } else {
             Ok(Some(
                 Py::new(
                     py,
                     KeySignature {
-                        sharps: transposed.sharps(),
+                        signature: transposed,
                     },
                 )?
                 .into_any(),
@@ -205,7 +221,7 @@ impl KeySignature {
         }
         Ok(format!(
             "<music21.key.KeySignature of {}>",
-            description(slf.borrow().sharps)
+            slf.borrow().signature.description()
         ))
     }
 
@@ -227,7 +243,7 @@ impl KeySignature {
         }
         Ok(other
             .extract::<PyRef<KeySignature>>()
-            .is_ok_and(|other| other.sharps == slf.borrow().sharps))
+            .is_ok_and(|other| other.signature.sharps() == slf.borrow().signature.sharps()))
     }
 
     fn __hash__(slf: &Bound<'_, Self>) -> u64 {
@@ -245,7 +261,7 @@ impl KeySignature {
         Ok(Py::new(
             py,
             KeySignature {
-                sharps: slf.borrow().sharps,
+                signature: slf.borrow().signature.clone(),
             },
         )?
         .into_any())
@@ -260,10 +276,8 @@ pub struct Key {
 
 impl Key {
     fn object(py: Python<'_>, inner: RsKey) -> PyResult<Py<PyAny>> {
-        let init = PyClassInitializer::from(KeySignature {
-            sharps: inner.sharps(),
-        })
-        .add_subclass(Key { inner });
+        let init =
+            PyClassInitializer::from(KeySignature::of(inner.sharps())).add_subclass(Key { inner });
         Ok(Py::new(py, init)?.into_any())
     }
 
@@ -289,10 +303,7 @@ impl Key {
         };
         let mode = mode_of(mode)?;
         let inner = RsKey::from_tonic_mode(&tonic, mode.as_deref()).map_err(key_error)?;
-        Ok(PyClassInitializer::from(KeySignature {
-            sharps: inner.sharps(),
-        })
-        .add_subclass(Key { inner }))
+        Ok(PyClassInitializer::from(KeySignature::of(inner.sharps())).add_subclass(Key { inner }))
     }
 
     #[getter]
@@ -311,7 +322,7 @@ impl Key {
         let rebuilt = RsKey::from_tonic_mode(&tonic, Some(value)).map_err(key_error)?;
         let sharps = rebuilt.sharps();
         slf.inner = rebuilt;
-        slf.as_super().sharps = sharps;
+        slf.as_super().signature = RsKeySignature::new(sharps);
         Ok(())
     }
 
@@ -384,7 +395,7 @@ impl Key {
         if inPlace {
             let sharps = transposed.sharps();
             slf.inner = transposed;
-            slf.as_super().sharps = sharps;
+            slf.as_super().signature = RsKeySignature::new(sharps);
             Ok(None)
         } else {
             Ok(Some(Key::object(py, transposed)?))

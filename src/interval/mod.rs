@@ -833,20 +833,21 @@ impl Interval {
         }
 
         let use_implicit_octave = p.octave().is_none();
-        let old_dnn = p.step().step_to_dnn_offset() + (7 * p.octave().unwrap_or(4));
-        let new_dnn = old_dnn + self.diatonic.generic.staff_distance();
-
-        let new_octave = (new_dnn - 1).div_euclid(7);
-        let step_number = (new_dnn - 1).rem_euclid(7);
-        let new_step = crate::stepname::StepName::try_from((step_number + 1) as u8)?;
-
-        let step_char = new_step.as_char();
+        let inherit_accidental_display = self.diatonic.simple_name() == "P1";
+        let cents_origin = if p.is_twelve_tone() {
+            0.0
+        } else {
+            p.microtone().map_or(0.0, crate::pitch::Microtone::cents)
+        };
+        let new_dnn = p.diatonic_note_number() + self.diatonic.generic.staff_distance();
+        let (new_step, new_octave) = convert_diatonic_number_to_step(new_dnn);
         let mut pitch2 = crate::pitch::PitchOptions::new()
-            .step(step_char)
+            .step(new_step)
             .octave(new_octave)
             .build()?;
-
-        let mut half_steps_to_fix = self.chromatic.semitones as FloatType - (pitch2.ps() - p.ps());
+        let origin_ps = p.ps() - cents_origin / 100.0;
+        let mut half_steps_to_fix =
+            self.chromatic.semitones as FloatType - (pitch2.ps() - origin_ps);
         while half_steps_to_fix >= 12.0 {
             half_steps_to_fix -= 12.0;
             pitch2.octave_setter(Some(pitch2.octave().unwrap_or(4) - 1));
@@ -855,21 +856,52 @@ impl Interval {
             half_steps_to_fix += 12.0;
             pitch2.octave_setter(Some(pitch2.octave().unwrap_or(4) + 1));
         }
-
-        let rounded_fix = half_steps_to_fix.round() as IntegerType;
         if half_steps_to_fix != 0.0 {
-            if max_accidental.is_some_and(|limit| rounded_fix.abs() > limit) {
+            if max_accidental.is_some_and(|limit| half_steps_to_fix.abs() > limit as FloatType) {
                 pitch2.set_ps(pitch2.ps() + half_steps_to_fix);
             } else {
-                let accidental = crate::pitch::accidental::Accidental::new(rounded_fix as i8)?;
-                pitch2 = crate::pitch::PitchOptions::new()
-                    .step(step_char)
-                    .accidental(accidental)
-                    .octave(new_octave)
-                    .build()?;
+                pitch2.set_accidental_alter(half_steps_to_fix)?;
             }
+            match (
+                inherit_accidental_display,
+                pitch2.has_accidental(),
+                p.explicit_accidental(),
+            ) {
+                (false, true, Some(source)) => {
+                    if let Some(target) = pitch2.explicit_accidental_mut() {
+                        target.inherit_display(source);
+                        target.set_display_status(None);
+                    }
+                }
+                (true, false, Some(source)) => {
+                    let mut natural = crate::pitch::Accidental::natural();
+                    natural.inherit_display(source);
+                    pitch2.set_accidental(Some(natural));
+                }
+                (true, true, Some(source)) => {
+                    if let Some(target) = pitch2.explicit_accidental_mut() {
+                        target.inherit_display(source);
+                    }
+                }
+                (true, true, None) => {
+                    if let Some(target) = pitch2.explicit_accidental_mut() {
+                        target.set_display_status(Some(false));
+                    }
+                }
+                _ => {}
+            }
+        } else if inherit_accidental_display
+            && p.explicit_accidental()
+                .is_some_and(|accidental| accidental.name() == "natural")
+        {
+            pitch2.set_accidental(p.explicit_accidental().cloned());
         }
-
+        if cents_origin != 0.0 {
+            let cents = pitch2
+                .microtone()
+                .map_or(0.0, crate::pitch::Microtone::cents);
+            pitch2.set_microtone_cents(cents + cents_origin)?;
+        }
         if use_implicit_octave {
             pitch2.octave_setter(None);
         }

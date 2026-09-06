@@ -8,6 +8,9 @@ fn pitch_doctests_against_the_crate() {
     doctest::run(
         "music21.pitch",
         "pitch",
-        &[("music21.pitch", doctest::PITCH_NAMES)],
+        &[
+            ("music21.pitch", doctest::PITCH_NAMES),
+            ("music21.interval", doctest::INTERVAL_NAMES),
+        ],
     );
 }

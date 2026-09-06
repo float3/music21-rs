@@ -277,6 +277,19 @@ impl Display for AccidentalSpecifier {
     }
 }
 
+/// One part of an [`Accidental`], for [`Accidental::set_attribute_independently`].
+/// music21 names the part with a string and raises on any other name; here the
+/// three writable parts are the only ones that can be spelled.
+#[derive(Clone, Debug, PartialEq)]
+pub enum AccidentalAttribute {
+    /// The accidental's name, such as `"sori"`.
+    Name(String),
+    /// The semitone alteration.
+    Alter(FloatType),
+    /// The written modifier, such as `"#"`.
+    Modifier(String),
+}
+
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Symbolic and numerical accidental information for a pitch.
@@ -545,6 +558,18 @@ impl Accidental {
     /// Sets `modifier` without updating `name` or `alter`.
     pub fn set_modifier_independently(&mut self, modifier: impl Into<String>) {
         self.modifier = modifier.into();
+    }
+
+    /// Writes one part of the accidental without the other two following
+    /// it: music21's `setAttributeIndependently`. Setting the name normally
+    /// resets the alteration and modifier to match, and this is how music21
+    /// builds an accidental whose parts disagree, such as a `sori`.
+    pub fn set_attribute_independently(&mut self, attribute: AccidentalAttribute) {
+        match attribute {
+            AccidentalAttribute::Name(name) => self.set_name_independently(name),
+            AccidentalAttribute::Alter(alter) => self.set_alter_independently(alter),
+            AccidentalAttribute::Modifier(modifier) => self.set_modifier_independently(modifier),
+        }
     }
 
     /// Copies display-related settings from another accidental.
