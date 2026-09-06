@@ -11,6 +11,28 @@ the next release needs a minor bump.
   `is_chromatic_step`, `is_skip` and `is_consonant` predicates,
   `complement`, `interval_class`, and `Interval::sum` / `Interval::difference`
   for `interval.add` and `interval.subtract`.
+- The halves of an interval are public: `GenericInterval`, `DiatonicInterval`,
+  `ChromaticInterval` and `Specifier`, with music21's full method set —
+  `simple_directed`, `semi_simple_undirected`, `octaves`, `staff_distance`,
+  `mod7`, `mod7_inversion`, `complement`, `reverse`, `nice_name` and the
+  directed and simple name variants, `get_diatonic`/`get_chromatic`,
+  `cents`, `interval_class`, and `DiatonicInterval::try_new`, which rejects
+  a "Major Fifth" or a descending perfect unison the way music21 does.
+  `Interval` exposes them as `generic()`, `diatonic()`, `chromatic()` and
+  `specifier()`, and can be built from either half with `from_diatonic` and
+  `from_chromatic`.
+- `GenericInterval::transpose_pitch` is music21's generic transposition —
+  it moves the staff position and keeps the accidental, so a third above
+  `C#4` is `E#4` — and `transpose_pitch_key_aware` carries a pitch's offset
+  from a key signature across, so `F` natural in G major steps up to `G-`.
+  `GenericInterval::from_name` reads `"Third"`, `"3rd"` and
+  `"Descending Fifth"`.
+- The module functions `notes_to_generic`, `notes_to_chromatic`,
+  `intervals_to_diatonic`, `convert_diatonic_number_to_step`,
+  `convert_semitone_to_specifier_generic`,
+  `convert_semitone_to_specifier_generic_microtone`, `convert_generic` and
+  `parse_specifier`, and `Interval::transpose_pitch_with_options` with
+  music21's `reverse` and `maxAccidental` arguments, are public.
 - `Chord` gains `root`, `bass`, `chord_step`, `third`, `fifth`, `seventh`,
   `semitones_from_chord_step`, `has_repeated_chord_step`,
   `has_any_enharmonic_spelled_pitches`, the `is_triad` / `is_major_triad` /
@@ -172,6 +194,15 @@ the next release needs a minor bump.
   deserialize unchanged.
 - The `test` binary is gone. It was auto-discovered from `src/bin/test.rs`
   and shipped with the crate; its checks are now a unit test.
+- `Interval::direction` is the direction of the chromatic interval, as
+  music21's is: a diminished unison is `Descending` and an augmented one
+  `Ascending`, where both used to read `Oblique` off the generic interval.
+- `transpose_pitch_with_options(pitch, true, max_accidental)` honours
+  `max_accidental` on the reversed transposition instead of resetting it to
+  four.
+- `Specifier::parse` reports an unknown quality as
+  `Cannot find a match for value: 'x'`, and a zero generic interval as
+  `The Zeroth is not an interval`, music21's texts.
 
 ## Internal
 
@@ -181,6 +212,12 @@ the next release needs a minor bump.
   in: 890 of the 920 examples pass, and `python-parity/doctest/pitch.toml`
   pins the passing docstrings. Running them turned up the accidental,
   inferred-spelling, MIDI-folding and negative-octave fixes above.
+- The same harness covers `interval.py` (759 of 771 examples), `key.py`
+  (217 of 253) and `serial.py` (148 of 149), each with a facade module and an
+  expectation file under `python-parity/doctest/`. The interval facade is
+  what made the interval halves public and found the reversed
+  `maxAccidental` and key-aware transposition fixes. `IntervalBaseTrait`,
+  which the facade replaced, is gone.
 - `cargo run -p xtask -- report` writes `target/reports`: the library's test
   coverage from `cargo llvm-cov`, and every public method of the music21
   classes named in `data/feature_map.toml` against the crate's `pub fn`s,

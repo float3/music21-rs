@@ -2,15 +2,14 @@ pub(crate) mod chromaticinterval;
 pub(crate) mod diatonicinterval;
 pub(crate) mod direction;
 pub(crate) mod genericinterval;
-pub(crate) mod intervalbase;
 pub(crate) mod specifier;
 
-use chromaticinterval::ChromaticInterval;
-use diatonicinterval::DiatonicInterval;
+pub use chromaticinterval::ChromaticInterval;
+pub use diatonicinterval::DiatonicInterval;
+pub use genericinterval::{GenericInterval, convert_generic};
+pub use specifier::Specifier;
+
 use direction::Direction;
-use genericinterval::GenericInterval;
-use intervalbase::IntervalBaseTrait;
-use specifier::Specifier;
 
 use std::str::FromStr;
 use std::{cmp::Ordering, sync::LazyLock};
@@ -50,14 +49,6 @@ impl IntervalDirection {
             Self::Oblique => "Oblique",
             Self::Ascending => "Ascending",
         }
-    }
-}
-
-fn public_direction(value: direction::Direction) -> IntervalDirection {
-    match value {
-        direction::Direction::Descending => IntervalDirection::Descending,
-        direction::Direction::Oblique => IntervalDirection::Oblique,
-        direction::Direction::Ascending => IntervalDirection::Ascending,
     }
 }
 
@@ -215,14 +206,18 @@ pub fn absolute_lower_pitch<'a>(first: &'a Pitch, second: &'a Pitch) -> &'a Pitc
     }
 }
 
-fn notes_to_generic(p1: &Pitch, p2: &Pitch) -> Result<GenericInterval> {
+/// The generic interval from one pitch to another, counted by staff
+/// position: music21's `notesToGeneric`.
+pub fn notes_to_generic(p1: &Pitch, p2: &Pitch) -> Result<GenericInterval> {
     let dnn1 = p1.step().step_to_dnn_offset() + (7 * p1.octave().unwrap_or(4));
     let dnn2 = p2.step().step_to_dnn_offset() + (7 * p2.octave().unwrap_or(4));
     let staff_dist = dnn2 - dnn1;
     GenericInterval::from_int(convert_staff_distance_to_interval(staff_dist))
 }
 
-fn notes_to_chromatic(p1: &Pitch, p2: &Pitch) -> ChromaticInterval {
+/// The semitone distance from one pitch to another: music21's
+/// `notesToChromatic`.
+pub fn notes_to_chromatic(p1: &Pitch, p2: &Pitch) -> ChromaticInterval {
     ChromaticInterval::new((p2.ps() - p1.ps()).round() as IntegerType)
 }
 
@@ -287,7 +282,9 @@ fn specifier_from_generic_chromatic(
     }
 }
 
-fn intervals_to_diatonic(
+/// Reads the quality off a generic and a chromatic interval together:
+/// music21's `intervalsToDiatonic`, so a third of four semitones is major.
+pub fn intervals_to_diatonic(
     g_int: &GenericInterval,
     c_int: &ChromaticInterval,
 ) -> Result<DiatonicInterval> {
@@ -295,9 +292,10 @@ fn intervals_to_diatonic(
     Ok(DiatonicInterval::new(specifier, g_int))
 }
 
-pub(crate) fn convert_semitone_to_specifier_generic(
-    count: IntegerType,
-) -> (Specifier, IntegerType) {
+/// The simplest quality and generic size for a semitone count: music21's
+/// `convertSemitoneToSpecifierGeneric`, so `6` is a diminished fifth and
+/// `-14` a descending major ninth.
+pub fn convert_semitone_to_specifier_generic(count: IntegerType) -> (Specifier, IntegerType) {
     let dir_scale = if count < 0 { -1 } else { 1 };
     let size = count.abs() % 12;
     let octave = count.abs() / 12;
@@ -318,6 +316,45 @@ pub(crate) fn convert_semitone_to_specifier_generic(
     (spec, (generic + octave * 7) * dir_scale)
 }
 
+/// Like [`convert_semitone_to_specifier_generic`] for a fractional semitone
+/// count, returning the leftover in cents as well: music21's
+/// `convertSemitoneToSpecifierGenericMicrotone`, so `2.5` is a major second
+/// and fifty cents, and `-2.5` a descending major second and minus fifty.
+pub fn convert_semitone_to_specifier_generic_microtone(
+    count: FloatType,
+) -> (Specifier, IntegerType, FloatType) {
+    let dir_scale = if count < 0.0 { -1 } else { 1 };
+    let mut whole = count.floor();
+    let mut cents = (count - whole) * 100.0;
+    if cents > 50.0 {
+        cents -= 100.0;
+        whole += 1.0;
+    }
+    let whole = whole as IntegerType;
+    let size = whole.abs() % 12;
+    let octave = whole.abs() / 12;
+    let (specifier, generic) = convert_semitone_to_specifier_generic(size);
+    (specifier, (generic + octave * 7) * dir_scale, cents)
+}
+
+/// The step letter and octave of a diatonic note number, counting `C0` as
+/// `1`: music21's `convertDiatonicNumberToStep`, so `15` is `C` in octave
+/// `2`, `0` is `B` in octave `-1`, and `-19` is `D` in octave `-3`.
+pub fn convert_diatonic_number_to_step(dn: IntegerType) -> (char, IntegerType) {
+    const STEPS: [char; 7] = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+    let zero_based = dn - 1;
+    let octave = zero_based.div_euclid(7);
+    let step = STEPS[zero_based.rem_euclid(7) as usize];
+    (step, octave)
+}
+
+/// Parses an interval quality from its prefix or spelled-out name: music21's
+/// `parseSpecifier`, so `"P"`, `"perfect"` and `"Perfect"` all give
+/// [`Specifier::Perfect`].
+pub fn parse_specifier(value: &str) -> Result<Specifier> {
+    Specifier::from_name(value)
+}
+
 impl Interval {
     pub(crate) fn between(start: PitchOrNote, end: PitchOrNote) -> Result<Self> {
         let start_pitch = extract_pitch(start);
@@ -335,7 +372,9 @@ impl Interval {
         })
     }
 
-    pub(crate) fn from_diatonic_and_chromatic(
+    /// Builds an interval from its two halves as given, without checking
+    /// that they agree: music21's `Interval(diatonic=..., chromatic=...)`.
+    pub fn from_diatonic_and_chromatic(
         diatonic: DiatonicInterval,
         chromatic: ChromaticInterval,
     ) -> Result<Interval> {
@@ -346,6 +385,43 @@ impl Interval {
             pitch_start: None,
             pitch_end: None,
         })
+    }
+
+    /// Builds an interval from a diatonic interval alone, deriving the
+    /// semitone count: music21's `Interval(diatonic=...)`.
+    pub fn from_diatonic(diatonic: DiatonicInterval) -> Result<Self> {
+        let chromatic = diatonic.get_chromatic()?;
+        Self::from_diatonic_and_chromatic(diatonic, chromatic)
+    }
+
+    /// Builds an interval from a semitone count alone, spelling it the
+    /// simplest way and marking the spelling as implicit: music21's
+    /// `Interval(chromatic=...)`.
+    pub fn from_chromatic(chromatic: ChromaticInterval) -> Result<Self> {
+        let diatonic = chromatic.get_diatonic();
+        let mut interval = Self::from_diatonic_and_chromatic(diatonic, chromatic)?;
+        interval.implicit_diatonic = true;
+        Ok(interval)
+    }
+
+    /// The generic half of the interval.
+    pub fn generic(&self) -> &GenericInterval {
+        &self.diatonic.generic
+    }
+
+    /// The diatonic half of the interval: quality plus generic size.
+    pub fn diatonic(&self) -> &DiatonicInterval {
+        &self.diatonic
+    }
+
+    /// The chromatic half of the interval: the semitone count.
+    pub fn chromatic(&self) -> &ChromaticInterval {
+        &self.chromatic
+    }
+
+    /// The quality.
+    pub fn specifier(&self) -> Specifier {
+        self.diatonic.specifier
     }
 
     /// Builds an interval from a generic size and a semitone count: music21's
@@ -432,7 +508,7 @@ impl Interval {
 
     /// Returns the directed interval direction.
     pub fn direction(&self) -> IntervalDirection {
-        public_direction(self.generic().direction())
+        self.chromatic.direction()
     }
 
     /// Returns the human-readable interval name, such as `"Major Third"`.
@@ -638,10 +714,6 @@ impl Interval {
         self.generic().undirected() == 1 && self.chromatic.semitones == 0
     }
 
-    pub(crate) fn generic(&self) -> &GenericInterval {
-        &self.diatonic.generic
-    }
-
     pub(crate) fn nice_name(&self) -> String {
         self.diatonic.nice_name()
     }
@@ -669,27 +741,11 @@ impl Interval {
     /// always `Descending` and an augmented one always `Ascending`, whatever
     /// sign the interval was written with.
     fn diatonic_direction(&self) -> Direction {
-        if !self.generic().is_unison() {
-            return self.generic().direction();
-        }
-        match self.diatonic.specifier {
-            Specifier::Diminished
-            | Specifier::DoubleDiminished
-            | Specifier::TripleDiminished
-            | Specifier::QuadrupleDiminished => Direction::Descending,
-            Specifier::Augmented
-            | Specifier::DoubleAugmented
-            | Specifier::TripleAugmented
-            | Specifier::QuadrupleAugmented => Direction::Ascending,
-            Specifier::Perfect | Specifier::Major | Specifier::Minor => Direction::Oblique,
-        }
+        self.diatonic.direction()
     }
 
     fn directed(&self, name: String) -> String {
-        format!(
-            "{} {name}",
-            public_direction(self.diatonic_direction()).name()
-        )
+        format!("{} {name}", self.diatonic_direction().name())
     }
 
     /// The spelled-out name with its direction: music21's `directedNiceName`,
@@ -756,9 +812,12 @@ impl Interval {
         self.semitones().rem_euclid(12)
     }
 
-    /// reverse default is false
-    /// maxAccidental default is 4
-    pub(crate) fn transpose_pitch_with_options(
+    /// Moves a pitch by the interval the way music21's `transposePitch`
+    /// does, with its keyword arguments: `reverse` transposes by the
+    /// reversed interval, and `max_accidental` respells any result carrying
+    /// more accidentals than that (music21's default is `Some(4)`), `None`
+    /// meaning no limit.
+    pub fn transpose_pitch_with_options(
         &self,
         p: &Pitch,
         reverse: bool,
@@ -767,7 +826,7 @@ impl Interval {
         if reverse {
             return self
                 .reverse()?
-                .transpose_pitch_with_options(p, false, Some(4));
+                .transpose_pitch_with_options(p, false, max_accidental);
         }
         if self.implicit_diatonic {
             return self.chromatic.transpose_pitch(p);
@@ -912,26 +971,16 @@ fn parse_interval_name(mut value: String) -> Result<(DiatonicInterval, Chromatic
     Ok((d_interval, c_interval, inferred))
 }
 
-impl IntervalBaseTrait for Interval {
-    fn reverse(&self) -> Result<Self>
-    where
-        Self: Sized,
-    {
+impl Interval {
+    fn reverse(&self) -> Result<Self> {
         if let (Some(start), Some(end)) = (&self.pitch_start, &self.pitch_end) {
             Interval::between(
                 PitchOrNote::Pitch(end.clone()),
                 PitchOrNote::Pitch(start.clone()),
             )
         } else {
-            Interval::from_diatonic_and_chromatic(
-                self.diatonic.reverse()?,
-                self.chromatic.reverse()?,
-            )
+            Interval::from_diatonic_and_chromatic(self.diatonic.reverse(), self.chromatic.reverse())
         }
-    }
-
-    fn transpose_pitch(&self, pitch: &Pitch) -> Result<Pitch> {
-        Interval::transpose_pitch(self, pitch)
     }
 }
 

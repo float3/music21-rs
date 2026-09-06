@@ -328,7 +328,7 @@ impl Accidental {
 #[derive(Clone)]
 pub struct Pitch {
     pub(crate) inner: RsPitch,
-    spelling_is_inferred: bool,
+    pub(crate) spelling_is_inferred: bool,
     /// music21 keeps no accidental object on a plain letter but does keep an
     /// explicit natural; the crate stores a natural either way, so this
     /// remembers which it was.
@@ -336,24 +336,17 @@ pub struct Pitch {
 }
 
 /// Reads a transposition argument the way `Pitch.transpose` does: an interval
-/// name, a semitone count, or any object with music21's `directedName`.
+/// name, a semitone count, a facade interval, or any object with music21's
+/// `directedName`.
 pub(crate) fn interval_from_any(value: &Bound<'_, PyAny>) -> PyResult<Interval> {
-    if let Ok(name) = value.extract::<String>() {
-        return Interval::from_name(name).map_err(pitch_error);
-    }
-    if let Ok(semitones) = value.extract::<i32>() {
-        return Interval::from_semitones(semitones).map_err(pitch_error);
-    }
-    if let Ok(name) = value
-        .getattr("directedName")
-        .and_then(|name| name.extract::<String>())
-    {
-        return Interval::from_name(name).map_err(pitch_error);
-    }
-    Err(PitchException::new_err(format!(
-        "cannot transpose by {}",
-        value.repr()?
-    )))
+    crate::interval::interval_from_any(value).map_err(|error| {
+        PitchException::new_err(format!(
+            "cannot transpose by {}: {error}",
+            value
+                .repr()
+                .map_or_else(|_| "?".to_string(), |r| r.to_string())
+        ))
+    })
 }
 
 /// Reads a pitch argument: a facade, a name, or a number.
@@ -861,8 +854,7 @@ impl Pitch {
         value: &Bound<'_, PyAny>,
         inPlace: bool,
     ) -> PyResult<Option<Pitch>> {
-        let interval = interval_from_any(value)?;
-        let transposed = slf.inner.transpose(&interval).map_err(pitch_error)?;
+        let transposed = crate::interval::transpose_pitch_by_any(&slf.inner, value)?;
         let inferred = slf.spelling_is_inferred;
         if inPlace {
             slf.inner = transposed;

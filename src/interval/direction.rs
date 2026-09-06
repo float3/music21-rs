@@ -1,21 +1,12 @@
-use crate::defaults::IntegerType;
+//! The direction of an interval, shared by the generic, diatonic and
+//! chromatic halves under the name music21 gives it.
 
-#[derive(PartialEq, Copy, Clone)]
-pub(crate) enum Direction {
-    Descending = -1,
-    Oblique = 0,
-    Ascending = 1,
-}
-
-impl Direction {
-    pub(crate) fn as_int(&self) -> IntegerType {
-        *self as IntegerType
-    }
-}
+pub use super::IntervalDirection as Direction;
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::defaults::IntegerType;
 
     #[test]
     fn test_direction_int() {

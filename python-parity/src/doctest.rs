@@ -52,6 +52,37 @@ pub const SERIAL_NAMES: &[&str] = &[
 ];
 
 /// The names the key facade provides, for swapping into `music21.key`.
+/// The names the `interval` facade replaces in `music21.interval`.
+pub const INTERVAL_NAMES: &[&str] = &[
+    "Direction",
+    "Specifier",
+    "GenericInterval",
+    "DiatonicInterval",
+    "ChromaticInterval",
+    "Interval",
+    "IntervalException",
+    "convertStaffDistanceToInterval",
+    "convertDiatonicNumberToStep",
+    "parseSpecifier",
+    "convertGeneric",
+    "convertSemitoneToSpecifierGenericMicrotone",
+    "convertSemitoneToSpecifierGeneric",
+    "intervalToPythagoreanRatio",
+    "notesToGeneric",
+    "notesToChromatic",
+    "intervalsToDiatonic",
+    "intervalFromGenericAndChromatic",
+    "getWrittenHigherNote",
+    "getWrittenLowerNote",
+    "getAbsoluteHigherNote",
+    "getAbsoluteLowerNote",
+    "transposePitch",
+    "transposeNote",
+    "notesToInterval",
+    "add",
+    "subtract",
+];
+
 pub const KEY_NAMES: &[&str] = &[
     "KeySignature",
     "Key",

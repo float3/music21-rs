@@ -79,13 +79,40 @@ rust = ["src/interval/mod.rs"]
 niceName = "name"
 reverse = "reversed"
 
-[class.excluded]
-generic = "the generic and diatonic halves are crate-private; their values are read through Interval"
-specifier = "the generic and diatonic halves are crate-private; their values are read through Interval"
+[[class]]
+python = "interval.py"
+name = "GenericInterval"
+rust = ["src/interval/genericinterval.rs"]
+
+[class.renames]
+perfectable = "is_perfectable"
+mod7inversion = "mod7_inversion"
 
 [[class]]
 python = "interval.py"
-rust = ["src/interval/mod.rs"]
+name = "DiatonicInterval"
+rust = ["src/interval/diatonicinterval.rs"]
+
+[class.renames]
+perfectable = "is_perfectable"
+mod7inversion = "mod7_inversion"
+
+[class.excluded]
+specifierAbbreviation = "Specifier::prefix; the abbreviation belongs to the quality, not the interval"
+
+[[class]]
+python = "interval.py"
+name = "ChromaticInterval"
+rust = ["src/interval/chromaticinterval.rs"]
+
+[[class]]
+python = "interval.py"
+name = "Specifier"
+rust = ["src/interval/specifier.rs"]
+
+[[class]]
+python = "interval.py"
+rust = ["src/interval/mod.rs", "src/interval/genericinterval.rs"]
 note = "Module-level helpers."
 
 [class.renames]
@@ -99,16 +126,6 @@ getWrittenHigherNote = "written_higher_pitch"
 getWrittenLowerNote = "written_lower_pitch"
 getAbsoluteHigherNote = "absolute_higher_pitch"
 getAbsoluteLowerNote = "absolute_lower_pitch"
-
-[class.excluded]
-notesToGeneric = "the generic, chromatic and diatonic halves are crate-private; Interval::between_pitches builds all three"
-notesToChromatic = "the generic, chromatic and diatonic halves are crate-private; Interval::between_pitches builds all three"
-intervalsToDiatonic = "the generic, chromatic and diatonic halves are crate-private; Interval::between_pitches builds all three"
-convertDiatonicNumberToStep = "internal conversions between music21's own representations"
-convertGeneric = "internal conversions between music21's own representations"
-convertSemitoneToSpecifierGeneric = "internal conversions between music21's own representations"
-convertSemitoneToSpecifierGenericMicrotone = "internal conversions between music21's own representations"
-parseSpecifier = "internal conversions between music21's own representations"
 
 [[class]]
 python = "key.py"

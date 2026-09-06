@@ -1,26 +1,72 @@
+//! The quality of an interval: music21's `interval.Specifier`.
+
+use std::fmt;
+use std::str::FromStr;
+
 use crate::{
     defaults::IntegerType,
     error::{Error, Result},
 };
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Specifier {
+/// An interval quality, numbered as music21 numbers its `Specifier` enum.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum Specifier {
+    /// `P`
     Perfect = 1,
+    /// `M`
     Major = 2,
+    /// `m`
     Minor = 3,
+    /// `A`
     Augmented = 4,
+    /// `d`
     Diminished = 5,
+    /// `AA`
     DoubleAugmented = 6,
+    /// `dd`
     DoubleDiminished = 7,
+    /// `AAA`
     TripleAugmented = 8,
+    /// `ddd`
     TripleDiminished = 9,
+    /// `AAAA`
     QuadrupleAugmented = 10,
+    /// `dddd`
     QuadrupleDiminished = 11,
 }
 
 impl Specifier {
-    /// Returns a human-friendly name for the specifier.
-    pub(crate) fn nice_name(&self) -> String {
+    /// Every specifier, in music21's numbering order.
+    pub const ALL: [Specifier; 11] = [
+        Specifier::Perfect,
+        Specifier::Major,
+        Specifier::Minor,
+        Specifier::Augmented,
+        Specifier::Diminished,
+        Specifier::DoubleAugmented,
+        Specifier::DoubleDiminished,
+        Specifier::TripleAugmented,
+        Specifier::TripleDiminished,
+        Specifier::QuadrupleAugmented,
+        Specifier::QuadrupleDiminished,
+    ];
+
+    /// music21's number for the specifier, `1` for perfect through `11`.
+    pub fn value(self) -> IntegerType {
+        self as IntegerType
+    }
+
+    /// The specifier with music21's number, if there is one.
+    pub fn from_value(value: IntegerType) -> Result<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|specifier| specifier.value() == value)
+            .ok_or_else(|| Error::Interval(format!("{value} is not a valid Specifier")))
+    }
+
+    /// Returns a human-friendly name for the specifier, music21's `niceName`.
+    pub fn nice_name(&self) -> String {
         match self {
             Specifier::Perfect => "Perfect".to_string(),
             Specifier::Major => "Major".to_string(),
@@ -36,7 +82,9 @@ impl Specifier {
         }
     }
 
-    /// Parses a specifier prefix such as `"P"`, `"m"`, or `"AA"`.
+    /// Parses a specifier the way music21's `parseSpecifier` does: a prefix
+    /// such as `"P"`, `"m"` or `"AA"`, or a spelled-out name such as
+    /// `"Perfect"` or `"Doubly-Augmented"`.
     ///
     /// Case is significant only for `m`/`M`: minor and major are the one pair
     /// where both spellings already denote different intervals. Every other
@@ -44,35 +92,39 @@ impl Specifier {
     /// draws — `a2`/`A2`, `d5`/`D5`, `p5`/`P5` and the doubled and tripled
     /// forms all parse there, while `m3` and `M3` stay distinct. Lowercasing
     /// the input wholesale would silently turn every major third minor.
-    pub(crate) fn parse(remain: &str) -> Result<Self> {
-        // Handled before the case fold, which would collapse them together.
-        match remain {
+    pub fn from_name(name: &str) -> Result<Self> {
+        match name {
             "M" => return Ok(Specifier::Major),
             "m" => return Ok(Specifier::Minor),
             _ => {}
         }
-
-        match remain.to_ascii_lowercase().as_str() {
-            "perfect" | "p" => Ok(Specifier::Perfect),
-            "major" => Ok(Specifier::Major),
-            "minor" => Ok(Specifier::Minor),
-            "augmented" | "a" => Ok(Specifier::Augmented),
-            "diminished" | "d" => Ok(Specifier::Diminished),
-            "double augmented" | "aa" => Ok(Specifier::DoubleAugmented),
-            "double diminished" | "dd" => Ok(Specifier::DoubleDiminished),
-            "triple augmented" | "aaa" => Ok(Specifier::TripleAugmented),
-            "triple diminished" | "ddd" => Ok(Specifier::TripleDiminished),
-            "quadruple augmented" | "aaaa" => Ok(Specifier::QuadrupleAugmented),
-            "quadruple diminished" | "dddd" => Ok(Specifier::QuadrupleDiminished),
+        let lower = name.to_ascii_lowercase();
+        if let Some(found) = Self::ALL.into_iter().find(|specifier| {
+            specifier.prefix().to_ascii_lowercase() == lower
+                || specifier.nice_name().to_ascii_lowercase() == lower
+        }) {
+            return Ok(found);
+        }
+        match lower.as_str() {
+            "double augmented" => Ok(Specifier::DoubleAugmented),
+            "double diminished" => Ok(Specifier::DoubleDiminished),
+            "triple augmented" => Ok(Specifier::TripleAugmented),
+            "triple diminished" => Ok(Specifier::TripleDiminished),
+            "quadruple augmented" => Ok(Specifier::QuadrupleAugmented),
+            "quadruple diminished" => Ok(Specifier::QuadrupleDiminished),
             _ => Err(Error::Interval(format!(
-                "unknown interval specifier {remain:?}"
+                "Cannot find a match for value: '{name}'"
             ))),
         }
     }
 
+    pub(crate) fn parse(remain: &str) -> Result<Self> {
+        Self::from_name(remain)
+    }
+
     /// Returns the prefix music21 writes before the interval number, such as
     /// `"P"`, `"m"` or `"AA"`.
-    pub(crate) fn prefix(self) -> &'static str {
+    pub fn prefix(self) -> &'static str {
         match self {
             Specifier::Perfect => "P",
             Specifier::Major => "M",
@@ -88,7 +140,9 @@ impl Specifier {
         }
     }
 
-    pub(crate) fn inversion(&self) -> Self {
+    /// The specifier of the inverted interval: major becomes minor,
+    /// augmented becomes diminished, perfect stays perfect.
+    pub fn inversion(&self) -> Self {
         match self {
             Specifier::Perfect => Specifier::Perfect,
             Specifier::Major => Specifier::Minor,
@@ -104,7 +158,9 @@ impl Specifier {
         }
     }
 
-    pub(crate) fn semitones_above_perfect(&self) -> Result<IntegerType> {
+    /// How many semitones above perfect the specifier lies. Major and minor
+    /// cannot be compared to perfect and are an error, as in music21.
+    pub fn semitones_above_perfect(&self) -> Result<IntegerType> {
         match self {
             Specifier::Perfect => Ok(0),
             Specifier::Augmented => Ok(1),
@@ -116,12 +172,15 @@ impl Specifier {
             Specifier::TripleDiminished => Ok(-3),
             Specifier::QuadrupleDiminished => Ok(-4),
             _ => Err(Error::Interval(format!(
-                "{self:?} cannot be compared to Perfect"
+                "<Specifier.{}> cannot be compared to Perfect",
+                self.python_name()
             ))),
         }
     }
 
-    pub(crate) fn semitones_above_major(&self) -> Result<IntegerType> {
+    /// How many semitones above major the specifier lies. Perfect cannot be
+    /// compared to major and is an error, as in music21.
+    pub fn semitones_above_major(&self) -> Result<IntegerType> {
         match self {
             Specifier::Major => Ok(0),
             Specifier::Minor => Ok(-1),
@@ -134,9 +193,42 @@ impl Specifier {
             Specifier::TripleDiminished => Ok(-4),
             Specifier::QuadrupleDiminished => Ok(-5),
             _ => Err(Error::Interval(format!(
-                "{self:?} cannot be compared to Major"
+                "<Specifier.{}> cannot be compared to Major",
+                self.python_name()
             ))),
         }
+    }
+
+    /// music21's enum member name, `PERFECT`, `DBLAUG`, `QUADDIM`.
+    pub fn python_name(self) -> &'static str {
+        match self {
+            Specifier::Perfect => "PERFECT",
+            Specifier::Major => "MAJOR",
+            Specifier::Minor => "MINOR",
+            Specifier::Augmented => "AUGMENTED",
+            Specifier::Diminished => "DIMINISHED",
+            Specifier::DoubleAugmented => "DBLAUG",
+            Specifier::DoubleDiminished => "DBLDIM",
+            Specifier::TripleAugmented => "TRPAUG",
+            Specifier::TripleDiminished => "TRPDIM",
+            Specifier::QuadrupleAugmented => "QUADAUG",
+            Specifier::QuadrupleDiminished => "QUADDIM",
+        }
+    }
+}
+
+impl fmt::Display for Specifier {
+    /// The prefix, as `str(Specifier.PERFECT)` is `P` in music21.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.prefix())
+    }
+}
+
+impl FromStr for Specifier {
+    type Err = Error;
+
+    fn from_str(name: &str) -> Result<Self> {
+        Self::from_name(name)
     }
 }
 
@@ -184,5 +276,26 @@ mod tests {
         assert_eq!(Specifier::Minor.semitones_above_major().unwrap(), -1);
         assert_eq!(Specifier::Diminished.semitones_above_major().unwrap(), -2);
         assert!(Specifier::Perfect.semitones_above_major().is_err());
+    }
+
+    #[test]
+    fn names_numbers_and_prefixes_round_trip() {
+        for specifier in Specifier::ALL {
+            assert_eq!(Specifier::from_value(specifier.value()).unwrap(), specifier);
+            assert_eq!(Specifier::from_name(specifier.prefix()).unwrap(), specifier);
+            assert_eq!(
+                Specifier::from_name(&specifier.nice_name()).unwrap(),
+                specifier
+            );
+            assert_eq!(specifier.to_string(), specifier.prefix());
+        }
+        assert_eq!(Specifier::from_name("perfect").unwrap(), Specifier::Perfect);
+        assert_eq!(
+            Specifier::from_name("dd").unwrap(),
+            Specifier::DoubleDiminished
+        );
+        assert_eq!("M".parse::<Specifier>().unwrap(), Specifier::Major);
+        assert!(Specifier::from_name("xyz").is_err());
+        assert!(Specifier::from_value(12).is_err());
     }
 }

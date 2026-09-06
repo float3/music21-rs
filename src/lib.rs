@@ -78,7 +78,10 @@ pub use defaults::{FloatType, FractionType, IntegerType, Octave, UnsignedInteger
 pub use duration::{Duration, DurationType, quarter_length_to_closest_type};
 pub use error::{Error, Result};
 pub use interval::{
-    Interval, IntervalDirection, absolute_higher_pitch, absolute_lower_pitch,
+    ChromaticInterval, DiatonicInterval, GenericInterval, Interval, IntervalDirection, Specifier,
+    absolute_higher_pitch, absolute_lower_pitch, convert_diatonic_number_to_step, convert_generic,
+    convert_semitone_to_specifier_generic, convert_semitone_to_specifier_generic_microtone,
+    intervals_to_diatonic, notes_to_chromatic, notes_to_generic, parse_specifier,
     staff_distance_to_generic_number, written_higher_pitch, written_lower_pitch,
 };
 pub use key::{Key, KeySignature, convert_key_string_to_music21_key_string};

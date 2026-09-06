@@ -566,6 +566,20 @@ impl Pitch {
         self.spelling_is_inferred = false;
     }
 
+    /// Moves the pitch to a staff position by diatonic note number, keeping
+    /// its accidental and microtone: music21's `diatonicNoteNum` setter.
+    pub(crate) fn set_diatonic_note_number(&mut self, dnn: IntegerType) -> Result<()> {
+        let (step, octave) = crate::interval::convert_diatonic_number_to_step(dnn);
+        self.step_setter(StepName::try_from(step)?);
+        self.octave_setter(Some(octave));
+        Ok(())
+    }
+
+    /// Replaces the accidental, a natural when `None` is given.
+    pub(crate) fn set_accidental_or_natural(&mut self, accidental: Option<Accidental>) {
+        self.accidental_setter(accidental.unwrap_or_else(Accidental::natural));
+    }
+
     fn accidental_setter(&mut self, value: Accidental) {
         self.accidental = value;
     }
