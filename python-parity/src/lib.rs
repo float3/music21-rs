@@ -36,8 +36,15 @@ fn message(error: &music21_rs::Error) -> String {
     }
 }
 
+/// The exception class music21 would raise for a crate error: accidental
+/// and microtone errors keep their own classes, everything else is a pitch
+/// error.
 fn pitch_error(error: music21_rs::Error) -> PyErr {
-    PitchException::new_err(message(&error))
+    match error {
+        music21_rs::Error::Accidental(_) => AccidentalException::new_err(message(&error)),
+        music21_rs::Error::Microtone(_) => MicrotoneException::new_err(message(&error)),
+        _ => PitchException::new_err(message(&error)),
+    }
 }
 
 fn accidental_error(error: music21_rs::Error) -> PyErr {

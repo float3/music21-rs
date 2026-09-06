@@ -178,7 +178,7 @@ the next release needs a minor bump.
 - `python-parity` now builds a pyo3 module, `music21_rs_facade`, of
   music21-shaped `Pitch`, `Accidental` and `Microtone` classes, and a test
   runs the doctests of music21's own `pitch.py` with those classes swapped
-  in: 889 of the 920 examples pass, and `python-parity/doctest/pitch.toml`
+  in: 890 of the 920 examples pass, and `python-parity/doctest/pitch.toml`
   pins the passing docstrings. Running them turned up the accidental,
   inferred-spelling, MIDI-folding and negative-octave fixes above.
 - `cargo run -p xtask -- report` writes `target/reports`: the library's test
