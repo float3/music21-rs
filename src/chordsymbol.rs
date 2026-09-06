@@ -32,6 +32,8 @@ pub enum ChordQuality {
     Suspended4,
     /// Power-chord sonority containing a root and fifth.
     Power,
+    /// A single pitch: music21's `pedal` kind.
+    Pedal,
 }
 
 /// A chord-symbol alteration such as `b5` or `#11`.
@@ -673,16 +675,32 @@ impl ChordSymbol {
                 None => "sus4".to_string(),
             },
             ChordQuality::Power => "5".to_string(),
+            ChordQuality::Pedal => "pedal".to_string(),
         }
     }
 
-    /// Realizes the chord symbol as a [`Chord`].
+    /// Realizes the symbol as a chord. An eleventh implies the ninth and a
+    /// thirteenth implies the ninth and eleventh, as music21's chord kinds
+    /// spell them, unless the figure omits them.
     pub fn to_chord(&self) -> Result<Chord> {
         let mut intervals = self.base_intervals();
 
+        let highest = self
+            .extensions
+            .iter()
+            .copied()
+            .filter(|degree| !self.alterations.iter().any(|alt| alt.degree == *degree))
+            .max()
+            .unwrap_or(0);
         for extension in [6, 9, 11, 13] {
-            if self.extensions.contains(&extension)
+            let implied = match extension {
+                9 => highest >= 11,
+                11 => highest == 13,
+                _ => false,
+            };
+            if (self.extensions.contains(&extension) || implied)
                 && !self.alterations.iter().any(|alt| alt.degree == extension)
+                && !self.omissions.contains(&extension)
             {
                 intervals.push((extension, default_extension_interval(extension)));
             }
@@ -764,6 +782,7 @@ impl ChordSymbol {
             ChordQuality::Suspended2 => vec![(1, "P1"), (2, "M2"), (5, fifth)],
             ChordQuality::Suspended4 => vec![(1, "P1"), (4, "P4"), (5, fifth)],
             ChordQuality::Power => vec![(1, "P1"), (5, fifth)],
+            ChordQuality::Pedal => vec![(1, "P1")],
         };
 
         intervals
@@ -1301,8 +1320,10 @@ fn parse_quality(suffix: &str, alterations: &[ChordAlteration]) -> ChordQuality 
         ChordQuality::Diminished
     } else if lower.starts_with("aug") || lower.starts_with('+') {
         ChordQuality::Augmented
-    } else if lower.starts_with('5') {
+    } else if lower.starts_with('5') || lower.starts_with("power") {
         ChordQuality::Power
+    } else if lower.starts_with("pedal") {
+        ChordQuality::Pedal
     } else if lower.starts_with("dom")
         || lower.starts_with('7')
         || lower.starts_with('9')
@@ -1579,8 +1600,253 @@ fn added_interval(addition: &ChordAlteration) -> Result<(u8, &'static str)> {
     }
 }
 
+/// The semitone steps each figured-bass degree of a chord kind's notation
+/// stands for above the root, the way music21's `chordSymbolFigureFromChord`
+/// reads `1,3,5,-7` as `[4, 7, 10]`.
+fn notation_semitones(notation: &str) -> Vec<Option<u8>> {
+    notation
+        .split(',')
+        .filter(|part| *part != "1")
+        .map(|part| {
+            let flats = part.matches('-').count() as IntegerType;
+            let sharps = part.matches('#').count() as IntegerType;
+            let degree: u8 = part.replace(['-', '#'], "").parse().ok()?;
+            let base: IntegerType = match degree {
+                3 => 4,
+                5 => 7,
+                7 => 11,
+                9 | 2 => 2,
+                11 | 4 => 5,
+                13 | 6 => 9,
+                _ => return None,
+            };
+            u8::try_from(base + sharps - flats).ok()
+        })
+        .collect()
+}
+
+/// music21's `compare` inside `chordSymbolFigureFromChord`: whether the
+/// chord's semitone steps match a kind's, a missing step being forgiven only
+/// for the degrees in `permitted_omissions` and only at that degree's
+/// unaltered size.
+fn steps_match(found: &[Option<u8>], wanted: &[Option<u8>], permitted_omissions: &[u8]) -> bool {
+    if wanted.len() > found.len() {
+        return false;
+    }
+    const DEGREES: [(u8, u8); 6] = [(3, 4), (5, 7), (7, 11), (9, 2), (11, 5), (13, 9)];
+    for (index, wanted_step) in wanted.iter().enumerate() {
+        if found[index] == *wanted_step {
+            continue;
+        }
+        let (degree, plain) = DEGREES[index];
+        let forgiven = permitted_omissions.contains(&degree) && *wanted_step == Some(plain);
+        if !forgiven || found[index].is_some() {
+            return false;
+        }
+    }
+    true
+}
+
+/// The music21 chord kind a chord is, with the abbreviation music21 writes it
+/// with, or `None` when no kind fits.
+fn kind_of_chord(chord: &Chord) -> Option<&'static Music21ChordType> {
+    let step = |degree: u8| chord.semitones_from_chord_step(degree);
+    let (d3, d5, d7, d9, d11, d13) = (step(3), step(5), step(7), step(2), step(4), step(6));
+    let is_triad = chord.is_triad();
+    let is_seventh = chord.is_seventh();
+
+    let mut kind = None;
+    for chord_type in MUSIC21_CHORD_TYPES {
+        let wanted = notation_semitones(chord_type.notation);
+        if wanted.iter().any(Option::is_none) {
+            continue;
+        }
+        let matched = match wanted.len() {
+            2 if is_triad => steps_match(&[d3, d5], &wanted, &[]),
+            3 if is_seventh => steps_match(&[d3, d5, d7], &wanted, &[]),
+            4 if d9.is_some() && d11.is_none() && d13.is_none() => {
+                steps_match(&[d3, d5, d7, d9], &wanted, &[5])
+            }
+            5 if d11.is_some() && d13.is_none() => {
+                steps_match(&[d3, d5, d7, d9, d11], &wanted, &[3, 5])
+            }
+            6 if d13.is_some() => steps_match(&[d3, d5, d7, d9, d11, d13], &wanted, &[5, 11, 9]),
+            _ => false,
+        };
+        if matched {
+            kind = Some(chord_type);
+        }
+    }
+    if kind.is_some() {
+        return kind;
+    }
+
+    let mut matched_degrees = 0;
+    for chord_type in MUSIC21_CHORD_TYPES {
+        let wanted = notation_semitones(chord_type.notation);
+        if wanted.iter().any(Option::is_none) {
+            continue;
+        }
+        let mut degrees: Vec<u8> = chord_type
+            .notation
+            .split(',')
+            .filter_map(|part| part.replace(['-', '#'], "").parse().ok())
+            .filter(|degree| *degree != 1)
+            .collect();
+        degrees.sort_unstable();
+        let found: Vec<Option<u8>> = degrees
+            .iter()
+            .map(|degree| match degree {
+                2 | 9 => d9,
+                3 => d3,
+                4 | 11 => d11,
+                5 => d5,
+                6 | 13 => d13,
+                7 => d7,
+                _ => None,
+            })
+            .collect();
+        if steps_match(&found, &wanted, &[]) && matched_degrees < wanted.len() {
+            matched_degrees = wanted.len();
+            kind = Some(chord_type);
+        }
+    }
+    kind
+}
+
+/// Names a chord as a lead-sheet symbol: music21's
+/// `chordSymbolFigureFromChord`, so `C E G B-` is `C7`, `E G C` is `C/E`
+/// and a lone `C` is `Cpedal`. Notes the kind cannot account for are listed
+/// after `add` and notes the kind expects but the chord lacks after `omit`,
+/// as music21 writes them. `None` when no kind fits, where music21 returns
+/// the sentence "Chord Symbol Cannot Be Identified"; an empty chord gives an
+/// empty string.
+pub fn chord_symbol_figure_from_chord(chord: &Chord) -> Result<Option<String>> {
+    let Some(root) = chord.root() else {
+        return Ok(Some(String::new()));
+    };
+    if chord.notes().len() == 1 {
+        return Ok(Some(format!("{}pedal", root.name())));
+    }
+    let Some(kind) = kind_of_chord(chord) else {
+        return Ok(None);
+    };
+    let mut figure = match (chord.inversion().unwrap_or(0), kind.abbreviation) {
+        (0, abbreviation) => format!("{}{abbreviation}", root.name()),
+        (_, "sus2") => {
+            let bass = chord.bass().unwrap_or(root);
+            format!("{}sus", bass.name())
+        }
+        (_, abbreviation) => {
+            let bass = chord.bass().unwrap_or(root);
+            format!("{}{abbreviation}/{}", root.name(), bass.name())
+        }
+    };
+
+    let perfect: Vec<String> = ChordSymbol::parse(figure.as_str())?
+        .to_chord()?
+        .pitch_names();
+    let present: Vec<String> = chord.pitch_names();
+    let mut additions: Vec<&String> = present
+        .iter()
+        .filter(|name| !perfect.contains(name))
+        .collect();
+    additions.dedup();
+    let mut subtractions: Vec<&String> = perfect
+        .iter()
+        .filter(|name| !present.contains(name))
+        .collect();
+    subtractions.dedup();
+    if !additions.is_empty() || !subtractions.is_empty() {
+        if !additions.is_empty() {
+            figure.push_str("add");
+            for name in &additions {
+                figure.push_str(name);
+                figure.push(',');
+            }
+        }
+        if !subtractions.is_empty() {
+            figure.push_str("omit");
+            for name in &subtractions {
+                figure.push_str(name);
+                figure.push(',');
+            }
+        }
+        figure.pop();
+    }
+    Ok(Some(figure))
+}
+
+/// A [`ChordSymbol`] read off a chord: music21's `chordSymbolFromChord`,
+/// [`chord_symbol_figure_from_chord`] parsed back. `None` when no kind fits.
+pub fn chord_symbol_from_chord(chord: &Chord) -> Result<Option<ChordSymbol>> {
+    match chord_symbol_figure_from_chord(chord)? {
+        Some(figure) if !figure.is_empty() => Ok(Some(ChordSymbol::parse(figure)?)),
+        _ => Ok(None),
+    }
+}
+
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn chord_symbol_figures_match_music21() {
+        let cases: [(&str, Option<&str>); 26] = [
+            ("C4 E4 G4", Some("C")),
+            ("C4 E-4 G4", Some("Cm")),
+            ("C4 E4 G#4", Some("C+")),
+            ("C4 E-4 G-4", Some("Cdim")),
+            ("C4 E4 G4 B-4", Some("C7")),
+            ("C4 E4 G4 B4", Some("Cmaj7")),
+            ("C4 E-4 G4 B-4", Some("Cm7")),
+            ("C4 E-4 G-4 B--4", Some("Co7")),
+            ("C4 E-4 G-4 B-4", Some("C\u{00f8}7")),
+            ("E4 G4 C5", Some("C/E")),
+            ("G3 C4 E4", Some("C/G")),
+            ("E4 G4 B-4 C5", Some("C7/E")),
+            ("C4 E4 G4 B-4 D5", Some("C9")),
+            ("C4 E4 G4 B4 D5", Some("CM9")),
+            ("C4 D4 G4", Some("Csus2")),
+            ("C4 F4 G4", Some("Csus")),
+            ("C4", Some("Cpedal")),
+            ("C4 G4", Some("Cpower")),
+            ("C4 E4 G4 B-4 D5 F5", Some("C11")),
+            ("C4 E4 G4 B-4 D5 F5 A5", Some("C13")),
+            ("C4 E4 G4 A4", Some("Am7/C")),
+            ("C4 E-4 G4 A4", Some("A\u{00f8}7/C")),
+            ("C4 E4 G4 D5", Some("CaddD")),
+            ("F4 A4 C5 D5", Some("Dm7/F")),
+            ("B3 D4 F4", Some("Bdim")),
+            ("C4 D-4 E4", None),
+        ];
+        for (notes, expected) in cases {
+            let chord = Chord::new(notes).unwrap();
+            assert_eq!(
+                chord_symbol_figure_from_chord(&chord).unwrap().as_deref(),
+                expected,
+                "{notes}"
+            );
+        }
+        assert_eq!(
+            chord_symbol_figure_from_chord(&Chord::empty())
+                .unwrap()
+                .as_deref(),
+            Some("")
+        );
+
+        let symbol = chord_symbol_from_chord(&Chord::new("E4 G4 B-4 C5").unwrap())
+            .unwrap()
+            .unwrap();
+        assert_eq!(symbol.figure(), "C7/E");
+        assert_eq!(symbol.root().name(), "C");
+        assert_eq!(symbol.bass().map(Pitch::name).as_deref(), Some("E"));
+        assert!(
+            chord_symbol_from_chord(&Chord::new("C4 D-4 E4").unwrap())
+                .unwrap()
+                .is_none()
+        );
+        assert!(chord_symbol_from_chord(&Chord::empty()).unwrap().is_none());
+    }
 
     #[test]
     fn kind_lookups_match_music21() {

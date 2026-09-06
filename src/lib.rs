@@ -71,7 +71,8 @@ pub use chord::{
     GuitarTuningString, IntoNotes, KnownChordType, TriadQuality,
 };
 pub use chordsymbol::{
-    ChordAlteration, ChordQuality, ChordSymbol, Music21ChordType, known_chord_symbol_types,
+    ChordAlteration, ChordQuality, ChordSymbol, Music21ChordType, chord_symbol_figure_from_chord,
+    chord_symbol_from_chord, known_chord_symbol_types,
 };
 pub use defaults::{FloatType, FractionType, IntegerType, Octave, UnsignedIntegerType};
 pub use duration::{Duration, DurationType, quarter_length_to_closest_type};
@@ -90,7 +91,7 @@ pub use note::{IntoNote, Note};
 pub use pitch::{
     Accidental, AccidentalSpecifier, CHROMATIC_PITCH_CLASS_NAMES, Microtone, MicrotoneSpecifier,
     Pitch, PitchClass, PitchClassSpecifier, PitchName, PitchOptions, convert_pitch_class_to_str,
-    pitch_class_name,
+    dissonance_score, pitch_class_name, simplify_multiple_enharmonics,
 };
 pub use polyrhythm::{Polyrhythm, PolyrhythmAnalysis, PolyrhythmEvent, PolyrhythmRatioTone};
 pub use rest::Rest;

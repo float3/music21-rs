@@ -835,7 +835,8 @@ fn symbol_quality(symbol: &ChordSymbol) -> RomanQuality {
         | ChordQuality::Dominant
         | ChordQuality::Suspended2
         | ChordQuality::Suspended4
-        | ChordQuality::Power => RomanQuality::Major,
+        | ChordQuality::Power
+        | ChordQuality::Pedal => RomanQuality::Major,
         ChordQuality::Minor => RomanQuality::Minor,
         ChordQuality::Diminished => RomanQuality::Diminished,
         ChordQuality::HalfDiminished => RomanQuality::HalfDiminished,

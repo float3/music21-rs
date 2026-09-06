@@ -1270,9 +1270,19 @@ fn normalize_midi(midi: IntegerType) -> IntegerType {
     }
 }
 
-type CriterionFunction = fn(&[Pitch]) -> Result<FloatType>;
+/// A scoring function for [`simplify_multiple_enharmonics`]: lower is a
+/// simpler spelling.
+pub type CriterionFunction = fn(&[Pitch]) -> Result<FloatType>;
 
-pub(crate) fn simplify_multiple_enharmonics(
+/// Respells a set of pitches so that they read as simply as possible
+/// together: music21's `simplifyMultipleEnharmonics`. The first pitch is kept
+/// as written and each of the others may be swapped for a common enharmonic;
+/// the spelling chosen is the one the criterion scores lowest, by default
+/// [`dissonance_score`]. Up to four pitches are searched exhaustively, more
+/// are settled greedily one at a time, as upstream does. With a key
+/// signature the tonic of its major key is placed first as an anchor and
+/// removed again afterwards.
+pub fn simplify_multiple_enharmonics(
     pitches: &[Pitch],
     criterion: Option<CriterionFunction>,
     key_context: Option<KeySignature>,
@@ -1282,7 +1292,7 @@ pub(crate) fn simplify_multiple_enharmonics(
         return Ok(Vec::new());
     }
 
-    let criterion: CriterionFunction = criterion.unwrap_or(default_dissonance_score);
+    let criterion: CriterionFunction = criterion.unwrap_or(dissonance_score);
 
     let remove_first: bool = match key_context {
         Some(key) => {
@@ -1376,11 +1386,16 @@ fn greedy_enharmonics_search(
     Ok(new_pitches)
 }
 
-fn default_dissonance_score(pitches: &[Pitch]) -> Result<FloatType> {
-    dissonance_score(pitches, true, true, true)
+/// How awkward a set of pitches reads together: music21's
+/// `_dissonanceScore` with all three of its terms on. It averages a penalty
+/// for accidentals beyond one sharp or flat, a penalty growing with the
+/// denominator of each pair's Pythagorean ratio, and a reward for every
+/// third and sixth, so that `C E G` scores below `C F- G`.
+pub fn dissonance_score(pitches: &[Pitch]) -> Result<FloatType> {
+    weighted_dissonance_score(pitches, true, true, true)
 }
 
-fn dissonance_score(
+fn weighted_dissonance_score(
     pitches: &[Pitch],
     small_pythagorean_ratio: bool,
     accidental_penalty: bool,
@@ -1518,6 +1533,68 @@ fn cents_to_alter_and_cents(shift: FloatType) -> (FloatType, FloatType) {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn simplify_multiple_enharmonics_matches_music21() {
+        let names = |names: &[&str]| -> Vec<Pitch> {
+            names
+                .iter()
+                .map(|n| Pitch::from_name(*n).unwrap())
+                .collect()
+        };
+        let spelled = |pitches: Vec<Pitch>| -> Vec<String> {
+            pitches.iter().map(Pitch::name_with_octave).collect()
+        };
+        let cases: [(&[&str], &[&str]); 11] = [
+            (&["C#", "D-", "E"], &["C#", "C#", "E"]),
+            (&["A#4", "C#5", "E#5"], &["A#4", "C#5", "E#5"]),
+            (&["F#", "A#", "C#"], &["F#", "A#", "C#"]),
+            (&["G-", "B-", "D-"], &["G-", "B-", "D-"]),
+            (&["C", "E-", "G-", "B--"], &["C", "E-", "F#", "A"]),
+            (&["B#", "D##", "F##"], &["B#", "E", "G"]),
+            (&["C", "E", "G#", "B"], &["C", "E", "G#", "B"]),
+            (&["E#", "G##", "B#"], &["E#", "G##", "B#"]),
+            (
+                &["C#", "E#", "G#", "B", "D#"],
+                &["C#", "E#", "G#", "B", "D#"],
+            ),
+            (
+                &["D-", "F", "A-", "C-", "E-", "G-"],
+                &["D-", "F", "A-", "C-", "E-", "G-"],
+            ),
+            (&["C4", "E-4", "F#4"], &["C4", "E-4", "G-4"]),
+        ];
+        for (input, expected) in cases {
+            let simplified = simplify_multiple_enharmonics(&names(input), None, None).unwrap();
+            assert_eq!(spelled(simplified), expected, "{input:?}");
+        }
+        let three_flats = crate::KeySignature::new(-3);
+        assert_eq!(
+            spelled(
+                simplify_multiple_enharmonics(&names(&["C#", "D-", "E"]), None, Some(three_flats))
+                    .unwrap()
+            ),
+            ["D-", "D-", "F-"]
+        );
+        let six_sharps = crate::KeySignature::new(6);
+        assert_eq!(
+            spelled(
+                simplify_multiple_enharmonics(&names(&["G-", "B-", "D-"]), None, Some(six_sharps))
+                    .unwrap()
+            ),
+            ["F#", "A#", "C#"]
+        );
+        assert!(
+            simplify_multiple_enharmonics(&[], None, None)
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(super::dissonance_score(&[]).unwrap(), 0.0);
+        assert!(
+            super::dissonance_score(&names(&["C", "E", "G"])).unwrap()
+                < super::dissonance_score(&names(&["C", "F-", "G"])).unwrap()
+        );
+    }
 
     #[test]
     fn get_enharmonic_picks_the_direction_music21_does() {

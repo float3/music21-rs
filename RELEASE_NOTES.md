@@ -111,6 +111,9 @@ the next release needs a minor bump.
   `augment_or_diminish` and `DurationType::ordinal`;
   `MetronomeMark::equivalent_by_referent` and
   `maintained_number_with_referent`; `Chord::geometric_normal_form`.
+- `pitch::simplify_multiple_enharmonics` and `dissonance_score`, and
+  `chordsymbol::chord_symbol_figure_from_chord` and `chord_symbol_from_chord`,
+  the last three music21 members the feature map listed as missing.
 - `ChordSymbol::find_figure`, `transpose` and `inversion_is_valid`;
   `Music21ChordType` now carries every abbreviation music21 accepts, with
   `abbreviations_for_kind`, `notation_for_kind` and
