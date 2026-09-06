@@ -701,10 +701,13 @@ impl Pitch {
 
     /// Returns the pitch class as music21's `pitchClassString`, one
     /// character with `A` and `B` for ten and eleven. Like music21's integer
-    /// `pitchClass` it rounds a microtone away, so `C` with `+20c` is `0`
-    /// where [`Self::pitch_class`] would say `0.2`.
+    /// `pitchClass` it rounds a microtone away with Python's round-half-to-even,
+    /// so `C` with `+20c` is `0` where [`Self::pitch_class`] would say `0.2`,
+    /// and a half-sharp C is `0` even though its MIDI number rounds up to 61.
     pub fn pitch_class_string(&self) -> String {
-        crate::pitch::pitchclass::convert_pitch_class_to_str(self.midi())
+        crate::pitch::pitchclass::convert_pitch_class_to_str(
+            self.ps().round_ties_even() as IntegerType
+        )
     }
 
     /// Returns how many cents the pitch sits from the nearest MIDI note,
