@@ -293,6 +293,14 @@ fn write_meters(py: Python<'_>, workspace_root: &Path, version: &str) -> PyResul
                 time_signature.getattr("beatDivisionCountName")?.extract()?;
             let classification: String = time_signature.getattr("classification")?.extract()?;
             let offsets: Vec<f64> = time_signature.call_method0("getBeatOffsets")?.extract()?;
+            let mut divisions = Vec::new();
+            for division in time_signature
+                .getattr("beatDivisionDurations")?
+                .try_iter()?
+            {
+                let quarter_length: f64 = division?.getattr("quarterLength")?.extract()?;
+                divisions.push(float_repr(quarter_length));
+            }
             let offsets: Vec<String> = offsets.into_iter().map(float_repr).collect();
 
             let _ = writeln!(out, "[[meter]]");
@@ -309,6 +317,11 @@ fn write_meters(py: Python<'_>, workspace_root: &Path, version: &str) -> PyResul
             );
             let _ = writeln!(out, "classification = {}", toml_string(&classification));
             let _ = writeln!(out, "beat_offsets = [{}]", offsets.join(", "));
+            let _ = writeln!(
+                out,
+                "beat_division_quarter_lengths = [{}]",
+                divisions.join(", ")
+            );
             let _ = writeln!(out);
             count += 1;
         }

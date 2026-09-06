@@ -9,6 +9,11 @@ use crate::{
 use super::Key;
 use std::sync::LazyLock;
 
+static PERFECT_FIFTH_UP: LazyLock<Interval> =
+    LazyLock::new(|| Interval::from_name("P5").expect("P5 is a valid interval"));
+static PERFECT_FOURTH_UP: LazyLock<Interval> =
+    LazyLock::new(|| Interval::from_name("P4").expect("P4 is a valid interval"));
+
 static PERFECT_FIFTH: LazyLock<Interval> =
     LazyLock::new(|| Interval::from_name("P5").expect("P5 is a valid interval"));
 static PERFECT_FOURTH: LazyLock<Interval> =
@@ -154,6 +159,27 @@ impl KeySignature {
         Ok(Self::new(pitch_to_sharps(&transposed, None)?))
     }
 
+    /// Transposes a pitch spelled in C into this key signature the way
+    /// music21's `transposePitchFromC` does: up a fifth per sharp, or up a
+    /// fourth per flat, keeping the pitch's own octave, so `E4` in two sharps
+    /// is `F#4` and in three flats `G4`.
+    pub fn transpose_pitch_from_c(&self, pitch: &Pitch) -> Result<Pitch> {
+        if self.sharps == 0 {
+            return Ok(pitch.clone());
+        }
+        let step = if self.sharps < 0 {
+            &*PERFECT_FOURTH_UP
+        } else {
+            &*PERFECT_FIFTH_UP
+        };
+        let mut transposed = pitch.clone();
+        for _ in 0..self.sharps.unsigned_abs() {
+            transposed = step.transpose_pitch_with_options(&transposed, false, None)?;
+        }
+        transposed.octave_setter(pitch.octave());
+        Ok(transposed)
+    }
+
     /// Returns the major or minor scale this signature implies.
     pub fn scale(&self, mode: &str) -> Result<Scale> {
         let scale_type = match mode {
@@ -209,6 +235,29 @@ impl KeySignature {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn transpose_pitch_from_c_matches_music21() {
+        let cases: [(i32, [&str; 5]); 7] = [
+            (0, ["C4", "E4", "B-3", "F#5", "G"]),
+            (1, ["G4", "B4", "F3", "C#5", "D"]),
+            (2, ["D4", "F#4", "C3", "G#5", "A"]),
+            (-1, ["F4", "A4", "E-3", "B5", "C"]),
+            (-3, ["E-4", "G4", "D-3", "A5", "B-"]),
+            (7, ["C#4", "E#4", "B3", "F##5", "G#"]),
+            (-7, ["C-4", "E-4", "B--3", "F5", "G-"]),
+        ];
+        for (sharps, expected) in cases {
+            let signature = KeySignature::new(sharps);
+            let actual = ["C4", "E4", "B-3", "F#5", "G"].map(|name| {
+                signature
+                    .transpose_pitch_from_c(&Pitch::from_name(name).unwrap())
+                    .unwrap()
+                    .name_with_octave()
+            });
+            assert_eq!(actual, expected, "{sharps} sharps");
+        }
+    }
     use super::*;
 
     #[test]

@@ -337,6 +337,26 @@ impl Scale {
         }
         Ok(current)
     }
+    /// Returns the scale of the same type on which `pitch` is the given degree:
+    /// music21's `deriveByDegree`, so the major scale with `E` as its fifth is
+    /// A major. The pitch keeps its spelling; a pitch without an octave is
+    /// read in octave 4, as music21 reads it, so the new tonic has one.
+    pub fn derive_by_degree(&self, degree: usize, pitch: &Pitch) -> Result<Scale> {
+        let implicit_octave = Some(crate::defaults::PITCH_OCTAVE as IntegerType);
+        let mut tonic = self.tonic.clone();
+        if tonic.octave().is_none() {
+            tonic.octave_setter(implicit_octave);
+        }
+        let degree_pitch = Scale::new(self.scale_type, tonic.clone()).pitch_at_degree(degree)?;
+        let up_to_degree = Interval::between_pitches(&tonic, &degree_pitch)?;
+        let mut reference = pitch.clone();
+        if reference.octave().is_none() {
+            reference.octave_setter(implicit_octave);
+        }
+        let new_tonic = reference.transpose(&up_to_degree.reversed()?)?;
+        Ok(Scale::new(self.scale_type, new_tonic))
+    }
+
     /// Returns the one-based degree whose pitch name matches, ignoring octave,
     /// or `None` when the pitch is not in the scale.
     pub fn degree_of(&self, pitch: &Pitch) -> Result<Option<usize>> {

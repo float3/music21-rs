@@ -92,8 +92,17 @@ add = "sum"
 subtract = "difference"
 intervalToPythagoreanRatio = "pythagorean_ratio"
 notesToInterval = "between_pitches"
+intervalFromGenericAndChromatic = "from_generic_and_chromatic"
+convertStaffDistanceToInterval = "staff_distance_to_generic_number"
+getWrittenHigherNote = "written_higher_pitch"
+getWrittenLowerNote = "written_lower_pitch"
+getAbsoluteHigherNote = "absolute_higher_pitch"
+getAbsoluteLowerNote = "absolute_lower_pitch"
 
 [class.excluded]
+notesToGeneric = "the generic, chromatic and diatonic halves are crate-private; Interval::between_pitches builds all three"
+notesToChromatic = "the generic, chromatic and diatonic halves are crate-private; Interval::between_pitches builds all three"
+intervalsToDiatonic = "the generic, chromatic and diatonic halves are crate-private; Interval::between_pitches builds all three"
 convertDiatonicNumberToStep = "internal conversions between music21's own representations"
 convertGeneric = "internal conversions between music21's own representations"
 convertSemitoneToSpecifierGeneric = "internal conversions between music21's own representations"
@@ -105,10 +114,14 @@ python = "key.py"
 name = "KeySignature"
 rust = ["src/key/keysignature.rs"]
 
+[class.excluded]
+isNonTraditional = "a key signature here is a count of sharps; non-traditional signatures are not modelled"
+
 [[class]]
 python = "key.py"
 name = "Key"
-rust = ["src/key/mod.rs"]
+rust = ["src/key/mod.rs", "src/analysis.rs"]
+note = "tonalCertainty belongs to a key that came out of analysis, so it lives on the ranked estimates in `analysis`."
 
 [[class]]
 python = "scale/__init__.py"
@@ -164,7 +177,16 @@ name = "TimeSignature"
 rust = ["src/meter.rs"]
 note = "Derived from numerator and denominator alone; beaming, display and accent weighting need a MeterSequence."
 
+[class.renames]
+getBeat = "beat_at_offset"
+getOffsetFromBeat = "offset_from_beat"
+getBeatProgress = "beat_progress"
+getBeatProportion = "beat_proportion"
+getBeatProportionStr = "beat_proportion_string"
+
 [class.excluded]
+summedNumerator = "display sequences are not modelled"
+getMeasureOffsetOrMeterModulusOffset = "needs the element's offset within a stream"
 resetValues = "a TimeSignature is immutable here"
 load = "a TimeSignature is immutable here"
 getBeams = "beaming needs the MeterSequence partition tree"

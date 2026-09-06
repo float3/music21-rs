@@ -83,6 +83,19 @@ the next release needs a minor bump.
   `directed_semi_simple_nice_name`, `specific_name`, `cents`, `is_unison`,
   `is_perfectable`, `staff_distance`, `mod7`, `mod7_inversion` and `mod12`.
 - `Pitch::full_name`, music21's `E-flat in octave 4 (+20c)` spelling.
+- `TimeSignature::offset_from_beat`, `beat_progress`, `beat_proportion`,
+  `beat_proportion_string`, `beat_division_quarter_lengths`,
+  `beat_division_durations`, `beat_sub_division_durations`,
+  `beat_division_count_name`, `ratio_equal` and the two beat-to-quarter
+  ratios; the division lengths are checked against music21 by the meter
+  fixture.
+- `Scale::derive_by_degree` and `Key::derive_by_degree`,
+  `KeySignature::transpose_pitch_from_c`, and `analysis::tonal_certainty`
+  over a ranked list of key estimates.
+- `Interval::from_generic_and_chromatic`, `pitch_start`, `pitch_end`,
+  `note_start`, `note_end`, and the free functions
+  `written_higher_pitch`, `written_lower_pitch`, `absolute_higher_pitch`,
+  `absolute_lower_pitch` and `staff_distance_to_generic_number`.
 - `Note::transpose`, `Key::transpose` and `Key::as_scale`.
 
 ## Bug Fixes

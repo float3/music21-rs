@@ -30,6 +30,7 @@ struct MeterExpectation {
     beat_division_count_name: String,
     classification: String,
     beat_offsets: Vec<f64>,
+    beat_division_quarter_lengths: Vec<f64>,
 }
 
 fn expectations() -> Expectations {
@@ -103,6 +104,13 @@ fn every_time_signature_matches_music21() {
             ));
         }
 
+        let divisions = actual.beat_division_quarter_lengths();
+        if divisions != expected.beat_division_quarter_lengths {
+            mismatches.push(format!(
+                "{} beat_division_quarter_lengths: music21 {:?}, crate {:?}",
+                expected.ratio, expected.beat_division_quarter_lengths, divisions
+            ));
+        }
         let offsets = actual.beat_offsets();
         if offsets.len() != expected.beat_offsets.len()
             || !offsets

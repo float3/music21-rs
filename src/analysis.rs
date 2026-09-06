@@ -211,8 +211,41 @@ fn correlation(left: &[FloatType; 12], right: &[FloatType; 12]) -> FloatType {
     }
 }
 
+/// How decisively the first of a ranked list of key estimates wins: music21's
+/// `Key.tonalCertainty` for a key that came out of analysis. It is the
+/// leader's score plus twice its lead over the next positive score; with no
+/// positive runner-up it is the leader's score, floored at zero.
+pub fn tonal_certainty(estimates: &[KeyEstimate]) -> FloatType {
+    let Some(leader) = estimates.first() else {
+        return 0.0;
+    };
+    let runner_up = estimates[1..]
+        .iter()
+        .map(KeyEstimate::score)
+        .find(|score| *score > 0.0);
+    match runner_up {
+        Some(second) => leader.score() + 2.0 * (leader.score() - second),
+        None => leader.score().max(0.0),
+    }
+}
+
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn tonal_certainty_rewards_a_clear_leader() {
+        let scale: Vec<Pitch> = ["C4", "D4", "E4", "F4", "G4", "A4", "B4", "C5"]
+            .iter()
+            .map(|name| Pitch::from_name(*name).unwrap())
+            .collect();
+        let ranked = estimate_key_from_pitches(&scale).unwrap();
+        let leader = ranked[0].score();
+        let second = ranked[1].score();
+        assert!(second > 0.0);
+        assert!((tonal_certainty(&ranked) - (leader + 2.0 * (leader - second))).abs() < 1e-12);
+        assert_eq!(tonal_certainty(&ranked[..1]), leader.max(0.0));
+        assert_eq!(tonal_certainty(&[]), 0.0);
+    }
     use super::*;
 
     #[test]

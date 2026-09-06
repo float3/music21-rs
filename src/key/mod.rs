@@ -165,6 +165,16 @@ impl Key {
     }
 
     /// Returns the relative major or minor key when applicable.
+    /// Returns the key of the same mode in which `pitch` is the given scale
+    /// degree: music21's `deriveByDegree`, so C major with `E` as degree 5 is
+    /// A major and A minor with `C` as degree 3 is A minor again.
+    pub fn derive_by_degree(&self, degree: usize, pitch: &Pitch) -> Result<Self> {
+        let scale = self.as_scale()?.derive_by_degree(degree, pitch)?;
+        let tonic = scale.tonic().clone();
+        let sharps = pitch_to_sharps(&tonic, Some(&self.mode))?;
+        Ok(Self::new(tonic, &self.mode, sharps))
+    }
+
     pub fn relative(&self) -> Result<Self> {
         match self.mode.as_str() {
             "major" => self.key_signature().try_as_key(Some("minor"), None),
@@ -253,6 +263,40 @@ fn canonical_key_mode(mode: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn derive_by_degree_matches_music21() {
+        let cases: [(&str, usize, &str, &str, &str); 8] = [
+            ("C", 5, "E", "A3", "major"),
+            ("C", 1, "F#4", "F#4", "major"),
+            ("a", 3, "C", "A3", "minor"),
+            ("C", 7, "B-", "C-4", "major"),
+            ("C", 4, "B", "F#4", "major"),
+            ("D", 2, "C#3", "B2", "major"),
+            ("c", 6, "A-4", "C4", "minor"),
+            ("C", 5, "G4", "C4", "major"),
+        ];
+        for (key, degree, pitch, tonic, mode) in cases {
+            let derived = Key::from_tonic(key)
+                .unwrap()
+                .derive_by_degree(degree, &Pitch::from_name(pitch).unwrap())
+                .unwrap();
+            assert_eq!(
+                derived.tonic_pitch().name_with_octave(),
+                tonic,
+                "{key} {degree} {pitch}"
+            );
+            assert_eq!(derived.mode(), mode, "{key} {degree} {pitch}");
+        }
+        assert_eq!(
+            Key::from_tonic("C")
+                .unwrap()
+                .derive_by_degree(5, &Pitch::from_name("E").unwrap())
+                .unwrap()
+                .sharps(),
+            3
+        );
+    }
     use super::*;
     use crate::key::keysignature::pitch_name_to_sharps;
 

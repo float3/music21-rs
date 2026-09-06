@@ -163,6 +163,58 @@ fn convert_staff_distance_to_interval(staff_dist: IntegerType) -> IntegerType {
     }
 }
 
+/// music21's `convertStaffDistanceToInterval`: a signed count of staff steps
+/// as a signed generic interval number, so `0` is a unison, `2` a third and
+/// `-1` a descending second.
+pub fn staff_distance_to_generic_number(staff_distance: IntegerType) -> IntegerType {
+    convert_staff_distance_to_interval(staff_distance)
+}
+
+fn diatonic_note_number(pitch: &Pitch) -> IntegerType {
+    pitch.step().step_to_dnn_offset() + (7 * pitch.octave().unwrap_or(4))
+}
+
+/// The pitch written higher on the staff, whatever it sounds like: music21's
+/// `getWrittenHigherNote`, so `C4` over `B#3`. Ties in staff position are
+/// settled by sound, and a complete tie returns the first.
+pub fn written_higher_pitch<'a>(first: &'a Pitch, second: &'a Pitch) -> &'a Pitch {
+    match diatonic_note_number(first).cmp(&diatonic_note_number(second)) {
+        Ordering::Greater => first,
+        Ordering::Less => second,
+        Ordering::Equal => absolute_higher_pitch(first, second),
+    }
+}
+
+/// The pitch written lower on the staff: music21's `getWrittenLowerNote`,
+/// so `B#3` under `C4`.
+pub fn written_lower_pitch<'a>(first: &'a Pitch, second: &'a Pitch) -> &'a Pitch {
+    match diatonic_note_number(first).cmp(&diatonic_note_number(second)) {
+        Ordering::Less => first,
+        Ordering::Greater => second,
+        Ordering::Equal => absolute_lower_pitch(first, second),
+    }
+}
+
+/// The pitch that sounds higher: music21's `getAbsoluteHigherNote`. Enharmonic
+/// equals return the first.
+pub fn absolute_higher_pitch<'a>(first: &'a Pitch, second: &'a Pitch) -> &'a Pitch {
+    if notes_to_chromatic(first, second).semitones > 0 {
+        second
+    } else {
+        first
+    }
+}
+
+/// The pitch that sounds lower: music21's `getAbsoluteLowerNote`. Enharmonic
+/// equals return the first.
+pub fn absolute_lower_pitch<'a>(first: &'a Pitch, second: &'a Pitch) -> &'a Pitch {
+    if notes_to_chromatic(first, second).semitones < 0 {
+        second
+    } else {
+        first
+    }
+}
+
 fn notes_to_generic(p1: &Pitch, p2: &Pitch) -> Result<GenericInterval> {
     let dnn1 = p1.step().step_to_dnn_offset() + (7 * p1.octave().unwrap_or(4));
     let dnn2 = p2.step().step_to_dnn_offset() + (7 * p2.octave().unwrap_or(4));
@@ -294,6 +346,42 @@ impl Interval {
             pitch_start: None,
             pitch_end: None,
         })
+    }
+
+    /// Builds an interval from a generic size and a semitone count: music21's
+    /// `intervalFromGenericAndChromatic`, so a third of four semitones is a
+    /// major third and a fifth of six a diminished fifth. Negative values
+    /// give a descending interval.
+    pub fn from_generic_and_chromatic(
+        generic: IntegerType,
+        semitones: IntegerType,
+    ) -> Result<Self> {
+        let generic = GenericInterval::from_int(generic)?;
+        let chromatic = ChromaticInterval::new(semitones);
+        let diatonic = intervals_to_diatonic(&generic, &chromatic)?;
+        Self::from_diatonic_and_chromatic(diatonic, chromatic)
+    }
+
+    /// The pitch the interval was measured from, when it was built from two
+    /// pitches or notes.
+    pub fn pitch_start(&self) -> Option<&Pitch> {
+        self.pitch_start.as_ref()
+    }
+
+    /// The pitch the interval was measured to, when it was built from two
+    /// pitches or notes.
+    pub fn pitch_end(&self) -> Option<&Pitch> {
+        self.pitch_end.as_ref()
+    }
+
+    /// [`Self::pitch_start`] as a note without a duration.
+    pub fn note_start(&self) -> Option<Note> {
+        self.pitch_start.clone().map(Note::from_pitch)
+    }
+
+    /// [`Self::pitch_end`] as a note without a duration.
+    pub fn note_end(&self) -> Option<Note> {
+        self.pitch_end.clone().map(Note::from_pitch)
     }
 
     /// Parses an interval name such as `"M3"`, `"P5"`, or `"-m6"`.
@@ -902,6 +990,78 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: &Interval) -> Result<Fract
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn generic_and_chromatic_build_the_interval_music21_does() {
+        let cases: [(i32, i32, &str, &str); 14] = [
+            (3, 4, "M3", "M3"),
+            (3, 3, "m3", "m3"),
+            (5, 7, "P5", "P5"),
+            (5, 6, "d5", "d5"),
+            (4, 6, "A4", "A4"),
+            (1, 0, "P1", "P1"),
+            (1, 1, "A1", "A1"),
+            (8, 12, "P8", "P8"),
+            (-3, -4, "M3", "M-3"),
+            (2, 3, "A2", "A2"),
+            (7, 10, "m7", "m7"),
+            (-2, -1, "m2", "m-2"),
+            (9, 13, "m9", "m9"),
+            (3, 2, "d3", "d3"),
+        ];
+        for (generic, semitones, name, directed) in cases {
+            let interval = Interval::from_generic_and_chromatic(generic, semitones).unwrap();
+            assert_eq!(interval.short_name(), name, "{generic} {semitones}");
+            assert_eq!(interval.directed_name(), directed, "{generic} {semitones}");
+            assert_eq!(interval.semitones(), semitones, "{generic} {semitones}");
+            assert!(interval.pitch_start().is_none());
+        }
+        assert!(Interval::from_generic_and_chromatic(0, 0).is_err());
+        assert_eq!(
+            [-3, -1, 0, 1, 2, 7].map(staff_distance_to_generic_number),
+            [-4, -2, 1, 2, 3, 8]
+        );
+    }
+
+    #[test]
+    fn written_and_sounding_order_match_music21() {
+        let cases: [(&str, &str, [&str; 4]); 8] = [
+            ("C4", "E4", ["E4", "C4", "E4", "C4"]),
+            ("E4", "C4", ["E4", "C4", "E4", "C4"]),
+            ("B#3", "C4", ["C4", "B#3", "B#3", "B#3"]),
+            ("C4", "B#3", ["C4", "B#3", "C4", "C4"]),
+            ("C-4", "B3", ["C-4", "B3", "C-4", "C-4"]),
+            ("F#4", "G-4", ["G-4", "F#4", "F#4", "F#4"]),
+            ("C4", "C4", ["C4", "C4", "C4", "C4"]),
+            ("B3", "C-4", ["C-4", "B3", "B3", "B3"]),
+        ];
+        for (first, second, expected) in cases {
+            let a = Pitch::from_name(first).unwrap();
+            let b = Pitch::from_name(second).unwrap();
+            let actual = [
+                written_higher_pitch(&a, &b),
+                written_lower_pitch(&a, &b),
+                absolute_higher_pitch(&a, &b),
+                absolute_lower_pitch(&a, &b),
+            ]
+            .map(Pitch::name_with_octave);
+            assert_eq!(actual, expected, "{first} {second}");
+        }
+    }
+
+    #[test]
+    fn intervals_remember_the_pitches_they_were_measured_between() {
+        let c = Pitch::from_name("C4").unwrap();
+        let g = Pitch::from_name("G4").unwrap();
+        let fifth = Interval::between_pitches(&c, &g).unwrap();
+        assert_eq!(fifth.pitch_start().unwrap().name_with_octave(), "C4");
+        assert_eq!(fifth.pitch_end().unwrap().name_with_octave(), "G4");
+        assert_eq!(fifth.note_start().unwrap().pitch_name_with_octave(), "C4");
+        assert_eq!(fifth.note_end().unwrap().pitch_name_with_octave(), "G4");
+        let named = Interval::from_name("P5").unwrap();
+        assert!(named.pitch_start().is_none());
+        assert!(named.note_end().is_none());
+    }
 
     #[test]
     fn nice_name_variants_match_music21() {

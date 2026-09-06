@@ -61,6 +61,7 @@ pub use abc::{
     abc_chord, abc_duration, abc_note, abc_rest, pitch_name_from_abc_note,
     pitch_names_from_abc_chord,
 };
+pub use analysis::tonal_certainty;
 pub use analysis::{
     KeyEstimate, KeyProfile, estimate_key_from_chords, estimate_key_from_chords_with,
     estimate_key_from_pitches, estimate_key_from_pitches_with,
@@ -75,7 +76,10 @@ pub use chordsymbol::{
 pub use defaults::{FloatType, FractionType, IntegerType, Octave, UnsignedIntegerType};
 pub use duration::{Duration, DurationType, quarter_length_to_closest_type};
 pub use error::{Error, Result};
-pub use interval::{Interval, IntervalDirection};
+pub use interval::{
+    Interval, IntervalDirection, absolute_higher_pitch, absolute_lower_pitch,
+    staff_distance_to_generic_number, written_higher_pitch, written_lower_pitch,
+};
 pub use key::{Key, KeySignature};
 pub use meter::{BeatDivision, TimeSignature};
 pub use midi::{
