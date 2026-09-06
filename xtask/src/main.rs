@@ -2,6 +2,7 @@
 
 #[cfg(feature = "python")]
 mod fixtures;
+mod report;
 mod scala_archive;
 mod tuning;
 
@@ -86,7 +87,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let workspace_root = workspace_root()?;
     std::env::set_current_dir(&workspace_root)?;
 
-    match std::env::args().nth(1).as_deref() {
+    let args: Vec<String> = std::env::args().collect();
+    match args.get(1).map(String::as_str) {
         Some("regenerate-tables") => regenerate_tables(&workspace_root),
         Some("emit-tables") => emit_tables(&workspace_root),
         Some("verify-tables") => verify_tables(&workspace_root),
@@ -98,6 +100,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         Some("verify-scala-archive") => verify_scala_archive(&workspace_root),
         Some("regenerate-fixtures") => regenerate_fixtures(&workspace_root),
         Some("regenerate-all") => regenerate_all(&workspace_root),
+        Some("report") => {
+            let options = report::parse_options(&workspace_root, &args[2..])?;
+            report::report(&workspace_root, &options)
+        }
         Some("-h") | Some("--help") | None => {
             print_help();
             Ok(())
@@ -119,6 +125,7 @@ fn print_help() {
     eprintln!("  cargo run -p xtask -- verify-scala-archive");
     eprintln!("  cargo run -p xtask -- regenerate-fixtures");
     eprintln!("  cargo run -p xtask --features python -- regenerate-all");
+    eprintln!("  cargo run -p xtask -- report [--out DIR] [--coverage-only|--features-only]");
 }
 
 /// Regenerates every music21 expectation fixture under `data/`.

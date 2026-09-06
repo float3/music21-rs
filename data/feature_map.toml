@@ -1,0 +1,277 @@
+# Which music21 classes the crate ports, and where. Read by
+# `cargo run -p xtask -- report`, which lists every public method of each
+# class against the `pub fn`s of the Rust files named here.
+#
+# A member is found by convention — `isMajorTriad` is `is_major_triad`, and a
+# leading `get` may be dropped — so only the names that differ need a line in
+# `renames`. `excluded` lists members left out on purpose, each with the
+# reason, and those show on the page as excluded rather than missing. The
+# command fails if a rename points at a function that does not exist or an
+# exclusion names a member music21 no longer has.
+
+[[class]]
+python = "chord/__init__.py"
+name = "Chord"
+rust = ["src/chord/mod.rs"]
+note = "Chord analysis; the stream, display and volume machinery is out of scope."
+
+[class.renames]
+forteClassTnI = "forte_class_tni"
+getChordStep = "chord_step"
+getZRelation = "z_relation"
+intervalVector = "interval_class_vector"
+orderedPitchClasses = "pitch_classes"
+
+[class.excluded]
+add = "notes are given at construction; a chord is a value here"
+chordTablesAddress = "the table address is internal; every value read off it has its own method"
+formatVectorString = "the vector strings come from interval_vector_string, normal_order_string and prime_form_string"
+getColor = "colour, notehead and stem direction are display state"
+setColor = "colour, notehead and stem direction are display state"
+getNotehead = "colour, notehead and stem direction are display state"
+setNotehead = "colour, notehead and stem direction are display state"
+getNoteheadFill = "colour, notehead and stem direction are display state"
+setNoteheadFill = "colour, notehead and stem direction are display state"
+getStemDirection = "colour, notehead and stem direction are display state"
+setStemDirection = "colour, notehead and stem direction are display state"
+getTie = "tie, volume and notehead are notation state the crate does not model"
+setTie = "tie, volume and notehead are notation state the crate does not model"
+getVolume = "tie, volume and notehead are notation state the crate does not model"
+setVolume = "tie, volume and notehead are notation state the crate does not model"
+annotateIntervals = "writes lyrics onto notes in a stream"
+
+[[class]]
+python = "pitch.py"
+name = "Pitch"
+rust = ["src/pitch/mod.rs"]
+
+[class.renames]
+diatonicNoteNum = "diatonic_note_number"
+frequency = "frequency_hz"
+freq440 = "frequency_hz"
+
+[class.excluded]
+informClient = "observer callback for a containing note; there is none"
+updateAccidentalDisplay = "accidental display state; needs a stream context"
+groups = "stream grouping"
+
+[[class]]
+python = "pitch.py"
+name = "Accidental"
+rust = ["src/pitch/accidental.rs"]
+
+[class.excluded]
+inheritDisplay = "accidental display state"
+setAttributeIndependently = "accidental display state"
+
+[[class]]
+python = "pitch.py"
+name = "Microtone"
+rust = ["src/pitch/microtone.rs"]
+
+[[class]]
+python = "interval.py"
+name = "Interval"
+rust = ["src/interval/mod.rs"]
+
+[class.renames]
+niceName = "name"
+reverse = "reversed"
+
+[class.excluded]
+generic = "the generic and diatonic halves are crate-private; their values are read through Interval"
+specifier = "the generic and diatonic halves are crate-private; their values are read through Interval"
+
+[[class]]
+python = "interval.py"
+rust = ["src/interval/mod.rs"]
+note = "Module-level helpers."
+
+[class.renames]
+add = "sum"
+subtract = "difference"
+intervalToPythagoreanRatio = "pythagorean_ratio"
+notesToInterval = "between_pitches"
+
+[class.excluded]
+convertDiatonicNumberToStep = "internal conversions between music21's own representations"
+convertGeneric = "internal conversions between music21's own representations"
+convertSemitoneToSpecifierGeneric = "internal conversions between music21's own representations"
+convertSemitoneToSpecifierGenericMicrotone = "internal conversions between music21's own representations"
+parseSpecifier = "internal conversions between music21's own representations"
+
+[[class]]
+python = "key.py"
+name = "KeySignature"
+rust = ["src/key/keysignature.rs"]
+
+[[class]]
+python = "key.py"
+name = "Key"
+rust = ["src/key/mod.rs"]
+
+[[class]]
+python = "scale/__init__.py"
+name = "ConcreteScale"
+rust = ["src/scale/scaletype.rs", "src/scale/stepscale.rs"]
+
+[class.renames]
+name = "music21_name"
+getScaleDegreeFromPitch = "degree_of"
+getScaleDegreeAndAccidentalFromPitch = "degree_and_accidental_of"
+nextPitch = "next_pitch_above"
+pitchFromDegree = "pitch_at_degree"
+
+[class.excluded]
+abstract = "the AbstractScale layer is not modelled"
+isConcrete = "the AbstractScale layer is not modelled"
+show = "notation output"
+write = "notation output"
+getScalaData = "Scala output; ScalaScale is the runtime reader"
+
+[[class]]
+python = "scale/__init__.py"
+members = "classes"
+suffix = "Scale"
+rust = ["src/scale/scaletype.rs", "src/scale/stepscale.rs", "src/scale/hexatonicblues.rs", "src/tuningsystem/scala.rs"]
+note = "The ConcreteScale subclasses, as ScaleType variants or runtime constructors."
+
+[class.renames]
+CyclicalScale = "cyclical"
+OctaveRepeatingScale = "octave_repeating"
+SieveScale = "sieve"
+
+[class.excluded]
+Scale = "the abstract base"
+AbstractScale = "the IntervalNetwork layer; the steps are read off it into ScaleType"
+AbstractDiatonicScale = "the IntervalNetwork layer"
+AbstractOctatonicScale = "the IntervalNetwork layer"
+AbstractHarmonicMinorScale = "the IntervalNetwork layer"
+AbstractMelodicMinorScale = "the IntervalNetwork layer"
+AbstractCyclicalScale = "the IntervalNetwork layer"
+AbstractOctaveRepeatingScale = "the IntervalNetwork layer"
+ConcreteScale = "realized by Scale, StepScale and ScalaScale"
+DiatonicScale = "the diatonic modes are ScaleType variants"
+
+[[class]]
+python = "roman.py"
+name = "RomanNumeral"
+rust = ["src/roman.rs"]
+
+[[class]]
+python = "meter/base.py"
+name = "TimeSignature"
+rust = ["src/meter.rs"]
+note = "Derived from numerator and denominator alone; beaming, display and accent weighting need a MeterSequence."
+
+[class.excluded]
+resetValues = "a TimeSignature is immutable here"
+load = "a TimeSignature is immutable here"
+getBeams = "beaming needs the MeterSequence partition tree"
+setDisplay = "display sequences need the MeterSequence partition tree"
+getAccent = "accent weighting needs the MeterSequence partition tree"
+setAccentWeight = "accent weighting needs the MeterSequence partition tree"
+getAccentWeight = "accent weighting needs the MeterSequence partition tree"
+averageBeatStrength = "accent weighting needs the MeterSequence partition tree"
+getBeatDepth = "accent weighting needs the MeterSequence partition tree"
+
+[[class]]
+python = "tempo.py"
+name = "MetronomeMark"
+rust = ["src/tempo.rs"]
+
+[class.renames]
+setQuarterBPM = "quarter_bpm"
+
+[class.excluded]
+getTextExpression = "expressions are notation objects"
+
+[[class]]
+python = "duration.py"
+name = "Duration"
+rust = ["src/duration.rs"]
+note = "A quarter length and a type; tuplets and components are not modelled."
+
+[class.renames]
+type = "duration_type"
+
+[class.excluded]
+addDurationTuple = "components and tuplets are not modelled"
+appendTuplet = "components and tuplets are not modelled"
+clear = "components and tuplets are not modelled"
+componentIndexAtQtrPosition = "components and tuplets are not modelled"
+componentStartTime = "components and tuplets are not modelled"
+consolidate = "components and tuplets are not modelled"
+sliceComponentAtPosition = "components and tuplets are not modelled"
+currentComponents = "components and tuplets are not modelled"
+splitDotGroups = "components and tuplets are not modelled"
+components = "components and tuplets are not modelled"
+dotGroups = "components and tuplets are not modelled"
+isComplex = "components and tuplets are not modelled"
+tuplets = "components and tuplets are not modelled"
+aggregateTupletMultiplier = "components and tuplets are not modelled"
+quarterLengthNoTuplets = "components and tuplets are not modelled"
+informClient = "observer callback for a containing note; there is none"
+
+[[class]]
+python = "serial.py"
+name = "ToneRow"
+rust = ["src/serial.rs"]
+
+[class.excluded]
+makeTwelveToneRow = "there is one row type"
+
+[[class]]
+python = "serial.py"
+name = "TwelveToneRow"
+rust = ["src/serial.rs"]
+
+[class.renames]
+getLinkClassification = "link_classification"
+
+[[class]]
+python = "serial.py"
+rust = ["src/serial.rs"]
+note = "Module-level helpers."
+
+[class.renames]
+getHistoricalRowByName = "historical_row_by_name"
+pcToToneRow = "new"
+
+[[class]]
+python = "voiceLeading.py"
+name = "VoiceLeadingQuartet"
+rust = ["src/voiceleading.rs"]
+
+[[class]]
+python = "sieve.py"
+name = "Sieve"
+rust = ["src/sieve.rs"]
+note = "Only what SieveScale needs: parse, membership and the interval widths of one period."
+
+[class.excluded]
+expand = "compression and segment formats have no caller here"
+compress = "compression and segment formats have no caller here"
+setZ = "compression and segment formats have no caller here"
+setZRange = "compression and segment formats have no caller here"
+setSegmentFormat = "compression and segment formats have no caller here"
+collect = "compression and segment formats have no caller here"
+represent = "compression and segment formats have no caller here"
+
+[[class]]
+python = "note.py"
+name = "Note"
+rust = ["src/note/mod.rs"]
+note = "A pitch and an optional duration."
+
+[class.renames]
+name = "pitch_name"
+nameWithOctave = "pitch_name_with_octave"
+
+[class.excluded]
+pitchChanged = "observer callback; there is none"
+
+[[class]]
+python = "harmony.py"
+name = "ChordSymbol"
+rust = ["src/chordsymbol.rs"]

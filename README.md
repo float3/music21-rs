@@ -112,6 +112,12 @@ The `examples/` directory contains a small set of interactive tools:
 The examples are also wired into the GitHub Pages build, with
 [examples/web/index.html](./examples/web/index.html) as the local landing page.
 
+The same site carries [/reports/](https://float3.github.io/music21-rs/reports/):
+the library's test coverage, and every public method of the music21 classes
+the crate ports against what has been ported so far, with the deliberate
+omissions and their reasons. It is written by `cargo run -p xtask -- report`
+from [data/feature_map.toml](./data/feature_map.toml).
+
 ## Local Development
 
 Use the Rust toolchain pinned in [rust-toolchain.toml](./rust-toolchain.toml).

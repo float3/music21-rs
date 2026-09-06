@@ -225,6 +225,16 @@ jobs:
       - name: Build docs
         run: cargo doc --workspace --no-deps
 
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+
+      # Test coverage and the ported feature set, published beside the docs.
+      # The feature half also fails when data/feature_map.toml has gone stale.
+      - name: Build reports
+        run: cargo run -p xtask -- report --out target/reports
+
       - name: Install wasm-pack
         run: cargo install wasm-pack --locked
 
@@ -253,6 +263,7 @@ jobs:
           mkdir -p target/pages/polyrhythm
           mkdir -p target/pages/tuning
           cp -R target/doc/. target/pages/docs/
+          cp -R target/reports target/pages/reports
           cp examples/web/help-tooltips.js target/pages/help-tooltips.js
           cp examples/web/theme.css target/pages/theme.css
           cp examples/web/theme.js target/pages/theme.js
@@ -292,6 +303,9 @@ jobs:
               "polyrhythm/app.js",
               "tuning/index.html",
               "tuning/app.js",
+              "reports/index.html",
+              "reports/report.json",
+              "reports/coverage/html/index.html",
           ]
 
           missing = [name for name in required_files if not (root / name).is_file()]
@@ -299,7 +313,8 @@ jobs:
               raise SystemExit(f"missing demo build output: {', '.join(missing)}")
 
           file_checks = {
-              "index.html": ["chord/", "chords/", "polyrhythm/", "tuning/", "./theme.css", "./theme.js"],
+              "index.html": ["chord/", "chords/", "polyrhythm/", "tuning/", "reports/", "./theme.css", "./theme.js"],
+              "reports/index.html": ["../theme.css", "../theme.js", "./coverage/html/index.html"],
               "theme.css": ["--accent", ":root[data-theme=\"dark\"]", ".theme-toggle"],
               "chord/index.html": ["./app.js", "../theme.css", "../chords/", "../polyrhythm/"],
               "chord/app.js": ["../help-tooltips.js", "../theme.js", "../pkg/music21_rs_web.js"],
