@@ -1,0 +1,28 @@
+# Docstrings of music21.serial whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_serial`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.serial.ToneRow",
+    "music21.serial.ToneRow.findOriginalCenteredTransformations",
+    "music21.serial.ToneRow.findZeroCenteredTransformations",
+    "music21.serial.ToneRow.getIntervalsAsString",
+    "music21.serial.ToneRow.isSameRow",
+    "music21.serial.ToneRow.isTwelveToneRow",
+    "music21.serial.ToneRow.makeTwelveToneRow",
+    "music21.serial.ToneRow.noteNames",
+    "music21.serial.ToneRow.originalCenteredTransformation",
+    "music21.serial.ToneRow.pitchClasses",
+    "music21.serial.ToneRow.zeroCenteredTransformation",
+    "music21.serial.TwelveToneRow.areCombinatorial",
+    "music21.serial.TwelveToneRow.findHistorical",
+    "music21.serial.TwelveToneRow.findTransformedHistorical",
+    "music21.serial.TwelveToneRow.getLinkClassification",
+    "music21.serial.TwelveToneRow.isAllInterval",
+    "music21.serial.TwelveToneRow.isLinkChord",
+    "music21.serial.TwelveToneRow.matrix",
+    "music21.serial.getHistoricalRowByName",
+    "music21.serial.pcToToneRow",
+    "music21.serial.rowToMatrix",
+]
