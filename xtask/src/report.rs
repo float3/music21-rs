@@ -218,6 +218,12 @@ fn submodule_version(workspace_root: &Path) -> Result<String, Box<dyn Error>> {
         .ok_or_else(|| format!("no __version__ in {}", path.display()).into())
 }
 
+/// Runs the library's tests under instrumentation and writes the HTML.
+///
+/// Cleans first: `cargo llvm-cov report` merges every profile and object it
+/// finds under `target`, and stale ones — from a checkout that has since moved,
+/// or from a package built with coverage on for some other reason — would be
+/// counted as never executed and drag the total down.
 fn measure_coverage(workspace_root: &Path, out: &Path) -> Result<Coverage, Box<dyn Error>> {
     let html_dir = out.join("coverage");
     let common = [
@@ -227,6 +233,17 @@ fn measure_coverage(workspace_root: &Path, out: &Path) -> Result<Coverage, Box<d
         "--ignore-filename-regex",
         COVERAGE_IGNORE,
     ];
+
+    let cleaned = Command::new("cargo")
+        .args(["llvm-cov", "clean", "--workspace"])
+        .current_dir(workspace_root)
+        .status()
+        .map_err(|err| {
+            format!("could not run cargo llvm-cov ({err}); is cargo-llvm-cov installed?")
+        })?;
+    if !cleaned.success() {
+        return Err("cargo llvm-cov clean failed".into());
+    }
 
     let status = Command::new("cargo")
         .arg("llvm-cov")
