@@ -111,6 +111,7 @@ the next release needs a minor bump.
   `augment_or_diminish` and `DurationType::ordinal`;
   `MetronomeMark::equivalent_by_referent` and
   `maintained_number_with_referent`; `Chord::geometric_normal_form`.
+- `ChordSymbol::find_figure`, `transpose` and `inversion_is_valid`.
 - `Interval::from_generic_and_chromatic`, `pitch_start`, `pitch_end`,
   `note_start`, `note_end`, and the free functions
   `written_higher_pitch`, `written_lower_pitch`, `absolute_higher_pitch`,

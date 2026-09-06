@@ -478,6 +478,129 @@ impl ChordSymbol {
         &self.additions
     }
 
+    /// Rebuilds the figure from the parsed parts in one canonical spelling:
+    /// music21's `findFigure`. Whatever was typed, a half-diminished seventh
+    /// comes back as `m7b5`, an augmented triad as `aug`, an added ninth as
+    /// `add(9)`, and the result parses back to the same chord.
+    pub fn find_figure(&self) -> String {
+        let mut figure = self.root.name();
+        figure.push_str(&self.quality_and_extension());
+        for alteration in &self.alterations {
+            if alteration.degree == 5 && self.fifth_is_implied() {
+                continue;
+            }
+            figure.push_str(&alteration_text(alteration));
+        }
+        for addition in &self.additions {
+            figure.push_str(&format!("add({})", alteration_text(addition)));
+        }
+        for omission in &self.omissions {
+            figure.push_str(&format!("no{omission}"));
+        }
+        if let Some(bass) = &self.bass
+            && bass.name() != self.root.name()
+        {
+            figure.push('/');
+            figure.push_str(&bass.name());
+        }
+        figure
+    }
+
+    /// The same chord on a transposed root and bass, its figure rebuilt by
+    /// [`Self::find_figure`]: music21's `transpose`, so `B-/D` up a major
+    /// second is `C/E`.
+    pub fn transpose(&self, interval: &Interval) -> Result<ChordSymbol> {
+        let mut transposed = self.clone();
+        transposed.root = self.root.transpose(interval)?;
+        transposed.bass = self
+            .bass
+            .as_ref()
+            .map(|bass| bass.transpose(interval))
+            .transpose()?;
+        transposed.figure = transposed.find_figure();
+        Ok(transposed)
+    }
+
+    /// Whether the chord has enough members for the given inversion:
+    /// music21's `inversionIsValid`, so first and second inversions always
+    /// are, a third needs a seventh, a fourth a ninth and a fifth an
+    /// eleventh or thirteenth. Root position is not an inversion.
+    pub fn inversion_is_valid(&self, inversion: u8) -> bool {
+        let highest = self
+            .extensions
+            .iter()
+            .copied()
+            .filter(|degree| matches!(degree, 7 | 9 | 11 | 13))
+            .max()
+            .unwrap_or(5);
+        match inversion {
+            1 | 2 => true,
+            3 => highest >= 7,
+            4 => highest >= 9,
+            5 => highest >= 11,
+            _ => false,
+        }
+    }
+
+    fn fifth_is_implied(&self) -> bool {
+        matches!(
+            self.quality,
+            ChordQuality::Diminished | ChordQuality::Augmented | ChordQuality::HalfDiminished
+        )
+    }
+
+    /// The quality with the extension it is written with: the highest
+    /// extension that no alteration accounts for, so `E7#9` keeps its `7`.
+    fn quality_and_extension(&self) -> String {
+        let seventh_family = self
+            .extensions
+            .iter()
+            .copied()
+            .filter(|degree| matches!(degree, 7 | 9 | 11 | 13))
+            .filter(|degree| {
+                !self
+                    .alterations
+                    .iter()
+                    .any(|alteration| alteration.degree == *degree)
+            })
+            .max()
+            .or_else(|| {
+                self.extensions
+                    .iter()
+                    .any(|degree| matches!(degree, 7 | 9 | 11 | 13))
+                    .then_some(7)
+            });
+        let sixth = self.extensions.contains(&6);
+        let extension = |written: &str| -> String {
+            match seventh_family {
+                Some(degree) => format!("{written}{degree}"),
+                None if sixth => format!("{written}6"),
+                None => written.to_string(),
+            }
+        };
+        match self.quality {
+            ChordQuality::Major => match seventh_family {
+                Some(degree) => format!("maj{degree}"),
+                None if sixth => "6".to_string(),
+                None => String::new(),
+            },
+            ChordQuality::Minor => extension("m"),
+            ChordQuality::Dominant => seventh_family.unwrap_or(7).to_string(),
+            ChordQuality::Diminished => extension("dim"),
+            ChordQuality::Augmented => extension("aug"),
+            ChordQuality::HalfDiminished => format!("m{}b5", seventh_family.unwrap_or(7)),
+            ChordQuality::Suspended2 => match seventh_family {
+                Some(degree) => format!("{degree}sus2"),
+                None => "sus2".to_string(),
+            },
+            ChordQuality::Suspended4 => match seventh_family {
+                Some(degree) => format!("{degree}sus4"),
+                None => "sus4".to_string(),
+            },
+            ChordQuality::Power => "5".to_string(),
+        }
+    }
+
     /// Realizes the chord symbol as a [`Chord`].
     pub fn to_chord(&self) -> Result<Chord> {
         let mut intervals = self.base_intervals();
@@ -1070,6 +1193,15 @@ fn add_implicit_music21_alterations(suffix: &str, alterations: &mut Vec<ChordAlt
     }
 }
 
+fn alteration_text(alteration: &ChordAlteration) -> String {
+    let sign = if alteration.semitones < 0 { "b" } else { "#" };
+    format!(
+        "{}{}",
+        sign.repeat(alteration.semitones.unsigned_abs() as usize),
+        alteration.degree
+    )
+}
+
 fn parse_quality(suffix: &str, alterations: &[ChordAlteration]) -> ChordQuality {
     let lower = suffix.to_ascii_lowercase();
     let has_flat_five = alterations
@@ -1374,6 +1506,64 @@ fn added_interval(addition: &ChordAlteration) -> Result<(u8, &'static str)> {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn find_figure_writes_one_canonical_spelling_that_parses_back() {
+        let cases = [
+            ("C", "C", "D"),
+            ("Cm7", "Cm7", "Dm7"),
+            ("F#dim", "F#dim", "G#dim"),
+            ("B-/D", "B-/D", "C/E"),
+            ("G7/B", "G7/B", "A7/C#"),
+            ("Am/C", "Am/C", "Bm/D"),
+            ("Cmaj7", "Cmaj7", "Dmaj7"),
+            ("Dm7b5", "Dm7b5", "Em7b5"),
+            ("C\u{00f8}7", "Cm7b5", "Dm7b5"),
+            ("E7#9", "E7#9", "F#7#9"),
+            ("Csus4", "Csus4", "Dsus4"),
+            ("G7sus4", "G7sus4", "A7sus4"),
+            ("Cadd(9)", "Cadd(9)", "Dadd(9)"),
+            ("C6", "C6", "D6"),
+            ("Cm6", "Cm6", "Dm6"),
+            ("Cdim7", "Cdim7", "Ddim7"),
+            ("Caug", "Caug", "Daug"),
+            ("C+", "Caug", "Daug"),
+            ("C9", "C9", "D9"),
+            ("Cmaj7#11", "Cmaj7#11", "Dmaj7#11"),
+            ("C5", "C5", "D5"),
+            ("Cno3", "Cno3", "Dno3"),
+        ];
+        let whole_tone = Interval::from_name("M2").unwrap();
+        for (typed, canonical, transposed) in cases {
+            let symbol = ChordSymbol::parse(typed).unwrap();
+            assert_eq!(symbol.find_figure(), canonical, "{typed}");
+            let reparsed = ChordSymbol::parse(symbol.find_figure()).unwrap();
+            assert_eq!(reparsed.quality(), symbol.quality(), "{typed}");
+            assert_eq!(
+                reparsed.to_chord().unwrap().pitch_names(),
+                symbol.to_chord().unwrap().pitch_names(),
+                "{typed}"
+            );
+            let up = symbol.transpose(&whole_tone).unwrap();
+            assert_eq!(up.figure(), transposed, "{typed}");
+            assert_eq!(up.find_figure(), transposed, "{typed}");
+        }
+    }
+
+    #[test]
+    fn inversion_validity_follows_the_chord_size() {
+        let valid = |figure: &str| -> Vec<u8> {
+            let symbol = ChordSymbol::parse(figure).unwrap();
+            (0..=6).filter(|n| symbol.inversion_is_valid(*n)).collect()
+        };
+        assert_eq!(valid("C"), [1, 2]);
+        assert_eq!(valid("C6"), [1, 2]);
+        assert_eq!(valid("Cm7"), [1, 2, 3]);
+        assert_eq!(valid("C9"), [1, 2, 3, 4]);
+        assert_eq!(valid("Cmaj11"), [1, 2, 3, 4, 5]);
+        assert_eq!(valid("C13"), [1, 2, 3, 4, 5]);
+        assert_eq!(valid("E7#9"), [1, 2, 3, 4]);
+    }
     use super::*;
 
     #[test]
