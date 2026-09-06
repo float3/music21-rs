@@ -1,0 +1,18 @@
+# Docstrings of music21.key whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_key`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.key.Key",
+    "music21.key.Key.parallel",
+    "music21.key.Key.relative",
+    "music21.key.Key.tonicPitchNameWithCase",
+    "music21.key.Key.transpose",
+    "music21.key.KeySignature.asKey",
+    "music21.key.KeySignature.sharps",
+    "music21.key.KeySignature.transpose",
+    "music21.key.KeySignature.transposePitchFromC",
+    "music21.key.convertKeyStringToMusic21KeyString",
+    "music21.key.pitchToSharps",
+]

@@ -83,8 +83,12 @@ pub fn pitch_to_sharps(pitch_value: &Pitch, mode: Option<&str>) -> Result<Intege
         .ok_or_else(|| Error::StepName("cannot map step to circle of fifths".to_string()))?;
 
     let mut sharps = step_index as IntegerType - 1;
-    let accidental_alter = pitch_value.alter().round() as IntegerType;
-    sharps += 7 * accidental_alter;
+    if !pitch_value.accidental().is_twelve_tone() {
+        return Err(Error::Key(
+            "Cannot determine sharps for quarter-tone keys! silly!".to_string(),
+        ));
+    }
+    sharps += 7 * pitch_value.accidental().alter() as IntegerType;
 
     if let Some(mode) = mode {
         let Some(mode_offset) = mode_sharps_alter(mode) else {
@@ -155,7 +159,10 @@ impl KeySignature {
     /// to by the interval.
     pub fn transpose(&self, interval: &Interval) -> Result<Self> {
         let tonic = self.try_as_key(Some("major"), None)?.tonic();
-        let transposed = interval.transpose_pitch(&tonic)?;
+        let mut transposed = interval.transpose_pitch(&tonic)?;
+        if interval.implicit_diatonic && pitch_to_sharps(&transposed, None)?.abs() > 6 {
+            transposed = transposed.get_enharmonic()?;
+        }
         Ok(Self::new(pitch_to_sharps(&transposed, None)?))
     }
 
@@ -216,7 +223,7 @@ impl KeySignature {
             canonical_mode_for_offset(our_sharps - major_sharps)
                 .ok_or_else(|| {
                     Error::Key(format!(
-                        "Could not solve mode from sharps={} and tonic={}",
+                        "Could not solve for mode from sharps={}, tonic={}",
                         self.sharps, tonic_name
                     ))
                 })?

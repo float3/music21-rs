@@ -51,6 +51,17 @@ pub const SERIAL_NAMES: &[&str] = &[
     "historicalDict",
 ];
 
+/// The names the key facade provides, for swapping into `music21.key`.
+pub const KEY_NAMES: &[&str] = &[
+    "KeySignature",
+    "Key",
+    "KeySignatureException",
+    "KeyException",
+    "sharpsToPitch",
+    "pitchToSharps",
+    "convertKeyStringToMusic21KeyString",
+];
+
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct Expectations {
     #[serde(default)]

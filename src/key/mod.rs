@@ -36,23 +36,25 @@ impl Key {
     ///
     /// Pass a mode string such as `"major"`, `"minor"`, `"dorian"`, or
     /// `None::<&str>` to infer major/minor from tonic case.
+    /// Builds a key from a tonic name and a mode. Without a mode the name
+    /// decides, as music21's `Key` reads it: a trailing `m` is minor and a
+    /// trailing `M` major (`F#m`, `EM`), otherwise a lower-case name is minor
+    /// and an upper-case one major.
     pub fn from_tonic_mode<'a, M>(tonic: &str, mode: M) -> Result<Self>
     where
         M: Into<Option<&'a str>>,
     {
-        let tonic_pitch = Pitch::from_name(tonic)?;
-
         let mode = mode.into();
-        let resolved_mode = match mode {
-            Some(mode) => mode.to_lowercase(),
-            None => {
-                if tonic.chars().all(|ch| !ch.is_ascii_uppercase()) {
-                    "minor".to_string()
-                } else {
-                    "major".to_string()
-                }
+        let (tonic, resolved_mode) = match mode {
+            Some(mode) => (tonic.to_string(), mode.to_lowercase()),
+            None if tonic.contains('m') => (tonic.replace('m', ""), "minor".to_string()),
+            None if tonic.contains('M') => (tonic.replace('M', ""), "major".to_string()),
+            None if tonic.chars().all(|ch| !ch.is_ascii_uppercase()) => {
+                (tonic.to_string(), "minor".to_string())
             }
+            None => (tonic.to_string(), "major".to_string()),
         };
+        let tonic_pitch = Pitch::from_name(tonic.as_str())?;
 
         let sharps = pitch_to_sharps(&tonic_pitch, Some(&resolved_mode))?;
         Ok(Self::new(tonic_pitch, &resolved_mode, sharps))
@@ -288,6 +290,35 @@ pub fn convert_key_string_to_music21_key_string(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn mode_suffixes_and_semitone_transposition_match_music21() {
+        let e_major = Key::from_tonic("EM").unwrap();
+        assert_eq!(
+            (e_major.tonic().name(), e_major.mode()),
+            ("E".to_string(), "major")
+        );
+        let f_sharp_minor = Key::from_tonic("F#m").unwrap();
+        assert_eq!(
+            (f_sharp_minor.tonic().name(), f_sharp_minor.mode()),
+            ("F#".to_string(), "minor")
+        );
+        let up_a_semitone = Key::from_tonic("e")
+            .unwrap()
+            .transpose(&Interval::from_semitones(1).unwrap())
+            .unwrap();
+        assert_eq!(up_a_semitone.tonic_pitch_name_with_case(), "f");
+        assert_eq!(up_a_semitone.sharps(), -4);
+        let by_name = Key::from_tonic("e")
+            .unwrap()
+            .transpose(&Interval::from_name("m2").unwrap())
+            .unwrap();
+        assert_eq!(by_name.tonic_pitch_name_with_case(), "f");
+        assert!(matches!(
+            pitch_to_sharps(&Pitch::from_name("C~").unwrap(), None),
+            Err(crate::Error::Key(_))
+        ));
+    }
 
     #[test]
     fn key_strings_convert_like_music21() {

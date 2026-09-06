@@ -16,6 +16,7 @@
 use pyo3::prelude::*;
 
 pub mod doctest;
+pub mod key;
 pub mod pitch;
 pub mod serial;
 
@@ -42,6 +43,7 @@ pub fn take_output() -> String {
 pub fn music21_rs_facade(m: &Bound<'_, PyModule>) -> PyResult<()> {
     pitch::register(m)?;
     serial::register(m)?;
+    key::register(m)?;
     m.add_function(wrap_pyfunction!(collect_output, m)?)?;
     Ok(())
 }

@@ -147,6 +147,12 @@ fn accidental_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsAccidental> {
     RsAccidental::new(value.extract::<f64>()?).map_err(accidental_error)
 }
 
+impl Accidental {
+    pub(crate) fn from_inner(inner: RsAccidental) -> Self {
+        Self { inner }
+    }
+}
+
 #[pymethods]
 impl Accidental {
     #[new]
