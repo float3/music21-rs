@@ -1,0 +1,2206 @@
+# Expected tone-row values, generated from music21 by
+# `cargo run -p xtask --features python -- regenerate-fixtures`.
+# The historical rows are transcribed into src/serial.rs; the Link chord
+# table is checked behaviourally, by classifying a row built from each
+# of music21's interval strings.
+#
+# music21 11.0.0b8
+
+music21_version = "11.0.0b8"
+
+[[historical_row]]
+name = "WebernOp29"
+composer = "Webern"
+opus = "Op. 29"
+title = "Cantata I"
+pitch_classes = [3, 11, 2, 1, 5, 4, 7, 6, 10, 9, 0, 8]
+intervals = "83E4E3E4E38"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  8  B  A  2  1  4  3  7  6  9  5", "  4  0  3  2  6  5  8  7  B  A  1  9", "  1  9  0  B  3  2  5  4  8  7  A  6", "  2  A  1  0  4  3  6  5  9  8  B  7", "  A  6  9  8  0  B  2  1  5  4  7  3", "  B  7  A  9  1  0  3  2  6  5  8  4", "  8  4  7  6  A  9  0  B  3  2  5  1", "  9  5  8  7  B  A  1  0  4  3  6  2", "  5  1  4  3  7  6  9  8  0  B  2  A", "  6  2  5  4  8  7  A  9  1  0  3  B", "  3  B  2  1  5  4  7  6  A  9  0  8", "  7  3  6  5  9  8  B  A  2  1  4  0"]
+
+[[historical_row]]
+name = "WebernOp28"
+composer = "Webern"
+opus = "Op. 28"
+title = "String Quartet"
+pitch_classes = [1, 0, 3, 2, 6, 7, 4, 5, 9, 8, 11, 10]
+intervals = "E3E41914E3E"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  B  2  1  5  6  3  4  8  7  A  9", "  1  0  3  2  6  7  4  5  9  8  B  A", "  A  9  0  B  3  4  1  2  6  5  8  7", "  B  A  1  0  4  5  2  3  7  6  9  8", "  7  6  9  8  0  1  A  B  3  2  5  4", "  6  5  8  7  B  0  9  A  2  1  4  3", "  9  8  B  A  2  3  0  1  5  4  7  6", "  8  7  A  9  1  2  B  0  4  3  6  5", "  4  3  6  5  9  A  7  8  0  B  2  1", "  5  4  7  6  A  B  8  9  1  0  3  2", "  2  1  4  3  7  8  5  6  A  9  0  B", "  3  2  5  4  8  9  6  7  B  A  1  0"]
+
+[[historical_row]]
+name = "SchoenbergOp24Mvmt5"
+composer = "Schoenberg"
+opus = "Op. 24"
+title = "Serenade, Mvt. 5, \"Tanzscene\""
+pitch_classes = [9, 10, 0, 3, 4, 6, 5, 7, 8, 11, 1, 2]
+intervals = "12312E21321"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  1  3  6  7  9  8  A  B  2  4  5", "  B  0  2  5  6  8  7  9  A  1  3  4", "  9  A  0  3  4  6  5  7  8  B  1  2", "  6  7  9  0  1  3  2  4  5  8  A  B", "  5  6  8  B  0  2  1  3  4  7  9  A", "  3  4  6  9  A  0  B  1  2  5  7  8", "  4  5  7  A  B  1  0  2  3  6  8  9", "  2  3  5  8  9  B  A  0  1  4  6  7", "  1  2  4  7  8  A  9  B  0  3  5  6", "  A  B  1  4  5  7  6  8  9  0  2  3", "  8  9  B  2  3  5  4  6  7  A  0  1", "  7  8  A  1  2  4  3  5  6  9  B  0"]
+
+[[historical_row]]
+name = "SchoenbergOp24Mvmt4"
+composer = "Schoenberg"
+opus = "Op. 24"
+title = "Serenade, Mvt. 4, \"Sonett\""
+pitch_classes = [4, 2, 3, 11, 0, 1, 8, 6, 9, 5, 7, 10]
+intervals = "T18117T3823"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  A  B  7  8  9  4  2  5  1  3  6", "  2  0  1  9  A  B  6  4  7  3  5  8", "  1  B  0  8  9  A  5  3  6  2  4  7", "  5  3  4  0  1  2  9  7  A  6  8  B", "  4  2  3  B  0  1  8  6  9  5  7  A", "  3  1  2  A  B  0  7  5  8  4  6  9", "  8  6  7  3  4  5  0  A  1  9  B  2", "  A  8  9  5  6  7  2  0  3  B  1  4", "  7  5  6  2  3  4  B  9  0  8  A  1", "  B  9  A  6  7  8  3  1  4  0  2  5", "  9  7  8  4  5  6  1  B  2  A  0  3", "  6  4  5  1  2  3  A  8  B  7  9  0"]
+
+[[historical_row]]
+name = "SchoenbergJakobsleiter"
+composer = "Schoenberg"
+title = "Die Jakobsleiter"
+pitch_classes = [1, 2, 5, 4, 8, 7, 0, 3, 11, 10, 6, 9]
+intervals = "13E4E538E83"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  1  4  3  7  6  B  2  A  9  5  8", "  B  0  3  2  6  5  A  1  9  8  4  7", "  8  9  0  B  3  2  7  A  6  5  1  4", "  9  A  1  0  4  3  8  B  7  6  2  5", "  5  6  9  8  0  B  4  7  3  2  A  1", "  6  7  A  9  1  0  5  8  4  3  B  2", "  1  2  5  4  8  7  0  3  B  A  6  9", "  A  B  2  1  5  4  9  0  8  7  3  6", "  2  3  6  5  9  8  1  4  0  B  7  A", "  3  4  7  6  A  9  2  5  1  0  8  B", "  7  8  B  A  2  1  6  9  5  4  0  3", "  4  5  8  7  B  A  3  6  2  1  9  0"]
+
+[[historical_row]]
+name = "SchoenbergOp27No4"
+composer = "Schoenberg"
+opus = "Op. 27 No. 4"
+title = "Four Pieces for Mixed Chorus, No. 4"
+pitch_classes = [1, 3, 10, 6, 8, 4, 11, 0, 2, 9, 5, 7]
+intervals = "27828712782"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  2  9  5  7  3  A  B  1  8  4  6", "  A  0  7  3  5  1  8  9  B  6  2  4", "  3  5  0  8  A  6  1  2  4  B  7  9", "  7  9  4  0  2  A  5  6  8  3  B  1", "  5  7  2  A  0  8  3  4  6  1  9  B", "  9  B  6  2  4  0  7  8  A  5  1  3", "  2  4  B  7  9  5  0  1  3  A  6  8", "  1  3  A  6  8  4  B  0  2  9  5  7", "  B  1  8  4  6  2  9  A  0  7  3  5", "  4  6  1  9  B  7  2  3  5  0  8  A", "  8  A  5  1  3  B  6  7  9  4  0  2", "  6  8  3  B  1  9  4  5  7  2  A  0"]
+
+[[historical_row]]
+name = "WebernOp23"
+composer = "Webern"
+opus = "Op. 23"
+title = "Three Songs"
+pitch_classes = [8, 3, 7, 4, 10, 6, 2, 5, 1, 0, 9, 11]
+intervals = "74968838E92"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  7  B  8  2  A  6  9  5  4  1  3", "  5  0  4  1  7  3  B  2  A  9  6  8", "  1  8  0  9  3  B  7  A  6  5  2  4", "  4  B  3  0  6  2  A  1  9  8  5  7", "  A  5  9  6  0  8  4  7  3  2  B  1", "  2  9  1  A  4  0  8  B  7  6  3  5", "  6  1  5  2  8  4  0  3  B  A  7  9", "  3  A  2  B  5  1  9  0  8  7  4  6", "  7  2  6  3  9  5  1  4  0  B  8  A", "  8  3  7  4  A  6  2  5  1  0  9  B", "  B  6  A  7  1  9  5  8  4  3  0  2", "  9  4  8  5  B  7  3  6  2  1  A  0"]
+
+[[historical_row]]
+name = "BergLuluActIIScene1"
+composer = "Berg"
+opus = "Lulu, Act II, Scene 1"
+title = "Perm. (Every 5th Note Of Transposed Primary Row)"
+pitch_classes = [10, 7, 1, 0, 9, 2, 4, 11, 5, 8, 3, 6]
+intervals = "96E95276373"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  9  3  2  B  4  6  1  7  A  5  8", "  3  0  6  5  2  7  9  4  A  1  8  B", "  9  6  0  B  8  1  3  A  4  7  2  5", "  A  7  1  0  9  2  4  B  5  8  3  6", "  1  A  4  3  0  5  7  2  8  B  6  9", "  8  5  B  A  7  0  2  9  3  6  1  4", "  6  3  9  8  5  A  0  7  1  4  B  2", "  B  8  2  1  A  3  5  0  6  9  4  7", "  5  2  8  7  4  9  B  6  0  3  A  1", "  2  B  5  4  1  6  8  3  9  0  7  A", "  7  4  A  9  6  B  1  8  2  5  0  3", "  4  1  7  6  3  8  A  5  B  2  9  0"]
+
+[[historical_row]]
+name = "SchoenbergOp27No1"
+composer = "Schoenberg"
+opus = "Op. 27 No. 1"
+title = "Four Pieces for Mixed Chorus, No. 1"
+pitch_classes = [6, 5, 2, 8, 7, 1, 3, 4, 10, 9, 11, 0]
+intervals = "E96E6216E21"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  B  8  2  1  7  9  A  4  3  5  6", "  1  0  9  3  2  8  A  B  5  4  6  7", "  4  3  0  6  5  B  1  2  8  7  9  A", "  A  9  6  0  B  5  7  8  2  1  3  4", "  B  A  7  1  0  6  8  9  3  2  4  5", "  5  4  1  7  6  0  2  3  9  8  A  B", "  3  2  B  5  4  A  0  1  7  6  8  9", "  2  1  A  4  3  9  B  0  6  5  7  8", "  8  7  4  A  9  3  5  6  0  B  1  2", "  9  8  5  B  A  4  6  7  1  0  2  3", "  7  6  3  9  8  2  4  5  B  A  0  1", "  6  5  2  8  7  1  3  4  A  9  B  0"]
+
+[[historical_row]]
+name = "BergLuluActIScene20"
+composer = "Berg"
+opus = "Lulu, Act I , Scene XX"
+title = "Perm. (Every 7th Note Of Transposed Primary Row)"
+pitch_classes = [10, 6, 3, 8, 5, 11, 4, 2, 9, 0, 1, 7]
+intervals = "895965T7316"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  8  5  A  7  1  6  4  B  2  3  9", "  4  0  9  2  B  5  A  8  3  6  7  1", "  7  3  0  5  2  8  1  B  6  9  A  4", "  2  A  7  0  9  3  8  6  1  4  5  B", "  5  1  A  3  0  6  B  9  4  7  8  2", "  B  7  4  9  6  0  5  3  A  1  2  8", "  6  2  B  4  1  7  0  A  5  8  9  3", "  8  4  1  6  3  9  2  0  7  A  B  5", "  1  9  6  B  8  2  7  5  0  3  4  A", "  A  6  3  8  5  B  4  2  9  0  1  7", "  9  5  2  7  4  A  3  1  8  B  0  6", "  3  B  8  1  A  4  9  7  2  5  6  0"]
+
+[[historical_row]]
+name = "SchoenbergOp27No3"
+composer = "Schoenberg"
+opus = "Op. 27 No. 3"
+title = "Four Pieces for Mixed Chorus, No. 3"
+pitch_classes = [7, 6, 2, 4, 5, 3, 11, 0, 8, 10, 9, 1]
+intervals = "E821T8182E4"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  B  7  9  A  8  4  5  1  3  2  6", "  1  0  8  A  B  9  5  6  2  4  3  7", "  5  4  0  2  3  1  9  A  6  8  7  B", "  3  2  A  0  1  B  7  8  4  6  5  9", "  2  1  9  B  0  A  6  7  3  5  4  8", "  4  3  B  1  2  0  8  9  5  7  6  A", "  8  7  3  5  6  4  0  1  9  B  A  2", "  7  6  2  4  5  3  B  0  8  A  9  1", "  B  A  6  8  9  7  3  4  0  2  1  5", "  9  8  4  6  7  5  1  2  A  0  B  3", "  A  9  5  7  8  6  2  3  B  1  0  4", "  6  5  1  3  4  2  A  B  7  9  8  0"]
+
+[[historical_row]]
+name = "SchoenbergOp27No2"
+composer = "Schoenberg"
+opus = "Op. 27 No. 2"
+title = "Four Pieces for Mixed Chorus, No. 2"
+pitch_classes = [0, 11, 4, 10, 2, 8, 3, 7, 6, 5, 9, 1]
+intervals = "E564674EE44"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  B  4  A  2  8  3  7  6  5  9  1", "  1  0  5  B  3  9  4  8  7  6  A  2", "  8  7  0  6  A  4  B  3  2  1  5  9", "  2  1  6  0  4  A  5  9  8  7  B  3", "  A  9  2  8  0  6  1  5  4  3  7  B", "  4  3  8  2  6  0  7  B  A  9  1  5", "  9  8  1  7  B  5  0  4  3  2  6  A", "  5  4  9  3  7  1  8  0  B  A  2  6", "  6  5  A  4  8  2  9  1  0  B  3  7", "  7  6  B  5  9  3  A  2  1  0  4  8", "  3  2  7  1  5  B  6  A  9  8  0  4", "  B  A  3  9  1  7  2  6  5  4  8  0"]
+
+[[historical_row]]
+name = "SchoenbergFragPiano"
+composer = "Schoenberg"
+title = "Fragment For Piano"
+pitch_classes = [6, 9, 0, 7, 1, 2, 8, 11, 5, 10, 4, 3]
+intervals = "3376163656E"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  3  6  1  7  8  2  5  B  4  A  9", "  9  0  3  A  4  5  B  2  8  1  7  6", "  6  9  0  7  1  2  8  B  5  A  4  3", "  B  2  5  0  6  7  1  4  A  3  9  8", "  5  8  B  6  0  1  7  A  4  9  3  2", "  4  7  A  5  B  0  6  9  3  8  2  1", "  A  1  4  B  5  6  0  3  9  2  8  7", "  7  A  1  8  2  3  9  0  6  B  5  4", "  1  4  7  2  8  9  3  6  0  5  B  A", "  8  B  2  9  3  4  A  1  7  0  6  5", "  2  5  8  3  9  A  4  7  1  6  0  B", "  3  6  9  4  A  B  5  8  2  7  1  0"]
+
+[[historical_row]]
+name = "SchoenbergOp50B"
+composer = "Schoenberg"
+opus = "Op. 50B"
+title = "De Profundis"
+pitch_classes = [3, 9, 8, 4, 2, 10, 7, 11, 0, 6, 5, 1]
+intervals = "6E8T89416E8"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  6  5  1  B  7  4  8  9  3  2  A", "  6  0  B  7  5  1  A  2  3  9  8  4", "  7  1  0  8  6  2  B  3  4  A  9  5", "  B  5  4  0  A  6  3  7  8  2  1  9", "  1  7  6  2  0  8  5  9  A  4  3  B", "  5  B  A  6  4  0  9  1  2  8  7  3", "  8  2  1  9  7  3  0  4  5  B  A  6", "  4  A  9  5  3  B  8  0  1  7  6  2", "  3  9  8  4  2  A  7  B  0  6  5  1", "  9  3  2  A  8  4  1  5  6  0  B  7", "  A  4  3  B  9  5  2  6  7  1  0  8", "  2  8  7  3  1  9  6  A  B  5  4  0"]
+
+[[historical_row]]
+name = "SchoenbergOp50C"
+composer = "Schoenberg"
+opus = "Op. 50C"
+title = "Modern Psalms, The First Psalm"
+pitch_classes = [4, 3, 0, 8, 11, 7, 5, 9, 6, 10, 1, 2]
+intervals = "E9838T49431"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  B  8  4  7  3  1  5  2  6  9  A", "  1  0  9  5  8  4  2  6  3  7  A  B", "  4  3  0  8  B  7  5  9  6  A  1  2", "  8  7  4  0  3  B  9  1  A  2  5  6", "  5  4  1  9  0  8  6  A  7  B  2  3", "  9  8  5  1  4  0  A  2  B  3  6  7", "  B  A  7  3  6  2  0  4  1  5  8  9", "  7  6  3  B  2  A  8  0  9  1  4  5", "  A  9  6  2  5  1  B  3  0  4  7  8", "  6  5  2  A  1  9  7  B  8  0  3  4", "  3  2  B  7  A  6  4  8  5  9  0  1", "  2  1  A  6  9  5  3  7  4  8  B  0"]
+
+[[historical_row]]
+name = "SchoenbergOp50A"
+composer = "Schoenberg"
+opus = "Op. 50A"
+title = "Three Times A Thousand Years"
+pitch_classes = [7, 9, 6, 4, 5, 11, 10, 2, 0, 1, 3, 8]
+intervals = "29T16E4T125"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  2  B  9  A  4  3  7  5  6  8  1", "  A  0  9  7  8  2  1  5  3  4  6  B", "  1  3  0  A  B  5  4  8  6  7  9  2", "  3  5  2  0  1  7  6  A  8  9  B  4", "  2  4  1  B  0  6  5  9  7  8  A  3", "  8  A  7  5  6  0  B  3  1  2  4  9", "  9  B  8  6  7  1  0  4  2  3  5  A", "  5  7  4  2  3  9  8  0  A  B  1  6", "  7  9  6  4  5  B  A  2  0  1  3  8", "  6  8  5  3  4  A  9  1  B  0  2  7", "  4  6  3  1  2  8  7  B  9  A  0  5", "  B  1  A  8  9  3  2  6  4  5  7  0"]
+
+[[historical_row]]
+name = "SchoenbergMosesAron"
+composer = "Schoenberg"
+title = "Moses And Aron"
+pitch_classes = [9, 10, 4, 2, 3, 1, 7, 5, 6, 8, 11, 0]
+intervals = "16T1T6T1231"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  1  7  5  6  4  A  8  9  B  2  3", "  B  0  6  4  5  3  9  7  8  A  1  2", "  5  6  0  A  B  9  3  1  2  4  7  8", "  7  8  2  0  1  B  5  3  4  6  9  A", "  6  7  1  B  0  A  4  2  3  5  8  9", "  8  9  3  1  2  0  6  4  5  7  A  B", "  2  3  9  7  8  6  0  A  B  1  4  5", "  4  5  B  9  A  8  2  0  1  3  6  7", "  3  4  A  8  9  7  1  B  0  2  5  6", "  1  2  8  6  7  5  B  9  A  0  3  4", "  A  B  5  3  4  2  8  6  7  9  0  1", "  9  A  4  2  3  1  7  5  6  8  B  0"]
+
+[[historical_row]]
+name = "WebernOp25"
+composer = "Webern"
+opus = "Op. 25"
+title = "Three Songs"
+pitch_classes = [7, 4, 3, 6, 1, 5, 2, 11, 10, 0, 9, 8]
+intervals = "9E37499E29E"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  9  8  B  6  A  7  4  3  5  2  1", "  3  0  B  2  9  1  A  7  6  8  5  4", "  4  1  0  3  A  2  B  8  7  9  6  5", "  1  A  9  0  7  B  8  5  4  6  3  2", "  6  3  2  5  0  4  1  A  9  B  8  7", "  2  B  A  1  8  0  9  6  5  7  4  3", "  5  2  1  4  B  3  0  9  8  A  7  6", "  8  5  4  7  2  6  3  0  B  1  A  9", "  9  6  5  8  3  7  4  1  0  2  B  A", "  7  4  3  6  1  5  2  B  A  0  9  8", "  A  7  6  9  4  8  5  2  1  3  0  B", "  B  8  7  A  5  9  6  3  2  4  1  0"]
+
+[[historical_row]]
+name = "SchoenbergOp23No5"
+composer = "Schoenberg"
+opus = "Op. 23, No. 5"
+title = "Five Piano Pieces"
+pitch_classes = [1, 9, 11, 7, 8, 6, 10, 2, 4, 3, 0, 5]
+intervals = "8281T442E95"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  8  A  6  7  5  9  1  3  2  B  4", "  4  0  2  A  B  9  1  5  7  6  3  8", "  2  A  0  8  9  7  B  3  5  4  1  6", "  6  2  4  0  1  B  3  7  9  8  5  A", "  5  1  3  B  0  A  2  6  8  7  4  9", "  7  3  5  1  2  0  4  8  A  9  6  B", "  3  B  1  9  A  8  0  4  6  5  2  7", "  B  7  9  5  6  4  8  0  2  1  A  3", "  9  5  7  3  4  2  6  A  0  B  8  1", "  A  6  8  4  5  3  7  B  1  0  9  2", "  1  9  B  7  8  6  A  2  4  3  0  5", "  8  4  6  2  3  1  5  9  B  A  7  0"]
+
+[[historical_row]]
+name = "SchoenbergOp28No1"
+composer = "Schoenberg"
+opus = "Op. 28 No. 1"
+title = "Three Satires for Mixed Chorus, No. 1"
+pitch_classes = [0, 4, 7, 1, 9, 11, 5, 3, 2, 6, 8, 10]
+intervals = "436826TE422"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  4  7  1  9  B  5  3  2  6  8  A", "  8  0  3  9  5  7  1  B  A  2  4  6", "  5  9  0  6  2  4  A  8  7  B  1  3", "  B  3  6  0  8  A  4  2  1  5  7  9", "  3  7  A  4  0  2  8  6  5  9  B  1", "  1  5  8  2  A  0  6  4  3  7  9  B", "  7  B  2  8  4  6  0  A  9  1  3  5", "  9  1  4  A  6  8  2  0  B  3  5  7", "  A  2  5  B  7  9  3  1  0  4  6  8", "  6  A  1  7  3  5  B  9  8  0  2  4", "  4  8  B  5  1  3  9  7  6  A  0  2", "  2  6  9  3  B  1  7  5  4  8  A  0"]
+
+[[historical_row]]
+name = "SchoenbergOp28No3"
+composer = "Schoenberg"
+opus = "Op. 28 No. 3"
+title = "Three Satires for Mixed Chorus, No. 3"
+pitch_classes = [5, 6, 4, 8, 2, 10, 7, 9, 3, 11, 1, 0]
+intervals = "1T46892682E"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  1  B  3  9  5  2  4  A  6  8  7", "  B  0  A  2  8  4  1  3  9  5  7  6", "  1  2  0  4  A  6  3  5  B  7  9  8", "  9  A  8  0  6  2  B  1  7  3  5  4", "  3  4  2  6  0  8  5  7  1  9  B  A", "  7  8  6  A  4  0  9  B  5  1  3  2", "  A  B  9  1  7  3  0  2  8  4  6  5", "  8  9  7  B  5  1  A  0  6  2  4  3", "  2  3  1  5  B  7  4  6  0  8  A  9", "  6  7  5  9  3  B  8  A  4  0  2  1", "  4  5  3  7  1  9  6  8  2  A  0  B", "  5  6  4  8  2  A  7  9  3  B  1  0"]
+
+[[historical_row]]
+name = "WebernOp21"
+composer = "Webern"
+opus = "Op. 21"
+title = "Chamber Symphony"
+pitch_classes = [5, 8, 7, 6, 10, 9, 3, 4, 0, 1, 2, 11]
+intervals = "3EE4E618119"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  3  2  1  5  4  A  B  7  8  9  6", "  9  0  B  A  2  1  7  8  4  5  6  3", "  A  1  0  B  3  2  8  9  5  6  7  4", "  B  2  1  0  4  3  9  A  6  7  8  5", "  7  A  9  8  0  B  5  6  2  3  4  1", "  8  B  A  9  1  0  6  7  3  4  5  2", "  2  5  4  3  7  6  0  1  9  A  B  8", "  1  4  3  2  6  5  B  0  8  9  A  7", "  5  8  7  6  A  9  3  4  0  1  2  B", "  4  7  6  5  9  8  2  3  B  0  1  A", "  3  6  5  4  8  7  1  2  A  B  0  9", "  6  9  8  7  B  A  4  5  1  2  3  0"]
+
+[[historical_row]]
+name = "SchoenbergIsraelExists"
+composer = "Schoenberg"
+title = "Israel Exists Again"
+pitch_classes = [0, 3, 4, 9, 11, 5, 2, 1, 10, 8, 6, 7]
+intervals = "315269E9TT1"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  3  4  9  B  5  2  1  A  8  6  7", "  9  0  1  6  8  2  B  A  7  5  3  4", "  8  B  0  5  7  1  A  9  6  4  2  3", "  3  6  7  0  2  8  5  4  1  B  9  A", "  1  4  5  A  0  6  3  2  B  9  7  8", "  7  A  B  4  6  0  9  8  5  3  1  2", "  A  1  2  7  9  3  0  B  8  6  4  5", "  B  2  3  8  A  4  1  0  9  7  5  6", "  2  5  6  B  1  7  4  3  0  A  8  9", "  4  7  8  1  3  9  6  5  2  0  A  B", "  6  9  A  3  5  B  8  7  4  2  0  1", "  5  8  9  2  4  A  7  6  3  1  B  0"]
+
+[[historical_row]]
+name = "SchoenbergOp35No2"
+composer = "Schoenberg"
+opus = "Op. 35"
+title = "Six Pieces for Male Chorus, No. 2"
+pitch_classes = [6, 9, 7, 1, 0, 2, 5, 11, 10, 3, 4, 8]
+intervals = "3T6E236E514"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  3  1  7  6  8  B  5  4  9  A  2", "  9  0  A  4  3  5  8  2  1  6  7  B", "  B  2  0  6  5  7  A  4  3  8  9  1", "  5  8  6  0  B  1  4  A  9  2  3  7", "  6  9  7  1  0  2  5  B  A  3  4  8", "  4  7  5  B  A  0  3  9  8  1  2  6", "  1  4  2  8  7  9  0  6  5  A  B  3", "  7  A  8  2  1  3  6  0  B  4  5  9", "  8  B  9  3  2  4  7  1  0  5  6  A", "  3  6  4  A  9  B  2  8  7  0  1  5", "  2  5  3  9  8  A  1  7  6  B  0  4", "  A  1  B  5  4  6  9  3  2  7  8  0"]
+
+[[historical_row]]
+name = "SchoenbergOp35No3"
+composer = "Schoenberg"
+opus = "Op. 35"
+title = "Six Pieces for Male Chorus, No. 3"
+pitch_classes = [3, 6, 7, 8, 5, 0, 9, 10, 4, 11, 2, 1]
+intervals = "3119791673E"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  3  4  5  2  9  6  7  1  8  B  A", "  9  0  1  2  B  6  3  4  A  5  8  7", "  8  B  0  1  A  5  2  3  9  4  7  6", "  7  A  B  0  9  4  1  2  8  3  6  5", "  A  1  2  3  0  7  4  5  B  6  9  8", "  3  6  7  8  5  0  9  A  4  B  2  1", "  6  9  A  B  8  3  0  1  7  2  5  4", "  5  8  9  A  7  2  B  0  6  1  4  3", "  B  2  3  4  1  8  5  6  0  7  A  9", "  4  7  8  9  6  1  A  B  5  0  3  2", "  1  4  5  6  3  A  7  8  2  9  0  B", "  2  5  6  7  4  B  8  9  3  A  1  0"]
+
+[[historical_row]]
+name = "SchoenbergOp35No1"
+composer = "Schoenberg"
+opus = "Op. 35"
+title = "Six Pieces for Male Chorus, No. 1"
+pitch_classes = [2, 11, 3, 5, 4, 1, 8, 10, 9, 6, 0, 7]
+intervals = "942E972E967"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  9  1  3  2  B  6  8  7  4  A  5", "  3  0  4  6  5  2  9  B  A  7  1  8", "  B  8  0  2  1  A  5  7  6  3  9  4", "  9  6  A  0  B  8  3  5  4  1  7  2", "  A  7  B  1  0  9  4  6  5  2  8  3", "  1  A  2  4  3  0  7  9  8  5  B  6", "  6  3  7  9  8  5  0  2  1  A  4  B", "  4  1  5  7  6  3  A  0  B  8  2  9", "  5  2  6  8  7  4  B  1  0  9  3  A", "  8  5  9  B  A  7  2  4  3  0  6  1", "  2  B  3  5  4  1  8  A  9  6  0  7", "  7  4  8  A  9  6  1  3  2  B  5  0"]
+
+[[historical_row]]
+name = "SchoenbergOp48No1"
+composer = "Schoenberg"
+opus = "Op. 48"
+title = "Three Songs, No. 1, \"Sommermud\""
+pitch_classes = [1, 2, 0, 6, 3, 5, 4, 10, 11, 7, 9, 8]
+intervals = "1T692E6182E"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  1  B  5  2  4  3  9  A  6  8  7", "  B  0  A  4  1  3  2  8  9  5  7  6", "  1  2  0  6  3  5  4  A  B  7  9  8", "  7  8  6  0  9  B  A  4  5  1  3  2", "  A  B  9  3  0  2  1  7  8  4  6  5", "  8  9  7  1  A  0  B  5  6  2  4  3", "  9  A  8  2  B  1  0  6  7  3  5  4", "  3  4  2  8  5  7  6  0  1  9  B  A", "  2  3  1  7  4  6  5  B  0  8  A  9", "  6  7  5  B  8  A  9  3  4  0  2  1", "  4  5  3  9  6  8  7  1  2  A  0  B", "  5  6  4  A  7  9  8  2  3  B  1  0"]
+
+[[historical_row]]
+name = "SchoenbergOp35No5"
+composer = "Schoenberg"
+opus = "Op. 35"
+title = "Six Pieces for Male Chorus, No. 5"
+pitch_classes = [1, 7, 10, 2, 3, 11, 8, 4, 0, 6, 5, 9]
+intervals = "634189886E4"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  6  9  1  2  A  7  3  B  5  4  8", "  6  0  3  7  8  4  1  9  5  B  A  2", "  3  9  0  4  5  1  A  6  2  8  7  B", "  B  5  8  0  1  9  6  2  A  4  3  7", "  A  4  7  B  0  8  5  1  9  3  2  6", "  2  8  B  3  4  0  9  5  1  7  6  A", "  5  B  2  6  7  3  0  8  4  A  9  1", "  9  3  6  A  B  7  4  0  8  2  1  5", "  1  7  A  2  3  B  8  4  0  6  5  9", "  7  1  4  8  9  5  2  A  6  0  B  3", "  8  2  5  9  A  6  3  B  7  1  0  4", "  4  A  1  5  6  2  B  7  3  9  8  0"]
+
+[[historical_row]]
+name = "SchoenbergOp29"
+composer = "Schoenberg"
+opus = "Op. 29"
+title = "Suite"
+pitch_classes = [3, 7, 6, 10, 2, 11, 0, 9, 8, 4, 5, 1]
+intervals = "4E44919E818"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  4  3  7  B  8  9  6  5  1  2  A", "  8  0  B  3  7  4  5  2  1  9  A  6", "  9  1  0  4  8  5  6  3  2  A  B  7", "  5  9  8  0  4  1  2  B  A  6  7  3", "  1  5  4  8  0  9  A  7  6  2  3  B", "  4  8  7  B  3  0  1  A  9  5  6  2", "  3  7  6  A  2  B  0  9  8  4  5  1", "  6  A  9  1  5  2  3  0  B  7  8  4", "  7  B  A  2  6  3  4  1  0  8  9  5", "  B  3  2  6  A  7  8  5  4  0  1  9", "  A  2  1  5  9  6  7  4  3  B  0  8", "  2  6  5  9  1  A  B  8  7  3  4  0"]
+
+[[historical_row]]
+name = "BergLyricSuitePerm"
+composer = "Berg"
+title = "Lyric Suite, Last Mvt. Permutation"
+pitch_classes = [5, 6, 10, 4, 1, 9, 2, 8, 7, 3, 0, 11]
+intervals = "1469856E89E"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  1  5  B  8  4  9  3  2  A  7  6", "  B  0  4  A  7  3  8  2  1  9  6  5", "  7  8  0  6  3  B  4  A  9  5  2  1", "  1  2  6  0  9  5  A  4  3  B  8  7", "  4  5  9  3  0  8  1  7  6  2  B  A", "  8  9  1  7  4  0  5  B  A  6  3  2", "  3  4  8  2  B  7  0  6  5  1  A  9", "  9  A  2  8  5  1  6  0  B  7  4  3", "  A  B  3  9  6  2  7  1  0  8  5  4", "  2  3  7  1  A  6  B  5  4  0  9  8", "  5  6  A  4  1  9  2  8  7  3  0  B", "  6  7  B  5  2  A  3  9  8  4  1  0"]
+
+[[historical_row]]
+name = "WebernOp20"
+composer = "Webern"
+opus = "Op. 20"
+title = "String Trio"
+pitch_classes = [8, 7, 2, 1, 6, 5, 9, 10, 3, 4, 0, 11]
+intervals = "E7E5E41518E"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  B  6  5  A  9  1  2  7  8  4  3", "  1  0  7  6  B  A  2  3  8  9  5  4", "  6  5  0  B  4  3  7  8  1  2  A  9", "  7  6  1  0  5  4  8  9  2  3  B  A", "  2  1  8  7  0  B  3  4  9  A  6  5", "  3  2  9  8  1  0  4  5  A  B  7  6", "  B  A  5  4  9  8  0  1  6  7  3  2", "  A  9  4  3  8  7  B  0  5  6  2  1", "  5  4  B  A  3  2  6  7  0  1  9  8", "  4  3  A  9  2  1  5  6  B  0  8  7", "  8  7  2  1  6  5  9  A  3  4  0  B", "  9  8  3  2  7  6  A  B  4  5  1  0"]
+
+[[historical_row]]
+name = "SchoenbergOp46"
+composer = "Schoenberg"
+opus = "Op. 46"
+title = "A Survivor From Warsaw"
+pitch_classes = [6, 7, 0, 8, 4, 3, 11, 10, 5, 9, 1, 2]
+intervals = "1588E8E7441"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  1  6  2  A  9  5  4  B  3  7  8", "  B  0  5  1  9  8  4  3  A  2  6  7", "  6  7  0  8  4  3  B  A  5  9  1  2", "  A  B  4  0  8  7  3  2  9  1  5  6", "  2  3  8  4  0  B  7  6  1  5  9  A", "  3  4  9  5  1  0  8  7  2  6  A  B", "  7  8  1  9  5  4  0  B  6  A  2  3", "  8  9  2  A  6  5  1  0  7  B  3  4", "  1  2  7  3  B  A  6  5  0  4  8  9", "  9  A  3  B  7  6  2  1  8  0  4  5", "  5  6  B  7  3  2  A  9  4  8  0  1", "  4  5  A  6  2  1  9  8  3  7  B  0"]
+
+[[historical_row]]
+name = "SchoenbergFragOrganSonata"
+composer = "Schoenberg"
+title = "Fragment of Sonata For Organ"
+pitch_classes = [1, 7, 11, 3, 9, 2, 8, 6, 10, 5, 0, 4]
+intervals = "644656T4774"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  6  A  2  8  1  7  5  9  4  B  3", "  6  0  4  8  2  7  1  B  3  A  5  9", "  2  8  0  4  A  3  9  7  B  6  1  5", "  A  4  8  0  6  B  5  3  7  2  9  1", "  4  A  2  6  0  5  B  9  1  8  3  7", "  B  5  9  1  7  0  6  4  8  3  A  2", "  5  B  3  7  1  6  0  A  2  9  4  8", "  7  1  5  9  3  8  2  0  4  B  6  A", "  3  9  1  5  B  4  A  8  0  7  2  6", "  8  2  6  A  4  9  3  1  5  0  7  B", "  1  7  B  3  9  2  8  6  A  5  0  4", "  9  3  7  B  5  A  4  2  6  1  8  0"]
+
+[[historical_row]]
+name = "SchoenbergOp44"
+composer = "Schoenberg"
+opus = "Op. 44"
+title = "Prelude To A Suite From \"Genesis\""
+pitch_classes = [10, 6, 2, 5, 4, 0, 11, 8, 1, 3, 9, 7]
+intervals = "883E8E9526T"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  8  4  7  6  2  1  A  3  5  B  9", "  4  0  8  B  A  6  5  2  7  9  3  1", "  8  4  0  3  2  A  9  6  B  1  7  5", "  5  1  9  0  B  7  6  3  8  A  4  2", "  6  2  A  1  0  8  7  4  9  B  5  3", "  A  6  2  5  4  0  B  8  1  3  9  7", "  B  7  3  6  5  1  0  9  2  4  A  8", "  2  A  6  9  8  4  3  0  5  7  1  B", "  9  5  1  4  3  B  A  7  0  2  8  6", "  7  3  B  2  1  9  8  5  A  0  6  4", "  1  9  5  8  7  3  2  B  4  6  0  A", "  3  B  7  A  9  5  4  1  6  8  2  0"]
+
+[[historical_row]]
+name = "SchoenbergOp45"
+composer = "Schoenberg"
+opus = "Op. 45"
+title = "String Trio"
+pitch_classes = [2, 10, 3, 9, 4, 1, 11, 8, 6, 7, 5, 0]
+intervals = "85679T9T1T7"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  8  1  7  2  B  9  6  4  5  3  A", "  4  0  5  B  6  3  1  A  8  9  7  2", "  B  7  0  6  1  A  8  5  3  4  2  9", "  5  1  6  0  7  4  2  B  9  A  8  3", "  A  6  B  5  0  9  7  4  2  3  1  8", "  1  9  2  8  3  0  A  7  5  6  4  B", "  3  B  4  A  5  2  0  9  7  8  6  1", "  6  2  7  1  8  5  3  0  A  B  9  4", "  8  4  9  3  A  7  5  2  0  1  B  6", "  7  3  8  2  9  6  4  1  B  0  A  5", "  9  5  A  4  B  8  6  3  1  2  0  7", "  2  A  3  9  4  1  B  8  6  7  5  0"]
+
+[[historical_row]]
+name = "SchoenbergOp33A"
+composer = "Schoenberg"
+opus = "Op. 33A"
+title = "Two Piano Pieces, No. 1"
+pitch_classes = [10, 5, 0, 11, 9, 6, 1, 3, 7, 8, 2, 4]
+intervals = "77ET9724162"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  7  2  1  B  8  3  5  9  A  4  6", "  5  0  7  6  4  1  8  A  2  3  9  B", "  A  5  0  B  9  6  1  3  7  8  2  4", "  B  6  1  0  A  7  2  4  8  9  3  5", "  1  8  3  2  0  9  4  6  A  B  5  7", "  4  B  6  5  3  0  7  9  1  2  8  A", "  9  4  B  A  8  5  0  2  6  7  1  3", "  7  2  9  8  6  3  A  0  4  5  B  1", "  3  A  5  4  2  B  6  8  0  1  7  9", "  2  9  4  3  1  A  5  7  B  0  6  8", "  8  3  A  9  7  4  B  1  5  6  0  2", "  6  1  8  7  5  2  9  B  3  4  A  0"]
+
+[[historical_row]]
+name = "SchoenbergOp25"
+composer = "Schoenberg"
+opus = "Op.25"
+title = "Suite for Piano"
+pitch_classes = [4, 5, 7, 1, 6, 3, 8, 2, 11, 0, 9, 10]
+intervals = "12659569191"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  1  3  9  2  B  4  A  7  8  5  6", "  B  0  2  8  1  A  3  9  6  7  4  5", "  9  A  0  6  B  8  1  7  4  5  2  3", "  3  4  6  0  5  2  7  1  A  B  8  9", "  A  B  1  7  0  9  2  8  5  6  3  4", "  1  2  4  A  3  0  5  B  8  9  6  7", "  8  9  B  5  A  7  0  6  3  4  1  2", "  2  3  5  B  4  1  6  0  9  A  7  8", "  5  6  8  2  7  4  9  3  0  1  A  B", "  4  5  7  1  6  3  8  2  B  0  9  A", "  7  8  A  4  9  6  B  5  2  3  0  1", "  6  7  9  3  8  5  A  4  1  2  B  0"]
+
+[[historical_row]]
+name = "SchoenbergOp26"
+composer = "Schoenberg"
+opus = "Op. 26"
+title = "Wind Quintet"
+pitch_classes = [3, 7, 9, 11, 1, 0, 10, 2, 4, 6, 8, 5]
+intervals = "4222ET42229"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  4  6  8  A  9  7  B  1  3  5  2", "  8  0  2  4  6  5  3  7  9  B  1  A", "  6  A  0  2  4  3  1  5  7  9  B  8", "  4  8  A  0  2  1  B  3  5  7  9  6", "  2  6  8  A  0  B  9  1  3  5  7  4", "  3  7  9  B  1  0  A  2  4  6  8  5", "  5  9  B  1  3  2  0  4  6  8  A  7", "  1  5  7  9  B  A  8  0  2  4  6  3", "  B  3  5  7  9  8  6  A  0  2  4  1", "  9  1  3  5  7  6  4  8  A  0  2  B", "  7  B  1  3  5  4  2  6  8  A  0  9", "  A  2  4  6  8  7  5  9  B  1  3  0"]
+
+[[historical_row]]
+name = "SchoenbergOp33B"
+composer = "Schoenberg"
+opus = "Op. 33B"
+title = "Two Piano Pieces, No. 2"
+pitch_classes = [11, 1, 5, 3, 9, 8, 6, 10, 7, 4, 0, 2]
+intervals = "24T6ET49982"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  2  6  4  A  9  7  B  8  5  1  3", "  A  0  4  2  8  7  5  9  6  3  B  1", "  6  8  0  A  4  3  1  5  2  B  7  9", "  8  A  2  0  6  5  3  7  4  1  9  B", "  2  4  8  6  0  B  9  1  A  7  3  5", "  3  5  9  7  1  0  A  2  B  8  4  6", "  5  7  B  9  3  2  0  4  1  A  6  8", "  1  3  7  5  B  A  8  0  9  6  2  4", "  4  6  A  8  2  1  B  3  0  9  5  7", "  7  9  1  B  5  4  2  6  3  0  8  A", "  B  1  5  3  9  8  6  A  7  4  0  2", "  9  B  3  1  7  6  4  8  5  2  A  0"]
+
+[[historical_row]]
+name = "BergViolinConcerto"
+composer = "Berg"
+title = "Concerto For Violin And Orchestra"
+pitch_classes = [7, 10, 2, 6, 9, 0, 4, 8, 11, 1, 3, 5]
+intervals = "34433443222"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  3  7  B  2  5  9  1  4  6  8  A", "  9  0  4  8  B  2  6  A  1  3  5  7", "  5  8  0  4  7  A  2  6  9  B  1  3", "  1  4  8  0  3  6  A  2  5  7  9  B", "  A  1  5  9  0  3  7  B  2  4  6  8", "  7  A  2  6  9  0  4  8  B  1  3  5", "  3  6  A  2  5  8  0  4  7  9  B  1", "  B  2  6  A  1  4  8  0  3  5  7  9", "  8  B  3  7  A  1  5  9  0  2  4  6", "  6  9  1  5  8  B  3  7  A  0  2  4", "  4  7  B  3  6  9  1  5  8  A  0  2", "  2  5  9  1  4  7  B  3  6  8  A  0"]
+
+[[historical_row]]
+name = "WebernOp22"
+composer = "Webern"
+opus = "Op. 22"
+title = "Quartet For Violin, Clarinet, Tenor Sax, And Piano"
+pitch_classes = [6, 3, 2, 5, 4, 8, 9, 10, 11, 1, 7, 0]
+intervals = "9E3E4111265"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  9  8  B  A  2  3  4  5  7  1  6", "  3  0  B  2  1  5  6  7  8  A  4  9", "  4  1  0  3  2  6  7  8  9  B  5  A", "  1  A  9  0  B  3  4  5  6  8  2  7", "  2  B  A  1  0  4  5  6  7  9  3  8", "  A  7  6  9  8  0  1  2  3  5  B  4", "  9  6  5  8  7  B  0  1  2  4  A  3", "  8  5  4  7  6  A  B  0  1  3  9  2", "  7  4  3  6  5  9  A  B  0  2  8  1", "  5  2  1  4  3  7  8  9  A  0  6  B", "  B  8  7  A  9  1  2  3  4  6  0  5", "  6  3  2  5  4  8  9  A  B  1  7  0"]
+
+[[historical_row]]
+name = "BergLulu"
+composer = "Berg"
+title = "Lulu: Primary Row"
+pitch_classes = [0, 4, 5, 2, 7, 9, 6, 8, 11, 10, 3, 1]
+intervals = "41952923E5T"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  4  5  2  7  9  6  8  B  A  3  1", "  8  0  1  A  3  5  2  4  7  6  B  9", "  7  B  0  9  2  4  1  3  6  5  A  8", "  A  2  3  0  5  7  4  6  9  8  1  B", "  5  9  A  7  0  2  B  1  4  3  8  6", "  3  7  8  5  A  0  9  B  2  1  6  4", "  6  A  B  8  1  3  0  2  5  4  9  7", "  4  8  9  6  B  1  A  0  3  2  7  5", "  1  5  6  3  8  A  7  9  0  B  4  2", "  2  6  7  4  9  B  8  A  1  0  5  3", "  9  1  2  B  4  6  3  5  8  7  0  A", "  B  3  4  1  6  8  5  7  A  9  2  0"]
+
+[[historical_row]]
+name = "WebernOp30"
+composer = "Webern"
+opus = "Op. 30"
+title = "Variations For Orchestra"
+pitch_classes = [9, 10, 1, 0, 11, 2, 3, 6, 5, 4, 7, 8]
+intervals = "13EE313EE31"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  1  4  3  2  5  6  9  8  7  A  B", "  B  0  3  2  1  4  5  8  7  6  9  A", "  8  9  0  B  A  1  2  5  4  3  6  7", "  9  A  1  0  B  2  3  6  5  4  7  8", "  A  B  2  1  0  3  4  7  6  5  8  9", "  7  8  B  A  9  0  1  4  3  2  5  6", "  6  7  A  9  8  B  0  3  2  1  4  5", "  3  4  7  6  5  8  9  0  B  A  1  2", "  4  5  8  7  6  9  A  1  0  B  2  3", "  5  6  9  8  7  A  B  2  1  0  3  4", "  2  3  6  5  4  7  8  B  A  9  0  1", "  1  2  5  4  3  6  7  A  9  8  B  0"]
+
+[[historical_row]]
+name = "WebernOp31"
+composer = "Webern"
+opus = "Op. 31"
+title = "Cantata II"
+pitch_classes = [6, 9, 5, 4, 8, 3, 7, 11, 10, 2, 1, 0]
+intervals = "38E4744E4EE"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  3  B  A  2  9  1  5  4  8  7  6", "  9  0  8  7  B  6  A  2  1  5  4  3", "  1  4  0  B  3  A  2  6  5  9  8  7", "  2  5  1  0  4  B  3  7  6  A  9  8", "  A  1  9  8  0  7  B  3  2  6  5  4", "  3  6  2  1  5  0  4  8  7  B  A  9", "  B  2  A  9  1  8  0  4  3  7  6  5", "  7  A  6  5  9  4  8  0  B  3  2  1", "  8  B  7  6  A  5  9  1  0  4  3  2", "  4  7  3  2  6  1  5  9  8  0  B  A", "  5  8  4  3  7  2  6  A  9  1  0  B", "  6  9  5  4  8  3  7  B  A  2  1  0"]
+
+[[historical_row]]
+name = "WebernOpNo17No1"
+composer = "Webern"
+opus = "Op. 17, No. 1"
+title = "\"Armer Sunder, Du\""
+pitch_classes = [11, 10, 5, 6, 3, 4, 7, 8, 9, 0, 1, 2]
+intervals = "E7191311311"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  B  6  7  4  5  8  9  A  1  2  3", "  1  0  7  8  5  6  9  A  B  2  3  4", "  6  5  0  1  A  B  2  3  4  7  8  9", "  5  4  B  0  9  A  1  2  3  6  7  8", "  8  7  2  3  0  1  4  5  6  9  A  B", "  7  6  1  2  B  0  3  4  5  8  9  A", "  4  3  A  B  8  9  0  1  2  5  6  7", "  3  2  9  A  7  8  B  0  1  4  5  6", "  2  1  8  9  6  7  A  B  0  3  4  5", "  B  A  5  6  3  4  7  8  9  0  1  2", "  A  9  4  5  2  3  6  7  8  B  0  1", "  9  8  3  4  1  2  5  6  7  A  B  0"]
+
+[[historical_row]]
+name = "WebernOp24"
+composer = "Webern"
+opus = "Op. 24"
+title = "Concerto For Nine Instruments"
+pitch_classes = [11, 10, 2, 3, 7, 6, 8, 4, 5, 0, 1, 9]
+intervals = "E414E281718"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  B  3  4  8  7  9  5  6  1  2  A", "  1  0  4  5  9  8  A  6  7  2  3  B", "  9  8  0  1  5  4  6  2  3  A  B  7", "  8  7  B  0  4  3  5  1  2  9  A  6", "  4  3  7  8  0  B  1  9  A  5  6  2", "  5  4  8  9  1  0  2  A  B  6  7  3", "  3  2  6  7  B  A  0  8  9  4  5  1", "  7  6  A  B  3  2  4  0  1  8  9  5", "  6  5  9  A  2  1  3  B  0  7  8  4", "  B  A  2  3  7  6  8  4  5  0  1  9", "  A  9  1  2  6  5  7  3  4  B  0  8", "  2  1  5  6  A  9  B  7  8  3  4  0"]
+
+[[historical_row]]
+name = "SchoenbergOp48No2"
+composer = "Schoenberg"
+opus = "Op. 48"
+title = "Three Songs, No. 2, \"Tot\""
+pitch_classes = [2, 3, 9, 1, 10, 4, 8, 7, 0, 11, 5, 6]
+intervals = "164964E5E61"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  1  7  B  8  2  6  5  A  9  3  4", "  B  0  6  A  7  1  5  4  9  8  2  3", "  5  6  0  4  1  7  B  A  3  2  8  9", "  1  2  8  0  9  3  7  6  B  A  4  5", "  4  5  B  3  0  6  A  9  2  1  7  8", "  A  B  5  9  6  0  4  3  8  7  1  2", "  6  7  1  5  2  8  0  B  4  3  9  A", "  7  8  2  6  3  9  1  0  5  4  A  B", "  2  3  9  1  A  4  8  7  0  B  5  6", "  3  4  A  2  B  5  9  8  1  0  6  7", "  9  A  4  8  5  B  3  2  7  6  0  1", "  8  9  3  7  4  A  2  1  6  5  B  0"]
+
+[[historical_row]]
+name = "WebernOp27"
+composer = "Webern"
+opus = "Op. 27"
+title = "Variations For Piano"
+pitch_classes = [3, 11, 10, 2, 1, 0, 6, 4, 7, 5, 9, 8]
+intervals = "8E4EE6T3T4E"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  8  7  B  A  9  3  1  4  2  6  5", "  4  0  B  3  2  1  7  5  8  6  A  9", "  5  1  0  4  3  2  8  6  9  7  B  A", "  1  9  8  0  B  A  4  2  5  3  7  6", "  2  A  9  1  0  B  5  3  6  4  8  7", "  3  B  A  2  1  0  6  4  7  5  9  8", "  9  5  4  8  7  6  0  A  1  B  3  2", "  B  7  6  A  9  8  2  0  3  1  5  4", "  8  4  3  7  6  5  B  9  0  A  2  1", "  A  6  5  9  8  7  1  B  2  0  4  3", "  6  2  1  5  4  3  9  7  A  8  0  B", "  7  3  2  6  5  4  A  8  B  9  1  0"]
+
+[[historical_row]]
+name = "SchoenbergOp47"
+composer = "Schoenberg"
+opus = "Op. 47"
+title = "Fantasy For Violin And Piano"
+pitch_classes = [10, 9, 1, 11, 5, 7, 3, 4, 0, 2, 8, 6]
+intervals = "E4T6281826T"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  B  3  1  7  9  5  6  2  4  A  8", "  1  0  4  2  8  A  6  7  3  5  B  9", "  9  8  0  A  4  6  2  3  B  1  7  5", "  B  A  2  0  6  8  4  5  1  3  9  7", "  5  4  8  6  0  2  A  B  7  9  3  1", "  3  2  6  4  A  0  8  9  5  7  1  B", "  7  6  A  8  2  4  0  1  9  B  5  3", "  6  5  9  7  1  3  B  0  8  A  4  2", "  A  9  1  B  5  7  3  4  0  2  8  6", "  8  7  B  9  3  5  1  2  A  0  6  4", "  2  1  5  3  9  B  7  8  4  6  0  A", "  4  3  7  5  B  1  9  A  6  8  2  0"]
+
+[[historical_row]]
+name = "WebernOp19No2"
+composer = "Webern"
+opus = "Op. 19, No. 2"
+title = "\"Ziehn Die Schafe\""
+pitch_classes = [8, 4, 9, 6, 7, 0, 11, 5, 3, 2, 10, 1]
+intervals = "85915E6TE83"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  8  1  A  B  4  3  9  7  6  2  5", "  4  0  5  2  3  8  7  1  B  A  6  9", "  B  7  0  9  A  3  2  8  6  5  1  4", "  2  A  3  0  1  6  5  B  9  8  4  7", "  1  9  2  B  0  5  4  A  8  7  3  6", "  8  4  9  6  7  0  B  5  3  2  A  1", "  9  5  A  7  8  1  0  6  4  3  B  2", "  3  B  4  1  2  7  6  0  A  9  5  8", "  5  1  6  3  4  9  8  2  0  B  7  A", "  6  2  7  4  5  A  9  3  1  0  8  B", "  A  6  B  8  9  2  1  7  5  4  0  3", "  7  3  8  5  6  B  A  4  2  1  9  0"]
+
+[[historical_row]]
+name = "WebernOp19No1"
+composer = "Webern"
+opus = "Op. 19, No. 1"
+title = "\"Weiss Wie Lilien\""
+pitch_classes = [7, 10, 6, 5, 3, 9, 8, 1, 2, 11, 4, 0]
+intervals = "38ET6E51958"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  3  B  A  8  2  1  6  7  4  9  5", "  9  0  8  7  5  B  A  3  4  1  6  2", "  1  4  0  B  9  3  2  7  8  5  A  6", "  2  5  1  0  A  4  3  8  9  6  B  7", "  4  7  3  2  0  6  5  A  B  8  1  9", "  A  1  9  8  6  0  B  4  5  2  7  3", "  B  2  A  9  7  1  0  5  6  3  8  4", "  6  9  5  4  2  8  7  0  1  A  3  B", "  5  8  4  3  1  7  6  B  0  9  2  A", "  8  B  7  6  4  A  9  2  3  0  5  1", "  3  6  2  1  B  5  4  9  A  7  0  8", "  7  A  6  5  3  9  8  1  2  B  4  0"]
+
+[[historical_row]]
+name = "WebernOp26"
+composer = "Webern"
+opus = "Op. 26"
+title = "Das Augenlicht"
+pitch_classes = [8, 10, 9, 0, 11, 3, 4, 1, 5, 2, 6, 7]
+intervals = "2E3E4194941"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  2  1  4  3  7  8  5  9  6  A  B", "  A  0  B  2  1  5  6  3  7  4  8  9", "  B  1  0  3  2  6  7  4  8  5  9  A", "  8  A  9  0  B  3  4  1  5  2  6  7", "  9  B  A  1  0  4  5  2  6  3  7  8", "  5  7  6  9  8  0  1  A  2  B  3  4", "  4  6  5  8  7  B  0  9  1  A  2  3", "  7  9  8  B  A  2  3  0  4  1  5  6", "  3  5  4  7  6  A  B  8  0  9  1  2", "  6  8  7  A  9  1  2  B  3  0  4  5", "  2  4  3  6  5  9  A  7  B  8  0  1", "  1  3  2  5  4  8  9  6  A  7  B  0"]
+
+[[historical_row]]
+name = "SchoenbergFragPianoPhantasia"
+composer = "Schoenberg"
+title = "Fragment of Phantasia For Piano"
+pitch_classes = [1, 5, 3, 6, 4, 8, 0, 11, 2, 9, 10, 7]
+intervals = "4T3T44E3719"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  4  2  5  3  7  B  A  1  8  9  6", "  8  0  A  1  B  3  7  6  9  4  5  2", "  A  2  0  3  1  5  9  8  B  6  7  4", "  7  B  9  0  A  2  6  5  8  3  4  1", "  9  1  B  2  0  4  8  7  A  5  6  3", "  5  9  7  A  8  0  4  3  6  1  2  B", "  1  5  3  6  4  8  0  B  2  9  A  7", "  2  6  4  7  5  9  1  0  3  A  B  8", "  B  3  1  4  2  6  A  9  0  7  8  5", "  4  8  6  9  7  B  3  2  5  0  1  A", "  3  7  5  8  6  A  2  1  4  B  0  9", "  6  A  8  B  9  1  5  4  7  2  3  0"]
+
+[[historical_row]]
+name = "BergDerWein"
+composer = "Berg"
+title = "Der Wein"
+pitch_classes = [2, 4, 5, 7, 9, 10, 1, 6, 8, 0, 11, 3]
+intervals = "212213524E4"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  2  3  5  7  8  B  4  6  A  9  1", "  A  0  1  3  5  6  9  2  4  8  7  B", "  9  B  0  2  4  5  8  1  3  7  6  A", "  7  9  A  0  2  3  6  B  1  5  4  8", "  5  7  8  A  0  1  4  9  B  3  2  6", "  4  6  7  9  B  0  3  8  A  2  1  5", "  1  3  4  6  8  9  0  5  7  B  A  2", "  8  A  B  1  3  4  7  0  2  6  5  9", "  6  8  9  B  1  2  5  A  0  4  3  7", "  2  4  5  7  9  A  1  6  8  0  B  3", "  3  5  6  8  A  B  2  7  9  1  0  4", "  B  1  2  4  6  7  A  3  5  9  8  0"]
+
+[[historical_row]]
+name = "BergWozzeckPassacaglia"
+composer = "Berg"
+title = "Wozzeck, Act I, Scene 4 \"Passacaglia\""
+pitch_classes = [3, 11, 7, 1, 0, 6, 4, 10, 9, 5, 8, 2]
+intervals = "886E6T6E836"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  8  4  A  9  3  1  7  6  2  5  B", "  4  0  8  2  1  7  5  B  A  6  9  3", "  8  4  0  6  5  B  9  3  2  A  1  7", "  2  A  6  0  B  5  3  9  8  4  7  1", "  3  B  7  1  0  6  4  A  9  5  8  2", "  9  5  1  7  6  0  A  4  3  B  2  8", "  B  7  3  9  8  2  0  6  5  1  4  A", "  5  1  9  3  2  8  6  0  B  7  A  4", "  6  2  A  4  3  9  7  1  0  8  B  5", "  A  6  2  8  7  1  B  5  4  0  3  9", "  7  3  B  5  4  A  8  2  1  9  0  6", "  1  9  5  B  A  4  2  8  7  3  6  0"]
+
+[[historical_row]]
+name = "WebernOp18No1"
+composer = "Webern"
+opus = "Op. 18, No. 1"
+title = "\"Schatzerl Klein\""
+pitch_classes = [0, 11, 5, 8, 10, 9, 3, 4, 1, 7, 2, 6]
+intervals = "E632E619674"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  B  5  8  A  9  3  4  1  7  2  6", "  1  0  6  9  B  A  4  5  2  8  3  7", "  7  6  0  3  5  4  A  B  8  2  9  1", "  4  3  9  0  2  1  7  8  5  B  6  A", "  2  1  7  A  0  B  5  6  3  9  4  8", "  3  2  8  B  1  0  6  7  4  A  5  9", "  9  8  2  5  7  6  0  1  A  4  B  3", "  8  7  1  4  6  5  B  0  9  3  A  2", "  B  A  4  7  9  8  2  3  0  6  1  5", "  5  4  A  1  3  2  8  9  6  0  7  B", "  A  9  3  6  8  7  1  2  B  5  0  4", "  6  5  B  2  4  3  9  A  7  1  8  0"]
+
+[[historical_row]]
+name = "WebernOp18No2"
+composer = "Webern"
+opus = "Op. 18, No. 2"
+title = "\"Erlosung\""
+pitch_classes = [6, 9, 5, 8, 4, 7, 3, 11, 2, 10, 1, 0]
+intervals = "3838388383E"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  3  B  2  A  1  9  5  8  4  7  6", "  9  0  8  B  7  A  6  2  5  1  4  3", "  1  4  0  3  B  2  A  6  9  5  8  7", "  A  1  9  0  8  B  7  3  6  2  5  4", "  2  5  1  4  0  3  B  7  A  6  9  8", "  B  2  A  1  9  0  8  4  7  3  6  5", "  3  6  2  5  1  4  0  8  B  7  A  9", "  7  A  6  9  5  8  4  0  3  B  2  1", "  4  7  3  6  2  5  1  9  0  8  B  A", "  8  B  7  A  6  9  5  1  4  0  3  2", "  5  8  4  7  3  6  2  A  1  9  0  B", "  6  9  5  8  4  7  3  B  2  A  1  0"]
+
+[[historical_row]]
+name = "WebernOp18No3"
+composer = "Webern"
+opus = "Op. 18, No. 3"
+title = "\"Ave, Regina Coelorum\""
+pitch_classes = [4, 3, 7, 6, 5, 11, 10, 2, 1, 0, 9, 8]
+intervals = "E4EE6E4EE9E"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  B  3  2  1  7  6  A  9  8  5  4", "  1  0  4  3  2  8  7  B  A  9  6  5", "  9  8  0  B  A  4  3  7  6  5  2  1", "  A  9  1  0  B  5  4  8  7  6  3  2", "  B  A  2  1  0  6  5  9  8  7  4  3", "  5  4  8  7  6  0  B  3  2  1  A  9", "  6  5  9  8  7  1  0  4  3  2  B  A", "  2  1  5  4  3  9  8  0  B  A  7  6", "  3  2  6  5  4  A  9  1  0  B  8  7", "  4  3  7  6  5  B  A  2  1  0  9  8", "  7  6  A  9  8  2  1  5  4  3  0  B", "  8  7  B  A  9  3  2  6  5  4  1  0"]
+
+[[historical_row]]
+name = "SchoenbergOp42"
+composer = "Schoenberg"
+opus = "Op. 42"
+title = "Concerto For Piano And Orchestra"
+pitch_classes = [3, 10, 2, 5, 4, 0, 6, 8, 1, 9, 11, 7]
+intervals = "743E8625828"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  7  B  2  1  9  3  5  A  6  8  4", "  5  0  4  7  6  2  8  A  3  B  1  9", "  1  8  0  3  2  A  4  6  B  7  9  5", "  A  5  9  0  B  7  1  3  8  4  6  2", "  B  6  A  1  0  8  2  4  9  5  7  3", "  3  A  2  5  4  0  6  8  1  9  B  7", "  9  4  8  B  A  6  0  2  7  3  5  1", "  7  2  6  9  8  4  A  0  5  1  3  B", "  2  9  1  4  3  B  5  7  0  8  A  6", "  6  1  5  8  7  3  9  B  4  0  2  A", "  4  B  3  6  5  1  7  9  2  A  0  8", "  8  3  7  A  9  5  B  1  6  2  4  0"]
+
+[[historical_row]]
+name = "SchoenbergOp48No3"
+composer = "Schoenberg"
+opus = "Op. 48"
+title = "Three Songs, No, 3, \"Madchenlied\""
+pitch_classes = [1, 7, 9, 11, 3, 5, 10, 6, 4, 0, 8, 2]
+intervals = "6224258T886"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  6  8  A  2  4  9  5  3  B  7  1", "  6  0  2  4  8  A  3  B  9  5  1  7", "  4  A  0  2  6  8  1  9  7  3  B  5", "  2  8  A  0  4  6  B  7  5  1  9  3", "  A  4  6  8  0  2  7  3  1  9  5  B", "  8  2  4  6  A  0  5  1  B  7  3  9", "  3  9  B  1  5  7  0  8  6  2  A  4", "  7  1  3  5  9  B  4  0  A  6  2  8", "  9  3  5  7  B  1  6  2  0  8  4  A", "  1  7  9  B  3  5  A  6  4  0  8  2", "  5  B  1  3  7  9  2  A  8  4  0  6", "  B  5  7  9  1  3  8  4  2  A  6  0"]
+
+[[historical_row]]
+name = "SchoenbergOp37"
+composer = "Schoenberg"
+opus = "Op. 37"
+title = "Fourth String Quartet"
+pitch_classes = [2, 1, 9, 10, 5, 3, 4, 0, 8, 7, 6, 11]
+intervals = "E817T188EE5"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  B  7  8  3  1  2  A  6  5  4  9", "  1  0  8  9  4  2  3  B  7  6  5  A", "  5  4  0  1  8  6  7  3  B  A  9  2", "  4  3  B  0  7  5  6  2  A  9  8  1", "  9  8  4  5  0  A  B  7  3  2  1  6", "  B  A  6  7  2  0  1  9  5  4  3  8", "  A  9  5  6  1  B  0  8  4  3  2  7", "  2  1  9  A  5  3  4  0  8  7  6  B", "  6  5  1  2  9  7  8  4  0  B  A  3", "  7  6  2  3  A  8  9  5  1  0  B  4", "  8  7  3  4  B  9  A  6  2  1  0  5", "  3  2  A  B  6  4  5  1  9  8  7  0"]
+
+[[historical_row]]
+name = "SchoenbergOp36"
+composer = "Schoenberg"
+opus = "Op. 36"
+title = "Concerto for Violin and Orchestra"
+pitch_classes = [9, 10, 3, 11, 4, 6, 0, 1, 7, 8, 2, 5]
+intervals = "15852616163"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  1  6  2  7  9  3  4  A  B  5  8", "  B  0  5  1  6  8  2  3  9  A  4  7", "  6  7  0  8  1  3  9  A  4  5  B  2", "  A  B  4  0  5  7  1  2  8  9  3  6", "  5  6  B  7  0  2  8  9  3  4  A  1", "  3  4  9  5  A  0  6  7  1  2  8  B", "  9  A  3  B  4  6  0  1  7  8  2  5", "  8  9  2  A  3  5  B  0  6  7  1  4", "  2  3  8  4  9  B  5  6  0  1  7  A", "  1  2  7  3  8  A  4  5  B  0  6  9", "  7  8  1  9  2  4  A  B  5  6  0  3", "  4  5  A  6  B  1  7  8  2  3  9  0"]
+
+[[historical_row]]
+name = "SchoenbergOp34"
+composer = "Schoenberg"
+opus = "Op. 34"
+title = "Accompaniment to a Film Scene"
+pitch_classes = [3, 6, 2, 4, 1, 0, 9, 11, 10, 8, 5, 7]
+intervals = "3829E92ET92"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  3  B  1  A  9  6  8  7  5  2  4", "  9  0  8  A  7  6  3  5  4  2  B  1", "  1  4  0  2  B  A  7  9  8  6  3  5", "  B  2  A  0  9  8  5  7  6  4  1  3", "  2  5  1  3  0  B  8  A  9  7  4  6", "  3  6  2  4  1  0  9  B  A  8  5  7", "  6  9  5  7  4  3  0  2  1  B  8  A", "  4  7  3  5  2  1  A  0  B  9  6  8", "  5  8  4  6  3  2  B  1  0  A  7  9", "  7  A  6  8  5  4  1  3  2  0  9  B", "  A  1  9  B  8  7  4  6  5  3  0  2", "  8  B  7  9  6  5  2  4  3  1  A  0"]
+
+[[historical_row]]
+name = "BergChamberConcerto"
+composer = "Berg"
+title = "Chamber Concerto"
+pitch_classes = [11, 7, 5, 9, 2, 3, 6, 8, 0, 1, 4, 10]
+intervals = "8T451324136"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  8  6  A  3  4  7  9  1  2  5  B", "  4  0  A  2  7  8  B  1  5  6  9  3", "  6  2  0  4  9  A  1  3  7  8  B  5", "  2  A  8  0  5  6  9  B  3  4  7  1", "  9  5  3  7  0  1  4  6  A  B  2  8", "  8  4  2  6  B  0  3  5  9  A  1  7", "  5  1  B  3  8  9  0  2  6  7  A  4", "  3  B  9  1  6  7  A  0  4  5  8  2", "  B  7  5  9  2  3  6  8  0  1  4  A", "  A  6  4  8  1  2  5  7  B  0  3  9", "  7  3  1  5  A  B  2  4  8  9  0  6", "  1  9  7  B  4  5  8  A  2  3  6  0"]
+
+[[historical_row]]
+name = "SchoenbergOp32"
+composer = "Schoenberg"
+opus = "Op. 32"
+title = "Von Heute Auf Morgen"
+pitch_classes = [2, 3, 9, 1, 11, 5, 8, 7, 4, 0, 10, 6]
+intervals = "164T63E98T8"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  1  7  B  9  3  6  5  2  A  8  4", "  B  0  6  A  8  2  5  4  1  9  7  3", "  5  6  0  4  2  8  B  A  7  3  1  9", "  1  2  8  0  A  4  7  6  3  B  9  5", "  3  4  A  2  0  6  9  8  5  1  B  7", "  9  A  4  8  6  0  3  2  B  7  5  1", "  6  7  1  5  3  9  0  B  8  4  2  A", "  7  8  2  6  4  A  1  0  9  5  3  B", "  A  B  5  9  7  1  4  3  0  8  6  2", "  2  3  9  1  B  5  8  7  4  0  A  6", "  4  5  B  3  1  7  A  9  6  2  0  8", "  8  9  3  7  5  B  2  1  A  6  4  0"]
+
+[[historical_row]]
+name = "SchoenbergOp31"
+composer = "Schoenberg"
+opus = "Op. 31"
+title = "Variations for Orchestra"
+pitch_classes = [10, 4, 6, 3, 5, 9, 2, 1, 7, 8, 11, 0]
+intervals = "629245E6131"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  6  8  5  7  B  4  3  9  A  1  2", "  6  0  2  B  1  5  A  9  3  4  7  8", "  4  A  0  9  B  3  8  7  1  2  5  6", "  7  1  3  0  2  6  B  A  4  5  8  9", "  5  B  1  A  0  4  9  8  2  3  6  7", "  1  7  9  6  8  0  5  4  A  B  2  3", "  8  2  4  1  3  7  0  B  5  6  9  A", "  9  3  5  2  4  8  1  0  6  7  A  B", "  3  9  B  8  A  2  7  6  0  1  4  5", "  2  8  A  7  9  1  6  5  B  0  3  4", "  B  5  7  4  6  A  3  2  8  9  0  1", "  A  4  6  3  5  9  2  1  7  8  B  0"]
+
+[[historical_row]]
+name = "SchoenbergOp30"
+composer = "Schoenberg"
+opus = "Op. 30"
+title = "Third String Quartet"
+pitch_classes = [7, 4, 3, 9, 0, 5, 6, 11, 10, 1, 8, 2]
+intervals = "9E63515E376"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  9  8  2  5  A  B  4  3  6  1  7", "  3  0  B  5  8  1  2  7  6  9  4  A", "  4  1  0  6  9  2  3  8  7  A  5  B", "  A  7  6  0  3  8  9  2  1  4  B  5", "  7  4  3  9  0  5  6  B  A  1  8  2", "  2  B  A  4  7  0  1  6  5  8  3  9", "  1  A  9  3  6  B  0  5  4  7  2  8", "  8  5  4  A  1  6  7  0  B  2  9  3", "  9  6  5  B  2  7  8  1  0  3  A  4", "  6  3  2  8  B  4  5  A  9  0  7  1", "  B  8  7  1  4  9  A  3  2  5  0  6", "  5  2  1  7  A  3  4  9  8  B  6  0"]
+
+[[historical_row]]
+name = "BergLyricSuite"
+composer = "Berg"
+title = "Lyric Suite Primary Row"
+pitch_classes = [5, 4, 0, 9, 7, 2, 8, 1, 3, 6, 10, 11]
+intervals = "E89T7652341"
+is_all_interval = true
+link_special_intervals = []
+matrix = ["  0  B  7  4  2  9  3  8  A  1  5  6", "  1  0  8  5  3  A  4  9  B  2  6  7", "  5  4  0  9  7  2  8  1  3  6  A  B", "  8  7  3  0  A  5  B  4  6  9  1  2", "  A  9  5  2  0  7  1  6  8  B  3  4", "  3  2  A  7  5  0  6  B  1  4  8  9", "  9  8  4  1  B  6  0  5  7  A  2  3", "  4  3  B  8  6  1  7  0  2  5  9  A", "  2  1  9  6  4  B  5  A  0  3  7  8", "  B  A  6  3  1  8  2  7  9  0  4  5", "  7  6  2  B  9  4  A  3  5  8  0  1", "  6  5  1  A  8  3  9  2  4  7  B  0"]
+
+[[historical_row]]
+name = "SchoenbergOp41"
+composer = "Schoenberg"
+opus = "Op. 41"
+title = "Ode To Napoleon"
+pitch_classes = [1, 0, 4, 5, 9, 8, 3, 2, 6, 7, 11, 10]
+intervals = "E414E7E414E"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  B  3  4  8  7  2  1  5  6  A  9", "  1  0  4  5  9  8  3  2  6  7  B  A", "  9  8  0  1  5  4  B  A  2  3  7  6", "  8  7  B  0  4  3  A  9  1  2  6  5", "  4  3  7  8  0  B  6  5  9  A  2  1", "  5  4  8  9  1  0  7  6  A  B  3  2", "  A  9  1  2  6  5  0  B  3  4  8  7", "  B  A  2  3  7  6  1  0  4  5  9  8", "  7  6  A  B  3  2  9  8  0  1  5  4", "  6  5  9  A  2  1  8  7  B  0  4  3", "  2  1  5  6  A  9  4  3  7  8  0  B", "  3  2  6  7  B  A  5  4  8  9  1  0"]
+
+[[historical_row]]
+name = "WebernOp17No3"
+composer = "Webern"
+opus = "Op. 17, No. 3"
+title = "\"Heiland, Unsere Missetaten...\""
+pitch_classes = [8, 5, 4, 3, 7, 6, 0, 1, 2, 11, 10, 9]
+intervals = "9EE4E6119EE"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  9  8  7  B  A  4  5  6  3  2  1", "  3  0  B  A  2  1  7  8  9  6  5  4", "  4  1  0  B  3  2  8  9  A  7  6  5", "  5  2  1  0  4  3  9  A  B  8  7  6", "  1  A  9  8  0  B  5  6  7  4  3  2", "  2  B  A  9  1  0  6  7  8  5  4  3", "  8  5  4  3  7  6  0  1  2  B  A  9", "  7  4  3  2  6  5  B  0  1  A  9  8", "  6  3  2  1  5  4  A  B  0  9  8  7", "  9  6  5  4  8  7  1  2  3  0  B  A", "  A  7  6  5  9  8  2  3  4  1  0  B", "  B  8  7  6  A  9  3  4  5  2  1  0"]
+
+[[historical_row]]
+name = "WebernOp17No2"
+composer = "Webern"
+opus = "Op. 17, No. 2"
+title = "\"Liebste Jungfrau\""
+pitch_classes = [1, 0, 11, 7, 8, 2, 3, 6, 5, 4, 9, 10]
+intervals = "EE81613EE51"
+is_all_interval = false
+link_special_intervals = []
+matrix = ["  0  B  A  6  7  1  2  5  4  3  8  9", "  1  0  B  7  8  2  3  6  5  4  9  A", "  2  1  0  8  9  3  4  7  6  5  A  B", "  6  5  4  0  1  7  8  B  A  9  2  3", "  5  4  3  B  0  6  7  A  9  8  1  2", "  B  A  9  5  6  0  1  4  3  2  7  8", "  A  9  8  4  5  B  0  3  2  1  6  7", "  7  6  5  1  2  8  9  0  B  A  3  4", "  8  7  6  2  3  9  A  1  0  B  4  5", "  9  8  7  3  4  A  B  2  1  0  5  6", "  4  3  2  A  B  5  6  9  8  7  0  1", "  3  2  1  9  A  4  5  8  7  6  B  0"]
+
+[[link_chord]]
+intervals = "125634T97E8"
+pitch_classes = [0, 1, 3, 8, 2, 5, 9, 7, 4, 11, 10, 6]
+classification = 1
+special_intervals = ["25634"]
+
+[[link_chord]]
+intervals = "134E78526T9"
+pitch_classes = [0, 1, 4, 8, 7, 2, 10, 3, 5, 11, 9, 6]
+classification = 2
+special_intervals = ["134E7"]
+
+[[link_chord]]
+intervals = "134E79T6258"
+pitch_classes = [0, 1, 4, 8, 7, 2, 11, 9, 3, 5, 10, 6]
+classification = 3
+special_intervals = ["134E7", "E79T6"]
+
+[[link_chord]]
+intervals = "134E79T6258"
+pitch_classes = [0, 1, 4, 8, 7, 2, 11, 9, 3, 5, 10, 6]
+classification = 3
+special_intervals = ["134E7", "E79T6"]
+
+[[link_chord]]
+intervals = "1367T89E254"
+pitch_classes = [0, 1, 4, 10, 5, 3, 11, 8, 7, 9, 2, 6]
+classification = 4
+special_intervals = ["89E25"]
+
+[[link_chord]]
+intervals = "137E542896T"
+pitch_classes = [0, 1, 4, 11, 10, 3, 7, 9, 5, 2, 8, 6]
+classification = 5
+special_intervals = ["7E542"]
+
+[[link_chord]]
+intervals = "137E982456T"
+pitch_classes = [0, 1, 4, 11, 10, 7, 3, 5, 9, 2, 8, 6]
+classification = 6
+special_intervals = ["7E982"]
+
+[[link_chord]]
+intervals = "142965837ET"
+pitch_classes = [0, 1, 5, 7, 4, 10, 3, 11, 2, 9, 8, 6]
+classification = 7
+special_intervals = ["29658"]
+
+[[link_chord]]
+intervals = "142973856ET"
+pitch_classes = [0, 1, 5, 7, 4, 11, 2, 10, 3, 9, 8, 6]
+classification = 8
+special_intervals = ["856ET"]
+
+[[link_chord]]
+intervals = "1429738E65T"
+pitch_classes = [0, 1, 5, 7, 4, 11, 2, 10, 9, 3, 8, 6]
+classification = 9
+special_intervals = ["8E65T"]
+
+[[link_chord]]
+intervals = "14297TE6853"
+pitch_classes = [0, 1, 5, 7, 4, 11, 9, 8, 2, 10, 3, 6]
+classification = 10
+special_intervals = ["E6853"]
+
+[[link_chord]]
+intervals = "145638E729T"
+pitch_classes = [0, 1, 5, 10, 4, 7, 3, 2, 9, 11, 8, 6]
+classification = 11
+special_intervals = ["8E729"]
+
+[[link_chord]]
+intervals = "1456T729E83"
+pitch_classes = [0, 1, 5, 10, 4, 2, 9, 11, 8, 7, 3, 6]
+classification = 12
+special_intervals = ["729E8"]
+
+[[link_chord]]
+intervals = "1456T982E73"
+pitch_classes = [0, 1, 5, 10, 4, 2, 11, 7, 9, 8, 3, 6]
+classification = 13
+special_intervals = ["982E7"]
+
+[[link_chord]]
+intervals = "145927E836T"
+pitch_classes = [0, 1, 5, 10, 7, 9, 4, 3, 11, 2, 8, 6]
+classification = 14
+special_intervals = ["927E8"]
+
+[[link_chord]]
+intervals = "14598E63T72"
+pitch_classes = [0, 1, 5, 10, 7, 3, 2, 8, 11, 9, 4, 6]
+classification = 15
+special_intervals = ["8E63T"]
+
+[[link_chord]]
+intervals = "14689T7E253"
+pitch_classes = [0, 1, 5, 11, 7, 4, 2, 9, 8, 10, 3, 6]
+classification = 16
+special_intervals = ["7E253"]
+
+[[link_chord]]
+intervals = "1469E27T853"
+pitch_classes = [0, 1, 5, 11, 8, 7, 9, 4, 2, 10, 3, 6]
+classification = 17
+special_intervals = ["7T853"]
+
+[[link_chord]]
+intervals = "149278356ET"
+pitch_classes = [0, 1, 5, 2, 4, 11, 7, 10, 3, 9, 8, 6]
+classification = 18
+special_intervals = ["78356"]
+
+[[link_chord]]
+intervals = "1492783E65T"
+pitch_classes = [0, 1, 5, 2, 4, 11, 7, 10, 9, 3, 8, 6]
+classification = 19
+special_intervals = ["783E6"]
+
+[[link_chord]]
+intervals = "1496258T73E"
+pitch_classes = [0, 1, 5, 2, 8, 10, 3, 11, 9, 4, 7, 6]
+classification = 20
+special_intervals = ["58T73"]
+
+[[link_chord]]
+intervals = "1496E358T72"
+pitch_classes = [0, 1, 5, 2, 8, 7, 10, 3, 11, 9, 4, 6]
+classification = 21
+special_intervals = ["358T7"]
+
+[[link_chord]]
+intervals = "14972836E5T"
+pitch_classes = [0, 1, 5, 2, 9, 11, 7, 10, 4, 3, 8, 6]
+classification = 22
+special_intervals = ["2836E"]
+
+[[link_chord]]
+intervals = "14972E6385T"
+pitch_classes = [0, 1, 5, 2, 9, 11, 10, 4, 7, 3, 8, 6]
+classification = 23
+special_intervals = ["2E638"]
+
+[[link_chord]]
+intervals = "1497T853E62"
+pitch_classes = [0, 1, 5, 2, 9, 7, 3, 8, 11, 10, 4, 6]
+classification = 24
+special_intervals = ["7T853"]
+
+[[link_chord]]
+intervals = "14E379T6528"
+pitch_classes = [0, 1, 5, 4, 7, 2, 11, 9, 3, 8, 10, 6]
+classification = 25
+special_intervals = ["79T65"]
+
+[[link_chord]]
+intervals = "14E6T783529"
+pitch_classes = [0, 1, 5, 4, 10, 8, 3, 11, 2, 7, 9, 6]
+classification = 26
+special_intervals = ["78352"]
+
+[[link_chord]]
+intervals = "172E6853T94"
+pitch_classes = [0, 1, 8, 10, 9, 3, 11, 4, 7, 5, 2, 6]
+classification = 27
+special_intervals = ["E6853"]
+
+[[link_chord]]
+intervals = "17356ET8294"
+pitch_classes = [0, 1, 8, 11, 4, 10, 9, 7, 3, 5, 2, 6]
+classification = 28
+special_intervals = ["56ET8"]
+
+[[link_chord]]
+intervals = "1738T542E69"
+pitch_classes = [0, 1, 8, 11, 7, 5, 10, 2, 4, 3, 9, 6]
+classification = 29
+special_intervals = ["42E69"]
+
+[[link_chord]]
+intervals = "173E65T8294"
+pitch_classes = [0, 1, 8, 11, 10, 4, 9, 7, 3, 5, 2, 6]
+classification = 30
+special_intervals = ["E65T8"]
+
+[[link_chord]]
+intervals = "1763T4952E8"
+pitch_classes = [0, 1, 8, 2, 5, 3, 7, 4, 9, 11, 10, 6]
+classification = 31
+special_intervals = ["4952E"]
+
+[[link_chord]]
+intervals = "176852E34T9"
+pitch_classes = [0, 1, 8, 2, 10, 3, 5, 4, 7, 11, 9, 6]
+classification = 32
+special_intervals = ["52E34"]
+
+[[link_chord]]
+intervals = "179236E8T54"
+pitch_classes = [0, 1, 8, 5, 7, 10, 4, 3, 11, 9, 2, 6]
+classification = 33
+special_intervals = ["236E8", "36E8T"]
+
+[[link_chord]]
+intervals = "179236E8T54"
+pitch_classes = [0, 1, 8, 5, 7, 10, 4, 3, 11, 9, 2, 6]
+classification = 33
+special_intervals = ["236E8", "36E8T"]
+
+[[link_chord]]
+intervals = "17923E685T4"
+pitch_classes = [0, 1, 8, 5, 7, 10, 9, 3, 11, 4, 2, 6]
+classification = 34
+special_intervals = ["3E685"]
+
+[[link_chord]]
+intervals = "179245T8E63"
+pitch_classes = [0, 1, 8, 5, 7, 11, 4, 2, 10, 9, 3, 6]
+classification = 35
+special_intervals = ["T8E63"]
+
+[[link_chord]]
+intervals = "17924T586E3"
+pitch_classes = [0, 1, 8, 5, 7, 11, 9, 2, 10, 4, 3, 6]
+classification = 36
+special_intervals = ["586E3"]
+
+[[link_chord]]
+intervals = "179T65234E8"
+pitch_classes = [0, 1, 8, 5, 3, 9, 2, 4, 7, 11, 10, 6]
+classification = 37
+special_intervals = ["79T65"]
+
+[[link_chord]]
+intervals = "179T8E63254"
+pitch_classes = [0, 1, 8, 5, 3, 11, 10, 4, 7, 9, 2, 6]
+classification = 38
+special_intervals = ["T8E63", "8E632"]
+
+[[link_chord]]
+intervals = "179T8E63254"
+pitch_classes = [0, 1, 8, 5, 3, 11, 10, 4, 7, 9, 2, 6]
+classification = 38
+special_intervals = ["T8E63", "8E632"]
+
+[[link_chord]]
+intervals = "1825E43796T"
+pitch_classes = [0, 1, 9, 11, 4, 3, 7, 10, 5, 2, 8, 6]
+classification = 39
+special_intervals = ["25E43", "5E437"]
+
+[[link_chord]]
+intervals = "1825E43796T"
+pitch_classes = [0, 1, 9, 11, 4, 3, 7, 10, 5, 2, 8, 6]
+classification = 39
+special_intervals = ["25E43", "5E437"]
+
+[[link_chord]]
+intervals = "1825E79T364"
+pitch_classes = [0, 1, 9, 11, 4, 3, 10, 7, 5, 8, 2, 6]
+classification = 40
+special_intervals = ["25E79", "5E79T"]
+
+[[link_chord]]
+intervals = "1825E79T364"
+pitch_classes = [0, 1, 9, 11, 4, 3, 10, 7, 5, 8, 2, 6]
+classification = 40
+special_intervals = ["25E79", "5E79T"]
+
+[[link_chord]]
+intervals = "1852E43769T"
+pitch_classes = [0, 1, 9, 2, 4, 3, 7, 10, 5, 11, 8, 6]
+classification = 41
+special_intervals = ["E4376"]
+
+[[link_chord]]
+intervals = "1852E79463T"
+pitch_classes = [0, 1, 9, 2, 4, 3, 10, 7, 11, 5, 8, 6]
+classification = 42
+special_intervals = ["E7946"]
+
+[[link_chord]]
+intervals = "185629TE743"
+pitch_classes = [0, 1, 9, 2, 8, 10, 7, 5, 4, 11, 3, 6]
+classification = 43
+special_intervals = ["9TE74"]
+
+[[link_chord]]
+intervals = "18563479TE2"
+pitch_classes = [0, 1, 9, 2, 8, 11, 3, 10, 7, 5, 4, 6]
+classification = 44
+special_intervals = ["479TE"]
+
+[[link_chord]]
+intervals = "18563E7T492"
+pitch_classes = [0, 1, 9, 2, 8, 11, 10, 5, 3, 7, 4, 6]
+classification = 45
+special_intervals = ["E7T49"]
+
+[[link_chord]]
+intervals = "18734E5296T"
+pitch_classes = [0, 1, 9, 4, 7, 11, 10, 3, 5, 2, 8, 6]
+classification = 46
+special_intervals = ["734E5", "34E52"]
+
+[[link_chord]]
+intervals = "18734E5296T"
+pitch_classes = [0, 1, 9, 4, 7, 11, 10, 3, 5, 2, 8, 6]
+classification = 46
+special_intervals = ["734E5", "34E52"]
+
+[[link_chord]]
+intervals = "187E259436T"
+pitch_classes = [0, 1, 9, 4, 3, 5, 10, 7, 11, 2, 8, 6]
+classification = 47
+special_intervals = ["87E25", "E2594"]
+
+[[link_chord]]
+intervals = "187E259436T"
+pitch_classes = [0, 1, 9, 4, 3, 5, 10, 7, 11, 2, 8, 6]
+classification = 47
+special_intervals = ["87E25", "E2594"]
+
+[[link_chord]]
+intervals = "18T352E7964"
+pitch_classes = [0, 1, 9, 7, 10, 3, 5, 4, 11, 8, 2, 6]
+classification = 48
+special_intervals = ["352E7"]
+
+[[link_chord]]
+intervals = "18T497E3562"
+pitch_classes = [0, 1, 9, 7, 11, 8, 3, 2, 5, 10, 4, 6]
+classification = 49
+special_intervals = ["T497E"]
+
+[[link_chord]]
+intervals = "18T97E52364"
+pitch_classes = [0, 1, 9, 7, 4, 11, 10, 3, 5, 8, 2, 6]
+classification = 50
+special_intervals = ["T97E5", "97E52"]
+
+[[link_chord]]
+intervals = "18T97E52364"
+pitch_classes = [0, 1, 9, 7, 4, 11, 10, 3, 5, 8, 2, 6]
+classification = 50
+special_intervals = ["T97E5", "97E52"]
+
+[[link_chord]]
+intervals = "18E63T79452"
+pitch_classes = [0, 1, 9, 8, 2, 5, 3, 10, 7, 11, 4, 6]
+classification = 51
+special_intervals = ["8E63T", "T7945"]
+
+[[link_chord]]
+intervals = "18E63T79452"
+pitch_classes = [0, 1, 9, 8, 2, 5, 3, 10, 7, 11, 4, 6]
+classification = 51
+special_intervals = ["8E63T", "T7945"]
+
+[[link_chord]]
+intervals = "19476538TE2"
+pitch_classes = [0, 1, 10, 2, 9, 3, 8, 11, 7, 5, 4, 6]
+classification = 52
+special_intervals = ["76538"]
+
+[[link_chord]]
+intervals = "1947T8536E2"
+pitch_classes = [0, 1, 10, 2, 9, 7, 3, 8, 11, 5, 4, 6]
+classification = 53
+special_intervals = ["7T853"]
+
+[[link_chord]]
+intervals = "1954763T8E2"
+pitch_classes = [0, 1, 10, 3, 7, 2, 8, 11, 9, 5, 4, 6]
+classification = 54
+special_intervals = ["4763T"]
+
+[[link_chord]]
+intervals = "19742538E6T"
+pitch_classes = [0, 1, 10, 5, 9, 11, 4, 7, 3, 2, 8, 6]
+classification = 55
+special_intervals = ["97425"]
+
+[[link_chord]]
+intervals = "197425T6E83"
+pitch_classes = [0, 1, 10, 5, 9, 11, 4, 2, 8, 7, 3, 6]
+classification = 56
+special_intervals = ["97425"]
+
+[[link_chord]]
+intervals = "1974T8E6352"
+pitch_classes = [0, 1, 10, 5, 9, 7, 3, 2, 8, 11, 4, 6]
+classification = 57
+special_intervals = ["T8E63"]
+
+[[link_chord]]
+intervals = "197T8532E64"
+pitch_classes = [0, 1, 10, 5, 3, 11, 4, 7, 9, 8, 2, 6]
+classification = 58
+special_intervals = ["7T853"]
+
+[[link_chord]]
+intervals = "1T5E7928364"
+pitch_classes = [0, 1, 11, 4, 3, 10, 7, 9, 5, 8, 2, 6]
+classification = 59
+special_intervals = ["5E792"]
+
+[[link_chord]]
+intervals = "1T63E874259"
+pitch_classes = [0, 1, 11, 5, 8, 7, 3, 10, 2, 4, 9, 6]
+classification = 60
+special_intervals = ["74259"]
+
+[[link_chord]]
+intervals = "1T6E3852479"
+pitch_classes = [0, 1, 11, 5, 4, 7, 3, 8, 10, 2, 9, 6]
+classification = 61
+special_intervals = ["52479"]
+
+[[link_chord]]
+intervals = "1T8352E4679"
+pitch_classes = [0, 1, 11, 7, 10, 3, 5, 4, 8, 2, 9, 6]
+classification = 62
+special_intervals = ["8352E"]
+
+[[link_chord]]
+intervals = "1T974253E68"
+pitch_classes = [0, 1, 11, 8, 3, 7, 9, 2, 5, 4, 10, 6]
+classification = 63
+special_intervals = ["97425"]
+
+[[link_chord]]
+intervals = "214367TE985"
+pitch_classes = [0, 2, 3, 7, 10, 4, 11, 9, 8, 5, 1, 6]
+classification = 64
+special_intervals = ["4367T"]
+
+[[link_chord]]
+intervals = "214376598ET"
+pitch_classes = [0, 2, 3, 7, 10, 5, 11, 4, 1, 9, 8, 6]
+classification = 65
+special_intervals = ["43765", "76598", "43765", "76598"]
+
+[[link_chord]]
+intervals = "214376598ET"
+pitch_classes = [0, 2, 3, 7, 10, 5, 11, 4, 1, 9, 8, 6]
+classification = 65
+special_intervals = ["43765", "76598", "43765", "76598"]
+
+[[link_chord]]
+intervals = "2143E86597T"
+pitch_classes = [0, 2, 3, 7, 10, 9, 5, 11, 4, 1, 8, 6]
+classification = 66
+special_intervals = ["E8659"]
+
+[[link_chord]]
+intervals = "2149586E37T"
+pitch_classes = [0, 2, 3, 7, 4, 9, 5, 11, 10, 1, 8, 6]
+classification = 67
+special_intervals = ["586E3"]
+
+[[link_chord]]
+intervals = "214976538ET"
+pitch_classes = [0, 2, 3, 7, 4, 11, 5, 10, 1, 9, 8, 6]
+classification = 68
+special_intervals = ["49765", "76538", "49765", "76538"]
+
+[[link_chord]]
+intervals = "214976538ET"
+pitch_classes = [0, 2, 3, 7, 4, 11, 5, 10, 1, 9, 8, 6]
+classification = 68
+special_intervals = ["49765", "76538", "49765", "76538"]
+
+[[link_chord]]
+intervals = "216734ET985"
+pitch_classes = [0, 2, 3, 9, 4, 7, 11, 10, 8, 5, 1, 6]
+classification = 69
+special_intervals = ["6734E"]
+
+[[link_chord]]
+intervals = "216743E9T85"
+pitch_classes = [0, 2, 3, 9, 4, 8, 11, 10, 7, 5, 1, 6]
+classification = 70
+special_intervals = ["21674"]
+
+[[link_chord]]
+intervals = "217634TE985"
+pitch_classes = [0, 2, 3, 10, 4, 7, 11, 9, 8, 5, 1, 6]
+classification = 71
+special_intervals = ["7634T"]
+
+[[link_chord]]
+intervals = "21T8E956347"
+pitch_classes = [0, 2, 3, 1, 9, 8, 5, 10, 4, 7, 11, 6]
+classification = 72
+special_intervals = ["1T8E9"]
+
+[[link_chord]]
+intervals = "21T96583E47"
+pitch_classes = [0, 2, 3, 1, 10, 4, 9, 5, 8, 7, 11, 6]
+classification = 73
+special_intervals = ["T9658"]
+
+[[link_chord]]
+intervals = "234T1596E87"
+pitch_classes = [0, 2, 5, 9, 7, 8, 1, 10, 4, 3, 11, 6]
+classification = 74
+special_intervals = ["34T15"]
+
+[[link_chord]]
+intervals = "235189E647T"
+pitch_classes = [0, 2, 5, 10, 11, 7, 4, 3, 9, 1, 8, 6]
+classification = 75
+special_intervals = ["5189E", "189E6"]
+
+[[link_chord]]
+intervals = "235189E647T"
+pitch_classes = [0, 2, 5, 10, 11, 7, 4, 3, 9, 1, 8, 6]
+classification = 75
+special_intervals = ["5189E", "189E6"]
+
+[[link_chord]]
+intervals = "23689E7T145"
+pitch_classes = [0, 2, 5, 11, 7, 4, 3, 10, 8, 9, 1, 6]
+classification = 76
+special_intervals = ["689E7"]
+
+[[link_chord]]
+intervals = "236E981547T"
+pitch_classes = [0, 2, 5, 11, 10, 7, 3, 4, 9, 1, 8, 6]
+classification = 77
+special_intervals = ["6E981", "E9815"]
+
+[[link_chord]]
+intervals = "236E981547T"
+pitch_classes = [0, 2, 5, 11, 10, 7, 3, 4, 9, 1, 8, 6]
+classification = 77
+special_intervals = ["6E981", "E9815"]
+
+[[link_chord]]
+intervals = "23T514697E8"
+pitch_classes = [0, 2, 5, 3, 8, 9, 1, 7, 4, 11, 10, 6]
+classification = 78
+special_intervals = ["3T514"]
+
+[[link_chord]]
+intervals = "2513647ET98"
+pitch_classes = [0, 2, 7, 8, 11, 5, 9, 4, 3, 1, 10, 6]
+classification = 79
+special_intervals = ["47ET9"]
+
+[[link_chord]]
+intervals = "25189TE7463"
+pitch_classes = [0, 2, 7, 8, 4, 1, 11, 10, 5, 9, 3, 6]
+classification = 80
+special_intervals = ["25189", "9TE74"]
+
+[[link_chord]]
+intervals = "25189TE7463"
+pitch_classes = [0, 2, 7, 8, 4, 1, 11, 10, 5, 9, 3, 6]
+classification = 80
+special_intervals = ["25189", "9TE74"]
+
+[[link_chord]]
+intervals = "2546E981T73"
+pitch_classes = [0, 2, 7, 11, 5, 4, 1, 9, 10, 8, 3, 6]
+classification = 81
+special_intervals = ["6E981"]
+
+[[link_chord]]
+intervals = "25691T8E473"
+pitch_classes = [0, 2, 7, 1, 10, 11, 9, 5, 4, 8, 3, 6]
+classification = 82
+special_intervals = ["91T8E"]
+
+[[link_chord]]
+intervals = "2569E8T1437"
+pitch_classes = [0, 2, 7, 1, 10, 9, 5, 3, 4, 8, 11, 6]
+classification = 83
+special_intervals = ["9E8T1"]
+
+[[link_chord]]
+intervals = "258T73E6149"
+pitch_classes = [0, 2, 7, 3, 1, 8, 11, 10, 4, 5, 9, 6]
+classification = 84
+special_intervals = ["58T73"]
+
+[[link_chord]]
+intervals = "258T9614E37"
+pitch_classes = [0, 2, 7, 3, 1, 10, 4, 5, 9, 8, 11, 6]
+classification = 85
+special_intervals = ["T9614"]
+
+[[link_chord]]
+intervals = "25T31496E87"
+pitch_classes = [0, 2, 7, 5, 8, 9, 1, 10, 4, 3, 11, 6]
+classification = 86
+special_intervals = ["5T314"]
+
+[[link_chord]]
+intervals = "25T89E61437"
+pitch_classes = [0, 2, 7, 5, 1, 10, 9, 3, 4, 8, 11, 6]
+classification = 87
+special_intervals = ["89E61"]
+
+[[link_chord]]
+intervals = "2618T497E35"
+pitch_classes = [0, 2, 8, 9, 5, 3, 7, 4, 11, 10, 1, 6]
+classification = 88
+special_intervals = ["T497E"]
+
+[[link_chord]]
+intervals = "26347ET9185"
+pitch_classes = [0, 2, 8, 11, 3, 10, 9, 7, 4, 5, 1, 6]
+classification = 89
+special_intervals = ["47ET9"]
+
+[[link_chord]]
+intervals = "263891T7E45"
+pitch_classes = [0, 2, 8, 11, 7, 4, 5, 3, 10, 9, 1, 6]
+classification = 90
+special_intervals = ["891T7", "1T7E4"]
+
+[[link_chord]]
+intervals = "263891T7E45"
+pitch_classes = [0, 2, 8, 11, 7, 4, 5, 3, 10, 9, 1, 6]
+classification = 90
+special_intervals = ["891T7", "1T7E4"]
+
+[[link_chord]]
+intervals = "2653E718T49"
+pitch_classes = [0, 2, 8, 1, 4, 3, 10, 11, 7, 5, 9, 6]
+classification = 91
+special_intervals = ["E718T"]
+
+[[link_chord]]
+intervals = "2654T1783E9"
+pitch_classes = [0, 2, 8, 1, 5, 3, 4, 11, 7, 10, 9, 6]
+classification = 92
+special_intervals = ["T1783", "1783E"]
+
+[[link_chord]]
+intervals = "2654T1783E9"
+pitch_classes = [0, 2, 8, 1, 5, 3, 4, 11, 7, 10, 9, 6]
+classification = 92
+special_intervals = ["T1783", "1783E"]
+
+[[link_chord]]
+intervals = "2654E3871T9"
+pitch_classes = [0, 2, 8, 1, 5, 4, 7, 3, 10, 11, 9, 6]
+classification = 93
+special_intervals = ["E3871", "3871T"]
+
+[[link_chord]]
+intervals = "2654E3871T9"
+pitch_classes = [0, 2, 8, 1, 5, 4, 7, 3, 10, 11, 9, 6]
+classification = 93
+special_intervals = ["E3871", "3871T"]
+
+[[link_chord]]
+intervals = "2654E7T1983"
+pitch_classes = [0, 2, 8, 1, 5, 4, 11, 9, 10, 7, 3, 6]
+classification = 94
+special_intervals = ["4E7T1", "7T198"]
+
+[[link_chord]]
+intervals = "2654E7T1983"
+pitch_classes = [0, 2, 8, 1, 5, 4, 11, 9, 10, 7, 3, 6]
+classification = 94
+special_intervals = ["4E7T1", "7T198"]
+
+[[link_chord]]
+intervals = "265819TE743"
+pitch_classes = [0, 2, 8, 1, 9, 10, 7, 5, 4, 11, 3, 6]
+classification = 95
+special_intervals = ["9TE74"]
+
+[[link_chord]]
+intervals = "2659E8T1347"
+pitch_classes = [0, 2, 8, 1, 10, 9, 5, 3, 4, 7, 11, 6]
+classification = 96
+special_intervals = ["9E8T1"]
+
+[[link_chord]]
+intervals = "267431T8E95"
+pitch_classes = [0, 2, 8, 3, 7, 10, 11, 9, 5, 4, 1, 6]
+classification = 97
+special_intervals = ["1T8E9"]
+
+[[link_chord]]
+intervals = "2694T817E35"
+pitch_classes = [0, 2, 8, 5, 9, 7, 3, 4, 11, 10, 1, 6]
+classification = 98
+special_intervals = ["T817E"]
+
+[[link_chord]]
+intervals = "269T1783E45"
+pitch_classes = [0, 2, 8, 5, 3, 4, 11, 7, 10, 9, 1, 6]
+classification = 99
+special_intervals = ["T1783", "1783E"]
+
+[[link_chord]]
+intervals = "269T1783E45"
+pitch_classes = [0, 2, 8, 5, 3, 4, 11, 7, 10, 9, 1, 6]
+classification = 99
+special_intervals = ["T1783", "1783E"]
+
+[[link_chord]]
+intervals = "269E3871T45"
+pitch_classes = [0, 2, 8, 5, 4, 7, 3, 10, 11, 9, 1, 6]
+classification = 100
+special_intervals = ["E3871", "3871T"]
+
+[[link_chord]]
+intervals = "269E3871T45"
+pitch_classes = [0, 2, 8, 5, 4, 7, 3, 10, 11, 9, 1, 6]
+classification = 100
+special_intervals = ["E3871", "3871T"]
+
+[[link_chord]]
+intervals = "26E451T7389"
+pitch_classes = [0, 2, 8, 7, 11, 4, 5, 3, 10, 1, 9, 6]
+classification = 101
+special_intervals = ["451T7", "1T738"]
+
+[[link_chord]]
+intervals = "26E451T7389"
+pitch_classes = [0, 2, 8, 7, 11, 4, 5, 3, 10, 1, 9, 6]
+classification = 101
+special_intervals = ["451T7", "1T738"]
+
+[[link_chord]]
+intervals = "26E459817T3"
+pitch_classes = [0, 2, 8, 7, 11, 4, 1, 9, 10, 5, 3, 6]
+classification = 102
+special_intervals = ["59817", "9817T"]
+
+[[link_chord]]
+intervals = "26E459817T3"
+pitch_classes = [0, 2, 8, 7, 11, 4, 1, 9, 10, 5, 3, 6]
+classification = 102
+special_intervals = ["59817", "9817T"]
+
+[[link_chord]]
+intervals = "26E4T718953"
+pitch_classes = [0, 2, 8, 7, 11, 9, 4, 5, 1, 10, 3, 6]
+classification = 103
+special_intervals = ["T7189", "71895"]
+
+[[link_chord]]
+intervals = "26E4T718953"
+pitch_classes = [0, 2, 8, 7, 11, 9, 4, 5, 1, 10, 3, 6]
+classification = 103
+special_intervals = ["T7189", "71895"]
+
+[[link_chord]]
+intervals = "26E873T5149"
+pitch_classes = [0, 2, 8, 7, 3, 10, 1, 11, 4, 5, 9, 6]
+classification = 104
+special_intervals = ["3T514"]
+
+[[link_chord]]
+intervals = "26E95134T87"
+pitch_classes = [0, 2, 8, 7, 4, 9, 10, 1, 5, 3, 11, 6]
+classification = 105
+special_intervals = ["5134T"]
+
+[[link_chord]]
+intervals = "26E95178T43"
+pitch_classes = [0, 2, 8, 7, 4, 9, 10, 5, 1, 11, 3, 6]
+classification = 106
+special_intervals = ["5178T"]
+
+[[link_chord]]
+intervals = "274316E985T"
+pitch_classes = [0, 2, 9, 1, 4, 5, 11, 10, 7, 3, 8, 6]
+classification = 107
+special_intervals = ["4316E", "16E98", "4316E", "16E98"]
+
+[[link_chord]]
+intervals = "274316E985T"
+pitch_classes = [0, 2, 9, 1, 4, 5, 11, 10, 7, 3, 8, 6]
+classification = 107
+special_intervals = ["4316E", "16E98", "4316E", "16E98"]
+
+[[link_chord]]
+intervals = "2743E86591T"
+pitch_classes = [0, 2, 9, 1, 4, 3, 11, 5, 10, 7, 8, 6]
+classification = 108
+special_intervals = ["E8659"]
+
+[[link_chord]]
+intervals = "274916E385T"
+pitch_classes = [0, 2, 9, 1, 10, 11, 5, 4, 7, 3, 8, 6]
+classification = 109
+special_intervals = ["4916E", "16E38", "4916E", "16E38"]
+
+[[link_chord]]
+intervals = "274916E385T"
+pitch_classes = [0, 2, 9, 1, 10, 11, 5, 4, 7, 3, 8, 6]
+classification = 109
+special_intervals = ["4916E", "16E38", "4916E", "16E38"]
+
+[[link_chord]]
+intervals = "2749586E31T"
+pitch_classes = [0, 2, 9, 1, 10, 3, 11, 5, 4, 7, 8, 6]
+classification = 110
+special_intervals = ["586E3"]
+
+[[link_chord]]
+intervals = "276134ET985"
+pitch_classes = [0, 2, 9, 3, 4, 7, 11, 10, 8, 5, 1, 6]
+classification = 111
+special_intervals = ["6134E"]
+
+[[link_chord]]
+intervals = "276143E9T85"
+pitch_classes = [0, 2, 9, 3, 4, 8, 11, 10, 7, 5, 1, 6]
+classification = 112
+special_intervals = ["27614"]
+
+[[link_chord]]
+intervals = "27E34169T85"
+pitch_classes = [0, 2, 9, 8, 11, 3, 4, 10, 7, 5, 1, 6]
+classification = 113
+special_intervals = ["4169T"]
+
+[[link_chord]]
+intervals = "2965387E41T"
+pitch_classes = [0, 2, 11, 5, 10, 1, 9, 4, 3, 7, 8, 6]
+classification = 114
+special_intervals = ["65387", "5387E"]
+
+[[link_chord]]
+intervals = "2965387E41T"
+pitch_classes = [0, 2, 11, 5, 10, 1, 9, 4, 3, 7, 8, 6]
+classification = 114
+special_intervals = ["65387", "5387E"]
+
+[[link_chord]]
+intervals = "296E387T145"
+pitch_classes = [0, 2, 11, 5, 4, 7, 3, 10, 8, 9, 1, 6]
+classification = 115
+special_intervals = ["6E387"]
+
+[[link_chord]]
+intervals = "29TE7436185"
+pitch_classes = [0, 2, 11, 9, 8, 3, 7, 10, 4, 5, 1, 6]
+classification = 116
+special_intervals = ["9TE74"]
+
+[[link_chord]]
+intervals = "29TE7463158"
+pitch_classes = [0, 2, 11, 9, 8, 3, 7, 1, 4, 5, 10, 6]
+classification = 117
+special_intervals = ["9TE74"]
+
+[[link_chord]]
+intervals = "29E7835641T"
+pitch_classes = [0, 2, 11, 10, 5, 1, 4, 9, 3, 7, 8, 6]
+classification = 118
+special_intervals = ["E7835", "78356"]
+
+[[link_chord]]
+intervals = "29E7835641T"
+pitch_classes = [0, 2, 11, 10, 5, 1, 4, 9, 3, 7, 8, 6]
+classification = 118
+special_intervals = ["E7835", "78356"]
+
+[[link_chord]]
+intervals = "2E431T96587"
+pitch_classes = [0, 2, 1, 5, 8, 9, 7, 4, 10, 3, 11, 6]
+classification = 119
+special_intervals = ["E431T", "T9658"]
+
+[[link_chord]]
+intervals = "2E431T96587"
+pitch_classes = [0, 2, 1, 5, 8, 9, 7, 4, 10, 3, 11, 6]
+classification = 119
+special_intervals = ["E431T", "T9658"]
+
+[[link_chord]]
+intervals = "2E465387T19"
+pitch_classes = [0, 2, 1, 5, 11, 4, 7, 3, 10, 8, 9, 6]
+classification = 120
+special_intervals = ["65387"]
+
+[[link_chord]]
+intervals = "2E637T85419"
+pitch_classes = [0, 2, 1, 7, 10, 5, 3, 11, 4, 8, 9, 6]
+classification = 121
+special_intervals = ["37T85"]
+
+[[link_chord]]
+intervals = "2E783T51469"
+pitch_classes = [0, 2, 1, 8, 4, 7, 5, 10, 11, 3, 9, 6]
+classification = 122
+special_intervals = ["2E783", "3T514"]
+
+[[link_chord]]
+intervals = "2E783T51469"
+pitch_classes = [0, 2, 1, 8, 4, 7, 5, 10, 11, 3, 9, 6]
+classification = 122
+special_intervals = ["2E783", "3T514"]
+
+[[link_chord]]
+intervals = "2E796415T38"
+pitch_classes = [0, 2, 1, 8, 5, 11, 3, 4, 9, 7, 10, 6]
+classification = 123
+special_intervals = ["415T3"]
+
+[[link_chord]]
+intervals = "2E8T1956743"
+pitch_classes = [0, 2, 1, 9, 7, 8, 5, 10, 4, 11, 3, 6]
+classification = 124
+special_intervals = ["E8T19"]
+
+[[link_chord]]
+intervals = "2E9658T4137"
+pitch_classes = [0, 2, 1, 10, 4, 9, 5, 3, 7, 8, 11, 6]
+classification = 125
+special_intervals = ["9658T"]
+
+[[link_chord]]
+intervals = "3142E8956T7"
+pitch_classes = [0, 3, 4, 8, 10, 9, 5, 2, 7, 1, 11, 6]
+classification = 126
+special_intervals = ["3142E"]
+
+[[link_chord]]
+intervals = "3142ET79685"
+pitch_classes = [0, 3, 4, 8, 10, 9, 7, 2, 11, 5, 1, 6]
+classification = 127
+special_intervals = ["3142E"]
+
+[[link_chord]]
+intervals = "31456T972E8"
+pitch_classes = [0, 3, 4, 8, 1, 7, 5, 2, 9, 11, 10, 6]
+classification = 128
+special_intervals = ["56T97"]
+
+[[link_chord]]
+intervals = "314672E9T85"
+pitch_classes = [0, 3, 4, 8, 2, 9, 11, 10, 7, 5, 1, 6]
+classification = 129
+special_intervals = ["31467"]
+
+[[link_chord]]
+intervals = "3152689TE74"
+pitch_classes = [0, 3, 4, 9, 11, 5, 1, 10, 8, 7, 2, 6]
+classification = 130
+special_intervals = ["52689", "9TE74"]
+
+[[link_chord]]
+intervals = "3152689TE74"
+pitch_classes = [0, 3, 4, 9, 11, 5, 1, 10, 8, 7, 2, 6]
+classification = 130
+special_intervals = ["52689", "9TE74"]
+
+[[link_chord]]
+intervals = "3152E9T8764"
+pitch_classes = [0, 3, 4, 9, 11, 10, 7, 5, 1, 8, 2, 6]
+classification = 131
+special_intervals = ["152E9"]
+
+[[link_chord]]
+intervals = "3158629TE74"
+pitch_classes = [0, 3, 4, 9, 5, 11, 1, 10, 8, 7, 2, 6]
+classification = 132
+special_intervals = ["58629", "9TE74"]
+
+[[link_chord]]
+intervals = "3158629TE74"
+pitch_classes = [0, 3, 4, 9, 5, 11, 1, 10, 8, 7, 2, 6]
+classification = 132
+special_intervals = ["58629", "9TE74"]
+
+[[link_chord]]
+intervals = "316452E98T7"
+pitch_classes = [0, 3, 4, 10, 2, 7, 9, 8, 5, 1, 11, 6]
+classification = 133
+special_intervals = ["52E98"]
+
+[[link_chord]]
+intervals = "317ET562894"
+pitch_classes = [0, 3, 4, 11, 10, 8, 1, 7, 9, 5, 2, 6]
+classification = 134
+special_intervals = ["56289"]
+
+[[link_chord]]
+intervals = "317ET926854"
+pitch_classes = [0, 3, 4, 11, 10, 8, 5, 7, 1, 9, 2, 6]
+classification = 135
+special_intervals = ["92685"]
+
+[[link_chord]]
+intervals = "317ET986254"
+pitch_classes = [0, 3, 4, 11, 10, 8, 5, 1, 7, 9, 2, 6]
+classification = 136
+special_intervals = ["98625"]
+
+[[link_chord]]
+intervals = "319765T42E8"
+pitch_classes = [0, 3, 4, 1, 8, 2, 7, 5, 9, 11, 10, 6]
+classification = 137
+special_intervals = ["765T4"]
+
+[[link_chord]]
+intervals = "3198265TE74"
+pitch_classes = [0, 3, 4, 1, 9, 11, 5, 10, 8, 7, 2, 6]
+classification = 138
+special_intervals = ["98265"]
+
+[[link_chord]]
+intervals = "31T524796E8"
+pitch_classes = [0, 3, 4, 2, 7, 9, 1, 8, 5, 11, 10, 6]
+classification = 139
+special_intervals = ["52479"]
+
+[[link_chord]]
+intervals = "31T567942E8"
+pitch_classes = [0, 3, 4, 2, 7, 1, 8, 5, 9, 11, 10, 6]
+classification = 140
+special_intervals = ["56794"]
+
+[[link_chord]]
+intervals = "31T7E294685"
+pitch_classes = [0, 3, 4, 2, 9, 8, 10, 7, 11, 5, 1, 6]
+classification = 141
+special_intervals = ["31T7E"]
+
+[[link_chord]]
+intervals = "325E79T8164"
+pitch_classes = [0, 3, 5, 10, 9, 4, 1, 11, 7, 8, 2, 6]
+classification = 142
+special_intervals = ["25E79", "5E79T"]
+
+[[link_chord]]
+intervals = "325E79T8164"
+pitch_classes = [0, 3, 5, 10, 9, 4, 1, 11, 7, 8, 2, 6]
+classification = 142
+special_intervals = ["25E79", "5E79T"]
+
+[[link_chord]]
+intervals = "3265981TE74"
+pitch_classes = [0, 3, 5, 11, 4, 1, 9, 10, 8, 7, 2, 6]
+classification = 143
+special_intervals = ["65981"]
+
+[[link_chord]]
+intervals = "329E71T4568"
+pitch_classes = [0, 3, 5, 2, 1, 8, 9, 7, 11, 4, 10, 6]
+classification = 144
+special_intervals = ["29E71", "9E71T"]
+
+[[link_chord]]
+intervals = "329E71T4568"
+pitch_classes = [0, 3, 5, 2, 1, 8, 9, 7, 11, 4, 10, 6]
+classification = 144
+special_intervals = ["29E71", "9E71T"]
+
+[[link_chord]]
+intervals = "32E981T6547"
+pitch_classes = [0, 3, 5, 4, 1, 9, 10, 8, 2, 7, 11, 6]
+classification = 145
+special_intervals = ["2E981"]
+
+[[link_chord]]
+intervals = "347621T8E95"
+pitch_classes = [0, 3, 7, 2, 8, 10, 11, 9, 5, 4, 1, 6]
+classification = 146
+special_intervals = ["1T8E9"]
+
+[[link_chord]]
+intervals = "3479TE26185"
+pitch_classes = [0, 3, 7, 2, 11, 9, 8, 10, 4, 5, 1, 6]
+classification = 147
+special_intervals = ["479TE"]
+
+[[link_chord]]
+intervals = "34T9E712568"
+pitch_classes = [0, 3, 7, 5, 2, 1, 8, 9, 11, 4, 10, 6]
+classification = 148
+special_intervals = ["T9E71"]
+
+[[link_chord]]
+intervals = "35146T927E8"
+pitch_classes = [0, 3, 8, 9, 1, 7, 5, 2, 4, 11, 10, 6]
+classification = 149
+special_intervals = ["146T9", "927E8"]
+
+[[link_chord]]
+intervals = "35146T927E8"
+pitch_classes = [0, 3, 8, 9, 1, 7, 5, 2, 4, 11, 10, 6]
+classification = 149
+special_intervals = ["146T9", "927E8"]
+
+[[link_chord]]
+intervals = "351T64927E8"
+pitch_classes = [0, 3, 8, 9, 7, 1, 5, 2, 4, 11, 10, 6]
+classification = 150
+special_intervals = ["1T649", "927E8"]
+
+[[link_chord]]
+intervals = "351T64927E8"
+pitch_classes = [0, 3, 8, 9, 7, 1, 5, 2, 4, 11, 10, 6]
+classification = 150
+special_intervals = ["1T649", "927E8"]
+
+[[link_chord]]
+intervals = "351T7924E68"
+pitch_classes = [0, 3, 8, 9, 7, 2, 11, 1, 5, 4, 10, 6]
+classification = 151
+special_intervals = ["51T79"]
+
+[[link_chord]]
+intervals = "35216E98T74"
+pitch_classes = [0, 3, 8, 10, 11, 5, 4, 1, 9, 7, 2, 6]
+classification = 152
+special_intervals = ["16E98"]
+
+[[link_chord]]
+intervals = "3521T8E9674"
+pitch_classes = [0, 3, 8, 10, 11, 9, 5, 4, 1, 7, 2, 6]
+classification = 153
+special_intervals = ["1T8E9"]
+
+[[link_chord]]
+intervals = "3581629ET74"
+pitch_classes = [0, 3, 8, 4, 5, 11, 1, 10, 9, 7, 2, 6]
+classification = 154
+special_intervals = ["1629E"]
+
+[[link_chord]]
+intervals = "3594T6127E8"
+pitch_classes = [0, 3, 8, 5, 9, 7, 1, 2, 4, 11, 10, 6]
+classification = 155
+special_intervals = ["94T61"]
+
+[[link_chord]]
+intervals = "359E6128T74"
+pitch_classes = [0, 3, 8, 5, 4, 10, 11, 1, 9, 7, 2, 6]
+classification = 156
+special_intervals = ["E6128"]
+
+[[link_chord]]
+intervals = "35E7216T498"
+pitch_classes = [0, 3, 8, 7, 2, 4, 5, 11, 9, 1, 10, 6]
+classification = 157
+special_intervals = ["16T49"]
+
+[[link_chord]]
+intervals = "35E72946T18"
+pitch_classes = [0, 3, 8, 7, 2, 4, 1, 5, 11, 9, 10, 6]
+classification = 158
+special_intervals = ["946T1"]
+
+[[link_chord]]
+intervals = "35E729T6418"
+pitch_classes = [0, 3, 8, 7, 2, 4, 1, 11, 5, 9, 10, 6]
+classification = 159
+special_intervals = ["9T641"]
+
+[[link_chord]]
+intervals = "3625189TE74"
+pitch_classes = [0, 3, 9, 11, 4, 5, 1, 10, 8, 7, 2, 6]
+classification = 160
+special_intervals = ["25189", "9TE74"]
+
+[[link_chord]]
+intervals = "3625189TE74"
+pitch_classes = [0, 3, 9, 11, 4, 5, 1, 10, 8, 7, 2, 6]
+classification = 160
+special_intervals = ["25189", "9TE74"]
+
+[[link_chord]]
+intervals = "36524ET8917"
+pitch_classes = [0, 3, 9, 2, 4, 8, 7, 5, 1, 10, 11, 6]
+classification = 161
+special_intervals = ["36524"]
+
+[[link_chord]]
+intervals = "3674218T9E5"
+pitch_classes = [0, 3, 9, 4, 8, 10, 11, 7, 5, 2, 1, 6]
+classification = 162
+special_intervals = ["36742"]
+
+[[link_chord]]
+intervals = "36T154927E8"
+pitch_classes = [0, 3, 9, 7, 8, 1, 5, 2, 4, 11, 10, 6]
+classification = 163
+special_intervals = ["T1549", "927E8"]
+
+[[link_chord]]
+intervals = "36T154927E8"
+pitch_classes = [0, 3, 9, 7, 8, 1, 5, 2, 4, 11, 10, 6]
+classification = 163
+special_intervals = ["T1549", "927E8"]
+
+[[link_chord]]
+intervals = "3764128T9E5"
+pitch_classes = [0, 3, 10, 4, 8, 9, 11, 7, 5, 2, 1, 6]
+classification = 164
+special_intervals = ["37641"]
+
+[[link_chord]]
+intervals = "38297E5T164"
+pitch_classes = [0, 3, 11, 1, 10, 5, 4, 9, 7, 8, 2, 6]
+classification = 165
+special_intervals = ["297E5"]
+
+[[link_chord]]
+intervals = "38E729T6145"
+pitch_classes = [0, 3, 11, 10, 5, 7, 4, 2, 8, 9, 1, 6]
+classification = 166
+special_intervals = ["8E729"]
+
+[[link_chord]]
+intervals = "3T17E924568"
+pitch_classes = [0, 3, 1, 2, 9, 8, 5, 7, 11, 4, 10, 6]
+classification = 167
+special_intervals = ["T17E9", "17E92"]
+
+[[link_chord]]
+intervals = "3T17E924568"
+pitch_classes = [0, 3, 1, 2, 9, 8, 5, 7, 11, 4, 10, 6]
+classification = 167
+special_intervals = ["T17E9", "17E92"]
+
+[[link_chord]]
+intervals = "3T4952E8617"
+pitch_classes = [0, 3, 1, 5, 2, 7, 9, 8, 4, 10, 11, 6]
+classification = 168
+special_intervals = ["4952E"]
+
+[[link_chord]]
+intervals = "3T6194527E8"
+pitch_classes = [0, 3, 1, 7, 8, 5, 9, 2, 4, 11, 10, 6]
+classification = 169
+special_intervals = ["61945"]
+
+[[link_chord]]
+intervals = "3T62E815497"
+pitch_classes = [0, 3, 1, 7, 9, 8, 4, 5, 10, 2, 11, 6]
+classification = 170
+special_intervals = ["15497"]
+
+[[link_chord]]
+intervals = "3T97E528164"
+pitch_classes = [0, 3, 1, 10, 5, 4, 9, 11, 7, 8, 2, 6]
+classification = 171
+special_intervals = ["T97E5", "97E52"]
+
+[[link_chord]]
+intervals = "3T97E528164"
+pitch_classes = [0, 3, 1, 10, 5, 4, 9, 11, 7, 8, 2, 6]
+classification = 171
+special_intervals = ["T97E5", "97E52"]
+
+[[link_chord]]
+intervals = "3E2418596T7"
+pitch_classes = [0, 3, 2, 4, 8, 9, 5, 10, 7, 1, 11, 6]
+classification = 172
+special_intervals = ["3E241"]
+
+[[link_chord]]
+intervals = "3E7T4926185"
+pitch_classes = [0, 3, 2, 9, 7, 11, 8, 10, 4, 5, 1, 6]
+classification = 173
+special_intervals = ["E7T49"]
+
+[[link_chord]]
+intervals = "416352E7T98"
+pitch_classes = [0, 4, 5, 11, 2, 7, 9, 8, 3, 1, 10, 6]
+classification = 174
+special_intervals = ["352E7"]
+
+[[link_chord]]
+intervals = "41T629E7835"
+pitch_classes = [0, 4, 5, 3, 9, 11, 8, 7, 2, 10, 1, 6]
+classification = 175
+special_intervals = ["629E7", "E7835"]
+
+[[link_chord]]
+intervals = "41T629E7835"
+pitch_classes = [0, 4, 5, 3, 9, 11, 8, 7, 2, 10, 1, 6]
+classification = 175
+special_intervals = ["629E7", "E7835"]
+
+[[link_chord]]
+intervals = "4328T56E917"
+pitch_classes = [0, 4, 7, 9, 5, 3, 8, 2, 1, 10, 11, 6]
+classification = 176
+special_intervals = ["8T56E"]
+
+[[link_chord]]
+intervals = "4328TE65917"
+pitch_classes = [0, 4, 7, 9, 5, 3, 2, 8, 1, 10, 11, 6]
+classification = 177
+special_intervals = ["8TE65"]
+
+[[link_chord]]
+intervals = "43T9E865217"
+pitch_classes = [0, 4, 7, 5, 2, 1, 9, 3, 8, 10, 11, 6]
+classification = 178
+special_intervals = ["9E865"]
+
+[[link_chord]]
+intervals = "463152E9T87"
+pitch_classes = [0, 4, 10, 1, 2, 7, 9, 8, 5, 3, 11, 6]
+classification = 179
+special_intervals = ["152E9"]
+
+[[link_chord]]
+intervals = "46529E8T137"
+pitch_classes = [0, 4, 10, 3, 5, 2, 1, 9, 7, 8, 11, 6]
+classification = 180
+special_intervals = ["9E8T1"]
+
+[[link_chord]]
+intervals = "46731T8E925"
+pitch_classes = [0, 4, 10, 5, 8, 9, 7, 3, 2, 11, 1, 6]
+classification = 181
+special_intervals = ["1T8E9"]
+
+[[link_chord]]
+intervals = "4692E513T87"
+pitch_classes = [0, 4, 10, 7, 9, 8, 1, 2, 5, 3, 11, 6]
+classification = 182
+special_intervals = ["2E513", "E513T"]
+
+[[link_chord]]
+intervals = "4692E513T87"
+pitch_classes = [0, 4, 10, 7, 9, 8, 1, 2, 5, 3, 11, 6]
+classification = 182
+special_intervals = ["2E513", "E513T"]
+
+[[link_chord]]
+intervals = "46982315ET7"
+pitch_classes = [0, 4, 10, 7, 3, 5, 8, 9, 2, 1, 11, 6]
+classification = 183
+special_intervals = ["2315E"]
+
+[[link_chord]]
+intervals = "469T315E287"
+pitch_classes = [0, 4, 10, 7, 5, 8, 9, 2, 1, 3, 11, 6]
+classification = 184
+special_intervals = ["T315E", "315E2"]
+
+[[link_chord]]
+intervals = "469T315E287"
+pitch_classes = [0, 4, 10, 7, 5, 8, 9, 2, 1, 3, 11, 6]
+classification = 184
+special_intervals = ["T315E", "315E2"]
+
+[[link_chord]]
+intervals = "4769E251T38"
+pitch_classes = [0, 4, 11, 5, 2, 1, 3, 8, 9, 7, 10, 6]
+classification = 185
+special_intervals = ["9E251"]
+
+[[link_chord]]
+intervals = "4783T1629E5"
+pitch_classes = [0, 4, 11, 7, 10, 8, 9, 3, 5, 2, 1, 6]
+classification = 186
+special_intervals = ["1629E"]
+
+[[link_chord]]
+intervals = "47T198236E5"
+pitch_classes = [0, 4, 11, 9, 10, 7, 3, 5, 8, 2, 1, 6]
+classification = 187
+special_intervals = ["7T198"]
+
+[[link_chord]]
+intervals = "47E928361T5"
+pitch_classes = [0, 4, 11, 10, 7, 9, 5, 8, 2, 3, 1, 6]
+classification = 188
+special_intervals = ["8361T"]
+
+[[link_chord]]
+intervals = "4T1629E3785"
+pitch_classes = [0, 4, 2, 3, 9, 11, 8, 7, 10, 5, 1, 6]
+classification = 189
+special_intervals = ["1629E"]
+
+[[link_chord]]
+intervals = "4TE86592317"
+pitch_classes = [0, 4, 2, 1, 9, 3, 8, 5, 7, 10, 11, 6]
+classification = 190
+special_intervals = ["E8659"]
+
+[[link_chord]]
+intervals = "4E2538T1697"
+pitch_classes = [0, 4, 3, 5, 10, 1, 9, 7, 8, 2, 11, 6]
+classification = 191
+special_intervals = ["E2538"]
+
+[[link_chord]]
+intervals = "4E29658T317"
+pitch_classes = [0, 4, 3, 5, 2, 8, 1, 9, 7, 10, 11, 6]
+classification = 192
+special_intervals = ["29658", "9658T"]
+
+[[link_chord]]
+intervals = "4E29658T317"
+pitch_classes = [0, 4, 3, 5, 2, 8, 1, 9, 7, 10, 11, 6]
+classification = 192
+special_intervals = ["29658", "9658T"]
+
+[[link_chord]]
+intervals = "4ET85692317"
+pitch_classes = [0, 4, 3, 1, 9, 2, 8, 5, 7, 10, 11, 6]
+classification = 193
+special_intervals = ["T8569", "85692"]
+
+[[link_chord]]
+intervals = "4ET85692317"
+pitch_classes = [0, 4, 3, 1, 9, 2, 8, 5, 7, 10, 11, 6]
+classification = 193
+special_intervals = ["T8569", "85692"]
+
+[[link_chord]]
+intervals = "5896T142E37"
+pitch_classes = [0, 5, 1, 10, 4, 2, 3, 7, 9, 8, 11, 6]
+classification = 194
+special_intervals = ["142E3"]
+

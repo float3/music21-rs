@@ -137,6 +137,7 @@ pub(crate) fn regenerate(workspace_root: &Path) -> Result<Vec<PathBuf>, Box<dyn 
             write_chord_types(py, workspace_root, &version)?,
             write_meters(py, workspace_root, &version)?,
             write_small_tables(py, workspace_root, &version)?,
+            write_serial(py, workspace_root, &version)?,
         ])
     })
     .map_err(|error| -> Box<dyn Error> { Box::new(error) })
@@ -432,6 +433,137 @@ fn write_small_tables(py: Python<'_>, workspace_root: &Path, version: &str) -> P
     fs::write(&path, out)?;
     println!(
         "  wrote {} ({accidentals} accidentals, {mode_count} modes, {specifiers} specifier combos, {profiles} key profiles, {tempo_words} tempo words)",
+        path.display()
+    );
+    Ok(path)
+}
+
+fn pitch_classes_from_intervals(intervals: &str) -> Vec<u32> {
+    let mut pitch_classes = vec![0u32];
+    for interval in intervals.chars() {
+        let step = match interval {
+            'T' => 10,
+            'E' => 11,
+            digit => digit
+                .to_digit(10)
+                .expect("link interval strings are 0-9, T or E"),
+        };
+        let last = *pitch_classes.last().expect("seeded with 0");
+        pitch_classes.push((last + step) % 12);
+    }
+    pitch_classes
+}
+
+fn write_link_classification(
+    out: &mut String,
+    row: &Bound<'_, PyAny>,
+    key_prefix: &str,
+) -> PyResult<()> {
+    let (classification, special): (Option<u32>, Vec<String>) =
+        row.call_method0("getLinkClassification")?.extract()?;
+    if let Some(classification) = classification {
+        let _ = writeln!(out, "{key_prefix}classification = {classification}");
+    }
+    let special = special
+        .iter()
+        .map(|value| toml_string(value))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let _ = writeln!(out, "{key_prefix}special_intervals = [{special}]");
+    Ok(())
+}
+
+fn write_serial(py: Python<'_>, workspace_root: &Path, version: &str) -> PyResult<PathBuf> {
+    let serial = py.import("music21.serial")?;
+
+    let mut out = header(
+        &[
+            "# Expected tone-row values, generated from music21 by",
+            "# `cargo run -p xtask --features python -- regenerate-fixtures`.",
+            "# The historical rows are transcribed into src/serial.rs; the Link chord",
+            "# table is checked behaviourally, by classifying a row built from each",
+            "# of music21's interval strings.",
+        ],
+        version,
+    );
+
+    let historical = serial.getattr("historicalDict")?.cast_into::<PyDict>()?;
+    let mut historical_count = 0;
+    for (name, _) in historical.iter() {
+        let name: String = name.extract()?;
+        let row = serial.call_method1("getHistoricalRowByName", (name.as_str(),))?;
+        let composer: String = row.getattr("composer")?.extract()?;
+        let opus: Option<String> = row.getattr("opus")?.extract()?;
+        let title: String = row.getattr("title")?.extract()?;
+        let pitch_classes: Vec<u32> = row.call_method0("pitchClasses")?.extract()?;
+        let intervals: String = row.call_method0("getIntervalsAsString")?.extract()?;
+        let all_interval: bool = row.call_method0("isAllInterval")?.extract()?;
+        let matrix: String = row.call_method0("matrix")?.str()?.extract()?;
+        let _ = writeln!(out, "[[historical_row]]");
+        let _ = writeln!(out, "name = {}", toml_string(&name));
+        let _ = writeln!(out, "composer = {}", toml_string(&composer));
+        if let Some(opus) = opus {
+            let _ = writeln!(out, "opus = {}", toml_string(&opus));
+        }
+        let _ = writeln!(out, "title = {}", toml_string(&title));
+        let _ = writeln!(
+            out,
+            "pitch_classes = [{}]",
+            pitch_classes
+                .iter()
+                .map(u32::to_string)
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        let _ = writeln!(out, "intervals = {}", toml_string(&intervals));
+        let _ = writeln!(out, "is_all_interval = {all_interval}");
+        write_link_classification(&mut out, &row, "link_")?;
+        let matrix = matrix
+            .lines()
+            .map(toml_string)
+            .collect::<Vec<_>>()
+            .join(", ");
+        let _ = writeln!(out, "matrix = [{matrix}]");
+        let _ = writeln!(out);
+        historical_count += 1;
+    }
+
+    let code = serial
+        .getattr("TwelveToneRow")?
+        .getattr("getLinkClassification")?
+        .getattr("__code__")?;
+    let mut link_count = 0;
+    for constant in code.getattr("co_consts")?.try_iter()? {
+        let Ok(strings) = constant?.extract::<Vec<String>>() else {
+            continue;
+        };
+        if strings.is_empty() || strings.iter().any(|value| value.len() != 11) {
+            continue;
+        }
+        for intervals in &strings {
+            let pitch_classes = pitch_classes_from_intervals(intervals);
+            let row = serial.call_method1("pcToToneRow", (pitch_classes.clone(),))?;
+            let _ = writeln!(out, "[[link_chord]]");
+            let _ = writeln!(out, "intervals = {}", toml_string(intervals));
+            let _ = writeln!(
+                out,
+                "pitch_classes = [{}]",
+                pitch_classes
+                    .iter()
+                    .map(u32::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            write_link_classification(&mut out, &row, "")?;
+            let _ = writeln!(out);
+            link_count += 1;
+        }
+    }
+
+    let path = workspace_root.join("data/serial_expectations.toml");
+    fs::write(&path, out)?;
+    println!(
+        "  wrote {} ({historical_count} historical rows, {link_count} link chords)",
         path.display()
     );
     Ok(path)

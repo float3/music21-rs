@@ -47,6 +47,8 @@ pub enum Error {
     Scale(String),
     /// Error associated with tempo marks.
     Tempo(String),
+    /// Error associated with tone rows and serial transformations.
+    Serial(String),
 }
 
 impl fmt::Display for Error {
@@ -72,6 +74,7 @@ impl fmt::Display for Error {
             Error::Key(msg) => write!(f, "Key error: {msg}"),
             Error::Scale(msg) => write!(f, "Scale error: {msg}"),
             Error::Tempo(msg) => write!(f, "Tempo error: {msg}"),
+            Error::Serial(msg) => write!(f, "Serial error: {msg}"),
         }
     }
 }
@@ -234,6 +237,7 @@ mod tests {
                 Error::Analysis("analysis".to_string()),
                 "Analysis error: analysis",
             ),
+            (Error::Serial("serial".to_string()), "Serial error: serial"),
         ];
 
         for (err, expected) in cases.iter() {

@@ -62,6 +62,14 @@ the next release needs a minor bump.
 - `Pitch::german`, `italian`, `french`, `spanish`, `unicode_name` and
   `unicode_name_with_octave`; `Pitch::transpose` is public and returns
   `Result` instead of swallowing failures.
+- `serial::ToneRow`, a port of music21's `serial` module: zero- and
+  original-centered `P`/`I`/`R`/`RI` transformations and their inverse
+  search, `matrix` and `row_to_matrix`, `intervals_as_string`,
+  `is_all_interval`, Link chord classification and hexachordal
+  combinatoriality, plus the 71 historical rows as `HISTORICAL_ROWS` and
+  `historical_row_by_name`. Both tables are verified against music21 by a
+  new `serial_expectations.toml` fixture.
+- `Error::Serial`.
 - `Note::transpose`, `Key::transpose` and `Key::as_scale`.
 
 ## Bug Fixes

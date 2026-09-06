@@ -42,6 +42,8 @@ pub mod rest;
 pub mod roman;
 /// Public scale helpers.
 pub mod scale;
+/// Tone rows, twelve-tone matrices and serial transformations.
+pub mod serial;
 pub mod sieve;
 pub(crate) mod stepname;
 /// Small ordered timeline container.
@@ -89,6 +91,11 @@ pub use polyrhythm::{Polyrhythm, PolyrhythmAnalysis, PolyrhythmEvent, Polyrhythm
 pub use rest::Rest;
 pub use roman::{RomanNumeral, analyze_chord, analyze_chord_with_root};
 pub use scale::{BluesForm, DiatonicScale, Scale, ScaleType, StepScale, WeightedHexatonicBlues};
+pub use serial::{
+    HISTORICAL_ROWS, HistoricalRow, IndexedTransformation, LinkClassification, ToneRow,
+    Transformation, TransformationConvention, TwelveToneMatrix, historical_row_by_name,
+    row_to_matrix,
+};
 pub use sieve::Sieve;
 pub use stream::{Stream, StreamElement, StreamEvent};
 pub use tempo::{DEFAULT_TEMPO_VALUES, MetronomeMark, convert_tempo_by_referent};
