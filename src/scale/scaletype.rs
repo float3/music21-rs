@@ -8,6 +8,7 @@
 //! run out of reasonable accidentals, which is why a C whole-tone scale ends
 //! `A#` rather than `B-` but a B whole-tone scale does not end `A##`.
 
+use crate::chord::{Chord, root};
 use crate::defaults::{FloatType, IntegerType};
 use crate::error::Result;
 use crate::interval::Interval;
@@ -46,6 +47,39 @@ fn step_interval(name: &str) -> &'static Interval {
         .get(name)
         .expect("scale tables only use intervals listed in STEP_INTERVALS")
 }
+
+/// Which set of solfège syllables [`Scale::solfeg`] uses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum SolfegVariant {
+    /// music21's own table.
+    Music21,
+    /// The Humdrum spellings, which differ in `my`, `so` and `ty`.
+    Humdrum,
+}
+
+/// music21's `_solfegSyllables`: for each of the seven degrees, the syllable
+/// at alterations of -2, -1, 0, +1 and +2.
+pub const SOLFEG_SYLLABLES: [[&str; 5]; 7] = [
+    ["def", "de", "do", "di", "dis"],
+    ["raf", "ra", "re", "ri", "ris"],
+    ["mef", "me", "mi", "mis", "mish"],
+    ["fef", "fe", "fa", "fi", "fis"],
+    ["sef", "se", "sol", "si", "sis"],
+    ["lef", "le", "la", "li", "lis"],
+    ["tef", "te", "ti", "tis", "tish"],
+];
+
+/// music21's `_humdrumSolfegSyllables`, laid out like [`SOLFEG_SYLLABLES`].
+pub const HUMDRUM_SOLFEG_SYLLABLES: [[&str; 5]; 7] = [
+    ["def", "de", "do", "di", "dis"],
+    ["raf", "ra", "re", "ri", "ris"],
+    ["mef", "me", "mi", "my", "mish"],
+    ["fef", "fe", "fa", "fi", "fis"],
+    ["sef", "se", "so", "si", "sis"],
+    ["lef", "le", "la", "li", "lis"],
+    ["tef", "te", "ti", "ty", "tish"],
+];
 
 /// A named scale from music21's scale module.
 ///
@@ -357,6 +391,132 @@ impl Scale {
         Ok(Scale::new(self.scale_type, new_tonic))
     }
 
+    /// Returns the number of distinct degrees: music21's `getDegreeMaxUnique`,
+    /// seven for a major scale and twelve for the chromatic.
+    pub fn degree_count(&self) -> usize {
+        self.scale_type.degree_count()
+    }
+
+    /// Returns the same scale type on the tonic transposed by `interval`.
+    pub fn transpose(&self, interval: &Interval) -> Result<Scale> {
+        Ok(Scale::new(self.scale_type, self.tonic.transpose(interval)?))
+    }
+
+    /// Returns one octave of the scale as a chord, tonic through octave:
+    /// music21's `getChord`.
+    pub fn chord(&self) -> Result<Chord> {
+        Chord::new(self.pitches()?.as_slice())
+    }
+
+    /// Returns the pitches at the given degrees within one octave of the
+    /// tonic: music21's `pitchesFromScaleDegrees`, which realizes tonic
+    /// through octave once and so silently drops a degree beyond the octave.
+    pub fn pitches_from_scale_degrees(&self, degrees: &[usize]) -> Result<Vec<Pitch>> {
+        let octave = self.pitches()?;
+        Ok(degrees
+            .iter()
+            .filter_map(|&degree| octave.get(degree.checked_sub(1)?).cloned())
+            .collect())
+    }
+
+    /// Returns the interval from one degree to another, both folded into the
+    /// first octave the way music21's `pitchFromDegree` folds them, so degree
+    /// 9 of a seven-note scale is degree 2 and the interval from 2 to 9 is a
+    /// unison.
+    pub fn interval_between_degrees(&self, start: usize, end: usize) -> Result<Interval> {
+        let fold = |degree: usize| -> usize {
+            let count = self.scale_type.degree_count();
+            if degree <= count + 1 {
+                degree
+            } else {
+                (degree - 1) % count + 1
+            }
+        };
+        Interval::between_pitches(
+            &self.pitch_at_degree(fold(start))?,
+            &self.pitch_at_degree(fold(end))?,
+        )
+    }
+
+    /// Returns whether `other` is the scale pitch `steps` degrees above
+    /// `origin`, compared by name so the octave does not matter: music21's
+    /// `isNext`.
+    pub fn is_next(&self, other: &Pitch, origin: &Pitch, steps: usize) -> Result<bool> {
+        Ok(self.next_pitch_above(origin, steps)?.name() == other.name())
+    }
+
+    /// Splits pitches into those whose names the scale contains and those it
+    /// does not: music21's `match`. The matched list carries the scale's own
+    /// pitches, realized from the tonic in octave 4 when it has none, and
+    /// the unmatched list carries the pitches as given.
+    pub fn match_pitches(&self, pitches: &[Pitch]) -> Result<(Vec<Pitch>, Vec<Pitch>)> {
+        let realized = self.realized_in_implicit_octave()?;
+        let mut matched = Vec::new();
+        let mut unmatched = Vec::new();
+        for pitch in pitches {
+            match realized
+                .iter()
+                .find(|candidate| candidate.name() == pitch.name())
+            {
+                Some(found) => matched.push(found.clone()),
+                None => unmatched.push(pitch.clone()),
+            }
+        }
+        Ok((matched, unmatched))
+    }
+
+    /// Returns the scale pitches, tonic through octave, whose pitch classes
+    /// none of `pitches` has: music21's `findMissing`, so C major against
+    /// `C E G` is `D4 F4 A4 B4`.
+    pub fn find_missing(&self, pitches: &[Pitch]) -> Result<Vec<Pitch>> {
+        let present: Vec<u8> = pitches.iter().map(root::pitch_class).collect();
+        Ok(self
+            .realized_in_implicit_octave()?
+            .into_iter()
+            .filter(|candidate| !present.contains(&root::pitch_class(candidate)))
+            .collect())
+    }
+
+    /// Returns the solfège syllable for a pitch, `do` through `ti` with the
+    /// chromatic inflections (`di`, `ra`, …): music21's `solfeg`. Without
+    /// `chromatic` the plain syllable of the degree is returned whatever the
+    /// accidental. Errors for degrees past seven and alterations past a
+    /// double sharp or flat.
+    pub fn solfeg(&self, pitch: &Pitch, variant: SolfegVariant, chromatic: bool) -> Result<String> {
+        let (degree, accidental) = self.degree_and_accidental_of(pitch)?;
+        if degree > 7 {
+            return Err(crate::error::Error::Scale(
+                "Cannot call solfeg on non-7-degree scales".to_string(),
+            ));
+        }
+        let table = match variant {
+            SolfegVariant::Music21 => &SOLFEG_SYLLABLES,
+            SolfegVariant::Humdrum => &HUMDRUM_SOLFEG_SYLLABLES,
+        };
+        let alter = if chromatic {
+            accidental.map_or(0, |accidental| accidental.alter() as IntegerType)
+        } else {
+            0
+        };
+        let column = usize::try_from(alter + 2)
+            .ok()
+            .filter(|column| *column < 5)
+            .ok_or_else(|| {
+                crate::error::Error::Scale(format!(
+                    "no solfeg syllable for an alteration of {alter}"
+                ))
+            })?;
+        Ok(table[degree - 1][column].to_string())
+    }
+
+    fn realized_in_implicit_octave(&self) -> Result<Vec<Pitch>> {
+        let mut tonic = self.tonic.clone();
+        if tonic.octave().is_none() {
+            tonic.octave_setter(Some(crate::defaults::PITCH_OCTAVE as IntegerType));
+        }
+        Scale::new(self.scale_type, tonic).pitches()
+    }
+
     /// Returns the one-based degree whose pitch name matches, ignoring octave,
     /// or `None` when the pitch is not in the scale.
     pub fn degree_of(&self, pitch: &Pitch) -> Result<Option<usize>> {
@@ -512,6 +672,169 @@ fn max_alter(pitches: &[Pitch]) -> crate::defaults::IntegerType {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn scale_helpers_match_music21() {
+        let c_major = Scale::new(ScaleType::Major, Pitch::from_name("C4").unwrap());
+        let pitch = |name: &str| Pitch::from_name(name).unwrap();
+        let names = |pitches: &[Pitch]| -> Vec<String> {
+            pitches.iter().map(Pitch::name_with_octave).collect()
+        };
+
+        assert_eq!(c_major.degree_count(), 7);
+        assert_eq!(
+            Scale::new(ScaleType::Chromatic, pitch("C4")).degree_count(),
+            12
+        );
+        assert_eq!(
+            c_major
+                .transpose(&Interval::from_name("P5").unwrap())
+                .unwrap()
+                .tonic()
+                .name_with_octave(),
+            "G4"
+        );
+        assert_eq!(
+            names(&c_major.chord().unwrap().pitches()),
+            ["C4", "D4", "E4", "F4", "G4", "A4", "B4", "C5"]
+        );
+        assert_eq!(
+            names(
+                &c_major
+                    .pitches_from_scale_degrees(&[1, 3, 5, 8, 10])
+                    .unwrap()
+            ),
+            ["C4", "E4", "G4", "C5"]
+        );
+        assert_eq!(
+            c_major.interval_between_degrees(1, 5).unwrap().short_name(),
+            "P5"
+        );
+        assert_eq!(
+            c_major.interval_between_degrees(3, 7).unwrap().short_name(),
+            "P5"
+        );
+        assert_eq!(
+            c_major
+                .interval_between_degrees(5, 2)
+                .unwrap()
+                .directed_name(),
+            "P-4"
+        );
+        assert_eq!(
+            c_major.interval_between_degrees(2, 9).unwrap().short_name(),
+            "P1"
+        );
+
+        assert!(c_major.is_next(&pitch("D4"), &pitch("C4"), 1).unwrap());
+        assert!(c_major.is_next(&pitch("D5"), &pitch("C4"), 1).unwrap());
+        assert!(!c_major.is_next(&pitch("E4"), &pitch("C4"), 1).unwrap());
+        assert!(c_major.is_next(&pitch("E4"), &pitch("C4"), 2).unwrap());
+
+        let (matched, unmatched) = c_major
+            .match_pitches(&["C4", "E4", "G-4", "B-5", "A"].map(pitch))
+            .unwrap();
+        assert_eq!(names(&matched), ["C4", "E4", "A4"]);
+        assert_eq!(names(&unmatched), ["G-4", "B-5"]);
+
+        assert_eq!(
+            names(
+                &c_major
+                    .find_missing(&["C4", "E4", "G4"].map(pitch))
+                    .unwrap()
+            ),
+            ["D4", "F4", "A4", "B4"]
+        );
+        let a_minor = Scale::new(ScaleType::Minor, pitch("A"));
+        assert_eq!(
+            names(
+                &a_minor
+                    .find_missing(&["A", "B", "C", "E"].map(pitch))
+                    .unwrap()
+            ),
+            ["D5", "F5", "G5"]
+        );
+        assert!(
+            c_major
+                .find_missing(&["C4", "D4", "E4", "F4", "G4", "A4", "B4"].map(pitch))
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn solfeg_matches_music21() {
+        let c_major = Scale::new(ScaleType::Major, Pitch::from_name("C4").unwrap());
+        let cases = [
+            ("C4", "do", "do", "do"),
+            ("C#4", "di", "di", "do"),
+            ("D-4", "ra", "ra", "re"),
+            ("E-4", "me", "me", "mi"),
+            ("F#4", "fi", "fi", "fa"),
+            ("G-4", "se", "se", "sol"),
+            ("G4", "sol", "so", "sol"),
+            ("A-4", "le", "le", "la"),
+            ("B-4", "te", "te", "ti"),
+            ("C-4", "de", "de", "do"),
+            ("B#4", "tis", "ty", "ti"),
+            ("F##4", "fis", "fis", "fa"),
+            ("E#4", "mis", "my", "mi"),
+            ("D##4", "ris", "ris", "re"),
+        ];
+        for (name, music21, humdrum, plain) in cases {
+            let pitch = Pitch::from_name(name).unwrap();
+            assert_eq!(
+                c_major
+                    .solfeg(&pitch, SolfegVariant::Music21, true)
+                    .unwrap(),
+                music21,
+                "{name}"
+            );
+            assert_eq!(
+                c_major
+                    .solfeg(&pitch, SolfegVariant::Humdrum, true)
+                    .unwrap(),
+                humdrum,
+                "{name}"
+            );
+            assert_eq!(
+                c_major
+                    .solfeg(&pitch, SolfegVariant::Music21, false)
+                    .unwrap(),
+                plain,
+                "{name}"
+            );
+        }
+        let chromatic = Scale::new(ScaleType::Chromatic, Pitch::from_name("C4").unwrap());
+        assert_eq!(
+            chromatic
+                .solfeg(
+                    &Pitch::from_name("D4").unwrap(),
+                    SolfegVariant::Music21,
+                    true
+                )
+                .unwrap(),
+            "mi"
+        );
+        assert!(
+            chromatic
+                .solfeg(
+                    &Pitch::from_name("B4").unwrap(),
+                    SolfegVariant::Music21,
+                    true
+                )
+                .is_err()
+        );
+        assert!(
+            c_major
+                .solfeg(
+                    &Pitch::from_name("C###4").unwrap(),
+                    SolfegVariant::Music21,
+                    true
+                )
+                .is_err()
+        );
+    }
     use super::*;
 
     #[test]

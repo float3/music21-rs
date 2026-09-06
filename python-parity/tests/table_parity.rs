@@ -11,7 +11,10 @@
 //! needs neither Python nor the submodule. `fixture_freshness.rs` is what stops
 //! the fixture itself going stale against a bumped submodule.
 
-use music21_rs::{Accidental, DEFAULT_TEMPO_VALUES, Interval, KeyProfile, key};
+use music21_rs::{
+    Accidental, DEFAULT_TEMPO_VALUES, Interval, KeyProfile, key,
+    scale::{HUMDRUM_SOLFEG_SYLLABLES, SOLFEG_SYLLABLES},
+};
 use serde::Deserialize;
 
 use std::path::Path;
@@ -23,6 +26,14 @@ struct Expectations {
     specifier: Vec<SpecifierExpectation>,
     key_profile: Vec<KeyProfileExpectation>,
     tempo: Vec<TempoExpectation>,
+    solfeg: Vec<SolfegExpectation>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SolfegExpectation {
+    variant: String,
+    degree: usize,
+    syllables: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -265,6 +276,36 @@ fn tempo_words_match_music21() {
     assert!(
         mismatches.is_empty(),
         "{} tempo values differ from music21:\n    {}",
+        mismatches.len(),
+        mismatches.join("\n    ")
+    );
+}
+
+#[test]
+fn solfeg_syllables_match_music21() {
+    let expectations = expectations();
+    assert_eq!(expectations.solfeg.len(), 14, "two tables of seven degrees");
+    let mut mismatches = Vec::new();
+    for expected in &expectations.solfeg {
+        let table = match expected.variant.as_str() {
+            "music21" => &SOLFEG_SYLLABLES,
+            "humdrum" => &HUMDRUM_SOLFEG_SYLLABLES,
+            other => {
+                mismatches.push(format!("unknown solfeg variant {other:?}"));
+                continue;
+            }
+        };
+        let actual: Vec<&str> = table[expected.degree - 1].to_vec();
+        if actual != expected.syllables {
+            mismatches.push(format!(
+                "{} degree {}: music21 {:?}, crate {:?}",
+                expected.variant, expected.degree, expected.syllables, actual
+            ));
+        }
+    }
+    assert!(
+        mismatches.is_empty(),
+        "{} solfeg rows differ from music21:\n    {}",
         mismatches.len(),
         mismatches.join("\n    ")
     );

@@ -94,7 +94,9 @@ pub use pitch::{
 pub use polyrhythm::{Polyrhythm, PolyrhythmAnalysis, PolyrhythmEvent, PolyrhythmRatioTone};
 pub use rest::Rest;
 pub use roman::{RomanNumeral, analyze_chord, analyze_chord_with_root};
-pub use scale::{BluesForm, DiatonicScale, Scale, ScaleType, StepScale, WeightedHexatonicBlues};
+pub use scale::{
+    BluesForm, DiatonicScale, Scale, ScaleType, SolfegVariant, StepScale, WeightedHexatonicBlues,
+};
 pub use serial::{
     HISTORICAL_ROWS, HistoricalRow, IndexedTransformation, LinkClassification, ToneRow,
     Transformation, TransformationConvention, TwelveToneMatrix, historical_row_by_name,

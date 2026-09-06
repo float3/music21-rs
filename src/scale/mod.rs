@@ -12,7 +12,7 @@ pub mod stepscale;
 
 pub use diatonicscale::DiatonicScale;
 pub use hexatonicblues::{BluesForm, WeightedHexatonicBlues};
-pub use scaletype::{Scale, ScaleType};
+pub use scaletype::{HUMDRUM_SOLFEG_SYLLABLES, SOLFEG_SYLLABLES, Scale, ScaleType, SolfegVariant};
 pub use stepscale::StepScale;
 
 pub(crate) const FIFTHS_ORDER_SHARP: [StepName; 7] = [

@@ -694,6 +694,115 @@ impl Pitch {
         Ok(())
     }
 
+    /// Returns the octave, or music21's default of 4 when none is set.
+    pub fn implicit_octave(&self) -> IntegerType {
+        self.octave.unwrap_or(PITCH_OCTAVE as IntegerType)
+    }
+
+    /// Returns the pitch class as music21's `pitchClassString`, one
+    /// character with `A` and `B` for ten and eleven. Like music21's integer
+    /// `pitchClass` it rounds a microtone away, so `C` with `+20c` is `0`
+    /// where [`Self::pitch_class`] would say `0.2`.
+    pub fn pitch_class_string(&self) -> String {
+        crate::pitch::pitchclass::convert_pitch_class_to_str(self.midi())
+    }
+
+    /// Returns how many cents the pitch sits from the nearest MIDI note,
+    /// rounded to a whole cent: music21's `getCentShiftFromMidi`, so a
+    /// half-sharp C reads `-50` because it rounds up to C-sharp.
+    pub fn cent_shift_from_midi(&self) -> IntegerType {
+        let mut distance = self.ps() - FloatType::from(self.midi());
+        while distance < -11.0 {
+            distance += 12.0;
+        }
+        while distance > 11.0 {
+            distance -= 12.0;
+        }
+        (distance * 100.0).round() as IntegerType
+    }
+
+    /// Returns the enharmonic music21's `getEnharmonic` picks: sharps respell
+    /// upward and flats downward, and a natural goes down for C, D and G and
+    /// up for the rest, so C is B-sharp and E is F-flat.
+    pub fn get_enharmonic(&self) -> Result<Pitch> {
+        let alter = self.accidental.alter();
+        let downward = if alter > 0.0 {
+            false
+        } else if alter < 0.0 {
+            true
+        } else {
+            matches!(self.step.as_char(), 'C' | 'D' | 'G')
+        };
+        if downward {
+            self.get_lower_enharmonic()
+        } else {
+            self.get_higher_enharmonic()
+        }
+    }
+
+    /// Returns the pitch with any quarter-tone accidental folded into the
+    /// microtone: music21's `convertQuarterTonesToMicrotones`, so a half-sharp
+    /// C becomes C with `+50c` and a one-and-a-half-sharp D becomes D-sharp
+    /// with `+50c`. Other accidentals are untouched.
+    pub fn convert_quarter_tones_to_microtones(&self) -> Result<Pitch> {
+        let (alter, shift) = match self.accidental.name() {
+            "half-flat" => (0.0, -50.0),
+            "half-sharp" => (0.0, 50.0),
+            "one-and-a-half-sharp" => (1.0, 50.0),
+            "one-and-a-half-flat" => (-1.0, -50.0),
+            _ => return Ok(self.clone()),
+        };
+        let cents = self.microtone.as_ref().map_or(0.0, Microtone::cents);
+        let mut pitch = self.clone();
+        pitch.accidental_setter(Accidental::new(alter)?);
+        pitch.microtone_setter(Microtone::new(cents + shift)?);
+        Ok(pitch)
+    }
+
+    /// Returns the pitch with its microtone rounded into the nearest
+    /// quarter-tone accidental and the remainder kept as a microtone:
+    /// music21's `convertMicrotonesToQuarterTones`, so C with `+30c` becomes a
+    /// half-sharp C with `-20c` and C with `+150c` becomes C-sharp with `+50c`.
+    pub fn convert_microtones_to_quarter_tones(&self) -> Result<Pitch> {
+        let cents = self.microtone.as_ref().map_or(0.0, Microtone::cents);
+        let (shift, remainder) = cents_to_alter_and_cents(cents);
+        let mut pitch = self.clone();
+        pitch.accidental_setter(Accidental::new(self.accidental.alter() + shift)?);
+        pitch.microtone_setter(Microtone::new(remainder)?);
+        Ok(pitch)
+    }
+
+    /// Returns which harmonic of `fundamental` this pitch is closest to, and
+    /// the fundamental retuned by the difference so that the harmonic lands
+    /// exactly here: music21's `harmonicAndFundamentalFromPitch`, so `E5`
+    /// over `C2` is the tenth harmonic of `C2` raised 14 cents.
+    pub fn harmonic_and_fundamental_from_pitch(&self, fundamental: &Pitch) -> Result<(u32, Pitch)> {
+        let (number, cents) = self.harmonic_from_fundamental(fundamental)?;
+        let cents = -cents;
+        let mut retuned = fundamental.clone();
+        match retuned.microtone.as_ref().map(Microtone::cents) {
+            Some(existing) => retuned.microtone_setter(Microtone::new(existing + cents)?),
+            None if cents != 0.0 => retuned.microtone_setter(Microtone::new(cents)?),
+            None => {}
+        }
+        Ok((number, retuned))
+    }
+
+    /// Returns [`Self::harmonic_and_fundamental_from_pitch`] in music21's
+    /// notation, `10thH/C2(+14c)`.
+    pub fn harmonic_and_fundamental_string_from_pitch(
+        &self,
+        fundamental: &Pitch,
+    ) -> Result<String> {
+        let (number, retuned) = self.harmonic_and_fundamental_from_pitch(fundamental)?;
+        let suffix = crate::pitch::microtone::ordinal_suffix(number as IntegerType);
+        let microtone = match retuned.microtone.as_ref() {
+            Some(microtone) if microtone.cents() != 0.0 => microtone.to_string(),
+            _ => String::new(),
+        };
+        Ok(format!("{number}{suffix}H/{retuned}{microtone}"))
+    }
+
     /// Builds a pitch from a frequency in hertz, spelled in twelve-tone equal
     /// temperament at A4 = 440 with any remainder as a microtone.
     pub fn from_frequency(hertz: FloatType) -> Result<Self> {
@@ -1372,8 +1481,196 @@ fn convert_harmonic_to_cents(harmonic_shift: IntegerType) -> IntegerType {
     (1200.0 * value.log2()).round() as IntegerType
 }
 
+/// music21's `_convertCentsToAlterAndCents`: how much of a cent shift becomes
+/// an accidental, in quarter-tone steps, and what is left as a microtone.
+/// Ported as written, including the loop upstream runs for shifts below
+/// -150 cents, which adds whole tones until the value passes +100 rather than
+/// stopping at zero; nothing here relies on that range.
+fn cents_to_alter_and_cents(shift: FloatType) -> (FloatType, FloatType) {
+    let mut value = shift;
+    let mut alter_add = 0.0;
+    if value > 150.0 {
+        let increment = (value / 100.0).floor();
+        value -= increment * 100.0;
+        alter_add += increment;
+    } else if value < -150.0 {
+        while value < 100.0 {
+            value += 100.0;
+            alter_add -= 1.0;
+        }
+    }
+    let (alter_shift, cents) = if value < -75.0 {
+        (-1.0, value + 100.0)
+    } else if value < -25.0 {
+        (-0.5, value + 50.0)
+    } else if value <= 25.0 {
+        (0.0, value)
+    } else if value <= 75.0 {
+        (0.5, value - 50.0)
+    } else {
+        (1.0, value - 100.0)
+    };
+    (alter_shift + alter_add, cents)
+}
+
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn get_enharmonic_picks_the_direction_music21_does() {
+        let cases = [
+            ("C#4", "D-4"),
+            ("D-4", "C#4"),
+            ("C4", "B#3"),
+            ("D4", "C##4"),
+            ("G4", "F##4"),
+            ("E4", "F-4"),
+            ("F4", "G--4"),
+            ("B4", "C-5"),
+            ("A-4", "G#4"),
+            ("F##4", "G4"),
+            ("C--4", "B-3"),
+            ("B#4", "C5"),
+            ("G##4", "A4"),
+        ];
+        for (name, expected) in cases {
+            let pitch = Pitch::from_name(name).unwrap();
+            assert_eq!(
+                pitch.get_enharmonic().unwrap().name_with_octave(),
+                expected,
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn cent_shift_from_midi_matches_music21() {
+        let cases: [(&str, FloatType, IntegerType, i32, &str); 8] = [
+            ("C4", 0.0, 60, 0, "0"),
+            ("C4", 20.0, 60, 20, "0"),
+            ("C4", -20.0, 60, -20, "0"),
+            ("C4", 60.0, 61, -40, "1"),
+            ("C~4", 0.0, 61, -50, "0"),
+            ("C`4", 0.0, 60, -50, "0"),
+            ("C4", -60.0, 59, 40, "B"),
+            ("C4", 130.0, 61, 30, "1"),
+        ];
+        for (name, cents, midi, shift, pitch_class) in cases {
+            let pitch = crate::PitchOptions::new()
+                .name(name)
+                .microtone(cents)
+                .build()
+                .unwrap();
+            assert_eq!(pitch.midi(), midi, "{name} {cents}");
+            assert_eq!(pitch.cent_shift_from_midi(), shift, "{name} {cents}");
+            assert_eq!(pitch.pitch_class_string(), pitch_class, "{name} {cents}");
+            assert_eq!(pitch.implicit_octave(), 4);
+        }
+        assert_eq!(Pitch::from_name("G").unwrap().implicit_octave(), 4);
+        assert_eq!(Pitch::from_name("G2").unwrap().implicit_octave(), 2);
+    }
+
+    #[test]
+    fn quarter_tones_and_microtones_convert_both_ways() {
+        let build = |name: &str, cents: FloatType| {
+            crate::PitchOptions::new()
+                .name(name)
+                .microtone(cents)
+                .build()
+                .unwrap()
+        };
+        let describe = |pitch: &Pitch| {
+            (
+                pitch.name_with_octave(),
+                pitch.microtone().map_or(0.0, Microtone::cents),
+                pitch.accidental().name().to_string(),
+            )
+        };
+
+        let to_microtones: [(&str, FloatType, &str, FloatType, &str); 6] = [
+            ("C~4", 0.0, "C4", 50.0, "natural"),
+            ("C`4", 0.0, "C4", -50.0, "natural"),
+            ("D#~4", 0.0, "D#4", 50.0, "sharp"),
+            ("E-`4", 0.0, "E-4", -50.0, "flat"),
+            ("C~4", 10.0, "C4", 60.0, "natural"),
+            ("C#4", 0.0, "C#4", 0.0, "sharp"),
+        ];
+        for (name, cents, expected_name, expected_cents, accidental) in to_microtones {
+            let converted = build(name, cents)
+                .convert_quarter_tones_to_microtones()
+                .unwrap();
+            assert_eq!(
+                describe(&converted),
+                (
+                    expected_name.to_string(),
+                    expected_cents,
+                    accidental.to_string()
+                ),
+                "{name} {cents}"
+            );
+        }
+
+        let to_quarter_tones: [(&str, FloatType, &str, FloatType, &str); 11] = [
+            ("C4", 50.0, "C~4", 0.0, "half-sharp"),
+            ("C4", -50.0, "C`4", 0.0, "half-flat"),
+            ("C4", 30.0, "C~4", -20.0, "half-sharp"),
+            ("C4", -30.0, "C`4", 20.0, "half-flat"),
+            ("C4", 70.0, "C~4", 20.0, "half-sharp"),
+            ("C#4", 50.0, "C#~4", 0.0, "one-and-a-half-sharp"),
+            ("C4", 150.0, "C#4", 50.0, "sharp"),
+            ("C4", -150.0, "C-4", -50.0, "flat"),
+            ("C4", 120.0, "C#4", 20.0, "sharp"),
+            ("C-4", -50.0, "C-`4", 0.0, "one-and-a-half-flat"),
+            ("C4", 0.0, "C4", 0.0, "natural"),
+        ];
+        for (name, cents, expected_name, expected_cents, accidental) in to_quarter_tones {
+            let converted = build(name, cents)
+                .convert_microtones_to_quarter_tones()
+                .unwrap();
+            assert_eq!(
+                describe(&converted),
+                (
+                    expected_name.to_string(),
+                    expected_cents,
+                    accidental.to_string()
+                ),
+                "{name} {cents}"
+            );
+        }
+    }
+
+    #[test]
+    fn harmonic_and_fundamental_match_music21() {
+        let cases = [
+            ("E5", "C2", 10, 14.0, "10thH/C2(+14c)"),
+            ("G4", "C2", 6, -2.0, "6thH/C2(-2c)"),
+            ("B-4", "C2", 7, 31.0, "7thH/C2(+31c)"),
+            ("F#5", "D3", 5, 14.0, "5thH/D3(+14c)"),
+            ("C5", "C4", 2, 0.0, "2ndH/C4"),
+        ];
+        for (name, fundamental, number, cents, text) in cases {
+            let pitch = Pitch::from_name(name).unwrap();
+            let fundamental = Pitch::from_name(fundamental).unwrap();
+            let (harmonic, retuned) = pitch
+                .harmonic_and_fundamental_from_pitch(&fundamental)
+                .unwrap();
+            assert_eq!(harmonic, number, "{name}");
+            let retuned_cents = retuned.microtone().map_or(0.0, Microtone::cents);
+            assert!(
+                (retuned_cents - cents).abs() < 1e-6,
+                "{name}: {retuned_cents}"
+            );
+            assert_eq!(
+                pitch
+                    .harmonic_and_fundamental_string_from_pitch(&fundamental)
+                    .unwrap(),
+                text,
+                "{name}"
+            );
+        }
+        let c4 = Pitch::from_name("C4").unwrap();
+        assert!(c4.harmonic_and_fundamental_from_pitch(&c4).is_err());
+    }
 
     #[test]
     fn full_name_matches_music21() {

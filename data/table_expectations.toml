@@ -748,3 +748,73 @@ number = 184.0
 name = "prestissimo"
 number = 208.0
 
+[[solfeg]]
+variant = "music21"
+degree = 1
+syllables = ["def", "de", "do", "di", "dis"]
+
+[[solfeg]]
+variant = "music21"
+degree = 2
+syllables = ["raf", "ra", "re", "ri", "ris"]
+
+[[solfeg]]
+variant = "music21"
+degree = 3
+syllables = ["mef", "me", "mi", "mis", "mish"]
+
+[[solfeg]]
+variant = "music21"
+degree = 4
+syllables = ["fef", "fe", "fa", "fi", "fis"]
+
+[[solfeg]]
+variant = "music21"
+degree = 5
+syllables = ["sef", "se", "sol", "si", "sis"]
+
+[[solfeg]]
+variant = "music21"
+degree = 6
+syllables = ["lef", "le", "la", "li", "lis"]
+
+[[solfeg]]
+variant = "music21"
+degree = 7
+syllables = ["tef", "te", "ti", "tis", "tish"]
+
+[[solfeg]]
+variant = "humdrum"
+degree = 1
+syllables = ["def", "de", "do", "di", "dis"]
+
+[[solfeg]]
+variant = "humdrum"
+degree = 2
+syllables = ["raf", "ra", "re", "ri", "ris"]
+
+[[solfeg]]
+variant = "humdrum"
+degree = 3
+syllables = ["mef", "me", "mi", "my", "mish"]
+
+[[solfeg]]
+variant = "humdrum"
+degree = 4
+syllables = ["fef", "fe", "fa", "fi", "fis"]
+
+[[solfeg]]
+variant = "humdrum"
+degree = 5
+syllables = ["sef", "se", "so", "si", "sis"]
+
+[[solfeg]]
+variant = "humdrum"
+degree = 6
+syllables = ["lef", "le", "la", "li", "lis"]
+
+[[solfeg]]
+variant = "humdrum"
+degree = 7
+syllables = ["tef", "te", "ti", "ty", "tish"]
+

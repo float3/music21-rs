@@ -92,6 +92,15 @@ the next release needs a minor bump.
 - `Scale::derive_by_degree` and `Key::derive_by_degree`,
   `KeySignature::transpose_pitch_from_c`, and `analysis::tonal_certainty`
   over a ranked list of key estimates.
+- `Pitch::get_enharmonic`, `implicit_octave`, `pitch_class_string`,
+  `cent_shift_from_midi`, `convert_quarter_tones_to_microtones`,
+  `convert_microtones_to_quarter_tones`,
+  `harmonic_and_fundamental_from_pitch` and
+  `harmonic_and_fundamental_string_from_pitch`.
+- `Scale::degree_count`, `transpose`, `chord`, `pitches_from_scale_degrees`,
+  `interval_between_degrees`, `is_next`, `match_pitches`, `find_missing` and
+  `solfeg` with `SolfegVariant`; the two syllable tables are pinned against
+  music21 by the table fixture.
 - `Interval::from_generic_and_chromatic`, `pitch_start`, `pitch_end`,
   `note_start`, `note_end`, and the free functions
   `written_higher_pitch`, `written_lower_pitch`, `absolute_higher_pitch`,

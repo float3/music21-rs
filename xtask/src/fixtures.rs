@@ -444,10 +444,42 @@ fn write_small_tables(py: Python<'_>, workspace_root: &Path, version: &str) -> P
         tempo_words += 1;
     }
 
+    let scale_module = py.import("music21.scale")?;
+    let concrete = scale_module.getattr("ConcreteScale")?;
+    let mut solfeg_rows = 0;
+    for (variant, attribute) in [
+        ("music21", "_solfegSyllables"),
+        ("humdrum", "_humdrumSolfegSyllables"),
+    ] {
+        let table = concrete.getattr(attribute)?.cast_into::<PyDict>()?;
+        for (degree, syllables) in table.iter() {
+            let degree: u32 = degree.extract()?;
+            let syllables = syllables.cast_into::<PyDict>()?;
+            let mut ordered = Vec::new();
+            for alter in -2..=2 {
+                let syllable: String = syllables
+                    .get_item(alter)?
+                    .ok_or_else(|| {
+                        pyo3::exceptions::PyKeyError::new_err(format!(
+                            "{attribute}[{degree}] has no entry for {alter}"
+                        ))
+                    })?
+                    .extract()?;
+                ordered.push(toml_string(&syllable));
+            }
+            let _ = writeln!(out, "[[solfeg]]");
+            let _ = writeln!(out, "variant = {}", toml_string(variant));
+            let _ = writeln!(out, "degree = {degree}");
+            let _ = writeln!(out, "syllables = [{}]", ordered.join(", "));
+            let _ = writeln!(out);
+            solfeg_rows += 1;
+        }
+    }
+
     let path = workspace_root.join("data/table_expectations.toml");
     fs::write(&path, out)?;
     println!(
-        "  wrote {} ({accidentals} accidentals, {mode_count} modes, {specifiers} specifier combos, {profiles} key profiles, {tempo_words} tempo words)",
+        "  wrote {} ({accidentals} accidentals, {mode_count} modes, {specifiers} specifier combos, {profiles} key profiles, {tempo_words} tempo words, {solfeg_rows} solfeg rows)",
         path.display()
     );
     Ok(path)
