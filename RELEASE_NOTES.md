@@ -111,7 +111,16 @@ the next release needs a minor bump.
   `augment_or_diminish` and `DurationType::ordinal`;
   `MetronomeMark::equivalent_by_referent` and
   `maintained_number_with_referent`; `Chord::geometric_normal_form`.
-- `ChordSymbol::find_figure`, `transpose` and `inversion_is_valid`.
+- `ChordSymbol::find_figure`, `transpose` and `inversion_is_valid`;
+  `Music21ChordType` now carries every abbreviation music21 accepts, with
+  `abbreviations_for_kind`, `notation_for_kind` and
+  `current_abbreviation_for_kind` to read them, and the parity fixture
+  checks the whole list.
+- `Chord::from_forte_class`, `from_forte_address` and `from_interval_vector`;
+  `roman::roman_inversion_name` and `identify_as_tonic_or_dominant`;
+  `key::convert_key_string_to_music21_key_string`;
+  `DurationType::next_larger` and `next_smaller`; `convert_pitch_class_to_str`
+  is public.
 - `Interval::from_generic_and_chromatic`, `pitch_start`, `pitch_end`,
   `note_start`, `note_end`, and the free functions
   `written_higher_pitch`, `written_lower_pitch`, `absolute_higher_pitch`,

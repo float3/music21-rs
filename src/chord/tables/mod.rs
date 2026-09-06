@@ -291,6 +291,23 @@ pub(crate) fn prime_form_from_address(address: ChordTableAddress) -> Result<Vec<
     Ok(bool_vec_to_pitch_classes(&entry.0))
 }
 
+/// The transposed normal form for a cardinality and Forte number, with the
+/// inversion left to the table's default when `None`.
+pub(crate) fn transposed_normal_form(
+    cardinality: u8,
+    index: u8,
+    inversion: Option<i8>,
+) -> Result<Vec<u8>, Error> {
+    let (card, index, inversion) = validate_address((cardinality, index, inversion))?;
+    let entry = find_cardinality_member(card, index, inversion).ok_or_else(|| {
+        Error::ChordTables(format!(
+            "cannot resolve normal form for address ({card}, {index}, {})",
+            inversion.as_i8()
+        ))
+    })?;
+    Ok(bool_vec_to_pitch_classes(&entry.0))
+}
+
 pub(crate) fn transposed_normal_form_from_address(
     address: ChordTableAddress,
 ) -> Result<Vec<u8>, Error> {

@@ -498,6 +498,80 @@ const MINOR_KEY_MIXTURES: [(u8, &str, &str); 5] = [
     (6, "minor", "sharp"),
 ];
 
+/// The figured-bass suffix a Roman numeral takes for a chord's inversion:
+/// music21's `romanInversionName`, `6` and `64` for a triad, `7`, `65`, `43`
+/// and `42` for a seventh chord, and nothing otherwise. The inversion is the
+/// chord's own unless one is given.
+pub fn roman_inversion_name(chord: &Chord, inversion: Option<u8>) -> String {
+    match chord.root() {
+        Some(root) => inversion_name_from_root(chord, root, inversion),
+        None => String::new(),
+    }
+}
+
+fn inversion_name_from_root(chord: &Chord, root: &Pitch, inversion: Option<u8>) -> String {
+    let Some(inversion) = inversion.or_else(|| chord.inversion_with_root(root)) else {
+        return String::new();
+    };
+    let has = |step: u8| chord.chord_step_from(step, root).is_some();
+    let suffix = if has(7) {
+        match inversion {
+            0 => "7",
+            1 => "65",
+            2 => "43",
+            3 => "42",
+            _ => "",
+        }
+    } else if has(1) && has(3) {
+        match inversion {
+            1 => "6",
+            2 => "64",
+            _ => "",
+        }
+    } else {
+        ""
+    };
+    suffix.to_string()
+}
+
+/// Reads a chord as the tonic or the dominant of a key, with its inversion:
+/// music21's `identifyAsTonicOrDominant`, so `G B D F` in C major is `V7`
+/// and `A C E` in A minor is `i`. A chord containing the tonic is the tonic,
+/// one containing the dominant is the dominant, and anything else is judged
+/// by how many of its notes the tonic and dominant sevenths share; `None`
+/// when neither wins.
+pub fn identify_as_tonic_or_dominant(chord: &Chord, key: &Key) -> Result<Option<String>> {
+    let names = chord.pitch_names();
+    let tonic = key.pitch_from_degree(1)?;
+    let dominant = key.pitch_from_degree(5)?;
+    let overlap = |figure: &str| -> Result<usize> {
+        let members = RomanNumeral::new(figure, key.clone())?
+            .to_chord()?
+            .pitch_names();
+        Ok(members.iter().filter(|name| names.contains(name)).count())
+    };
+    let is_tonic = if names.contains(&tonic.name()) {
+        true
+    } else if names.contains(&dominant.name()) {
+        false
+    } else {
+        let (one, five) = (overlap("I7")?, overlap("V7")?);
+        if one == five {
+            return Ok(None);
+        }
+        one > five
+    };
+    let (numeral, root) = if is_tonic {
+        (if key.mode() == "minor" { "i" } else { "I" }, &tonic)
+    } else {
+        ("V", &dominant)
+    };
+    Ok(Some(format!(
+        "{numeral}{}",
+        inversion_name_from_root(chord, root, None)
+    )))
+}
+
 /// Performs functional Roman-numeral analysis in a key.
 pub fn analyze_chord(chord: &Chord, key: Key) -> Result<Option<RomanNumeral>> {
     RomanNumeral::analyze(chord, key)
@@ -950,6 +1024,40 @@ fn normalize_pitch_name(name: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn inversion_names_and_tonic_dominant_reading_match_music21() {
+        let chord = |notes: &str| Chord::new(notes).unwrap();
+        assert_eq!(roman_inversion_name(&chord("C4 E4 G4"), None), "");
+        assert_eq!(roman_inversion_name(&chord("E4 G4 C5"), None), "6");
+        assert_eq!(roman_inversion_name(&chord("G3 C4 E4"), None), "64");
+        assert_eq!(roman_inversion_name(&chord("C4 E4 G4 B-4"), None), "7");
+        assert_eq!(roman_inversion_name(&chord("E4 G4 B-4 C5"), None), "65");
+        assert_eq!(roman_inversion_name(&chord("G3 B-3 C4 E4"), None), "43");
+        assert_eq!(roman_inversion_name(&chord("B-3 C4 E4 G4"), None), "42");
+        assert_eq!(roman_inversion_name(&chord("C4 E4 G4"), Some(2)), "64");
+        assert_eq!(roman_inversion_name(&chord("C4 E4 G4"), Some(3)), "");
+        assert_eq!(roman_inversion_name(&Chord::empty(), None), "");
+
+        let cases = [
+            ("C4 E4 G4", "C", Some("I")),
+            ("E4 G4 C5", "C", Some("I6")),
+            ("G3 B3 D4 F4", "C", Some("V7")),
+            ("D4 F4 A4", "C", Some("V43")),
+            ("A3 C4 E4", "a", Some("i")),
+            ("E3 G#3 B3", "a", Some("V")),
+            ("C4 E4", "C", Some("I")),
+            ("G4 D5", "C", Some("V")),
+            ("B3 D4", "C", Some("V")),
+            ("F#4 A4", "C", None),
+        ];
+        for (notes, key, expected) in cases {
+            let reading =
+                identify_as_tonic_or_dominant(&chord(notes), &Key::from_tonic(key).unwrap())
+                    .unwrap();
+            assert_eq!(reading.as_deref(), expected, "{notes} in {key}");
+        }
+    }
 
     #[test]
     #[allow(clippy::type_complexity)]

@@ -102,6 +102,23 @@ impl DurationType {
         (self != Self::Zero).then(|| Self::ALL.iter().position(|kind| *kind == self))?
     }
 
+    /// The next longer note value: music21's `nextLargerType`, so a quarter
+    /// gives a half. `None` above the duplex maxima and for `Zero`.
+    pub fn next_larger(self) -> Option<DurationType> {
+        let ordinal = self.ordinal()?;
+        Self::ALL.get(ordinal.checked_sub(1)?).copied()
+    }
+
+    /// The next shorter note value: music21's `nextSmallerType`, so a quarter
+    /// gives an eighth. `None` below the 2048th and for `Zero`.
+    pub fn next_smaller(self) -> Option<DurationType> {
+        let ordinal = self.ordinal()?;
+        Self::ALL
+            .get(ordinal + 1)
+            .copied()
+            .filter(|kind| *kind != Self::Zero)
+    }
+
     /// Returns music21's type number: how many of this note value make a
     /// whole note, so a quarter is `4` and a breve `0.5`. `None` for `Zero`.
     pub fn type_number(self) -> Option<FloatType> {
@@ -425,6 +442,28 @@ impl TryFrom<IntegerType> for Duration {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn neighbouring_types_match_music21() {
+        assert_eq!(
+            DurationType::Quarter.next_larger(),
+            Some(DurationType::Half)
+        );
+        assert_eq!(
+            DurationType::Quarter.next_smaller(),
+            Some(DurationType::Eighth)
+        );
+        assert_eq!(DurationType::Whole.next_larger(), Some(DurationType::Breve));
+        assert_eq!(DurationType::Breve.next_larger(), Some(DurationType::Longa));
+        assert_eq!(
+            DurationType::Sixteenth.next_smaller(),
+            Some(DurationType::ThirtySecond)
+        );
+        assert_eq!(DurationType::DuplexMaxima.next_larger(), None);
+        assert_eq!(DurationType::ALL[15].next_smaller(), None);
+        assert_eq!(DurationType::Zero.next_larger(), None);
+        assert_eq!(DurationType::Zero.next_smaller(), None);
+    }
 
     #[test]
     fn ordinal_and_scaling_match_music21() {

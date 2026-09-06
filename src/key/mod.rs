@@ -261,8 +261,57 @@ fn canonical_key_mode(mode: &str) -> String {
     }
 }
 
+/// music21's `convertKeyStringToMusic21KeyString`: a key written with `b`
+/// for flat, as in `Bb` or `eb`, rewritten with music21's `-`, so `Bb` is
+/// `B-` and `bb` is `b-`. A lone `b` is B, and anything without a trailing
+/// `b` is returned as it is.
+pub fn convert_key_string_to_music21_key_string(text: &str) -> String {
+    if !text.ends_with('b') || text == "b" {
+        return text.to_string();
+    }
+    if text == "bb" {
+        return "b-".to_string();
+    }
+    if text == "Bb" {
+        return "B-".to_string();
+    }
+    let mut chars = text.chars();
+    let Some(first) = chars.next() else {
+        return text.to_string();
+    };
+    let rest: Vec<char> = chars.collect();
+    if rest.iter().all(|c| *c == 'b') {
+        return format!("{first}{}", "-".repeat(rest.len()));
+    }
+    text.to_string()
+}
+
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn key_strings_convert_like_music21() {
+        let cases = [
+            ("bb", "b-"),
+            ("b", "b"),
+            ("B", "B"),
+            ("Bb", "B-"),
+            ("a", "a"),
+            ("f#", "f#"),
+            ("F#", "F#"),
+            ("eb", "e-"),
+            ("e-", "e-"),
+            ("Ebb", "E--"),
+            ("Abb", "A--"),
+        ];
+        for (text, expected) in cases {
+            assert_eq!(
+                convert_key_string_to_music21_key_string(text),
+                expected,
+                "{text}"
+            );
+        }
+    }
 
     #[test]
     fn derive_by_degree_matches_music21() {

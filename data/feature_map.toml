@@ -312,3 +312,98 @@ pitchChanged = "observer callback; there is none"
 python = "harmony.py"
 name = "ChordSymbol"
 rust = ["src/chordsymbol.rs"]
+
+[[class]]
+python = "pitch.py"
+rust = ["src/pitch/mod.rs", "src/pitch/accidental.rs", "src/pitch/microtone.rs", "src/pitch/pitchclass.rs"]
+note = "Module-level helpers."
+
+[class.renames]
+isValidAccidentalName = "is_valid_name"
+standardizeAccidentalName = "standardize_name"
+
+[[class]]
+python = "key.py"
+rust = ["src/key/mod.rs", "src/key/keysignature.rs"]
+note = "Module-level helpers."
+
+[[class]]
+python = "duration.py"
+rust = ["src/duration.rs"]
+note = "Module-level helpers."
+
+[class.renames]
+convertQuarterLengthToType = "from_quarter_length"
+convertTypeToQuarterLength = "quarter_length"
+convertTypeToNumber = "type_number"
+dottedMatch = "type_and_dots"
+nextLargerType = "next_larger"
+nextSmallerType = "next_smaller"
+
+[class.excluded]
+quarterLengthToNonPowerOf2Tuplet = "tuplets and duration tuples are not modelled"
+quarterLengthToTuplet = "tuplets and duration tuples are not modelled"
+quarterConversion = "tuplets and duration tuples are not modelled"
+durationTupleFromQuarterLength = "tuplets and duration tuples are not modelled"
+durationTupleFromTypeDots = "tuplets and duration tuples are not modelled"
+
+[[class]]
+python = "tempo.py"
+rust = ["src/tempo.rs"]
+note = "Module-level helpers."
+
+[class.excluded]
+interpolateElements = "interpolates tempo across the elements of a stream"
+
+[[class]]
+python = "roman.py"
+rust = ["src/roman.rs"]
+note = "Module-level helpers."
+
+[class.renames]
+romanNumeralFromChord = "analyze_chord"
+
+[class.excluded]
+expandShortHand = "figure-parsing internals; the parser here reads the figure directly"
+correctSuffixForChordQuality = "figure-parsing internals; the parser here reads the figure directly"
+correctRNAlterationForMinor = "figure-parsing internals; the parser here reads the figure directly"
+figureTuples = "figured-bass tuples are not modelled"
+figureTupleSolo = "figured-bass tuples are not modelled"
+
+[[class]]
+python = "chord/__init__.py"
+rust = ["src/chord/mod.rs"]
+note = "Module-level helpers."
+
+[[class]]
+python = "harmony.py"
+rust = ["src/chordsymbol.rs"]
+note = "Module-level helpers."
+
+[class.renames]
+getAbbreviationListGivenChordType = "abbreviations_for_kind"
+getNotationStringGivenChordType = "notation_for_kind"
+getCurrentAbbreviationFor = "current_abbreviation_for_kind"
+
+[class.excluded]
+addNewChordSymbol = "mutates music21's global chord-type table; the table here is a constant"
+changeAbbreviationFor = "mutates music21's global chord-type table; the table here is a constant"
+removeChordSymbols = "mutates music21's global chord-type table; the table here is a constant"
+realizeChordSymbolDurations = "stretches chord symbols across a stream"
+
+[[class]]
+python = "meter/base.py"
+rust = ["src/meter.rs"]
+note = "Module-level helpers."
+
+[class.excluded]
+bestTimeSignature = "guesses a meter from the notes of a measure"
+
+[[class]]
+python = "voiceLeading.py"
+rust = ["src/voiceleading.rs"]
+note = "Module-level helpers."
+
+[class.excluded]
+getVerticalityFromObject = "walks a stream"
+iterateAllVoiceLeadingQuartets = "walks a stream"

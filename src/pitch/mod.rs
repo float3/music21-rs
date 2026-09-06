@@ -21,7 +21,7 @@ use crate::tuningsystem::TuningSystem;
 pub use accidental::{Accidental, AccidentalSpecifier};
 pub use microtone::{Microtone, MicrotoneSpecifier};
 use pitchclass::convert_ps_to_oct;
-pub use pitchclass::{PitchClass, PitchClassSpecifier};
+pub use pitchclass::{PitchClass, PitchClassSpecifier, convert_pitch_class_to_str};
 
 use itertools::Itertools;
 use num::Num;

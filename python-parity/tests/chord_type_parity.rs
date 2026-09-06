@@ -68,13 +68,10 @@ fn chord_types_match_music21_in_order() {
                 ours.kind, ours.notation, theirs.notation
             ));
         }
-        // The crate keeps only one abbreviation per kind. music21 writes figures
-        // with the first, so that is the one it must hold.
-        let first = theirs.abbreviations.first().map(String::as_str);
-        if Some(ours.abbreviation) != first {
+        if ours.abbreviations != theirs.abbreviations.as_slice() {
             problems.push(format!(
-                "{}: abbreviation {:?} vs music21's first {:?} (all: {:?})",
-                ours.kind, ours.abbreviation, first, theirs.abbreviations
+                "{}: abbreviations {:?} vs music21's {:?}",
+                ours.kind, ours.abbreviations, theirs.abbreviations
             ));
         }
     }

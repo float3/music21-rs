@@ -80,7 +80,7 @@ pub use interval::{
     Interval, IntervalDirection, absolute_higher_pitch, absolute_lower_pitch,
     staff_distance_to_generic_number, written_higher_pitch, written_lower_pitch,
 };
-pub use key::{Key, KeySignature};
+pub use key::{Key, KeySignature, convert_key_string_to_music21_key_string};
 pub use meter::{BeatDivision, TimeSignature};
 pub use midi::{
     DEFAULT_TICKS_PER_QUARTER, MidiNote, midi_notes_from_stream, read_midi_bytes,
@@ -89,11 +89,15 @@ pub use midi::{
 pub use note::{IntoNote, Note};
 pub use pitch::{
     Accidental, AccidentalSpecifier, CHROMATIC_PITCH_CLASS_NAMES, Microtone, MicrotoneSpecifier,
-    Pitch, PitchClass, PitchClassSpecifier, PitchName, PitchOptions, pitch_class_name,
+    Pitch, PitchClass, PitchClassSpecifier, PitchName, PitchOptions, convert_pitch_class_to_str,
+    pitch_class_name,
 };
 pub use polyrhythm::{Polyrhythm, PolyrhythmAnalysis, PolyrhythmEvent, PolyrhythmRatioTone};
 pub use rest::Rest;
-pub use roman::{RomanNumeral, analyze_chord, analyze_chord_with_root};
+pub use roman::{
+    RomanNumeral, analyze_chord, analyze_chord_with_root, identify_as_tonic_or_dominant,
+    roman_inversion_name,
+};
 pub use scale::{
     BluesForm, DiatonicScale, Scale, ScaleType, SolfegVariant, StepScale, WeightedHexatonicBlues,
 };

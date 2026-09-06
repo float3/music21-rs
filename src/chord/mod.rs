@@ -150,6 +150,79 @@ impl Chord {
         })
     }
 
+    /// Builds the chord of a Forte set class from its name, `3-11` or
+    /// `4-27B`: music21's `fromForteClass`. The pitches are the transposed
+    /// normal form from C, without octaves, so `3-11` is `C E- G` and `3-11B`
+    /// is `C E G`.
+    pub fn from_forte_class(notation: &str) -> Result<Self> {
+        let Some((cardinality, rest)) = notation.split_once('-') else {
+            return Err(Error::Chord(format!(
+                "cannot extract set-class representation from string: {notation}"
+            )));
+        };
+        let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
+        let letters = &rest[digits.len()..];
+        let inversion = match letters.to_ascii_lowercase().as_str() {
+            "a" => Some(1),
+            "b" => Some(-1),
+            _ => None,
+        };
+        let cardinality = cardinality
+            .parse::<u8>()
+            .map_err(|_| Error::Chord(format!("cannot read a cardinality out of {notation}")))?;
+        let index = digits
+            .parse::<u8>()
+            .map_err(|_| Error::Chord(format!("cannot read a Forte number out of {notation}")))?;
+        Self::from_forte_address(cardinality, index, inversion)
+    }
+
+    /// Builds the chord of a Forte set class from its table address: the
+    /// cardinality, the number within it, and `1`, `-1` or `None` for the
+    /// inversion, where `None` takes the form the table lists first.
+    pub fn from_forte_address(cardinality: u8, index: u8, inversion: Option<i8>) -> Result<Self> {
+        let pitch_classes = tables::transposed_normal_form(cardinality, index, inversion)?;
+        Self::from_pitch_class_list(&pitch_classes)
+    }
+
+    /// Builds the chord whose interval-class vector this is: music21's
+    /// `fromIntervalVector`. Z-related pairs share a vector; the first of
+    /// the pair is returned unless `z_relation` asks for the second. `None`
+    /// when no set class has the vector.
+    pub fn from_interval_vector(vector: &[u8; 6], z_relation: bool) -> Option<Self> {
+        let mut seen: Vec<(u8, String)> = Vec::new();
+        for entry in tables::known_chord_table_entries() {
+            if entry.interval_class_vector != vector {
+                continue;
+            }
+            let number = entry.forte_class.trim_end_matches(['A', 'B']).to_string();
+            if seen
+                .iter()
+                .any(|(card, seen_number)| *card == entry.cardinality && *seen_number == number)
+            {
+                continue;
+            }
+            seen.push((entry.cardinality, number));
+        }
+        let (cardinality, number) = match (seen.len(), z_relation) {
+            (1, _) | (2, false) => seen.first()?.clone(),
+            (2, true) => seen.get(1)?.clone(),
+            _ => return None,
+        };
+        let index = number.split_once('-')?.1.parse().ok()?;
+        Self::from_forte_address(cardinality, index, None).ok()
+    }
+
+    /// A chord from pitch-class integers, spelled the way music21 spells a
+    /// chord built from integers: each class on its own and then
+    /// `simplifyEnharmonics` over the whole, so `[0, 3, 6, 8]` is `C E- G- A-`.
+    fn from_pitch_class_list(pitch_classes: &[u8]) -> Result<Self> {
+        let pitches = pitch_classes
+            .iter()
+            .map(|&pc| Pitch::from_pitch_class(IntegerType::from(pc)))
+            .collect::<Result<Vec<_>>>()?;
+        Self::new(pitches.as_slice())?.simplify_enharmonics(None)
+    }
+
     /// Builds an empty chord.
     pub fn empty() -> Self {
         Self {
@@ -701,6 +774,13 @@ impl Chord {
         Some([0, 3, 6, 2, 5, 1, 4][usize::from(bass_to_root - 1)])
     }
 
+    /// The inversion the way [`Self::inversion`] counts it, but measured from a
+    /// root the caller has decided on rather than the one the chord infers.
+    pub(crate) fn inversion_with_root(&self, root: &Pitch) -> Option<u8> {
+        let bass_to_root = diatonic_steps_above(self.bass()?, root);
+        Some([0, 3, 6, 2, 5, 1, 4][usize::from(bass_to_root - 1)])
+    }
+
     /// Returns a human-readable inversion label.
     ///
     /// Returns `None` whenever [`Self::inversion`] returns `None`.
@@ -1178,7 +1258,7 @@ impl Chord {
         chord
     }
 
-    fn chord_step_from(&self, step: u8, root: &Pitch) -> Option<&Pitch> {
+    pub(crate) fn chord_step_from(&self, step: u8, root: &Pitch) -> Option<&Pitch> {
         let step = fold_chord_step(step);
         self.pitch_refs()
             .find(|pitch| diatonic_steps_above(root, pitch) == step)
@@ -2288,6 +2368,47 @@ impl Chord {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn forte_and_interval_vector_constructors_match_music21() {
+        let names = |chord: &Chord| chord.pitch_names();
+        assert_eq!(
+            names(&Chord::from_forte_class("3-11").unwrap()),
+            ["C", "E-", "G"]
+        );
+        assert_eq!(
+            names(&Chord::from_forte_class("3-11B").unwrap()),
+            ["C", "E", "G"]
+        );
+        assert_eq!(
+            names(&Chord::from_forte_class("3-11a").unwrap()),
+            ["C", "E-", "G"]
+        );
+        assert_eq!(
+            names(&Chord::from_forte_address(4, 27, Some(-1)).unwrap()),
+            ["C", "E-", "G-", "A-"]
+        );
+        assert_eq!(
+            Chord::from_forte_class("3-11").unwrap().prime_form_string(),
+            "<037>"
+        );
+        assert!(Chord::from_forte_class("311").is_err());
+        assert!(Chord::from_forte_class("3-99").is_err());
+
+        assert_eq!(
+            names(&Chord::from_interval_vector(&[0, 0, 1, 1, 1, 0], false).unwrap()),
+            ["C", "E-", "G"]
+        );
+        assert_eq!(
+            names(&Chord::from_interval_vector(&[1, 1, 1, 1, 1, 1], false).unwrap()),
+            ["C", "C#", "E", "F#"]
+        );
+        assert_eq!(
+            names(&Chord::from_interval_vector(&[1, 1, 1, 1, 1, 1], true).unwrap()),
+            ["C", "D-", "E-", "G"]
+        );
+        assert!(Chord::from_interval_vector(&[9, 9, 9, 9, 9, 9], false).is_none());
+    }
 
     #[test]
     fn geometric_normal_form_matches_music21() {

@@ -195,7 +195,9 @@ impl Display for PitchClass {
     }
 }
 
-pub(crate) fn convert_pitch_class_to_str(pc: IntegerType) -> String {
+/// music21's `convertPitchClassToStr`: an integer pitch class as one
+/// character, `A` for ten and `B` for eleven, reduced modulo twelve first.
+pub fn convert_pitch_class_to_str(pc: IntegerType) -> String {
     // Mimic Python's modulo: always a non-negative remainder.
     let pc = pc.rem_euclid(12);
     format!("{pc:X}")

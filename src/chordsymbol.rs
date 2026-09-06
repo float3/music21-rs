@@ -82,11 +82,11 @@ pub struct Music21ChordType {
     pub kind: &'static str,
     /// Scale-degree notation, such as `"1,3,5,-7"`.
     pub notation: &'static str,
-    /// music21's first abbreviation for this kind, such as `"7"`.
-    ///
-    /// music21 lists several per kind; this is the first, which is the one it
-    /// uses when writing a figure.
+    /// music21's first abbreviation for this kind, such as `"7"`, which is
+    /// the one it uses when writing a figure.
     pub abbreviation: &'static str,
+    /// Every abbreviation music21 accepts for this kind, first one first.
+    pub abbreviations: &'static [&'static str],
 }
 
 /// Returns every chord type this crate knows from music21's harmony tables.
@@ -95,6 +95,31 @@ pub struct Music21ChordType {
 /// by `python-parity`'s `chord_type_parity` test.
 pub fn known_chord_symbol_types() -> &'static [Music21ChordType] {
     MUSIC21_CHORD_TYPES
+}
+
+fn chord_type_named(kind: &str) -> Option<&'static Music21ChordType> {
+    MUSIC21_CHORD_TYPES
+        .iter()
+        .find(|chord_type| chord_type.kind == kind)
+}
+
+/// Every abbreviation music21 accepts for a chord kind: music21's
+/// `getAbbreviationListGivenChordType`, so `dominant-seventh` gives `7` and
+/// `dom7`. `None` for an unknown kind.
+pub fn abbreviations_for_kind(kind: &str) -> Option<&'static [&'static str]> {
+    chord_type_named(kind).map(|chord_type| chord_type.abbreviations)
+}
+
+/// The scale-degree notation of a chord kind: music21's
+/// `getNotationStringGivenChordType`, `1,3,5,-7` for `dominant-seventh`.
+pub fn notation_for_kind(kind: &str) -> Option<&'static str> {
+    chord_type_named(kind).map(|chord_type| chord_type.notation)
+}
+
+/// The abbreviation music21 writes a chord kind with: its
+/// `getCurrentAbbreviationFor`, the first of [`abbreviations_for_kind`].
+pub fn current_abbreviation_for_kind(kind: &str) -> Option<&'static str> {
+    chord_type_named(kind).map(|chord_type| chord_type.abbreviation)
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -127,251 +152,301 @@ const MUSIC21_CHORD_TYPES: &[Music21ChordType] = &[
         kind: "major",
         notation: "1,3,5",
         abbreviation: "",
+        abbreviations: &["", "M", "maj"],
     },
     Music21ChordType {
         kind: "minor",
         notation: "1,-3,5",
         abbreviation: "m",
+        abbreviations: &["m", "min"],
     },
     Music21ChordType {
         kind: "augmented",
         notation: "1,3,#5",
         abbreviation: "+",
+        abbreviations: &["+", "aug"],
     },
     Music21ChordType {
         kind: "diminished",
         notation: "1,-3,-5",
         abbreviation: "dim",
+        abbreviations: &["dim", "o"],
     },
     Music21ChordType {
         kind: "dominant-seventh",
         notation: "1,3,5,-7",
         abbreviation: "7",
+        abbreviations: &["7", "dom7"],
     },
     Music21ChordType {
         kind: "major-seventh",
         notation: "1,3,5,7",
         abbreviation: "maj7",
+        abbreviations: &["maj7", "M7"],
     },
     Music21ChordType {
         kind: "minor-major-seventh",
         notation: "1,-3,5,7",
         abbreviation: "mM7",
+        abbreviations: &["mM7", "m#7", "minmaj7"],
     },
     Music21ChordType {
         kind: "minor-seventh",
         notation: "1,-3,5,-7",
         abbreviation: "m7",
+        abbreviations: &["m7", "min7"],
     },
     Music21ChordType {
         kind: "augmented-major-seventh",
         notation: "1,3,#5,7",
         abbreviation: "+M7",
+        abbreviations: &["+M7", "augmaj7"],
     },
     Music21ChordType {
         kind: "augmented-seventh",
         notation: "1,3,#5,-7",
         abbreviation: "7+",
+        abbreviations: &["7+", "+7", "aug7"],
     },
     Music21ChordType {
         kind: "half-diminished-seventh",
         notation: "1,-3,-5,-7",
-        abbreviation: "\u{00f8}7",
+        abbreviation: "ø7",
+        abbreviations: &["ø7", "m7b5"],
     },
     Music21ChordType {
         kind: "diminished-seventh",
         notation: "1,-3,-5,--7",
         abbreviation: "o7",
+        abbreviations: &["o7", "dim7"],
     },
     Music21ChordType {
         kind: "seventh-flat-five",
         notation: "1,3,-5,-7",
         abbreviation: "dom7dim5",
+        abbreviations: &["dom7dim5"],
     },
     Music21ChordType {
         kind: "major-sixth",
         notation: "1,3,5,6",
         abbreviation: "6",
+        abbreviations: &["6"],
     },
     Music21ChordType {
         kind: "minor-sixth",
         notation: "1,-3,5,6",
         abbreviation: "m6",
+        abbreviations: &["m6", "min6"],
     },
     Music21ChordType {
         kind: "major-ninth",
         notation: "1,3,5,7,9",
         abbreviation: "M9",
+        abbreviations: &["M9", "Maj9"],
     },
     Music21ChordType {
         kind: "dominant-ninth",
         notation: "1,3,5,-7,9",
         abbreviation: "9",
+        abbreviations: &["9", "dom9"],
     },
     Music21ChordType {
         kind: "minor-major-ninth",
         notation: "1,-3,5,7,9",
         abbreviation: "mM9",
+        abbreviations: &["mM9", "minmaj9"],
     },
     Music21ChordType {
         kind: "minor-ninth",
         notation: "1,-3,5,-7,9",
         abbreviation: "m9",
+        abbreviations: &["m9", "min9"],
     },
     Music21ChordType {
         kind: "augmented-major-ninth",
         notation: "1,3,#5,7,9",
         abbreviation: "+M9",
+        abbreviations: &["+M9", "augmaj9"],
     },
     Music21ChordType {
         kind: "augmented-dominant-ninth",
         notation: "1,3,#5,-7,9",
         abbreviation: "9#5",
+        abbreviations: &["9#5", "+9", "aug9"],
     },
     Music21ChordType {
         kind: "half-diminished-ninth",
         notation: "1,-3,-5,-7,9",
-        abbreviation: "\u{00f8}9",
+        abbreviation: "ø9",
+        abbreviations: &["ø9"],
     },
     Music21ChordType {
         kind: "half-diminished-minor-ninth",
         notation: "1,-3,-5,-7,-9",
-        abbreviation: "\u{00f8}b9",
+        abbreviation: "øb9",
+        abbreviations: &["øb9"],
     },
     Music21ChordType {
         kind: "diminished-ninth",
         notation: "1,-3,-5,--7,9",
         abbreviation: "o9",
+        abbreviations: &["o9", "dim9"],
     },
     Music21ChordType {
         kind: "diminished-minor-ninth",
         notation: "1,-3,-5,--7,-9",
         abbreviation: "ob9",
+        abbreviations: &["ob9", "dimb9"],
     },
     Music21ChordType {
         kind: "dominant-11th",
         notation: "1,3,5,-7,9,11",
         abbreviation: "11",
+        abbreviations: &["11", "dom11"],
     },
     Music21ChordType {
         kind: "major-11th",
         notation: "1,3,5,7,9,11",
         abbreviation: "M11",
+        abbreviations: &["M11", "Maj11"],
     },
     Music21ChordType {
         kind: "minor-major-11th",
         notation: "1,-3,5,7,9,11",
         abbreviation: "mM11",
+        abbreviations: &["mM11", "minmaj11"],
     },
     Music21ChordType {
         kind: "minor-11th",
         notation: "1,-3,5,-7,9,11",
         abbreviation: "m11",
+        abbreviations: &["m11", "min11"],
     },
     Music21ChordType {
         kind: "augmented-major-11th",
         notation: "1,3,#5,7,9,11",
         abbreviation: "+M11",
+        abbreviations: &["+M11", "augmaj11"],
     },
     Music21ChordType {
         kind: "augmented-11th",
         notation: "1,3,#5,-7,9,11",
         abbreviation: "+11",
+        abbreviations: &["+11", "aug11"],
     },
     Music21ChordType {
         kind: "half-diminished-11th",
         notation: "1,-3,-5,-7,9,11",
-        abbreviation: "\u{00f8}11",
+        abbreviation: "ø11",
+        abbreviations: &["ø11"],
     },
     Music21ChordType {
         kind: "diminished-11th",
         notation: "1,-3,-5,--7,9,11",
         abbreviation: "o11",
+        abbreviations: &["o11", "dim11"],
     },
     Music21ChordType {
         kind: "major-13th",
         notation: "1,3,5,7,9,11,13",
         abbreviation: "M13",
+        abbreviations: &["M13", "Maj13"],
     },
     Music21ChordType {
         kind: "dominant-13th",
         notation: "1,3,5,-7,9,11,13",
         abbreviation: "13",
+        abbreviations: &["13", "dom13"],
     },
     Music21ChordType {
         kind: "minor-major-13th",
         notation: "1,-3,5,7,9,11,13",
         abbreviation: "mM13",
+        abbreviations: &["mM13", "minmaj13"],
     },
     Music21ChordType {
         kind: "minor-13th",
         notation: "1,-3,5,-7,9,11,13",
         abbreviation: "m13",
+        abbreviations: &["m13", "min13"],
     },
     Music21ChordType {
         kind: "augmented-major-13th",
         notation: "1,3,#5,7,9,11,13",
         abbreviation: "+M13",
+        abbreviations: &["+M13", "augmaj13"],
     },
     Music21ChordType {
         kind: "augmented-dominant-13th",
         notation: "1,3,#5,-7,9,11,13",
         abbreviation: "+13",
+        abbreviations: &["+13", "aug13"],
     },
     Music21ChordType {
         kind: "half-diminished-13th",
         notation: "1,-3,-5,-7,9,11,13",
-        abbreviation: "\u{00f8}13",
+        abbreviation: "ø13",
+        abbreviations: &["ø13"],
     },
     Music21ChordType {
         kind: "suspended-second",
         notation: "1,2,5",
         abbreviation: "sus2",
+        abbreviations: &["sus2"],
     },
     Music21ChordType {
         kind: "suspended-fourth",
         notation: "1,4,5",
         abbreviation: "sus",
+        abbreviations: &["sus", "sus4"],
     },
     Music21ChordType {
         kind: "suspended-fourth-seventh",
         notation: "1,4,5,-7",
         abbreviation: "7sus",
+        abbreviations: &["7sus", "7sus4"],
     },
     Music21ChordType {
         kind: "Neapolitan",
         notation: "1,-2,3,-5",
         abbreviation: "N6",
+        abbreviations: &["N6"],
     },
     Music21ChordType {
         kind: "Italian",
         notation: "1,#4,-6",
         abbreviation: "It+6",
+        abbreviations: &["It+6", "It"],
     },
     Music21ChordType {
         kind: "French",
         notation: "1,2,#4,-6",
         abbreviation: "Fr+6",
+        abbreviations: &["Fr+6", "Fr"],
     },
     Music21ChordType {
         kind: "German",
         notation: "1,-3,#4,-6",
         abbreviation: "Gr+6",
+        abbreviations: &["Gr+6", "Ger"],
     },
     Music21ChordType {
         kind: "pedal",
         notation: "1",
         abbreviation: "pedal",
+        abbreviations: &["pedal"],
     },
     Music21ChordType {
         kind: "power",
         notation: "1,5",
         abbreviation: "power",
+        abbreviations: &["power"],
     },
     Music21ChordType {
         kind: "Tristan",
         notation: "1,#4,#6,#9",
         abbreviation: "tristan",
+        abbreviations: &["tristan"],
     },
 ];
 
@@ -1506,6 +1581,25 @@ fn added_interval(addition: &ChordAlteration) -> Result<(u8, &'static str)> {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn kind_lookups_match_music21() {
+        assert_eq!(
+            abbreviations_for_kind("dominant-seventh"),
+            Some(&["7", "dom7"][..])
+        );
+        assert_eq!(notation_for_kind("dominant-seventh"), Some("1,3,5,-7"));
+        assert_eq!(current_abbreviation_for_kind("dominant-seventh"), Some("7"));
+        assert_eq!(abbreviations_for_kind("major"), Some(&["", "M", "maj"][..]));
+        assert_eq!(current_abbreviation_for_kind("major"), Some(""));
+        assert_eq!(abbreviations_for_kind("nonsense"), None);
+        for chord_type in known_chord_symbol_types() {
+            assert_eq!(
+                chord_type.abbreviations.first(),
+                Some(&chord_type.abbreviation)
+            );
+        }
+    }
 
     #[test]
     fn find_figure_writes_one_canonical_spelling_that_parses_back() {
