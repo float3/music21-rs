@@ -57,6 +57,28 @@ signatures change, so the next release needs a minor bump.
   `pitchClasses`, in chord order with repeats kept.
 - `format_vector_string` writes a pitch-class list the way music21's
   `Chord.formatVectorString` does, with ten and eleven as `A` and `B`.
+- Notes and chords carry the notation music21 puts on them, in two new
+  modules. `notation` holds `Tie` (with `TieType`, `TieStyle` and
+  `Placement`), `Notehead`, `StemDirection` and `Lyric` (with `Syllabic`);
+  `volume` holds `Volume`, which is a MIDI velocity and its 0-to-1 scalar
+  together with music21's rule for reading them against the dynamics around
+  them. `Note` gains `tie`, `notehead`, `notehead_fill`,
+  `notehead_parenthesis`, `stem_direction`, `color`, `volume`, `lyrics`,
+  `lyric` and `add_lyric`; `Accidental` gains `color`.
+- `Chord` gains the same notation through its notes — `notes_mut`,
+  `note_for_pitch`, `note_for_pitch_mut` — plus `tie`, `color`,
+  `color_of_pitch`, `volume`, `set_volumes`, `has_component_volumes`,
+  `lyrics` and `add_lyric`. `annotate_intervals` names the interval from the
+  lowest pitch up to each of the others, and `annotated_with_intervals`
+  writes those names on as lyrics.
+- `Chord::string_harmonic` reads a written string harmonic: a chord whose
+  second note has a diamond head comes back with the pitch it actually
+  sounds added on top. This is music21's `Pitch.getStringHarmonic`, which
+  was previously left out because it depends on noteheads.
+- `Chord::remove_redundant_pitches_reporting` and its name and pitch-class
+  variants hand back the pitches they dropped, as music21's do in place.
+- `Accidental::set_attribute_independently` takes an `AccidentalAttribute`,
+  so only the three parts music21 allows can be named.
 - The module functions `notes_to_generic`, `notes_to_chromatic`,
   `intervals_to_diatonic`, `convert_diatonic_number_to_step`,
   `convert_semitone_to_specifier_generic`,
@@ -249,6 +271,8 @@ signatures change, so the next release needs a minor bump.
   does not match the name, both as music21 does.
 - Pitch classes round half to even, as Python does, so the half-sharp `C~` is
   pitch class `0` rather than `1`.
+- `Chord::remove` reports a pitch that is not there with music21's message,
+  which does not name the pitch.
 - `Specifier::parse` reports an unknown quality as
   `Cannot find a match for value: 'x'`, and a zero generic interval as
   `The Zeroth is not an interval`, music21's texts.
@@ -262,15 +286,20 @@ signatures change, so the next release needs a minor bump.
   pins the passing docstrings. Running them turned up the accidental,
   inferred-spelling, MIDI-folding and negative-octave fixes above.
 - The same harness covers `interval.py` (759 of 771 examples), `chord.py`
-  (827 of 971), `key.py` (230 of 253) and `serial.py` (148 of 149), each with
+  (916 of 971), `key.py` (230 of 253) and `serial.py` (148 of 149), each with
   a facade module and an expectation file under `python-parity/doctest/`. The
   interval facade is what made the interval halves public and found the
   reversed `maxAccidental` and key-aware transposition fixes;
-  `IntervalBaseTrait`, which it replaced, is gone. The chord facade brought a
-  `note.Note` and `duration.Duration` facade with it, and found the
-  `commonName`, `inversionName`, dotted-duration and pitch-class rounding
-  fixes above. What still fails there is notation the crate does not model —
-  volumes, ties, noteheads, lyrics and stream context.
+  `IntervalBaseTrait`, which it replaced, is gone. The chord facade brought
+  `note.Note`, `duration.Duration`, `tie.Tie`, `note.Lyric`, `volume.Volume`
+  and a colour-only `style.Style` with it, and found the `commonName`,
+  `inversionName`, dotted-duration and pitch-class rounding fixes above.
+- The facade chord holds its notes as Python objects rather than values, so
+  `chord[1].notehead = 'diamond'` sticks and `chord[1] is chord.notes[1]`
+  holds. Pitches are still values, which is what most of the remaining
+  failures come down to: `chord.pitches[0].getEnharmonic(inPlace=True)` does
+  not reach the chord. The rest are music21 internals (`_overrides`,
+  `chordTablesAddress`, `client`) and stream context.
 - `cargo run -p xtask -- report` writes `target/reports`: the library's test
   coverage from `cargo llvm-cov`, and every public method of the music21
   classes named in `data/feature_map.toml` against the crate's `pub fn`s,

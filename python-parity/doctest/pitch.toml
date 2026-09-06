@@ -4,13 +4,13 @@
 # fails when one of these stops passing.
 
 passing = [
+    "music21.pitch.Accidental",
     "music21.pitch.Accidental.__eq__",
     "music21.pitch.Accidental.__ge__",
     "music21.pitch.Accidental.__gt__",
     "music21.pitch.Accidental.__le__",
     "music21.pitch.Accidental.__lt__",
     "music21.pitch.Accidental.alter",
-    "music21.pitch.Accidental.displayStatus",
     "music21.pitch.Accidental.displayType",
     "music21.pitch.Accidental.fullName",
     "music21.pitch.Accidental.inheritDisplay",
@@ -50,6 +50,7 @@ passing = [
     "music21.pitch.Pitch.getHarmonic",
     "music21.pitch.Pitch.getHigherEnharmonic",
     "music21.pitch.Pitch.getLowerEnharmonic",
+    "music21.pitch.Pitch.getStringHarmonic",
     "music21.pitch.Pitch.harmonicAndFundamentalFromPitch",
     "music21.pitch.Pitch.harmonicAndFundamentalStringFromPitch",
     "music21.pitch.Pitch.harmonicFromFundamental",

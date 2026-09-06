@@ -19,6 +19,7 @@ pub mod chord;
 pub mod doctest;
 pub mod interval;
 pub mod key;
+pub mod notation;
 pub mod note;
 pub mod pitch;
 pub mod serial;
@@ -48,6 +49,7 @@ pub fn music21_rs_facade(m: &Bound<'_, PyModule>) -> PyResult<()> {
     serial::register(m)?;
     key::register(m)?;
     interval::register(m)?;
+    notation::register(m)?;
     note::register(m)?;
     chord::register(m)?;
     m.add_function(wrap_pyfunction!(collect_output, m)?)?;

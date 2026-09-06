@@ -31,6 +31,7 @@ pub mod key;
 pub mod meter;
 pub mod midi;
 /// Note construction and pitch access helpers.
+pub mod notation;
 pub mod note;
 /// Pitch construction, spelling and pitch-space helpers.
 pub mod pitch;
@@ -54,6 +55,7 @@ pub mod tempo;
 pub mod tuningsystem;
 /// Two-voice voice-leading classification and parallel-interval checks.
 pub mod voiceleading;
+pub mod volume;
 // #[macro_use]
 // pub(crate) mod macros;
 
@@ -90,6 +92,7 @@ pub use midi::{
     DEFAULT_TICKS_PER_QUARTER, MidiNote, midi_notes_from_stream, read_midi_bytes,
     read_midi_bytes_with_tempo, stream_from_midi_notes, write_midi_bytes,
 };
+pub use notation::{Lyric, Notehead, Placement, StemDirection, Syllabic, Tie, TieStyle, TieType};
 pub use note::{IntoNote, Note};
 pub use pitch::{
     Accidental, AccidentalAttribute, AccidentalDisplayOptions, AccidentalSpecifier,
@@ -120,3 +123,4 @@ pub use tuningsystem::{
     scala::{ScalaArchive, ScalaDegree, ScalaScale},
 };
 pub use voiceleading::{MotionType, VoiceLeadingQuartet};
+pub use volume::Volume;

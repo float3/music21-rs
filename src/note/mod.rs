@@ -2,7 +2,9 @@ use crate::defaults::{FloatType, IntegerType};
 use crate::duration::Duration;
 use crate::error::Result;
 use crate::interval::Interval;
+use crate::notation::{Lyric, Notehead, StemDirection, Syllabic, Tie};
 use crate::pitch::Pitch;
+use crate::volume::Volume;
 
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
@@ -13,6 +15,23 @@ use std::str::FromStr;
 pub struct Note {
     pub(crate) pitch: Pitch,
     duration: Option<Duration>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    notation: Notation,
+}
+
+/// The notation a note carries besides its pitch and duration: how it is
+/// tied, drawn, stemmed, coloured, sung and sounded.
+#[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+struct Notation {
+    tie: Option<Tie>,
+    notehead: Notehead,
+    notehead_fill: Option<bool>,
+    notehead_parenthesis: bool,
+    stem_direction: StemDirection,
+    color: Option<String>,
+    volume: Option<Volume>,
+    lyrics: Vec<Lyric>,
 }
 
 impl Note {
@@ -31,6 +50,7 @@ impl Note {
         Self {
             pitch,
             duration: None,
+            notation: Notation::default(),
         }
     }
 
@@ -89,12 +109,158 @@ impl Note {
         self
     }
 
-    /// Returns this note transposed by the interval, keeping its duration.
+    /// Returns this note transposed by the interval, keeping everything but
+    /// its pitch.
     pub fn transpose(&self, interval: &Interval) -> Result<Self> {
         Ok(Self {
             pitch: interval.transpose_pitch(&self.pitch)?,
             duration: self.duration.clone(),
+            notation: self.notation.clone(),
         })
+    }
+
+    // ---- notation --------------------------------------------------------
+
+    /// The tie joining this note to its neighbours, if any.
+    pub fn tie(&self) -> Option<&Tie> {
+        self.notation.tie.as_ref()
+    }
+
+    /// Ties this note, or unties it with `None`.
+    pub fn set_tie(&mut self, tie: Option<Tie>) {
+        self.notation.tie = tie;
+    }
+
+    /// The shape the note head is drawn with.
+    pub fn notehead(&self) -> Notehead {
+        self.notation.notehead
+    }
+
+    /// Sets the shape the note head is drawn with.
+    pub fn set_notehead(&mut self, notehead: Notehead) {
+        self.notation.notehead = notehead;
+    }
+
+    /// Whether the note head is filled in: `Some(true)` filled,
+    /// `Some(false)` hollow, `None` to let the duration decide, which is
+    /// music21's default.
+    pub fn notehead_fill(&self) -> Option<bool> {
+        self.notation.notehead_fill
+    }
+
+    /// Sets whether the note head is filled in.
+    pub fn set_notehead_fill(&mut self, fill: Option<bool>) {
+        self.notation.notehead_fill = fill;
+    }
+
+    /// Whether the note head is written in parentheses.
+    pub fn notehead_parenthesis(&self) -> bool {
+        self.notation.notehead_parenthesis
+    }
+
+    /// Sets whether the note head is written in parentheses.
+    pub fn set_notehead_parenthesis(&mut self, parenthesis: bool) {
+        self.notation.notehead_parenthesis = parenthesis;
+    }
+
+    /// Which way the stem points.
+    pub fn stem_direction(&self) -> StemDirection {
+        self.notation.stem_direction
+    }
+
+    /// Sets which way the stem points.
+    pub fn set_stem_direction(&mut self, direction: StemDirection) {
+        self.notation.stem_direction = direction;
+    }
+
+    /// The colour the note is written in, if one was said: music21 keeps
+    /// this on the note's style.
+    pub fn color(&self) -> Option<&str> {
+        self.notation.color.as_deref()
+    }
+
+    /// Sets the colour the note is written in.
+    pub fn set_color(&mut self, color: Option<String>) {
+        self.notation.color = color;
+    }
+
+    /// How loud the note is. music21 makes a volume on first access, so this
+    /// answers a default one for a note nobody has marked; see
+    /// [`Self::has_volume_information`] to tell the two apart.
+    pub fn volume(&self) -> Volume {
+        self.notation.volume.clone().unwrap_or_default()
+    }
+
+    /// Sets how loud the note is, or clears it.
+    pub fn set_volume(&mut self, volume: Option<Volume>) {
+        self.notation.volume = volume;
+    }
+
+    /// Whether a volume was ever set on this note: music21's
+    /// `hasVolumeInformation`.
+    pub fn has_volume_information(&self) -> bool {
+        self.notation
+            .volume
+            .as_ref()
+            .is_some_and(Volume::has_velocity_information)
+    }
+
+    /// The syllables sung on this note, one per verse.
+    pub fn lyrics(&self) -> &[Lyric] {
+        &self.notation.lyrics
+    }
+
+    /// The syllables sung on this note, for editing in place.
+    pub fn lyrics_mut(&mut self) -> &mut Vec<Lyric> {
+        &mut self.notation.lyrics
+    }
+
+    /// The text of the first verse, with the hyphens of every further verse
+    /// joined by newlines: music21's `lyric`.
+    pub fn lyric(&self) -> Option<String> {
+        if self.notation.lyrics.is_empty() {
+            return None;
+        }
+        Some(
+            self.notation
+                .lyrics
+                .iter()
+                .map(Lyric::raw_text)
+                .collect::<Vec<_>>()
+                .join("\n"),
+        )
+    }
+
+    /// Replaces every lyric with one verse of text, or clears them with
+    /// `None`. Newlines start further verses, and hyphens say where each
+    /// syllable falls in its word: music21's `lyric` setter.
+    pub fn set_lyric(&mut self, lyric: Option<&str>) -> Result<()> {
+        self.notation.lyrics.clear();
+        let Some(lyric) = lyric else {
+            return Ok(());
+        };
+        for (index, line) in lyric.split('\n').enumerate() {
+            let mut parsed = Lyric::from_raw_text(line);
+            parsed.set_number(index as IntegerType + 1)?;
+            self.notation.lyrics.push(parsed);
+        }
+        Ok(())
+    }
+
+    /// Adds a syllable as the next verse: music21's `addLyric`. Hyphens in
+    /// the text say where the syllable falls in its word unless `apply_raw`
+    /// is set, which takes the text as written.
+    pub fn add_lyric(&mut self, text: &str, apply_raw: bool) -> Result<()> {
+        let mut lyric = if apply_raw {
+            let mut lyric = Lyric::new(text);
+            lyric.set_syllabic(Syllabic::Single);
+            lyric
+        } else {
+            Lyric::from_raw_text(text)
+        };
+        lyric.set_number(self.notation.lyrics.len() as IntegerType + 1)?;
+        self.notation.lyrics.push(lyric);
+        Ok(())
     }
 }
 

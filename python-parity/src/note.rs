@@ -7,9 +7,13 @@ use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
-use music21_rs::{Duration as RsDuration, Note as RsNote, Pitch as RsPitch};
+use music21_rs::{
+    Duration as RsDuration, Note as RsNote, Notehead as RsNotehead, Pitch as RsPitch,
+    StemDirection as RsStemDirection,
+};
 
 use crate::interval::transpose_pitch_by_any;
+use crate::notation::{Lyric, Style, StyleOwner, Tie, Volume, tie_from_any, volume_from_any};
 use crate::pitch::{Pitch, message, pitch_from_any};
 
 pyo3::create_exception!(music21_rs_facade, NoteException, PyException);
@@ -240,8 +244,30 @@ impl Note {
     }
 
     #[getter]
-    fn octave(&self) -> Option<i32> {
+    fn get_octave(&self) -> Option<i32> {
         self.inner.octave()
+    }
+
+    #[setter]
+    fn set_octave(&mut self, value: Option<i32>) -> PyResult<()> {
+        let previous = self.inner.clone();
+        let name = match value {
+            Some(octave) => format!("{}{octave}", previous.pitch().name()),
+            None => previous.pitch().name(),
+        };
+        self.inner = RsNote::from_pitch(RsPitch::from_name(name).map_err(note_error)?);
+        if let Some(duration) = previous.duration() {
+            self.inner.set_duration(duration.clone());
+        }
+        self.inner.set_tie(previous.tie().cloned());
+        self.inner.set_notehead(previous.notehead());
+        self.inner.set_notehead_fill(previous.notehead_fill());
+        self.inner
+            .set_notehead_parenthesis(previous.notehead_parenthesis());
+        self.inner.set_stem_direction(previous.stem_direction());
+        self.inner
+            .set_color(previous.color().map(std::string::ToString::to_string));
+        Ok(())
     }
 
     #[getter]
@@ -299,6 +325,182 @@ impl Note {
     #[getter]
     fn isChord(&self) -> bool {
         false
+    }
+
+    // ---- notation --------------------------------------------------------
+
+    #[getter]
+    fn get_tie(&self) -> Option<Tie> {
+        self.inner.tie().cloned().map(Tie::wrap)
+    }
+
+    #[setter]
+    pub(crate) fn set_tie(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        let tie = match value.filter(|value| !value.is_none()) {
+            Some(value) => Some(tie_from_any(value)?),
+            None => None,
+        };
+        self.inner.set_tie(tie);
+        Ok(())
+    }
+
+    #[getter]
+    fn get_notehead(&self) -> &'static str {
+        self.inner.notehead().as_str()
+    }
+
+    #[setter]
+    pub(crate) fn set_notehead(&mut self, value: Option<&str>) -> PyResult<()> {
+        let notehead = match value {
+            None | Some("") => RsNotehead::Normal,
+            Some(name) => RsNotehead::from_name(name).map_err(note_error)?,
+        };
+        self.inner.set_notehead(notehead);
+        Ok(())
+    }
+
+    #[getter]
+    fn get_noteheadFill(&self) -> Option<bool> {
+        self.inner.notehead_fill()
+    }
+
+    #[setter]
+    pub(crate) fn set_noteheadFill(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        let fill = if value.is_none() {
+            None
+        } else if let Ok(flag) = value.extract::<bool>() {
+            Some(flag)
+        } else {
+            match value.extract::<String>()?.as_str() {
+                "none" | "default" => None,
+                "filled" | "yes" => Some(true),
+                "notfilled" | "no" => Some(false),
+                other => {
+                    return Err(note_error(music21_rs::Error::Notation(format!(
+                        "not a valid notehead fill value: '{other}'"
+                    ))));
+                }
+            }
+        };
+        self.inner.set_notehead_fill(fill);
+        Ok(())
+    }
+
+    #[getter]
+    fn get_noteheadParenthesis(&self) -> bool {
+        self.inner.notehead_parenthesis()
+    }
+
+    #[setter]
+    fn set_noteheadParenthesis(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        let parenthesis = if let Ok(flag) = value.extract::<bool>() {
+            flag
+        } else if let Ok(number) = value.extract::<i64>() {
+            number != 0
+        } else {
+            match value.extract::<String>()?.as_str() {
+                "yes" => true,
+                "no" => false,
+                other => {
+                    return Err(note_error(music21_rs::Error::Notation(format!(
+                        "notehead parentheses must be True or False, not '{other}'"
+                    ))));
+                }
+            }
+        };
+        self.inner.set_notehead_parenthesis(parenthesis);
+        Ok(())
+    }
+
+    #[getter]
+    fn get_stemDirection(&self) -> &'static str {
+        self.inner.stem_direction().as_str()
+    }
+
+    #[setter]
+    pub(crate) fn set_stemDirection(&mut self, value: Option<&str>) -> PyResult<()> {
+        let direction = match value {
+            None => RsStemDirection::Unspecified,
+            Some(name) => RsStemDirection::from_name(name).map_err(note_error)?,
+        };
+        self.inner.set_stem_direction(direction);
+        Ok(())
+    }
+
+    #[getter]
+    fn style(slf: &Bound<'_, Self>) -> Style {
+        Style {
+            owner: StyleOwner::Note(slf.clone().unbind()),
+        }
+    }
+
+    #[getter]
+    fn hasStyleInformation(&self) -> bool {
+        self.inner.color().is_some()
+    }
+
+    #[getter]
+    fn get_volume(&self) -> Volume {
+        Volume::wrap(self.inner.volume())
+    }
+
+    #[setter]
+    fn set_volume(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        let volume = match value.filter(|value| !value.is_none()) {
+            Some(value) => Some(volume_from_any(value)?),
+            None => None,
+        };
+        self.inner.set_volume(volume);
+        Ok(())
+    }
+
+    fn hasVolumeInformation(&self) -> bool {
+        self.inner.has_volume_information()
+    }
+
+    #[getter]
+    pub(crate) fn lyrics(&self) -> Vec<Lyric> {
+        self.inner
+            .lyrics()
+            .iter()
+            .cloned()
+            .map(Lyric::wrap)
+            .collect()
+    }
+
+    #[getter]
+    fn get_lyric(&self) -> Option<String> {
+        self.inner.lyric()
+    }
+
+    #[setter]
+    pub(crate) fn set_lyric(&mut self, value: Option<&str>) -> PyResult<()> {
+        self.inner.set_lyric(value).map_err(note_error)
+    }
+
+    #[pyo3(signature = (text, lyricNumber = None, *, applyRaw = false, lyricIdentifier = None))]
+    pub(crate) fn addLyric(
+        &mut self,
+        text: &Bound<'_, PyAny>,
+        lyricNumber: Option<i32>,
+        applyRaw: bool,
+        lyricIdentifier: Option<String>,
+    ) -> PyResult<()> {
+        let text = if text.is_none() {
+            String::new()
+        } else {
+            text.str()?.to_string()
+        };
+        self.inner.add_lyric(&text, applyRaw).map_err(note_error)?;
+        if let Some(lyric) = self.inner.lyrics_mut().last_mut() {
+            if let Some(number) = lyricNumber {
+                lyric.set_number(number).map_err(note_error)?;
+            }
+            if lyricIdentifier.is_some() {
+                lyric.set_identifier(lyricIdentifier);
+            }
+        }
+        Ok(())
     }
 
     #[pyo3(signature = (value, *, inPlace = false))]

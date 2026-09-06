@@ -5,14 +5,15 @@
 
 use pyo3::exceptions::{PyException, PyIndexError, PyKeyError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyTuple};
+use pyo3::types::{PyDict, PyList, PyTuple};
 
 use music21_rs::{
     Chord as RsChord, Duration as RsDuration, Interval as RsInterval, Note as RsNote,
-    Pitch as RsPitch, Scale, ScaleType,
+    Pitch as RsPitch, Scale, ScaleType, Volume as RsVolume,
 };
 
 use crate::interval::interval_from_any;
+use crate::notation::{Lyric, Style, StyleOwner, Tie, Volume, tie_from_any, volume_from_any};
 use crate::note::{Duration, Note, duration_from_any, note_from_any};
 use crate::pitch::{Accidental, Pitch, message, pitch_from_any};
 
@@ -30,18 +31,139 @@ fn chord_error(error: music21_rs::Error) -> PyErr {
     skip_from_py_object
 )]
 pub struct Chord {
+    /// The pitches and the analysis read off them. Every method that asks a
+    /// musical question goes through this.
     pub(crate) inner: RsChord,
+    /// The `Note` objects music21 hands back from `chord[i]` and `.notes`.
+    /// They are the same objects every time, so notation written through one
+    /// of them sticks; their pitches mirror `inner`, and structural changes
+    /// rebuild them from it.
+    notes: Vec<Py<Note>>,
     /// The chord's own `Duration`, kept as the Python object music21 hands
     /// back so `chord.duration is d` holds and edits through it stick.
     duration: Option<Py<Duration>>,
+    /// The chord's own `Volume`, likewise.
+    volume: Option<Py<Volume>>,
 }
 
 impl Chord {
-    pub(crate) fn wrap(inner: RsChord) -> Self {
-        Self {
+    /// Builds the facade around a chord, giving each of its notes a Python
+    /// object of its own.
+    pub(crate) fn from_inner(py: Python<'_>, inner: RsChord) -> PyResult<Self> {
+        let mut chord = Self {
             inner,
+            notes: Vec::new(),
             duration: None,
+            volume: None,
+        };
+        chord.rebuild_notes(py)?;
+        Ok(chord)
+    }
+
+    /// Replaces the pitches and everything read off them, rebuilding the
+    /// note objects to match. Notation on the old notes does not survive a
+    /// structural change, which is what music21 does too.
+    fn replace_inner(&mut self, py: Python<'_>, inner: RsChord) -> PyResult<()> {
+        self.inner = inner;
+        self.rebuild_notes(py)
+    }
+
+    fn rebuild_notes(&mut self, py: Python<'_>) -> PyResult<()> {
+        self.notes = self
+            .inner
+            .notes()
+            .iter()
+            .cloned()
+            .map(|note| Py::new(py, Note::wrap(note)))
+            .collect::<PyResult<_>>()?;
+        Ok(())
+    }
+
+    /// The chord with the notation its note objects carry written back onto
+    /// it, for the few questions that read notation rather than pitch.
+    fn with_note_notation(&self, py: Python<'_>) -> PyResult<RsChord> {
+        let notes: Vec<RsNote> = self
+            .notes
+            .iter()
+            .map(|note| note.borrow(py).inner.clone())
+            .collect();
+        let mut chord = RsChord::new(notes.as_slice()).map_err(chord_error)?;
+        if let Some(duration) = self.inner.duration() {
+            chord.set_duration(duration.clone());
         }
+        Ok(chord)
+    }
+
+    /// The note object holding the first pitch that matches, the way
+    /// music21's per-note accessors take a pitch.
+    /// music21 hands back the pitches it dropped when reducing in place,
+    /// and the reduced chord when not.
+    fn deliver_reduced(
+        &mut self,
+        py: Python<'_>,
+        reduced: RsChord,
+        removed: Vec<RsPitch>,
+        in_place: bool,
+    ) -> PyResult<Option<Py<PyAny>>> {
+        if in_place {
+            self.replace_inner(py, reduced)?;
+            let dropped: Vec<Pitch> = removed
+                .into_iter()
+                .map(|pitch| Pitch::wrap(pitch, false))
+                .collect();
+            return Ok(Some(PyList::new(py, dropped)?.into_any().unbind()));
+        }
+        Ok(Some(
+            Py::new(py, Self::from_inner(py, reduced)?)?.into_any(),
+        ))
+    }
+
+    /// The note a per-note setter writes to: the one the target names, or
+    /// the first note when music21 lets the target be left out.
+    fn first_or_named(
+        &self,
+        py: Python<'_>,
+        target: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<Py<Note>> {
+        match target.filter(|target| !target.is_none()) {
+            Some(target) => self.note_object(py, target),
+            None => self
+                .notes
+                .first()
+                .map(|note| note.clone_ref(py))
+                .ok_or_else(|| ChordException::new_err("the chord has no notes")),
+        }
+    }
+
+    fn note_object(&self, py: Python<'_>, target: &Bound<'_, PyAny>) -> PyResult<Py<Note>> {
+        let wanted = if let Ok(name) = target.extract::<String>() {
+            RsPitch::from_name(name).map_err(chord_error)?
+        } else if let Ok(index) = target.extract::<usize>() {
+            return self
+                .notes
+                .get(index)
+                .map(|note| note.clone_ref(py))
+                .ok_or_else(|| PyIndexError::new_err("list index out of range"));
+        } else {
+            pitch_from_any(target)?
+        };
+        self.notes
+            .iter()
+            .find(|note| {
+                note.borrow(py).inner.pitch().name_with_octave() == wanted.name_with_octave()
+            })
+            .or_else(|| {
+                self.notes
+                    .iter()
+                    .find(|note| note.borrow(py).inner.pitch().name() == wanted.name())
+            })
+            .map(|note| note.clone_ref(py))
+            .ok_or_else(|| {
+                ChordException::new_err(format!(
+                    "the given pitch is not in the Chord: {}",
+                    wanted.name_with_octave()
+                ))
+            })
     }
 
     fn duration_object(&mut self, py: Python<'_>) -> PyResult<Py<Duration>> {
@@ -165,10 +287,11 @@ impl Chord {
     #[new]
     #[pyo3(signature = (notes = None, **keywords))]
     fn new(
+        py: Python<'_>,
         notes: Option<&Bound<'_, PyAny>>,
         keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Self> {
-        let mut chord = Self::wrap(chord_from_any(notes)?);
+        let mut chord = Self::from_inner(py, chord_from_any(notes)?)?;
         if let Some(keywords) = keywords {
             if let Some(value) = keywords.get_item("quarterLength")? {
                 chord.set_quarterLength(keywords.py(), value.extract::<f64>()?)?;
@@ -205,11 +328,9 @@ impl Chord {
     fn get_notes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
         PyTuple::new(
             py,
-            self.inner
-                .notes()
+            self.notes
                 .iter()
-                .cloned()
-                .map(Note::wrap)
+                .map(|note| note.clone_ref(py))
                 .collect::<Vec<_>>(),
         )
     }
@@ -263,25 +384,24 @@ impl Chord {
         self.inner.notes().len()
     }
 
-    fn __getitem__(&self, key: &Bound<'_, PyAny>) -> PyResult<Note> {
-        let notes = self.inner.notes();
+    fn __getitem__(&self, py: Python<'_>, key: &Bound<'_, PyAny>) -> PyResult<Py<Note>> {
         if let Ok(index) = key.extract::<isize>() {
-            let length = notes.len() as isize;
+            let length = self.notes.len() as isize;
             let resolved = if index < 0 { index + length } else { index };
             if resolved < 0 || resolved >= length {
                 return Err(PyIndexError::new_err("list index out of range"));
             }
-            return Ok(Note::wrap(notes[resolved as usize].clone()));
+            return Ok(self.notes[resolved as usize].clone_ref(py));
         }
         let wanted = if let Ok(name) = key.extract::<String>() {
             name.to_uppercase()
         } else {
             pitch_from_any(key)?.name_with_octave()
         };
-        notes
+        self.notes
             .iter()
-            .find(|note| note.pitch().name_with_octave() == wanted)
-            .map(|note| Note::wrap(note.clone()))
+            .find(|note| note.borrow(py).inner.pitch().name_with_octave() == wanted)
+            .map(|note| note.clone_ref(py))
             .ok_or_else(|| {
                 PyKeyError::new_err(format!(
                     "No note in the chord matches {}",
@@ -329,40 +449,34 @@ impl Chord {
 
     fn __iter__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
         let py = slf.py();
-        let notes = PyTuple::new(
-            py,
-            slf.borrow()
-                .inner
-                .notes()
-                .iter()
-                .cloned()
-                .map(Note::wrap)
-                .collect::<Vec<_>>(),
-        )?;
+        let notes = slf.borrow().get_notes(py)?;
         notes.into_any().try_iter().map(Bound::into_any)
     }
 
     #[pyo3(signature = (notes, *, runSort = true))]
-    fn add(&mut self, notes: &Bound<'_, PyAny>, runSort: bool) -> PyResult<()> {
+    fn add(&mut self, py: Python<'_>, notes: &Bound<'_, PyAny>, runSort: bool) -> PyResult<()> {
         let added = if notes.extract::<String>().is_ok() || notes.try_iter().is_err() {
             vec![note_from_any(notes)?]
         } else {
             chord_from_any(Some(notes))?.notes().to_vec()
         };
-        self.inner.add(added.as_slice()).map_err(chord_error)?;
+        let mut grown = self.with_note_notation(py)?;
+        grown.add(added.as_slice()).map_err(chord_error)?;
         if runSort {
-            self.inner = self.inner.sort_ascending();
+            grown = grown.sort_ascending();
         }
-        Ok(())
+        self.replace_inner(py, grown)
     }
 
-    fn remove(&mut self, removeItem: &Bound<'_, PyAny>) -> PyResult<()> {
+    fn remove(&mut self, py: Python<'_>, removeItem: &Bound<'_, PyAny>) -> PyResult<()> {
+        let mut reduced = self.with_note_notation(py)?;
         let result = if let Ok(name) = removeItem.extract::<String>() {
-            self.inner.remove_named(&name)
+            reduced.remove_named(&name)
         } else {
-            self.inner.remove(&pitch_from_any(removeItem)?)
+            reduced.remove(&pitch_from_any(removeItem)?)
         };
-        result.map_err(|error| PyValueError::new_err(message(&error)))
+        result.map_err(|error| PyValueError::new_err(message(&error)))?;
+        self.replace_inner(py, reduced)
     }
 
     // ---- duration --------------------------------------------------------
@@ -692,11 +806,15 @@ impl Chord {
         self.inner.has_z_relation()
     }
 
-    fn getZRelation(&self) -> Option<Chord> {
-        self.inner
+    fn getZRelation(&self, py: Python<'_>) -> PyResult<Option<Chord>> {
+        match self
+            .inner
             .z_relation()
             .and_then(|name| RsChord::from_forte_class(&name).ok())
-            .map(Self::wrap)
+        {
+            Some(related) => Ok(Some(Self::from_inner(py, related)?)),
+            None => Ok(None),
+        }
     }
 
     fn areZRelations(&self, other: &Chord) -> bool {
@@ -826,6 +944,7 @@ impl Chord {
     #[pyo3(signature = (forceOctave = None, *, inPlace = false, leaveRedundantPitches = false))]
     fn closedPosition(
         &mut self,
+        py: Python<'_>,
         forceOctave: Option<i32>,
         inPlace: bool,
         leaveRedundantPitches: bool,
@@ -834,16 +953,17 @@ impl Chord {
             .inner
             .closed_position(forceOctave, leaveRedundantPitches);
         if inPlace {
-            self.inner = closed;
+            self.replace_inner(py, closed)?;
             Ok(None)
         } else {
-            Ok(Some(Self::wrap(closed)))
+            Ok(Some(Self::from_inner(py, closed)?))
         }
     }
 
     #[pyo3(signature = (forceOctave = None, *, inPlace = false, leaveRedundantPitches = false))]
     fn semiClosedPosition(
         &mut self,
+        py: Python<'_>,
         forceOctave: Option<i32>,
         inPlace: bool,
         leaveRedundantPitches: bool,
@@ -852,99 +972,101 @@ impl Chord {
             .inner
             .semi_closed_position(forceOctave, leaveRedundantPitches);
         if inPlace {
-            self.inner = moved;
+            self.replace_inner(py, moved)?;
             Ok(None)
         } else {
-            Ok(Some(Self::wrap(moved)))
+            Ok(Some(Self::from_inner(py, moved)?))
         }
     }
 
     #[pyo3(signature = (*, inPlace = false))]
-    fn removeRedundantPitches(&mut self, inPlace: bool) -> PyResult<Option<Chord>> {
-        let reduced = self.inner.remove_redundant_pitches();
-        if inPlace {
-            self.inner = reduced;
-            Ok(None)
-        } else {
-            Ok(Some(Self::wrap(reduced)))
-        }
+    fn removeRedundantPitches(
+        &mut self,
+        py: Python<'_>,
+        inPlace: bool,
+    ) -> PyResult<Option<Py<PyAny>>> {
+        let (reduced, removed) = self.inner.remove_redundant_pitches_reporting();
+        self.deliver_reduced(py, reduced, removed, inPlace)
     }
 
     #[pyo3(signature = (*, inPlace = false))]
-    fn removeRedundantPitchNames(&mut self, inPlace: bool) -> PyResult<Option<Chord>> {
-        let reduced = self.inner.remove_redundant_pitch_names();
-        if inPlace {
-            self.inner = reduced;
-            Ok(None)
-        } else {
-            Ok(Some(Self::wrap(reduced)))
-        }
+    fn removeRedundantPitchNames(
+        &mut self,
+        py: Python<'_>,
+        inPlace: bool,
+    ) -> PyResult<Option<Py<PyAny>>> {
+        let (reduced, removed) = self.inner.remove_redundant_pitch_names_reporting();
+        self.deliver_reduced(py, reduced, removed, inPlace)
     }
 
     #[pyo3(signature = (*, inPlace = false))]
-    fn removeRedundantPitchClasses(&mut self, inPlace: bool) -> PyResult<Option<Chord>> {
-        let reduced = self.inner.remove_redundant_pitch_classes();
-        if inPlace {
-            self.inner = reduced;
-            Ok(None)
-        } else {
-            Ok(Some(Self::wrap(reduced)))
-        }
+    fn removeRedundantPitchClasses(
+        &mut self,
+        py: Python<'_>,
+        inPlace: bool,
+    ) -> PyResult<Option<Py<PyAny>>> {
+        let (reduced, removed) = self.inner.remove_redundant_pitch_classes_reporting();
+        self.deliver_reduced(py, reduced, removed, inPlace)
     }
 
     #[pyo3(signature = (*, inPlace = false))]
-    fn sortAscending(&mut self, inPlace: bool) -> PyResult<Option<Chord>> {
+    fn sortAscending(&mut self, py: Python<'_>, inPlace: bool) -> PyResult<Option<Chord>> {
         let sorted = self.inner.sort_ascending();
         if inPlace {
-            self.inner = sorted;
+            self.replace_inner(py, sorted)?;
             Ok(None)
         } else {
-            Ok(Some(Self::wrap(sorted)))
+            Ok(Some(Self::from_inner(py, sorted)?))
         }
     }
 
     #[pyo3(signature = (*, inPlace = false))]
-    fn sortDiatonicAscending(&mut self, inPlace: bool) -> PyResult<Option<Chord>> {
+    fn sortDiatonicAscending(&mut self, py: Python<'_>, inPlace: bool) -> PyResult<Option<Chord>> {
         let sorted = self.inner.sort_diatonic_ascending();
         if inPlace {
-            self.inner = sorted;
+            self.replace_inner(py, sorted)?;
             Ok(None)
         } else {
-            Ok(Some(Self::wrap(sorted)))
+            Ok(Some(Self::from_inner(py, sorted)?))
         }
     }
 
     #[pyo3(signature = (*, inPlace = false))]
-    fn sortChromaticAscending(&mut self, inPlace: bool) -> PyResult<Option<Chord>> {
+    fn sortChromaticAscending(&mut self, py: Python<'_>, inPlace: bool) -> PyResult<Option<Chord>> {
         let sorted = self.inner.sort_chromatic_ascending();
         if inPlace {
-            self.inner = sorted;
+            self.replace_inner(py, sorted)?;
             Ok(None)
         } else {
-            Ok(Some(Self::wrap(sorted)))
+            Ok(Some(Self::from_inner(py, sorted)?))
         }
     }
 
     #[pyo3(signature = (*, inPlace = false))]
-    fn sortFrequencyAscending(&mut self, inPlace: bool) -> PyResult<Option<Chord>> {
+    fn sortFrequencyAscending(&mut self, py: Python<'_>, inPlace: bool) -> PyResult<Option<Chord>> {
         let sorted = self.inner.sort_frequency_ascending();
         if inPlace {
-            self.inner = sorted;
+            self.replace_inner(py, sorted)?;
             Ok(None)
         } else {
-            Ok(Some(Self::wrap(sorted)))
+            Ok(Some(Self::from_inner(py, sorted)?))
         }
     }
 
     #[pyo3(signature = (value, *, inPlace = false))]
-    fn transpose(&mut self, value: &Bound<'_, PyAny>, inPlace: bool) -> PyResult<Option<Chord>> {
+    fn transpose(
+        &mut self,
+        py: Python<'_>,
+        value: &Bound<'_, PyAny>,
+        inPlace: bool,
+    ) -> PyResult<Option<Chord>> {
         let interval: RsInterval = interval_from_any(value)?;
         let moved = self.inner.transpose(&interval).map_err(chord_error)?;
         if inPlace {
-            self.inner = moved;
+            self.replace_inner(py, moved)?;
             Ok(None)
         } else {
-            Ok(Some(Self::wrap(moved)))
+            Ok(Some(Self::from_inner(py, moved)?))
         }
     }
 
@@ -964,6 +1086,340 @@ impl Chord {
             .into_iter()
             .map(|(degree, accidental)| (degree, accidental.map(Accidental::from_inner)))
             .collect())
+    }
+
+    // ---- notation --------------------------------------------------------
+
+    #[getter]
+    fn style(slf: &Bound<'_, Self>) -> Style {
+        Style {
+            owner: StyleOwner::Chord(slf.clone().unbind()),
+        }
+    }
+
+    #[getter]
+    fn hasStyleInformation(&self) -> bool {
+        self.inner.color().is_some()
+    }
+
+    /// music21's `getColor`: the note's own colour when it has one, and the
+    /// chord's otherwise.
+    fn getColor(&self, py: Python<'_>, pitchTarget: &Bound<'_, PyAny>) -> PyResult<Option<String>> {
+        let note = self.note_object(py, pitchTarget)?;
+        let color = note.borrow(py).inner.color().map(str::to_string);
+        Ok(color.or_else(|| self.inner.color().map(str::to_string)))
+    }
+
+    #[pyo3(signature = (value, pitchTarget = None))]
+    fn setColor(
+        &mut self,
+        py: Python<'_>,
+        value: Option<String>,
+        pitchTarget: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<()> {
+        match pitchTarget.filter(|target| !target.is_none()) {
+            None => {
+                self.inner.set_color(value);
+                Ok(())
+            }
+            Some(target) => {
+                let note = self.note_object(py, target)?;
+                note.borrow_mut(py).inner.set_color(value);
+                Ok(())
+            }
+        }
+    }
+
+    fn getNotehead(&self, py: Python<'_>, p: &Bound<'_, PyAny>) -> PyResult<&'static str> {
+        let note = self.note_object(py, p)?;
+        let notehead = note.borrow(py).inner.notehead();
+        Ok(notehead.as_str())
+    }
+
+    #[pyo3(signature = (nh, pitchTarget = None))]
+    fn setNotehead(
+        &mut self,
+        py: Python<'_>,
+        nh: Option<&str>,
+        pitchTarget: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<()> {
+        let target = self.first_or_named(py, pitchTarget)?;
+        target.borrow_mut(py).set_notehead(nh)
+    }
+
+    fn getNoteheadFill(&self, py: Python<'_>, p: &Bound<'_, PyAny>) -> PyResult<Option<bool>> {
+        let note = self.note_object(py, p)?;
+        let fill = note.borrow(py).inner.notehead_fill();
+        Ok(fill)
+    }
+
+    #[pyo3(signature = (nh, pitchTarget = None))]
+    fn setNoteheadFill(
+        &mut self,
+        py: Python<'_>,
+        nh: &Bound<'_, PyAny>,
+        pitchTarget: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<()> {
+        let target = self.first_or_named(py, pitchTarget)?;
+        target.borrow_mut(py).set_noteheadFill(nh)
+    }
+
+    fn getStemDirection(&self, py: Python<'_>, p: &Bound<'_, PyAny>) -> PyResult<&'static str> {
+        let note = self.note_object(py, p)?;
+        let direction = note.borrow(py).inner.stem_direction();
+        Ok(direction.as_str())
+    }
+
+    #[pyo3(signature = (stemDirection, pitchTarget = None))]
+    fn setStemDirection(
+        &mut self,
+        py: Python<'_>,
+        stemDirection: Option<&str>,
+        pitchTarget: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<()> {
+        let target = self.first_or_named(py, pitchTarget)?;
+        target.borrow_mut(py).set_stemDirection(stemDirection)
+    }
+
+    fn getTie(&self, py: Python<'_>, p: &Bound<'_, PyAny>) -> PyResult<Option<Tie>> {
+        match self.note_object(py, p) {
+            Ok(note) => {
+                let tie = note.borrow(py).inner.tie().cloned().map(Tie::wrap);
+                Ok(tie)
+            }
+            Err(_) => Ok(None),
+        }
+    }
+
+    #[pyo3(signature = (tieObjOrStr, pitchTarget = None))]
+    fn setTie(
+        &mut self,
+        py: Python<'_>,
+        tieObjOrStr: &Bound<'_, PyAny>,
+        pitchTarget: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<()> {
+        let target = self.first_or_named(py, pitchTarget)?;
+        target.borrow_mut(py).set_tie(Some(tieObjOrStr))
+    }
+
+    #[getter]
+    fn get_tie(&self, py: Python<'_>) -> Option<Tie> {
+        self.notes
+            .iter()
+            .find_map(|note| note.borrow(py).inner.tie().cloned())
+            .map(Tie::wrap)
+    }
+
+    #[setter]
+    fn set_tie(&mut self, py: Python<'_>, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        let tie = match value.filter(|value| !value.is_none()) {
+            Some(value) => Some(tie_from_any(value)?),
+            None => None,
+        };
+        for note in &self.notes {
+            note.borrow_mut(py).inner.set_tie(tie.clone());
+        }
+        Ok(())
+    }
+
+    fn getVolume(&self, py: Python<'_>, p: &Bound<'_, PyAny>) -> PyResult<Volume> {
+        let note = self.note_object(py, p)?;
+        let volume = note.borrow(py).inner.volume();
+        Ok(Volume::wrap(volume))
+    }
+
+    #[pyo3(signature = (vol, target = None))]
+    fn setVolume(
+        &mut self,
+        py: Python<'_>,
+        vol: &Bound<'_, PyAny>,
+        target: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<()> {
+        let note = self.first_or_named(py, target)?;
+        let parsed = volume_from_any(vol)?;
+        note.borrow_mut(py).inner.set_volume(Some(parsed));
+        Ok(())
+    }
+
+    fn hasVolumeInformation(&self, py: Python<'_>) -> bool {
+        self.volume.is_some() || self.hasComponentVolumes(py)
+    }
+
+    /// music21's `simplifyEnharmonics`: respells the chord so its pitches
+    /// read as simply as they can.
+    #[pyo3(signature = (*, inPlace = false, keyContext = None))]
+    fn simplifyEnharmonics(
+        &mut self,
+        py: Python<'_>,
+        inPlace: bool,
+        keyContext: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<Option<Chord>> {
+        let key_context = match keyContext.filter(|value| !value.is_none()) {
+            Some(value) => {
+                let sharps: i32 = value.getattr("sharps")?.extract()?;
+                Some(music21_rs::KeySignature::new(sharps))
+            }
+            None => None,
+        };
+        let simplified = self
+            .inner
+            .simplify_enharmonics(key_context)
+            .map_err(chord_error)?;
+        if inPlace {
+            self.replace_inner(py, simplified)?;
+            Ok(None)
+        } else {
+            Ok(Some(Self::from_inner(py, simplified)?))
+        }
+    }
+
+    fn hasComponentVolumes(&self, py: Python<'_>) -> bool {
+        self.notes
+            .iter()
+            .any(|note| note.borrow(py).inner.has_volume_information())
+    }
+
+    fn setVolumes(&mut self, py: Python<'_>, volumes: &Bound<'_, PyAny>) -> PyResult<()> {
+        let mut parsed: Vec<RsVolume> = Vec::new();
+        for item in volumes.try_iter()? {
+            parsed.push(volume_from_any(&item?)?);
+        }
+        if parsed.is_empty() {
+            return Err(ChordException::new_err(
+                "setVolumes needs at least one volume",
+            ));
+        }
+        self.volume = None;
+        for (index, note) in self.notes.iter().enumerate() {
+            note.borrow_mut(py)
+                .inner
+                .set_volume(Some(parsed[index % parsed.len()].clone()));
+        }
+        Ok(())
+    }
+
+    #[getter]
+    fn get_volume(&mut self, py: Python<'_>) -> PyResult<Py<Volume>> {
+        if let Some(volume) = &self.volume {
+            return Ok(volume.clone_ref(py));
+        }
+        let velocities: Vec<i32> = self
+            .notes
+            .iter()
+            .filter_map(|note| note.borrow(py).inner.volume().velocity())
+            .collect();
+        let inner = if velocities.is_empty() {
+            RsVolume::new()
+        } else {
+            let total: i32 = velocities.iter().sum();
+            let mean = f64::from(total) / velocities.len() as f64;
+            RsVolume::from_velocity(mean.round_ties_even() as i32)
+        };
+        let created = Py::new(py, Volume::wrap(inner))?;
+        self.volume = Some(created.clone_ref(py));
+        Ok(created)
+    }
+
+    #[setter]
+    fn set_volume(&mut self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        for note in &self.notes {
+            note.borrow_mut(py).inner.set_volume(None);
+        }
+        self.volume = match value.extract::<Py<Volume>>() {
+            Ok(object) => Some(object),
+            Err(_) => Some(Py::new(py, Volume::wrap(volume_from_any(value)?))?),
+        };
+        Ok(())
+    }
+
+    #[getter]
+    fn lyrics(&self, py: Python<'_>) -> Vec<Lyric> {
+        self.notes
+            .first()
+            .map(|note| note.borrow(py).lyrics())
+            .unwrap_or_default()
+    }
+
+    #[getter]
+    fn get_lyric(&self, py: Python<'_>) -> Option<String> {
+        self.notes
+            .first()
+            .and_then(|note| note.borrow(py).inner.lyric())
+    }
+
+    #[setter]
+    fn set_lyric(&mut self, py: Python<'_>, value: Option<&str>) -> PyResult<()> {
+        match self.notes.first() {
+            Some(note) => note.borrow_mut(py).set_lyric(value),
+            None => Ok(()),
+        }
+    }
+
+    #[pyo3(signature = (text, lyricNumber = None, *, applyRaw = false, lyricIdentifier = None))]
+    fn addLyric(
+        &mut self,
+        py: Python<'_>,
+        text: &Bound<'_, PyAny>,
+        lyricNumber: Option<i32>,
+        applyRaw: bool,
+        lyricIdentifier: Option<String>,
+    ) -> PyResult<()> {
+        match self.notes.first() {
+            Some(note) => {
+                note.borrow_mut(py)
+                    .addLyric(text, lyricNumber, applyRaw, lyricIdentifier)
+            }
+            None => Err(ChordException::new_err(
+                "an empty chord has nothing to sing",
+            )),
+        }
+    }
+
+    /// music21's `annotateIntervals`: the interval from the lowest pitch up
+    /// to each of the others, written on as lyrics.
+    #[pyo3(signature = (*, inPlace = false, stripSpecifiers = true, sortPitches = true, returnList = false))]
+    fn annotateIntervals(
+        &mut self,
+        py: Python<'_>,
+        inPlace: bool,
+        stripSpecifiers: bool,
+        sortPitches: bool,
+        returnList: bool,
+    ) -> PyResult<Option<Py<PyAny>>> {
+        let names = self
+            .inner
+            .annotate_intervals(stripSpecifiers, sortPitches)
+            .map_err(chord_error)?;
+        if returnList {
+            return Ok(Some(PyList::new(py, names)?.into_any().unbind()));
+        }
+        if inPlace {
+            for name in names {
+                let text = name.into_pyobject(py)?;
+                self.addLyric(py, text.as_any(), None, false, None)?;
+            }
+            return Ok(None);
+        }
+        let mut annotated = Self::from_inner(py, self.inner.clone())?;
+        for name in names {
+            let text = name.into_pyobject(py)?;
+            annotated.addLyric(py, text.as_any(), None, false, None)?;
+        }
+        Ok(Some(Py::new(py, annotated)?.into_any()))
+    }
+
+    /// music21's `Pitch.getStringHarmonic`, which reads the notehead off the
+    /// chord: a chord whose second note is a diamond sounds the harmonic its
+    /// two pitches pick out.
+    pub(crate) fn getStringHarmonic(&self, py: Python<'_>) -> PyResult<Option<Chord>> {
+        let sounded = self
+            .with_note_notation(py)?
+            .string_harmonic()
+            .map_err(chord_error)?;
+        match sounded {
+            Some(chord) => Ok(Some(Self::from_inner(py, chord)?)),
+            None => Ok(None),
+        }
     }
 
     fn __eq__(&self, other: &Bound<'_, PyAny>) -> bool {
@@ -1015,14 +1471,17 @@ impl Chord {
     }
 
     fn __copy__(&self, py: Python<'_>) -> PyResult<Self> {
-        let duration = match &self.duration {
-            Some(duration) => Some(Py::new(py, duration.borrow(py).clone())?),
-            None => None,
-        };
-        Ok(Self {
-            inner: self.inner.clone(),
-            duration,
-        })
+        let mut copied = Self::from_inner(py, self.inner.clone())?;
+        for (target, source) in copied.notes.iter().zip(&self.notes) {
+            target.borrow_mut(py).inner = source.borrow(py).inner.clone();
+        }
+        if let Some(duration) = &self.duration {
+            copied.duration = Some(Py::new(py, duration.borrow(py).clone())?);
+        }
+        if let Some(volume) = &self.volume {
+            copied.volume = Some(Py::new(py, volume.borrow(py).clone())?);
+        }
+        Ok(copied)
     }
 }
 

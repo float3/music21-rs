@@ -303,6 +303,8 @@ pub struct Accidental {
     display_style: DisplayStyle,
     display_size: DisplaySize,
     display_location: DisplayLocation,
+    #[cfg_attr(feature = "serde", serde(default))]
+    color: Option<String>,
     name: String,
     modifier: String,
     pub(crate) alter: FloatType,
@@ -383,6 +385,7 @@ impl Accidental {
             display_style: DisplayStyle::Normal,
             display_size: DisplaySize::Full,
             display_location: DisplayLocation::Normal,
+            color: None,
             name: "".to_string(),
             modifier: "".to_string(),
             alter: 0.0,
@@ -572,6 +575,17 @@ impl Accidental {
         }
     }
 
+    /// The colour the accidental is written in, if one was said: music21
+    /// keeps this on the accidental's style.
+    pub fn color(&self) -> Option<&str> {
+        self.color.as_deref()
+    }
+
+    /// Sets the colour the accidental is written in.
+    pub fn set_color(&mut self, color: Option<String>) {
+        self.color = color;
+    }
+
     /// Copies display-related settings from another accidental.
     pub fn inherit_display(&mut self, other: &Accidental) {
         self.display_type = other.display_type.clone();
@@ -579,6 +593,7 @@ impl Accidental {
         self.display_style = other.display_style.clone();
         self.display_size = other.display_size.clone();
         self.display_location = other.display_location.clone();
+        self.color = other.color.clone();
     }
 
     /// Returns the accidental display type.

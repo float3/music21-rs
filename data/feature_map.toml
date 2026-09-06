@@ -12,11 +12,17 @@
 [[class]]
 python = "chord/__init__.py"
 name = "Chord"
-rust = ["src/chord/mod.rs"]
-note = "Chord analysis; the stream, display and volume machinery is out of scope."
+rust = ["src/chord/mod.rs", "src/note/mod.rs"]
+note = "Chord analysis and the notation its notes carry. The per-note getters and setters music21 deprecated in v11 are the note's own methods here, reached through `notes_mut`."
 
 [class.renames]
 forteClassTnI = "forte_class_tni"
+getNotehead = "notehead"
+setNotehead = "set_notehead"
+getNoteheadFill = "notehead_fill"
+setNoteheadFill = "set_notehead_fill"
+getStemDirection = "stem_direction"
+setStemDirection = "set_stem_direction"
 getChordStep = "chord_step"
 getZRelation = "z_relation"
 intervalVector = "interval_class_vector"
@@ -26,32 +32,19 @@ pitchClasses = "note_pitch_classes"
 
 [class.excluded]
 chordTablesAddress = "the table address is internal; every value read off it has its own method"
-getColor = "colour, notehead and stem direction are display state"
-setColor = "colour, notehead and stem direction are display state"
-getNotehead = "colour, notehead and stem direction are display state"
-setNotehead = "colour, notehead and stem direction are display state"
-getNoteheadFill = "colour, notehead and stem direction are display state"
-setNoteheadFill = "colour, notehead and stem direction are display state"
-getStemDirection = "colour, notehead and stem direction are display state"
-setStemDirection = "colour, notehead and stem direction are display state"
-getTie = "tie, volume and notehead are notation state the crate does not model"
-setTie = "tie, volume and notehead are notation state the crate does not model"
-getVolume = "tie, volume and notehead are notation state the crate does not model"
-setVolume = "tie, volume and notehead are notation state the crate does not model"
-annotateIntervals = "writes lyrics onto notes in a stream"
 
 [[class]]
 python = "pitch.py"
 name = "Pitch"
-rust = ["src/pitch/mod.rs"]
+rust = ["src/pitch/mod.rs", "src/chord/mod.rs"]
 
 [class.renames]
 diatonicNoteNum = "diatonic_note_number"
+getStringHarmonic = "string_harmonic"
 frequency = "frequency_hz"
 freq440 = "frequency_hz"
 
 [class.excluded]
-getStringHarmonic = "reads and writes noteheads on a chord's notes"
 informClient = "observer callback for a containing note; there is none"
 groups = "stream grouping"
 

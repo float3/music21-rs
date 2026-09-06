@@ -56,10 +56,19 @@ pub const SERIAL_NAMES: &[&str] = &[
 pub const CHORD_NAMES: &[&str] = &["Chord", "ChordException"];
 
 /// The names the `note` facade replaces in `music21.note`.
-pub const NOTE_NAMES: &[&str] = &["Note", "NoteException"];
+pub const NOTE_NAMES: &[&str] = &["Note", "NoteException", "Lyric", "LyricException"];
 
 /// The names the `note` facade replaces in `music21.duration`.
 pub const DURATION_NAMES: &[&str] = &["Duration"];
+
+/// The names the `notation` facade replaces in `music21.tie`.
+pub const TIE_NAMES: &[&str] = &["Tie", "TieException"];
+
+/// The names the `notation` facade replaces in `music21.volume`.
+pub const VOLUME_NAMES: &[&str] = &["Volume", "VolumeException"];
+
+/// The names the `notation` facade replaces in `music21.style`.
+pub const STYLE_NAMES: &[&str] = &["Style"];
 
 /// The names the `interval` facade replaces in `music21.interval`.
 pub const INTERVAL_NAMES: &[&str] = &[

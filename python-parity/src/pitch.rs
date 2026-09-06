@@ -128,7 +128,7 @@ impl Microtone {
 #[pyclass(name = "Accidental", module = "music21.pitch", skip_from_py_object)]
 #[derive(Clone)]
 pub struct Accidental {
-    inner: RsAccidental,
+    pub(crate) inner: RsAccidental,
 }
 
 fn accidental_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsAccidental> {
@@ -230,6 +230,18 @@ impl Accidental {
     #[getter]
     fn fullName(&self) -> String {
         self.inner.full_name().to_string()
+    }
+
+    #[getter]
+    fn style(slf: &Bound<'_, Self>) -> crate::notation::Style {
+        crate::notation::Style {
+            owner: crate::notation::StyleOwner::Accidental(slf.clone().unbind()),
+        }
+    }
+
+    #[getter]
+    fn hasStyleInformation(&self) -> bool {
+        self.inner.color().is_some()
     }
 
     /// music21's `inheritDisplay`: copies every display setting from another
@@ -1069,6 +1081,27 @@ impl Pitch {
     }
 
     fn informClient(&self) {}
+
+    /// music21's `getStringHarmonic`: given a chord whose second note is
+    /// written with a diamond head, the chord comes back with the harmonic
+    /// those two pitches sound added on top. A chord not written as a
+    /// harmonic answers `False`, as music21 does.
+    ///
+    /// The pitch it is called on takes no part; music21 reads both pitches
+    /// off the chord.
+    fn getStringHarmonic<'py>(
+        &self,
+        py: Python<'py>,
+        chordIn: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let chord = chordIn
+            .extract::<PyRef<crate::chord::Chord>>()
+            .map_err(|_| PitchException::new_err("getStringHarmonic needs a chord.Chord"))?;
+        match chord.getStringHarmonic(py)? {
+            Some(sounded) => Ok(Bound::new(py, sounded)?.into_any()),
+            None => Ok(false.into_pyobject(py)?.to_owned().into_any()),
+        }
+    }
 
     /// music21's `updateAccidentalDisplay`: decides whether this pitch's
     /// accidental should be shown, given what came before.

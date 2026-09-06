@@ -49,6 +49,10 @@ pub enum Error {
     Tempo(String),
     /// Error associated with tone rows and serial transformations.
     Serial(String),
+    /// Error associated with ties, noteheads, stems and lyrics.
+    Notation(String),
+    /// Error associated with note volumes.
+    Volume(String),
 }
 
 impl fmt::Display for Error {
@@ -69,6 +73,8 @@ impl fmt::Display for Error {
             Error::Midi(msg) => write!(f, "Midi error: {msg}"),
             Error::Analysis(msg) => write!(f, "Analysis error: {msg}"),
             Error::Meter(msg) => write!(f, "Meter error: {msg}"),
+            Error::Notation(msg) => write!(f, "Notation error: {msg}"),
+            Error::Volume(msg) => write!(f, "Volume error: {msg}"),
             Error::Sieve(msg) => write!(f, "Sieve error: {msg}"),
             Error::Duration(msg) => write!(f, "Duration error: {msg}"),
             Error::Key(msg) => write!(f, "Key error: {msg}"),

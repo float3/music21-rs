@@ -11,6 +11,9 @@ fn pitch_doctests_against_the_crate() {
         &[
             ("music21.pitch", doctest::PITCH_NAMES),
             ("music21.interval", doctest::INTERVAL_NAMES),
+            ("music21.note", doctest::NOTE_NAMES),
+            ("music21.duration", doctest::DURATION_NAMES),
+            ("music21.chord", doctest::CHORD_NAMES),
         ],
     );
 }
