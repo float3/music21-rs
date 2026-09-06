@@ -3,6 +3,7 @@ pub mod guitar;
 pub(crate) mod root;
 pub(crate) mod tables;
 
+use crate::common::numbertools::ORDINALS;
 use crate::defaults::{FloatType, IntegerType, UnsignedIntegerType};
 use crate::duration::Duration;
 use crate::error::Error;
@@ -652,7 +653,10 @@ impl Chord {
         tables::address_to_forte_name(address, "tn").ok()
     }
 
-    /// Returns the transposed normal form when table metadata is available.
+    /// Returns the normal form transposed to start on zero, `[0, 3, 6, 8]`
+    /// for `C E G B-`. This is the Forte-table form music21 reads off the
+    /// chord's table address; [`Self::normal_order`] is music21's
+    /// `normalOrder`, on the chord's own pitch classes.
     ///
     /// Returns `None` when the chord's pitch-class set cannot be found in the
     /// chord tables, including empty or otherwise unsupported pitch-class sets.
@@ -2055,8 +2059,549 @@ impl IntoNotes for &[IntegerType] {
     }
 }
 
+impl Chord {
+    fn chord_tables_address(&self) -> Option<tables::ChordTableAddress> {
+        tables::seek_chord_tables_address(&self.ordered_pitch_classes()).ok()
+    }
+
+    /// Returns the interval-class vector in music21's angle-bracket
+    /// notation, `<001110>`; an empty chord reads `<000000>`.
+    pub fn interval_vector_string(&self) -> String {
+        format_pitch_classes(&self.interval_class_vector().unwrap_or_else(|| vec![0; 6]))
+    }
+
+    /// Returns music21's `normalOrder`: the most compact rotation of the
+    /// pitch classes, on the chord's own pitch classes rather than
+    /// transposed to zero, so `C E G B-` is `[4, 7, 10, 0]` where
+    /// [`Self::normal_form`] is `[0, 3, 6, 8]`. Empty for an empty chord.
+    pub fn normal_order(&self) -> Vec<u8> {
+        let Some(transposed) = self.normal_form() else {
+            return Vec::new();
+        };
+        let ordered = self.ordered_pitch_classes();
+        ordered
+            .iter()
+            .map(|&transposition| {
+                transposed
+                    .iter()
+                    .map(|&pc| (pc + transposition) % 12)
+                    .collect::<Vec<u8>>()
+            })
+            .find(|candidate| {
+                let mut sorted = candidate.clone();
+                sorted.sort_unstable();
+                sorted == ordered
+            })
+            .unwrap_or_default()
+    }
+
+    /// Returns [`Self::normal_order`] in music21's angle-bracket notation,
+    /// `<47A0>`.
+    pub fn normal_order_string(&self) -> String {
+        format_pitch_classes(&self.normal_order())
+    }
+
+    /// Returns the Forte class number within the cardinality, `11` for a
+    /// major or minor triad. `None` for an empty chord.
+    pub fn forte_class_number(&self) -> Option<u8> {
+        self.chord_tables_address().map(|address| address.1)
+    }
+
+    /// Returns the Forte class under transposition equivalence, with the
+    /// `A`/`B` inversion suffix: music21's `forteClassTn`, the same as
+    /// [`Self::forte_class`].
+    pub fn forte_class_tn(&self) -> Option<String> {
+        self.forte_class()
+    }
+
+    /// Returns the number of notes, counting repeated pitch classes: music21's
+    /// `multisetCardinality`.
+    pub fn multiset_cardinality(&self) -> usize {
+        self.notes.len()
+    }
+
+    /// Returns whether the pitch-class set is the inversion of its prime
+    /// form, so its Forte class carries a `B` suffix.
+    pub fn is_prime_form_inversion(&self) -> bool {
+        self.chord_tables_address()
+            .is_some_and(|address| address.2 == -1)
+    }
+
+    /// Returns whether music21 records a Z-related set class for this chord.
+    pub fn has_z_relation(&self) -> bool {
+        self.z_relation().is_some()
+    }
+
+    /// Returns whether `other` belongs to the set class Z-related to this
+    /// chord's, so the two share an interval vector without being related by
+    /// transposition or inversion.
+    pub fn are_z_relations(&self, other: &Chord) -> bool {
+        let Some(z_relation) = self.z_relation() else {
+            return false;
+        };
+        other
+            .chord_tables_address()
+            .is_some_and(|address| format!("{}-{}", address.0, address.1) == z_relation)
+    }
+
+    /// Returns whether the pitch classes form a fully diminished seventh
+    /// however it is spelled: music21's `isFalseDiminishedSeventh`, true for
+    /// `C E- G- A` where [`Self::is_diminished_seventh`] is not.
+    pub fn is_false_diminished_seventh(&self) -> bool {
+        self.chord_tables_address()
+            .is_some_and(|address| (address.0, address.1, address.2) == (4, 28, 0))
+    }
+
+    /// Returns music21's `inversionText`: `Root Position`, `First Inversion`
+    /// and so on, or `Unknown Position` for an empty chord.
+    pub fn inversion_text(&self) -> String {
+        match self.inversion() {
+            Some(0) => "Root Position".to_string(),
+            Some(inversion) => format!("{} Inversion", ORDINALS[usize::from(inversion)]),
+            None => "Unknown Position".to_string(),
+        }
+    }
+
+    /// Returns the interval from the root to the first pitch lying on the
+    /// given chord step, compound intervals included, so the third of
+    /// `C3 G3 E4 C5` is a major tenth. `None` when the chord has no root or
+    /// no pitch on that step.
+    pub fn interval_from_chord_step(&self, step: u8) -> Option<Interval> {
+        let root = self.root()?;
+        self.pitch_refs()
+            .filter_map(|pitch| Interval::between_pitches(root, pitch).ok())
+            .find(|interval| interval.mod7() == IntegerType::from(step))
+    }
+
+    /// Returns the chord in closed position with every repeated step raised
+    /// an octave, so an eight-note cluster spreads into a scale: music21's
+    /// `semiClosedPosition`.
+    pub fn semi_closed_position(&self, force_octave: Option<IntegerType>) -> Self {
+        let mut chord = self.closed_position(force_octave);
+        let implicit_octave = crate::defaults::PITCH_OCTAVE as IntegerType;
+        let mut remaining: Vec<usize> = (0..chord.notes.len()).collect();
+        while !remaining.is_empty() {
+            let mut used_steps = Vec::new();
+            let mut still_clashing = Vec::new();
+            for index in remaining {
+                let pitch = &mut chord.notes[index].pitch;
+                let step = root::diatonic_note_number(pitch).rem_euclid(7);
+                if used_steps.contains(&step) {
+                    let octave = pitch.octave().unwrap_or(implicit_octave) + 1;
+                    pitch.octave_setter(Some(octave));
+                    still_clashing.push(index);
+                } else {
+                    used_steps.push(step);
+                }
+            }
+            remaining = still_clashing;
+        }
+        chord.sort_ascending_in_place();
+        chord
+    }
+
+    /// Returns a copy sorted by pitch space alone, so enharmonic pairs keep
+    /// their input order: music21's `sortChromaticAscending`.
+    pub fn sort_chromatic_ascending(&self) -> Self {
+        let mut chord = self.clone();
+        chord.notes.sort_by(|left, right| {
+            left.pitch
+                .ps()
+                .partial_cmp(&right.pitch.ps())
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        chord
+    }
+
+    /// Returns a copy sorted by staff position and then pitch space, so
+    /// `B#3` sorts below `C4`: music21's `sortDiatonicAscending`, which is
+    /// also what [`Self::sort_ascending`] does.
+    pub fn sort_diatonic_ascending(&self) -> Self {
+        self.sort_ascending()
+    }
+
+    /// Returns a copy sorted by frequency: music21's `sortFrequencyAscending`.
+    pub fn sort_frequency_ascending(&self) -> Self {
+        let mut chord = self.clone();
+        chord.notes.sort_by(|left, right| {
+            left.pitch
+                .frequency_hz()
+                .partial_cmp(&right.pitch.frequency_hz())
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        chord
+    }
+
+    /// Returns the pitch names in input order, without octaves.
+    pub fn pitch_names(&self) -> Vec<String> {
+        self.notes.iter().map(|note| note.pitch.name()).collect()
+    }
+
+    /// Returns music21's `fullName`: the pitches' full names between braces,
+    /// followed by the duration's full name when the chord has a duration
+    /// that music21 can name.
+    pub fn full_name(&self) -> String {
+        let pitches = self
+            .notes
+            .iter()
+            .map(|note| note.pitch.full_name())
+            .collect::<Vec<_>>()
+            .join(" | ");
+        match self.duration.as_ref().and_then(Duration::full_name) {
+            Some(duration) => format!("Chord {{{pitches}}} {duration}"),
+            None => format!("Chord {{{pitches}}}"),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    #[allow(clippy::type_complexity)]
+    fn set_class_strings_and_flags_match_music21() {
+        let cases: [(&str, &str, &str, u8, &str, usize, bool, bool, &str, bool); 14] = [
+            (
+                "C4 E4 G4",
+                "<001110>",
+                "<047>",
+                11,
+                "3-11B",
+                3,
+                true,
+                false,
+                "Root Position",
+                false,
+            ),
+            (
+                "C4 E-4 G-4 B--4",
+                "<004002>",
+                "<0369>",
+                28,
+                "4-28",
+                4,
+                false,
+                false,
+                "Root Position",
+                true,
+            ),
+            (
+                "C4 E4 G4 B-4",
+                "<012111>",
+                "<47A0>",
+                27,
+                "4-27B",
+                4,
+                true,
+                false,
+                "Root Position",
+                false,
+            ),
+            (
+                "C3 G3 E4 C5",
+                "<001110>",
+                "<047>",
+                11,
+                "3-11B",
+                4,
+                true,
+                false,
+                "Root Position",
+                false,
+            ),
+            (
+                "E-4 G4 C5",
+                "<001110>",
+                "<037>",
+                11,
+                "3-11A",
+                3,
+                false,
+                false,
+                "First Inversion",
+                false,
+            ),
+            (
+                "C4 D-4 E4 G-4",
+                "<111111>",
+                "<0146>",
+                15,
+                "4-15A",
+                4,
+                false,
+                true,
+                "Root Position",
+                false,
+            ),
+            (
+                "C4 D-4 E-4 G4",
+                "<111111>",
+                "<0137>",
+                29,
+                "4-29A",
+                4,
+                false,
+                true,
+                "Root Position",
+                false,
+            ),
+            (
+                "C4 C#4 D4 E4 F#4 G4 A4 B4",
+                "<465472>",
+                "<B0124679>",
+                23,
+                "8-23",
+                8,
+                false,
+                false,
+                "Root Position",
+                false,
+            ),
+            (
+                "G3 C4 E4",
+                "<001110>",
+                "<047>",
+                11,
+                "3-11B",
+                3,
+                true,
+                false,
+                "Second Inversion",
+                false,
+            ),
+            (
+                "B#3 C4 E4 G-4 F#4",
+                "<010101>",
+                "<046>",
+                8,
+                "3-8B",
+                5,
+                true,
+                false,
+                "Third Inversion",
+                false,
+            ),
+            (
+                "C4 E-4 G-4 A4",
+                "<004002>",
+                "<0369>",
+                28,
+                "4-28",
+                4,
+                false,
+                false,
+                "First Inversion",
+                true,
+            ),
+            (
+                "C4",
+                "<000000>",
+                "<0>",
+                1,
+                "1-1",
+                1,
+                false,
+                false,
+                "Root Position",
+                false,
+            ),
+            (
+                "C4 F4 G4",
+                "<010020>",
+                "<570>",
+                9,
+                "3-9",
+                3,
+                false,
+                false,
+                "Second Inversion",
+                false,
+            ),
+            (
+                "D4 F4 A-4 C-5",
+                "<004002>",
+                "<258B>",
+                28,
+                "4-28",
+                4,
+                false,
+                false,
+                "Root Position",
+                true,
+            ),
+        ];
+        for (
+            notes,
+            vector,
+            normal_order,
+            forte_number,
+            forte_tn,
+            cardinality,
+            prime_inversion,
+            z_relation,
+            inversion_text,
+            false_diminished,
+        ) in cases
+        {
+            let chord = Chord::new(notes).unwrap();
+            assert_eq!(chord.interval_vector_string(), vector, "{notes}");
+            assert_eq!(chord.normal_order_string(), normal_order, "{notes}");
+            assert_eq!(chord.forte_class_number(), Some(forte_number), "{notes}");
+            assert_eq!(chord.forte_class_tn().as_deref(), Some(forte_tn), "{notes}");
+            assert_eq!(chord.multiset_cardinality(), cardinality, "{notes}");
+            assert_eq!(chord.is_prime_form_inversion(), prime_inversion, "{notes}");
+            assert_eq!(chord.has_z_relation(), z_relation, "{notes}");
+            assert_eq!(chord.inversion_text(), inversion_text, "{notes}");
+            assert_eq!(
+                chord.is_false_diminished_seventh(),
+                false_diminished,
+                "{notes}"
+            );
+        }
+
+        let empty = Chord::empty();
+        assert_eq!(empty.interval_vector_string(), "<000000>");
+        assert_eq!(empty.normal_order_string(), "<>");
+        assert_eq!(empty.forte_class_number(), None);
+        assert_eq!(empty.multiset_cardinality(), 0);
+        assert!(!empty.has_z_relation());
+        assert_eq!(empty.inversion_text(), "Unknown Position");
+    }
+
+    #[test]
+    fn z_relations_pair_up_like_music21() {
+        let z15 = Chord::new("C4 D-4 E4 G-4").unwrap();
+        let z29 = Chord::new("C4 D-4 E-4 G4").unwrap();
+        let triad = Chord::new("C E G").unwrap();
+        assert!(z15.are_z_relations(&z29));
+        assert!(z29.are_z_relations(&z15));
+        assert!(!z15.are_z_relations(&triad));
+        assert!(!triad.are_z_relations(&z15));
+    }
+
+    #[test]
+    fn interval_from_chord_step_matches_music21() {
+        let cases: [(&str, Option<&str>, Option<&str>); 9] = [
+            ("C4 E4 G4", Some("M3"), Some("P5")),
+            ("C4 E-4 G-4 B--4", Some("m3"), Some("d5")),
+            ("C3 G3 E4 C5", Some("M10"), Some("P5")),
+            ("E-4 G4 C5", Some("M6"), Some("P4")),
+            ("C4 D-4 E4 G-4", Some("M3"), Some("d5")),
+            ("C4 E-4 G-4 A4", Some("M6"), Some("A4")),
+            ("A2 C#4 E4 G4", Some("M10"), Some("P12")),
+            ("C4", None, None),
+            ("C4 F4 G4", None, Some("P4")),
+        ];
+        for (notes, third, fifth) in cases {
+            let chord = Chord::new(notes).unwrap();
+            let name = |interval: Option<Interval>| interval.map(|interval| interval.short_name());
+            assert_eq!(
+                name(chord.interval_from_chord_step(3)).as_deref(),
+                third,
+                "{notes}"
+            );
+            assert_eq!(
+                name(chord.interval_from_chord_step(5)).as_deref(),
+                fifth,
+                "{notes}"
+            );
+        }
+        assert!(Chord::empty().interval_from_chord_step(3).is_none());
+    }
+
+    fn octave_names(chord: &Chord) -> Vec<String> {
+        chord
+            .pitches()
+            .iter()
+            .map(Pitch::name_with_octave)
+            .collect()
+    }
+
+    #[test]
+    fn semi_closed_position_matches_music21() {
+        let cases: [(&str, &[&str], &[&str]); 7] = [
+            ("C4 E4 G4", &["C4", "E4", "G4"], &["C3", "E3", "G3"]),
+            ("C3 G3 E4 C5", &["C3", "E3", "G3"], &["C3", "E3", "G3"]),
+            ("E-4 G4 C5", &["E-4", "G4", "C5"], &["E-3", "G3", "C4"]),
+            (
+                "C4 C#4 D4 E4 F#4 G4 A4 B4",
+                &["C4", "D4", "E4", "F#4", "G4", "A4", "B4", "C#5"],
+                &["C3", "D3", "E3", "F#3", "G3", "A3", "B3", "C#4"],
+            ),
+            ("C4 E4 G4 C5 E5", &["C4", "E4", "G4"], &["C3", "E3", "G3"]),
+            (
+                "B#3 C4 E4 G-4 F#4",
+                &["B#3", "C4", "E4", "F#4", "G-4"],
+                &["B#3", "C4", "E4", "F#4", "G-4"],
+            ),
+            (
+                "E4 G#4 B4 D5 F5",
+                &["E4", "F4", "G#4", "B4", "D5"],
+                &["E3", "F3", "G#3", "B3", "D4"],
+            ),
+        ];
+        for (notes, expected, expected_forced) in cases {
+            let chord = Chord::new(notes).unwrap();
+            assert_eq!(
+                octave_names(&chord.semi_closed_position(None)),
+                expected,
+                "{notes}"
+            );
+            assert_eq!(
+                octave_names(&chord.semi_closed_position(Some(3))),
+                expected_forced,
+                "{notes} forced to octave 3"
+            );
+        }
+    }
+
+    #[test]
+    fn sort_variants_match_music21() {
+        let chord = Chord::new("B#3 C4 E4 G-4 F#4").unwrap();
+        assert_eq!(
+            octave_names(&chord.sort_chromatic_ascending()),
+            ["B#3", "C4", "E4", "G-4", "F#4"]
+        );
+        assert_eq!(
+            octave_names(&chord.sort_diatonic_ascending()),
+            ["B#3", "C4", "E4", "F#4", "G-4"]
+        );
+        assert_eq!(
+            octave_names(&chord.sort_frequency_ascending()),
+            ["B#3", "C4", "E4", "G-4", "F#4"]
+        );
+        let spread = Chord::new("C5 G3 E4 C3").unwrap();
+        assert_eq!(
+            octave_names(&spread.sort_chromatic_ascending()),
+            ["C3", "G3", "E4", "C5"]
+        );
+        assert_eq!(
+            octave_names(&spread.sort_frequency_ascending()),
+            ["C3", "G3", "E4", "C5"]
+        );
+        assert_eq!(chord.pitch_names(), ["B#", "C", "E", "G-", "F#"]);
+    }
+
+    #[test]
+    fn full_name_matches_music21() {
+        let chord = Chord::new("C4 E-4 G-4 B--4").unwrap();
+        assert_eq!(
+            chord.full_name(),
+            "Chord {C in octave 4 | E-flat in octave 4 | G-flat in octave 4 | B-double-flat in octave 4}"
+        );
+        let quarter = chord.clone().with_duration(Duration::quarter());
+        assert_eq!(
+            quarter.full_name(),
+            "Chord {C in octave 4 | E-flat in octave 4 | G-flat in octave 4 | B-double-flat in octave 4} Quarter"
+        );
+        let dotted = Chord::new("C4 E4 G4")
+            .unwrap()
+            .with_duration(Duration::new(1.5).unwrap());
+        assert_eq!(
+            dotted.full_name(),
+            "Chord {C in octave 4 | E in octave 4 | G in octave 4} Dotted Quarter"
+        );
+    }
     use crate::{Duration, GuitarTuning, Interval, Key, Pitch, chord::Chord, chord::TriadQuality};
 
     #[test]

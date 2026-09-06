@@ -986,6 +986,26 @@ impl Pitch {
         format!("{}{}", self.step.as_char(), self.accidental.unicode())
     }
 
+    /// Returns music21's `fullName`: the step, the accidental's full name, the
+    /// octave and any microtone, as in `E-flat in octave 4 (+20c)`.
+    pub fn full_name(&self) -> String {
+        let mut name = self.step.as_char().to_string();
+        if self.accidental.alter() != 0.0 {
+            name.push('-');
+            name.push_str(self.accidental.full_name());
+        }
+        if let Some(octave) = self.octave {
+            name.push_str(&format!(" in octave {octave}"));
+        }
+        if let Some(microtone) = &self.microtone
+            && microtone.cents() != 0.0
+        {
+            name.push(' ');
+            name.push_str(&microtone.to_string());
+        }
+        name
+    }
+
     /// Returns [`Self::unicode_name`] followed by the octave when one is set.
     pub fn unicode_name_with_octave(&self) -> String {
         match self.octave {
@@ -1354,6 +1374,45 @@ fn convert_harmonic_to_cents(harmonic_shift: IntegerType) -> IntegerType {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn full_name_matches_music21() {
+        let cases = [
+            ("C4", "C in octave 4"),
+            ("E-4", "E-flat in octave 4"),
+            ("F#", "F-sharp"),
+            ("B--3", "B-double-flat in octave 3"),
+            ("G##5", "G-double-sharp in octave 5"),
+            ("A~4", "A-half-sharp in octave 4"),
+            ("C`4", "C-half-flat in octave 4"),
+            ("D#~4", "D-one-and-a-half-sharp in octave 4"),
+        ];
+        for (name, expected) in cases {
+            assert_eq!(
+                Pitch::from_name(name).unwrap().full_name(),
+                expected,
+                "{name}"
+            );
+        }
+        let sharp = crate::PitchOptions::new()
+            .name("C4")
+            .microtone(20)
+            .build()
+            .unwrap();
+        assert_eq!(sharp.full_name(), "C in octave 4 (+20c)");
+        let flat = crate::PitchOptions::new()
+            .name("E-4")
+            .microtone(-33)
+            .build()
+            .unwrap();
+        assert_eq!(flat.full_name(), "E-flat in octave 4 (-33c)");
+        let hair = crate::PitchOptions::new()
+            .name("E-4")
+            .microtone(-0.2)
+            .build()
+            .unwrap();
+        assert_eq!(hair.full_name(), "E-flat in octave 4 (-0c)");
+    }
     use crate::defaults::{FloatType, IntegerType};
     use crate::interval::Interval;
     use crate::tuningsystem::TuningSystem;

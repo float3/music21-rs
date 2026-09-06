@@ -126,381 +126,457 @@ sharps_alter = -5
 prefix = "P"
 number = 1
 semitones = 0
+nice_name = "Perfect Unison"
 
 [[specifier]]
 prefix = "P"
 number = 4
 semitones = 5
+nice_name = "Perfect Fourth"
 
 [[specifier]]
 prefix = "P"
 number = 5
 semitones = 7
+nice_name = "Perfect Fifth"
 
 [[specifier]]
 prefix = "P"
 number = 8
 semitones = 12
+nice_name = "Perfect Octave"
 
 [[specifier]]
 prefix = "M"
 number = 2
 semitones = 2
+nice_name = "Major Second"
 
 [[specifier]]
 prefix = "M"
 number = 3
 semitones = 4
+nice_name = "Major Third"
 
 [[specifier]]
 prefix = "M"
 number = 6
 semitones = 9
+nice_name = "Major Sixth"
 
 [[specifier]]
 prefix = "M"
 number = 7
 semitones = 11
+nice_name = "Major Seventh"
 
 [[specifier]]
 prefix = "m"
 number = 2
 semitones = 1
+nice_name = "Minor Second"
 
 [[specifier]]
 prefix = "m"
 number = 3
 semitones = 3
+nice_name = "Minor Third"
 
 [[specifier]]
 prefix = "m"
 number = 6
 semitones = 8
+nice_name = "Minor Sixth"
 
 [[specifier]]
 prefix = "m"
 number = 7
 semitones = 10
+nice_name = "Minor Seventh"
 
 [[specifier]]
 prefix = "A"
 number = 1
 semitones = 1
+nice_name = "Augmented Unison"
 
 [[specifier]]
 prefix = "A"
 number = 2
 semitones = 3
+nice_name = "Augmented Second"
 
 [[specifier]]
 prefix = "A"
 number = 3
 semitones = 5
+nice_name = "Augmented Third"
 
 [[specifier]]
 prefix = "A"
 number = 4
 semitones = 6
+nice_name = "Augmented Fourth"
 
 [[specifier]]
 prefix = "A"
 number = 5
 semitones = 8
+nice_name = "Augmented Fifth"
 
 [[specifier]]
 prefix = "A"
 number = 6
 semitones = 10
+nice_name = "Augmented Sixth"
 
 [[specifier]]
 prefix = "A"
 number = 7
 semitones = 12
+nice_name = "Augmented Seventh"
 
 [[specifier]]
 prefix = "A"
 number = 8
 semitones = 13
+nice_name = "Augmented Octave"
 
 [[specifier]]
 prefix = "d"
 number = 1
 semitones = -1
+nice_name = "Diminished Unison"
 
 [[specifier]]
 prefix = "d"
 number = 2
 semitones = 0
+nice_name = "Diminished Second"
 
 [[specifier]]
 prefix = "d"
 number = 3
 semitones = 2
+nice_name = "Diminished Third"
 
 [[specifier]]
 prefix = "d"
 number = 4
 semitones = 4
+nice_name = "Diminished Fourth"
 
 [[specifier]]
 prefix = "d"
 number = 5
 semitones = 6
+nice_name = "Diminished Fifth"
 
 [[specifier]]
 prefix = "d"
 number = 6
 semitones = 7
+nice_name = "Diminished Sixth"
 
 [[specifier]]
 prefix = "d"
 number = 7
 semitones = 9
+nice_name = "Diminished Seventh"
 
 [[specifier]]
 prefix = "d"
 number = 8
 semitones = 11
+nice_name = "Diminished Octave"
 
 [[specifier]]
 prefix = "AA"
 number = 1
 semitones = 2
+nice_name = "Doubly-Augmented Unison"
 
 [[specifier]]
 prefix = "AA"
 number = 2
 semitones = 4
+nice_name = "Doubly-Augmented Second"
 
 [[specifier]]
 prefix = "AA"
 number = 3
 semitones = 6
+nice_name = "Doubly-Augmented Third"
 
 [[specifier]]
 prefix = "AA"
 number = 4
 semitones = 7
+nice_name = "Doubly-Augmented Fourth"
 
 [[specifier]]
 prefix = "AA"
 number = 5
 semitones = 9
+nice_name = "Doubly-Augmented Fifth"
 
 [[specifier]]
 prefix = "AA"
 number = 6
 semitones = 11
+nice_name = "Doubly-Augmented Sixth"
 
 [[specifier]]
 prefix = "AA"
 number = 7
 semitones = 13
+nice_name = "Doubly-Augmented Seventh"
 
 [[specifier]]
 prefix = "AA"
 number = 8
 semitones = 14
+nice_name = "Doubly-Augmented Octave"
 
 [[specifier]]
 prefix = "dd"
 number = 1
 semitones = -2
+nice_name = "Doubly-Diminished Unison"
 
 [[specifier]]
 prefix = "dd"
 number = 2
 semitones = -1
+nice_name = "Doubly-Diminished Second"
 
 [[specifier]]
 prefix = "dd"
 number = 3
 semitones = 1
+nice_name = "Doubly-Diminished Third"
 
 [[specifier]]
 prefix = "dd"
 number = 4
 semitones = 3
+nice_name = "Doubly-Diminished Fourth"
 
 [[specifier]]
 prefix = "dd"
 number = 5
 semitones = 5
+nice_name = "Doubly-Diminished Fifth"
 
 [[specifier]]
 prefix = "dd"
 number = 6
 semitones = 6
+nice_name = "Doubly-Diminished Sixth"
 
 [[specifier]]
 prefix = "dd"
 number = 7
 semitones = 8
+nice_name = "Doubly-Diminished Seventh"
 
 [[specifier]]
 prefix = "dd"
 number = 8
 semitones = 10
+nice_name = "Doubly-Diminished Octave"
 
 [[specifier]]
 prefix = "AAA"
 number = 1
 semitones = 3
+nice_name = "Triply-Augmented Unison"
 
 [[specifier]]
 prefix = "AAA"
 number = 2
 semitones = 5
+nice_name = "Triply-Augmented Second"
 
 [[specifier]]
 prefix = "AAA"
 number = 3
 semitones = 7
+nice_name = "Triply-Augmented Third"
 
 [[specifier]]
 prefix = "AAA"
 number = 4
 semitones = 8
+nice_name = "Triply-Augmented Fourth"
 
 [[specifier]]
 prefix = "AAA"
 number = 5
 semitones = 10
+nice_name = "Triply-Augmented Fifth"
 
 [[specifier]]
 prefix = "AAA"
 number = 6
 semitones = 12
+nice_name = "Triply-Augmented Sixth"
 
 [[specifier]]
 prefix = "AAA"
 number = 7
 semitones = 14
+nice_name = "Triply-Augmented Seventh"
 
 [[specifier]]
 prefix = "AAA"
 number = 8
 semitones = 15
+nice_name = "Triply-Augmented Octave"
 
 [[specifier]]
 prefix = "ddd"
 number = 1
 semitones = -3
+nice_name = "Triply-Diminished Unison"
 
 [[specifier]]
 prefix = "ddd"
 number = 2
 semitones = -2
+nice_name = "Triply-Diminished Second"
 
 [[specifier]]
 prefix = "ddd"
 number = 3
 semitones = 0
+nice_name = "Triply-Diminished Third"
 
 [[specifier]]
 prefix = "ddd"
 number = 4
 semitones = 2
+nice_name = "Triply-Diminished Fourth"
 
 [[specifier]]
 prefix = "ddd"
 number = 5
 semitones = 4
+nice_name = "Triply-Diminished Fifth"
 
 [[specifier]]
 prefix = "ddd"
 number = 6
 semitones = 5
+nice_name = "Triply-Diminished Sixth"
 
 [[specifier]]
 prefix = "ddd"
 number = 7
 semitones = 7
+nice_name = "Triply-Diminished Seventh"
 
 [[specifier]]
 prefix = "ddd"
 number = 8
 semitones = 9
+nice_name = "Triply-Diminished Octave"
 
 [[specifier]]
 prefix = "AAAA"
 number = 1
 semitones = 4
+nice_name = "Quadruply-Augmented Unison"
 
 [[specifier]]
 prefix = "AAAA"
 number = 2
 semitones = 6
+nice_name = "Quadruply-Augmented Second"
 
 [[specifier]]
 prefix = "AAAA"
 number = 3
 semitones = 8
+nice_name = "Quadruply-Augmented Third"
 
 [[specifier]]
 prefix = "AAAA"
 number = 4
 semitones = 9
+nice_name = "Quadruply-Augmented Fourth"
 
 [[specifier]]
 prefix = "AAAA"
 number = 5
 semitones = 11
+nice_name = "Quadruply-Augmented Fifth"
 
 [[specifier]]
 prefix = "AAAA"
 number = 6
 semitones = 13
+nice_name = "Quadruply-Augmented Sixth"
 
 [[specifier]]
 prefix = "AAAA"
 number = 7
 semitones = 15
+nice_name = "Quadruply-Augmented Seventh"
 
 [[specifier]]
 prefix = "AAAA"
 number = 8
 semitones = 16
+nice_name = "Quadruply-Augmented Octave"
 
 [[specifier]]
 prefix = "dddd"
 number = 1
 semitones = -4
+nice_name = "Quadruply-Diminished Unison"
 
 [[specifier]]
 prefix = "dddd"
 number = 2
 semitones = -3
+nice_name = "Quadruply-Diminished Second"
 
 [[specifier]]
 prefix = "dddd"
 number = 3
 semitones = -1
+nice_name = "Quadruply-Diminished Third"
 
 [[specifier]]
 prefix = "dddd"
 number = 4
 semitones = 1
+nice_name = "Quadruply-Diminished Fourth"
 
 [[specifier]]
 prefix = "dddd"
 number = 5
 semitones = 3
+nice_name = "Quadruply-Diminished Fifth"
 
 [[specifier]]
 prefix = "dddd"
 number = 6
 semitones = 4
+nice_name = "Quadruply-Diminished Sixth"
 
 [[specifier]]
 prefix = "dddd"
 number = 7
 semitones = 6
+nice_name = "Quadruply-Diminished Seventh"
 
 [[specifier]]
 prefix = "dddd"
 number = 8
 semitones = 8
+nice_name = "Quadruply-Diminished Octave"
 
 [[key_profile]]
 name = "KrumhanslSchmuckler"

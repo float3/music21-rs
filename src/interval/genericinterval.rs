@@ -89,6 +89,26 @@ impl GenericInterval {
         name_from_interval_number(self.semi_simple_undirected())
     }
 
+    pub(crate) fn simple_nice_name(&self) -> String {
+        name_from_interval_number(self.simple_undirected())
+    }
+
+    pub(crate) fn is_unison(&self) -> bool {
+        self.undirected() == 1
+    }
+
+    pub(crate) fn mod7_inversion(&self) -> IntegerType {
+        9 - self.semi_simple_undirected()
+    }
+
+    pub(crate) fn mod7(&self) -> IntegerType {
+        if self.direction() == Direction::Descending {
+            self.mod7_inversion()
+        } else {
+            self.simple_undirected()
+        }
+    }
+
     pub(crate) fn is_perfectable(&self) -> bool {
         matches!(self.simple_undirected(), 1 | 4 | 5)
     }

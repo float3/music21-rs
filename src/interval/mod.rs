@@ -7,6 +7,7 @@ pub(crate) mod specifier;
 
 use chromaticinterval::ChromaticInterval;
 use diatonicinterval::DiatonicInterval;
+use direction::Direction;
 use genericinterval::GenericInterval;
 use intervalbase::IntervalBaseTrait;
 use specifier::Specifier;
@@ -557,8 +558,114 @@ impl Interval {
         self.diatonic.nice_name()
     }
 
-    pub(crate) fn semi_simple_nice_name(&self) -> String {
+    /// The spelled-out name with compound intervals folded to an octave at
+    /// most: music21's `semiSimpleNiceName`, so a ninth is `Minor Second`
+    /// but an octave stays `Perfect Octave`.
+    pub fn semi_simple_nice_name(&self) -> String {
         self.diatonic.semi_simple_nice_name()
+    }
+
+    /// The spelled-out name within one octave: music21's `simpleNiceName`,
+    /// so both a ninth and a sixteenth are `Major Second` and an octave is a
+    /// `Perfect Unison`.
+    pub fn simple_nice_name(&self) -> String {
+        format!(
+            "{} {}",
+            self.diatonic.specifier.nice_name(),
+            self.generic().simple_nice_name()
+        )
+    }
+
+    /// The direction music21's `DiatonicInterval` reports, which differs from
+    /// the generic direction only on altered unisons: a diminished unison is
+    /// always `Descending` and an augmented one always `Ascending`, whatever
+    /// sign the interval was written with.
+    fn diatonic_direction(&self) -> Direction {
+        if !self.generic().is_unison() {
+            return self.generic().direction();
+        }
+        match self.diatonic.specifier {
+            Specifier::Diminished
+            | Specifier::DoubleDiminished
+            | Specifier::TripleDiminished
+            | Specifier::QuadrupleDiminished => Direction::Descending,
+            Specifier::Augmented
+            | Specifier::DoubleAugmented
+            | Specifier::TripleAugmented
+            | Specifier::QuadrupleAugmented => Direction::Ascending,
+            Specifier::Perfect | Specifier::Major | Specifier::Minor => Direction::Oblique,
+        }
+    }
+
+    fn directed(&self, name: String) -> String {
+        format!(
+            "{} {name}",
+            public_direction(self.diatonic_direction()).name()
+        )
+    }
+
+    /// The spelled-out name with its direction: music21's `directedNiceName`,
+    /// `Descending Major Third`.
+    pub fn directed_nice_name(&self) -> String {
+        self.directed(self.nice_name())
+    }
+
+    /// [`Self::simple_nice_name`] with its direction: music21's
+    /// `directedSimpleNiceName`.
+    pub fn directed_simple_nice_name(&self) -> String {
+        self.directed(self.simple_nice_name())
+    }
+
+    /// [`Self::semi_simple_nice_name`] with its direction: music21's
+    /// `directedSemiSimpleNiceName`.
+    pub fn directed_semi_simple_nice_name(&self) -> String {
+        self.directed(self.semi_simple_nice_name())
+    }
+
+    /// The specifier spelled out on its own: music21's `specificName`,
+    /// `Doubly-Diminished` for `dd5`.
+    pub fn specific_name(&self) -> String {
+        self.diatonic.specifier.nice_name()
+    }
+
+    /// The chromatic size in cents, signed.
+    pub fn cents(&self) -> FloatType {
+        FloatType::from(self.semitones()) * 100.0
+    }
+
+    /// Whether the generic interval is a unison, whatever its quality.
+    pub fn is_unison(&self) -> bool {
+        self.generic().is_unison()
+    }
+
+    /// Whether the generic interval takes perfect rather than major and
+    /// minor qualities: unisons, fourths, fifths and their compounds.
+    pub fn is_perfectable(&self) -> bool {
+        self.generic().is_perfectable()
+    }
+
+    /// The signed number of staff steps: music21's `generic.staffDistance`,
+    /// `0` for a unison, `2` for a third and `-4` for a descending fifth.
+    pub fn staff_distance(&self) -> IntegerType {
+        self.generic().staff_distance()
+    }
+
+    /// The simple generic size from one to seven, with descending intervals
+    /// inverted: music21's `generic.mod7`, so a descending third is `6`.
+    pub fn mod7(&self) -> IntegerType {
+        self.generic().mod7()
+    }
+
+    /// The generic size of the inversion within an octave: music21's
+    /// `generic.mod7inversion`, `6` for a third and `1` for an octave.
+    pub fn mod7_inversion(&self) -> IntegerType {
+        self.generic().mod7_inversion()
+    }
+
+    /// The semitones reduced to a pitch class, `0` to `11`: music21's
+    /// `chromatic.mod12`, so a descending major third is `8`.
+    pub fn mod12(&self) -> IntegerType {
+        self.semitones().rem_euclid(12)
     }
 
     /// reverse default is false
@@ -795,6 +902,240 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: &Interval) -> Result<Fract
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn nice_name_variants_match_music21() {
+        let cases: [(&str, [&str; 7]); 15] = [
+            (
+                "P1",
+                [
+                    "Perfect Unison",
+                    "Oblique Perfect Unison",
+                    "Perfect Unison",
+                    "Perfect Unison",
+                    "Oblique Perfect Unison",
+                    "Oblique Perfect Unison",
+                    "Perfect",
+                ],
+            ),
+            (
+                "m2",
+                [
+                    "Minor Second",
+                    "Ascending Minor Second",
+                    "Minor Second",
+                    "Minor Second",
+                    "Ascending Minor Second",
+                    "Ascending Minor Second",
+                    "Minor",
+                ],
+            ),
+            (
+                "P8",
+                [
+                    "Perfect Octave",
+                    "Ascending Perfect Octave",
+                    "Perfect Unison",
+                    "Perfect Octave",
+                    "Ascending Perfect Unison",
+                    "Ascending Perfect Octave",
+                    "Perfect",
+                ],
+            ),
+            (
+                "m9",
+                [
+                    "Minor Ninth",
+                    "Ascending Minor Ninth",
+                    "Minor Second",
+                    "Minor Second",
+                    "Ascending Minor Second",
+                    "Ascending Minor Second",
+                    "Minor",
+                ],
+            ),
+            (
+                "M10",
+                [
+                    "Major Tenth",
+                    "Ascending Major Tenth",
+                    "Major Third",
+                    "Major Third",
+                    "Ascending Major Third",
+                    "Ascending Major Third",
+                    "Major",
+                ],
+            ),
+            (
+                "P12",
+                [
+                    "Perfect Twelfth",
+                    "Ascending Perfect Twelfth",
+                    "Perfect Fifth",
+                    "Perfect Fifth",
+                    "Ascending Perfect Fifth",
+                    "Ascending Perfect Fifth",
+                    "Perfect",
+                ],
+            ),
+            (
+                "-M3",
+                [
+                    "Major Third",
+                    "Descending Major Third",
+                    "Major Third",
+                    "Major Third",
+                    "Descending Major Third",
+                    "Descending Major Third",
+                    "Major",
+                ],
+            ),
+            (
+                "-m9",
+                [
+                    "Minor Ninth",
+                    "Descending Minor Ninth",
+                    "Minor Second",
+                    "Minor Second",
+                    "Descending Minor Second",
+                    "Descending Minor Second",
+                    "Minor",
+                ],
+            ),
+            (
+                "dd5",
+                [
+                    "Doubly-Diminished Fifth",
+                    "Ascending Doubly-Diminished Fifth",
+                    "Doubly-Diminished Fifth",
+                    "Doubly-Diminished Fifth",
+                    "Ascending Doubly-Diminished Fifth",
+                    "Ascending Doubly-Diminished Fifth",
+                    "Doubly-Diminished",
+                ],
+            ),
+            (
+                "AA4",
+                [
+                    "Doubly-Augmented Fourth",
+                    "Ascending Doubly-Augmented Fourth",
+                    "Doubly-Augmented Fourth",
+                    "Doubly-Augmented Fourth",
+                    "Ascending Doubly-Augmented Fourth",
+                    "Ascending Doubly-Augmented Fourth",
+                    "Doubly-Augmented",
+                ],
+            ),
+            (
+                "P15",
+                [
+                    "Perfect Double-octave",
+                    "Ascending Perfect Double-octave",
+                    "Perfect Unison",
+                    "Perfect Octave",
+                    "Ascending Perfect Unison",
+                    "Ascending Perfect Octave",
+                    "Perfect",
+                ],
+            ),
+            (
+                "d1",
+                [
+                    "Diminished Unison",
+                    "Descending Diminished Unison",
+                    "Diminished Unison",
+                    "Diminished Unison",
+                    "Descending Diminished Unison",
+                    "Descending Diminished Unison",
+                    "Diminished",
+                ],
+            ),
+            (
+                "A1",
+                [
+                    "Augmented Unison",
+                    "Ascending Augmented Unison",
+                    "Augmented Unison",
+                    "Augmented Unison",
+                    "Ascending Augmented Unison",
+                    "Ascending Augmented Unison",
+                    "Augmented",
+                ],
+            ),
+            (
+                "-A1",
+                [
+                    "Augmented Unison",
+                    "Ascending Augmented Unison",
+                    "Augmented Unison",
+                    "Augmented Unison",
+                    "Ascending Augmented Unison",
+                    "Ascending Augmented Unison",
+                    "Augmented",
+                ],
+            ),
+            (
+                "P-8",
+                [
+                    "Perfect Octave",
+                    "Descending Perfect Octave",
+                    "Perfect Unison",
+                    "Perfect Octave",
+                    "Descending Perfect Unison",
+                    "Descending Perfect Octave",
+                    "Perfect",
+                ],
+            ),
+        ];
+        for (name, expected) in cases {
+            let interval = Interval::from_name(name).unwrap();
+            let actual = [
+                interval.name(),
+                interval.directed_nice_name(),
+                interval.simple_nice_name(),
+                interval.semi_simple_nice_name(),
+                interval.directed_simple_nice_name(),
+                interval.directed_semi_simple_nice_name(),
+                interval.specific_name(),
+            ];
+            assert_eq!(actual, expected, "{name}");
+        }
+    }
+
+    #[test]
+    #[allow(clippy::type_complexity)]
+    fn generic_and_chromatic_helpers_match_music21() {
+        let cases: [(&str, f64, bool, bool, i32, i32, i32, i32); 14] = [
+            ("P1", 0.0, true, true, 0, 1, 8, 0),
+            ("m2", 100.0, false, false, 1, 2, 7, 1),
+            ("P4", 500.0, false, true, 3, 4, 5, 5),
+            ("P5", 700.0, false, true, 4, 5, 4, 7),
+            ("M7", 1100.0, false, false, 6, 7, 2, 11),
+            ("P8", 1200.0, false, true, 7, 1, 1, 0),
+            ("m9", 1300.0, false, false, 8, 2, 7, 1),
+            ("-M3", -400.0, false, false, -2, 6, 6, 8),
+            ("-P5", -700.0, false, true, -4, 4, 4, 5),
+            ("-m9", -1300.0, false, false, -8, 7, 7, 11),
+            ("P15", 2400.0, false, true, 14, 1, 1, 0),
+            ("d1", -100.0, true, true, 0, 1, 8, 11),
+            ("-A1", -100.0, true, true, 0, 8, 8, 11),
+            ("P-8", -1200.0, false, true, -7, 1, 1, 0),
+        ];
+        for (name, cents, unison, perfectable, staff, mod7, mod7_inversion, mod12) in cases {
+            let interval = Interval::from_name(name).unwrap();
+            assert_eq!(interval.cents(), cents, "{name} cents");
+            assert_eq!(interval.is_unison(), unison, "{name} unison");
+            assert_eq!(interval.is_perfectable(), perfectable, "{name} perfectable");
+            assert_eq!(interval.staff_distance(), staff, "{name} staff distance");
+            assert_eq!(interval.mod7(), mod7, "{name} mod7");
+            assert_eq!(
+                interval.mod7_inversion(),
+                mod7_inversion,
+                "{name} mod7 inversion"
+            );
+            assert_eq!(interval.mod12(), mod12, "{name} mod12");
+        }
+    }
     use super::*;
 
     fn pitch(name: &str) -> Pitch {

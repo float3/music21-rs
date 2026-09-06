@@ -27,12 +27,12 @@ impl Specifier {
             Specifier::Minor => "Minor".to_string(),
             Specifier::Augmented => "Augmented".to_string(),
             Specifier::Diminished => "Diminished".to_string(),
-            Specifier::DoubleAugmented => "Double Augmented".to_string(),
-            Specifier::DoubleDiminished => "Double Diminished".to_string(),
-            Specifier::TripleAugmented => "Triple Augmented".to_string(),
-            Specifier::TripleDiminished => "Triple Diminished".to_string(),
-            Specifier::QuadrupleAugmented => "Quadruple Augmented".to_string(),
-            Specifier::QuadrupleDiminished => "Quadruple Diminished".to_string(),
+            Specifier::DoubleAugmented => "Doubly-Augmented".to_string(),
+            Specifier::DoubleDiminished => "Doubly-Diminished".to_string(),
+            Specifier::TripleAugmented => "Triply-Augmented".to_string(),
+            Specifier::TripleDiminished => "Triply-Diminished".to_string(),
+            Specifier::QuadrupleAugmented => "Quadruply-Augmented".to_string(),
+            Specifier::QuadrupleDiminished => "Quadruply-Diminished".to_string(),
         }
     }
 
@@ -151,17 +151,17 @@ mod tests {
         assert_eq!(Specifier::Minor.nice_name(), "Minor");
         assert_eq!(Specifier::Augmented.nice_name(), "Augmented");
         assert_eq!(Specifier::Diminished.nice_name(), "Diminished");
-        assert_eq!(Specifier::DoubleAugmented.nice_name(), "Double Augmented");
-        assert_eq!(Specifier::DoubleDiminished.nice_name(), "Double Diminished");
-        assert_eq!(Specifier::TripleAugmented.nice_name(), "Triple Augmented");
-        assert_eq!(Specifier::TripleDiminished.nice_name(), "Triple Diminished");
+        assert_eq!(Specifier::DoubleAugmented.nice_name(), "Doubly-Augmented");
+        assert_eq!(Specifier::DoubleDiminished.nice_name(), "Doubly-Diminished");
+        assert_eq!(Specifier::TripleAugmented.nice_name(), "Triply-Augmented");
+        assert_eq!(Specifier::TripleDiminished.nice_name(), "Triply-Diminished");
         assert_eq!(
             Specifier::QuadrupleAugmented.nice_name(),
-            "Quadruple Augmented"
+            "Quadruply-Augmented"
         );
         assert_eq!(
             Specifier::QuadrupleDiminished.nice_name(),
-            "Quadruple Diminished"
+            "Quadruply-Diminished"
         );
     }
 

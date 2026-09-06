@@ -57,6 +57,7 @@ struct SpecifierExpectation {
     prefix: String,
     number: i32,
     semitones: i32,
+    nice_name: String,
 }
 
 fn expectations() -> Expectations {
@@ -157,14 +158,26 @@ fn interval_specifiers_match_music21() {
 
     for expected in &expectations().specifier {
         let name = format!("{}{}", expected.prefix, expected.number);
-        match Interval::from_name(name.as_str()) {
-            Ok(interval) if interval.semitones() == expected.semitones => {}
-            Ok(interval) => mismatches.push(format!(
+        let interval = match Interval::from_name(name.as_str()) {
+            Ok(interval) => interval,
+            Err(error) => {
+                mismatches.push(format!("{name}: does not parse ({error})"));
+                continue;
+            }
+        };
+        if interval.semitones() != expected.semitones {
+            mismatches.push(format!(
                 "{name}: music21 {} semitones, crate {}",
                 expected.semitones,
                 interval.semitones()
-            )),
-            Err(error) => mismatches.push(format!("{name}: does not parse ({error})")),
+            ));
+        }
+        if interval.name() != expected.nice_name {
+            mismatches.push(format!(
+                "{name}: music21 calls it {:?}, crate {:?}",
+                expected.nice_name,
+                interval.name()
+            ));
         }
     }
 

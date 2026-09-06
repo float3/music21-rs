@@ -385,7 +385,9 @@ fn write_small_tables(py: Python<'_>, workspace_root: &Path, version: &str) -> P
             let _ = writeln!(out, "[[specifier]]");
             let _ = writeln!(out, "prefix = {}", toml_string(prefix));
             let _ = writeln!(out, "number = {number}");
+            let nice_name: String = interval.getattr("niceName")?.extract()?;
             let _ = writeln!(out, "semitones = {semitones}");
+            let _ = writeln!(out, "nice_name = {}", toml_string(&nice_name));
             let _ = writeln!(out);
             specifiers += 1;
         }

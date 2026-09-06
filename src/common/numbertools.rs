@@ -94,6 +94,11 @@ define_ordinals! {
     }
 }
 
+/// music21's plain `ordinals` list, as far as any chord inversion can reach.
+pub(crate) const ORDINALS: [&str; 8] = [
+    "Zeroth", "First", "Second", "Third", "Fourth", "Fifth", "Sixth", "Seventh",
+];
+
 pub(crate) static MUSICAL_ORDINAL_STRINGS: LazyLock<[String; 23]> = LazyLock::new(|| {
     std::array::from_fn(|i| {
         let val: UnsignedIntegerType = i as UnsignedIntegerType;

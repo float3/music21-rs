@@ -70,6 +70,19 @@ the next release needs a minor bump.
   `historical_row_by_name`. Both tables are verified against music21 by a
   new `serial_expectations.toml` fixture.
 - `Error::Serial`.
+- `Chord::normal_order` and `normal_order_string` (music21's `normalOrder`,
+  on the chord's own pitch classes), `interval_vector_string`,
+  `forte_class_number`, `forte_class_tn`, `multiset_cardinality`,
+  `is_prime_form_inversion`, `has_z_relation`, `are_z_relations`,
+  `is_false_diminished_seventh`, `inversion_text`,
+  `interval_from_chord_step`, `semi_closed_position`,
+  `sort_chromatic_ascending`, `sort_diatonic_ascending`,
+  `sort_frequency_ascending`, `pitch_names` and `full_name`.
+- `Interval::simple_nice_name`, `semi_simple_nice_name`,
+  `directed_nice_name`, `directed_simple_nice_name`,
+  `directed_semi_simple_nice_name`, `specific_name`, `cents`, `is_unison`,
+  `is_perfectable`, `staff_distance`, `mod7`, `mod7_inversion` and `mod12`.
+- `Pitch::full_name`, music21's `E-flat in octave 4 (+20c)` spelling.
 - `Note::transpose`, `Key::transpose` and `Key::as_scale`.
 
 ## Bug Fixes
@@ -81,6 +94,10 @@ the next release needs a minor bump.
   rounded `261.6256`.
 - Transposing with no accidental limit errors past quadruple accidentals
   instead of silently respelling, as music21 does.
+- Doubled, tripled and quadrupled specifiers are spelled `Doubly-Diminished`,
+  `Triply-Augmented` and so on in interval names, as music21 spells them,
+  rather than `Double Diminished`. The specifier fixture now checks the
+  names as well as the semitone counts.
 
 ## Breaking Changes
 
