@@ -51,7 +51,10 @@ fn expectations() -> Expectations {
 }
 
 fn classification(row: &ToneRow) -> (Option<u32>, Vec<String>) {
-    match row.link_classification().expect("a historical row is twelve-tone") {
+    match row
+        .link_classification()
+        .expect("a historical row is twelve-tone")
+    {
         Some(link) => (
             Some(link.number),
             link.special_intervals

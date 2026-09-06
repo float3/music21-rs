@@ -112,6 +112,13 @@ The `examples/` directory contains a small set of interactive tools:
 The examples are also wired into the GitHub Pages build, with
 [examples/web/index.html](./examples/web/index.html) as the local landing page.
 
+music21's own doctests can be run against the crate: `python-parity` builds a
+Python module of music21-shaped classes over `music21-rs` and runs the
+docstrings of `music21/pitch.py` with those in place of music21's. The
+docstrings that pass are listed in `python-parity/doctest/pitch.toml`, and
+`cargo test --manifest-path python-parity/Cargo.toml --test doctest_pitch`
+fails when one of them stops passing.
+
 The same site carries [/reports/](https://float3.github.io/music21-rs/reports/):
 the library's test coverage, and every public method of the music21 classes
 the crate ports against what has been ported so far, with the deliberate

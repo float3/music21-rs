@@ -765,6 +765,7 @@ name = "music21-rs-python-parity"
 version = "0.0.0"
 dependencies = [
  "music21-rs",
+ "pyo3",
  "serde",
  "toml",
  "utils",

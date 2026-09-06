@@ -782,7 +782,10 @@ impl Interval {
         let new_step = crate::stepname::StepName::try_from((step_number + 1) as u8)?;
 
         let step_char = new_step.as_char();
-        let mut pitch2 = Pitch::from_name(format!("{step_char}{new_octave}"))?;
+        let mut pitch2 = crate::pitch::PitchOptions::new()
+            .step(step_char)
+            .octave(new_octave)
+            .build()?;
 
         let mut half_steps_to_fix = self.chromatic.semitones as FloatType - (pitch2.ps() - p.ps());
         while half_steps_to_fix >= 12.0 {
@@ -800,8 +803,11 @@ impl Interval {
                 pitch2.set_ps(pitch2.ps() + half_steps_to_fix);
             } else {
                 let accidental = crate::pitch::accidental::Accidental::new(rounded_fix as i8)?;
-                let accidental_modifier = accidental.modifier().to_string();
-                pitch2 = Pitch::from_name(format!("{step_char}{accidental_modifier}{new_octave}"))?;
+                pitch2 = crate::pitch::PitchOptions::new()
+                    .step(step_char)
+                    .accidental(accidental)
+                    .octave(new_octave)
+                    .build()?;
             }
         }
 

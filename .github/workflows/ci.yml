@@ -131,6 +131,11 @@ jobs:
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@v2
 
+      # The doctest harness imports the whole of music21, which needs its
+      # own dependencies; the table bridge stubs them out and does not.
+      - name: Install music21's dependencies
+        run: python -m pip install chardet joblib jsonpickle more_itertools numpy requests webcolors
+
       - name: Run Python parity tests
         shell: bash
         run: |

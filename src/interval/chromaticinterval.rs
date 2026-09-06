@@ -26,8 +26,8 @@ impl ChromaticInterval {
 
 impl IntervalBaseTrait for ChromaticInterval {
     fn transpose_pitch(&self, pitch: &Pitch) -> Result<Pitch> {
-        let mut p_out =
-            Pitch::from_number((pitch.ps() + self.semitones as FloatType).round() as FloatType)?;
+        let mut p_out = pitch.clone();
+        p_out.set_ps(pitch.ps() + self.semitones as FloatType);
         if pitch.octave().is_none() {
             p_out.octave_setter(None);
         }

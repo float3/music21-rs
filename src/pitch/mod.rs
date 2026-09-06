@@ -15,7 +15,6 @@ use crate::interval::Interval;
 use crate::interval::PitchOrNote;
 use crate::key::keysignature::KeySignature;
 use crate::stepname::StepName;
-use crate::tuningsystem::OCTAVE_SIZE;
 use crate::tuningsystem::TuningSystem;
 
 pub use accidental::{Accidental, AccidentalSpecifier};
@@ -292,8 +291,12 @@ impl Pitch {
             Some(accidental) => Accidental::new(accidental)?,
             None => parsed.accidental.unwrap_or_default(),
         };
-        let microtone = microtone.map(Microtone::new).transpose()?;
+        let microtone = match microtone {
+            Some(microtone) => Some(Microtone::new(microtone)?),
+            None => parsed.microtone,
+        };
 
+        let explicit_accidental = has_explicit_accidental.then(|| accidental.clone());
         let mut pitch = Pitch {
             step,
             accidental,
@@ -305,14 +308,18 @@ impl Pitch {
 
         if let Some(name) = &name {
             pitch.name_setter(name)?;
+            pitch.spelling_is_inferred = parsed.spelling_is_inferred;
         }
         if explicit_step.is_some() || name.is_none() {
             pitch.step_setter(step);
+            pitch.spelling_is_inferred = parsed.spelling_is_inferred;
         }
         if has_explicit_octave || name.is_none() {
             pitch.octave_setter(octave);
         }
-        if has_explicit_accidental || name.is_none() {
+        if let Some(accidental) = explicit_accidental {
+            pitch.accidental_setter(accidental);
+        } else if name.is_none() {
             pitch.accidental_setter(pitch.accidental.clone());
         }
         if let Some(microtone) = pitch.microtone.clone() {
@@ -515,6 +522,9 @@ impl Pitch {
         if p.spelling_is_inferred {
             p.simplify_enharmonic_in_place(true)?;
         }
+        if let Some(fundamental) = &self.fundamental {
+            p.fundamental_setter(fundamental.transpose(interval)?);
+        }
 
         Ok(p)
     }
@@ -530,16 +540,17 @@ impl Pitch {
         ((octave + 1) * 12) as FloatType + self.step.step_ref() as FloatType + self.alter()
     }
 
-    /// Returns the nearest MIDI note number for this pitch.
+    /// Returns the MIDI note number the way music21's `midi` reports it: the
+    /// pitch space rounded half up, then folded into 0 to 127 by octaves, so
+    /// a pitch above the MIDI range reports its highest in-range octave and
+    /// one below it its lowest.
     pub fn midi(&self) -> IntegerType {
-        self.pitch_space().round() as IntegerType
+        normalize_midi((self.pitch_space() + 0.5).floor() as IntegerType)
     }
 
     /// Returns this pitch's twelve-tone equal-temperament frequency in hertz.
     pub fn frequency_hz(&self) -> FloatType {
-        self.frequency_hz_in(TuningSystem::EqualTemperament {
-            octave_size: OCTAVE_SIZE,
-        })
+        440.0 * (2.0 as FloatType).powf((self.pitch_space() - 69.0) / 12.0)
     }
 
     /// Returns this pitch's frequency in hertz for a supported tuning system.
@@ -799,11 +810,10 @@ impl Pitch {
     ) -> Result<String> {
         let (number, retuned) = self.harmonic_and_fundamental_from_pitch(fundamental)?;
         let suffix = crate::pitch::microtone::ordinal_suffix(number as IntegerType);
-        let microtone = match retuned.microtone.as_ref() {
-            Some(microtone) if microtone.cents() != 0.0 => microtone.to_string(),
-            _ => String::new(),
-        };
-        Ok(format!("{number}{suffix}H/{retuned}{microtone}"))
+        Ok(format!(
+            "{number}{suffix}H/{}",
+            retuned.name_with_octave_and_microtone()
+        ))
     }
 
     /// Builds a pitch from a frequency in hertz, spelled in twelve-tone equal
@@ -874,7 +884,7 @@ impl Pitch {
     /// Returns this pitch moved down by octaves until it is at or below
     /// `target`. With `minimize` it is then raised back to within an octave.
     pub fn transpose_below_target(&self, target: &Pitch, minimize: bool) -> Result<Pitch> {
-        let mut pitch = self.octave_bearing_copy("transpose_below_target")?;
+        let mut pitch = self.octave_bearing_copy("transposeBelowTarget")?;
         while pitch.ps() > target.ps() {
             pitch.shift_octave(-1);
         }
@@ -889,7 +899,7 @@ impl Pitch {
     /// Returns this pitch moved up by octaves until it is at or above
     /// `target`. With `minimize` it is then lowered back to within an octave.
     pub fn transpose_above_target(&self, target: &Pitch, minimize: bool) -> Result<Pitch> {
-        let mut pitch = self.octave_bearing_copy("transpose_above_target")?;
+        let mut pitch = self.octave_bearing_copy("transposeAboveTarget")?;
         while pitch.ps() < target.ps() {
             pitch.shift_octave(1);
         }
@@ -963,6 +973,7 @@ impl Pitch {
         })?;
         let (number, cents) = self.harmonic_from_fundamental(fundamental)?;
         let suffix = crate::pitch::microtone::ordinal_suffix(number as IntegerType);
+        let fundamental = fundamental.name_with_octave_and_microtone();
         if cents == 0.0 {
             Ok(format!("{number}{suffix}H/{fundamental}"))
         } else {
@@ -974,7 +985,7 @@ impl Pitch {
     fn octave_bearing_copy(&self, operation: &str) -> Result<Pitch> {
         if self.octave.is_none() {
             return Err(Error::Pitch(format!(
-                "cannot call {operation} with an octaveless Pitch"
+                "Cannot call {operation} with an octaveless Pitch."
             )));
         }
         Ok(self.clone())
@@ -1118,6 +1129,17 @@ impl Pitch {
         name
     }
 
+    /// Returns the name with its octave and, when it has one that is not
+    /// zero, its microtone: music21's `str(Pitch)`, `A4(+20c)`.
+    pub fn name_with_octave_and_microtone(&self) -> String {
+        match &self.microtone {
+            Some(microtone) if microtone.cents() != 0.0 => {
+                format!("{}{microtone}", self.name_with_octave())
+            }
+            _ => self.name_with_octave(),
+        }
+    }
+
     /// Returns [`Self::unicode_name`] followed by the octave when one is set.
     pub fn unicode_name_with_octave(&self) -> String {
         match self.octave {
@@ -1129,9 +1151,20 @@ impl Pitch {
     fn whole_alteration(&self, language: &str) -> Result<IntegerType> {
         let alter = self.accidental.alter();
         if alter.fract() != 0.0 {
-            return Err(Error::Pitch(format!(
-                "{language} names cannot express the microtonal accidental of {self}"
-            )));
+            return Err(Error::Pitch(match language {
+                "german" => {
+                    "Es geht nicht \"german\" zu benutzen mit Microtönen.  Schade!".to_string()
+                }
+                "italian" => "Non si puo usare `italian` con microtoni".to_string(),
+                "french" => {
+                    "On ne peut pas utiliser les microtones avec \"french.\" Quelle Dommage!"
+                        .to_string()
+                }
+                "spanish" => "Unsupported accidental type.".to_string(),
+                other => {
+                    format!("{other} names cannot express the microtonal accidental of {self}")
+                }
+            }));
         }
         Ok(alter as IntegerType)
     }
@@ -1166,6 +1199,7 @@ struct PitchParameters {
     name: Option<String>,
     step: Option<StepName>,
     accidental: Option<Accidental>,
+    microtone: Option<Microtone>,
     spelling_is_inferred: bool,
     octave: Octave,
 }
@@ -1178,12 +1212,13 @@ impl From<PitchName> for PitchParameters {
                 ..Self::default()
             },
             PitchName::Number(number) => {
-                let (step, accidental, _, _) = convert_ps_to_step(number);
-                let octave = (number >= 12.0).then(|| (number / 12.0) as IntegerType - 1);
+                let (step, accidental, microtone, octave_shift) = convert_ps_to_step(number);
+                let octave = (number >= 12.0).then(|| convert_ps_to_oct(number) + octave_shift);
                 Self {
                     name: None,
                     step: Some(step),
                     accidental: Some(accidental),
+                    microtone: (microtone.cents() != 0.0).then_some(microtone),
                     spelling_is_inferred: true,
                     octave,
                 }
@@ -1533,6 +1568,97 @@ fn cents_to_alter_and_cents(shift: FloatType) -> (FloatType, FloatType) {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn options_keep_an_explicit_accidental_and_a_numeric_name_stays_inferred() {
+        let sharp = crate::PitchOptions::new()
+            .name("C")
+            .accidental("#")
+            .octave(7)
+            .microtone(-30)
+            .build()
+            .unwrap();
+        assert_eq!(sharp.full_name(), "C-sharp in octave 7 (-30c)");
+        let double_flat = crate::PitchOptions::new()
+            .name("D")
+            .accidental(Accidental::new("double-flat").unwrap())
+            .build()
+            .unwrap();
+        assert_eq!(double_flat.name(), "D--");
+        let inferred = Pitch::from_number(6.0).unwrap();
+        assert_eq!(
+            inferred
+                .transpose(&Interval::from_name("-m2").unwrap())
+                .unwrap()
+                .name(),
+            "F"
+        );
+    }
+
+    #[test]
+    fn midi_folds_into_range_like_music21() {
+        let high = Pitch::from_name("C#10").unwrap();
+        assert_eq!(high.midi(), 121);
+        assert_eq!(high.cent_shift_from_midi(), 0);
+        let half_flat = crate::PitchOptions::new().name("F`10").build().unwrap();
+        assert_eq!(half_flat.midi(), 125);
+        assert_eq!(
+            Pitch::from_name("C#-2")
+                .unwrap_or_else(|_| Pitch::from_pitch_space(-11.0).unwrap())
+                .midi(),
+            1
+        );
+        assert_eq!(Pitch::from_name("C~4").unwrap().midi(), 61);
+        assert_eq!(Pitch::from_name("A4").unwrap().frequency_hz(), 440.0);
+    }
+
+    #[test]
+    fn harmonics_chain_and_transpose_with_their_fundamental() {
+        let a4 = Pitch::from_name("A4").unwrap();
+        let seventh = a4.harmonic(7).unwrap();
+        assert_eq!(seventh.name_with_octave(), "F#~7");
+        assert_eq!(seventh.microtone().unwrap().cents().round(), 19.0);
+        let doubled = seventh.harmonic(2).unwrap();
+        assert_eq!(doubled.name_with_octave(), "F#~8");
+        assert_eq!(doubled.microtone().unwrap().cents().round(), 19.0);
+        assert_eq!(doubled.fundamental().unwrap().name_with_octave(), "F#~7");
+
+        let second = a4.harmonic(2).unwrap();
+        assert_eq!(second.fundamental().unwrap().name_with_octave(), "A4");
+        let up_a_fifth = second
+            .transpose(&Interval::from_name("p5").unwrap())
+            .unwrap();
+        assert_eq!(up_a_fifth.name_with_octave(), "E6");
+        assert_eq!(up_a_fifth.fundamental().unwrap().name_with_octave(), "E5");
+    }
+
+    #[test]
+    fn numbers_and_chromatic_transposition_keep_microtones() {
+        let sharp_twenty = Pitch::from_number(60.2).unwrap();
+        assert_eq!(sharp_twenty.name_with_octave(), "C4");
+        assert_eq!(sharp_twenty.microtone().unwrap().cents().round(), 20.0);
+        let harmonic = Pitch::from_name("A4")
+            .unwrap()
+            .harmonic(7)
+            .unwrap()
+            .harmonic(2)
+            .unwrap();
+        let down_two_octaves = harmonic
+            .transpose(&Interval::from_semitones(-24).unwrap())
+            .unwrap();
+        assert_eq!(down_two_octaves.name_with_octave(), "F#~6");
+        assert_eq!(down_two_octaves.microtone().unwrap().cents().round(), 19.0);
+    }
+
+    #[test]
+    fn transposition_reaches_octave_minus_one() {
+        let low = Pitch::from_name("D2")
+            .unwrap()
+            .transpose(&Interval::from_name("m-23").unwrap())
+            .unwrap();
+        assert_eq!(low.name_with_octave(), "C#-1");
+        assert_eq!(low.ps(), 1.0);
+    }
 
     #[test]
     fn simplify_multiple_enharmonics_matches_music21() {

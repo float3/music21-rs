@@ -59,7 +59,10 @@ fn parses_the_whole_scala_archive() {
         let bytes = std::fs::read(&path).expect("scl file is readable");
         let expected_bad = KNOWN_BAD.contains(&name.as_str());
 
-        match (ScalaScale::parse(&String::from_utf8_lossy(&bytes)), expected_bad) {
+        match (
+            ScalaScale::parse(&String::from_utf8_lossy(&bytes)),
+            expected_bad,
+        ) {
             (Ok(scale), false) => {
                 // A file may legally declare zero degrees; `xxx.scl` does, and
                 // music21 reads it the same way. Such a scale has no unison to
@@ -181,12 +184,14 @@ fn archive_search_matches_music21_on_the_real_corpus() {
             continue;
         }
         let bytes = std::fs::read(&path).expect("scl file is readable");
-        archive
-            .insert(name, &bytes)
-            .expect("archive file parses");
+        archive.insert(name, &bytes).expect("archive file parses");
     }
 
-    assert!(archive.len() > 3_000, "only {} scales indexed", archive.len());
+    assert!(
+        archive.len() > 3_000,
+        "only {} scales indexed",
+        archive.len()
+    );
 
     for (target, expected) in SEARCH_EXPECTATIONS {
         let hits = archive.search(target);

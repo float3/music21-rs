@@ -88,7 +88,9 @@ fn every_fixture_was_generated_from_the_pinned_submodule() {
     for fixture in VERSIONED_FIXTURES {
         let actual = fixture_version(fixture);
         if actual != expected {
-            stale.push(format!("{fixture}: generated from {actual}, submodule is {expected}"));
+            stale.push(format!(
+                "{fixture}: generated from {actual}, submodule is {expected}"
+            ));
         }
     }
 

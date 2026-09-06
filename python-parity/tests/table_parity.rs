@@ -246,7 +246,9 @@ fn key_profiles_match_music21() {
 
     for profile in KeyProfile::ALL {
         if !seen.contains(&profile) {
-            mismatches.push(format!("{profile:?}: not in music21's keyWeightKeyAnalysisClasses"));
+            mismatches.push(format!(
+                "{profile:?}: not in music21's keyWeightKeyAnalysisClasses"
+            ));
         }
     }
 

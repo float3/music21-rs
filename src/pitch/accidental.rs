@@ -411,7 +411,7 @@ impl Accidental {
         AccidentalEnum::from_string(&name.to_lowercase())
             .map(|accidental| accidental.to_name().to_string())
             .ok_or_else(|| {
-                Error::Accidental(format!("{name:?} is not a supported accidental type"))
+                Error::Accidental(format!("'{name}' is not a supported accidental type"))
             })
     }
 
@@ -564,7 +564,7 @@ impl Accidental {
     /// Sets the accidental display type.
     pub fn set_display_type(&mut self, value: &str) -> Result<()> {
         self.display_type = display_type_from_str(value).ok_or_else(|| {
-            Error::Accidental(format!("Supplied display type is not supported: {value:?}"))
+            Error::Accidental(format!("Supplied display type is not supported: '{value}'"))
         })?;
         Ok(())
     }

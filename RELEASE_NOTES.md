@@ -139,6 +139,17 @@ the next release needs a minor bump.
   rounded `261.6256`.
 - Transposing with no accidental limit errors past quadruple accidentals
   instead of silently respelling, as music21 does.
+- A `PitchOptions` with both a name and an accidental keeps the accidental
+  (`name("D").accidental("--")` is `D--`, not `D`), and a pitch built from a
+  number stays marked as having inferred spelling, so transposing it
+  respells (`Pitch::from_number(6.0)` down a minor second is `F`, not `E#`).
+- `Pitch::midi` folds out-of-range pitches into 0 to 127 by octaves and
+  rounds half up, as music21 does; `frequency_hz` is computed from A4 = 440
+  exactly, so `A4` reads `440.0` rather than `439.99999999999994`.
+- Transposing keeps the pitch's fundamental, transposed with it, and can
+  reach octave -1 (`D2` down a minor 23rd is `C#-1`).
+- The pitch-language errors, `transposeAboveTarget`/`transposeBelowTarget`
+  and the unknown-accidental errors use music21's wording.
 - Doubled, tripled and quadrupled specifiers are spelled `Doubly-Diminished`,
   `Triply-Augmented` and so on in interval names, as music21 spells them,
   rather than `Double Diminished`. The specifier fixture now checks the
@@ -164,6 +175,12 @@ the next release needs a minor bump.
 
 ## Internal
 
+- `python-parity` now builds a pyo3 module, `music21_rs_facade`, of
+  music21-shaped `Pitch`, `Accidental` and `Microtone` classes, and a test
+  runs the doctests of music21's own `pitch.py` with those classes swapped
+  in: 889 of the 920 examples pass, and `python-parity/doctest/pitch.toml`
+  pins the passing docstrings. Running them turned up the accidental,
+  inferred-spelling, MIDI-folding and negative-octave fixes above.
 - `cargo run -p xtask -- report` writes `target/reports`: the library's test
   coverage from `cargo llvm-cov`, and every public method of the music21
   classes named in `data/feature_map.toml` against the crate's `pub fn`s,
