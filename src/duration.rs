@@ -96,6 +96,12 @@ impl DurationType {
         }
     }
 
+    /// music21's `ordinal`: the position in the list of note values from the
+    /// duplex maxima (`0`) down to the 2048th (`15`). `None` for `Zero`.
+    pub fn ordinal(self) -> Option<usize> {
+        (self != Self::Zero).then(|| Self::ALL.iter().position(|kind| *kind == self))?
+    }
+
     /// Returns music21's type number: how many of this note value make a
     /// whole note, so a quarter is `4` and a breve `0.5`. `None` for `Zero`.
     pub fn type_number(self) -> Option<FloatType> {
@@ -270,6 +276,24 @@ impl Duration {
         self.type_and_dots().map_or(0, |(_, dots)| dots)
     }
 
+    /// music21's `ordinal` for the duration's type, or `None` where music21
+    /// says `complex` or the duration is zero: a duration whose quarter length
+    /// is not a single dotted note value.
+    pub fn ordinal(&self) -> Option<usize> {
+        self.type_and_dots()?.0.ordinal()
+    }
+
+    /// Returns the duration scaled by a positive factor: music21's
+    /// `augmentOrDiminish`, so a quarter by two is a half.
+    pub fn augment_or_diminish(&self, factor: FloatType) -> Result<Duration> {
+        if factor.is_nan() || factor <= 0.0 {
+            return Err(Error::Duration(
+                "amountToScale must be greater than zero".to_string(),
+            ));
+        }
+        Duration::new(self.quarter_length * factor)
+    }
+
     /// Returns music21's `fullName` for a single note value with dots, such
     /// as `"Dotted Quarter"`, `"Double Dotted Half"` or `"Imperfect Longa"`.
     /// `None` for tuplets and tied lengths, which music21 spells out from
@@ -401,6 +425,45 @@ impl TryFrom<IntegerType> for Duration {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn ordinal_and_scaling_match_music21() {
+        assert_eq!(DurationType::DuplexMaxima.ordinal(), Some(0));
+        assert_eq!(DurationType::Quarter.ordinal(), Some(6));
+        assert_eq!(DurationType::Sixteenth.ordinal(), Some(8));
+        assert_eq!(DurationType::Zero.ordinal(), None);
+        assert_eq!(Duration::new(1.5).unwrap().ordinal(), Some(6));
+        assert_eq!(Duration::new(2.5).unwrap().ordinal(), None);
+        assert_eq!(Duration::new(0.0).unwrap().ordinal(), None);
+        assert_eq!(
+            Duration::new(1.0)
+                .unwrap()
+                .augment_or_diminish(2.0)
+                .unwrap()
+                .quarter_length(),
+            2.0
+        );
+        assert_eq!(
+            Duration::new(1.5)
+                .unwrap()
+                .augment_or_diminish(0.5)
+                .unwrap()
+                .quarter_length(),
+            0.75
+        );
+        assert!(
+            Duration::new(1.0)
+                .unwrap()
+                .augment_or_diminish(0.0)
+                .is_err()
+        );
+        assert!(
+            Duration::new(1.0)
+                .unwrap()
+                .augment_or_diminish(-1.0)
+                .is_err()
+        );
+    }
     use super::*;
 
     /// music21's `duration.typeToDuration`, verbatim.

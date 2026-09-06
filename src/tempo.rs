@@ -143,6 +143,26 @@ impl MetronomeMark {
         }
     }
 
+    /// The same tempo counted in a different note value: music21's
+    /// `getEquivalentByReferent`, so quarter = 60 becomes eighth = 120. The
+    /// tempo word is carried over unchanged, implied or not.
+    pub fn equivalent_by_referent(&self, referent: Duration) -> MetronomeMark {
+        let number = self.number.map(|number| {
+            convert_tempo_by_referent(
+                number,
+                self.referent.quarter_length(),
+                referent.quarter_length(),
+            )
+        });
+        Self::build(number, self.text.clone(), referent)
+    }
+
+    /// The same number counted in a different note value, so the tempo
+    /// itself changes: music21's `getMaintainedNumberWithReferent`.
+    pub fn maintained_number_with_referent(&self, referent: Duration) -> MetronomeMark {
+        Self::build(self.number, self.text.clone(), referent)
+    }
+
     /// The beats per minute, if known.
     pub fn number(&self) -> Option<FloatType> {
         self.number
@@ -204,6 +224,32 @@ impl MetronomeMark {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn referent_changes_match_music21() {
+        let quarter_sixty = MetronomeMark::new(60.0);
+        let eighths = quarter_sixty.equivalent_by_referent(Duration::eighth());
+        assert_eq!(eighths.number(), Some(120.0));
+        assert_eq!(eighths.referent().quarter_length(), 0.5);
+        assert_eq!(eighths.text(), Some("larghetto"));
+        let halves = quarter_sixty.equivalent_by_referent(Duration::half());
+        assert_eq!(halves.number(), Some(30.0));
+
+        let andante = MetronomeMark::with_number_and_text(72.0, "andante")
+            .with_referent(Duration::new(1.5).unwrap());
+        let quarters = andante.equivalent_by_referent(Duration::quarter());
+        assert_eq!(quarters.number(), Some(108.0));
+        assert_eq!(quarters.text(), Some("andante"));
+        assert_eq!(
+            andante.equivalent_by_referent(Duration::half()).number(),
+            Some(54.0)
+        );
+
+        let kept = andante.maintained_number_with_referent(Duration::eighth());
+        assert_eq!(kept.number(), Some(72.0));
+        assert_eq!(kept.referent().quarter_length(), 0.5);
+        assert_eq!(kept.text(), Some("andante"));
+    }
     use super::*;
 
     #[test]

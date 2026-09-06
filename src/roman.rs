@@ -179,6 +179,115 @@ impl RomanNumeral {
         &self.key
     }
 
+    /// The numeral with its front alteration and nothing else: music21's
+    /// `romanNumeral`, so `bII6` is `bII` and `V65/V` is `V`. An augmented
+    /// sixth answers its nationality, `It`, `Fr`, `Ger` or `Sw`.
+    pub fn roman_numeral(&self) -> String {
+        if let RomanKind::AugmentedSixth(kind) = self.kind {
+            return kind.figure().trim_end_matches(['+', '6']).to_string();
+        }
+        let primary = self.figure.split('/').next().unwrap_or_default();
+        let (_, unaltered) = split_roman_accidental_prefix(primary);
+        let numeral: String = unaltered
+            .chars()
+            .take_while(|c| matches!(c, 'i' | 'v' | 'x' | 'I' | 'V' | 'X'))
+            .collect();
+        let prefix = match self.accidental {
+            0 => String::new(),
+            sharps if sharps > 0 => "#".repeat(sharps.unsigned_abs() as usize),
+            flats => "b".repeat(flats.unsigned_abs() as usize),
+        };
+        format!("{prefix}{numeral}")
+    }
+
+    /// The figure and its key together: music21's `figureAndKey`,
+    /// `bII6 in a minor`.
+    pub fn figure_and_key(&self) -> String {
+        format!(
+            "{} in {} {}",
+            self.figure,
+            self.key.tonic_pitch_name_with_case(),
+            self.key.mode()
+        )
+    }
+
+    /// The scale degree with the alteration in front of it, as sharps
+    /// (positive) or flats (negative): music21's `scaleDegreeWithAlteration`.
+    pub fn scale_degree_with_alteration(&self) -> (u8, i8) {
+        (self.degree, self.accidental)
+    }
+
+    /// How strongly the figure implies its function, from music21's
+    /// `functionalityScores` table: `I` is 100, `V7` 80, an unknown figure 0.
+    /// A secondary figure multiplies the scores of its halves.
+    /// An augmented sixth is looked up by music21's spelling, `It6` rather
+    /// than the `It+6` this crate writes.
+    pub fn functionality_score(&self) -> u8 {
+        if self.secondary.is_some() {
+            let score = self.figure.split('/').fold(100.0, |score, part| {
+                score * f64::from(functionality_score_of(part).unwrap_or(0)) / 100.0
+            });
+            return score as u8;
+        }
+        functionality_score_of(&self.figure.replace('+', "")).unwrap_or(0)
+    }
+
+    /// Whether this is a Neapolitan chord: a major triad on the flattened
+    /// second degree, in first inversion unless `require_first_inversion` is
+    /// off.
+    pub fn is_neapolitan(&self, require_first_inversion: bool) -> bool {
+        self.degree == 2
+            && self.accidental == -1
+            && self.quality == RomanQuality::Major
+            && (!require_first_inversion || self.inversion == 1)
+    }
+
+    /// Whether the chord is borrowed from the parallel mode: music21's
+    /// `isMixture`, so `iv` and `bVI` in a major key are mixture and `IV` in a
+    /// minor key is. With `evaluate_secondary` a secondary figure is judged by
+    /// the numeral after the slash.
+    pub fn is_mixture(&self, evaluate_secondary: bool) -> Result<bool> {
+        if evaluate_secondary && let Some(secondary) = &self.secondary {
+            return RomanNumeral::new(secondary.clone(), self.key.clone())?.is_mixture(true);
+        }
+        if self.kind != RomanKind::Diatonic || !(1..=7).contains(&self.degree) {
+            return Ok(false);
+        }
+        let quality = match self.quality {
+            RomanQuality::Diminished => "diminished",
+            RomanQuality::Minor => "minor",
+            RomanQuality::Major => "major",
+            RomanQuality::HalfDiminished | RomanQuality::Augmented => return Ok(false),
+        };
+        let front = match self.accidental {
+            0 => "natural",
+            1 => "sharp",
+            -1 => "flat",
+            _ => "other",
+        };
+        let entry = (self.degree, quality, front);
+        Ok(match self.key.mode() {
+            "major" => {
+                MAJOR_KEY_MIXTURES.contains(&entry)
+                    || (self.degree == 7
+                        && self.seventh
+                        && self.quality == RomanQuality::Diminished)
+            }
+            "minor" => {
+                MINOR_KEY_MIXTURES.contains(&entry)
+                    || (self.degree == 7
+                        && self.seventh
+                        && self.quality == RomanQuality::HalfDiminished)
+            }
+            _ => false,
+        })
+    }
+
+    /// The same figure in the key transposed by `interval`.
+    pub fn transpose(&self, interval: &Interval) -> Result<Self> {
+        RomanNumeral::new(self.figure.clone(), self.key.transpose(interval)?)
+    }
+
     /// Realizes the Roman numeral as a chord.
     pub fn to_chord(&self) -> Result<Chord> {
         if let RomanKind::AugmentedSixth(kind) = self.kind {
@@ -310,6 +419,84 @@ impl fmt::Display for RomanNumeral {
         formatter.write_str(self.figure())
     }
 }
+
+/// music21's `functionalityScores`: how strongly a figure implies its
+/// harmonic function, on a hundred-point scale, in music21's order.
+pub const FUNCTIONALITY_SCORES: [(&str, u8); 48] = [
+    ("I", 100),
+    ("i", 90),
+    ("V7", 80),
+    ("V", 70),
+    ("V65", 68),
+    ("I6", 65),
+    ("V6", 63),
+    ("V43", 61),
+    ("I64", 60),
+    ("IV", 59),
+    ("i6", 58),
+    ("viio7", 57),
+    ("V42", 55),
+    ("viio65", 53),
+    ("viio6", 52),
+    ("#viio65", 51),
+    ("ii", 50),
+    ("#viio6", 49),
+    ("ii65", 48),
+    ("ii43", 47),
+    ("ii42", 46),
+    ("IV6", 45),
+    ("ii6", 43),
+    ("VI", 42),
+    ("#VI", 41),
+    ("vi", 40),
+    ("viio", 39),
+    ("#viio", 38),
+    ("iio", 37),
+    ("iio42", 36),
+    ("bII6", 35),
+    ("It6", 34),
+    ("Ger65", 33),
+    ("iio43", 32),
+    ("iio65", 31),
+    ("Fr43", 30),
+    ("#vio", 28),
+    ("#vio6", 27),
+    ("III", 22),
+    ("Sw43", 21),
+    ("v", 20),
+    ("VII", 19),
+    ("VII7", 18),
+    ("IV65", 17),
+    ("IV7", 16),
+    ("iii", 15),
+    ("iii6", 12),
+    ("vi6", 10),
+];
+
+fn functionality_score_of(figure: &str) -> Option<u8> {
+    FUNCTIONALITY_SCORES
+        .iter()
+        .find(|(known, _)| *known == figure)
+        .map(|(_, score)| *score)
+}
+
+const MAJOR_KEY_MIXTURES: [(u8, &str, &str); 7] = [
+    (1, "minor", "natural"),
+    (2, "diminished", "natural"),
+    (3, "major", "flat"),
+    (4, "minor", "natural"),
+    (5, "minor", "natural"),
+    (6, "major", "flat"),
+    (7, "major", "flat"),
+];
+
+const MINOR_KEY_MIXTURES: [(u8, &str, &str); 5] = [
+    (1, "major", "natural"),
+    (2, "minor", "natural"),
+    (3, "minor", "sharp"),
+    (4, "major", "natural"),
+    (6, "minor", "sharp"),
+];
 
 /// Performs functional Roman-numeral analysis in a key.
 pub fn analyze_chord(chord: &Chord, key: Key) -> Result<Option<RomanNumeral>> {
@@ -763,6 +950,245 @@ fn normalize_pitch_name(name: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    #[allow(clippy::type_complexity)]
+    fn numeral_names_scores_and_mixture_match_music21() {
+        let cases: [(&str, &str, &str, &str, (u8, i8), u8, bool, bool, bool); 18] = [
+            (
+                "V7",
+                "C",
+                "V",
+                "V7 in C major",
+                (5, 0),
+                80,
+                false,
+                false,
+                false,
+            ),
+            (
+                "bII6",
+                "C",
+                "bII",
+                "bII6 in C major",
+                (2, -1),
+                35,
+                true,
+                true,
+                false,
+            ),
+            (
+                "bII",
+                "C",
+                "bII",
+                "bII in C major",
+                (2, -1),
+                0,
+                false,
+                true,
+                false,
+            ),
+            (
+                "bII6",
+                "a",
+                "bII",
+                "bII6 in a minor",
+                (2, -1),
+                35,
+                true,
+                true,
+                false,
+            ),
+            (
+                "viio7",
+                "C",
+                "vii",
+                "viio7 in C major",
+                (7, 0),
+                57,
+                false,
+                false,
+                true,
+            ),
+            (
+                "I",
+                "C",
+                "I",
+                "I in C major",
+                (1, 0),
+                100,
+                false,
+                false,
+                false,
+            ),
+            (
+                "i",
+                "a",
+                "i",
+                "i in a minor",
+                (1, 0),
+                90,
+                false,
+                false,
+                false,
+            ),
+            (
+                "V65/V",
+                "C",
+                "V",
+                "V65/V in C major",
+                (5, 0),
+                47,
+                false,
+                false,
+                false,
+            ),
+            (
+                "iv",
+                "C",
+                "iv",
+                "iv in C major",
+                (4, 0),
+                0,
+                false,
+                false,
+                true,
+            ),
+            (
+                "bVI",
+                "C",
+                "bVI",
+                "bVI in C major",
+                (6, -1),
+                0,
+                false,
+                false,
+                true,
+            ),
+            (
+                "I",
+                "a",
+                "I",
+                "I in a minor",
+                (1, 0),
+                100,
+                false,
+                false,
+                true,
+            ),
+            (
+                "III",
+                "a",
+                "III",
+                "III in a minor",
+                (3, 0),
+                22,
+                false,
+                false,
+                false,
+            ),
+            (
+                "#iii",
+                "a",
+                "#iii",
+                "#iii in a minor",
+                (3, 1),
+                0,
+                false,
+                false,
+                true,
+            ),
+            (
+                "ii",
+                "C",
+                "ii",
+                "ii in C major",
+                (2, 0),
+                50,
+                false,
+                false,
+                false,
+            ),
+            (
+                "iio",
+                "C",
+                "ii",
+                "iio in C major",
+                (2, 0),
+                37,
+                false,
+                false,
+                true,
+            ),
+            (
+                "IV",
+                "a",
+                "IV",
+                "IV in a minor",
+                (4, 0),
+                59,
+                false,
+                false,
+                true,
+            ),
+            (
+                "bVII",
+                "C",
+                "bVII",
+                "bVII in C major",
+                (7, -1),
+                0,
+                false,
+                false,
+                true,
+            ),
+            (
+                "v",
+                "C",
+                "v",
+                "v in C major",
+                (5, 0),
+                20,
+                false,
+                false,
+                true,
+            ),
+        ];
+        for (figure, key, numeral, figure_and_key, degree, score, neapolitan, loose, mixture) in
+            cases
+        {
+            let rn = RomanNumeral::new(figure, Key::from_tonic(key).unwrap()).unwrap();
+            assert_eq!(rn.roman_numeral(), numeral, "{figure} in {key}");
+            assert_eq!(rn.figure_and_key(), figure_and_key, "{figure} in {key}");
+            assert_eq!(
+                rn.scale_degree_with_alteration(),
+                degree,
+                "{figure} in {key}"
+            );
+            assert_eq!(rn.functionality_score(), score, "{figure} in {key}");
+            assert_eq!(rn.is_neapolitan(true), neapolitan, "{figure} in {key}");
+            assert_eq!(rn.is_neapolitan(false), loose, "{figure} in {key}");
+            assert_eq!(rn.is_mixture(false).unwrap(), mixture, "{figure} in {key}");
+            assert_eq!(rn.is_mixture(true).unwrap(), mixture, "{figure} in {key}");
+        }
+        let italian = RomanNumeral::new("It6", Key::from_tonic("C").unwrap()).unwrap();
+        assert_eq!(italian.roman_numeral(), "It");
+        assert_eq!(italian.functionality_score(), 34);
+        assert!(!italian.is_mixture(false).unwrap());
+        let transposed = RomanNumeral::new("bII6", Key::from_tonic("a").unwrap())
+            .unwrap()
+            .transpose(&Interval::from_name("M2").unwrap())
+            .unwrap();
+        assert_eq!(transposed.figure_and_key(), "bII6 in b minor");
+    }
+
+    #[test]
+    fn functionality_scores_table_has_no_duplicates() {
+        let mut figures: Vec<&str> = FUNCTIONALITY_SCORES.iter().map(|(f, _)| *f).collect();
+        figures.sort_unstable();
+        figures.dedup();
+        assert_eq!(figures.len(), FUNCTIONALITY_SCORES.len());
+    }
     use super::*;
 
     #[test]

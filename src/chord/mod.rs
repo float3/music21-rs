@@ -2064,6 +2064,38 @@ impl Chord {
         tables::seek_chord_tables_address(&self.ordered_pitch_classes()).ok()
     }
 
+    /// Returns music21's `geometricNormalForm`: the distinct pitch classes
+    /// rotated so the intervals between neighbours read smallest first, then
+    /// written from zero, so both `C E G` and `E G C` are `[0, 3, 8]`. Empty
+    /// for an empty chord.
+    pub fn geometric_normal_form(&self) -> Vec<u8> {
+        let pitch_classes = self.ordered_pitch_classes();
+        if pitch_classes.is_empty() {
+            return Vec::new();
+        }
+        let intervals: Vec<u8> = pitch_classes
+            .iter()
+            .zip(pitch_classes.iter().cycle().skip(1))
+            .map(|(&low, &high)| (high + 12 - low) % 12)
+            .collect();
+        let best = (0..intervals.len())
+            .map(|rotation| {
+                let mut rotated = intervals[rotation + 1..].to_vec();
+                rotated.extend_from_slice(&intervals[..=rotation]);
+                rotated
+            })
+            .min()
+            .unwrap_or_default();
+        let mut sum = 0;
+        best.iter()
+            .map(|interval| {
+                let pitch_class = sum;
+                sum += interval;
+                pitch_class
+            })
+            .collect()
+    }
+
     /// Returns the interval-class vector in music21's angle-bracket
     /// notation, `<001110>`; an empty chord reads `<000000>`.
     pub fn interval_vector_string(&self) -> String {
@@ -2256,6 +2288,29 @@ impl Chord {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn geometric_normal_form_matches_music21() {
+        let cases: [(&str, &[u8]); 9] = [
+            ("C4 E4 G4", &[0, 3, 8]),
+            ("E4 G4 C5", &[0, 3, 8]),
+            ("C4 D-4 E4 G-4", &[0, 1, 4, 6]),
+            ("C4 E-4 G-4 A4", &[0, 3, 6, 9]),
+            ("C4", &[0]),
+            ("C4 C5", &[0]),
+            ("B3 C4 E4", &[0, 1, 5]),
+            ("F#4 A4 C5 E-5", &[0, 3, 6, 9]),
+            ("C4 D4 E4 F4 G4 A4 B4", &[0, 1, 3, 5, 6, 8, 10]),
+        ];
+        for (notes, expected) in cases {
+            assert_eq!(
+                Chord::new(notes).unwrap().geometric_normal_form(),
+                expected,
+                "{notes}"
+            );
+        }
+        assert!(Chord::empty().geometric_normal_form().is_empty());
+    }
 
     #[test]
     #[allow(clippy::type_complexity)]

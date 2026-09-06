@@ -49,6 +49,30 @@ impl Note {
         self.pitch.name_with_octave()
     }
 
+    /// The pitch's step letter.
+    pub fn step(&self) -> char {
+        self.pitch.step().as_char()
+    }
+
+    /// The pitch's octave, if it has one.
+    pub fn octave(&self) -> crate::defaults::Octave {
+        self.pitch.octave()
+    }
+
+    /// The note's one pitch as a list, the shape a chord's `pitches` has.
+    pub fn pitches(&self) -> Vec<Pitch> {
+        vec![self.pitch.clone()]
+    }
+
+    /// music21's `fullName`: `E-flat in octave 4 Quarter Note`, with the
+    /// duration's name left out when the note has none.
+    pub fn full_name(&self) -> String {
+        match self.duration.as_ref().and_then(Duration::full_name) {
+            Some(duration) => format!("{} {duration} Note", self.pitch.full_name()),
+            None => format!("{} Note", self.pitch.full_name()),
+        }
+    }
+
     /// Returns the note duration when one has been assigned.
     pub fn duration(&self) -> Option<&Duration> {
         self.duration.as_ref()
@@ -188,6 +212,25 @@ impl IntoNote for IntegerType {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn full_name_step_and_octave_match_music21() {
+        let flat = Note::from_name("E-4").unwrap();
+        assert_eq!(flat.full_name(), "E-flat in octave 4 Note");
+        assert_eq!(flat.step(), 'E');
+        assert_eq!(flat.octave(), Some(4));
+        assert_eq!(flat.pitches()[0].name_with_octave(), "E-4");
+        let dotted = Note::from_name("C#5")
+            .unwrap()
+            .with_duration(crate::Duration::new(1.5).unwrap());
+        assert_eq!(
+            dotted.full_name(),
+            "C-sharp in octave 5 Dotted Quarter Note"
+        );
+        let bare = Note::from_name("G").unwrap();
+        assert_eq!(bare.octave(), None);
+        assert_eq!(bare.full_name(), "G Note");
+    }
     use super::{IntoNote, Note};
     use crate::defaults::IntegerType;
     use crate::pitch::Pitch;

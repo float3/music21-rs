@@ -476,10 +476,25 @@ fn write_small_tables(py: Python<'_>, workspace_root: &Path, version: &str) -> P
         }
     }
 
+    let roman = py.import("music21.roman")?;
+    let scores = roman
+        .getattr("functionalityScores")?
+        .cast_into::<PyDict>()?;
+    let mut score_rows = 0;
+    for (figure, score) in scores.iter() {
+        let figure: String = figure.extract()?;
+        let score: u32 = score.extract()?;
+        let _ = writeln!(out, "[[functionality]]");
+        let _ = writeln!(out, "figure = {}", toml_string(&figure));
+        let _ = writeln!(out, "score = {score}");
+        let _ = writeln!(out);
+        score_rows += 1;
+    }
+
     let path = workspace_root.join("data/table_expectations.toml");
     fs::write(&path, out)?;
     println!(
-        "  wrote {} ({accidentals} accidentals, {mode_count} modes, {specifiers} specifier combos, {profiles} key profiles, {tempo_words} tempo words, {solfeg_rows} solfeg rows)",
+        "  wrote {} ({accidentals} accidentals, {mode_count} modes, {specifiers} specifier combos, {profiles} key profiles, {tempo_words} tempo words, {solfeg_rows} solfeg rows, {score_rows} functionality scores)",
         path.display()
     );
     Ok(path)

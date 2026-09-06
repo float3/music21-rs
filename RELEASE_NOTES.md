@@ -101,6 +101,16 @@ the next release needs a minor bump.
   `interval_between_degrees`, `is_next`, `match_pitches`, `find_missing` and
   `solfeg` with `SolfegVariant`; the two syllable tables are pinned against
   music21 by the table fixture.
+- `RomanNumeral::roman_numeral`, `figure_and_key`,
+  `scale_degree_with_alteration`, `functionality_score` (with the
+  `FUNCTIONALITY_SCORES` table, pinned against music21), `is_neapolitan`,
+  `is_mixture` and `transpose`.
+- `VoiceLeadingQuartet::with_key`, `key`, `is_proper_resolution`,
+  `leap_not_set_with_step` and `clausula_vera`.
+- `Note::step`, `octave`, `pitches` and `full_name`; `Duration::ordinal`,
+  `augment_or_diminish` and `DurationType::ordinal`;
+  `MetronomeMark::equivalent_by_referent` and
+  `maintained_number_with_referent`; `Chord::geometric_normal_form`.
 - `Interval::from_generic_and_chromatic`, `pitch_start`, `pitch_end`,
   `note_start`, `note_end`, and the free functions
   `written_higher_pitch`, `written_lower_pitch`, `absolute_higher_pitch`,

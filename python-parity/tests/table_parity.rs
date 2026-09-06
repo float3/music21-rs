@@ -13,6 +13,7 @@
 
 use music21_rs::{
     Accidental, DEFAULT_TEMPO_VALUES, Interval, KeyProfile, key,
+    roman::FUNCTIONALITY_SCORES,
     scale::{HUMDRUM_SOLFEG_SYLLABLES, SOLFEG_SYLLABLES},
 };
 use serde::Deserialize;
@@ -27,6 +28,13 @@ struct Expectations {
     key_profile: Vec<KeyProfileExpectation>,
     tempo: Vec<TempoExpectation>,
     solfeg: Vec<SolfegExpectation>,
+    functionality: Vec<FunctionalityExpectation>,
+}
+
+#[derive(Debug, Deserialize)]
+struct FunctionalityExpectation {
+    figure: String,
+    score: u8,
 }
 
 #[derive(Debug, Deserialize)]
@@ -306,6 +314,32 @@ fn solfeg_syllables_match_music21() {
     assert!(
         mismatches.is_empty(),
         "{} solfeg rows differ from music21:\n    {}",
+        mismatches.len(),
+        mismatches.join("\n    ")
+    );
+}
+
+#[test]
+fn functionality_scores_match_music21() {
+    let expectations = expectations();
+    assert_eq!(expectations.functionality.len(), FUNCTIONALITY_SCORES.len());
+    let mut mismatches = Vec::new();
+    for expected in &expectations.functionality {
+        match FUNCTIONALITY_SCORES
+            .iter()
+            .find(|(figure, _)| *figure == expected.figure)
+        {
+            Some((_, score)) if *score == expected.score => {}
+            Some((_, score)) => mismatches.push(format!(
+                "{}: music21 {}, crate {score}",
+                expected.figure, expected.score
+            )),
+            None => mismatches.push(format!("{}: unknown to the crate", expected.figure)),
+        }
+    }
+    assert!(
+        mismatches.is_empty(),
+        "{} functionality scores differ from music21:\n    {}",
         mismatches.len(),
         mismatches.join("\n    ")
     );

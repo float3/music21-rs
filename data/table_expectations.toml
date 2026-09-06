@@ -818,3 +818,195 @@ variant = "humdrum"
 degree = 7
 syllables = ["tef", "te", "ti", "ty", "tish"]
 
+[[functionality]]
+figure = "I"
+score = 100
+
+[[functionality]]
+figure = "i"
+score = 90
+
+[[functionality]]
+figure = "V7"
+score = 80
+
+[[functionality]]
+figure = "V"
+score = 70
+
+[[functionality]]
+figure = "V65"
+score = 68
+
+[[functionality]]
+figure = "I6"
+score = 65
+
+[[functionality]]
+figure = "V6"
+score = 63
+
+[[functionality]]
+figure = "V43"
+score = 61
+
+[[functionality]]
+figure = "I64"
+score = 60
+
+[[functionality]]
+figure = "IV"
+score = 59
+
+[[functionality]]
+figure = "i6"
+score = 58
+
+[[functionality]]
+figure = "viio7"
+score = 57
+
+[[functionality]]
+figure = "V42"
+score = 55
+
+[[functionality]]
+figure = "viio65"
+score = 53
+
+[[functionality]]
+figure = "viio6"
+score = 52
+
+[[functionality]]
+figure = "#viio65"
+score = 51
+
+[[functionality]]
+figure = "ii"
+score = 50
+
+[[functionality]]
+figure = "#viio6"
+score = 49
+
+[[functionality]]
+figure = "ii65"
+score = 48
+
+[[functionality]]
+figure = "ii43"
+score = 47
+
+[[functionality]]
+figure = "ii42"
+score = 46
+
+[[functionality]]
+figure = "IV6"
+score = 45
+
+[[functionality]]
+figure = "ii6"
+score = 43
+
+[[functionality]]
+figure = "VI"
+score = 42
+
+[[functionality]]
+figure = "#VI"
+score = 41
+
+[[functionality]]
+figure = "vi"
+score = 40
+
+[[functionality]]
+figure = "viio"
+score = 39
+
+[[functionality]]
+figure = "#viio"
+score = 38
+
+[[functionality]]
+figure = "iio"
+score = 37
+
+[[functionality]]
+figure = "iio42"
+score = 36
+
+[[functionality]]
+figure = "bII6"
+score = 35
+
+[[functionality]]
+figure = "It6"
+score = 34
+
+[[functionality]]
+figure = "Ger65"
+score = 33
+
+[[functionality]]
+figure = "iio43"
+score = 32
+
+[[functionality]]
+figure = "iio65"
+score = 31
+
+[[functionality]]
+figure = "Fr43"
+score = 30
+
+[[functionality]]
+figure = "#vio"
+score = 28
+
+[[functionality]]
+figure = "#vio6"
+score = 27
+
+[[functionality]]
+figure = "III"
+score = 22
+
+[[functionality]]
+figure = "Sw43"
+score = 21
+
+[[functionality]]
+figure = "v"
+score = 20
+
+[[functionality]]
+figure = "VII"
+score = 19
+
+[[functionality]]
+figure = "VII7"
+score = 18
+
+[[functionality]]
+figure = "IV65"
+score = 17
+
+[[functionality]]
+figure = "IV7"
+score = 16
+
+[[functionality]]
+figure = "iii"
+score = 15
+
+[[functionality]]
+figure = "iii6"
+score = 12
+
+[[functionality]]
+figure = "vi6"
+score = 10
+

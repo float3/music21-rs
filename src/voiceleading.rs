@@ -6,9 +6,11 @@
 //! forbids.
 
 use crate::{
-    error::Result,
+    error::{Error, Result},
     interval::{Interval, IntervalDirection},
+    key::Key,
     pitch::Pitch,
+    scale::{Scale, ScaleType},
 };
 use std::sync::LazyLock;
 
@@ -67,6 +69,7 @@ pub struct VoiceLeadingQuartet {
     v2n2: Pitch,
     vertical: [Interval; 2],
     horizontal: [Interval; 2],
+    key: Option<Key>,
 }
 
 impl VoiceLeadingQuartet {
@@ -88,6 +91,7 @@ impl VoiceLeadingQuartet {
             v2n2,
             vertical,
             horizontal,
+            key: None,
         })
     }
 
@@ -99,6 +103,124 @@ impl VoiceLeadingQuartet {
             Pitch::from_name(v2n1)?,
             Pitch::from_name(v2n2)?,
         )
+    }
+
+    /// Attaches the key the progression is heard in, which
+    /// [`Self::is_proper_resolution`] and [`Self::clausula_vera`] consult.
+    pub fn with_key(mut self, key: Key) -> Self {
+        self.key = Some(key);
+        self
+    }
+
+    /// The key the progression is heard in, if one was given.
+    pub fn key(&self) -> Option<&Key> {
+        self.key.as_ref()
+    }
+
+    /// Whether a dissonant first interval resolves the way voice-leading
+    /// rules expect: music21's `isProperResolution`. A fourth wants the upper
+    /// voice to fall or stay; a tritone or a minor seventh wants the
+    /// leading tone up, the seventh down and the right contrary motion — and
+    /// with a key set, only when the notes really are those scale degrees.
+    /// Anything else, and no motion at all, is proper.
+    pub fn is_proper_resolution(&self) -> Result<bool> {
+        if self.no_motion() {
+            return Ok(true);
+        }
+        let (lower_degree_before, lower_degree_after) = match &self.key {
+            Some(key) => {
+                let scale = key.as_scale()?;
+                let mut before = scale.degree_of(&self.v2n1)?;
+                let after = scale.degree_of(&self.v2n2)?;
+                if key.mode() == "minor" && before.is_none() {
+                    before =
+                        Scale::new(ScaleType::MelodicMinor, key.tonic()).degree_of(&self.v2n1)?;
+                }
+                (before, after)
+            }
+            None => (None, None),
+        };
+        let keyed = self.key.is_some();
+        let first = self.vertical[0].simple_name();
+        let second = self.vertical[1].generic().simple_undirected();
+        Ok(match first.as_str() {
+            "P4" => self.v1n1.ps() >= self.v1n2.ps(),
+            "A4" => {
+                if keyed && lower_degree_before != Some(4) {
+                    true
+                } else if keyed && lower_degree_after != Some(3) {
+                    false
+                } else {
+                    self.outward_contrary_motion() && second == 6
+                }
+            }
+            "d5" => {
+                if keyed && lower_degree_before != Some(7) {
+                    true
+                } else if keyed && lower_degree_after != Some(1) {
+                    false
+                } else {
+                    self.inward_contrary_motion() && second == 3
+                }
+            }
+            "m7" => {
+                if keyed && lower_degree_before != Some(5) {
+                    true
+                } else if keyed && lower_degree_after != Some(1) {
+                    false
+                } else {
+                    second == 3
+                }
+            }
+            _ => true,
+        })
+    }
+
+    /// Whether one voice leaps while the other neither steps nor holds:
+    /// music21's `leapNotSetWithStep`. Two thirds in contrary motion are let
+    /// through.
+    pub fn leap_not_set_with_step(&self) -> bool {
+        if self.no_motion() {
+            return false;
+        }
+        let [upper, lower] = &self.horizontal;
+        let steps_or_holds =
+            |interval: &Interval| interval.is_diatonic_step() || interval.is_unison();
+        if upper.generic().undirected() == 3
+            && lower.generic().undirected() == 3
+            && self.contrary_motion()
+        {
+            return false;
+        }
+        if upper.is_skip() {
+            !steps_or_holds(lower)
+        } else if lower.is_skip() {
+            !steps_or_holds(upper)
+        } else {
+            false
+        }
+    }
+
+    /// Whether the two voices close a clausula vera: stepwise contrary
+    /// motion, one voice by a semitone and the other by a tone, onto a unison
+    /// or octave on the tonic. Errors without a key.
+    pub fn clausula_vera(&self) -> Result<bool> {
+        let Some(key) = &self.key else {
+            return Err(Error::Analysis(
+                "clausulaVera requires a key to be set on the VoiceLeadingQuartet".to_string(),
+            ));
+        };
+        let tonic = key.tonic().name();
+        let mut horizontal = [
+            self.horizontal[0].short_name(),
+            self.horizontal[1].short_name(),
+        ];
+        horizontal.sort_unstable();
+        Ok(horizontal == ["M2", "m2"]
+            && self.contrary_motion()
+            && matches!(self.vertical[1].short_name().as_str(), "P1" | "P8")
+            && self.v1n2.name() == tonic
+            && self.v2n2.name() == tonic)
     }
 
     /// The upper voice's first pitch.
@@ -275,6 +397,71 @@ impl VoiceLeadingQuartet {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    #[allow(clippy::type_complexity)]
+    fn proper_resolution_leaps_and_clausula_vera_match_music21() {
+        let quartet = |a: &str, b: &str, c: &str, d: &str, key: Option<&str>| {
+            let built = VoiceLeadingQuartet::from_names(a, b, c, d).unwrap();
+            match key {
+                Some(key) => built.with_key(Key::from_tonic(key).unwrap()),
+                None => built,
+            }
+        };
+        let cases: [(
+            &str,
+            &str,
+            &str,
+            &str,
+            Option<&str>,
+            bool,
+            bool,
+            Option<bool>,
+        ); 20] = [
+            ("C4", "B3", "F4", "E4", None, true, false, None),
+            ("C4", "B3", "F4", "E4", Some("C"), true, false, Some(false)),
+            ("B3", "C4", "F4", "E4", Some("C"), true, false, Some(false)),
+            ("B3", "C4", "F4", "E4", None, false, false, None),
+            ("F4", "E4", "B3", "C4", Some("C"), true, false, Some(false)),
+            ("F4", "E4", "B3", "C4", None, true, false, None),
+            ("G3", "C4", "F4", "E4", Some("C"), true, false, Some(false)),
+            ("G3", "C4", "F4", "E4", Some("G"), true, false, Some(false)),
+            ("C4", "C4", "E4", "E4", Some("C"), true, false, Some(false)),
+            ("D4", "F4", "F4", "A4", None, true, true, None),
+            ("C4", "F4", "E4", "F4", None, true, false, None),
+            ("C4", "E4", "E4", "G4", None, true, true, None),
+            ("C4", "E4", "E4", "C4", None, true, false, None),
+            ("B3", "C4", "D4", "C4", Some("C"), true, false, Some(true)),
+            ("B3", "C4", "D4", "C4", Some("G"), true, false, Some(false)),
+            ("B3", "C4", "D4", "C5", Some("C"), true, false, Some(false)),
+            ("F4", "E4", "G3", "C4", Some("C"), true, false, Some(false)),
+            ("F4", "E4", "B3", "C4", Some("F"), true, false, Some(false)),
+            ("D4", "C4", "B3", "C4", Some("C"), true, false, Some(true)),
+            ("C4", "D4", "G4", "F4", None, true, false, None),
+        ];
+        for (a, b, c, d, key, proper, leap, clausula) in cases {
+            let vlq = quartet(a, b, c, d, key);
+            assert_eq!(
+                vlq.is_proper_resolution().unwrap(),
+                proper,
+                "{a} {b} {c} {d} {key:?}"
+            );
+            assert_eq!(
+                vlq.leap_not_set_with_step(),
+                leap,
+                "{a} {b} {c} {d} {key:?}"
+            );
+            match clausula {
+                Some(expected) => assert_eq!(
+                    vlq.clausula_vera().unwrap(),
+                    expected,
+                    "{a} {b} {c} {d} {key:?}"
+                ),
+                None => assert!(vlq.clausula_vera().is_err(), "{a} {b} {c} {d}"),
+            }
+            assert_eq!(vlq.key().is_some(), key.is_some());
+        }
+    }
     use super::*;
 
     struct Expected {

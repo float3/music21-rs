@@ -176,6 +176,10 @@ python = "roman.py"
 name = "RomanNumeral"
 rust = ["src/roman.rs"]
 
+[class.excluded]
+adjustMinorVIandVIIByQuality = "an internal step of music21's figure parsing"
+bassScaleDegreeFromNotation = "takes a figured-bass Notation object, which is not modelled"
+
 [[class]]
 python = "meter/base.py"
 name = "TimeSignature"
@@ -223,6 +227,7 @@ note = "A quarter length and a type; tuplets and components are not modelled."
 type = "duration_type"
 
 [class.excluded]
+getGraceDuration = "grace durations are not modelled"
 addDurationTuple = "components and tuplets are not modelled"
 appendTuplet = "components and tuplets are not modelled"
 clear = "components and tuplets are not modelled"
@@ -269,6 +274,11 @@ pcToToneRow = "new"
 python = "voiceLeading.py"
 name = "VoiceLeadingQuartet"
 rust = ["src/voiceleading.rs"]
+
+[class.excluded]
+modalOpening = "needs roman.identifyAsTonicOrDominant, which is not ported"
+opensIncorrectly = "deprecated upstream in favour of modalOpening"
+closesIncorrectly = "deprecated upstream in favour of clausulaVera"
 
 [[class]]
 python = "sieve.py"
