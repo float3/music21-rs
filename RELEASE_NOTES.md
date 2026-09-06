@@ -119,6 +119,11 @@ the next release needs a minor bump.
 
 ## Internal
 
+- `cargo run -p xtask -- report` writes `target/reports`: the library's test
+  coverage from `cargo llvm-cov`, and every public method of the music21
+  classes named in `data/feature_map.toml` against the crate's `pub fn`s,
+  with the deliberate omissions and their reasons. CI publishes it on the
+  Pages site under `/reports/` and fails when the map goes stale.
 - `Pitch::from_options` is the constructor; the nine-argument positional
   `Pitch::new` and the `IntoAccidental`, `IntoCentShift`, `IntoPitchName` and
   `IntoPitch` traits, half of whose impls were `panic!()` stubs, are gone.
