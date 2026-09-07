@@ -124,10 +124,11 @@ fails when one of them stops passing.
 
 The same site carries [/reports/](https://float3.github.io/music21-rs/reports/):
 the library's test coverage, the state of every test suite the repository has —
-the workspace, the parity suite that runs music21's own doctests, and the Python
-wheel with its own tests — and every public method of the music21 classes the
-crate ports against what has been ported so far, with the deliberate omissions
-and their reasons. It is written by `cargo run -p xtask -- report` from
+the workspace, the parity suite, and the Python wheel with its own tests — how
+much of music21's own documentation runs against the crate, docstring by
+docstring and example by example for each module covered, and every public
+method of the music21 classes the crate ports against what has been ported so
+far, with the deliberate omissions and their reasons. It is written by `cargo run -p xtask -- report` from
 [data/feature_map.toml](./data/feature_map.toml).
 
 ## Local Development

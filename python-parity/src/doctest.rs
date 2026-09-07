@@ -41,6 +41,17 @@ struct Expectations {
     passing: Vec<String>,
 }
 
+/// The counts of one module's run, written beside the log as
+/// `target/doctest_<name>.toml` so `xtask report` can read them back.
+#[derive(Debug, Serialize)]
+struct Summary {
+    module: String,
+    docstrings_passing: usize,
+    docstrings: usize,
+    examples_passing: usize,
+    examples: usize,
+}
+
 #[derive(Debug)]
 struct Outcome {
     name: String,
@@ -181,6 +192,19 @@ pub fn run(module: &str, name: &str, swaps: &[(&str, &[&str])]) {
         let _ = std::fs::create_dir_all(parent);
     }
     std::fs::write(&log_path, &log).expect("write the doctest log");
+
+    let summary = Summary {
+        module: module.to_string(),
+        docstrings_passing: passing.len(),
+        docstrings: outcomes.len(),
+        examples_passing: examples_attempted - examples_failed,
+        examples: examples_attempted,
+    };
+    std::fs::write(
+        root.join(format!("target/doctest_{name}.toml")),
+        toml::to_string_pretty(&summary).expect("serialize the doctest summary"),
+    )
+    .expect("write the doctest summary");
 
     println!(
         "{module} doctests against music21-rs: {} of {} docstrings pass, {} of {} examples pass; details in {}",

@@ -76,7 +76,29 @@ struct Report {
     music21_version: String,
     coverage: Option<Coverage>,
     suites: Vec<Suite>,
+    doctests: Vec<ModuleDoctests>,
     features: Vec<ClassReport>,
+}
+
+/// What the parity harness writes beside each module's failure log.
+#[derive(Debug, Deserialize)]
+struct DoctestSummary {
+    module: String,
+    docstrings_passing: usize,
+    docstrings: usize,
+    examples_passing: usize,
+    examples: usize,
+}
+
+/// How much of one music21 module's own documentation runs against the crate.
+#[derive(Debug, Serialize)]
+struct ModuleDoctests {
+    name: String,
+    module: String,
+    docstrings_passing: usize,
+    docstrings: usize,
+    examples_passing: usize,
+    examples: usize,
 }
 
 /// One runnable test suite, and what came of running it.
@@ -205,6 +227,8 @@ pub(crate) fn report(workspace_root: &Path, options: &Options) -> Result<(), Box
         Vec::new()
     };
 
+    let doctests = read_doctests(workspace_root);
+
     let features = if options.features {
         scan_features(workspace_root)?
     } else {
@@ -216,6 +240,7 @@ pub(crate) fn report(workspace_root: &Path, options: &Options) -> Result<(), Box
         music21_version: submodule_version(workspace_root)?,
         coverage,
         suites,
+        doctests,
         features,
     };
 
@@ -247,6 +272,16 @@ pub(crate) fn report(workspace_root: &Path, options: &Options) -> Result<(), Box
                 suite.failed
             ),
         }
+    }
+    for module in &report.doctests {
+        println!(
+            "  {} doctests: {} of {} docstrings, {} of {} examples",
+            module.module,
+            module.docstrings_passing,
+            module.docstrings,
+            module.examples_passing,
+            module.examples
+        );
     }
     for class in &report.features {
         let counted = class.ported + class.missing;
@@ -612,6 +647,45 @@ fn last_line(text: &str) -> Option<String> {
         .map(str::trim)
         .find(|line| !line.is_empty())
         .map(str::to_string)
+}
+
+/// Reads the summaries the parity doctest harness writes beside its logs,
+/// one per music21 module it runs. They are written by the parity suite, so
+/// they describe the run that just happened when the suites ran, and the last
+/// one otherwise.
+fn read_doctests(workspace_root: &Path) -> Vec<ModuleDoctests> {
+    let Ok(entries) = fs::read_dir(workspace_root.join("target")) else {
+        return Vec::new();
+    };
+    let mut modules = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        let Some(name) = name
+            .strip_prefix("doctest_")
+            .and_then(|name| name.strip_suffix(".toml"))
+        else {
+            continue;
+        };
+        let Ok(text) = fs::read_to_string(&path) else {
+            continue;
+        };
+        let Ok(summary) = toml::from_str::<DoctestSummary>(&text) else {
+            continue;
+        };
+        modules.push(ModuleDoctests {
+            name: name.to_string(),
+            module: summary.module,
+            docstrings_passing: summary.docstrings_passing,
+            docstrings: summary.docstrings,
+            examples_passing: summary.examples_passing,
+            examples: summary.examples,
+        });
+    }
+    modules.sort_by(|a, b| b.examples.cmp(&a.examples).then(a.name.cmp(&b.name)));
+    modules
 }
 
 fn scan_features(workspace_root: &Path) -> Result<Vec<ClassReport>, Box<dyn Error>> {
@@ -1064,6 +1138,69 @@ fn render_html(report: &Report) -> String {
         let _ = write!(
             html,
             "                </tbody>\n            </table>\n            <p>Every suite the repository has, run when this report was generated. A suite whose tooling is not present is skipped rather than failed, and says so. The wheel's own tests import <code>music21_rs</code>, so they need the built wheel installed in the interpreter that runs them.</p>\n"
+        );
+    }
+
+    if !report.doctests.is_empty() {
+        let docstrings_passing: usize = report.doctests.iter().map(|m| m.docstrings_passing).sum();
+        let docstrings: usize = report.doctests.iter().map(|m| m.docstrings).sum();
+        let examples_passing: usize = report.doctests.iter().map(|m| m.examples_passing).sum();
+        let examples: usize = report.doctests.iter().map(|m| m.examples).sum();
+        let share = |part: usize, whole: usize| {
+            if whole == 0 {
+                0.0
+            } else {
+                100.0 * part as f64 / whole as f64
+            }
+        };
+        let docstring_percent = share(docstrings_passing, docstrings);
+        let example_percent = share(examples_passing, examples);
+        let _ = write!(
+            html,
+            r#"            <h2>music21's own doctests</h2>
+            <div class="summary">
+                <div class="panel">
+                    <span class="number">{docstring_percent:.1}%</span>
+                    <span class="label">of docstrings, {docstrings_passing} of {docstrings}</span>
+                    <div class="bar"><span style="width: {docstring_percent:.1}%"></span></div>
+                </div>
+                <div class="panel">
+                    <span class="number">{example_percent:.1}%</span>
+                    <span class="label">of examples, {examples_passing} of {examples}</span>
+                    <div class="bar"><span style="width: {example_percent:.1}%"></span></div>
+                </div>
+                <div class="panel">
+                    <span class="number">{count}</span>
+                    <span class="label">modules covered</span>
+                </div>
+            </div>
+            <table>
+                <thead><tr><th>Module</th><th>Docstrings</th><th>Examples</th></tr></thead>
+                <tbody>
+"#,
+            count = report.doctests.len(),
+        );
+        for module in &report.doctests {
+            let doc_percent = share(module.docstrings_passing, module.docstrings).floor();
+            let ex_percent = share(module.examples_passing, module.examples).floor();
+            let _ = write!(
+                html,
+                r#"                    <tr>
+                        <td><code>{module}</code></td>
+                        <td>{dp} of {dt} <span class="count">({doc_percent:.0}%)</span></td>
+                        <td>{ep} of {et} <span class="count">({ex_percent:.0}%)</span></td>
+                    </tr>
+"#,
+                module = escape(&module.module),
+                dp = module.docstrings_passing,
+                dt = module.docstrings,
+                ep = module.examples_passing,
+                et = module.examples,
+            );
+        }
+        let _ = write!(
+            html,
+            "                </tbody>\n            </table>\n            <p>music21's own docstrings, collected from the submodule and run against the crate through the music21-shaped facades in <code>python-parity</code>. A docstring counts as passing only when every one of its examples does. Written by the parity suite; the failures of each module are in <code>target/doctest_&lt;module&gt;.log</code>.</p>\n"
         );
     }
 
