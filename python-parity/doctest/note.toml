@@ -26,6 +26,7 @@ passing = [
     "music21.note.NotRest.noteheadParenthesis",
     "music21.note.NotRest.stemDirection",
     "music21.note.NotRest.storedInstrument",
+    "music21.note.NotRest.volume",
     "music21.note.Note",
     "music21.note.Note.fullName",
     "music21.note.Rest",

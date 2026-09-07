@@ -28,6 +28,7 @@ passing = [
     "music21.duration.Duration.quarterLength",
     "music21.duration.Duration.quarterLengthNoTuplets",
     "music21.duration.Duration.sliceComponentAtPosition",
+    "music21.duration.Duration.splitDotGroups",
     "music21.duration.Duration.type",
     "music21.duration.DurationTuple",
     "music21.duration.DurationTuple.ordinal",

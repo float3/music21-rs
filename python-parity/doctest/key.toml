@@ -10,6 +10,7 @@ passing = [
     "music21.key.Key.tonicPitchNameWithCase",
     "music21.key.Key.transpose",
     "music21.key.KeySignature",
+    "music21.key.KeySignature.accidentalByStep",
     "music21.key.KeySignature.alteredPitches",
     "music21.key.KeySignature.asKey",
     "music21.key.KeySignature.isNonTraditional",

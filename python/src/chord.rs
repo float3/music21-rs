@@ -1782,11 +1782,24 @@ impl Chord {
         ))
     }
 
-    fn __deepcopy__(&self, py: Python<'_>, _memo: &Bound<'_, PyAny>) -> PyResult<Self> {
-        self.__copy__(py)
+    fn __deepcopy__<'py>(
+        slf: &Bound<'py, Self>,
+        py: Python<'py>,
+        _memo: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        Self::__copy__(slf, py)
     }
 
-    fn __copy__(&self, py: Python<'_>) -> PyResult<Self> {
+    fn __copy__<'py>(slf: &Bound<'py, Self>, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let copied = slf.borrow().copied_value(py)?;
+        crate::copy_as_same_type(slf, copied)
+    }
+}
+
+impl Chord {
+    /// This chord as a fresh value, its notes, duration and volume copied
+    /// rather than shared.
+    fn copied_value(&self, py: Python<'_>) -> PyResult<Self> {
         let mut copied = Self::from_inner(py, self.inner.clone())?;
         for (target, source) in copied.notes.iter().zip(&self.notes) {
             target.borrow_mut(py).inner = source.borrow(py).inner.clone();

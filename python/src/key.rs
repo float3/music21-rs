@@ -279,7 +279,7 @@ impl KeySignature {
 }
 
 /// music21's `key.Key`: a key signature with a tonic and a mode.
-#[pyclass(name = "Key", module = "music21.key", extends = KeySignature)]
+#[pyclass(name = "Key", module = "music21.key", extends = KeySignature, subclass)]
 pub struct Key {
     pub(crate) inner: RsKey,
 }

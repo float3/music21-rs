@@ -2036,12 +2036,18 @@ impl Note {
         ))
     }
 
-    fn __deepcopy__(&self, py: Python<'_>, _memo: &Bound<'_, PyAny>) -> PyResult<Self> {
-        self.copied(py)
+    fn __deepcopy__<'py>(
+        slf: &Bound<'py, Self>,
+        py: Python<'py>,
+        _memo: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let copied = slf.borrow().copied(py)?;
+        crate::copy_as_same_type(slf, copied)
     }
 
-    fn __copy__(&self, py: Python<'_>) -> PyResult<Self> {
-        self.copied(py)
+    fn __copy__<'py>(slf: &Bound<'py, Self>, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let copied = slf.borrow().copied(py)?;
+        crate::copy_as_same_type(slf, copied)
     }
 
     /// music21's `_chordAttached`, which its own `ChordBase` sets on every

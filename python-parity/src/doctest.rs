@@ -8,6 +8,14 @@
 //! module's names point at the facades the finder sees only the module-level
 //! functions.
 //!
+//! What is swapped in is not always the bare facade class. A class music21
+//! keeps in a `Stream` has to be a `Music21Object` to be kept at all, so
+//! those go in as a Python subclass of the facade and of `Music21Object` —
+//! see `class_to_install` in the `python` crate, which is also what
+//! `install_into_music21` uses. Only the container machinery is inherited,
+//! never music21's own implementation of the class being replaced, so a
+//! member the facade has not ported still fails rather than falling through.
+//!
 //! Each docstring is one unit: it passes when all of its examples pass.
 //! `python-parity/doctest/<name>.toml` lists the docstrings that pass. The run
 //! fails when one of those stops passing, and says so by name; a docstring
@@ -119,7 +127,9 @@ fn run_doctests(py: Python<'_>, module: &str, swaps: &[(&str, &[&str])]) -> PyRe
     for (module_name, names) in swaps {
         let module = py.import(*module_name)?;
         for name in *names {
-            module.setattr(*name, facade.getattr(*name)?)?;
+            let value =
+                music21_rs_python::class_to_install(py, &module, name, &facade.getattr(*name)?)?;
+            module.setattr(*name, value)?;
         }
     }
 
