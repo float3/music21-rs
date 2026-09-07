@@ -1,5 +1,5 @@
 use crate::{
-    defaults::{FloatType, IntegerType},
+    defaults::{FloatType, FractionType, IntegerType},
     error::{Error, Result},
 };
 
@@ -230,6 +230,114 @@ pub struct Duration {
     quarter_length: FloatType,
 }
 
+/// The numerators music21 searches when reading a length as a tuplet: its
+/// `defaultTupletNumerators`. Four in the time of three is deliberately
+/// absent, since that length is a dotted note.
+const TUPLET_NUMERATORS: [u32; 5] = [3, 5, 7, 11, 13];
+
+/// The dot counts music21 allows inside a tuplet: its
+/// `POSSIBLE_DOTS_IN_TUPLETS`.
+const TUPLET_DOTS: [u32; 2] = [0, 1];
+
+/// How close a length has to be to a tuplet's to be read as one, relative to
+/// the length itself.
+///
+/// music21 snaps a quarter length onto a limited-denominator fraction before
+/// it looks, which is why `0.333333` is a triplet eighth there; this is the
+/// same latitude for a crate that keeps the length as a float.
+const TUPLET_TOLERANCE: FloatType = 1e-5;
+
+/// A length written as a tuplet: `actual` notes of one written value in the
+/// time of `normal` of them.
+///
+/// This is the naming half of music21's `Tuplet`. A [`Duration`] here is a
+/// quarter length, so a tuplet is something a length is *read as* rather
+/// than something a duration carries — what it is for is being able to say
+/// that two thirds of a quarter is a quarter triplet.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Tuplet {
+    actual: u32,
+    normal: u32,
+    duration_type: DurationType,
+    dots: u32,
+}
+
+impl Tuplet {
+    /// How many notes are played: music21's `numberNotesActual`.
+    pub fn actual(&self) -> u32 {
+        self.actual
+    }
+
+    /// How many notes they are played in the time of: `numberNotesNormal`.
+    pub fn normal(&self) -> u32 {
+        self.normal
+    }
+
+    /// The note value each one is written as.
+    pub fn duration_type(&self) -> DurationType {
+        self.duration_type
+    }
+
+    /// How many augmentation dots that written value carries.
+    pub fn dots(&self) -> u32 {
+        self.dots
+    }
+
+    /// What the written length is multiplied by inside the tuplet:
+    /// music21's `tupletMultiplier`, `normal / actual`.
+    pub fn multiplier(&self) -> FractionType {
+        FractionType::new(
+            IntegerType::try_from(self.normal).unwrap_or(IntegerType::MAX),
+            IntegerType::try_from(self.actual).unwrap_or(IntegerType::MAX),
+        )
+    }
+
+    /// music21's `Tuplet.fullName`: the familiar name for the ratios that
+    /// have one, and `Tuplet of 17/14ths` for the ones that do not.
+    pub fn full_name(&self) -> String {
+        match (self.actual, self.normal) {
+            (3, 2) => "Triplet".to_string(),
+            (5, 4 | 2) => "Quintuplet".to_string(),
+            (6, 4) => "Sextuplet".to_string(),
+            (7, 4) => "Septuplet".to_string(),
+            (actual, normal) => format!(
+                "Tuplet of {actual}/{normal}{}s",
+                ordinal_abbreviation(normal)
+            ),
+        }
+    }
+}
+
+/// The `st`, `nd`, `rd` or `th` that follows a number: music21's
+/// `ordinalAbbreviation`, which the tuplet ratios without a name use.
+fn ordinal_abbreviation(value: u32) -> &'static str {
+    if matches!(value % 100, 11..=13) {
+        return "th";
+    }
+    match value % 10 {
+        1 => "st",
+        2 => "nd",
+        3 => "rd",
+        _ => "th",
+    }
+}
+
+/// The word music21 puts in front of a note value for its dots. The mensural
+/// values say it differently: an undotted longa is *imperfect* and a dotted
+/// one *perfect*.
+fn dot_prefix(dots: u32, mensural: bool) -> &'static str {
+    match dots {
+        0 if mensural => "Imperfect ",
+        1 if mensural => "Perfect ",
+        0 => "",
+        1 => "Dotted ",
+        2 => "Double Dotted ",
+        3 => "Triple Dotted ",
+        _ => "Quadruple Dotted ",
+    }
+}
+
 impl Duration {
     /// Creates a duration from a quarter-length value.
     pub fn new(quarter_length: FloatType) -> Result<Self> {
@@ -311,23 +419,67 @@ impl Duration {
         Duration::new(self.quarter_length * factor)
     }
 
-    /// Returns music21's `fullName` for a single note value with dots, such
-    /// as `"Dotted Quarter"`, `"Double Dotted Half"` or `"Imperfect Longa"`.
-    /// `None` for tuplets and tied lengths, which music21 spells out from
-    /// their components.
+    /// The tuplet this length is written as, when it is one: music21's
+    /// `quarterLengthToTuplet`, keeping the first match as its `fullName`
+    /// does.
+    ///
+    /// The search walks the note values from shortest to longest and, for
+    /// each, tries every tuplet numerator and every count of them that fits.
+    /// Order is what decides the answer: two thirds of a quarter matches a
+    /// quarter in a triplet before it matches anything longer, which is why
+    /// music21 calls it a quarter triplet and not two eighth triplets.
+    pub fn tuplet(&self) -> Option<Tuplet> {
+        if self.quarter_length <= 0.0 {
+            return None;
+        }
+        let mut values = DurationType::ALL;
+        values.sort_by(|left, right| {
+            left.quarter_length()
+                .partial_cmp(&right.quarter_length())
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        let tolerance = self.quarter_length * TUPLET_TOLERANCE;
+        for duration_type in values {
+            for actual in TUPLET_NUMERATORS {
+                for normal in 1..actual {
+                    for dots in TUPLET_DOTS {
+                        let candidate = duration_type.quarter_length_with_dots(dots)
+                            * FloatType::from(normal)
+                            / FloatType::from(actual);
+                        if (candidate - self.quarter_length).abs() <= tolerance {
+                            return Some(Tuplet {
+                                actual,
+                                normal,
+                                duration_type,
+                                dots,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// Returns music21's `fullName` for a single written note value, such as
+    /// `"Dotted Quarter"`, `"Double Dotted Half"`, `"Imperfect Longa"` or
+    /// `"Quarter Triplet (2/3 QL)"`.
+    ///
+    /// `None` for a length that is neither a note value nor a tuplet — a
+    /// tied one, which music21 spells out from its components.
     pub fn full_name(&self) -> Option<String> {
-        let (duration_type, dots) = self.type_and_dots()?;
-        let mensural = matches!(duration_type, DurationType::Longa | DurationType::Maxima);
-        let prefix = match dots {
-            0 if mensural => "Imperfect ",
-            1 if mensural => "Perfect ",
-            0 => "",
-            1 => "Dotted ",
-            2 => "Double Dotted ",
-            3 => "Triple Dotted ",
-            _ => "Quadruple Dotted ",
+        let Some((duration_type, dots)) = self.type_and_dots() else {
+            let tuplet = self.tuplet()?;
+            return Some(format!(
+                "{}{} {} ({} QL)",
+                dot_prefix(tuplet.dots(), false),
+                tuplet.duration_type().title(),
+                tuplet.full_name(),
+                mixed_numeral(self.quarter_length)
+            ));
         };
-        let mut name = format!("{prefix}{}", duration_type.title());
+        let mensural = matches!(duration_type, DurationType::Longa | DurationType::Maxima);
+        let mut name = format!("{}{}", dot_prefix(dots, mensural), duration_type.title());
         if dots >= 3 {
             name.push_str(&format!(" ({} QL)", mixed_numeral(self.quarter_length)));
         }
@@ -391,17 +543,32 @@ pub fn quarter_length_to_closest_type(quarter_length: FloatType) -> Result<(Dura
 
 /// Writes a quarter length the way music21's `mixedNumeral` does: `"2"`,
 /// `"1/2"`, `"1 3/4"`.
+/// The largest denominator [`mixed_numeral`] will write. music21 allows any
+/// up to 65535, but it prints the quarter length of a written note, and a
+/// note nobody can write does not want a fraction with a four-digit
+/// denominator in its name.
+const MAX_MIXED_NUMERAL_DENOMINATOR: u32 = 1024;
+
+/// How close a fraction has to be to be written as one, relative to the
+/// value.
+const MIXED_NUMERAL_TOLERANCE: FloatType = 1e-6;
+
 fn mixed_numeral(value: FloatType) -> String {
     let whole = value.trunc() as IntegerType;
     let remainder = value - value.trunc();
     if remainder == 0.0 {
         return whole.to_string();
     }
-    let fractional = (1..=12)
-        .map(|power| 1_u32 << power)
+    // Ascending denominators, so the simplest fraction that fits wins: a
+    // third has to be reachable as well as a quarter, since a tuplet length
+    // is not a power of two. The tolerance stands in for the snapping
+    // music21 does when it reads a quarter length, which is what makes its
+    // own `0.333333` a triplet third rather than a decimal.
+    let tolerance = MIXED_NUMERAL_TOLERANCE * value.abs().max(1.0);
+    let fractional = (1..=MAX_MIXED_NUMERAL_DENOMINATOR)
         .find_map(|denominator| {
-            let numerator = remainder * FloatType::from(denominator);
-            (numerator.fract() == 0.0)
+            let numerator = (remainder * FloatType::from(denominator)).round();
+            ((remainder - numerator / FloatType::from(denominator)).abs() <= tolerance)
                 .then(|| format!("{}/{denominator}", numerator as IntegerType))
         })
         .unwrap_or_else(|| remainder.to_string());
@@ -669,17 +836,65 @@ mod tests {
             (5.0, DurationType::Whole),
             (2.5, DurationType::Half),
         ];
+        // None of these is a single written note value. The ones that are a
+        // tuplet are named as one; the ones that are a tie of two values are
+        // not named at all, since the crate keeps a length and not the
+        // components music21 spells them out from.
+        let tuplet_names = [
+            (2.0 / 3.0, "Quarter Triplet (2/3 QL)"),
+            (1.0 / 3.0, "Eighth Triplet (1/3 QL)"),
+            (4.0 / 3.0, "Half Triplet (1 1/3 QL)"),
+            (0.2, "16th Quintuplet (1/5 QL)"),
+            (0.4, "Eighth Quintuplet (2/5 QL)"),
+        ];
+        let tied = [1.25, 5.0, 2.5];
         for (quarter_length, closest) in inexact {
             let duration = Duration::new(quarter_length).unwrap();
             assert_eq!(duration.type_and_dots(), None, "{quarter_length}");
             assert_eq!(duration.dots(), 0, "{quarter_length}");
-            assert_eq!(duration.full_name(), None, "{quarter_length}");
+            let named = tuplet_names
+                .iter()
+                .find(|(length, _)| *length == quarter_length)
+                .map(|(_, name)| (*name).to_string());
+            assert_eq!(duration.full_name(), named, "{quarter_length}");
+            assert_eq!(
+                duration.tuplet().is_some(),
+                named.is_some(),
+                "{quarter_length}"
+            );
             assert_eq!(
                 quarter_length_to_closest_type(quarter_length).unwrap(),
                 (closest, false),
                 "{quarter_length}"
             );
         }
+        for quarter_length in tied {
+            assert_eq!(Duration::new(quarter_length).unwrap().tuplet(), None);
+        }
+
+        // music21 snaps a quarter length before it looks, so a truncated
+        // third is still a triplet there and here.
+        let truncated = Duration::new(0.333_333).unwrap();
+        assert_eq!(
+            truncated.full_name().as_deref(),
+            Some("Eighth Triplet (1/3 QL)")
+        );
+
+        let triplet = Duration::new(2.0 / 3.0).unwrap().tuplet().unwrap();
+        assert_eq!((triplet.actual(), triplet.normal()), (3, 2));
+        assert_eq!(triplet.duration_type(), DurationType::Quarter);
+        assert_eq!(triplet.dots(), 0);
+        assert_eq!(triplet.full_name(), "Triplet");
+        assert_eq!(triplet.multiplier(), FractionType::new(2i32, 3i32));
+
+        // the ratios music21 has no word for say the ratio instead
+        let odd = Tuplet {
+            actual: 17,
+            normal: 14,
+            duration_type: DurationType::Quarter,
+            dots: 0,
+        };
+        assert_eq!(odd.full_name(), "Tuplet of 17/14ths");
         assert_eq!(Duration::new(3.75).unwrap().dots(), 3);
         assert_eq!(
             quarter_length_to_closest_type(200.0).unwrap(),
