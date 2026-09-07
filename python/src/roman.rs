@@ -85,9 +85,9 @@ impl RomanNumeral {
     /// The chord this numeral stands for, sounding where its key does.
     fn chord(&self) -> PyResult<RsChord> {
         let chord = self.inner.to_chord().map_err(roman_error)?;
-        let Some(octave) = self.octave else {
-            return Ok(chord);
-        };
+        // A numeral given only a key still sounds somewhere: music21 spells
+        // it from octave 4, the octave a bare pitch is heard in.
+        let octave = self.octave.unwrap_or(4);
         // The crate spells from an octave-less tonic; music21 spells from
         // wherever the scale it was given stands — the fifth degree of A-flat
         // major on `A-4` is `E-5` — and carries the rise through the chord.
@@ -180,16 +180,106 @@ impl RomanNumeral {
         Self::initializer(py, Self::build(figure, keyOrScale)?)
     }
 
+    /// The figure is read again here rather than only in `__new__`.
+    ///
+    /// A Python subclass hands `__new__` its own arguments and only then
+    /// calls `super().__init__` with music21's, so a class that builds in
+    /// `__new__` alone cannot be subclassed — and music21's own
+    /// `RomanNumeral` is subclassed by `romanText` and by downstream code.
+    #[pyo3(signature = (figure = None, keyOrScale = None, **_keywords))]
+    fn __init__(
+        slf: &Bound<'_, Self>,
+        py: Python<'_>,
+        figure: Option<&Bound<'_, PyAny>>,
+        keyOrScale: Option<&Bound<'_, PyAny>>,
+        _keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<()> {
+        let built = Self::build(figure, keyOrScale)?;
+        let chord = built.chord()?;
+        slf.as_super().borrow_mut().replace_value(py, chord)?;
+        let mut me = slf.borrow_mut();
+        me.inner = built.inner;
+        me.octave = built.octave;
+        Ok(())
+    }
+
     #[getter]
     fn figure(&self) -> String {
         self.inner.figure().to_string()
     }
 
-    /// music21's `romanNumeral`: the numeral alone, without the figures that
-    /// say the inversion or the added notes.
+    /// music21's `romanNumeral`: the numeral with whatever alters it in
+    /// front, but without the figures that say the inversion or the added
+    /// notes — `bVII65/V` reads as `bVII`.
     #[getter]
     fn romanNumeral(&self) -> String {
+        format!(
+            "{}{}",
+            self.frontAlterationString(),
+            self.inner.roman_numeral()
+        )
+    }
+
+    /// music21's `romanNumeralAlone`: the numeral with nothing in front of
+    /// it at all.
+    #[getter]
+    fn romanNumeralAlone(&self) -> String {
         self.inner.roman_numeral()
+    }
+
+    /// music21's `frontAlterationString`: the flats or sharps written before
+    /// the numeral.
+    #[getter]
+    fn frontAlterationString(&self) -> String {
+        let alteration = self.inner.accidental();
+        let mark = if alteration < 0 { "b" } else { "#" };
+        mark.repeat(alteration.unsigned_abs() as usize)
+    }
+
+    /// music21's `frontAlterationAccidental`: that alteration as an
+    /// accidental, and nothing when the numeral is unaltered.
+    #[getter]
+    fn frontAlterationAccidental(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let alteration = self.inner.accidental();
+        if alteration == 0 {
+            return Ok(py.None());
+        }
+        Ok(crate::pitch::Accidental::from_inner(
+            music21_rs::pitch::Accidental::new(f64::from(alteration)).map_err(roman_error)?,
+        )
+        .into_pyobject(py)?
+        .into_any()
+        .unbind())
+    }
+
+    /// music21's `figureAndKey`: the figure and the key it is read in.
+    #[getter]
+    fn figureAndKey(&self) -> String {
+        self.inner.figure_and_key()
+    }
+
+    /// music21's `secondaryRomanNumeralKey`: the key a secondary numeral
+    /// establishes, so the `V` of `V/V` in G major is read in D major.
+    #[getter]
+    fn secondaryRomanNumeralKey(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        if self.inner.secondary().is_none() {
+            return Ok(py.None());
+        }
+        crate::key::Key::object(py, self.inner.effective_key_of().map_err(roman_error)?)
+    }
+
+    /// music21's `caseMatters`: whether an upper-case numeral means major
+    /// and a lower-case one minor, which it always does here.
+    #[getter]
+    fn caseMatters(&self) -> bool {
+        true
+    }
+
+    /// music21's `bracketedAlterations`: the alterations written in square
+    /// brackets, which this crate does not read.
+    #[getter]
+    fn bracketedAlterations(&self) -> Vec<(String, u8)> {
+        Vec::new()
     }
 
     #[getter]
@@ -225,11 +315,16 @@ impl RomanNumeral {
         self.inner.inversion()
     }
 
-    /// music21's `secondaryRomanNumeralKey` figure, when the numeral names
-    /// one — the `V` of `V/V`.
+    /// music21's `secondaryRomanNumeral`: the numeral after the slash, as a
+    /// numeral of its own read in this one's key.
     #[getter]
-    fn secondaryRomanNumeral(&self) -> Option<String> {
-        self.inner.secondary().map(str::to_string)
+    fn secondaryRomanNumeral(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let Some(secondary) = self.inner.secondary() else {
+            return Ok(py.None());
+        };
+        let inner = RsRomanNumeral::new(secondary.to_string(), self.inner.key().clone())
+            .map_err(roman_error)?;
+        Ok(Py::new(py, Self::initializer(py, Self::wrap(inner, self.octave))?)?.into_any())
     }
 
     /// music21's `functionalityScore`: how strongly the figure pulls, on

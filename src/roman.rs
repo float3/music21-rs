@@ -126,6 +126,12 @@ impl RomanNumeral {
             None => (trimmed, None),
         };
 
+        // music21 writes the Neapolitan as `N`, and in first inversion — the
+        // way it is nearly always used — as `N6`. Both are the flattened
+        // second degree, so they are read as the figure they stand for while
+        // the numeral keeps the name it was given.
+        let primary = &neapolitan_figure(primary);
+
         let (accidental, primary) = split_roman_accidental_prefix(primary);
         let (roman, suffix) = split_roman_prefix(primary)?;
         let degree = roman_degree(roman)?;
@@ -378,6 +384,13 @@ impl RomanNumeral {
         Self::new(figure, key).map(Some)
     }
 
+    /// The key the figure is actually read in: the key it was given, or the
+    /// one a secondary numeral establishes — the `V` of `V/V` in G major is
+    /// read in D major.
+    pub fn effective_key_of(&self) -> Result<Key> {
+        self.effective_key()
+    }
+
     fn effective_key(&self) -> Result<Key> {
         let Some(secondary) = &self.secondary else {
             return Ok(self.key.clone());
@@ -603,6 +616,15 @@ fn split_roman_accidental_prefix(value: &str) -> (i8, &str) {
         }
     }
     (accidental, &value[end..])
+}
+
+/// music21's `N`, `N6` and `N53`, written out as the figure they stand for.
+fn neapolitan_figure(figure: &str) -> String {
+    match figure {
+        "N" | "N6" => "bII6".to_string(),
+        "N53" => "bII".to_string(),
+        other => other.to_string(),
+    }
 }
 
 fn split_roman_prefix(value: &str) -> Result<(&str, &str)> {
@@ -1025,6 +1047,28 @@ fn normalize_pitch_name(name: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_neapolitan_can_be_written_by_name() {
+        // music21 writes the flattened second degree as `N`, and in first
+        // inversion — the way it is nearly always used — as `N6`.
+        let key = Key::from_tonic_mode("c#", Some("minor")).unwrap();
+        let named = RomanNumeral::new("N6", key.clone()).unwrap();
+        assert_eq!(named.figure(), "N6");
+        assert_eq!(named.degree(), 2);
+        assert_eq!(named.accidental(), -1);
+        assert_eq!(named.inversion(), 1);
+        assert!(named.is_neapolitan(true));
+
+        let spelled = RomanNumeral::new("bII6", key.clone()).unwrap();
+        assert_eq!(
+            named.to_chord().unwrap().pitch_names(),
+            spelled.to_chord().unwrap().pitch_names()
+        );
+
+        // `N53` is the same chord in root position.
+        let root_position = RomanNumeral::new("N53", key).unwrap();
+        assert_eq!(root_position.inversion(), 0);
+    }
 
     #[test]
     fn inversion_names_and_tonic_dominant_reading_match_music21() {
