@@ -23,13 +23,14 @@ pub mod pitch;
 pub mod roman;
 pub mod scale;
 pub mod serial;
+pub mod tempo;
 
 pub use pitch::{Accidental, Microtone, Pitch};
 
 /// The names each music21 module has a counterpart for here, which is what
 /// [`install_into_music21`] replaces and what `python-parity`'s doctest
 /// harness swaps one module at a time.
-const MUSIC21_MODULES: [(&str, &[&str]); 13] = [
+const MUSIC21_MODULES: [(&str, &[&str]); 14] = [
     ("music21.pitch", pitch::NAMES),
     ("music21.interval", interval::NAMES),
     ("music21.note", note::NAMES),
@@ -43,6 +44,7 @@ const MUSIC21_MODULES: [(&str, &[&str]); 13] = [
     ("music21.scale", scale::NAMES),
     ("music21.roman", roman::NAMES),
     ("music21.figuredBass.notation", figuredbass::NAMES),
+    ("music21.tempo", tempo::NAMES),
 ];
 
 /// A copy of a facade value as an instance of the class it was asked on,
@@ -257,6 +259,7 @@ fn install_into_music21(py: Python<'_>) -> PyResult<usize> {
 pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     pitch::register(m)?;
     figuredbass::register(m)?;
+    tempo::register(m)?;
     serial::register(m)?;
     key::register(m)?;
     interval::register(m)?;

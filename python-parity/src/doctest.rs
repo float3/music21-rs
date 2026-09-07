@@ -45,6 +45,7 @@ pub use music21_rs_python::pitch::NAMES as PITCH_NAMES;
 pub use music21_rs_python::roman::NAMES as ROMAN_NAMES;
 pub use music21_rs_python::scale::NAMES as SCALE_NAMES;
 pub use music21_rs_python::serial::NAMES as SERIAL_NAMES;
+pub use music21_rs_python::tempo::NAMES as TEMPO_NAMES;
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct Expectations {

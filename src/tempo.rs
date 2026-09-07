@@ -104,6 +104,14 @@ pub struct MetronomeMark {
     text_implicit: bool,
 }
 
+impl Default for MetronomeMark {
+    /// A mark that says nothing yet: no number, no word, counting quarters.
+    /// music21 builds one of these and fills it in.
+    fn default() -> Self {
+        Self::build(None, None, Duration::quarter())
+    }
+}
+
 impl MetronomeMark {
     /// A mark of `number` beats per minute, counting quarter notes, with the
     /// tempo word implied from the number when one is close enough.
@@ -166,6 +174,40 @@ impl MetronomeMark {
     /// The beats per minute, if known.
     pub fn number(&self) -> Option<FloatType> {
         self.number
+    }
+
+    /// Sets the beats per minute, which is then no longer implied. A mark
+    /// with no word of its own picks one up, as music21 does.
+    pub fn set_number(&mut self, number: Option<FloatType>) {
+        self.number = number;
+        self.number_implicit = false;
+        if self.text.is_none()
+            && let Some(number) = number
+            && let Some(text) = default_text_for_number(number)
+        {
+            self.text = Some(text.to_string());
+            self.text_implicit = true;
+        }
+    }
+
+    /// Sets the tempo word, which is then no longer implied. A mark with no
+    /// number of its own picks one up.
+    pub fn set_text(&mut self, text: impl Into<String>) {
+        let text = text.into();
+        self.text_implicit = false;
+        if self.number.is_none()
+            && let Some(number) = default_number_for_text(&text)
+        {
+            self.number = Some(number);
+            self.number_implicit = true;
+        }
+        self.text = Some(text);
+    }
+
+    /// Sets the note value the number counts, leaving the number alone — so
+    /// the tempo itself changes.
+    pub fn set_referent(&mut self, referent: Duration) {
+        self.referent = referent;
     }
 
     /// The tempo word, if any.
