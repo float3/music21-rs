@@ -3,7 +3,7 @@
 
 #![allow(non_snake_case)]
 
-use pyo3::exceptions::PyException;
+use pyo3::exceptions::{PyException, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
 
@@ -249,6 +249,14 @@ impl Tuplet {
 #[pyclass(name = "Duration", module = "music21.duration", skip_from_py_object)]
 pub struct Duration {
     pub(crate) inner: RsDuration,
+    /// The written values a caller put here by hand.
+    ///
+    /// music21's `Duration` *is* a list of written values whose lengths add
+    /// up; the crate's is the sum alone, and reads the list back off it.
+    /// That round-trips for a length with one spelling, but three quarters
+    /// tied is a dotted half read back, so a list that was set explicitly is
+    /// kept and answered with until something changes the length.
+    components: Option<Vec<DurationTuple>>,
     /// The object this duration belongs to. music21's `GeneralNote.duration`
     /// setter writes itself here, and reads the failure to do so as "not a
     /// Duration at all", so keeping the slot is what lets music21's own
@@ -261,6 +269,7 @@ impl Clone for Duration {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
+            components: self.components.clone(),
             client: None,
         }
     }
@@ -270,8 +279,33 @@ impl Duration {
     pub(crate) fn wrap(inner: RsDuration) -> Self {
         Self {
             inner,
+            components: None,
             client: None,
         }
+    }
+
+    /// The written values this length is made of: the ones set by hand, or
+    /// the ones the crate reads off the length.
+    fn component_list(&self) -> Vec<DurationTuple> {
+        if let Some(components) = &self.components {
+            return components.clone();
+        }
+        self.inner
+            .components()
+            .into_iter()
+            .map(|(kind, dots)| DurationTuple::of(kind, dots))
+            .collect()
+    }
+
+    /// Makes the given values the duration, its length their total.
+    fn set_component_list(&mut self, components: Vec<DurationTuple>) -> PyResult<()> {
+        let total: f64 = components
+            .iter()
+            .map(|component| component.quarterLength())
+            .sum();
+        self.inner = RsDuration::new(total).map_err(duration_error)?;
+        self.components = Some(components);
+        Ok(())
     }
 
     /// The duration music21 builds from a bare `Duration(**keywords)`: a
@@ -367,6 +401,7 @@ impl Duration {
 
     #[setter]
     fn set_quarterLength(&mut self, value: f64) -> PyResult<()> {
+        self.components = None;
         self.inner.set_quarter_length(value).map_err(note_error)
     }
 
@@ -383,6 +418,7 @@ impl Duration {
         let kind = music21_rs::duration::DurationType::from_music21_name(value)
             .ok_or_else(|| NoteException::new_err(format!("no such duration type: {value}")))?;
         let dots = self.inner.dots();
+        self.components = None;
         self.inner = RsDuration::from_type_with_dots(kind, dots);
         Ok(())
     }
@@ -390,14 +426,92 @@ impl Duration {
     /// music21's `components`: the written note values this length is made
     /// of, tied together.
     #[getter]
-    fn components<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
-        let components: Vec<DurationTuple> = self
-            .inner
-            .components()
-            .into_iter()
-            .map(|(kind, dots)| DurationTuple::of(kind, dots))
-            .collect();
-        PyTuple::new(py, components)
+    fn get_components<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
+        PyTuple::new(py, self.component_list())
+    }
+
+    #[setter]
+    fn set_components(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        let mut components = Vec::new();
+        for item in value.try_iter()? {
+            components.push(duration_tuple_from_any(&item?)?);
+        }
+        self.set_component_list(components)
+    }
+
+    /// music21's `addDurationTuple`: another written value tied on the end.
+    fn addDurationTuple(&mut self, dur: &Bound<'_, PyAny>) -> PyResult<()> {
+        let mut components = self.component_list();
+        components.push(duration_tuple_from_any(dur)?);
+        self.set_component_list(components)
+    }
+
+    /// music21's `clear`: no written values at all, and no length.
+    fn clear(&mut self) -> PyResult<()> {
+        self.set_component_list(Vec::new())
+    }
+
+    /// music21's `componentStartTime`: how far into the duration the written
+    /// value at an index begins.
+    fn componentStartTime(&self, componentIndex: usize) -> PyResult<f64> {
+        let components = self.component_list();
+        if componentIndex >= components.len() {
+            return Err(DurationException::new_err(format!(
+                "invalid component index value {componentIndex} submitted; \
+                 value must be an integer between 0 and {}",
+                components.len().saturating_sub(1)
+            )));
+        }
+        Ok(components[..componentIndex]
+            .iter()
+            .map(DurationTuple::quarterLength)
+            .sum())
+    }
+
+    /// music21's `componentIndexAtQtrPosition`, including its own oddity:
+    /// at the very start or the very end it hands back the *component*
+    /// rather than its index, which its docstring flags and keeps.
+    fn componentIndexAtQtrPosition<'py>(
+        &self,
+        py: Python<'py>,
+        quarterPosition: f64,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let components = self.component_list();
+        if components.is_empty() {
+            return Err(DurationException::new_err(
+                "Need components to run getComponentIndexAtQtrPosition",
+            ));
+        }
+        let total = self.inner.quarter_length();
+        if quarterPosition > total {
+            return Err(PyValueError::new_err(
+                "position is after the end of the duration",
+            ));
+        }
+        if quarterPosition < 0.0 {
+            return Err(PyValueError::new_err(
+                "position is before the start of the duration",
+            ));
+        }
+        if quarterPosition == 0.0 {
+            return Ok(components[0].clone().into_pyobject(py)?.into_any());
+        }
+        if quarterPosition == total {
+            return Ok(components[components.len() - 1]
+                .clone()
+                .into_pyobject(py)?
+                .into_any());
+        }
+        let mut current = 0.0;
+        for (index, component) in components.iter().enumerate() {
+            current += component.quarterLength();
+            if current > quarterPosition {
+                return Ok(index.into_pyobject(py)?.into_any());
+            }
+        }
+        Err(DurationException::new_err(
+            "Could not match quarterLength within an index.",
+        ))
     }
 
     /// music21's `tuplets`: the one this length is written inside, when it
@@ -412,7 +526,7 @@ impl Duration {
     /// written value tied together.
     #[getter]
     fn isComplex(&self) -> bool {
-        self.inner.components().len() > 1
+        self.component_list().len() > 1
     }
 
     /// music21's `augmentOrDiminish`: the same length scaled, as a new
@@ -434,6 +548,7 @@ impl Duration {
         let kind = self.inner.duration_type().ok_or_else(|| {
             NoteException::new_err("cannot set dots on a duration with no note value")
         })?;
+        self.components = None;
         self.inner = RsDuration::from_type_with_dots(kind, value);
         Ok(())
     }
@@ -1176,6 +1291,27 @@ impl Note {
             .filter(|value| !value.is_none())
             .map(|value| value.clone().unbind());
     }
+}
+
+/// Reads a written value argument: a `DurationTuple`, or anything with
+/// music21's `type` and `dots` on it, a `Duration` included.
+fn duration_tuple_from_any(value: &Bound<'_, PyAny>) -> PyResult<DurationTuple> {
+    if let Ok(tuple) = value.extract::<PyRef<'_, DurationTuple>>() {
+        return Ok(tuple.clone());
+    }
+    if let Ok(duration) = value.extract::<PyRef<'_, Duration>>() {
+        let components = duration.component_list();
+        if let [single] = components.as_slice() {
+            return Ok(single.clone());
+        }
+        return Ok(DurationTuple::from_quarter_length(
+            duration.inner.quarter_length(),
+        ));
+    }
+    let kind: String = value.getattr("type")?.extract()?;
+    let dots: u32 = value.getattr("dots")?.extract()?;
+    let quarter_length: f64 = value.getattr("quarterLength")?.extract()?;
+    Ok(DurationTuple::new(kind, dots, quarter_length))
 }
 
 /// music21's `durationTupleFromQuarterLength`.

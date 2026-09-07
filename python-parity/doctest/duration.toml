@@ -4,6 +4,8 @@
 # fails when one of these stops passing.
 
 passing = [
+    "music21.duration.Duration.componentIndexAtQtrPosition",
+    "music21.duration.Duration.components",
     "music21.duration.Duration.fullName",
     "music21.duration.Duration.isComplex",
     "music21.duration.Duration.type",
