@@ -274,6 +274,13 @@ pub struct Tuplet {
     normal: u32,
     duration_type: DurationType,
     dots: u32,
+    /// The written value the `normal` count is counted in, which is not
+    /// always the one the `actual` count is written as: three eighths in the
+    /// time of one quarter is the same ratio as three in the time of two
+    /// eighths, and music21 keeps both spellings.
+    normal_type: DurationType,
+    /// The dots on that value.
+    normal_dots: u32,
 }
 
 impl Tuplet {
@@ -285,7 +292,33 @@ impl Tuplet {
             normal,
             duration_type,
             dots,
+            normal_type: duration_type,
+            normal_dots: dots,
         }
+    }
+
+    /// The same tuplet counting the `normal` side in a different written
+    /// value: music21's `durationNormal` apart from its `durationActual`.
+    pub fn with_normal(mut self, duration_type: DurationType, dots: u32) -> Self {
+        self.normal_type = duration_type;
+        self.normal_dots = dots;
+        self
+    }
+
+    /// The written value the `normal` count is counted in.
+    pub fn normal_duration_type(&self) -> DurationType {
+        self.normal_type
+    }
+
+    /// The dots on that value.
+    pub fn normal_dots(&self) -> u32 {
+        self.normal_dots
+    }
+
+    /// How long the whole tuplet lasts: music21's `totalTupletLength`, the
+    /// `normal` count of the value it is counted in.
+    pub fn total_tuplet_length(&self) -> FloatType {
+        FloatType::from(self.normal) * self.normal_type.quarter_length_with_dots(self.normal_dots)
     }
 
     /// How many notes are played: music21's `numberNotesActual`.
@@ -479,12 +512,7 @@ impl Duration {
                             * FloatType::from(normal)
                             / FloatType::from(actual);
                         if (candidate - self.quarter_length).abs() <= tolerance {
-                            return Some(Tuplet {
-                                actual,
-                                normal,
-                                duration_type,
-                                dots,
-                            });
+                            return Some(Tuplet::new(actual, normal, duration_type, dots));
                         }
                     }
                 }
@@ -1115,13 +1143,15 @@ mod tests {
         assert_eq!(triplet.multiplier(), FractionType::new(2i32, 3i32));
 
         // the ratios music21 has no word for say the ratio instead
-        let odd = Tuplet {
-            actual: 17,
-            normal: 14,
-            duration_type: DurationType::Quarter,
-            dots: 0,
-        };
+        let odd = Tuplet::new(17, 14, DurationType::Quarter, 0);
         assert_eq!(odd.full_name(), "Tuplet of 17/14ths");
+        assert_eq!(odd.total_tuplet_length(), 14.0);
+        // Three eighths in the time of one quarter is the same ratio written
+        // the other way, and lasts exactly as long.
+        let across =
+            Tuplet::new(3, 1, DurationType::Eighth, 0).with_normal(DurationType::Quarter, 0);
+        assert_eq!(across.total_tuplet_length(), 1.0);
+        assert_eq!(across.multiplier(), FractionType::new(1i32, 3i32));
         assert_eq!(Duration::new(3.75).unwrap().dots(), 3);
         assert_eq!(
             quarter_length_to_closest_type(200.0).unwrap(),

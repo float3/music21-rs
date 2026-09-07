@@ -185,56 +185,362 @@ impl DurationTuple {
 #[derive(Clone)]
 pub struct Tuplet {
     inner: RsTuplet,
+    /// Where this tuplet's bracket sits over the notes: music21's `type`,
+    /// `'start'` on the first note and `'stop'` on the last, `None` while
+    /// nothing has said. It is engraving rather than rhythm, which is why it
+    /// lives here and not in the crate — but music21's own `makeTupletBrackets`
+    /// writes it on whatever tuplets it finds, ours included.
+    bracket_type: Option<String>,
+    /// Whether a bracket is drawn at all.
+    bracket: bool,
+    /// Which side of the notes the number goes.
+    placement: Option<String>,
+    /// Whether the two counts are shown, and how.
+    tuplet_actual_show: Option<String>,
+    tuplet_normal_show: Option<String>,
+    /// How deep inside other tuplets this one is.
+    nested_level: u32,
+    /// An identifier for grouping tuplets that belong together.
+    tuplet_id: i64,
+    /// Whether the tuplet may still be changed. music21 freezes a tuplet as
+    /// it goes onto a duration, so that the duration's length cannot go
+    /// stale underneath it.
+    frozen: bool,
 }
 
 impl Tuplet {
     pub(crate) fn wrap(inner: RsTuplet) -> Self {
-        Self { inner }
+        Self {
+            inner,
+            bracket_type: None,
+            bracket: true,
+            placement: Some("above".to_string()),
+            tuplet_actual_show: Some("number".to_string()),
+            tuplet_normal_show: Some("number".to_string()),
+            nested_level: 1,
+            tuplet_id: 0,
+            frozen: false,
+        }
+    }
+
+    /// The written value each of the `actual` notes carries.
+    fn set_actual_tuple(&mut self, written: &DurationTuple) {
+        let Some(kind) = RsDurationType::from_music21_name(&written.r#type()) else {
+            return;
+        };
+        self.inner = RsTuplet::new(
+            self.inner.actual(),
+            self.inner.normal(),
+            kind,
+            written.dots(),
+        )
+        .with_normal(self.inner.normal_duration_type(), self.inner.normal_dots());
+    }
+
+    /// The written value the `normal` count is counted in.
+    fn set_normal_tuple(&mut self, written: &DurationTuple) {
+        let Some(kind) = RsDurationType::from_music21_name(&written.r#type()) else {
+            return;
+        };
+        self.inner = self.inner.with_normal(kind, written.dots());
+    }
+
+    /// Refuses a change to a tuplet that is already on a duration, as
+    /// music21 refuses one: the duration's length was worked out from it.
+    fn thaw(&self) -> PyResult<()> {
+        if self.frozen {
+            return Err(DurationException::new_err(
+                "A frozen tuplet (or one attached to a duration) is immutable",
+            ));
+        }
+        Ok(())
     }
 }
 
 #[pymethods]
 impl Tuplet {
     #[new]
-    #[pyo3(signature = (numberNotesActual = 3, numberNotesNormal = 2, **_keywords))]
+    #[pyo3(signature = (numberNotesActual = 3, numberNotesNormal = 2, durationActual = None, durationNormal = None, **_keywords))]
     fn new(
         numberNotesActual: u32,
         numberNotesNormal: u32,
+        durationActual: Option<&Bound<'_, PyAny>>,
+        durationNormal: Option<&Bound<'_, PyAny>>,
         _keywords: Option<&Bound<'_, PyDict>>,
-    ) -> Self {
-        Self::wrap(RsTuplet::new(
+    ) -> PyResult<Self> {
+        let actual = match durationActual {
+            Some(value) => duration_tuple_from_any(value)?,
+            None => DurationTuple::of(RsDurationType::Eighth, 0),
+        };
+        let normal = match durationNormal {
+            Some(value) => duration_tuple_from_any(value)?,
+            None => actual.clone(),
+        };
+        let mut tuplet = Self::wrap(RsTuplet::new(
             numberNotesActual,
             numberNotesNormal,
             RsDurationType::Eighth,
             0,
-        ))
+        ));
+        tuplet.set_actual_tuple(&actual);
+        tuplet.set_normal_tuple(&normal);
+        Ok(tuplet)
     }
 
     #[getter]
-    fn numberNotesActual(&self) -> u32 {
+    fn get_numberNotesActual(&self) -> u32 {
         self.inner.actual()
     }
 
+    #[setter]
+    fn set_numberNotesActual(&mut self, value: u32) -> PyResult<()> {
+        self.thaw()?;
+        self.inner = RsTuplet::new(
+            value,
+            self.inner.normal(),
+            self.inner.duration_type(),
+            self.inner.dots(),
+        )
+        .with_normal(self.inner.normal_duration_type(), self.inner.normal_dots());
+        Ok(())
+    }
+
     #[getter]
-    fn numberNotesNormal(&self) -> u32 {
+    fn get_numberNotesNormal(&self) -> u32 {
         self.inner.normal()
     }
 
+    #[setter]
+    fn set_numberNotesNormal(&mut self, value: u32) -> PyResult<()> {
+        self.thaw()?;
+        self.inner = RsTuplet::new(
+            self.inner.actual(),
+            value,
+            self.inner.duration_type(),
+            self.inner.dots(),
+        )
+        .with_normal(self.inner.normal_duration_type(), self.inner.normal_dots());
+        Ok(())
+    }
+
+    /// music21's `durationActual`: the written value each of the `actual`
+    /// notes carries.
     #[getter]
-    fn durationActual(&self) -> DurationTuple {
+    fn get_durationActual(&self) -> DurationTuple {
         DurationTuple::of(self.inner.duration_type(), self.inner.dots())
     }
 
+    #[setter]
+    fn set_durationActual(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        self.thaw()?;
+        let Some(value) = value.filter(|value| !value.is_none()) else {
+            return Ok(());
+        };
+        self.set_actual_tuple(&duration_tuple_from_any(value)?);
+        Ok(())
+    }
+
+    /// music21's `durationNormal`: the written value the `normal` count is
+    /// counted in, which need not be the same one.
     #[getter]
-    fn durationNormal(&self) -> DurationTuple {
-        DurationTuple::of(self.inner.duration_type(), self.inner.dots())
+    fn get_durationNormal(&self) -> DurationTuple {
+        DurationTuple::of(self.inner.normal_duration_type(), self.inner.normal_dots())
+    }
+
+    #[setter]
+    fn set_durationNormal(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        self.thaw()?;
+        let Some(value) = value.filter(|value| !value.is_none()) else {
+            return Ok(());
+        };
+        self.set_normal_tuple(&duration_tuple_from_any(value)?);
+        Ok(())
+    }
+
+    /// music21's `setRatio`: both counts at once.
+    fn setRatio(&mut self, actual: u32, normal: u32) -> PyResult<()> {
+        self.thaw()?;
+        self.inner = RsTuplet::new(
+            actual,
+            normal,
+            self.inner.duration_type(),
+            self.inner.dots(),
+        )
+        .with_normal(self.inner.normal_duration_type(), self.inner.normal_dots());
+        Ok(())
+    }
+
+    /// music21's `setDurationType`: both written values at once.
+    #[pyo3(signature = (durType, dots = 0))]
+    fn setDurationType(&mut self, durType: &Bound<'_, PyAny>, dots: u32) -> PyResult<()> {
+        self.thaw()?;
+        let name = match durType.extract::<String>() {
+            Ok(name) => name,
+            Err(_) => {
+                let quarter_length = durType.extract::<f64>()?;
+                DurationTuple::from_quarter_length(quarter_length).r#type()
+            }
+        };
+        let kind = RsDurationType::from_music21_name(&name)
+            .ok_or_else(|| DurationException::new_err(format!("no such duration type: {name}")))?;
+        self.inner = RsTuplet::new(self.inner.actual(), self.inner.normal(), kind, dots)
+            .with_normal(kind, dots);
+        Ok(())
+    }
+
+    /// music21's `totalTupletLength`: how long the whole tuplet lasts.
+    fn totalTupletLength<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        op_frac(py, self.inner.total_tuplet_length())
     }
 
     /// music21's `tupletMultiplier`, `normal / actual`, as a `Fraction`.
     fn tupletMultiplier<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        py.import("fractions")?
-            .getattr("Fraction")?
-            .call1((self.inner.normal(), self.inner.actual()))
+        let normal = self
+            .inner
+            .normal_duration_type()
+            .quarter_length_with_dots(self.inner.normal_dots());
+        let actual = self
+            .inner
+            .duration_type()
+            .quarter_length_with_dots(self.inner.dots());
+        // The ratio of the counts, scaled by the ratio of the two written
+        // values when they are not the same one.
+        let scale = if actual == 0.0 { 1.0 } else { normal / actual };
+        if scale == 1.0 {
+            return op_frac_ratio(py, self.inner.normal() as i64, self.inner.actual() as i64);
+        }
+        op_frac(
+            py,
+            f64::from(self.inner.normal()) * scale / f64::from(self.inner.actual()),
+        )
+    }
+
+    /// music21's `augmentOrDiminish`: the same ratio over longer or shorter
+    /// written values.
+    fn augmentOrDiminish(&mut self, amountToScale: f64) -> PyResult<()> {
+        self.thaw()?;
+        if amountToScale <= 0.0 || amountToScale.is_nan() {
+            return Err(PyValueError::new_err(
+                "amountToScale must be greater than zero",
+            ));
+        }
+        let actual = self.get_durationActual().augmentOrDiminish(amountToScale);
+        let normal = self.get_durationNormal().augmentOrDiminish(amountToScale);
+        self.set_actual_tuple(&actual);
+        self.set_normal_tuple(&normal);
+        Ok(())
+    }
+
+    /// music21's `type`: where this tuplet's bracket sits over the notes.
+    #[getter]
+    fn get_type(&self) -> Option<String> {
+        self.bracket_type.clone()
+    }
+
+    #[setter]
+    fn set_type(&mut self, value: Option<String>) -> PyResult<()> {
+        if let Some(value) = &value
+            && !matches!(value.as_str(), "start" | "stop" | "startStop")
+        {
+            return Err(DurationException::new_err(format!(
+                "Type must be 'start', 'stop', 'startStop', or None, not {value}"
+            )));
+        }
+        self.bracket_type = value;
+        Ok(())
+    }
+
+    #[getter]
+    fn get_bracket(&self) -> bool {
+        self.bracket
+    }
+
+    #[setter]
+    fn set_bracket(&mut self, value: bool) {
+        self.bracket = value;
+    }
+
+    #[getter]
+    fn get_placement(&self) -> Option<String> {
+        self.placement.clone()
+    }
+
+    #[setter]
+    fn set_placement(&mut self, value: Option<String>) {
+        self.placement = value;
+    }
+
+    #[getter]
+    fn get_tupletActualShow(&self) -> Option<String> {
+        self.tuplet_actual_show.clone()
+    }
+
+    #[setter]
+    fn set_tupletActualShow(&mut self, value: Option<String>) {
+        self.tuplet_actual_show = value;
+    }
+
+    #[getter]
+    fn get_tupletNormalShow(&self) -> Option<String> {
+        self.tuplet_normal_show.clone()
+    }
+
+    #[setter]
+    fn set_tupletNormalShow(&mut self, value: Option<String>) {
+        self.tuplet_normal_show = value;
+    }
+
+    #[getter]
+    fn get_nestedLevel(&self) -> u32 {
+        self.nested_level
+    }
+
+    #[setter]
+    fn set_nestedLevel(&mut self, value: u32) {
+        self.nested_level = value;
+    }
+
+    #[getter]
+    fn get_tupletId(&self) -> i64 {
+        self.tuplet_id
+    }
+
+    #[setter]
+    fn set_tupletId(&mut self, value: i64) {
+        self.tuplet_id = value;
+    }
+
+    /// music21's `tupletActual`: the count and the written value together.
+    #[getter]
+    fn get_tupletActual(&self) -> (u32, DurationTuple) {
+        (self.inner.actual(), self.get_durationActual())
+    }
+
+    #[setter]
+    fn set_tupletActual(&mut self, value: (u32, Bound<'_, PyAny>)) -> PyResult<()> {
+        self.set_numberNotesActual(value.0)?;
+        self.set_durationActual(Some(&value.1))
+    }
+
+    #[getter]
+    fn get_tupletNormal(&self) -> (u32, DurationTuple) {
+        (self.inner.normal(), self.get_durationNormal())
+    }
+
+    #[setter]
+    fn set_tupletNormal(&mut self, value: (u32, Bound<'_, PyAny>)) -> PyResult<()> {
+        self.set_numberNotesNormal(value.0)?;
+        self.set_durationNormal(Some(&value.1))
+    }
+
+    #[getter]
+    fn get_frozen(&self) -> bool {
+        self.frozen
+    }
+
+    #[setter]
+    fn set_frozen(&mut self, value: bool) {
+        self.frozen = value;
     }
 
     #[getter]
@@ -255,6 +561,14 @@ impl Tuplet {
             self.inner.normal(),
             self.inner.duration_type().music21_name()
         )
+    }
+
+    fn __deepcopy__(&self, _memo: &Bound<'_, PyAny>) -> Self {
+        self.clone()
+    }
+
+    fn __copy__(&self) -> Self {
+        self.clone()
     }
 }
 
@@ -917,8 +1231,14 @@ impl Duration {
     }
 
     /// music21's `tuplets`: the tuplets this length is written inside.
+    ///
+    /// Asking works them out and keeps them, so the objects handed back are
+    /// the same ones next time and an edit to one sticks — music21's own
+    /// `findTupletGroups` marks the end of a group by setting `type` on the
+    /// tuplet it read off a note.
     #[getter]
-    fn get_tuplets<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
+    fn get_tuplets<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
+        self.materialize(py)?;
         PyTuple::new(py, self.tuplet_objects(py)?)
     }
 
@@ -1199,6 +1519,27 @@ impl Duration {
         self.inner.full_name()
     }
 
+    /// music21's `informClient`: tells whatever owns this duration that its
+    /// length has changed, so that the streams holding it can re-sort.
+    ///
+    /// The crate has no such notification and wants none, but music21's own
+    /// code calls this on durations it has just edited, and a duration of
+    /// ours has to be able to pass the message on to a music21 client.
+    fn informClient(&self, py: Python<'_>) -> PyResult<bool> {
+        let Some(client) = &self.client else {
+            return Ok(false);
+        };
+        let message = PyDict::new(py);
+        message.set_item("changedAttribute", "duration")?;
+        message.set_item("quarterLength", op_frac(py, self.inner.quarter_length())?)?;
+        let client = client.bind(py);
+        if !client.hasattr("informSites")? {
+            return Ok(false);
+        }
+        client.call_method1("informSites", (message,))?;
+        Ok(true)
+    }
+
     /// music21's `isGrace`, which only a `GraceDuration` says yes to.
     #[getter]
     fn isGrace(&self) -> bool {
@@ -1230,8 +1571,8 @@ impl Duration {
         if mine != theirs {
             return Ok(false);
         }
-        let my_tuplets = slf.borrow().get_tuplets(py)?;
-        let their_tuplets = other.borrow().get_tuplets(py)?;
+        let my_tuplets = Duration::get_tuplets(&mut slf.borrow_mut(), py)?;
+        let their_tuplets = Duration::get_tuplets(&mut other.borrow_mut(), py)?;
         if !my_tuplets.eq(&their_tuplets)? {
             return Ok(false);
         }
@@ -1627,8 +1968,18 @@ impl Note {
     }
 
     #[getter]
-    fn step(&self) -> String {
+    fn get_step(&self) -> String {
         self.inner.step().to_string()
+    }
+
+    /// music21's `step` setter, which writes through to the pitch and keeps
+    /// the accidental and the octave: `n.step = 'D'` on a `C#4` gives `D#4`.
+    #[setter]
+    fn set_step(slf: &Bound<'_, Self>, value: &str) -> PyResult<()> {
+        // Through the note's own pitch object, so the change lands where a
+        // caller holding that pitch will see it, and so the one reading of
+        // a step name lives in one place.
+        Self::get_pitch(slf).setattr(slf.py(), "step", value)
     }
 
     #[getter]

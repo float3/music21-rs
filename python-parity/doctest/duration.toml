@@ -44,6 +44,8 @@ passing = [
     "music21.duration.Tuplet.setRatio",
     "music21.duration.Tuplet.totalTupletLength",
     "music21.duration.Tuplet.tupletMultiplier",
+    "music21.duration.TupletFixer.findTupletGroups",
+    "music21.duration.TupletFixer.fixBrokenTupletDuration",
     "music21.duration.convertQuarterLengthToType",
     "music21.duration.convertTypeToNumber",
     "music21.duration.convertTypeToQuarterLength",
