@@ -743,7 +743,7 @@ impl Chord {
             let Ok(interval) = relevant_interval else {
                 return "unknown chord".to_string();
             };
-            let semitones = interval.chromatic.semitones.abs() % 12;
+            let semitones = interval.chromatic.simple_undirected();
             let plural = if semitones == 1 { "" } else { "s" };
             return format!("{semitones} semitone{plural}");
         }

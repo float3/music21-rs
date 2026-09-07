@@ -70,6 +70,7 @@ passing = [
     "music21.pitch.Pitch.simplifyEnharmonic",
     "music21.pitch.Pitch.spanish",
     "music21.pitch.Pitch.step",
+    "music21.pitch.Pitch.transpose",
     "music21.pitch.Pitch.transposeAboveTarget",
     "music21.pitch.Pitch.transposeBelowTarget",
     "music21.pitch.Pitch.unicodeName",

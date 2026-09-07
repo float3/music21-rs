@@ -263,7 +263,7 @@ impl DiatonicInterval {
         if self.generic.direction() == Direction::Descending {
             semitones *= -1;
         }
-        Ok(ChromaticInterval::new(semitones))
+        Ok(ChromaticInterval::from_int(semitones))
     }
 
     /// The same interval in the other direction. A unison keeps its
@@ -320,7 +320,7 @@ mod tests {
     fn diatonic_get_chromatic_major_third() {
         let generic = GenericInterval::from_int(3).unwrap();
         let diatonic = DiatonicInterval::new(Specifier::Major, &generic);
-        assert_eq!(diatonic.get_chromatic().unwrap().semitones, 4);
+        assert_eq!(diatonic.get_chromatic().unwrap().semitones, 4.0);
     }
 
     #[test]
@@ -328,7 +328,7 @@ mod tests {
         let generic = GenericInterval::from_int(1).unwrap();
         let diatonic = DiatonicInterval::new(Specifier::Augmented, &generic);
         let reversed = diatonic.reverse();
-        assert_eq!(reversed.get_chromatic().unwrap().semitones, -1);
+        assert_eq!(reversed.get_chromatic().unwrap().semitones, -1.0);
     }
 
     #[test]

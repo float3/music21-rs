@@ -11,6 +11,7 @@ pub use specifier::Specifier;
 
 use direction::Direction;
 
+use std::fmt;
 use std::str::FromStr;
 use std::{cmp::Ordering, sync::LazyLock};
 
@@ -189,7 +190,7 @@ pub fn written_lower_pitch<'a>(first: &'a Pitch, second: &'a Pitch) -> &'a Pitch
 /// The pitch that sounds higher: music21's `getAbsoluteHigherNote`. Enharmonic
 /// equals return the first.
 pub fn absolute_higher_pitch<'a>(first: &'a Pitch, second: &'a Pitch) -> &'a Pitch {
-    if notes_to_chromatic(first, second).semitones > 0 {
+    if notes_to_chromatic(first, second).semitones > 0.0 {
         second
     } else {
         first
@@ -199,7 +200,7 @@ pub fn absolute_higher_pitch<'a>(first: &'a Pitch, second: &'a Pitch) -> &'a Pit
 /// The pitch that sounds lower: music21's `getAbsoluteLowerNote`. Enharmonic
 /// equals return the first.
 pub fn absolute_lower_pitch<'a>(first: &'a Pitch, second: &'a Pitch) -> &'a Pitch {
-    if notes_to_chromatic(first, second).semitones < 0 {
+    if notes_to_chromatic(first, second).semitones < 0.0 {
         second
     } else {
         first
@@ -218,7 +219,7 @@ pub fn notes_to_generic(p1: &Pitch, p2: &Pitch) -> Result<GenericInterval> {
 /// The semitone distance from one pitch to another: music21's
 /// `notesToChromatic`.
 pub fn notes_to_chromatic(p1: &Pitch, p2: &Pitch) -> ChromaticInterval {
-    ChromaticInterval::new((p2.ps() - p1.ps()).round() as IntegerType)
+    ChromaticInterval::new(p2.ps() - p1.ps())
 }
 
 fn specifier_from_generic_chromatic(
@@ -229,24 +230,25 @@ fn specifier_from_generic_chromatic(
     let normal_semis = note_vals[(g_int.simple_undirected() - 1) as usize]
         + 12 * g_int.simple_steps_and_octaves().1;
 
-    let c_direction = match c_int.semitones.cmp(&0) {
-        Ordering::Equal => direction::Direction::Oblique,
-        Ordering::Less => direction::Direction::Descending,
-        Ordering::Greater => direction::Direction::Ascending,
-    };
+    let c_direction = c_int.direction();
 
     let these_semis = if g_int.direction() != c_direction
         && g_int.direction() != direction::Direction::Oblique
         && c_direction != direction::Direction::Oblique
     {
-        -c_int.semitones.abs()
+        -c_int.undirected()
     } else if g_int.undirected() == 1 {
-        c_int.semitones
+        c_int.directed()
     } else {
-        c_int.semitones.abs()
+        c_int.undirected()
     };
 
-    let diff = these_semis - normal_semis;
+    let rounding_error = if c_int.undirected() > 0.0 {
+        0.0001
+    } else {
+        -0.0001
+    };
+    let diff = (these_semis + rounding_error).round() as IntegerType - normal_semis;
 
     if g_int.is_perfectable() {
         match diff {
@@ -295,11 +297,15 @@ pub fn intervals_to_diatonic(
 /// The simplest quality and generic size for a semitone count: music21's
 /// `convertSemitoneToSpecifierGeneric`, so `6` is a diminished fifth and
 /// `-14` a descending major ninth.
-pub fn convert_semitone_to_specifier_generic(count: IntegerType) -> (Specifier, IntegerType) {
-    let dir_scale = if count < 0 { -1 } else { 1 };
-    let size = count.abs() % 12;
-    let octave = count.abs() / 12;
-    let (spec, generic) = match size {
+pub fn convert_semitone_to_specifier_generic(count: FloatType) -> (Specifier, IntegerType) {
+    let (specifier, generic, _) = convert_semitone_to_specifier_generic_microtone(count);
+    (specifier, generic)
+}
+
+/// The quality and generic size of a whole number of semitones within one
+/// octave, music21's `SEMITONES_TO_SPEC_GENERIC` table.
+fn semitones_to_specifier_generic(size: IntegerType) -> (Specifier, IntegerType) {
+    match size {
         0 => (Specifier::Perfect, 1),
         1 => (Specifier::Minor, 2),
         2 => (Specifier::Major, 2),
@@ -312,14 +318,13 @@ pub fn convert_semitone_to_specifier_generic(count: IntegerType) -> (Specifier, 
         9 => (Specifier::Major, 6),
         10 => (Specifier::Minor, 7),
         _ => (Specifier::Major, 7),
-    };
-    (spec, (generic + octave * 7) * dir_scale)
+    }
 }
 
 /// Like [`convert_semitone_to_specifier_generic`] for a fractional semitone
 /// count, returning the leftover in cents as well: music21's
 /// `convertSemitoneToSpecifierGenericMicrotone`, so `2.5` is a major second
-/// and fifty cents, and `-2.5` a descending major second and minus fifty.
+/// and fifty cents, and `-2.5` a descending minor third and fifty.
 pub fn convert_semitone_to_specifier_generic_microtone(
     count: FloatType,
 ) -> (Specifier, IntegerType, FloatType) {
@@ -333,7 +338,7 @@ pub fn convert_semitone_to_specifier_generic_microtone(
     let whole = whole as IntegerType;
     let size = whole.abs() % 12;
     let octave = whole.abs() / 12;
-    let (specifier, generic) = convert_semitone_to_specifier_generic(size);
+    let (specifier, generic) = semitones_to_specifier_generic(size);
     (specifier, (generic + octave * 7) * dir_scale, cents)
 }
 
@@ -433,7 +438,7 @@ impl Interval {
         semitones: IntegerType,
     ) -> Result<Self> {
         let generic = GenericInterval::from_int(generic)?;
-        let chromatic = ChromaticInterval::new(semitones);
+        let chromatic = ChromaticInterval::from_int(semitones);
         let diatonic = intervals_to_diatonic(&generic, &chromatic)?;
         Self::from_diatonic_and_chromatic(diatonic, chromatic)
     }
@@ -474,7 +479,7 @@ impl Interval {
 
     /// Creates an implicit diatonic interval from a chromatic semitone count.
     pub fn from_semitones(semitones: IntegerType) -> Result<Self> {
-        let chromatic = ChromaticInterval::new(semitones);
+        let chromatic = ChromaticInterval::from_int(semitones);
         let diatonic = chromatic.get_diatonic();
         Ok(Self {
             implicit_diatonic: true,
@@ -501,9 +506,15 @@ impl Interval {
         )
     }
 
-    /// Returns the directed chromatic size in semitones.
-    pub fn semitones(&self) -> IntegerType {
+    /// Returns the directed chromatic size in semitones, fractional for a
+    /// microtonal interval.
+    pub fn semitones(&self) -> FloatType {
         self.chromatic.semitones
+    }
+
+    /// Returns the directed chromatic size rounded to whole semitones.
+    pub fn whole_semitones(&self) -> IntegerType {
+        self.chromatic.whole_semitones()
     }
 
     /// Returns the directed interval direction.
@@ -609,7 +620,7 @@ impl Interval {
 
     /// Returns whether this spans exactly one semitone.
     pub fn is_chromatic_step(&self) -> bool {
-        self.chromatic.semitones.abs() == 1
+        self.chromatic.undirected() == 1.0
     }
 
     /// Returns whether this is a step diatonically or chromatically.
@@ -644,8 +655,7 @@ impl Interval {
     /// Returns the interval class, the smaller of the semitone count within an
     /// octave and its complement, from `0` to `6`.
     pub fn interval_class(&self) -> IntegerType {
-        let mod12 = self.chromatic.semitones.rem_euclid(12);
-        if mod12 > 6 { 12 - mod12 } else { mod12 }
+        self.chromatic.interval_class()
     }
 
     /// Adds intervals end to end, as music21's `interval.add` does.
@@ -711,7 +721,7 @@ impl Interval {
     }
 
     pub(crate) fn is_perfect_unison(&self) -> bool {
-        self.generic().undirected() == 1 && self.chromatic.semitones == 0
+        self.generic().undirected() == 1 && self.chromatic.semitones == 0.0
     }
 
     pub(crate) fn nice_name(&self) -> String {
@@ -774,7 +784,15 @@ impl Interval {
 
     /// The chromatic size in cents, signed.
     pub fn cents(&self) -> FloatType {
-        FloatType::from(self.semitones()) * 100.0
+        self.chromatic.cents()
+    }
+
+    /// How far the chromatic size runs past the diatonic spelling, in cents:
+    /// music21's `_diatonicIntervalCentShift`, `-50.0` for the augmented
+    /// unison between `C1` and a `C1` half-sharp.
+    pub fn diatonic_interval_cent_shift(&self) -> FloatType {
+        let diatonic_cents = self.diatonic.cents().unwrap_or(0.0);
+        self.chromatic.cents() - diatonic_cents
     }
 
     /// Whether the generic interval is a unison, whatever its quality.
@@ -809,7 +827,7 @@ impl Interval {
     /// The semitones reduced to a pitch class, `0` to `11`: music21's
     /// `chromatic.mod12`, so a descending major third is `8`.
     pub fn mod12(&self) -> IntegerType {
-        self.semitones().rem_euclid(12)
+        self.chromatic.mod12()
     }
 
     /// Moves a pitch by the interval the way music21's `transposePitch`
@@ -846,8 +864,7 @@ impl Interval {
             .octave(new_octave)
             .build()?;
         let origin_ps = p.ps() - cents_origin / 100.0;
-        let mut half_steps_to_fix =
-            self.chromatic.semitones as FloatType - (pitch2.ps() - origin_ps);
+        let mut half_steps_to_fix = self.chromatic.semitones - (pitch2.ps() - origin_ps);
         while half_steps_to_fix >= 12.0 {
             half_steps_to_fix -= 12.0;
             pitch2.octave_setter(Some(pitch2.octave().unwrap_or(4) - 1));
@@ -912,6 +929,22 @@ impl Interval {
     pub fn transpose_pitch_in_place(&self, pitch: &mut Pitch) -> Result<()> {
         *pitch = self.transpose_pitch(pitch)?;
         Ok(())
+    }
+}
+
+impl fmt::Display for Interval {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let shift = self.diatonic_interval_cent_shift();
+        if shift == 0.0 {
+            write!(f, "{}", self.directed_name())
+        } else {
+            write!(
+                f,
+                "{} {}",
+                self.directed_name(),
+                crate::pitch::Microtone::from_cents(shift, 1)
+            )
+        }
     }
 }
 
@@ -1100,7 +1133,11 @@ mod tests {
             let interval = Interval::from_generic_and_chromatic(generic, semitones).unwrap();
             assert_eq!(interval.short_name(), name, "{generic} {semitones}");
             assert_eq!(interval.directed_name(), directed, "{generic} {semitones}");
-            assert_eq!(interval.semitones(), semitones, "{generic} {semitones}");
+            assert_eq!(
+                interval.semitones(),
+                FloatType::from(semitones),
+                "{generic} {semitones}"
+            );
             assert!(interval.pitch_start().is_none());
         }
         assert!(Interval::from_generic_and_chromatic(0, 0).is_err());
@@ -1403,24 +1440,52 @@ mod tests {
     }
 
     #[test]
+    fn interval_between_microtonal_pitches_keeps_the_cent_shift() {
+        let c1 = pitch("C1");
+        let mut half_sharp = pitch("C1");
+        half_sharp.set_accidental(Some(
+            crate::pitch::Accidental::new("half-sharp").expect("half-sharp is an accidental"),
+        ));
+
+        let quarter_tone = Interval::between_pitches(&c1, &half_sharp).unwrap();
+        assert_eq!(quarter_tone.semitones(), 0.5);
+        assert_eq!(quarter_tone.cents(), 50.0);
+        assert_eq!(quarter_tone.directed_name(), "A1");
+        assert_eq!(quarter_tone.diatonic_interval_cent_shift(), -50.0);
+        assert_eq!(quarter_tone.to_string(), "A1 (-50c)");
+        assert!(quarter_tone.pythagorean_ratio().is_err());
+    }
+
+    #[test]
+    fn interval_cents_carry_a_pitch_microtone() {
+        let c4 = pitch("C4");
+        let mut d4 = pitch("D4");
+        d4.set_microtone_cents(30.0).unwrap();
+
+        let interval = Interval::between_pitches(&c4, &d4).unwrap();
+        assert_eq!(interval.cents(), 230.0);
+        assert_eq!(interval.to_string(), "M2 (+30c)");
+    }
+
+    #[test]
     fn interval_from_string_has_expected_chromatic() {
         let interval = Interval::from_name("M3").unwrap();
-        assert_eq!(interval.chromatic.semitones, 4);
+        assert_eq!(interval.chromatic.semitones, 4.0);
         assert!(!interval.implicit_diatonic);
     }
 
     #[test]
     fn interval_parser_accepts_direction_words_and_ordinals() {
         let descending = Interval::from_name("Descending Perfect Twelfth").unwrap();
-        assert_eq!(descending.semitones(), -19);
+        assert_eq!(descending.semitones(), -19.0);
         assert_eq!(descending.generic_number(), -5);
 
         let ascending = Interval::from_name("ascending Major Second").unwrap();
-        assert_eq!(ascending.semitones(), 2);
+        assert_eq!(ascending.semitones(), 2.0);
         assert_eq!(ascending.generic_number(), 2);
 
         let major_third = Interval::from_name("Major Third").unwrap();
-        assert_eq!(major_third.semitones(), 4);
+        assert_eq!(major_third.semitones(), 4.0);
         assert_eq!(major_third.generic_number(), 3);
     }
 
@@ -1428,7 +1493,7 @@ mod tests {
     fn interval_from_int_is_implicit_diatonic() {
         let interval = Interval::from_semitones(1).unwrap();
         assert!(interval.implicit_diatonic);
-        assert_eq!(interval.chromatic.semitones, 1);
+        assert_eq!(interval.chromatic.semitones, 1.0);
     }
 
     #[test]
@@ -1436,7 +1501,7 @@ mod tests {
         let c4 = pitch("C4");
         let g4 = pitch("G4");
         let interval = Interval::between(PitchOrNote::Pitch(c4), PitchOrNote::Pitch(g4)).unwrap();
-        assert_eq!(interval.chromatic.semitones, 7);
+        assert_eq!(interval.chromatic.semitones, 7.0);
         assert_eq!(interval.generic().staff_distance(), 4);
     }
 
@@ -1585,7 +1650,7 @@ mod tests {
         }
         let descending_unison = Interval::difference(&intervals(&["P5", "A5"])).unwrap();
         assert_eq!(descending_unison.directed_name(), "d1");
-        assert_eq!(descending_unison.semitones(), -1);
+        assert_eq!(descending_unison.semitones(), -1.0);
         assert!(Interval::difference(&[]).is_err());
     }
 
@@ -1603,7 +1668,7 @@ mod tests {
         let unison = Interval::from_name("P1").unwrap();
         let inverted = unison.inversion().unwrap();
 
-        assert_eq!(inverted.semitones(), 0);
+        assert_eq!(inverted.semitones(), 0.0);
         assert_eq!(inverted.generic_number(), 1);
     }
     #[test]
@@ -1628,8 +1693,8 @@ mod tests {
         // The carve-out: these must stay different.
         let minor = Interval::from_name("m3").expect("m3 parses");
         let major = Interval::from_name("M3").expect("M3 parses");
-        assert_eq!(minor.semitones(), 3);
-        assert_eq!(major.semitones(), 4);
+        assert_eq!(minor.semitones(), 3.0);
+        assert_eq!(major.semitones(), 4.0);
     }
 
     #[test]
@@ -1650,7 +1715,7 @@ mod tests {
         // directedName puts the hyphen.
         for name in ["-M2", "M-2"] {
             let interval = Interval::from_name(name).expect("descending name parses");
-            assert_eq!(interval.semitones(), -2, "{name}");
+            assert_eq!(interval.semitones(), -2.0, "{name}");
             assert_eq!(interval.generic_number(), -2, "{name}");
         }
 
@@ -1659,13 +1724,13 @@ mod tests {
         // back. music21 agrees on both spellings.
         for name in ["--M2", "-M-2"] {
             let interval = Interval::from_name(name).expect("repeated hyphen parses");
-            assert_eq!(interval.semitones(), -2, "{name}");
+            assert_eq!(interval.semitones(), -2.0, "{name}");
         }
 
         // A specifier other than major is unaffected by where the hyphen sits.
         assert_eq!(
             Interval::from_name("d-5").expect("d-5 parses").semitones(),
-            -6
+            -6.0
         );
     }
 }

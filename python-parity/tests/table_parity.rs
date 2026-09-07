@@ -184,7 +184,7 @@ fn interval_specifiers_match_music21() {
                 continue;
             }
         };
-        if interval.semitones() != expected.semitones {
+        if interval.whole_semitones() != expected.semitones {
             mismatches.push(format!(
                 "{name}: music21 {} semitones, crate {}",
                 expected.semitones,

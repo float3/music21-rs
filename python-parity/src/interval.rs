@@ -556,7 +556,7 @@ impl GenericInterval {
         Ok(format!(
             "<music21.interval.{} {}>",
             slf.get_type().qualname()?,
-            slf.borrow().inner.directed()
+            slf.borrow().inner
         ))
     }
 
@@ -785,17 +785,21 @@ impl ChromaticInterval {
     }
 }
 
-fn semitones_from_any(value: &Bound<'_, PyAny>) -> PyResult<i32> {
+fn semitones_from_any(value: &Bound<'_, PyAny>) -> PyResult<f64> {
     if let Ok(semitones) = value.extract::<i32>() {
-        return Ok(semitones);
+        return Ok(f64::from(semitones));
     }
-    let semitones: f64 = value.extract()?;
+    value.extract()
+}
+
+/// A semitone count as music21 hands it back: an `int` when it is whole, a
+/// `float` when it carries a microtone.
+fn semitone_object(py: Python<'_>, semitones: f64) -> PyResult<Py<PyAny>> {
     if semitones.fract() == 0.0 {
-        return Ok(semitones as i32);
+        Ok((semitones as i64).into_pyobject(py)?.into_any().unbind())
+    } else {
+        Ok(semitones.into_pyobject(py)?.into_any().unbind())
     }
-    Err(IntervalException::new_err(format!(
-        "music21-rs intervals are whole semitones; cannot build one from {semitones}"
-    )))
 }
 
 #[pymethods]
@@ -808,14 +812,14 @@ impl ChromaticInterval {
     ) -> PyResult<Self> {
         let semitones = match semitones {
             Some(value) => semitones_from_any(value)?,
-            None => 0,
+            None => 0.0,
         };
         Ok(Self::wrap(RsChromatic::new(semitones)))
     }
 
     #[getter]
-    fn get_semitones(&self) -> i32 {
-        self.inner.semitones()
+    fn get_semitones(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        semitone_object(py, self.inner.semitones())
     }
 
     #[setter]
@@ -830,13 +834,13 @@ impl ChromaticInterval {
     }
 
     #[getter]
-    fn directed(&self) -> i32 {
-        self.inner.directed()
+    fn directed(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        semitone_object(py, self.inner.directed())
     }
 
     #[getter]
-    fn undirected(&self) -> i32 {
-        self.inner.undirected()
+    fn undirected(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        semitone_object(py, self.inner.undirected())
     }
 
     #[getter]
@@ -1234,8 +1238,8 @@ impl Interval {
     }
 
     #[getter]
-    fn semitones(&self) -> i32 {
-        self.inner.semitones()
+    fn semitones(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        semitone_object(py, self.inner.semitones())
     }
 
     #[getter]
@@ -1426,7 +1430,7 @@ impl Interval {
         Ok(format!(
             "<music21.interval.{} {}>",
             slf.get_type().qualname()?,
-            slf.borrow().inner.directed_name()
+            slf.borrow().inner
         ))
     }
 
@@ -1522,13 +1526,14 @@ fn interval_to_pythagorean_ratio<'py>(
     intervalObj: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let interval = interval_from_any(intervalObj)?;
-    let ratio = interval.pythagorean_ratio().map_err(interval_error)?;
-    let numer = *ratio.numer().ok_or_else(|| {
-        IntervalException::new_err(format!("no Pythagorean ratio for {}", interval.name()))
-    })?;
-    let denom = *ratio.denom().ok_or_else(|| {
-        IntervalException::new_err(format!("no Pythagorean ratio for {}", interval.name()))
-    })?;
+    let no_ratio = || {
+        IntervalException::new_err(format!(
+            "Could not find a pythagorean ratio for <music21.interval.Interval {interval}>."
+        ))
+    };
+    let ratio = interval.pythagorean_ratio().map_err(|_| no_ratio())?;
+    let numer = *ratio.numer().ok_or_else(no_ratio)?;
+    let denom = *ratio.denom().ok_or_else(no_ratio)?;
     let fractions = py.import("fractions")?;
     fractions.getattr("Fraction")?.call1((numer, denom))
 }

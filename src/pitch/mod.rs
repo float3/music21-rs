@@ -1854,7 +1854,7 @@ fn weighted_dissonance_score(
         if triad_award {
             intervals.into_iter().for_each(|interval| {
                 let simple_directed = interval.generic().simple_directed();
-                let interval_semitones = interval.chromatic.semitones % 12;
+                let interval_semitones = interval.chromatic.whole_semitones() % 12;
                 if (simple_directed == 3 && (interval_semitones == 3 || interval_semitones == 4))
                     || (simple_directed == 6
                         && (interval_semitones == 8 || interval_semitones == 9))

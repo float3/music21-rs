@@ -203,6 +203,13 @@ signatures change, so the next release needs a minor bump.
   `written_higher_pitch`, `written_lower_pitch`, `absolute_higher_pitch`,
   `absolute_lower_pitch` and `staff_distance_to_generic_number`.
 - `Note::transpose`, `Key::transpose` and `Key::as_scale`.
+- `Interval` implements `Display` as music21's interval `repr` does — the
+  directed name plus the cent shift past its diatonic spelling, so the
+  interval from `C1` to a `C1` half-sharp reads `A1 (-50c)` — and
+  `Interval::diatonic_interval_cent_shift` is that shift on its own.
+- `ChromaticInterval::from_int` and `whole_semitones`, and
+  `Interval::whole_semitones`, for the whole-semitone count where the
+  fractional one is not wanted.
 
 ## Bug Fixes
 
@@ -213,6 +220,12 @@ signatures change, so the next release needs a minor bump.
   rounded `261.6256`.
 - Transposing with no accidental limit errors past quadruple accidentals
   instead of silently respelling, as music21 does.
+- Microtonal intervals survive. `ChromaticInterval` counts fractional
+  semitones as music21's does, and `notes_to_chromatic` no longer rounds the
+  pitch-space distance away, so the interval between `C1` and a `C1`
+  half-sharp is half a semitone rather than one, transposing by it lands on
+  `C~1` rather than `C#1`, and `Interval::pythagorean_ratio` reports that a
+  quarter tone has no Pythagorean ratio instead of answering `2187/2048`.
 - A `PitchOptions` with both a name and an accidental keeps the accidental
   (`name("D").accidental("--")` is `D--`, not `D`), and a pitch built from a
   number stays marked as having inferred spelling, so transposing it
@@ -231,6 +244,11 @@ signatures change, so the next release needs a minor bump.
 
 ## Breaking Changes
 
+- `ChromaticInterval::semitones`, `directed`, `undirected` and
+  `Interval::semitones` return `FloatType` rather than `IntegerType`, and
+  `ChromaticInterval::new` takes a `FloatType`. `ChromaticInterval` is no
+  longer `Eq` or `Hash`. `mod12`, `simple_directed`, `simple_undirected` and
+  `interval_class` still return `IntegerType`, off the rounded count.
 - `Chord::inversion` now follows music21: it is the chord step the bass
   occupies above the music21 root, so `C F G` is second inversion and
   `A- C F#` is first inversion with root `F#`, and it is `None` only for an
