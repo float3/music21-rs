@@ -14,7 +14,9 @@ use music21_rs::{
 
 use crate::interval::interval_from_any;
 use crate::notation::{Lyric, Style, StyleOwner, Tie, Volume, tie_from_any, volume_from_any};
-use crate::note::{Duration, Note, duration_from_any, note_from_any};
+use crate::note::{
+    Duration, Note, augment_or_diminish_note, duration_from_any, grace_note, note_from_any,
+};
 use crate::pitch::{Accidental, Pitch, message, pitch_from_any};
 
 /// The names the key facade provides, for swapping into `music21.key`.
@@ -1330,6 +1332,26 @@ impl Chord {
         } else {
             Ok(Some(Self::from_inner(py, sorted)?))
         }
+    }
+
+    /// music21's `GeneralNote.augmentOrDiminish`.
+    #[pyo3(signature = (scalar, *, inPlace = false))]
+    fn augmentOrDiminish<'py>(
+        slf: &Bound<'py, Self>,
+        scalar: f64,
+        inPlace: bool,
+    ) -> PyResult<Option<Bound<'py, PyAny>>> {
+        augment_or_diminish_note(slf.as_any(), scalar, inPlace)
+    }
+
+    /// music21's `GeneralNote.getGrace`.
+    #[pyo3(signature = (*, appoggiatura = false, inPlace = false))]
+    fn getGrace<'py>(
+        slf: &Bound<'py, Self>,
+        appoggiatura: bool,
+        inPlace: bool,
+    ) -> PyResult<Option<Bound<'py, PyAny>>> {
+        grace_note(slf.as_any(), appoggiatura, inPlace)
     }
 
     #[pyo3(signature = (value, *, inPlace = false))]

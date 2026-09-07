@@ -131,14 +131,54 @@ impl Tie {
 
 /// music21's `note.Lyric`.
 #[pyclass(name = "Lyric", module = "music21.note", skip_from_py_object)]
-#[derive(Clone)]
 pub struct Lyric {
     pub(crate) inner: RsLyric,
+    /// The syllables an elided lyric is made of, as the Python objects a
+    /// caller handed over.
+    ///
+    /// They are kept as objects rather than as values because music21's
+    /// elisions are edited after the fact — the madrigal example sets the
+    /// elision character and then the syllabic on a component already inside
+    /// the composite, and both have to show through.
+    components: Vec<Py<Lyric>>,
 }
 
 impl Lyric {
     pub(crate) fn wrap(inner: RsLyric) -> Self {
-        Self { inner }
+        Self {
+            inner,
+            components: Vec::new(),
+        }
+    }
+
+    /// This lyric as a value, with whatever its component objects say now
+    /// written into it, so the crate answers every question about it.
+    pub(crate) fn synced(&self, py: Python<'_>) -> RsLyric {
+        if self.components.is_empty() {
+            return self.inner.clone();
+        }
+        let mut lyric = self.inner.clone();
+        lyric.set_components(
+            self.components
+                .iter()
+                .map(|component| component.borrow(py).synced(py))
+                .collect(),
+        );
+        lyric
+    }
+}
+
+impl Clone for Lyric {
+    /// A copy takes copies of its syllables, as a deepcopy of music21's does.
+    fn clone(&self) -> Self {
+        Python::attach(|py| Self {
+            inner: self.inner.clone(),
+            components: self
+                .components
+                .iter()
+                .filter_map(|component| Py::new(py, component.borrow(py).clone()).ok())
+                .collect(),
+        })
     }
 }
 
@@ -167,22 +207,26 @@ impl Lyric {
     }
 
     #[getter]
-    fn get_text(&self) -> String {
-        self.inner.text()
+    fn get_text(&self, py: Python<'_>) -> String {
+        self.synced(py).text()
     }
 
+    /// Setting the text of an elided lyric makes it an ordinary one, since
+    /// the syllables it was made of are what the text used to come from.
     #[setter]
     fn set_text(&mut self, value: &str) {
+        self.components = Vec::new();
         self.inner.set_text(value);
     }
 
     #[getter]
-    fn get_rawText(&self) -> String {
-        self.inner.raw_text()
+    fn get_rawText(&self, py: Python<'_>) -> String {
+        self.synced(py).raw_text()
     }
 
     #[setter]
     fn set_rawText(&mut self, value: &str) {
+        self.components = Vec::new();
         self.inner.set_raw_text(value);
     }
 
@@ -203,8 +247,8 @@ impl Lyric {
     }
 
     #[getter]
-    fn get_syllabic(&self) -> &'static str {
-        self.inner.syllabic().as_str()
+    fn get_syllabic(&self, py: Python<'_>) -> &'static str {
+        self.synced(py).syllabic().as_str()
     }
 
     #[setter]
@@ -230,23 +274,21 @@ impl Lyric {
     }
 
     #[getter]
-    fn isComposite(&self) -> bool {
-        self.inner.is_composite()
+    fn isComposite(&self, py: Python<'_>) -> bool {
+        self.synced(py).is_composite()
     }
 
     /// music21's `components`: the lyrics a composite one is made of, and
     /// `None` when it is an ordinary syllable.
     #[getter]
-    fn get_components(&self) -> Option<Vec<Lyric>> {
-        if !self.inner.is_composite() {
+    fn get_components(&self, py: Python<'_>) -> Option<Vec<Py<Lyric>>> {
+        if self.components.is_empty() {
             return None;
         }
         Some(
-            self.inner
-                .components()
+            self.components
                 .iter()
-                .cloned()
-                .map(Lyric::wrap)
+                .map(|component| component.clone_ref(py))
                 .collect(),
         )
     }
@@ -254,14 +296,15 @@ impl Lyric {
     #[setter]
     fn set_components(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
         let Some(value) = value.filter(|value| !value.is_none()) else {
+            self.components = Vec::new();
             self.inner.set_components(Vec::new());
             return Ok(());
         };
         let mut components = Vec::new();
         for item in value.try_iter()? {
-            components.push(item?.extract::<PyRef<'_, Lyric>>()?.inner.clone());
+            components.push(item?.extract::<Py<Lyric>>()?);
         }
-        self.inner.set_components(components);
+        self.components = components;
         Ok(())
     }
 
@@ -287,27 +330,28 @@ impl Lyric {
         }
     }
 
-    fn __eq__(&self, other: &Bound<'_, PyAny>) -> bool {
+    fn __eq__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> bool {
         other
             .extract::<PyRef<Lyric>>()
-            .is_ok_and(|other| other.inner == self.inner)
+            .is_ok_and(|other| other.synced(py) == self.synced(py))
     }
 
     fn __hash__(&self) -> isize {
         self.inner.number() as isize
     }
 
-    fn __repr__(&self) -> String {
+    fn __repr__(&self, py: Python<'_>) -> String {
+        let lyric = self.synced(py);
         format!(
             "<music21.note.Lyric number={} syllabic={} text='{}'>",
-            self.inner.number(),
-            self.inner.syllabic(),
-            self.inner.text()
+            lyric.number(),
+            lyric.syllabic(),
+            lyric.text()
         )
     }
 
-    fn __str__(&self) -> String {
-        self.inner.text()
+    fn __str__(&self, py: Python<'_>) -> String {
+        self.synced(py).text()
     }
 
     fn __deepcopy__(&self, _memo: &Bound<'_, PyAny>) -> Self {
@@ -321,14 +365,28 @@ impl Lyric {
 
 /// music21's `volume.Volume`.
 #[pyclass(name = "Volume", module = "music21.volume", skip_from_py_object)]
-#[derive(Clone)]
 pub struct Volume {
     pub(crate) inner: RsVolume,
+    /// The note or chord this volume belongs to. music21's `_setVolume`
+    /// reads the slot to decide whether the volume is already spoken for —
+    /// a volume that has a client is copied rather than stolen — so without
+    /// it music21's own `NotRest` cannot take one of ours at all.
+    client: Option<Py<PyAny>>,
 }
 
 impl Volume {
     pub(crate) fn wrap(inner: RsVolume) -> Self {
-        Self { inner }
+        Self {
+            inner,
+            client: None,
+        }
+    }
+}
+
+impl Clone for Volume {
+    /// A copy of a volume belongs to nobody yet, as music21's does.
+    fn clone(&self) -> Self {
+        Self::wrap(self.inner.clone())
     }
 }
 
@@ -355,7 +413,6 @@ impl Volume {
         velocityScalar: Option<f64>,
         velocityIsRelative: bool,
     ) -> PyResult<Self> {
-        let _ = client;
         let mut inner = RsVolume::new();
         if let Some(velocity) = velocity {
             inner.set_velocity(Some(velocity));
@@ -365,7 +422,22 @@ impl Volume {
                 .map_err(volume_error)?;
         }
         inner.set_velocity_is_relative(velocityIsRelative);
-        Ok(Self::wrap(inner))
+        let mut volume = Self::wrap(inner);
+        volume.set_client(client);
+        Ok(volume)
+    }
+
+    /// music21's `client`: the note or chord this volume is the volume of.
+    #[getter]
+    fn get_client(&self, py: Python<'_>) -> Option<Py<PyAny>> {
+        self.client.as_ref().map(|client| client.clone_ref(py))
+    }
+
+    #[setter]
+    fn set_client(&mut self, value: Option<&Bound<'_, PyAny>>) {
+        self.client = value
+            .filter(|value| !value.is_none())
+            .map(|value| value.clone().unbind());
     }
 
     #[getter]

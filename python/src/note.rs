@@ -593,6 +593,55 @@ impl Duration {
     }
 }
 
+/// music21's `GeneralNote.augmentOrDiminish`: the same note with its length
+/// scaled, in place or as a copy.
+///
+/// Written against the Python object rather than against either facade,
+/// because music21 writes it once on `GeneralNote` and both a note and a
+/// chord inherit it — and because scaling is entirely a question for the
+/// duration, whichever of the two is holding it.
+pub(crate) fn augment_or_diminish_note<'py>(
+    note: &Bound<'py, PyAny>,
+    scalar: f64,
+    in_place: bool,
+) -> PyResult<Option<Bound<'py, PyAny>>> {
+    if scalar <= 0.0 || scalar.is_nan() {
+        return Err(NoteException::new_err("scalar must be greater than zero"));
+    }
+    let target = target_note(note, in_place)?;
+    let scaled = target
+        .getattr("duration")?
+        .call_method1("augmentOrDiminish", (scalar,))?;
+    target.setattr("duration", scaled)?;
+    Ok(if in_place { None } else { Some(target) })
+}
+
+/// music21's `GeneralNote.getGrace`: the same note written as it was and
+/// sounding nothing.
+pub(crate) fn grace_note<'py>(
+    note: &Bound<'py, PyAny>,
+    appoggiatura: bool,
+    in_place: bool,
+) -> PyResult<Option<Bound<'py, PyAny>>> {
+    let target = target_note(note, in_place)?;
+    let grace = target
+        .getattr("duration")?
+        .call_method1("getGraceDuration", (appoggiatura,))?;
+    target.setattr("duration", grace)?;
+    Ok(if in_place { None } else { Some(target) })
+}
+
+/// The note the change lands on: this one, or a deep copy of it.
+fn target_note<'py>(note: &Bound<'py, PyAny>, in_place: bool) -> PyResult<Bound<'py, PyAny>> {
+    if in_place {
+        return Ok(note.clone());
+    }
+    note.py()
+        .import("copy")?
+        .getattr("deepcopy")?
+        .call1((note,))
+}
+
 /// Reads a duration argument: a `Duration`, a quarter length, or a type name
 /// such as `"half"`.
 pub(crate) fn duration_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsDuration> {
@@ -1148,6 +1197,12 @@ impl Duration {
     #[getter]
     fn fullName(&self) -> String {
         self.inner.full_name()
+    }
+
+    /// music21's `isGrace`, which only a `GraceDuration` says yes to.
+    #[getter]
+    fn isGrace(&self) -> bool {
+        false
     }
 
     fn __eq__(slf: &Bound<'_, Self>, other: &Bound<'_, PyAny>) -> PyResult<bool> {
@@ -1904,6 +1959,26 @@ impl Note {
             lyric.set_identifier(lyricIdentifier);
         }
         Ok(())
+    }
+
+    /// music21's `GeneralNote.augmentOrDiminish`.
+    #[pyo3(signature = (scalar, *, inPlace = false))]
+    fn augmentOrDiminish<'py>(
+        slf: &Bound<'py, Self>,
+        scalar: f64,
+        inPlace: bool,
+    ) -> PyResult<Option<Bound<'py, PyAny>>> {
+        augment_or_diminish_note(slf.as_any(), scalar, inPlace)
+    }
+
+    /// music21's `GeneralNote.getGrace`.
+    #[pyo3(signature = (*, appoggiatura = false, inPlace = false))]
+    fn getGrace<'py>(
+        slf: &Bound<'py, Self>,
+        appoggiatura: bool,
+        inPlace: bool,
+    ) -> PyResult<Option<Bound<'py, PyAny>>> {
+        grace_note(slf.as_any(), appoggiatura, inPlace)
     }
 
     #[pyo3(signature = (value, *, inPlace = false))]
