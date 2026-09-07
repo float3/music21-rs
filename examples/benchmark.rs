@@ -38,4 +38,14 @@ fn main() {
     });
     let chord = Chord::new("C4 E4 G4").unwrap();
     time("Chord::common_name()", n / 10, || chord.common_name());
+    time("  Chord::orderedPitchClasses (str)", n / 10, || {
+        chord.ordered_pitch_classes_string()
+    });
+    time("  Chord::root()", n / 10, || chord.root().cloned());
+    time("  Chord::forte_class()", n / 10, || chord.forte_class());
+    time("  Chord::inversion()", n / 10, || chord.inversion());
+    time("  Chord::is_dominant_seventh()", n / 10, || {
+        chord.is_dominant_seventh()
+    });
+    time("  Chord::third()", n / 10, || chord.third().cloned());
 }
