@@ -15,7 +15,8 @@ use music21_rs::{
 use crate::interval::interval_from_any;
 use crate::notation::{Lyric, Style, StyleOwner, Tie, Volume, tie_from_any, volume_from_any};
 use crate::note::{
-    Duration, Note, augment_or_diminish_note, duration_from_any, grace_note, note_from_any,
+    Duration, Note, augment_or_diminish_note, duration_from_any, grace_note, instrument_for_note,
+    note_from_any,
 };
 use crate::pitch::{Accidental, Pitch, message, pitch_from_any};
 
@@ -50,6 +51,10 @@ pub struct Chord {
     duration: Option<Py<Duration>>,
     /// The chord's own `Volume`, likewise.
     volume: Option<Py<Volume>>,
+    /// music21's `storedInstrument`: the instrument this chord is played on,
+    /// when it is not simply the one the part is written for. The crate
+    /// models no instruments, so the object is kept as it was given.
+    stored_instrument: Option<Py<PyAny>>,
 }
 
 impl Chord {
@@ -61,6 +66,7 @@ impl Chord {
             notes: Vec::new(),
             duration: None,
             volume: None,
+            stored_instrument: None,
         };
         chord.rebuild_notes(py)?;
         Ok(chord)
@@ -108,6 +114,7 @@ impl Chord {
             notes,
             duration: Some(duration),
             volume: None,
+            stored_instrument: None,
         })
     }
 
@@ -1391,6 +1398,31 @@ impl Chord {
         inPlace: bool,
     ) -> PyResult<Option<Bound<'py, PyAny>>> {
         augment_or_diminish_note(slf.as_any(), scalar, inPlace)
+    }
+
+    /// music21's `NotRest.getInstrument`.
+    #[pyo3(signature = (*, returnDefault = true))]
+    fn getInstrument<'py>(
+        slf: &Bound<'py, Self>,
+        returnDefault: bool,
+    ) -> PyResult<Option<Bound<'py, PyAny>>> {
+        instrument_for_note(slf.as_any(), returnDefault)
+    }
+
+    /// music21's `storedInstrument`: the instrument this chord is played on,
+    /// when it is not simply the one the part is written for.
+    #[getter]
+    fn get_storedInstrument(&self, py: Python<'_>) -> Option<Py<PyAny>> {
+        self.stored_instrument
+            .as_ref()
+            .map(|instrument| instrument.clone_ref(py))
+    }
+
+    #[setter]
+    fn set_storedInstrument(&mut self, value: Option<&Bound<'_, PyAny>>) {
+        self.stored_instrument = value
+            .filter(|value| !value.is_none())
+            .map(|value| value.clone().unbind());
     }
 
     /// music21's `GeneralNote.getGrace`.

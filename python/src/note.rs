@@ -8,8 +8,9 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyFloat, PyList, PyTuple};
 
 use music21_rs::{
-    Duration as RsDuration, DurationType as RsDurationType, Note as RsNote, Notehead as RsNotehead,
-    Pitch as RsPitch, StemDirection as RsStemDirection, Tuplet as RsTuplet,
+    Duration as RsDuration, DurationType as RsDurationType, KeySignature as RsKeySignature,
+    Note as RsNote, Notehead as RsNotehead, Pitch as RsPitch, StemDirection as RsStemDirection,
+    Tuplet as RsTuplet,
 };
 
 use crate::interval::transpose_pitch_by_any;
@@ -907,6 +908,63 @@ impl Duration {
     }
 }
 
+/// The key signature in force where this note sits, if it sits anywhere.
+///
+/// The search up the containing streams is music21's `getContextByClass`,
+/// since it is music21 that holds the streams. A signature found this way is
+/// as often music21's own class as ours, so it is read off its `sharps`.
+fn key_signature_around(note: &Bound<'_, PyAny>) -> PyResult<Option<RsKeySignature>> {
+    if !note.hasattr("getContextByClass")? {
+        return Ok(None);
+    }
+    let found = note.call_method1("getContextByClass", ("KeySignature",))?;
+    if found.is_none() {
+        return Ok(None);
+    }
+    let Ok(sharps) = found.getattr("sharps").and_then(|s| s.extract::<i32>()) else {
+        return Ok(None);
+    };
+    Ok(Some(RsKeySignature::new(sharps)))
+}
+
+/// music21's `NotRest.getInstrument`: the instrument stored on this note,
+/// or the one in force where it sits.
+///
+/// The search up the containing streams is music21's, as is the default
+/// instrument it falls back to; the crate models neither streams nor
+/// instruments. Written against the Python object because music21 writes it
+/// once on `NotRest` and both a note and a chord inherit it.
+pub(crate) fn instrument_for_note<'py>(
+    note: &Bound<'py, PyAny>,
+    return_default: bool,
+) -> PyResult<Option<Bound<'py, PyAny>>> {
+    let stored = note.getattr("storedInstrument")?;
+    if !stored.is_none() {
+        return Ok(Some(stored));
+    }
+    let py = note.py();
+    let Ok(instrument) = py.import("music21.instrument") else {
+        return Ok(None);
+    };
+    let mut found = py.None().into_bound(py);
+    if note.hasattr("getContextByClass")? {
+        let keywords = PyDict::new(py);
+        keywords.set_item("followDerivation", false)?;
+        found = note.call_method(
+            "getContextByClass",
+            (instrument.getattr("Instrument")?,),
+            Some(&keywords),
+        )?;
+    }
+    if !found.is_none() {
+        return Ok(Some(found));
+    }
+    if return_default {
+        return Ok(Some(instrument.getattr("Instrument")?.call0()?));
+    }
+    Ok(None)
+}
+
 /// music21's `GeneralNote.augmentOrDiminish`: the same note with its length
 /// scaled, in place or as a copy.
 ///
@@ -1729,6 +1787,21 @@ pub struct Note {
     /// no such list is a note music21's own notation code cannot process.
     expressions: Option<Py<PyList>>,
     articulations: Option<Py<PyList>>,
+    /// music21's `storedInstrument`: the instrument this one note is played
+    /// on, when it is not simply the one the part is written for. The crate
+    /// models no instruments, so whatever object a caller stores is kept as
+    /// it was given.
+    stored_instrument: Option<Py<PyAny>>,
+    /// Whatever was assigned through `pitches` that was not a pitch.
+    ///
+    /// music21's `pitches` setter takes the first item of the sequence and
+    /// stores it as the pitch without looking at it, so `n.pitches = ('C4',)`
+    /// leaves a *string* where the pitch should be, and its own docstring
+    /// says so: "Don't use strings, or you will get a string back!". The
+    /// note goes on answering every musical question from the pitch it
+    /// already had, which is what music21 does too — nothing there reads the
+    /// stored value except `.pitch`.
+    unread_pitch: Option<Py<PyAny>>,
 }
 
 impl Note {
@@ -1744,6 +1817,8 @@ impl Note {
             chord: None,
             expressions: None,
             articulations: None,
+            stored_instrument: None,
+            unread_pitch: None,
         })
     }
 
@@ -1768,6 +1843,8 @@ impl Note {
                 chord: None,
                 expressions: None,
                 articulations: None,
+                stored_instrument: None,
+                unread_pitch: None,
             },
         )?;
         Self::claim_pitch(py, &note);
@@ -1949,9 +2026,8 @@ impl Note {
         Ok(note)
     }
 
-    /// music21's `.pitch`, the same object every time: an edit through it
-    /// is an edit to the note, and to the chord holding the note.
-    #[getter]
+    /// The note's own `Pitch` object, the same one every time: an edit
+    /// through it is an edit to the note, and to the chord holding the note.
     pub(crate) fn get_pitch(slf: &Bound<'_, Self>) -> Py<Pitch> {
         let py = slf.py();
         let pitch = slf.borrow().pitch.clone_ref(py);
@@ -1962,8 +2038,23 @@ impl Note {
     #[setter]
     fn set_pitch(slf: &Bound<'_, Self>, value: &Bound<'_, PyAny>) -> PyResult<()> {
         let pitch = pitch_from_any(value)?;
-        slf.borrow_mut().inner.set_pitch(pitch);
+        {
+            let mut me = slf.borrow_mut();
+            me.inner.set_pitch(pitch);
+            me.unread_pitch = None;
+        }
         Self::broadcast_pitch(slf.py(), &slf.clone().unbind())
+    }
+
+    /// music21's `.pitch`, which is whatever is stored there — a `Pitch`
+    /// unless something put a bare value in through `pitches`.
+    #[getter(pitch)]
+    fn pitch_attribute(slf: &Bound<'_, Self>) -> Py<PyAny> {
+        let py = slf.py();
+        if let Some(unread) = &slf.borrow().unread_pitch {
+            return unread.clone_ref(py);
+        }
+        Self::get_pitch(slf).into_any()
     }
 
     #[getter]
@@ -2052,7 +2143,15 @@ impl Note {
         let Some(first) = value.try_iter()?.next() else {
             return Err(refused());
         };
-        Self::set_pitch(slf, &first?)
+        let first = first?;
+        // music21 stores the first item without looking at it. A value that
+        // is not a pitch is kept as it was given and handed back by `.pitch`,
+        // which is the footgun its own docstring warns about.
+        if pitch_from_any(&first).is_err() || first.extract::<String>().is_ok() {
+            slf.borrow_mut().unread_pitch = Some(first.unbind());
+            return Ok(());
+        }
+        Self::set_pitch(slf, &first)
     }
 
     #[getter]
@@ -2364,7 +2463,15 @@ impl Note {
         inPlace: bool,
     ) -> PyResult<Option<Py<Self>>> {
         let py = slf.py();
-        let pitch = transpose_pitch_by_any(slf.borrow().inner.pitch(), value)?;
+        let mut pitch = transpose_pitch_by_any(slf.borrow().inner.pitch(), value)?;
+        // A move given as a number of semitones says how far, not how to
+        // spell what it lands on, so music21 lets the key signature in force
+        // decide: a semitone above F is F# in D major and G- in B-flat minor.
+        if value.extract::<i32>().is_ok()
+            && let Some(signature) = key_signature_around(slf.as_any())?
+        {
+            pitch = pitch.respelled_for(&signature).map_err(note_error)?;
+        }
         if inPlace {
             slf.borrow_mut().inner.set_pitch(pitch);
             Self::broadcast_pitch(py, &slf.clone().unbind())?;
@@ -2424,6 +2531,30 @@ impl Note {
     fn __copy__<'py>(slf: &Bound<'py, Self>, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let copied = slf.borrow().copied(py)?;
         crate::copy_as_same_type(slf, copied)
+    }
+
+    /// music21's `storedInstrument`.
+    #[getter]
+    fn get_storedInstrument(&self, py: Python<'_>) -> Option<Py<PyAny>> {
+        self.stored_instrument
+            .as_ref()
+            .map(|instrument| instrument.clone_ref(py))
+    }
+
+    #[setter]
+    fn set_storedInstrument(&mut self, value: Option<&Bound<'_, PyAny>>) {
+        self.stored_instrument = value
+            .filter(|value| !value.is_none())
+            .map(|value| value.clone().unbind());
+    }
+
+    /// music21's `NotRest.getInstrument`.
+    #[pyo3(signature = (*, returnDefault = true))]
+    fn getInstrument<'py>(
+        slf: &Bound<'py, Self>,
+        returnDefault: bool,
+    ) -> PyResult<Option<Bound<'py, PyAny>>> {
+        instrument_for_note(slf.as_any(), returnDefault)
     }
 
     /// music21's `expressions`: the ornaments written over this note. The

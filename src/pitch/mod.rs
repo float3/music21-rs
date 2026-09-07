@@ -1109,6 +1109,28 @@ impl Pitch {
     /// Returns the enharmonic music21's `getEnharmonic` picks: sharps respell
     /// upward and flats downward, and a natural goes down for C, D and G and
     /// up for the rest, so C is B-sharp and E is F-flat.
+    /// This pitch respelled to agree with a key signature, when the two
+    /// disagree about the same sounding note.
+    ///
+    /// This is the rule music21 applies after transposing by a number of
+    /// semitones: a `G-` in a key that writes an `F#` is written `F#`, and
+    /// the other way round, because a chromatic step says how far to move
+    /// and not how to spell what it lands on. A pitch with no accidental,
+    /// or one the signature does not alter, is left as it is.
+    pub fn respelled_for(&self, signature: &crate::key::KeySignature) -> Result<Pitch> {
+        if !self.has_accidental() {
+            return Ok(self.clone());
+        }
+        let alter = self.accidental().alter();
+        for altered in signature.altered_pitches()? {
+            if altered.pitch_class() == self.pitch_class() && altered.accidental().alter() != alter
+            {
+                return self.get_enharmonic();
+            }
+        }
+        Ok(self.clone())
+    }
+
     pub fn get_enharmonic(&self) -> Result<Pitch> {
         let alter = self.accidental.alter();
         let downward = if alter > 0.0 {
@@ -1939,6 +1961,34 @@ fn cents_to_alter_and_cents(shift: FloatType) -> (FloatType, FloatType) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_pitch_is_respelled_to_agree_with_the_key_signature() {
+        use crate::key::KeySignature;
+        // music21's own example: a semitone above F is F# in D major and
+        // G- in B-flat minor, because the signature spells that note.
+        let f_sharp = Pitch::from_name("F#4").unwrap();
+        assert_eq!(
+            f_sharp.respelled_for(&KeySignature::new(2)).unwrap().name(),
+            "F#"
+        );
+        assert_eq!(
+            f_sharp
+                .respelled_for(&KeySignature::new(-5))
+                .unwrap()
+                .name(),
+            "G-"
+        );
+        // A pitch the signature says nothing about is left alone, and so is
+        // one carrying no accidental at all.
+        assert_eq!(
+            Pitch::from_name("C4")
+                .unwrap()
+                .respelled_for(&KeySignature::new(-5))
+                .unwrap()
+                .name(),
+            "C"
+        );
+    }
 
     #[test]
     fn an_octave_digit_may_sit_anywhere_after_the_step() {
