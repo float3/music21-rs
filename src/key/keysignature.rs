@@ -90,11 +90,11 @@ pub fn pitch_to_sharps(pitch_value: &Pitch, mode: Option<&str>) -> Result<Intege
     }
     sharps += 7 * pitch_value.accidental().alter() as IntegerType;
 
-    if let Some(mode) = mode {
-        let Some(mode_offset) = mode_sharps_alter(mode) else {
-            return Err(Error::Key(format!("unknown mode {mode}")));
-        };
-        sharps += mode_offset;
+    // A mode nobody has a signature alteration for leaves the signature
+    // where the major key put it, which is what music21 does: `C
+    // hypomixolydian` is written with no sharps and no flats.
+    if let Some(offset) = mode.and_then(mode_sharps_alter) {
+        sharps += offset;
     }
 
     Ok(sharps)

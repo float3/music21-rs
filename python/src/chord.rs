@@ -134,6 +134,12 @@ impl Chord {
 
     /// Replaces the whole chord, rebuilding the note objects: what a caller
     /// standing on a chord does when the chord it stands for changes.
+    /// The chord's own pitches as values, for a caller that wants to work
+    /// on them and hand the whole chord back.
+    pub(crate) fn value_pitches(&self) -> Vec<music21_rs::Pitch> {
+        self.inner.pitches()
+    }
+
     pub(crate) fn replace_value(&mut self, py: Python<'_>, inner: RsChord) -> PyResult<()> {
         self.replace_inner(py, inner)
     }
@@ -325,7 +331,7 @@ impl Chord {
         Ok(created)
     }
 
-    fn quarter_length(&self, py: Python<'_>) -> f64 {
+    pub(crate) fn quarter_length(&self, py: Python<'_>) -> f64 {
         match &self.duration {
             Some(duration) => duration.borrow(py).inner.quarter_length(),
             None => self

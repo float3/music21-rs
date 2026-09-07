@@ -13,9 +13,10 @@ use pyo3::exceptions::{PyException, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
+use music21_rs::roman as rs_roman;
 use music21_rs::{
-    Chord as RsChord, Interval as RsInterval, Key as RsKey, Minor67Default as RsMinor67Default,
-    RomanNumeral as RsRomanNumeral,
+    Chord as RsChord, ImpliedQuality as RsImpliedQuality, Interval as RsInterval, Key as RsKey,
+    Minor67Default as RsMinor67Default, RomanNumeral as RsRomanNumeral,
 };
 
 use crate::chord::Chord;
@@ -60,6 +61,52 @@ pub struct RomanNumeral {
     /// music21's `functionalityScore` when a caller has set one, which wins
     /// over the score the figure is looked up under.
     score: Option<u8>,
+    /// The key or scale object the numeral was given, kept so that `key` is
+    /// the very object the caller handed over.
+    ///
+    /// music21 stores what it was given and hands it back, so a numeral built
+    /// on a scale reports that scale — which has no mode, and is why such a
+    /// numeral is never modal mixture — and an edit to the key's mode is one
+    /// the numeral sees.
+    key_object: Option<Py<PyAny>>,
+    /// Whether the numeral was told not to work its notes out.
+    ///
+    /// music21's `updatePitches=False` is how a caller says it wants the
+    /// figure read and nothing else, which is faster when only the figure is
+    /// wanted. The chord is then empty until something asks for it again.
+    silent: bool,
+    /// A numeral built with no figure at all.
+    ///
+    /// music21 starts one of these and then walks it through its parsing
+    /// steps, so a blank numeral has no figure, no notes and no key, and
+    /// every field a parsing step writes starts empty.
+    blank: bool,
+    /// What the parsing steps have written, which stands over what the
+    /// figure says.
+    state: ParseState,
+}
+
+/// The fields music21's parsing steps write on a numeral as they read its
+/// figure, each empty until a step writes it.
+///
+/// The crate answers all of these from the figure, so nothing here is needed
+/// to read a numeral. They exist because music21 exposes the steps
+/// themselves, and a caller — or music21's own `romanText` parser — may run
+/// one and then ask what it wrote.
+#[derive(Default)]
+struct ParseState {
+    degree: Option<u8>,
+    implied_quality: Option<RsImpliedQuality>,
+    /// The alteration in front of the numeral, in semitones. Zero is an
+    /// alteration a step deliberately cleared.
+    alteration: Option<i8>,
+    numeral_alone: Option<String>,
+    bracketed: Option<Vec<(i8, u8)>>,
+    omitted: Option<Vec<u8>>,
+    added: Option<Vec<(i8, u8)>>,
+    /// `Some(None)` is a secondary numeral a step deliberately cleared.
+    secondary: Option<Option<Py<PyAny>>>,
+    secondary_key: Option<Option<Py<PyAny>>>,
 }
 
 impl RomanNumeral {
@@ -69,6 +116,10 @@ impl RomanNumeral {
             octave,
             implied_key: false,
             score: None,
+            key_object: None,
+            silent: false,
+            blank: false,
+            state: ParseState::default(),
         }
     }
 
@@ -77,6 +128,7 @@ impl RomanNumeral {
         let octave = slf.borrow().octave;
         let mut numeral = Self::wrap(rebuilt, octave);
         numeral.implied_key = slf.borrow().implied_key;
+        slf.borrow_mut().blank = false;
         let chord = numeral.chord()?;
         slf.as_super().borrow_mut().replace_value(py, chord)?;
         slf.borrow_mut().inner = numeral.inner;
@@ -98,6 +150,7 @@ impl RomanNumeral {
     ) -> PyResult<Self> {
         let given = keyOrScale.filter(|value| !value.is_none()).is_some();
         let (key, octave) = key_and_octave(keyOrScale)?;
+        let blank = figure.filter(|value| !value.is_none()).is_none();
         let figure = match figure.filter(|value| !value.is_none()) {
             None => "I".to_string(),
             Some(value) => match value.extract::<usize>() {
@@ -115,7 +168,57 @@ impl RomanNumeral {
         .map_err(roman_error)?;
         let mut numeral = Self::wrap(inner, octave);
         numeral.implied_key = !given;
+        numeral.blank = blank;
+        numeral.silent = !update_pitches(keywords)?;
+        numeral.key_object = keyOrScale
+            .filter(|value| !value.is_none() && value.extract::<String>().is_err())
+            .map(|value| value.clone().unbind());
         Ok(numeral)
+    }
+
+    /// The alteration in front of the numeral, in semitones: what a parsing
+    /// step wrote if one did, and otherwise what the figure was written with.
+    fn front_alteration(&self) -> i8 {
+        if let Some(alteration) = self.state.alteration {
+            return alteration;
+        }
+        if self.blank {
+            return 0;
+        }
+        self.inner.written_accidental()
+    }
+
+    /// The quality the numeral states.
+    fn implied_quality(&self) -> RsImpliedQuality {
+        if let Some(quality) = self.state.implied_quality {
+            return quality;
+        }
+        if self.blank {
+            return RsImpliedQuality::Unstated;
+        }
+        self.inner.implied_quality()
+    }
+
+    /// The alterations written in square brackets.
+    fn bracketed(&self) -> Vec<(i8, u8)> {
+        if let Some(bracketed) = &self.state.bracketed {
+            return bracketed.clone();
+        }
+        if self.blank {
+            return Vec::new();
+        }
+        self.inner.bracketed_alterations().to_vec()
+    }
+
+    /// The notes the figure puts in beside the chord.
+    fn added(&self) -> Vec<(i8, u8)> {
+        if let Some(added) = &self.state.added {
+            return added.clone();
+        }
+        if self.blank {
+            return Vec::new();
+        }
+        self.inner.added_steps().to_vec()
     }
 
     /// The chord this numeral stands for, sounding where its key does.
@@ -124,6 +227,9 @@ impl RomanNumeral {
     /// back with the pitches; a numeral built on a scale that stood in some
     /// other octave is moved there afterwards.
     fn chord(&self) -> PyResult<RsChord> {
+        if self.blank || self.silent {
+            return RsChord::new::<&[music21_rs::Pitch]>(&[]).map_err(roman_error);
+        }
         let chord = self.inner.to_chord().map_err(roman_error)?;
         let Some(octave) = self.octave else {
             return Ok(chord);
@@ -205,6 +311,18 @@ fn minor_default(py: Python<'_>, reading: RsMinor67Default) -> PyResult<Py<PyAny
 }
 
 /// The reading a keyword names, defaulting to reading it off the quality.
+/// music21's `updatePitches` keyword: whether the numeral works its notes
+/// out at all, or only reads its figure.
+fn update_pitches(keywords: Option<&Bound<'_, PyDict>>) -> PyResult<bool> {
+    let Some(keywords) = keywords else {
+        return Ok(true);
+    };
+    match keywords.get_item("updatePitches")? {
+        Some(value) if !value.is_none() => value.extract(),
+        _ => Ok(true),
+    }
+}
+
 /// music21's `caseMatters` keyword: whether an upper-case numeral means a
 /// major chord. The older figured-bass reading lets the key say instead.
 fn case_matters(keywords: Option<&Bound<'_, PyDict>>) -> PyResult<bool> {
@@ -240,25 +358,54 @@ fn minor_reading(keywords: Option<&Bound<'_, PyDict>>, name: &str) -> PyResult<R
     })
 }
 
-/// The numeral written on a scale degree, keeping the case the key implies.
-fn numeral_for_degree(key: &RsKey, degree: usize) -> PyResult<String> {
-    figure_for_degree(Some(key), degree).map(|figure| {
-        figure
-            .chars()
-            .take_while(|letter| matches!(letter, 'I' | 'V' | 'i' | 'v'))
-            .collect()
-    })
+/// The key an applied numeral establishes: the key its own chord is the
+/// tonic of.
+fn established_key(applied: &RsRomanNumeral) -> PyResult<RsKey> {
+    let chord = applied.to_chord().map_err(roman_error)?;
+    let root = chord
+        .root()
+        .ok_or_else(|| RomanNumeralException::new_err("applied numeral has no root"))?;
+    let mode = match applied.implied_quality() {
+        RsImpliedQuality::Minor => "minor",
+        RsImpliedQuality::Major => "major",
+        _ if chord.semitones_from_chord_step(3) == Some(3) => "minor",
+        _ => "major",
+    };
+    RsKey::from_tonic_mode(&root.name(), Some(mode)).map_err(roman_error)
 }
 
-/// The same figure written on a different numeral: everything before the
-/// roman letters is dropped and everything after them is kept.
-fn replace_numeral(figure: &str, numeral: &str) -> String {
-    let rest: String = figure
-        .chars()
-        .skip_while(|letter| !matches!(letter, 'I' | 'V' | 'i' | 'v'))
-        .skip_while(|letter| matches!(letter, 'I' | 'V' | 'i' | 'v'))
-        .collect();
-    format!("{numeral}{rest}")
+/// The same key with a minor third, which is where every augmented sixth is
+/// read: music21 hands the figure on in the parallel minor.
+fn parallel_minor(py: Python<'_>, scale: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
+    let (key, _) = key_and_octave(Some(scale))?;
+    if key.mode() == "minor" {
+        return Ok(scale.clone().unbind());
+    }
+    let minor = RsKey::from_tonic_mode(&key.tonic().name(), Some("minor")).map_err(roman_error)?;
+    crate::key::Key::object(py, minor)
+}
+
+/// The sharps or flats an alteration is written with.
+fn alteration_mark(alter: i8) -> String {
+    let mark = if alter < 0 { "b" } else { "#" };
+    mark.repeat(alter.unsigned_abs() as usize)
+}
+
+/// The same for an added note, where music21 writes a flat as `-`.
+fn added_mark(alter: i8) -> String {
+    let mark = if alter < 0 { "-" } else { "#" };
+    mark.repeat(alter.unsigned_abs() as usize)
+}
+
+/// How many semitones a written run of accidentals moves a note.
+fn mark_alteration(mark: &str) -> i8 {
+    mark.chars()
+        .map(|letter| match letter {
+            '#' => 1,
+            'b' | '-' => -1,
+            _ => 0,
+        })
+        .sum()
 }
 
 /// The figure music21 writes for a scale degree given as a number.
@@ -318,6 +465,10 @@ impl RomanNumeral {
         let mut me = slf.borrow_mut();
         me.inner = built.inner;
         me.octave = built.octave;
+        me.implied_key = built.implied_key;
+        me.blank = built.blank;
+        me.silent = built.silent;
+        me.key_object = built.key_object;
         Ok(())
     }
 
@@ -326,6 +477,9 @@ impl RomanNumeral {
     /// changing either changes everything downstream of it.
     #[getter]
     fn get_figure(&self) -> String {
+        if self.blank {
+            return String::new();
+        }
         self.inner.figure().to_string()
     }
 
@@ -356,8 +510,19 @@ impl RomanNumeral {
     /// music21's `romanNumeralAlone`: the numeral with nothing in front of
     /// it at all.
     #[getter]
-    fn romanNumeralAlone(&self) -> String {
+    fn get_romanNumeralAlone(&self) -> String {
+        if let Some(alone) = &self.state.numeral_alone {
+            return alone.clone();
+        }
+        if self.blank {
+            return String::new();
+        }
         self.inner.roman_numeral_alone()
+    }
+
+    #[setter]
+    fn set_romanNumeralAlone(&mut self, value: String) {
+        self.state.numeral_alone = Some(value);
     }
 
     /// music21's `frontAlterationString`: the flats or sharps written before
@@ -365,7 +530,7 @@ impl RomanNumeral {
     /// numeral reports, since `vi` in a minor key roots on a raised sixth.
     #[getter]
     fn frontAlterationString(&self) -> String {
-        let alteration = self.inner.written_accidental();
+        let alteration = self.front_alteration();
         let mark = if alteration < 0 { "b" } else { "#" };
         mark.repeat(alteration.unsigned_abs() as usize)
     }
@@ -373,8 +538,8 @@ impl RomanNumeral {
     /// music21's `frontAlterationAccidental`: that alteration as an
     /// accidental, and nothing when the numeral is unaltered.
     #[getter]
-    fn frontAlterationAccidental(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        let alteration = self.inner.accidental();
+    fn get_frontAlterationAccidental(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let alteration = self.front_alteration();
         if alteration == 0 {
             return Ok(py.None());
         }
@@ -391,7 +556,7 @@ impl RomanNumeral {
     #[getter]
     fn figureAndKey(&self) -> String {
         if self.implied_key {
-            return self.inner.figure().to_string();
+            return self.get_figure();
         }
         self.inner.figure_and_key()
     }
@@ -415,8 +580,14 @@ impl RomanNumeral {
     /// music21's `secondaryRomanNumeralKey`: the key a secondary numeral
     /// establishes, so the `V` of `V/V` in G major is read in D major.
     #[getter]
-    fn secondaryRomanNumeralKey(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        if self.inner.secondary().is_none() {
+    fn get_secondaryRomanNumeralKey(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        if let Some(key) = &self.state.secondary_key {
+            return Ok(match key {
+                Some(key) => key.clone_ref(py),
+                None => py.None(),
+            });
+        }
+        if self.blank || self.inner.secondary().is_none() {
             return Ok(py.None());
         }
         crate::key::Key::object(py, self.inner.effective_key_of().map_err(roman_error)?)
@@ -433,41 +604,97 @@ impl RomanNumeral {
     /// brackets, as the mark each was written with and the chord step it
     /// moves.
     #[getter]
-    fn bracketedAlterations(&self) -> Vec<(String, u8)> {
-        self.inner
-            .bracketed_alterations()
+    fn get_bracketedAlterations(&self) -> Vec<(String, u8)> {
+        self.bracketed()
             .iter()
-            .map(|(alter, step)| {
-                let mark = if *alter < 0 { "b" } else { "#" };
-                (mark.repeat(alter.unsigned_abs() as usize), *step)
-            })
+            .map(|(alter, step)| (alteration_mark(*alter), *step))
             .collect()
     }
 
+    #[setter]
+    fn set_bracketedAlterations(&mut self, value: Vec<(String, u8)>) {
+        self.state.bracketed = Some(
+            value
+                .into_iter()
+                .map(|(mark, step)| (mark_alteration(&mark), step))
+                .collect(),
+        );
+    }
+
+    /// music21's `omittedSteps`: the chord steps the figure leaves out.
+    #[getter]
+    fn get_omittedSteps(&self) -> Vec<u32> {
+        self.state
+            .omitted
+            .clone()
+            .unwrap_or_else(|| self.inner.omitted_steps().to_vec())
+            .into_iter()
+            .map(u32::from)
+            .collect()
+    }
+
+    #[setter]
+    fn set_omittedSteps(&mut self, value: Vec<u8>) {
+        self.state.omitted = Some(value);
+    }
+
+    /// music21's `addedSteps`: the notes the figure puts in beside the
+    /// chord, each with the accidental it was written with.
+    #[getter]
+    fn get_addedSteps(&self) -> Vec<(String, u8)> {
+        self.added()
+            .iter()
+            .map(|(alter, step)| (added_mark(*alter), *step))
+            .collect()
+    }
+
+    #[setter]
+    fn set_addedSteps(&mut self, value: Vec<(String, u8)>) {
+        self.state.added = Some(
+            value
+                .into_iter()
+                .map(|(mark, step)| (mark_alteration(&mark), step))
+                .collect(),
+        );
+    }
+
+    /// music21's `scaleDegree`, which is a field its parsing steps write
+    /// rather than something read back off the figure — so setting it says
+    /// which degree the numeral is taken to stand on, and leaves the figure
+    /// and the notes alone.
     #[getter]
     fn get_scaleDegree(&self) -> u8 {
+        if let Some(degree) = self.state.degree {
+            return degree;
+        }
+        if self.blank {
+            return 0;
+        }
         self.inner.degree()
     }
 
-    /// Setting the degree rewrites the figure on that degree, keeping
-    /// everything else the figure said.
     #[setter]
-    fn set_scaleDegree(slf: &Bound<'_, Self>, py: Python<'_>, value: usize) -> PyResult<()> {
-        let (figure, key) = {
-            let me = slf.borrow();
-            (me.inner.figure().to_string(), me.inner.key().clone())
-        };
-        let numeral = numeral_for_degree(&key, value)?;
-        let rewritten = replace_numeral(&figure, &numeral);
-        let rebuilt = RsRomanNumeral::new(rewritten, key).map_err(roman_error)?;
-        Self::rebuild(slf, py, rebuilt)
+    fn set_scaleDegree(&mut self, value: u8) {
+        self.state.degree = Some(value);
+    }
+
+    /// music21's `impliedQuality`: the quality the figure states, which is
+    /// what the notes read off the scale are respelled to.
+    #[getter]
+    fn get_impliedQuality(&self) -> String {
+        self.implied_quality().name().to_string()
+    }
+
+    #[setter]
+    fn set_impliedQuality(&mut self, value: &str) {
+        self.state.implied_quality = Some(RsImpliedQuality::from_name(value));
     }
 
     /// music21's `scaleDegreeWithAlteration`: the degree, and how it is
     /// altered from the key.
     #[getter]
     fn scaleDegreeWithAlteration(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        let (degree, alteration) = self.inner.scale_degree_with_alteration();
+        let (degree, alteration) = (self.get_scaleDegree(), self.front_alteration());
         let alteration = if alteration == 0 {
             py.None().into_bound(py)
         } else {
@@ -482,11 +709,16 @@ impl RomanNumeral {
 
     /// music21's `key`. Setting it reads the same figure in the new key.
     #[getter]
-    fn get_key(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        if self.implied_key {
+    fn get_key(slf: &Bound<'_, Self>, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        if slf.borrow().implied_key {
             return Ok(py.None());
         }
-        crate::key::Key::object(py, self.inner.key().clone())
+        if let Some(key) = &slf.borrow().key_object {
+            return Ok(key.clone_ref(py));
+        }
+        let key = crate::key::Key::object(py, slf.borrow().inner.key().clone())?;
+        slf.borrow_mut().key_object = Some(key.clone_ref(py));
+        Ok(key)
     }
 
     #[setter]
@@ -498,6 +730,8 @@ impl RomanNumeral {
             let mut me = slf.borrow_mut();
             me.octave = octave.or(me.octave);
             me.implied_key = value.is_none();
+            me.key_object = (!value.is_none() && value.extract::<String>().is_err())
+                .then(|| value.clone().unbind());
         }
         Self::rebuild(slf, py, rebuilt)
     }
@@ -520,13 +754,28 @@ impl RomanNumeral {
 
     /// music21's `frontAlterationTransposeInterval`: the alteration in front
     /// of the numeral, as the interval it moves the root by.
+    #[setter]
+    fn set_frontAlterationAccidental(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        if value.is_none() {
+            self.state.alteration = Some(0);
+            return Ok(());
+        }
+        let alter: f64 = value.getattr("alter")?.extract()?;
+        self.state.alteration = Some(alter.round() as i8);
+        Ok(())
+    }
+
+    /// music21's `frontAlterationTransposeInterval`: the alteration as the
+    /// interval it moves the root by, which is an augmented unison and not a
+    /// minor second — the letter does not change.
     #[getter]
     fn frontAlterationTransposeInterval(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        let alteration = self.inner.accidental();
+        let alteration = self.front_alteration();
         if alteration == 0 {
             return Ok(py.None());
         }
-        let interval = RsInterval::from_semitones(i32::from(alteration)).map_err(roman_error)?;
+        let interval = RsInterval::from_generic_and_chromatic(1, i32::from(alteration))
+            .map_err(roman_error)?;
         Ok(crate::interval::Interval::wrap(interval)
             .into_pyobject(py)?
             .into_any()
@@ -541,8 +790,28 @@ impl RomanNumeral {
 
     /// music21's `secondaryRomanNumeral`: the numeral after the slash, as a
     /// numeral of its own read in this one's key.
+    #[setter]
+    fn set_secondaryRomanNumeralKey(&mut self, py: Python<'_>, value: &Bound<'_, PyAny>) {
+        let _ = py;
+        self.state.secondary_key = Some((!value.is_none()).then(|| value.clone().unbind()));
+    }
+
+    #[setter]
+    fn set_secondaryRomanNumeral(&mut self, value: &Bound<'_, PyAny>) {
+        self.state.secondary = Some((!value.is_none()).then(|| value.clone().unbind()));
+    }
+
     #[getter]
-    fn secondaryRomanNumeral(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+    fn get_secondaryRomanNumeral(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        if let Some(secondary) = &self.state.secondary {
+            return Ok(match secondary {
+                Some(secondary) => secondary.clone_ref(py),
+                None => py.None(),
+            });
+        }
+        if self.blank {
+            return Ok(py.None());
+        }
         let Some(secondary) = self.inner.secondary() else {
             return Ok(py.None());
         };
@@ -556,13 +825,207 @@ impl RomanNumeral {
     /// they set stands.
     #[getter]
     fn get_functionalityScore(&self) -> u8 {
-        self.score
-            .unwrap_or_else(|| self.inner.functionality_score())
+        if let Some(score) = self.score {
+            return score;
+        }
+        if self.blank {
+            return 0;
+        }
+        self.inner.functionality_score()
     }
 
     #[setter]
     fn set_functionalityScore(&mut self, value: u8) {
         self.score = Some(value);
+    }
+
+    /// music21's `_parseOmittedSteps`: takes the `[noN]` groups off a
+    /// figure and records what they said.
+    fn _parseOmittedSteps(&mut self, workingFigure: &str) -> String {
+        let mut figure = workingFigure.to_string();
+        self.state.omitted = Some(rs_roman::take_omitted_steps(&mut figure));
+        figure
+    }
+
+    /// music21's `_parseAddedSteps`: the same for the `[addN]` groups.
+    fn _parseAddedSteps(&mut self, workingFigure: &str) -> String {
+        let mut figure = workingFigure.to_string();
+        self.state.added = Some(rs_roman::take_added_steps(&mut figure));
+        figure
+    }
+
+    /// music21's `_parseBracketedAlterations`: the same for `[#5]` and `[b3]`.
+    fn _parseBracketedAlterations(&mut self, workingFigure: &str) -> String {
+        let mut figure = workingFigure.to_string();
+        self.state.bracketed = Some(rs_roman::take_bracketed_alterations(&mut figure));
+        figure
+    }
+
+    /// music21's `_parseFrontAlterations`: takes the flats or sharps off the
+    /// front of a figure and records the alteration they make.
+    fn _parseFrontAlterations(&mut self, workingFigure: &str) -> String {
+        let (alteration, rest) = rs_roman::split_roman_accidental_prefix(workingFigure);
+        self.state.alteration = Some(alteration);
+        rest.to_string()
+    }
+
+    /// music21's `_parseRNAloneAmidstAug6`: takes the numeral off the front
+    /// of a figure and records the degree it names.
+    ///
+    /// An augmented sixth is written by nationality rather than by numeral,
+    /// carries its own degree and alteration, and is read in the parallel
+    /// minor — so this hands back the scale to read the rest of the figure
+    /// in, which is the one it was given unless that happened.
+    #[pyo3(signature = (workingFigure, useScale))]
+    fn _parseRNAloneAmidstAug6(
+        slf: &Bound<'_, Self>,
+        py: Python<'_>,
+        workingFigure: &str,
+        useScale: &Bound<'_, PyAny>,
+    ) -> PyResult<Py<PyAny>> {
+        let read = rs_roman::parse_numeral_alone(workingFigure).map_err(roman_error)?;
+        {
+            let mut me = slf.borrow_mut();
+            me.state.numeral_alone = Some(read.numeral.clone());
+            me.state.degree = Some(read.degree);
+            if read.alteration != 0 {
+                me.state.alteration = Some(read.alteration);
+            }
+            if !read.bracketed.is_empty() {
+                let mut bracketed = me.bracketed();
+                bracketed.extend(read.bracketed.iter().copied());
+                me.state.bracketed = Some(bracketed);
+            }
+        }
+        let scale = if read.minor {
+            parallel_minor(py, useScale)?
+        } else {
+            useScale.clone().unbind()
+        };
+        Ok((read.rest, scale).into_pyobject(py)?.into_any().unbind())
+    }
+
+    /// music21's `_correctForSecondaryRomanNumeral`: splits an applied
+    /// numeral off a figure and records the numeral and the key it makes.
+    #[pyo3(signature = (useScale, figure = None))]
+    fn _correctForSecondaryRomanNumeral(
+        slf: &Bound<'_, Self>,
+        py: Python<'_>,
+        useScale: &Bound<'_, PyAny>,
+        figure: Option<&str>,
+    ) -> PyResult<Py<PyAny>> {
+        let written = match figure {
+            Some(figure) => figure.to_string(),
+            None => slf.borrow().get_figure(),
+        };
+        let (primary, secondary) = rs_roman::split_secondary(&written);
+        let Some(secondary) = secondary else {
+            let mut me = slf.borrow_mut();
+            me.state.secondary = Some(None);
+            me.state.secondary_key = Some(None);
+            drop(me);
+            return Ok((primary, useScale.clone())
+                .into_pyobject(py)?
+                .into_any()
+                .unbind());
+        };
+        let (sixth, seventh, matters) = {
+            let me = slf.borrow();
+            (
+                me.inner.sixth_minor(),
+                me.inner.seventh_minor(),
+                me.inner.case_matters(),
+            )
+        };
+        let (key, _) = key_and_octave(Some(useScale))?;
+        let applied = RsRomanNumeral::with_options(secondary, key, sixth, seventh, matters)
+            .map_err(roman_error)?;
+        // The key the applied numeral makes is the one its own chord stands
+        // in: the `vi` of `V9/vi` in C major roots on A and is minor, so what
+        // follows the slash is read in A minor.
+        let established = crate::key::Key::object(py, established_key(&applied)?)?;
+        let numeral = Py::new(py, Self::initializer(py, Self::wrap(applied, None))?)?.into_any();
+        {
+            let mut me = slf.borrow_mut();
+            me.state.secondary = Some(Some(numeral));
+            me.state.secondary_key = Some(Some(established.clone_ref(py)));
+        }
+        Ok((primary, established)
+            .into_pyobject(py)?
+            .into_any()
+            .unbind())
+    }
+
+    /// music21's `_matchAccidentalsToQuality`: respells the third, fifth and
+    /// seventh of the chord to the quality named.
+    fn _matchAccidentalsToQuality(
+        slf: &Bound<'_, Self>,
+        py: Python<'_>,
+        impliedQuality: &str,
+    ) -> PyResult<()> {
+        let quality = RsImpliedQuality::from_name(impliedQuality);
+        slf.borrow_mut().state.implied_quality = Some(quality);
+        let written: Vec<u8> = Vec::new();
+        let mut pitches = slf.as_super().borrow().value_pitches();
+        rs_roman::match_pitches_to_quality(&mut pitches, None, quality, &written)
+            .map_err(roman_error)?;
+        let chord = RsChord::new(pitches.as_slice()).map_err(roman_error)?;
+        slf.as_super().borrow_mut().replace_value(py, chord)
+    }
+
+    /// music21's `adjustMinorVIandVIIByQuality`: a numeral on the sixth or
+    /// seventh degree of a minor key takes the raised degree when the chord
+    /// it names is one only the raised degree gives.
+    fn adjustMinorVIandVIIByQuality(&mut self, useScale: &Bound<'_, PyAny>) -> PyResult<()> {
+        let (key, _) = key_and_octave(Some(useScale))?;
+        if key.mode() != "minor" || !self.inner.case_matters() {
+            return Ok(());
+        }
+        let degree = self.get_scaleDegree();
+        if !matches!(degree, 6 | 7) {
+            return Ok(());
+        }
+        let reading = if degree == 6 {
+            self.inner.sixth_minor()
+        } else {
+            self.inner.seventh_minor()
+        };
+        let wants_raised = matches!(
+            self.implied_quality(),
+            RsImpliedQuality::Minor
+                | RsImpliedQuality::Diminished
+                | RsImpliedQuality::HalfDiminished
+        );
+        let alteration = self.front_alteration();
+        let raise = match reading {
+            RsMinor67Default::Flat => false,
+            RsMinor67Default::Sharp => true,
+            RsMinor67Default::Quality => wants_raised,
+            RsMinor67Default::Cautionary => match alteration {
+                0 => wants_raised,
+                sharps if sharps >= 1 => false,
+                _ => true,
+            },
+        };
+        if raise {
+            self.state.alteration = Some(alteration + 1);
+        }
+        Ok(())
+    }
+
+    /// music21's `bassScaleDegreeFromNotation`: which scale degree the
+    /// figured-bass column puts in the bass.
+    #[pyo3(signature = (notationObject = None))]
+    fn bassScaleDegreeFromNotation(
+        &self,
+        notationObject: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<u8> {
+        let numbers = match notationObject.filter(|value| !value.is_none()) {
+            Some(notation) => notation.getattr("numbers")?.extract::<Vec<u8>>()?,
+            None => self.inner.figure_numbers(),
+        };
+        rs_roman::bass_scale_degree_from_notation(self.get_scaleDegree(), &numbers)
+            .map_err(roman_error)
     }
 
     /// music21's `isNeapolitan`.
@@ -573,9 +1036,26 @@ impl RomanNumeral {
 
     /// music21's `isMixture`: whether the figure borrows from the parallel
     /// key.
+    ///
+    /// Only a major or a minor key has a parallel to borrow from, so a
+    /// numeral read in a mode or over a scale is never mixture.
     #[pyo3(signature = (evaluateSecondaryNumeral = false))]
-    fn isMixture(&self, evaluateSecondaryNumeral: bool) -> PyResult<bool> {
-        self.inner
+    fn isMixture(
+        slf: &Bound<'_, Self>,
+        py: Python<'_>,
+        evaluateSecondaryNumeral: bool,
+    ) -> PyResult<bool> {
+        let key = Self::get_key(slf, py)?;
+        let mode = key
+            .bind(py)
+            .getattr("mode")
+            .ok()
+            .and_then(|mode| mode.extract::<String>().ok());
+        if !matches!(mode.as_deref(), Some("major" | "minor")) {
+            return Ok(false);
+        }
+        slf.borrow()
+            .inner
             .is_mixture(evaluateSecondaryNumeral)
             .map_err(roman_error)
     }
@@ -610,15 +1090,36 @@ impl RomanNumeral {
     }
 
     fn __repr__(&self) -> String {
-        format!("<music21.roman.RomanNumeral {}>", self.figureAndKey())
+        let named = self.figureAndKey();
+        if named.is_empty() {
+            return "<music21.roman.RomanNumeral>".to_string();
+        }
+        format!("<music21.roman.RomanNumeral {named}>")
     }
 
-    fn __eq__(&self, other: &Bound<'_, PyAny>) -> bool {
-        other.extract::<PyRef<'_, Self>>().is_ok_and(|other| {
-            other.inner.figure() == self.inner.figure()
-                && other.inner.key().tonic().name() == self.inner.key().tonic().name()
-                && other.inner.key().mode() == self.inner.key().mode()
-        })
+    /// Two numerals are the same when they are the same figure in the same
+    /// key *and* the same written note — music21 compares the `NotRest` half
+    /// as well, so a numeral lengthened to a half note is no longer equal to
+    /// the one it was.
+    fn __eq__(slf: &Bound<'_, Self>, other: &Bound<'_, PyAny>) -> PyResult<bool> {
+        let Ok(theirs) = other.extract::<PyRef<'_, Self>>() else {
+            return Ok(false);
+        };
+        {
+            let me = slf.borrow();
+            if theirs.inner.figure() != me.inner.figure()
+                || theirs.inner.key().tonic().name() != me.inner.key().tonic().name()
+                || theirs.inner.key().mode() != me.inner.key().mode()
+            {
+                return Ok(false);
+            }
+        }
+        // Only the written note, not the notes sounded: two numerals that
+        // read the same figure are the same numeral however their chords are
+        // voiced, but one lengthened to a half note is not.
+        let py = other.py();
+        let theirs = other.extract::<PyRef<'_, Chord>>()?;
+        Ok(slf.as_super().borrow().quarter_length(py) == theirs.quarter_length(py))
     }
 
     fn __deepcopy__(&self, py: Python<'_>, _memo: &Bound<'_, PyAny>) -> PyResult<Py<Self>> {
