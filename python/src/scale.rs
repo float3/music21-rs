@@ -722,9 +722,11 @@ impl ConcreteScale {
     /// scale, which is the plain triad on it.
     fn romanNumeral(
         slf: &Bound<'_, Self>,
+        py: Python<'_>,
         degree: &Bound<'_, PyAny>,
-    ) -> PyResult<crate::roman::RomanNumeral> {
-        crate::roman::RomanNumeral::build(Some(degree), Some(slf.as_any()))
+    ) -> PyResult<Py<crate::roman::RomanNumeral>> {
+        let numeral = crate::roman::RomanNumeral::build(Some(degree), Some(slf.as_any()))?;
+        Py::new(py, crate::roman::RomanNumeral::initializer(py, numeral)?)
     }
 
     /// music21's `isNext`: whether one pitch is so many degrees above another

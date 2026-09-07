@@ -9,11 +9,14 @@ use pyo3::types::{PyDict, PyList, PyTuple};
 
 use music21_rs::{
     Chord as RsChord, ChordTableAddress as RsChordTableAddress, Duration as RsDuration,
-    Interval as RsInterval, Key as RsKey, Note as RsNote, Pitch as RsPitch, Volume as RsVolume,
+    Interval as RsInterval, Key as RsKey, Note as RsNote, Notehead as RsNotehead, Pitch as RsPitch,
+    StemDirection as RsStemDirection, Volume as RsVolume,
 };
 
 use crate::interval::interval_from_any;
-use crate::notation::{Lyric, Style, StyleOwner, Tie, Volume, tie_from_any, volume_from_any};
+use crate::notation::{
+    Beams, Lyric, Style, StyleOwner, Tie, Volume, tie_from_any, volume_from_any,
+};
 use crate::note::{
     Duration, Note, augment_or_diminish_note, duration_from_any, grace_note, instrument_for_note,
     note_from_any,
@@ -127,6 +130,12 @@ impl Chord {
             stored_instrument: None,
             overrides: None,
         })
+    }
+
+    /// Replaces the whole chord, rebuilding the note objects: what a caller
+    /// standing on a chord does when the chord it stands for changes.
+    pub(crate) fn replace_value(&mut self, py: Python<'_>, inner: RsChord) -> PyResult<()> {
+        self.replace_inner(py, inner)
     }
 
     /// Replaces the pitches and everything read off them, rebuilding the
@@ -1639,6 +1648,72 @@ impl Chord {
                 .map(|(degree, accidental)| (degree, accidental.map(Accidental::from_inner)))
                 .collect(),
         ))
+    }
+
+    /// music21's `notehead`: the shape the chord as a whole is drawn with,
+    /// which a chord has in its own right and not only through its notes.
+    #[getter]
+    fn get_notehead(&self) -> &'static str {
+        self.inner.notehead().as_str()
+    }
+
+    #[setter]
+    fn set_notehead(&mut self, value: &str) -> PyResult<()> {
+        self.inner
+            .set_notehead(RsNotehead::from_name(value).map_err(chord_error)?);
+        Ok(())
+    }
+
+    /// music21's `noteheadFill`.
+    #[getter]
+    fn get_noteheadFill(&self) -> Option<bool> {
+        self.inner.notehead_fill()
+    }
+
+    #[setter]
+    fn set_noteheadFill(&mut self, value: Option<bool>) {
+        self.inner.set_notehead_fill(value);
+    }
+
+    /// music21's `noteheadParenthesis`.
+    #[getter]
+    fn get_noteheadParenthesis(&self) -> bool {
+        self.inner.notehead_parenthesis()
+    }
+
+    #[setter]
+    fn set_noteheadParenthesis(&mut self, value: bool) {
+        self.inner.set_notehead_parenthesis(value);
+    }
+
+    /// music21's `stemDirection`: which way the chord's own stem points.
+    #[getter]
+    fn get_stemDirection(&self) -> &'static str {
+        self.inner.stem_direction().as_str()
+    }
+
+    #[setter]
+    fn set_stemDirection(&mut self, value: &str) -> PyResult<()> {
+        self.inner
+            .set_stem_direction(RsStemDirection::from_name(value).map_err(chord_error)?);
+        Ok(())
+    }
+
+    /// music21's `beams`: the beams joining the chord's flags to its
+    /// neighbours'.
+    #[getter]
+    fn get_beams(slf: &Bound<'_, Self>) -> PyResult<Beams> {
+        Ok(Beams::owned_by(
+            slf.borrow().inner.beams().clone(),
+            slf.clone().unbind().into_any(),
+        ))
+    }
+
+    #[setter]
+    fn set_beams(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        let beams = value.extract::<PyRef<'_, Beams>>()?;
+        self.inner.set_beams(beams.inner.clone());
+        Ok(())
     }
 
     // ---- notation --------------------------------------------------------

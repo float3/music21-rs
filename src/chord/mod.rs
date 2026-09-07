@@ -11,7 +11,7 @@ use crate::error::Result;
 use crate::interval::{Interval, PitchOrNote};
 use crate::key::Key;
 use crate::key::keysignature::KeySignature;
-use crate::notation::{Lyric, Notehead, Tie};
+use crate::notation::{Beams, Lyric, Notehead, StemDirection, Tie};
 use crate::note::{IntoNote, Note};
 use crate::pitch::{Pitch, PitchClass, PitchClassSpecifier};
 use crate::volume::Volume;
@@ -39,6 +39,20 @@ pub struct Chord {
     /// A colour for the chord as a whole, used when its notes carry none.
     #[cfg_attr(feature = "serde", serde(default))]
     color: Option<String>,
+    /// The notation the chord carries in its own right, apart from its
+    /// notes': music21 keeps these on `NotRest`, which a chord is, and a
+    /// chord's are read independently of the notes inside it.
+    #[cfg_attr(feature = "serde", serde(default))]
+    notehead: Notehead,
+    #[cfg_attr(feature = "serde", serde(default))]
+    notehead_fill: Option<bool>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    notehead_parenthesis: bool,
+    #[cfg_attr(feature = "serde", serde(default))]
+    stem_direction: StemDirection,
+    /// The beams joining the chord's flags to its neighbours'.
+    #[cfg_attr(feature = "serde", serde(default))]
+    beams: Beams,
     #[cfg_attr(feature = "serde", serde(skip))]
     from_integer_pitches: bool,
     /// A root the caller decided on, which wins over the one the pitches
@@ -181,6 +195,11 @@ impl Chord {
             from_integer_pitches: T::FROM_INTEGER_PITCHES,
             volume: None,
             color: None,
+            notehead: Notehead::default(),
+            notehead_fill: None,
+            notehead_parenthesis: false,
+            stem_direction: StemDirection::default(),
+            beams: Beams::default(),
             root_override: None,
             bass_override: None,
         })
@@ -267,6 +286,11 @@ impl Chord {
             from_integer_pitches: false,
             volume: None,
             color: None,
+            notehead: Notehead::default(),
+            notehead_fill: None,
+            notehead_parenthesis: false,
+            stem_direction: StemDirection::default(),
+            beams: Beams::default(),
             root_override: None,
             bass_override: None,
         }
@@ -966,6 +990,57 @@ impl Chord {
     /// Sets the colour the chord as a whole is written in.
     pub fn set_color(&mut self, color: Option<String>) {
         self.color = color;
+    }
+
+    /// The shape the chord as a whole is drawn with: music21's `notehead`,
+    /// which a chord has in its own right and not only through its notes.
+    pub fn notehead(&self) -> Notehead {
+        self.notehead
+    }
+
+    /// Sets that shape.
+    pub fn set_notehead(&mut self, notehead: Notehead) {
+        self.notehead = notehead;
+    }
+
+    /// Whether the chord's own note heads are filled, when it says.
+    pub fn notehead_fill(&self) -> Option<bool> {
+        self.notehead_fill
+    }
+
+    /// Says whether they are filled.
+    pub fn set_notehead_fill(&mut self, fill: Option<bool>) {
+        self.notehead_fill = fill;
+    }
+
+    /// Whether the chord's own note heads are bracketed.
+    pub fn notehead_parenthesis(&self) -> bool {
+        self.notehead_parenthesis
+    }
+
+    /// Says whether they are bracketed.
+    pub fn set_notehead_parenthesis(&mut self, parenthesis: bool) {
+        self.notehead_parenthesis = parenthesis;
+    }
+
+    /// Which way the chord's own stem points.
+    pub fn stem_direction(&self) -> StemDirection {
+        self.stem_direction
+    }
+
+    /// Sets which way it points.
+    pub fn set_stem_direction(&mut self, direction: StemDirection) {
+        self.stem_direction = direction;
+    }
+
+    /// The beams joining the chord's flags to its neighbours'.
+    pub fn beams(&self) -> &Beams {
+        &self.beams
+    }
+
+    /// Replaces those beams.
+    pub fn set_beams(&mut self, beams: Beams) {
+        self.beams = beams;
     }
 
     /// The colour a pitch is written in: the note's own colour when it has
@@ -3034,7 +3109,7 @@ impl Chord {
 #[cfg(test)]
 mod notation_tests {
     use super::*;
-    use crate::notation::{StemDirection, TieType};
+    use crate::notation::TieType;
 
     #[test]
     fn annotate_intervals_matches_music21() {

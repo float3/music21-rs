@@ -1,0 +1,20 @@
+# Docstrings of music21.roman whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_roman`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.roman.FigureTuple",
+    "music21.roman.FigureTuple.fromPitchAndReference",
+    "music21.roman.PitchFigureTuple",
+    "music21.roman.PitchFigureTuple.fromPitchAndReference",
+    "music21.roman.RomanNumeral._findSemitoneSizeForQuality",
+    "music21.roman.RomanNumeral._parseAddedSteps",
+    "music21.roman.RomanNumeral._parseOmittedSteps",
+    "music21.roman._postFigureFromChordAndKey",
+    "music21.roman.correctRNAlterationForMinor",
+    "music21.roman.correctSuffixForChordQuality",
+    "music21.roman.expandShortHand",
+    "music21.roman.figureTuples",
+    "music21.roman.romanInversionName",
+]

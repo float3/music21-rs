@@ -16,7 +16,7 @@ use pyo3::types::PyDict;
 use music21_rs::{Chord as RsChord, Key as RsKey, RomanNumeral as RsRomanNumeral};
 
 use crate::chord::Chord;
-use crate::pitch::{Pitch, message};
+use crate::pitch::message;
 
 /// The names the `roman` facade replaces in `music21.roman`.
 pub const NAMES: &[&str] = &["RomanNumeral", "RomanNumeralException"];
@@ -32,10 +32,16 @@ fn roman_error(error: music21_rs::Error) -> PyErr {
 const MAJOR_FIGURES: [&str; 7] = ["I", "ii", "iii", "IV", "V", "vi", "viio"];
 const MINOR_FIGURES: [&str; 7] = ["i", "iio", "III", "iv", "v", "VI", "VII"];
 
-/// music21's `roman.RomanNumeral`.
+/// music21's `roman.RomanNumeral`, which *is* a chord.
+///
+/// Upstream it inherits from `Harmony` and so from `Chord`, and every chord
+/// question — its pitches, its root, whether it is a seventh — is asked of
+/// it directly. So it extends the chord facade here too, and the figure is
+/// what this class adds on top.
 #[pyclass(
     name = "RomanNumeral",
     module = "music21.roman",
+    extends = Chord,
     subclass,
     skip_from_py_object
 )]
@@ -50,6 +56,12 @@ pub struct RomanNumeral {
 impl RomanNumeral {
     pub(crate) fn wrap(inner: RsRomanNumeral, octave: Option<i32>) -> Self {
         Self { inner, octave }
+    }
+
+    /// The numeral, standing on the chord it names.
+    pub(crate) fn initializer(py: Python<'_>, numeral: Self) -> PyResult<PyClassInitializer<Self>> {
+        let chord = Chord::from_inner(py, numeral.chord()?)?;
+        Ok(PyClassInitializer::from(chord).add_subclass(numeral))
     }
 
     /// Builds one from music21's two arguments: a figure or a scale degree,
@@ -160,11 +172,12 @@ impl RomanNumeral {
     #[new]
     #[pyo3(signature = (figure = None, keyOrScale = None, **_keywords))]
     fn new(
+        py: Python<'_>,
         figure: Option<&Bound<'_, PyAny>>,
         keyOrScale: Option<&Bound<'_, PyAny>>,
         _keywords: Option<&Bound<'_, PyDict>>,
-    ) -> PyResult<Self> {
-        Self::build(figure, keyOrScale)
+    ) -> PyResult<PyClassInitializer<Self>> {
+        Self::initializer(py, Self::build(figure, keyOrScale)?)
     }
 
     #[getter]
@@ -206,6 +219,8 @@ impl RomanNumeral {
         crate::key::Key::object(py, self.inner.key().clone())
     }
 
+    /// music21's `inversion`, which for a roman numeral is the one its
+    /// figure names rather than one read back off the pitches.
     fn inversion(&self) -> u8 {
         self.inner.inversion()
     }
@@ -215,35 +230,6 @@ impl RomanNumeral {
     #[getter]
     fn secondaryRomanNumeral(&self) -> Option<String> {
         self.inner.secondary().map(str::to_string)
-    }
-
-    #[getter]
-    fn pitches(&self) -> PyResult<Vec<Pitch>> {
-        Ok(self
-            .chord()?
-            .pitches()
-            .iter()
-            .map(|pitch| Pitch::wrap(pitch.clone(), false))
-            .collect())
-    }
-
-    fn root(&self) -> PyResult<Option<Pitch>> {
-        Ok(self
-            .chord()?
-            .root()
-            .map(|pitch| Pitch::wrap(pitch.clone(), false)))
-    }
-
-    fn bass(&self) -> PyResult<Option<Pitch>> {
-        Ok(self
-            .chord()?
-            .bass()
-            .map(|pitch| Pitch::wrap(pitch.clone(), false)))
-    }
-
-    /// The chord this numeral stands for.
-    fn asChord(&self, py: Python<'_>) -> PyResult<Py<Chord>> {
-        Py::new(py, Chord::from_inner(py, self.chord()?)?)
     }
 
     /// music21's `functionalityScore`: how strongly the figure pulls, on
@@ -270,14 +256,31 @@ impl RomanNumeral {
 
     /// music21's `transpose`: the same figure in a key moved by an interval.
     #[pyo3(signature = (value, *, inPlace = false))]
-    fn transpose(&mut self, value: &Bound<'_, PyAny>, inPlace: bool) -> PyResult<Option<Self>> {
+    fn transpose(
+        slf: &Bound<'_, Self>,
+        py: Python<'_>,
+        value: &Bound<'_, PyAny>,
+        inPlace: bool,
+    ) -> PyResult<Option<Py<Self>>> {
         let interval = crate::interval::interval_from_any(value)?;
-        let moved = self.inner.transpose(&interval).map_err(roman_error)?;
+        let (moved, octave) = {
+            let me = slf.borrow();
+            (
+                me.inner.transpose(&interval).map_err(roman_error)?,
+                me.octave,
+            )
+        };
         if inPlace {
-            self.inner = moved;
+            let numeral = Self::wrap(moved, octave);
+            let chord = numeral.chord()?;
+            slf.as_super().borrow_mut().replace_value(py, chord)?;
+            slf.borrow_mut().inner = numeral.inner;
             return Ok(None);
         }
-        Ok(Some(Self::wrap(moved, self.octave)))
+        Ok(Some(Py::new(
+            py,
+            Self::initializer(py, Self::wrap(moved, octave))?,
+        )?))
     }
 
     fn __repr__(&self) -> String {
@@ -295,12 +298,18 @@ impl RomanNumeral {
         })
     }
 
-    fn __deepcopy__(&self, _memo: &Bound<'_, PyAny>) -> Self {
-        Self::wrap(self.inner.clone(), self.octave)
+    fn __deepcopy__(&self, py: Python<'_>, _memo: &Bound<'_, PyAny>) -> PyResult<Py<Self>> {
+        Py::new(
+            py,
+            Self::initializer(py, Self::wrap(self.inner.clone(), self.octave))?,
+        )
     }
 
-    fn __copy__(&self) -> Self {
-        Self::wrap(self.inner.clone(), self.octave)
+    fn __copy__(&self, py: Python<'_>) -> PyResult<Py<Self>> {
+        Py::new(
+            py,
+            Self::initializer(py, Self::wrap(self.inner.clone(), self.octave))?,
+        )
     }
 }
 
