@@ -27,6 +27,12 @@ use crate::pitch::{Pitch, message, pitch_from_any};
 /// The twenty concrete classes are named here rather than derived from
 /// `ScaleType::ALL` because this has to be a constant, and a test below
 /// keeps the two lists in step.
+///
+/// `AbstractScale` is deliberately absent. A concrete scale hands one out
+/// under `abstract`, so the class is registered and reachable — but music21
+/// builds its own abstract scales out of interval networks, which this crate
+/// does not model at all, so replacing the class would be claiming something
+/// untrue.
 pub const NAMES: &[&str] = &[
     "Scale",
     "ConcreteScale",
@@ -90,6 +96,13 @@ impl Scale {
         "Scale"
     }
 
+    /// music21's `type`: what kind of scale this is. A bare `Scale` is only
+    /// a scale.
+    #[getter]
+    fn r#type(&self) -> &'static str {
+        "Scale"
+    }
+
     /// music21's `extractPitchList`: the pitches out of anything that has
     /// them — a scale, a chord or a stream, or a list of pitches, names or
     /// notes.
@@ -129,6 +142,122 @@ impl Scale {
     }
 }
 
+/// music21's `scale.AbstractScale`: a pattern of steps with no note to
+/// stand on.
+///
+/// music21 keeps the pattern and the tonic in separate objects, and a
+/// concrete scale hands its pattern out under `abstract`. Here the pattern
+/// is a [`RsScaleType`], so this is a thin thing over one — but it has to be
+/// an object rather than a name, because music21's own docstrings ask it how
+/// many degrees it has and whether it repeats at the octave.
+#[pyclass(
+    name = "AbstractScale",
+    module = "music21.scale",
+    extends = Scale,
+    subclass,
+    skip_from_py_object
+)]
+pub struct AbstractScale {
+    scale_type: Option<RsScaleType>,
+}
+
+impl AbstractScale {
+    fn object(py: Python<'_>, scale_type: Option<RsScaleType>) -> PyResult<Py<PyAny>> {
+        Ok(Py::new(
+            py,
+            PyClassInitializer::from(Scale).add_subclass(Self { scale_type }),
+        )?
+        .into_any())
+    }
+
+    /// The pattern named by an abstract scale of any kind — one of these, or
+    /// music21's own, which says which it is in its class name.
+    pub(crate) fn scale_type_of(value: &Bound<'_, PyAny>) -> Option<RsScaleType> {
+        if let Ok(ours) = value.extract::<PyRef<'_, Self>>() {
+            return ours.scale_type;
+        }
+        if let Ok(name) = value.extract::<String>() {
+            return named_scale_type(&name);
+        }
+        // music21 names the mode separately from the class for the diatonic
+        // ones: `AbstractDiatonicScale('major')`.
+        if let Ok(mode) = value.getattr("mode")
+            && let Ok(mode) = mode.extract::<String>()
+            && let Some(scale_type) = named_scale_type(&mode)
+        {
+            return Some(scale_type);
+        }
+        let name = value.get_type().name().ok()?.extract::<String>().ok()?;
+        named_scale_type(&name)
+    }
+}
+
+#[pymethods]
+impl AbstractScale {
+    #[new]
+    #[pyo3(signature = (mode = None, **_keywords))]
+    fn new(
+        mode: Option<&Bound<'_, PyAny>>,
+        _keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<PyClassInitializer<Self>> {
+        let scale_type = mode
+            .filter(|value| !value.is_none())
+            .and_then(|value| Self::scale_type_of(value));
+        Ok(PyClassInitializer::from(Scale).add_subclass(Self { scale_type }))
+    }
+
+    /// music21's `getDegreeMaxUnique`: how many degrees the pattern has
+    /// before it repeats.
+    fn getDegreeMaxUnique(&self) -> usize {
+        self.scale_type.map_or(0, RsScaleType::degree_count)
+    }
+
+    /// music21's `octaveDuplicating`: whether the pattern repeats at the
+    /// octave, which every one of these does.
+    #[getter]
+    fn octaveDuplicating(&self) -> bool {
+        true
+    }
+
+    #[getter]
+    fn r#type(&self) -> String {
+        match self.scale_type {
+            Some(scale_type) => format!("Abstract {}", scale_type.music21_descriptive_name()),
+            None => "Abstract".to_string(),
+        }
+    }
+
+    #[getter]
+    fn name(&self) -> String {
+        self.r#type()
+    }
+
+    #[getter]
+    fn mode(&self) -> Option<&'static str> {
+        self.scale_type.map(RsScaleType::music21_descriptive_name)
+    }
+
+    fn __eq__(&self, other: &Bound<'_, PyAny>) -> bool {
+        Self::scale_type_of(other) == self.scale_type
+    }
+}
+
+/// The scale type music21 calls by this name, whether it is written as a
+/// class name (`MajorScale`, `AbstractHarmonicMinorScale`) or as a mode
+/// (`major`, `harmonic minor`).
+fn named_scale_type(name: &str) -> Option<RsScaleType> {
+    let bare = name.strip_prefix("Abstract").unwrap_or(name);
+    RsScaleType::from_music21_name(bare)
+        .or_else(|| RsScaleType::from_music21_name(&format!("{bare}Scale")))
+        .or_else(|| {
+            RsScaleType::ALL.into_iter().find(|scale_type| {
+                scale_type
+                    .music21_descriptive_name()
+                    .eq_ignore_ascii_case(bare)
+            })
+        })
+}
+
 /// music21's `scale.ConcreteScale`: a pattern of steps standing on a tonic.
 ///
 /// Every one of music21's twenty named scales is this with the pattern fixed,
@@ -144,13 +273,37 @@ impl Scale {
 )]
 pub struct ConcreteScale {
     pub(crate) inner: RsScale,
+    /// Whether the class this was built as fixes the pattern of steps.
+    ///
+    /// A bare `ConcreteScale` does not, which is why music21 calls its type
+    /// `Concrete` while a `HarmonicMinorScale` with no tonic still knows it
+    /// is a harmonic minor.
+    named_pattern: bool,
+    /// Whether a tonic was ever given.
+    ///
+    /// music21's `ConcreteScale` can be built without one, and then it is
+    /// not concrete at all: it is a pattern of steps waiting for a note to
+    /// stand on, which is what `isConcrete` and the `Abstract …` name say.
+    /// Anything that needs an actual pitch raises until it has one.
+    has_tonic: bool,
 }
 
 impl ConcreteScale {
     pub(crate) fn of(scale_type: RsScaleType, tonic: RsPitch) -> Self {
         Self {
             inner: RsScale::new(scale_type, tonic),
+            named_pattern: true,
+            has_tonic: true,
         }
+    }
+
+    /// The scale as something that can actually be realized, or music21's
+    /// complaint that it has no note to stand on.
+    fn realized(&self) -> PyResult<&RsScale> {
+        if !self.has_tonic {
+            return Err(ScaleException::new_err("pitchReference cannot be None"));
+        }
+        Ok(&self.inner)
     }
 
     /// A Python object of the class music21 names this scale type, when one
@@ -168,7 +321,11 @@ impl ConcreteScale {
         }
         Ok(Py::new(
             py,
-            PyClassInitializer::from(Scale).add_subclass(Self { inner: scale }),
+            PyClassInitializer::from(Scale).add_subclass(Self {
+                inner: scale,
+                named_pattern: true,
+                has_tonic: true,
+            }),
         )?
         .into_any())
     }
@@ -196,11 +353,16 @@ impl ConcreteScale {
         tonic: Option<&Bound<'_, PyAny>>,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<PyClassInitializer<Self>> {
-        let tonic = match tonic.filter(|value| !value.is_none()) {
-            Some(value) => pitch_from_any(value)?,
-            None => RsPitch::from_name("C").map_err(scale_error)?,
-        };
-        Ok(PyClassInitializer::from(Scale).add_subclass(Self::of(RsScaleType::Major, tonic)))
+        let mut built = Self::of(
+            RsScaleType::Major,
+            RsPitch::from_name("C").map_err(scale_error)?,
+        );
+        built.named_pattern = false;
+        match tonic.filter(|value| !value.is_none()) {
+            Some(value) => built.inner = RsScale::new(RsScaleType::Major, pitch_from_any(value)?),
+            None => built.has_tonic = false,
+        }
+        Ok(PyClassInitializer::from(Scale).add_subclass(built))
     }
 
     /// The pattern of steps is only known once the class is, which is why it
@@ -213,23 +375,47 @@ impl ConcreteScale {
         tonic: Option<&Bound<'_, PyAny>>,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<()> {
-        let scale_type = Self::scale_type_of(&slf.as_any().get_type())?;
-        let tonic = match tonic.filter(|value| !value.is_none()) {
+        let class = slf.as_any().get_type();
+        let named = class.hasattr("scaleTypeName")?;
+        let scale_type = Self::scale_type_of(&class)?;
+        let given = tonic.filter(|value| !value.is_none());
+        let tonic = match given {
             Some(value) => pitch_from_any(value)?,
             None => RsPitch::from_name("C").map_err(scale_error)?,
         };
-        slf.borrow_mut().inner = RsScale::new(scale_type, tonic);
+        let mut me = slf.borrow_mut();
+        me.inner = RsScale::new(scale_type, tonic);
+        me.named_pattern = named;
+        me.has_tonic = given.is_some();
         Ok(())
     }
 
+    /// music21's `isConcrete`: whether the scale has a note to stand on.
     #[getter]
     fn isConcrete(&self) -> bool {
-        true
+        self.has_tonic
     }
 
-    /// music21's `name`: the tonic and the pattern, `"D major"`.
+    /// music21's `type`: what kind of scale this is, which for a concrete
+    /// one is the pattern it stands on and for a vague one is `"Concrete"`.
+    #[getter]
+    fn r#type(&self) -> String {
+        if !self.named_pattern {
+            return "Concrete".to_string();
+        }
+        self.inner
+            .scale_type()
+            .music21_descriptive_name()
+            .to_string()
+    }
+
+    /// music21's `name`: the tonic and the pattern, `"D major"`, and
+    /// `"Abstract Concrete"` while there is no tonic to name.
     #[getter]
     fn name(&self) -> String {
+        if !self.has_tonic {
+            return format!("Abstract {}", self.r#type());
+        }
         format!(
             "{} {}",
             self.inner.tonic().name(),
@@ -238,13 +424,20 @@ impl ConcreteScale {
     }
 
     #[getter]
-    fn get_tonic(&self) -> Pitch {
-        Pitch::wrap(self.inner.tonic().clone(), false)
+    fn get_tonic(&self) -> Option<Pitch> {
+        self.has_tonic
+            .then(|| Pitch::wrap(self.inner.tonic().clone(), false))
     }
 
     #[setter]
-    fn set_tonic(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
-        self.inner = RsScale::new(self.inner.scale_type(), pitch_from_any(value)?);
+    fn set_tonic(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        match value.filter(|value| !value.is_none()) {
+            Some(value) => {
+                self.inner = RsScale::new(self.inner.scale_type(), pitch_from_any(value)?);
+                self.has_tonic = true;
+            }
+            None => self.has_tonic = false,
+        }
         Ok(())
     }
 
@@ -253,7 +446,7 @@ impl ConcreteScale {
     #[getter]
     fn pitches(&self) -> PyResult<Vec<Pitch>> {
         Ok(self
-            .inner
+            .realized()?
             .pitches()
             .map_err(scale_error)?
             .into_iter()
@@ -287,7 +480,7 @@ impl ConcreteScale {
     /// sounds — so a scale built on a bare `C` answers `C4`, and a plagal
     /// mode answers its final rather than the bottom of its range.
     fn getTonic(&self) -> PyResult<Pitch> {
-        self.inner
+        self.realized()?
             .final_pitch()
             .map(|pitch| Pitch::wrap(pitch, false))
             .map_err(scale_error)
@@ -295,7 +488,7 @@ impl ConcreteScale {
 
     /// music21's `getDominant`: the reciting tone.
     fn getDominant(&self) -> PyResult<Pitch> {
-        self.inner
+        self.realized()?
             .dominant()
             .map(|pitch| Pitch::wrap(pitch, false))
             .map_err(scale_error)
@@ -305,7 +498,7 @@ impl ConcreteScale {
     /// sit a semitone below the final, which in a minor scale is not the
     /// seventh degree the scale itself has.
     fn getLeadingTone(&self) -> PyResult<Pitch> {
-        self.inner
+        self.realized()?
             .leading_tone()
             .map(|pitch| Pitch::wrap(pitch, false))
             .map_err(scale_error)
@@ -317,22 +510,30 @@ impl ConcreteScale {
     /// Setting it changes the pattern and keeps the tonic, which is how
     /// music21 turns a scale of one kind into a scale of another.
     #[getter]
-    fn get_abstract(&self) -> String {
-        self.inner.scale_type().music21_name().to_string()
+    fn get_abstract(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        AbstractScale::object(py, self.named_pattern.then(|| self.inner.scale_type()))
     }
 
     #[setter]
     fn set_abstract(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
-        let name = match value.extract::<String>() {
-            Ok(name) => name,
-            Err(_) => value.get_type().name()?.extract()?,
-        };
-        let name = name.strip_prefix("Abstract").unwrap_or(&name).to_string();
-        let scale_type = RsScaleType::from_music21_name(&name)
-            .or_else(|| RsScaleType::from_music21_name(&format!("{name}Scale")))
-            .ok_or_else(|| ScaleException::new_err(format!("no such scale type: {name}")))?;
+        let scale_type = AbstractScale::scale_type_of(value).ok_or_else(|| {
+            ScaleException::new_err(format!(
+                "cannot read a scale pattern from {}",
+                value
+                    .str()
+                    .map_or_else(|_| "?".to_string(), |v| v.to_string())
+            ))
+        })?;
         self.inner = RsScale::new(scale_type, self.inner.tonic().clone());
+        self.named_pattern = true;
         Ok(())
+    }
+
+    /// music21's `octaveDuplicating`: whether the pattern repeats at the
+    /// octave, which every one of these does.
+    #[getter]
+    fn octaveDuplicating(&self) -> bool {
+        true
     }
 
     /// music21's `deriveRanked`: the scales of this pattern containing the
@@ -420,7 +621,7 @@ impl ConcreteScale {
             "humdrum" => RsSolfegVariant::Humdrum,
             _ => RsSolfegVariant::Music21,
         };
-        self.inner
+        self.realized()?
             .solfeg(&pitch, variant, chromatic)
             .map_err(scale_error)
     }
@@ -454,7 +655,7 @@ impl ConcreteScale {
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<bool> {
         let _ = direction;
-        self.inner
+        self.realized()?
             .is_next(
                 &pitch_from_any(other)?,
                 &pitch_from_any(pitchOrigin)?,
@@ -466,7 +667,7 @@ impl ConcreteScale {
     /// music21's `pitchFromDegree`: the pitch at a scale degree, counting the
     /// tonic as one.
     fn pitchFromDegree(&self, degree: usize) -> PyResult<Pitch> {
-        self.inner
+        self.realized()?
             .pitch_at_degree(degree)
             .map(|pitch| Pitch::wrap(pitch, false))
             .map_err(scale_error)
@@ -500,7 +701,7 @@ impl ConcreteScale {
     ) -> PyResult<Py<PyAny>> {
         let pitch = pitch_from_any(pitchTarget)?;
         let (degree, accidental) = self
-            .inner
+            .realized()?
             .degree_and_accidental_of(&pitch)
             .map_err(scale_error)?;
         let accidental = accidental.map(crate::pitch::Accidental::from_inner);
@@ -557,7 +758,7 @@ impl ConcreteScale {
         let interval: RsInterval = interval_from_any(value)?;
         let moved = slf
             .borrow()
-            .inner
+            .realized()?
             .transpose(&interval)
             .map_err(scale_error)?;
         if inPlace {
@@ -620,7 +821,7 @@ impl ConcreteScale {
         degreeStart: usize,
         degreeEnd: usize,
     ) -> PyResult<crate::interval::Interval> {
-        self.inner
+        self.realized()?
             .interval_between_degrees(degreeStart, degreeEnd)
             .map(crate::interval::Interval::wrap)
             .map_err(scale_error)
@@ -676,7 +877,7 @@ impl DiatonicScale {
         let relative = slf
             .as_super()
             .borrow()
-            .inner
+            .realized()?
             .relative_major()
             .map_err(scale_error)?;
         ConcreteScale::object(slf.py(), relative)
@@ -687,7 +888,7 @@ impl DiatonicScale {
         let relative = slf
             .as_super()
             .borrow()
-            .inner
+            .realized()?
             .relative_minor()
             .map_err(scale_error)?;
         ConcreteScale::object(slf.py(), relative)
@@ -773,6 +974,7 @@ def build(base, diatonic_base, names):
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let py = m.py();
     m.add_class::<Scale>()?;
+    m.add_class::<AbstractScale>()?;
     m.add_class::<ConcreteScale>()?;
     m.add_class::<DiatonicScale>()?;
     let exception = py.get_type::<ScaleException>();
