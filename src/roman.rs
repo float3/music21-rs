@@ -64,6 +64,14 @@ pub struct RomanNumeral {
     /// How the sixth and seventh degrees of a minor key are read.
     sixth_minor: Minor67Default,
     seventh_minor: Minor67Default,
+    /// The collection the figure is read over, when it is not a key at all.
+    ///
+    /// music21 takes a `ConcreteScale` wherever it takes a key, and reads
+    /// every degree off that instead — which is how a numeral means
+    /// something in a collection no key signature can write, such as the
+    /// octatonic. The key is still carried, as the major of the same tonic,
+    /// because everything that asks a numeral for its key expects one.
+    scale: Option<crate::scale::Scale>,
     /// Whether an upper-case numeral means a major chord and a lower-case
     /// one a minor chord.
     ///
@@ -179,6 +187,23 @@ impl RomanNumeral {
         seventh_minor: Minor67Default,
         case_matters: bool,
     ) -> Result<Self> {
+        Self::over_scale(figure, key, None, sixth_minor, seventh_minor, case_matters)
+    }
+
+    /// The same again over a scale that is not a key: music21's numerals
+    /// read against a `ConcreteScale`.
+    ///
+    /// The key is still needed — a numeral reports one, and a secondary
+    /// numeral establishes one — so pass the major key of the scale's tonic,
+    /// which is what music21 falls back on.
+    pub fn over_scale(
+        figure: impl Into<String>,
+        key: Key,
+        scale: Option<crate::scale::Scale>,
+        sixth_minor: Minor67Default,
+        seventh_minor: Minor67Default,
+        case_matters: bool,
+    ) -> Result<Self> {
         let figure = figure.into();
         let written = fold_figure_symbols(figure.trim());
         let trimmed = written.as_str();
@@ -206,6 +231,7 @@ impl RomanNumeral {
                 sixth_minor,
                 seventh_minor,
                 case_matters,
+                scale,
             });
         }
 
@@ -254,6 +280,7 @@ impl RomanNumeral {
             sixth_minor,
             seventh_minor,
             case_matters,
+            scale,
         };
         numeral.raise_minor_sixth_and_seventh(&mut column)?;
         // This crate writes an addition as `add(13)` where music21 writes a
@@ -338,6 +365,22 @@ impl RomanNumeral {
     /// alteration in semitones and how far above the root each stands.
     pub fn added_steps(&self) -> &[(i8, u8)] {
         &self.figures.added
+    }
+
+    /// The scale the figure is read over, where it is not a key at all.
+    ///
+    /// A numeral read this way spells its chord where the scale stands, so
+    /// nothing downstream has to place it.
+    pub fn scale(&self) -> Option<&crate::scale::Scale> {
+        self.scale.as_ref()
+    }
+
+    /// The collection the figure's degrees are read off.
+    fn reading(&self) -> Result<Reading> {
+        Ok(match &self.scale {
+            Some(scale) => Reading::Scale(scale.clone()),
+            None => Reading::Key(self.effective_key()?),
+        })
     }
 
     /// The quality the figure states, which is what the notes read off the
@@ -538,15 +581,15 @@ impl RomanNumeral {
             return self.augmented_sixth_chord(kind);
         }
 
-        let scale = self.effective_key()?;
+        let reading = self.reading()?;
         let numbers = self.figures.numbers();
         let implies_root = FIGURES_IMPLYING_ROOT.contains(&numbers.as_slice());
         let bass_degree = self.bass_scale_degree(&numbers, implies_root)?;
 
-        let mut pitches = vec![degree_pitch(&scale, bass_degree)?];
+        let mut pitches = vec![reading.pitch_at(bass_degree)?];
         for figure in self.figures.figures.iter().rev() {
             let degree = bass_degree + IntegerType::from(figure.number) - 1;
-            let mut pitch = degree_pitch(&scale, degree)?;
+            let mut pitch = reading.pitch_at(degree)?;
             if let Some(alter) = figure.alter {
                 pitch.set_accidental(Some(Accidental::new(modified_alter(&pitch, alter))?));
             }
@@ -592,7 +635,7 @@ impl RomanNumeral {
         };
 
         self.omit_steps(&mut pitches, recorded.as_ref())?;
-        self.add_steps(&mut pitches, &scale)?;
+        self.add_steps(&mut pitches, &reading)?;
 
         let mut chord = Chord::new(pitches.as_slice())?;
         chord.set_root(recorded);
@@ -604,7 +647,8 @@ impl RomanNumeral {
         if !implies_root {
             return Ok(IntegerType::from(self.degree));
         }
-        bass_scale_degree_from_notation(self.degree, numbers).map(IntegerType::from)
+        bass_scale_degree_from_notation_in(self.degree, numbers, self.reading()?.cardinality())
+            .map(IntegerType::from)
     }
 
     /// music21's `_matchAccidentalsToQuality`, over the chord being built:
@@ -652,14 +696,14 @@ impl RomanNumeral {
 
     /// music21's added steps: an `[add4]` puts in the note that many scale
     /// steps above the *root*, at or above the bass.
-    fn add_steps(&self, pitches: &mut Vec<Pitch>, scale: &Key) -> Result<()> {
+    fn add_steps(&self, pitches: &mut Vec<Pitch>, reading: &Reading) -> Result<()> {
         if self.figures.added.is_empty() {
             return Ok(());
         }
         let bass = pitches.first().map_or(0.0, Pitch::ps);
         for (alter, step) in &self.figures.added {
             let degree = IntegerType::from(self.degree) + IntegerType::from(*step) - 1;
-            let mut added = degree_pitch(scale, degree)?;
+            let mut added = reading.pitch_at(degree)?;
             let moved = added.accidental().alter() + FloatType::from(*alter);
             added.set_accidental(Some(Accidental::new(moved)?));
             while added.ps() < bass {
@@ -1603,6 +1647,12 @@ fn unslash_inversion(figure: &str) -> String {
 /// the root. A column that implies no root at all — `54`, say — leaves the
 /// root in the bass, which is what the degree already says.
 pub fn bass_scale_degree_from_notation(degree: u8, numbers: &[u8]) -> Result<u8> {
+    bass_scale_degree_from_notation_in(degree, numbers, 7)
+}
+
+/// The same in a collection of a given size, which for anything but a key is
+/// not seven.
+fn bass_scale_degree_from_notation_in(degree: u8, numbers: &[u8], cardinality: u8) -> Result<u8> {
     if !FIGURES_IMPLYING_ROOT.contains(&numbers) {
         return Ok(degree);
     }
@@ -1618,8 +1668,9 @@ pub fn bass_scale_degree_from_notation(degree: u8, numbers: &[u8]) -> Result<u8>
         .root()
         .ok_or_else(|| Error::Chord("figured bass column has no root".to_string()))?;
     let distance = root.diatonic_note_number() - middle_c;
-    let bass = (IntegerType::from(degree) - distance).rem_euclid(7);
-    Ok(if bass == 0 { 7 } else { bass as u8 })
+    let count = IntegerType::from(cardinality);
+    let bass = (IntegerType::from(degree) - distance).rem_euclid(count);
+    Ok(if bass == 0 { cardinality } else { bass as u8 })
 }
 
 /// Respells the third, fifth and seventh of a chord to the quality asked for.
@@ -1661,6 +1712,38 @@ pub fn match_pitches_to_quality(
         correct_faulty_pitch(&mut pitches[index], -1)?;
     }
     Ok(())
+}
+
+/// What a roman numeral counts its degrees against.
+///
+/// Usually a key, which has seven of them; but music21 reads a numeral over
+/// any concrete scale, and an octatonic one has eight.
+enum Reading {
+    Key(Key),
+    Scale(crate::scale::Scale),
+}
+
+impl Reading {
+    /// How many degrees there are before the collection repeats.
+    fn cardinality(&self) -> u8 {
+        match self {
+            Self::Key(_) => 7,
+            Self::Scale(scale) => scale.degree_count() as u8,
+        }
+    }
+
+    /// The pitch a degree spells, folded into the octave the collection's
+    /// tonic stands in.
+    fn pitch_at(&self, degree: IntegerType) -> Result<Pitch> {
+        match self {
+            Self::Key(key) => degree_pitch(key, degree),
+            Self::Scale(scale) => {
+                let count = IntegerType::from(self.cardinality());
+                let wrapped = (degree - 1).rem_euclid(count) + 1;
+                scale.pitch_at_degree(wrapped as usize)
+            }
+        }
+    }
 }
 
 /// The pitch a scale degree spells, folded into the octave the scale's tonic
@@ -2709,6 +2792,82 @@ mod tests {
                 .unwrap_or_else(|err| panic!("{figure} should parse: {err}"));
             assert_eq!(numeral.inversion(), expected, "{figure}");
         }
+    }
+
+    #[test]
+    fn a_figure_expands_into_a_figured_bass_column() {
+        // music21's shorthand: a bare `7` is a seventh chord in root
+        // position, and `43` is the same chord over its fifth.
+        let numbers = |figure: &str| {
+            RomanNumeral::new(figure, Key::from_tonic("C").unwrap())
+                .unwrap()
+                .figure_numbers()
+        };
+        assert_eq!(numbers("V"), vec![5, 3]);
+        assert_eq!(numbers("V7"), vec![7, 5, 3]);
+        assert_eq!(numbers("V65"), vec![6, 5, 3]);
+        assert_eq!(numbers("V43"), vec![6, 4, 3]);
+        assert_eq!(numbers("V9"), vec![9, 7, 5, 3]);
+        // A column written out is left as written, alterations and all.
+        assert_eq!(numbers("V7#5b3"), vec![7, 5, 3]);
+    }
+
+    #[test]
+    fn a_column_says_which_degree_is_in_the_bass() {
+        // A sixth and a third over the bass is a triad in first inversion, so
+        // the bass of a `V6` is the seventh degree.
+        assert_eq!(bass_scale_degree_from_notation(5, &[6, 3]).unwrap(), 7);
+        assert_eq!(bass_scale_degree_from_notation(1, &[5, 3]).unwrap(), 1);
+        assert_eq!(bass_scale_degree_from_notation(2, &[6, 5, 3]).unwrap(), 4);
+        // A column that implies no root leaves the degree where it was.
+        assert_eq!(bass_scale_degree_from_notation(5, &[5, 4]).unwrap(), 5);
+    }
+
+    #[test]
+    fn a_figure_alters_one_note_rather_than_naming_another_chord() {
+        let names = |figure: &str, key: &str| {
+            RomanNumeral::new(figure, Key::from_tonic(key).unwrap())
+                .unwrap()
+                .to_chord()
+                .unwrap()
+                .pitch_names()
+        };
+        // Writing the fifth out says the column is `7,b5` and nothing else,
+        // so the third music21 would have implied is gone with it.
+        assert_eq!(names("V7b5", "C"), ["G", "D-", "F"]);
+        assert_eq!(names("V[no3]", "F"), ["C", "G"]);
+        assert_eq!(names("I[add4][no3]", "C"), ["C", "F", "G"]);
+        // The sharp of `i#7` raises the flattened seventh of a minor key to a
+        // natural, rather than spelling a `B#`.
+        assert_eq!(names("i#7", "c"), ["C", "E-", "G", "B"]);
+        assert_eq!(names("i#7", "C"), ["C", "E-", "G", "B#"]);
+    }
+
+    #[test]
+    fn a_numeral_can_be_read_over_a_scale_that_is_not_a_key() {
+        // music21 reads a numeral against any concrete scale, and an
+        // octatonic one has eight degrees rather than seven.
+        let scale = crate::scale::Scale::new(
+            crate::scale::ScaleType::Octatonic,
+            Pitch::from_name("C2").unwrap(),
+        );
+        let numeral = RomanNumeral::over_scale(
+            "I9",
+            Key::from_tonic("C").unwrap(),
+            Some(scale),
+            Minor67Default::Quality,
+            Minor67Default::Quality,
+            false,
+        )
+        .unwrap();
+        let pitches: Vec<String> = numeral
+            .to_chord()
+            .unwrap()
+            .pitches()
+            .iter()
+            .map(Pitch::name_with_octave)
+            .collect();
+        assert_eq!(pitches, ["C2", "E-2", "G-2", "A2", "C3"]);
     }
 
     #[test]

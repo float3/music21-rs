@@ -14,6 +14,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
 use music21_rs::roman as rs_roman;
+use music21_rs::scale::Scale as RsScale;
 use music21_rs::{
     Chord as RsChord, ImpliedQuality as RsImpliedQuality, Interval as RsInterval, Key as RsKey,
     Minor67Default as RsMinor67Default, RomanNumeral as RsRomanNumeral,
@@ -158,9 +159,10 @@ impl RomanNumeral {
                 Err(_) => value.extract::<String>()?,
             },
         };
-        let inner = RsRomanNumeral::with_options(
+        let inner = RsRomanNumeral::over_scale(
             figure,
             key,
+            collection(keyOrScale),
             minor_reading(keywords, "sixthMinor")?,
             minor_reading(keywords, "seventhMinor")?,
             case_matters(keywords)?,
@@ -231,7 +233,9 @@ impl RomanNumeral {
             return RsChord::new::<&[music21_rs::Pitch]>(&[]).map_err(roman_error);
         }
         let chord = self.inner.to_chord().map_err(roman_error)?;
-        let Some(octave) = self.octave else {
+        // A numeral read over a scale is already spelled where that scale
+        // stands, so there is nowhere to move it to.
+        let Some(octave) = self.octave.filter(|_| self.inner.scale().is_none()) else {
             return Ok(chord);
         };
         let tonic_octave = self.inner.key().tonic().octave().unwrap_or(4);
@@ -256,6 +260,20 @@ impl RomanNumeral {
         }
         Ok(moved)
     }
+}
+
+/// The collection a numeral counts its degrees against, when the caller
+/// gave a scale rather than a key.
+///
+/// A key is left out: seven degrees spelled by a key signature is what every
+/// other path already does, and reading those off a realized scale would put
+/// a second answer in play. Only a scale music21 would not call diatonic
+/// comes through here.
+fn collection(value: Option<&Bound<'_, PyAny>>) -> Option<RsScale> {
+    let scale = value?
+        .extract::<PyRef<'_, crate::scale::ConcreteScale>>()
+        .ok()?;
+    (scale.inner.degree_count() != 7).then(|| scale.inner.clone())
 }
 
 /// The key a numeral is written in, and the octave its scale stood in.

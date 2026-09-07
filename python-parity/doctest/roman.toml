@@ -9,6 +9,7 @@ passing = [
     "music21.roman.Minor67Default",
     "music21.roman.PitchFigureTuple",
     "music21.roman.PitchFigureTuple.fromPitchAndReference",
+    "music21.roman.RomanNumeral",
     "music21.roman.RomanNumeral._adjustMinorVIandVIIByQuality",
     "music21.roman.RomanNumeral._correctForSecondaryRomanNumeral",
     "music21.roman.RomanNumeral._findSemitoneSizeForQuality",
