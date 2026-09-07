@@ -4,8 +4,8 @@
 //! the same value as a scalar from 0 to 1 — plus the rule for reading it
 //! against the dynamic marks around it. music21 finds those marks by
 //! searching the stream the note sits in; there are no streams here, so
-//! [`Volume::realized_with`] takes the dynamic and articulation scalars as
-//! arguments instead of going looking for them.
+//! [`Volume::realized_with`] takes the dynamic scalar and the articulation
+//! shift as arguments instead of going looking for them.
 
 use std::fmt;
 
@@ -123,20 +123,22 @@ impl Volume {
     /// The loudness this volume comes to on its own, between `0` and `1`:
     /// music21's `realized` with no dynamic or articulation context.
     pub fn realized(&self) -> FloatType {
-        self.realized_with(None, None, BASE_LEVEL, true)
+        self.realized_with(None, 0.0, BASE_LEVEL, true)
     }
 
-    /// The loudness this volume comes to against the dynamic and
-    /// articulation scalars given: music21's `getRealized`, with the context
-    /// search it would do through a stream replaced by its two answers.
+    /// The loudness this volume comes to against the dynamic in force and
+    /// whatever the articulations add: music21's `getRealized`, with the
+    /// context search it would do through a stream replaced by its answers.
     ///
-    /// A relative velocity doubles the scalar range, so `0.5` leaves the
-    /// base level alone and `0.7` raises it; an absolute one decides the
-    /// answer by itself. `clip` holds the result inside `0` to `1`.
+    /// A relative velocity doubles the scalar range, so `0.5` leaves the base
+    /// level alone and `0.7` raises it; an absolute one decides the answer by
+    /// itself. The dynamic scales; an articulation *shifts*, which is why an
+    /// accent on a note nobody has marked lifts it rather than doubling it.
+    /// `clip` holds the result inside `0` to `1`.
     pub fn realized_with(
         &self,
         dynamic_scalar: Option<FloatType>,
-        articulation_scalar: Option<FloatType>,
+        articulation_shift: FloatType,
         base_level: FloatType,
         clip: bool,
     ) -> FloatType {
@@ -150,9 +152,7 @@ impl Volume {
             if let Some(dynamic_scalar) = dynamic_scalar {
                 value *= dynamic_scalar * 2.0;
             }
-            if let Some(articulation_scalar) = articulation_scalar {
-                value *= articulation_scalar * 2.0;
-            }
+            value += articulation_shift;
         }
         if clip {
             value = value.clamp(0.0, 1.0);
@@ -161,9 +161,27 @@ impl Volume {
     }
 
     /// The realized loudness as one of music21's dynamic marks, `ppp`
-    /// through `fff`: music21's `getRealizedStr`.
-    pub fn realized_str(&self) -> &'static str {
+    /// through `fff`: `dynamics.dynamicStrFromDecimal` of the realized value.
+    pub fn realized_dynamic(&self) -> &'static str {
         dynamic_name(self.realized())
+    }
+
+    /// The realized loudness written out to two places, which is what
+    /// music21's `getRealizedStr` and `cachedRealizedStr` answer.
+    pub fn realized_str(&self) -> String {
+        rounded_str(self.realized())
+    }
+}
+
+/// A loudness written out the way Python writes `str(round(value, 2))`: to
+/// two places, with the trailing zeros dropped but never the point.
+pub fn rounded_str(value: FloatType) -> String {
+    let rounded = (value * 100.0).round() / 100.0;
+    let written = format!("{rounded}");
+    if written.contains('.') {
+        written
+    } else {
+        format!("{written}.0")
     }
 }
 
@@ -247,13 +265,15 @@ mod tests {
         // music21's default loudness for a note nobody has marked.
         let unset = Volume::new();
         assert!((unset.realized() - 0.70866).abs() < 1e-9);
-        assert_eq!(unset.realized_str(), "f");
+        assert_eq!(unset.realized_dynamic(), "f");
+        assert_eq!(unset.realized_str(), "0.71");
 
         // A relative velocity doubles its scalar against the base level, so
         // half velocity leaves the base level where it is.
         let half = Volume::from_velocity_scalar(0.5).unwrap();
         assert!((half.realized() - 0.5).abs() < 1e-9);
-        assert_eq!(half.realized_str(), "mf");
+        assert_eq!(half.realized_dynamic(), "mf");
+        assert_eq!(half.realized_str(), "0.5");
 
         // An absolute velocity decides the answer by itself.
         let mut absolute = Volume::from_velocity_scalar(0.5).unwrap();
@@ -264,10 +284,15 @@ mod tests {
         assert!((loud.realized() - 1.0).abs() < 1e-9);
 
         // Relative velocities scale with the dynamic around them, and clip.
-        assert!((half.realized_with(Some(0.5), None, 0.5, true) - 0.5).abs() < 1e-9);
-        assert!((half.realized_with(Some(1.0), None, 0.5, true) - 1.0).abs() < 1e-9);
-        assert!((half.realized_with(Some(1.0), None, 0.5, false) - 1.0).abs() < 1e-9);
-        assert!(loud.realized_with(Some(1.0), None, 0.5, false) > 0.99);
+        assert!((half.realized_with(Some(0.5), 0.0, 0.5, true) - 0.5).abs() < 1e-9);
+        assert!((half.realized_with(Some(1.0), 0.0, 0.5, true) - 1.0).abs() < 1e-9);
+        assert!((half.realized_with(Some(1.0), 0.0, 0.5, false) - 1.0).abs() < 1e-9);
+        assert!(loud.realized_with(Some(1.0), 0.0, 0.5, false) > 0.99);
+
+        // An articulation shifts rather than scales, so an accent on a note
+        // nobody has marked lifts it a little.
+        let unmarked = Volume::new();
+        assert!((unmarked.realized_with(None, 0.1, 0.5, true) - 0.80866).abs() < 1e-9);
     }
 
     #[test]

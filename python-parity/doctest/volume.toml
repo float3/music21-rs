@@ -1,0 +1,16 @@
+# Docstrings of music21.volume whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_volume`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.volume.Volume",
+    "music21.volume.Volume.cachedRealized",
+    "music21.volume.Volume.cachedRealizedStr",
+    "music21.volume.Volume.getDynamicContext",
+    "music21.volume.Volume.getRealized",
+    "music21.volume.Volume.getRealizedStr",
+    "music21.volume.Volume.mergeAttributes",
+    "music21.volume.Volume.velocity",
+    "music21.volume.Volume.velocityScalar",
+]

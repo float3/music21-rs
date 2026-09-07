@@ -2325,12 +2325,15 @@ impl Note {
     /// music21's `.volume`, made on first asking and the same object after
     /// that, so `n.volume.velocity = 20` sticks.
     #[getter]
-    fn get_volume(&mut self, py: Python<'_>) -> PyResult<Py<Volume>> {
-        if let Some(volume) = &self.volume {
+    fn get_volume(slf: &Bound<'_, Self>, py: Python<'_>) -> PyResult<Py<Volume>> {
+        if let Some(volume) = &slf.borrow().volume {
             return Ok(volume.clone_ref(py));
         }
-        let created = Py::new(py, Volume::wrap(self.inner.volume()))?;
-        self.volume = Some(created.clone_ref(py));
+        // The volume knows whose it is, which is how music21 tells a volume
+        // already spoken for from a loose one.
+        let inner = slf.borrow().inner.volume();
+        let created = Py::new(py, Volume::owned_by(inner, slf.clone().into_any().unbind()))?;
+        slf.borrow_mut().volume = Some(created.clone_ref(py));
         Ok(created)
     }
 

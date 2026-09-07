@@ -1,0 +1,20 @@
+# Docstrings of music21.beam whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_beam`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.beam",
+    "music21.beam.Beam",
+    "music21.beam.Beams",
+    "music21.beam.Beams.append",
+    "music21.beam.Beams.fill",
+    "music21.beam.Beams.getByNumber",
+    "music21.beam.Beams.getNumbers",
+    "music21.beam.Beams.getTypeByNumber",
+    "music21.beam.Beams.getTypes",
+    "music21.beam.Beams.naiveBeams",
+    "music21.beam.Beams.removeSandwichedUnbeamables",
+    "music21.beam.Beams.setAll",
+    "music21.beam.Beams.setByNumber",
+]

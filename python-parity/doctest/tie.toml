@@ -1,0 +1,9 @@
+# Docstrings of music21.tie whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_tie`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.tie.Tie",
+    "music21.tie.Tie.__eq__",
+]

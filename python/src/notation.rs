@@ -3,7 +3,7 @@
 
 #![allow(non_snake_case)]
 
-use pyo3::exceptions::{PyException, PyValueError};
+use pyo3::exceptions::{PyException, PyIndexError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
@@ -385,7 +385,16 @@ pub struct Beam {
 fn beam_type_of(value: &Bound<'_, PyAny>) -> PyResult<RsBeamType> {
     let name: String = value.extract()?;
     RsBeamType::from_music21_name(&name)
-        .ok_or_else(|| BeamException::new_err(format!("no such beam type: {name}")))
+        .ok_or_else(|| BeamException::new_err(format!("beam type cannot be {name}")))
+}
+
+/// The same where the type may be left unsaid, which is what a beam counted
+/// but not yet decided has.
+fn beam_type_or_none(value: Option<&Bound<'_, PyAny>>) -> PyResult<Option<RsBeamType>> {
+    match value.filter(|value| !value.is_none()) {
+        Some(value) => beam_type_of(value).map(Some),
+        None => Ok(None),
+    }
 }
 
 /// Reads music21's beam direction name, which only a stub has.
@@ -402,29 +411,26 @@ fn beam_direction_of(value: Option<&Bound<'_, PyAny>>) -> PyResult<Option<RsBeam
 #[pymethods]
 impl Beam {
     #[new]
-    #[pyo3(signature = (type_ = None, direction = None, **_keywords))]
+    #[pyo3(signature = (r#type = None, direction = None, number = None, **_keywords))]
     fn new(
-        type_: Option<&Bound<'_, PyAny>>,
+        r#type: Option<&Bound<'_, PyAny>>,
         direction: Option<&Bound<'_, PyAny>>,
+        number: Option<u32>,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Self> {
-        let beam_type = match type_.filter(|value| !value.is_none()) {
-            Some(value) => beam_type_of(value)?,
-            None => RsBeamType::Start,
-        };
-        Ok(Self {
-            inner: RsBeam::new(beam_type, beam_direction_of(direction)?),
-        })
+        let mut inner = RsBeam::new(beam_type_or_none(r#type)?, beam_direction_of(direction)?);
+        inner.set_number(number);
+        Ok(Self { inner })
     }
 
     #[getter]
-    fn get_type(&self) -> &'static str {
-        self.inner.beam_type().as_str()
+    fn get_type(&self) -> Option<&'static str> {
+        self.inner.beam_type().map(RsBeamType::as_str)
     }
 
     #[setter]
-    fn set_type(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
-        self.inner = RsBeam::new(beam_type_of(value)?, self.inner.direction());
+    fn set_type(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        self.inner.set_beam_type(beam_type_or_none(value)?);
         Ok(())
     }
 
@@ -435,7 +441,7 @@ impl Beam {
 
     #[setter]
     fn set_direction(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
-        self.inner = RsBeam::new(self.inner.beam_type(), beam_direction_of(value)?);
+        self.inner.set_direction(beam_direction_of(value)?);
         Ok(())
     }
 
@@ -457,6 +463,14 @@ impl Beam {
         other
             .extract::<PyRef<'_, Self>>()
             .is_ok_and(|other| other.inner == self.inner)
+    }
+
+    fn __deepcopy__(&self, _memo: &Bound<'_, PyAny>) -> Self {
+        self.clone()
+    }
+
+    fn __copy__(&self) -> Self {
+        self.clone()
     }
 }
 
@@ -499,6 +513,47 @@ impl Clone for Beams {
     }
 }
 
+/// How many beam levels a written value carries, from either of the two ways
+/// music21 says it: the name of the value, or the number of lines.
+fn beam_levels(level: Option<&Bound<'_, PyAny>>) -> PyResult<u32> {
+    let Some(value) = level.filter(|value| !value.is_none()) else {
+        return Ok(1);
+    };
+    if let Ok(name) = value.extract::<String>() {
+        return RsDurationType::from_music21_name(&name)
+            .and_then(RsBeams::levels_for)
+            .ok_or_else(|| BeamException::new_err(format!("cannot fill beams for level {name}")));
+    }
+    let levels: u32 = value.extract()?;
+    if levels == 0 || levels > 9 {
+        return Err(BeamException::new_err(format!(
+            "cannot fill beams for level {levels}"
+        )));
+    }
+    Ok(levels)
+}
+
+/// The beams of one object, or nothing where it carries none: one entry of
+/// music21's `naiveBeams` list, read back off Python.
+fn beams_of(value: &Bound<'_, PyAny>) -> PyResult<Option<RsBeams>> {
+    if value.is_none() {
+        return Ok(None);
+    }
+    Ok(Some(value.extract::<PyRef<'_, Beams>>()?.inner.clone()))
+}
+
+/// The same list, handed back to Python as `Beams` objects and `None`s.
+fn beams_list<'py>(py: Python<'py>, beams: Vec<Option<RsBeams>>) -> PyResult<Bound<'py, PyList>> {
+    let list = PyList::empty(py);
+    for entry in beams {
+        match entry {
+            Some(beams) => list.append(Py::new(py, Beams::wrap(beams))?)?,
+            None => list.append(py.None())?,
+        }
+    }
+    Ok(list)
+}
+
 #[pymethods]
 impl Beams {
     #[new]
@@ -509,7 +564,7 @@ impl Beams {
 
     /// music21's `beamsList`: the beams themselves, in level order.
     #[getter]
-    fn beamsList(&self) -> Vec<Beam> {
+    fn get_beamsList(&self) -> Vec<Beam> {
         self.inner
             .beams()
             .iter()
@@ -517,83 +572,99 @@ impl Beams {
             .collect()
     }
 
-    /// music21's `append`: one more beam, a level down.
-    #[pyo3(signature = (type_ = None, direction = None))]
+    /// Setting it replaces them outright, which is how music21 says a note
+    /// carries no beam at all.
+    #[setter]
+    fn set_beamsList(&mut self, py: Python<'_>, value: Vec<PyRef<'_, Beam>>) -> PyResult<()> {
+        self.inner
+            .set_beams(value.into_iter().map(|beam| beam.inner).collect());
+        self.write_back(py)
+    }
+
+    /// music21's `append`: one more beam, a level down. It takes the type of
+    /// the beam to make, or a beam already made.
+    #[pyo3(signature = (r#type = None, direction = None))]
     fn append(
         &mut self,
         py: Python<'_>,
-        type_: Option<&Bound<'_, PyAny>>,
+        r#type: Option<&Bound<'_, PyAny>>,
         direction: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<()> {
-        let beam_type = match type_.filter(|value| !value.is_none()) {
-            Some(value) => beam_type_of(value)?,
-            None => RsBeamType::Start,
-        };
-        self.inner.append(beam_type, beam_direction_of(direction)?);
+        if let Some(value) = r#type
+            && let Ok(beam) = value.extract::<PyRef<'_, Beam>>()
+        {
+            self.inner.beams_mut().push(beam.inner);
+            return self.write_back(py);
+        }
+        self.inner
+            .append(beam_type_or_none(r#type)?, beam_direction_of(direction)?);
         self.write_back(py)
     }
 
     /// music21's `fill`: as many beams as the written value has flags.
-    #[pyo3(signature = (level = None, type_ = None))]
+    ///
+    /// It says how many lines there are and leaves what each does unsaid,
+    /// unless a type is given.
+    #[pyo3(signature = (level = None, r#type = None))]
     fn fill(
         &mut self,
         py: Python<'_>,
         level: Option<&Bound<'_, PyAny>>,
-        type_: Option<&Bound<'_, PyAny>>,
+        r#type: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<()> {
-        let duration_type = match level.filter(|value| !value.is_none()) {
-            Some(value) => match value.extract::<String>() {
-                Ok(name) => RsDurationType::from_music21_name(&name).ok_or_else(|| {
-                    BeamException::new_err(format!("no such duration type: {name}"))
-                })?,
-                Err(_) => {
-                    // music21 also takes the number of levels, `2` meaning a
-                    // sixteenth.
-                    let levels: u32 = value.extract()?;
-                    LEVELS
-                        .get(levels.saturating_sub(1) as usize)
-                        .copied()
-                        .ok_or_else(|| {
-                            BeamException::new_err(format!("cannot beam at {levels} levels"))
-                        })?
-                }
-            },
-            None => RsDurationType::Eighth,
-        };
-        let beam_type = match type_.filter(|value| !value.is_none()) {
-            Some(value) => Some(beam_type_of(value)?),
-            None => None,
-        };
+        let levels = beam_levels(level)?;
         self.inner
-            .fill(duration_type, beam_type)
+            .fill_levels(levels, beam_type_or_none(r#type)?)
             .map_err(beam_error)?;
         self.write_back(py)
     }
 
     /// music21's `setAll`: every beam made the same.
-    #[pyo3(signature = (type_, direction = None))]
+    #[pyo3(signature = (r#type, direction = None))]
     fn setAll(
         &mut self,
         py: Python<'_>,
-        type_: &Bound<'_, PyAny>,
+        r#type: &Bound<'_, PyAny>,
         direction: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<()> {
         self.inner
-            .set_all(beam_type_of(type_)?, beam_direction_of(direction)?);
+            .set_all(beam_type_of(r#type)?, beam_direction_of(direction)?);
         self.write_back(py)
     }
 
     /// music21's `setByNumber`: the beam at one level made the same.
-    #[pyo3(signature = (number, type_, direction = None))]
+    ///
+    /// The type and the direction may be written as one, hyphenated, which is
+    /// how a partial beam is usually named.
+    #[pyo3(signature = (number, r#type, direction = None))]
     fn setByNumber(
         &mut self,
         py: Python<'_>,
         number: u32,
-        type_: &Bound<'_, PyAny>,
+        r#type: &Bound<'_, PyAny>,
         direction: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<()> {
+        let (beam_type, beam_direction) = match r#type.extract::<String>() {
+            Ok(written) if written.contains('-') => {
+                let (name, side) = written.split_once('-').expect("a hyphen was just found");
+                let name = name.to_string();
+                let side = side.to_string();
+                let name = name.into_pyobject(py)?;
+                let side = side.into_pyobject(py)?;
+                (
+                    beam_type_of(name.as_any())?,
+                    beam_direction_of(Some(side.as_any()))?,
+                )
+            }
+            _ => (beam_type_of(r#type)?, beam_direction_of(direction)?),
+        };
+        if !self.inner.numbers().contains(&Some(number)) {
+            return Err(PyIndexError::new_err(format!(
+                "beam number {number} cannot be accessed"
+            )));
+        }
         self.inner
-            .set_by_number(number, beam_type_of(type_)?, beam_direction_of(direction)?)
+            .set_by_number(number, beam_type, beam_direction)
             .map_err(beam_error)?;
         self.write_back(py)
     }
@@ -603,26 +674,121 @@ impl Beams {
         self.inner
             .by_number(number)
             .map(|beam| Beam { inner: *beam })
-            .ok_or_else(|| BeamException::new_err(format!("beam number {number} does not exist")))
+            .ok_or_else(|| {
+                PyIndexError::new_err(format!("beam number {number} cannot be accessed"))
+            })
     }
 
-    /// music21's `getTypeByNumber`.
-    fn getTypeByNumber(&self, number: u32) -> PyResult<&'static str> {
-        Ok(self.getByNumber(number)?.get_type())
+    /// music21's `getTypeByNumber`, which writes a stub's direction into the
+    /// name with a hyphen.
+    fn getTypeByNumber(&self, number: u32) -> PyResult<Option<String>> {
+        let beam = self.getByNumber(number)?;
+        let Some(name) = beam.get_type() else {
+            return Ok(None);
+        };
+        Ok(Some(match beam.get_direction() {
+            Some(direction) => format!("{name}-{direction}"),
+            None => name.to_string(),
+        }))
     }
 
     /// music21's `getTypes`.
-    fn getTypes(&self) -> Vec<&'static str> {
+    fn getTypes(&self) -> Vec<Option<&'static str>> {
         self.inner
             .types()
             .into_iter()
-            .map(RsBeamType::as_str)
+            .map(|beam_type| beam_type.map(RsBeamType::as_str))
             .collect()
     }
 
     /// music21's `getNumbers`.
     fn getNumbers(&self) -> Vec<Option<u32>> {
         self.inner.numbers()
+    }
+
+    /// music21's `naiveBeams`: the fullest set of beams each of a run of
+    /// objects could carry, with nothing said about what any of them does.
+    ///
+    /// Anything a quarter or longer carries none, and neither does a rest —
+    /// there is nothing to beam a silence to.
+    #[staticmethod]
+    fn naiveBeams<'py>(
+        py: Python<'py>,
+        srcList: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyList>> {
+        let mut beams = Vec::new();
+        for element in srcList.try_iter()? {
+            let element = element?;
+            let name: String = element.getattr("duration")?.getattr("type")?.extract()?;
+            let sounds = element
+                .getattr("classSet")
+                .and_then(|classes| classes.contains("NotRest"))
+                .unwrap_or(false);
+            let levels = RsDurationType::from_music21_name(&name)
+                .and_then(RsBeams::levels_for)
+                .filter(|_| sounds);
+            beams.push(levels.and_then(|levels| {
+                let mut made = RsBeams::new();
+                made.fill_levels(levels, None).ok()?;
+                Some(made)
+            }));
+        }
+        beams_list(py, beams)
+    }
+
+    /// music21's `removeSandwichedUnbeamables`: a note with nothing beamable
+    /// on either side of it has nothing to beam to, so it carries none.
+    #[staticmethod]
+    fn removeSandwichedUnbeamables<'py>(
+        py: Python<'py>,
+        beamsList: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyList>> {
+        let mut beams: Vec<Option<RsBeams>> = Vec::new();
+        for entry in beamsList.try_iter()? {
+            beams.push(beams_of(&entry?)?);
+        }
+        music21_rs::notation::remove_sandwiched_unbeamables(&mut beams);
+        let made = beams_list(py, beams)?;
+        // music21 edits the list it was given and hands the same one back.
+        let list = beamsList.cast::<PyList>()?;
+        list.set_slice(0, list.len(), made.as_any())?;
+        Ok(list.clone())
+    }
+
+    /// music21's `sanitizePartialBeams`: beams made only of stubs are no
+    /// beams at all, and a stub next to a beam points towards it.
+    #[staticmethod]
+    fn sanitizePartialBeams<'py>(
+        py: Python<'py>,
+        beamsList: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyList>> {
+        let mut beams: Vec<Option<RsBeams>> = Vec::new();
+        for entry in beamsList.try_iter()? {
+            beams.push(beams_of(&entry?)?);
+        }
+        music21_rs::notation::sanitize_partial_beams(&mut beams);
+        let made = beams_list(py, beams)?;
+        let list = beamsList.cast::<PyList>()?;
+        list.set_slice(0, list.len(), made.as_any())?;
+        Ok(list.clone())
+    }
+
+    /// music21's `mergeConnectingPartialBeams`: a stub pointing right into a
+    /// stub pointing left is really one beam, and is written as one.
+    #[staticmethod]
+    fn mergeConnectingPartialBeams<'py>(
+        py: Python<'py>,
+        beamsList: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyList>> {
+        let mut beams: Vec<Option<RsBeams>> = Vec::new();
+        for entry in beamsList.try_iter()? {
+            beams.push(beams_of(&entry?)?);
+        }
+        music21_rs::notation::merge_connecting_partial_beams(&mut beams);
+        let made = beams_list(py, beams)?;
+        let list = beamsList.cast::<PyList>()?;
+        list.set_slice(0, list.len(), made.as_any())?;
+        Ok(list.clone())
     }
 
     #[getter]
@@ -641,7 +807,7 @@ impl Beams {
 
     fn __iter__(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         let list = PyList::empty(py);
-        for beam in self.beamsList() {
+        for beam in self.get_beamsList() {
             list.append(beam.into_pyobject(py)?)?;
         }
         Ok(list.try_iter()?.unbind().into_any())
@@ -666,20 +832,6 @@ impl Beams {
     }
 }
 
-/// The written value beamed at each level, so that music21's `fill(2)` means
-/// a sixteenth.
-const LEVELS: [RsDurationType; 9] = [
-    RsDurationType::Eighth,
-    RsDurationType::Sixteenth,
-    RsDurationType::ThirtySecond,
-    RsDurationType::SixtyFourth,
-    RsDurationType::HundredTwentyEighth,
-    RsDurationType::TwoHundredFiftySixth,
-    RsDurationType::FiveHundredTwelfth,
-    RsDurationType::TenTwentyFourth,
-    RsDurationType::TwentyFortyEighth,
-];
-
 /// music21's `volume.Volume`.
 #[pyclass(name = "Volume", module = "music21.volume", skip_from_py_object)]
 pub struct Volume {
@@ -696,6 +848,63 @@ impl Volume {
         Self {
             inner,
             client: None,
+        }
+    }
+
+    /// How much the dynamic in force scales this volume by.
+    ///
+    /// `False` says to ignore dynamics; a dynamic given outright is used as
+    /// it stands; anything else means going and looking for one.
+    fn dynamic_scalar(
+        &self,
+        py: Python<'_>,
+        given: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<Option<f64>> {
+        let found = match given {
+            Some(value) if value.extract::<bool>().is_ok_and(|say| !say) => return Ok(None),
+            Some(value) if value.hasattr("volumeScalar")? => value.clone().unbind(),
+            _ => self.getDynamicContext(py)?,
+        };
+        if found.is_none(py) {
+            return Ok(None);
+        }
+        found.bind(py).getattr("volumeScalar")?.extract().map(Some)
+    }
+
+    /// How much the articulations on the note shift this volume.
+    ///
+    /// music21 adds each articulation's `volumeShift`, so an accent lifts a
+    /// note rather than doubling it.
+    fn articulation_shift(
+        &self,
+        py: Python<'_>,
+        given: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<f64> {
+        let marks = match given {
+            Some(value) if value.extract::<bool>().is_ok_and(|say| !say) => return Ok(0.0),
+            Some(value) if value.hasattr("volumeShift")? => {
+                let list = PyList::empty(py);
+                list.append(value)?;
+                list.into_any().unbind()
+            }
+            Some(value) if value.try_iter().is_ok() => value.clone().unbind(),
+            _ => match &self.client {
+                Some(client) => client.bind(py).getattr("articulations")?.unbind(),
+                None => PyList::empty(py).into_any().unbind(),
+            },
+        };
+        let mut shift = 0.0;
+        for mark in marks.bind(py).try_iter()? {
+            shift += mark?.getattr("volumeShift")?.extract::<f64>()?;
+        }
+        Ok(shift)
+    }
+
+    /// The same, knowing what it is the volume of.
+    pub(crate) fn owned_by(inner: RsVolume, client: Py<PyAny>) -> Self {
+        Self {
+            inner,
+            client: Some(client),
         }
     }
 }
@@ -807,8 +1016,39 @@ impl Volume {
     }
 
     #[getter]
-    fn cachedRealizedStr(&self) -> &'static str {
+    fn cachedRealizedStr(&self) -> String {
         self.inner.realized_str()
+    }
+
+    /// music21's `mergeAttributes`: everything the other volume says except
+    /// whose volume it is, copied rather than shared.
+    fn mergeAttributes(&mut self, other: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        let Some(other) = other.filter(|value| !value.is_none()) else {
+            return Ok(());
+        };
+        let other = other.extract::<PyRef<'_, Self>>()?;
+        self.inner
+            .set_velocity_scalar(other.inner.velocity_scalar())
+            .map_err(volume_error)?;
+        self.inner
+            .set_velocity_is_relative(other.inner.velocity_is_relative());
+        Ok(())
+    }
+
+    /// music21's `getDynamicContext`: the dynamic in force where the note
+    /// this volume belongs to stands.
+    ///
+    /// The crate has no streams and cannot answer this; the note does, since
+    /// it is a real `Music21Object` in a real stream, so the question is put
+    /// to it.
+    fn getDynamicContext(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let Some(client) = &self.client else {
+            return Ok(py.None());
+        };
+        Ok(client
+            .bind(py)
+            .call_method1("getContextByClass", ("Dynamic",))?
+            .unbind())
     }
 
     #[pyo3(signature = (
@@ -820,22 +1060,50 @@ impl Volume {
     ))]
     fn getRealized(
         &self,
-        useDynamicContext: Option<f64>,
+        py: Python<'_>,
+        useDynamicContext: Option<&Bound<'_, PyAny>>,
         useVelocity: bool,
-        useArticulations: Option<f64>,
+        useArticulations: Option<&Bound<'_, PyAny>>,
         baseLevel: f64,
         clip: bool,
-    ) -> f64 {
+    ) -> PyResult<f64> {
         let mut volume = self.inner.clone();
         if !useVelocity {
             volume.set_velocity(None);
         }
-        volume.realized_with(useDynamicContext, useArticulations, baseLevel, clip)
+        Ok(volume.realized_with(
+            self.dynamic_scalar(py, useDynamicContext)?,
+            self.articulation_shift(py, useArticulations)?,
+            baseLevel,
+            clip,
+        ))
     }
 
-    #[pyo3(signature = (**_keywords))]
-    fn getRealizedStr(&self, _keywords: Option<&Bound<'_, PyAny>>) -> &'static str {
-        self.inner.realized_str()
+    #[pyo3(signature = (
+        useDynamicContext = None,
+        useVelocity = true,
+        useArticulations = None,
+        baseLevel = 0.5,
+        clip = true,
+    ))]
+    fn getRealizedStr(
+        &self,
+        py: Python<'_>,
+        useDynamicContext: Option<&Bound<'_, PyAny>>,
+        useVelocity: bool,
+        useArticulations: Option<&Bound<'_, PyAny>>,
+        baseLevel: f64,
+        clip: bool,
+    ) -> PyResult<String> {
+        let realized = self.getRealized(
+            py,
+            useDynamicContext,
+            useVelocity,
+            useArticulations,
+            baseLevel,
+            clip,
+        )?;
+        Ok(music21_rs::volume::rounded_str(realized))
     }
 
     fn __eq__(&self, other: &Bound<'_, PyAny>) -> bool {

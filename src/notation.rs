@@ -475,29 +475,43 @@ impl fmt::Display for BeamDirection {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Beam {
-    beam_type: BeamType,
+    /// What the beam does at this note. music21 leaves it unsaid on a beam
+    /// that has been counted but not yet decided — which is what `fill`
+    /// makes, and what a beam built with no arguments is.
+    beam_type: Option<BeamType>,
     direction: Option<BeamDirection>,
     number: Option<u32>,
 }
 
 impl Beam {
     /// A beam of the given type, with a direction only a partial one needs.
-    pub fn new(beam_type: BeamType, direction: Option<BeamDirection>) -> Self {
+    pub fn new(beam_type: impl Into<Option<BeamType>>, direction: Option<BeamDirection>) -> Self {
         Self {
-            beam_type,
+            beam_type: beam_type.into(),
             direction,
             number: None,
         }
     }
 
-    /// Whether the beam starts, carries on, ends, or is a stub.
-    pub fn beam_type(&self) -> BeamType {
+    /// Whether the beam starts, carries on, ends, or is a stub — and nothing
+    /// at all where that has not been decided.
+    pub fn beam_type(&self) -> Option<BeamType> {
         self.beam_type
+    }
+
+    /// Says what the beam does at this note.
+    pub fn set_beam_type(&mut self, beam_type: Option<BeamType>) {
+        self.beam_type = beam_type;
     }
 
     /// Which way a stub points, and nothing for a beam that is not one.
     pub fn direction(&self) -> Option<BeamDirection> {
         self.direction
+    }
+
+    /// Points a stub the other way.
+    pub fn set_direction(&mut self, direction: Option<BeamDirection>) {
+        self.direction = direction;
     }
 
     /// Which level this beam is: the first is the one an eighth note has.
@@ -519,9 +533,13 @@ impl fmt::Display for Beam {
             Some(number) => number.to_string(),
             None => "None".to_string(),
         };
+        let beam_type = match self.beam_type {
+            Some(beam_type) => beam_type.to_string(),
+            None => "None".to_string(),
+        };
         match self.direction {
-            Some(direction) => write!(f, "{number}/{}/{direction}", self.beam_type),
-            None => write!(f, "{number}/{}", self.beam_type),
+            Some(direction) => write!(f, "{number}/{beam_type}/{direction}"),
+            None => write!(f, "{number}/{beam_type}"),
         }
     }
 }
@@ -581,11 +599,34 @@ impl Beams {
         self.feathered = feathered;
     }
 
+    /// The beams, to be edited in place.
+    pub fn beams_mut(&mut self) -> &mut Vec<Beam> {
+        &mut self.beams
+    }
+
+    /// Replaces the beams outright.
+    pub fn set_beams(&mut self, beams: Vec<Beam>) {
+        self.beams = beams;
+    }
+
     /// Adds a beam at the next level down: music21's `append`.
-    pub fn append(&mut self, beam_type: BeamType, direction: Option<BeamDirection>) {
+    pub fn append(
+        &mut self,
+        beam_type: impl Into<Option<BeamType>>,
+        direction: Option<BeamDirection>,
+    ) {
         let mut beam = Beam::new(beam_type, direction);
         beam.set_number(Some(self.beams.len() as u32 + 1));
         self.beams.push(beam);
+    }
+
+    /// How many beams a written value carries, where it carries any:
+    /// music21's `beamableDurationTypes` read as a count of levels.
+    pub fn levels_for(duration_type: DurationType) -> Option<u32> {
+        BEAMABLE
+            .into_iter()
+            .find(|(candidate, _)| *candidate == duration_type)
+            .map(|(_, levels)| levels)
     }
 
     /// Gives the note as many beams as its written value has, all of the same
@@ -594,23 +635,32 @@ impl Beams {
     /// A value that carries no beam — anything a quarter or longer — is an
     /// error, as it is upstream.
     pub fn fill(&mut self, duration_type: DurationType, beam_type: Option<BeamType>) -> Result<()> {
-        let Some((_, levels)) = BEAMABLE
-            .into_iter()
-            .find(|(candidate, _)| *candidate == duration_type)
-        else {
+        let Some(levels) = Self::levels_for(duration_type) else {
             return Err(Error::Notation(format!(
                 "cannot fill beams for a {} note",
                 duration_type.music21_name()
             )));
         };
+        self.fill_levels(levels, beam_type)
+    }
+
+    /// The same, counting the levels rather than naming the written value:
+    /// music21 takes either, and `fill(2)` is a sixteenth.
+    ///
+    /// The beams are left with nothing said about what they do, unless a type
+    /// is given — music21 counts the lines first and decides them after.
+    pub fn fill_levels(&mut self, levels: u32, beam_type: Option<BeamType>) -> Result<()> {
+        if levels == 0 || levels > BEAMABLE.len() as u32 {
+            return Err(Error::Notation(format!(
+                "cannot fill beams for level {levels}"
+            )));
+        }
         self.beams.clear();
         for _ in 0..levels {
-            self.append(beam_type.unwrap_or_default(), None);
+            self.append(None, None);
         }
-        if beam_type.is_none() {
-            for beam in &mut self.beams {
-                beam.beam_type = BeamType::Start;
-            }
+        if let Some(beam_type) = beam_type {
+            self.set_all(beam_type, None);
         }
         Ok(())
     }
@@ -618,7 +668,7 @@ impl Beams {
     /// Sets every beam to the same type: music21's `setAll`.
     pub fn set_all(&mut self, beam_type: BeamType, direction: Option<BeamDirection>) {
         for beam in &mut self.beams {
-            beam.beam_type = beam_type;
+            beam.beam_type = Some(beam_type);
             beam.direction = direction;
         }
     }
@@ -644,13 +694,13 @@ impl Beams {
                 "beam number {number} does not exist"
             )));
         };
-        beam.beam_type = beam_type;
+        beam.beam_type = Some(beam_type);
         beam.direction = direction;
         Ok(())
     }
 
     /// The type of every beam, in level order: music21's `getTypes`.
-    pub fn types(&self) -> Vec<BeamType> {
+    pub fn types(&self) -> Vec<Option<BeamType>> {
         self.beams.iter().map(Beam::beam_type).collect()
     }
 
@@ -669,6 +719,158 @@ impl fmt::Display for Beams {
             .map(|beam| format!("<music21.beam.Beam {beam}>"))
             .collect();
         f.write_str(&written.join("/"))
+    }
+}
+
+/// A note with nothing beamable on either side of it has nothing to beam to,
+/// so it carries no beam at all: music21's `removeSandwichedUnbeamables`.
+///
+/// The list is a run of notes, each entry the beams that note could carry or
+/// nothing where it could carry none.
+pub fn remove_sandwiched_unbeamables(beams: &mut [Option<Beams>]) {
+    let mut previous: Option<Beams> = None;
+    for index in 0..beams.len() {
+        let next = beams.get(index + 1).cloned().flatten();
+        if previous.is_none() && next.is_none() {
+            beams[index] = None;
+        }
+        previous = beams[index].clone();
+    }
+}
+
+/// Beams made only of stubs are no beams at all, and a stub beside a real
+/// beam points towards it: music21's `sanitizePartialBeams`.
+pub fn sanitize_partial_beams(beams: &mut [Option<Beams>]) {
+    for entry in beams.iter_mut() {
+        let Some(group) = entry else {
+            continue;
+        };
+        let joined = group.types().into_iter().flatten().any(|beam_type| {
+            matches!(
+                beam_type,
+                BeamType::Start | BeamType::Stop | BeamType::Continue
+            )
+        });
+        if !joined {
+            *entry = None;
+            continue;
+        }
+        let mut after_start = false;
+        let mut after_stop = false;
+        for beam in group.beams_mut() {
+            match beam.beam_type() {
+                Some(BeamType::Start) => after_start = true,
+                Some(BeamType::Stop) => after_stop = true,
+                Some(BeamType::PartialBeam) => {
+                    if after_start && beam.direction() == Some(BeamDirection::Left) {
+                        beam.set_direction(Some(BeamDirection::Right));
+                    } else if after_stop && beam.direction() == Some(BeamDirection::Right) {
+                        beam.set_direction(Some(BeamDirection::Left));
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
+/// A stub pointing right into a stub pointing left is really one beam, and is
+/// written as one: music21's `mergeConnectingPartialBeams`.
+pub fn merge_connecting_partial_beams(beams: &mut [Option<Beams>]) {
+    for index in 0..beams.len().saturating_sub(1) {
+        let Some(numbers) = beams[index]
+            .as_ref()
+            .map(|group| group.numbers().into_iter().flatten().collect::<Vec<_>>())
+        else {
+            continue;
+        };
+        if beams[index + 1].is_none() {
+            continue;
+        }
+        for number in numbers {
+            let this = beams[index]
+                .as_ref()
+                .and_then(|group| group.by_number(number))
+                .copied();
+            let next = beams[index + 1]
+                .as_ref()
+                .and_then(|group| group.by_number(number))
+                .copied();
+            let (Some(this), Some(next)) = (this, next) else {
+                continue;
+            };
+            if this.beam_type() != Some(BeamType::PartialBeam)
+                || this.direction() != Some(BeamDirection::Right)
+            {
+                continue;
+            }
+            if next.beam_type() == Some(BeamType::PartialBeam)
+                && next.direction() == Some(BeamDirection::Right)
+            {
+                continue;
+            }
+            // A partial pointing into a beam that carries on or ends is a
+            // notation nobody can draw; music21 leaves it alone and warns.
+            if matches!(
+                next.beam_type(),
+                Some(BeamType::Continue) | Some(BeamType::Stop)
+            ) {
+                continue;
+            }
+            set_beam(&mut beams[index], number, BeamType::Start, None);
+            let merged = match next.beam_type() {
+                Some(BeamType::PartialBeam) => BeamType::Stop,
+                Some(BeamType::Start) => BeamType::Continue,
+                other => other.unwrap_or(BeamType::Start),
+            };
+            set_beam(&mut beams[index + 1], number, merged, None);
+        }
+    }
+
+    // And a stub pointing left after a beam that has already ended joins it.
+    for index in 1..beams.len() {
+        let Some(numbers) = beams[index]
+            .as_ref()
+            .map(|group| group.numbers().into_iter().flatten().collect::<Vec<_>>())
+        else {
+            continue;
+        };
+        if beams[index - 1].is_none() {
+            continue;
+        }
+        for number in numbers {
+            let this = beams[index]
+                .as_ref()
+                .and_then(|group| group.by_number(number))
+                .copied();
+            let previous = beams[index - 1]
+                .as_ref()
+                .and_then(|group| group.by_number(number))
+                .copied();
+            let (Some(this), Some(previous)) = (this, previous) else {
+                continue;
+            };
+            if this.beam_type() != Some(BeamType::PartialBeam)
+                || this.direction() != Some(BeamDirection::Left)
+                || previous.beam_type() != Some(BeamType::Stop)
+            {
+                continue;
+            }
+            set_beam(&mut beams[index], number, BeamType::Stop, None);
+            set_beam(&mut beams[index - 1], number, BeamType::Continue, None);
+        }
+    }
+}
+
+/// Writes one beam of one group, where the group has one at that level.
+fn set_beam(
+    group: &mut Option<Beams>,
+    number: u32,
+    beam_type: BeamType,
+    direction: Option<BeamDirection>,
+) {
+    if let Some(group) = group {
+        let _ = group.set_by_number(number, beam_type, direction);
     }
 }
 
@@ -1003,7 +1205,10 @@ mod tests {
             .fill(DurationType::Sixteenth, Some(BeamType::Start))
             .unwrap();
         assert_eq!(beams.len(), 2);
-        assert_eq!(beams.types(), [BeamType::Start, BeamType::Start]);
+        assert_eq!(
+            beams.types(),
+            [Some(BeamType::Start), Some(BeamType::Start)]
+        );
         assert_eq!(beams.numbers(), [Some(1), Some(2)]);
         assert_eq!(
             beams.to_string(),
@@ -1011,11 +1216,22 @@ mod tests {
         );
 
         beams.set_all(BeamType::Stop, None);
-        assert_eq!(beams.types(), [BeamType::Stop, BeamType::Stop]);
+        assert_eq!(beams.types(), [Some(BeamType::Stop), Some(BeamType::Stop)]);
         assert_eq!(
-            beams.by_number(1).map(Beam::beam_type),
+            beams.by_number(1).and_then(Beam::beam_type),
             Some(BeamType::Stop)
         );
+
+        // Counted but not decided: `fill` alone says how many lines there
+        // are and leaves what each does unsaid, as music21 does.
+        let mut counted = Beams::new();
+        counted.fill(DurationType::Sixteenth, None).unwrap();
+        assert_eq!(counted.types(), [None, None]);
+        assert_eq!(
+            counted.to_string(),
+            "<music21.beam.Beam 1/None>/<music21.beam.Beam 2/None>"
+        );
+        assert!(Beams::new().fill_levels(12, None).is_err());
         assert!(beams.set_by_number(3, BeamType::Start, None).is_err());
 
         // A quarter carries no beam at all, and music21 refuses to fill one.

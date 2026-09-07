@@ -38,7 +38,7 @@ use utils::{init_py, prepare};
 pub use music21_rs_python::chord::NAMES as CHORD_NAMES;
 pub use music21_rs_python::interval::NAMES as INTERVAL_NAMES;
 pub use music21_rs_python::key::NAMES as KEY_NAMES;
-pub use music21_rs_python::notation::{BEAM_NAMES, STYLE_NAMES, TIE_NAMES, VOLUME_NAMES};
+pub use music21_rs_python::notation::{BEAM_NAMES, TIE_NAMES, VOLUME_NAMES};
 pub use music21_rs_python::note::{DURATION_NAMES, NAMES as NOTE_NAMES};
 pub use music21_rs_python::pitch::NAMES as PITCH_NAMES;
 pub use music21_rs_python::roman::NAMES as ROMAN_NAMES;
