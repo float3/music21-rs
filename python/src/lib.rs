@@ -19,6 +19,7 @@ pub mod key;
 pub mod notation;
 pub mod note;
 pub mod pitch;
+pub mod scale;
 pub mod serial;
 
 pub use pitch::{Accidental, Microtone, Pitch};
@@ -205,6 +206,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     serial::register(m)?;
     key::register(m)?;
     interval::register(m)?;
+    scale::register(m)?;
     notation::register(m)?;
     note::register(m)?;
     chord::register(m)?;

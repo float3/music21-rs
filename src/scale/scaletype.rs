@@ -187,6 +187,45 @@ impl ScaleType {
         }
     }
 
+    /// The words music21 puts after the tonic when it names a scale:
+    /// `"C major"`, `"C harmonic minor"`, `"C Rag Asawari"`.
+    ///
+    /// The capitalisation is upstream's and is not consistent — the modes are
+    /// lower case, the others are not — which is why this is a table rather
+    /// than something derived from the class name.
+    pub fn music21_descriptive_name(self) -> &'static str {
+        match self {
+            Self::Major => "major",
+            Self::Minor => "minor",
+            Self::Dorian => "dorian",
+            Self::Phrygian => "phrygian",
+            Self::Lydian => "lydian",
+            Self::Mixolydian => "mixolydian",
+            Self::Locrian => "locrian",
+            Self::Hypodorian => "hypodorian",
+            Self::Hypophrygian => "hypophrygian",
+            Self::Hypolydian => "hypolydian",
+            Self::Hypomixolydian => "hypomixolydian",
+            Self::Hypolocrian => "hypolocrian",
+            Self::Hypoaeolian => "hypoaeolian",
+            Self::HarmonicMinor => "harmonic minor",
+            Self::MelodicMinor => "melodic minor",
+            Self::Chromatic => "Chromatic",
+            Self::WholeTone => "Whole tone",
+            Self::Octatonic => "Octatonic",
+            Self::RagAsawari => "Rag Asawari",
+            Self::RagMarwa => "Rag Marwa",
+        }
+    }
+
+    /// The scale type music21 calls by this class name, such as
+    /// `"MajorScale"`.
+    pub fn from_music21_name(name: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|scale_type| scale_type.music21_name() == name)
+    }
+
     /// Returns the step intervals walked from the tonic.
     ///
     /// Almost every scale ascends throughout; Rag Marwa is the exception, and

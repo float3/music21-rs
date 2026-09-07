@@ -5,6 +5,7 @@
 
 passing = [
     "music21.key.Key",
+    "music21.key.Key.deriveByDegree",
     "music21.key.Key.parallel",
     "music21.key.Key.relative",
     "music21.key.Key.tonalCertainty",
@@ -14,6 +15,7 @@ passing = [
     "music21.key.KeySignature.accidentalByStep",
     "music21.key.KeySignature.alteredPitches",
     "music21.key.KeySignature.asKey",
+    "music21.key.KeySignature.getScale",
     "music21.key.KeySignature.isNonTraditional",
     "music21.key.KeySignature.sharps",
     "music21.key.KeySignature.transpose",

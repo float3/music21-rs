@@ -171,7 +171,25 @@ impl Key {
     /// degree: music21's `deriveByDegree`, so C major with `E` as degree 5 is
     /// A major and A minor with `C` as degree 3 is A minor again.
     pub fn derive_by_degree(&self, degree: usize, pitch: &Pitch) -> Result<Self> {
-        let scale = self.as_scale()?.derive_by_degree(degree, pitch)?;
+        self.derive_by_degree_of(self.as_scale()?.scale_type(), degree, pitch)
+    }
+
+    /// The same, reading the degree off a scale pattern the caller chooses
+    /// rather than the key's own.
+    ///
+    /// music21 spells this as a settable `.abstract` on the key: the seventh
+    /// degree of a minor key is a whole tone below the tonic in the natural
+    /// form and a semitone below it in the harmonic form, so the key that has
+    /// `E` as its seventh is F-sharp minor by one reading and F minor by the
+    /// other. The key that comes back keeps this one's mode either way.
+    pub fn derive_by_degree_of(
+        &self,
+        scale_type: ScaleType,
+        degree: usize,
+        pitch: &Pitch,
+    ) -> Result<Self> {
+        let scale =
+            Scale::new(scale_type, self.tonic_pitch.clone()).derive_by_degree(degree, pitch)?;
         let tonic = scale.tonic().clone();
         let sharps = pitch_to_sharps(&tonic, Some(&self.mode))?;
         Ok(Self::new(tonic, &self.mode, sharps))
@@ -290,6 +308,31 @@ pub fn convert_key_string_to_music21_key_string(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_pattern_read_by_decides_which_key_has_a_pitch_at_a_degree() {
+        // music21's own example: the minor key whose seventh degree is E is
+        // F-sharp minor in the natural form and F minor in the harmonic one,
+        // where the seventh is only a semitone below the tonic.
+        let minor = Key::from_tonic_mode("C", "minor").unwrap();
+        let e = Pitch::from_name("E").unwrap();
+        assert_eq!(minor.derive_by_degree(7, &e).unwrap().tonic().name(), "F#");
+        assert_eq!(
+            minor
+                .derive_by_degree_of(ScaleType::HarmonicMinor, 7, &e)
+                .unwrap()
+                .tonic()
+                .name(),
+            "F"
+        );
+        // The mode of the key that comes back is this key's, either way.
+        assert_eq!(
+            minor
+                .derive_by_degree_of(ScaleType::HarmonicMinor, 7, &e)
+                .unwrap()
+                .mode(),
+            "minor"
+        );
+    }
 
     #[test]
     fn mode_suffixes_and_semitone_transposition_match_music21() {

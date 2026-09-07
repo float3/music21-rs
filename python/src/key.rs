@@ -7,6 +7,10 @@ use pyo3::exceptions::{PyException, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
+use music21_rs::scale::{Scale as RsScale, ScaleType as RsScaleType};
+
+use crate::scale::ConcreteScale;
+
 use music21_rs::{
     Key as RsKey, KeySignature as RsKeySignature, convert_key_string_to_music21_key_string,
     key::{pitch_to_sharps, sharps_to_pitch},
@@ -254,6 +258,27 @@ impl KeySignature {
         (slf.as_ptr() as usize >> 4) as u64
     }
 
+    /// music21's `getScale`: the major or minor scale this signature stands
+    /// for. Only those two, as upstream — a signature says nothing about the
+    /// other modes.
+    #[pyo3(signature = (mode = "major"))]
+    fn getScale(&self, py: Python<'_>, mode: Option<&str>) -> PyResult<Py<PyAny>> {
+        let scale_type = match mode {
+            None | Some("major") => RsScaleType::Major,
+            Some("minor") => RsScaleType::Minor,
+            Some(other) => {
+                return Err(KeySignatureException::new_err(format!(
+                    "No mapping to a scale exists for this mode yet: {other}"
+                )));
+            }
+        };
+        let key = self
+            .signature
+            .try_as_key(mode, None)
+            .map_err(signature_error)?;
+        ConcreteScale::object(py, RsScale::new(scale_type, key.tonic()))
+    }
+
     /// A copy that is an instance of the class it was asked on, so that a
     /// key installed into music21 copies as one music21 can still hold.
     fn __deepcopy__<'py>(
@@ -296,6 +321,15 @@ pub struct Key {
     /// back, so handing back a fresh one each time would lose every
     /// alternative it found.
     alternate_interpretations: Option<Py<PyList>>,
+    /// music21's `abstract`: the pattern of steps this key reads its degrees
+    /// by, when a caller has replaced the one its mode implies.
+    ///
+    /// The seventh degree of a minor key is a whole tone below the tonic in
+    /// the natural form and a semitone below it in the harmonic form, and
+    /// music21 lets a caller say which by assigning an `AbstractScale` here.
+    /// The object is kept as it was given; which pattern it stands for is
+    /// read off its class name.
+    abstract_scale: Option<Py<PyAny>>,
 }
 
 impl Key {
@@ -304,6 +338,7 @@ impl Key {
             inner,
             correlation_coefficient: 0.0,
             alternate_interpretations: None,
+            abstract_scale: None,
         });
         Ok(Py::new(py, init)?.into_any())
     }
@@ -318,6 +353,22 @@ impl Key {
             .alternate_interpretations
             .as_ref()
             .expect("just set when missing"))
+    }
+
+    /// The pattern of steps the assigned abstract scale stands for, read off
+    /// its class name — music21 names them `AbstractHarmonicMinorScale` and
+    /// so on, for the concrete `HarmonicMinorScale` they belong to.
+    fn abstract_scale_type(&self, py: Python<'_>) -> Option<RsScaleType> {
+        let name: String = self
+            .abstract_scale
+            .as_ref()?
+            .bind(py)
+            .get_type()
+            .name()
+            .ok()?
+            .extract()
+            .ok()?;
+        RsScaleType::from_music21_name(name.strip_prefix("Abstract")?)
     }
 
     fn same_key(&self, other: &Key) -> bool {
@@ -404,6 +455,7 @@ impl Key {
                 inner,
                 correlation_coefficient: 0.0,
                 alternate_interpretations: None,
+                abstract_scale: None,
             }),
         )
     }
@@ -454,16 +506,39 @@ impl Key {
         Key::object(py, self.inner.parallel().map_err(key_error)?)
     }
 
+    /// music21's `abstract`: the pattern of steps the key reads its degrees
+    /// by, when one has been put here in place of the mode's own.
+    #[getter]
+    fn get_abstract(&self, py: Python<'_>) -> Option<Py<PyAny>> {
+        self.abstract_scale
+            .as_ref()
+            .map(|scale| scale.clone_ref(py))
+    }
+
+    #[setter]
+    fn set_abstract(&mut self, value: Option<&Bound<'_, PyAny>>) {
+        self.abstract_scale = value
+            .filter(|value| !value.is_none())
+            .map(|value| value.clone().unbind());
+    }
+
     fn deriveByDegree(
         &self,
         py: Python<'_>,
         degree: usize,
         pitchRef: &Bound<'_, PyAny>,
     ) -> PyResult<Py<PyAny>> {
-        let derived = self
-            .inner
-            .derive_by_degree(degree, &pitch_from_any(pitchRef)?)
-            .map_err(key_error)?;
+        let pitch = pitch_from_any(pitchRef)?;
+        let derived = match self.abstract_scale_type(py) {
+            Some(scale_type) => self
+                .inner
+                .derive_by_degree_of(scale_type, degree, &pitch)
+                .map_err(key_error)?,
+            None => self
+                .inner
+                .derive_by_degree(degree, &pitch)
+                .map_err(key_error)?,
+        };
         Key::object(py, derived)
     }
 
