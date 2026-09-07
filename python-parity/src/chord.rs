@@ -85,6 +85,33 @@ impl Chord {
         self.rebuild_notes(py)
     }
 
+    /// Replaces the chord with one of its own reductions, keeping the note
+    /// objects whose notes survive. A reduction drops notes rather than
+    /// rewriting them, and music21 drops them out of its own list, so the
+    /// note and pitch objects of the survivors come through:
+    /// `c3.pitches[0] is p1` after `removeRedundantPitches(inPlace=True)`.
+    fn reduce_inner(&mut self, py: Python<'_>, inner: RsChord) -> PyResult<()> {
+        let mut spare: Vec<Option<Py<Note>>> = self
+            .notes
+            .iter()
+            .map(|note| Some(note.clone_ref(py)))
+            .collect();
+        let mut kept: Vec<Py<Note>> = Vec::with_capacity(inner.notes().len());
+        for note in inner.notes() {
+            let survivor = spare.iter_mut().find(|held| {
+                held.as_ref()
+                    .is_some_and(|held| held.borrow(py).inner.pitch() == note.pitch())
+            });
+            match survivor {
+                Some(slot) => kept.push(slot.take().expect("the slot it found was filled")),
+                None => kept.push(Note::object(py, note.clone())?),
+            }
+        }
+        self.inner = inner;
+        self.notes = kept;
+        Ok(())
+    }
+
     fn rebuild_notes(&mut self, py: Python<'_>) -> PyResult<()> {
         self.notes = self
             .inner
@@ -160,7 +187,7 @@ impl Chord {
         in_place: bool,
     ) -> PyResult<Option<Py<PyAny>>> {
         if in_place {
-            self.replace_inner(py, reduced)?;
+            self.reduce_inner(py, reduced)?;
             let dropped: Vec<Pitch> = removed
                 .into_iter()
                 .map(|pitch| Pitch::wrap(pitch, false))
@@ -797,6 +824,14 @@ impl Chord {
                 None => me.inner.bass().cloned(),
             }
         };
+        Self::own_pitch(slf, found.as_ref())
+    }
+
+    /// music21's `_findBass`: the lowest written pitch, with no regard for
+    /// any bass a caller has set. `bass()` is the way to ask; this is here
+    /// because music21's own docstring for it is one of the ones we run.
+    fn _findBass(slf: &Bound<'_, Self>) -> PyResult<Option<Py<Pitch>>> {
+        let found = slf.borrow().inner.found_bass().cloned();
         Self::own_pitch(slf, found.as_ref())
     }
 

@@ -24,14 +24,31 @@ pub(crate) fn note_error(error: music21_rs::Error) -> PyErr {
 
 /// music21's `duration.Duration`, over the crate's quarter-length duration.
 #[pyclass(name = "Duration", module = "music21.duration", skip_from_py_object)]
-#[derive(Clone)]
 pub struct Duration {
     pub(crate) inner: RsDuration,
+    /// The object this duration belongs to. music21's `GeneralNote.duration`
+    /// setter writes itself here, and reads the failure to do so as "not a
+    /// Duration at all", so keeping the slot is what lets music21's own
+    /// classes take one of ours.
+    client: Option<Py<PyAny>>,
+}
+
+impl Clone for Duration {
+    /// A copy of a duration belongs to nobody yet, as music21's does.
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            client: None,
+        }
+    }
 }
 
 impl Duration {
     pub(crate) fn wrap(inner: RsDuration) -> Self {
-        Self { inner }
+        Self {
+            inner,
+            client: None,
+        }
     }
 }
 
@@ -73,7 +90,7 @@ impl Duration {
             Some(value) => duration_from_any(value)?,
             None => RsDuration::new(1.0).map_err(note_error)?,
         };
-        Ok(Self { inner })
+        Ok(Self::wrap(inner))
     }
 
     #[getter]
@@ -133,6 +150,18 @@ impl Duration {
             "<music21.duration.Duration {:?}>",
             self.inner.quarter_length()
         )
+    }
+
+    #[getter]
+    fn get_client(&self, py: Python<'_>) -> Option<Py<PyAny>> {
+        self.client.as_ref().map(|client| client.clone_ref(py))
+    }
+
+    #[setter]
+    fn set_client(&mut self, value: Option<&Bound<'_, PyAny>>) {
+        self.client = value
+            .filter(|value| !value.is_none())
+            .map(|value| value.clone().unbind());
     }
 
     fn __deepcopy__(&self, _memo: &Bound<'_, PyAny>) -> Self {
