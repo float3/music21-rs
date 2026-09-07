@@ -416,19 +416,21 @@ impl Chord {
     }
 
     fn spelling_root_name_override(&self, common_name: &str) -> Option<String> {
-        let root = if !common_name.contains("augmented sixth chord") {
+        if !common_name.contains("augmented sixth chord") {
             return None;
-        } else if self.has_pitch_names(&["C#", "E-", "G"])
-            || self.has_pitch_names(&["C#", "E#", "G", "B"])
+        }
+        let names = self.unique_pitch_names();
+        let root = if self.names_are(&names, &["C#", "E-", "G"])
+            || self.names_are(&names, &["C#", "E#", "G", "B"])
         {
             "C#"
-        } else if self.has_pitch_names(&["C", "D", "F#", "A-"]) {
+        } else if self.names_are(&names, &["C", "D", "F#", "A-"]) {
             "D"
-        } else if self.has_pitch_names(&["C#", "E-", "G", "A"]) {
+        } else if self.names_are(&names, &["C#", "E-", "G", "A"]) {
             "A"
-        } else if self.has_pitch_names(&["C", "E", "F#", "A#"]) {
+        } else if self.names_are(&names, &["C", "E", "F#", "A#"]) {
             "F#"
-        } else if self.has_pitch_names(&["D", "E", "G#", "B-"])
+        } else if self.names_are(&names, &["D", "E", "G#", "B-"])
             || (self.from_integer_pitches && self.pitch_class_mask() == 0b010100010100)
         {
             "E"
@@ -669,35 +671,36 @@ impl Chord {
     }
 
     fn spelling_common_name_override(&self) -> Option<String> {
-        let name = if self.has_pitch_names(&["C#", "E-", "G"]) {
+        let names = self.unique_pitch_names();
+        let name = if self.names_are(&names, &["C#", "E-", "G"]) {
             "Italian augmented sixth chord in root position"
-        } else if self.has_pitch_names(&["C", "D", "F#", "A-"])
-            || self.has_pitch_names(&["D", "E", "G#", "B-"])
+        } else if self.names_are(&names, &["C", "D", "F#", "A-"])
+            || self.names_are(&names, &["D", "E", "G#", "B-"])
             || (self.from_integer_pitches && self.pitch_class_mask() == 0b010100010100)
         {
             "French augmented sixth chord in third inversion"
-        } else if self.has_pitch_names(&["C#", "E-", "G", "A"]) {
+        } else if self.names_are(&names, &["C#", "E-", "G", "A"]) {
             "French augmented sixth chord in first inversion"
-        } else if self.has_pitch_names(&["C", "E", "F#", "A#"]) {
+        } else if self.names_are(&names, &["C", "E", "F#", "A#"]) {
             "French augmented sixth chord"
-        } else if self.has_pitch_names(&["C#", "E#", "G", "B"]) {
+        } else if self.names_are(&names, &["C#", "E#", "G", "B"]) {
             "French augmented sixth chord in root position"
-        } else if self.has_pitch_names(&["E-", "F#", "A"])
-            || self.has_pitch_names(&["C#", "G", "A#"])
+        } else if self.names_are(&names, &["E-", "F#", "A"])
+            || self.names_are(&names, &["C#", "G", "A#"])
             || (self.from_integer_pitches && self.pitch_class_mask() == 0b001001001000)
         {
             "enharmonic equivalent to diminished triad"
-        } else if self.has_pitch_names(&["C#", "D#", "F#", "A#"])
-            || self.has_pitch_names(&["C#", "E#", "G#", "A#"])
-            || self.has_pitch_names(&["E-", "G-", "A-", "C-"])
+        } else if self.names_are(&names, &["C#", "D#", "F#", "A#"])
+            || self.names_are(&names, &["C#", "E#", "G#", "A#"])
+            || self.names_are(&names, &["E-", "G-", "A-", "C-"])
         {
             "enharmonic equivalent to minor seventh chord"
-        } else if self.has_pitch_names(&["C#", "E#", "F#", "A#"])
-            || self.has_pitch_names(&["E-", "F-", "A-", "C-"])
-            || self.has_pitch_names(&["E-", "G-", "B-", "C-"])
+        } else if self.names_are(&names, &["C#", "E#", "F#", "A#"])
+            || self.names_are(&names, &["E-", "F-", "A-", "C-"])
+            || self.names_are(&names, &["E-", "G-", "B-", "C-"])
         {
             "enharmonic equivalent to major seventh chord"
-        } else if self.has_pitch_names(&["E-", "F#", "A", "B"]) {
+        } else if self.names_are(&names, &["E-", "F#", "A", "B"]) {
             "enharmonic to dominant seventh chord"
         } else {
             return None;
@@ -2449,17 +2452,14 @@ impl Chord {
             .fold(0_u16, |mask, pc| mask | (1_u16 << pc))
     }
 
-    fn has_pitch_names(&self, expected: &[&str]) -> bool {
-        if self.notes.len() != expected.len() {
-            return false;
-        }
-
-        let actual = self
-            .notes
-            .iter()
-            .map(|note| note.pitch.name())
-            .collect::<std::collections::BTreeSet<_>>();
-        expected.iter().all(|name| actual.contains(*name))
+    /// Whether the chord is spelled with exactly these pitch names.
+    ///
+    /// The set of names it compares against is passed in rather than built
+    /// here: the two spelling cascades ask this question up to fifteen times
+    /// in a row, and building the set per question was most of what
+    /// `common_name` cost.
+    fn names_are(&self, names: &std::collections::BTreeSet<String>, expected: &[&str]) -> bool {
+        self.notes.len() == expected.len() && expected.iter().all(|name| names.contains(*name))
     }
 
     fn interval_nice_name(start: &Pitch, end: &Pitch) -> Option<String> {

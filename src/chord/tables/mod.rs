@@ -95,6 +95,26 @@ pub(crate) struct KnownChordTableEntry {
     pub(crate) interval_class_vector: Vec<u8>,
 }
 
+/// Whether a Forte index stands for a set class that is its own inversion.
+///
+/// [`forte_index_to_inversions_available`] answers the same question with a
+/// `Vec`, which the address search cannot afford: it asks once per candidate
+/// index, and there are up to fifty of those per cardinality.
+fn forte_index_is_inversion_equivalent(card: usize, index: u8) -> Result<bool, Error> {
+    if !(1..=13).contains(&card) {
+        return Err(Error::ChordTables(format!("cardinality {card} not valid")));
+    }
+    if index < 1 || index > MAXIMUM_INDEX_NUMBER_WITHOUT_INVERSION_EQUIVALENCE[card] {
+        return Err(Error::ChordTables(format!(
+            "index {index} not valid for cardinality {card}"
+        )));
+    }
+    Ok(FORTE[card]
+        .get(index as usize)
+        .and_then(Option::as_ref)
+        .is_some_and(|entry| entry.invariance_vector()[1] > 0))
+}
+
 fn forte_index_to_inversions_available(card: usize, index: u8) -> Result<Vec<Sign>, Error> {
     if !(1..=13).contains(&card) {
         return Err(Error::ChordTables(format!("cardinality {card} not valid")));
@@ -187,47 +207,48 @@ pub(crate) fn seek_chord_tables_address(
         return Ok((12, 1, 0, Some(0)));
     }
 
-    let mut candidates: Vec<([bool; 12], [bool; 12], u8)> = Vec::new();
-    for rot in 0..ordered_pitch_classes.len() {
-        let mut test_set: Vec<u8> = ordered_pitch_classes[rot..].to_vec();
-        test_set.extend_from_slice(&ordered_pitch_classes[..rot]);
-
-        let test_set_original_pc = test_set[0] % 12;
-        let test_set_transposed: Vec<u8> = test_set
-            .iter()
-            .map(|x| {
-                ((*x as IntegerType - test_set_original_pc as IntegerType).rem_euclid(12)) as u8
-            })
-            .collect();
-
-        let mut test_set_invert: Vec<u8> =
-            test_set_transposed.iter().map(|x| (12 - *x) % 12).collect();
-        test_set_invert.reverse();
-        let shift = (12 - test_set_invert[0]) % 12;
-        test_set_invert = test_set_invert.iter().map(|x| (x + shift) % 12).collect();
-
-        candidates.push((
-            pitch_classes_to_bools(&test_set_transposed),
-            pitch_classes_to_bools(&test_set_invert),
-            test_set_original_pc,
-        ));
+    // Every rotation of the set, transposed to start on zero, and its
+    // inversion. A chord has at most twelve pitch classes, so all of this
+    // fits on the stack: the search runs on every question a caller asks a
+    // chord about its set class, and heap traffic here was most of its cost.
+    let count = ordered_pitch_classes.len();
+    let mut candidates = [([false; 12], [false; 12], 0_u8); 12];
+    let mut transposed = [0_u8; 12];
+    let mut inverted = [0_u8; 12];
+    for rot in 0..count {
+        let original_pc = ordered_pitch_classes[rot] % 12;
+        for (offset, slot) in transposed[..count].iter_mut().enumerate() {
+            let pitch_class = ordered_pitch_classes[(rot + offset) % count];
+            *slot = ((IntegerType::from(pitch_class) - IntegerType::from(original_pc))
+                .rem_euclid(12)) as u8;
+        }
+        // the inversion is each degree taken downwards, read back to front
+        for offset in 0..count {
+            inverted[offset] = (12 - transposed[count - 1 - offset]) % 12;
+        }
+        let shift = (12 - inverted[0]) % 12;
+        for slot in inverted[..count].iter_mut() {
+            *slot = (*slot + shift) % 12;
+        }
+        candidates[rot] = (
+            pitch_classes_to_bools(&transposed[..count]),
+            pitch_classes_to_bools(&inverted[..count]),
+            original_pc,
+        );
     }
+    let candidates = &candidates[..count];
 
     for (index_candidate, data_line) in FORTE[card as usize].iter().enumerate().skip(1) {
         let Some(data_line) = data_line else {
             continue;
         };
         let data_line_pcs = data_line.pitch_classes();
-        let inversions_available =
-            forte_index_to_inversions_available(card as usize, index_candidate as u8)?;
+        let is_own_inversion =
+            || forte_index_is_inversion_equivalent(card as usize, index_candidate as u8);
 
-        for (candidate, candidate_inversion, candidate_original_pc) in &candidates {
+        for (candidate, candidate_inversion, candidate_original_pc) in candidates {
             if data_line_pcs == *candidate {
-                let inversion = if inversions_available.contains(&Sign::Zero) {
-                    0
-                } else {
-                    1
-                };
+                let inversion = if is_own_inversion()? { 0 } else { 1 };
                 return Ok((
                     card,
                     index_candidate as u8,
@@ -236,11 +257,7 @@ pub(crate) fn seek_chord_tables_address(
                 ));
             }
             if data_line_pcs == *candidate_inversion {
-                let inversion = if inversions_available.contains(&Sign::Zero) {
-                    0
-                } else {
-                    -1
-                };
+                let inversion = if is_own_inversion()? { 0 } else { -1 };
                 return Ok((
                     card,
                     index_candidate as u8,
