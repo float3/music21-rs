@@ -15,7 +15,7 @@ use std::fmt;
 use std::str::FromStr;
 use std::{cmp::Ordering, sync::LazyLock};
 
-use crate::common::numbertools::MUSICAL_ORDINAL_STRINGS;
+use crate::common::numbertools::{MUSICAL_ORDINAL_STRINGS, MUSICAL_ORDINAL_STRINGS_LOWER};
 use crate::common::stringtools::get_num_from_str;
 use crate::error::{Error, Result};
 use crate::{
@@ -1013,12 +1013,21 @@ fn parse_interval_name(mut value: String) -> Result<(DiatonicInterval, Chromatic
         inferred = true;
     }
 
-    // Replace any music ordinal in the string with its index.
-    for (i, ordinal) in MUSICAL_ORDINAL_STRINGS.iter().enumerate() {
+    // Replace any music ordinal in the string with its index. Almost no name
+    // holds one, and the replacement lowercases both sides every time it is
+    // called, so the cheap containment test in front of it is what keeps
+    // `P5` from allocating three strings per candidate, twenty-three times.
+    let mut lowered = value.to_ascii_lowercase();
+    for (i, ordinal) in MUSICAL_ORDINAL_STRINGS_LOWER.iter().enumerate() {
+        if !lowered.contains(ordinal.as_str()) {
+            continue;
+        }
         let replacement = i.to_string();
-        let (next_value, replaced) = replace_music_ordinal(&value, ordinal, &replacement);
+        let (next_value, replaced) =
+            replace_music_ordinal(&value, &MUSICAL_ORDINAL_STRINGS[i], &replacement);
         if replaced {
             value = next_value;
+            lowered = value.to_ascii_lowercase();
         }
     }
 

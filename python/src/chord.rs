@@ -508,18 +508,17 @@ impl Chord {
     /// `__new__`. A Python subclass of a music21 class constructs the base
     /// with *its own* arguments and then calls `super().__init__` with
     /// music21's — `Harte('C:maj')` reaches `Chord.__init__(pitches)` — so
-    /// `__new__` must not refuse arguments that were never meant for it. It
-    /// builds what it can and leaves the refusing to `__init__`, which is
-    /// where music21 does it too.
+    /// the work belongs in `__init__`, which is where music21 does it and
+    /// where a subclass can reach it. `__new__` only has to hand back an
+    /// object for `__init__` to fill in; doing the work here as well would
+    /// do it twice for every direct caller.
     fn new(
         py: Python<'_>,
         notes: Option<&Bound<'_, PyAny>>,
         keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Self> {
-        match Self::build(py, notes, keywords) {
-            Ok(chord) => Ok(chord),
-            Err(_) => Self::build(py, None, None),
-        }
+        let _ = (notes, keywords);
+        Self::build(py, None, None)
     }
 
     /// music21's construction proper, which a direct caller reaches through

@@ -107,6 +107,11 @@ pub(crate) static MUSICAL_ORDINAL_STRINGS: LazyLock<[String; 23]> = LazyLock::ne
     })
 });
 
+/// The same names lowered, for the case-insensitive search an interval name
+/// does over all twenty-three of them.
+pub(crate) static MUSICAL_ORDINAL_STRINGS_LOWER: LazyLock<[String; 23]> =
+    LazyLock::new(|| std::array::from_fn(|i| MUSICAL_ORDINAL_STRINGS[i].to_ascii_lowercase()));
+
 #[cfg(test)]
 mod tests {
     use super::*;

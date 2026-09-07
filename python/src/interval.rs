@@ -1078,7 +1078,7 @@ impl Interval {
             (Some(diatonic), None) => {
                 RsInterval::from_diatonic(diatonic).map_err(interval_error)?
             }
-            (None, None) => RsInterval::from_name("P1").map_err(interval_error)?,
+            (None, None) => PERFECT_UNISON.clone(),
         };
         Ok(Self {
             inner,
@@ -1097,6 +1097,12 @@ impl Interval {
         }
     }
 }
+
+/// The interval every `Interval` starts as, before `__init__` fills it in.
+/// Parsed once: `__new__` runs on every construction, and parsing a name is
+/// a thousand times the cost of cloning one.
+static PERFECT_UNISON: std::sync::LazyLock<RsInterval> =
+    std::sync::LazyLock::new(|| RsInterval::from_name("P1").expect("a perfect unison"));
 
 /// The pitch music21's `_extractPitch` reads off a note or pitch argument:
 /// the note's `pitch` when it has one, otherwise the object itself.
@@ -1193,9 +1199,10 @@ impl Interval {
     /// `__new__`. A Python subclass of a music21 class constructs the base
     /// with *its own* arguments and then calls `super().__init__` with
     /// music21's — `Harte('C:maj')` reaches `Chord.__init__(pitches)` — so
-    /// `__new__` must not refuse arguments that were never meant for it. It
-    /// builds what it can and leaves the refusing to `__init__`, which is
-    /// where music21 does it too.
+    /// the work belongs in `__init__`, which is where music21 does it and
+    /// where a subclass can reach it. `__new__` only has to hand back an
+    /// object for `__init__` to fill in; doing the work here as well would
+    /// do it twice for every direct caller.
     fn new(
         arg0: Option<&Bound<'_, PyAny>>,
         arg1: Option<&Bound<'_, PyAny>>,
@@ -1208,11 +1215,11 @@ impl Interval {
         name: Option<String>,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> Self {
-        Self::build(
+        let _ = (
             arg0, arg1, diatonic, chromatic, pitchStart, pitchEnd, noteStart, noteEnd, name,
-            _keywords,
-        )
-        .unwrap_or_else(|_| Self::wrap(RsInterval::from_name("P1").expect("a perfect unison")))
+        );
+        let _ = _keywords;
+        Self::wrap(PERFECT_UNISON.clone())
     }
 
     /// music21's construction proper, which a direct caller reaches through
