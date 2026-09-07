@@ -152,6 +152,11 @@ pub struct Note {
     /// object every time, so `chord.pitches[0].getEnharmonic(inPlace=True)`
     /// reaches the chord; `inner` mirrors whatever it holds.
     pitch: Py<Pitch>,
+    /// The `Duration` object music21 hands back from `.duration`, once
+    /// something has asked for one. Notes a chord builds are given the
+    /// chord's, which is what makes `chord.duration is chord[0].duration`
+    /// hold; a note that came with its own keeps it.
+    duration: Option<Py<Duration>>,
     /// The chord this note is part of: music21's `_chordAttached`, which its
     /// own `ChordBase` sets on every note it takes in. An edit to the pitch
     /// has to reach the chord through it.
@@ -166,6 +171,7 @@ impl Note {
         Ok(Self {
             inner,
             pitch,
+            duration: None,
             chord: None,
         })
     }
@@ -186,6 +192,7 @@ impl Note {
             Self {
                 inner,
                 pitch,
+                duration: None,
                 chord: None,
             },
         )?;
@@ -245,22 +252,67 @@ impl Note {
         Self::claim_pitch(py, note);
     }
 
-    fn quarter_length(&self) -> f64 {
-        self.inner
+    /// The duration this note actually has: the object music21 hands out
+    /// when something has asked for one, since an edit through that object
+    /// is an edit to the note, and `inner`'s otherwise.
+    pub(crate) fn duration_value(&self, py: Python<'_>) -> Option<RsDuration> {
+        match &self.duration {
+            Some(object) => Some(object.borrow(py).inner.clone()),
+            None => self.inner.duration().cloned(),
+        }
+    }
+
+    /// The `Duration` object for this note, made on first asking as music21
+    /// makes one on first asking.
+    pub(crate) fn duration_object(&mut self, py: Python<'_>) -> PyResult<Py<Duration>> {
+        if let Some(object) = &self.duration {
+            return Ok(object.clone_ref(py));
+        }
+        let inner = self
+            .inner
             .duration()
+            .cloned()
+            .unwrap_or_else(RsDuration::quarter);
+        let created = Py::new(py, Duration::wrap(inner))?;
+        self.duration = Some(created.clone_ref(py));
+        Ok(created)
+    }
+
+    /// Hands this note a `Duration` object to share, the way a chord shares
+    /// its own with the notes it builds.
+    pub(crate) fn share_duration(&mut self, py: Python<'_>, duration: &Py<Duration>) {
+        self.inner.set_duration(duration.borrow(py).inner.clone());
+        self.duration = Some(duration.clone_ref(py));
+    }
+
+    fn quarter_length(&self, py: Python<'_>) -> f64 {
+        self.duration_value(py)
+            .as_ref()
             .map_or(1.0, RsDuration::quarter_length)
     }
 
-    /// A detached copy: a new pitch object, and no chord.
+    /// This note with whatever its duration object now says written into it,
+    /// for the answers the crate reads off a whole note.
+    pub(crate) fn synced(&self, py: Python<'_>) -> RsNote {
+        let mut note = self.inner.clone();
+        if let Some(duration) = self.duration_value(py) {
+            note.set_duration(duration);
+        }
+        note
+    }
+
+    /// A detached copy: new pitch and duration objects, and no chord.
     fn copied(&self, py: Python<'_>) -> PyResult<Self> {
-        Self::wrap(py, self.inner.clone())
+        Self::wrap(py, self.synced(py))
     }
 }
 
-/// Reads a note argument: a `Note`, a pitch, or a name.
+/// Reads a note argument: a `Note`, a pitch, or a name. A facade note comes
+/// back with its duration object's value written in, since that object is
+/// where an edit like `n.duration.type = 'half'` landed.
 pub(crate) fn note_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsNote> {
     if let Ok(facade) = value.extract::<PyRef<Note>>() {
-        return Ok(facade.inner.clone());
+        return Ok(facade.synced(value.py()));
     }
     Ok(RsNote::from_pitch(pitch_from_any(value)?))
 }
@@ -281,10 +333,12 @@ impl Note {
         let mut note = Self::wrap(py, inner)?;
         if let Some(keywords) = keywords {
             if let Some(value) = keywords.get_item("quarterLength")? {
-                note.set_quarterLength(value.extract::<f64>()?)?;
+                note.set_quarterLength(py, value.extract::<f64>()?)?;
             }
+            // music21's `Note(p, duration=d)` keeps `d` itself, which is how
+            // a chord gives every note it builds the same duration object.
             if let Some(value) = keywords.get_item("duration")? {
-                note.inner.set_duration(duration_from_any(&value)?);
+                note.set_duration(py, &value)?;
             }
         }
         Ok(note)
@@ -363,35 +417,41 @@ impl Note {
     }
 
     #[getter]
-    fn fullName(&self) -> String {
-        self.inner.full_name()
+    fn fullName(&self, py: Python<'_>) -> String {
+        self.synced(py).full_name()
     }
 
+    /// music21's `.duration`, the same object every time: `n.duration.type =
+    /// 'half'` is how music21's own doctests lengthen a note.
     #[getter]
-    fn get_duration(&self) -> Duration {
-        Duration::wrap(
-            self.inner
-                .duration()
-                .cloned()
-                .unwrap_or_else(RsDuration::quarter),
-        )
+    fn get_duration(&mut self, py: Python<'_>) -> PyResult<Py<Duration>> {
+        self.duration_object(py)
     }
 
     #[setter]
-    fn set_duration(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
-        self.inner.set_duration(duration_from_any(value)?);
+    fn set_duration(&mut self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        let inner = duration_from_any(value)?;
+        self.inner.set_duration(inner.clone());
+        self.duration = match value.extract::<Py<Duration>>() {
+            Ok(object) => Some(object),
+            Err(_) => Some(Py::new(py, Duration::wrap(inner))?),
+        };
         Ok(())
     }
 
     #[getter]
-    fn get_quarterLength(&self) -> f64 {
-        self.quarter_length()
+    fn get_quarterLength(&self, py: Python<'_>) -> f64 {
+        self.quarter_length(py)
     }
 
     #[setter]
-    fn set_quarterLength(&mut self, value: f64) -> PyResult<()> {
-        self.inner
-            .set_duration(RsDuration::new(value).map_err(note_error)?);
+    fn set_quarterLength(&mut self, py: Python<'_>, value: f64) -> PyResult<()> {
+        let inner = RsDuration::new(value).map_err(note_error)?;
+        self.inner.set_duration(inner.clone());
+        match &self.duration {
+            Some(duration) => duration.borrow_mut(py).inner = inner,
+            None => self.duration = Some(Py::new(py, Duration::wrap(inner))?),
+        }
         Ok(())
     }
 
@@ -606,10 +666,10 @@ impl Note {
         Ok(Some(Self::object(py, moved)?))
     }
 
-    fn __eq__(&self, other: &Bound<'_, PyAny>) -> bool {
+    fn __eq__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> bool {
         other.extract::<PyRef<Note>>().is_ok_and(|other| {
             other.inner.pitch() == self.inner.pitch()
-                && other.quarter_length() == self.quarter_length()
+                && other.quarter_length(py) == self.quarter_length(py)
         })
     }
 

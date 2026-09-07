@@ -61,16 +61,18 @@ impl Chord {
     }
 
     /// Builds the facade around note objects the caller already holds,
-    /// reading the chord off them.
-    pub(crate) fn from_notes(py: Python<'_>, notes: Vec<Py<Note>>) -> PyResult<Self> {
+    /// reading the chord off them, with the duration object they share.
+    fn from_notes(py: Python<'_>, notes: Vec<Py<Note>>, duration: Py<Duration>) -> PyResult<Self> {
         let inners: Vec<RsNote> = notes
             .iter()
-            .map(|note| note.borrow(py).inner.clone())
+            .map(|note| note.borrow(py).synced(py))
             .collect();
+        let mut inner = RsChord::new(inners.as_slice()).map_err(chord_error)?;
+        inner.set_duration(duration.borrow(py).inner.clone());
         Ok(Self {
-            inner: RsChord::new(inners.as_slice()).map_err(chord_error)?,
+            inner,
             notes,
-            duration: None,
+            duration: Some(duration),
             volume: None,
         })
     }
@@ -137,7 +139,7 @@ impl Chord {
         let notes: Vec<RsNote> = self
             .notes
             .iter()
-            .map(|note| note.borrow(py).inner.clone())
+            .map(|note| note.borrow(py).synced(py))
             .collect();
         let mut chord = RsChord::new(notes.as_slice()).map_err(chord_error)?;
         if let Some(duration) = self.inner.duration() {
@@ -329,26 +331,52 @@ fn chord_from_any(value: Option<&Bound<'_, PyAny>>) -> PyResult<RsChord> {
 ///
 /// Everything else (a name, a number, another chord) has no object to keep
 /// and becomes a note of our own.
-fn adopted_notes(py: Python<'_>, value: Option<&Bound<'_, PyAny>>) -> PyResult<Vec<Py<Note>>> {
-    let fresh = |chord: RsChord| {
+/// Whether the chord's duration is still up for grabs. music21's
+/// `quickDuration`: with no duration keyword, the first note handed in gives
+/// the chord its duration, and every note the chord builds itself before
+/// that shares the chord's.
+struct AdoptedNotes {
+    notes: Vec<Py<Note>>,
+    /// The duration object the chord should take, when a note handed in gave
+    /// it one.
+    taken: Option<Py<Duration>>,
+}
+
+fn adopted_notes(
+    py: Python<'_>,
+    value: Option<&Bound<'_, PyAny>>,
+    shared: &Py<Duration>,
+    mut quick: bool,
+) -> PyResult<AdoptedNotes> {
+    let fresh = |chord: RsChord| -> PyResult<Vec<Py<Note>>> {
         chord
             .notes()
             .iter()
             .cloned()
-            .map(|note| Note::object(py, note))
-            .collect::<PyResult<Vec<_>>>()
+            .map(|note| {
+                let object = Note::object(py, note)?;
+                object.borrow_mut(py).share_duration(py, shared);
+                Ok(object)
+            })
+            .collect()
+    };
+    let loose = |notes| {
+        Ok(AdoptedNotes {
+            notes,
+            taken: None,
+        })
     };
     let Some(value) = value.filter(|value| !value.is_none()) else {
-        return Ok(Vec::new());
+        return loose(Vec::new());
     };
     if value.extract::<String>().is_ok() {
-        return fresh(chord_from_any(Some(value))?);
+        return loose(fresh(chord_from_any(Some(value))?)?);
     }
     let Ok(items) = value
         .try_iter()
         .and_then(|items| items.collect::<PyResult<Vec<Bound<'_, PyAny>>>>())
     else {
-        return fresh(chord_from_any(Some(value))?);
+        return loose(fresh(chord_from_any(Some(value))?)?);
     };
     // A list of plain integers is a pitch-class or MIDI list, spelled as a
     // whole rather than one number at a time.
@@ -359,19 +387,29 @@ fn adopted_notes(py: Python<'_>, value: Option<&Bound<'_, PyAny>>) -> PyResult<V
                 && item.extract::<PyRef<Pitch>>().is_err()
         });
     if all_integers {
-        return fresh(chord_from_any(Some(value))?);
+        return loose(fresh(chord_from_any(Some(value))?)?);
     }
     let mut notes: Vec<Py<Note>> = Vec::with_capacity(items.len());
+    let mut taken: Option<Py<Duration>> = None;
+    let mut use_duration = Some(shared.clone_ref(py));
     for item in &items {
         if let Ok(note) = item.extract::<Py<Note>>() {
+            if quick {
+                taken = Some(note.borrow_mut(py).duration_object(py)?);
+                use_duration = None;
+                quick = false;
+            }
             notes.push(note);
-        } else if let Ok(pitch) = item.extract::<Py<Pitch>>() {
-            notes.push(Note::object_for_pitch(py, pitch)?);
+            continue;
+        }
+        let built = if let Ok(pitch) = item.extract::<Py<Pitch>>() {
+            Note::object_for_pitch(py, pitch)?
         } else if let Ok(chord) = item.extract::<PyRef<Chord>>() {
             // music21 deep-copies the notes it takes out of another chord.
             for note in chord.inner.notes() {
                 notes.push(Note::object(py, note.clone())?);
             }
+            continue;
         } else {
             let note = note_from_any(item).map_err(|_| {
                 PyTypeError::new_err(format!(
@@ -380,10 +418,14 @@ fn adopted_notes(py: Python<'_>, value: Option<&Bound<'_, PyAny>>) -> PyResult<V
                         .map_or_else(|_| "?".to_string(), |r| r.to_string())
                 ))
             })?;
-            notes.push(Note::object(py, note)?);
+            Note::object(py, note)?
+        };
+        if let Some(duration) = &use_duration {
+            built.borrow_mut(py).share_duration(py, duration);
         }
+        notes.push(built);
     }
-    Ok(notes)
+    Ok(AdoptedNotes { notes, taken })
 }
 
 /// pyo3 hands a `Vec<u8>` to Python as `bytes`; pitch-class lists must come
@@ -413,16 +455,27 @@ impl Chord {
         notes: Option<&Bound<'_, PyAny>>,
         keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Self> {
-        let mut chord = Self::from_notes(py, adopted_notes(py, notes)?)?;
+        // music21 makes the chord's duration before reading the notes, and
+        // hands it to every note it builds. A duration given by keyword *is*
+        // that object, so `chord.Chord('A4 C#5', duration=d).duration is d`.
+        let mut quick = true;
+        let mut shared = Py::new(py, Duration::wrap(RsDuration::quarter()))?;
         if let Some(keywords) = keywords {
-            if let Some(value) = keywords.get_item("quarterLength")? {
-                chord.set_quarterLength(keywords.py(), value.extract::<f64>()?)?;
-            }
             if let Some(value) = keywords.get_item("duration")? {
-                chord.set_duration(&value)?;
+                quick = false;
+                shared = match value.extract::<Py<Duration>>() {
+                    Ok(object) => object,
+                    Err(_) => Py::new(py, Duration::wrap(duration_from_any(&value)?))?,
+                };
+            } else if let Some(value) = keywords.get_item("quarterLength")? {
+                quick = false;
+                let length = RsDuration::new(value.extract::<f64>()?).map_err(chord_error)?;
+                shared = Py::new(py, Duration::wrap(length))?;
             }
         }
-        Ok(chord)
+        let adopted = adopted_notes(py, notes, &shared, quick)?;
+        let duration = adopted.taken.unwrap_or(shared);
+        Self::from_notes(py, adopted.notes, duration)
     }
 
     // ---- contents --------------------------------------------------------
@@ -468,7 +521,7 @@ impl Chord {
             let note = item.extract::<PyRef<Note>>().map_err(|_| {
                 PyTypeError::new_err("every element of notes must be a note.Note object")
             })?;
-            notes.push(note.inner.clone());
+            notes.push(note.synced(py));
         }
         let replaced = RsChord::new(notes.as_slice()).map_err(chord_error)?;
         self.replace_inner(py, replaced)

@@ -4,8 +4,10 @@
 # fails when one of these stops passing.
 
 passing = [
+    "music21.chord.Chord",
     "music21.chord.Chord.__getitem__",
     "music21.chord.Chord.__setitem__",
+    "music21.chord.Chord.add",
     "music21.chord.Chord.annotateIntervals",
     "music21.chord.Chord.areZRelations",
     "music21.chord.Chord.canBeDominantV",
@@ -64,6 +66,7 @@ passing = [
     "music21.chord.Chord.multisetCardinality",
     "music21.chord.Chord.normalOrder",
     "music21.chord.Chord.normalOrderString",
+    "music21.chord.Chord.notes",
     "music21.chord.Chord.orderedPitchClasses",
     "music21.chord.Chord.orderedPitchClassesString",
     "music21.chord.Chord.pitchClassCardinality",
@@ -90,6 +93,7 @@ passing = [
     "music21.chord.Chord.transpose",
     "music21.chord.ChordBase",
     "music21.chord.ChordBase.__len__",
+    "music21.chord.ChordBase.add",
     "music21.chord.ChordBase.hasComponentVolumes",
     "music21.chord.ChordBase.remove",
     "music21.chord.ChordBase.setVolumes",
