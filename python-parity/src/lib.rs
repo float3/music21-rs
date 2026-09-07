@@ -1,30 +1,17 @@
-//! music21-shaped Python facades over `music21-rs`, for running music21's own
-//! doctests against the Rust implementation.
+//! The harness that runs music21's own doctests against the `music21_rs`
+//! Python classes.
 //!
-//! Each class here has music21's name, module string, constructor keywords,
-//! property names and `repr`, and holds a `music21-rs` value underneath. The
-//! harness in [`doctest`] imports the real music21, replaces the classes and
-//! functions of one music21 module with these, and runs that module's
-//! docstrings as they are. What passes is what the crate reproduces to the
-//! letter; what fails is either a fidelity gap or a feature the crate does not
-//! have.
-//!
-//! The facades are deliberately thin. Anything music21 does that the crate
-//! does not is left to fail rather than reimplemented here in Python-shaped
-//! Rust — the point is to measure the crate, not to build a second one.
+//! The classes themselves live in the `music21-rs-python` crate, which is
+//! also what maturin builds into a wheel; this crate wraps them in a module
+//! of its own so the doctest runner has somewhere to send its output, imports
+//! the real music21 from the submodule, replaces the classes and functions of
+//! one music21 module with ours, and runs that module's docstrings as they
+//! are. What passes is what the crate reproduces to the letter; what fails is
+//! either a fidelity gap or a feature the crate does not have.
 
 use pyo3::prelude::*;
 
-pub mod chord;
 pub mod doctest;
-pub mod interval;
-pub mod key;
-pub mod notation;
-pub mod note;
-pub mod pitch;
-pub mod serial;
-
-pub use pitch::{Accidental, Microtone, Pitch};
 
 /// Buffer for doctest output, so a runner's report can be read back from Rust
 /// instead of going to stdout.
@@ -41,17 +28,11 @@ pub fn take_output() -> String {
     std::mem::take(&mut *OUTPUT.lock().expect("doctest output buffer"))
 }
 
-/// The Python module: `import music21_rs_facade`. One flat namespace holding
-/// every facade; the harness copies the names each music21 module needs.
+/// The module the harness imports: every `music21_rs` class plus the output
+/// callback the doctest runner writes through.
 #[pymodule]
 pub fn music21_rs_facade(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    pitch::register(m)?;
-    serial::register(m)?;
-    key::register(m)?;
-    interval::register(m)?;
-    notation::register(m)?;
-    note::register(m)?;
-    chord::register(m)?;
+    music21_rs_python::register_all(m)?;
     m.add_function(wrap_pyfunction!(collect_output, m)?)?;
     Ok(())
 }

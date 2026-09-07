@@ -462,7 +462,9 @@ impl Note {
         if Duration::keywords_say_duration(keywords)? {
             let duration = match keywords.and_then(|keywords| keywords.get_item("duration").ok()?) {
                 Some(value) => value,
-                None => Py::new(py, Duration::new(None, keywords)?)?.into_bound(py).into_any(),
+                None => Py::new(py, Duration::new(None, keywords)?)?
+                    .into_bound(py)
+                    .into_any(),
             };
             note.set_duration(py, &duration)?;
         }
@@ -551,7 +553,9 @@ impl Note {
         let refused = || {
             NoteException::new_err(format!(
                 "cannot set pitches with provided object: {}",
-                value.str().map_or_else(|_| "?".to_string(), |v| v.to_string())
+                value
+                    .str()
+                    .map_or_else(|_| "?".to_string(), |v| v.to_string())
             ))
         };
         if !value.is_instance_of::<PyList>() && !value.is_instance_of::<PyTuple>() {

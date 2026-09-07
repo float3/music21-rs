@@ -446,7 +446,14 @@ pub(crate) fn pitch_from_keywords(
     let wanted = PyDict::new(py);
     for name in PITCH_KEYWORDS {
         if let Some(value) = keywords.get_item(name)? {
-            wanted.set_item(if name == "nameWithOctave" { "name" } else { name }, value)?;
+            wanted.set_item(
+                if name == "nameWithOctave" {
+                    "name"
+                } else {
+                    name
+                },
+                value,
+            )?;
         }
     }
     if wanted.is_empty() {

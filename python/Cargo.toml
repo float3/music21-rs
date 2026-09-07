@@ -1,0 +1,25 @@
+[package]
+authors = ["hill <hill@hilll.dev>"]
+description = "music21-shaped Python classes over the music21-rs crate"
+edition = "2024"
+license = "AGPL-3.0-only"
+name = "music21-rs-python"
+publish = false
+repository = "https://github.com/float3/music21-rs"
+# Kept in step with the root crate by `wheel_version_matches_the_crate`.
+version = "0.3.0"
+
+# `cdylib` is the wheel maturin builds; `rlib` is what `python-parity` links
+# against so music21's own doctests run against these very classes.
+[lib]
+crate-type = ["cdylib", "rlib"]
+name = "music21_rs"
+
+[dependencies]
+music21-rs = { path = "..", default-features = false }
+pyo3 = "0.29.0"
+
+[features]
+# maturin turns this on when it builds the wheel: an extension module must
+# not link libpython, while `python-parity` embeds an interpreter and must.
+extension-module = ["pyo3/extension-module"]

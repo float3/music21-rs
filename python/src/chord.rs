@@ -387,12 +387,7 @@ fn adopted_notes(
             })
             .collect()
     };
-    let loose = |notes| {
-        Ok(AdoptedNotes {
-            notes,
-            taken: None,
-        })
-    };
+    let loose = |notes| Ok(AdoptedNotes { notes, taken: None });
     let Some(value) = value.filter(|value| !value.is_none()) else {
         return loose(Vec::new());
     };

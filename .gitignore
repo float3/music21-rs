@@ -1,5 +1,6 @@
 /target/
 /python-parity/target/
+/python/target/
 /venv/
 /__pycache__/
 /examples/web/pkg/
@@ -17,5 +18,6 @@ Thumbs.db
 .idea/
 .codex/
 .m21venv/
+.wheelvenv/
 CLAUDE.md
 AGENTS.md

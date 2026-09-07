@@ -1,0 +1,29 @@
+[build-system]
+build-backend = "maturin"
+requires = ["maturin>=1.7,<2"]
+
+[project]
+authors = [{ name = "hill", email = "hill@hilll.dev" }]
+classifiers = [
+  "Programming Language :: Rust",
+  "Programming Language :: Python :: Implementation :: CPython",
+  "Topic :: Multimedia :: Sound/Audio :: Analysis",
+]
+description = "music21-shaped Python classes over the music21-rs crate"
+dynamic = ["version"]
+license = "AGPL-3.0-only"
+name = "music21-rs"
+readme = "README.md"
+requires-python = ">=3.9"
+
+[project.urls]
+Repository = "https://github.com/float3/music21-rs"
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.maturin]
+# Without this the extension links libpython, which is right for the embedded
+# interpreter `python-parity` uses and wrong for a wheel.
+features = ["extension-module"]
+module-name = "music21_rs"

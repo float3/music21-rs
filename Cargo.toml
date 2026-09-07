@@ -11,7 +11,7 @@ repository = "https://github.com/float3/music21-rs"
 version = "0.3.0"
 
 [workspace]
-exclude = ["python-parity"]
+exclude = ["python", "python-parity"]
 members = ["utils", "examples/audio", "examples/web", "xtask"]
 
 [features]
