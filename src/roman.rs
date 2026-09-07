@@ -54,10 +54,13 @@ enum RomanQuality {
 impl AugmentedSixthKind {
     fn from_figure(figure: &str) -> Option<Self> {
         match figure.trim() {
-            "It+6" | "It6" => Some(Self::Italian),
-            "Fr+6" | "Fr6" => Some(Self::French),
-            "Ger+6" | "Ger6" => Some(Self::German),
-            "Sw+6" | "Sw6" => Some(Self::Swiss),
+            // music21 writes these with or without the `+6`, and with the
+            // inversion figure in place of it — `Ger65` is the German sixth
+            // in the position it is nearly always used in.
+            "It" | "It+6" | "It6" | "It53" | "It63" | "It64" => Some(Self::Italian),
+            "Fr" | "Fr+6" | "Fr6" | "Fr43" | "Fr7" | "Fr42" | "Fr65" => Some(Self::French),
+            "Ger" | "Ger+6" | "Ger6" | "Ger65" | "Ger7" | "Ger43" | "Ger42" => Some(Self::German),
+            "Sw" | "Sw+6" | "Sw6" | "Sw43" | "Sw7" | "Sw65" | "Sw42" => Some(Self::Swiss),
             _ => None,
         }
     }
@@ -109,7 +112,9 @@ impl RomanNumeral {
 
         if let Some(kind) = AugmentedSixthKind::from_figure(trimmed) {
             return Ok(Self {
-                figure: kind.figure().to_string(),
+                // The figure is kept as written, since music21 names these
+                // several ways and reports back the one it was given.
+                figure: trimmed.to_string(),
                 key,
                 degree: 6,
                 accidental: -1,
@@ -126,11 +131,10 @@ impl RomanNumeral {
             None => (trimmed, None),
         };
 
-        // music21 writes the Neapolitan as `N`, and in first inversion — the
-        // way it is nearly always used — as `N6`. Both are the flattened
-        // second degree, so they are read as the figure they stand for while
-        // the numeral keeps the name it was given.
-        let primary = &neapolitan_figure(primary);
+        // music21 writes a few chords by name rather than by numeral: the
+        // Neapolitan and the cadential six-four. Each is read as the figure
+        // it stands for, while the numeral keeps the name it was given.
+        let primary = &named_figure(primary, &key);
 
         let (accidental, primary) = split_roman_accidental_prefix(primary);
         let (roman, suffix) = split_roman_prefix(primary)?;
@@ -618,11 +622,18 @@ fn split_roman_accidental_prefix(value: &str) -> (i8, &str) {
     (accidental, &value[end..])
 }
 
-/// music21's `N`, `N6` and `N53`, written out as the figure they stand for.
-fn neapolitan_figure(figure: &str) -> String {
+/// The chords music21 writes by name, as the figures they stand for.
+///
+/// The Neapolitan is the flattened second degree, written `N` and — the way
+/// it is nearly always used — `N6` in first inversion. The cadential
+/// six-four is the tonic triad in second inversion, and takes the case of
+/// the key it stands in.
+fn named_figure(figure: &str, key: &Key) -> String {
+    let tonic = if key.mode() == "minor" { "i" } else { "I" };
     match figure {
         "N" | "N6" => "bII6".to_string(),
         "N53" => "bII".to_string(),
+        "Cad64" => format!("{tonic}64"),
         other => other.to_string(),
     }
 }
@@ -634,7 +645,7 @@ fn split_roman_prefix(value: &str) -> Result<(&str, &str)> {
         .unwrap_or(value.len());
 
     if end == 0 {
-        return Err(Error::Chord(format!("missing roman numeral in {value:?}")));
+        return Err(Error::Chord(format!("No roman numeral found in '{value}'")));
     }
 
     Ok((&value[..end], &value[end..]))
