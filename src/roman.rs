@@ -1,18 +1,13 @@
 use crate::{
     chord::{Chord, root::pitch_class},
     chordsymbol::{ChordQuality, ChordSymbol},
-    defaults::IntegerType,
+    defaults::{FloatType, IntegerType},
     error::{Error, Result},
     interval::Interval,
     key::Key,
-    pitch::Pitch,
+    pitch::{Accidental, Pitch},
 };
 use std::fmt;
-use std::sync::LazyLock;
-
-/// Parsed once: inverting a chord walks this interval one pitch at a time.
-static OCTAVE_UP: LazyLock<Interval> =
-    LazyLock::new(|| Interval::from_name("P8").expect("P8 is a valid interval"));
 
 /// How a figure on the sixth or seventh degree of a minor key decides
 /// between the natural and the raised degree: music21's `Minor67Default`.
@@ -47,16 +42,37 @@ pub struct RomanNumeral {
     key: Key,
     degree: u8,
     accidental: i8,
+    /// The alteration as it was written in front of the numeral, before the
+    /// minor sixth and seventh were read against the chord asked for.
+    ///
+    /// music21 keeps the two apart: `vi` in C minor reports `#vi` as its
+    /// numeral, because its root is a raised sixth degree, while the figure
+    /// it was written with carries no accidental at all.
+    written_accidental: i8,
     inversion: u8,
     seventh: bool,
     quality: RomanQuality,
+    /// The quality the figure states, as music21 reads it off the symbol in
+    /// front of the inversion digits or off the case of the numeral. It is
+    /// what the notes read from the scale are respelled to.
+    implied_quality: ImpliedQuality,
+    /// The figured-bass column the digits stand for, with the omissions,
+    /// additions and alterations written in brackets beside them.
+    figures: FiguredBass,
     secondary: Option<String>,
     kind: RomanKind,
     /// How the sixth and seventh degrees of a minor key are read.
-    #[cfg_attr(feature = "serde", serde(default))]
     sixth_minor: Minor67Default,
-    #[cfg_attr(feature = "serde", serde(default))]
     seventh_minor: Minor67Default,
+    /// Whether an upper-case numeral means a major chord and a lower-case
+    /// one a minor chord.
+    ///
+    /// music21's `caseMatters`. The older figured-bass tradition writes every
+    /// numeral in upper case and lets the key say what the chord is, and a
+    /// numeral read that way states no quality at all: its notes are whatever
+    /// the scale spells, and the sixth and seventh of a minor key are left
+    /// where the key signature put them.
+    case_matters: bool,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -151,61 +167,97 @@ impl RomanNumeral {
         sixth_minor: Minor67Default,
         seventh_minor: Minor67Default,
     ) -> Result<Self> {
+        Self::with_options(figure, key, sixth_minor, seventh_minor, true)
+    }
+
+    /// The same again, saying whether the case of the numeral states the
+    /// chord's quality: music21's `caseMatters`.
+    pub fn with_options(
+        figure: impl Into<String>,
+        key: Key,
+        sixth_minor: Minor67Default,
+        seventh_minor: Minor67Default,
+        case_matters: bool,
+    ) -> Result<Self> {
         let figure = figure.into();
-        let trimmed = figure.trim();
+        let written = fold_figure_symbols(figure.trim());
+        let trimmed = written.as_str();
         if trimmed.is_empty() {
             return Err(Error::Chord("roman numeral cannot be empty".to_string()));
         }
+        validate_figure(trimmed)?;
 
         if let Some(kind) = AugmentedSixthKind::from_figure(trimmed) {
             return Ok(Self {
                 // The figure is kept as written, since music21 names these
                 // several ways and reports back the one it was given.
-                figure: trimmed.to_string(),
+                figure: written.clone(),
                 key,
                 degree: 6,
                 accidental: -1,
+                written_accidental: -1,
                 inversion: 0,
                 seventh: false,
                 quality: RomanQuality::Augmented,
+                implied_quality: ImpliedQuality::Augmented,
+                figures: FiguredBass::default(),
                 secondary: None,
                 kind: RomanKind::AugmentedSixth(kind),
                 sixth_minor,
                 seventh_minor,
+                case_matters,
             });
         }
 
-        let (primary, secondary) = match trimmed.split_once('/') {
-            Some((primary, secondary)) => (primary, Some(secondary.to_string())),
-            None => (trimmed, None),
-        };
+        let (primary, secondary) = split_secondary(trimmed);
 
         // music21 writes a few chords by name rather than by numeral: the
         // Neapolitan and the cadential six-four. Each is read as the figure
         // it stands for, while the numeral keeps the name it was given.
-        let primary = &named_figure(primary, &key);
+        let mut working = named_figure(primary, &key);
 
-        let (accidental, primary) = split_roman_accidental_prefix(primary);
-        let (roman, suffix) = split_roman_prefix(primary)?;
+        // The brackets come off before anything reads the digits, so a
+        // `[no3]` cannot be mistaken for a diminished mark.
+        let omitted = take_omitted_steps(&mut working);
+        let added = take_added_steps(&mut working);
+        let bracketed = take_bracketed_alterations(&mut working);
+
+        let (accidental, rest) = split_roman_accidental_prefix(&working);
+        let (roman, suffix) = split_roman_prefix(rest)?;
         let degree = roman_degree(roman)?;
-        let quality = roman_quality(roman, suffix);
-        let inversion = parse_inversion(suffix);
-        let seventh = suffix_has_seventh(suffix);
+        let (implied_quality, mut column) =
+            implied_quality_from_string(roman, suffix, case_matters);
+        let inversion = parse_inversion(&column);
+        let seventh = suffix_has_seventh(&column);
 
         let mut numeral = Self {
-            figure: trimmed.to_string(),
+            figure: written.clone(),
             key,
             degree,
             accidental,
+            written_accidental: accidental,
             inversion,
             seventh,
-            quality,
+            quality: RomanQuality::from(implied_quality),
+            implied_quality,
+            figures: FiguredBass::default(),
             secondary,
             kind: RomanKind::Diatonic,
             sixth_minor,
             seventh_minor,
+            case_matters,
         };
-        numeral.raise_minor_sixth_and_seventh()?;
+        numeral.raise_minor_sixth_and_seventh(&mut column)?;
+        // This crate writes an addition as `add(13)` where music21 writes a
+        // bracket, and it is not part of the figured-bass column: an added
+        // thirteenth is a note beside the chord, not a figure over the bass.
+        let column = strip_roman_addition_groups(&column);
+        numeral.figures = FiguredBass {
+            omitted,
+            added,
+            bracketed,
+            ..figured_bass_column(&expand_shorthand(&column))
+        };
         Ok(numeral)
     }
 
@@ -217,12 +269,15 @@ impl RomanNumeral {
     /// seventh on `G#` rather than a chord on `G` with three flats in it,
     /// and `vi` the minor triad on `F#`. The natural degrees are what `VI`
     /// and `VII` ask for, and those are left alone.
-    fn raise_minor_sixth_and_seventh(&mut self) -> Result<()> {
+    fn raise_minor_sixth_and_seventh(&mut self, column: &mut String) -> Result<()> {
         if !matches!(self.degree, 6 | 7) {
             return Ok(());
         }
         // Against the key the figure is actually read in, so the `vi` of a
         // secondary numeral is judged in the key that numeral establishes.
+        if !self.case_matters {
+            return Ok(());
+        }
         if self.effective_key()?.mode() != "minor" {
             return Ok(());
         }
@@ -233,8 +288,8 @@ impl RomanNumeral {
         };
         // A chord that only the raised degree gives.
         let wants_raised = matches!(
-            self.quality,
-            RomanQuality::Minor | RomanQuality::Diminished | RomanQuality::HalfDiminished
+            self.implied_quality,
+            ImpliedQuality::Minor | ImpliedQuality::Diminished | ImpliedQuality::HalfDiminished
         );
         let raise = match reading {
             Minor67Default::Flat => false,
@@ -255,8 +310,20 @@ impl RomanNumeral {
         };
         if raise {
             self.accidental += 1;
+            sharpen_figure(column);
         }
         Ok(())
+    }
+
+    /// The alterations written in square brackets, as the semitones each
+    /// moves its chord step by and the step it moves.
+    pub fn bracketed_alterations(&self) -> &[(i8, u8)] {
+        &self.figures.bracketed
+    }
+
+    /// Whether the case of the numeral states the chord's quality.
+    pub fn case_matters(&self) -> bool {
+        self.case_matters
     }
 
     /// How this numeral reads the sixth degree of a minor key.
@@ -283,6 +350,12 @@ impl RomanNumeral {
     ///
     /// Negative values are flats and positive values are sharps, so `bII`
     /// returns `-1` and `#iv` returns `1`.
+    pub fn written_accidental(&self) -> i8 {
+        self.written_accidental
+    }
+
+    /// The alteration the numeral reports, once the sixth and seventh
+    /// degrees of a minor key have been read against the chord asked for.
     pub fn accidental(&self) -> i8 {
         self.accidental
     }
@@ -420,34 +493,222 @@ impl RomanNumeral {
         RomanNumeral::new(self.figure.clone(), self.key.transpose(interval)?)
     }
 
-    /// Realizes the Roman numeral as a chord.
+    /// The chord the numeral stands for, spelled where its key sounds.
+    ///
+    /// This is music21's `_updatePitches`, and it is a figured-bass reading
+    /// rather than a stack of intervals: the bass is the scale degree the
+    /// inversion figure puts there, every number of the column is that many
+    /// scale steps above it, and only then is the result respelled to the
+    /// quality the numeral's case and symbols asked for. Reading it off the
+    /// scale is what lets a numeral mean something in a mode, and what makes
+    /// `V7b5` alter one note rather than name a different chord.
     pub fn to_chord(&self) -> Result<Chord> {
         if let RomanKind::AugmentedSixth(kind) = self.kind {
             return self.augmented_sixth_chord(kind);
         }
 
-        let effective_key = self.effective_key()?;
-        let mut root = effective_key.pitch_from_degree(self.degree as usize)?;
+        let scale = self.effective_key()?;
+        let numbers = self.figures.numbers();
+        let implies_root = FIGURES_IMPLYING_ROOT.contains(&numbers.as_slice());
+        let bass_degree = self.bass_scale_degree(&numbers, implies_root)?;
+
+        let mut pitches = vec![degree_pitch(&scale, bass_degree)?];
+        for figure in self.figures.figures.iter().rev() {
+            let degree = bass_degree + IntegerType::from(figure.number) - 1;
+            let mut pitch = degree_pitch(&scale, degree)?;
+            if let Some(alter) = figure.alter {
+                pitch.set_accidental(Some(Accidental::new(modified_alter(&pitch, alter))?));
+            }
+            let below = pitches.last().map_or(0.0, Pitch::ps);
+            if pitch.ps() < below {
+                pitch.set_octave(Some(pitch.octave().unwrap_or(4) + 1));
+            }
+            pitches.push(pitch);
+        }
+
+        // The alteration in front of the numeral moves the chord without
+        // renaming it — music21 transposes by an augmented unison — but it
+        // leaves the notes above the fifth alone, since a `bVII9` is a chord
+        // on a flattened seventh degree and not a flattened ninth.
         if self.accidental != 0 {
-            // The alteration in front of a numeral moves the note without
-            // renaming it — music21 transposes by an augmented unison — so a
-            // `bII` in C is `D-`, not the `C#` a semitone step would give.
-            let altered = root.accidental().alter() + f64::from(self.accidental);
-            root.set_accidental(Some(crate::pitch::Accidental::new(altered)?));
-        }
-        let mut pitches = self
-            .interval_names()
-            .into_iter()
-            .map(|name| Interval::from_name(name)?.transpose_pitch(&root))
-            .collect::<Result<Vec<_>>>()?;
-
-        for _ in 0..self.inversion.min(pitches.len().saturating_sub(1) as u8) {
-            let pitch = pitches.remove(0);
-            let transposed = OCTAVE_UP.transpose_pitch(&pitch)?;
-            pitches.push(transposed);
+            let untouched = upper_extension_indices(&pitches)?;
+            for (index, pitch) in pitches.iter_mut().enumerate() {
+                if untouched.contains(&index) {
+                    continue;
+                }
+                let alter = pitch.accidental().alter() + FloatType::from(self.accidental);
+                pitch.set_accidental(Some(Accidental::new(alter)?));
+            }
         }
 
-        Chord::new(pitches.as_slice())
+        // A column that says nothing about a root is a stack over its bass.
+        let root = if implies_root {
+            None
+        } else {
+            Some(pitches[0].clone())
+        };
+
+        self.match_accidentals_to_quality(&mut pitches, root.as_ref())?;
+        self.correct_bracketed_pitches(&mut pitches, root.as_ref())?;
+
+        // A note left out or put in must not move the root, so the root is
+        // read while the chord is still whole and recorded from there.
+        let altered = !self.figures.omitted.is_empty() || !self.figures.added.is_empty();
+        let recorded = match &root {
+            Some(root) => Some(root.clone()),
+            None if altered => Chord::new(pitches.as_slice())?.root().cloned(),
+            None => None,
+        };
+
+        self.omit_steps(&mut pitches, recorded.as_ref())?;
+        self.add_steps(&mut pitches, &scale)?;
+
+        let mut chord = Chord::new(pitches.as_slice())?;
+        chord.set_root(recorded);
+        Ok(chord)
+    }
+
+    /// The scale degree the inversion figure puts in the bass.
+    ///
+    /// music21 works it out by building a chord of naturals spaced by the
+    /// column's own numbers and asking which of them is its root; the bass is
+    /// then that many steps below the numeral's own degree.
+    fn bass_scale_degree(&self, numbers: &[u8], implies_root: bool) -> Result<IntegerType> {
+        if !implies_root {
+            return Ok(IntegerType::from(self.degree));
+        }
+        let middle_c = 22;
+        let mut pitches = vec![natural_at_diatonic_number(middle_c)?];
+        for number in numbers {
+            pitches.push(natural_at_diatonic_number(
+                middle_c + IntegerType::from(*number) - 1,
+            )?);
+        }
+        let spelled = Chord::new(pitches.as_slice())?;
+        let root = spelled
+            .root()
+            .ok_or_else(|| Error::Chord("figured bass column has no root".to_string()))?;
+        let distance = root.diatonic_note_number() - middle_c;
+        let bass = (IntegerType::from(self.degree) - distance).rem_euclid(7);
+        Ok(if bass == 0 { 7 } else { bass })
+    }
+
+    /// music21's `_matchAccidentalsToQuality`: respells the third, fifth and
+    /// seventh to the chord the numeral asked for.
+    ///
+    /// The scale gives the letters and the quality gives the accidentals, so
+    /// a `V` in a minor key is major whatever the natural minor spells — but
+    /// an accidental written on a figure is left where it was put, which is
+    /// what keeps the flat of `V7b5`.
+    fn match_accidentals_to_quality(
+        &self,
+        pitches: &mut [Pitch],
+        root: Option<&Pitch>,
+    ) -> Result<()> {
+        let correct = self.implied_quality.correct_semitones();
+        for (step, want) in [3u8, 5, 7].into_iter().zip(correct.iter().copied()) {
+            if self.figures.alters(step) {
+                continue;
+            }
+            let Some(index) = chord_step_index(pitches, root, step)? else {
+                continue;
+            };
+            let have = step_semitones(pitches, root, index)?;
+            if have == IntegerType::from(want) {
+                continue;
+            }
+            correct_faulty_pitch(&mut pitches[index], IntegerType::from(want) - have)?;
+        }
+
+        // A seventh does not have to match the scale: a `i7` read in a major
+        // key would otherwise take the major seventh the scale spells.
+        if correct.len() == 2
+            && self.figures.figures.len() >= 3
+            && self.implied_quality == ImpliedQuality::Minor
+            && !self.figures.alters(7)
+            && let Some(index) = chord_step_index(pitches, root, 7)?
+            && step_semitones(pitches, root, index)? == 11
+        {
+            correct_faulty_pitch(&mut pitches[index], -1)?;
+        }
+        Ok(())
+    }
+
+    /// music21's `_correctBracketedPitches`: an alteration written in square
+    /// brackets moves a chord step without changing which step it is.
+    fn correct_bracketed_pitches(
+        &self,
+        pitches: &mut [Pitch],
+        root: Option<&Pitch>,
+    ) -> Result<()> {
+        for (alter, step) in &self.figures.bracketed {
+            let Some(index) = chord_step_index(pitches, root, *step)? else {
+                continue;
+            };
+            let moved = pitches[index].accidental().alter() + FloatType::from(*alter);
+            pitches[index].set_accidental(Some(Accidental::new(moved)?));
+        }
+        Ok(())
+    }
+
+    /// music21's omitted steps: a `[no3]` drops every note of that step.
+    fn omit_steps(&self, pitches: &mut Vec<Pitch>, root: Option<&Pitch>) -> Result<()> {
+        if self.figures.omitted.is_empty() {
+            return Ok(());
+        }
+        let mut dropped = Vec::new();
+        for step in &self.figures.omitted {
+            if let Some(index) = chord_step_index(pitches, root, *step)? {
+                dropped.push(pitches[index].name());
+            }
+        }
+        pitches.retain(|pitch| !dropped.contains(&pitch.name()));
+        Ok(())
+    }
+
+    /// music21's added steps: an `[add4]` puts in the note that many scale
+    /// steps above the *root*, at or above the bass.
+    fn add_steps(&self, pitches: &mut Vec<Pitch>, scale: &Key) -> Result<()> {
+        if self.figures.added.is_empty() {
+            return Ok(());
+        }
+        let bass = pitches.first().map_or(0.0, Pitch::ps);
+        for (alter, step) in &self.figures.added {
+            let degree = IntegerType::from(self.degree) + IntegerType::from(*step) - 1;
+            let mut added = degree_pitch(scale, degree)?;
+            let moved = added.accidental().alter() + FloatType::from(*alter);
+            added.set_accidental(Some(Accidental::new(moved)?));
+            while added.ps() < bass {
+                added.set_octave(Some(added.octave().unwrap_or(4) + 1));
+            }
+            // An added note spelled onto the bass belongs above it, not under
+            // it: `IV[add#7]` in C would otherwise put `E#` in the bass.
+            if added.ps() == bass
+                && pitches
+                    .first()
+                    .is_some_and(|low| added.diatonic_note_number() < low.diatonic_note_number())
+            {
+                added.set_octave(Some(added.octave().unwrap_or(4) + 1));
+            }
+            if !pitches
+                .iter()
+                .any(|pitch| pitch.name_with_octave() == added.name_with_octave())
+            {
+                pitches.push(added);
+            }
+        }
+        // Two notes may sound alike and still be written apart, and the one
+        // written lower is the one written first.
+        pitches.sort_by(|left, right| {
+            left.ps()
+                .partial_cmp(&right.ps())
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then(
+                    left.diatonic_note_number()
+                        .cmp(&right.diatonic_note_number()),
+                )
+        });
+        Ok(())
     }
 
     fn augmented_sixth_chord(&self, kind: AugmentedSixthKind) -> Result<Chord> {
@@ -525,34 +786,28 @@ impl RomanNumeral {
             return Ok(self.key.clone());
         };
 
-        let (accidental, secondary) = split_roman_accidental_prefix(secondary);
-        let (roman, _) = split_roman_prefix(secondary)?;
-        let degree = roman_degree(roman)?;
-        let mut tonic = self.key.pitch_from_degree(degree as usize)?;
-        if accidental != 0 {
-            tonic = Interval::from_semitones(accidental as IntegerType)?.transpose_pitch(&tonic)?;
-        }
-        let mode = if roman.chars().next().is_some_and(char::is_uppercase) {
-            "major"
-        } else {
-            "minor"
+        // music21 reads the secondary numeral as a chord of its own and
+        // takes the key from that chord's root and quality, so the `vi` of
+        // `V/vi` in C minor is the raised sixth degree the same way a plain
+        // `vi` would be.
+        let numeral = Self::with_options(
+            secondary.clone(),
+            self.key.clone(),
+            self.sixth_minor,
+            self.seventh_minor,
+            self.case_matters,
+        )?;
+        let chord = numeral.to_chord()?;
+        let root = chord
+            .root()
+            .ok_or_else(|| Error::Chord(format!("no root for secondary numeral {secondary}")))?;
+        let mode = match numeral.implied_quality {
+            ImpliedQuality::Minor => "minor",
+            ImpliedQuality::Major => "major",
+            _ if chord.semitones_from_chord_step(3) == Some(3) => "minor",
+            _ => "major",
         };
-        Key::from_tonic_mode(&tonic.name(), mode)
-    }
-
-    fn interval_names(&self) -> Vec<&'static str> {
-        match (self.quality, self.seventh) {
-            (RomanQuality::Major, false) => vec!["P1", "M3", "P5"],
-            (RomanQuality::Major, true) => vec!["P1", "M3", "P5", "m7"],
-            (RomanQuality::Minor, false) => vec!["P1", "m3", "P5"],
-            (RomanQuality::Minor, true) => vec!["P1", "m3", "P5", "m7"],
-            (RomanQuality::Diminished, false) => vec!["P1", "m3", "d5"],
-            (RomanQuality::Diminished, true) => vec!["P1", "m3", "d5", "d7"],
-            (RomanQuality::HalfDiminished, false) => vec!["P1", "m3", "d5"],
-            (RomanQuality::HalfDiminished, true) => vec!["P1", "m3", "d5", "m7"],
-            (RomanQuality::Augmented, false) => vec!["P1", "M3", "a5"],
-            (RomanQuality::Augmented, true) => vec!["P1", "M3", "a5", "m7"],
-        }
+        Key::from_tonic_mode(&root.name(), mode)
     }
 }
 
@@ -763,6 +1018,594 @@ fn named_figure(figure: &str, key: &Key) -> String {
     }
 }
 
+/// music21's "immediate fixes" to a figure as written.
+///
+/// A diminished chord is written `o`, `0`, `º` or `°`, and a half-diminished
+/// one `ø` or `/o`; each pair is folded onto one spelling, and the fold is
+/// what the numeral reports back as its figure. The zero is left alone when a
+/// digit precedes it, so `10` stays a ten.
+fn fold_figure_symbols(figure: &str) -> String {
+    let mut folded = String::with_capacity(figure.len());
+    let mut previous: Option<char> = None;
+    for letter in figure.chars() {
+        let fixed = match letter {
+            '0' if !previous.is_some_and(|before| before.is_ascii_digit()) => 'o',
+            '\u{00ba}' | '\u{00b0}' => 'o',
+            other => other,
+        };
+        folded.push(fixed);
+        previous = Some(letter);
+    }
+    folded.replace("/o", "\u{00f8}")
+}
+
+/// music21's figure validation: letters, digits and the handful of symbols a
+/// figure is written with, and never the letters no numeral contains.
+///
+/// The parentheses and spaces of this crate's own `add(...)` and `omit(...)`
+/// groups come through as well, since a figure written that way is one it
+/// can read.
+fn validate_figure(figure: &str) -> Result<()> {
+    let ok = figure.chars().all(|letter| {
+        letter.is_alphanumeric()
+            || matches!(
+                letter,
+                '#' | '\u{00b0}' | '+' | '-' | '/' | '[' | ']' | '(' | ')' | ' '
+            )
+    });
+    if !ok
+        || figure
+            .chars()
+            .any(|letter| matches!(letter, 'x' | 'y' | 'z'))
+    {
+        return Err(Error::Chord(format!("Invalid figure: {figure}")));
+    }
+    Ok(())
+}
+
+/// One figure of a figured-bass column: how far above the bass the note
+/// stands, and the accidental written beside the number.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Figure {
+    /// The interval above the bass, counted inclusively, so `6` is a sixth.
+    number: u8,
+    /// The accidental written with the number, in semitones. `None` is no
+    /// modifier at all, which is not the same as a written natural: the note
+    /// then keeps whatever the scale spells it with.
+    alter: Option<i8>,
+}
+
+/// The figured-bass column a roman numeral's digits stand for, and what the
+/// brackets beside them say.
+///
+/// This is music21's `figuredBass.notation.Notation` reduced to what a
+/// numeral needs — the numbers above the bass and their accidentals, already
+/// expanded out of the shorthand a figure is usually written in — together
+/// with the omissions, additions and alterations music21 parses out of the
+/// figure before the column is read.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct FiguredBass {
+    /// The figures of the column, written high to low as music21 writes them.
+    figures: Vec<Figure>,
+    /// Chord steps the figure asks to be left out, as `[no3]`.
+    omitted: Vec<u8>,
+    /// Notes the figure asks to be added, as `[add4]`: the alteration in
+    /// semitones and how far above the *root* the note stands.
+    added: Vec<(i8, u8)>,
+    /// Alterations written in square brackets, as `[#7]`: the alteration in
+    /// semitones and the chord step it applies to.
+    bracketed: Vec<(i8, u8)>,
+}
+
+impl FiguredBass {
+    /// The numbers of the column, high to low.
+    fn numbers(&self) -> Vec<u8> {
+        self.figures.iter().map(|figure| figure.number).collect()
+    }
+
+    /// Whether an accidental was written beside a given number, which is what
+    /// stops the implied quality from correcting the note back.
+    fn alters(&self, number: u8) -> bool {
+        self.figures
+            .iter()
+            .any(|figure| figure.number == number && figure.alter.is_some_and(|alter| alter != 0))
+    }
+}
+
+/// The chords a figured-bass column implies a root for.
+///
+/// music21's `FIGURES_IMPLYING_ROOT`. Every other column — `54`, say — is
+/// read as a stack over its bass, and the bass is then the root.
+const FIGURES_IMPLYING_ROOT: &[&[u8]] = &[
+    // triads
+    &[6],
+    &[6, 3],
+    &[6, 4],
+    // seventh chords
+    &[6, 5, 3],
+    &[6, 5],
+    &[6, 4, 3],
+    &[4, 3],
+    &[6, 4, 2],
+    &[4, 2],
+    &[2],
+    // ninth chords
+    &[7, 6, 5, 3],
+    &[6, 5, 4, 3],
+    &[6, 4, 3, 2],
+    &[7, 5, 3, 2],
+    // eleventh chords
+    &[9, 7, 6, 5, 3],
+    &[7, 6, 5, 4, 3],
+    &[9, 6, 5, 4, 3],
+    &[9, 7, 6, 4, 3],
+    &[7, 6, 5, 4, 2],
+];
+
+/// The shorthand a figured-bass column is written in, and what it stands for.
+///
+/// music21's `figuredBass.notation.shorthandNotation`. A bare `7` means a
+/// seventh chord in root position — the fifth and the third are there whether
+/// or not anybody wrote them.
+const SHORTHAND: &[(&[u8], &[u8])] = &[
+    (&[], &[5, 3]),
+    (&[5], &[5, 3]),
+    (&[6], &[6, 3]),
+    (&[7], &[7, 5, 3]),
+    (&[9], &[9, 7, 5, 3]),
+    (&[11], &[11, 9, 7, 5, 3]),
+    (&[13], &[13, 11, 9, 7, 5, 3]),
+    (&[6, 5], &[6, 5, 3]),
+    (&[4, 3], &[6, 4, 3]),
+    (&[4, 2], &[6, 4, 2]),
+    (&[2], &[6, 4, 2]),
+];
+
+/// The quality a figure says its chord has, whatever the scale spells.
+///
+/// music21's `impliedQuality`: the symbol in front of the inversion digits,
+/// or — when there is none — the case the numeral was written in. What it is
+/// for is respelling the third, the fifth and the seventh once they have been
+/// read off the scale.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum ImpliedQuality {
+    /// No quality was implied, and the scale's own spelling stands.
+    #[default]
+    Unstated,
+    Major,
+    Minor,
+    Diminished,
+    HalfDiminished,
+    Augmented,
+    DominantSeventh,
+}
+
+impl From<ImpliedQuality> for RomanQuality {
+    /// The quality a numeral reports, which is the stated one with the two
+    /// readings that only say how a seventh is spelled folded onto major.
+    fn from(quality: ImpliedQuality) -> Self {
+        match quality {
+            ImpliedQuality::Minor => Self::Minor,
+            ImpliedQuality::Diminished => Self::Diminished,
+            ImpliedQuality::HalfDiminished => Self::HalfDiminished,
+            ImpliedQuality::Augmented => Self::Augmented,
+            ImpliedQuality::Unstated | ImpliedQuality::Major | ImpliedQuality::DominantSeventh => {
+                Self::Major
+            }
+        }
+    }
+}
+
+impl ImpliedQuality {
+    /// How many semitones the third, the fifth and — where the quality says
+    /// so — the seventh stand above the root.
+    fn correct_semitones(self) -> &'static [u8] {
+        match self {
+            Self::Unstated => &[],
+            Self::Major => &[4, 7],
+            Self::Minor => &[3, 7],
+            Self::Diminished => &[3, 6, 9],
+            Self::HalfDiminished => &[3, 6, 10],
+            Self::Augmented => &[4, 8],
+            Self::DominantSeventh => &[4, 7, 10],
+        }
+    }
+}
+
+/// Where music21 splits a secondary numeral off a figure.
+///
+/// Its own regular expression asks for a letter after the slash, and
+/// deliberately not `o` — so `vii/o7` is a half-diminished seventh and not a
+/// numeral applied to some chord `o7` — and not a digit, so the `6/5` of
+/// `Ger6/5` stays one figure.
+fn split_secondary(figure: &str) -> (&str, Option<String>) {
+    for (index, letter) in figure.char_indices() {
+        if letter != '/' {
+            continue;
+        }
+        let rest = &figure[index + 1..];
+        let opens = rest.chars().next().is_some_and(|next| {
+            next == '#' || (next.is_ascii_alphabetic() && next != 'o' && next != 'O')
+        });
+        if opens {
+            return (&figure[..index], Some(rest.to_string()));
+        }
+    }
+    (figure, None)
+}
+
+/// Takes the `[noN]` groups out of a figure, leaving the rest of it.
+///
+/// The steps are counted from the root and folded into one octave, so
+/// `[no11]` leaves out the fourth.
+fn take_omitted_steps(figure: &mut String) -> Vec<u8> {
+    let mut steps = Vec::new();
+    let mut kept = String::with_capacity(figure.len());
+    let mut remaining = figure.as_str();
+    while let Some(start) = remaining.find("[no") {
+        let Some(end) = remaining[start..].find(']') else {
+            break;
+        };
+        let group = &remaining[start + 1..start + end];
+        for part in group.split("no") {
+            if let Ok(step) = part.trim().parse::<u8>() {
+                steps.push(if step % 7 == 0 { 7 } else { step % 7 });
+            }
+        }
+        kept.push_str(&remaining[..start]);
+        remaining = remaining[start + end + 1..].trim_start();
+    }
+    kept.push_str(remaining);
+    *figure = kept;
+    steps
+}
+
+/// Takes the `[addN]` groups out of a figure, with the accidental each was
+/// written with.
+fn take_added_steps(figure: &mut String) -> Vec<(i8, u8)> {
+    take_bracket_groups(figure, "[add")
+}
+
+/// Takes the `[#N]` and `[bN]` groups out of a figure.
+fn take_bracketed_alterations(figure: &mut String) -> Vec<(i8, u8)> {
+    take_bracket_groups(figure, "[")
+}
+
+/// The shape the two share: a bracket, a prefix, some accidentals, a number,
+/// and a closing bracket. A bracket holding anything else is left where it is.
+fn take_bracket_groups(figure: &mut String, opening: &str) -> Vec<(i8, u8)> {
+    let mut groups = Vec::new();
+    let mut kept = String::with_capacity(figure.len());
+    let mut remaining = figure.as_str();
+    while let Some(start) = remaining.find(opening) {
+        let Some(end) = remaining[start..].find(']') else {
+            break;
+        };
+        let body = &remaining[start + opening.len()..start + end];
+        let digits: String = body.chars().filter(char::is_ascii_digit).collect();
+        let well_formed = !digits.is_empty()
+            && body
+                .chars()
+                .all(|letter| matches!(letter, '#' | 'b' | '-') || letter.is_ascii_digit());
+        if !well_formed {
+            kept.push_str(&remaining[..start + end + 1]);
+            remaining = &remaining[start + end + 1..];
+            continue;
+        }
+        let alter: i8 = body
+            .chars()
+            .map(|letter| match letter {
+                '#' => 1,
+                'b' | '-' => -1,
+                _ => 0,
+            })
+            .sum();
+        if let Ok(step) = digits.parse::<u8>() {
+            groups.push((alter, step));
+        }
+        kept.push_str(&remaining[..start]);
+        remaining = remaining[start + end + 1..].trim_start();
+    }
+    kept.push_str(remaining);
+    *figure = kept;
+    groups
+}
+
+/// music21's `expandShortHand`: the figures of a column, one string each.
+fn expand_shorthand(shorthand: &str) -> Vec<String> {
+    let mut shorthand = shorthand.replace('/', "");
+    // A lone flat is a flattened third.
+    if shorthand == "b" || shorthand == "-" {
+        shorthand.push('3');
+    }
+    let letters: Vec<char> = shorthand.chars().collect();
+    let mut tokens = Vec::new();
+    let mut index = 0;
+    while index < letters.len() {
+        let start = index;
+        for mark in ['#', '-', 'b', 'o'] {
+            while letters.get(index) == Some(&mark) {
+                index += 1;
+            }
+        }
+        // The two-digit figures are read whole, so `13` is a thirteenth and
+        // not a one and a three.
+        let read = match letters.get(index) {
+            Some('1') if matches!(letters.get(index + 1), Some('1' | '3' | '5')) => {
+                index += 2;
+                true
+            }
+            Some(digit) if digit.is_ascii_digit() && *digit != '0' => {
+                index += 1;
+                true
+            }
+            _ => false,
+        };
+        if read {
+            tokens.push(letters[start..index].iter().collect::<String>());
+        } else {
+            index = start + 1;
+        }
+    }
+    // A column written as a third alone is a fifth and a third.
+    if tokens.len() == 1 && tokens[0].ends_with('3') {
+        tokens.insert(0, "5".to_string());
+    }
+    tokens
+}
+
+/// Reads one figured-bass column out of the figures a numeral was written
+/// with, expanding music21's shorthand.
+fn figured_bass_column(tokens: &[String]) -> FiguredBass {
+    let mut numbers: Vec<Option<u8>> = Vec::with_capacity(tokens.len());
+    let mut alters: Vec<Option<i8>> = Vec::with_capacity(tokens.len());
+    for token in tokens {
+        let digits: String = token.chars().filter(char::is_ascii_digit).collect();
+        numbers.push(digits.parse::<u8>().ok());
+        let marks: String = token
+            .chars()
+            .filter(|letter| !letter.is_ascii_digit())
+            .collect();
+        alters.push(modifier_alter(&marks));
+    }
+
+    // A figure with a modifier but no number is a third.
+    let written: Vec<u8> = numbers.iter().map(|number| number.unwrap_or(3)).collect();
+    let shorthand: Vec<u8> = numbers.iter().flatten().copied().collect();
+    let longhand = (shorthand.len() == numbers.len())
+        .then(|| {
+            SHORTHAND
+                .iter()
+                .find(|(written, _)| *written == shorthand.as_slice())
+                .map(|(_, longhand)| longhand.to_vec())
+        })
+        .flatten();
+
+    let figures = match longhand {
+        Some(longhand) => longhand
+            .into_iter()
+            .map(|number| Figure {
+                number,
+                alter: written
+                    .iter()
+                    .position(|shorthand| *shorthand == number)
+                    .and_then(|index| alters[index]),
+            })
+            .collect(),
+        None => written
+            .iter()
+            .zip(&alters)
+            .map(|(number, alter)| Figure {
+                number: *number,
+                alter: *alter,
+            })
+            .collect(),
+    };
+
+    FiguredBass {
+        figures,
+        ..FiguredBass::default()
+    }
+}
+
+/// The accidental a figure's modifier leaves on the note the scale spells.
+///
+/// A written natural replaces whatever was there; anything else is added to
+/// it, so the sharp of `i#7` raises the flattened seventh of a minor key to
+/// a natural rather than spelling a `B#`.
+fn modified_alter(pitch: &Pitch, alter: i8) -> FloatType {
+    if alter == 0 {
+        return 0.0;
+    }
+    pitch.accidental().alter() + FloatType::from(alter)
+}
+
+/// What a figure's modifier does to the note the scale spells.
+///
+/// music21 reads `+` as a sharp and `/` as a flat, which is how figured bass
+/// has always written a raised or lowered note; `n` is a natural, and no
+/// modifier at all is no instruction.
+fn modifier_alter(marks: &str) -> Option<i8> {
+    if marks.is_empty() {
+        return None;
+    }
+    let mut alter = 0;
+    for mark in marks.chars() {
+        match mark {
+            '#' | '+' => alter += 1,
+            'b' | '-' | '/' => alter -= 1,
+            'n' => {}
+            _ => return None,
+        }
+    }
+    Some(alter)
+}
+
+/// The pitch a scale degree spells, folded into the octave the scale's tonic
+/// stands in — which is what music21's `pitchFromDegree` does, so a ninth
+/// comes back as the second and the caller lifts it.
+fn degree_pitch(key: &Key, degree: IntegerType) -> Result<Pitch> {
+    let wrapped = (degree - 1).rem_euclid(7) + 1;
+    key.pitch_from_degree(wrapped as usize)
+}
+
+/// The natural note at a diatonic note number, where 22 is middle C.
+fn natural_at_diatonic_number(number: IntegerType) -> Result<Pitch> {
+    const LETTERS: [char; 7] = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+    let letter = LETTERS[((number - 1).rem_euclid(7)) as usize];
+    Pitch::builder()
+        .step(letter)
+        .octave((number - 1).div_euclid(7))
+        .build()
+}
+
+/// Which of a chord's notes are the seventh and the extensions above it.
+///
+/// music21 leaves these alone when it moves a chord by the alteration in
+/// front of its numeral, since the alteration is written against the root.
+fn upper_extension_indices(pitches: &[Pitch]) -> Result<Vec<usize>> {
+    let chord = Chord::new(pitches)?;
+    let Some(root) = chord.root().cloned() else {
+        return Ok(Vec::new());
+    };
+    let mut indices = Vec::new();
+    for step in [7u8, 2, 4, 6] {
+        if let Some(index) = chord_step_index(pitches, Some(&root), step)? {
+            indices.push(index);
+        }
+    }
+    Ok(indices)
+}
+
+/// Where a chord step stands among a set of pitches, counting from the root
+/// the chord infers when none was recorded.
+fn chord_step_index(pitches: &[Pitch], root: Option<&Pitch>, step: u8) -> Result<Option<usize>> {
+    let inferred;
+    let root = match root {
+        Some(root) => root,
+        None => {
+            let chord = Chord::new(pitches)?;
+            let Some(found) = chord.root().cloned() else {
+                return Ok(None);
+            };
+            inferred = found;
+            &inferred
+        }
+    };
+    let wanted = IntegerType::from(step);
+    Ok(pitches.iter().position(|pitch| {
+        (pitch.diatonic_note_number() - root.diatonic_note_number()).rem_euclid(7) + 1 == wanted
+    }))
+}
+
+/// How many semitones a pitch stands above the root, within the octave.
+fn step_semitones(pitches: &[Pitch], root: Option<&Pitch>, index: usize) -> Result<IntegerType> {
+    let inferred;
+    let root = match root {
+        Some(root) => root,
+        None => {
+            let chord = Chord::new(pitches)?;
+            let Some(found) = chord.root().cloned() else {
+                return Ok(0);
+            };
+            inferred = found;
+            &inferred
+        }
+    };
+    let distance = (pitches[index].ps() - root.ps()).round() as IntegerType;
+    Ok(distance.rem_euclid(12))
+}
+
+/// music21's `correctFaultyPitch`: moves a note by the semitones it is out
+/// by, reading a correction of half an octave or more the short way round.
+fn correct_faulty_pitch(pitch: &mut Pitch, correction: IntegerType) -> Result<()> {
+    let folded = fold_correction(correction) + pitch.accidental().alter() as IntegerType;
+    let alter = fold_correction(folded);
+    pitch.set_accidental(Some(Accidental::new(FloatType::from(alter))?));
+    Ok(())
+}
+
+/// Half an octave or more in either direction is the same note the other way.
+fn fold_correction(semitones: IntegerType) -> IntegerType {
+    if semitones >= 6 {
+        semitones - 12
+    } else if semitones <= -6 {
+        semitones + 12
+    } else {
+        semitones
+    }
+}
+
+/// music21's `_setImpliedQualityFromString`: the quality symbol in front of
+/// the inversion digits, and the digits left after it.
+///
+/// The crate's own `dim`, `aug` and `m7b5` spellings are read here too, since
+/// a figure written that way is one it has always accepted.
+fn implied_quality_from_string(
+    roman: &str,
+    suffix: &str,
+    case_matters: bool,
+) -> (ImpliedQuality, String) {
+    if let Some(rest) = suffix.strip_prefix('o') {
+        return (ImpliedQuality::Diminished, rest.to_string());
+    }
+    if let Some(rest) = suffix.strip_prefix('\u{00f8}') {
+        return (ImpliedQuality::HalfDiminished, rest.to_string());
+    }
+    if let Some(rest) = suffix.strip_prefix('+') {
+        return (ImpliedQuality::Augmented, rest.to_string());
+    }
+    let lower = suffix.to_ascii_lowercase();
+    if lower.contains("m7b5") {
+        return (ImpliedQuality::HalfDiminished, suffix.to_string());
+    }
+    if lower.contains("dim") {
+        return (ImpliedQuality::Diminished, suffix.to_string());
+    }
+    if lower.contains("aug") {
+        return (ImpliedQuality::Augmented, suffix.to_string());
+    }
+    // A `d` before the inversion figure is music21's dominant seventh: `Vd7`
+    // and `IVd65` are dominant sevenths whatever the scale spells.
+    if let Some((leading, figure)) = suffix.rsplit_once('d')
+        && matches!(
+            figure,
+            "7" | "65" | "6/5" | "43" | "4/3" | "42" | "4/2" | "2"
+        )
+    {
+        return (
+            ImpliedQuality::DominantSeventh,
+            format!("{leading}{figure}"),
+        );
+    }
+    if !case_matters {
+        return (ImpliedQuality::Unstated, suffix.to_string());
+    }
+    let quality = if roman.chars().next().is_some_and(char::is_uppercase) {
+        ImpliedQuality::Major
+    } else {
+        ImpliedQuality::Minor
+    };
+    (quality, suffix.to_string())
+}
+
+/// music21's `sharpen`: raises the alteration in front of a numeral, taking
+/// a sharp already written on the root out of the figure so the note is not
+/// raised twice.
+fn sharpen_figure(figure: &mut String) {
+    if figure.contains("##") {
+        *figure = figure.replace("##8", "#8");
+    } else if figure.contains("#2") {
+        *figure = figure.replace("#2", "2");
+    } else if figure.contains("#4") {
+        *figure = figure.replace("#4", "4");
+    } else if figure.contains("#6") {
+        *figure = figure.replace("#6", "6");
+    } else {
+        *figure = figure.replace("#8", "");
+    }
+}
+
 fn split_roman_prefix(value: &str) -> Result<(&str, &str)> {
     let end = value
         .char_indices()
@@ -786,21 +1629,6 @@ fn roman_degree(roman: &str) -> Result<u8> {
         "VI" => Ok(6),
         "VII" => Ok(7),
         _ => Err(Error::Chord(format!("unsupported roman numeral {roman:?}"))),
-    }
-}
-
-fn roman_quality(roman: &str, suffix: &str) -> RomanQuality {
-    let lower = suffix.to_ascii_lowercase();
-    if suffix.contains('\u{00f8}') || lower.contains("m7b5") {
-        RomanQuality::HalfDiminished
-    } else if lower.contains('o') || lower.contains("dim") {
-        RomanQuality::Diminished
-    } else if lower.contains('+') || lower.contains("aug") {
-        RomanQuality::Augmented
-    } else if roman.chars().next().is_some_and(char::is_lowercase) {
-        RomanQuality::Minor
-    } else {
-        RomanQuality::Major
     }
 }
 

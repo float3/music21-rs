@@ -54,6 +54,7 @@ impl IntervalDirection {
 }
 
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// A directed musical interval with diatonic spelling and chromatic size.
 pub struct Interval {
     pub(crate) implicit_diatonic: bool,

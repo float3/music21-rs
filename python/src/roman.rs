@@ -9,7 +9,7 @@
 
 #![allow(non_snake_case)]
 
-use pyo3::exceptions::PyException;
+use pyo3::exceptions::{PyException, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
@@ -32,8 +32,7 @@ fn roman_error(error: music21_rs::Error) -> PyErr {
 
 /// The figures music21 writes for the seven degrees, upper case in a major
 /// key and lower where the triad on that degree is minor or diminished.
-const MAJOR_FIGURES: [&str; 7] = ["I", "ii", "iii", "IV", "V", "vi", "viio"];
-const MINOR_FIGURES: [&str; 7] = ["i", "iio", "III", "iv", "v", "VI", "VII"];
+const NUMERALS: [&str; 7] = ["I", "II", "III", "IV", "V", "VI", "VII"];
 
 /// music21's `roman.RomanNumeral`, which *is* a chord.
 ///
@@ -54,17 +53,30 @@ pub struct RomanNumeral {
     /// a scale that had one. music21 spells its chord from there, so a
     /// numeral on `A-4` roots on `A-4` and not on a bare `A-`.
     octave: Option<i32>,
+    /// Whether the numeral was given a key at all. One that was not still
+    /// reads in C major — music21 calls that the implied scale — but it
+    /// reports no key, and says only its figure when asked for both.
+    implied_key: bool,
+    /// music21's `functionalityScore` when a caller has set one, which wins
+    /// over the score the figure is looked up under.
+    score: Option<u8>,
 }
 
 impl RomanNumeral {
     pub(crate) fn wrap(inner: RsRomanNumeral, octave: Option<i32>) -> Self {
-        Self { inner, octave }
+        Self {
+            inner,
+            octave,
+            implied_key: false,
+            score: None,
+        }
     }
 
     /// Replaces the figure this numeral reads, and the chord it stands on.
     fn rebuild(slf: &Bound<'_, Self>, py: Python<'_>, rebuilt: RsRomanNumeral) -> PyResult<()> {
         let octave = slf.borrow().octave;
-        let numeral = Self::wrap(rebuilt, octave);
+        let mut numeral = Self::wrap(rebuilt, octave);
+        numeral.implied_key = slf.borrow().implied_key;
         let chord = numeral.chord()?;
         slf.as_super().borrow_mut().replace_value(py, chord)?;
         slf.borrow_mut().inner = numeral.inner;
@@ -84,56 +96,59 @@ impl RomanNumeral {
         keyOrScale: Option<&Bound<'_, PyAny>>,
         keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Self> {
+        let given = keyOrScale.filter(|value| !value.is_none()).is_some();
         let (key, octave) = key_and_octave(keyOrScale)?;
         let figure = match figure.filter(|value| !value.is_none()) {
             None => "I".to_string(),
             Some(value) => match value.extract::<usize>() {
-                Ok(degree) => figure_for_degree(&key, degree)?,
+                Ok(degree) => figure_for_degree(given.then_some(&key), degree)?,
                 Err(_) => value.extract::<String>()?,
             },
         };
-        let inner = RsRomanNumeral::with_minor_defaults(
+        let inner = RsRomanNumeral::with_options(
             figure,
             key,
             minor_reading(keywords, "sixthMinor")?,
             minor_reading(keywords, "seventhMinor")?,
+            case_matters(keywords)?,
         )
         .map_err(roman_error)?;
-        Ok(Self::wrap(inner, octave))
+        let mut numeral = Self::wrap(inner, octave);
+        numeral.implied_key = !given;
+        Ok(numeral)
     }
 
     /// The chord this numeral stands for, sounding where its key does.
+    ///
+    /// The crate spells it from the key's own octave, so the octaves come
+    /// back with the pitches; a numeral built on a scale that stood in some
+    /// other octave is moved there afterwards.
     fn chord(&self) -> PyResult<RsChord> {
         let chord = self.inner.to_chord().map_err(roman_error)?;
-        // A numeral given only a key still sounds somewhere: music21 spells
-        // it from octave 4, the octave a bare pitch is heard in.
-        let octave = self.octave.unwrap_or(4);
-        // The crate spells from an octave-less tonic; music21 spells from
-        // wherever the scale it was given stands — the fifth degree of A-flat
-        // major on `A-4` is `E-5` — and carries the rise through the chord.
-        let mut scale = self.inner.key().as_scale().map_err(roman_error)?;
-        let mut tonic = scale.tonic().clone();
-        tonic.set_octave(Some(octave));
-        scale.set_tonic(tonic);
-        let degree = scale
-            .pitch_at_degree(usize::from(self.inner.degree()))
-            .map_err(roman_error)?;
-        let mut raised = Vec::new();
-        let mut previous: Option<f64> = None;
-        let mut current = degree.octave().unwrap_or(octave);
-        for pitch in chord.pitches() {
-            let mut moved = pitch.clone();
-            moved.set_octave(Some(current));
-            if let Some(previous) = previous
-                && moved.ps() < previous
-            {
-                current += 1;
-                moved.set_octave(Some(current));
-            }
-            previous = Some(moved.ps());
-            raised.push(moved);
+        let Some(octave) = self.octave else {
+            return Ok(chord);
+        };
+        let tonic_octave = self.inner.key().tonic().octave().unwrap_or(4);
+        let shift = octave - tonic_octave;
+        if shift == 0 {
+            return Ok(chord);
         }
-        RsChord::new(raised.as_slice()).map_err(roman_error)
+        let moved = chord
+            .pitches()
+            .into_iter()
+            .map(|pitch| {
+                let mut moved = pitch;
+                moved.set_octave(Some(moved.octave().unwrap_or(4) + shift));
+                moved
+            })
+            .collect::<Vec<_>>();
+        let mut moved = RsChord::new(moved.as_slice()).map_err(roman_error)?;
+        if let Some(root) = chord.root() {
+            let mut root = root.clone();
+            root.set_octave(Some(root.octave().unwrap_or(4) + shift));
+            moved.set_root(Some(root));
+        }
+        Ok(moved)
     }
 }
 
@@ -190,6 +205,18 @@ fn minor_default(py: Python<'_>, reading: RsMinor67Default) -> PyResult<Py<PyAny
 }
 
 /// The reading a keyword names, defaulting to reading it off the quality.
+/// music21's `caseMatters` keyword: whether an upper-case numeral means a
+/// major chord. The older figured-bass reading lets the key say instead.
+fn case_matters(keywords: Option<&Bound<'_, PyDict>>) -> PyResult<bool> {
+    let Some(keywords) = keywords else {
+        return Ok(true);
+    };
+    match keywords.get_item("caseMatters")? {
+        Some(value) if !value.is_none() => value.extract(),
+        _ => Ok(true),
+    }
+}
+
 fn minor_reading(keywords: Option<&Bound<'_, PyDict>>, name: &str) -> PyResult<RsMinor67Default> {
     let Some(keywords) = keywords else {
         return Ok(RsMinor67Default::Quality);
@@ -215,7 +242,7 @@ fn minor_reading(keywords: Option<&Bound<'_, PyDict>>, name: &str) -> PyResult<R
 
 /// The numeral written on a scale degree, keeping the case the key implies.
 fn numeral_for_degree(key: &RsKey, degree: usize) -> PyResult<String> {
-    figure_for_degree(key, degree).map(|figure| {
+    figure_for_degree(Some(key), degree).map(|figure| {
         figure
             .chars()
             .take_while(|letter| matches!(letter, 'I' | 'V' | 'i' | 'v'))
@@ -234,19 +261,28 @@ fn replace_numeral(figure: &str, numeral: &str) -> String {
     format!("{numeral}{rest}")
 }
 
-/// The figure music21 writes for a plain triad on a scale degree.
-fn figure_for_degree(key: &RsKey, degree: usize) -> PyResult<String> {
+/// The figure music21 writes for a scale degree given as a number.
+///
+/// It is the numeral alone, lower-cased on the degrees whose ordinary triad
+/// is minor or diminished in that mode — and left upper-case throughout when
+/// no key was given, since then there is no mode to read it against.
+fn figure_for_degree(key: Option<&RsKey>, degree: usize) -> PyResult<String> {
     if degree == 0 || degree > 7 {
         return Err(RomanNumeralException::new_err(format!(
             "cannot make a roman numeral on degree {degree}"
         )));
     }
-    let figures = if key.mode() == "minor" {
-        MINOR_FIGURES
-    } else {
-        MAJOR_FIGURES
+    let numeral = NUMERALS[degree - 1];
+    let lower = match key.map(RsKey::mode) {
+        Some("minor") => matches!(degree, 1 | 2 | 4 | 5),
+        Some(_) => matches!(degree, 2 | 3 | 6 | 7),
+        None => false,
     };
-    Ok(figures[degree - 1].to_string())
+    Ok(if lower {
+        numeral.to_ascii_lowercase()
+    } else {
+        numeral.to_string()
+    })
 }
 
 #[pymethods]
@@ -304,8 +340,17 @@ impl RomanNumeral {
     /// front, but without the figures that say the inversion or the added
     /// notes — `bVII65/V` reads as `bVII`.
     #[getter]
-    fn romanNumeral(&self) -> String {
+    fn get_romanNumeral(&self) -> String {
         self.inner.roman_numeral()
+    }
+
+    /// music21 refuses this one: a numeral is what its figure says, so the
+    /// figure is what a caller sets.
+    #[setter]
+    fn set_romanNumeral(&self, _value: &Bound<'_, PyAny>) -> PyResult<()> {
+        Err(PyValueError::new_err(
+            "Cannot set romanNumeral property of RomanNumeral objects",
+        ))
     }
 
     /// music21's `romanNumeralAlone`: the numeral with nothing in front of
@@ -316,10 +361,11 @@ impl RomanNumeral {
     }
 
     /// music21's `frontAlterationString`: the flats or sharps written before
-    /// the numeral.
+    /// the numeral, as they were written — which is not always what the
+    /// numeral reports, since `vi` in a minor key roots on a raised sixth.
     #[getter]
     fn frontAlterationString(&self) -> String {
-        let alteration = self.inner.accidental();
+        let alteration = self.inner.written_accidental();
         let mark = if alteration < 0 { "b" } else { "#" };
         mark.repeat(alteration.unsigned_abs() as usize)
     }
@@ -340,10 +386,30 @@ impl RomanNumeral {
         .unbind())
     }
 
-    /// music21's `figureAndKey`: the figure and the key it is read in.
+    /// music21's `figureAndKey`: the figure and the key it is read in, or
+    /// the figure alone when the key was only implied.
     #[getter]
     fn figureAndKey(&self) -> String {
+        if self.implied_key {
+            return self.inner.figure().to_string();
+        }
         self.inner.figure_and_key()
+    }
+
+    /// music21's `useImpliedScale`: whether the numeral was left to guess
+    /// the key it is read in.
+    #[getter]
+    fn useImpliedScale(&self) -> bool {
+        self.implied_key
+    }
+
+    /// music21's `impliedScale`: the scale a numeral with no key reads in.
+    #[getter]
+    fn impliedScale(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        if !self.implied_key {
+            return Ok(py.None());
+        }
+        crate::key::Key::object(py, self.inner.key().clone())
     }
 
     /// music21's `secondaryRomanNumeralKey`: the key a secondary numeral
@@ -357,17 +423,25 @@ impl RomanNumeral {
     }
 
     /// music21's `caseMatters`: whether an upper-case numeral means major
-    /// and a lower-case one minor, which it always does here.
+    /// and a lower-case one minor.
     #[getter]
     fn caseMatters(&self) -> bool {
-        true
+        self.inner.case_matters()
     }
 
     /// music21's `bracketedAlterations`: the alterations written in square
-    /// brackets, which this crate does not read.
+    /// brackets, as the mark each was written with and the chord step it
+    /// moves.
     #[getter]
     fn bracketedAlterations(&self) -> Vec<(String, u8)> {
-        Vec::new()
+        self.inner
+            .bracketed_alterations()
+            .iter()
+            .map(|(alter, step)| {
+                let mark = if *alter < 0 { "b" } else { "#" };
+                (mark.repeat(alter.unsigned_abs() as usize), *step)
+            })
+            .collect()
     }
 
     #[getter]
@@ -409,6 +483,9 @@ impl RomanNumeral {
     /// music21's `key`. Setting it reads the same figure in the new key.
     #[getter]
     fn get_key(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        if self.implied_key {
+            return Ok(py.None());
+        }
         crate::key::Key::object(py, self.inner.key().clone())
     }
 
@@ -420,6 +497,7 @@ impl RomanNumeral {
         {
             let mut me = slf.borrow_mut();
             me.octave = octave.or(me.octave);
+            me.implied_key = value.is_none();
         }
         Self::rebuild(slf, py, rebuilt)
     }
@@ -474,10 +552,17 @@ impl RomanNumeral {
     }
 
     /// music21's `functionalityScore`: how strongly the figure pulls, on
-    /// music21's own hundred-point scale.
+    /// music21's own hundred-point scale. A caller may set one, and what
+    /// they set stands.
     #[getter]
-    fn functionalityScore(&self) -> u8 {
-        self.inner.functionality_score()
+    fn get_functionalityScore(&self) -> u8 {
+        self.score
+            .unwrap_or_else(|| self.inner.functionality_score())
+    }
+
+    #[setter]
+    fn set_functionalityScore(&mut self, value: u8) {
+        self.score = Some(value);
     }
 
     /// music21's `isNeapolitan`.
@@ -525,10 +610,7 @@ impl RomanNumeral {
     }
 
     fn __repr__(&self) -> String {
-        format!(
-            "<music21.roman.RomanNumeral {}>",
-            self.inner.figure_and_key()
-        )
+        format!("<music21.roman.RomanNumeral {}>", self.figureAndKey())
     }
 
     fn __eq__(&self, other: &Bound<'_, PyAny>) -> bool {
