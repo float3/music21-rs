@@ -335,7 +335,7 @@ pub struct Key {
 }
 
 impl Key {
-    fn object(py: Python<'_>, inner: RsKey) -> PyResult<Py<PyAny>> {
+    pub(crate) fn object(py: Python<'_>, inner: RsKey) -> PyResult<Py<PyAny>> {
         let init = PyClassInitializer::from(KeySignature::of(inner.sharps())).add_subclass(Key {
             inner,
             correlation_coefficient: 0.0,
@@ -522,11 +522,9 @@ impl Key {
     ) -> PyResult<Option<usize>> {
         let scale = self.inner.as_scale().map_err(key_error)?;
         let pitch = pitch_from_any(pitchTarget)?;
-        let degree = match comparisonAttribute {
-            "pitchClass" => scale.degree_of_pitch_class(&pitch),
-            _ => scale.degree_of(&pitch),
-        };
-        degree.map_err(key_error)
+        scale
+            .degree_of_by(&pitch, crate::scale::comparison_of(comparisonAttribute))
+            .map_err(key_error)
     }
 
     /// music21's `getScaleDegreeAndAccidentalFromPitch`: the degree, and how

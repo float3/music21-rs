@@ -61,6 +61,9 @@ pub const NAMES: &[&str] = &[
 ];
 
 pyo3::create_exception!(music21_rs_facade, ScaleException, PyException);
+// music21 raises this one from the interval network underneath a scale, and
+// names it after that module rather than after `scale` itself.
+pyo3::create_exception!(music21_rs_facade, IntervalNetworkException, PyException);
 
 fn scale_error(error: music21_rs::Error) -> PyErr {
     ScaleException::new_err(message(&error))
@@ -137,6 +140,12 @@ impl Scale {
             }
             seen.push(key);
             pitches.push(pitch);
+        }
+        // What survives is heard in octave 4 if it had no octave of its own.
+        for pitch in &mut pitches {
+            if pitch.octave().is_none() {
+                pitch.set_octave(Some(4));
+            }
         }
         Ok(wrap_pitches(pitches))
     }
@@ -297,11 +306,24 @@ impl ConcreteScale {
         }
     }
 
+    /// The scale as it sounds in the direction asked for — a melodic minor
+    /// lets its raised degrees fall coming down.
+    fn heard(&self, direction: Option<&Bound<'_, PyAny>>) -> PyResult<RsScale> {
+        let scale = self.realized()?;
+        Ok(if is_descending(direction) {
+            scale.descending()
+        } else {
+            scale.clone()
+        })
+    }
+
     /// The scale as something that can actually be realized, or music21's
     /// complaint that it has no note to stand on.
     fn realized(&self) -> PyResult<&RsScale> {
         if !self.has_tonic {
-            return Err(ScaleException::new_err("pitchReference cannot be None"));
+            return Err(IntervalNetworkException::new_err(
+                "pitchReference cannot be None",
+            ));
         }
         Ok(&self.inner)
     }
@@ -309,6 +331,18 @@ impl ConcreteScale {
     /// A Python object of the class music21 names this scale type, when one
     /// has been registered, and a plain `ConcreteScale` otherwise.
     pub(crate) fn object(py: Python<'_>, scale: RsScale) -> PyResult<Py<PyAny>> {
+        // A scale given by its notes has no class to be built as.
+        if scale.is_custom() {
+            let mut built = Self {
+                inner: scale,
+                named_pattern: false,
+                has_tonic: true,
+            };
+            built.named_pattern = false;
+            return Ok(
+                Py::new(py, PyClassInitializer::from(Scale).add_subclass(built))?.into_any(),
+            );
+        }
         let name = scale.scale_type().music21_name();
         let module = py
             .import("music21_rs_facade")
@@ -673,6 +707,15 @@ impl ConcreteScale {
         ))
     }
 
+    /// music21's `romanNumeral`: the roman numeral on a degree of this
+    /// scale, which is the plain triad on it.
+    fn romanNumeral(
+        slf: &Bound<'_, Self>,
+        degree: &Bound<'_, PyAny>,
+    ) -> PyResult<crate::roman::RomanNumeral> {
+        crate::roman::RomanNumeral::build(Some(degree), Some(slf.as_any()))
+    }
+
     /// music21's `isNext`: whether one pitch is so many degrees above another
     /// in this scale.
     #[pyo3(signature = (other, pitchOrigin, direction = None, stepSize = 1, **_keywords))]
@@ -705,31 +748,33 @@ impl ConcreteScale {
 
     /// music21's `getScaleDegreeFromPitch`: which degree a pitch is, or
     /// nothing when it is not in the scale.
-    #[pyo3(signature = (pitchTarget, comparisonAttribute = "name", **_keywords))]
+    #[pyo3(signature = (pitchTarget, comparisonAttribute = "name", direction = None, **_keywords))]
     fn getScaleDegreeFromPitch(
         &self,
         pitchTarget: &Bound<'_, PyAny>,
         comparisonAttribute: &str,
+        direction: Option<&Bound<'_, PyAny>>,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Option<usize>> {
         let pitch = pitch_from_any(pitchTarget)?;
-        self.realized()?
+        self.heard(direction)?
             .degree_of_by(&pitch, comparison_of(comparisonAttribute))
             .map_err(scale_error)
     }
 
     /// music21's `getScaleDegreeAndAccidentalFromPitch`: the degree and how
     /// far the pitch is altered from it.
-    #[pyo3(signature = (pitchTarget, **_keywords))]
+    #[pyo3(signature = (pitchTarget, direction = None, **_keywords))]
     fn getScaleDegreeAndAccidentalFromPitch(
         &self,
         py: Python<'_>,
         pitchTarget: &Bound<'_, PyAny>,
+        direction: Option<&Bound<'_, PyAny>>,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Py<PyAny>> {
         let pitch = pitch_from_any(pitchTarget)?;
         let (degree, accidental) = self
-            .realized()?
+            .heard(direction)?
             .degree_and_accidental_of(&pitch)
             .map_err(scale_error)?;
         let accidental = accidental.map(crate::pitch::Accidental::from_inner);
@@ -758,13 +803,7 @@ impl ConcreteScale {
             Some(value) => pitch_from_any(value)?,
             None => self.inner.tonic().clone(),
         };
-        let descending = direction.is_some_and(|direction| {
-            direction
-                .str()
-                .map(|name| name.to_string_lossy().to_lowercase().contains("descending"))
-                .unwrap_or(false)
-                || direction.extract::<i32>().is_ok_and(|value| value < 0)
-        });
+        let descending = is_descending(direction);
         let moved = if descending {
             self.inner.next_pitch_below(&origin, stepSize)
         } else {
@@ -963,12 +1002,24 @@ fn without_duplicates(pitches: Vec<RsPitch>, comparison: RsDegreeComparison) -> 
 
 /// music21's `comparisonAttribute`: whether a pitch matches a degree by
 /// sounding note or by written one.
-fn comparison_of(attribute: &str) -> RsDegreeComparison {
+pub(crate) fn comparison_of(attribute: &str) -> RsDegreeComparison {
     match attribute {
         "step" => RsDegreeComparison::Step,
         "name" | "nameWithOctave" => RsDegreeComparison::Name,
         _ => RsDegreeComparison::PitchClass,
     }
+}
+
+/// Whether a `direction` argument says downwards. music21 passes its own
+/// `Direction` enum, a name, or a signed number.
+fn is_descending(direction: Option<&Bound<'_, PyAny>>) -> bool {
+    direction.is_some_and(|direction| {
+        direction
+            .str()
+            .map(|name| name.to_string_lossy().to_lowercase().contains("descending"))
+            .unwrap_or(false)
+            || direction.extract::<i32>().is_ok_and(|value| value < 0)
+    })
 }
 
 /// Reads pitches out of whatever holds them.
@@ -1035,6 +1086,9 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let exception = py.get_type::<ScaleException>();
     exception.setattr("__module__", "music21.scale")?;
     m.add("ScaleException", exception)?;
+    let network = py.get_type::<IntervalNetworkException>();
+    network.setattr("__module__", "music21.scale.intervalNetwork")?;
+    m.add("IntervalNetworkException", network)?;
 
     let builder = PyModule::from_code(
         py,

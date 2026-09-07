@@ -274,6 +274,21 @@ impl ScaleType {
             .collect()
     }
 
+    /// The collection this scale uses coming down, where that is not the
+    /// one it uses going up.
+    ///
+    /// The melodic minor is the familiar case — it raises its sixth and
+    /// seventh degrees ascending and lets them fall descending, which is the
+    /// natural minor — and Rag Asawari's avaroha is that same collection.
+    /// Every other scale here descends through the notes it ascends
+    /// through, and answers `None`.
+    pub fn descending_form(self) -> Option<Self> {
+        match self {
+            Self::MelodicMinor | Self::RagAsawari => Some(Self::Minor),
+            _ => None,
+        }
+    }
+
     /// Whether this is a plagal mode, whose range sits below its final.
     pub fn is_plagal(self) -> bool {
         matches!(
@@ -506,6 +521,36 @@ impl Scale {
         })
     }
 
+    /// This scale as it sounds coming down, which for most is itself.
+    pub fn descending(&self) -> Scale {
+        match self.custom_steps {
+            Some(_) => self.clone(),
+            None => match self.scale_type.descending_form() {
+                Some(scale_type) => Scale::new(scale_type, self.tonic.clone()),
+                None => self.clone(),
+            },
+        }
+    }
+
+    /// The scale coming down: highest note first, through the collection it
+    /// uses descending.
+    pub fn pitches_descending(&self) -> Result<Vec<Pitch>> {
+        let mut pitches = self.descending().pitches()?;
+        pitches.reverse();
+        Ok(pitches)
+    }
+
+    /// A range of the scale coming down, highest note first.
+    pub fn pitches_between_descending(
+        &self,
+        minimum: &Pitch,
+        maximum: &Pitch,
+    ) -> Result<Vec<Pitch>> {
+        let mut pitches = self.descending().pitches_between(minimum, maximum)?;
+        pitches.reverse();
+        Ok(pitches)
+    }
+
     /// Whether this scale was given by its notes rather than by a name.
     pub fn is_custom(&self) -> bool {
         self.custom_steps.is_some()
@@ -671,12 +716,22 @@ impl Scale {
     }
 
     /// The scale of the wanted type carrying this one's key signature.
+    ///
+    /// It stands at or above this scale, in the same octave where that is
+    /// possible: the relative major of A minor on `A4` is C major on `C5`,
+    /// because a `C4` would sound below the scale it came from.
     fn relative(&self, wanted: ScaleType) -> Result<Scale> {
         let mode = self.scale_type.music21_descriptive_name();
         let sharps = crate::key::pitch_to_sharps(&self.tonic, Some(mode))?;
         let key = crate::key::KeySignature::new(sharps)
             .try_as_key(Some(wanted.music21_descriptive_name()), None)?;
-        Ok(Scale::new(wanted, key.tonic()))
+        let here = self.realized_tonic();
+        let mut tonic = key.tonic();
+        tonic.set_octave(here.octave());
+        if tonic.ps() < here.ps() {
+            tonic.set_octave(tonic.octave().map(|octave| octave + 1));
+        }
+        Ok(Scale::new(wanted, tonic))
     }
 
     /// Returns the pitch at a one-based scale degree.
@@ -706,11 +761,15 @@ impl Scale {
     /// scale for `E-5` to `G-7` starts at `E5` — the first scale pitch that
     /// is not below the bottom — and not at a respelled `E-5`.
     pub fn pitches_between(&self, minimum: &Pitch, maximum: &Pitch) -> Result<Vec<Pitch>> {
+        // Asked the other way round, music21 walks down instead: the same
+        // pitches, highest first.
+        if maximum.ps() < minimum.ps() {
+            let mut descending = self.pitches_between(maximum, minimum)?;
+            descending.reverse();
+            return Ok(descending);
+        }
         let lowest = minimum.ps();
         let highest = maximum.ps();
-        if highest < lowest {
-            return Ok(Vec::new());
-        }
         let mut current = self.realization_start()?;
         // Down whole octaves until the start is at or below the range.
         while current.ps() > lowest {
@@ -1169,16 +1228,18 @@ mod tests {
         let names: Vec<String> = octave.iter().map(Pitch::name_with_octave).collect();
         assert_eq!(names, ["C3", "D3", "E3", "F3", "G3", "A3", "B3", "C4"]);
 
-        // A range that runs backwards is empty rather than an error.
-        assert!(
-            scale
-                .pitches_between(
-                    &Pitch::from_name("C5").unwrap(),
-                    &Pitch::from_name("C4").unwrap(),
-                )
-                .unwrap()
-                .is_empty()
-        );
+        // Asked the other way round, the same range comes back descending,
+        // which is what music21 does.
+        let descending: Vec<String> = scale
+            .pitches_between(
+                &Pitch::from_name("C5").unwrap(),
+                &Pitch::from_name("C4").unwrap(),
+            )
+            .unwrap()
+            .iter()
+            .map(Pitch::name_with_octave)
+            .collect();
+        assert_eq!(descending, ["C5", "B4", "A4", "G4", "F4", "E4", "D4", "C4"]);
     }
 
     #[test]

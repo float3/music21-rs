@@ -19,6 +19,7 @@ pub mod key;
 pub mod notation;
 pub mod note;
 pub mod pitch;
+pub mod roman;
 pub mod scale;
 pub mod serial;
 
@@ -207,6 +208,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     key::register(m)?;
     interval::register(m)?;
     scale::register(m)?;
+    roman::register(m)?;
     notation::register(m)?;
     note::register(m)?;
     chord::register(m)?;

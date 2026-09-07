@@ -517,8 +517,14 @@ impl Pitch {
         })
     }
 
-    pub(crate) fn octave_setter(&mut self, octave: Octave) {
+    /// Puts this pitch in an octave, or in none at all: music21's settable
+    /// `octave`, which only moves the pitch and does not respell it.
+    pub fn set_octave(&mut self, octave: Octave) {
         self.octave = octave;
+    }
+
+    pub(crate) fn octave_setter(&mut self, octave: Octave) {
+        self.set_octave(octave);
     }
 
     fn get_all_common_enharmonics(&mut self, alter_limit: FloatType) -> Result<Vec<Pitch>> {
