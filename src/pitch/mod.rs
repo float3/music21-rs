@@ -445,23 +445,21 @@ impl Pitch {
     fn name_setter(&mut self, usr_str: &str) -> Result<()> {
         let usr_str = usr_str.trim();
 
-        let digit_index = usr_str
-            .char_indices()
-            .find(|&(_, c)| c.is_ascii_digit())
-            .map(|(i, _)| i);
-
-        let (pitch_part, octave_part) = if let Some(i) = digit_index {
-            if i == 0 {
-                return Err(Error::Pitch(format!(
-                    "Cannot have octave given before pitch name in {usr_str:?}"
-                )));
+        let mut pitch_part = String::with_capacity(usr_str.len());
+        let mut octave_part = String::new();
+        for character in usr_str.chars() {
+            if character.is_ascii_digit() {
+                if pitch_part.is_empty() {
+                    return Err(Error::Pitch(format!(
+                        "Cannot have octave given before pitch name in {usr_str:?}"
+                    )));
+                }
+                octave_part.push(character);
+            } else {
+                pitch_part.push(character);
             }
-            (&usr_str[..i], &usr_str[i..])
-        } else {
-            (usr_str, "")
-        };
+        }
 
-        // Process the pitch part.
         let mut pitch_chars = pitch_part.chars();
         let step = pitch_chars.next().ok_or(Error::Pitch(format!(
             "Cannot make a name out of {pitch_part:?}"
@@ -1941,6 +1939,31 @@ fn cents_to_alter_and_cents(shift: FloatType) -> (FloatType, FloatType) {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn an_octave_digit_may_sit_anywhere_after_the_step() {
+        for (name, expected) in [
+            ("e4-", "E-4"),
+            ("e-4", "E-4"),
+            ("b3-", "B-3"),
+            ("g4--", "G--4"),
+            ("c#4", "C#4"),
+            ("f##2", "F##2"),
+            ("d1", "D1"),
+        ] {
+            assert_eq!(
+                Pitch::from_name(name).unwrap().name_with_octave(),
+                expected,
+                "parsing {name:?}"
+            );
+        }
+        assert_eq!(
+            Pitch::from_name("c4#2").unwrap().name_with_octave(),
+            "C#42",
+            "the digits concatenate wherever they fall, as music21's do"
+        );
+        assert!(Pitch::from_name("4c").is_err());
+    }
 
     #[test]
     fn options_keep_an_explicit_accidental_and_a_numeric_name_stays_inferred() {
