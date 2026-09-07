@@ -20,6 +20,7 @@ passing = [
     "music21.chord.Chord.forteClassNumber",
     "music21.chord.Chord.forteClassTn",
     "music21.chord.Chord.forteClassTnI",
+    "music21.chord.Chord.geometricNormalForm",
     "music21.chord.Chord.getColor",
     "music21.chord.Chord.getNotehead",
     "music21.chord.Chord.getNoteheadFill",
@@ -86,7 +87,10 @@ passing = [
     "music21.chord.Chord.transpose",
     "music21.chord.ChordBase.__len__",
     "music21.chord.ChordBase.hasComponentVolumes",
+    "music21.chord.ChordBase.remove",
+    "music21.chord.ChordBase.setVolumes",
     "music21.chord.ChordBase.tie",
+    "music21.chord.ChordBase.volume",
     "music21.chord.fromForteClass",
     "music21.chord.fromIntervalVector",
 ]

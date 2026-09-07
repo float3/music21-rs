@@ -186,8 +186,16 @@ fn dynamic_name(value: FloatType) -> &'static str {
 
 impl fmt::Display for Volume {
     /// music21's `repr` body, `realized=0.71`.
+    ///
+    /// music21 writes `round(self.realized, 2)` into an f-string, so Python's
+    /// float formatting drops a trailing zero the way `{:.2}` does not: half
+    /// velocity reads `realized=0.5`, not `realized=0.50`.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "realized={:.2}", self.realized())
+        let mut rounded = format!("{:.2}", self.realized());
+        while rounded.ends_with('0') && !rounded.ends_with(".0") {
+            rounded.pop();
+        }
+        write!(f, "realized={rounded}")
     }
 }
 
@@ -274,6 +282,11 @@ mod tests {
         assert_eq!(dynamic_name(0.7), "f");
         assert_eq!(dynamic_name(0.85), "ff");
         assert_eq!(dynamic_name(1.0), "fff");
-        assert_eq!(Volume::from_velocity(64).to_string(), "realized=0.50");
+        assert_eq!(Volume::from_velocity(64).to_string(), "realized=0.5");
+        assert_eq!(Volume::new().to_string(), "realized=0.71");
+        let mut silent = Volume::new();
+        silent.set_velocity(Some(0));
+        silent.set_velocity_is_relative(false);
+        assert_eq!(silent.to_string(), "realized=0.0");
     }
 }

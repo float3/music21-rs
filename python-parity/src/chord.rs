@@ -9,7 +9,7 @@ use pyo3::types::{PyDict, PyList, PyTuple};
 
 use music21_rs::{
     Chord as RsChord, Duration as RsDuration, Interval as RsInterval, Note as RsNote,
-    Pitch as RsPitch, Scale, ScaleType, Volume as RsVolume,
+    Pitch as RsPitch, Volume as RsVolume,
 };
 
 use crate::interval::interval_from_any;
@@ -204,6 +204,18 @@ impl Chord {
     fn optional_pitch(pitch: Option<&RsPitch>) -> Option<Pitch> {
         pitch.cloned().map(|pitch| Pitch::wrap(pitch, false))
     }
+
+    /// The root the pitches imply. music21 raises out of `_findRoot` when
+    /// there are none to read it from, which is the only way this fails; the
+    /// repr in the message is the empty chord's.
+    fn found_root(&self) -> PyResult<Option<Pitch>> {
+        if self.inner.pitches().is_empty() {
+            return Err(ChordException::new_err(
+                "no pitches in chord <music21.chord.Chord >",
+            ));
+        }
+        Ok(Self::optional_pitch(self.inner.found_root()))
+    }
 }
 
 /// Reads whatever music21's `Chord(...)` accepts: a space-separated string, a
@@ -267,19 +279,6 @@ fn require_iterable(value: &Bound<'_, PyAny>, field: &str) -> PyResult<()> {
         )));
     }
     Ok(())
-}
-
-fn scale_of(key: &Bound<'_, PyAny>) -> PyResult<Scale> {
-    let tonic = pitch_from_any(&key.getattr("tonic")?)?;
-    let mode: String = key
-        .getattr("mode")
-        .and_then(|mode| mode.extract::<String>())
-        .unwrap_or_else(|_| "major".to_string());
-    let scale_type = match mode.as_str() {
-        "minor" => ScaleType::Minor,
-        _ => ScaleType::Major,
-    };
-    Ok(Scale::new(scale_type, tonic))
 }
 
 #[pymethods]
@@ -472,8 +471,17 @@ impl Chord {
         let mut reduced = self.with_note_notation(py)?;
         let result = if let Ok(name) = removeItem.extract::<String>() {
             reduced.remove_named(&name)
-        } else {
+        } else if removeItem.extract::<PyRef<'_, Pitch>>().is_ok()
+            || removeItem.extract::<PyRef<'_, Note>>().is_ok()
+        {
             reduced.remove(&pitch_from_any(removeItem)?)
+        } else {
+            // music21 takes only a name, a Pitch or a NotRest; anything else
+            // is refused by type rather than looked for and not found.
+            return Err(PyValueError::new_err(format!(
+                "Cannot remove {} from a chord; try a Pitch or Note object",
+                removeItem.str()?
+            )));
         };
         result.map_err(|error| PyValueError::new_err(message(&error)))?;
         self.replace_inner(py, reduced)
@@ -548,12 +556,19 @@ impl Chord {
             return Ok(None);
         }
         match find {
+            // `find=True` throws away any override and runs the search again.
             Some(true) => {
                 self.inner.set_root(None);
-                Ok(Self::optional_pitch(self.inner.found_root()))
+                self.found_root()
             }
-            Some(false) => Ok(Self::optional_pitch(self.inner.root())),
-            None => Ok(Self::optional_pitch(self.inner.root())),
+            // `find=False` asks only whether a root was ever set, and never
+            // runs the search — which is how a caller tells an overridden
+            // root from an inferred one.
+            Some(false) => Ok(Self::optional_pitch(self.inner.overridden_root())),
+            None => match self.inner.overridden_root() {
+                Some(root) => Ok(Some(Pitch::wrap(root.clone(), false))),
+                None => self.found_root(),
+            },
         }
     }
 
@@ -796,7 +811,6 @@ impl Chord {
             .unwrap_or_else(|| "N/A".to_string())
     }
 
-    #[getter]
     fn geometricNormalForm(&self) -> Vec<u32> {
         into_numbers(self.inner.geometric_normal_form())
     }
@@ -1070,22 +1084,14 @@ impl Chord {
         }
     }
 
-    /// music21's `scaleDegrees`: each pitch's degree in the given key, with
-    /// the accidental that alters it.
-    fn scaleDegrees<'py>(
-        &self,
-        py: Python<'py>,
-        scaleObj: &Bound<'py, PyAny>,
-    ) -> PyResult<Vec<(Option<usize>, Option<Accidental>)>> {
-        let _ = py;
-        let scale = scale_of(scaleObj)?;
-        Ok(self
-            .inner
-            .scale_degrees(&scale)
-            .map_err(chord_error)?
-            .into_iter()
-            .map(|(degree, accidental)| (degree, accidental.map(Accidental::from_inner)))
-            .collect())
+    /// music21's `scaleDegrees`, which reads the key off the stream the chord
+    /// sits in. A bare chord has no stream and no `key` of its own, so
+    /// music21 answers `None` and so does this. The crate's
+    /// `Chord::scale_degrees`, which takes the key as an argument, is what a
+    /// caller with a key in hand would use.
+    #[getter]
+    fn scaleDegrees(&self) -> Option<Vec<(Option<usize>, Option<Accidental>)>> {
+        None
     }
 
     // ---- notation --------------------------------------------------------
@@ -1241,8 +1247,12 @@ impl Chord {
         Ok(())
     }
 
-    fn hasVolumeInformation(&self, py: Python<'_>) -> bool {
-        self.volume.is_some() || self.hasComponentVolumes(py)
+    /// Whether the chord carries a volume of its own. Volumes on its
+    /// components do not count — music21 asks only whether `_volume` was
+    /// ever set, which is why `setVolumes` leaves this false until something
+    /// reads `.volume` and creates the averaged one.
+    fn hasVolumeInformation(&self) -> bool {
+        self.volume.is_some()
     }
 
     /// music21's `simplifyEnharmonics`: respells the chord so its pitches
