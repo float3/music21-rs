@@ -22,6 +22,9 @@ pub mod duration;
 /// Error and result types used by the crate.
 pub mod error;
 
+/// Figured bass: the numbers written under a bass note.
+pub mod figuredbass;
+
 pub(crate) mod fraction_pow;
 /// Public interval parsing, naming and transposition helpers.
 pub mod interval;

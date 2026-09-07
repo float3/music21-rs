@@ -3,6 +3,7 @@ use crate::{
     chordsymbol::{ChordQuality, ChordSymbol},
     defaults::{FloatType, IntegerType},
     error::{Error, Result},
+    figuredbass::{Figure, Notation},
     interval::Interval,
     key::Key,
     pitch::{Accidental, Pitch},
@@ -288,10 +289,10 @@ impl RomanNumeral {
         // thirteenth is a note beside the chord, not a figure over the bass.
         let column = strip_roman_addition_groups(&column);
         numeral.figures = FiguredBass {
+            column: Notation::parse(&expand_shorthand(&column).join(","))?,
             omitted,
             added,
             bracketed,
-            ..figured_bass_column(&expand_shorthand(&column))
         };
         Ok(numeral)
     }
@@ -587,12 +588,12 @@ impl RomanNumeral {
         let bass_degree = self.bass_scale_degree(&numbers, implies_root)?;
 
         let mut pitches = vec![reading.pitch_at(bass_degree)?];
-        for figure in self.figures.figures.iter().rev() {
-            let degree = bass_degree + IntegerType::from(figure.number) - 1;
-            let mut pitch = reading.pitch_at(degree)?;
-            if let Some(alter) = figure.alter {
-                pitch.set_accidental(Some(Accidental::new(modified_alter(&pitch, alter))?));
-            }
+        for figure in self.figures.figures().iter().rev() {
+            let Some(number) = figure.number() else {
+                continue;
+            };
+            let degree = bass_degree + number - 1;
+            let mut pitch = figure.modifier().modify(&reading.pitch_at(degree)?)?;
             let below = pitches.last().map_or(0.0, Pitch::ps);
             if pitch.ps() < below {
                 pitch.set_octave(Some(pitch.octave().unwrap_or(4) + 1));
@@ -1076,18 +1077,6 @@ fn validate_figure(figure: &str) -> Result<()> {
     Ok(())
 }
 
-/// One figure of a figured-bass column: how far above the bass the note
-/// stands, and the accidental written beside the number.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct Figure {
-    /// The interval above the bass, counted inclusively, so `6` is a sixth.
-    number: u8,
-    /// The accidental written with the number, in semitones. `None` is no
-    /// modifier at all, which is not the same as a written natural: the note
-    /// then keeps whatever the scale spells it with.
-    alter: Option<i8>,
-}
-
 /// The figured-bass column a roman numeral's digits stand for, and what the
 /// brackets beside them say.
 ///
@@ -1096,10 +1085,10 @@ struct Figure {
 /// expanded out of the shorthand a figure is usually written in — together
 /// with the omissions, additions and alterations music21 parses out of the
 /// figure before the column is read.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 struct FiguredBass {
-    /// The figures of the column, written high to low as music21 writes them.
-    figures: Vec<Figure>,
+    /// The column itself, expanded out of the shorthand it was written in.
+    column: Notation,
     /// Chord steps the figure asks to be left out, as `[no3]`.
     omitted: Vec<u8>,
     /// Notes the figure asks to be added, as `[add4]`: the alteration in
@@ -1113,15 +1102,28 @@ struct FiguredBass {
 impl FiguredBass {
     /// The numbers of the column, high to low.
     fn numbers(&self) -> Vec<u8> {
-        self.figures.iter().map(|figure| figure.number).collect()
+        self.column
+            .numbers()
+            .iter()
+            .filter_map(|number| number.map(|number| number as u8))
+            .collect()
+    }
+
+    /// The figures of the column, high to low.
+    fn figures(&self) -> &[Figure] {
+        self.column.figures()
     }
 
     /// Whether an accidental was written beside a given number, which is what
     /// stops the implied quality from correcting the note back.
     fn alters(&self, number: u8) -> bool {
-        self.figures
-            .iter()
-            .any(|figure| figure.number == number && figure.alter.is_some_and(|alter| alter != 0))
+        self.column.figures().iter().any(|figure| {
+            figure.number() == Some(IntegerType::from(number))
+                && figure
+                    .modifier()
+                    .accidental()
+                    .is_some_and(|accidental| accidental.alter() != 0.0)
+        })
     }
 }
 
@@ -1153,25 +1155,6 @@ const FIGURES_IMPLYING_ROOT: &[&[u8]] = &[
     &[9, 6, 5, 4, 3],
     &[9, 7, 6, 4, 3],
     &[7, 6, 5, 4, 2],
-];
-
-/// The shorthand a figured-bass column is written in, and what it stands for.
-///
-/// music21's `figuredBass.notation.shorthandNotation`. A bare `7` means a
-/// seventh chord in root position — the fifth and the third are there whether
-/// or not anybody wrote them.
-const SHORTHAND: &[(&[u8], &[u8])] = &[
-    (&[], &[5, 3]),
-    (&[5], &[5, 3]),
-    (&[6], &[6, 3]),
-    (&[7], &[7, 5, 3]),
-    (&[9], &[9, 7, 5, 3]),
-    (&[11], &[11, 9, 7, 5, 3]),
-    (&[13], &[13, 11, 9, 7, 5, 3]),
-    (&[6, 5], &[6, 5, 3]),
-    (&[4, 3], &[6, 4, 3]),
-    (&[4, 2], &[6, 4, 2]),
-    (&[2], &[6, 4, 2]),
 ];
 
 /// The quality a figure says its chord has, whatever the scale spells.
@@ -1393,93 +1376,6 @@ pub fn expand_shorthand(shorthand: &str) -> Vec<String> {
         tokens.insert(0, "5".to_string());
     }
     tokens
-}
-
-/// Reads one figured-bass column out of the figures a numeral was written
-/// with, expanding music21's shorthand.
-fn figured_bass_column(tokens: &[String]) -> FiguredBass {
-    let mut numbers: Vec<Option<u8>> = Vec::with_capacity(tokens.len());
-    let mut alters: Vec<Option<i8>> = Vec::with_capacity(tokens.len());
-    for token in tokens {
-        let digits: String = token.chars().filter(char::is_ascii_digit).collect();
-        numbers.push(digits.parse::<u8>().ok());
-        let marks: String = token
-            .chars()
-            .filter(|letter| !letter.is_ascii_digit())
-            .collect();
-        alters.push(modifier_alter(&marks));
-    }
-
-    // A figure with a modifier but no number is a third.
-    let written: Vec<u8> = numbers.iter().map(|number| number.unwrap_or(3)).collect();
-    let shorthand: Vec<u8> = numbers.iter().flatten().copied().collect();
-    let longhand = (shorthand.len() == numbers.len())
-        .then(|| {
-            SHORTHAND
-                .iter()
-                .find(|(written, _)| *written == shorthand.as_slice())
-                .map(|(_, longhand)| longhand.to_vec())
-        })
-        .flatten();
-
-    let figures = match longhand {
-        Some(longhand) => longhand
-            .into_iter()
-            .map(|number| Figure {
-                number,
-                alter: written
-                    .iter()
-                    .position(|shorthand| *shorthand == number)
-                    .and_then(|index| alters[index]),
-            })
-            .collect(),
-        None => written
-            .iter()
-            .zip(&alters)
-            .map(|(number, alter)| Figure {
-                number: *number,
-                alter: *alter,
-            })
-            .collect(),
-    };
-
-    FiguredBass {
-        figures,
-        ..FiguredBass::default()
-    }
-}
-
-/// The accidental a figure's modifier leaves on the note the scale spells.
-///
-/// A written natural replaces whatever was there; anything else is added to
-/// it, so the sharp of `i#7` raises the flattened seventh of a minor key to
-/// a natural rather than spelling a `B#`.
-fn modified_alter(pitch: &Pitch, alter: i8) -> FloatType {
-    if alter == 0 {
-        return 0.0;
-    }
-    pitch.accidental().alter() + FloatType::from(alter)
-}
-
-/// What a figure's modifier does to the note the scale spells.
-///
-/// music21 reads `+` as a sharp and `/` as a flat, which is how figured bass
-/// has always written a raised or lowered note; `n` is a natural, and no
-/// modifier at all is no instruction.
-fn modifier_alter(marks: &str) -> Option<i8> {
-    if marks.is_empty() {
-        return None;
-    }
-    let mut alter = 0;
-    for mark in marks.chars() {
-        match mark {
-            '#' | '+' => alter += 1,
-            'b' | '-' | '/' => alter -= 1,
-            'n' => {}
-            _ => return None,
-        }
-    }
-    Some(alter)
 }
 
 /// The key a secondary numeral establishes.
