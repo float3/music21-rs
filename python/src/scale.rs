@@ -282,6 +282,10 @@ fn named_scale_type(name: &str) -> Option<RsScaleType> {
 )]
 pub struct ConcreteScale {
     pub(crate) inner: RsScale,
+    /// What music21 calls a scale of this shape when it has no pattern of
+    /// its own: `Concrete` for a bare `ConcreteScale`, `diatonic` for a bare
+    /// `DiatonicScale`.
+    family: String,
     /// Whether the class this was built as fixes the pattern of steps.
     ///
     /// A bare `ConcreteScale` does not, which is why music21 calls its type
@@ -301,6 +305,7 @@ impl ConcreteScale {
     pub(crate) fn of(scale_type: RsScaleType, tonic: RsPitch) -> Self {
         Self {
             inner: RsScale::new(scale_type, tonic),
+            family: "Concrete".to_string(),
             named_pattern: true,
             has_tonic: true,
         }
@@ -335,6 +340,7 @@ impl ConcreteScale {
         if scale.is_custom() {
             let mut built = Self {
                 inner: scale,
+                family: "Concrete".to_string(),
                 named_pattern: false,
                 has_tonic: true,
             };
@@ -357,6 +363,7 @@ impl ConcreteScale {
             py,
             PyClassInitializer::from(Scale).add_subclass(Self {
                 inner: scale,
+                family: "Concrete".to_string(),
                 named_pattern: true,
                 has_tonic: true,
             }),
@@ -420,6 +427,10 @@ impl ConcreteScale {
     ) -> PyResult<()> {
         let class = slf.as_any().get_type();
         let named = class.hasattr("scaleTypeName")?;
+        let family: String = match class.getattr("scaleFamilyName") {
+            Ok(family) => family.extract()?,
+            Err(_) => "Concrete".to_string(),
+        };
         // A scale given by its notes keeps them; only the tonic is settled
         // here, and it already has one.
         if slf.borrow().inner.is_custom() {
@@ -433,6 +444,7 @@ impl ConcreteScale {
         };
         let mut me = slf.borrow_mut();
         me.inner = RsScale::new(scale_type, tonic);
+        me.family = family;
         me.named_pattern = named;
         me.has_tonic = given.is_some();
         Ok(())
@@ -449,7 +461,7 @@ impl ConcreteScale {
     #[getter]
     fn r#type(&self) -> String {
         if !self.named_pattern || self.inner.is_custom() {
-            return "Concrete".to_string();
+            return self.family.clone();
         }
         self.inner
             .scale_type()
@@ -926,10 +938,18 @@ impl ConcreteScale {
         ))
     }
 
+    /// Two scales are the same when they are the same pattern on the same
+    /// tonic — and a scale with no tonic is compared on its pattern alone,
+    /// which is music21's implicit abstract comparison.
     fn __eq__(&self, other: &Bound<'_, PyAny>) -> bool {
         other.extract::<PyRef<'_, Self>>().is_ok_and(|other| {
-            other.inner.scale_type() == self.inner.scale_type()
-                && other.inner.tonic().name_with_octave() == self.inner.tonic().name_with_octave()
+            if other.inner.scale_type() != self.inner.scale_type() {
+                return false;
+            }
+            if !other.has_tonic || !self.has_tonic {
+                return true;
+            }
+            other.inner.tonic().name_with_octave() == self.inner.tonic().name_with_octave()
         })
     }
 }
@@ -947,6 +967,11 @@ pub struct DiatonicScale;
 
 #[pymethods]
 impl DiatonicScale {
+    /// What music21 calls a diatonic scale that has no pattern of its own.
+    #[classattr]
+    #[allow(non_upper_case_globals)]
+    const scaleFamilyName: &'static str = "diatonic";
+
     #[new]
     #[pyo3(signature = (tonic = None, **keywords))]
     fn new(

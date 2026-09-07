@@ -480,8 +480,11 @@ pub struct Scale {
     /// notes rather than by a name, and it behaves as any other scale does —
     /// it realizes, it has degrees, it can be matched against. `None` is the
     /// ordinary case, where the steps come from the named type.
+    ///
+    /// They are intervals and not names: a step between microtonal pitches
+    /// has no name to be written and read back through.
     #[cfg_attr(feature = "serde", serde(default))]
-    custom_steps: Option<Vec<String>>,
+    custom_steps: Option<Vec<Interval>>,
 }
 
 impl Scale {
@@ -508,12 +511,15 @@ impl Scale {
         };
         let mut steps = Vec::with_capacity(pitches.len());
         for pair in pitches.windows(2) {
-            steps.push(Interval::between_pitches(&pair[0], &pair[1])?.name());
+            steps.push(Interval::between_pitches(&pair[0], &pair[1])?);
         }
-        // The closing step back to the octave, so the collection repeats.
+        // The closing step back to the octave, so the collection repeats —
+        // unless the notes given already close on it, which they often do.
         let octave = tonic.transpose(&Interval::from_name("P8")?)?;
         let last = pitches.last().unwrap_or(tonic);
-        steps.push(Interval::between_pitches(last, &octave)?.name());
+        if last.ps() != octave.ps() {
+            steps.push(Interval::between_pitches(last, &octave)?);
+        }
         Ok(Self {
             scale_type: ScaleType::Major,
             tonic: tonic.clone(),
@@ -602,14 +608,14 @@ impl Scale {
     }
 
     /// The steps walked from where the scale is realized.
-    fn walk(&self) -> Vec<String> {
+    fn walk(&self) -> Result<Vec<Interval>> {
         match &self.custom_steps {
-            Some(steps) => steps.clone(),
+            Some(steps) => Ok(steps.clone()),
             None => self
                 .scale_type
                 .realization_steps()
                 .into_iter()
-                .map(str::to_string)
+                .map(step_interval)
                 .collect(),
         }
     }
@@ -649,7 +655,7 @@ impl Scale {
         pitches.push(start.clone());
 
         let mut current = start;
-        for step in self.walk() {
+        for step in self.walk()? {
             current = advance(&current, &step, simplification)?;
             pitches.push(current.clone());
         }
@@ -674,7 +680,7 @@ impl Scale {
             .rev()
             .take(self.scale_type.tonic_degree().saturating_sub(1))
         {
-            start = start.transpose(&Interval::from_name(*step)?.reversed()?)?;
+            start = start.transpose(&step_interval(step)?.reversed()?)?;
         }
         Ok(start)
     }
@@ -746,7 +752,7 @@ impl Scale {
         }
 
         let simplification = self.scale_type.simplification();
-        let steps = self.walk();
+        let steps = self.walk()?;
         let mut current = self.realization_start()?;
         for index in 0..(degree - 1) {
             current = advance(&current, &steps[index % steps.len()], simplification)?;
@@ -777,7 +783,7 @@ impl Scale {
             current.octave_setter(Some(octave - 1));
         }
         let simplification = self.scale_type.simplification();
-        let steps = self.walk();
+        let steps = self.walk()?;
         let mut pitches = Vec::new();
         // Two octaves of headroom past the range, so a scale whose degrees
         // are not evenly spaced still reaches the top of it.
@@ -1136,8 +1142,7 @@ impl Scale {
 }
 
 /// Transposes one scale step, applying the scale's simplification.
-fn advance(pitch: &Pitch, step: &str, simplification: Simplification) -> Result<Pitch> {
-    let interval = step_interval(step)?;
+fn advance(pitch: &Pitch, interval: &Interval, simplification: Simplification) -> Result<Pitch> {
     match simplification {
         Simplification::MaxAccidental => {
             interval.transpose_pitch_with_options(pitch, false, Some(1))

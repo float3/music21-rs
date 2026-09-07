@@ -63,6 +63,15 @@ pub struct Interval {
     pitch_end: Option<Pitch>,
 }
 
+impl PartialEq for Interval {
+    /// Two intervals are the same when they are the same written distance
+    /// and the same sounding one, which is music21's own comparison — the
+    /// pitches an interval was built between are not part of what it is.
+    fn eq(&self, other: &Self) -> bool {
+        self.diatonic == other.diatonic && self.chromatic == other.chromatic
+    }
+}
+
 pub(crate) enum PitchOrNote {
     Pitch(Pitch),
     Note(Note),
