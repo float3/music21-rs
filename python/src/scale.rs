@@ -348,10 +348,10 @@ impl ConcreteScale {
     /// from the class and only the tonic is given. No tonic means C, as it
     /// does upstream.
     #[new]
-    #[pyo3(signature = (tonic = None, **_keywords))]
+    #[pyo3(signature = (tonic = None, **keywords))]
     fn new(
         tonic: Option<&Bound<'_, PyAny>>,
-        _keywords: Option<&Bound<'_, PyDict>>,
+        keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<PyClassInitializer<Self>> {
         let mut built = Self::of(
             RsScaleType::Major,
@@ -361,6 +361,15 @@ impl ConcreteScale {
         match tonic.filter(|value| !value.is_none()) {
             Some(value) => built.inner = RsScale::new(RsScaleType::Major, pitch_from_any(value)?),
             None => built.has_tonic = false,
+        }
+        // music21 also takes the notes themselves, which is a scale nobody
+        // has a name for.
+        if let Some(keywords) = keywords
+            && let Some(pitches) = keywords.get_item("pitches")?
+            && !pitches.is_none()
+        {
+            built.inner = RsScale::from_pitches(&pitch_list(&pitches)?).map_err(scale_error)?;
+            built.has_tonic = true;
         }
         Ok(PyClassInitializer::from(Scale).add_subclass(built))
     }
@@ -377,6 +386,11 @@ impl ConcreteScale {
     ) -> PyResult<()> {
         let class = slf.as_any().get_type();
         let named = class.hasattr("scaleTypeName")?;
+        // A scale given by its notes keeps them; only the tonic is settled
+        // here, and it already has one.
+        if slf.borrow().inner.is_custom() {
+            return Ok(());
+        }
         let scale_type = Self::scale_type_of(&class)?;
         let given = tonic.filter(|value| !value.is_none());
         let tonic = match given {
@@ -400,7 +414,7 @@ impl ConcreteScale {
     /// one is the pattern it stands on and for a vague one is `"Concrete"`.
     #[getter]
     fn r#type(&self) -> String {
-        if !self.named_pattern {
+        if !self.named_pattern || self.inner.is_custom() {
             return "Concrete".to_string();
         }
         self.inner
@@ -416,11 +430,7 @@ impl ConcreteScale {
         if !self.has_tonic {
             return format!("Abstract {}", self.r#type());
         }
-        format!(
-            "{} {}",
-            self.inner.tonic().name(),
-            self.inner.scale_type().music21_descriptive_name()
-        )
+        format!("{} {}", self.inner.tonic().name(), self.r#type())
     }
 
     #[getter]
@@ -541,24 +551,24 @@ impl ConcreteScale {
     ///
     /// Only the first four by default, as upstream, and matched by sounding
     /// note unless asked for written ones.
-    #[pyo3(signature = (other, *, resultsReturned = 4, comparisonAttribute = "pitchClass", **_keywords))]
+    #[pyo3(signature = (other, *, resultsReturned = 4, comparisonAttribute = "pitchClass", removeDuplicates = false, **_keywords))]
     fn deriveRanked(
         slf: &Bound<'_, Self>,
         other: &Bound<'_, PyAny>,
         resultsReturned: Option<usize>,
         comparisonAttribute: &str,
+        removeDuplicates: bool,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Vec<(usize, Py<PyAny>)>> {
-        let pitches = pitch_list(other)?;
+        let comparison = comparison_of(comparisonAttribute);
+        let mut pitches = pitch_list(other)?;
+        if removeDuplicates {
+            pitches = without_duplicates(pitches, comparison);
+        }
         let ranked = slf
             .borrow()
             .inner
-            .scale_type()
-            .derive_ranked_by(
-                &pitches,
-                resultsReturned,
-                comparison_of(comparisonAttribute),
-            )
+            .derive_ranked_by(&pitches, resultsReturned, comparison)
             .map_err(scale_error)?;
         ranked
             .into_iter()
@@ -567,40 +577,46 @@ impl ConcreteScale {
     }
 
     /// music21's `derive`: the best-ranked of those.
-    #[pyo3(signature = (other, **_keywords))]
+    #[pyo3(signature = (other, *, comparisonAttribute = "pitchClass", **_keywords))]
     fn derive(
         slf: &Bound<'_, Self>,
         other: &Bound<'_, PyAny>,
+        comparisonAttribute: &str,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Py<PyAny>> {
         let pitches = pitch_list(other)?;
-        let derived = slf
+        let mut ranked = slf
             .borrow()
             .inner
-            .scale_type()
-            .derive(&pitches)
+            .derive_ranked_by(&pitches, Some(1), comparison_of(comparisonAttribute))
             .map_err(scale_error)?;
+        let derived = ranked
+            .pop()
+            .map(|(_, scale)| scale)
+            .ok_or_else(|| ScaleException::new_err("no candidate tonics"))?;
         Self::object(slf.py(), derived)
     }
 
     /// music21's `deriveAll`: every scale of this pattern that contains all
     /// of the given pitches.
-    #[pyo3(signature = (other, **_keywords))]
+    #[pyo3(signature = (other, *, comparisonAttribute = "pitchClass", **_keywords))]
     fn deriveAll(
         slf: &Bound<'_, Self>,
         other: &Bound<'_, PyAny>,
+        comparisonAttribute: &str,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Vec<Py<PyAny>>> {
         let pitches = pitch_list(other)?;
-        let derived = slf
+        let wanted = pitches.len();
+        let ranked = slf
             .borrow()
             .inner
-            .scale_type()
-            .derive_all(&pitches)
+            .derive_ranked_by(&pitches, None, comparison_of(comparisonAttribute))
             .map_err(scale_error)?;
-        derived
+        ranked
             .into_iter()
-            .map(|scale| Self::object(slf.py(), scale))
+            .filter(|(matched, _)| *matched == wanted)
+            .map(|(_, scale)| Self::object(slf.py(), scale))
             .collect()
     }
 
@@ -635,10 +651,24 @@ impl ConcreteScale {
         maxPitch: Option<&Bound<'_, PyAny>>,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Vec<Pitch>> {
-        let _ = (minPitch, maxPitch);
+        let scale = self.realized()?;
+        let (Some(low), Some(high)) = (
+            minPitch.filter(|value| !value.is_none()),
+            maxPitch.filter(|value| !value.is_none()),
+        ) else {
+            return Ok(wrap_pitches(
+                scale
+                    .pitches_from_scale_degrees(&degreeTargets)
+                    .map_err(scale_error)?,
+            ));
+        };
         Ok(wrap_pitches(
-            self.inner
-                .pitches_from_scale_degrees(&degreeTargets)
+            scale
+                .pitches_from_scale_degrees_between(
+                    &degreeTargets,
+                    &pitch_from_any(low)?,
+                    &pitch_from_any(high)?,
+                )
                 .map_err(scale_error)?,
         ))
     }
@@ -683,11 +713,9 @@ impl ConcreteScale {
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Option<usize>> {
         let pitch = pitch_from_any(pitchTarget)?;
-        let degree = match comparisonAttribute {
-            "pitchClass" => self.inner.degree_of_pitch_class(&pitch),
-            _ => self.inner.degree_of(&pitch),
-        };
-        degree.map_err(scale_error)
+        self.realized()?
+            .degree_of_by(&pitch, comparison_of(comparisonAttribute))
+            .map_err(scale_error)
     }
 
     /// music21's `getScaleDegreeAndAccidentalFromPitch`: the degree and how
@@ -786,15 +814,20 @@ impl ConcreteScale {
 
     /// music21's `match`: which of the given pitches are in the scale and
     /// which are not.
-    #[pyo3(name = "match", signature = (other, **_keywords))]
+    #[pyo3(name = "match", signature = (other, comparisonAttribute = "name", **_keywords))]
     fn match_pitches(
         &self,
         py: Python<'_>,
         other: &Bound<'_, PyAny>,
+        comparisonAttribute: &str,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Py<PyDict>> {
-        let pitches = pitch_list(other)?;
-        let (matched, unmatched) = self.inner.match_pitches(&pitches).map_err(scale_error)?;
+        let comparison = comparison_of(comparisonAttribute);
+        let pitches = without_duplicates(pitch_list(other)?, comparison);
+        let (matched, unmatched) = self
+            .realized()?
+            .match_pitches_by(&pitches, comparison)
+            .map_err(scale_error)?;
         let answer = PyDict::new(py);
         answer.set_item("matched", wrap_pitches(matched))?;
         answer.set_item("notMatched", wrap_pitches(unmatched))?;
@@ -907,11 +940,33 @@ impl DiatonicScale {
     }
 }
 
+/// The pitches with duplicates removed, judged on whichever attribute is
+/// named — music21 runs every list of targets through this before matching
+/// or deriving from it.
+fn without_duplicates(pitches: Vec<RsPitch>, comparison: RsDegreeComparison) -> Vec<RsPitch> {
+    let mut seen: Vec<String> = Vec::new();
+    let mut kept = Vec::new();
+    for pitch in pitches {
+        let key = match comparison {
+            RsDegreeComparison::Name => pitch.name(),
+            RsDegreeComparison::Step => pitch.name().chars().take(1).collect(),
+            RsDegreeComparison::PitchClass => pitch.pitch_class().number().to_string(),
+        };
+        if seen.contains(&key) {
+            continue;
+        }
+        seen.push(key);
+        kept.push(pitch);
+    }
+    kept
+}
+
 /// music21's `comparisonAttribute`: whether a pitch matches a degree by
 /// sounding note or by written one.
 fn comparison_of(attribute: &str) -> RsDegreeComparison {
     match attribute {
-        "name" | "nameWithOctave" | "step" => RsDegreeComparison::Name,
+        "step" => RsDegreeComparison::Step,
+        "name" | "nameWithOctave" => RsDegreeComparison::Name,
         _ => RsDegreeComparison::PitchClass,
     }
 }

@@ -30,7 +30,11 @@ enum Simplification {
     MostCommon,
 }
 
-/// Distinct step intervals used by the scale tables, parsed once.
+/// The step intervals the scale tables use, parsed once.
+///
+/// A scale given by its notes rather than by a name can step by anything, so
+/// this is a fast path and not the whole world: a step it does not hold is
+/// parsed on the spot.
 static STEP_INTERVALS: LazyLock<HashMap<&'static str, Interval>> = LazyLock::new(|| {
     ["m2", "M2", "a2", "m3", "M3", "-M2"]
         .into_iter()
@@ -42,10 +46,11 @@ static STEP_INTERVALS: LazyLock<HashMap<&'static str, Interval>> = LazyLock::new
         .collect()
 });
 
-fn step_interval(name: &str) -> &'static Interval {
-    STEP_INTERVALS
-        .get(name)
-        .expect("scale tables only use intervals listed in STEP_INTERVALS")
+fn step_interval(name: &str) -> Result<Interval> {
+    match STEP_INTERVALS.get(name) {
+        Some(interval) => Ok(interval.clone()),
+        None => Interval::from_name(name),
+    }
 }
 
 /// Which set of solfège syllables [`Scale::solfeg`] uses.
@@ -423,6 +428,8 @@ pub enum DegreeComparison {
     PitchClass,
     /// By written note, so it does not.
     Name,
+    /// By letter alone, so an `E-` matches the `E` of C major.
+    Step,
 }
 
 impl DegreeComparison {
@@ -431,6 +438,7 @@ impl DegreeComparison {
         match self {
             Self::PitchClass => pitch.pitch_class().number().to_string(),
             Self::Name => pitch.name(),
+            Self::Step => pitch.name().chars().take(1).collect(),
         }
     }
 }
@@ -451,12 +459,123 @@ impl DegreeComparison {
 pub struct Scale {
     scale_type: ScaleType,
     tonic: Pitch,
+    /// The steps of a scale nobody has a name for.
+    ///
+    /// music21's `ConcreteScale(pitches=[...])` is a scale given by its
+    /// notes rather than by a name, and it behaves as any other scale does —
+    /// it realizes, it has degrees, it can be matched against. `None` is the
+    /// ordinary case, where the steps come from the named type.
+    #[cfg_attr(feature = "serde", serde(default))]
+    custom_steps: Option<Vec<String>>,
 }
 
 impl Scale {
     /// Builds a scale of the given type on a tonic.
     pub fn new(scale_type: ScaleType, tonic: Pitch) -> Self {
-        Self { scale_type, tonic }
+        Self {
+            scale_type,
+            tonic,
+            custom_steps: None,
+        }
+    }
+
+    /// A scale given by the notes of one octave of it rather than by a name:
+    /// music21's `ConcreteScale(pitches=[...])`.
+    ///
+    /// The first pitch is the tonic, the steps are the intervals between
+    /// neighbours, and the scale closes back on the octave, so the notes
+    /// repeat an octave higher as any scale's do.
+    pub fn from_pitches(pitches: &[Pitch]) -> Result<Self> {
+        let Some(tonic) = pitches.first() else {
+            return Err(crate::error::Error::Scale(
+                "a scale needs at least one pitch".to_string(),
+            ));
+        };
+        let mut steps = Vec::with_capacity(pitches.len());
+        for pair in pitches.windows(2) {
+            steps.push(Interval::between_pitches(&pair[0], &pair[1])?.name());
+        }
+        // The closing step back to the octave, so the collection repeats.
+        let octave = tonic.transpose(&Interval::from_name("P8")?)?;
+        let last = pitches.last().unwrap_or(tonic);
+        steps.push(Interval::between_pitches(last, &octave)?.name());
+        Ok(Self {
+            scale_type: ScaleType::Major,
+            tonic: tonic.clone(),
+            custom_steps: Some(steps),
+        })
+    }
+
+    /// Whether this scale was given by its notes rather than by a name.
+    pub fn is_custom(&self) -> bool {
+        self.custom_steps.is_some()
+    }
+
+    /// Moves the scale to a new tonic, keeping its pattern of steps.
+    pub fn set_tonic(&mut self, tonic: Pitch) {
+        self.tonic = tonic;
+    }
+
+    /// The scales of *this* pattern that contain the most of `pitches`, best
+    /// first: music21's `deriveRanked` on the scale rather than on the type,
+    /// which is what a scale given by its notes has to use.
+    pub fn derive_ranked_by(
+        &self,
+        pitches: &[Pitch],
+        limit: Option<usize>,
+        comparison: DegreeComparison,
+    ) -> Result<Vec<(usize, Scale)>> {
+        if !self.is_custom() {
+            return self.scale_type.derive_ranked_by(pitches, limit, comparison);
+        }
+        let targets: Vec<String> = pitches.iter().map(|p| comparison.key(p)).collect();
+        let mut ranked = Vec::with_capacity(SCALE_STARTS.len());
+        for start in SCALE_STARTS {
+            let mut candidate = self.clone();
+            candidate.set_tonic(Pitch::from_name(start)?);
+            let degrees: Vec<String> = candidate
+                .pitches()?
+                .iter()
+                .map(|p| comparison.key(p))
+                .collect();
+            let matched = targets
+                .iter()
+                .filter(|target| degrees.contains(target))
+                .count();
+            ranked.push((matched, candidate));
+        }
+        ranked.sort_by(|left, right| {
+            left.0
+                .cmp(&right.0)
+                .then_with(|| left.1.tonic().ps().total_cmp(&right.1.tonic().ps()))
+        });
+        ranked.reverse();
+        if let Some(limit) = limit {
+            ranked.truncate(limit);
+        }
+        Ok(ranked)
+    }
+
+    /// The steps walked from where the scale is realized.
+    fn walk(&self) -> Vec<String> {
+        match &self.custom_steps {
+            Some(steps) => steps.clone(),
+            None => self
+                .scale_type
+                .realization_steps()
+                .into_iter()
+                .map(str::to_string)
+                .collect(),
+        }
+    }
+
+    /// Returns the number of distinct degrees: music21's `getDegreeMaxUnique`,
+    /// seven for a major scale and twelve for the chromatic.
+    pub fn degree_count(&self) -> usize {
+        match &self.custom_steps {
+            Some(steps) => steps.len(),
+            None => self.scale_type.degree_count(),
+        }
     }
 
     /// Returns the scale type.
@@ -485,8 +604,8 @@ impl Scale {
         pitches.push(start.clone());
 
         let mut current = start;
-        for step in self.scale_type.realization_steps() {
-            current = advance(&current, step, simplification)?;
+        for step in self.walk() {
+            current = advance(&current, &step, simplification)?;
             pitches.push(current.clone());
         }
         Ok(pitches)
@@ -501,6 +620,9 @@ impl Scale {
     /// being diminished.
     fn realization_start(&self) -> Result<Pitch> {
         let mut start = self.realized_tonic();
+        if self.custom_steps.is_some() {
+            return Ok(start);
+        }
         let steps = self.scale_type.steps();
         for step in steps
             .iter()
@@ -569,10 +691,10 @@ impl Scale {
         }
 
         let simplification = self.scale_type.simplification();
-        let steps = self.scale_type.realization_steps();
+        let steps = self.walk();
         let mut current = self.realization_start()?;
         for index in 0..(degree - 1) {
-            current = advance(&current, steps[index % steps.len()], simplification)?;
+            current = advance(&current, &steps[index % steps.len()], simplification)?;
         }
         Ok(current)
     }
@@ -596,7 +718,7 @@ impl Scale {
             current.octave_setter(Some(octave - 1));
         }
         let simplification = self.scale_type.simplification();
-        let steps = self.scale_type.realization_steps();
+        let steps = self.walk();
         let mut pitches = Vec::new();
         // Two octaves of headroom past the range, so a scale whose degrees
         // are not evenly spaced still reaches the top of it.
@@ -609,7 +731,7 @@ impl Scale {
             if sounding >= lowest {
                 pitches.push(current.clone());
             }
-            current = advance(&current, steps[index % steps.len()], simplification)?;
+            current = advance(&current, &steps[index % steps.len()], simplification)?;
         }
         Ok(pitches)
     }
@@ -661,12 +783,6 @@ impl Scale {
         Ok(Scale::new(self.scale_type, new_tonic))
     }
 
-    /// Returns the number of distinct degrees: music21's `getDegreeMaxUnique`,
-    /// seven for a major scale and twelve for the chromatic.
-    pub fn degree_count(&self) -> usize {
-        self.scale_type.degree_count()
-    }
-
     /// Returns the same scale type on the tonic transposed by `interval`.
     pub fn transpose(&self, interval: &Interval) -> Result<Scale> {
         Ok(Scale::new(self.scale_type, self.tonic.transpose(interval)?))
@@ -686,6 +802,27 @@ impl Scale {
         Ok(degrees
             .iter()
             .filter_map(|&degree| octave.get(degree.checked_sub(1)?).cloned())
+            .collect())
+    }
+
+    /// Every pitch of the named degrees between two pitches: music21's
+    /// `pitchesFromScaleDegrees` given a range, so the third and seventh of
+    /// C major from `c2` to `c6` are `D2 G2 D3 G3 D4 G4 D5 G5`.
+    pub fn pitches_from_scale_degrees_between(
+        &self,
+        degrees: &[usize],
+        minimum: &Pitch,
+        maximum: &Pitch,
+    ) -> Result<Vec<Pitch>> {
+        let wanted: Vec<String> = self
+            .pitches_from_scale_degrees(degrees)?
+            .iter()
+            .map(Pitch::name)
+            .collect();
+        Ok(self
+            .pitches_between(minimum, maximum)?
+            .into_iter()
+            .filter(|pitch| wanted.contains(&pitch.name()))
             .collect())
     }
 
@@ -720,16 +857,32 @@ impl Scale {
     /// pitches, realized from the tonic in octave 4 when it has none, and
     /// the unmatched list carries the pitches as given.
     pub fn match_pitches(&self, pitches: &[Pitch]) -> Result<(Vec<Pitch>, Vec<Pitch>)> {
+        self.match_pitches_by(pitches, DegreeComparison::Name)
+    }
+
+    /// The same, saying how a pitch is matched against a degree.
+    ///
+    /// Both lists hold the pitches as given rather than the scale's own —
+    /// music21 hands its targets straight back — except that one with no
+    /// octave is heard in octave 4, since that is where the scale sounds.
+    pub fn match_pitches_by(
+        &self,
+        pitches: &[Pitch],
+        comparison: DegreeComparison,
+    ) -> Result<(Vec<Pitch>, Vec<Pitch>)> {
         let realized = self.realized_in_implicit_octave()?;
+        let degrees: Vec<String> = realized.iter().map(|p| comparison.key(p)).collect();
         let mut matched = Vec::new();
         let mut unmatched = Vec::new();
         for pitch in pitches {
-            match realized
-                .iter()
-                .find(|candidate| candidate.name() == pitch.name())
-            {
-                Some(found) => matched.push(found.clone()),
-                None => unmatched.push(pitch.clone()),
+            let mut heard = pitch.clone();
+            if heard.octave().is_none() {
+                heard.octave_setter(Some(crate::defaults::PITCH_OCTAVE as IntegerType));
+            }
+            if degrees.contains(&comparison.key(&heard)) {
+                matched.push(heard);
+            } else {
+                unmatched.push(heard);
             }
         }
         Ok((matched, unmatched))
@@ -781,6 +934,21 @@ impl Scale {
 
     fn realized_in_implicit_octave(&self) -> Result<Vec<Pitch>> {
         self.pitches()
+    }
+
+    /// Returns the one-based degree matching a pitch under the given
+    /// comparison, or `None` when the scale does not have it.
+    pub fn degree_of_by(
+        &self,
+        pitch: &Pitch,
+        comparison: DegreeComparison,
+    ) -> Result<Option<usize>> {
+        let wanted = comparison.key(pitch);
+        Ok(self
+            .scale_pitches()?
+            .iter()
+            .position(|candidate| comparison.key(candidate) == wanted)
+            .map(|index| index + 1))
     }
 
     /// Returns the one-based degree whose pitch name matches, ignoring octave,
@@ -910,7 +1078,7 @@ impl Scale {
 
 /// Transposes one scale step, applying the scale's simplification.
 fn advance(pitch: &Pitch, step: &str, simplification: Simplification) -> Result<Pitch> {
-    let interval = step_interval(step);
+    let interval = step_interval(step)?;
     match simplification {
         Simplification::MaxAccidental => {
             interval.transpose_pitch_with_options(pitch, false, Some(1))
@@ -938,6 +1106,44 @@ fn max_alter(pitches: &[Pitch]) -> crate::defaults::IntegerType {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_scale_can_be_given_by_its_notes() {
+        // music21's own example: a scale of four notes, which repeats at the
+        // octave like any other.
+        let given: Vec<Pitch> = ["C4", "E-4", "G-4", "A4"]
+            .iter()
+            .map(|name| Pitch::from_name(*name).expect("valid pitch"))
+            .collect();
+        let scale = Scale::from_pitches(&given).expect("a scale");
+        assert!(scale.is_custom());
+        assert_eq!(scale.degree_count(), 4);
+        let realized: Vec<String> = scale
+            .pitches()
+            .expect("realizes")
+            .iter()
+            .map(Pitch::name_with_octave)
+            .collect();
+        assert_eq!(realized, ["C4", "E-4", "G-4", "A4", "C5"]);
+        assert_eq!(scale.pitch_at_degree(5).unwrap().name_with_octave(), "C5");
+        assert_eq!(
+            scale.degree_of(&Pitch::from_name("G-").unwrap()).unwrap(),
+            Some(3)
+        );
+
+        // And it walks a range the way a named scale does.
+        let range: Vec<String> = scale
+            .pitches_between(
+                &Pitch::from_name("E-5").unwrap(),
+                &Pitch::from_name("C6").unwrap(),
+            )
+            .expect("a range")
+            .iter()
+            .map(Pitch::name_with_octave)
+            .collect();
+        assert_eq!(range, ["E-5", "G-5", "A5", "C6"]);
+
+        assert!(Scale::from_pitches(&[]).is_err());
+    }
     #[test]
     fn a_range_starts_at_the_first_scale_pitch_inside_it() {
         // music21's own example: C major from E-flat 5 to G-flat 7 starts on
