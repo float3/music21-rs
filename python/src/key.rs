@@ -12,6 +12,16 @@ use music21_rs::{
 
 use crate::pitch::{Accidental, Pitch, interval_from_any, message, pitch_from_any};
 
+pub const NAMES: &[&str] = &[
+    "KeySignature",
+    "Key",
+    "KeySignatureException",
+    "KeyException",
+    "sharpsToPitch",
+    "pitchToSharps",
+    "convertKeyStringToMusic21KeyString",
+];
+
 pyo3::create_exception!(music21_rs_facade, KeySignatureException, PyException);
 pyo3::create_exception!(music21_rs_facade, KeyException, PyException);
 

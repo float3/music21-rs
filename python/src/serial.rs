@@ -18,6 +18,19 @@ use music21_rs::{
 
 use crate::pitch::{Pitch, pitch_from_any};
 
+/// The names the serial facade provides, for swapping into `music21.serial`.
+pub const NAMES: &[&str] = &[
+    "ToneRow",
+    "TwelveToneRow",
+    "HistoricalTwelveToneRow",
+    "TwelveToneMatrix",
+    "SerialException",
+    "pcToToneRow",
+    "rowToMatrix",
+    "getHistoricalRowByName",
+    "historicalDict",
+];
+
 pyo3::create_exception!(music21_rs_facade, SerialException, PyException);
 
 fn serial_error(error: music21_rs::Error) -> PyErr {

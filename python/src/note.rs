@@ -16,6 +16,18 @@ use crate::interval::transpose_pitch_by_any;
 use crate::notation::{Lyric, Style, StyleOwner, Tie, Volume, tie_from_any, volume_from_any};
 use crate::pitch::{Pitch, message, pitch_from_any};
 
+/// The names the `note` facade replaces in `music21.note`.
+pub const NAMES: &[&str] = &[
+    "Note",
+    "NoteException",
+    "NotRestException",
+    "Lyric",
+    "LyricException",
+];
+
+/// The names the `note` facade replaces in `music21.duration`.
+pub const DURATION_NAMES: &[&str] = &["Duration"];
+
 pyo3::create_exception!(music21_rs_facade, NoteException, PyException);
 pyo3::create_exception!(music21_rs_facade, NotRestException, PyException);
 

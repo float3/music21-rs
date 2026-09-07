@@ -14,6 +14,20 @@ use music21_rs::{
 
 use crate::note::Note;
 
+/// The names the pitch facade provides, for swapping into `music21.pitch`.
+pub const NAMES: &[&str] = &[
+    "Pitch",
+    "Accidental",
+    "Microtone",
+    "PitchException",
+    "AccidentalException",
+    "MicrotoneException",
+    "simplifyMultipleEnharmonics",
+    "convertPitchClassToStr",
+    "isValidAccidentalName",
+    "standardizeAccidentalName",
+];
+
 pyo3::create_exception!(music21_rs_facade, PitchException, PyException);
 pyo3::create_exception!(music21_rs_facade, AccidentalException, PyException);
 pyo3::create_exception!(music21_rs_facade, MicrotoneException, PyException);

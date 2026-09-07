@@ -12,6 +12,15 @@ use music21_rs::{
 
 use crate::pitch::message;
 
+/// The names the `notation` facade replaces in `music21.tie`.
+pub const TIE_NAMES: &[&str] = &["Tie", "TieException"];
+
+/// The names the `notation` facade replaces in `music21.volume`.
+pub const VOLUME_NAMES: &[&str] = &["Volume", "VolumeException"];
+
+/// The names the `notation` facade replaces in `music21.style`.
+pub const STYLE_NAMES: &[&str] = &["Style"];
+
 pyo3::create_exception!(music21_rs_facade, TieException, PyValueError);
 pyo3::create_exception!(music21_rs_facade, LyricException, PyException);
 pyo3::create_exception!(music21_rs_facade, VolumeException, PyException);

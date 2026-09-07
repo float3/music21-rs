@@ -24,6 +24,31 @@ reproduces.
 Anything music21 does that the Rust crate does not is left to fail rather
 than reimplemented in Python-shaped Rust.
 
+## Pointing an existing music21 program at it
+
+`install_into_music21()` replaces music21's own classes with these, in the
+music21 that is installed, so a program written for music21 runs on the Rust
+implementation without a line changed:
+
+```python
+import music21_rs
+music21_rs.install_into_music21()   # before anything imports the classes
+
+from music21.chord import Chord
+Chord("C4 E4 G4").commonName        # 'major triad', out of Rust
+```
+
+It patches a live module, so it changes music21 for everything in the
+process; nothing calls it for you. Call it before the program does
+`from music21.chord import Chord`, since that binds whatever it finds at
+import time — a `conftest.py` is early enough for a test suite.
+
+`python/downstream/run.py` is that idea as a test: it checks out
+[harte-library](https://github.com/andreamust/harte-library) — a Harte chord
+notation parser that subclasses `chord.Chord` and `interval.Interval` — runs
+its 8,116-test suite twice, once each way, and requires the two sets of
+failures to match exactly. They do.
+
 ## Building
 
 ```bash

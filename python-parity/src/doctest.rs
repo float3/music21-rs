@@ -24,98 +24,16 @@ use pyo3::types::{PyDict, PyList};
 use serde::{Deserialize, Serialize};
 use utils::{init_py, prepare};
 
-/// The names the pitch facade provides, for swapping into `music21.pitch`.
-pub const PITCH_NAMES: &[&str] = &[
-    "Pitch",
-    "Accidental",
-    "Microtone",
-    "PitchException",
-    "AccidentalException",
-    "MicrotoneException",
-    "simplifyMultipleEnharmonics",
-    "convertPitchClassToStr",
-    "isValidAccidentalName",
-    "standardizeAccidentalName",
-];
-
-/// The names the serial facade provides, for swapping into `music21.serial`.
-pub const SERIAL_NAMES: &[&str] = &[
-    "ToneRow",
-    "TwelveToneRow",
-    "HistoricalTwelveToneRow",
-    "TwelveToneMatrix",
-    "SerialException",
-    "pcToToneRow",
-    "rowToMatrix",
-    "getHistoricalRowByName",
-    "historicalDict",
-];
-
-/// The names the key facade provides, for swapping into `music21.key`.
-/// The names the `chord` facade replaces in `music21.chord`.
-pub const CHORD_NAMES: &[&str] = &["Chord", "ChordException"];
-
-/// The names the `note` facade replaces in `music21.note`.
-pub const NOTE_NAMES: &[&str] = &[
-    "Note",
-    "NoteException",
-    "NotRestException",
-    "Lyric",
-    "LyricException",
-];
-
-/// The names the `note` facade replaces in `music21.duration`.
-pub const DURATION_NAMES: &[&str] = &["Duration"];
-
-/// The names the `notation` facade replaces in `music21.tie`.
-pub const TIE_NAMES: &[&str] = &["Tie", "TieException"];
-
-/// The names the `notation` facade replaces in `music21.volume`.
-pub const VOLUME_NAMES: &[&str] = &["Volume", "VolumeException"];
-
-/// The names the `notation` facade replaces in `music21.style`.
-pub const STYLE_NAMES: &[&str] = &["Style"];
-
-/// The names the `interval` facade replaces in `music21.interval`.
-pub const INTERVAL_NAMES: &[&str] = &[
-    "Direction",
-    "Specifier",
-    "GenericInterval",
-    "DiatonicInterval",
-    "ChromaticInterval",
-    "Interval",
-    "IntervalException",
-    "convertStaffDistanceToInterval",
-    "convertDiatonicNumberToStep",
-    "parseSpecifier",
-    "convertGeneric",
-    "convertSemitoneToSpecifierGenericMicrotone",
-    "convertSemitoneToSpecifierGeneric",
-    "intervalToPythagoreanRatio",
-    "notesToGeneric",
-    "notesToChromatic",
-    "intervalsToDiatonic",
-    "intervalFromGenericAndChromatic",
-    "getWrittenHigherNote",
-    "getWrittenLowerNote",
-    "getAbsoluteHigherNote",
-    "getAbsoluteLowerNote",
-    "transposePitch",
-    "transposeNote",
-    "notesToInterval",
-    "add",
-    "subtract",
-];
-
-pub const KEY_NAMES: &[&str] = &[
-    "KeySignature",
-    "Key",
-    "KeySignatureException",
-    "KeyException",
-    "sharpsToPitch",
-    "pitchToSharps",
-    "convertKeyStringToMusic21KeyString",
-];
+/// The names each facade module provides, for swapping into the music21
+/// module of the same name. They live with the classes they name; the
+/// aliases are here because the tests read them off this module.
+pub use music21_rs_python::chord::NAMES as CHORD_NAMES;
+pub use music21_rs_python::interval::NAMES as INTERVAL_NAMES;
+pub use music21_rs_python::key::NAMES as KEY_NAMES;
+pub use music21_rs_python::notation::{STYLE_NAMES, TIE_NAMES, VOLUME_NAMES};
+pub use music21_rs_python::note::{DURATION_NAMES, NAMES as NOTE_NAMES};
+pub use music21_rs_python::pitch::NAMES as PITCH_NAMES;
+pub use music21_rs_python::serial::NAMES as SERIAL_NAMES;
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct Expectations {

@@ -18,6 +18,37 @@ use music21_rs::{
 
 use crate::pitch::{Pitch, message, pitch_from_any};
 
+/// The names the `interval` facade replaces in `music21.interval`.
+pub const NAMES: &[&str] = &[
+    "Direction",
+    "Specifier",
+    "GenericInterval",
+    "DiatonicInterval",
+    "ChromaticInterval",
+    "Interval",
+    "IntervalException",
+    "convertStaffDistanceToInterval",
+    "convertDiatonicNumberToStep",
+    "parseSpecifier",
+    "convertGeneric",
+    "convertSemitoneToSpecifierGenericMicrotone",
+    "convertSemitoneToSpecifierGeneric",
+    "intervalToPythagoreanRatio",
+    "notesToGeneric",
+    "notesToChromatic",
+    "intervalsToDiatonic",
+    "intervalFromGenericAndChromatic",
+    "getWrittenHigherNote",
+    "getWrittenLowerNote",
+    "getAbsoluteHigherNote",
+    "getAbsoluteLowerNote",
+    "transposePitch",
+    "transposeNote",
+    "notesToInterval",
+    "add",
+    "subtract",
+];
+
 pyo3::create_exception!(music21_rs_facade, IntervalException, PyException);
 
 fn interval_error(error: music21_rs::Error) -> PyErr {
@@ -941,108 +972,8 @@ impl Interval {
         }
     }
 
-    fn with_pitches(inner: RsInterval, start: &Bound<'_, PyAny>, end: &Bound<'_, PyAny>) -> Self {
-        Self {
-            inner,
-            pitch_start: Some(start.clone().unbind()),
-            pitch_end: Some(end.clone().unbind()),
-            interval_type: String::new(),
-        }
-    }
-}
-
-/// The pitch music21's `_extractPitch` reads off a note or pitch argument:
-/// the note's `pitch` when it has one, otherwise the object itself.
-fn extract_pitch_object<'py>(value: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
-    if value.extract::<PyRef<Pitch>>().is_ok() {
-        return Ok(value.clone());
-    }
-    match value.getattr("pitch") {
-        Ok(pitch) => Ok(pitch),
-        Err(_) => Ok(value.clone()),
-    }
-}
-
-fn optional_pitch_object<'py>(
-    value: Option<&Bound<'py, PyAny>>,
-) -> PyResult<Option<Bound<'py, PyAny>>> {
-    match value {
-        Some(value) if !value.is_none() => Ok(Some(extract_pitch_object(value)?)),
-        _ => Ok(None),
-    }
-}
-
-/// Reads an interval argument the way music21's transposition helpers do:
-/// an `Interval`, one of its halves, a name, a semitone count, or any object
-/// carrying music21's `directedName`.
-pub(crate) fn interval_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsInterval> {
-    if let Ok(facade) = value.extract::<PyRef<Interval>>() {
-        return Ok(facade.inner.clone());
-    }
-    if let Ok(facade) = value.extract::<PyRef<DiatonicInterval>>() {
-        return RsInterval::from_diatonic(facade.inner.clone()).map_err(interval_error);
-    }
-    if let Ok(facade) = value.extract::<PyRef<ChromaticInterval>>() {
-        return RsInterval::from_chromatic(facade.inner.clone()).map_err(interval_error);
-    }
-    if let Ok(name) = value.extract::<String>() {
-        return RsInterval::from_name(name).map_err(interval_error);
-    }
-    if let Ok(semitones) = value.extract::<i32>() {
-        return RsInterval::from_semitones(semitones).map_err(interval_error);
-    }
-    if let Ok(name) = value
-        .getattr("directedName")
-        .and_then(|name| name.extract::<String>())
-    {
-        return RsInterval::from_name(name).map_err(interval_error);
-    }
-    Err(IntervalException::new_err(format!(
-        "cannot read an interval from {}",
-        value.repr()?
-    )))
-}
-
-/// Transposes a pitch by whichever interval object music21's
-/// `Pitch.transpose` accepts. A `GenericInterval` keeps the accidental, a
-/// `ChromaticInterval` respells from pitch space, and anything else goes
-/// through a full `Interval`.
-pub(crate) fn transpose_pitch_by_any(
-    pitch: &RsPitch,
-    value: &Bound<'_, PyAny>,
-) -> PyResult<RsPitch> {
-    if let Ok(generic) = value.extract::<PyRef<GenericInterval>>() {
-        return generic.inner.transpose_pitch(pitch).map_err(interval_error);
-    }
-    if let Ok(chromatic) = value.extract::<PyRef<ChromaticInterval>>() {
-        return chromatic
-            .inner
-            .transpose_pitch(pitch)
-            .map_err(interval_error);
-    }
-    let interval = interval_from_any(value)?;
-    pitch.transpose(&interval).map_err(interval_error)
-}
-
-#[pymethods]
-impl Interval {
-    #[new]
-    #[pyo3(signature = (
-        arg0 = None,
-        arg1 = None,
-        /,
-        *,
-        diatonic = None,
-        chromatic = None,
-        pitchStart = None,
-        pitchEnd = None,
-        noteStart = None,
-        noteEnd = None,
-        name = None,
-        **_keywords
-    ))]
     #[allow(clippy::too_many_arguments)]
-    fn new(
+    fn build(
         arg0: Option<&Bound<'_, PyAny>>,
         arg1: Option<&Bound<'_, PyAny>>,
         diatonic: Option<PyRef<'_, DiatonicInterval>>,
@@ -1155,6 +1086,171 @@ impl Interval {
             pitch_end: pitch_end.map(Bound::unbind),
             interval_type: String::new(),
         })
+    }
+
+    fn with_pitches(inner: RsInterval, start: &Bound<'_, PyAny>, end: &Bound<'_, PyAny>) -> Self {
+        Self {
+            inner,
+            pitch_start: Some(start.clone().unbind()),
+            pitch_end: Some(end.clone().unbind()),
+            interval_type: String::new(),
+        }
+    }
+}
+
+/// The pitch music21's `_extractPitch` reads off a note or pitch argument:
+/// the note's `pitch` when it has one, otherwise the object itself.
+fn extract_pitch_object<'py>(value: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    if value.extract::<PyRef<Pitch>>().is_ok() {
+        return Ok(value.clone());
+    }
+    match value.getattr("pitch") {
+        Ok(pitch) => Ok(pitch),
+        Err(_) => Ok(value.clone()),
+    }
+}
+
+fn optional_pitch_object<'py>(
+    value: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Option<Bound<'py, PyAny>>> {
+    match value {
+        Some(value) if !value.is_none() => Ok(Some(extract_pitch_object(value)?)),
+        _ => Ok(None),
+    }
+}
+
+/// Reads an interval argument the way music21's transposition helpers do:
+/// an `Interval`, one of its halves, a name, a semitone count, or any object
+/// carrying music21's `directedName`.
+pub(crate) fn interval_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsInterval> {
+    if let Ok(facade) = value.extract::<PyRef<Interval>>() {
+        return Ok(facade.inner.clone());
+    }
+    if let Ok(facade) = value.extract::<PyRef<DiatonicInterval>>() {
+        return RsInterval::from_diatonic(facade.inner.clone()).map_err(interval_error);
+    }
+    if let Ok(facade) = value.extract::<PyRef<ChromaticInterval>>() {
+        return RsInterval::from_chromatic(facade.inner.clone()).map_err(interval_error);
+    }
+    if let Ok(name) = value.extract::<String>() {
+        return RsInterval::from_name(name).map_err(interval_error);
+    }
+    if let Ok(semitones) = value.extract::<i32>() {
+        return RsInterval::from_semitones(semitones).map_err(interval_error);
+    }
+    if let Ok(name) = value
+        .getattr("directedName")
+        .and_then(|name| name.extract::<String>())
+    {
+        return RsInterval::from_name(name).map_err(interval_error);
+    }
+    Err(IntervalException::new_err(format!(
+        "cannot read an interval from {}",
+        value.repr()?
+    )))
+}
+
+/// Transposes a pitch by whichever interval object music21's
+/// `Pitch.transpose` accepts. A `GenericInterval` keeps the accidental, a
+/// `ChromaticInterval` respells from pitch space, and anything else goes
+/// through a full `Interval`.
+pub(crate) fn transpose_pitch_by_any(
+    pitch: &RsPitch,
+    value: &Bound<'_, PyAny>,
+) -> PyResult<RsPitch> {
+    if let Ok(generic) = value.extract::<PyRef<GenericInterval>>() {
+        return generic.inner.transpose_pitch(pitch).map_err(interval_error);
+    }
+    if let Ok(chromatic) = value.extract::<PyRef<ChromaticInterval>>() {
+        return chromatic
+            .inner
+            .transpose_pitch(pitch)
+            .map_err(interval_error);
+    }
+    let interval = interval_from_any(value)?;
+    pitch.transpose(&interval).map_err(interval_error)
+}
+
+#[pymethods]
+impl Interval {
+    #[new]
+    #[pyo3(signature = (
+        arg0 = None,
+        arg1 = None,
+        /,
+        *,
+        diatonic = None,
+        chromatic = None,
+        pitchStart = None,
+        pitchEnd = None,
+        noteStart = None,
+        noteEnd = None,
+        name = None,
+        **_keywords
+    ))]
+    #[allow(clippy::too_many_arguments)]
+    /// music21 builds its objects in `__init__`; pyo3 builds them in
+    /// `__new__`. A Python subclass of a music21 class constructs the base
+    /// with *its own* arguments and then calls `super().__init__` with
+    /// music21's — `Harte('C:maj')` reaches `Chord.__init__(pitches)` — so
+    /// `__new__` must not refuse arguments that were never meant for it. It
+    /// builds what it can and leaves the refusing to `__init__`, which is
+    /// where music21 does it too.
+    fn new(
+        arg0: Option<&Bound<'_, PyAny>>,
+        arg1: Option<&Bound<'_, PyAny>>,
+        diatonic: Option<PyRef<'_, DiatonicInterval>>,
+        chromatic: Option<PyRef<'_, ChromaticInterval>>,
+        pitchStart: Option<&Bound<'_, PyAny>>,
+        pitchEnd: Option<&Bound<'_, PyAny>>,
+        noteStart: Option<&Bound<'_, PyAny>>,
+        noteEnd: Option<&Bound<'_, PyAny>>,
+        name: Option<String>,
+        _keywords: Option<&Bound<'_, PyDict>>,
+    ) -> Self {
+        Self::build(
+            arg0, arg1, diatonic, chromatic, pitchStart, pitchEnd, noteStart, noteEnd, name,
+            _keywords,
+        )
+        .unwrap_or_else(|_| Self::wrap(RsInterval::from_name("P1").expect("a perfect unison")))
+    }
+
+    /// music21's construction proper, which a direct caller reaches through
+    /// `__new__` having already run it and a subclass reaches through
+    /// `super().__init__`.
+    #[pyo3(signature = (
+        arg0 = None,
+        arg1 = None,
+        /,
+        *,
+        diatonic = None,
+        chromatic = None,
+        pitchStart = None,
+        pitchEnd = None,
+        noteStart = None,
+        noteEnd = None,
+        name = None,
+        **_keywords
+    ))]
+    #[allow(clippy::too_many_arguments)]
+    fn __init__(
+        slf: &Bound<'_, Self>,
+        arg0: Option<&Bound<'_, PyAny>>,
+        arg1: Option<&Bound<'_, PyAny>>,
+        diatonic: Option<PyRef<'_, DiatonicInterval>>,
+        chromatic: Option<PyRef<'_, ChromaticInterval>>,
+        pitchStart: Option<&Bound<'_, PyAny>>,
+        pitchEnd: Option<&Bound<'_, PyAny>>,
+        noteStart: Option<&Bound<'_, PyAny>>,
+        noteEnd: Option<&Bound<'_, PyAny>>,
+        name: Option<String>,
+        _keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<()> {
+        *slf.borrow_mut() = Self::build(
+            arg0, arg1, diatonic, chromatic, pitchStart, pitchEnd, noteStart, noteEnd, name,
+            _keywords,
+        )?;
+        Ok(())
     }
 
     #[getter]

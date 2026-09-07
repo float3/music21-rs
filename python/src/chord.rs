@@ -17,6 +17,10 @@ use crate::notation::{Lyric, Style, StyleOwner, Tie, Volume, tie_from_any, volum
 use crate::note::{Duration, Note, duration_from_any, note_from_any};
 use crate::pitch::{Accidental, Pitch, message, pitch_from_any};
 
+/// The names the key facade provides, for swapping into `music21.key`.
+/// The names the `chord` facade replaces in `music21.chord`.
+pub const NAMES: &[&str] = &["Chord", "ChordException"];
+
 pyo3::create_exception!(music21_rs_facade, ChordException, PyException);
 
 fn chord_error(error: music21_rs::Error) -> PyErr {
@@ -58,6 +62,34 @@ impl Chord {
         };
         chord.rebuild_notes(py)?;
         Ok(chord)
+    }
+
+    fn build(
+        py: Python<'_>,
+        notes: Option<&Bound<'_, PyAny>>,
+        keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Self> {
+        // music21 makes the chord's duration before reading the notes, and
+        // hands it to every note it builds. A duration given by keyword *is*
+        // that object, so `chord.Chord('A4 C#5', duration=d).duration is d`.
+        let mut quick = true;
+        let mut shared = Py::new(py, Duration::wrap(RsDuration::quarter()))?;
+        if let Some(keywords) = keywords {
+            if let Some(value) = keywords.get_item("duration")? {
+                quick = false;
+                shared = match value.extract::<Py<Duration>>() {
+                    Ok(object) => object,
+                    Err(_) => Py::new(py, Duration::wrap(duration_from_any(&value)?))?,
+                };
+            } else if let Some(value) = keywords.get_item("quarterLength")? {
+                quick = false;
+                let length = RsDuration::new(value.extract::<f64>()?).map_err(chord_error)?;
+                shared = Py::new(py, Duration::wrap(length))?;
+            }
+        }
+        let adopted = adopted_notes(py, notes, &shared, quick)?;
+        let duration = adopted.taken.unwrap_or(shared);
+        Self::from_notes(py, adopted.notes, duration)
     }
 
     /// Builds the facade around note objects the caller already holds,
@@ -472,32 +504,36 @@ fn require_iterable(value: &Bound<'_, PyAny>, field: &str) -> PyResult<()> {
 impl Chord {
     #[new]
     #[pyo3(signature = (notes = None, **keywords))]
+    /// music21 builds its objects in `__init__`; pyo3 builds them in
+    /// `__new__`. A Python subclass of a music21 class constructs the base
+    /// with *its own* arguments and then calls `super().__init__` with
+    /// music21's — `Harte('C:maj')` reaches `Chord.__init__(pitches)` — so
+    /// `__new__` must not refuse arguments that were never meant for it. It
+    /// builds what it can and leaves the refusing to `__init__`, which is
+    /// where music21 does it too.
     fn new(
         py: Python<'_>,
         notes: Option<&Bound<'_, PyAny>>,
         keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Self> {
-        // music21 makes the chord's duration before reading the notes, and
-        // hands it to every note it builds. A duration given by keyword *is*
-        // that object, so `chord.Chord('A4 C#5', duration=d).duration is d`.
-        let mut quick = true;
-        let mut shared = Py::new(py, Duration::wrap(RsDuration::quarter()))?;
-        if let Some(keywords) = keywords {
-            if let Some(value) = keywords.get_item("duration")? {
-                quick = false;
-                shared = match value.extract::<Py<Duration>>() {
-                    Ok(object) => object,
-                    Err(_) => Py::new(py, Duration::wrap(duration_from_any(&value)?))?,
-                };
-            } else if let Some(value) = keywords.get_item("quarterLength")? {
-                quick = false;
-                let length = RsDuration::new(value.extract::<f64>()?).map_err(chord_error)?;
-                shared = Py::new(py, Duration::wrap(length))?;
-            }
+        match Self::build(py, notes, keywords) {
+            Ok(chord) => Ok(chord),
+            Err(_) => Self::build(py, None, None),
         }
-        let adopted = adopted_notes(py, notes, &shared, quick)?;
-        let duration = adopted.taken.unwrap_or(shared);
-        Self::from_notes(py, adopted.notes, duration)
+    }
+
+    /// music21's construction proper, which a direct caller reaches through
+    /// `__new__` having already run it and a subclass reaches through
+    /// `super().__init__`.
+    #[pyo3(signature = (notes = None, **keywords))]
+    fn __init__(
+        slf: &Bound<'_, Self>,
+        notes: Option<&Bound<'_, PyAny>>,
+        keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<()> {
+        let built = Self::build(slf.py(), notes, keywords)?;
+        *slf.borrow_mut() = built;
+        Ok(())
     }
 
     // ---- contents --------------------------------------------------------

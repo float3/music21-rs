@@ -183,6 +183,14 @@ jobs:
           python -m pip install --no-index --find-links target/wheels music21-rs
           python -m pytest python/tests -q
 
+      # Somebody else's music21 library, run twice: once on music21 and once
+      # on ours. The two sets of failures have to match.
+      - name: Test a downstream music21 library against it
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          python -m pip install music21 lark numpy
+          python python/downstream/run.py
+
       - name: Upload the wheel
         uses: actions/upload-artifact@v4
         with:
