@@ -75,7 +75,9 @@ impl MidiNote {
 /// Extracts MIDI note events from a stream.
 pub fn midi_notes_from_stream(stream: &Stream) -> Result<Vec<MidiNote>> {
     let mut notes = Vec::new();
-    for event in stream.events() {
+    // Flattened, so that a score's parts and measures sound at the offsets
+    // their nesting puts them at rather than not at all.
+    for event in stream.flatten().events() {
         let start = event.offset();
         let duration = event.element().quarter_length();
         match event.element() {
@@ -87,7 +89,13 @@ pub fn midi_notes_from_stream(stream: &Stream) -> Result<Vec<MidiNote>> {
                     notes.push(note_to_midi_note(note, start, duration)?);
                 }
             }
-            StreamElement::Rest(_) => {}
+            // A rest is silence, and the marks that say what is in force
+            // carry no pitch; a nested stream is gone by now.
+            StreamElement::Rest(_)
+            | StreamElement::Stream(_)
+            | StreamElement::KeySignature(_)
+            | StreamElement::TimeSignature(_)
+            | StreamElement::MetronomeMark(_) => {}
         }
     }
     Ok(notes)

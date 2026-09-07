@@ -107,6 +107,7 @@ pub fn pitch_name_to_sharps(pitch_name: &str, mode: Option<&str>) -> Result<Inte
 }
 
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// A key signature represented by the number of sharps.
 ///
 /// Flats are represented as negative sharps, so B-flat major has `-2`.

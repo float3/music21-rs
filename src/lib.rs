@@ -115,7 +115,7 @@ pub use serial::{
     row_to_matrix,
 };
 pub use sieve::Sieve;
-pub use stream::{Stream, StreamElement, StreamEvent};
+pub use stream::{Stream, StreamElement, StreamEvent, StreamKind};
 pub use tempo::{DEFAULT_TEMPO_VALUES, MetronomeMark, convert_tempo_by_referent};
 pub use tuningsystem::{
     ALL_TUNING_SYSTEMS, COMMON_EQUAL_TEMPERAMENTS, COMMON_TWELVE_TONE_TUNING_SYSTEMS, Fraction,
