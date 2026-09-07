@@ -11,6 +11,7 @@ passing = [
     "music21.pitch.Accidental.__le__",
     "music21.pitch.Accidental.__lt__",
     "music21.pitch.Accidental.alter",
+    "music21.pitch.Accidental.displayStatus",
     "music21.pitch.Accidental.displayType",
     "music21.pitch.Accidental.fullName",
     "music21.pitch.Accidental.inheritDisplay",

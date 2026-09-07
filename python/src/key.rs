@@ -1,9 +1,11 @@
 //! music21's `key` module: `KeySignature`, `Key` and the module functions,
 //! over `music21-rs`. `Key` extends `KeySignature` as it does upstream.
 
-use pyo3::exceptions::PyException;
+#![allow(non_snake_case)]
+
+use pyo3::exceptions::{PyException, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::PyDict;
+use pyo3::types::{PyDict, PyList};
 
 use music21_rs::{
     Key as RsKey, KeySignature as RsKeySignature, convert_key_string_to_music21_key_string,
@@ -18,6 +20,7 @@ pub const NAMES: &[&str] = &[
     "KeySignatureException",
     "KeyException",
     "sharpsToPitch",
+    "_sharpsToPitchCache",
     "pitchToSharps",
     "convertKeyStringToMusic21KeyString",
 ];
@@ -111,7 +114,6 @@ impl KeySignature {
     }
 
     #[setter]
-    #[allow(non_snake_case)]
     fn set_alteredPitches(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
         self.signature
             .set_altered_pitches(crate::pitch::pitch_list(Some(value))?);
@@ -119,19 +121,16 @@ impl KeySignature {
     }
 
     #[getter]
-    #[allow(non_snake_case)]
     fn accidentalsApplyOnlyToOctave(&self) -> bool {
         self.signature.accidentals_apply_only_to_octave()
     }
 
     #[setter]
-    #[allow(non_snake_case)]
     fn set_accidentalsApplyOnlyToOctave(&mut self, value: bool) {
         self.signature.set_accidentals_apply_only_to_octave(value);
     }
 
     #[getter]
-    #[allow(non_snake_case)]
     fn alteredPitches(&self) -> PyResult<Vec<Pitch>> {
         Ok(self
             .inner()
@@ -143,12 +142,10 @@ impl KeySignature {
     }
 
     #[getter]
-    #[allow(non_snake_case)]
     fn isNonTraditional(&self) -> bool {
         self.signature.is_non_traditional()
     }
 
-    #[allow(non_snake_case)]
     fn accidentalByStep(&self, step: &str) -> PyResult<Option<Accidental>> {
         let letter = step
             .chars()
@@ -163,7 +160,6 @@ impl KeySignature {
     }
 
     #[pyo3(signature = (mode = None, tonic = None))]
-    #[allow(non_snake_case)]
     fn asKey(
         &self,
         py: Python<'_>,
@@ -183,7 +179,6 @@ impl KeySignature {
     }
 
     #[pyo3(signature = (value, *, inPlace = false))]
-    #[allow(non_snake_case)]
     fn transpose(
         mut slf: PyRefMut<'_, Self>,
         py: Python<'_>,
@@ -209,7 +204,6 @@ impl KeySignature {
     }
 
     #[pyo3(signature = (p, *, inPlace = false))]
-    #[allow(non_snake_case)]
     fn transposePitchFromC(&self, p: &Bound<'_, PyAny>, inPlace: bool) -> PyResult<Option<Pitch>> {
         let transposed = self
             .inner()
@@ -282,13 +276,41 @@ impl KeySignature {
 #[pyclass(name = "Key", module = "music21.key", extends = KeySignature, subclass)]
 pub struct Key {
     pub(crate) inner: RsKey,
+    /// How well this key fitted the music it was analysed from, and the
+    /// keys that fitted less well, best first.
+    ///
+    /// music21 fills both in when a key comes out of `analyze('key')`, and
+    /// reads them back for `tonalCertainty`. A key that was simply named
+    /// carries no ranking, which is what makes asking one how certain it is
+    /// an error.
+    correlation_coefficient: f64,
+    /// Held as the Python list itself, not as a copy of it: music21's own
+    /// key analysis fills the list by appending to what the getter hands
+    /// back, so handing back a fresh one each time would lose every
+    /// alternative it found.
+    alternate_interpretations: Option<Py<PyList>>,
 }
 
 impl Key {
     fn object(py: Python<'_>, inner: RsKey) -> PyResult<Py<PyAny>> {
-        let init =
-            PyClassInitializer::from(KeySignature::of(inner.sharps())).add_subclass(Key { inner });
+        let init = PyClassInitializer::from(KeySignature::of(inner.sharps())).add_subclass(Key {
+            inner,
+            correlation_coefficient: 0.0,
+            alternate_interpretations: None,
+        });
         Ok(Py::new(py, init)?.into_any())
+    }
+
+    /// The list of alternatives, made on first asking and then kept, so
+    /// that appending to what a caller was handed reaches this key.
+    fn interpretations(&mut self, py: Python<'_>) -> PyResult<&Py<PyList>> {
+        if self.alternate_interpretations.is_none() {
+            self.alternate_interpretations = Some(PyList::empty(py).unbind());
+        }
+        Ok(self
+            .alternate_interpretations
+            .as_ref()
+            .expect("just set when missing"))
     }
 
     fn same_key(&self, other: &Key) -> bool {
@@ -299,6 +321,63 @@ impl Key {
 
 #[pymethods]
 impl Key {
+    /// music21's `correlationCoefficient`: how well this key fitted the
+    /// music it was analysed from. Zero until an analysis says otherwise.
+    #[getter]
+    fn get_correlationCoefficient(&self) -> f64 {
+        self.correlation_coefficient
+    }
+
+    #[setter]
+    fn set_correlationCoefficient(&mut self, value: f64) {
+        self.correlation_coefficient = value;
+    }
+
+    /// music21's `alternateInterpretations`: the keys that fitted less well
+    /// than this one, best first.
+    #[getter]
+    fn get_alternateInterpretations(&mut self, py: Python<'_>) -> PyResult<Py<PyList>> {
+        Ok(self.interpretations(py)?.clone_ref(py))
+    }
+
+    #[setter]
+    fn set_alternateInterpretations(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        let Some(value) = value.filter(|value| !value.is_none()) else {
+            self.alternate_interpretations = None;
+            return Ok(());
+        };
+        let list = PyList::empty(value.py());
+        for item in value.try_iter()? {
+            list.append(item?)?;
+        }
+        self.alternate_interpretations = Some(list.unbind());
+        Ok(())
+    }
+
+    /// music21's `tonalCertainty`: how decisively this key won the analysis
+    /// it came out of. A key that was simply named never ran one, which is
+    /// why asking is an error rather than a zero.
+    #[pyo3(signature = (method = "correlationCoefficient"))]
+    fn tonalCertainty(&mut self, py: Python<'_>, method: &str) -> PyResult<f64> {
+        if method != "correlationCoefficient" {
+            return Err(PyValueError::new_err(format!("Unknown method: {method}")));
+        }
+        let alternatives = self.interpretations(py)?.bind(py).clone();
+        if alternatives.is_empty() {
+            return Err(KeySignatureException::new_err(
+                "cannot process ambiguity without a list of .alternateInterpretations",
+            ));
+        }
+        let mut scores = vec![self.correlation_coefficient];
+        for key in alternatives.iter() {
+            let score = key.getattr("correlationCoefficient")?.extract::<f64>()?;
+            if score > 0.0 {
+                scores.push(score);
+            }
+        }
+        Ok(music21_rs::tonal_certainty_from_scores(&scores))
+    }
+
     #[new]
     #[pyo3(signature = (tonic = None, mode = None, **kwargs))]
     fn new(
@@ -313,7 +392,13 @@ impl Key {
         };
         let mode = mode_of(mode)?;
         let inner = RsKey::from_tonic_mode(&tonic, mode.as_deref()).map_err(key_error)?;
-        Ok(PyClassInitializer::from(KeySignature::of(inner.sharps())).add_subclass(Key { inner }))
+        Ok(
+            PyClassInitializer::from(KeySignature::of(inner.sharps())).add_subclass(Key {
+                inner,
+                correlation_coefficient: 0.0,
+                alternate_interpretations: None,
+            }),
+        )
     }
 
     #[getter]
@@ -348,7 +433,6 @@ impl Key {
     }
 
     #[getter]
-    #[allow(non_snake_case)]
     fn tonicPitchNameWithCase(&self) -> String {
         self.inner.tonic_pitch_name_with_case()
     }
@@ -363,7 +447,6 @@ impl Key {
         Key::object(py, self.inner.parallel().map_err(key_error)?)
     }
 
-    #[allow(non_snake_case)]
     fn deriveByDegree(
         &self,
         py: Python<'_>,
@@ -378,7 +461,6 @@ impl Key {
     }
 
     #[pyo3(signature = (degree, *args, **kwargs))]
-    #[allow(non_snake_case)]
     fn pitchFromDegree(
         &self,
         degree: usize,
@@ -393,7 +475,6 @@ impl Key {
     }
 
     #[pyo3(signature = (value, *, inPlace = false))]
-    #[allow(non_snake_case)]
     fn transpose(
         mut slf: PyRefMut<'_, Self>,
         py: Python<'_>,
@@ -421,15 +502,38 @@ impl Key {
     }
 }
 
-/// music21's `key.sharpsToPitch`.
+/// music21's `key.sharpsToPitch`, memoized in `_sharpsToPitchCache` as
+/// music21 memoizes it — the cache is documented behaviour of the function,
+/// and its own doctest reads the dictionary back.
 #[pyfunction]
-#[pyo3(name = "sharpsToPitch")]
-#[allow(non_snake_case)]
-fn sharps_to_pitch_facade(sharpCount: i32) -> PyResult<Pitch> {
-    Ok(Pitch::wrap(
-        sharps_to_pitch(sharpCount).map_err(key_error)?,
-        false,
-    ))
+#[pyo3(name = "sharpsToPitch", signature = (sharpCount = None))]
+fn sharps_to_pitch_facade<'py>(
+    py: Python<'py>,
+    sharpCount: Option<i32>,
+) -> PyResult<Bound<'py, PyAny>> {
+    // music21 reads a missing count as C major rather than as an error.
+    let sharp_count = sharpCount.unwrap_or(0);
+    let cache = sharps_to_pitch_cache(py)?;
+    if let Some(cached) = cache.get_item(sharp_count)? {
+        return Ok(cached);
+    }
+    let pitch = Pitch::wrap(sharps_to_pitch(sharp_count).map_err(key_error)?, false)
+        .into_pyobject(py)?
+        .into_any();
+    cache.set_item(sharp_count, &pitch)?;
+    Ok(pitch)
+}
+
+/// The dictionary `sharpsToPitch` remembers its answers in, made once and
+/// then kept on the facade module so that it is the same object music21's
+/// `key._sharpsToPitchCache` names once the facade is installed.
+fn sharps_to_pitch_cache<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+    let facade = py
+        .import("music21_rs_facade")
+        .or_else(|_| py.import("music21_rs"))?;
+    Ok(facade
+        .getattr("_sharpsToPitchCache")?
+        .cast_into::<PyDict>()?)
 }
 
 /// music21's `key.pitchToSharps`.
@@ -447,7 +551,6 @@ fn pitch_to_sharps_facade(
 /// music21's `key.convertKeyStringToMusic21KeyString`.
 #[pyfunction]
 #[pyo3(name = "convertKeyStringToMusic21KeyString")]
-#[allow(non_snake_case)]
 fn convert_key_string(textString: &str) -> String {
     convert_key_string_to_music21_key_string(textString)
 }
@@ -458,6 +561,7 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<KeySignature>()?;
     m.add_class::<Key>()?;
     m.add_function(wrap_pyfunction!(sharps_to_pitch_facade, m)?)?;
+    m.add("_sharpsToPitchCache", PyDict::new(py))?;
     m.add_function(wrap_pyfunction!(pitch_to_sharps_facade, m)?)?;
     m.add_function(wrap_pyfunction!(convert_key_string, m)?)?;
     for (name, exception) in [

@@ -7,6 +7,7 @@ passing = [
     "music21.key.Key",
     "music21.key.Key.parallel",
     "music21.key.Key.relative",
+    "music21.key.Key.tonalCertainty",
     "music21.key.Key.tonicPitchNameWithCase",
     "music21.key.Key.transpose",
     "music21.key.KeySignature",
@@ -19,4 +20,5 @@ passing = [
     "music21.key.KeySignature.transposePitchFromC",
     "music21.key.convertKeyStringToMusic21KeyString",
     "music21.key.pitchToSharps",
+    "music21.key.sharpsToPitch",
 ]

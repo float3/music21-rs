@@ -63,11 +63,11 @@ pub use abc::{
     abc_chord, abc_duration, abc_note, abc_rest, pitch_name_from_abc_note,
     pitch_names_from_abc_chord,
 };
-pub use analysis::tonal_certainty;
 pub use analysis::{
     KeyEstimate, KeyProfile, estimate_key_from_chords, estimate_key_from_chords_with,
     estimate_key_from_pitches, estimate_key_from_pitches_with,
 };
+pub use analysis::{tonal_certainty, tonal_certainty_from_scores};
 pub use chord::{
     Chord, ChordResolutionSuggestion, GuitarFingering, GuitarStringFingering, GuitarTuning,
     GuitarTuningString, IntoNotes, KnownChordType, TriadQuality, format_vector_string,

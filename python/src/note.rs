@@ -956,6 +956,17 @@ fn target_note<'py>(note: &Bound<'py, PyAny>, in_place: bool) -> PyResult<Bound<
         .call1((note,))
 }
 
+/// A Python list holding whatever the value iterates over.
+fn list_of(value: &Bound<'_, PyAny>) -> PyResult<Py<PyList>> {
+    let list = PyList::empty(value.py());
+    if !value.is_none() {
+        for item in value.try_iter()? {
+            list.append(item?)?;
+        }
+    }
+    Ok(list.unbind())
+}
+
 /// Reads a duration argument: a `Duration`, a quarter length, or a type name
 /// such as `"half"`.
 pub(crate) fn duration_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsDuration> {
@@ -1708,6 +1719,16 @@ pub struct Note {
     /// own `ChordBase` sets on every note it takes in. An edit to the pitch
     /// has to reach the chord through it.
     chord: Option<Py<PyAny>>,
+    /// music21's `expressions` and `articulations`: the ornaments written
+    /// over the note and the marks written under it.
+    ///
+    /// The crate models neither, and the lists hold whatever objects a
+    /// caller puts in them. They are kept because they are where music21
+    /// looks — `makeAccidentals` walks the expressions of every note to see
+    /// whether an ornament needs an accidental of its own — and a note with
+    /// no such list is a note music21's own notation code cannot process.
+    expressions: Option<Py<PyList>>,
+    articulations: Option<Py<PyList>>,
 }
 
 impl Note {
@@ -1721,6 +1742,8 @@ impl Note {
             volume: None,
             duration: None,
             chord: None,
+            expressions: None,
+            articulations: None,
         })
     }
 
@@ -1743,6 +1766,8 @@ impl Note {
                 volume: None,
                 duration: None,
                 chord: None,
+                expressions: None,
+                articulations: None,
             },
         )?;
         Self::claim_pitch(py, &note);
@@ -2399,6 +2424,37 @@ impl Note {
     fn __copy__<'py>(slf: &Bound<'py, Self>, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let copied = slf.borrow().copied(py)?;
         crate::copy_as_same_type(slf, copied)
+    }
+
+    /// music21's `expressions`: the ornaments written over this note. The
+    /// same list every time, so appending to it sticks.
+    #[getter]
+    fn get_expressions(&mut self, py: Python<'_>) -> Py<PyList> {
+        let list = self
+            .expressions
+            .get_or_insert_with(|| PyList::empty(py).unbind());
+        list.clone_ref(py)
+    }
+
+    #[setter]
+    fn set_expressions(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        self.expressions = Some(list_of(value)?);
+        Ok(())
+    }
+
+    /// music21's `articulations`: the marks written under this note.
+    #[getter]
+    fn get_articulations(&mut self, py: Python<'_>) -> Py<PyList> {
+        let list = self
+            .articulations
+            .get_or_insert_with(|| PyList::empty(py).unbind());
+        list.clone_ref(py)
+    }
+
+    #[setter]
+    fn set_articulations(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        self.articulations = Some(list_of(value)?);
+        Ok(())
     }
 
     /// music21's `_chordAttached`, which its own `ChordBase` sets on every

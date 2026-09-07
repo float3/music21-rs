@@ -216,16 +216,20 @@ fn correlation(left: &[FloatType; 12], right: &[FloatType; 12]) -> FloatType {
 /// leader's score plus twice its lead over the next positive score; with no
 /// positive runner-up it is the leader's score, floored at zero.
 pub fn tonal_certainty(estimates: &[KeyEstimate]) -> FloatType {
-    let Some(leader) = estimates.first() else {
+    let scores: Vec<FloatType> = estimates.iter().map(KeyEstimate::score).collect();
+    tonal_certainty_from_scores(&scores)
+}
+
+/// The same measure over the scores alone, for a ranking that came from
+/// somewhere else — music21 hands its own analysis results around as keys
+/// carrying a `correlationCoefficient` rather than as estimates.
+pub fn tonal_certainty_from_scores(scores: &[FloatType]) -> FloatType {
+    let Some(leader) = scores.first().copied() else {
         return 0.0;
     };
-    let runner_up = estimates[1..]
-        .iter()
-        .map(KeyEstimate::score)
-        .find(|score| *score > 0.0);
-    match runner_up {
-        Some(second) => leader.score() + 2.0 * (leader.score() - second),
-        None => leader.score().max(0.0),
+    match scores[1..].iter().copied().find(|score| *score > 0.0) {
+        Some(second) => leader + 2.0 * (leader - second),
+        None => leader.max(0.0),
     }
 }
 

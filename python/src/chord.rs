@@ -8,7 +8,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
 
 use music21_rs::{
-    Chord as RsChord, Duration as RsDuration, Interval as RsInterval, Note as RsNote,
+    Chord as RsChord, Duration as RsDuration, Interval as RsInterval, Key as RsKey, Note as RsNote,
     Pitch as RsPitch, Volume as RsVolume,
 };
 
@@ -500,6 +500,55 @@ fn require_iterable(value: &Bound<'_, PyAny>, field: &str) -> PyResult<()> {
         )));
     }
     Ok(())
+}
+
+/// One pitch's place in a key: which degree it is, and how it is altered
+/// from that degree.
+type ScaleDegree = (Option<usize>, Option<Accidental>);
+
+/// The key a chord is in: its own, or the nearest one in the streams that
+/// hold it.
+///
+/// The search is music21's `getContextByClass`, since it is music21 that
+/// holds the streams — this crate models no such containment and wants
+/// none. A chord that is not living in one simply has no key.
+fn chord_key_in_force(chord: &Bound<'_, Chord>) -> PyResult<Option<RsKey>> {
+    if let Ok(own) = chord.getattr("key")
+        && !own.is_none()
+        && let Some(key) = key_value(&own)
+    {
+        return Ok(Some(key));
+    }
+    if !chord.hasattr("getContextByClass")? {
+        return Ok(None);
+    }
+    let found = chord.call_method1("getContextByClass", ("Scale",))?;
+    if found.is_none() {
+        return Ok(None);
+    }
+    Ok(key_value(&found))
+}
+
+/// The crate's key behind whatever key object this is.
+///
+/// A facade `Key` carries one already. Anything else is read off its tonic
+/// and mode, since a key found in a stream is as often music21's own as
+/// ours — the chord doctests build one without the key facade in place.
+fn key_value(value: &Bound<'_, PyAny>) -> Option<RsKey> {
+    if let Ok(key) = value.extract::<PyRef<'_, crate::key::Key>>() {
+        return Some(key.inner.clone());
+    }
+    let tonic = value.getattr("tonic").ok()?;
+    let name: String = tonic
+        .getattr("name")
+        .ok()
+        .and_then(|name| name.extract().ok())
+        .or_else(|| tonic.extract().ok())?;
+    let mode: Option<String> = value
+        .getattr("mode")
+        .ok()
+        .and_then(|mode| mode.extract().ok());
+    RsKey::from_tonic_mode(&name, mode.as_deref()).ok()
 }
 
 #[pymethods]
@@ -1371,14 +1420,32 @@ impl Chord {
         }
     }
 
-    /// music21's `scaleDegrees`, which reads the key off the stream the chord
-    /// sits in. A bare chord has no stream and no `key` of its own, so
-    /// music21 answers `None` and so does this. The crate's
-    /// `Chord::scale_degrees`, which takes the key as an argument, is what a
-    /// caller with a key in hand would use.
+    /// music21's `scaleDegrees`: what degree of the key each pitch is, and
+    /// how it is altered from that degree.
+    ///
+    /// The key comes from the chord's own `key` when it has one — a roman
+    /// numeral does — and otherwise from the nearest one in the streams the
+    /// chord sits in, which is where music21 looks for it. A chord in no
+    /// stream and with no key of its own has no answer, as upstream.
     #[getter]
-    fn scaleDegrees(&self) -> Option<Vec<(Option<usize>, Option<Accidental>)>> {
-        None
+    fn scaleDegrees(slf: &Bound<'_, Self>) -> PyResult<Option<Vec<ScaleDegree>>> {
+        let Some(key) = chord_key_in_force(slf)? else {
+            return Ok(None);
+        };
+        let Ok(scale) = key.as_scale() else {
+            return Ok(None);
+        };
+        let degrees = slf
+            .borrow()
+            .inner
+            .scale_degrees(&scale)
+            .map_err(chord_error)?;
+        Ok(Some(
+            degrees
+                .into_iter()
+                .map(|(degree, accidental)| (degree, accidental.map(Accidental::from_inner)))
+                .collect(),
+        ))
     }
 
     // ---- notation --------------------------------------------------------
