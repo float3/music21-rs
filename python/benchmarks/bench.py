@@ -84,6 +84,19 @@ def cases() -> list[Case]:
                  (lambda e=expression: [e(music21_rs.Chord(text)) for text in CHORDS]),
                  notes="5 chords"))
 
+    # The pattern a memo is for: several set-class questions of one chord,
+    # each of which would otherwise repeat the same table search.
+    def three_questions(builder):
+        def ask():
+            chord = builder("D3 F#3 A3 C4")
+            return (chord.forteClass, list(chord.primeForm), list(chord.intervalVector))
+        return ask
+
+    add(Case("Chord: forteClass + primeForm + intervalVector", "chord analysis",
+             three_questions(m21chord.Chord),
+             three_questions(music21_rs.Chord),
+             notes="one chord, three questions"))
+
     # ---- pitch and interval work -----------------------------------------
     add(Case("Pitch.transpose('M3')", "pitch",
              lambda: m21pitch.Pitch("C#4").transpose("M3").nameWithOctave,
