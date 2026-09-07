@@ -5,6 +5,7 @@
 
 passing = [
     "music21.duration.Duration.fullName",
+    "music21.duration.Duration.isComplex",
     "music21.duration.Duration.type",
     "music21.duration.DurationTuple",
     "music21.duration.DurationTuple.ordinal",
@@ -12,10 +13,13 @@ passing = [
     "music21.duration.GraceDuration",
     "music21.duration.Tuplet.__eq__",
     "music21.duration.Tuplet.augmentOrDiminish",
+    "music21.duration.Tuplet.durationActual",
+    "music21.duration.Tuplet.durationNormal",
     "music21.duration.Tuplet.fullName",
     "music21.duration.Tuplet.setDurationType",
     "music21.duration.Tuplet.setRatio",
     "music21.duration.Tuplet.totalTupletLength",
+    "music21.duration.Tuplet.tupletMultiplier",
     "music21.duration.convertQuarterLengthToType",
     "music21.duration.convertTypeToNumber",
     "music21.duration.convertTypeToQuarterLength",
@@ -24,6 +28,8 @@ passing = [
     "music21.duration.durationTupleFromTypeDots",
     "music21.duration.nextLargerType",
     "music21.duration.nextSmallerType",
+    "music21.duration.quarterConversion",
     "music21.duration.quarterLengthToClosestType",
+    "music21.duration.quarterLengthToNonPowerOf2Tuplet",
     "music21.duration.quarterLengthToTuplet",
 ]

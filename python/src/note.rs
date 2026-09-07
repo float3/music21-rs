@@ -8,8 +8,8 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
 
 use music21_rs::{
-    Duration as RsDuration, Note as RsNote, Notehead as RsNotehead, Pitch as RsPitch,
-    StemDirection as RsStemDirection,
+    Duration as RsDuration, DurationType as RsDurationType, Note as RsNote, Notehead as RsNotehead,
+    Pitch as RsPitch, StemDirection as RsStemDirection, Tuplet as RsTuplet,
 };
 
 use crate::interval::transpose_pitch_by_any;
@@ -26,10 +26,20 @@ pub const NAMES: &[&str] = &[
 ];
 
 /// The names the `note` facade replaces in `music21.duration`.
+/// Only `Duration` itself. `Tuplet`, `DurationTuple` and the module
+/// functions beside them are registered on the facade module but *not*
+/// swapped into music21's: music21's own are richer than these and already
+/// pass their docstrings, and replacing a working implementation with a
+/// thinner one costs more than it gains.
 pub const DURATION_NAMES: &[&str] = &["Duration"];
 
 pyo3::create_exception!(music21_rs_facade, NoteException, PyException);
 pyo3::create_exception!(music21_rs_facade, NotRestException, PyException);
+pyo3::create_exception!(music21_rs_facade, DurationException, PyException);
+
+fn duration_error(error: music21_rs::Error) -> PyErr {
+    DurationException::new_err(message(&error))
+}
 
 pub(crate) fn note_error(error: music21_rs::Error) -> PyErr {
     NoteException::new_err(message(&error))
@@ -40,6 +50,199 @@ pub(crate) fn note_error(error: music21_rs::Error) -> PyErr {
 /// from the one its `Note` methods raise.
 fn not_rest_error(error: music21_rs::Error) -> PyErr {
     NotRestException::new_err(message(&error))
+}
+
+/// One written note value inside a duration: music21's `DurationTuple`.
+///
+/// music21 makes this a `NamedTuple` of a type name, a dot count and the
+/// quarter length the two come to. The name is kept rather than the crate's
+/// `DurationType` so that the two music21 uses for a length it cannot write
+/// as a note — `zero` and `inexpressible` — have somewhere to go.
+#[pyclass(
+    name = "DurationTuple",
+    module = "music21.duration",
+    skip_from_py_object
+)]
+#[derive(Clone)]
+pub struct DurationTuple {
+    kind: String,
+    dots: u32,
+    quarter_length: f64,
+}
+
+impl DurationTuple {
+    pub(crate) fn of(kind: RsDurationType, dots: u32) -> Self {
+        Self {
+            kind: kind.music21_name().to_string(),
+            dots,
+            quarter_length: kind.quarter_length_with_dots(dots),
+        }
+    }
+
+    /// The tuple music21 reads a bare quarter length as: a note value with
+    /// dots when one fits, `zero` for nothing, and `inexpressible` for a
+    /// length no note value reaches.
+    pub(crate) fn from_quarter_length(quarter_length: f64) -> Self {
+        if quarter_length == 0.0 {
+            return Self {
+                kind: "zero".to_string(),
+                dots: 0,
+                quarter_length: 0.0,
+            };
+        }
+        match RsDuration::new(quarter_length)
+            .ok()
+            .and_then(|duration| duration.type_and_dots())
+        {
+            Some((kind, dots)) => Self::of(kind, dots),
+            None => Self {
+                kind: "inexpressible".to_string(),
+                dots: 0,
+                quarter_length,
+            },
+        }
+    }
+}
+
+#[pymethods]
+impl DurationTuple {
+    #[new]
+    #[pyo3(signature = (type_name, dots, quarterLength))]
+    fn new(type_name: String, dots: u32, quarterLength: f64) -> Self {
+        Self {
+            kind: type_name,
+            dots,
+            quarter_length: quarterLength,
+        }
+    }
+
+    #[getter]
+    fn r#type(&self) -> String {
+        self.kind.clone()
+    }
+
+    #[getter]
+    fn dots(&self) -> u32 {
+        self.dots
+    }
+
+    #[getter]
+    fn quarterLength(&self) -> f64 {
+        self.quarter_length
+    }
+
+    /// music21's `ordinal`: where the note value sits in the list running
+    /// from the duplex maxima down to the 2048th.
+    #[getter]
+    fn ordinal(&self) -> PyResult<usize> {
+        RsDurationType::from_music21_name(&self.kind)
+            .and_then(RsDurationType::ordinal)
+            .ok_or_else(|| {
+                DurationException::new_err(format!(
+                    "Could not determine durationNumber from {}",
+                    self.kind
+                ))
+            })
+    }
+
+    /// The same value scaled, read back as a written note value.
+    fn augmentOrDiminish(&self, amountToScale: f64) -> Self {
+        Self::from_quarter_length(self.quarter_length * amountToScale)
+    }
+
+    fn __eq__(&self, other: &Bound<'_, PyAny>) -> bool {
+        other.extract::<PyRef<'_, Self>>().is_ok_and(|other| {
+            other.kind == self.kind
+                && other.dots == self.dots
+                && other.quarter_length == self.quarter_length
+        })
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "DurationTuple(type='{}', dots={}, quarterLength={:?})",
+            self.kind, self.dots, self.quarter_length
+        )
+    }
+}
+
+/// music21's `duration.Tuplet`: so many notes written in the time of so
+/// many others.
+#[pyclass(name = "Tuplet", module = "music21.duration", skip_from_py_object)]
+#[derive(Clone)]
+pub struct Tuplet {
+    inner: RsTuplet,
+}
+
+impl Tuplet {
+    pub(crate) fn wrap(inner: RsTuplet) -> Self {
+        Self { inner }
+    }
+}
+
+#[pymethods]
+impl Tuplet {
+    #[new]
+    #[pyo3(signature = (numberNotesActual = 3, numberNotesNormal = 2, **_keywords))]
+    fn new(
+        numberNotesActual: u32,
+        numberNotesNormal: u32,
+        _keywords: Option<&Bound<'_, PyDict>>,
+    ) -> Self {
+        Self::wrap(RsTuplet::new(
+            numberNotesActual,
+            numberNotesNormal,
+            RsDurationType::Eighth,
+            0,
+        ))
+    }
+
+    #[getter]
+    fn numberNotesActual(&self) -> u32 {
+        self.inner.actual()
+    }
+
+    #[getter]
+    fn numberNotesNormal(&self) -> u32 {
+        self.inner.normal()
+    }
+
+    #[getter]
+    fn durationActual(&self) -> DurationTuple {
+        DurationTuple::of(self.inner.duration_type(), self.inner.dots())
+    }
+
+    #[getter]
+    fn durationNormal(&self) -> DurationTuple {
+        DurationTuple::of(self.inner.duration_type(), self.inner.dots())
+    }
+
+    /// music21's `tupletMultiplier`, `normal / actual`, as a `Fraction`.
+    fn tupletMultiplier<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        py.import("fractions")?
+            .getattr("Fraction")?
+            .call1((self.inner.normal(), self.inner.actual()))
+    }
+
+    #[getter]
+    fn fullName(&self) -> String {
+        self.inner.full_name()
+    }
+
+    fn __eq__(&self, other: &Bound<'_, PyAny>) -> bool {
+        other
+            .extract::<PyRef<'_, Self>>()
+            .is_ok_and(|other| other.inner == self.inner)
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "<music21.duration.Tuplet {}/{}/{}>",
+            self.inner.actual(),
+            self.inner.normal(),
+            self.inner.duration_type().music21_name()
+        )
+    }
 }
 
 /// music21's `duration.Duration`, over the crate's quarter-length duration.
@@ -182,6 +385,43 @@ impl Duration {
         let dots = self.inner.dots();
         self.inner = RsDuration::from_type_with_dots(kind, dots);
         Ok(())
+    }
+
+    /// music21's `components`: the written note values this length is made
+    /// of, tied together.
+    #[getter]
+    fn components<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
+        let components: Vec<DurationTuple> = self
+            .inner
+            .components()
+            .into_iter()
+            .map(|(kind, dots)| DurationTuple::of(kind, dots))
+            .collect();
+        PyTuple::new(py, components)
+    }
+
+    /// music21's `tuplets`: the one this length is written inside, when it
+    /// is written inside one.
+    #[getter]
+    fn tuplets<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
+        let tuplets: Vec<Tuplet> = self.inner.tuplet().map(Tuplet::wrap).into_iter().collect();
+        PyTuple::new(py, tuplets)
+    }
+
+    /// music21's `isComplex`: whether this length needs more than one
+    /// written value tied together.
+    #[getter]
+    fn isComplex(&self) -> bool {
+        self.inner.components().len() > 1
+    }
+
+    /// music21's `augmentOrDiminish`: the same length scaled, as a new
+    /// duration. A scalar of zero or less is refused, as music21 refuses it.
+    fn augmentOrDiminish(&self, amountToScale: f64) -> PyResult<Self> {
+        self.inner
+            .augment_or_diminish(amountToScale)
+            .map(Self::wrap)
+            .map_err(duration_error)
     }
 
     #[getter]
@@ -938,10 +1178,33 @@ impl Note {
     }
 }
 
+/// music21's `durationTupleFromQuarterLength`.
+#[pyfunction]
+#[pyo3(name = "durationTupleFromQuarterLength", signature = (ql = 1.0))]
+fn durationTupleFromQuarterLength(ql: f64) -> DurationTuple {
+    DurationTuple::from_quarter_length(ql)
+}
+
+/// music21's `durationTupleFromTypeDots`.
+#[pyfunction]
+#[pyo3(name = "durationTupleFromTypeDots", signature = (durType = "quarter".to_string(), dots = 0))]
+fn durationTupleFromTypeDots(durType: String, dots: u32) -> PyResult<DurationTuple> {
+    let kind = RsDurationType::from_music21_name(&durType)
+        .ok_or_else(|| DurationException::new_err(format!("no such duration type: {durType}")))?;
+    Ok(DurationTuple::of(kind, dots))
+}
+
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let py = m.py();
     m.add_class::<Note>()?;
     m.add_class::<Duration>()?;
+    m.add_class::<DurationTuple>()?;
+    m.add_class::<Tuplet>()?;
+    let duration_exception = py.get_type::<DurationException>();
+    duration_exception.setattr("__module__", "music21.duration")?;
+    m.add("DurationException", duration_exception)?;
+    m.add_function(wrap_pyfunction!(durationTupleFromQuarterLength, m)?)?;
+    m.add_function(wrap_pyfunction!(durationTupleFromTypeDots, m)?)?;
     let exception = py.get_type::<NoteException>();
     exception.setattr("__module__", "music21.note")?;
     m.add("NoteException", exception)?;

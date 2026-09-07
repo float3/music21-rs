@@ -268,6 +268,17 @@ pub struct Tuplet {
 }
 
 impl Tuplet {
+    /// A tuplet of `actual` notes of a written value in the time of
+    /// `normal` of them.
+    pub fn new(actual: u32, normal: u32, duration_type: DurationType, dots: u32) -> Self {
+        Self {
+            actual,
+            normal,
+            duration_type,
+            dots,
+        }
+    }
+
     /// How many notes are played: music21's `numberNotesActual`.
     pub fn actual(&self) -> u32 {
         self.actual
