@@ -108,7 +108,8 @@ pub use roman::{
     roman_inversion_name,
 };
 pub use scale::{
-    BluesForm, DiatonicScale, Scale, ScaleType, SolfegVariant, StepScale, WeightedHexatonicBlues,
+    BluesForm, DegreeComparison, DiatonicScale, Scale, ScaleType, SolfegVariant, StepScale,
+    WeightedHexatonicBlues,
 };
 pub use serial::{
     HISTORICAL_ROWS, HistoricalRow, IndexedTransformation, LinkClassification, ToneRow,

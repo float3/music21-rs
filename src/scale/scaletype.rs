@@ -346,21 +346,35 @@ impl ScaleType {
         pitches: &[Pitch],
         limit: Option<usize>,
     ) -> Result<Vec<(usize, Scale)>> {
+        self.derive_ranked_by(pitches, limit, DegreeComparison::PitchClass)
+    }
+
+    /// The same, saying how a pitch is matched against a scale degree.
+    ///
+    /// By pitch class an `E#` is in C major, since the scale has an `F`; by
+    /// name it is not. music21 offers both, and its `deriveRanked` defaults
+    /// to the first.
+    pub fn derive_ranked_by(
+        self,
+        pitches: &[Pitch],
+        limit: Option<usize>,
+        comparison: DegreeComparison,
+    ) -> Result<Vec<(usize, Scale)>> {
         let targets = pitches
             .iter()
-            .map(|pitch| pitch.pitch_class().number())
+            .map(|pitch| comparison.key(pitch))
             .collect::<Vec<_>>();
         let mut ranked = Vec::with_capacity(SCALE_STARTS.len());
         for start in SCALE_STARTS {
             let scale = Scale::new(self, Pitch::from_name(start)?);
-            let classes = scale
+            let degrees = scale
                 .pitches()?
                 .iter()
-                .map(|pitch| pitch.pitch_class().number())
+                .map(|pitch| comparison.key(pitch))
                 .collect::<Vec<_>>();
             let matched = targets
                 .iter()
-                .filter(|target| classes.contains(target))
+                .filter(|target| degrees.contains(target))
                 .count();
             ranked.push((matched, scale));
         }
@@ -399,6 +413,27 @@ impl ScaleType {
 /// How many octaves of a scale [`Scale::pitches_between`] will walk, which
 /// is the whole of music21's pitch space and then some.
 const MAX_RANGE_OCTAVES: usize = 12;
+
+/// How a pitch is matched against a scale degree: music21's
+/// `comparisonAttribute`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum DegreeComparison {
+    /// By sounding note, so `E#` matches the `F` of C major.
+    PitchClass,
+    /// By written note, so it does not.
+    Name,
+}
+
+impl DegreeComparison {
+    /// What two pitches have to share to count as the same degree.
+    fn key(self, pitch: &Pitch) -> String {
+        match self {
+            Self::PitchClass => pitch.pitch_class().number().to_string(),
+            Self::Name => pitch.name(),
+        }
+    }
+}
 
 /// A named scale realized from a tonic pitch.
 ///

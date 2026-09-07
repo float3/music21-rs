@@ -19,6 +19,7 @@ passing = [
     "music21.scale.ConcreteScale.isNext",
     "music21.scale.ConcreteScale.nextPitch",
     "music21.scale.ConcreteScale.pitchFromDegree",
+    "music21.scale.ConcreteScale.solfeg",
     "music21.scale.ConcreteScale.transpose",
     "music21.scale.CyclicalScale",
     "music21.scale.DiatonicScale.getDominant",

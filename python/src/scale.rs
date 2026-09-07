@@ -14,7 +14,8 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyTuple, PyType};
 
 use music21_rs::scale::{
-    Scale as RsScale, ScaleType as RsScaleType, SolfegVariant as RsSolfegVariant,
+    DegreeComparison as RsDegreeComparison, Scale as RsScale, ScaleType as RsScaleType,
+    SolfegVariant as RsSolfegVariant,
 };
 use music21_rs::{Interval as RsInterval, Pitch as RsPitch};
 
@@ -90,7 +91,13 @@ impl Scale {
     }
 
     /// music21's `extractPitchList`: the pitches out of anything that has
-    /// them — a list of pitches or names, or notes, or a stream of notes.
+    /// them — a scale, a chord or a stream, or a list of pitches, names or
+    /// notes.
+    ///
+    /// Duplicates go by default, judged on whichever attribute is named, and
+    /// what survives is given octave 4 if it had none. Keeping the list as
+    /// given is what `removeDuplicates=False` is for, and that skips the
+    /// octave too, exactly as upstream.
     #[staticmethod]
     #[pyo3(signature = (other, comparisonAttribute = "nameWithOctave", removeDuplicates = true))]
     fn extractPitchList(
@@ -98,23 +105,27 @@ impl Scale {
         comparisonAttribute: &str,
         removeDuplicates: bool,
     ) -> PyResult<Vec<Pitch>> {
+        let read = pitch_list(other)?;
+        if !removeDuplicates {
+            return Ok(wrap_pitches(read));
+        }
         let mut pitches = Vec::new();
         let mut seen: Vec<String> = Vec::new();
-        for pitch in pitch_list(other)? {
-            if removeDuplicates {
-                let key = match comparisonAttribute {
-                    "name" => pitch.name(),
-                    "pitchClass" => pitch.pitch_class().number().to_string(),
-                    _ => pitch.name_with_octave(),
-                };
-                if seen.contains(&key) {
-                    continue;
-                }
-                seen.push(key);
+        for pitch in read {
+            let key = match comparisonAttribute {
+                "name" => pitch.name(),
+                // A pitch's step is the letter its name starts with.
+                "step" => pitch.name().chars().take(1).collect(),
+                "pitchClass" => pitch.pitch_class().number().to_string(),
+                _ => pitch.name_with_octave(),
+            };
+            if seen.contains(&key) {
+                continue;
             }
-            pitches.push(Pitch::wrap(pitch, false));
+            seen.push(key);
+            pitches.push(pitch);
         }
-        Ok(pitches)
+        Ok(wrap_pitches(pitches))
     }
 }
 
@@ -302,17 +313,39 @@ impl ConcreteScale {
 
     /// music21's `abstract`: the pattern of steps this scale stands on,
     /// which here is the scale type it was built with.
+    ///
+    /// Setting it changes the pattern and keeps the tonic, which is how
+    /// music21 turns a scale of one kind into a scale of another.
     #[getter]
     fn get_abstract(&self) -> String {
         self.inner.scale_type().music21_name().to_string()
     }
 
+    #[setter]
+    fn set_abstract(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        let name = match value.extract::<String>() {
+            Ok(name) => name,
+            Err(_) => value.get_type().name()?.extract()?,
+        };
+        let name = name.strip_prefix("Abstract").unwrap_or(&name).to_string();
+        let scale_type = RsScaleType::from_music21_name(&name)
+            .or_else(|| RsScaleType::from_music21_name(&format!("{name}Scale")))
+            .ok_or_else(|| ScaleException::new_err(format!("no such scale type: {name}")))?;
+        self.inner = RsScale::new(scale_type, self.inner.tonic().clone());
+        Ok(())
+    }
+
     /// music21's `deriveRanked`: the scales of this pattern containing the
     /// most of the given pitches, best first, each with how many it matched.
-    #[pyo3(signature = (other, **_keywords))]
+    ///
+    /// Only the first four by default, as upstream, and matched by sounding
+    /// note unless asked for written ones.
+    #[pyo3(signature = (other, *, resultsReturned = 4, comparisonAttribute = "pitchClass", **_keywords))]
     fn deriveRanked(
         slf: &Bound<'_, Self>,
         other: &Bound<'_, PyAny>,
+        resultsReturned: Option<usize>,
+        comparisonAttribute: &str,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Vec<(usize, Py<PyAny>)>> {
         let pitches = pitch_list(other)?;
@@ -320,7 +353,11 @@ impl ConcreteScale {
             .borrow()
             .inner
             .scale_type()
-            .derive_ranked(&pitches, None)
+            .derive_ranked_by(
+                &pitches,
+                resultsReturned,
+                comparison_of(comparisonAttribute),
+            )
             .map_err(scale_error)?;
         ranked
             .into_iter()
@@ -669,10 +706,35 @@ impl DiatonicScale {
     }
 }
 
-/// Reads a sequence of pitches, or a stream of notes, as pitches.
+/// music21's `comparisonAttribute`: whether a pitch matches a degree by
+/// sounding note or by written one.
+fn comparison_of(attribute: &str) -> RsDegreeComparison {
+    match attribute {
+        "name" | "nameWithOctave" | "step" => RsDegreeComparison::Name,
+        _ => RsDegreeComparison::PitchClass,
+    }
+}
+
+/// Reads pitches out of whatever holds them.
+///
+/// Anything with a `pitches` list — another scale, a chord, a stream — is
+/// asked for that first, which is how music21 lets one scale be matched
+/// against another; then a sequence of pitches, names or notes; then a
+/// single thing with a pitch.
 fn pitch_list(value: &Bound<'_, PyAny>) -> PyResult<Vec<RsPitch>> {
+    if let Ok(pitches) = value.getattr("pitches")
+        && !pitches.is_none()
+    {
+        return pitches
+            .try_iter()?
+            .map(|pitch| pitch_from_any(&pitch?))
+            .collect();
+    }
+    let Ok(items) = value.try_iter() else {
+        return Ok(vec![pitch_from_any(&value.getattr("pitch")?)?]);
+    };
     let mut pitches = Vec::new();
-    for item in value.try_iter()? {
+    for item in items {
         let item = item?;
         match item.getattr("pitch") {
             Ok(pitch) if !pitch.is_none() => pitches.push(pitch_from_any(&pitch)?),

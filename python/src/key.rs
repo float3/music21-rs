@@ -5,9 +5,11 @@
 
 use pyo3::exceptions::{PyException, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList};
+use pyo3::types::{PyDict, PyList, PyTuple};
 
-use music21_rs::scale::{Scale as RsScale, ScaleType as RsScaleType};
+use music21_rs::scale::{
+    Scale as RsScale, ScaleType as RsScaleType, SolfegVariant as RsSolfegVariant,
+};
 
 use crate::scale::ConcreteScale;
 
@@ -504,6 +506,74 @@ impl Key {
     #[getter]
     fn parallel(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         Key::object(py, self.inner.parallel().map_err(key_error)?)
+    }
+
+    /// music21's `getScaleDegreeFromPitch`: which degree of this key a pitch
+    /// is, or nothing when it is not in it.
+    ///
+    /// A key *is* a scale upstream — music21's `Key` inherits from
+    /// `DiatonicScale` — so the questions a scale answers, it answers too.
+    #[pyo3(signature = (pitchTarget, comparisonAttribute = "name", **_keywords))]
+    fn getScaleDegreeFromPitch(
+        &self,
+        pitchTarget: &Bound<'_, PyAny>,
+        comparisonAttribute: &str,
+        _keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Option<usize>> {
+        let scale = self.inner.as_scale().map_err(key_error)?;
+        let pitch = pitch_from_any(pitchTarget)?;
+        let degree = match comparisonAttribute {
+            "pitchClass" => scale.degree_of_pitch_class(&pitch),
+            _ => scale.degree_of(&pitch),
+        };
+        degree.map_err(key_error)
+    }
+
+    /// music21's `getScaleDegreeAndAccidentalFromPitch`: the degree, and how
+    /// far the pitch is altered from it.
+    #[pyo3(signature = (pitchTarget, **_keywords))]
+    fn getScaleDegreeAndAccidentalFromPitch(
+        &self,
+        py: Python<'_>,
+        pitchTarget: &Bound<'_, PyAny>,
+        _keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Py<PyAny>> {
+        let scale = self.inner.as_scale().map_err(key_error)?;
+        let (degree, accidental) = scale
+            .degree_and_accidental_of(&pitch_from_any(pitchTarget)?)
+            .map_err(key_error)?;
+        let accidental = match accidental {
+            Some(accidental) => crate::pitch::Accidental::from_inner(accidental)
+                .into_pyobject(py)?
+                .into_any(),
+            None => py.None().into_bound(py),
+        };
+        Ok(
+            PyTuple::new(py, [degree.into_pyobject(py)?.into_any(), accidental])?
+                .into_any()
+                .unbind(),
+        )
+    }
+
+    /// music21's `solfeg`: the syllable for a pitch's degree in this key.
+    #[pyo3(signature = (pitchTarget = None, *, variant = "music21", chromatic = true, **_keywords))]
+    fn solfeg(
+        &self,
+        pitchTarget: Option<&Bound<'_, PyAny>>,
+        variant: &str,
+        chromatic: bool,
+        _keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<String> {
+        let scale = self.inner.as_scale().map_err(key_error)?;
+        let pitch = match pitchTarget.filter(|value| !value.is_none()) {
+            Some(value) => pitch_from_any(value)?,
+            None => self.inner.tonic(),
+        };
+        let variant = match variant {
+            "humdrum" => RsSolfegVariant::Humdrum,
+            _ => RsSolfegVariant::Music21,
+        };
+        scale.solfeg(&pitch, variant, chromatic).map_err(key_error)
     }
 
     /// music21's `abstract`: the pattern of steps the key reads its degrees
