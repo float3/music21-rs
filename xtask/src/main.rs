@@ -125,7 +125,9 @@ fn print_help() {
     eprintln!("  cargo run -p xtask -- verify-scala-archive");
     eprintln!("  cargo run -p xtask -- regenerate-fixtures");
     eprintln!("  cargo run -p xtask --features python -- regenerate-all");
-    eprintln!("  cargo run -p xtask -- report [--out DIR] [--coverage-only|--features-only]");
+    eprintln!(
+        "  cargo run -p xtask -- report [--out DIR] [--coverage-only|--features-only|--suites-only|--no-suites] [--from-json FILE]"
+    );
 }
 
 /// Regenerates every music21 expectation fixture under `data/`.

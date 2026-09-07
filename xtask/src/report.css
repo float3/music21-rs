@@ -1,0 +1,569 @@
+/* The reports page. Everything here is scoped to `.page-reports`, so the
+   shared site theme (`examples/web/theme.css`) stays the source of the
+   colours and this file only says how the report is laid out. */
+
+body.page-reports {
+    --shell-width: 1120px;
+}
+
+.page-reports code {
+    font-family:
+        ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.92em;
+    color: var(--mono);
+}
+
+/* ---- masthead ---------------------------------------------------------- */
+
+.page-reports header {
+    margin-bottom: 10px;
+}
+
+.report-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 12px;
+    margin: 0 0 22px;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.report-meta code {
+    padding: 2px 7px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--panel);
+    font-size: 12px;
+}
+
+.report-meta .sep {
+    color: var(--line);
+}
+
+/* ---- scoreboard -------------------------------------------------------- */
+
+.scoreboard {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 14px;
+    margin-bottom: 24px;
+}
+
+.score {
+    display: grid;
+    align-content: start;
+    /* A partial report — `--features-only`, say — has fewer figures, and they
+       should not stretch across the page to fill the row. */
+    max-width: 340px;
+    gap: 7px;
+    padding: 16px 18px 18px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--panel);
+    box-shadow: var(--shadow);
+    color: inherit;
+    text-decoration: none;
+}
+
+a.score:hover {
+    border-color: var(--accent);
+}
+
+.score .label {
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.score .value {
+    font-size: 34px;
+    font-weight: 800;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+
+.score.is-warn .value {
+    color: var(--warn);
+}
+
+.score .sub {
+    color: var(--muted);
+    font-size: 13px;
+}
+
+/* ---- meters ------------------------------------------------------------ */
+
+.meter {
+    height: 6px;
+    margin-top: 3px;
+    border-radius: 999px;
+    background: var(--line);
+    overflow: hidden;
+}
+
+.meter > span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--accent);
+}
+
+.meter.is-warn > span {
+    background: var(--warn);
+}
+
+.meter.is-slim {
+    height: 5px;
+    margin: 0;
+}
+
+/* ---- section navigation ------------------------------------------------ */
+
+.section-nav {
+    position: sticky;
+    top: 12px;
+    z-index: 5;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 0 0 22px;
+    padding: 5px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--panel);
+    box-shadow: var(--shadow);
+}
+
+.section-nav a {
+    padding: 7px 15px;
+    border-radius: 999px;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 750;
+    text-decoration: none;
+}
+
+.section-nav a:hover,
+.section-nav a.is-current {
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+}
+
+/* ---- sections ---------------------------------------------------------- */
+
+.page-reports section {
+    margin-bottom: 20px;
+    overflow: hidden;
+    scroll-margin-top: 78px;
+}
+
+.page-reports section h2 {
+    border-bottom: 0;
+    background: none;
+    font-size: 17px;
+}
+
+.section-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 4px 20px;
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel-soft);
+}
+
+.section-head .head-note {
+    margin: 0;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.section-body {
+    padding: 18px 20px;
+}
+
+.section-foot {
+    margin: 0;
+    padding: 14px 20px 16px;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.55;
+}
+
+/* ---- tables ------------------------------------------------------------ */
+
+.table-wrap {
+    overflow-x: auto;
+}
+
+.page-reports table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+}
+
+.page-reports th {
+    padding: 9px 14px;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-align: left;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.page-reports td {
+    padding: 9px 14px;
+    vertical-align: middle;
+}
+
+.page-reports tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.page-reports tfoot td {
+    border-top: 1px solid var(--line);
+    border-bottom: 0;
+    background: var(--panel-soft);
+    font-weight: 800;
+}
+
+.table-wrap > table th:first-child,
+.table-wrap > table td:first-child {
+    padding-left: 20px;
+}
+
+.table-wrap > table th:last-child,
+.table-wrap > table td:last-child {
+    padding-right: 20px;
+}
+
+.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.name {
+    font-weight: 750;
+    white-space: nowrap;
+}
+
+.detail {
+    display: block;
+    margin-top: 3px;
+    color: var(--muted);
+    font-size: 12.5px;
+    font-weight: 400;
+    white-space: normal;
+}
+
+/* A cell holding "n of m" beside the bar that says the same thing. */
+.progress-cell {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.progress-cell .meter {
+    flex: none;
+    width: 96px;
+}
+
+.of {
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+/* ---- status pills ------------------------------------------------------ */
+
+.pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border: 1px solid var(--muted-line);
+    border-radius: 999px;
+    background: var(--muted-soft);
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.pill::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.pill.good {
+    border-color: var(--accent-line);
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+}
+
+.pill.bad {
+    border-color: var(--warn-line);
+    background: var(--warn-soft);
+    color: var(--warn-strong);
+}
+
+/* ---- coverage ---------------------------------------------------------- */
+
+.coverage-grid {
+    display: grid;
+    gap: 16px;
+}
+
+.coverage-row {
+    display: grid;
+    grid-template-columns: 92px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 16px;
+}
+
+.coverage-row .label {
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.coverage-row .figure {
+    font-size: 15px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+}
+
+.coverage-row .figure small {
+    margin-left: 8px;
+    color: var(--muted);
+    font-size: 12.5px;
+    font-weight: 400;
+}
+
+/* ---- the ported list --------------------------------------------------- */
+
+.toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    padding: 13px 20px;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel-softer);
+}
+
+.toolbar input[type="search"] {
+    flex: 1 1 240px;
+    min-width: 0;
+    padding: 8px 12px;
+    border-radius: 8px;
+}
+
+.toolbar label.check {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 750;
+    cursor: pointer;
+}
+
+.toolbar .button-link {
+    padding: 8px 13px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 750;
+}
+
+.toolbar .tally {
+    flex: 1 1 auto;
+    color: var(--muted);
+    font-size: 13px;
+    text-align: right;
+}
+
+.class-item {
+    border-bottom: 1px solid var(--line);
+}
+
+.class-item:last-of-type {
+    border-bottom: 0;
+}
+
+.class-item > summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 84px 96px 172px;
+    align-items: center;
+    gap: 18px;
+    padding: 11px 20px;
+    cursor: pointer;
+    list-style: none;
+}
+
+.class-item > summary::-webkit-details-marker {
+    display: none;
+}
+
+.class-item > summary:hover {
+    background: var(--row-hover);
+}
+
+.class-name {
+    display: flex;
+    align-items: baseline;
+    gap: 9px;
+    min-width: 0;
+}
+
+.class-name .caret {
+    flex: none;
+    align-self: center;
+    width: 8px;
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1;
+    transition: transform 120ms ease;
+}
+
+.class-item[open] > summary .caret {
+    transform: rotate(90deg);
+}
+
+.class-name b {
+    font-size: 14.5px;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.class-name .path {
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.class-item > summary > .of {
+    text-align: right;
+}
+
+.class-counts {
+    display: flex;
+    justify-content: end;
+    gap: 6px;
+}
+
+.class-body {
+    padding: 2px 20px 18px;
+}
+
+.class-body .note {
+    margin: 0 0 12px;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.class-body table {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.class-body th:first-child,
+.class-body td:first-child {
+    width: 30%;
+}
+
+.class-body th:nth-child(2),
+.class-body td:nth-child(2) {
+    width: 130px;
+}
+
+.class-body th {
+    background: var(--panel-soft);
+}
+
+.empty-note {
+    margin: 0;
+    padding: 22px 20px;
+    color: var(--muted);
+    font-size: 13px;
+    text-align: center;
+}
+
+/* The filter needs script; without it the whole list is simply shown. */
+.no-js .toolbar {
+    display: none;
+}
+
+/* ---- narrow screens ---------------------------------------------------- */
+
+@media (max-width: 760px) {
+    .section-nav {
+        border-radius: 12px;
+    }
+
+    .section-head,
+    .section-body,
+    .toolbar {
+        padding-inline: 15px;
+    }
+
+    .table-wrap > table th:first-child,
+    .table-wrap > table td:first-child {
+        padding-left: 15px;
+    }
+
+    .table-wrap > table th:last-child,
+    .table-wrap > table td:last-child {
+        padding-right: 15px;
+    }
+
+    .class-item > summary {
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 9px 14px;
+        padding: 12px 15px;
+    }
+
+    .class-item > summary > .of {
+        text-align: left;
+    }
+
+    .class-counts {
+        justify-content: start;
+    }
+
+    .class-body {
+        padding-inline: 15px;
+    }
+
+    .coverage-row {
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px 12px;
+    }
+
+    .coverage-row .meter {
+        grid-column: 1 / -1;
+    }
+}

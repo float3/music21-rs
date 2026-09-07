@@ -70,7 +70,7 @@ enum Members {
     Classes,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct Report {
     generated_from: String,
     music21_version: String,
@@ -91,7 +91,7 @@ struct DoctestSummary {
 }
 
 /// How much of one music21 module's own documentation runs against the crate.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct ModuleDoctests {
     name: String,
     module: String,
@@ -102,7 +102,7 @@ struct ModuleDoctests {
 }
 
 /// One runnable test suite, and what came of running it.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct Suite {
     name: String,
     command: String,
@@ -113,7 +113,7 @@ struct Suite {
     detail: Option<String>,
 }
 
-#[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 enum SuiteStatus {
     Passed,
@@ -131,21 +131,21 @@ impl SuiteStatus {
     }
 }
 
-#[derive(Debug, Serialize, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 struct Coverage {
     lines: Percent,
     functions: Percent,
     regions: Percent,
 }
 
-#[derive(Debug, Serialize, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 struct Percent {
     count: u64,
     covered: u64,
     percent: f64,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct ClassReport {
     python: String,
     name: String,
@@ -156,7 +156,7 @@ struct ClassReport {
     members: Vec<MemberReport>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct MemberReport {
     name: String,
     status: Status,
@@ -164,7 +164,7 @@ struct MemberReport {
     detail: Option<String>,
 }
 
-#[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 enum Status {
     Ported,
@@ -177,6 +177,10 @@ pub(crate) struct Options {
     pub coverage: bool,
     pub suites: bool,
     pub features: bool,
+    /// Re-render the page from a `report.json` an earlier run wrote, measuring
+    /// nothing. Working on the page's layout otherwise means waiting for
+    /// coverage and every suite to run again.
+    pub from_json: Option<PathBuf>,
 }
 
 pub(crate) fn parse_options(workspace_root: &Path, args: &[String]) -> Result<Options, String> {
@@ -185,6 +189,7 @@ pub(crate) fn parse_options(workspace_root: &Path, args: &[String]) -> Result<Op
         coverage: true,
         suites: true,
         features: true,
+        from_json: None,
     };
     let mut args = args.iter();
     while let Some(arg) = args.next() {
@@ -206,6 +211,10 @@ pub(crate) fn parse_options(workspace_root: &Path, args: &[String]) -> Result<Op
                 options.features = false;
             }
             "--no-suites" => options.suites = false,
+            "--from-json" => {
+                let path = args.next().ok_or("--from-json needs a report.json")?;
+                options.from_json = Some(workspace_root.join(path));
+            }
             other => return Err(format!("unknown report option {other:?}")),
         }
     }
@@ -214,6 +223,14 @@ pub(crate) fn parse_options(workspace_root: &Path, args: &[String]) -> Result<Op
 
 pub(crate) fn report(workspace_root: &Path, options: &Options) -> Result<(), Box<dyn Error>> {
     fs::create_dir_all(&options.out)?;
+
+    if let Some(path) = &options.from_json {
+        let report: Report = serde_json::from_str(&fs::read_to_string(path)?)?;
+        let page = options.out.join("index.html");
+        fs::write(&page, render_html(&report))?;
+        println!("wrote {} from {}", page.display(), path.display());
+        return Ok(());
+    }
 
     let coverage = if options.coverage {
         Some(measure_coverage(workspace_root, &options.out)?)
@@ -937,91 +954,486 @@ fn escape(text: &str) -> String {
         .replace('"', "&quot;")
 }
 
+/// The page's own layout, inlined so the report is one self-contained file.
+/// Colours come from the site theme it links to.
+const STYLE: &str = include_str!("report.css");
+
+/// Filtering the ported list and highlighting the section in view. The page
+/// is complete without it.
+const SCRIPT: &str = include_str!("report.js");
+
+/// `1 suite`, `3 suites` — the report says these counts out loud often enough
+/// to be worth getting right, and one of the nouns is `class`.
+fn plural(count: usize, one: &str, many: &str) -> String {
+    if count == 1 {
+        format!("{count} {one}")
+    } else {
+        format!("{count} {many}")
+    }
+}
+
+fn share(part: usize, whole: usize) -> f64 {
+    if whole == 0 {
+        0.0
+    } else {
+        100.0 * part as f64 / whole as f64
+    }
+}
+
+/// A progress bar. `warn` paints it in the warning colour, for a figure that
+/// is a shortfall rather than an achievement.
+fn meter(percent: f64, warn: bool, extra_class: &str) -> String {
+    let warn = if warn { " is-warn" } else { "" };
+    format!(
+        "<div class=\"meter{warn}{extra}\"><span style=\"width: {percent:.1}%\"></span></div>",
+        extra = if extra_class.is_empty() {
+            String::new()
+        } else {
+            format!(" {extra_class}")
+        },
+    )
+}
+
+/// One headline figure at the top of the page, linking to the section it
+/// summarises.
+struct Score {
+    anchor: &'static str,
+    label: &'static str,
+    value: String,
+    sub: String,
+    /// The bar under the figure, if the figure is a proportion.
+    percent: Option<f64>,
+    warn: bool,
+}
+
+impl Score {
+    fn render(&self) -> String {
+        let bar = match self.percent {
+            Some(percent) => meter(percent, self.warn, ""),
+            None => String::new(),
+        };
+        format!(
+            r##"                <a class="score{warn}" href="#{anchor}">
+                    <span class="label">{label}</span>
+                    <span class="value">{value}</span>
+                    <span class="sub">{sub}</span>
+                    {bar}
+                </a>
+"##,
+            warn = if self.warn { " is-warn" } else { "" },
+            anchor = self.anchor,
+            label = self.label,
+            value = self.value,
+            sub = self.sub,
+        )
+    }
+}
+
+/// The head of a `<section>`: its title, and the one line that says what the
+/// numbers in it are counting.
+fn section_head(anchor: &str, title: &str, note: &str) -> String {
+    format!(
+        r#"            <section id="{anchor}">
+                <div class="section-head">
+                    <h2>{title}</h2>
+                    <p class="head-note">{note}</p>
+                </div>
+"#
+    )
+}
+
+fn render_coverage(coverage: &Coverage) -> String {
+    let mut html = section_head(
+        "coverage",
+        "Test coverage",
+        "the library's own unit tests, generated tables left out",
+    );
+    html.push_str("                <div class=\"section-body\">\n                    <div class=\"coverage-grid\">\n");
+    for (label, percent) in [
+        ("Lines", coverage.lines),
+        ("Functions", coverage.functions),
+        ("Regions", coverage.regions),
+    ] {
+        let _ = write!(
+            html,
+            r#"                        <div class="coverage-row">
+                            <span class="label">{label}</span>
+                            {bar}
+                            <span class="figure">{value:.1}%<small>{covered} of {count}</small></span>
+                        </div>
+"#,
+            bar = meter(percent.percent, false, ""),
+            value = percent.percent,
+            covered = percent.covered,
+            count = percent.count,
+        );
+    }
+    html.push_str("                    </div>\n                </div>\n");
+    html.push_str(
+        "                <p class=\"section-foot\">Measured by <code>cargo llvm-cov</code> over <code>cargo test --lib</code>, with the generated chord and Scala tables excluded — they are data, and counting their thousands of lines would say nothing about the code. <a href=\"./coverage/html/index.html\">Read it file by file</a>.</p>\n            </section>\n",
+    );
+    html
+}
+
+fn render_suites(suites: &[Suite]) -> String {
+    let passed: usize = suites.iter().map(|s| s.passed).sum();
+    let failed: usize = suites.iter().map(|s| s.failed).sum();
+    let skipped = suites
+        .iter()
+        .filter(|s| s.status == SuiteStatus::Skipped)
+        .count();
+    let note = if failed > 0 {
+        format!("{failed} failing, {passed} passing")
+    } else if skipped > 0 {
+        format!(
+            "{passed} passing, {} not run here",
+            plural(skipped, "suite", "suites")
+        )
+    } else {
+        format!("{passed} passing, all green")
+    };
+    let mut html = section_head("suites", "Test suites", &escape(&note));
+    html.push_str(
+        r#"                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Suite</th><th>Result</th><th class="num">Passed</th><th class="num">Failed</th><th>Command</th></tr></thead>
+                        <tbody>
+"#,
+    );
+    for suite in suites {
+        let (pill, label) = match suite.status {
+            SuiteStatus::Passed => ("pill good", "passed"),
+            SuiteStatus::Failed => ("pill bad", "failed"),
+            SuiteStatus::Skipped => ("pill", "skipped"),
+        };
+        let detail = match (&suite.detail, suite.status) {
+            (Some(detail), SuiteStatus::Skipped) => {
+                format!("<span class=\"detail\">{}</span>", escape(detail))
+            }
+            (Some(detail), _) => format!(
+                "<span class=\"detail\"><code>{}</code></span>",
+                escape(detail)
+            ),
+            (None, _) => String::new(),
+        };
+        let count = |n: usize| {
+            if suite.status == SuiteStatus::Skipped || suite.passed + suite.failed == 0 {
+                "—".to_string()
+            } else {
+                n.to_string()
+            }
+        };
+        let _ = write!(
+            html,
+            r#"                            <tr>
+                                <td class="name">{name}{detail}</td>
+                                <td><span class="{pill}">{label}</span></td>
+                                <td class="num">{passed}</td>
+                                <td class="num">{failed}</td>
+                                <td><code>{command}</code></td>
+                            </tr>
+"#,
+            name = escape(&suite.name),
+            passed = count(suite.passed),
+            failed = count(suite.failed),
+            command = escape(&suite.command),
+        );
+    }
+    html.push_str(
+        "                        </tbody>\n                    </table>\n                </div>\n",
+    );
+    html.push_str(
+        "                <p class=\"section-foot\">Every suite the repository has, run when this report was generated. A suite whose tooling is not present is skipped rather than failed, and says why. The wheel's own tests import <code>music21_rs</code>, so they need the built wheel installed in the interpreter that runs them.</p>\n            </section>\n",
+    );
+    html
+}
+
+fn render_doctests(doctests: &[ModuleDoctests]) -> String {
+    let docstrings_passing: usize = doctests.iter().map(|m| m.docstrings_passing).sum();
+    let docstrings: usize = doctests.iter().map(|m| m.docstrings).sum();
+    let examples_passing: usize = doctests.iter().map(|m| m.examples_passing).sum();
+    let examples: usize = doctests.iter().map(|m| m.examples).sum();
+
+    let mut html = section_head(
+        "doctests",
+        "music21's own doctests",
+        &format!(
+            "{modules}, {examples_passing} of {examples} examples",
+            modules = plural(doctests.len(), "module", "modules")
+        ),
+    );
+    html.push_str(
+        r#"                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Module</th><th>Docstrings</th><th>Examples</th></tr></thead>
+                        <tbody>
+"#,
+    );
+    let cell = |passing: usize, total: usize| {
+        let percent = share(passing, total);
+        format!(
+            "<div class=\"progress-cell\"><span><b>{passing}</b> <span class=\"of\">of {total}</span></span>{bar}</div>",
+            bar = meter(percent, passing < total, "is-slim"),
+        )
+    };
+    for module in doctests {
+        let _ = write!(
+            html,
+            r#"                            <tr>
+                                <td class="name"><code>{module}</code></td>
+                                <td>{docstrings}</td>
+                                <td>{examples}</td>
+                            </tr>
+"#,
+            module = escape(&module.module),
+            docstrings = cell(module.docstrings_passing, module.docstrings),
+            examples = cell(module.examples_passing, module.examples),
+        );
+    }
+    let _ = write!(
+        html,
+        r#"                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <td class="name">every module</td>
+                                <td>{docstrings}</td>
+                                <td>{examples}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+"#,
+        docstrings = cell(docstrings_passing, docstrings),
+        examples = cell(examples_passing, examples),
+    );
+    html.push_str(
+        "                <p class=\"section-foot\">music21's own docstrings, collected from the submodule and run against the crate through the music21-shaped facades in <code>python-parity</code>. A docstring counts as passing only when every one of its examples does, which is why that share is always the harsher of the two. The failures of each module are written to <code>target/doctest_&lt;module&gt;.log</code>.</p>\n            </section>\n",
+    );
+    html
+}
+
+fn render_features(features: &[ClassReport]) -> String {
+    let ported: usize = features.iter().map(|c| c.ported).sum();
+    let missing: usize = features.iter().map(|c| c.missing).sum();
+    let excluded: usize = features.iter().map(|c| c.excluded).sum();
+    let total = ported + missing;
+
+    let note = if missing == 0 {
+        format!("{ported} of {total} members in scope, nothing outstanding")
+    } else {
+        format!("{missing} of {total} members in scope still to port")
+    };
+    let mut html = section_head("ported", "Ported from music21", &escape(&note));
+
+    let _ = write!(
+        html,
+        r#"                <div class="toolbar">
+                    <input type="search" data-filter-search placeholder="Filter by class, file or member name" aria-label="Filter the ported list" />
+                    <label class="check"><input type="checkbox" data-filter-incomplete /> Only incomplete</label>
+                    <button type="button" class="button-link" data-expand-all>Expand all</button>
+                    <button type="button" class="button-link" data-collapse-all>Collapse all</button>
+                    <span class="tally" data-filter-tally>{count}</span>
+                </div>
+                <div data-class-list>
+"#,
+        count = plural(features.len(), "class", "classes"),
+    );
+
+    for class in features {
+        let counted = class.ported + class.missing;
+        let percent = share(class.ported, counted);
+        let mut haystack = format!("{} {}", class.name, class.python).to_lowercase();
+        for member in &class.members {
+            haystack.push(' ');
+            haystack.push_str(&member.name.to_lowercase());
+        }
+        // A complete class says so with a full bar and its own count; only a
+        // shortfall or a deliberate omission is worth a pill of its own.
+        let mut pills = String::new();
+        if class.missing > 0 {
+            let _ = write!(
+                pills,
+                "<span class=\"pill bad\">{} missing</span>",
+                class.missing
+            );
+        }
+        if class.excluded > 0 {
+            let _ = write!(
+                pills,
+                "<span class=\"pill\">{} excluded</span>",
+                class.excluded
+            );
+        }
+        let _ = write!(
+            html,
+            r#"                    <details class="class-item" data-missing="{missing}" data-search="{haystack}">
+                        <summary>
+                            <span class="class-name"><span class="caret">&#9654;</span><b>{name}</b><span class="path"><code>{python}</code></span></span>
+                            <span class="of">{ported} of {counted}</span>
+                            {bar}
+                            <span class="class-counts">{pills}</span>
+                        </summary>
+                        <div class="class-body">
+"#,
+            missing = class.missing,
+            haystack = escape(&haystack),
+            name = escape(&class.name),
+            python = escape(&class.python),
+            ported = class.ported,
+            bar = meter(percent, class.missing > 0, ""),
+        );
+        if let Some(note) = &class.note {
+            let _ = writeln!(
+                html,
+                "                            <p class=\"note\">{}</p>",
+                escape(note)
+            );
+        }
+        html.push_str(
+            r#"                            <table>
+                                <thead><tr><th>music21</th><th>Status</th><th>music21-rs</th></tr></thead>
+                                <tbody>
+"#,
+        );
+        // Missing first: that list is the to-do list for porting.
+        let mut ordered: Vec<&MemberReport> = class.members.iter().collect();
+        ordered.sort_by_key(|member| match member.status {
+            Status::Missing => 0,
+            Status::Ported => 1,
+            Status::Excluded => 2,
+        });
+        for member in ordered {
+            let (pill, label, detail) = match member.status {
+                Status::Ported => (
+                    "pill good",
+                    "ported",
+                    format!(
+                        "<code>{}</code>",
+                        escape(member.detail.as_deref().unwrap_or(""))
+                    ),
+                ),
+                Status::Missing => ("pill bad", "missing", String::new()),
+                Status::Excluded => (
+                    "pill",
+                    "excluded",
+                    escape(member.detail.as_deref().unwrap_or("")),
+                ),
+            };
+            let _ = writeln!(
+                html,
+                "                                    <tr><td class=\"name\"><code>{name}</code></td><td><span class=\"{pill}\">{label}</span></td><td>{detail}</td></tr>",
+                name = escape(&member.name),
+            );
+        }
+        html.push_str(
+            "                                </tbody>\n                            </table>\n                        </div>\n                    </details>\n",
+        );
+    }
+
+    let _ = write!(
+        html,
+        r#"                    <p class="empty-note" data-filter-empty hidden>Nothing matches that filter.</p>
+                </div>
+                <p class="section-foot">Every public method of the music21 classes the crate ports, read from the submodule, against the <code>pub fn</code>s of the Rust files that port them. {excluded} members are left out on purpose and say why; the mapping lives in <code>data/feature_map.toml</code>, and the report fails when it goes stale.</p>
+            </section>
+"#
+    );
+    html
+}
+
 fn render_html(report: &Report) -> String {
+    let mut scores: Vec<Score> = Vec::new();
+    if let Some(coverage) = &report.coverage {
+        scores.push(Score {
+            anchor: "coverage",
+            label: "Line coverage",
+            value: format!("{:.1}%", coverage.lines.percent),
+            sub: format!(
+                "{} of {} lines",
+                coverage.lines.covered, coverage.lines.count
+            ),
+            percent: Some(coverage.lines.percent),
+            warn: false,
+        });
+    }
+    if !report.suites.is_empty() {
+        let passed: usize = report.suites.iter().map(|s| s.passed).sum();
+        let failed: usize = report.suites.iter().map(|s| s.failed).sum();
+        let skipped = report
+            .suites
+            .iter()
+            .filter(|s| s.status == SuiteStatus::Skipped)
+            .count();
+        let sub = if failed > 0 {
+            format!("passing, {failed} failing")
+        } else if skipped > 0 {
+            format!("passing, {} not run", plural(skipped, "suite", "suites"))
+        } else {
+            format!(
+                "passing, across {}",
+                plural(report.suites.len(), "suite", "suites")
+            )
+        };
+        scores.push(Score {
+            anchor: "suites",
+            label: "Tests",
+            value: passed.to_string(),
+            sub,
+            percent: Some(share(passed, passed + failed)),
+            warn: failed > 0,
+        });
+    }
+    if !report.doctests.is_empty() {
+        let passing: usize = report.doctests.iter().map(|m| m.examples_passing).sum();
+        let total: usize = report.doctests.iter().map(|m| m.examples).sum();
+        scores.push(Score {
+            anchor: "doctests",
+            label: "music21 doctests",
+            value: format!("{:.1}%", share(passing, total)),
+            sub: format!("{passing} of {total} examples"),
+            percent: Some(share(passing, total)),
+            warn: passing < total,
+        });
+    }
+    if !report.features.is_empty() {
+        let ported: usize = report.features.iter().map(|c| c.ported).sum();
+        let missing: usize = report.features.iter().map(|c| c.missing).sum();
+        let total = ported + missing;
+        scores.push(Score {
+            anchor: "ported",
+            label: "music21 API ported",
+            value: format!("{:.1}%", share(ported, total)),
+            sub: format!("{ported} of {total} members"),
+            percent: Some(share(ported, total)),
+            warn: missing > 0,
+        });
+    }
+
+    let nav: Vec<(&str, &str)> = [
+        ("coverage", "Coverage", report.coverage.is_some()),
+        ("suites", "Test suites", !report.suites.is_empty()),
+        ("doctests", "Doctests", !report.doctests.is_empty()),
+        ("ported", "Ported", !report.features.is_empty()),
+    ]
+    .into_iter()
+    .filter(|(_, _, present)| *present)
+    .map(|(anchor, label, _)| (anchor, label))
+    .collect();
+
     let mut html = String::new();
     let _ = write!(
         html,
         r#"<!doctype html>
-<html lang="en">
+<html lang="en" class="no-js">
     <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>music21-rs Reports</title>
         <link rel="stylesheet" href="../theme.css" />
         <style>
-            .summary {{
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-                gap: 18px;
-                margin-bottom: 24px;
-            }}
-            .summary .panel {{
-                padding: 18px;
-            }}
-            .summary .number {{
-                display: block;
-                font-size: 32px;
-                font-weight: 800;
-            }}
-            .summary .label {{
-                color: var(--muted);
-            }}
-            .bar {{
-                height: 8px;
-                border-radius: 4px;
-                background: var(--line);
-                overflow: hidden;
-                margin-top: 10px;
-            }}
-            .bar span {{
-                display: block;
-                height: 100%;
-                background: var(--accent-strong);
-            }}
-            details {{
-                margin-bottom: 14px;
-            }}
-            summary {{
-                cursor: pointer;
-                font-weight: 700;
-            }}
-            summary .count {{
-                color: var(--muted);
-                font-weight: 400;
-                margin-left: 8px;
-            }}
-            .status-ported {{
-                color: var(--accent-strong);
-            }}
-            .status-missing {{
-                color: var(--muted);
-            }}
-            .status-excluded {{
-                color: var(--muted);
-                font-style: italic;
-            }}
-            .status-passed {{
-                color: var(--accent-strong);
-                font-weight: 700;
-            }}
-            .status-failed {{
-                color: #d1344b;
-                font-weight: 700;
-            }}
-            .status-skipped {{
-                color: var(--muted);
-                font-style: italic;
-            }}
-            td code {{
-                font-size: 13px;
-            }}
-            .meta {{
-                color: var(--muted);
-                margin-bottom: 24px;
-            }}
-        </style>
+{style}        </style>
     </head>
-    <body>
+    <body class="page-reports">
         <main class="shell">
             <header>
                 <div class="title-row">
@@ -1032,267 +1444,59 @@ fn render_html(report: &Report) -> String {
                     <a href="../docs/music21_rs/index.html">Rust docs</a>
                 </div>
             </header>
-            <p class="meta">Generated from commit <code>{head}</code> against music21 {version}.</p>
+            <p class="report-meta">
+                <span>commit <code>{head}</code></span>
+                <span class="sep">/</span>
+                <span>music21 <code>{version}</code></span>
+            </p>
 "#,
+        style = STYLE,
         head = escape(&report.generated_from),
         version = escape(&report.music21_version),
     );
 
+    if !scores.is_empty() {
+        html.push_str("            <div class=\"scoreboard\">\n");
+        for score in &scores {
+            html.push_str(&score.render());
+        }
+        html.push_str("            </div>\n");
+    }
+
+    if nav.len() > 1 {
+        html.push_str("            <nav class=\"section-nav\" aria-label=\"Report sections\">\n");
+        for (anchor, label) in &nav {
+            let _ = writeln!(html, "                <a href=\"#{anchor}\">{label}</a>");
+        }
+        html.push_str("            </nav>\n");
+    }
+
     if let Some(coverage) = &report.coverage {
-        let _ = write!(
-            html,
-            "            <h2>Test coverage</h2>\n            <div class=\"summary\">\n"
-        );
-        for (label, percent) in [
-            ("lines", coverage.lines),
-            ("functions", coverage.functions),
-            ("regions", coverage.regions),
-        ] {
-            let _ = write!(
-                html,
-                r#"                <div class="panel">
-                    <span class="number">{:.1}%</span>
-                    <span class="label">of {label}, {} of {}</span>
-                    <div class="bar"><span style="width: {:.1}%"></span></div>
-                </div>
-"#,
-                percent.percent, percent.covered, percent.count, percent.percent
-            );
-        }
-        let _ = write!(
-            html,
-            "            </div>\n            <p>The library's own unit tests, measured by <code>cargo llvm-cov</code>, with the generated chord and Scala tables left out. <a href=\"./coverage/html/index.html\">File by file</a>.</p>\n"
-        );
+        html.push_str(&render_coverage(coverage));
     }
-
     if !report.suites.is_empty() {
-        let passed: usize = report.suites.iter().map(|s| s.passed).sum();
-        let failed: usize = report.suites.iter().map(|s| s.failed).sum();
-        let skipped = report
-            .suites
-            .iter()
-            .filter(|s| s.status == SuiteStatus::Skipped)
-            .count();
-        let headline = if failed > 0 {
-            format!("{failed} failing")
-        } else if skipped > 0 {
-            format!("{skipped} not run")
-        } else {
-            "all green".to_string()
-        };
-        let _ = write!(
-            html,
-            r#"            <h2>Test suites</h2>
-            <div class="summary">
-                <div class="panel">
-                    <span class="number">{passed}</span>
-                    <span class="label">tests passed</span>
-                </div>
-                <div class="panel">
-                    <span class="number">{failed}</span>
-                    <span class="label">tests failed</span>
-                </div>
-                <div class="panel">
-                    <span class="number">{headline}</span>
-                    <span class="label">across {count} suites</span>
-                </div>
-            </div>
-            <table>
-                <thead><tr><th>Suite</th><th>Status</th><th>Passed</th><th>Failed</th><th>Command</th></tr></thead>
-                <tbody>
-"#,
-            count = report.suites.len(),
-            headline = escape(&headline),
-        );
-        for suite in &report.suites {
-            let status = suite.status.label();
-            let note = match (&suite.detail, suite.status) {
-                (Some(detail), SuiteStatus::Skipped) => format!(" — {}", escape(detail)),
-                (Some(detail), _) => format!(" — <code>{}</code>", escape(detail)),
-                (None, _) => String::new(),
-            };
-            let count = |n: usize| {
-                if suite.status == SuiteStatus::Skipped || suite.passed + suite.failed == 0 {
-                    "—".to_string()
-                } else {
-                    n.to_string()
-                }
-            };
-            let _ = write!(
-                html,
-                r#"                    <tr>
-                        <td>{name}</td>
-                        <td><span class="status-{status}">{status}</span>{note}</td>
-                        <td>{passed}</td>
-                        <td>{failed}</td>
-                        <td><code>{command}</code></td>
-                    </tr>
-"#,
-                name = escape(&suite.name),
-                note = note,
-                passed = count(suite.passed),
-                failed = count(suite.failed),
-                command = escape(&suite.command),
-            );
-        }
-        let _ = write!(
-            html,
-            "                </tbody>\n            </table>\n            <p>Every suite the repository has, run when this report was generated. A suite whose tooling is not present is skipped rather than failed, and says so. The wheel's own tests import <code>music21_rs</code>, so they need the built wheel installed in the interpreter that runs them.</p>\n"
-        );
+        html.push_str(&render_suites(&report.suites));
     }
-
     if !report.doctests.is_empty() {
-        let docstrings_passing: usize = report.doctests.iter().map(|m| m.docstrings_passing).sum();
-        let docstrings: usize = report.doctests.iter().map(|m| m.docstrings).sum();
-        let examples_passing: usize = report.doctests.iter().map(|m| m.examples_passing).sum();
-        let examples: usize = report.doctests.iter().map(|m| m.examples).sum();
-        let share = |part: usize, whole: usize| {
-            if whole == 0 {
-                0.0
-            } else {
-                100.0 * part as f64 / whole as f64
-            }
-        };
-        let docstring_percent = share(docstrings_passing, docstrings);
-        let example_percent = share(examples_passing, examples);
-        let _ = write!(
-            html,
-            r#"            <h2>music21's own doctests</h2>
-            <div class="summary">
-                <div class="panel">
-                    <span class="number">{docstring_percent:.1}%</span>
-                    <span class="label">of docstrings, {docstrings_passing} of {docstrings}</span>
-                    <div class="bar"><span style="width: {docstring_percent:.1}%"></span></div>
-                </div>
-                <div class="panel">
-                    <span class="number">{example_percent:.1}%</span>
-                    <span class="label">of examples, {examples_passing} of {examples}</span>
-                    <div class="bar"><span style="width: {example_percent:.1}%"></span></div>
-                </div>
-                <div class="panel">
-                    <span class="number">{count}</span>
-                    <span class="label">modules covered</span>
-                </div>
-            </div>
-            <table>
-                <thead><tr><th>Module</th><th>Docstrings</th><th>Examples</th></tr></thead>
-                <tbody>
-"#,
-            count = report.doctests.len(),
-        );
-        for module in &report.doctests {
-            let doc_percent = share(module.docstrings_passing, module.docstrings).floor();
-            let ex_percent = share(module.examples_passing, module.examples).floor();
-            let _ = write!(
-                html,
-                r#"                    <tr>
-                        <td><code>{module}</code></td>
-                        <td>{dp} of {dt} <span class="count">({doc_percent:.0}%)</span></td>
-                        <td>{ep} of {et} <span class="count">({ex_percent:.0}%)</span></td>
-                    </tr>
-"#,
-                module = escape(&module.module),
-                dp = module.docstrings_passing,
-                dt = module.docstrings,
-                ep = module.examples_passing,
-                et = module.examples,
-            );
-        }
-        let _ = write!(
-            html,
-            "                </tbody>\n            </table>\n            <p>music21's own docstrings, collected from the submodule and run against the crate through the music21-shaped facades in <code>python-parity</code>. A docstring counts as passing only when every one of its examples does. Written by the parity suite; the failures of each module are in <code>target/doctest_&lt;module&gt;.log</code>.</p>\n"
-        );
+        html.push_str(&render_doctests(&report.doctests));
     }
-
     if !report.features.is_empty() {
-        let ported: usize = report.features.iter().map(|c| c.ported).sum();
-        let missing: usize = report.features.iter().map(|c| c.missing).sum();
-        let excluded: usize = report.features.iter().map(|c| c.excluded).sum();
-        let total = ported + missing;
-        let percent = if total == 0 {
-            0.0
-        } else {
-            100.0 * ported as f64 / total as f64
-        };
-        let _ = write!(
-            html,
-            r#"            <h2>Ported from music21</h2>
-            <div class="summary">
-                <div class="panel">
-                    <span class="number">{percent:.1}%</span>
-                    <span class="label">of the members in scope, {ported} of {total}</span>
-                    <div class="bar"><span style="width: {percent:.1}%"></span></div>
-                </div>
-                <div class="panel">
-                    <span class="number">{missing}</span>
-                    <span class="label">not ported yet</span>
-                </div>
-                <div class="panel">
-                    <span class="number">{excluded}</span>
-                    <span class="label">left out on purpose</span>
-                </div>
-            </div>
-            <p>Every public method of the music21 classes the crate ports, read from the submodule, against the <code>pub fn</code>s of the Rust files that port them. Members left out on purpose say why; the mapping lives in <code>data/feature_map.toml</code>.</p>
-"#
-        );
-        for class in &report.features {
-            let counted = class.ported + class.missing;
-            let class_percent = if counted == 0 {
-                0.0
-            } else {
-                100.0 * class.ported as f64 / counted as f64
-            };
-            let _ = write!(
-                html,
-                r#"            <details>
-                <summary>{name}<span class="count">{ported} of {counted} ported ({class_percent:.0}%), {excluded} excluded</span></summary>
-                <div class="bar"><span style="width: {class_percent:.1}%"></span></div>
-                <p class="meta"><code>{python}</code>{note}</p>
-                <table>
-                    <thead><tr><th>music21</th><th>status</th><th>music21-rs</th></tr></thead>
-                    <tbody>
-"#,
-                name = escape(&class.name),
-                ported = class.ported,
-                excluded = class.excluded,
-                python = escape(&class.python),
-                note = class
-                    .note
-                    .as_deref()
-                    .map(|note| format!(" — {}", escape(note)))
-                    .unwrap_or_default(),
-            );
-            for member in &class.members {
-                let (status, detail) = match member.status {
-                    Status::Ported => (
-                        "ported",
-                        format!(
-                            "<code>{}</code>",
-                            escape(member.detail.as_deref().unwrap_or(""))
-                        ),
-                    ),
-                    Status::Missing => ("missing", String::new()),
-                    Status::Excluded => {
-                        ("excluded", escape(member.detail.as_deref().unwrap_or("")))
-                    }
-                };
-                let _ = writeln!(
-                    html,
-                    "                        <tr><td><code>{}</code></td><td class=\"status-{status}\">{status}</td><td>{detail}</td></tr>\n",
-                    escape(&member.name)
-                );
-            }
-            let _ = write!(
-                html,
-                "                    </tbody>\n                </table>\n            </details>\n"
-            );
-        }
+        html.push_str(&render_features(&report.features));
     }
 
-    html.push_str("        </main>\n        <script type=\"module\" src=\"../theme.js\"></script>\n    </body>\n</html>\n");
+    let _ = write!(
+        html,
+        r#"        </main>
+        <script type="module" src="../theme.js"></script>
+        <script>
+{script}        </script>
+    </body>
+</html>
+"#,
+        script = SCRIPT,
+    );
     html
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
