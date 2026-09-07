@@ -143,7 +143,7 @@ impl RomanNumeral {
         let inversion = parse_inversion(suffix);
         let seventh = suffix_has_seventh(suffix);
 
-        Ok(Self {
+        let mut numeral = Self {
             figure: trimmed.to_string(),
             key,
             degree,
@@ -153,7 +153,36 @@ impl RomanNumeral {
             quality,
             secondary,
             kind: RomanKind::Diatonic,
-        })
+        };
+        numeral.raise_minor_sixth_and_seventh()?;
+        Ok(numeral)
+    }
+
+    /// Raises the sixth and seventh degrees of a minor key where the figure
+    /// asks for a chord that only the raised degree gives.
+    ///
+    /// This is music21's `_adjustMinorVIandVIIByQuality` at its default
+    /// setting, and it is what makes `viio7` in A minor the diminished
+    /// seventh on `G#` rather than a chord on `G` with three flats in it,
+    /// and `vi` the minor triad on `F#`. The natural degrees are what `VI`
+    /// and `VII` ask for, and those are left alone.
+    fn raise_minor_sixth_and_seventh(&mut self) -> Result<()> {
+        if !matches!(self.degree, 6 | 7) {
+            return Ok(());
+        }
+        if !matches!(
+            self.quality,
+            RomanQuality::Minor | RomanQuality::Diminished | RomanQuality::HalfDiminished
+        ) {
+            return Ok(());
+        }
+        // Against the key the figure is actually read in, so the `vi` of a
+        // secondary numeral is judged in the key that numeral establishes.
+        if self.effective_key()?.mode() != "minor" {
+            return Ok(());
+        }
+        self.accidental += 1;
+        Ok(())
     }
 
     /// Returns the original figure.
@@ -193,21 +222,30 @@ impl RomanNumeral {
     /// `romanNumeral`, so `bII6` is `bII` and `V65/V` is `V`. An augmented
     /// sixth answers its nationality, `It`, `Fr`, `Ger` or `Sw`.
     pub fn roman_numeral(&self) -> String {
-        if let RomanKind::AugmentedSixth(kind) = self.kind {
-            return kind.figure().trim_end_matches(['+', '6']).to_string();
+        let numeral = self.roman_numeral_alone();
+        if matches!(self.kind, RomanKind::AugmentedSixth(_)) {
+            return numeral;
         }
-        let primary = self.figure.split('/').next().unwrap_or_default();
-        let (_, unaltered) = split_roman_accidental_prefix(primary);
-        let numeral: String = unaltered
-            .chars()
-            .take_while(|c| matches!(c, 'i' | 'v' | 'x' | 'I' | 'V' | 'X'))
-            .collect();
         let prefix = match self.accidental {
             0 => String::new(),
             sharps if sharps > 0 => "#".repeat(sharps.unsigned_abs() as usize),
             flats => "b".repeat(flats.unsigned_abs() as usize),
         };
         format!("{prefix}{numeral}")
+    }
+
+    /// The numeral with nothing written in front of it: music21's
+    /// `romanNumeralAlone`, so `bVII65/V` is `VII`.
+    pub fn roman_numeral_alone(&self) -> String {
+        if let RomanKind::AugmentedSixth(kind) = self.kind {
+            return kind.figure().trim_end_matches(['+', '6']).to_string();
+        }
+        let primary = self.figure.split('/').next().unwrap_or_default();
+        let (_, unaltered) = split_roman_accidental_prefix(primary);
+        unaltered
+            .chars()
+            .take_while(|c| matches!(c, 'i' | 'v' | 'x' | 'I' | 'V' | 'X'))
+            .collect()
     }
 
     /// The figure and its key together: music21's `figureAndKey`,
@@ -1058,6 +1096,50 @@ fn normalize_pitch_name(name: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_minor_key_raises_its_sixth_and_seventh_where_the_figure_asks() {
+        let minor = Key::from_tonic_mode("a", Some("minor")).unwrap();
+        // The diminished seventh on the leading note is the raised seventh
+        // degree: G#, not G with three flats hung off it.
+        let leading = RomanNumeral::new("viio7", minor.clone()).unwrap();
+        assert_eq!(
+            leading.to_chord().unwrap().pitch_names(),
+            ["G#", "B", "D", "F"]
+        );
+        assert_eq!(leading.roman_numeral(), "#vii");
+        assert_eq!(leading.roman_numeral_alone(), "vii");
+        assert_eq!(leading.scale_degree_with_alteration(), (7, 1));
+
+        // A minor triad on the sixth degree is the raised one too.
+        assert_eq!(
+            RomanNumeral::new("vi", minor.clone())
+                .unwrap()
+                .to_chord()
+                .unwrap()
+                .pitch_names(),
+            ["F#", "A", "C#"]
+        );
+        // The natural degrees are what the upper-case figures ask for.
+        assert_eq!(
+            RomanNumeral::new("VI", minor.clone())
+                .unwrap()
+                .to_chord()
+                .unwrap()
+                .pitch_names(),
+            ["F", "A", "C"]
+        );
+        // And a major key is left alone entirely.
+        let major = Key::from_tonic_mode("C", Some("major")).unwrap();
+        assert_eq!(
+            RomanNumeral::new("vi", major)
+                .unwrap()
+                .to_chord()
+                .unwrap()
+                .pitch_names(),
+            ["A", "C", "E"]
+        );
+    }
+
     #[test]
     fn the_neapolitan_can_be_written_by_name() {
         // music21 writes the flattened second degree as `N`, and in first

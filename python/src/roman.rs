@@ -271,18 +271,14 @@ impl RomanNumeral {
     /// notes — `bVII65/V` reads as `bVII`.
     #[getter]
     fn romanNumeral(&self) -> String {
-        format!(
-            "{}{}",
-            self.frontAlterationString(),
-            self.inner.roman_numeral()
-        )
+        self.inner.roman_numeral()
     }
 
     /// music21's `romanNumeralAlone`: the numeral with nothing in front of
     /// it at all.
     #[getter]
     fn romanNumeralAlone(&self) -> String {
-        self.inner.roman_numeral()
+        self.inner.roman_numeral_alone()
     }
 
     /// music21's `frontAlterationString`: the flats or sharps written before
