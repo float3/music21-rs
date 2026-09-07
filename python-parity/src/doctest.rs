@@ -41,6 +41,7 @@ pub use music21_rs_python::key::NAMES as KEY_NAMES;
 pub use music21_rs_python::notation::{STYLE_NAMES, TIE_NAMES, VOLUME_NAMES};
 pub use music21_rs_python::note::{DURATION_NAMES, NAMES as NOTE_NAMES};
 pub use music21_rs_python::pitch::NAMES as PITCH_NAMES;
+pub use music21_rs_python::scale::NAMES as SCALE_NAMES;
 pub use music21_rs_python::serial::NAMES as SERIAL_NAMES;
 
 #[derive(Debug, Default, Serialize, Deserialize)]

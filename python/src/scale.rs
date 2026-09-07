@@ -13,17 +13,45 @@ use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyTuple, PyType};
 
-use music21_rs::scale::{Scale as RsScale, ScaleType as RsScaleType};
+use music21_rs::scale::{
+    Scale as RsScale, ScaleType as RsScaleType, SolfegVariant as RsSolfegVariant,
+};
 use music21_rs::{Interval as RsInterval, Pitch as RsPitch};
 
 use crate::interval::interval_from_any;
 use crate::pitch::{Pitch, message, pitch_from_any};
 
-/// The names the `scale` facade provides for `music21.scale`.
+/// The names the `scale` facade replaces in `music21.scale`.
 ///
-/// The twenty concrete classes are added to this list as they are built, so
-/// this is only what is written out by hand.
-pub const NAMES: &[&str] = &["Scale", "ConcreteScale", "DiatonicScale", "ScaleException"];
+/// The twenty concrete classes are named here rather than derived from
+/// `ScaleType::ALL` because this has to be a constant, and a test below
+/// keeps the two lists in step.
+pub const NAMES: &[&str] = &[
+    "Scale",
+    "ConcreteScale",
+    "DiatonicScale",
+    "ScaleException",
+    "MajorScale",
+    "MinorScale",
+    "DorianScale",
+    "PhrygianScale",
+    "LydianScale",
+    "MixolydianScale",
+    "LocrianScale",
+    "HypodorianScale",
+    "HypophrygianScale",
+    "HypolydianScale",
+    "HypomixolydianScale",
+    "HypolocrianScale",
+    "HypoaeolianScale",
+    "HarmonicMinorScale",
+    "MelodicMinorScale",
+    "ChromaticScale",
+    "WholeToneScale",
+    "OctatonicScale",
+    "RagAsawari",
+    "RagMarwa",
+];
 
 pyo3::create_exception!(music21_rs_facade, ScaleException, PyException);
 
@@ -59,6 +87,34 @@ impl Scale {
     #[getter]
     fn name(&self) -> &'static str {
         "Scale"
+    }
+
+    /// music21's `extractPitchList`: the pitches out of anything that has
+    /// them — a list of pitches or names, or notes, or a stream of notes.
+    #[staticmethod]
+    #[pyo3(signature = (other, comparisonAttribute = "nameWithOctave", removeDuplicates = true))]
+    fn extractPitchList(
+        other: &Bound<'_, PyAny>,
+        comparisonAttribute: &str,
+        removeDuplicates: bool,
+    ) -> PyResult<Vec<Pitch>> {
+        let mut pitches = Vec::new();
+        let mut seen: Vec<String> = Vec::new();
+        for pitch in pitch_list(other)? {
+            if removeDuplicates {
+                let key = match comparisonAttribute {
+                    "name" => pitch.name(),
+                    "pitchClass" => pitch.pitch_class().number().to_string(),
+                    _ => pitch.name_with_octave(),
+                };
+                if seen.contains(&key) {
+                    continue;
+                }
+                seen.push(key);
+            }
+            pitches.push(Pitch::wrap(pitch, false));
+        }
+        Ok(pitches)
     }
 }
 
@@ -194,8 +250,180 @@ impl ConcreteScale {
             .collect())
     }
 
-    fn getPitches(&self) -> PyResult<Vec<Pitch>> {
-        self.pitches()
+    /// music21's `getPitches`: the scale over a range of pitches, or over
+    /// the octave above the tonic when no range is given.
+    #[pyo3(signature = (minPitch = None, maxPitch = None, **_keywords))]
+    fn getPitches(
+        &self,
+        minPitch: Option<&Bound<'_, PyAny>>,
+        maxPitch: Option<&Bound<'_, PyAny>>,
+        _keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Vec<Pitch>> {
+        let (Some(low), Some(high)) = (
+            minPitch.filter(|value| !value.is_none()),
+            maxPitch.filter(|value| !value.is_none()),
+        ) else {
+            return self.pitches();
+        };
+        Ok(wrap_pitches(
+            self.inner
+                .pitches_between(&pitch_from_any(low)?, &pitch_from_any(high)?)
+                .map_err(scale_error)?,
+        ))
+    }
+
+    /// music21's `getTonic`: the note the scale comes to rest on, as it
+    /// sounds — so a scale built on a bare `C` answers `C4`, and a plagal
+    /// mode answers its final rather than the bottom of its range.
+    fn getTonic(&self) -> PyResult<Pitch> {
+        self.inner
+            .final_pitch()
+            .map(|pitch| Pitch::wrap(pitch, false))
+            .map_err(scale_error)
+    }
+
+    /// music21's `getDominant`: the reciting tone.
+    fn getDominant(&self) -> PyResult<Pitch> {
+        self.inner
+            .dominant()
+            .map(|pitch| Pitch::wrap(pitch, false))
+            .map_err(scale_error)
+    }
+
+    /// music21's `getLeadingTone`: the seventh degree raised or lowered to
+    /// sit a semitone below the final, which in a minor scale is not the
+    /// seventh degree the scale itself has.
+    fn getLeadingTone(&self) -> PyResult<Pitch> {
+        self.inner
+            .leading_tone()
+            .map(|pitch| Pitch::wrap(pitch, false))
+            .map_err(scale_error)
+    }
+
+    /// music21's `abstract`: the pattern of steps this scale stands on,
+    /// which here is the scale type it was built with.
+    #[getter]
+    fn get_abstract(&self) -> String {
+        self.inner.scale_type().music21_name().to_string()
+    }
+
+    /// music21's `deriveRanked`: the scales of this pattern containing the
+    /// most of the given pitches, best first, each with how many it matched.
+    #[pyo3(signature = (other, **_keywords))]
+    fn deriveRanked(
+        slf: &Bound<'_, Self>,
+        other: &Bound<'_, PyAny>,
+        _keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Vec<(usize, Py<PyAny>)>> {
+        let pitches = pitch_list(other)?;
+        let ranked = slf
+            .borrow()
+            .inner
+            .scale_type()
+            .derive_ranked(&pitches, None)
+            .map_err(scale_error)?;
+        ranked
+            .into_iter()
+            .map(|(matched, scale)| Ok((matched, Self::object(slf.py(), scale)?)))
+            .collect()
+    }
+
+    /// music21's `derive`: the best-ranked of those.
+    #[pyo3(signature = (other, **_keywords))]
+    fn derive(
+        slf: &Bound<'_, Self>,
+        other: &Bound<'_, PyAny>,
+        _keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Py<PyAny>> {
+        let pitches = pitch_list(other)?;
+        let derived = slf
+            .borrow()
+            .inner
+            .scale_type()
+            .derive(&pitches)
+            .map_err(scale_error)?;
+        Self::object(slf.py(), derived)
+    }
+
+    /// music21's `deriveAll`: every scale of this pattern that contains all
+    /// of the given pitches.
+    #[pyo3(signature = (other, **_keywords))]
+    fn deriveAll(
+        slf: &Bound<'_, Self>,
+        other: &Bound<'_, PyAny>,
+        _keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Vec<Py<PyAny>>> {
+        let pitches = pitch_list(other)?;
+        let derived = slf
+            .borrow()
+            .inner
+            .scale_type()
+            .derive_all(&pitches)
+            .map_err(scale_error)?;
+        derived
+            .into_iter()
+            .map(|scale| Self::object(slf.py(), scale))
+            .collect()
+    }
+
+    /// music21's `solfeg`: the syllable for a pitch's degree in this scale.
+    #[pyo3(signature = (pitchTarget = None, *, variant = "music21", chromatic = true, **_keywords))]
+    fn solfeg(
+        &self,
+        pitchTarget: Option<&Bound<'_, PyAny>>,
+        variant: &str,
+        chromatic: bool,
+        _keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<String> {
+        let pitch = match pitchTarget.filter(|value| !value.is_none()) {
+            Some(value) => pitch_from_any(value)?,
+            None => self.inner.tonic().clone(),
+        };
+        let variant = match variant {
+            "humdrum" => RsSolfegVariant::Humdrum,
+            _ => RsSolfegVariant::Music21,
+        };
+        self.inner
+            .solfeg(&pitch, variant, chromatic)
+            .map_err(scale_error)
+    }
+
+    /// music21's `pitchesFromScaleDegrees`.
+    #[pyo3(signature = (degreeTargets, minPitch = None, maxPitch = None, **_keywords))]
+    fn pitchesFromScaleDegrees(
+        &self,
+        degreeTargets: Vec<usize>,
+        minPitch: Option<&Bound<'_, PyAny>>,
+        maxPitch: Option<&Bound<'_, PyAny>>,
+        _keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Vec<Pitch>> {
+        let _ = (minPitch, maxPitch);
+        Ok(wrap_pitches(
+            self.inner
+                .pitches_from_scale_degrees(&degreeTargets)
+                .map_err(scale_error)?,
+        ))
+    }
+
+    /// music21's `isNext`: whether one pitch is so many degrees above another
+    /// in this scale.
+    #[pyo3(signature = (other, pitchOrigin, direction = None, stepSize = 1, **_keywords))]
+    fn isNext(
+        &self,
+        other: &Bound<'_, PyAny>,
+        pitchOrigin: &Bound<'_, PyAny>,
+        direction: Option<&Bound<'_, PyAny>>,
+        stepSize: usize,
+        _keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<bool> {
+        let _ = direction;
+        self.inner
+            .is_next(
+                &pitch_from_any(other)?,
+                &pitch_from_any(pitchOrigin)?,
+                stepSize,
+            )
+            .map_err(scale_error)
     }
 
     /// music21's `pitchFromDegree`: the pitch at a scale degree, counting the
@@ -404,6 +632,41 @@ impl DiatonicScale {
     ) -> PyResult<PyClassInitializer<Self>> {
         Ok(ConcreteScale::new(tonic, keywords)?.add_subclass(Self))
     }
+
+    /// music21's `getRelativeMajor`: the major scale written with the same
+    /// key signature, so D dorian answers C major.
+    fn getRelativeMajor(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
+        let relative = slf
+            .as_super()
+            .borrow()
+            .inner
+            .relative_major()
+            .map_err(scale_error)?;
+        ConcreteScale::object(slf.py(), relative)
+    }
+
+    /// music21's `getRelativeMinor`.
+    fn getRelativeMinor(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
+        let relative = slf
+            .as_super()
+            .borrow()
+            .inner
+            .relative_minor()
+            .map_err(scale_error)?;
+        ConcreteScale::object(slf.py(), relative)
+    }
+
+    /// music21's `getParallelMajor`: the major scale on the same tonic.
+    fn getParallelMajor(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
+        let parallel = slf.as_super().borrow().inner.parallel_major();
+        ConcreteScale::object(slf.py(), parallel)
+    }
+
+    /// music21's `getParallelMinor`.
+    fn getParallelMinor(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
+        let parallel = slf.as_super().borrow().inner.parallel_minor();
+        ConcreteScale::object(slf.py(), parallel)
+    }
 }
 
 /// Reads a sequence of pitches, or a stream of notes, as pitches.
@@ -480,10 +743,18 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     Ok(())
 }
 
-/// Every name this facade puts into `music21.scale`, the built subclasses
-/// included.
-pub fn all_names() -> Vec<&'static str> {
-    let mut names: Vec<&'static str> = NAMES.to_vec();
-    names.extend(RsScaleType::ALL.into_iter().map(RsScaleType::music21_name));
-    names
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_scale_type_is_named_in_the_swap_list() {
+        for scale_type in RsScaleType::ALL {
+            let name = scale_type.music21_name();
+            assert!(
+                NAMES.contains(&name),
+                "{name} is a scale type the facade builds but does not install"
+            );
+        }
+    }
 }

@@ -1,12 +1,25 @@
 //! Checks every [`ScaleType`] against what music21 actually produces.
 //!
+//! The fixture records `getPitches(tonic, tonic + P8)` — the scale over one
+//! octave from the tonic — so the comparison here is against
+//! [`Scale::pitches_between`] and not [`Scale::pitches`]. The two differ for
+//! the plagal modes, whose default realization starts below their final.
+//!
 //! The expectations in `data/scale_expectations.toml` are generated from the
 //! music21 submodule by `cargo run -p xtask --features python -- regenerate-fixtures`. They
 //! are committed because a full `music21.scale` import needs music21's own
 //! dependencies, which the chord-table bridge deliberately stubs out. This test
 //! therefore needs neither Python nor the submodule — only the checked-in file.
 
-use music21_rs::{Pitch, Scale, ScaleType};
+use music21_rs::{Interval, Pitch, Scale, ScaleType};
+
+/// An octave downwards, for stepping back to the bottom of the range.
+fn octave_down() -> Interval {
+    Interval::from_name("P8")
+        .expect("an octave")
+        .reversed()
+        .expect("an octave downwards")
+}
 use serde::Deserialize;
 
 use std::collections::BTreeSet;
@@ -69,8 +82,11 @@ fn every_scale_matches_music21() {
         for case in &expected.cases {
             let tonic = Pitch::from_name(case.tonic.as_str())
                 .unwrap_or_else(|err| panic!("tonic {} is invalid: {err}", case.tonic));
+            let top = tonic
+                .transpose(&Interval::from_name("P8").expect("an octave"))
+                .unwrap_or_else(|err| panic!("octave above {} failed: {err}", case.tonic));
             let actual: Vec<String> = Scale::new(scale_type, tonic)
-                .pitches()
+                .pitches_between(&top.transpose(&octave_down()).expect("octave down"), &top)
                 .unwrap_or_else(|err| {
                     panic!("{} on {} failed: {err}", expected.scale_type, case.tonic)
                 })

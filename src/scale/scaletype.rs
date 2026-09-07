@@ -226,6 +226,62 @@ impl ScaleType {
             .find(|scale_type| scale_type.music21_name() == name)
     }
 
+    /// Which degree of the realized scale is its final: music21's
+    /// `tonicDegree`.
+    ///
+    /// A plagal mode — the six that music21 prefixes `Hypo` — runs from a
+    /// fourth below its final to a fifth above it, so the note the music
+    /// comes to rest on is its fourth degree and not its first. Every other
+    /// scale here starts on its own tonic.
+    pub fn tonic_degree(self) -> usize {
+        if self.is_plagal() { 4 } else { 1 }
+    }
+
+    /// Which degree is the reciting tone: music21's `dominantDegree`.
+    ///
+    /// A fifth above the final in the authentic modes. The plagal ones took
+    /// theirs a third above the authentic dominant and then moved it off any
+    /// B, which is why hypophrygian and hypomixolydian differ from the rest.
+    pub fn dominant_degree(self) -> usize {
+        match self {
+            Self::Hypophrygian | Self::Hypomixolydian => 7,
+            _ if self.is_plagal() => 6,
+            _ => 5,
+        }
+    }
+
+    /// The steps walked from the pitch the scale is *realized* from, which
+    /// for a plagal mode is not its final.
+    ///
+    /// [`Self::steps`] is the collection written from the final, which is
+    /// how every one of these scales is named. A plagal mode is realized
+    /// from a fourth below that, so its walk starts three steps earlier in
+    /// the same cycle — the rotation that puts the final at the degree
+    /// [`Self::tonic_degree`] names.
+    pub fn realization_steps(self) -> Vec<&'static str> {
+        let steps = self.steps();
+        let count = steps.len();
+        let start = (count + 1 - self.tonic_degree()) % count;
+        steps[start..]
+            .iter()
+            .chain(&steps[..start])
+            .copied()
+            .collect()
+    }
+
+    /// Whether this is a plagal mode, whose range sits below its final.
+    pub fn is_plagal(self) -> bool {
+        matches!(
+            self,
+            Self::Hypodorian
+                | Self::Hypophrygian
+                | Self::Hypolydian
+                | Self::Hypomixolydian
+                | Self::Hypolocrian
+                | Self::Hypoaeolian
+        )
+    }
+
     /// Returns the step intervals walked from the tonic.
     ///
     /// Almost every scale ascends throughout; Rag Marwa is the exception, and
@@ -340,6 +396,10 @@ impl ScaleType {
     }
 }
 
+/// How many octaves of a scale [`Scale::pitches_between`] will walk, which
+/// is the whole of music21's pitch space and then some.
+const MAX_RANGE_OCTAVES: usize = 12;
+
 /// A named scale realized from a tonic pitch.
 ///
 /// ```
@@ -378,17 +438,88 @@ impl Scale {
     ///
     /// The result has `degree_count() + 1` entries, since the closing octave is
     /// included the way music21's `getPitches` includes it.
+    ///
+    /// A tonic with no octave is realized in octave 4, which is what music21
+    /// does: the scale on a bare `G` runs `G4 A4 B-4 C5 …`. The tonic itself
+    /// keeps its own spelling — `Scale::tonic` still has no octave — because
+    /// the octave belongs to the realization and not to the scale.
     pub fn pitches(&self) -> Result<Vec<Pitch>> {
         let simplification = self.scale_type.simplification();
+        let start = self.realization_start()?;
         let mut pitches = Vec::with_capacity(self.scale_type.degree_count() + 1);
-        pitches.push(self.tonic.clone());
+        pitches.push(start.clone());
 
-        let mut current = self.tonic.clone();
-        for step in self.scale_type.steps() {
+        let mut current = start;
+        for step in self.scale_type.realization_steps() {
             current = advance(&current, step, simplification)?;
             pitches.push(current.clone());
         }
         Ok(pitches)
+    }
+
+    /// The pitch the scale is realized from, which is its final except in a
+    /// plagal mode, where the range starts below it.
+    ///
+    /// How far below is the scale's own business rather than a flat fourth:
+    /// the walk goes back down the last steps of the collection, so the
+    /// hypolocrian on C starts on `G-` and not on `G`, its fifth degree
+    /// being diminished.
+    fn realization_start(&self) -> Result<Pitch> {
+        let mut start = self.realized_tonic();
+        let steps = self.scale_type.steps();
+        for step in steps
+            .iter()
+            .rev()
+            .take(self.scale_type.tonic_degree().saturating_sub(1))
+        {
+            start = start.transpose(&Interval::from_name(*step)?.reversed()?)?;
+        }
+        Ok(start)
+    }
+
+    /// The tonic as the scale sounds it: music21's `getTonic`, which is the
+    /// tonic in octave 4 when it was given without one.
+    pub fn realized_tonic(&self) -> Pitch {
+        let mut tonic = self.tonic.clone();
+        if tonic.octave().is_none() {
+            tonic.octave_setter(Some(crate::defaults::PITCH_OCTAVE as IntegerType));
+        }
+        tonic
+    }
+
+    /// The major scale written with the same key signature as this one:
+    /// music21's `getRelativeMajor`.
+    ///
+    /// A mode is written with the signature of the major scale it is a
+    /// rotation of, so D dorian is C major and E minor is G major. Only the
+    /// seven-note modes have one.
+    pub fn relative_major(&self) -> Result<Scale> {
+        self.relative(ScaleType::Major)
+    }
+
+    /// The minor scale written with the same key signature: music21's
+    /// `getRelativeMinor`.
+    pub fn relative_minor(&self) -> Result<Scale> {
+        self.relative(ScaleType::Minor)
+    }
+
+    /// The major scale on the same tonic: music21's `getParallelMajor`.
+    pub fn parallel_major(&self) -> Scale {
+        Scale::new(ScaleType::Major, self.tonic.clone())
+    }
+
+    /// The minor scale on the same tonic: music21's `getParallelMinor`.
+    pub fn parallel_minor(&self) -> Scale {
+        Scale::new(ScaleType::Minor, self.tonic.clone())
+    }
+
+    /// The scale of the wanted type carrying this one's key signature.
+    fn relative(&self, wanted: ScaleType) -> Result<Scale> {
+        let mode = self.scale_type.music21_descriptive_name();
+        let sharps = crate::key::pitch_to_sharps(&self.tonic, Some(mode))?;
+        let key = crate::key::KeySignature::new(sharps)
+            .try_as_key(Some(wanted.music21_descriptive_name()), None)?;
+        Ok(Scale::new(wanted, key.tonic()))
     }
 
     /// Returns the pitch at a one-based scale degree.
@@ -403,13 +534,78 @@ impl Scale {
         }
 
         let simplification = self.scale_type.simplification();
-        let steps = self.scale_type.steps();
-        let mut current = self.tonic.clone();
+        let steps = self.scale_type.realization_steps();
+        let mut current = self.realization_start()?;
         for index in 0..(degree - 1) {
             current = advance(&current, steps[index % steps.len()], simplification)?;
         }
         Ok(current)
     }
+    /// Returns every pitch of the scale from `minimum` up to `maximum`,
+    /// inclusive: music21's `getPitches` given a range.
+    ///
+    /// The scale is realized from the tonic in whatever octave puts it at or
+    /// below the bottom of the range, then walked upward, so asking a C major
+    /// scale for `E-5` to `G-7` starts at `E5` — the first scale pitch that
+    /// is not below the bottom — and not at a respelled `E-5`.
+    pub fn pitches_between(&self, minimum: &Pitch, maximum: &Pitch) -> Result<Vec<Pitch>> {
+        let lowest = minimum.ps();
+        let highest = maximum.ps();
+        if highest < lowest {
+            return Ok(Vec::new());
+        }
+        let mut current = self.realization_start()?;
+        // Down whole octaves until the start is at or below the range.
+        while current.ps() > lowest {
+            let octave = current.octave().unwrap_or(0);
+            current.octave_setter(Some(octave - 1));
+        }
+        let simplification = self.scale_type.simplification();
+        let steps = self.scale_type.realization_steps();
+        let mut pitches = Vec::new();
+        // Two octaves of headroom past the range, so a scale whose degrees
+        // are not evenly spaced still reaches the top of it.
+        let limit = steps.len() * (MAX_RANGE_OCTAVES + 2) + 1;
+        for index in 0..limit {
+            let sounding = current.ps();
+            if sounding > highest {
+                break;
+            }
+            if sounding >= lowest {
+                pitches.push(current.clone());
+            }
+            current = advance(&current, steps[index % steps.len()], simplification)?;
+        }
+        Ok(pitches)
+    }
+
+    /// The note the scale comes to rest on, as it sounds: music21's
+    /// `getTonic`, which is the fourth degree of a plagal mode.
+    pub fn final_pitch(&self) -> Result<Pitch> {
+        self.pitch_at_degree(self.scale_type.tonic_degree())
+    }
+
+    /// The reciting tone: music21's `getDominant`.
+    pub fn dominant(&self) -> Result<Pitch> {
+        self.pitch_at_degree(self.scale_type.dominant_degree())
+    }
+
+    /// The seventh degree raised or lowered to sit a semitone below the
+    /// final: music21's `getLeadingTone`, which in a minor scale is not the
+    /// seventh degree the scale itself has.
+    pub fn leading_tone(&self) -> Result<Pitch> {
+        let seventh = self.pitch_at_degree(7)?;
+        let tonic = self.final_pitch()?;
+        let distance = seventh.midi() - tonic.midi();
+        if distance == 11 {
+            return Ok(seventh);
+        }
+        let alter = seventh.accidental().alter() + FloatType::from(11 - distance);
+        let mut raised = seventh.clone();
+        raised.set_accidental(Some(crate::pitch::Accidental::new(alter)?));
+        Ok(raised)
+    }
+
     /// Returns the scale of the same type on which `pitch` is the given degree:
     /// music21's `deriveByDegree`, so the major scale with `E` as its fifth is
     /// A major. The pitch keeps its spelling; a pitch without an octave is
@@ -549,11 +745,7 @@ impl Scale {
     }
 
     fn realized_in_implicit_octave(&self) -> Result<Vec<Pitch>> {
-        let mut tonic = self.tonic.clone();
-        if tonic.octave().is_none() {
-            tonic.octave_setter(Some(crate::defaults::PITCH_OCTAVE as IntegerType));
-        }
-        Scale::new(self.scale_type, tonic).pitches()
+        self.pitches()
     }
 
     /// Returns the one-based degree whose pitch name matches, ignoring octave,
@@ -711,6 +903,42 @@ fn max_alter(pitches: &[Pitch]) -> crate::defaults::IntegerType {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_range_starts_at_the_first_scale_pitch_inside_it() {
+        // music21's own example: C major from E-flat 5 to G-flat 7 starts on
+        // E5, the first scale pitch that is not below the bottom.
+        let scale = Scale::new(ScaleType::Major, Pitch::from_name("C").unwrap());
+        let range = scale
+            .pitches_between(
+                &Pitch::from_name("E-5").unwrap(),
+                &Pitch::from_name("G-7").unwrap(),
+            )
+            .unwrap();
+        let names: Vec<String> = range.iter().map(Pitch::name_with_octave).take(4).collect();
+        assert_eq!(names, ["E5", "F5", "G5", "A5"]);
+        assert_eq!(range.last().unwrap().name_with_octave(), "F7");
+
+        // A range of exactly one octave has both ends in it.
+        let octave = scale
+            .pitches_between(
+                &Pitch::from_name("C3").unwrap(),
+                &Pitch::from_name("C4").unwrap(),
+            )
+            .unwrap();
+        let names: Vec<String> = octave.iter().map(Pitch::name_with_octave).collect();
+        assert_eq!(names, ["C3", "D3", "E3", "F3", "G3", "A3", "B3", "C4"]);
+
+        // A range that runs backwards is empty rather than an error.
+        assert!(
+            scale
+                .pitches_between(
+                    &Pitch::from_name("C5").unwrap(),
+                    &Pitch::from_name("C4").unwrap(),
+                )
+                .unwrap()
+                .is_empty()
+        );
+    }
 
     #[test]
     fn scale_helpers_match_music21() {
@@ -1150,12 +1378,66 @@ mod tests {
             (ScaleType::Hypolocrian, ScaleType::Locrian),
             (ScaleType::Hypoaeolian, ScaleType::Minor),
         ] {
+            let mut plagal_names = names(plagal, "C4");
+            plagal_names.sort();
+            plagal_names.dedup();
+            let mut authentic_names = names(authentic, "C4");
+            authentic_names.sort();
+            authentic_names.dedup();
             assert_eq!(
-                names(plagal, "C4"),
-                names(authentic, "C4"),
+                plagal_names, authentic_names,
                 "{plagal:?} should share {authentic:?}'s pitch collection"
             );
         }
+    }
+
+    #[test]
+    fn a_plagal_mode_is_realized_a_fourth_below_its_final() {
+        // music21's own example: the hypodorian on D runs A3 to A4, and the
+        // note it comes to rest on is its fourth degree.
+        let scale = Scale::new(
+            ScaleType::Hypodorian,
+            Pitch::from_name("d").expect("valid tonic"),
+        );
+        let realized: Vec<String> = scale
+            .pitches()
+            .expect("scale realizes")
+            .iter()
+            .map(Pitch::name_with_octave)
+            .collect();
+        assert_eq!(
+            realized,
+            ["A3", "B3", "C4", "D4", "E4", "F4", "G4", "A4"],
+            "a plagal mode starts a fourth below its final"
+        );
+        assert_eq!(scale.final_pitch().unwrap().name_with_octave(), "D4");
+        assert_eq!(scale.dominant().unwrap().name_with_octave(), "F4");
+
+        // An authentic mode starts on its own final, and its dominant is the
+        // fifth degree.
+        let dorian = Scale::new(
+            ScaleType::Dorian,
+            Pitch::from_name("d").expect("valid tonic"),
+        );
+        assert_eq!(dorian.final_pitch().unwrap().name_with_octave(), "D4");
+        assert_eq!(dorian.dominant().unwrap().name_with_octave(), "A4");
+    }
+
+    #[test]
+    fn a_leading_tone_is_a_semitone_below_the_final() {
+        // In a minor scale that is not the seventh degree the scale has.
+        let minor = Scale::new(
+            ScaleType::Minor,
+            Pitch::from_name("c").expect("valid tonic"),
+        );
+        assert_eq!(minor.pitch_at_degree(7).unwrap().name(), "B-");
+        assert_eq!(minor.leading_tone().unwrap().name(), "B");
+        // In a major scale it already is.
+        let major = Scale::new(
+            ScaleType::Major,
+            Pitch::from_name("C").expect("valid tonic"),
+        );
+        assert_eq!(major.leading_tone().unwrap().name_with_octave(), "B4");
     }
 
     #[test]
