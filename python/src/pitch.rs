@@ -1286,6 +1286,17 @@ impl Pitch {
         Ok(false)
     }
 
+    /// music21's `classes`: the names of everything this object is.
+    ///
+    /// A pitch is not a `Music21Object` and so gets no music21 half from the
+    /// install, but music21's own code still asks it what it is — its
+    /// `_extractPitch` tells a pitch from a note by looking here — so the
+    /// answer is given directly.
+    #[getter]
+    fn classes(&self) -> [&'static str; 3] {
+        ["Pitch", "ProtoM21Object", "object"]
+    }
+
     // ---- dunders ---------------------------------------------------------
 
     fn __repr__(&self) -> String {

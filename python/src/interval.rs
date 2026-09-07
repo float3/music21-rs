@@ -73,13 +73,20 @@ fn deliver_pitch(
     in_place: bool,
 ) -> PyResult<Option<Pitch>> {
     if in_place {
-        let mut facade = value.extract::<PyRefMut<Pitch>>()?;
-        facade.inner = transposed;
-        facade.spelling_is_inferred = inferred;
-        Ok(None)
-    } else {
-        Ok(Some(Pitch::wrap(transposed, inferred)))
+        if let Ok(mut facade) = value.extract::<PyRefMut<Pitch>>() {
+            facade.inner = transposed;
+            facade.spelling_is_inferred = inferred;
+            return Ok(None);
+        }
+        // Not one of ours: a music21 module that bound `Pitch` at import
+        // time still holds music21's own class, and music21's own
+        // `Stream.transpose` hands those in. Write the answer onto it
+        // through the names every pitch has.
+        value.setattr("name", transposed.name())?;
+        value.setattr("octave", transposed.octave())?;
+        return Ok(None);
     }
+    Ok(Some(Pitch::wrap(transposed, inferred)))
 }
 
 fn key_signature_from_any(value: Option<&Bound<'_, PyAny>>) -> PyResult<Option<KeySignature>> {
@@ -374,14 +381,26 @@ impl Specifier {
     subclass,
     skip_from_py_object
 )]
-#[derive(Clone)]
 pub struct GenericInterval {
     pub(crate) inner: RsGeneric,
+    /// The complement, once it has been asked for.
+    complemented: Option<Py<GenericInterval>>,
 }
 
 impl GenericInterval {
     pub(crate) fn wrap(inner: RsGeneric) -> Self {
-        Self { inner }
+        Self {
+            inner,
+            complemented: None,
+        }
+    }
+}
+
+impl Clone for GenericInterval {
+    /// A copy has not worked its complement out yet, so that its complement
+    /// is its own rather than the original's.
+    fn clone(&self) -> Self {
+        Self::wrap(self.inner.clone())
     }
 }
 
@@ -415,7 +434,7 @@ impl GenericInterval {
             Some(value) => generic_from_any(value)?,
             None => RsGeneric::new(1).map_err(interval_error)?,
         };
-        Ok(Self { inner })
+        Ok(Self::wrap(inner))
     }
 
     #[getter]
@@ -426,6 +445,7 @@ impl GenericInterval {
     #[setter]
     fn set_value(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
         self.inner = generic_from_any(value)?;
+        self.complemented = None;
         Ok(())
     }
 
@@ -534,8 +554,20 @@ impl GenericInterval {
         self.inner.mod7()
     }
 
-    fn complement(&self) -> Self {
-        Self::wrap(self.inner.complement())
+    /// music21's `complement`, which hands back the same object every time
+    /// it is asked — `fourth.complement() is fourth.complement()` is one of
+    /// its own examples. The answer only depends on the interval, and the
+    /// interval can change, so the one that was worked out is thrown away
+    /// when it does.
+    fn complement(&mut self, py: Python<'_>) -> PyResult<Py<Self>> {
+        if self.complemented.is_none() {
+            self.complemented = Some(Py::new(py, Self::wrap(self.inner.complement()))?);
+        }
+        Ok(self
+            .complemented
+            .as_ref()
+            .expect("just set when missing")
+            .clone_ref(py))
     }
 
     fn reverse(&self) -> Self {
@@ -591,8 +623,12 @@ impl GenericInterval {
         ))
     }
 
-    fn __deepcopy__(&self, _memo: &Bound<'_, PyAny>) -> Self {
-        self.clone()
+    fn __deepcopy__<'py>(
+        slf: &Bound<'py, Self>,
+        _memo: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let copied = slf.borrow().clone();
+        crate::copy_as_same_type(slf, copied)
     }
 }
 
@@ -793,8 +829,12 @@ impl DiatonicInterval {
         ))
     }
 
-    fn __deepcopy__(&self, _memo: &Bound<'_, PyAny>) -> Self {
-        self.clone()
+    fn __deepcopy__<'py>(
+        slf: &Bound<'py, Self>,
+        _memo: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let copied = slf.borrow().clone();
+        crate::copy_as_same_type(slf, copied)
     }
 }
 
@@ -943,8 +983,12 @@ impl ChromaticInterval {
         ))
     }
 
-    fn __deepcopy__(&self, _memo: &Bound<'_, PyAny>) -> Self {
-        self.clone()
+    fn __deepcopy__<'py>(
+        slf: &Bound<'py, Self>,
+        _memo: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let copied = slf.borrow().clone();
+        crate::copy_as_same_type(slf, copied)
     }
 }
 
@@ -1537,13 +1581,20 @@ impl Interval {
         ))
     }
 
-    fn __deepcopy__(&self, py: Python<'_>, _memo: &Bound<'_, PyAny>) -> Self {
-        Self {
-            inner: self.inner.clone(),
-            pitch_start: self.pitch_start.as_ref().map(|p| p.clone_ref(py)),
-            pitch_end: self.pitch_end.as_ref().map(|p| p.clone_ref(py)),
-            interval_type: self.interval_type.clone(),
-        }
+    fn __deepcopy__<'py>(
+        slf: &Bound<'py, Self>,
+        py: Python<'py>,
+        _memo: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let me = slf.borrow();
+        let copied = Self {
+            inner: me.inner.clone(),
+            pitch_start: me.pitch_start.as_ref().map(|p| p.clone_ref(py)),
+            pitch_end: me.pitch_end.as_ref().map(|p| p.clone_ref(py)),
+            interval_type: me.interval_type.clone(),
+        };
+        drop(me);
+        crate::copy_as_same_type(slf, copied)
     }
 }
 

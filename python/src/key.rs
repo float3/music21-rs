@@ -254,21 +254,28 @@ impl KeySignature {
         (slf.as_ptr() as usize >> 4) as u64
     }
 
-    fn __deepcopy__(
-        slf: &Bound<'_, Self>,
-        py: Python<'_>,
-        _memo: &Bound<'_, PyAny>,
-    ) -> PyResult<Py<PyAny>> {
-        if let Ok(key) = slf.extract::<PyRef<Key>>() {
-            return Key::object(py, key.inner.clone());
+    /// A copy that is an instance of the class it was asked on, so that a
+    /// key installed into music21 copies as one music21 can still hold.
+    fn __deepcopy__<'py>(
+        slf: &Bound<'py, Self>,
+        _py: Python<'py>,
+        _memo: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let class = slf.as_any().get_type();
+        let copy = class.call_method1("__new__", (&class,))?;
+        if let Ok(key) = slf.extract::<PyRef<Key>>()
+            && let Ok(target) = copy.cast::<Key>()
+        {
+            let inner = key.inner.clone();
+            let mut target = target.borrow_mut();
+            target.as_super().signature = inner.key_signature();
+            target.inner = inner;
+            return Ok(copy);
         }
-        Ok(Py::new(
-            py,
-            KeySignature {
-                signature: slf.borrow().signature.clone(),
-            },
-        )?
-        .into_any())
+        if let Ok(target) = copy.cast::<Self>() {
+            target.borrow_mut().signature = slf.borrow().signature.clone();
+        }
+        Ok(copy)
     }
 }
 
