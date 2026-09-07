@@ -60,6 +60,21 @@ impl Chord {
         Ok(chord)
     }
 
+    /// Builds the facade around note objects the caller already holds,
+    /// reading the chord off them.
+    pub(crate) fn from_notes(py: Python<'_>, notes: Vec<Py<Note>>) -> PyResult<Self> {
+        let inners: Vec<RsNote> = notes
+            .iter()
+            .map(|note| note.borrow(py).inner.clone())
+            .collect();
+        Ok(Self {
+            inner: RsChord::new(inners.as_slice()).map_err(chord_error)?,
+            notes,
+            duration: None,
+            volume: None,
+        })
+    }
+
     /// Replaces the pitches and everything read off them, rebuilding the
     /// note objects to match. Notation on the old notes does not survive a
     /// structural change, which is what music21 does too.
@@ -230,20 +245,35 @@ impl Chord {
         }
     }
 
-    fn optional_pitch(pitch: Option<&RsPitch>) -> Option<Pitch> {
-        pitch.cloned().map(|pitch| Pitch::wrap(pitch, false))
+    /// A pitch the chord answers with, as a Python object. music21's
+    /// `root()`, `bass()` and the chord steps hand back one of the chord's
+    /// own pitches rather than a copy — `chord.root() is chord.pitches[0]`
+    /// holds — so a value the chord carries comes back as the pitch object
+    /// of the note carrying it, and only a value it does not carry (an
+    /// overridden root from outside the chord) comes back loose.
+    fn own_pitch(slf: &Bound<'_, Self>, pitch: Option<&RsPitch>) -> PyResult<Option<Py<Pitch>>> {
+        let Some(pitch) = pitch else {
+            return Ok(None);
+        };
+        let py = slf.py();
+        for note in Self::note_objects(slf) {
+            if note.borrow(py).inner.pitch() == pitch {
+                return Ok(Some(Note::get_pitch(note.bind(py))));
+            }
+        }
+        Ok(Some(Py::new(py, Pitch::wrap(pitch.clone(), false))?))
     }
 
     /// The root the pitches imply. music21 raises out of `_findRoot` when
     /// there are none to read it from, which is the only way this fails; the
     /// repr in the message is the empty chord's.
-    fn found_root(&self) -> PyResult<Option<Pitch>> {
+    fn found_root(&self) -> PyResult<Option<RsPitch>> {
         if self.inner.pitches().is_empty() {
             return Err(ChordException::new_err(
                 "no pitches in chord <music21.chord.Chord >",
             ));
         }
-        Ok(Self::optional_pitch(self.inner.found_root()))
+        Ok(self.inner.found_root().cloned())
     }
 }
 
@@ -292,6 +322,70 @@ fn chord_from_any(value: Option<&Bound<'_, PyAny>>) -> PyResult<RsChord> {
     RsChord::new(notes.as_slice()).map_err(chord_error)
 }
 
+/// The note objects a chord's contents argument names, keeping whatever
+/// `Note` or `Pitch` objects it was handed. music21 appends the very objects
+/// given to it — `chord[0] is n1`, `chord.pitches[0] is p1` — so a chord
+/// built from them shares them rather than copying their values out.
+///
+/// Everything else (a name, a number, another chord) has no object to keep
+/// and becomes a note of our own.
+fn adopted_notes(py: Python<'_>, value: Option<&Bound<'_, PyAny>>) -> PyResult<Vec<Py<Note>>> {
+    let fresh = |chord: RsChord| {
+        chord
+            .notes()
+            .iter()
+            .cloned()
+            .map(|note| Note::object(py, note))
+            .collect::<PyResult<Vec<_>>>()
+    };
+    let Some(value) = value.filter(|value| !value.is_none()) else {
+        return Ok(Vec::new());
+    };
+    if value.extract::<String>().is_ok() {
+        return fresh(chord_from_any(Some(value))?);
+    }
+    let Ok(items) = value
+        .try_iter()
+        .and_then(|items| items.collect::<PyResult<Vec<Bound<'_, PyAny>>>>())
+    else {
+        return fresh(chord_from_any(Some(value))?);
+    };
+    // A list of plain integers is a pitch-class or MIDI list, spelled as a
+    // whole rather than one number at a time.
+    let all_integers = !items.is_empty()
+        && items.iter().all(|item| {
+            item.extract::<String>().is_err()
+                && item.extract::<i32>().is_ok()
+                && item.extract::<PyRef<Pitch>>().is_err()
+        });
+    if all_integers {
+        return fresh(chord_from_any(Some(value))?);
+    }
+    let mut notes: Vec<Py<Note>> = Vec::with_capacity(items.len());
+    for item in &items {
+        if let Ok(note) = item.extract::<Py<Note>>() {
+            notes.push(note);
+        } else if let Ok(pitch) = item.extract::<Py<Pitch>>() {
+            notes.push(Note::object_for_pitch(py, pitch)?);
+        } else if let Ok(chord) = item.extract::<PyRef<Chord>>() {
+            // music21 deep-copies the notes it takes out of another chord.
+            for note in chord.inner.notes() {
+                notes.push(Note::object(py, note.clone())?);
+            }
+        } else {
+            let note = note_from_any(item).map_err(|_| {
+                PyTypeError::new_err(format!(
+                    "Could not process input argument {}",
+                    item.repr()
+                        .map_or_else(|_| "?".to_string(), |r| r.to_string())
+                ))
+            })?;
+            notes.push(Note::object(py, note)?);
+        }
+    }
+    Ok(notes)
+}
+
 /// pyo3 hands a `Vec<u8>` to Python as `bytes`; pitch-class lists must come
 /// back as a list of numbers, so they travel as `u32`.
 fn into_numbers(values: Vec<u8>) -> Vec<u32> {
@@ -319,7 +413,7 @@ impl Chord {
         notes: Option<&Bound<'_, PyAny>>,
         keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Self> {
-        let mut chord = Self::from_inner(py, chord_from_any(notes)?)?;
+        let mut chord = Self::from_notes(py, adopted_notes(py, notes)?)?;
         if let Some(keywords) = keywords {
             if let Some(value) = keywords.get_item("quarterLength")? {
                 chord.set_quarterLength(keywords.py(), value.extract::<f64>()?)?;
@@ -586,101 +680,115 @@ impl Chord {
 
     #[pyo3(signature = (newroot = None, *, find = None))]
     fn root(
-        &mut self,
+        slf: &Bound<'_, Self>,
         newroot: Option<&Bound<'_, PyAny>>,
         find: Option<bool>,
-    ) -> PyResult<Option<Pitch>> {
-        if let Some(newroot) = newroot.filter(|value| !value.is_none()) {
-            self.inner.set_root(Some(pitch_from_any(newroot)?));
-            return Ok(None);
-        }
-        match find {
-            // `find=True` throws away any override and runs the search again.
-            Some(true) => {
-                self.inner.set_root(None);
-                self.found_root()
+    ) -> PyResult<Option<Py<Pitch>>> {
+        let found = {
+            let mut me = slf.borrow_mut();
+            if let Some(newroot) = newroot.filter(|value| !value.is_none()) {
+                me.inner.set_root(Some(pitch_from_any(newroot)?));
+                return Ok(None);
             }
-            // `find=False` asks only whether a root was ever set, and never
-            // runs the search — which is how a caller tells an overridden
-            // root from an inferred one.
-            Some(false) => Ok(Self::optional_pitch(self.inner.overridden_root())),
-            None => match self.inner.overridden_root() {
-                Some(root) => Ok(Some(Pitch::wrap(root.clone(), false))),
-                None => self.found_root(),
-            },
-        }
+            match find {
+                // `find=True` throws away any override and runs the search
+                // again.
+                Some(true) => {
+                    me.inner.set_root(None);
+                    me.found_root()?
+                }
+                // `find=False` asks only whether a root was ever set, and
+                // never runs the search — which is how a caller tells an
+                // overridden root from an inferred one.
+                Some(false) => me.inner.overridden_root().cloned(),
+                None => match me.inner.overridden_root() {
+                    Some(root) => Some(root.clone()),
+                    None => me.found_root()?,
+                },
+            }
+        };
+        Self::own_pitch(slf, found.as_ref())
     }
 
     #[pyo3(signature = (newbass = None, *, find = None, allow_add = false))]
     fn bass(
-        &mut self,
+        slf: &Bound<'_, Self>,
         newbass: Option<&Bound<'_, PyAny>>,
         find: Option<bool>,
         allow_add: bool,
-    ) -> PyResult<Option<Pitch>> {
-        if let Some(newbass) = newbass.filter(|value| !value.is_none()) {
-            let bass = pitch_from_any(newbass)?;
-            let known = self
-                .inner
-                .pitches()
-                .iter()
-                .any(|pitch| pitch.name() == bass.name());
-            if !known && !allow_add {
-                return Err(ChordException::new_err(format!(
-                    "Pitch {} not found in chord",
-                    bass.name_with_octave()
-                )));
+    ) -> PyResult<Option<Py<Pitch>>> {
+        let found = {
+            let mut me = slf.borrow_mut();
+            if let Some(newbass) = newbass.filter(|value| !value.is_none()) {
+                let bass = pitch_from_any(newbass)?;
+                let known = me
+                    .inner
+                    .pitches()
+                    .iter()
+                    .any(|pitch| pitch.name() == bass.name());
+                if !known && !allow_add {
+                    return Err(ChordException::new_err(format!(
+                        "Pitch {} not found in chord",
+                        bass.name_with_octave()
+                    )));
+                }
+                me.inner.set_bass(Some(bass));
+                return Ok(None);
             }
-            self.inner.set_bass(Some(bass));
-            return Ok(None);
-        }
-        match find {
-            Some(true) => {
-                self.inner.set_bass(None);
-                Ok(Self::optional_pitch(self.inner.found_bass()))
+            match find {
+                Some(true) => {
+                    me.inner.set_bass(None);
+                    me.inner.found_bass().cloned()
+                }
+                Some(false) => me.inner.overridden_bass().cloned(),
+                None => me.inner.bass().cloned(),
             }
-            Some(false) => Ok(Self::optional_pitch(self.inner.overridden_bass())),
-            None => Ok(Self::optional_pitch(self.inner.bass())),
-        }
+        };
+        Self::own_pitch(slf, found.as_ref())
     }
 
     #[getter]
-    fn third(&self) -> Option<Pitch> {
-        Self::optional_pitch(self.inner.third())
+    fn third(slf: &Bound<'_, Self>) -> PyResult<Option<Py<Pitch>>> {
+        let found = slf.borrow().inner.third().cloned();
+        Self::own_pitch(slf, found.as_ref())
     }
 
     #[getter]
-    fn fifth(&self) -> Option<Pitch> {
-        Self::optional_pitch(self.inner.fifth())
+    fn fifth(slf: &Bound<'_, Self>) -> PyResult<Option<Py<Pitch>>> {
+        let found = slf.borrow().inner.fifth().cloned();
+        Self::own_pitch(slf, found.as_ref())
     }
 
     #[getter]
-    fn seventh(&self) -> Option<Pitch> {
-        Self::optional_pitch(self.inner.seventh())
+    fn seventh(slf: &Bound<'_, Self>) -> PyResult<Option<Py<Pitch>>> {
+        let found = slf.borrow().inner.seventh().cloned();
+        Self::own_pitch(slf, found.as_ref())
     }
 
     #[pyo3(signature = (chordStep, testRoot = None))]
     fn getChordStep(
-        &self,
+        slf: &Bound<'_, Self>,
         chordStep: u8,
         testRoot: Option<&Bound<'_, PyAny>>,
-    ) -> PyResult<Option<Pitch>> {
-        match testRoot.filter(|value| !value.is_none()) {
-            Some(testRoot) => {
-                let root = pitch_from_any(testRoot)?;
-                Ok(Self::optional_pitch(
-                    self.inner.chord_step_with_root(chordStep, &root),
-                ))
-            }
-            None => {
-                if self.inner.root().is_none() {
-                    return Err(ChordException::new_err(
-                        "Cannot run getChordStep without a root",
-                    ));
+    ) -> PyResult<Option<Py<Pitch>>> {
+        let found = {
+            let me = slf.borrow();
+            match testRoot.filter(|value| !value.is_none()) {
+                Some(testRoot) => {
+                    let root = pitch_from_any(testRoot)?;
+                    me.inner.chord_step_with_root(chordStep, &root).cloned()
                 }
-                Ok(Self::optional_pitch(self.inner.chord_step(chordStep)))
+                None => {
+                    if me.inner.root().is_none() {
+                        return Err(ChordException::new_err(
+                            "Cannot run getChordStep without a root",
+                        ));
+                    }
+                    me.inner.chord_step(chordStep).cloned()
+                }
             }
-        }
+        };
+        Self::own_pitch(slf, found.as_ref())
     }
 
     #[pyo3(signature = (chordStep, testRoot = None))]

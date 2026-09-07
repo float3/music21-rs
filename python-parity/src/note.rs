@@ -177,6 +177,22 @@ impl Note {
         Ok(note)
     }
 
+    /// A note built around a pitch object the caller already holds, so that
+    /// `chord.Chord([p1, p2]).pitches[0] is p1`, as music21's is.
+    pub(crate) fn object_for_pitch(py: Python<'_>, pitch: Py<Pitch>) -> PyResult<Py<Self>> {
+        let inner = RsNote::from_pitch(pitch.borrow(py).inner.clone());
+        let note = Py::new(
+            py,
+            Self {
+                inner,
+                pitch,
+                chord: None,
+            },
+        )?;
+        Self::claim_pitch(py, &note);
+        Ok(note)
+    }
+
     /// Points the note's pitch object back at the note, so an edit through
     /// the pitch finds its way home.
     fn claim_pitch(py: Python<'_>, note: &Py<Self>) {
