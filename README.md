@@ -123,10 +123,12 @@ listed under `python-parity/doctest/`, and
 fails when one of them stops passing.
 
 The same site carries [/reports/](https://float3.github.io/music21-rs/reports/):
-the library's test coverage, and every public method of the music21 classes
-the crate ports against what has been ported so far, with the deliberate
-omissions and their reasons. It is written by `cargo run -p xtask -- report`
-from [data/feature_map.toml](./data/feature_map.toml).
+the library's test coverage, the state of every test suite the repository has —
+the workspace, the parity suite that runs music21's own doctests, and the Python
+wheel with its own tests — and every public method of the music21 classes the
+crate ports against what has been ported so far, with the deliberate omissions
+and their reasons. It is written by `cargo run -p xtask -- report` from
+[data/feature_map.toml](./data/feature_map.toml).
 
 ## Local Development
 
@@ -189,6 +191,11 @@ python python/downstream/run.py
 # 8. what the docs job builds; `report` also fails when the feature map is stale
 cargo doc --workspace --no-deps
 cargo run -p xtask -- report --features-only
+
+# `report` with no flags runs every suite above and records how each one did,
+# alongside coverage. `--suites-only` runs just that part; `--no-suites` skips
+# it. A suite whose tooling is missing is recorded as skipped, with the reason,
+# rather than failing the report.
 ```
 
 Step 6 needs a Python interpreter with music21's own dependencies, since the

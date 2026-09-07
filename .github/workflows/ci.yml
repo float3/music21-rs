@@ -292,10 +292,34 @@ jobs:
         with:
           tool: cargo-llvm-cov
 
-      # Test coverage and the ported feature set, published beside the docs.
-      # The feature half also fails when data/feature_map.toml has gone stale.
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      # The report runs every suite, so this job needs what those suites need:
+      # music21's own dependencies for the doctest harness, and maturin and
+      # pytest for the wheel.
+      - name: Install the suites' dependencies
+        run: |
+          python -m pip install chardet joblib jsonpickle more_itertools numpy requests webcolors
+          python -m pip install "maturin>=1.7,<2" pytest
+
+      # The wheel's own tests import music21_rs, so the wheel has to be
+      # installed before the report runs them; the report rebuilds it, which
+      # is cheap once cargo has cached the artifacts.
+      - name: Install the wheel the report tests
+        run: |
+          maturin build --release --manifest-path python/Cargo.toml --out target/wheels
+          python -m pip install --no-index --find-links target/wheels music21-rs
+
+      # Coverage, every test suite, and the ported feature set, published
+      # beside the docs. The feature half also fails when data/feature_map.toml
+      # has gone stale.
       - name: Build reports
         run: cargo run -p xtask -- report --out target/reports
+        env:
+          PYO3_PYTHON: python
 
       - name: Install wasm-pack
         run: cargo install wasm-pack --locked

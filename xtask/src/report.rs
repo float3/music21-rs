@@ -17,11 +17,12 @@
 //! the map cannot go stale silently. That is the "check" in the command.
 
 use std::collections::BTreeMap;
+use std::env;
 use std::error::Error;
 use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Output};
 
 use serde::{Deserialize, Serialize};
 
@@ -74,7 +75,38 @@ struct Report {
     generated_from: String,
     music21_version: String,
     coverage: Option<Coverage>,
+    suites: Vec<Suite>,
     features: Vec<ClassReport>,
+}
+
+/// One runnable test suite, and what came of running it.
+#[derive(Debug, Serialize)]
+struct Suite {
+    name: String,
+    command: String,
+    status: SuiteStatus,
+    passed: usize,
+    failed: usize,
+    /// Why a suite was skipped, or what a run of it produced.
+    detail: Option<String>,
+}
+
+#[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+enum SuiteStatus {
+    Passed,
+    Failed,
+    Skipped,
+}
+
+impl SuiteStatus {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Passed => "passed",
+            Self::Failed => "failed",
+            Self::Skipped => "skipped",
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Clone, Copy)]
@@ -121,6 +153,7 @@ enum Status {
 pub(crate) struct Options {
     pub out: PathBuf,
     pub coverage: bool,
+    pub suites: bool,
     pub features: bool,
 }
 
@@ -128,6 +161,7 @@ pub(crate) fn parse_options(workspace_root: &Path, args: &[String]) -> Result<Op
     let mut options = Options {
         out: workspace_root.join("target/reports"),
         coverage: true,
+        suites: true,
         features: true,
     };
     let mut args = args.iter();
@@ -137,8 +171,19 @@ pub(crate) fn parse_options(workspace_root: &Path, args: &[String]) -> Result<Op
                 let path = args.next().ok_or("--out needs a directory")?;
                 options.out = workspace_root.join(path);
             }
-            "--features-only" => options.coverage = false,
-            "--coverage-only" => options.features = false,
+            "--features-only" => {
+                options.coverage = false;
+                options.suites = false;
+            }
+            "--coverage-only" => {
+                options.features = false;
+                options.suites = false;
+            }
+            "--suites-only" => {
+                options.coverage = false;
+                options.features = false;
+            }
+            "--no-suites" => options.suites = false,
             other => return Err(format!("unknown report option {other:?}")),
         }
     }
@@ -154,6 +199,12 @@ pub(crate) fn report(workspace_root: &Path, options: &Options) -> Result<(), Box
         None
     };
 
+    let suites = if options.suites {
+        run_suites(workspace_root)
+    } else {
+        Vec::new()
+    };
+
     let features = if options.features {
         scan_features(workspace_root)?
     } else {
@@ -164,6 +215,7 @@ pub(crate) fn report(workspace_root: &Path, options: &Options) -> Result<(), Box
         generated_from: git_head(workspace_root),
         music21_version: submodule_version(workspace_root)?,
         coverage,
+        suites,
         features,
     };
 
@@ -179,6 +231,22 @@ pub(crate) fn report(workspace_root: &Path, options: &Options) -> Result<(), Box
             "  coverage: {:.2}% of lines, {:.2}% of functions, {:.2}% of regions",
             coverage.lines.percent, coverage.functions.percent, coverage.regions.percent
         );
+    }
+    for suite in &report.suites {
+        match suite.status {
+            SuiteStatus::Skipped => println!(
+                "  {}: skipped ({})",
+                suite.name,
+                suite.detail.as_deref().unwrap_or("no reason given")
+            ),
+            status => println!(
+                "  {}: {}, {} passed, {} failed",
+                suite.name,
+                status.label(),
+                suite.passed,
+                suite.failed
+            ),
+        }
     }
     for class in &report.features {
         let counted = class.ported + class.missing;
@@ -288,6 +356,262 @@ fn measure_coverage(workspace_root: &Path, out: &Path) -> Result<Coverage, Box<d
         functions: percent("functions")?,
         regions: percent("regions")?,
     })
+}
+
+/// Runs every suite the repository has and records what each one answered.
+/// A suite whose tooling is missing is skipped with the reason rather than
+/// failing the report, so this runs anywhere and says what it could not reach.
+fn run_suites(workspace_root: &Path) -> Vec<Suite> {
+    let submodule = workspace_root.join("music21/music21/__init__.py");
+    let mut suites = vec![
+        cargo_suite(
+            workspace_root,
+            "Workspace",
+            &["test", "--workspace", "--all-targets"],
+            None,
+        ),
+        cargo_suite(
+            workspace_root,
+            "Python parity and music21's doctests",
+            &[
+                "test",
+                "--manifest-path",
+                "python-parity/Cargo.toml",
+                "--",
+                "--test-threads=1",
+            ],
+            (!submodule.exists()).then_some("the music21 submodule is not checked out"),
+        ),
+    ];
+    let (build, tests) = wheel_suites(workspace_root);
+    suites.push(build);
+    suites.push(tests);
+    suites
+}
+
+/// The interpreter the wheel suite should use: whatever `PYO3_PYTHON` names,
+/// since that is what the pyo3 crates here link against.
+fn python_command() -> String {
+    env::var("PYO3_PYTHON").unwrap_or_else(|_| "python".to_string())
+}
+
+fn cargo_suite(workspace_root: &Path, name: &str, args: &[&str], skip: Option<&str>) -> Suite {
+    let command = format!("cargo {}", args.join(" "));
+    if let Some(reason) = skip {
+        return Suite {
+            name: name.to_string(),
+            command,
+            status: SuiteStatus::Skipped,
+            passed: 0,
+            failed: 0,
+            detail: Some(reason.to_string()),
+        };
+    }
+    let output = Command::new("cargo")
+        .args(args)
+        .current_dir(workspace_root)
+        .output();
+    let output = match output {
+        Ok(output) => output,
+        Err(err) => {
+            return Suite {
+                name: name.to_string(),
+                command,
+                status: SuiteStatus::Skipped,
+                passed: 0,
+                failed: 0,
+                detail: Some(format!("could not run cargo ({err})")),
+            };
+        }
+    };
+    let (passed, failed) = cargo_test_counts(&String::from_utf8_lossy(&output.stdout));
+    Suite {
+        name: name.to_string(),
+        command,
+        status: if output.status.success() {
+            SuiteStatus::Passed
+        } else {
+            SuiteStatus::Failed
+        },
+        passed,
+        failed,
+        detail: None,
+    }
+}
+
+/// Builds the wheel the way CI does, then runs its own suite against it. Those
+/// tests import `music21_rs`, so they only run where the wheel is installed;
+/// this never installs it.
+fn wheel_suites(workspace_root: &Path) -> (Suite, Suite) {
+    const BUILD: &str = "Python wheel";
+    const TESTS: &str = "Python wheel tests";
+
+    let wheels = workspace_root.join("target/wheels");
+    let command = "maturin build --release --manifest-path python/Cargo.toml".to_string();
+    let built = Command::new("maturin")
+        .args(["build", "--release", "--manifest-path", "python/Cargo.toml"])
+        .arg("--out")
+        .arg(&wheels)
+        .current_dir(workspace_root)
+        .output();
+    let build = match built {
+        Err(err) => Suite {
+            name: BUILD.to_string(),
+            command,
+            status: SuiteStatus::Skipped,
+            passed: 0,
+            failed: 0,
+            detail: Some(format!("maturin is not installed ({err})")),
+        },
+        Ok(output) if output.status.success() => Suite {
+            name: BUILD.to_string(),
+            command,
+            status: SuiteStatus::Passed,
+            passed: 0,
+            failed: 0,
+            detail: built_wheel_name(&merged(&output)),
+        },
+        Ok(output) => Suite {
+            name: BUILD.to_string(),
+            command,
+            status: SuiteStatus::Failed,
+            passed: 0,
+            failed: 0,
+            detail: last_line(&merged(&output)),
+        },
+    };
+
+    let python = python_command();
+    let command = "python -m pytest python/tests".to_string();
+    let ran = Command::new(&python)
+        .args(["-m", "pytest", "python/tests", "-q"])
+        .current_dir(workspace_root)
+        .output();
+    let tests = match ran {
+        Err(err) => Suite {
+            name: TESTS.to_string(),
+            command,
+            status: SuiteStatus::Skipped,
+            passed: 0,
+            failed: 0,
+            detail: Some(format!("could not run {python} ({err})")),
+        },
+        Ok(output) => {
+            let text = merged(&output);
+            match missing_module(&text) {
+                Some(missing) => Suite {
+                    name: TESTS.to_string(),
+                    command,
+                    status: SuiteStatus::Skipped,
+                    passed: 0,
+                    failed: 0,
+                    detail: Some(format!("{python} has no {missing}")),
+                },
+                None => {
+                    let (passed, failed) = pytest_counts(&text);
+                    Suite {
+                        name: TESTS.to_string(),
+                        command,
+                        status: if output.status.success() {
+                            SuiteStatus::Passed
+                        } else {
+                            SuiteStatus::Failed
+                        },
+                        passed,
+                        failed,
+                        detail: None,
+                    }
+                }
+            }
+        }
+    };
+    (build, tests)
+}
+
+/// Everything a command wrote, on either stream: maturin reports the wheel it
+/// built on stderr, and a Python import error lands there too.
+fn merged(output: &Output) -> String {
+    format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    )
+}
+
+/// Sums the `test result:` lines libtest writes, one per test binary.
+fn cargo_test_counts(text: &str) -> (usize, usize) {
+    let mut passed = 0;
+    let mut failed = 0;
+    for line in text.lines() {
+        let Some(rest) = line.trim().strip_prefix("test result:") else {
+            continue;
+        };
+        let words: Vec<&str> = rest.split_whitespace().collect();
+        for pair in words.windows(2) {
+            match (pair[0].parse::<usize>(), pair[1].trim_end_matches(';')) {
+                (Ok(count), "passed") => passed += count,
+                (Ok(count), "failed") => failed += count,
+                _ => {}
+            }
+        }
+    }
+    (passed, failed)
+}
+
+/// Reads pytest's one-line summary, `19 passed in 0.07s` or
+/// `2 failed, 17 passed in 0.11s`.
+fn pytest_counts(text: &str) -> (usize, usize) {
+    for line in text.lines().rev() {
+        let words: Vec<&str> = line.split_whitespace().collect();
+        let mut passed = 0;
+        let mut failed = 0;
+        let mut seen = false;
+        for pair in words.windows(2) {
+            match (pair[0].parse::<usize>(), pair[1].trim_end_matches(',')) {
+                (Ok(count), "passed") => {
+                    passed += count;
+                    seen = true;
+                }
+                (Ok(count), "failed") => {
+                    failed += count;
+                    seen = true;
+                }
+                _ => {}
+            }
+        }
+        if seen {
+            return (passed, failed);
+        }
+    }
+    (0, 0)
+}
+
+/// The module a Python run could not import, when that is why it failed.
+fn missing_module(text: &str) -> Option<String> {
+    let marker = "No module named ";
+    let start = text.find(marker)? + marker.len();
+    let name: String = text[start..]
+        .trim_start_matches(['\'', '"'])
+        .chars()
+        .take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '.')
+        .collect();
+    (!name.is_empty()).then_some(name)
+}
+
+fn built_wheel_name(stdout: &str) -> Option<String> {
+    let line = stdout.lines().find(|line| line.contains("Built wheel"))?;
+    let (_, path) = line.rsplit_once(' ')?;
+    Path::new(path.trim())
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+}
+
+fn last_line(text: &str) -> Option<String> {
+    text.lines()
+        .rev()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .map(str::to_string)
 }
 
 fn scan_features(workspace_root: &Path) -> Result<Vec<ClassReport>, Box<dyn Error>> {
@@ -602,6 +926,18 @@ fn render_html(report: &Report) -> String {
                 color: var(--muted);
                 font-style: italic;
             }}
+            .status-passed {{
+                color: var(--accent-strong);
+                font-weight: 700;
+            }}
+            .status-failed {{
+                color: #d1344b;
+                font-weight: 700;
+            }}
+            .status-skipped {{
+                color: var(--muted);
+                font-style: italic;
+            }}
             td code {{
                 font-size: 13px;
             }}
@@ -652,6 +988,82 @@ fn render_html(report: &Report) -> String {
         let _ = write!(
             html,
             "            </div>\n            <p>The library's own unit tests, measured by <code>cargo llvm-cov</code>, with the generated chord and Scala tables left out. <a href=\"./coverage/html/index.html\">File by file</a>.</p>\n"
+        );
+    }
+
+    if !report.suites.is_empty() {
+        let passed: usize = report.suites.iter().map(|s| s.passed).sum();
+        let failed: usize = report.suites.iter().map(|s| s.failed).sum();
+        let skipped = report
+            .suites
+            .iter()
+            .filter(|s| s.status == SuiteStatus::Skipped)
+            .count();
+        let headline = if failed > 0 {
+            format!("{failed} failing")
+        } else if skipped > 0 {
+            format!("{skipped} not run")
+        } else {
+            "all green".to_string()
+        };
+        let _ = write!(
+            html,
+            r#"            <h2>Test suites</h2>
+            <div class="summary">
+                <div class="panel">
+                    <span class="number">{passed}</span>
+                    <span class="label">tests passed</span>
+                </div>
+                <div class="panel">
+                    <span class="number">{failed}</span>
+                    <span class="label">tests failed</span>
+                </div>
+                <div class="panel">
+                    <span class="number">{headline}</span>
+                    <span class="label">across {count} suites</span>
+                </div>
+            </div>
+            <table>
+                <thead><tr><th>Suite</th><th>Status</th><th>Passed</th><th>Failed</th><th>Command</th></tr></thead>
+                <tbody>
+"#,
+            count = report.suites.len(),
+            headline = escape(&headline),
+        );
+        for suite in &report.suites {
+            let status = suite.status.label();
+            let note = match (&suite.detail, suite.status) {
+                (Some(detail), SuiteStatus::Skipped) => format!(" — {}", escape(detail)),
+                (Some(detail), _) => format!(" — <code>{}</code>", escape(detail)),
+                (None, _) => String::new(),
+            };
+            let count = |n: usize| {
+                if suite.status == SuiteStatus::Skipped || suite.passed + suite.failed == 0 {
+                    "—".to_string()
+                } else {
+                    n.to_string()
+                }
+            };
+            let _ = write!(
+                html,
+                r#"                    <tr>
+                        <td>{name}</td>
+                        <td><span class="status-{status}">{status}</span>{note}</td>
+                        <td>{passed}</td>
+                        <td>{failed}</td>
+                        <td><code>{command}</code></td>
+                    </tr>
+"#,
+                name = escape(&suite.name),
+                note = note,
+                passed = count(suite.passed),
+                failed = count(suite.failed),
+                command = escape(&suite.command),
+            );
+        }
+        let _ = write!(
+            html,
+            "                </tbody>\n            </table>\n            <p>Every suite the repository has, run when this report was generated. A suite whose tooling is not present is skipped rather than failed, and says so. The wheel's own tests import <code>music21_rs</code>, so they need the built wheel installed in the interpreter that runs them.</p>\n"
         );
     }
 
@@ -790,6 +1202,47 @@ mod tests {
         assert_eq!(module_functions(python), ["top"]);
         assert_eq!(module_classes(python, None), ["A", "B"]);
         assert_eq!(module_classes(python, Some("B")), ["B"]);
+    }
+
+    #[test]
+    fn cargo_test_counts_sum_every_binary() {
+        let text = "running 424 tests\ntest result: ok. 424 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.85s\n\nrunning 9 tests\ntest result: FAILED. 7 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s\n";
+        assert_eq!(cargo_test_counts(text), (431, 2));
+        assert_eq!(cargo_test_counts("nothing to see"), (0, 0));
+    }
+
+    #[test]
+    fn pytest_counts_read_the_summary_line() {
+        assert_eq!(pytest_counts("...\n19 passed in 0.07s\n"), (19, 0));
+        assert_eq!(
+            pytest_counts("F..\n2 failed, 17 passed in 0.11s\n"),
+            (17, 2)
+        );
+        assert_eq!(pytest_counts("collected 0 items\n"), (0, 0));
+    }
+
+    #[test]
+    fn a_missing_module_is_read_off_the_traceback() {
+        assert_eq!(
+            missing_module("ModuleNotFoundError: No module named 'music21_rs'").as_deref(),
+            Some("music21_rs")
+        );
+        assert_eq!(
+            missing_module("No module named pytest").as_deref(),
+            Some("pytest")
+        );
+        assert_eq!(missing_module("19 passed in 0.07s"), None);
+    }
+
+    #[test]
+    fn the_built_wheel_is_named_from_maturin_output() {
+        let stdout =
+            "Built wheel for CPython 3.13 to target/wheels/music21_rs-0.3.0-cp313-win_amd64.whl";
+        assert_eq!(
+            built_wheel_name(stdout).as_deref(),
+            Some("music21_rs-0.3.0-cp313-win_amd64.whl")
+        );
+        assert_eq!(built_wheel_name("nothing was built"), None);
     }
 
     #[test]
