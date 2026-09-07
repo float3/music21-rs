@@ -793,9 +793,46 @@ impl Note {
         self.inner.lyric()
     }
 
+    /// music21 takes a string here, splitting it into a verse per line, or a
+    /// `Lyric` to hold as the one verse, or `None` to clear them.
     #[setter]
-    pub(crate) fn set_lyric(&mut self, value: Option<&str>) -> PyResult<()> {
-        self.inner.set_lyric(value).map_err(note_error)
+    pub(crate) fn set_lyric(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        let Some(value) = value.filter(|value| !value.is_none()) else {
+            return self.inner.set_lyric(None).map_err(note_error);
+        };
+        if let Ok(lyric) = value.extract::<PyRef<'_, Lyric>>() {
+            self.inner.set_lyric(None).map_err(note_error)?;
+            self.inner.lyrics_mut().push(lyric.inner.clone());
+            return Ok(());
+        }
+        let text = value.str()?.to_string();
+        self.inner.set_lyric(Some(&text)).map_err(note_error)
+    }
+
+    /// music21's `insertLyric`: puts a syllable in front of the verse at
+    /// `index` and moves the rest down a line.
+    #[pyo3(signature = (text, index = 0, *, applyRaw = false, identifier = None))]
+    pub(crate) fn insertLyric(
+        &mut self,
+        text: &Bound<'_, PyAny>,
+        index: usize,
+        applyRaw: bool,
+        identifier: Option<String>,
+    ) -> PyResult<()> {
+        let text = if text.is_none() {
+            String::new()
+        } else {
+            text.str()?.to_string()
+        };
+        self.inner
+            .insert_lyric(&text, index, applyRaw)
+            .map_err(note_error)?;
+        if identifier.is_some()
+            && let Some(lyric) = self.inner.lyrics_mut().get_mut(index)
+        {
+            lyric.set_identifier(identifier);
+        }
+        Ok(())
     }
 
     #[pyo3(signature = (text, lyricNumber = None, *, applyRaw = false, lyricIdentifier = None))]
@@ -811,14 +848,13 @@ impl Note {
         } else {
             text.str()?.to_string()
         };
-        self.inner.add_lyric(&text, applyRaw).map_err(note_error)?;
-        if let Some(lyric) = self.inner.lyrics_mut().last_mut() {
-            if let Some(number) = lyricNumber {
-                lyric.set_number(number).map_err(note_error)?;
-            }
-            if lyricIdentifier.is_some() {
-                lyric.set_identifier(lyricIdentifier);
-            }
+        self.inner
+            .add_lyric(&text, lyricNumber, applyRaw)
+            .map_err(note_error)?;
+        if lyricIdentifier.is_some()
+            && let Some(lyric) = self.inner.lyrics_mut().last_mut()
+        {
+            lyric.set_identifier(lyricIdentifier);
         }
         Ok(())
     }

@@ -996,9 +996,14 @@ impl Chord {
     }
 
     /// Adds a syllable as the next verse: music21's `addLyric`.
-    pub fn add_lyric(&mut self, text: &str, apply_raw: bool) -> Result<()> {
+    pub fn add_lyric(
+        &mut self,
+        text: &str,
+        number: Option<IntegerType>,
+        apply_raw: bool,
+    ) -> Result<()> {
         match self.notes.first_mut() {
-            Some(note) => note.add_lyric(text, apply_raw),
+            Some(note) => note.add_lyric(text, number, apply_raw),
             None => Err(Error::Chord(
                 "an empty chord has nothing to sing".to_string(),
             )),
@@ -1050,7 +1055,7 @@ impl Chord {
         let names = self.annotate_intervals(strip_specifiers, sort_pitches)?;
         let mut annotated = self.clone();
         for name in names {
-            annotated.add_lyric(&name, false)?;
+            annotated.add_lyric(&name, None, false)?;
         }
         Ok(annotated)
     }

@@ -1623,9 +1623,28 @@ impl Chord {
     }
 
     #[setter]
-    fn set_lyric(&mut self, py: Python<'_>, value: Option<&str>) -> PyResult<()> {
+    fn set_lyric(&mut self, py: Python<'_>, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
         match self.notes.first() {
             Some(note) => note.borrow_mut(py).set_lyric(value),
+            None => Ok(()),
+        }
+    }
+
+    /// music21's `insertLyric`, which a chord passes to its first note as it
+    /// passes every other lyric question.
+    #[pyo3(signature = (text, index = 0, *, applyRaw = false, identifier = None))]
+    fn insertLyric(
+        &mut self,
+        py: Python<'_>,
+        text: &Bound<'_, PyAny>,
+        index: usize,
+        applyRaw: bool,
+        identifier: Option<String>,
+    ) -> PyResult<()> {
+        match self.notes.first() {
+            Some(note) => note
+                .borrow_mut(py)
+                .insertLyric(text, index, applyRaw, identifier),
             None => Ok(()),
         }
     }

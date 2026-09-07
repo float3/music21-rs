@@ -5,6 +5,9 @@
 
 passing = [
     "music21.note.GeneralNote",
+    "music21.note.GeneralNote.addLyric",
+    "music21.note.GeneralNote.insertLyric",
+    "music21.note.GeneralNote.lyric",
     "music21.note.GeneralNote.tie",
     "music21.note.Lyric.identifier",
     "music21.note.Lyric.number",

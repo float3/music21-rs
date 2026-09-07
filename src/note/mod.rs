@@ -230,7 +230,7 @@ impl Note {
             self.notation
                 .lyrics
                 .iter()
-                .map(Lyric::raw_text)
+                .map(Lyric::text)
                 .collect::<Vec<_>>()
                 .join("\n"),
         )
@@ -255,17 +255,64 @@ impl Note {
     /// Adds a syllable as the next verse: music21's `addLyric`. Hyphens in
     /// the text say where the syllable falls in its word unless `apply_raw`
     /// is set, which takes the text as written.
-    pub fn add_lyric(&mut self, text: &str, apply_raw: bool) -> Result<()> {
-        let mut lyric = if apply_raw {
+    /// Adds a syllable as a verse: music21's `addLyric`.
+    ///
+    /// With no `number` it becomes the next verse. With one, it *replaces*
+    /// the text of the verse already carrying that number — leaving where
+    /// that syllable falls in its word alone, as music21's plain text
+    /// assignment does — and only becomes a new verse when no verse has it.
+    pub fn add_lyric(
+        &mut self,
+        text: &str,
+        number: Option<IntegerType>,
+        apply_raw: bool,
+    ) -> Result<()> {
+        let Some(number) = number else {
+            let mut lyric = Self::build_lyric(text, apply_raw);
+            lyric.set_number(self.notation.lyrics.len() as IntegerType + 1)?;
+            self.notation.lyrics.push(lyric);
+            return Ok(());
+        };
+        if let Some(existing) = self
+            .notation
+            .lyrics
+            .iter_mut()
+            .find(|lyric| lyric.number() == number)
+        {
+            existing.set_text(text);
+            return Ok(());
+        }
+        let mut lyric = Self::build_lyric(text, apply_raw);
+        lyric.set_number(number)?;
+        self.notation.lyrics.push(lyric);
+        Ok(())
+    }
+
+    /// Puts a syllable in front of the verse at `index`, moving the verses
+    /// from there on down a line: music21's `insertLyric`.
+    ///
+    /// An index past the end appends, as inserting into a list does.
+    pub fn insert_lyric(&mut self, text: &str, index: usize, apply_raw: bool) -> Result<()> {
+        let index = index.min(self.notation.lyrics.len());
+        for (offset, lyric) in self.notation.lyrics[index..].iter_mut().enumerate() {
+            lyric.set_number(index as IntegerType + offset as IntegerType + 2)?;
+        }
+        let mut lyric = Self::build_lyric(text, apply_raw);
+        lyric.set_number(index as IntegerType + 1)?;
+        self.notation.lyrics.insert(index, lyric);
+        Ok(())
+    }
+
+    /// A syllable read from text, whose hyphens say where it falls in its
+    /// word unless `apply_raw` takes the text as written.
+    fn build_lyric(text: &str, apply_raw: bool) -> Lyric {
+        if apply_raw {
             let mut lyric = Lyric::new(text);
             lyric.set_syllabic(Syllabic::Single);
             lyric
         } else {
             Lyric::from_raw_text(text)
-        };
-        lyric.set_number(self.notation.lyrics.len() as IntegerType + 1)?;
-        self.notation.lyrics.push(lyric);
-        Ok(())
+        }
     }
 }
 
@@ -498,6 +545,56 @@ mod tests {
         assert_eq!(note.pitch_name_with_octave(), "E-5");
         assert_eq!(note.duration().unwrap().quarter_length(), 2.0);
         assert_eq!(note.notehead(), crate::Notehead::Diamond);
+    }
+
+    #[test]
+    fn a_numbered_lyric_replaces_the_verse_that_has_that_number() {
+        let mut note = Note::from_name("C4").unwrap();
+        note.add_lyric("hello", None, false).unwrap();
+        note.add_lyric("bye", Some(3), false).unwrap();
+        assert_eq!(
+            note.lyrics()
+                .iter()
+                .map(|lyric| (lyric.number(), lyric.text()))
+                .collect::<Vec<_>>(),
+            [(1, "hello".to_string()), (3, "bye".to_string())]
+        );
+
+        // the same number again replaces the text, and leaves where the
+        // syllable falls in its word alone
+        note.add_lyric("ciao", Some(3), false).unwrap();
+        assert_eq!(note.lyrics().len(), 2);
+        assert_eq!(note.lyrics()[1].text(), "ciao");
+        assert_eq!(note.lyrics()[1].number(), 3);
+
+        // and `lyric` reads the syllables, not their hyphenated spellings
+        let mut hyphenated = Note::from_name("C4").unwrap();
+        hyphenated.set_lyric(Some("hel-")).unwrap();
+        assert_eq!(hyphenated.lyrics()[0].raw_text(), "hel-");
+        assert_eq!(hyphenated.lyric().as_deref(), Some("hel"));
+    }
+
+    #[test]
+    fn inserting_a_lyric_moves_the_verses_after_it_down() {
+        let mut note = Note::from_name("C4").unwrap();
+        note.add_lyric("second", None, false).unwrap();
+        note.insert_lyric("first", 0, false).unwrap();
+        note.insert_lyric("newSecond", 1, false).unwrap();
+        assert_eq!(
+            note.lyrics()
+                .iter()
+                .map(|lyric| (lyric.number(), lyric.text()))
+                .collect::<Vec<_>>(),
+            [
+                (1, "first".to_string()),
+                (2, "newSecond".to_string()),
+                (3, "second".to_string())
+            ]
+        );
+        // an index past the end appends, as inserting into a list does
+        note.insert_lyric("last", 99, false).unwrap();
+        assert_eq!(note.lyrics()[3].number(), 4);
+        assert_eq!(note.lyrics()[3].text(), "last");
     }
 
     #[test]
