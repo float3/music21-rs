@@ -8,8 +8,8 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
 
 use music21_rs::{
-    Chord as RsChord, Duration as RsDuration, Interval as RsInterval, Key as RsKey, Note as RsNote,
-    Pitch as RsPitch, Volume as RsVolume,
+    Chord as RsChord, ChordTableAddress as RsChordTableAddress, Duration as RsDuration,
+    Interval as RsInterval, Key as RsKey, Note as RsNote, Pitch as RsPitch, Volume as RsVolume,
 };
 
 use crate::interval::interval_from_any;
@@ -55,6 +55,15 @@ pub struct Chord {
     /// when it is not simply the one the part is written for. The crate
     /// models no instruments, so the object is kept as it was given.
     stored_instrument: Option<Py<PyAny>>,
+    /// music21's `_overrides`: the answers a caller has fixed rather than
+    /// letting the chord work them out.
+    ///
+    /// The crate models the same thing — `Chord::set_root` records an answer
+    /// that wins over the inferred one — but music21's own doctests reach
+    /// into the dictionary directly, and writing `None` there is how they
+    /// say "this chord has no root at all". So the dictionary is the storage
+    /// the facade reads, made on first asking and kept.
+    overrides: Option<Py<PyDict>>,
 }
 
 impl Chord {
@@ -67,6 +76,7 @@ impl Chord {
             duration: None,
             volume: None,
             stored_instrument: None,
+            overrides: None,
         };
         chord.rebuild_notes(py)?;
         Ok(chord)
@@ -115,6 +125,7 @@ impl Chord {
             duration: Some(duration),
             volume: None,
             stored_instrument: None,
+            overrides: None,
         })
     }
 
@@ -509,9 +520,126 @@ fn require_iterable(value: &Bound<'_, PyAny>, field: &str) -> PyResult<()> {
     Ok(())
 }
 
+/// music21's `chord.tables.ChordTableAddress`: where a chord's set class
+/// sits in the Forte tables.
+///
+/// music21 makes this a `NamedTuple`, so it is indexable and compares equal
+/// to a plain tuple, and its `repr` names the four fields.
+#[pyclass(
+    name = "ChordTableAddress",
+    module = "music21.chord.tables",
+    skip_from_py_object
+)]
+#[derive(Clone)]
+pub struct ChordTableAddress {
+    inner: RsChordTableAddress,
+}
+
+#[pymethods]
+impl ChordTableAddress {
+    #[new]
+    #[pyo3(signature = (cardinality = 0, forteClass = 0, inversion = 0, pcOriginal = 0))]
+    fn new(cardinality: u8, forteClass: u8, inversion: i8, pcOriginal: u8) -> Self {
+        Self {
+            inner: RsChordTableAddress {
+                cardinality,
+                forte_class: forteClass,
+                inversion,
+                pitch_class_original: pcOriginal,
+            },
+        }
+    }
+
+    #[getter]
+    fn cardinality(&self) -> u8 {
+        self.inner.cardinality
+    }
+
+    #[getter]
+    fn forteClass(&self) -> u8 {
+        self.inner.forte_class
+    }
+
+    #[getter]
+    fn inversion(&self) -> i8 {
+        self.inner.inversion
+    }
+
+    #[getter]
+    fn pcOriginal(&self) -> u8 {
+        self.inner.pitch_class_original
+    }
+
+    fn __len__(&self) -> usize {
+        4
+    }
+
+    fn __getitem__(&self, py: Python<'_>, index: isize) -> PyResult<Py<PyAny>> {
+        Ok(match index {
+            0 | -4 => self
+                .inner
+                .cardinality
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
+            1 | -3 => self
+                .inner
+                .forte_class
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
+            2 | -2 => self.inner.inversion.into_pyobject(py)?.into_any().unbind(),
+            3 | -1 => self
+                .inner
+                .pitch_class_original
+                .into_pyobject(py)?
+                .into_any()
+                .unbind(),
+            _ => return Err(PyIndexError::new_err("tuple index out of range")),
+        })
+    }
+
+    fn __eq__(&self, other: &Bound<'_, PyAny>) -> bool {
+        if let Ok(other) = other.extract::<PyRef<'_, Self>>() {
+            return other.inner == self.inner;
+        }
+        other.extract::<(u8, u8, i8, u8)>().is_ok_and(|values| {
+            values
+                == (
+                    self.inner.cardinality,
+                    self.inner.forte_class,
+                    self.inner.inversion,
+                    self.inner.pitch_class_original,
+                )
+        })
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "ChordTableAddress(cardinality={}, forteClass={}, inversion={}, pcOriginal={})",
+            self.inner.cardinality,
+            self.inner.forte_class,
+            self.inner.inversion,
+            self.inner.pitch_class_original
+        )
+    }
+}
+
 /// One pitch's place in a key: which degree it is, and how it is altered
 /// from that degree.
 type ScaleDegree = (Option<usize>, Option<Accidental>);
+
+/// The answer fixed by hand for `key` in a chord's `_overrides`, if one has
+/// been fixed at all. The outer `Option` says whether there is an entry; the
+/// value inside it may itself be `None`, which is the entry saying there is
+/// no such pitch.
+fn overridden<'py>(chord: &Bound<'py, Chord>, key: &str) -> PyResult<Option<Bound<'py, PyAny>>> {
+    let py = chord.py();
+    let Some(overrides) = chord.borrow().overrides.as_ref().map(|d| d.clone_ref(py)) else {
+        return Ok(None);
+    };
+    overrides.bind(py).get_item(key)
+}
 
 /// The key a chord is in: its own, or the nearest one in the streams that
 /// hold it.
@@ -846,12 +974,34 @@ impl Chord {
 
     // ---- members ---------------------------------------------------------
 
+    /// music21's `_overrides`: the answers fixed by hand, as a live
+    /// dictionary. Writing `_overrides['root'] = None` is how music21's own
+    /// doctests say a chord has no root.
+    #[getter]
+    fn _overrides(&mut self, py: Python<'_>) -> Py<PyDict> {
+        let overrides = self
+            .overrides
+            .get_or_insert_with(|| PyDict::new(py).unbind());
+        overrides.clone_ref(py)
+    }
+
     #[pyo3(signature = (newroot = None, *, find = None))]
     fn root(
         slf: &Bound<'_, Self>,
         newroot: Option<&Bound<'_, PyAny>>,
         find: Option<bool>,
     ) -> PyResult<Option<Py<Pitch>>> {
+        // An answer fixed by hand in `_overrides` wins, `None` included.
+        if newroot.is_none_or(|value| value.is_none())
+            && find != Some(true)
+            && let Some(fixed) = overridden(slf, "root")?
+        {
+            if fixed.is_none() {
+                return Ok(None);
+            }
+            let pitch = pitch_from_any(&fixed)?;
+            return Self::own_pitch(slf, Some(&pitch));
+        }
         let found = {
             let mut me = slf.borrow_mut();
             if let Some(newroot) = newroot.filter(|value| !value.is_none()) {
@@ -955,11 +1105,13 @@ impl Chord {
                     me.inner.chord_step_with_root(chordStep, &root).cloned()
                 }
                 None => {
-                    if me.inner.root().is_none() {
+                    drop(me);
+                    if Self::root(slf, None, None)?.is_none() {
                         return Err(ChordException::new_err(
                             "Cannot run getChordStep without a root",
                         ));
                     }
+                    let me = slf.borrow();
                     me.inner.chord_step(chordStep).cloned()
                 }
             }
@@ -1452,6 +1604,15 @@ impl Chord {
         }
     }
 
+    /// music21's `chordTablesAddress`: where this chord's set class sits in
+    /// the Forte tables.
+    #[getter]
+    fn chordTablesAddress(&self) -> ChordTableAddress {
+        ChordTableAddress {
+            inner: self.inner.chord_tables_address_entry(),
+        }
+    }
+
     /// music21's `scaleDegrees`: what degree of the key each pitch is, and
     /// how it is altered from that degree.
     ///
@@ -1916,6 +2077,7 @@ impl Chord {
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let py = m.py();
     m.add_class::<Chord>()?;
+    m.add_class::<ChordTableAddress>()?;
     let exception = py.get_type::<ChordException>();
     exception.setattr("__module__", "music21.chord")?;
     m.add("ChordException", exception)?;

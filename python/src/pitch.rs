@@ -142,9 +142,22 @@ impl Microtone {
 
 /// music21's `pitch.Accidental`.
 #[pyclass(name = "Accidental", module = "music21.pitch", skip_from_py_object)]
-#[derive(Clone)]
 pub struct Accidental {
     pub(crate) inner: RsAccidental,
+    /// The pitch this accidental belongs to, when it came out of one.
+    ///
+    /// music21's `p.accidental` is the pitch's own accidental, so editing it
+    /// edits the pitch — its `roman` module corrects a chord's spelling by
+    /// calling `set` on the accidental it read off a pitch, and expects the
+    /// pitch to change. [`Accidental::write_back`] is what carries it there.
+    owner: Option<Py<Pitch>>,
+}
+
+impl Clone for Accidental {
+    /// A copy of an accidental is a loose one, as a copy of a pitch is.
+    fn clone(&self) -> Self {
+        Self::from_inner(self.inner.clone())
+    }
 }
 
 fn accidental_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsAccidental> {
@@ -165,7 +178,27 @@ fn accidental_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsAccidental> {
 
 impl Accidental {
     pub(crate) fn from_inner(inner: RsAccidental) -> Self {
-        Self { inner }
+        Self { inner, owner: None }
+    }
+
+    /// The same accidental, knowing which pitch it came off.
+    fn owned_by(inner: RsAccidental, pitch: Py<Pitch>) -> Self {
+        Self {
+            inner,
+            owner: Some(pitch),
+        }
+    }
+
+    /// Writes this accidental into the pitch it belongs to, if it belongs to
+    /// one, so that an edit through it is an edit to the pitch.
+    fn write_back(&self, py: Python<'_>) -> PyResult<()> {
+        let Some(owner) = &self.owner else {
+            return Ok(());
+        };
+        let accidental = Py::new(py, Self::from_inner(self.inner.clone()))?;
+        owner
+            .bind(py)
+            .setattr("accidental", accidental.bind(py).as_any())
     }
 }
 
@@ -178,7 +211,7 @@ impl Accidental {
             None => RsAccidental::natural(),
             Some(value) => accidental_from_any(value)?,
         };
-        Ok(Self { inner })
+        Ok(Self::from_inner(inner))
     }
 
     #[staticmethod]
@@ -187,7 +220,12 @@ impl Accidental {
     }
 
     #[pyo3(signature = (specifier, *, allowNonStandardValue = false))]
-    fn set(&mut self, specifier: &Bound<'_, PyAny>, allowNonStandardValue: bool) -> PyResult<()> {
+    fn set(
+        &mut self,
+        py: Python<'_>,
+        specifier: &Bound<'_, PyAny>,
+        allowNonStandardValue: bool,
+    ) -> PyResult<()> {
         if allowNonStandardValue {
             if let Ok(text) = specifier.extract::<String>() {
                 self.inner
@@ -198,10 +236,10 @@ impl Accidental {
                     .set_allowing_non_standard_value(specifier.extract::<f64>()?)
                     .map_err(accidental_error)?;
             }
-            return Ok(());
+            return self.write_back(py);
         }
         self.inner = accidental_from_any(specifier)?;
-        Ok(())
+        self.write_back(py)
     }
 
     fn isTwelveTone(&self) -> bool {
@@ -214,8 +252,9 @@ impl Accidental {
     }
 
     #[setter]
-    fn set_name(&mut self, value: &str) -> PyResult<()> {
-        self.inner.set_name(value).map_err(accidental_error)
+    fn set_name(&mut self, py: Python<'_>, value: &str) -> PyResult<()> {
+        self.inner.set_name(value).map_err(accidental_error)?;
+        self.write_back(py)
     }
 
     #[getter]
@@ -224,8 +263,9 @@ impl Accidental {
     }
 
     #[setter]
-    fn set_alter(&mut self, value: f64) -> PyResult<()> {
-        self.inner.set_alter(value).map_err(accidental_error)
+    fn set_alter(&mut self, py: Python<'_>, value: f64) -> PyResult<()> {
+        self.inner.set_alter(value).map_err(accidental_error)?;
+        self.write_back(py)
     }
 
     #[getter]
@@ -234,8 +274,9 @@ impl Accidental {
     }
 
     #[setter]
-    fn set_modifier(&mut self, value: &str) {
+    fn set_modifier(&mut self, py: Python<'_>, value: &str) -> PyResult<()> {
         self.inner.set_modifier(value);
+        self.write_back(py)
     }
 
     #[getter]
@@ -768,12 +809,15 @@ impl Pitch {
         self.inner.implicit_octave()
     }
 
+    /// music21's `accidental`, which is the pitch's own: editing it edits
+    /// the pitch. A pitch that carries none — music21 keeps no accidental on
+    /// a bare `D` — answers nothing.
     #[getter]
-    fn accidental(&self) -> Option<Accidental> {
-        self.inner
-            .explicit_accidental()
-            .cloned()
-            .map(Accidental::from_inner)
+    fn accidental(slf: &Bound<'_, Self>) -> PyResult<Option<Accidental>> {
+        let Some(accidental) = slf.borrow().inner.explicit_accidental().cloned() else {
+            return Ok(None);
+        };
+        Ok(Some(Accidental::owned_by(accidental, slf.clone().unbind())))
     }
 
     #[setter]
@@ -1256,7 +1300,7 @@ impl Pitch {
     /// music21's `_nameInKeySignature`: whether one of the key signature's
     /// altered pitches has this pitch's step and accidental.
     fn _nameInKeySignature(&self, alteredPitches: &Bound<'_, PyAny>) -> PyResult<bool> {
-        if self.accidental().is_none() {
+        if self.inner.explicit_accidental().is_none() {
             return Ok(false);
         }
         let own_name = self.accidental_name();

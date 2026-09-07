@@ -29,9 +29,7 @@ intervalVector = "interval_class_vector"
 orderedPitchClasses = "pitch_classes"
 formatVectorString = "format_vector_string"
 pitchClasses = "note_pitch_classes"
-
-[class.excluded]
-chordTablesAddress = "the table address is internal; every value read off it has its own method"
+chordTablesAddress = "chord_tables_address_entry"
 
 [[class]]
 python = "pitch.py"

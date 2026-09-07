@@ -2746,7 +2746,49 @@ impl IntoNotes for &[IntegerType] {
     }
 }
 
+/// Where a chord's set class sits in the Forte tables: music21's
+/// `ChordTableAddress`.
+///
+/// The cardinality and the class number index the table; the inversion says
+/// which of an inversionally related pair this is, `0` when the class is its
+/// own inversion; and the original pitch class is the one the prime form was
+/// transposed away from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct ChordTableAddress {
+    /// How many distinct pitch classes the chord has.
+    pub cardinality: u8,
+    /// The Forte class number within that cardinality.
+    pub forte_class: u8,
+    /// `1`, `-1`, or `0` for a class that is its own inversion.
+    pub inversion: i8,
+    /// The pitch class the prime form was transposed away from.
+    pub pitch_class_original: u8,
+}
+
 impl Chord {
+    /// Where this chord's set class sits in the Forte tables.
+    ///
+    /// An empty chord answers all zeros rather than failing, which is the
+    /// one place music21's `Chord.chordTablesAddress` differs from the
+    /// `seekChordTablesAddress` underneath it.
+    pub fn chord_tables_address_entry(&self) -> ChordTableAddress {
+        match self.chord_tables_address() {
+            Some((cardinality, forte_class, inversion, original)) => ChordTableAddress {
+                cardinality,
+                forte_class,
+                inversion,
+                pitch_class_original: original.unwrap_or(0),
+            },
+            None => ChordTableAddress {
+                cardinality: 0,
+                forte_class: 0,
+                inversion: 0,
+                pitch_class_original: 0,
+            },
+        }
+    }
+
     fn chord_tables_address(&self) -> Option<tables::ChordTableAddress> {
         tables::seek_chord_tables_address(&self.ordered_pitch_classes()).ok()
     }

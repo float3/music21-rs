@@ -15,6 +15,7 @@ passing = [
     "music21.serial.ToneRow.originalCenteredTransformation",
     "music21.serial.ToneRow.pitchClasses",
     "music21.serial.ToneRow.zeroCenteredTransformation",
+    "music21.serial.TwelveToneMatrix",
     "music21.serial.TwelveToneRow.areCombinatorial",
     "music21.serial.TwelveToneRow.findHistorical",
     "music21.serial.TwelveToneRow.findTransformedHistorical",

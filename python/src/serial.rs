@@ -271,10 +271,12 @@ impl ToneRow {
         labelled(py, &found, TransformationConvention::OriginalCentered)
     }
 
-    fn matrix(&self, py: Python<'_>) -> PyResult<TwelveToneMatrix> {
-        let _ = py;
+    /// music21's `matrix`, which keeps the row it was made from: its own
+    /// `repr` names that row, and a historical row names itself.
+    fn matrix(slf: &Bound<'_, Self>) -> PyResult<TwelveToneMatrix> {
         Ok(TwelveToneMatrix {
-            inner: self.inner.matrix(),
+            inner: slf.borrow().inner.matrix(),
+            source: Some(slf.clone().unbind().into_any()),
         })
     }
 
@@ -482,6 +484,8 @@ impl HistoricalTwelveToneRow {
 )]
 pub struct TwelveToneMatrix {
     inner: RsMatrix,
+    /// The row this matrix was made from, which its `repr` names.
+    source: Option<Py<PyAny>>,
 }
 
 #[pymethods]
@@ -490,7 +494,21 @@ impl TwelveToneMatrix {
         self.inner.to_string()
     }
 
+    /// music21's `repr`, which names the matrix's first row.
+    ///
+    /// That row is built as the class of the row the matrix came from, with
+    /// its attributes merged in, so a matrix of a historical row names the
+    /// piece — a historical row says its title rather than its id — while
+    /// any other names itself `row-1`.
     fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
+        if let Some(source) = &self.source
+            && source.bind(py).is_instance_of::<HistoricalTwelveToneRow>()
+        {
+            return Ok(format!(
+                "<music21.serial.TwelveToneMatrix for [{}]>",
+                source.bind(py).repr()?
+            ));
+        }
         match self.inner.rows().first() {
             Some(first) => {
                 let row = ToneRow::twelve(py, first.clone(), Some("row-1".to_string()))?;

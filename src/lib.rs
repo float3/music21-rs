@@ -69,8 +69,9 @@ pub use analysis::{
 };
 pub use analysis::{tonal_certainty, tonal_certainty_from_scores};
 pub use chord::{
-    Chord, ChordResolutionSuggestion, GuitarFingering, GuitarStringFingering, GuitarTuning,
-    GuitarTuningString, IntoNotes, KnownChordType, TriadQuality, format_vector_string,
+    Chord, ChordResolutionSuggestion, ChordTableAddress, GuitarFingering, GuitarStringFingering,
+    GuitarTuning, GuitarTuningString, IntoNotes, KnownChordType, TriadQuality,
+    format_vector_string,
 };
 pub use chordsymbol::{
     ChordAlteration, ChordQuality, ChordSymbol, Music21ChordType, chord_symbol_figure_from_chord,
