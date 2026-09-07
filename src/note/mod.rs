@@ -59,6 +59,12 @@ impl Note {
         &self.pitch
     }
 
+    /// Sets the note's pitch, keeping its duration and notation: music21's
+    /// `Note.pitch` setter.
+    pub fn set_pitch(&mut self, pitch: Pitch) {
+        self.pitch = pitch;
+    }
+
     /// Returns the pitch name without an octave, such as `"C#"` or `"E-"`.
     pub fn pitch_name(&self) -> String {
         self.pitch.name()
@@ -481,6 +487,18 @@ mod tests {
             .unwrap();
         assert_eq!(moved.pitch_name_with_octave(), "E4");
         assert_eq!(moved.duration().unwrap().quarter_length(), 2.0);
+    }
+
+    #[test]
+    fn setting_a_pitch_keeps_the_duration_and_the_notation() {
+        let mut note = Note::from_name("C4")
+            .unwrap()
+            .with_duration(crate::Duration::half());
+        note.set_notehead(crate::Notehead::Diamond);
+        note.set_pitch(crate::Pitch::from_name("E-5").unwrap());
+        assert_eq!(note.pitch_name_with_octave(), "E-5");
+        assert_eq!(note.duration().unwrap().quarter_length(), 2.0);
+        assert_eq!(note.notehead(), crate::Notehead::Diamond);
     }
 
     #[test]

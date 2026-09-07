@@ -5,6 +5,7 @@
 
 passing = [
     "music21.chord.Chord.__getitem__",
+    "music21.chord.Chord.__setitem__",
     "music21.chord.Chord.annotateIntervals",
     "music21.chord.Chord.areZRelations",
     "music21.chord.Chord.canBeDominantV",
@@ -38,6 +39,7 @@ passing = [
     "music21.chord.Chord.inversion",
     "music21.chord.Chord.inversionName",
     "music21.chord.Chord.inversionText",
+    "music21.chord.Chord.isAugmentedSixth",
     "music21.chord.Chord.isAugmentedTriad",
     "music21.chord.Chord.isConsonant",
     "music21.chord.Chord.isDiminishedSeventh",
@@ -58,6 +60,7 @@ passing = [
     "music21.chord.Chord.isSeventhOfType",
     "music21.chord.Chord.isSwissAugmentedSixth",
     "music21.chord.Chord.isTranspositionallySymmetrical",
+    "music21.chord.Chord.isTriad",
     "music21.chord.Chord.multisetCardinality",
     "music21.chord.Chord.normalOrder",
     "music21.chord.Chord.normalOrderString",
@@ -85,6 +88,7 @@ passing = [
     "music21.chord.Chord.sortDiatonicAscending",
     "music21.chord.Chord.third",
     "music21.chord.Chord.transpose",
+    "music21.chord.ChordBase",
     "music21.chord.ChordBase.__len__",
     "music21.chord.ChordBase.hasComponentVolumes",
     "music21.chord.ChordBase.remove",

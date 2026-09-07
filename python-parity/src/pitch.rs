@@ -12,6 +12,8 @@ use music21_rs::{
     Pitch as RsPitch, PitchOptions,
 };
 
+use crate::note::Note;
+
 pyo3::create_exception!(music21_rs_facade, PitchException, PyException);
 pyo3::create_exception!(music21_rs_facade, AccidentalException, PyException);
 pyo3::create_exception!(music21_rs_facade, MicrotoneException, PyException);
@@ -365,10 +367,26 @@ impl Accidental {
 
 /// music21's `pitch.Pitch`.
 #[pyclass(name = "Pitch", module = "music21.pitch", skip_from_py_object)]
-#[derive(Clone)]
 pub struct Pitch {
     pub(crate) inner: RsPitch,
     pub(crate) spelling_is_inferred: bool,
+    /// The note this pitch belongs to, when it came out of one. music21's
+    /// `chord[0].pitch` and `chord.pitches[0]` are the chord's own pitch, so
+    /// an edit through this object has to reach the note and the chord;
+    /// [`Pitch::write_back`] is what carries it there.
+    pub(crate) owner: Option<Py<Note>>,
+}
+
+impl Clone for Pitch {
+    /// A copy of a pitch is a loose one: music21's `copy.copy(p)` is not the
+    /// note's pitch any more, so the owner does not come along.
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            spelling_is_inferred: self.spelling_is_inferred,
+            owner: None,
+        }
+    }
 }
 
 /// Reads a transposition argument the way `Pitch.transpose` does: an interval
@@ -425,7 +443,22 @@ impl Pitch {
         Self {
             inner,
             spelling_is_inferred,
+            owner: None,
         }
+    }
+
+    /// Writes this pitch's value back to the note that holds it, and through
+    /// the note to its chord. A pitch nobody owns writes nowhere.
+    ///
+    /// This is what every mutating method ends with. `Python::attach` rather
+    /// than a threaded-through token so that music21's setters keep their
+    /// shapes; a mutating method is only ever reached from Python, so the
+    /// interpreter is already there.
+    pub(crate) fn write_back(&self) -> PyResult<()> {
+        let Some(owner) = &self.owner else {
+            return Ok(());
+        };
+        Python::attach(|py| Note::adopt_pitch(py, owner, &self.inner))
     }
 
     fn accidental_name(&self) -> String {
@@ -564,7 +597,7 @@ impl Pitch {
         }
         self.inner = options.build().map_err(pitch_error)?;
         self.spelling_is_inferred = false;
-        Ok(())
+        self.write_back()
     }
 
     #[getter]
@@ -581,7 +614,7 @@ impl Pitch {
         }
         self.inner = RsPitch::from_name(value).map_err(pitch_error)?;
         self.spelling_is_inferred = false;
-        Ok(())
+        self.write_back()
     }
 
     #[getter]
@@ -649,7 +682,7 @@ impl Pitch {
             self.microtone_cents(),
         )?;
         self.spelling_is_inferred = false;
-        Ok(())
+        self.write_back()
     }
 
     #[getter]
@@ -665,7 +698,7 @@ impl Pitch {
             value,
             self.microtone_cents(),
         )?;
-        Ok(())
+        self.write_back()
     }
 
     #[getter]
@@ -699,7 +732,7 @@ impl Pitch {
         } else {
             self.inner.set_accidental(None);
         }
-        Ok(())
+        self.write_back()
     }
 
     #[getter]
@@ -741,7 +774,7 @@ impl Pitch {
             self.inner.octave(),
             cents,
         )?;
-        Ok(())
+        self.write_back()
     }
 
     #[getter]
@@ -772,7 +805,7 @@ impl Pitch {
     fn set_ps(&mut self, value: f64) -> PyResult<()> {
         self.inner = RsPitch::from_pitch_space(value).map_err(pitch_error)?;
         self.spelling_is_inferred = true;
-        Ok(())
+        self.write_back()
     }
 
     #[getter]
@@ -793,7 +826,7 @@ impl Pitch {
         }
         self.inner = RsPitch::from_midi(midi).map_err(pitch_error)?;
         self.spelling_is_inferred = true;
-        Ok(())
+        self.write_back()
     }
 
     #[getter]
@@ -818,7 +851,7 @@ impl Pitch {
         }
         self.inner = options.build().map_err(pitch_error)?;
         self.spelling_is_inferred = true;
-        Ok(())
+        self.write_back()
     }
 
     #[getter]
@@ -847,7 +880,7 @@ impl Pitch {
             Some(octave),
             self.microtone_cents(),
         )?;
-        Ok(())
+        self.write_back()
     }
 
     #[getter]
@@ -859,7 +892,7 @@ impl Pitch {
     fn set_frequency(&mut self, value: f64) -> PyResult<()> {
         self.inner = RsPitch::from_frequency(value).map_err(pitch_error)?;
         self.spelling_is_inferred = true;
-        Ok(())
+        self.write_back()
     }
 
     #[getter]
@@ -892,6 +925,7 @@ impl Pitch {
         let inferred = slf.spelling_is_inferred;
         if inPlace {
             slf.inner = transposed;
+            slf.write_back()?;
             Ok(None)
         } else {
             Ok(Some(Pitch::wrap(transposed, inferred)))
@@ -903,6 +937,7 @@ impl Pitch {
         let result = slf.inner.get_enharmonic().map_err(pitch_error)?;
         if inPlace {
             slf.inner = result;
+            slf.write_back()?;
             Ok(None)
         } else {
             Ok(Some(Pitch::wrap(result, false)))
@@ -914,6 +949,7 @@ impl Pitch {
         let result = slf.inner.get_higher_enharmonic().map_err(pitch_error)?;
         if inPlace {
             slf.inner = result;
+            slf.write_back()?;
             Ok(None)
         } else {
             Ok(Some(Pitch::wrap(result, false)))
@@ -925,6 +961,7 @@ impl Pitch {
         let result = slf.inner.get_lower_enharmonic().map_err(pitch_error)?;
         if inPlace {
             slf.inner = result;
+            slf.write_back()?;
             Ok(None)
         } else {
             Ok(Some(Pitch::wrap(result, false)))
@@ -944,6 +981,7 @@ impl Pitch {
         let inferred = slf.spelling_is_inferred;
         if inPlace {
             slf.inner = result;
+            slf.write_back()?;
             Ok(None)
         } else {
             Ok(Some(Pitch::wrap(result, inferred)))
@@ -1018,6 +1056,7 @@ impl Pitch {
         let inferred = slf.spelling_is_inferred;
         if inPlace {
             slf.inner = result;
+            slf.write_back()?;
             Ok(None)
         } else {
             Ok(Some(Pitch::wrap(result, inferred)))
@@ -1038,6 +1077,7 @@ impl Pitch {
         let inferred = slf.spelling_is_inferred;
         if inPlace {
             slf.inner = result;
+            slf.write_back()?;
             Ok(None)
         } else {
             Ok(Some(Pitch::wrap(result, inferred)))
@@ -1056,6 +1096,7 @@ impl Pitch {
         let inferred = slf.spelling_is_inferred;
         if inPlace {
             slf.inner = result;
+            slf.write_back()?;
             Ok(None)
         } else {
             Ok(Some(Pitch::wrap(result, inferred)))
@@ -1074,6 +1115,7 @@ impl Pitch {
         let inferred = slf.spelling_is_inferred;
         if inPlace {
             slf.inner = result;
+            slf.write_back()?;
             Ok(None)
         } else {
             Ok(Some(Pitch::wrap(result, inferred)))
@@ -1146,7 +1188,7 @@ impl Pitch {
                 cautionary_not_immediate_repeat: cautionaryNotImmediateRepeat,
                 last_note_was_tied: lastNoteWasTied,
             });
-        Ok(())
+        self.write_back()
     }
 
     /// music21's `_nameInKeySignature`: whether one of the key signature's

@@ -74,8 +74,45 @@ impl Chord {
             .notes()
             .iter()
             .cloned()
-            .map(|note| Py::new(py, Note::wrap(note)))
+            .map(|note| Note::object(py, note))
             .collect::<PyResult<_>>()?;
+        Ok(())
+    }
+
+    /// The note objects, each told which chord holds it. Handing a note out
+    /// without that leaves its pitch unable to find its way back here, so
+    /// every accessor that gives Python a note or a pitch goes through this.
+    fn note_objects(slf: &Bound<'_, Self>) -> Vec<Py<Note>> {
+        let py = slf.py();
+        let notes: Vec<Py<Note>> = slf
+            .borrow()
+            .notes
+            .iter()
+            .map(|note| note.clone_ref(py))
+            .collect();
+        for note in &notes {
+            Note::attach_to_chord(py, note, slf.as_any());
+        }
+        notes
+    }
+
+    /// Takes the pitch one of our notes now carries: music21's chord and its
+    /// notes hold one pitch between them, so an edit through the note's
+    /// pitch object is an edit to the chord.
+    pub(crate) fn adopt_note_pitch(
+        slf: &Bound<'_, Self>,
+        note: &Py<Note>,
+        pitch: &RsPitch,
+    ) -> PyResult<()> {
+        let mut me = slf.borrow_mut();
+        let Some(index) = me
+            .notes
+            .iter()
+            .position(|held| held.as_ptr() == note.as_ptr())
+        else {
+            return Ok(());
+        };
+        me.inner.notes_mut()[index].set_pitch(pitch.clone());
         Ok(())
     }
 
@@ -193,14 +230,6 @@ impl Chord {
         }
     }
 
-    fn pitch_facades(&self) -> Vec<Pitch> {
-        self.inner
-            .pitches()
-            .into_iter()
-            .map(|pitch| Pitch::wrap(pitch, false))
-            .collect()
-    }
-
     fn optional_pitch(pitch: Option<&RsPitch>) -> Option<Pitch> {
         pitch.cloned().map(|pitch| Pitch::wrap(pitch, false))
     }
@@ -304,38 +333,40 @@ impl Chord {
 
     // ---- contents --------------------------------------------------------
 
+    /// music21's `.pitches`: the very pitch objects its notes hold, so
+    /// `chord.pitches[0] is chord[0].pitch` and an edit through either lands
+    /// on the chord.
     #[getter]
-    fn get_pitches<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
-        PyTuple::new(py, self.pitch_facades())
+    fn get_pitches<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyTuple>> {
+        let py = slf.py();
+        let pitches: Vec<Py<Pitch>> = Self::note_objects(slf)
+            .iter()
+            .map(|note| Note::get_pitch(note.bind(py)))
+            .collect();
+        PyTuple::new(py, pitches)
     }
 
     #[setter]
-    fn set_pitches(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+    fn set_pitches(&mut self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<()> {
         require_iterable(value, "pitches")?;
-        self.inner = chord_from_any(Some(value))?;
-        Ok(())
+        let replaced = chord_from_any(Some(value))?;
+        self.replace_inner(py, replaced)
     }
 
     #[setter]
-    fn set_pitchNames(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+    fn set_pitchNames(&mut self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<()> {
         require_iterable(value, "pitchNames")?;
-        self.inner = chord_from_any(Some(value))?;
-        Ok(())
+        let replaced = chord_from_any(Some(value))?;
+        self.replace_inner(py, replaced)
     }
 
     #[getter]
-    fn get_notes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
-        PyTuple::new(
-            py,
-            self.notes
-                .iter()
-                .map(|note| note.clone_ref(py))
-                .collect::<Vec<_>>(),
-        )
+    fn get_notes<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyTuple>> {
+        PyTuple::new(slf.py(), Self::note_objects(slf))
     }
 
     #[setter]
-    fn set_notes(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+    fn set_notes(&mut self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<()> {
         require_iterable(value, "notes")?;
         let mut notes: Vec<RsNote> = Vec::new();
         for item in value.try_iter()? {
@@ -345,8 +376,8 @@ impl Chord {
             })?;
             notes.push(note.inner.clone());
         }
-        self.inner = RsChord::new(notes.as_slice()).map_err(chord_error)?;
-        Ok(())
+        let replaced = RsChord::new(notes.as_slice()).map_err(chord_error)?;
+        self.replace_inner(py, replaced)
     }
 
     #[getter]
@@ -383,21 +414,23 @@ impl Chord {
         self.inner.notes().len()
     }
 
-    fn __getitem__(&self, py: Python<'_>, key: &Bound<'_, PyAny>) -> PyResult<Py<Note>> {
+    fn __getitem__(slf: &Bound<'_, Self>, key: &Bound<'_, PyAny>) -> PyResult<Py<Note>> {
+        let py = slf.py();
+        let notes = Self::note_objects(slf);
         if let Ok(index) = key.extract::<isize>() {
-            let length = self.notes.len() as isize;
+            let length = notes.len() as isize;
             let resolved = if index < 0 { index + length } else { index };
             if resolved < 0 || resolved >= length {
                 return Err(PyIndexError::new_err("list index out of range"));
             }
-            return Ok(self.notes[resolved as usize].clone_ref(py));
+            return Ok(notes[resolved as usize].clone_ref(py));
         }
         let wanted = if let Ok(name) = key.extract::<String>() {
             name.to_uppercase()
         } else {
             pitch_from_any(key)?.name_with_octave()
         };
-        self.notes
+        notes
             .iter()
             .find(|note| note.borrow(py).inner.pitch().name_with_octave() == wanted)
             .map(|note| note.clone_ref(py))
@@ -410,7 +443,12 @@ impl Chord {
             })
     }
 
-    fn __setitem__(&mut self, key: &Bound<'_, PyAny>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+    fn __setitem__(
+        &mut self,
+        py: Python<'_>,
+        key: &Bound<'_, PyAny>,
+        value: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
         let length = self.inner.notes().len() as isize;
         let resolved = match key.extract::<isize>() {
             Ok(index) if index < 0 => index + length,
@@ -439,17 +477,18 @@ impl Chord {
         let mut notes = self.inner.notes().to_vec();
         notes[resolved as usize] = note;
         let duration = self.inner.duration().cloned();
-        self.inner = RsChord::new(notes.as_slice()).map_err(chord_error)?;
+        let mut replaced = RsChord::new(notes.as_slice()).map_err(chord_error)?;
         if let Some(duration) = duration {
-            self.inner.set_duration(duration);
+            replaced.set_duration(duration);
         }
-        Ok(())
+        self.replace_inner(py, replaced)
     }
 
     fn __iter__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
-        let py = slf.py();
-        let notes = slf.borrow().get_notes(py)?;
-        notes.into_any().try_iter().map(Bound::into_any)
+        Self::get_notes(slf)?
+            .into_any()
+            .try_iter()
+            .map(Bound::into_any)
     }
 
     #[pyo3(signature = (notes, *, runSort = true))]

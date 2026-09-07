@@ -146,20 +146,98 @@ impl Duration {
 
 /// music21's `note.Note`: a pitch with a duration.
 #[pyclass(name = "Note", module = "music21.note", subclass, skip_from_py_object)]
-#[derive(Clone)]
 pub struct Note {
     pub(crate) inner: RsNote,
+    /// The `Pitch` object music21 hands back from `.pitch`. It is the same
+    /// object every time, so `chord.pitches[0].getEnharmonic(inPlace=True)`
+    /// reaches the chord; `inner` mirrors whatever it holds.
+    pitch: Py<Pitch>,
+    /// The chord this note is part of: music21's `_chordAttached`, which its
+    /// own `ChordBase` sets on every note it takes in. An edit to the pitch
+    /// has to reach the chord through it.
+    chord: Option<Py<PyAny>>,
 }
 
 impl Note {
-    pub(crate) fn wrap(inner: RsNote) -> Self {
-        Self { inner }
+    /// Builds the facade around a note, giving its pitch a Python object of
+    /// its own.
+    pub(crate) fn wrap(py: Python<'_>, inner: RsNote) -> PyResult<Self> {
+        let pitch = Py::new(py, Pitch::wrap(inner.pitch().clone(), false))?;
+        Ok(Self {
+            inner,
+            pitch,
+            chord: None,
+        })
+    }
+
+    /// A Python note object whose pitch already points back at it.
+    pub(crate) fn object(py: Python<'_>, inner: RsNote) -> PyResult<Py<Self>> {
+        let note = Py::new(py, Self::wrap(py, inner)?)?;
+        Self::claim_pitch(py, &note);
+        Ok(note)
+    }
+
+    /// Points the note's pitch object back at the note, so an edit through
+    /// the pitch finds its way home.
+    fn claim_pitch(py: Python<'_>, note: &Py<Self>) {
+        let pitch = note.borrow(py).pitch.clone_ref(py);
+        pitch.borrow_mut(py).owner = Some(note.clone_ref(py));
+    }
+
+    /// Takes the value a `Pitch` object now holds and passes it on: into the
+    /// note, and through the note into its chord. The pitch object itself is
+    /// left alone, because it is the one calling and is already borrowed.
+    pub(crate) fn adopt_pitch(py: Python<'_>, note: &Py<Self>, pitch: &RsPitch) -> PyResult<()> {
+        note.borrow_mut(py).inner.set_pitch(pitch.clone());
+        Self::tell_chord(py, note, pitch)
+    }
+
+    /// Sends the note's own pitch the other way, out to its pitch object and
+    /// to its chord: what a setter on the note ends with.
+    pub(crate) fn broadcast_pitch(py: Python<'_>, note: &Py<Self>) -> PyResult<()> {
+        let (object, value) = {
+            let me = note.borrow(py);
+            (me.pitch.clone_ref(py), me.inner.pitch().clone())
+        };
+        object.borrow_mut(py).inner = value.clone();
+        Self::tell_chord(py, note, &value)
+    }
+
+    /// Writes a new pitch for this note into the chord holding it, when a
+    /// chord of ours is holding it.
+    fn tell_chord(py: Python<'_>, note: &Py<Self>, pitch: &RsPitch) -> PyResult<()> {
+        let Some(chord) = note
+            .borrow(py)
+            .chord
+            .as_ref()
+            .map(|chord| chord.clone_ref(py))
+        else {
+            return Ok(());
+        };
+        // music21's own `ChordBase` writes itself here as well; it keeps its
+        // own pitches and wants nothing from us.
+        let Ok(chord) = chord.cast_bound::<crate::chord::Chord>(py).cloned() else {
+            return Ok(());
+        };
+        crate::chord::Chord::adopt_note_pitch(&chord, note, pitch)
+    }
+
+    /// Tells the note which chord holds it, and makes sure its pitch object
+    /// knows the note.
+    pub(crate) fn attach_to_chord(py: Python<'_>, note: &Py<Self>, chord: &Bound<'_, PyAny>) {
+        note.borrow_mut(py).chord = Some(chord.clone().unbind());
+        Self::claim_pitch(py, note);
     }
 
     fn quarter_length(&self) -> f64 {
         self.inner
             .duration()
             .map_or(1.0, RsDuration::quarter_length)
+    }
+
+    /// A detached copy: a new pitch object, and no chord.
+    fn copied(&self, py: Python<'_>) -> PyResult<Self> {
+        Self::wrap(py, self.inner.clone())
     }
 }
 
@@ -176,6 +254,7 @@ impl Note {
     #[new]
     #[pyo3(signature = (pitch = None, **keywords))]
     fn new(
+        py: Python<'_>,
         pitch: Option<&Bound<'_, PyAny>>,
         keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Self> {
@@ -183,7 +262,7 @@ impl Note {
             Some(value) => RsNote::from_pitch(pitch_from_any(value)?),
             None => RsNote::from_name("C4").map_err(note_error)?,
         };
-        let mut note = Self { inner };
+        let mut note = Self::wrap(py, inner)?;
         if let Some(keywords) = keywords {
             if let Some(value) = keywords.get_item("quarterLength")? {
                 note.set_quarterLength(value.extract::<f64>()?)?;
@@ -195,19 +274,21 @@ impl Note {
         Ok(note)
     }
 
+    /// music21's `.pitch`, the same object every time: an edit through it
+    /// is an edit to the note, and to the chord holding the note.
     #[getter]
-    fn get_pitch(&self) -> Pitch {
-        Pitch::wrap(self.inner.pitch().clone(), false)
+    pub(crate) fn get_pitch(slf: &Bound<'_, Self>) -> Py<Pitch> {
+        let py = slf.py();
+        let pitch = slf.borrow().pitch.clone_ref(py);
+        pitch.borrow_mut(py).owner = Some(slf.clone().unbind());
+        pitch
     }
 
     #[setter]
-    fn set_pitch(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
-        let duration = self.inner.duration().cloned();
-        self.inner = RsNote::from_pitch(pitch_from_any(value)?);
-        if let Some(duration) = duration {
-            self.inner.set_duration(duration);
-        }
-        Ok(())
+    fn set_pitch(slf: &Bound<'_, Self>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        let pitch = pitch_from_any(value)?;
+        slf.borrow_mut().inner.set_pitch(pitch);
+        Self::broadcast_pitch(slf.py(), &slf.clone().unbind())
     }
 
     #[getter]
@@ -216,21 +297,19 @@ impl Note {
     }
 
     #[setter]
-    fn set_name(&mut self, value: &str) -> PyResult<()> {
-        let octave = self.inner.pitch().octave();
-        let name = match octave {
-            Some(octave) if !value.chars().any(|ch| ch.is_ascii_digit()) => {
-                format!("{value}{octave}")
+    fn set_name(slf: &Bound<'_, Self>, value: &str) -> PyResult<()> {
+        let name = {
+            let me = slf.borrow();
+            match me.inner.pitch().octave() {
+                Some(octave) if !value.chars().any(|ch| ch.is_ascii_digit()) => {
+                    format!("{value}{octave}")
+                }
+                _ => value.to_string(),
             }
-            _ => value.to_string(),
         };
         let pitch = RsPitch::from_name(name).map_err(note_error)?;
-        let duration = self.inner.duration().cloned();
-        self.inner = RsNote::from_pitch(pitch);
-        if let Some(duration) = duration {
-            self.inner.set_duration(duration);
-        }
-        Ok(())
+        slf.borrow_mut().inner.set_pitch(pitch);
+        Self::broadcast_pitch(slf.py(), &slf.clone().unbind())
     }
 
     #[getter]
@@ -249,34 +328,22 @@ impl Note {
     }
 
     #[setter]
-    fn set_octave(&mut self, value: Option<i32>) -> PyResult<()> {
-        let previous = self.inner.clone();
-        let name = match value {
-            Some(octave) => format!("{}{octave}", previous.pitch().name()),
-            None => previous.pitch().name(),
+    fn set_octave(slf: &Bound<'_, Self>, value: Option<i32>) -> PyResult<()> {
+        let name = {
+            let me = slf.borrow();
+            match value {
+                Some(octave) => format!("{}{octave}", me.inner.pitch().name()),
+                None => me.inner.pitch().name(),
+            }
         };
-        self.inner = RsNote::from_pitch(RsPitch::from_name(name).map_err(note_error)?);
-        if let Some(duration) = previous.duration() {
-            self.inner.set_duration(duration.clone());
-        }
-        self.inner.set_tie(previous.tie().cloned());
-        self.inner.set_notehead(previous.notehead());
-        self.inner.set_notehead_fill(previous.notehead_fill());
-        self.inner
-            .set_notehead_parenthesis(previous.notehead_parenthesis());
-        self.inner.set_stem_direction(previous.stem_direction());
-        self.inner
-            .set_color(previous.color().map(std::string::ToString::to_string));
-        Ok(())
+        let pitch = RsPitch::from_name(name).map_err(note_error)?;
+        slf.borrow_mut().inner.set_pitch(pitch);
+        Self::broadcast_pitch(slf.py(), &slf.clone().unbind())
     }
 
     #[getter]
-    fn pitches(&self) -> Vec<Pitch> {
-        self.inner
-            .pitches()
-            .into_iter()
-            .map(|pitch| Pitch::wrap(pitch, false))
-            .collect()
+    fn pitches(slf: &Bound<'_, Self>) -> Vec<Py<Pitch>> {
+        vec![Self::get_pitch(slf)]
     }
 
     #[getter]
@@ -504,18 +571,23 @@ impl Note {
     }
 
     #[pyo3(signature = (value, *, inPlace = false))]
-    fn transpose(&mut self, value: &Bound<'_, PyAny>, inPlace: bool) -> PyResult<Option<Self>> {
-        let pitch = transpose_pitch_by_any(self.inner.pitch(), value)?;
+    fn transpose(
+        slf: &Bound<'_, Self>,
+        value: &Bound<'_, PyAny>,
+        inPlace: bool,
+    ) -> PyResult<Option<Py<Self>>> {
+        let py = slf.py();
+        let pitch = transpose_pitch_by_any(slf.borrow().inner.pitch(), value)?;
+        if inPlace {
+            slf.borrow_mut().inner.set_pitch(pitch);
+            Self::broadcast_pitch(py, &slf.clone().unbind())?;
+            return Ok(None);
+        }
         let mut moved = RsNote::from_pitch(pitch);
-        if let Some(duration) = self.inner.duration().cloned() {
+        if let Some(duration) = slf.borrow().inner.duration().cloned() {
             moved.set_duration(duration);
         }
-        if inPlace {
-            self.inner = moved;
-            Ok(None)
-        } else {
-            Ok(Some(Self { inner: moved }))
-        }
+        Ok(Some(Self::object(py, moved)?))
     }
 
     fn __eq__(&self, other: &Bound<'_, PyAny>) -> bool {
@@ -537,12 +609,27 @@ impl Note {
         ))
     }
 
-    fn __deepcopy__(&self, _memo: &Bound<'_, PyAny>) -> Self {
-        self.clone()
+    fn __deepcopy__(&self, py: Python<'_>, _memo: &Bound<'_, PyAny>) -> PyResult<Self> {
+        self.copied(py)
     }
 
-    fn __copy__(&self) -> Self {
-        self.clone()
+    fn __copy__(&self, py: Python<'_>) -> PyResult<Self> {
+        self.copied(py)
+    }
+
+    /// music21's `_chordAttached`, which its own `ChordBase` sets on every
+    /// note it takes in. Keeping the slot is what lets music21's chord
+    /// classes hold facade notes at all.
+    #[getter(_chordAttached)]
+    fn get_chordAttached(&self, py: Python<'_>) -> Option<Py<PyAny>> {
+        self.chord.as_ref().map(|chord| chord.clone_ref(py))
+    }
+
+    #[setter(_chordAttached)]
+    fn set_chordAttached(&mut self, value: Option<&Bound<'_, PyAny>>) {
+        self.chord = value
+            .filter(|value| !value.is_none())
+            .map(|value| value.clone().unbind());
     }
 }
 
