@@ -136,15 +136,90 @@ Use the Rust toolchain pinned in [rust-toolchain.toml](./rust-toolchain.toml).
 cargo test
 ```
 
-For parity work against upstream `music21`, initialize the reference submodule.
-Normal library tests do not require Python, and the `music21-rs` crate does not
-have a Python feature. Python parity checks live in the separate local
-`python-parity` package:
+### Running everything
+
+The repository holds four cargo crates, and two of them — `python` and
+`python-parity` — sit outside the workspace on purpose, so that a plain
+`cargo test` never needs Python. That also means no single cargo invocation
+reaches everything. The block below is the whole of what CI gates, in the
+order it fails fastest, and can be pasted as one command:
 
 ```bash
+# 1. the reference submodule, needed by python-parity and the Scala archive
 git submodule update --init --recursive
+
+# 2. formatting, for each manifest -- `--all` does not leave the workspace
+cargo fmt --all -- --check
+cargo fmt --manifest-path python/Cargo.toml --all -- --check
+cargo fmt --manifest-path python-parity/Cargo.toml --all -- --check
+
+# 3. lints, and the generated files that must match their source data
+cargo clippy --workspace --all-targets -- -D warnings
+cargo run -p xtask -- verify-tables
+cargo run -p xtask -- verify-tuning-tables
+cargo run -p xtask -- verify-scala-archive
+cargo check --workspace --locked
+
+# 4. the library, the examples and xtask
+cargo test --workspace --all-targets
+
+# 5. the feature matrix; default features are empty, so this is not redundant
+feature_sets=(
+  "--no-default-features"
+  "--no-default-features --features serde"
+  "--all-features"
+)
+for flags in "${feature_sets[@]}"; do
+  cargo check --workspace --all-targets $flags
+  cargo clippy --workspace --all-targets $flags -- -D warnings
+  cargo test --workspace --all-targets $flags
+done
+
+# 6. the parity suite: fixtures, the Scala archive, and music21's own
+#    doctests run against the crate through a music21-shaped pyo3 facade
 cargo test --manifest-path python-parity/Cargo.toml -- --test-threads=1
+
+# 7. the wheel, its own tests, and a real third-party music21 library run
+#    against both music21 and this crate
+maturin build --release --manifest-path python/Cargo.toml --out target/wheels
+pip install --no-index --find-links target/wheels music21-rs
+pytest python/tests -q
+python python/downstream/run.py
+
+# 8. what the docs job builds; `report` also fails when the feature map is stale
+cargo doc --workspace --no-deps
+cargo run -p xtask -- report --features-only
 ```
+
+Step 6 needs a Python interpreter with music21's own dependencies, since the
+doctest harness imports the whole of music21 rather than the stubbed subset the
+chord-table bridge uses:
+
+```bash
+uv venv .m21venv --python 3.12
+uv pip install --python .m21venv chardet joblib jsonpickle more_itertools numpy requests webcolors
+```
+
+Step 7 needs `maturin`, `pytest`, and — for `downstream/run.py` — `git`,
+`music21`, `lark` and `numpy`. That script clones a pinned copy of
+`harte-library`, a library written for music21 by someone with no knowledge of
+this crate, and runs its several-thousand-test suite twice: once on music21 and
+once on `music21_rs`. It is a comparison rather than a pass mark, and it fails
+if the two sets of failures differ.
+
+**On Windows**, pyo3 links against whichever `python` comes first on `PATH`. If
+that is the Microsoft Store build, every step 6 test dies with
+`STATUS_DLL_NOT_FOUND` before running a line. Point `PYO3_PYTHON` at a normal
+interpreter and put its directory on `PATH` first:
+
+```bash
+export PYO3_PYTHON="$(ls -d "$HOME"/AppData/Roaming/uv/python/cpython-3.12*/python.exe | head -1)"
+export PATH="$(dirname "$PYO3_PYTHON"):$PATH"
+```
+
+Two CI jobs are not in the list because they need tooling this repository does
+not otherwise ask for: `nix flake check` with `alejandra --check .`, and the
+`wasm-pack` and `tsc` build of [examples/web/](./examples/web/).
 
 Chord table code is committed to the repository so normal builds do not need
 Python. To regenerate the table source from upstream `music21`, run:
