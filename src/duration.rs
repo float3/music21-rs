@@ -3,6 +3,7 @@ use crate::{
     error::{Error, Result},
 };
 
+use fraction::ToPrimitive;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
@@ -228,6 +229,14 @@ impl FromStr for DurationType {
 /// a whole note is `4.0`.
 pub struct Duration {
     quarter_length: FloatType,
+    /// The tuplets this length is written inside, when a caller has said so.
+    ///
+    /// `None` is the ordinary case: nobody has said, so the tuplet is read
+    /// off the length by [`Duration::tuplet`]. `Some` is what a caller set,
+    /// an empty list included — saying "written inside no tuplet at all" is
+    /// different from saying nothing, and music21 keeps the difference too.
+    #[cfg_attr(feature = "serde", serde(default))]
+    tuplets: Option<Vec<Tuplet>>,
 }
 
 /// The numerators music21 searches when reading a length as a tuplet: its
@@ -362,7 +371,10 @@ impl Duration {
             )));
         }
 
-        Ok(Self { quarter_length })
+        Ok(Self {
+            quarter_length,
+            tuplets: None,
+        })
     }
 
     /// Returns a quarter-note duration.
@@ -389,6 +401,7 @@ impl Duration {
     pub fn from_type(duration_type: DurationType) -> Self {
         Self {
             quarter_length: duration_type.quarter_length(),
+            tuplets: None,
         }
     }
 
@@ -396,6 +409,7 @@ impl Duration {
     pub fn from_type_with_dots(duration_type: DurationType, dots: u32) -> Self {
         Self {
             quarter_length: duration_type.quarter_length_with_dots(dots),
+            tuplets: None,
         }
     }
 
@@ -403,11 +417,7 @@ impl Duration {
     /// this length, such as a half note with one dot for `3.0`. `None` for a
     /// length no single dotted note value has, such as a tuplet or a tie.
     pub fn type_and_dots(&self) -> Option<(DurationType, u32)> {
-        DurationType::ALL.into_iter().find_map(|duration_type| {
-            (0..=MAX_DOTS)
-                .find(|dots| duration_type.quarter_length_with_dots(*dots) == self.quarter_length)
-                .map(|dots| (duration_type, dots))
-        })
+        exact_type_and_dots(self.quarter_length)
     }
 
     /// Returns the augmentation dots on this duration, or `0` when it is not
@@ -447,6 +457,13 @@ impl Duration {
         if self.quarter_length <= 0.0 {
             return None;
         }
+        // A length that is already a written value is that value, not a
+        // tuplet of some other one: music21 tries the exact match before it
+        // tries any ratio, and a plain quarter is a quarter even though it
+        // is also two thirds of a dotted quarter in a triplet.
+        if self.type_and_dots().is_some() {
+            return None;
+        }
         let mut values = DurationType::ALL;
         values.sort_by(|left, right| {
             left.quarter_length()
@@ -476,6 +493,85 @@ impl Duration {
         None
     }
 
+    /// The tuplets this length is written inside: the ones a caller set, or
+    /// the one read off the length when nobody has.
+    ///
+    /// This is music21's `tuplets`, which is likewise inferred until it is
+    /// assigned. Setting it to nothing is not the same as never setting it:
+    /// two thirds of a quarter reads as a quarter triplet on its own, and
+    /// stays two thirds of a quarter written as no tuplet once told so.
+    pub fn tuplets(&self) -> Vec<Tuplet> {
+        match &self.tuplets {
+            Some(tuplets) => tuplets.clone(),
+            None => self.tuplet().into_iter().collect(),
+        }
+    }
+
+    /// What the written values are multiplied by to give the sounding
+    /// length: music21's `aggregateTupletMultiplier`, every tuplet's ratio
+    /// multiplied together, so a triplet inside a quintuplet is `8/15`.
+    pub fn aggregate_tuplet_multiplier(&self) -> FractionType {
+        self.tuplets()
+            .iter()
+            .map(Tuplet::multiplier)
+            .fold(FractionType::from(1), |total, ratio| total * ratio)
+    }
+
+    /// The total of the written values, before any tuplet shortens them:
+    /// music21's `quarterLengthNoTuplets`.
+    pub fn quarter_length_no_tuplets(&self) -> FloatType {
+        self.components()
+            .into_iter()
+            .map(|(duration_type, dots)| duration_type.quarter_length_with_dots(dots))
+            .sum()
+    }
+
+    /// Says what tuplets this length is written inside, keeping the written
+    /// values and changing the sounding length to match: music21's `tuplets`
+    /// setter.
+    pub fn set_tuplets(&mut self, tuplets: Vec<Tuplet>) {
+        let written = self.quarter_length_no_tuplets();
+        self.tuplets = Some(tuplets);
+        self.quarter_length = written * float_from_fraction(self.aggregate_tuplet_multiplier());
+    }
+
+    /// Writes this length inside one more tuplet, shortening it by that
+    /// tuplet's ratio: music21's `appendTuplet`.
+    pub fn append_tuplet(&mut self, tuplet: Tuplet) {
+        let mut tuplets = self.tuplets();
+        tuplets.push(tuplet);
+        self.set_tuplets(tuplets);
+    }
+
+    /// The length of the written values alone, with the tuplets a caller set
+    /// divided back out.
+    ///
+    /// Only the set ones: an inferred tuplet is read *off* this length, so
+    /// dividing by it here would be circular. Dividing in binary floating
+    /// point rarely lands back on an exact note value, so the result is
+    /// snapped onto one when it is within a hair of it.
+    fn written_quarter_length(&self) -> FloatType {
+        let Some(tuplets) = &self.tuplets else {
+            return self.quarter_length;
+        };
+        if tuplets.is_empty() {
+            return self.quarter_length;
+        }
+        let multiplier = float_from_fraction(self.aggregate_tuplet_multiplier());
+        if multiplier == 0.0 {
+            return self.quarter_length;
+        }
+        let written = self.quarter_length / multiplier;
+        let tolerance = written.abs() * TUPLET_TOLERANCE;
+        DurationType::ALL
+            .into_iter()
+            .flat_map(|duration_type| {
+                (0..=MAX_DOTS).map(move |dots| duration_type.quarter_length_with_dots(dots))
+            })
+            .find(|candidate| (candidate - written).abs() <= tolerance)
+            .unwrap_or(written)
+    }
+
     /// The written note values this length is made of, tied together:
     /// music21's `components`.
     ///
@@ -489,28 +585,31 @@ impl Duration {
     /// take the largest note that fits, and look for a single dotted value
     /// covering what is left before taking another bite.
     pub fn components(&self) -> Vec<(DurationType, u32)> {
+        let written = self.written_quarter_length();
         // Zero is written as nothing at all, which is what music21's empty
         // `components` says; `type_and_dots` would call it a `zero` note.
-        if self.quarter_length == 0.0 {
+        if written == 0.0 {
             return Vec::new();
         }
-        if let Some(single) = self.type_and_dots() {
-            return vec![single];
+        if let Some((duration_type, dots)) = exact_type_and_dots(written) {
+            return vec![(duration_type, dots)];
         }
         // Shorter than the shortest note value, or longer than a tie of the
         // longest can reach: music21 calls both *inexpressible*, and asks
         // this before it looks for a tuplet.
-        let Ok((largest, _)) = quarter_length_to_closest_type(self.quarter_length) else {
+        let Ok((largest, _)) = quarter_length_to_closest_type(written) else {
             return Vec::new();
         };
         if largest.next_larger().is_none() {
             return Vec::new();
         }
-        if let Some(tuplet) = self.tuplet() {
+        if self.tuplets.is_none()
+            && let Some(tuplet) = self.tuplet()
+        {
             return vec![(tuplet.duration_type(), tuplet.dots())];
         }
         let mut components = vec![(largest, 0)];
-        let mut remainder = self.quarter_length - largest.quarter_length();
+        let mut remainder = written - largest.quarter_length();
         for _ in 0..MAX_TIED_COMPONENTS {
             if let Some(rest) = Duration::new(remainder)
                 .ok()
@@ -553,7 +652,7 @@ impl Duration {
         // plain or dotted note value, which is music21's order: a quarter is
         // a quarter, even though it is also a dotted quarter in a triplet.
         let tuplet = if components.len() == 1 && self.type_and_dots().is_none() {
-            self.tuplet()
+            self.tuplets().first().copied()
         } else {
             None
         };
@@ -605,6 +704,21 @@ impl Duration {
 }
 
 const MAX_DOTS: u32 = 4;
+
+/// The note value and dot count whose length is exactly this one, if any.
+fn exact_type_and_dots(quarter_length: FloatType) -> Option<(DurationType, u32)> {
+    DurationType::ALL.into_iter().find_map(|duration_type| {
+        (0..=MAX_DOTS)
+            .find(|dots| duration_type.quarter_length_with_dots(*dots) == quarter_length)
+            .map(|dots| (duration_type, dots))
+    })
+}
+
+/// A ratio as a float, which a tuplet's is whenever it meets a quarter
+/// length. Zero for the ratio that has no value, which no tuplet has.
+fn float_from_fraction(ratio: FractionType) -> FloatType {
+    ratio.to_f64().unwrap_or(0.0)
+}
 
 /// Returns the note-value type closest to a quarter length, and whether it is
 /// exact, as music21's `quarterLengthToClosestType` does: a length between two
@@ -1122,6 +1236,61 @@ mod tests {
     fn duration_rejects_invalid_values() {
         assert!(Duration::new(-1.0).is_err());
         assert!(Duration::new(FloatType::INFINITY).is_err());
+    }
+
+    #[test]
+    fn a_plain_note_value_is_not_read_as_a_tuplet() {
+        // music21 tries the exact written value before any ratio, so a
+        // quarter is a quarter and not two thirds of a dotted quarter.
+        assert_eq!(Duration::quarter().tuplet(), None);
+        assert_eq!(Duration::new(3.0).unwrap().tuplet(), None);
+        assert_eq!(
+            Duration::new(1.0 / 3.0).unwrap().tuplet(),
+            Some(Tuplet::new(3, 2, DurationType::Eighth, 0))
+        );
+    }
+
+    #[test]
+    fn appending_a_tuplet_shortens_the_length_by_its_ratio() {
+        // music21's own `appendTuplet` docstring, exactly.
+        let mut duration = Duration::new(1.0).unwrap();
+        duration.append_tuplet(Tuplet::new(3, 2, DurationType::Quarter, 0));
+        assert!((duration.quarter_length() - 2.0 / 3.0).abs() < 1e-12);
+        assert_eq!(duration.quarter_length_no_tuplets(), 1.0);
+
+        duration.append_tuplet(Tuplet::new(5, 4, DurationType::Quarter, 0));
+        assert!((duration.quarter_length() - 8.0 / 15.0).abs() < 1e-12);
+        assert_eq!(
+            duration.aggregate_tuplet_multiplier(),
+            FractionType::new(8, 15)
+        );
+        // The written value is untouched by either tuplet.
+        assert_eq!(
+            duration.components(),
+            vec![(DurationType::Quarter, 0)],
+            "the written value stays a quarter inside both tuplets"
+        );
+    }
+
+    #[test]
+    fn saying_a_length_is_in_no_tuplet_is_not_the_same_as_saying_nothing() {
+        let inferred = Duration::new(1.0 / 3.0).unwrap();
+        assert_eq!(inferred.tuplets().len(), 1);
+
+        let mut told = Duration::new(1.0 / 3.0).unwrap();
+        told.set_tuplets(Vec::new());
+        assert!(told.tuplets().is_empty());
+        // Losing the triplet leaves the written eighth sounding in full.
+        assert_eq!(told.quarter_length(), 0.5);
+    }
+
+    #[test]
+    fn setting_a_length_forgets_the_tuplets_it_was_told() {
+        let mut duration = Duration::new(1.0).unwrap();
+        duration.append_tuplet(Tuplet::new(3, 2, DurationType::Quarter, 0));
+        duration.set_quarter_length(2.0).unwrap();
+        assert!(duration.tuplets().is_empty());
+        assert_eq!(duration.quarter_length(), 2.0);
     }
 
     #[test]
