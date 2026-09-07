@@ -725,7 +725,7 @@ impl ConcreteScale {
         py: Python<'_>,
         degree: &Bound<'_, PyAny>,
     ) -> PyResult<Py<crate::roman::RomanNumeral>> {
-        let numeral = crate::roman::RomanNumeral::build(Some(degree), Some(slf.as_any()))?;
+        let numeral = crate::roman::RomanNumeral::build(Some(degree), Some(slf.as_any()), None)?;
         Py::new(py, crate::roman::RomanNumeral::initializer(py, numeral)?)
     }
 

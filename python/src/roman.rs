@@ -14,7 +14,8 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
 use music21_rs::{
-    Chord as RsChord, Interval as RsInterval, Key as RsKey, RomanNumeral as RsRomanNumeral,
+    Chord as RsChord, Interval as RsInterval, Key as RsKey, Minor67Default as RsMinor67Default,
+    RomanNumeral as RsRomanNumeral,
 };
 
 use crate::chord::Chord;
@@ -81,6 +82,7 @@ impl RomanNumeral {
     pub(crate) fn build(
         figure: Option<&Bound<'_, PyAny>>,
         keyOrScale: Option<&Bound<'_, PyAny>>,
+        keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Self> {
         let (key, octave) = key_and_octave(keyOrScale)?;
         let figure = match figure.filter(|value| !value.is_none()) {
@@ -90,7 +92,13 @@ impl RomanNumeral {
                 Err(_) => value.extract::<String>()?,
             },
         };
-        let inner = RsRomanNumeral::new(figure, key).map_err(roman_error)?;
+        let inner = RsRomanNumeral::with_minor_defaults(
+            figure,
+            key,
+            minor_reading(keywords, "sixthMinor")?,
+            minor_reading(keywords, "seventhMinor")?,
+        )
+        .map_err(roman_error)?;
         Ok(Self::wrap(inner, octave))
     }
 
@@ -167,16 +175,42 @@ fn key_and_octave(value: Option<&Bound<'_, PyAny>>) -> PyResult<(RsKey, Option<i
     Ok((key, octave))
 }
 
-/// music21's `Minor67Default.QUALITY`, which is the only one this crate
-/// behaves as.
-fn minor_default(py: Python<'_>) -> PyResult<Py<PyAny>> {
+/// The reading, as music21's own `Minor67Default` member.
+fn minor_default(py: Python<'_>, reading: RsMinor67Default) -> PyResult<Py<PyAny>> {
     let Ok(roman) = py.import("music21.roman") else {
         return Ok(py.None());
     };
-    Ok(roman
-        .getattr("Minor67Default")?
-        .getattr("QUALITY")?
-        .unbind())
+    let name = match reading {
+        RsMinor67Default::Quality => "QUALITY",
+        RsMinor67Default::Flat => "FLAT",
+        RsMinor67Default::Sharp => "SHARP",
+        RsMinor67Default::Cautionary => "CAUTIONARY",
+    };
+    Ok(roman.getattr("Minor67Default")?.getattr(name)?.unbind())
+}
+
+/// The reading a keyword names, defaulting to reading it off the quality.
+fn minor_reading(keywords: Option<&Bound<'_, PyDict>>, name: &str) -> PyResult<RsMinor67Default> {
+    let Some(keywords) = keywords else {
+        return Ok(RsMinor67Default::Quality);
+    };
+    let Some(value) = keywords.get_item(name)? else {
+        return Ok(RsMinor67Default::Quality);
+    };
+    if value.is_none() {
+        return Ok(RsMinor67Default::Quality);
+    }
+    // music21 passes its own enum member; its name is what says which.
+    let named = value
+        .getattr("name")
+        .and_then(|name| name.extract::<String>())
+        .or_else(|_| value.extract::<String>())?;
+    Ok(match named.to_ascii_uppercase().as_str() {
+        "FLAT" => RsMinor67Default::Flat,
+        "SHARP" => RsMinor67Default::Sharp,
+        "CAUTIONARY" => RsMinor67Default::Cautionary,
+        _ => RsMinor67Default::Quality,
+    })
 }
 
 /// The numeral written on a scale degree, keeping the case the key implies.
@@ -225,7 +259,7 @@ impl RomanNumeral {
         keyOrScale: Option<&Bound<'_, PyAny>>,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<PyClassInitializer<Self>> {
-        Self::initializer(py, Self::build(figure, keyOrScale)?)
+        Self::initializer(py, Self::build(figure, keyOrScale, _keywords)?)
     }
 
     /// The figure is read again here rather than only in `__new__`.
@@ -242,7 +276,7 @@ impl RomanNumeral {
         keyOrScale: Option<&Bound<'_, PyAny>>,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<()> {
-        let built = Self::build(figure, keyOrScale)?;
+        let built = Self::build(figure, keyOrScale, _keywords)?;
         let chord = built.chord()?;
         slf.as_super().borrow_mut().replace_value(py, chord)?;
         let mut me = slf.borrow_mut();
@@ -398,12 +432,12 @@ impl RomanNumeral {
     /// music21's `QUALITY` — decide by the quality the figure names.
     #[getter]
     fn sixthMinor(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        minor_default(py)
+        minor_default(py, self.inner.sixth_minor())
     }
 
     #[getter]
     fn seventhMinor(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        minor_default(py)
+        minor_default(py, self.inner.seventh_minor())
     }
 
     /// music21's `frontAlterationTransposeInterval`: the alteration in front

@@ -14,6 +14,32 @@ use std::sync::LazyLock;
 static OCTAVE_UP: LazyLock<Interval> =
     LazyLock::new(|| Interval::from_name("P8").expect("P8 is a valid interval"));
 
+/// How a figure on the sixth or seventh degree of a minor key decides
+/// between the natural and the raised degree: music21's `Minor67Default`.
+///
+/// Minor is two scales at once, and a `vi` might mean either of two chords.
+/// music21 lets a caller say which reading to use, and the readings differ
+/// in what they do with an accidental the figure already carries.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum Minor67Default {
+    /// Read it from the chord the figure asks for: a minor triad on the
+    /// sixth or a diminished chord on the seventh needs the raised degree,
+    /// and a major one needs the natural. This is music21's default and the
+    /// reading most scores assume.
+    #[default]
+    Quality,
+    /// Always the natural degree, whatever the figure asks for. A sharp
+    /// written in front still raises it.
+    Flat,
+    /// Always the raised degree. A flat written in front still lowers it.
+    Sharp,
+    /// As `Quality`, but an accidental already written in front is read as a
+    /// caution rather than as a further change — so `#vi` and `vi` are the
+    /// same chord, and so are `bVI` and `VI`.
+    Cautionary,
+}
+
 /// A parsed Roman numeral in a key.
 #[derive(Clone, Debug)]
 pub struct RomanNumeral {
@@ -26,6 +52,11 @@ pub struct RomanNumeral {
     quality: RomanQuality,
     secondary: Option<String>,
     kind: RomanKind,
+    /// How the sixth and seventh degrees of a minor key are read.
+    #[cfg_attr(feature = "serde", serde(default))]
+    sixth_minor: Minor67Default,
+    #[cfg_attr(feature = "serde", serde(default))]
+    seventh_minor: Minor67Default,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -104,6 +135,22 @@ impl RomanNumeral {
     /// Supports ordinary figures such as `V7/V` and augmented-sixth figures
     /// such as `It+6`, `Fr+6`, `Ger+6`, and `Sw+6`.
     pub fn new(figure: impl Into<String>, key: Key) -> Result<Self> {
+        Self::with_minor_defaults(
+            figure,
+            key,
+            Minor67Default::default(),
+            Minor67Default::default(),
+        )
+    }
+
+    /// The same, saying how the sixth and seventh degrees of a minor key are
+    /// to be read: music21's `sixthMinor` and `seventhMinor`.
+    pub fn with_minor_defaults(
+        figure: impl Into<String>,
+        key: Key,
+        sixth_minor: Minor67Default,
+        seventh_minor: Minor67Default,
+    ) -> Result<Self> {
         let figure = figure.into();
         let trimmed = figure.trim();
         if trimmed.is_empty() {
@@ -123,6 +170,8 @@ impl RomanNumeral {
                 quality: RomanQuality::Augmented,
                 secondary: None,
                 kind: RomanKind::AugmentedSixth(kind),
+                sixth_minor,
+                seventh_minor,
             });
         }
 
@@ -153,6 +202,8 @@ impl RomanNumeral {
             quality,
             secondary,
             kind: RomanKind::Diatonic,
+            sixth_minor,
+            seventh_minor,
         };
         numeral.raise_minor_sixth_and_seventh()?;
         Ok(numeral)
@@ -170,19 +221,52 @@ impl RomanNumeral {
         if !matches!(self.degree, 6 | 7) {
             return Ok(());
         }
-        if !matches!(
-            self.quality,
-            RomanQuality::Minor | RomanQuality::Diminished | RomanQuality::HalfDiminished
-        ) {
-            return Ok(());
-        }
         // Against the key the figure is actually read in, so the `vi` of a
         // secondary numeral is judged in the key that numeral establishes.
         if self.effective_key()?.mode() != "minor" {
             return Ok(());
         }
-        self.accidental += 1;
+        let reading = if self.degree == 6 {
+            self.sixth_minor
+        } else {
+            self.seventh_minor
+        };
+        // A chord that only the raised degree gives.
+        let wants_raised = matches!(
+            self.quality,
+            RomanQuality::Minor | RomanQuality::Diminished | RomanQuality::HalfDiminished
+        );
+        let raise = match reading {
+            Minor67Default::Flat => false,
+            Minor67Default::Sharp => true,
+            Minor67Default::Quality => wants_raised,
+            // An accidental already written is a caution, not a further
+            // change: `#vi` and `vi` are the same chord, and so are `bVI`
+            // and `VI`.
+            Minor67Default::Cautionary => match self.accidental {
+                0 => wants_raised,
+                // A sharp already written is the caution, and says nothing
+                // more; a flat is a caution against the raised degree, so
+                // the raise it cancels is applied and the two meet at the
+                // natural one.
+                sharps if sharps >= 1 => false,
+                _ => true,
+            },
+        };
+        if raise {
+            self.accidental += 1;
+        }
         Ok(())
+    }
+
+    /// How this numeral reads the sixth degree of a minor key.
+    pub fn sixth_minor(&self) -> Minor67Default {
+        self.sixth_minor
+    }
+
+    /// How it reads the seventh.
+    pub fn seventh_minor(&self) -> Minor67Default {
+        self.seventh_minor
     }
 
     /// Returns the original figure.
@@ -345,8 +429,11 @@ impl RomanNumeral {
         let effective_key = self.effective_key()?;
         let mut root = effective_key.pitch_from_degree(self.degree as usize)?;
         if self.accidental != 0 {
-            root =
-                Interval::from_semitones(self.accidental as IntegerType)?.transpose_pitch(&root)?;
+            // The alteration in front of a numeral moves the note without
+            // renaming it — music21 transposes by an augmented unison — so a
+            // `bII` in C is `D-`, not the `C#` a semitone step would give.
+            let altered = root.accidental().alter() + f64::from(self.accidental);
+            root.set_accidental(Some(crate::pitch::Accidental::new(altered)?));
         }
         let mut pitches = self
             .interval_names()
@@ -1138,6 +1225,41 @@ mod tests {
                 .pitch_names(),
             ["A", "C", "E"]
         );
+    }
+
+    #[test]
+    fn the_four_readings_of_a_minor_sixth_and_seventh() {
+        let minor = Key::from_tonic_mode("c", Some("minor")).unwrap();
+        let read = |figure: &str, sixth: Minor67Default| {
+            RomanNumeral::with_minor_defaults(figure, minor.clone(), sixth, sixth)
+                .unwrap()
+                .to_chord()
+                .unwrap()
+                .pitch_names()
+                .join(" ")
+        };
+
+        // By quality, which is the default: the chord the figure asks for
+        // says which sixth it is built on.
+        assert_eq!(read("vi", Minor67Default::Quality), "A C E");
+        assert_eq!(read("VI", Minor67Default::Quality), "A- C E-");
+
+        // Flat is always the natural degree, whatever the figure asks for,
+        // and a sharp written in front still raises it.
+        assert_eq!(read("vi", Minor67Default::Flat), "A- C- E-");
+        assert_eq!(read("#vi", Minor67Default::Flat), "A C E");
+
+        // Sharp is always the raised one, and a flat still lowers it.
+        assert_eq!(read("VI", Minor67Default::Sharp), "A C# E");
+        assert_eq!(read("bVI", Minor67Default::Sharp), "A- C E-");
+
+        // Cautionary reads the quality, but an accidental already written is
+        // a caution rather than a further change, so `#vi` is `vi` and
+        // `bVI` is `VI`.
+        assert_eq!(read("#vi", Minor67Default::Cautionary), "A C E");
+        assert_eq!(read("vi", Minor67Default::Cautionary), "A C E");
+        assert_eq!(read("bVI", Minor67Default::Cautionary), "A- C E-");
+        assert_eq!(read("VI", Minor67Default::Cautionary), "A- C E-");
     }
 
     #[test]
