@@ -274,6 +274,20 @@ impl ScaleType {
             .collect()
     }
 
+    /// The step a scale carries on past its own octave, where it has one.
+    ///
+    /// Rag Marwa is the only one here: its network keeps going a semitone
+    /// above the terminus, so the collection realized from `C` closes on the
+    /// octave and then sounds the `D-` above it. music21 calls it "a pitch
+    /// beyond the terminus" and gives it whenever the realization is not
+    /// bounded by a range.
+    pub fn beyond_terminus(self) -> Option<&'static str> {
+        match self {
+            Self::RagMarwa => Some("m2"),
+            _ => None,
+        }
+    }
+
     /// The collection this scale uses coming down, where that is not the
     /// one it uses going up.
     ///
@@ -513,12 +527,18 @@ impl Scale {
         for pair in pitches.windows(2) {
             steps.push(Interval::between_pitches(&pair[0], &pair[1])?);
         }
-        // The closing step back to the octave, so the collection repeats —
-        // unless the notes given already close on it, which they often do.
-        let octave = tonic.transpose(&Interval::from_name("P8")?)?;
+        // The closing step back to the tonic, so the collection repeats.
+        // Notes that already close on it need none — and they may close two
+        // octaves up rather than one, which is a pattern two octaves long and
+        // not a scale that folds back on itself.
         let last = pitches.last().unwrap_or(tonic);
-        if last.ps() != octave.ps() {
-            steps.push(Interval::between_pitches(last, &octave)?);
+        let span = last.ps() - tonic.ps();
+        if span.rem_euclid(12.0) != 0.0 {
+            let octaves = (span / 12.0).floor() + 1.0;
+            let closing = tonic.transpose(&Interval::from_semitones(
+                (octaves * 12.0) as crate::defaults::IntegerType,
+            )?)?;
+            steps.push(Interval::between_pitches(last, &closing)?);
         }
         Ok(Self {
             scale_type: ScaleType::Major,
@@ -659,6 +679,11 @@ impl Scale {
             current = advance(&current, &step, simplification)?;
             pitches.push(current.clone());
         }
+        if self.custom_steps.is_none()
+            && let Some(beyond) = self.scale_type.beyond_terminus()
+        {
+            pitches.push(advance(&current, &step_interval(beyond)?, simplification)?);
+        }
         Ok(pitches)
     }
 
@@ -776,14 +801,18 @@ impl Scale {
         }
         let lowest = minimum.ps();
         let highest = maximum.ps();
-        let mut current = self.realization_start()?;
-        // Down whole octaves until the start is at or below the range.
-        while current.ps() > lowest {
-            let octave = current.octave().unwrap_or(0);
-            current.octave_setter(Some(octave - 1));
-        }
         let simplification = self.scale_type.simplification();
         let steps = self.walk()?;
+        // Down whole periods until the start is at or below the range. A
+        // period is usually the octave, but a scale given by its notes may
+        // take two to come back to where it began, and dropping by one would
+        // start the pattern halfway through itself.
+        let period = self.period_in_octaves(&steps);
+        let mut current = self.realization_start()?;
+        while current.ps() > lowest {
+            let octave = current.octave().unwrap_or(0);
+            current.octave_setter(Some(octave - period));
+        }
         let mut pitches = Vec::new();
         // Two octaves of headroom past the range, so a scale whose degrees
         // are not evenly spaced still reaches the top of it.
@@ -799,6 +828,14 @@ impl Scale {
             current = advance(&current, &steps[index % steps.len()], simplification)?;
         }
         Ok(pitches)
+    }
+
+    /// How many octaves the pattern takes to come back to where it began,
+    /// which is one for every scale that has a name and may be more for one
+    /// given by its notes.
+    fn period_in_octaves(&self, steps: &[Interval]) -> IntegerType {
+        let semitones: FloatType = steps.iter().map(Interval::semitones).sum();
+        ((semitones / 12.0).round() as IntegerType).max(1)
     }
 
     /// The note the scale comes to rest on, as it sounds: music21's
@@ -1794,14 +1831,16 @@ mod tests {
     #[test]
     fn rag_marwa_dips_below_its_sixth_degree() {
         // music21's ascending network steps down a M2 from B before closing on
-        // C, so A appears twice and the line is not monotonic.
+        // C, so A appears twice and the line is not monotonic — and then it
+        // carries on a semitone past the octave, which is the one scale here
+        // that ends above where it closed.
         assert_eq!(
             names(ScaleType::RagMarwa, "C4"),
-            ["C", "D-", "E", "F#", "A", "B", "A", "C"]
+            ["C", "D-", "E", "F#", "A", "B", "A", "C", "D-"]
         );
         assert_eq!(
             names(ScaleType::RagMarwa, "E-4"),
-            ["E-", "F-", "G", "A", "C", "D", "C", "E-"]
+            ["E-", "F-", "G", "A", "C", "D", "C", "E-", "F-"]
         );
     }
 
@@ -1851,9 +1890,10 @@ mod tests {
             ] {
                 let scale = Scale::new(scale_type, Pitch::from_name(tonic).unwrap());
                 let pitches = scale.pitches().expect("scale realizes");
+                let beyond = usize::from(scale_type.beyond_terminus().is_some());
                 assert_eq!(
                     pitches.len(),
-                    scale_type.degree_count() + 1,
+                    scale_type.degree_count() + 1 + beyond,
                     "{scale_type:?} on {tonic}"
                 );
             }

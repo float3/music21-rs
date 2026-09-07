@@ -10,6 +10,7 @@
 #![allow(non_snake_case)]
 
 use pyo3::exceptions::PyException;
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyTuple, PyType};
 
@@ -267,6 +268,21 @@ fn named_scale_type(name: &str) -> Option<RsScaleType> {
         })
 }
 
+/// The note a scale stands on.
+///
+/// music21 takes a pitch, a note or the name of one, and refuses anything
+/// else by name — a number is not a pitch, however much it looks like a MIDI
+/// value.
+fn tonic_pitch(value: &Bound<'_, PyAny>) -> PyResult<RsPitch> {
+    if value.extract::<f64>().is_ok() && value.extract::<String>().is_err() {
+        let kind = value.get_type();
+        return Err(PyValueError::new_err(format!(
+            "Tonic must be a Pitch, Note, or str, not {kind}"
+        )));
+    }
+    pitch_from_any(value)
+}
+
 /// music21's `scale.ConcreteScale`: a pattern of steps standing on a tonic.
 ///
 /// Every one of music21's twenty named scales is this with the pattern fixed,
@@ -400,7 +416,9 @@ impl ConcreteScale {
         );
         built.named_pattern = false;
         match tonic.filter(|value| !value.is_none()) {
-            Some(value) => built.inner = RsScale::new(RsScaleType::Major, pitch_from_any(value)?),
+            Some(value) => {
+                built.inner = RsScale::new(RsScaleType::Major, tonic_pitch(value)?);
+            }
             None => built.has_tonic = false,
         }
         // music21 also takes the notes themselves, which is a scale nobody
@@ -439,7 +457,7 @@ impl ConcreteScale {
         let scale_type = Self::scale_type_of(&class)?;
         let given = tonic.filter(|value| !value.is_none());
         let tonic = match given {
-            Some(value) => pitch_from_any(value)?,
+            Some(value) => tonic_pitch(value)?,
             None => RsPitch::from_name("C").map_err(scale_error)?,
         };
         let mut me = slf.borrow_mut();
