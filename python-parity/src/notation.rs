@@ -159,7 +159,7 @@ impl Lyric {
 
     #[getter]
     fn get_text(&self) -> String {
-        self.inner.text().to_string()
+        self.inner.text()
     }
 
     #[setter]
@@ -182,9 +182,15 @@ impl Lyric {
         self.inner.number()
     }
 
+    /// music21 refuses anything that is not a number here, `None` included,
+    /// with a `LyricException` rather than the `TypeError` a typed argument
+    /// would raise.
     #[setter]
-    fn set_number(&mut self, value: i32) -> PyResult<()> {
-        self.inner.set_number(value).map_err(lyric_error)
+    fn set_number(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        let Ok(number) = value.extract::<i32>() else {
+            return Err(LyricException::new_err("Number best be number"));
+        };
+        self.inner.set_number(number).map_err(lyric_error)
     }
 
     #[getter]
@@ -199,9 +205,14 @@ impl Lyric {
         Ok(())
     }
 
+    /// music21's `identifier`: the name this verse goes by, and the verse
+    /// *number* itself — an `int`, not its digits — when it has no name.
     #[getter]
-    fn get_identifier(&self) -> String {
-        self.inner.identifier()
+    fn get_identifier(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        match self.inner.explicit_identifier() {
+            Some(identifier) => Ok(identifier.into_pyobject(py)?.into_any().unbind()),
+            None => Ok(self.inner.number().into_pyobject(py)?.into_any().unbind()),
+        }
     }
 
     #[setter]
@@ -211,9 +222,53 @@ impl Lyric {
 
     #[getter]
     fn isComposite(&self) -> bool {
-        self.inner.syllabic() == Syllabic::Composite
+        self.inner.is_composite()
     }
 
+    /// music21's `components`: the lyrics a composite one is made of, and
+    /// `None` when it is an ordinary syllable.
+    #[getter]
+    fn get_components(&self) -> Option<Vec<Lyric>> {
+        if !self.inner.is_composite() {
+            return None;
+        }
+        Some(
+            self.inner
+                .components()
+                .iter()
+                .cloned()
+                .map(Lyric::wrap)
+                .collect(),
+        )
+    }
+
+    #[setter]
+    fn set_components(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        let Some(value) = value.filter(|value| !value.is_none()) else {
+            self.inner.set_components(Vec::new());
+            return Ok(());
+        };
+        let mut components = Vec::new();
+        for item in value.try_iter()? {
+            components.push(item?.extract::<PyRef<'_, Lyric>>()?.inner.clone());
+        }
+        self.inner.set_components(components);
+        Ok(())
+    }
+
+    #[getter]
+    fn get_elisionBefore(&self) -> String {
+        self.inner.elision_before().to_string()
+    }
+
+    #[setter]
+    fn set_elisionBefore(&mut self, value: &str) {
+        self.inner.set_elision_before(value);
+    }
+
+    /// music21's `setTextAndSyllabic`. With `applyRaw` the hyphens stay in
+    /// the text and the syllabic is left as it was, except that a lyric that
+    /// never had one becomes a whole word.
     #[pyo3(signature = (rawText, applyRaw = false))]
     fn setTextAndSyllabic(&mut self, rawText: &str, applyRaw: bool) {
         if applyRaw {
@@ -243,7 +298,7 @@ impl Lyric {
     }
 
     fn __str__(&self) -> String {
-        self.inner.text().to_string()
+        self.inner.text()
     }
 
     fn __deepcopy__(&self, _memo: &Bound<'_, PyAny>) -> Self {

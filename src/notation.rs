@@ -493,7 +493,13 @@ impl Syllabic {
         Self::ALL
             .into_iter()
             .find(|candidate| candidate.as_str() == name)
-            .ok_or_else(|| Error::Notation(format!("not a valid syllabic value: {name}")))
+            .ok_or_else(|| {
+                // music21 quotes the value and lists what it would have
+                // taken, `None` included even though it is not a position.
+                Error::Notation(format!(
+                    "Syllabic value '{name}' is not in note.SYLLABIC_CHOICES, namely: [None, 'begin', 'single', 'end', 'middle', 'composite']"
+                ))
+            })
     }
 }
 
@@ -515,7 +521,13 @@ pub struct Lyric {
     number: IntegerType,
     syllabic: Syllabic,
     identifier: Option<String>,
+    components: Vec<Lyric>,
+    elision_before: String,
 }
+
+/// What music21's `Lyric.elisionBefore` starts as: a space between this
+/// syllable and the one before it inside a composite lyric.
+const DEFAULT_ELISION: &str = " ";
 
 impl Lyric {
     /// A lyric on the first verse, spelled as a whole word.
@@ -525,6 +537,8 @@ impl Lyric {
             number: 1,
             syllabic: Syllabic::Single,
             identifier: None,
+            components: Vec::new(),
+            elision_before: DEFAULT_ELISION.to_string(),
         }
     }
 
@@ -537,13 +551,56 @@ impl Lyric {
     }
 
     /// The syllable without its hyphens.
-    pub fn text(&self) -> &str {
-        &self.text
+    ///
+    /// A composite lyric has no text of its own: it reads as its components
+    /// run together, each joined on by its own [`Self::elision_before`].
+    pub fn text(&self) -> String {
+        let Some((first, rest)) = self.components.split_first() else {
+            return self.text.clone();
+        };
+        let mut text = first.text();
+        for component in rest {
+            text.push_str(&component.elision_before);
+            text.push_str(&component.text());
+        }
+        text
     }
 
     /// Replaces the syllable text, leaving its position in the word alone.
+    ///
+    /// Setting the text of a composite lyric drops its components, which is
+    /// what music21 does: the text you gave it is now the whole of it.
     pub fn set_text(&mut self, text: impl Into<String>) {
+        self.components.clear();
         self.text = text.into();
+    }
+
+    /// Whether this lyric is several lyrics sung together rather than one
+    /// syllable: music21's `isComposite`.
+    pub fn is_composite(&self) -> bool {
+        !self.components.is_empty()
+    }
+
+    /// The lyrics this one is made of, empty unless it is composite.
+    pub fn components(&self) -> &[Lyric] {
+        &self.components
+    }
+
+    /// Makes this lyric the several lyrics given, run together. An empty
+    /// list makes it an ordinary one again, keeping the text it had.
+    pub fn set_components(&mut self, components: Vec<Lyric>) {
+        self.components = components;
+    }
+
+    /// What joins this syllable to the one before it inside a composite
+    /// lyric — a space by default, an underscore for an elision.
+    pub fn elision_before(&self) -> &str {
+        &self.elision_before
+    }
+
+    /// Sets what joins this syllable to the one before it.
+    pub fn set_elision_before(&mut self, elision: impl Into<String>) {
+        self.elision_before = elision.into();
     }
 
     /// The verse number, counting from one.
@@ -562,8 +619,12 @@ impl Lyric {
         Ok(())
     }
 
-    /// Where the syllable falls in its word.
+    /// Where the syllable falls in its word. A composite lyric reads as
+    /// [`Syllabic::Composite`] whatever it was set to.
     pub fn syllabic(&self) -> Syllabic {
+        if self.is_composite() {
+            return Syllabic::Composite;
+        }
         self.syllabic
     }
 
@@ -580,23 +641,46 @@ impl Lyric {
             .unwrap_or_else(|| self.number.to_string())
     }
 
+    /// The name this verse was given, and nothing when it goes by its
+    /// number. music21's `identifier` answers the number itself in that
+    /// case, which is a different type, so a caller that cares asks here.
+    pub fn explicit_identifier(&self) -> Option<&str> {
+        self.identifier.as_deref()
+    }
+
     /// Names this verse, or clears the name so the number stands in.
     pub fn set_identifier(&mut self, identifier: Option<String>) {
         self.identifier = identifier;
     }
 
     /// The syllable written with the hyphens its position implies.
+    ///
+    /// A composite lyric takes its hyphens from the ends of the run: the
+    /// first component decides whether one leads, the last whether one
+    /// trails.
     pub fn raw_text(&self) -> String {
-        match self.syllabic {
-            Syllabic::Begin => format!("{}-", self.text),
-            Syllabic::Middle => format!("-{}-", self.text),
-            Syllabic::End => format!("-{}", self.text),
-            Syllabic::Single | Syllabic::Composite => self.text.clone(),
-        }
+        let text = self.text();
+        let (Some(first), Some(last)) = (self.components.first(), self.components.last()) else {
+            return match self.syllabic {
+                Syllabic::Begin => format!("{text}-"),
+                Syllabic::Middle => format!("-{text}-"),
+                Syllabic::End => format!("-{text}"),
+                Syllabic::Single | Syllabic::Composite => text,
+            };
+        };
+        let leading = matches!(first.syllabic(), Syllabic::Middle | Syllabic::End);
+        let trailing = matches!(last.syllabic(), Syllabic::Begin | Syllabic::Middle);
+        format!(
+            "{}{text}{}",
+            if leading { "-" } else { "" },
+            if trailing { "-" } else { "" }
+        )
     }
 
-    /// Reads the syllable and its position out of hyphenated text.
+    /// Reads the syllable and its position out of hyphenated text. Like
+    /// [`Self::set_text`], this drops any components.
     pub fn set_raw_text(&mut self, raw_text: &str) {
+        self.components.clear();
         let starts = raw_text.starts_with('-');
         let ends = raw_text.ends_with('-') && raw_text.len() > 1;
         let trimmed = raw_text.strip_prefix('-').unwrap_or(raw_text).to_string();
@@ -617,7 +701,7 @@ impl Lyric {
 
 impl fmt::Display for Lyric {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.text)
+        f.write_str(&self.text())
     }
 }
 
@@ -700,6 +784,48 @@ mod tests {
         assert_eq!(lyric.to_string(), "shine");
         assert_eq!(Syllabic::from_name("middle").unwrap(), Syllabic::Middle);
         assert!(Syllabic::from_name("half").is_err());
+    }
+
+    #[test]
+    fn a_composite_lyric_reads_as_its_components_run_together() {
+        // music21's own example: "bianco" sung as "co" then "e".
+        let mut co = Lyric::new("co");
+        co.set_syllabic(Syllabic::End);
+        let mut e = Lyric::new("e");
+        e.set_syllabic(Syllabic::Single);
+
+        let mut bianco = Lyric::new("");
+        assert!(!bianco.is_composite());
+        bianco.set_components(vec![co, e]);
+        assert!(bianco.is_composite());
+        assert_eq!(bianco.text(), "co e");
+        assert_eq!(bianco.syllabic(), Syllabic::Composite);
+        // The first component leads with a hyphen; the last ends the word.
+        assert_eq!(bianco.raw_text(), "-co e");
+
+        // An elision joins the two rather than a space, and a middle
+        // syllable at the end leaves the word open.
+        let mut components = bianco.components().to_vec();
+        components[1].set_elision_before("_");
+        components[1].set_syllabic(Syllabic::Middle);
+        bianco.set_components(components);
+        assert_eq!(bianco.text(), "co_e");
+        assert_eq!(bianco.raw_text(), "-co_e-");
+
+        // Setting the text outright is music21's way of un-compositing.
+        bianco.set_text("bianco");
+        assert!(!bianco.is_composite());
+        assert_eq!(bianco.text(), "bianco");
+        assert_eq!(bianco.syllabic(), Syllabic::Single);
+    }
+
+    #[test]
+    fn an_identifier_is_only_there_when_it_was_named() {
+        let mut lyric = Lyric::new("shine");
+        assert_eq!(lyric.explicit_identifier(), None);
+        assert_eq!(lyric.identifier(), "1");
+        lyric.set_identifier(Some("chorus".to_string()));
+        assert_eq!(lyric.explicit_identifier(), Some("chorus"));
     }
 
     #[test]

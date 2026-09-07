@@ -3030,7 +3030,7 @@ mod notation_tests {
             .unwrap()
             .annotated_with_intervals(true, true)
             .unwrap();
-        let texts: Vec<&str> = annotated.lyrics().iter().map(Lyric::text).collect();
+        let texts: Vec<String> = annotated.lyrics().iter().map(Lyric::text).collect();
         assert_eq!(texts, ["5", "3"]);
         assert_eq!(annotated.lyrics()[1].number(), 2);
     }

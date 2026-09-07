@@ -415,6 +415,47 @@ pub(crate) fn pitch_list(value: Option<&Bound<'_, PyAny>>) -> PyResult<Vec<RsPit
         .collect()
 }
 
+/// The keywords music21's `Pitch.__init__` understands, which its `Note`
+/// hands straight through: `note.Note(step='C', accidental='sharp', octave=2)`
+/// is the pitch built from them.
+const PITCH_KEYWORDS: [&str; 10] = [
+    "name",
+    "nameWithOctave",
+    "step",
+    "octave",
+    "accidental",
+    "microtone",
+    "pitchClass",
+    "midi",
+    "ps",
+    "fundamental",
+];
+
+/// The pitch music21 would build from a note's keywords, or nothing when
+/// none of them say anything about a pitch.
+///
+/// `nameWithOctave` arrives as `name`, since a name carrying an octave is
+/// what the crate's parser already reads.
+pub(crate) fn pitch_from_keywords(
+    py: Python<'_>,
+    keywords: Option<&Bound<'_, PyDict>>,
+) -> PyResult<Option<RsPitch>> {
+    let Some(keywords) = keywords else {
+        return Ok(None);
+    };
+    let wanted = PyDict::new(py);
+    for name in PITCH_KEYWORDS {
+        if let Some(value) = keywords.get_item(name)? {
+            wanted.set_item(if name == "nameWithOctave" { "name" } else { name }, value)?;
+        }
+    }
+    if wanted.is_empty() {
+        return Ok(None);
+    }
+    let built = py.get_type::<Pitch>().call((), Some(&wanted))?;
+    Ok(Some(built.extract::<PyRef<'_, Pitch>>()?.inner.clone()))
+}
+
 /// Reads a pitch argument: a facade, a name, or a number.
 pub(crate) fn pitch_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsPitch> {
     if let Ok(facade) = value.extract::<PyRef<Pitch>>() {

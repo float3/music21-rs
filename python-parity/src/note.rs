@@ -5,7 +5,7 @@
 
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
-use pyo3::types::PyDict;
+use pyo3::types::{PyDict, PyList, PyTuple};
 
 use music21_rs::{
     Duration as RsDuration, Note as RsNote, Notehead as RsNotehead, Pitch as RsPitch,
@@ -58,6 +58,42 @@ impl Duration {
             client: None,
         }
     }
+
+    /// The duration music21 builds from a bare `Duration(**keywords)`: a
+    /// quarter length if one was given, else a note value by name, else the
+    /// quarter every note starts with.
+    pub(crate) fn from_keywords(keywords: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
+        let Some(keywords) = keywords else {
+            return Ok(Self::wrap(RsDuration::quarter()));
+        };
+        if let Some(value) = keywords.get_item("quarterLength")? {
+            return Ok(Self::wrap(
+                RsDuration::new(value.extract::<f64>()?).map_err(note_error)?,
+            ));
+        }
+        if let Some(value) = keywords.get_item("type")? {
+            let name = value.extract::<String>()?;
+            let kind = music21_rs::duration::DurationType::from_music21_name(&name)
+                .ok_or_else(|| NoteException::new_err(format!("no such duration type: {name}")))?;
+            return Ok(Self::wrap(RsDuration::from_type(kind)));
+        }
+        Ok(Self::wrap(RsDuration::quarter()))
+    }
+
+    /// Whether any of the keywords say something about the duration, which
+    /// is how music21 decides between the quarter it gives every note and a
+    /// duration built from what it was told.
+    pub(crate) fn keywords_say_duration(keywords: Option<&Bound<'_, PyDict>>) -> PyResult<bool> {
+        let Some(keywords) = keywords else {
+            return Ok(false);
+        };
+        for name in ["quarterLength", "type", "dots", "duration"] {
+            if keywords.contains(name)? {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
 }
 
 /// Reads a duration argument: a `Duration`, a quarter length, or a type name
@@ -88,17 +124,25 @@ pub(crate) fn duration_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsDuration
 
 #[pymethods]
 impl Duration {
+    /// music21's `Duration(value, **keywords)`, where `type`, `dots` and
+    /// `quarterLength` are the keywords its `GeneralNote` passes through when
+    /// a note is built with them.
     #[new]
-    #[pyo3(signature = (value = None, **_keywords))]
+    #[pyo3(signature = (value = None, **keywords))]
     fn new(
         value: Option<&Bound<'_, PyAny>>,
-        _keywords: Option<&Bound<'_, PyDict>>,
+        keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Self> {
-        let inner = match value.filter(|value| !value.is_none()) {
-            Some(value) => duration_from_any(value)?,
-            None => RsDuration::new(1.0).map_err(note_error)?,
+        let mut duration = match value.filter(|value| !value.is_none()) {
+            Some(value) => Self::wrap(duration_from_any(value)?),
+            None => Self::from_keywords(keywords)?,
         };
-        Ok(Self::wrap(inner))
+        if let Some(keywords) = keywords
+            && let Some(dots) = keywords.get_item("dots")?
+        {
+            duration.set_dots(dots.extract::<u32>()?)?;
+        }
+        Ok(duration)
     }
 
     #[getter]
@@ -129,8 +173,17 @@ impl Duration {
     }
 
     #[getter]
-    fn dots(&self) -> u32 {
+    fn get_dots(&self) -> u32 {
         self.inner.dots()
+    }
+
+    #[setter]
+    fn set_dots(&mut self, value: u32) -> PyResult<()> {
+        let kind = self.inner.duration_type().ok_or_else(|| {
+            NoteException::new_err("cannot set dots on a duration with no note value")
+        })?;
+        self.inner = RsDuration::from_type_with_dots(kind, value);
+        Ok(())
     }
 
     #[getter]
@@ -347,6 +400,30 @@ impl Note {
         note
     }
 
+    /// music21 orders notes by pitch alone, and refuses anything without a
+    /// `.pitch` — its `__lt__` answers `NotImplemented` and Python raises.
+    /// The message is written out here rather than left to Python because
+    /// pyo3 puts the module into the type name, so CPython's own wording
+    /// would say `music21.note.Note` where music21 says `Note`.
+    fn ordered(
+        slf: &Bound<'_, Self>,
+        other: &Bound<'_, PyAny>,
+        operator: &str,
+        compare: impl Fn(f64, f64) -> bool,
+    ) -> PyResult<bool> {
+        let Ok(pitch) = other
+            .getattr("pitch")
+            .and_then(|pitch| pitch_from_any(&pitch))
+        else {
+            return Err(pyo3::exceptions::PyTypeError::new_err(format!(
+                "'{operator}' not supported between instances of '{}' and '{}'",
+                slf.get_type().name()?,
+                other.get_type().name()?,
+            )));
+        };
+        Ok(compare(slf.borrow().inner.pitch().ps(), pitch.ps()))
+    }
+
     /// A detached copy: new pitch and duration objects, and no chord.
     fn copied(&self, py: Python<'_>) -> PyResult<Self> {
         Self::wrap(py, self.synced(py))
@@ -374,18 +451,20 @@ impl Note {
     ) -> PyResult<Self> {
         let inner = match pitch.filter(|value| !value.is_none()) {
             Some(value) => RsNote::from_pitch(pitch_from_any(value)?),
-            None => RsNote::from_name("C4").map_err(note_error)?,
+            None => match crate::pitch::pitch_from_keywords(py, keywords)? {
+                Some(pitch) => RsNote::from_pitch(pitch),
+                None => RsNote::from_name("C4").map_err(note_error)?,
+            },
         };
         let mut note = Self::wrap(py, inner)?;
-        if let Some(keywords) = keywords {
-            if let Some(value) = keywords.get_item("quarterLength")? {
-                note.set_quarterLength(py, value.extract::<f64>()?)?;
-            }
-            // music21's `Note(p, duration=d)` keeps `d` itself, which is how
-            // a chord gives every note it builds the same duration object.
-            if let Some(value) = keywords.get_item("duration")? {
-                note.set_duration(py, &value)?;
-            }
+        // music21 hands the same keywords on to `Duration`, so `type='eighth',
+        // dots=2` is an eighth with two dots and not a quarter.
+        if Duration::keywords_say_duration(keywords)? {
+            let duration = match keywords.and_then(|keywords| keywords.get_item("duration").ok()?) {
+                Some(value) => value,
+                None => Py::new(py, Duration::new(None, keywords)?)?.into_bound(py).into_any(),
+            };
+            note.set_duration(py, &duration)?;
         }
         Ok(note)
     }
@@ -457,9 +536,31 @@ impl Note {
         Self::broadcast_pitch(slf.py(), &slf.clone().unbind())
     }
 
+    /// music21's `.pitches`, the chord-shaped view of a note: its one pitch
+    /// in a tuple.
     #[getter]
-    fn pitches(slf: &Bound<'_, Self>) -> Vec<Py<Pitch>> {
-        vec![Self::get_pitch(slf)]
+    fn get_pitches<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyTuple>> {
+        PyTuple::new(slf.py(), [Self::get_pitch(slf)])
+    }
+
+    /// Setting it takes the first pitch of a list or tuple and ignores the
+    /// rest, since a note has only one; anything that is not a sequence is
+    /// refused.
+    #[setter]
+    fn set_pitches(slf: &Bound<'_, Self>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        let refused = || {
+            NoteException::new_err(format!(
+                "cannot set pitches with provided object: {}",
+                value.str().map_or_else(|_| "?".to_string(), |v| v.to_string())
+            ))
+        };
+        if !value.is_instance_of::<PyList>() && !value.is_instance_of::<PyTuple>() {
+            return Err(refused());
+        }
+        let Some(first) = value.try_iter()?.next() else {
+            return Err(refused());
+        };
+        Self::set_pitch(slf, &first?)
     }
 
     #[getter]
@@ -733,6 +834,22 @@ impl Note {
             other.inner.pitch() == self.inner.pitch()
                 && other.quarter_length(py) == self.quarter_length(py)
         })
+    }
+
+    fn __lt__(slf: &Bound<'_, Self>, other: &Bound<'_, PyAny>) -> PyResult<bool> {
+        Self::ordered(slf, other, "<", |left, right| left < right)
+    }
+
+    fn __le__(slf: &Bound<'_, Self>, other: &Bound<'_, PyAny>) -> PyResult<bool> {
+        Self::ordered(slf, other, "<=", |left, right| left <= right)
+    }
+
+    fn __gt__(slf: &Bound<'_, Self>, other: &Bound<'_, PyAny>) -> PyResult<bool> {
+        Self::ordered(slf, other, ">", |left, right| left > right)
+    }
+
+    fn __ge__(slf: &Bound<'_, Self>, other: &Bound<'_, PyAny>) -> PyResult<bool> {
+        Self::ordered(slf, other, ">=", |left, right| left >= right)
     }
 
     fn __hash__(slf: &Bound<'_, Self>) -> isize {
