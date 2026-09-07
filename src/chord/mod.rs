@@ -896,18 +896,26 @@ impl Chord {
         self.notes.iter_mut().find(|note| &note.pitch == pitch)
     }
 
-    /// Whether any note carries a volume of its own: music21's
-    /// `hasComponentVolumes`.
+    /// Whether *every* note carries a volume of its own: music21's
+    /// `hasComponentVolumes`, which counts the notes that have one and
+    /// compares the count against the whole chord. A chord where only some
+    /// notes have been given a volume reads as having none.
     pub fn has_component_volumes(&self) -> bool {
-        self.notes.iter().any(Note::has_volume_information)
+        self.notes.iter().all(Note::has_volume_information)
     }
 
     /// How loud the chord is. With volumes on its notes this is their
     /// average velocity, as music21 reads it; otherwise it is the chord's
     /// own volume.
     pub fn volume(&self) -> Volume {
+        // music21 asks in this order: a volume of the chord's own wins, then
+        // the notes' average, and a chord with neither — an empty one
+        // included — reads as a default volume.
+        if let Some(volume) = &self.volume {
+            return volume.clone();
+        }
         if !self.has_component_volumes() {
-            return self.volume.clone().unwrap_or_default();
+            return Volume::default();
         }
         let velocities: Vec<IntegerType> = self
             .notes

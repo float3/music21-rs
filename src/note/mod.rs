@@ -203,12 +203,11 @@ impl Note {
     }
 
     /// Whether a volume was ever set on this note: music21's
-    /// `hasVolumeInformation`.
+    /// `hasVolumeInformation`, which asks only whether the object is there
+    /// and not whether a velocity was written on it, so a bare
+    /// `Volume::new()` set on a note counts.
     pub fn has_volume_information(&self) -> bool {
-        self.notation
-            .volume
-            .as_ref()
-            .is_some_and(Volume::has_velocity_information)
+        self.notation.volume.is_some()
     }
 
     /// The syllables sung on this note, one per verse.

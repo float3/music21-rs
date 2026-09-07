@@ -394,8 +394,6 @@ pub enum StemDirection {
     Down,
     /// Written with no stem at all, as a harmonic sounding pitch is.
     NoStem,
-    /// Explicitly no stem direction.
-    NoneDirection,
     /// Not said, the default.
     #[default]
     Unspecified,
@@ -404,15 +402,22 @@ pub enum StemDirection {
 }
 
 impl StemDirection {
-    /// Every stem direction, in music21's order.
-    pub const ALL: [StemDirection; 6] = [
+    /// Every stem direction a note can hold.
+    ///
+    /// One shorter than music21's [`StemDirection::NAMES`]: `"none"` is an
+    /// input spelling of `"noStem"` that music21's setter rewrites, so no
+    /// note ever reads back as `"none"`.
+    pub const ALL: [StemDirection; 5] = [
         StemDirection::Double,
         StemDirection::Down,
         StemDirection::NoStem,
-        StemDirection::NoneDirection,
         StemDirection::Unspecified,
         StemDirection::Up,
     ];
+
+    /// music21's `stemDirectionNames`: the names the setter accepts, which
+    /// includes the `"none"` spelling of `"noStem"`.
+    pub const NAMES: [&'static str; 6] = ["double", "down", "noStem", "none", "unspecified", "up"];
 
     /// music21's name for the direction.
     pub fn as_str(self) -> &'static str {
@@ -420,14 +425,19 @@ impl StemDirection {
             StemDirection::Double => "double",
             StemDirection::Down => "down",
             StemDirection::NoStem => "noStem",
-            StemDirection::NoneDirection => "none",
             StemDirection::Unspecified => "unspecified",
             StemDirection::Up => "up",
         }
     }
 
     /// Reads music21's name for the direction.
+    ///
+    /// `"none"` reads as [`StemDirection::NoStem`], which is what music21's
+    /// setter stores for it.
     pub fn from_name(name: &str) -> Result<Self> {
+        if name == "none" {
+            return Ok(StemDirection::NoStem);
+        }
         Self::ALL
             .into_iter()
             .find(|candidate| candidate.as_str() == name)
@@ -652,6 +662,12 @@ mod tests {
             );
         }
         assert_eq!(Notehead::default(), Notehead::Normal);
+        // "none" is an input spelling of "noStem", never a state of its own.
+        assert_eq!(
+            StemDirection::from_name("none").unwrap(),
+            StemDirection::NoStem
+        );
+        assert_eq!(StemDirection::NAMES.len(), StemDirection::ALL.len() + 1);
         assert_eq!(StemDirection::default(), StemDirection::Unspecified);
         assert_eq!(Notehead::Diamond.to_string(), "diamond");
         assert_eq!(StemDirection::NoStem.to_string(), "noStem");

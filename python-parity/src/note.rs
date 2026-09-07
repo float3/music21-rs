@@ -17,9 +17,17 @@ use crate::notation::{Lyric, Style, StyleOwner, Tie, Volume, tie_from_any, volum
 use crate::pitch::{Pitch, message, pitch_from_any};
 
 pyo3::create_exception!(music21_rs_facade, NoteException, PyException);
+pyo3::create_exception!(music21_rs_facade, NotRestException, PyException);
 
 pub(crate) fn note_error(error: music21_rs::Error) -> PyErr {
     NoteException::new_err(message(&error))
+}
+
+/// The error music21 raises out of the `NotRest` properties — notehead, its
+/// fill and parentheses, and stem direction — which is a different class
+/// from the one its `Note` methods raise.
+fn not_rest_error(error: music21_rs::Error) -> PyErr {
+    NotRestException::new_err(message(&error))
 }
 
 /// music21's `duration.Duration`, over the crate's quarter-length duration.
@@ -181,6 +189,10 @@ pub struct Note {
     /// object every time, so `chord.pitches[0].getEnharmonic(inPlace=True)`
     /// reaches the chord; `inner` mirrors whatever it holds.
     pitch: Py<Pitch>,
+    /// The `Volume` object music21 hands back from `.volume`, once something
+    /// has asked for one. music21 makes it on demand and reads its mere
+    /// existence as `hasVolumeInformation`.
+    volume: Option<Py<Volume>>,
     /// The `Duration` object music21 hands back from `.duration`, once
     /// something has asked for one. Notes a chord builds are given the
     /// chord's, which is what makes `chord.duration is chord[0].duration`
@@ -200,6 +212,7 @@ impl Note {
         Ok(Self {
             inner,
             pitch,
+            volume: None,
             duration: None,
             chord: None,
         })
@@ -221,6 +234,7 @@ impl Note {
             Self {
                 inner,
                 pitch,
+                volume: None,
                 duration: None,
                 chord: None,
             },
@@ -320,12 +334,15 @@ impl Note {
             .map_or(1.0, RsDuration::quarter_length)
     }
 
-    /// This note with whatever its duration object now says written into it,
-    /// for the answers the crate reads off a whole note.
+    /// This note with whatever its duration and volume objects now say
+    /// written into it, for the answers the crate reads off a whole note.
     pub(crate) fn synced(&self, py: Python<'_>) -> RsNote {
         let mut note = self.inner.clone();
         if let Some(duration) = self.duration_value(py) {
             note.set_duration(duration);
+        }
+        if let Some(volume) = &self.volume {
+            note.set_volume(Some(volume.borrow(py).inner.clone()));
         }
         note
     }
@@ -525,7 +542,7 @@ impl Note {
     pub(crate) fn set_notehead(&mut self, value: Option<&str>) -> PyResult<()> {
         let notehead = match value {
             None | Some("") => RsNotehead::Normal,
-            Some(name) => RsNotehead::from_name(name).map_err(note_error)?,
+            Some(name) => RsNotehead::from_name(name).map_err(not_rest_error)?,
         };
         self.inner.set_notehead(notehead);
         Ok(())
@@ -548,7 +565,7 @@ impl Note {
                 "filled" | "yes" => Some(true),
                 "notfilled" | "no" => Some(false),
                 other => {
-                    return Err(note_error(music21_rs::Error::Notation(format!(
+                    return Err(not_rest_error(music21_rs::Error::Notation(format!(
                         "not a valid notehead fill value: '{other}'"
                     ))));
                 }
@@ -574,7 +591,7 @@ impl Note {
                 "yes" => true,
                 "no" => false,
                 other => {
-                    return Err(note_error(music21_rs::Error::Notation(format!(
+                    return Err(not_rest_error(music21_rs::Error::Notation(format!(
                         "notehead parentheses must be True or False, not '{other}'"
                     ))));
                 }
@@ -593,7 +610,7 @@ impl Note {
     pub(crate) fn set_stemDirection(&mut self, value: Option<&str>) -> PyResult<()> {
         let direction = match value {
             None => RsStemDirection::Unspecified,
-            Some(name) => RsStemDirection::from_name(name).map_err(note_error)?,
+            Some(name) => RsStemDirection::from_name(name).map_err(not_rest_error)?,
         };
         self.inner.set_stem_direction(direction);
         Ok(())
@@ -611,23 +628,39 @@ impl Note {
         self.inner.color().is_some()
     }
 
+    /// music21's `.volume`, made on first asking and the same object after
+    /// that, so `n.volume.velocity = 20` sticks.
     #[getter]
-    fn get_volume(&self) -> Volume {
-        Volume::wrap(self.inner.volume())
+    fn get_volume(&mut self, py: Python<'_>) -> PyResult<Py<Volume>> {
+        if let Some(volume) = &self.volume {
+            return Ok(volume.clone_ref(py));
+        }
+        let created = Py::new(py, Volume::wrap(self.inner.volume()))?;
+        self.volume = Some(created.clone_ref(py));
+        Ok(created)
     }
 
     #[setter]
-    fn set_volume(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
-        let volume = match value.filter(|value| !value.is_none()) {
-            Some(value) => Some(volume_from_any(value)?),
-            None => None,
+    fn set_volume(&mut self, py: Python<'_>, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        let Some(value) = value.filter(|value| !value.is_none()) else {
+            self.inner.set_volume(None);
+            self.volume = None;
+            return Ok(());
         };
-        self.inner.set_volume(volume);
+        let inner = volume_from_any(value)?;
+        self.inner.set_volume(Some(inner.clone()));
+        self.volume = match value.extract::<Py<Volume>>() {
+            Ok(object) => Some(object),
+            Err(_) => Some(Py::new(py, Volume::wrap(inner))?),
+        };
         Ok(())
     }
 
+    /// Whether this note carries a volume at all. music21 asks only whether
+    /// the object is there, which is why reading `.volume` once makes this
+    /// true.
     fn hasVolumeInformation(&self) -> bool {
-        self.inner.has_volume_information()
+        self.volume.is_some()
     }
 
     #[getter]
@@ -745,5 +778,8 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let exception = py.get_type::<NoteException>();
     exception.setattr("__module__", "music21.note")?;
     m.add("NoteException", exception)?;
+    let not_rest = py.get_type::<NotRestException>();
+    not_rest.setattr("__module__", "music21.note")?;
+    m.add("NotRestException", not_rest)?;
     Ok(())
 }

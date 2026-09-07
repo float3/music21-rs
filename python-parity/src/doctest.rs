@@ -56,7 +56,13 @@ pub const SERIAL_NAMES: &[&str] = &[
 pub const CHORD_NAMES: &[&str] = &["Chord", "ChordException"];
 
 /// The names the `note` facade replaces in `music21.note`.
-pub const NOTE_NAMES: &[&str] = &["Note", "NoteException", "Lyric", "LyricException"];
+pub const NOTE_NAMES: &[&str] = &[
+    "Note",
+    "NoteException",
+    "NotRestException",
+    "Lyric",
+    "LyricException",
+];
 
 /// The names the `note` facade replaces in `music21.duration`.
 pub const DURATION_NAMES: &[&str] = &["Duration"];

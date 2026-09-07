@@ -1,0 +1,23 @@
+# Docstrings of music21.note whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_note`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.note.GeneralNote",
+    "music21.note.GeneralNote.tie",
+    "music21.note.Lyric.setTextAndSyllabic",
+    "music21.note.NotRest",
+    "music21.note.NotRest.hasVolumeInformation",
+    "music21.note.NotRest.notehead",
+    "music21.note.NotRest.noteheadFill",
+    "music21.note.NotRest.noteheadParenthesis",
+    "music21.note.NotRest.stemDirection",
+    "music21.note.NotRest.storedInstrument",
+    "music21.note.Note.fullName",
+    "music21.note.Rest",
+    "music21.note.Rest.fullName",
+    "music21.note.Unpitched",
+    "music21.note.Unpitched.displayName",
+    "music21.note.Unpitched.displayPitch",
+]
