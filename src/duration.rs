@@ -239,6 +239,10 @@ const TUPLET_NUMERATORS: [u32; 5] = [3, 5, 7, 11, 13];
 /// `POSSIBLE_DOTS_IN_TUPLETS`.
 const TUPLET_DOTS: [u32; 2] = [0, 1];
 
+/// How many written values music21 will tie together before it gives up, its
+/// `range(8)`.
+const MAX_TIED_COMPONENTS: usize = 8;
+
 /// How close a length has to be to a tuplet's to be read as one, relative to
 /// the length itself.
 ///
@@ -461,29 +465,112 @@ impl Duration {
         None
     }
 
+    /// The written note values this length is made of, tied together:
+    /// music21's `components`.
+    ///
+    /// One value for a plain or dotted note, one for a tuplet (the written
+    /// value, which the tuplet's ratio then scales), and several for a
+    /// length that can only be written as a tie — a quarter tied to a
+    /// sixteenth for five sixteenths. Empty for a length that runs off the
+    /// end of the note values, which is music21's `inexpressible`.
+    ///
+    /// The tie is found greedily, largest value first, as music21 finds it:
+    /// take the largest note that fits, and look for a single dotted value
+    /// covering what is left before taking another bite.
+    pub fn components(&self) -> Vec<(DurationType, u32)> {
+        // Zero is written as nothing at all, which is what music21's empty
+        // `components` says; `type_and_dots` would call it a `zero` note.
+        if self.quarter_length == 0.0 {
+            return Vec::new();
+        }
+        if let Some(single) = self.type_and_dots() {
+            return vec![single];
+        }
+        // Shorter than the shortest note value, or longer than a tie of the
+        // longest can reach: music21 calls both *inexpressible*, and asks
+        // this before it looks for a tuplet.
+        let Ok((largest, _)) = quarter_length_to_closest_type(self.quarter_length) else {
+            return Vec::new();
+        };
+        if largest.next_larger().is_none() {
+            return Vec::new();
+        }
+        if let Some(tuplet) = self.tuplet() {
+            return vec![(tuplet.duration_type(), tuplet.dots())];
+        }
+        let mut components = vec![(largest, 0)];
+        let mut remainder = self.quarter_length - largest.quarter_length();
+        for _ in 0..MAX_TIED_COMPONENTS {
+            if let Some(rest) = Duration::new(remainder)
+                .ok()
+                .and_then(|duration| duration.type_and_dots())
+            {
+                components.push(rest);
+                return components;
+            }
+            let Ok((next, _)) = quarter_length_to_closest_type(remainder) else {
+                break;
+            };
+            remainder -= next.quarter_length();
+            components.push((next, 0));
+        }
+        components
+    }
+
     /// Returns music21's `fullName` for a single written note value, such as
     /// `"Dotted Quarter"`, `"Double Dotted Half"`, `"Imperfect Longa"` or
     /// `"Quarter Triplet (2/3 QL)"`.
     ///
-    /// `None` for a length that is neither a note value nor a tuplet — a
-    /// tied one, which music21 spells out from its components.
-    pub fn full_name(&self) -> Option<String> {
-        let Some((duration_type, dots)) = self.type_and_dots() else {
-            let tuplet = self.tuplet()?;
-            return Some(format!(
-                "{}{} {} ({} QL)",
-                dot_prefix(tuplet.dots(), false),
-                tuplet.duration_type().title(),
-                tuplet.full_name(),
+    /// A length that has to be written as a tie names each of its values and
+    /// joins them, `"Quarter tied to 16th (1 1/4 total QL)"`. A length no
+    /// note value reaches is `"Inexpressible"` and a zero one is
+    /// `"Zero Duration (0 total QL)"`, both as music21 names them.
+    pub fn full_name(&self) -> String {
+        let components = self.components();
+        if components.is_empty() {
+            return if self.quarter_length == 0.0 {
+                // music21 writes a stray second space here, from joining a
+                // name that already ends in one; its own docstring for this
+                // shows a single space, which is what the whitespace its
+                // test runner normalises away comes to.
+                "Zero Duration (0 total QL)".to_string()
+            } else {
+                "Inexpressible".to_string()
+            };
+        }
+        // A tuplet is only asked for once the length has failed to be a
+        // plain or dotted note value, which is music21's order: a quarter is
+        // a quarter, even though it is also a dotted quarter in a triplet.
+        let tuplet = if components.len() == 1 && self.type_and_dots().is_none() {
+            self.tuplet()
+        } else {
+            None
+        };
+        let names: Vec<String> = components
+            .iter()
+            .map(|(duration_type, dots)| {
+                let mensural = matches!(duration_type, DurationType::Longa | DurationType::Maxima);
+                let mut name = format!("{}{}", dot_prefix(*dots, mensural), duration_type.title());
+                if let Some(tuplet) = &tuplet {
+                    name.push(' ');
+                    name.push_str(&tuplet.full_name());
+                }
+                // music21 shows the length itself once the name alone stops
+                // saying what it is: past two dots, or inside a tuplet.
+                if tuplet.is_some() || *dots >= 3 {
+                    name.push_str(&format!(" ({} QL)", mixed_numeral(self.quarter_length)));
+                }
+                name
+            })
+            .collect();
+        let mut name = names.join(" tied to ");
+        if components.len() != 1 {
+            name.push_str(&format!(
+                " ({} total QL)",
                 mixed_numeral(self.quarter_length)
             ));
-        };
-        let mensural = matches!(duration_type, DurationType::Longa | DurationType::Maxima);
-        let mut name = format!("{}{}", dot_prefix(dots, mensural), duration_type.title());
-        if dots >= 3 {
-            name.push_str(&format!(" ({} QL)", mixed_numeral(self.quarter_length)));
         }
-        Some(name)
+        name
     }
 
     /// Returns the note-value type whose undotted length this duration is.
@@ -814,11 +901,7 @@ mod tests {
         for (quarter_length, type_and_dots, full_name, closest) in cases {
             let duration = Duration::new(quarter_length).unwrap();
             assert_eq!(duration.type_and_dots(), type_and_dots, "{quarter_length}");
-            assert_eq!(
-                duration.full_name().as_deref(),
-                Some(full_name),
-                "{quarter_length}"
-            );
+            assert_eq!(duration.full_name(), full_name, "{quarter_length}");
             assert_eq!(
                 quarter_length_to_closest_type(quarter_length).unwrap(),
                 closest,
@@ -847,19 +930,34 @@ mod tests {
             (0.2, "16th Quintuplet (1/5 QL)"),
             (0.4, "Eighth Quintuplet (2/5 QL)"),
         ];
-        let tied = [1.25, 5.0, 2.5];
+        // and the ones music21 has to write as two values tied together
+        let tied = [
+            (1.25, "Quarter tied to 16th (1 1/4 total QL)"),
+            (5.0, "Whole tied to Quarter (5 total QL)"),
+            (2.5, "Half tied to Eighth (2 1/2 total QL)"),
+        ];
         for (quarter_length, closest) in inexact {
             let duration = Duration::new(quarter_length).unwrap();
             assert_eq!(duration.type_and_dots(), None, "{quarter_length}");
             assert_eq!(duration.dots(), 0, "{quarter_length}");
-            let named = tuplet_names
+            let tuplet_name = tuplet_names
                 .iter()
-                .find(|(length, _)| *length == quarter_length)
-                .map(|(_, name)| (*name).to_string());
-            assert_eq!(duration.full_name(), named, "{quarter_length}");
+                .find(|(length, _)| *length == quarter_length);
+            let tied_name = tied.iter().find(|(length, _)| *length == quarter_length);
+            let expected = tuplet_name.or(tied_name).map(|(_, name)| *name);
+            assert_eq!(
+                duration.full_name(),
+                expected.expect("every inexact length here is named"),
+                "{quarter_length}"
+            );
             assert_eq!(
                 duration.tuplet().is_some(),
-                named.is_some(),
+                tuplet_name.is_some(),
+                "{quarter_length}"
+            );
+            assert_eq!(
+                duration.components().len(),
+                if tuplet_name.is_some() { 1 } else { 2 },
                 "{quarter_length}"
             );
             assert_eq!(
@@ -868,17 +966,21 @@ mod tests {
                 "{quarter_length}"
             );
         }
-        for quarter_length in tied {
-            assert_eq!(Duration::new(quarter_length).unwrap().tuplet(), None);
+
+        // the two lengths music21 refuses to write at all
+        for quarter_length in [0.001, 100.0] {
+            let duration = Duration::new(quarter_length).unwrap();
+            assert!(duration.components().is_empty(), "{quarter_length}");
+            assert_eq!(duration.full_name(), "Inexpressible", "{quarter_length}");
         }
+        let zero = Duration::new(0.0).unwrap();
+        assert!(zero.components().is_empty());
+        assert_eq!(zero.full_name(), "Zero Duration (0 total QL)");
 
         // music21 snaps a quarter length before it looks, so a truncated
         // third is still a triplet there and here.
         let truncated = Duration::new(0.333_333).unwrap();
-        assert_eq!(
-            truncated.full_name().as_deref(),
-            Some("Eighth Triplet (1/3 QL)")
-        );
+        assert_eq!(truncated.full_name(), "Eighth Triplet (1/3 QL)");
 
         let triplet = Duration::new(2.0 / 3.0).unwrap().tuplet().unwrap();
         assert_eq!((triplet.actual(), triplet.normal()), (3, 2));

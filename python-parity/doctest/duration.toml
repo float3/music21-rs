@@ -4,6 +4,7 @@
 # fails when one of these stops passing.
 
 passing = [
+    "music21.duration.Duration.fullName",
     "music21.duration.Duration.type",
     "music21.duration.DurationTuple",
     "music21.duration.DurationTuple.ordinal",

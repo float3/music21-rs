@@ -205,9 +205,7 @@ impl Duration {
 
     #[getter]
     fn fullName(&self) -> String {
-        self.inner
-            .full_name()
-            .unwrap_or_else(|| "Duration".to_string())
+        self.inner.full_name()
     }
 
     fn __eq__(&self, other: &Bound<'_, PyAny>) -> bool {

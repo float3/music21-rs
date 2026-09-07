@@ -2980,10 +2980,7 @@ impl Chord {
             .clone()
             .unwrap_or_else(Duration::quarter)
             .full_name();
-        match duration {
-            Some(duration) => format!("Chord {{{pitches}}} {duration}"),
-            None => format!("Chord {{{pitches}}}"),
-        }
+        format!("Chord {{{pitches}}} {duration}")
     }
 }
 

@@ -93,8 +93,8 @@ impl Note {
     /// music21's `fullName`: `E-flat in octave 4 Quarter Note`, with the
     /// duration's name left out when the note has none.
     pub fn full_name(&self) -> String {
-        match self.duration.as_ref().and_then(Duration::full_name) {
-            Some(duration) => format!("{} {duration} Note", self.pitch.full_name()),
+        match self.duration.as_ref() {
+            Some(duration) => format!("{} {} Note", self.pitch.full_name(), duration.full_name()),
             None => format!("{} Note", self.pitch.full_name()),
         }
     }
