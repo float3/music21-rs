@@ -93,7 +93,10 @@ pub use midi::{
     DEFAULT_TICKS_PER_QUARTER, MidiNote, midi_notes_from_stream, read_midi_bytes,
     read_midi_bytes_with_tempo, stream_from_midi_notes, write_midi_bytes,
 };
-pub use notation::{Lyric, Notehead, Placement, StemDirection, Syllabic, Tie, TieStyle, TieType};
+pub use notation::{
+    Beam, BeamDirection, BeamType, Beams, Lyric, Notehead, Placement, StemDirection, Syllabic, Tie,
+    TieStyle, TieType,
+};
 pub use note::{IntoNote, Note};
 pub use pitch::{
     Accidental, AccidentalAttribute, AccidentalDisplayOptions, AccidentalSpecifier,

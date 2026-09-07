@@ -14,7 +14,9 @@ use music21_rs::{
 };
 
 use crate::interval::transpose_pitch_by_any;
-use crate::notation::{Lyric, Style, StyleOwner, Tie, Volume, tie_from_any, volume_from_any};
+use crate::notation::{
+    Beams, Lyric, Style, StyleOwner, Tie, Volume, tie_from_any, volume_from_any,
+};
 use crate::pitch::{Pitch, message, pitch_from_any};
 
 /// The names the `note` facade replaces in `music21.note`.
@@ -2555,6 +2557,24 @@ impl Note {
         returnDefault: bool,
     ) -> PyResult<Option<Bound<'py, PyAny>>> {
         instrument_for_note(slf.as_any(), returnDefault)
+    }
+
+    /// music21's `beams`: the beams joining this note's flags to its
+    /// neighbours'. The object knows the note it came off, so an edit
+    /// through it is an edit to the note.
+    #[getter]
+    fn get_beams(slf: &Bound<'_, Self>) -> PyResult<Beams> {
+        Ok(Beams::owned_by(
+            slf.borrow().inner.beams().clone(),
+            slf.clone().unbind().into_any(),
+        ))
+    }
+
+    #[setter]
+    fn set_beams(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        let beams = value.extract::<PyRef<'_, Beams>>()?;
+        self.inner.set_beams(beams.inner.clone());
+        Ok(())
     }
 
     /// music21's `expressions`: the ornaments written over this note. The

@@ -4,6 +4,7 @@
 # fails when one of these stops passing.
 
 passing = [
+    "music21.scale",
     "music21.scale.AbstractDiatonicScale",
     "music21.scale.AbstractDiatonicScale.buildNetwork",
     "music21.scale.AbstractOctatonicScale.buildNetwork",
@@ -54,8 +55,10 @@ passing = [
     "music21.scale.MixolydianScale",
     "music21.scale.OctaveRepeatingScale",
     "music21.scale.PhrygianScale",
+    "music21.scale.RagAsawari",
     "music21.scale.ScalaScale",
     "music21.scale.Scale",
+    "music21.scale.Scale.extractPitchList",
     "music21.scale.SieveScale",
     "music21.scale.WholeToneScale",
 ]

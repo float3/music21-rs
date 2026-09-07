@@ -28,7 +28,7 @@ pub use pitch::{Accidental, Microtone, Pitch};
 /// The names each music21 module has a counterpart for here, which is what
 /// [`install_into_music21`] replaces and what `python-parity`'s doctest
 /// harness swaps one module at a time.
-const MUSIC21_MODULES: [(&str, &[&str]); 10] = [
+const MUSIC21_MODULES: [(&str, &[&str]); 13] = [
     ("music21.pitch", pitch::NAMES),
     ("music21.interval", interval::NAMES),
     ("music21.note", note::NAMES),
@@ -39,6 +39,9 @@ const MUSIC21_MODULES: [(&str, &[&str]); 10] = [
     ("music21.tie", notation::TIE_NAMES),
     ("music21.volume", notation::VOLUME_NAMES),
     ("music21.style", notation::STYLE_NAMES),
+    ("music21.beam", notation::BEAM_NAMES),
+    ("music21.scale", scale::NAMES),
+    ("music21.roman", roman::NAMES),
 ];
 
 /// A copy of a facade value as an instance of the class it was asked on,
@@ -68,19 +71,61 @@ where
 /// class hierarchy is not something it can put at a point in time. That
 /// machinery — sites, contexts, derivations, offsets relative to a container
 /// — is exactly what this crate does not model and does not want to, so a
-/// facade class is installed as a Python subclass of the facade *and* of
-/// music21's own `Music21Object`, which is where all of it comes from.
+/// facade class is installed as a Python subclass of the facade *and* of the
+/// music21 class it replaces.
 ///
-/// Only `Music21Object` is inherited, and never the music21 class the facade
-/// replaces: a member the facade has not ported still raises `AttributeError`
-/// rather than quietly falling through to music21's own implementation, so
-/// the doctest scores keep meaning what they say. What the subclass does
-/// carry across is *classification* — `classes` and `classSet`, so that
-/// `getElementsByClass` and `.notes` find our objects where they would find
-/// music21's — which is a statement about what the object is, not a borrowed
-/// implementation of it.
+/// Inheriting the class being replaced is what makes music21's own
+/// `isinstance` checks work — `Stream.pitches` asks whether each element is a
+/// `GeneralNote` — but it would also let a member the facade has not ported
+/// fall through to music21's implementation of it, and the doctest scores
+/// would stop meaning what they say. So it does not: every public member
+/// music21 defines below `Music21Object` that the facade does not define is
+/// *blocked* on the installed class, and raises `AttributeError` as it did
+/// when the facade replaced the class outright.
+///
+/// `Music21Object` itself is never blocked. Sites, contexts, derivations and
+/// offsets are the container machinery, and using music21's is the whole
+/// point of inheriting from it.
 const INSTALL_HELPER: &str = r#"
 from music21 import base as _base
+
+
+class NotPorted:
+    """A member music21 has and the facade does not.
+
+    It reads as absent, so nothing can quietly reach music21's own
+    implementation of something this crate has not ported.
+    """
+
+    def __init__(self, owner, name):
+        self.owner = owner
+        self.name = name
+
+    def __get__(self, instance, owner=None):
+        raise AttributeError(
+            f'{self.owner!r} object has no attribute {self.name!r}'
+        )
+
+    def __set__(self, instance, value):
+        raise AttributeError(
+            f'{self.owner!r} object has no attribute {self.name!r}'
+        )
+
+
+def unported_members(facade, original):
+    """Every public member music21 defines below `Music21Object` that the
+    facade does not."""
+    blocked = {}
+    for ancestor in original.__mro__:
+        if ancestor is _base.Music21Object:
+            break
+        for name in vars(ancestor):
+            if name.startswith('_') or name in blocked:
+                continue
+            if hasattr(facade, name):
+                continue
+            blocked[name] = NotPorted(original.__name__, name)
+    return blocked
 
 
 def make_class(facade, original):
@@ -105,18 +150,24 @@ def make_class(facade, original):
         classified.add(ancestor)
         classified.add(ancestor.__name__)
         classified.add(ancestor.__module__ + '.' + ancestor.__name__)
-    namespace = {
+    namespace = dict(unported_members(facade, original))
+    namespace.update({
         '__init__': __init__,
         '__deepcopy__': __deepcopy__,
         '__copy__': __copy__,
         '__module__': original.__module__,
         '__qualname__': original.__qualname__,
         'classes': tuple(a.__name__ for a in original.__mro__ if a is not object),
-    }
+    })
     for name in ('isNote', 'isRest', 'isChord', 'classSortOrder', 'equalityAttributes'):
         if hasattr(original, name):
             namespace[name] = getattr(original, name)
-    installed = type(original.__name__, (facade, _base.Music21Object), namespace)
+    try:
+        installed = type(original.__name__, (facade, original), namespace)
+    except TypeError:
+        # Some pairs cannot share a layout; those keep the old arrangement,
+        # where only the container machinery is inherited.
+        installed = type(original.__name__, (facade, _base.Music21Object), namespace)
     # A caller who asks a stream for `note.Note` is asking for this class now.
     installed.classSet = frozenset(classified | {installed})
     return installed

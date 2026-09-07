@@ -5,9 +5,12 @@
 
 use pyo3::exceptions::{PyException, PyValueError};
 use pyo3::prelude::*;
+use pyo3::types::{PyDict, PyList};
 
 use music21_rs::{
-    Lyric as RsLyric, Placement, Syllabic, Tie as RsTie, TieStyle, TieType, Volume as RsVolume,
+    Beam as RsBeam, BeamDirection as RsBeamDirection, BeamType as RsBeamType, Beams as RsBeams,
+    DurationType as RsDurationType, Lyric as RsLyric, Placement, Syllabic, Tie as RsTie, TieStyle,
+    TieType, Volume as RsVolume,
 };
 
 use crate::pitch::message;
@@ -21,9 +24,17 @@ pub const VOLUME_NAMES: &[&str] = &["Volume", "VolumeException"];
 /// The names the `notation` facade replaces in `music21.style`.
 pub const STYLE_NAMES: &[&str] = &["Style"];
 
+/// The names the `notation` facade replaces in `music21.beam`.
+pub const BEAM_NAMES: &[&str] = &["Beam", "Beams", "BeamException"];
+
 pyo3::create_exception!(music21_rs_facade, TieException, PyValueError);
 pyo3::create_exception!(music21_rs_facade, LyricException, PyException);
 pyo3::create_exception!(music21_rs_facade, VolumeException, PyException);
+pyo3::create_exception!(music21_rs_facade, BeamException, PyException);
+
+fn beam_error(error: music21_rs::Error) -> PyErr {
+    BeamException::new_err(message(&error))
+}
 
 fn tie_error(error: music21_rs::Error) -> PyErr {
     TieException::new_err(message(&error))
@@ -363,6 +374,312 @@ impl Lyric {
     }
 }
 
+/// music21's `beam.Beam`: one beam at one level.
+#[pyclass(name = "Beam", module = "music21.beam", skip_from_py_object)]
+#[derive(Clone)]
+pub struct Beam {
+    pub(crate) inner: RsBeam,
+}
+
+/// Reads music21's beam type name.
+fn beam_type_of(value: &Bound<'_, PyAny>) -> PyResult<RsBeamType> {
+    let name: String = value.extract()?;
+    RsBeamType::from_music21_name(&name)
+        .ok_or_else(|| BeamException::new_err(format!("no such beam type: {name}")))
+}
+
+/// Reads music21's beam direction name, which only a stub has.
+fn beam_direction_of(value: Option<&Bound<'_, PyAny>>) -> PyResult<Option<RsBeamDirection>> {
+    let Some(value) = value.filter(|value| !value.is_none()) else {
+        return Ok(None);
+    };
+    let name: String = value.extract()?;
+    RsBeamDirection::from_music21_name(&name)
+        .map(Some)
+        .ok_or_else(|| BeamException::new_err(format!("no such beam direction: {name}")))
+}
+
+#[pymethods]
+impl Beam {
+    #[new]
+    #[pyo3(signature = (type_ = None, direction = None, **_keywords))]
+    fn new(
+        type_: Option<&Bound<'_, PyAny>>,
+        direction: Option<&Bound<'_, PyAny>>,
+        _keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Self> {
+        let beam_type = match type_.filter(|value| !value.is_none()) {
+            Some(value) => beam_type_of(value)?,
+            None => RsBeamType::Start,
+        };
+        Ok(Self {
+            inner: RsBeam::new(beam_type, beam_direction_of(direction)?),
+        })
+    }
+
+    #[getter]
+    fn get_type(&self) -> &'static str {
+        self.inner.beam_type().as_str()
+    }
+
+    #[setter]
+    fn set_type(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        self.inner = RsBeam::new(beam_type_of(value)?, self.inner.direction());
+        Ok(())
+    }
+
+    #[getter]
+    fn get_direction(&self) -> Option<&'static str> {
+        self.inner.direction().map(RsBeamDirection::as_str)
+    }
+
+    #[setter]
+    fn set_direction(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        self.inner = RsBeam::new(self.inner.beam_type(), beam_direction_of(value)?);
+        Ok(())
+    }
+
+    #[getter]
+    fn get_number(&self) -> Option<u32> {
+        self.inner.number()
+    }
+
+    #[setter]
+    fn set_number(&mut self, value: Option<u32>) {
+        self.inner.set_number(value);
+    }
+
+    fn __repr__(&self) -> String {
+        format!("<music21.beam.Beam {}>", self.inner)
+    }
+
+    fn __eq__(&self, other: &Bound<'_, PyAny>) -> bool {
+        other
+            .extract::<PyRef<'_, Self>>()
+            .is_ok_and(|other| other.inner == self.inner)
+    }
+}
+
+/// music21's `beam.Beams`: the beams of one note, one for each level it is
+/// beamed at.
+#[pyclass(name = "Beams", module = "music21.beam", skip_from_py_object)]
+pub struct Beams {
+    pub(crate) inner: RsBeams,
+    /// The note or chord these belong to, so an edit through them reaches it.
+    owner: Option<Py<PyAny>>,
+}
+
+impl Beams {
+    pub(crate) fn wrap(inner: RsBeams) -> Self {
+        Self { inner, owner: None }
+    }
+
+    /// The same, knowing what carries them.
+    pub(crate) fn owned_by(inner: RsBeams, owner: Py<PyAny>) -> Self {
+        Self {
+            inner,
+            owner: Some(owner),
+        }
+    }
+
+    /// Writes these beams back into whatever carries them.
+    fn write_back(&self, py: Python<'_>) -> PyResult<()> {
+        let Some(owner) = &self.owner else {
+            return Ok(());
+        };
+        let beams = Py::new(py, Self::wrap(self.inner.clone()))?;
+        owner.bind(py).setattr("beams", beams.bind(py).as_any())
+    }
+}
+
+impl Clone for Beams {
+    /// A copy belongs to nobody yet, as a copy of a pitch does.
+    fn clone(&self) -> Self {
+        Self::wrap(self.inner.clone())
+    }
+}
+
+#[pymethods]
+impl Beams {
+    #[new]
+    #[pyo3(signature = (**_keywords))]
+    fn new(_keywords: Option<&Bound<'_, PyDict>>) -> Self {
+        Self::wrap(RsBeams::new())
+    }
+
+    /// music21's `beamsList`: the beams themselves, in level order.
+    #[getter]
+    fn beamsList(&self) -> Vec<Beam> {
+        self.inner
+            .beams()
+            .iter()
+            .map(|beam| Beam { inner: *beam })
+            .collect()
+    }
+
+    /// music21's `append`: one more beam, a level down.
+    #[pyo3(signature = (type_ = None, direction = None))]
+    fn append(
+        &mut self,
+        py: Python<'_>,
+        type_: Option<&Bound<'_, PyAny>>,
+        direction: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<()> {
+        let beam_type = match type_.filter(|value| !value.is_none()) {
+            Some(value) => beam_type_of(value)?,
+            None => RsBeamType::Start,
+        };
+        self.inner.append(beam_type, beam_direction_of(direction)?);
+        self.write_back(py)
+    }
+
+    /// music21's `fill`: as many beams as the written value has flags.
+    #[pyo3(signature = (level = None, type_ = None))]
+    fn fill(
+        &mut self,
+        py: Python<'_>,
+        level: Option<&Bound<'_, PyAny>>,
+        type_: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<()> {
+        let duration_type = match level.filter(|value| !value.is_none()) {
+            Some(value) => match value.extract::<String>() {
+                Ok(name) => RsDurationType::from_music21_name(&name).ok_or_else(|| {
+                    BeamException::new_err(format!("no such duration type: {name}"))
+                })?,
+                Err(_) => {
+                    // music21 also takes the number of levels, `2` meaning a
+                    // sixteenth.
+                    let levels: u32 = value.extract()?;
+                    LEVELS
+                        .get(levels.saturating_sub(1) as usize)
+                        .copied()
+                        .ok_or_else(|| {
+                            BeamException::new_err(format!("cannot beam at {levels} levels"))
+                        })?
+                }
+            },
+            None => RsDurationType::Eighth,
+        };
+        let beam_type = match type_.filter(|value| !value.is_none()) {
+            Some(value) => Some(beam_type_of(value)?),
+            None => None,
+        };
+        self.inner
+            .fill(duration_type, beam_type)
+            .map_err(beam_error)?;
+        self.write_back(py)
+    }
+
+    /// music21's `setAll`: every beam made the same.
+    #[pyo3(signature = (type_, direction = None))]
+    fn setAll(
+        &mut self,
+        py: Python<'_>,
+        type_: &Bound<'_, PyAny>,
+        direction: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<()> {
+        self.inner
+            .set_all(beam_type_of(type_)?, beam_direction_of(direction)?);
+        self.write_back(py)
+    }
+
+    /// music21's `setByNumber`: the beam at one level made the same.
+    #[pyo3(signature = (number, type_, direction = None))]
+    fn setByNumber(
+        &mut self,
+        py: Python<'_>,
+        number: u32,
+        type_: &Bound<'_, PyAny>,
+        direction: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<()> {
+        self.inner
+            .set_by_number(number, beam_type_of(type_)?, beam_direction_of(direction)?)
+            .map_err(beam_error)?;
+        self.write_back(py)
+    }
+
+    /// music21's `getByNumber`.
+    fn getByNumber(&self, number: u32) -> PyResult<Beam> {
+        self.inner
+            .by_number(number)
+            .map(|beam| Beam { inner: *beam })
+            .ok_or_else(|| BeamException::new_err(format!("beam number {number} does not exist")))
+    }
+
+    /// music21's `getTypeByNumber`.
+    fn getTypeByNumber(&self, number: u32) -> PyResult<&'static str> {
+        Ok(self.getByNumber(number)?.get_type())
+    }
+
+    /// music21's `getTypes`.
+    fn getTypes(&self) -> Vec<&'static str> {
+        self.inner
+            .types()
+            .into_iter()
+            .map(RsBeamType::as_str)
+            .collect()
+    }
+
+    /// music21's `getNumbers`.
+    fn getNumbers(&self) -> Vec<Option<u32>> {
+        self.inner.numbers()
+    }
+
+    #[getter]
+    fn get_feathered(&self) -> bool {
+        self.inner.feathered()
+    }
+
+    #[setter]
+    fn set_feathered(&mut self, value: bool) {
+        self.inner.set_feathered(value);
+    }
+
+    fn __len__(&self) -> usize {
+        self.inner.len()
+    }
+
+    fn __iter__(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let list = PyList::empty(py);
+        for beam in self.beamsList() {
+            list.append(beam.into_pyobject(py)?)?;
+        }
+        Ok(list.try_iter()?.unbind().into_any())
+    }
+
+    fn __repr__(&self) -> String {
+        format!("<music21.beam.Beams {}>", self.inner)
+    }
+
+    fn __eq__(&self, other: &Bound<'_, PyAny>) -> bool {
+        other
+            .extract::<PyRef<'_, Self>>()
+            .is_ok_and(|other| other.inner == self.inner)
+    }
+
+    fn __deepcopy__(&self, _memo: &Bound<'_, PyAny>) -> Self {
+        self.clone()
+    }
+
+    fn __copy__(&self) -> Self {
+        self.clone()
+    }
+}
+
+/// The written value beamed at each level, so that music21's `fill(2)` means
+/// a sixteenth.
+const LEVELS: [RsDurationType; 9] = [
+    RsDurationType::Eighth,
+    RsDurationType::Sixteenth,
+    RsDurationType::ThirtySecond,
+    RsDurationType::SixtyFourth,
+    RsDurationType::HundredTwentyEighth,
+    RsDurationType::TwoHundredFiftySixth,
+    RsDurationType::FiveHundredTwelfth,
+    RsDurationType::TenTwentyFourth,
+    RsDurationType::TwentyFortyEighth,
+];
+
 /// music21's `volume.Volume`.
 #[pyclass(name = "Volume", module = "music21.volume", skip_from_py_object)]
 pub struct Volume {
@@ -595,6 +912,8 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Lyric>()?;
     m.add_class::<Volume>()?;
     m.add_class::<Style>()?;
+    m.add_class::<Beam>()?;
+    m.add_class::<Beams>()?;
     let tie_exception = py.get_type::<TieException>();
     tie_exception.setattr("__module__", "music21.tie")?;
     m.add("TieException", tie_exception)?;
@@ -604,5 +923,8 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let volume_exception = py.get_type::<VolumeException>();
     volume_exception.setattr("__module__", "music21.volume")?;
     m.add("VolumeException", volume_exception)?;
+    let beam_exception = py.get_type::<BeamException>();
+    beam_exception.setattr("__module__", "music21.beam")?;
+    m.add("BeamException", beam_exception)?;
     Ok(())
 }

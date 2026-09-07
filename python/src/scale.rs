@@ -500,24 +500,35 @@ impl ConcreteScale {
 
     /// music21's `getPitches`: the scale over a range of pitches, or over
     /// the octave above the tonic when no range is given.
-    #[pyo3(signature = (minPitch = None, maxPitch = None, **_keywords))]
+    #[pyo3(signature = (minPitch = None, maxPitch = None, direction = None, **_keywords))]
     fn getPitches(
         &self,
         minPitch: Option<&Bound<'_, PyAny>>,
         maxPitch: Option<&Bound<'_, PyAny>>,
+        direction: Option<&Bound<'_, PyAny>>,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Vec<Pitch>> {
+        let descending = is_descending(direction);
         let (Some(low), Some(high)) = (
             minPitch.filter(|value| !value.is_none()),
             maxPitch.filter(|value| !value.is_none()),
         ) else {
+            if descending {
+                return Ok(wrap_pitches(
+                    self.realized()?.pitches_descending().map_err(scale_error)?,
+                ));
+            }
             return self.pitches();
         };
-        Ok(wrap_pitches(
-            self.inner
-                .pitches_between(&pitch_from_any(low)?, &pitch_from_any(high)?)
-                .map_err(scale_error)?,
-        ))
+        let (low, high) = (pitch_from_any(low)?, pitch_from_any(high)?);
+        let scale = self.realized()?;
+        Ok(wrap_pitches(if descending {
+            scale
+                .pitches_between_descending(&low, &high)
+                .map_err(scale_error)?
+        } else {
+            scale.pitches_between(&low, &high).map_err(scale_error)?
+        }))
     }
 
     /// music21's `getTonic`: the note the scale comes to rest on, as it

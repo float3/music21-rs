@@ -12,6 +12,7 @@ use std::str::FromStr;
 
 use crate::{
     defaults::IntegerType,
+    duration::DurationType,
     error::{Error, Result},
 };
 
@@ -384,6 +385,293 @@ impl fmt::Display for Notehead {
     }
 }
 
+/// How one beam of a note joins its neighbours: music21's `beam.Beam`.
+///
+/// A beam is a horizontal line joining the flags of consecutive short notes,
+/// and each note carries one for every level it is beamed at — an eighth has
+/// one, a sixteenth two. Whether the line starts here, carries through, ends
+/// here, or is only a stub is rhythmic grouping written down, which is why
+/// this lives here beside the ties and the noteheads and not among the
+/// things that need a page.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum BeamType {
+    /// The beam begins on this note.
+    #[default]
+    Start,
+    /// The beam carries through this note.
+    Continue,
+    /// The beam ends on this note.
+    Stop,
+    /// A stub reaching only part of the way, pointing left or right.
+    PartialBeam,
+}
+
+impl BeamType {
+    /// music21's name for the type.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Start => "start",
+            Self::Continue => "continue",
+            Self::Stop => "stop",
+            Self::PartialBeam => "partial",
+        }
+    }
+
+    /// Reads music21's name.
+    pub fn from_music21_name(name: &str) -> Option<Self> {
+        match name {
+            "start" => Some(Self::Start),
+            "continue" => Some(Self::Continue),
+            "stop" => Some(Self::Stop),
+            "partial" => Some(Self::PartialBeam),
+            _ => None,
+        }
+    }
+}
+
+impl fmt::Display for BeamType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Which way a partial beam points: music21's `direction`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum BeamDirection {
+    /// Back towards the note before.
+    Left,
+    /// On towards the note after.
+    Right,
+}
+
+impl BeamDirection {
+    /// music21's name for the direction.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Left => "left",
+            Self::Right => "right",
+        }
+    }
+
+    /// Reads music21's name.
+    pub fn from_music21_name(name: &str) -> Option<Self> {
+        match name {
+            "left" => Some(Self::Left),
+            "right" => Some(Self::Right),
+            _ => None,
+        }
+    }
+}
+
+impl fmt::Display for BeamDirection {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// One beam at one level: music21's `beam.Beam`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Beam {
+    beam_type: BeamType,
+    direction: Option<BeamDirection>,
+    number: Option<u32>,
+}
+
+impl Beam {
+    /// A beam of the given type, with a direction only a partial one needs.
+    pub fn new(beam_type: BeamType, direction: Option<BeamDirection>) -> Self {
+        Self {
+            beam_type,
+            direction,
+            number: None,
+        }
+    }
+
+    /// Whether the beam starts, carries on, ends, or is a stub.
+    pub fn beam_type(&self) -> BeamType {
+        self.beam_type
+    }
+
+    /// Which way a stub points, and nothing for a beam that is not one.
+    pub fn direction(&self) -> Option<BeamDirection> {
+        self.direction
+    }
+
+    /// Which level this beam is: the first is the one an eighth note has.
+    pub fn number(&self) -> Option<u32> {
+        self.number
+    }
+
+    /// Puts the beam at a level.
+    pub fn set_number(&mut self, number: Option<u32>) {
+        self.number = number;
+    }
+}
+
+impl fmt::Display for Beam {
+    /// music21's `_reprInternal`: the level, the type, and the direction of
+    /// a stub.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let number = match self.number {
+            Some(number) => number.to_string(),
+            None => "None".to_string(),
+        };
+        match self.direction {
+            Some(direction) => write!(f, "{number}/{}/{direction}", self.beam_type),
+            None => write!(f, "{number}/{}", self.beam_type),
+        }
+    }
+}
+
+/// The beams of one note, one for each level it is beamed at: music21's
+/// `beam.Beams`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Beams {
+    beams: Vec<Beam>,
+    /// Whether the beam group is drawn fanned out, for an accelerando.
+    feathered: bool,
+}
+
+/// The written values that can carry a beam at all, and how many levels each
+/// has: music21's `beamableDurationTypes`, an eighth through a 2048th.
+const BEAMABLE: [(DurationType, u32); 9] = [
+    (DurationType::Eighth, 1),
+    (DurationType::Sixteenth, 2),
+    (DurationType::ThirtySecond, 3),
+    (DurationType::SixtyFourth, 4),
+    (DurationType::HundredTwentyEighth, 5),
+    (DurationType::TwoHundredFiftySixth, 6),
+    (DurationType::FiveHundredTwelfth, 7),
+    (DurationType::TenTwentyFourth, 8),
+    (DurationType::TwentyFortyEighth, 9),
+];
+
+impl Beams {
+    /// No beams at all.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// The beams, in level order.
+    pub fn beams(&self) -> &[Beam] {
+        &self.beams
+    }
+
+    /// How many levels are beamed.
+    pub fn len(&self) -> usize {
+        self.beams.len()
+    }
+
+    /// Whether the note carries no beam at all.
+    pub fn is_empty(&self) -> bool {
+        self.beams.is_empty()
+    }
+
+    /// Whether the group is drawn fanned out.
+    pub fn feathered(&self) -> bool {
+        self.feathered
+    }
+
+    /// Draws the group fanned out, or stops doing so.
+    pub fn set_feathered(&mut self, feathered: bool) {
+        self.feathered = feathered;
+    }
+
+    /// Adds a beam at the next level down: music21's `append`.
+    pub fn append(&mut self, beam_type: BeamType, direction: Option<BeamDirection>) {
+        let mut beam = Beam::new(beam_type, direction);
+        beam.set_number(Some(self.beams.len() as u32 + 1));
+        self.beams.push(beam);
+    }
+
+    /// Gives the note as many beams as its written value has, all of the same
+    /// type: music21's `fill`.
+    ///
+    /// A value that carries no beam — anything a quarter or longer — is an
+    /// error, as it is upstream.
+    pub fn fill(&mut self, duration_type: DurationType, beam_type: Option<BeamType>) -> Result<()> {
+        let Some((_, levels)) = BEAMABLE
+            .into_iter()
+            .find(|(candidate, _)| *candidate == duration_type)
+        else {
+            return Err(Error::Notation(format!(
+                "cannot fill beams for a {} note",
+                duration_type.music21_name()
+            )));
+        };
+        self.beams.clear();
+        for _ in 0..levels {
+            self.append(beam_type.unwrap_or_default(), None);
+        }
+        if beam_type.is_none() {
+            for beam in &mut self.beams {
+                beam.beam_type = BeamType::Start;
+            }
+        }
+        Ok(())
+    }
+
+    /// Sets every beam to the same type: music21's `setAll`.
+    pub fn set_all(&mut self, beam_type: BeamType, direction: Option<BeamDirection>) {
+        for beam in &mut self.beams {
+            beam.beam_type = beam_type;
+            beam.direction = direction;
+        }
+    }
+
+    /// The beam at a level, counting from one: music21's `getByNumber`.
+    pub fn by_number(&self, number: u32) -> Option<&Beam> {
+        self.beams.iter().find(|beam| beam.number == Some(number))
+    }
+
+    /// Sets the beam at a level, which must already be there.
+    pub fn set_by_number(
+        &mut self,
+        number: u32,
+        beam_type: BeamType,
+        direction: Option<BeamDirection>,
+    ) -> Result<()> {
+        let Some(beam) = self
+            .beams
+            .iter_mut()
+            .find(|beam| beam.number == Some(number))
+        else {
+            return Err(Error::Notation(format!(
+                "beam number {number} does not exist"
+            )));
+        };
+        beam.beam_type = beam_type;
+        beam.direction = direction;
+        Ok(())
+    }
+
+    /// The type of every beam, in level order: music21's `getTypes`.
+    pub fn types(&self) -> Vec<BeamType> {
+        self.beams.iter().map(Beam::beam_type).collect()
+    }
+
+    /// The level of every beam: music21's `getNumbers`.
+    pub fn numbers(&self) -> Vec<Option<u32>> {
+        self.beams.iter().map(Beam::number).collect()
+    }
+}
+
+impl fmt::Display for Beams {
+    /// music21's `_reprInternal`: every beam, slash-separated.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let written: Vec<String> = self
+            .beams
+            .iter()
+            .map(|beam| format!("<music21.beam.Beam {beam}>"))
+            .collect();
+        f.write_str(&written.join("/"))
+    }
+}
+
 /// Which way the stem points: music21's `stemDirectionNames`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -707,6 +995,37 @@ impl fmt::Display for Lyric {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn beams_fill_one_level_for_each_flag() {
+        // music21's own example: a sixteenth is beamed at two levels.
+        let mut beams = Beams::new();
+        beams
+            .fill(DurationType::Sixteenth, Some(BeamType::Start))
+            .unwrap();
+        assert_eq!(beams.len(), 2);
+        assert_eq!(beams.types(), [BeamType::Start, BeamType::Start]);
+        assert_eq!(beams.numbers(), [Some(1), Some(2)]);
+        assert_eq!(
+            beams.to_string(),
+            "<music21.beam.Beam 1/start>/<music21.beam.Beam 2/start>"
+        );
+
+        beams.set_all(BeamType::Stop, None);
+        assert_eq!(beams.types(), [BeamType::Stop, BeamType::Stop]);
+        assert_eq!(
+            beams.by_number(1).map(Beam::beam_type),
+            Some(BeamType::Stop)
+        );
+        assert!(beams.set_by_number(3, BeamType::Start, None).is_err());
+
+        // A quarter carries no beam at all, and music21 refuses to fill one.
+        assert!(Beams::new().fill(DurationType::Quarter, None).is_err());
+
+        // A stub says which way it points.
+        let mut stub = Beams::new();
+        stub.append(BeamType::PartialBeam, Some(BeamDirection::Left));
+        assert_eq!(stub.to_string(), "<music21.beam.Beam 1/partial/left>");
+    }
     use super::*;
 
     #[test]

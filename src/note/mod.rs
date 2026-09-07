@@ -2,7 +2,7 @@ use crate::defaults::{FloatType, IntegerType};
 use crate::duration::Duration;
 use crate::error::Result;
 use crate::interval::Interval;
-use crate::notation::{Lyric, Notehead, StemDirection, Syllabic, Tie};
+use crate::notation::{Beams, Lyric, Notehead, StemDirection, Syllabic, Tie};
 use crate::pitch::Pitch;
 use crate::volume::Volume;
 
@@ -32,6 +32,7 @@ struct Notation {
     color: Option<String>,
     volume: Option<Volume>,
     lyrics: Vec<Lyric>,
+    beams: Beams,
 }
 
 impl Note {
@@ -126,6 +127,22 @@ impl Note {
     }
 
     // ---- notation --------------------------------------------------------
+
+    /// The beams joining this note's flags to its neighbours': music21's
+    /// `beams`.
+    pub fn beams(&self) -> &Beams {
+        &self.notation.beams
+    }
+
+    /// The same, to be changed.
+    pub fn beams_mut(&mut self) -> &mut Beams {
+        &mut self.notation.beams
+    }
+
+    /// Replaces the beams.
+    pub fn set_beams(&mut self, beams: Beams) {
+        self.notation.beams = beams;
+    }
 
     /// The tie joining this note to its neighbours, if any.
     pub fn tie(&self) -> Option<&Tie> {
