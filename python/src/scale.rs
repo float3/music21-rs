@@ -261,6 +261,29 @@ impl AbstractScale {
         self.octave_duplicating
     }
 
+    /// music21's `_net`: the interval network the pattern is realized
+    /// through upstream.
+    ///
+    /// The crate walks a list of steps instead, and nothing here reads a
+    /// network — but music21's own code and its own tests ask an abstract
+    /// scale for one, so the steps are handed over as the network they
+    /// describe, built by music21 itself. A pattern with no name has no
+    /// network to give.
+    #[getter]
+    fn _net(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let Some(scale_type) = self.scale_type else {
+            return Err(pyo3::exceptions::PyAttributeError::new_err(
+                "'music21.scale.AbstractScale' object has no attribute '_net'",
+            ));
+        };
+        let network = py
+            .import("music21.scale.intervalNetwork")?
+            .getattr("IntervalNetwork")?
+            .call0()?;
+        network.call_method1("fillBiDirectedEdges", (scale_type.realization_steps(),))?;
+        Ok(network.unbind())
+    }
+
     #[getter]
     fn r#type(&self) -> String {
         match self.scale_type {
