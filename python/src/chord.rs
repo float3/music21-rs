@@ -966,6 +966,9 @@ impl Chord {
             extra.set_item("articulations", chord.articulations.as_ref())?;
             extra.set_item("storedInstrument", chord.stored_instrument.as_ref())?;
             extra.set_item("_overrides", chord.overrides.as_ref())?;
+            // As on a note: the tuplets a chord is written inside live on
+            // the duration object rather than in the value.
+            extra.set_item("duration", chord.duration.as_ref())?;
         }
         slf.borrow_mut().settle_beams(py);
         crate::pickled_extra(slf, &slf.borrow().inner, Some(&extra))
@@ -988,6 +991,11 @@ impl Chord {
             chord.expressions = extra.get_item("expressions")?.extract().ok();
             chord.articulations = extra.get_item("articulations")?.extract().ok();
             chord.overrides = extra.get_item("_overrides")?.extract().ok();
+            chord.duration = extra
+                .get_item("duration")
+                .ok()
+                .filter(|duration| !duration.is_none())
+                .map(pyo3::Bound::unbind);
             chord.stored_instrument = Some(extra.get_item("storedInstrument")?.unbind())
                 .filter(|value| !value.is_none(py));
         }
@@ -2345,8 +2353,12 @@ impl Chord {
     }
 
     #[setter]
-    fn set__volume(&mut self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<()> {
-        self.set_volume(py, value)
+    fn set__volume(
+        slf: &Bound<'_, Self>,
+        py: Python<'_>,
+        value: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
+        Self::set_volume(slf, py, value)
     }
 
     /// Whether the chord carries a volume of its own. Volumes on its
@@ -2410,11 +2422,12 @@ impl Chord {
     }
 
     #[getter]
-    fn get_volume(&mut self, py: Python<'_>) -> PyResult<Py<Volume>> {
-        if let Some(volume) = &self.volume {
+    fn get_volume(slf: &Bound<'_, Self>, py: Python<'_>) -> PyResult<Py<Volume>> {
+        if let Some(volume) = &slf.borrow().volume {
             return Ok(volume.clone_ref(py));
         }
-        let velocities: Vec<i32> = self
+        let velocities: Vec<i32> = slf
+            .borrow()
             .notes
             .iter()
             .filter_map(|note| note.borrow(py).inner.volume().velocity())
@@ -2426,25 +2439,40 @@ impl Chord {
             let mean = f64::from(total) / velocities.len() as f64;
             RsVolume::from_velocity(mean.round_ties_even() as i32)
         };
-        let created = crate::installed_new(py, "music21.volume", "Volume", Volume::wrap(inner))?;
-        self.volume = Some(created.clone_ref(py));
+        // The volume knows whose it is, as a note's does: music21 reads a
+        // volume's client to find the dynamic in force where it sounds.
+        let created = crate::installed_new(
+            py,
+            "music21.volume",
+            "Volume",
+            Volume::owned_by(inner, slf.clone().into_any().unbind()),
+        )?;
+        slf.borrow_mut().volume = Some(created.clone_ref(py));
         Ok(created)
     }
 
+    /// As on a note: the object given is kept when nothing else has claimed
+    /// it and copied when something has, and either way the chord is what
+    /// the volume is the volume of.
     #[setter]
-    fn set_volume(&mut self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<()> {
-        for note in &self.notes {
+    fn set_volume(slf: &Bound<'_, Self>, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        for note in &slf.borrow().notes {
             note.borrow_mut(py).inner.set_volume(None);
         }
-        self.volume = match value.extract::<Py<Volume>>() {
-            Ok(object) => Some(object),
-            Err(_) => Some(crate::installed_new(
+        let object = match value.extract::<Py<Volume>>() {
+            Ok(object) if object.borrow(py).is_claimed() => {
+                crate::installed_new(py, "music21.volume", "Volume", object.borrow(py).clone())?
+            }
+            Ok(object) => object,
+            Err(_) => crate::installed_new(
                 py,
                 "music21.volume",
                 "Volume",
                 Volume::wrap(volume_from_any(value)?),
-            )?),
+            )?,
         };
+        object.borrow_mut(py).set_client(Some(slf.as_any()));
+        slf.borrow_mut().volume = Some(object);
         Ok(())
     }
 

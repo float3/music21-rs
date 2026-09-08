@@ -1253,6 +1253,10 @@ impl Duration {
             extra.set_item("unlinkedType", duration.unlinked_type.as_ref())?;
             extra.set_item("expressionIsInferred", duration.expression_is_inferred)?;
             extra.set_item("dotGroups", duration.dot_groups.clone())?;
+            // The tuplets a duration is written inside are objects, and a
+            // score frozen to a file and read back is written the same way:
+            // without them a nested tuplet came back as a plain note.
+            extra.set_item("tuplets", duration.tuplets.as_ref())?;
         }
         crate::pickled_extra(slf, &slf.borrow().inner, Some(&extra))
     }
@@ -1278,6 +1282,9 @@ impl Duration {
                 .unwrap_or(true);
             if let Ok(groups) = extra.get_item("dotGroups")?.extract::<Vec<u32>>() {
                 duration.dot_groups = groups;
+            }
+            if let Ok(tuplets) = extra.get_item("tuplets")?.extract::<Vec<Py<PyAny>>>() {
+                duration.tuplets = Some(tuplets);
             }
         }
         Ok(())
@@ -2649,6 +2656,11 @@ impl Note {
             extra.set_item("expressions", note.expressions.as_ref())?;
             extra.set_item("articulations", note.articulations.as_ref())?;
             extra.set_item("storedInstrument", note.stored_instrument.as_ref())?;
+            // The duration object goes with it: how long the note sounds is
+            // in the value, but the tuplets it is written inside and whether
+            // it is a grace note are the object's, and a score is frozen to
+            // a file and read back.
+            extra.set_item("duration", note.duration.as_ref())?;
         }
         crate::pickled_extra(slf, &slf.borrow().synced(py), Some(&extra))
     }
@@ -2671,6 +2683,11 @@ impl Note {
             let mut note = slf.borrow_mut();
             note.expressions = extra.get_item("expressions")?.extract().ok();
             note.articulations = extra.get_item("articulations")?.extract().ok();
+            note.duration = extra
+                .get_item("duration")
+                .ok()
+                .filter(|duration| !duration.is_none())
+                .map(pyo3::Bound::unbind);
             note.stored_instrument = Some(extra.get_item("storedInstrument")?.unbind())
                 .filter(|value| !value.is_none(py));
         }
