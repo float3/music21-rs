@@ -1126,7 +1126,7 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: &Interval) -> Result<Fract
             }
             found = Some((
                 end_pitch_up.clone(),
-                FractionPow::<IntegerType>::powi(&FractionType::new(3i32, 2i32), counter),
+                FractionType::new(3i32, 2i32).powi(counter),
             ));
             break;
         } else if end_pitch_down.name() == wanted_name {
@@ -1137,7 +1137,7 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: &Interval) -> Result<Fract
             }
             found = Some((
                 end_pitch_down.clone(),
-                FractionPow::<IntegerType>::powi(&FractionType::new(2i32, 3i32), counter),
+                FractionType::new(2i32, 3i32).powi(counter),
             ));
             break;
         } else {
@@ -1157,8 +1157,7 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: &Interval) -> Result<Fract
     };
 
     let octaves = (end_pitch_wanted.ps() - found_pitch.ps()) / 12.0;
-    let octave_multiplier =
-        FractionPow::<IntegerType>::powi(&FractionType::new(2i32, 1i32), octaves as IntegerType);
+    let octave_multiplier = FractionType::new(2i32, 1i32).powi(octaves as IntegerType);
 
     Ok(found_ratio * octave_multiplier)
 }
