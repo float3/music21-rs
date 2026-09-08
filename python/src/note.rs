@@ -1320,7 +1320,7 @@ pub(crate) fn duration_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsDuration
             let written = value
                 .get_type()
                 .name()
-                .is_ok_and(|name| name.to_string() == "DurationTuple");
+                .is_ok_and(|name| name == "DurationTuple");
             return Err(PyValueError::new_err(if written {
                 "Invalid quarterLength for DurationTuple: nan"
             } else {

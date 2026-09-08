@@ -376,6 +376,22 @@ rust = ["src/chord/mod.rs"]
 note = "Module-level helpers."
 
 [[class]]
+python = "chord/tables.py"
+rust = ["src/chord/tables/mod.rs"]
+note = "The Forte tables of set classes, read without a chord in hand. The data is generated from music21's own and checked by `xtask verify-tables`."
+
+[class.renames]
+forteIndexToInversionsAvailable = "inversions_available"
+addressToTransposedNormalForm = "normal_form"
+addressToPrimeForm = "prime_form"
+addressToIntervalVector = "interval_class_vector"
+intervalVectorToAddress = "set_classes_with_interval_vector"
+addressToZAddress = "z_related_class"
+addressToCommonNames = "common_names"
+addressToForteName = "forte_name"
+seekChordTablesAddress = "address_of_pitch_classes"
+
+[[class]]
 python = "harmony.py"
 rust = ["src/chordsymbol.rs"]
 note = "Module-level helpers."

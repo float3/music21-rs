@@ -36,6 +36,7 @@ use utils::{init_py, prepare};
 /// module of the same name. They live with the classes they name; the
 /// aliases are here because the tests read them off this module.
 pub use music21_rs_python::chord::NAMES as CHORD_NAMES;
+pub use music21_rs_python::chordtables::NAMES as CHORD_TABLES_NAMES;
 pub use music21_rs_python::figuredbass::NAMES as FIGURED_BASS_NAMES;
 pub use music21_rs_python::interval::NAMES as INTERVAL_NAMES;
 pub use music21_rs_python::key::NAMES as KEY_NAMES;

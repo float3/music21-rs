@@ -1,7 +1,7 @@
 /// Guitar tuning and fingering helpers.
 pub mod guitar;
 pub(crate) mod root;
-pub(crate) mod tables;
+pub mod tables;
 
 use crate::common::numbertools::ORDINALS;
 use crate::defaults::{FloatType, IntegerType, UnsignedIntegerType};
@@ -2931,7 +2931,7 @@ impl Chord {
         }
     }
 
-    fn chord_tables_address(&self) -> Option<tables::ChordTableAddress> {
+    fn chord_tables_address(&self) -> Option<tables::RawAddress> {
         tables::seek_chord_tables_address(&self.ordered_pitch_classes()).ok()
     }
 

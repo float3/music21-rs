@@ -14,6 +14,7 @@
 use pyo3::prelude::*;
 
 pub mod chord;
+pub mod chordtables;
 pub mod figuredbass;
 pub mod interval;
 pub mod key;
@@ -31,12 +32,13 @@ pub use pitch::{Accidental, Microtone, Pitch};
 /// The names each music21 module has a counterpart for here, which is what
 /// [`install_into_music21`] replaces and what `python-parity`'s doctest
 /// harness swaps one module at a time.
-const MUSIC21_MODULES: [(&str, &[&str]); 15] = [
+const MUSIC21_MODULES: [(&str, &[&str]); 16] = [
     ("music21.pitch", pitch::NAMES),
     ("music21.interval", interval::NAMES),
     ("music21.note", note::NAMES),
     ("music21.duration", note::DURATION_NAMES),
     ("music21.chord", chord::NAMES),
+    ("music21.chord.tables", chordtables::NAMES),
     ("music21.key", key::NAMES),
     ("music21.serial", serial::NAMES),
     ("music21.tie", notation::TIE_NAMES),
@@ -907,6 +909,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     notation::register(m)?;
     note::register(m)?;
     chord::register(m)?;
+    chordtables::register(m)?;
     Ok(())
 }
 

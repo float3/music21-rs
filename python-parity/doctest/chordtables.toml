@@ -1,0 +1,17 @@
+# Docstrings of music21.chord.tables whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_chordtables`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.chord.tables._validateAddress",
+    "music21.chord.tables.addressToCommonNames",
+    "music21.chord.tables.addressToForteName",
+    "music21.chord.tables.addressToIntervalVector",
+    "music21.chord.tables.addressToPrimeForm",
+    "music21.chord.tables.addressToTransposedNormalForm",
+    "music21.chord.tables.addressToZAddress",
+    "music21.chord.tables.forteIndexToInversionsAvailable",
+    "music21.chord.tables.intervalVectorToAddress",
+    "music21.chord.tables.seekChordTablesAddress",
+]
