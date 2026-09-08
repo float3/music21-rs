@@ -554,7 +554,15 @@ def lineage(cls):
         return known
     walked = []
     for ancestor in (cls,) + cls.__mro__:
+        # Kept in a tuple rather than as the class itself: `DocTestFinder`
+        # recurses into any class-valued attribute of a class, so a bare one
+        # here made music21's own docstring collectable a second time, under
+        # the name `music21.key.KeySignature._replaces`. Those are tests that
+        # exist only because these classes are installed, and every one of
+        # them that failed counted against the crate in a comparison it was
+        # never part of.
         stands_for = ancestor.__dict__.get('_replaces')
+        stands_for = stands_for[0] if stands_for else None
         if stands_for is None and ancestor in _facades:
             # The facade under an installed class is that class's other
             # half, not a kind of thing music21 knows about.
@@ -745,7 +753,8 @@ def make_class(facade, original):
         'classes': property(lambda self: lineage(type(self))[0]),
         'classSet': property(lambda self: lineage(type(self))[1]),
         '_getSlotsRecursive': lambda self: slots_of(type(self)),
-        '_replaces': original,
+        # A one-element tuple; see `lineage` for why it is not the class.
+        '_replaces': (original,),
     })
     for name in ('isNote', 'isRest', 'isChord', 'classSortOrder', 'equalityAttributes',
                  # What music21 says about its own attributes, which its test
@@ -842,6 +851,25 @@ pub fn class_to_install<'py>(
     Ok(built)
 }
 
+/// Replaces `original` with `installed` everywhere music21 has bound it.
+///
+/// Installing a class into its own module is not enough on its own: music21
+/// is fully imported before any of this runs, and a module that wrote
+/// `from music21.duration import Duration` at the top holds the class it had
+/// then. Without this, every object music21 builds carries the old class, and
+/// a score cannot be frozen at all — pickle looks the class up by module and
+/// name, finds the installed one, and refuses the object it was given.
+pub fn rebind(
+    py: Python<'_>,
+    original: &Bound<'_, PyAny>,
+    installed: &Bound<'_, PyAny>,
+) -> PyResult<()> {
+    install_helper(py)?
+        .getattr("rebind")?
+        .call1((original, installed))?;
+    Ok(())
+}
+
 /// The helper module, compiled once per interpreter.
 fn install_helper<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyModule>> {
     if let Ok(existing) = py.import("music21_rs_install") {
@@ -910,6 +938,12 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     note::register(m)?;
     chord::register(m)?;
     chordtables::register(m)?;
+    // The other end of every pickle these classes write. It belongs here
+    // rather than on the wheel's module alone: `python-parity` builds its
+    // own module out of this one, and a score frozen under that harness --
+    // which is what `corpus.parse` does on the way back out -- names
+    // `_thawed` on whichever of the two modules is present.
+    m.add_function(wrap_pyfunction!(thawed, m)?)?;
     Ok(())
 }
 
@@ -920,7 +954,6 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
 pub fn music21_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     register_all(m)?;
     m.add_function(wrap_pyfunction!(install_into_music21, m)?)?;
-    m.add_function(wrap_pyfunction!(thawed, m)?)?;
     // maturin's generated package does `from .music21_rs import *`, which
     // without this would pull the extension module in under its own name.
     let mut names: Vec<String> = m

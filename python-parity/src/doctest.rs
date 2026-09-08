@@ -113,9 +113,41 @@ fn add_dependency_venv(py: Python<'_>, root: &Path) -> PyResult<()> {
     Ok(())
 }
 
+/// Throws away music21's parsed-score cache before a run.
+///
+/// A cached score is a pickle carrying the classes it was parsed with, and
+/// these classes name the module they came from. One written by a run through
+/// the installed wheel names `music21_rs`, which a harness process has no
+/// import of; one written here names `music21_rs_facade`, which nothing else
+/// has. Either way the other run reads a pickle it cannot open, so whichever
+/// went first would decide what the second measured. `xtask music21-suite` clears
+/// it for the same reason.
+fn clear_corpus_cache(py: Python<'_>) -> PyResult<()> {
+    let environment = py.import("music21.environment")?;
+    let root = environment
+        .getattr("Environment")?
+        .call0()?
+        .call_method0("getRootTempDir")?
+        .str()?
+        .extract::<String>()?;
+    let Ok(entries) = std::fs::read_dir(&root) else {
+        return Ok(());
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if name.starts_with("m21-") && name.contains(".p") {
+            let _ = std::fs::remove_file(&path);
+        }
+    }
+    Ok(())
+}
+
 fn run_doctests(py: Python<'_>, module: &str, swaps: &[(&str, &[&str])]) -> PyResult<Vec<Outcome>> {
     let facade = py.import("music21_rs_facade")?;
     let music21 = py.import("music21")?;
+    clear_corpus_cache(py)?;
     let target = py.import(module)?;
 
     let doctest = py.import("doctest")?;
@@ -133,9 +165,20 @@ fn run_doctests(py: Python<'_>, module: &str, swaps: &[(&str, &[&str])]) -> PyRe
     for (module_name, names) in swaps {
         let module = py.import(*module_name)?;
         for name in *names {
+            let original = module.getattr(*name).ok();
             let value =
                 music21_rs_python::class_to_install(py, &module, name, &facade.getattr(*name)?)?;
-            module.setattr(*name, value)?;
+            module.setattr(*name, &value)?;
+            // Setting the name on its own module is not enough: music21 is
+            // fully imported by now, and a module that wrote `from
+            // music21.duration import Duration` at the top still holds the
+            // class it had then. Every object music21 builds would carry
+            // that one, and a score could not be frozen at all — which is
+            // what `corpus.parse` does on the way back out. This is the
+            // same rebinding `install_into_music21` does.
+            if let Some(original) = original {
+                music21_rs_python::rebind(py, &original, &value)?;
+            }
         }
     }
 

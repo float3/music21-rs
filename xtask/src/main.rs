@@ -1,8 +1,14 @@
 //! Development task runner for regenerating committed chord-table artifacts.
 
 #[cfg(feature = "python")]
+mod bench;
+mod downstream;
+#[cfg(feature = "python")]
 mod fixtures;
+#[cfg(feature = "python")]
+mod music21_suite;
 mod report;
+mod report_script;
 mod scala_archive;
 mod submodule;
 mod temperaments;
@@ -110,10 +116,48 @@ fn main() -> Result<(), Box<dyn Error>> {
         Some("regenerate-scala-archive") => regenerate_scala_archive(&workspace_root),
         Some("emit-scala-archive") => emit_scala_archive(&workspace_root),
         Some("verify-scala-archive") => verify_scala_archive(&workspace_root),
+        Some("emit-report-script") => report_script::emit(&workspace_root),
+        Some("verify-report-script") => report_script::verify(&workspace_root),
         Some("emit-temperaments") => emit_temperaments(&workspace_root),
         Some("verify-temperaments") => verify_temperaments(&workspace_root),
         Some("regenerate-fixtures") => regenerate_fixtures(&workspace_root),
         Some("regenerate-all") => regenerate_all(&workspace_root),
+        #[cfg(feature = "python")]
+        Some("bench") => {
+            let json = flag_value(&args[2..], "--json").map(PathBuf::from);
+            let code = bench::run(&workspace_root, json)?;
+            std::process::exit(code);
+        }
+        // Without the feature the command still exists and still says what
+        // is missing, so `report` can record the suite as skipped with a
+        // reason rather than as an unknown command.
+        #[cfg(not(feature = "python"))]
+        Some("bench") => Err(PYTHON_FEATURE.into()),
+        #[cfg(feature = "python")]
+        Some("music21-suite") => {
+            let rest = &args[2..];
+            let one =
+                match flag_value(rest, "--run") {
+                    Some(side) => Some(music21_suite::Which::parse(&side).ok_or_else(|| {
+                        format!("--run takes music21 or music21_rs, not {side:?}")
+                    })?),
+                    None => None,
+                };
+            let code = music21_suite::run(
+                &workspace_root,
+                flag_value(rest, "--only"),
+                flag_value(rest, "--out").map(PathBuf::from),
+                one,
+            )?;
+            std::process::exit(code);
+        }
+        #[cfg(not(feature = "python"))]
+        Some("music21-suite") => Err(PYTHON_FEATURE.into()),
+        Some("downstream") => {
+            let directory = flag_value(&args[2..], "--directory").map(PathBuf::from);
+            let code = downstream::run(&workspace_root, directory)?;
+            std::process::exit(code);
+        }
         Some("report") => {
             let options = report::parse_options(&workspace_root, &args[2..])?;
             report::report(&workspace_root, &options)
@@ -126,6 +170,20 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 }
 
+/// What a command that needs pyo3 says when xtask was built without it.
+#[cfg(not(feature = "python"))]
+const PYTHON_FEATURE: &str =
+    "xtask was built without its `python` feature; rebuild with `--features python`";
+
+/// The value after `--flag` on a subcommand's argument list.
+///
+/// The commands here take at most one or two arguments each, so this stands
+/// in for an argument-parsing dependency the rest of the crate does without.
+fn flag_value(args: &[String], flag: &str) -> Option<String> {
+    let position = args.iter().position(|arg| arg == flag)?;
+    args.get(position + 1).cloned()
+}
+
 fn print_help() {
     eprintln!("Usage:");
     eprintln!("  cargo run --release -p xtask --features python -- regenerate-tables");
@@ -134,6 +192,11 @@ fn print_help() {
     eprintln!("  cargo run --release -p xtask -- regenerate-tuning-tables");
     eprintln!("  cargo run --release -p xtask -- emit-tuning-tables");
     eprintln!("  cargo run --release -p xtask -- verify-tuning-tables");
+    eprintln!("  cargo run --release -p xtask --features python -- bench");
+    eprintln!("  cargo run --release -p xtask -- downstream");
+    eprintln!("  cargo run --release -p xtask --features python -- music21-suite");
+    eprintln!("  cargo run --release -p xtask -- emit-report-script");
+    eprintln!("  cargo run --release -p xtask -- verify-report-script");
     eprintln!("  cargo run --release -p xtask -- emit-temperaments");
     eprintln!("  cargo run --release -p xtask -- verify-temperaments");
     eprintln!("  cargo run --release -p xtask -- regenerate-scala-archive");
