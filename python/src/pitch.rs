@@ -54,11 +54,21 @@ pub(crate) fn message(error: &music21_rs::Error) -> String {
 /// and microtone errors keep their own classes, everything else is a pitch
 /// error.
 pub(crate) fn pitch_error(error: music21_rs::Error) -> PyErr {
+    specific_error(&error).unwrap_or_else(|| PitchException::new_err(message(&error)))
+}
+
+/// The exception class music21 names for a crate error that has one of its
+/// own, whatever module the error came out of: an accidental it cannot
+/// spell, a microtone it cannot read, or an argument that was never a value
+/// at all.
+pub(crate) fn specific_error(error: &music21_rs::Error) -> Option<PyErr> {
     match error {
-        music21_rs::Error::Accidental(_) => AccidentalException::new_err(message(&error)),
-        music21_rs::Error::Microtone(_) => MicrotoneException::new_err(message(&error)),
-        music21_rs::Error::Value(_) => pyo3::exceptions::PyValueError::new_err(message(&error)),
-        _ => PitchException::new_err(message(&error)),
+        music21_rs::Error::Accidental(_) => Some(AccidentalException::new_err(message(error))),
+        music21_rs::Error::Microtone(_) => Some(MicrotoneException::new_err(message(error))),
+        music21_rs::Error::Value(_) => {
+            Some(pyo3::exceptions::PyValueError::new_err(message(error)))
+        }
+        _ => None,
     }
 }
 

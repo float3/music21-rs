@@ -56,6 +56,12 @@ pyo3::create_exception!(
 );
 
 fn interval_error(error: music21_rs::Error) -> PyErr {
+    // An accidental this crate cannot spell is music21's `AccidentalException`
+    // wherever it is raised from: its own transposition raises one on the
+    // fifth sharp, and callers catch that class by name.
+    if let Some(specific) = crate::pitch::specific_error(&error) {
+        return specific;
+    }
     IntervalException::new_err(message(&error))
 }
 

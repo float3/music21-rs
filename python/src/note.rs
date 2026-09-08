@@ -897,12 +897,19 @@ impl Duration {
 
     /// Every tuplet's ratio multiplied together, in lowest terms.
     fn aggregate_ratio(&self, py: Python<'_>) -> PyResult<(i64, i64)> {
+        let fraction = py.import("fractions")?.getattr("Fraction")?;
         let mut numerator: i64 = 1;
         let mut denominator: i64 = 1;
         for tuplet in self.tuplet_objects(py)? {
-            let tuplet = tuplet.bind(py);
-            numerator *= tuplet.getattr("numberNotesNormal")?.extract::<i64>()?;
-            denominator *= tuplet.getattr("numberNotesActual")?.extract::<i64>()?;
+            // Each tuplet's own multiplier, not the ratio of its counts:
+            // the two written values a tuplet names need not be the same
+            // one, and a Humdrum `6..` is three dotted quarters in the time
+            // of two, which is seven sixths and not two thirds.
+            let multiplier =
+                fraction.call1((tuplet.bind(py).call_method0("tupletMultiplier")?,))?;
+            numerator *= multiplier.getattr("numerator")?.extract::<i64>()?;
+            denominator *= multiplier.getattr("denominator")?.extract::<i64>()?;
+            (numerator, denominator) = reduce_ratio(numerator, denominator);
         }
         Ok(reduce_ratio(numerator, denominator))
     }
@@ -2190,6 +2197,17 @@ impl Note {
 
     /// Sends the note's own pitch the other way, out to its pitch object and
     /// to its chord: what a setter on the note ends with.
+    /// The note's pitch as it stands now.
+    ///
+    /// The object is the source: a caller holds it and edits it, and one
+    /// pitch object may belong to more than one note — music21's `chordify`
+    /// and `Verticality.makeElement` hand a chord the very pitches of the
+    /// notes they were built from, so renaming one there renames the note it
+    /// came off.
+    pub(crate) fn pitch_value(&self, py: Python<'_>) -> RsPitch {
+        self.pitch.borrow(py).inner.clone()
+    }
+
     pub(crate) fn broadcast_pitch(py: Python<'_>, note: &Py<Self>) -> PyResult<()> {
         let (object, value) = {
             let me = note.borrow(py);
@@ -2334,6 +2352,13 @@ impl Note {
     /// written into it, for the answers the crate reads off a whole note.
     pub(crate) fn synced(&self, py: Python<'_>) -> RsNote {
         let mut note = self.inner.clone();
+        // The pitch object is what a caller holds and edits, and one pitch
+        // object may belong to more than one note: music21's `chordify` with
+        // `copyPitches=False` hands a chord the very pitches of the notes it
+        // was built from, and raising one of those raises the note it came
+        // off. Reading the object rather than only writing to it is what
+        // makes that hold.
+        note.set_pitch(self.pitch.borrow(py).inner.clone());
         // music21's own readers write beams into the object `n.beams` gave
         // them, so the object is where the score's beaming is.
         if let Some(beams) = &self.beams {
@@ -2397,7 +2422,7 @@ impl Note {
                 other.get_type().name()?,
             )));
         };
-        Ok(compare(slf.borrow().inner.pitch().ps(), pitch.ps()))
+        Ok(compare(slf.borrow().pitch_value(slf.py()).ps(), pitch.ps()))
     }
 
     /// A detached copy: new pitch and duration objects, and no chord.
@@ -2545,15 +2570,31 @@ impl Note {
         pitch
     }
 
+    /// Setting it keeps the pitch object given, as music21 does: its own
+    /// `Verticality.makeElement` gives a copied note the very pitch of the
+    /// note it was copied from, and renaming it there renames both.
     #[setter]
     fn set_pitch(slf: &Bound<'_, Self>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        let py = slf.py();
+        if let Ok(object) = value.extract::<Py<Pitch>>() {
+            let inner = object.borrow(py).inner.clone();
+            {
+                let mut me = slf.borrow_mut();
+                me.pitch = object;
+                me.inner.set_pitch(inner.clone());
+                me.unread_pitch = None;
+            }
+            let note = slf.clone().unbind();
+            Self::claim_pitch(py, &note);
+            return Self::tell_chord(py, &note, &inner);
+        }
         let pitch = pitch_from_any(value)?;
         {
             let mut me = slf.borrow_mut();
             me.inner.set_pitch(pitch);
             me.unread_pitch = None;
         }
-        Self::broadcast_pitch(slf.py(), &slf.clone().unbind())
+        Self::broadcast_pitch(py, &slf.clone().unbind())
     }
 
     /// music21's `.pitch`, which is whatever is stored there — a `Pitch`
@@ -2568,8 +2609,8 @@ impl Note {
     }
 
     #[getter]
-    fn get_name(&self) -> String {
-        self.inner.pitch_name()
+    fn get_name(&self, py: Python<'_>) -> String {
+        self.pitch_value(py).name()
     }
 
     #[setter]
@@ -2589,8 +2630,8 @@ impl Note {
     }
 
     #[getter]
-    fn get_nameWithOctave(&self) -> String {
-        self.inner.pitch_name_with_octave()
+    fn get_nameWithOctave(&self, py: Python<'_>) -> String {
+        self.pitch_value(py).name_with_octave()
     }
 
     /// Setting it renames the note's pitch, which is what music21 does.
@@ -2604,8 +2645,13 @@ impl Note {
     }
 
     #[getter]
-    fn get_step(&self) -> String {
-        self.inner.step().to_string()
+    fn get_step(&self, py: Python<'_>) -> String {
+        self.pitch_value(py)
+            .name()
+            .chars()
+            .next()
+            .unwrap_or('C')
+            .to_string()
     }
 
     /// music21's `step` setter, which writes through to the pitch and keeps
@@ -2619,8 +2665,8 @@ impl Note {
     }
 
     #[getter]
-    fn get_octave(&self) -> Option<i32> {
-        self.inner.octave()
+    fn get_octave(&self, py: Python<'_>) -> Option<i32> {
+        self.pitch_value(py).octave()
     }
 
     #[setter]
@@ -3193,7 +3239,7 @@ impl Note {
         Ok(format!(
             "<music21.note.{} {}>",
             slf.get_type().qualname()?,
-            slf.borrow().inner.pitch_name()
+            slf.borrow().pitch_value(slf.py()).name()
         ))
     }
 

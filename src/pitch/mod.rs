@@ -1666,7 +1666,10 @@ fn convert_ps_to_step<T: Num + ToPrimitive>(
         let pc = pc_real.floor() as IntegerType;
         let mut micro = pc_real - pc as FloatType;
 
-        let alter = if round_to_digits(micro, 1) == 0.5 || (0.25..0.75).contains(&micro) {
+        // A quarter of a semitone exactly is *not* a quarter tone: music21
+        // writes `F` plus twenty-five cents rather than an F half-sharp
+        // twenty-five cents flat, and the bound it draws is exclusive.
+        let alter = if round_to_digits(micro, 1) == 0.5 || (0.25 < micro && micro < 0.75) {
             micro -= 0.5;
             0.5
         } else if (0.75..1.0).contains(&micro) {
