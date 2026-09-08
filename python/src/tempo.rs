@@ -168,14 +168,32 @@ impl MetronomeMark {
     /// in Rust where a pickle cannot see it — so it is written out as text,
     /// and read back into a fresh one of these.
     fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<(Py<PyAny>, (), Py<PyAny>)> {
-        crate::pickled(slf, &slf.borrow().inner)
+        let me = slf.borrow();
+        // What it is played at goes with it: a mark imported from a score
+        // often says nothing and sounds at ninety-six.
+        let written = (
+            me.inner.clone(),
+            me.sounding,
+            me.parentheses,
+            me.placement.clone(),
+        );
+        drop(me);
+        crate::pickled(slf, &written)
     }
 
     fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
-        let Some(inner) = crate::unpickled::<_, RsMetronomeMark>(slf, state)? else {
+        type State = (RsMetronomeMark, Option<f64>, bool, Option<String>);
+        let Some((inner, sounding, parentheses, placement)) =
+            crate::unpickled::<_, State>(slf, state)?
+        else {
             return Ok(());
         };
-        slf.borrow_mut().inner = inner;
+        let mut me = slf.borrow_mut();
+        me.inner = inner;
+        me.sounding = sounding;
+        me.parentheses = parentheses;
+        me.placement = placement;
+        me.referent = None;
         Ok(())
     }
 

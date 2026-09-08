@@ -49,6 +49,23 @@ const MUSIC21_MODULES: [(&str, &[&str]); 15] = [
     ("music21.voiceLeading", voiceleading::NAMES),
 ];
 
+/// music21's own coercion of a number written some other way.
+///
+/// Its setters are `int(value)` and `float(value)`, so a score reader that
+/// hands an octave over as the string it read from the file gets a number.
+/// Refusing one where music21 accepts it is a difference nobody asked for.
+pub(crate) fn as_int(value: &Bound<'_, PyAny>) -> PyResult<i32> {
+    if let Ok(number) = value.extract::<i32>() {
+        return Ok(number);
+    }
+    value
+        .py()
+        .import("builtins")?
+        .getattr("int")?
+        .call1((value,))?
+        .extract()
+}
+
 /// A copy of a facade value as an instance of the class it was asked on,
 /// so that a Python subclass of a facade class copies as itself.
 ///
@@ -220,9 +237,15 @@ pub(crate) fn blank_installed<'py>(class: &Bound<'py, PyAny>) -> PyResult<Bound<
 /// offsets are the container machinery, and using music21's is the whole
 /// point of inheriting from it.
 const INSTALL_HELPER: &str = r#"
+import copy as _copy
 import sys
 
 from music21 import base as _base
+from music21 import derivation as _derivation
+
+# What `Music21Object._deepcopySubclassable` leaves behind: where the object
+# sat, what it was derived from, and what it had worked out about both.
+_NOT_COPIED = frozenset(('_derivation', '_activeSite', '_sites', '_cache'))
 
 
 def rebind(original, installed):
@@ -311,10 +334,29 @@ def make_class(facade, original):
 
     def __deepcopy__(self, memo=None):
         # The facade copies as whatever class it was asked on, so this is
-        # already one of these; it just has no music21 half yet, and a copy
-        # belongs to no stream until something puts it in one.
+        # already one of these; it just has no music21 half yet.
         copied = facade.__deepcopy__(self, memo)
         _base.Music21Object.__init__(copied)
+        # The music21 half comes across as music21 copies it — the offset,
+        # the editorial, the labels — and what tied the object to where it
+        # sat does not: a copy belongs to no stream until something puts it
+        # in one.
+        for name, value in vars(self).items():
+            if name in _NOT_COPIED:
+                continue
+            try:
+                setattr(copied, name, _copy.deepcopy(value, memo if memo is not None else {}))
+            except Exception:  # pragma: no cover - music21 keeps odd things here
+                pass
+        # music21 records where a copy came from, and a stream's own deepcopy
+        # reads that back to move its spanners onto the copies. Without it a
+        # crescendo would still point at the notes of the original and would
+        # be written out over nothing.
+        derived = _derivation.Derivation(client=copied)
+        derived.origin = self
+        derived.method = '__deepcopy__'
+        copied._derivation = derived
+        copied.purgeOrphans()
         return copied
 
     def __copy__(self):

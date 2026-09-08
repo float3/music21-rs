@@ -85,6 +85,13 @@ pub struct RomanNumeral {
     /// What the parsing steps have written, which stands over what the
     /// figure says.
     state: ParseState,
+    /// music21's `pivotChord`: the same chord read again in the key the
+    /// music turns to. Nothing here works it out — it is written by
+    /// music21's own `romanText` reader, which is what carries a pivot.
+    pivot: Option<Py<PyAny>>,
+    /// music21's `followsKeyChange`, which its `romanText` reader sets on
+    /// the first numeral after a key is declared.
+    follows_key_change: bool,
 }
 
 /// The fields music21's parsing steps write on a numeral as they read its
@@ -121,6 +128,8 @@ impl RomanNumeral {
             silent: false,
             blank: false,
             state: ParseState::default(),
+            pivot: None,
+            follows_key_change: false,
         }
     }
 
@@ -134,6 +143,25 @@ impl RomanNumeral {
         slf.as_super().borrow_mut().replace_value(py, chord)?;
         slf.borrow_mut().inner = numeral.inner;
         Ok(())
+    }
+
+    /// The same numeral again, as an object of the class this one is.
+    fn copied<'py>(slf: &Bound<'py, Self>, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let (inner, octave) = {
+            let me = slf.borrow();
+            (me.inner.clone(), me.octave)
+        };
+        let numeral = Self::wrap(inner, octave);
+        let chord = Chord::from_inner(py, numeral.chord()?)?;
+        let class = slf.as_any().get_type();
+        let copy = class.call_method1("__new__", (&class,))?;
+        {
+            let cell = copy.cast::<Self>()?;
+            let mut me = cell.borrow_mut();
+            *me = numeral;
+            *me.into_super() = chord;
+        }
+        Ok(copy)
     }
 
     /// The numeral, standing on the chord it names.
@@ -472,7 +500,10 @@ impl RomanNumeral {
     /// A numeral is written out as text and read back, and the chord it
     /// stands on is worked out again from the figure.
     fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<(Py<PyAny>, (), Py<PyAny>)> {
-        crate::pickled(slf, &slf.borrow().inner)
+        let me = slf.borrow();
+        let written = (me.inner.clone(), me.octave, me.implied_key, me.score);
+        drop(me);
+        crate::pickled(slf, &written)
     }
 
     fn __setstate__(
@@ -480,13 +511,19 @@ impl RomanNumeral {
         py: Python<'_>,
         state: &Bound<'_, PyAny>,
     ) -> PyResult<()> {
-        let Some(inner) = crate::unpickled::<_, RsRomanNumeral>(slf, state)? else {
+        type State = (RsRomanNumeral, Option<i32>, bool, Option<u8>);
+        let Some((inner, octave, implied_key, score)) = crate::unpickled::<_, State>(slf, state)?
+        else {
             return Ok(());
         };
-        let numeral = Self::wrap(inner, None);
+        let numeral = Self::wrap(inner, octave);
         let chord = numeral.chord()?;
         slf.as_super().borrow_mut().replace_value(py, chord)?;
-        slf.borrow_mut().inner = numeral.inner;
+        let mut me = slf.borrow_mut();
+        me.inner = numeral.inner;
+        me.octave = octave;
+        me.implied_key = implied_key;
+        me.score = score;
         Ok(())
     }
 
@@ -1145,6 +1182,78 @@ impl RomanNumeral {
         )?))
     }
 
+    /// music21's `pivotChord`: the same chord read again in the key the
+    /// music turns to, which its `romanText` reader writes here.
+    #[getter]
+    fn get_pivotChord(&self, py: Python<'_>) -> Py<PyAny> {
+        match &self.pivot {
+            Some(pivot) => pivot.clone_ref(py),
+            None => py.None(),
+        }
+    }
+
+    #[setter]
+    fn set_pivotChord(&mut self, value: &Bound<'_, PyAny>) {
+        self.pivot = (!value.is_none()).then(|| value.clone().unbind());
+    }
+
+    /// music21's `followsKeyChange`: whether this is the first numeral after
+    /// the music declared a new key.
+    #[getter]
+    fn get_followsKeyChange(&self) -> bool {
+        self.follows_key_change
+    }
+
+    #[setter]
+    fn set_followsKeyChange(&mut self, value: bool) {
+        self.follows_key_change = value;
+    }
+
+    /// music21's `figuresWritten`: the digits under the numeral, with the
+    /// numeral, its accidental and its quality symbol taken off and nothing
+    /// expanded.
+    #[getter]
+    fn get_figuresWritten(&self) -> &str {
+        if self.blank {
+            return "";
+        }
+        self.inner.figures_written()
+    }
+
+    /// music21's `primaryFigure`: the figure with the secondary numeral
+    /// taken off it, and a chord written by name read as the figure it
+    /// stands for.
+    #[getter]
+    fn get_primaryFigure(&self) -> String {
+        if self.blank {
+            return String::new();
+        }
+        let figure = self.inner.figure();
+        let (primary, _) = music21_rs::roman::split_secondary(figure);
+        if primary == "Cad64" {
+            return if self.inner.key().mode() == "minor" {
+                "i64".to_string()
+            } else {
+                "I64".to_string()
+            };
+        }
+        primary.to_string()
+    }
+
+    /// music21's `scaleCardinality`: how many degrees the collection the
+    /// numeral is read over has. A key has seven; a scale has as many as it
+    /// has.
+    #[getter]
+    fn get_scaleCardinality(&self) -> usize {
+        match self.inner.scale() {
+            Some(scale) => scale
+                .pitches()
+                .map(|pitches| pitches.len().saturating_sub(1))
+                .unwrap_or(7),
+            None => 7,
+        }
+    }
+
     /// music21's `writeAsChord`: whether the numeral is written out as the
     /// notes it stands for rather than as a figure. `RomanNumeral` always is.
     #[getter]
@@ -1194,18 +1303,18 @@ impl RomanNumeral {
         Ok(slf.as_super().borrow().quarter_length(py) == theirs.quarter_length(py))
     }
 
-    fn __deepcopy__(&self, py: Python<'_>, _memo: &Bound<'_, PyAny>) -> PyResult<Py<Self>> {
-        Py::new(
-            py,
-            Self::initializer(py, Self::wrap(self.inner.clone(), self.octave))?,
-        )
+    /// A copy is one of whatever class this is, since music21 keeps it in a
+    /// stream and a bare facade is not something a stream can hold.
+    fn __deepcopy__<'py>(
+        slf: &Bound<'py, Self>,
+        py: Python<'py>,
+        _memo: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        Self::copied(slf, py)
     }
 
-    fn __copy__(&self, py: Python<'_>) -> PyResult<Py<Self>> {
-        Py::new(
-            py,
-            Self::initializer(py, Self::wrap(self.inner.clone(), self.octave))?,
-        )
+    fn __copy__<'py>(slf: &Bound<'py, Self>, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        Self::copied(slf, py)
     }
 }
 

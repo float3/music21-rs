@@ -142,9 +142,11 @@ impl DurationTuple {
         self.dots
     }
 
+    /// music21 writes a length through `opFrac`, so a triplet quarter is
+    /// `Fraction(2, 3)` and not a float that nearly is.
     #[getter]
-    fn quarterLength(&self) -> f64 {
-        self.quarter_length
+    fn quarterLength<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        op_frac(py, self.quarter_length)
     }
 
     /// music21's `ordinal`: where the note value sits in the list running
@@ -720,7 +722,14 @@ pub struct Duration {
     /// setter writes itself here, and reads the failure to do so as "not a
     /// Duration at all", so keeping the slot is what lets music21's own
     /// classes take one of ours.
-    client: Option<Py<PyAny>>,
+    pub(crate) client: Option<Py<PyAny>>,
+}
+
+/// Tells a duration what holds it, the way music21's own `duration` setter
+/// does. A duration announces a change to its holder, and one that was never
+/// told who that is announces to nobody.
+pub(crate) fn adopt_duration(py: Python<'_>, duration: &Py<Duration>, holder: &Bound<'_, PyAny>) {
+    duration.borrow_mut(py).client = Some(holder.clone().unbind());
 }
 
 impl Clone for Duration {
@@ -844,7 +853,7 @@ impl Duration {
         // `-0.0`, and an empty duration would then answer `-0.0`.
         self.component_list()
             .iter()
-            .map(DurationTuple::quarterLength)
+            .map(|component| component.quarter_length)
             .fold(0.0, |total, length| total + length)
     }
 
@@ -1271,7 +1280,7 @@ impl Duration {
         }
         Ok(components[..componentIndex]
             .iter()
-            .map(DurationTuple::quarterLength)
+            .map(|component| component.quarter_length)
             .fold(0.0, |total, length| total + length))
     }
 
@@ -1312,7 +1321,7 @@ impl Duration {
         }
         let mut current = 0.0;
         for (index, component) in components.iter().enumerate() {
-            current += component.quarterLength();
+            current += component.quarter_length;
             if current > quarterPosition {
                 return Ok(index.into_pyobject(py)?.into_any());
             }
@@ -1330,7 +1339,7 @@ impl Duration {
         let mut start = 0.0;
         let mut index = components.len();
         for (position, component) in components.iter().enumerate() {
-            let end = start + component.quarterLength();
+            let end = start + component.quarter_length;
             if quarterPosition > start && quarterPosition < end {
                 index = position;
                 break;
@@ -1343,7 +1352,7 @@ impl Duration {
             ));
         }
         let left = quarterPosition - start;
-        let right = components[index].quarterLength() - left;
+        let right = components[index].quarter_length - left;
         let mut sliced = components[..index].to_vec();
         sliced.push(DurationTuple::from_quarter_length(left));
         sliced.push(DurationTuple::from_quarter_length(right));
@@ -1998,6 +2007,28 @@ impl Note {
         Ok(created)
     }
 
+    /// Takes whatever a caller wrote as a duration and holds it, as an
+    /// object if that is what was given and as a fresh one if not.
+    pub(crate) fn attach_duration(
+        &mut self,
+        py: Python<'_>,
+        value: &Bound<'_, PyAny>,
+    ) -> PyResult<Py<Duration>> {
+        let inner = duration_from_any(value)?;
+        let duration = match value.extract::<Py<Duration>>() {
+            Ok(object) => object,
+            Err(_) => crate::installed_new(
+                py,
+                "music21.duration",
+                "Duration",
+                Duration::wrap(inner.clone()),
+            )?,
+        };
+        self.inner.set_duration(inner);
+        self.duration = Some(duration.clone_ref(py));
+        Ok(duration)
+    }
+
     /// Hands this note a `Duration` object to share, the way a chord shares
     /// its own with the notes it builds.
     pub(crate) fn share_duration(&mut self, py: Python<'_>, duration: &Py<Duration>) {
@@ -2050,8 +2081,31 @@ impl Note {
 
     /// A detached copy: new pitch and duration objects, and no chord.
     fn copied(&self, py: Python<'_>) -> PyResult<Self> {
-        Self::wrap(py, self.synced(py))
+        let mut copy = Self::wrap(py, self.synced(py))?;
+        // The ornaments and the marks come across: music21 copies a note to
+        // realize a mordent and then takes the mordent off the copy, and a
+        // copy with none would have nothing to take.
+        copy.expressions = copied_list(py, self.expressions.as_ref())?;
+        copy.articulations = copied_list(py, self.articulations.as_ref())?;
+        Ok(copy)
     }
+}
+
+/// A list copied the way `copy.deepcopy` would copy it, which is what a
+/// note's ornaments and marks are when the note is copied.
+pub(crate) fn copied_list(
+    py: Python<'_>,
+    list: Option<&Py<PyList>>,
+) -> PyResult<Option<Py<PyList>>> {
+    let Some(list) = list else {
+        return Ok(None);
+    };
+    let copier = py.import("copy")?.getattr("deepcopy")?;
+    let copied = PyList::empty(py);
+    for item in list.bind(py).iter() {
+        copied.append(copier.call1((item,))?)?;
+    }
+    Ok(Some(copied.unbind()))
 }
 
 /// Reads a note argument: a `Note`, a pitch, or a name. A facade note comes
@@ -2111,7 +2165,7 @@ impl Note {
                     .into_bound(py)
                     .into_any(),
             };
-            note.set_duration(py, &duration)?;
+            note.attach_duration(py, &duration)?;
         }
         Ok(note)
     }
@@ -2262,29 +2316,24 @@ impl Note {
     /// music21's `.duration`, the same object every time: `n.duration.type =
     /// 'half'` is how music21's own doctests lengthen a note.
     #[getter]
-    fn get_duration(&mut self, py: Python<'_>) -> PyResult<Py<Duration>> {
-        self.duration_object(py)
+    fn get_duration(slf: &Bound<'_, Self>) -> PyResult<Py<Duration>> {
+        let py = slf.py();
+        let duration = slf.borrow_mut().duration_object(py)?;
+        adopt_duration(py, &duration, slf.as_any());
+        Ok(duration)
     }
 
     #[setter]
-    fn set_duration(&mut self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<()> {
-        let inner = duration_from_any(value)?;
-        self.inner.set_duration(inner.clone());
-        self.duration = match value.extract::<Py<Duration>>() {
-            Ok(object) => Some(object),
-            Err(_) => Some(crate::installed_new(
-                py,
-                "music21.duration",
-                "Duration",
-                Duration::wrap(inner),
-            )?),
-        };
+    fn set_duration(slf: &Bound<'_, Self>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        let py = slf.py();
+        let duration = slf.borrow_mut().attach_duration(py, value)?;
+        adopt_duration(py, &duration, slf.as_any());
         Ok(())
     }
 
     #[getter]
-    fn get_quarterLength(&self, py: Python<'_>) -> f64 {
-        self.quarter_length(py)
+    fn get_quarterLength<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        op_frac(py, self.quarter_length(py))
     }
 
     #[setter]

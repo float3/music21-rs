@@ -221,19 +221,16 @@ impl Accidental {
 
     /// Writes this accidental into the pitch it belongs to, if it belongs to
     /// one, so that an edit through it is an edit to the pitch.
+    ///
+    /// The value goes in, not a new object: music21's `p.accidental` is one
+    /// object that stays put, and a caller holding it — music21's own
+    /// `makeAccidentals` holds one while it decides whether to write it — has
+    /// to go on holding the accidental the pitch has.
     fn write_back(&self, py: Python<'_>) -> PyResult<()> {
         let Some(owner) = &self.owner else {
             return Ok(());
         };
-        let accidental = crate::installed_new(
-            py,
-            "music21.pitch",
-            "Accidental",
-            Self::from_inner(self.inner.clone()),
-        )?;
-        owner
-            .bind(py)
-            .setattr("accidental", accidental.bind(py).as_any())
+        Pitch::take_accidental_value(owner.bind(py), self.inner.clone())
     }
 }
 
@@ -383,7 +380,7 @@ impl Accidental {
             .ok()
             .and_then(|colour| colour.extract().ok());
         slf.borrow_mut().inner.set_color(colour);
-        Ok(())
+        slf.borrow().write_back(slf.py())
     }
 
     #[getter]
@@ -393,13 +390,13 @@ impl Accidental {
 
     /// music21's `inheritDisplay`: copies every display setting from another
     /// accidental.
-    fn inheritDisplay(&mut self, other: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+    fn inheritDisplay(&mut self, py: Python<'_>, other: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
         let Some(other) = other.filter(|other| !other.is_none()) else {
             return Ok(());
         };
         let source = other.extract::<PyRef<Accidental>>()?;
         self.inner.inherit_display(&source.inner);
-        Ok(())
+        self.write_back(py)
     }
 
     /// music21's `setAttributeIndependently`: writes `name`, `alter` or
@@ -407,6 +404,7 @@ impl Accidental {
     /// an error, as upstream.
     fn setAttributeIndependently(
         &mut self,
+        py: Python<'_>,
         attribute: &str,
         value: &Bound<'_, PyAny>,
     ) -> PyResult<()> {
@@ -424,7 +422,7 @@ impl Accidental {
                 )));
             }
         }
-        Ok(())
+        self.write_back(py)
     }
 
     #[getter]
@@ -433,8 +431,11 @@ impl Accidental {
     }
 
     #[setter]
-    fn set_displayType(&mut self, value: &str) -> PyResult<()> {
-        self.inner.set_display_type(value).map_err(accidental_error)
+    fn set_displayType(&mut self, py: Python<'_>, value: &str) -> PyResult<()> {
+        self.inner
+            .set_display_type(value)
+            .map_err(accidental_error)?;
+        self.write_back(py)
     }
 
     /// music21's `displayStyle`: whether the accidental is written plainly,
@@ -445,10 +446,11 @@ impl Accidental {
     }
 
     #[setter]
-    fn set_displayStyle(&mut self, value: &str) -> PyResult<()> {
+    fn set_displayStyle(&mut self, py: Python<'_>, value: &str) -> PyResult<()> {
         self.inner
             .set_display_style(value)
-            .map_err(accidental_error)
+            .map_err(accidental_error)?;
+        self.write_back(py)
     }
 
     /// music21's `displaySize`: full size, or a cue.
@@ -458,8 +460,11 @@ impl Accidental {
     }
 
     #[setter]
-    fn set_displaySize(&mut self, value: &str) -> PyResult<()> {
-        self.inner.set_display_size(value).map_err(accidental_error)
+    fn set_displaySize(&mut self, py: Python<'_>, value: &str) -> PyResult<()> {
+        self.inner
+            .set_display_size(value)
+            .map_err(accidental_error)?;
+        self.write_back(py)
     }
 
     /// music21's `displayLocation`: beside the note, or above or below it.
@@ -469,10 +474,11 @@ impl Accidental {
     }
 
     #[setter]
-    fn set_displayLocation(&mut self, value: &str) -> PyResult<()> {
+    fn set_displayLocation(&mut self, py: Python<'_>, value: &str) -> PyResult<()> {
         self.inner
             .set_display_location(value)
-            .map_err(accidental_error)
+            .map_err(accidental_error)?;
+        self.write_back(py)
     }
 
     #[getter]
@@ -492,7 +498,7 @@ impl Accidental {
                 value.repr()?
             )));
         }
-        Ok(())
+        self.write_back(value.py())
     }
 
     fn __repr__(&self) -> String {
@@ -561,6 +567,13 @@ pub struct Pitch {
     /// an edit through this object has to reach the note and the chord;
     /// [`Pitch::write_back`] is what carries it there.
     pub(crate) owner: Option<Py<Note>>,
+    /// The pitch's own `Accidental` object, once something has asked for it.
+    ///
+    /// music21 keeps one object and hands it back every time, so
+    /// `p.accidental.displayType = 'never'` is an edit to the pitch and not
+    /// to a copy thrown away on the next line. `inner` is still what says
+    /// what the accidental *is*; this object mirrors it.
+    accidental: Option<Py<Accidental>>,
 }
 
 impl Clone for Pitch {
@@ -571,6 +584,7 @@ impl Clone for Pitch {
             inner: self.inner.clone(),
             spelling_is_inferred: self.spelling_is_inferred,
             owner: None,
+            accidental: None,
         }
     }
 }
@@ -678,7 +692,27 @@ impl Pitch {
             inner,
             spelling_is_inferred,
             owner: None,
+            accidental: None,
         }
+    }
+
+    /// Takes a value written through the pitch's own accidental object,
+    /// without disturbing that object: it is the one music21 hands back
+    /// every time, and a caller may be holding it.
+    fn take_accidental_value(slf: &Bound<'_, Self>, value: RsAccidental) -> PyResult<()> {
+        let rebuilt = {
+            let pitch = slf.borrow();
+            pitch.rebuilt(
+                pitch.step_char(),
+                value.name(),
+                pitch.inner.octave(),
+                pitch.microtone_cents(),
+            )?
+        };
+        let mut pitch = slf.borrow_mut();
+        pitch.inner = rebuilt;
+        pitch.inner.set_accidental(Some(value));
+        pitch.write_back()
     }
 
     /// Writes this pitch's value back to the note that holds it, and through
@@ -940,8 +974,14 @@ impl Pitch {
         self.inner.octave()
     }
 
+    /// music21's setter is `int(value)`, so an octave read out of a file as
+    /// text still sets one.
     #[setter]
-    fn set_octave(&mut self, value: Option<i32>) -> PyResult<()> {
+    fn set_octave(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        let value = match value {
+            Some(value) => Some(crate::as_int(value)?),
+            None => None,
+        };
         self.inner = self.rebuilt(
             self.step_char(),
             &self.accidental_name(),
@@ -960,45 +1000,78 @@ impl Pitch {
     /// the pitch. A pitch that carries none — music21 keeps no accidental on
     /// a bare `D` — answers nothing.
     #[getter]
-    fn accidental(slf: &Bound<'_, Self>) -> PyResult<Option<Accidental>> {
-        let Some(accidental) = slf.borrow().inner.explicit_accidental().cloned() else {
+    fn accidental(slf: &Bound<'_, Self>) -> PyResult<Option<Py<Accidental>>> {
+        let py = slf.py();
+        let Some(current) = slf.borrow().inner.explicit_accidental().cloned() else {
+            slf.borrow_mut().accidental = None;
             return Ok(None);
         };
-        Ok(Some(Accidental::owned_by(accidental, slf.clone().unbind())))
+        // The same object as last time, unless the pitch is spelt with a
+        // different accidental now — music21 makes a new one for that.
+        let held = slf.borrow().accidental.as_ref().map(|a| a.clone_ref(py));
+        if let Some(held) = held
+            && held.borrow(py).inner.name() == current.name()
+        {
+            held.borrow_mut(py).inner = current;
+            return Ok(Some(held));
+        }
+        let created = crate::installed_new(
+            py,
+            "music21.pitch",
+            "Accidental",
+            Accidental::owned_by(current, slf.clone().unbind()),
+        )?;
+        slf.borrow_mut().accidental = Some(created.clone_ref(py));
+        Ok(Some(created))
     }
 
+    /// The accidental object assigned becomes the pitch's own, as music21's
+    /// does: a caller who sets one and then edits it is editing the pitch.
     #[setter]
-    fn set_accidental(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
-        let accidental = match value {
+    fn set_accidental(slf: &Bound<'_, Self>, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        let py = slf.py();
+        let given = value.filter(|value| !value.is_none());
+        let accidental = match given {
             None => None,
-            Some(value) if value.is_none() => None,
             Some(value) => Some(accidental_from_any(value)?),
         };
-        self.inner = self.rebuilt(
-            self.step_char(),
-            accidental.as_ref().map_or("natural", RsAccidental::name),
-            self.inner.octave(),
-            self.microtone_cents(),
-        )?;
-        if let Some(accidental) = accidental {
-            self.inner.set_accidental(Some(accidental));
-        } else {
-            self.inner.set_accidental(None);
+        let rebuilt = {
+            let pitch = slf.borrow();
+            pitch.rebuilt(
+                pitch.step_char(),
+                accidental.as_ref().map_or("natural", RsAccidental::name),
+                pitch.inner.octave(),
+                pitch.microtone_cents(),
+            )?
+        };
+        {
+            let mut pitch = slf.borrow_mut();
+            pitch.inner = rebuilt;
+            pitch.inner.set_accidental(accidental.clone());
+            pitch.accidental = None;
         }
-        self.write_back()
+        // An accidental object handed over is kept, and told which pitch it
+        // now belongs to.
+        if let Some(given) = given
+            && let Ok(object) = given.extract::<Py<Accidental>>()
+        {
+            object.borrow_mut(py).owner = Some(slf.clone().unbind());
+            slf.borrow_mut().accidental = Some(object);
+        }
+        slf.borrow().write_back()
     }
 
     /// music21 keeps the accidental in a private slot and its own code
     /// reaches for it — `musedata` writes one straight in — so the slot
     /// answers here too, as the accidental itself.
     #[getter]
-    fn _accidental(slf: &Bound<'_, Self>) -> PyResult<Option<Accidental>> {
+    fn _accidental(slf: &Bound<'_, Self>) -> PyResult<Option<Py<Accidental>>> {
         Self::accidental(slf)
     }
 
     #[setter]
-    fn set__accidental(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
-        self.set_accidental(value)
+    fn set__accidental(slf: &Bound<'_, Self>, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        Self::set_accidental(slf, value)
     }
 
     #[getter]

@@ -189,37 +189,42 @@ impl Tie {
 #[pyclass(name = "Lyric", module = "music21.note", skip_from_py_object)]
 pub struct Lyric {
     pub(crate) inner: RsLyric,
-    /// The syllables an elided lyric is made of, as the Python objects a
+    /// The syllables an elided lyric is made of, as the Python list a
     /// caller handed over.
     ///
-    /// They are kept as objects rather than as values because music21's
+    /// It is the list object itself, not a copy of what was in it, because
+    /// music21's own MusicXML reader assigns an empty list and then appends
+    /// to it; and the syllables are objects rather than values because
     /// elisions are edited after the fact — the madrigal example sets the
     /// elision character and then the syllabic on a component already inside
     /// the composite, and both have to show through.
-    components: Vec<Py<Lyric>>,
+    components: Option<Py<PyList>>,
 }
 
 impl Lyric {
     pub(crate) fn wrap(inner: RsLyric) -> Self {
         Self {
             inner,
-            components: Vec::new(),
+            components: None,
         }
     }
 
     /// This lyric as a value, with whatever its component objects say now
     /// written into it, so the crate answers every question about it.
     pub(crate) fn synced(&self, py: Python<'_>) -> RsLyric {
-        if self.components.is_empty() {
+        let Some(components) = self.components.as_ref().map(|list| list.bind(py)) else {
+            return self.inner.clone();
+        };
+        let syllables: Vec<RsLyric> = components
+            .iter()
+            .filter_map(|component| component.extract::<PyRef<'_, Lyric>>().ok())
+            .map(|component| component.synced(py))
+            .collect();
+        if syllables.is_empty() {
             return self.inner.clone();
         }
         let mut lyric = self.inner.clone();
-        lyric.set_components(
-            self.components
-                .iter()
-                .map(|component| component.borrow(py).synced(py))
-                .collect(),
-        );
+        lyric.set_components(syllables);
         lyric
     }
 }
@@ -229,11 +234,15 @@ impl Clone for Lyric {
     fn clone(&self) -> Self {
         Python::attach(|py| Self {
             inner: self.inner.clone(),
-            components: self
-                .components
-                .iter()
-                .filter_map(|component| Py::new(py, component.borrow(py).clone()).ok())
-                .collect(),
+            components: self.components.as_ref().and_then(|list| {
+                let copies: Vec<Py<Lyric>> = list
+                    .bind(py)
+                    .iter()
+                    .filter_map(|component| component.extract::<PyRef<'_, Lyric>>().ok())
+                    .filter_map(|component| Py::new(py, component.clone()).ok())
+                    .collect();
+                Some(PyList::new(py, copies).ok()?.unbind())
+            }),
         })
     }
 }
@@ -327,7 +336,7 @@ impl Lyric {
     /// the syllables it was made of are what the text used to come from.
     #[setter]
     fn set_text(&mut self, value: &str) {
-        self.components = Vec::new();
+        self.components = None;
         self.inner.set_text(value);
     }
 
@@ -338,7 +347,7 @@ impl Lyric {
 
     #[setter]
     fn set_rawText(&mut self, value: &str) {
-        self.components = Vec::new();
+        self.components = None;
         self.inner.set_raw_text(value);
     }
 
@@ -393,30 +402,27 @@ impl Lyric {
     /// music21's `components`: the lyrics a composite one is made of, and
     /// `None` when it is an ordinary syllable.
     #[getter]
-    fn get_components(&self, py: Python<'_>) -> Option<Vec<Py<Lyric>>> {
-        if self.components.is_empty() {
-            return None;
-        }
-        Some(
-            self.components
-                .iter()
-                .map(|component| component.clone_ref(py))
-                .collect(),
-        )
+    fn get_components(&self, py: Python<'_>) -> Option<Py<PyList>> {
+        self.components
+            .as_ref()
+            .map(|components| components.clone_ref(py))
     }
 
+    /// The list assigned is kept as it stands, not copied: music21's own
+    /// MusicXML reader assigns an empty list and then appends each syllable
+    /// to it through this attribute.
     #[setter]
-    fn set_components(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+    fn set_components(&mut self, py: Python<'_>, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
         let Some(value) = value.filter(|value| !value.is_none()) else {
-            self.components = Vec::new();
+            self.components = None;
             self.inner.set_components(Vec::new());
             return Ok(());
         };
-        let mut components = Vec::new();
-        for item in value.try_iter()? {
-            components.push(item?.extract::<Py<Lyric>>()?);
-        }
-        self.components = components;
+        let list = match value.cast::<PyList>() {
+            Ok(list) => list.clone().unbind(),
+            Err(_) => PyList::new(py, value.try_iter()?.collect::<PyResult<Vec<_>>>()?)?.unbind(),
+        };
+        self.components = Some(list);
         Ok(())
     }
 

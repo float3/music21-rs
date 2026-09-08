@@ -65,6 +65,20 @@ def build_suite(only: str | None) -> unittest.TestSuite:
     return suite
 
 
+def clear_corpus_cache() -> None:
+    """Throw away music21's parsed-score cache before a run.
+
+    A cached score is a pickle carrying the classes it was parsed with, so a
+    cache written by one of the two runs would be read by the other and the
+    comparison would be measuring the wrong thing.
+    """
+    from music21 import environment
+
+    scratch = Path(str(environment.Environment().getRootTempDir()))
+    for cached in scratch.glob("*.p*"):
+        cached.unlink(missing_ok=True)
+
+
 def run_one(out: Path, use_rs: bool, only: str | None) -> int:
     """One run of the suite, writing what failed to `out`."""
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -74,6 +88,7 @@ def run_one(out: Path, use_rs: bool, only: str | None) -> int:
     import music21
 
     print(f"music21 {music21.__version__} from {music21.__file__}", flush=True)
+    clear_corpus_cache()
     if use_rs:
         import music21_rs
 

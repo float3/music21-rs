@@ -1000,24 +1000,36 @@ impl Chord {
     // ---- duration --------------------------------------------------------
 
     #[getter]
-    fn get_duration(&mut self, py: Python<'_>) -> PyResult<Py<Duration>> {
-        self.duration_object(py)
+    fn get_duration(slf: &Bound<'_, Self>) -> PyResult<Py<Duration>> {
+        let py = slf.py();
+        let duration = slf.borrow_mut().duration_object(py)?;
+        crate::note::adopt_duration(py, &duration, slf.as_any());
+        Ok(duration)
     }
 
     #[setter]
-    fn set_duration(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+    fn set_duration(slf: &Bound<'_, Self>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        let py = slf.py();
         let inner = duration_from_any(value)?;
-        self.inner.set_duration(inner.clone());
-        self.duration = match value.extract::<Py<Duration>>() {
-            Ok(object) => Some(object),
-            Err(_) => Some(Py::new(value.py(), Duration::wrap(inner))?),
+        let duration = match value.extract::<Py<Duration>>() {
+            Ok(object) => object,
+            Err(_) => crate::installed_new(
+                py,
+                "music21.duration",
+                "Duration",
+                Duration::wrap(inner.clone()),
+            )?,
         };
+        crate::note::adopt_duration(py, &duration, slf.as_any());
+        let mut chord = slf.borrow_mut();
+        chord.inner.set_duration(inner);
+        chord.duration = Some(duration);
         Ok(())
     }
 
     #[getter]
-    fn get_quarterLength(&self, py: Python<'_>) -> f64 {
-        self.quarter_length(py)
+    fn get_quarterLength<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        crate::note::op_frac(py, self.quarter_length(py))
     }
 
     #[setter]
@@ -2299,6 +2311,11 @@ impl Chord {
                 volume.borrow(py).clone(),
             )?);
         }
+        // The ornaments and the marks come across. A score is deep-copied on
+        // its way out to a file, and an arpeggio the copy had lost would not
+        // be written.
+        copied.expressions = crate::note::copied_list(py, self.expressions.as_ref())?;
+        copied.articulations = crate::note::copied_list(py, self.articulations.as_ref())?;
         Ok(copied)
     }
 }

@@ -139,6 +139,41 @@ impl AugmentedSixthKind {
         }
     }
 
+    /// The inversion figure music21 reads one of these in when the figure
+    /// names no digits: a German sixth written `Ger` is `Ger65`.
+    fn default_inversion(self) -> &'static str {
+        match self {
+            Self::Italian => "6",
+            Self::French | Self::Swiss => "43",
+            Self::German => "65",
+        }
+    }
+
+    /// The digits an augmented-sixth figure writes, once its name and the
+    /// `+` are off it. music21's `_parseRNAloneAmidstAug6`: a figure naming
+    /// no digits takes the usual inversion, and one naming a plain `6` takes
+    /// it too, since `Fr6` is how `Fr43` is usually written.
+    fn written_figure(self, figure: &str) -> String {
+        let rest = figure
+            .trim()
+            .trim_start_matches(['I', 't', 'G', 'e', 'r', 'F', 'S', 'w'])
+            .trim_start_matches('+');
+        let leading_digit = rest
+            .chars()
+            .next()
+            .is_some_and(|first| first.is_ascii_digit());
+        if !leading_digit {
+            return format!("{}{rest}", self.default_inversion());
+        }
+        if self != Self::Italian
+            && rest.starts_with('6')
+            && !rest[1..].starts_with(|c: char| c.is_ascii_digit())
+        {
+            return format!("{}{}", self.default_inversion(), &rest[1..]);
+        }
+        rest.to_string()
+    }
+
     fn figure(self) -> &'static str {
         match self {
             Self::Italian => "It+6",
@@ -230,7 +265,10 @@ impl RomanNumeral {
                 seventh: false,
                 quality: RomanQuality::Augmented,
                 implied_quality: ImpliedQuality::Augmented,
-                figures: FiguredBass::default(),
+                figures: FiguredBass {
+                    written: kind.written_figure(trimmed),
+                    ..FiguredBass::default()
+                },
                 secondary: None,
                 kind: RomanKind::AugmentedSixth(kind),
                 sixth_minor,
@@ -288,12 +326,14 @@ impl RomanNumeral {
             scale,
         };
         numeral.raise_minor_sixth_and_seventh(&mut column)?;
+        let written = column.clone();
         // This crate writes an addition as `add(13)` where music21 writes a
         // bracket, and it is not part of the figured-bass column: an added
         // thirteenth is a note beside the chord, not a figure over the bass.
         let column = strip_roman_addition_groups(&column);
         numeral.figures = FiguredBass {
             column: Notation::parse(&expand_shorthand(&column).join(","))?,
+            written,
             omitted,
             added,
             bracketed,
@@ -416,6 +456,13 @@ impl RomanNumeral {
     }
 
     /// Returns the original figure.
+    /// The digits written under the numeral, as music21's `figuresWritten`:
+    /// the figure with the numeral, its accidental and its quality symbol
+    /// taken off it, and nothing expanded.
+    pub fn figures_written(&self) -> &str {
+        &self.figures.written
+    }
+
     pub fn figure(&self) -> &str {
         &self.figure
     }
@@ -1094,6 +1141,10 @@ fn validate_figure(figure: &str) -> Result<()> {
 struct FiguredBass {
     /// The column itself, expanded out of the shorthand it was written in.
     column: Notation,
+    /// The digits as the figure wrote them, before the shorthand was
+    /// expanded and after everything that is not a digit has been read off:
+    /// `V65` writes `65`, `I7#5b3` writes `7#5b3`, and `V` writes nothing.
+    written: String,
     /// Chord steps the figure asks to be left out, as `[no3]`.
     omitted: Vec<u8>,
     /// Notes the figure asks to be added, as `[add4]`: the alteration in
@@ -2217,6 +2268,26 @@ fn normalize_pitch_name(name: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_numeral_reports_the_digits_it_was_written_with() {
+        let major = Key::from_tonic("C").unwrap();
+        for (figure, written) in [
+            ("V65", "65"),
+            ("V", ""),
+            ("I7#5b3", "7#5b3"),
+            ("viio6", "6"),
+            ("vii\u{f8}7", "7"),
+        ] {
+            let numeral = RomanNumeral::new(figure, major.clone()).unwrap();
+            assert_eq!(numeral.figures_written(), written, "{figure}");
+        }
+        let minor = Key::from_tonic("c").unwrap();
+        for (figure, written) in [("Fr43", "43"), ("Fr+6", "43"), ("It+6", "6"), ("Ger", "65")] {
+            let numeral = RomanNumeral::new(figure, minor.clone()).unwrap();
+            assert_eq!(numeral.figures_written(), written, "{figure}");
+        }
+    }
+
     #[test]
     fn a_minor_key_raises_its_sixth_and_seventh_where_the_figure_asks() {
         let minor = Key::from_tonic_mode("a", Some("minor")).unwrap();

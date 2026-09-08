@@ -345,6 +345,11 @@ pub struct Key {
     /// The object is kept as it was given; which pattern it stands for is
     /// read off its class name.
     abstract_scale: Option<Py<PyAny>>,
+    /// A type name a caller wrote over the mode's.
+    ///
+    /// music21's `type` is a plain attribute — a key writes its own mode
+    /// into it — so anything may be written there and comes back.
+    named_type: Option<String>,
 }
 
 impl Key {
@@ -355,6 +360,7 @@ impl Key {
             correlation_coefficient: 0.0,
             alternate_interpretations: None,
             abstract_scale: None,
+            named_type: None,
         };
         // Where the class has been installed over music21's, the object has
         // to be one of those: music21 will hold nothing else, and a pickle
@@ -503,6 +509,7 @@ impl Key {
                 correlation_coefficient: 0.0,
                 alternate_interpretations: None,
                 abstract_scale: None,
+                named_type: None,
             }),
         )
     }
@@ -515,6 +522,28 @@ impl Key {
     #[getter]
     fn mode(&self) -> String {
         self.inner.mode().to_string()
+    }
+
+    /// music21's `type`, which a key inherits from `ConcreteScale` and
+    /// writes its own mode into: a key *is* a scale of that mode.
+    #[getter]
+    fn get_type(&self) -> String {
+        match &self.named_type {
+            Some(named) => named.clone(),
+            None => self.inner.mode().to_string(),
+        }
+    }
+
+    #[setter]
+    fn set_type(&mut self, value: &str) {
+        self.named_type = Some(value.to_string());
+    }
+
+    /// music21's `name`, which for a scale is its tonic and its type:
+    /// `E- major`.
+    #[getter]
+    fn name(&self) -> String {
+        format!("{} {}", self.inner.tonic().name(), self.get_type())
     }
 
     #[setter]

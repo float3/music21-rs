@@ -308,6 +308,11 @@ pub struct ConcreteScale {
     /// `Concrete` while a `HarmonicMinorScale` with no tonic still knows it
     /// is a harmonic minor.
     named_pattern: bool,
+    /// A name a caller wrote over the one the pattern gives.
+    ///
+    /// music21's `type` is a plain attribute, and `key.Key` writes its mode
+    /// into it, so a caller may too.
+    named_type: Option<String>,
     /// Whether a tonic was ever given.
     ///
     /// music21's `ConcreteScale` can be built without one, and then it is
@@ -323,6 +328,7 @@ impl ConcreteScale {
             inner: RsScale::new(scale_type, tonic),
             family: "Concrete".to_string(),
             named_pattern: true,
+            named_type: None,
             has_tonic: true,
         }
     }
@@ -349,6 +355,15 @@ impl ConcreteScale {
         Ok(&self.inner)
     }
 
+    /// The same, but a scale nobody gave a tonic to sounds from middle C.
+    ///
+    /// music21 asks a scale with no tonic for its notes and gets them, since
+    /// the pattern is a pattern whatever it stands on; only the questions
+    /// that name a degree refuse.
+    fn realized_anywhere(&self) -> &RsScale {
+        &self.inner
+    }
+
     /// A Python object of the class music21 names this scale type, when one
     /// has been registered, and a plain `ConcreteScale` otherwise.
     pub(crate) fn object(py: Python<'_>, scale: RsScale) -> PyResult<Py<PyAny>> {
@@ -358,6 +373,7 @@ impl ConcreteScale {
                 inner: scale,
                 family: "Concrete".to_string(),
                 named_pattern: false,
+                named_type: None,
                 has_tonic: true,
             };
             built.named_pattern = false;
@@ -381,6 +397,7 @@ impl ConcreteScale {
                 inner: scale,
                 family: "Concrete".to_string(),
                 named_pattern: true,
+                named_type: None,
                 has_tonic: true,
             }),
         )?
@@ -403,14 +420,29 @@ impl ConcreteScale {
 impl ConcreteScale {
     /// A scale is written out as text and read back.
     fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<(Py<PyAny>, (), Py<PyAny>)> {
-        crate::pickled(slf, &slf.borrow().inner)
+        let me = slf.borrow();
+        let written = (
+            me.inner.clone(),
+            me.family.clone(),
+            me.named_pattern,
+            me.has_tonic,
+        );
+        drop(me);
+        crate::pickled(slf, &written)
     }
 
     fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
-        let Some(inner) = crate::unpickled::<_, RsScale>(slf, state)? else {
+        type State = (RsScale, String, bool, bool);
+        let Some((inner, family, named_pattern, has_tonic)) =
+            crate::unpickled::<_, State>(slf, state)?
+        else {
             return Ok(());
         };
-        slf.borrow_mut().inner = inner;
+        let mut me = slf.borrow_mut();
+        me.inner = inner;
+        me.family = family;
+        me.named_pattern = named_pattern;
+        me.has_tonic = has_tonic;
         Ok(())
     }
 
@@ -491,6 +523,9 @@ impl ConcreteScale {
     /// one is the pattern it stands on and for a vague one is `"Concrete"`.
     #[getter]
     fn r#type(&self) -> String {
+        if let Some(named) = &self.named_type {
+            return named.clone();
+        }
         if !self.named_pattern || self.inner.is_custom() {
             return self.family.clone();
         }
@@ -498,6 +533,13 @@ impl ConcreteScale {
             .scale_type()
             .music21_descriptive_name()
             .to_string()
+    }
+
+    /// music21's `type` is a plain attribute, so a caller may name a scale
+    /// whatever it likes and the name comes back with it.
+    #[setter]
+    fn set_type(&mut self, value: &str) {
+        self.named_type = Some(value.to_string());
     }
 
     /// music21's `name`: the tonic and the pattern, `"D major"`, and
@@ -533,7 +575,7 @@ impl ConcreteScale {
     #[getter]
     fn pitches(&self) -> PyResult<Vec<Pitch>> {
         Ok(self
-            .realized()?
+            .realized_anywhere()
             .pitches()
             .map_err(scale_error)?
             .into_iter()
