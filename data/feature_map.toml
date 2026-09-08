@@ -181,8 +181,7 @@ name = "RomanNumeral"
 rust = ["src/roman.rs"]
 
 [class.excluded]
-adjustMinorVIandVIIByQuality = "an internal step of music21's figure parsing"
-bassScaleDegreeFromNotation = "takes a figured-bass Notation object, which is not modelled"
+adjustMinorVIandVIIByQuality = "the rule is applied when the figure is read, rather than exposed as a step a caller runs afterwards"
 
 [[class]]
 python = "meter/base.py"
@@ -339,13 +338,13 @@ convertTypeToNumber = "type_number"
 dottedMatch = "type_and_dots"
 nextLargerType = "next_larger"
 nextSmallerType = "next_smaller"
+durationTupleFromTypeDots = "from_type_with_dots"
 
 [class.excluded]
-quarterLengthToNonPowerOf2Tuplet = "tuplets and duration tuples are not modelled"
-quarterLengthToTuplet = "tuplets and duration tuples are not modelled"
-quarterConversion = "tuplets and duration tuples are not modelled"
-durationTupleFromQuarterLength = "tuplets and duration tuples are not modelled"
-durationTupleFromTypeDots = "tuplets and duration tuples are not modelled"
+quarterLengthToNonPowerOf2Tuplet = "a length written inside a tuplet of an unwritable value; `Duration::tuplet` reads the writable ones"
+quarterLengthToTuplet = "the best tuplet for a length is `Duration::tuplet`; the other ways of writing it have no caller here"
+quarterConversion = "the two halves of the answer are `Duration::components` and `Duration::tuplets`, asked separately"
+durationTupleFromQuarterLength = "a duration built from a length is `Duration::new`, and its written value is `type_and_dots`"
 
 [[class]]
 python = "tempo.py"
