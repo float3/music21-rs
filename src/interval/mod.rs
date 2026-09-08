@@ -56,6 +56,7 @@ impl IntervalDirection {
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// A directed musical interval with diatonic spelling and chromatic size.
+#[must_use]
 pub struct Interval {
     pub(crate) implicit_diatonic: bool,
     pub(crate) diatonic: DiatonicInterval,
@@ -888,8 +889,16 @@ impl Interval {
         }
 
         let use_implicit_octave = p.octave().is_none();
-        let inherit_accidental_display = self.diatonic.simple_name() == "P1";
-        let cents_origin = if p.is_twelve_tone() {
+        // A true unison, or any whole number of octaves: the accidental of
+        // what comes back is written the way the accidental it came from was.
+        let whole_semitones = self.chromatic.semitones == self.chromatic.semitones.trunc();
+        let inherit_accidental_display = self.diatonic.simple_name() == "P1" && whole_semitones;
+        // A microtonal interval already says how many cents the answer sits
+        // from its written value, so the cents the pitch came with are not
+        // carried across on top of them — music21 says the same, and it is
+        // what keeps a scale realized a quarter-tone at a time from piling
+        // the whole walk into one note's microtone.
+        let cents_origin = if p.is_twelve_tone() || !whole_semitones {
             0.0
         } else {
             p.microtone().map_or(0.0, crate::pitch::Microtone::cents)
