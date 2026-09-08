@@ -153,18 +153,30 @@ impl RomanNumeral {
 
     /// The same numeral again, as an object of the class this one is.
     fn copied<'py>(slf: &Bound<'py, Self>, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        let (inner, octave) = {
+        let mut numeral = {
             let me = slf.borrow();
-            (me.inner.clone(), me.octave)
+            let mut numeral = Self::wrap(me.inner.clone(), me.octave);
+            // Everything the numeral was told rather than read off its
+            // figure comes across: a copy of a pivot chord is still a pivot,
+            // and music21's own `romanText` reader copies a measure that
+            // holds one.
+            numeral.implied_key = me.implied_key;
+            numeral.score = me.score;
+            numeral.silent = me.silent;
+            numeral.blank = me.blank;
+            numeral.follows_key_change = me.follows_key_change;
+            numeral.write_as_chord = me.write_as_chord;
+            numeral.key_object = me.key_object.as_ref().map(|key| key.clone_ref(py));
+            numeral.pivot = me.pivot.as_ref().map(|pivot| pivot.clone_ref(py));
+            numeral
         };
-        let numeral = Self::wrap(inner, octave);
         let chord = Chord::from_inner(py, numeral.chord()?)?;
         let class = slf.as_any().get_type();
-        let copy = class.call_method1("__new__", (&class,))?;
+        let copy = crate::blank_installed(class.as_any())?;
         {
             let cell = copy.cast::<Self>()?;
             let mut me = cell.borrow_mut();
-            *me = numeral;
+            std::mem::swap(&mut *me, &mut numeral);
             *me.into_super() = chord;
         }
         Ok(copy)

@@ -252,7 +252,10 @@ impl RomanNumeral {
         }
         validate_figure(trimmed)?;
 
-        if let Some(kind) = AugmentedSixthKind::from_figure(trimmed) {
+        // The applied part comes off first, so that `Ger6/vi` is a German
+        // sixth read in the key its `vi` establishes.
+        let (aug6_primary, aug6_secondary) = split_secondary(trimmed);
+        if let Some(kind) = AugmentedSixthKind::from_figure(aug6_primary) {
             return Ok(Self {
                 // The figure is kept as written, since music21 names these
                 // several ways and reports back the one it was given.
@@ -266,10 +269,10 @@ impl RomanNumeral {
                 quality: RomanQuality::Augmented,
                 implied_quality: ImpliedQuality::Augmented,
                 figures: FiguredBass {
-                    written: kind.written_figure(trimmed),
+                    written: kind.written_figure(aug6_primary),
                     ..FiguredBass::default()
                 },
-                secondary: None,
+                secondary: aug6_secondary,
                 kind: RomanKind::AugmentedSixth(kind),
                 sixth_minor,
                 seventh_minor,
@@ -278,7 +281,7 @@ impl RomanNumeral {
             });
         }
 
-        let (primary, secondary) = split_secondary(trimmed);
+        let (primary, secondary) = (aug6_primary, aug6_secondary);
 
         // music21 writes a few chords by name rather than by numeral: the
         // Neapolitan and the cadential six-four. Each is read as the figure
@@ -803,8 +806,11 @@ impl RomanNumeral {
     }
 
     fn augmented_sixth_chord(&self, kind: AugmentedSixthKind) -> Result<Chord> {
-        let mut lowered_sixth = self.key.pitch_from_degree(6)?;
-        if self.key.mode() != "minor" {
+        // Read in the key the figure actually sounds in, so the German
+        // sixth of `Ger6/vi` stands on the sixth degree of that `vi`.
+        let key = self.effective_key()?;
+        let mut lowered_sixth = key.pitch_from_degree(6)?;
+        if key.mode() != "minor" {
             lowered_sixth = Interval::from_semitones(-1)?.transpose_pitch(&lowered_sixth)?;
         }
         let pitches = kind
