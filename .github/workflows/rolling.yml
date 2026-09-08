@@ -30,10 +30,11 @@ jobs:
         toolchain: [stable, beta, nightly]
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
+      # No submodules: `cargo test --workspace` cannot reach them. Nothing in
+      # `src/` opens a file at all, and the tests that need the submodule live
+      # in `python-parity`, which is not a workspace member.
       - name: Checkout
         uses: actions/checkout@v7
-        with:
-          submodules: recursive
 
       # The action exports RUSTUP_TOOLCHAIN, which outranks the `stable` that
       # rust-toolchain.toml pins — without it every job would test stable.

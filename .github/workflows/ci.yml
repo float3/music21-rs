@@ -32,35 +32,18 @@ jobs:
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@v22
 
-      - name: Configure Nix cache
-        uses: DeterminateSystems/magic-nix-cache-action@v14
-
+      # No Nix cache. `magic-nix-cache-action` wrote a cache entry per store
+      # path -- 451 `.nar.zstd` and 455 `.narinfo` entries, 906 of the
+      # repository's 948 -- to hold about a gigabyte, and the eviction that
+      # caused fell on the cargo caches, which are what the run's wall clock
+      # actually turns on. This job checks formatting and evaluates the flake;
+      # it is not worth a cache, let alone that one. (Determinate Systems have
+      # since retired the action.)
       - name: Check Nix formatting with Alejandra
         run: nix shell nixpkgs#alejandra -c alejandra --check .
 
       - name: Validate flake
         run: nix flake check --accept-flake-config
-
-  stable-check:
-    name: Stable Check
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          submodules: recursive
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install Linux audio dependencies
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev pkg-config
-
-      - name: Cache cargo artifacts
-        uses: Swatinem/rust-cache@v2
-
-      - name: Cargo check
-        run: cargo check --workspace --locked
 
   feature-matrix:
     name: Feature Matrix (${{ matrix.feature_set.name }})
@@ -79,10 +62,13 @@ jobs:
             flags: --all-features
             single_threaded: false
     steps:
+      # No submodules. Nothing under `src/` opens a file at all -- the
+      # generated tables are compiled-in Rust, not `include_str!` -- so
+      # `cargo test --workspace` cannot reach `music21/` or `hexatone/`, and
+      # the tests that do need them live in `python-parity`, outside the
+      # workspace. That is 228 MB of checkout this job was paying for.
       - name: Checkout
         uses: actions/checkout@v7
-        with:
-          submodules: recursive
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -92,8 +78,15 @@ jobs:
       - name: Install Linux audio dependencies
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev pkg-config
 
+      # One cache for every job building the same graph, not one per job.
+      # Sixteen job-scoped keys held 8.4 GB of the repository's 10 GB cache
+      # limit, so GitHub was evicting them and some job started cold on most
+      # runs. `workspace-stable` is shared with `lint`, `test` and `semver`;
+      # `xtask-python` is the other group, for the jobs that build pyo3.
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: workspace-stable
 
       - name: Check / Clippy / Test
         shell: bash
@@ -132,6 +125,8 @@ jobs:
 
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: xtask-python
 
       # The doctest harness imports the whole of music21, which needs its
       # own dependencies; the table bridge stubs them out and does not.
@@ -226,6 +221,8 @@ jobs:
 
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: xtask-python
 
       - name: Setup Python
         uses: actions/setup-python@v7
@@ -260,10 +257,11 @@ jobs:
     name: Lint (fmt + clippy + check)
     runs-on: ubuntu-latest
     steps:
+      # No submodules: every `verify-*` command below compares a committed
+      # `data/*.toml` against the Rust emitted from it and reads nothing else,
+      # and neither fmt, clippy nor check leaves the workspace.
       - name: Checkout
         uses: actions/checkout@v7
-        with:
-          submodules: recursive
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -275,6 +273,8 @@ jobs:
 
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: workspace-stable
 
       # The reports page's script is TypeScript, and the JavaScript the page
       # carries is generated from it and committed, so verifying the two
@@ -313,8 +313,11 @@ jobs:
       - name: Verify the reports page's compiled script
         run: cargo run --release -p xtask -- verify-report-script
 
+      # `--locked` is what says a change touching dependencies committed the
+      # updated `Cargo.lock`. It used to be a job of its own doing nothing
+      # else; `--all-targets` here is the stronger check for none of the cost.
       - name: Cargo check
-        run: cargo check --workspace --all-targets
+        run: cargo check --workspace --all-targets --locked
 
   msrv:
     name: MSRV
@@ -355,6 +358,8 @@ jobs:
 
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: workspace-stable
 
       - name: Install cargo-semver-checks
         uses: taiki-e/install-action@v2
@@ -377,10 +382,13 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
+      # No submodules. Nothing under `src/` opens a file at all -- the
+      # generated tables are compiled-in Rust, not `include_str!` -- so
+      # `cargo test --workspace` cannot reach `music21/` or `hexatone/`, and
+      # the tests that do need them live in `python-parity`, outside the
+      # workspace. That is 228 MB of checkout this job was paying for.
       - name: Checkout
         uses: actions/checkout@v7
-        with:
-          submodules: recursive
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -391,6 +399,8 @@ jobs:
 
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: workspace-stable
 
       - name: Cargo test
         run: cargo test --workspace --all-targets
@@ -422,6 +432,8 @@ jobs:
 
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: xtask-python
 
       # Built the way docs.rs builds it: every feature on, so the `serde` impls
       # and `ScalaArchive::bundled()` are documented at all, and `--cfg docsrs`
@@ -481,8 +493,28 @@ jobs:
       # The benchmark and music21's suite are subcommands of this same
       # program now, and the report drives them by running itself, so the
       # binary it builds has to be the one with pyo3 in it.
+      #
+      # On a pull request only the feature half runs. The other half re-runs
+      # the workspace tests, the doctests, the parity suite, the wheel and
+      # music21's own suite -- all of which this workflow has just run in
+      # parallel as jobs of their own -- and then re-runs them serially and
+      # under coverage instrumentation, which took thirteen of this job's
+      # fifteen minutes and set the whole workflow's wall clock. The page it
+      # measures is never uploaded from a pull request either: `Configure
+      # Pages` and `Upload docs artifact` below are both push-only. What is
+      # worth keeping on a pull request is the feature-map staleness check,
+      # which is the one part of this job that can fail on a code change, and
+      # `--features-only` is exactly that part.
       - name: Build reports
-        run: cargo run --release -p xtask --features python -- report --out target/reports
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            cargo run --release -p xtask --features python -- report --out target/reports
+          else
+            cargo run --release -p xtask --features python -- report --features-only --out target/reports
+          fi
         env:
           PYO3_PYTHON: python
 
@@ -533,10 +565,13 @@ jobs:
 
       - name: Smoke check demo site
         shell: bash
+        env:
+          FULL_REPORT: ${{ github.event_name == 'push' }}
         run: |
           set -euo pipefail
 
           python3 - <<'PY'
+          import os
           from pathlib import Path
 
           root = Path("target/pages")
@@ -560,8 +595,12 @@ jobs:
               "tuning/app.js",
               "reports/index.html",
               "reports/report.json",
-              "reports/coverage/html/index.html",
           ]
+
+          # Only a push measures coverage; a pull request builds the feature
+          # half alone, which writes no coverage page to check for.
+          if os.environ.get("FULL_REPORT") == "true":
+              required_files.append("reports/coverage/html/index.html")
 
           missing = [name for name in required_files if not (root / name).is_file()]
           if missing:
@@ -570,7 +609,7 @@ jobs:
           file_checks = {
               "index.html": ["chord/", "chords/", "polyrhythm/", "tuning/", "reports/", "./python/", "./theme.css", "./theme.js"],
               "python/music21_rs.html": ["id=\"Chord\"", "id=\"Pitch\"", "id=\"Pitch.transpose\"", "install_into_music21"],
-              "reports/index.html": ["../theme.css", "../theme.js", "./coverage/html/index.html"],
+              "reports/index.html": ["../theme.css", "../theme.js"],
               "theme.css": ["--accent", ":root[data-theme=\"dark\"]", ".theme-toggle"],
               "chord/index.html": ["./app.js", "../theme.css", "../chords/", "../polyrhythm/"],
               "chord/app.js": ["../help-tooltips.js", "../theme.js", "../pkg/music21_rs_web.js"],
@@ -581,6 +620,9 @@ jobs:
               "tuning/index.html": ["./app.js", "../theme.css"],
               "tuning/app.js": ["../theme.js"],
           }
+
+          if os.environ.get("FULL_REPORT") == "true":
+              file_checks["reports/index.html"].append("./coverage/html/index.html")
 
           for name, needles in file_checks.items():
               text = (root / name).read_text(encoding="utf-8")
@@ -633,7 +675,6 @@ jobs:
     # included, which builds and tests the very artifact PyPI then receives.
     needs:
       - nix
-      - stable-check
       - feature-matrix
       - python-parity
       - wheel
@@ -762,13 +803,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # macos-13 is the x86_64 runner, macos-14 the Apple Silicon one.
-        os: [windows-latest, macos-13, macos-14]
+        # macos-15-intel is the x86_64 runner, macos-15 the Apple Silicon
+        # one. The plain version numbers are the Apple Silicon images now, so
+        # the x86_64 half has to name itself; macos-13 was retired and
+        # macos-14 is deprecated.
+        os: [windows-latest, macos-15-intel, macos-15]
         python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
         exclude:
-          # setup-python has no 3.9 build for Apple Silicon; that one
+          # setup-python still has no 3.9 build for Apple Silicon -- the
+          # manifest carries darwin x64 alone for every 3.9 -- so that one
           # combination installs from the sdist instead.
-          - os: macos-14
+          - os: macos-15
             python-version: "3.9"
     steps:
       - name: Checkout
