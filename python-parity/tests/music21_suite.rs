@@ -44,7 +44,11 @@ fn music21s_own_tests_run_against_the_linked_crate() {
     let unexpected: Vec<&String> = outcome
         .bad
         .iter()
-        .filter(|name| !EXPECTED_FAILURES.iter().any(|(known, _)| *known == name.as_str()))
+        .filter(|name| {
+            !EXPECTED_FAILURES
+                .iter()
+                .any(|(known, _)| *known == name.as_str())
+        })
         .collect();
     assert!(
         unexpected.is_empty(),
