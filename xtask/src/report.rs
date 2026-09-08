@@ -26,13 +26,61 @@ use std::process::{Command, Output};
 
 use serde::{Deserialize, Serialize};
 
-/// Files that are generated data rather than code, kept out of the coverage
-/// figures.
-const COVERAGE_IGNORE: &str = r"generated\.rs|scala_bundled\.rs";
+/// What the coverage figure leaves out. Generated data rather than code
+/// (`chord/tables/generated.rs`, `scala_bundled.rs`), and every crate that is
+/// not the library: the suites now run instrumented across the whole
+/// workspace and `python-parity` besides, so without this the figure would be
+/// diluted by the tooling that does the measuring.
+const COVERAGE_IGNORE: &str =
+    r"generated\.rs|scala_bundled\.rs|[\\/](xtask|utils|examples|python-parity|python)[\\/]";
 
 #[derive(Debug, Deserialize)]
 struct FeatureMap {
     class: Vec<ClassMap>,
+    /// What the crate has that music21 does not.
+    #[serde(default)]
+    beyond: Vec<BeyondMap>,
+}
+
+/// One thing the crate does that music21 has no counterpart for. The count,
+/// where there is one, is read out of the Rust source rather than written
+/// here, so it cannot drift.
+#[derive(Debug, Deserialize)]
+struct BeyondMap {
+    name: String,
+    note: String,
+    #[serde(default)]
+    rust: Option<String>,
+    /// A `const NAME: [T; N]` whose declared length is the count.
+    #[serde(default)]
+    count: Option<String>,
+    #[serde(default)]
+    unit: Option<String>,
+    /// Counted against music21's own `.scl` files instead.
+    #[serde(default)]
+    scala_archive: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct BeyondReport {
+    name: String,
+    note: String,
+    /// How many of them, where that is a number worth giving.
+    count: Option<usize>,
+    unit: Option<String>,
+    /// What music21 has of the same thing, where it has any.
+    music21: Option<usize>,
+}
+
+/// How big each thing is to install, in bytes.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+struct Sizes {
+    /// The `music21` package as it lands in site-packages, corpus and all.
+    music21: Option<u64>,
+    /// What `cargo add music21-rs` fetches: the source the crate publishes.
+    crate_source: Option<u64>,
+    /// The built wheel, which is what `pip install music21-rs` fetches.
+    wheel: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -75,9 +123,47 @@ struct Report {
     generated_from: String,
     music21_version: String,
     coverage: Option<Coverage>,
+    #[serde(default)]
+    sizes: Option<Sizes>,
     suites: Vec<Suite>,
+    #[serde(default)]
+    benchmarks: Option<Benchmarks>,
     doctests: Vec<ModuleDoctests>,
     features: Vec<ClassReport>,
+    #[serde(default)]
+    beyond: Vec<BeyondReport>,
+}
+
+/// The crate timed against music21 through the same Python API, by
+/// `python/benchmarks/bench.py`. Both sides are asked the same question and
+/// have to agree on the answer before either is timed, so a speedup here is a
+/// speedup at doing the same work.
+#[derive(Debug, Serialize, Deserialize)]
+struct Benchmarks {
+    status: SuiteStatus,
+    command: String,
+    /// Why the benchmarks were not run, when they were not.
+    detail: Option<String>,
+    #[serde(default)]
+    music21: String,
+    #[serde(default)]
+    python: String,
+    #[serde(default)]
+    platform: String,
+    #[serde(default)]
+    cases: Vec<BenchCase>,
+}
+
+/// One benchmark case, as `bench.py --json` writes it.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct BenchCase {
+    case: String,
+    group: String,
+    #[serde(default)]
+    notes: String,
+    music21_ns: f64,
+    music21_rs_ns: f64,
+    speedup: f64,
 }
 
 /// What the parity harness writes beside each module's failure log.
@@ -88,6 +174,29 @@ struct DoctestSummary {
     docstrings: usize,
     examples_passing: usize,
     examples: usize,
+    /// Written once something runs music21's unit tests against the crate.
+    /// Until then the report shows nought against the total in the fixture.
+    #[serde(default)]
+    tests_passing: usize,
+    #[serde(default)]
+    tests: Option<usize>,
+}
+
+/// `data/doctest_totals.toml`: how much documentation each module in scope
+/// has, counted by music21's own `DocTestFinder`.
+#[derive(Debug, Default, Deserialize)]
+struct DoctestTotals {
+    #[serde(default)]
+    module: Vec<DoctestTotal>,
+}
+
+#[derive(Debug, Deserialize)]
+struct DoctestTotal {
+    module: String,
+    docstrings: usize,
+    examples: usize,
+    #[serde(default)]
+    tests: usize,
 }
 
 /// How much of one music21 module's own documentation runs against the crate.
@@ -99,6 +208,16 @@ struct ModuleDoctests {
     docstrings: usize,
     examples_passing: usize,
     examples: usize,
+    tests_passing: usize,
+    tests: usize,
+    /// False for a module in scope that no parity harness runs yet, which is
+    /// counted at nought rather than left out.
+    #[serde(default = "yes")]
+    harnessed: bool,
+}
+
+fn yes() -> bool {
+    true
 }
 
 /// One runnable test suite, and what came of running it.
@@ -152,7 +271,6 @@ struct ClassReport {
     note: Option<String>,
     ported: usize,
     missing: usize,
-    excluded: usize,
     members: Vec<MemberReport>,
 }
 
@@ -160,7 +278,7 @@ struct ClassReport {
 struct MemberReport {
     name: String,
     status: Status,
-    /// The Rust name for a ported member, the reason for an excluded one.
+    /// The Rust name for a ported member, or why an unported one is unported.
     detail: Option<String>,
 }
 
@@ -169,13 +287,13 @@ struct MemberReport {
 enum Status {
     Ported,
     Missing,
-    Excluded,
 }
 
 pub(crate) struct Options {
     pub out: PathBuf,
     pub coverage: bool,
     pub suites: bool,
+    pub benchmarks: bool,
     pub features: bool,
     /// Re-render the page from a `report.json` an earlier run wrote, measuring
     /// nothing. Working on the page's layout otherwise means waiting for
@@ -188,6 +306,7 @@ pub(crate) fn parse_options(workspace_root: &Path, args: &[String]) -> Result<Op
         out: workspace_root.join("target/reports"),
         coverage: true,
         suites: true,
+        benchmarks: true,
         features: true,
         from_json: None,
     };
@@ -201,16 +320,25 @@ pub(crate) fn parse_options(workspace_root: &Path, args: &[String]) -> Result<Op
             "--features-only" => {
                 options.coverage = false;
                 options.suites = false;
+                options.benchmarks = false;
             }
             "--coverage-only" => {
                 options.features = false;
                 options.suites = false;
+                options.benchmarks = false;
             }
             "--suites-only" => {
                 options.coverage = false;
                 options.features = false;
+                options.benchmarks = false;
+            }
+            "--benchmarks-only" => {
+                options.coverage = false;
+                options.suites = false;
+                options.features = false;
             }
             "--no-suites" => options.suites = false,
+            "--no-benchmarks" => options.benchmarks = false,
             "--from-json" => {
                 let path = args.next().ok_or("--from-json needs a report.json")?;
                 options.from_json = Some(workspace_root.join(path));
@@ -232,33 +360,59 @@ pub(crate) fn report(workspace_root: &Path, options: &Options) -> Result<(), Box
         return Ok(());
     }
 
-    let coverage = if options.coverage {
-        Some(measure_coverage(workspace_root, &options.out)?)
+    // Coverage is not a run of its own: it is what the suites leave behind.
+    // Every suite is run under the instrumentation `cargo llvm-cov show-env`
+    // describes, so the profiles they all write merge into one figure — the
+    // parity suite and music21's own doctests included, which used to drive
+    // thousands of lines that the report then called uncovered.
+    let coverage_env = if options.coverage {
+        Some(start_coverage(workspace_root)?)
     } else {
         None
     };
+    let env = coverage_env.as_deref().unwrap_or(&[]);
 
-    let suites = if options.suites {
-        run_suites(workspace_root)
+    // The suites have to run for coverage even when their own section is not
+    // wanted, because they are the measurement.
+    let measured = if options.suites || options.coverage {
+        run_suites(workspace_root, env)
     } else {
         Vec::new()
     };
 
+    let coverage = match &coverage_env {
+        Some(env) => Some(collect_coverage(workspace_root, &options.out, env)?),
+        None => None,
+    };
+
+    let suites = if options.suites { measured } else { Vec::new() };
+
+    let benchmarks = options.benchmarks.then(|| run_benchmarks(workspace_root));
+
     let doctests = read_doctests(workspace_root);
 
-    let features = if options.features {
-        scan_features(workspace_root)?
+    let (features, beyond) = if options.features {
+        let map_path = workspace_root.join("data/feature_map.toml");
+        let map: FeatureMap = toml::from_str(&fs::read_to_string(&map_path)?)
+            .map_err(|err| format!("{} does not parse: {err}", map_path.display()))?;
+        (
+            scan_features(workspace_root, &map)?,
+            scan_beyond(workspace_root, &map.beyond)?,
+        )
     } else {
-        Vec::new()
+        (Vec::new(), Vec::new())
     };
 
     let report = Report {
         generated_from: git_head(workspace_root),
         music21_version: submodule_version(workspace_root)?,
         coverage,
+        sizes: Some(measure_sizes(workspace_root)),
         suites,
+        benchmarks,
         doctests,
         features,
+        beyond,
     };
 
     fs::write(
@@ -302,10 +456,7 @@ pub(crate) fn report(workspace_root: &Path, options: &Options) -> Result<(), Box
     }
     for class in &report.features {
         let counted = class.ported + class.missing;
-        println!(
-            "  {}: {} of {} ported, {} excluded",
-            class.name, class.ported, counted, class.excluded
-        );
+        println!("  {}: {} of {} ported", class.name, class.ported, counted);
     }
     Ok(())
 }
@@ -338,22 +489,14 @@ fn submodule_version(workspace_root: &Path) -> Result<String, Box<dyn Error>> {
         .ok_or_else(|| format!("no __version__ in {}", path.display()).into())
 }
 
-/// Runs the library's tests under instrumentation and writes the HTML.
+/// Wipes any previous profile data and returns the environment
+/// `cargo llvm-cov show-env` describes, so that every suite run with it is
+/// instrumented and writes its profile into one place.
 ///
-/// Cleans first: `cargo llvm-cov report` merges every profile and object it
-/// finds under `target`, and stale ones — from a checkout that has since moved,
-/// or from a package built with coverage on for some other reason — would be
-/// counted as never executed and drag the total down.
-fn measure_coverage(workspace_root: &Path, out: &Path) -> Result<Coverage, Box<dyn Error>> {
-    let html_dir = out.join("coverage");
-    let common = [
-        "-p",
-        "music21-rs",
-        "--all-features",
-        "--ignore-filename-regex",
-        COVERAGE_IGNORE,
-    ];
-
+/// `CARGO_TARGET_DIR` is added to it: `python-parity` is outside the
+/// workspace and would otherwise build into its own target directory, where
+/// the report step could not find its binaries to map the profiles onto.
+fn start_coverage(workspace_root: &Path) -> Result<Vec<(String, String)>, Box<dyn Error>> {
     let cleaned = Command::new("cargo")
         .args(["llvm-cov", "clean", "--workspace"])
         .current_dir(workspace_root)
@@ -365,24 +508,72 @@ fn measure_coverage(workspace_root: &Path, out: &Path) -> Result<Coverage, Box<d
         return Err("cargo llvm-cov clean failed".into());
     }
 
+    let output = Command::new("cargo")
+        .args(["llvm-cov", "show-env"])
+        .current_dir(workspace_root)
+        .output()
+        .map_err(|err| {
+            format!("could not run cargo llvm-cov ({err}); is cargo-llvm-cov installed?")
+        })?;
+    if !output.status.success() {
+        return Err("cargo llvm-cov show-env failed".into());
+    }
+
+    let mut env: Vec<(String, String)> = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter_map(|line| line.split_once('='))
+        .map(|(key, value)| {
+            (
+                key.trim().to_string(),
+                value.trim().trim_matches('\'').to_string(),
+            )
+        })
+        .collect();
+    if env.is_empty() {
+        return Err("cargo llvm-cov show-env printed no environment".into());
+    }
+    let build_dir = env
+        .iter()
+        .find(|(key, _)| key == "CARGO_LLVM_COV_BUILD_DIR" || key == "CARGO_LLVM_COV_TARGET_DIR")
+        .map(|(_, value)| value.clone());
+    if let Some(dir) = build_dir {
+        env.push(("CARGO_TARGET_DIR".to_string(), dir));
+    }
+    Ok(env)
+}
+
+/// Merges what the suites left behind into one figure, and writes the
+/// file-by-file HTML beside the page.
+fn collect_coverage(
+    workspace_root: &Path,
+    out: &Path,
+    env: &[(String, String)],
+) -> Result<Coverage, Box<dyn Error>> {
+    let html_dir = out.join("coverage");
+    let common = [
+        "llvm-cov",
+        "report",
+        "--ignore-filename-regex",
+        COVERAGE_IGNORE,
+    ];
+
     let status = Command::new("cargo")
-        .arg("llvm-cov")
         .args(common)
         .arg("--html")
         .arg("--output-dir")
         .arg(&html_dir)
+        .envs(env.iter().map(|(key, value)| (key, value)))
         .current_dir(workspace_root)
         .status()
-        .map_err(|err| {
-            format!("could not run cargo llvm-cov ({err}); is cargo-llvm-cov installed?")
-        })?;
+        .map_err(|err| format!("could not run cargo llvm-cov ({err})"))?;
     if !status.success() {
-        return Err("cargo llvm-cov failed".into());
+        return Err("cargo llvm-cov report --html failed".into());
     }
 
     let output = Command::new("cargo")
-        .args(["llvm-cov", "report", "--json", "--summary-only"])
-        .args(["--ignore-filename-regex", COVERAGE_IGNORE])
+        .args(common)
+        .args(["--json", "--summary-only"])
+        .envs(env.iter().map(|(key, value)| (key, value)))
         .current_dir(workspace_root)
         .output()?;
     if !output.status.success() {
@@ -413,7 +604,7 @@ fn measure_coverage(workspace_root: &Path, out: &Path) -> Result<Coverage, Box<d
 /// Runs every suite the repository has and records what each one answered.
 /// A suite whose tooling is missing is skipped with the reason rather than
 /// failing the report, so this runs anywhere and says what it could not reach.
-fn run_suites(workspace_root: &Path) -> Vec<Suite> {
+fn run_suites(workspace_root: &Path, env: &[(String, String)]) -> Vec<Suite> {
     let submodule = workspace_root.join("music21/music21/__init__.py");
     let mut suites = vec![
         cargo_suite(
@@ -421,6 +612,7 @@ fn run_suites(workspace_root: &Path) -> Vec<Suite> {
             "Workspace",
             &["test", "--workspace", "--all-targets"],
             None,
+            env,
         ),
         cargo_suite(
             workspace_root,
@@ -433,8 +625,14 @@ fn run_suites(workspace_root: &Path) -> Vec<Suite> {
                 "--test-threads=1",
             ],
             (!submodule.exists()).then_some("the music21 submodule is not checked out"),
+            env,
         ),
     ];
+    // The wheel is deliberately built uninstrumented. Its Rust half lives in
+    // a `.pyd` inside the installed package rather than under the target
+    // directory, so the report step could not find the object to map its
+    // profiles onto; and an instrumented wheel is not the artifact CI ships.
+    // What it tests of the crate, the parity suite covers far more of anyway.
     let (build, tests) = wheel_suites(workspace_root);
     suites.push(build);
     suites.push(tests);
@@ -447,7 +645,114 @@ fn python_command() -> String {
     env::var("PYO3_PYTHON").unwrap_or_else(|_| "python".to_string())
 }
 
-fn cargo_suite(workspace_root: &Path, name: &str, args: &[&str], skip: Option<&str>) -> Suite {
+/// Times the crate against music21 through the same Python API. Both need to
+/// be importable — the wheel installed, music21 with its dependencies — so
+/// this is skipped with the reason wherever they are not, like the suites.
+fn run_benchmarks(workspace_root: &Path) -> Benchmarks {
+    let python = python_command();
+    let json = workspace_root.join("target/benchmarks.json");
+    let command = format!("{python} python/benchmarks/bench.py --json target/benchmarks.json");
+
+    let skipped = |detail: String| Benchmarks {
+        status: SuiteStatus::Skipped,
+        command: command.clone(),
+        detail: Some(detail),
+        music21: String::new(),
+        python: String::new(),
+        platform: String::new(),
+        cases: Vec::new(),
+    };
+
+    let output = Command::new(&python)
+        .arg("python/benchmarks/bench.py")
+        .arg("--json")
+        .arg(&json)
+        .current_dir(workspace_root)
+        .output();
+    let output = match output {
+        Ok(output) => output,
+        Err(err) => return skipped(format!("could not run {python} ({err})")),
+    };
+    if !output.status.success() {
+        let text = merged(&output);
+        return match missing_module(&text) {
+            Some(module) => skipped(format!("{module} is not installed in this interpreter")),
+            None => Benchmarks {
+                status: SuiteStatus::Failed,
+                command,
+                detail: last_line(&text),
+                music21: String::new(),
+                python: String::new(),
+                platform: String::new(),
+                cases: Vec::new(),
+            },
+        };
+    }
+
+    let Ok(text) = fs::read_to_string(&json) else {
+        return skipped(format!("{} was not written", json.display()));
+    };
+    let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&text) else {
+        return skipped(format!("{} does not parse", json.display()));
+    };
+    let string = |key: &str| {
+        parsed
+            .get(key)
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default()
+            .to_string()
+    };
+    let cases: Vec<BenchCase> = parsed
+        .get("results")
+        .cloned()
+        .and_then(|results| serde_json::from_value(results).ok())
+        .unwrap_or_default();
+
+    Benchmarks {
+        status: if cases.is_empty() {
+            SuiteStatus::Skipped
+        } else {
+            SuiteStatus::Passed
+        },
+        command,
+        detail: cases.is_empty().then(|| "no case was timed".to_string()),
+        music21: string("music21"),
+        python: string("python"),
+        platform: string("platform"),
+        cases,
+    }
+}
+
+/// The median speedup, which is what the headline figure quotes: one very
+/// fast case should not speak for the rest.
+fn median_speedup(cases: &[BenchCase]) -> f64 {
+    if cases.is_empty() {
+        return 0.0;
+    }
+    let mut speedups: Vec<f64> = cases.iter().map(|case| case.speedup).collect();
+    speedups.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    speedups[speedups.len() / 2]
+}
+
+/// `bench.py`'s own rendering of a duration, so the page and the terminal
+/// agree.
+fn humanise(nanoseconds: f64) -> String {
+    if nanoseconds < 1_000.0 {
+        format!("{nanoseconds:.0} ns")
+    } else if nanoseconds < 1_000_000.0 {
+        format!("{:.1} \u{b5}s", nanoseconds / 1_000.0)
+    } else {
+        format!("{:.1} ms", nanoseconds / 1_000_000.0)
+    }
+}
+
+fn cargo_suite(
+    workspace_root: &Path,
+    name: &str,
+    args: &[&str],
+    skip: Option<&str>,
+    env: &[(String, String)],
+) -> Suite {
     let command = format!("cargo {}", args.join(" "));
     if let Some(reason) = skip {
         return Suite {
@@ -461,6 +766,7 @@ fn cargo_suite(workspace_root: &Path, name: &str, args: &[&str], skip: Option<&s
     }
     let output = Command::new("cargo")
         .args(args)
+        .envs(env.iter().map(|(key, value)| (key, value)))
         .current_dir(workspace_root)
         .output();
     let output = match output {
@@ -674,6 +980,18 @@ fn read_doctests(workspace_root: &Path) -> Vec<ModuleDoctests> {
     let Ok(entries) = fs::read_dir(workspace_root.join("target")) else {
         return Vec::new();
     };
+    // The unit-test totals come from the fixture whether a harness covers the
+    // module or not, since nothing runs music21's unit tests against the crate
+    // yet — that column is nought all the way down, and is the to-do list.
+    let totals = read_doctest_totals(workspace_root);
+    let total_tests = |module: &str| {
+        totals
+            .iter()
+            .find(|total| total.module == module)
+            .map(|total| total.tests)
+            .unwrap_or(0)
+    };
+
     let mut modules = Vec::new();
     for entry in entries.flatten() {
         let path = entry.path();
@@ -692,24 +1010,202 @@ fn read_doctests(workspace_root: &Path) -> Vec<ModuleDoctests> {
         let Ok(summary) = toml::from_str::<DoctestSummary>(&text) else {
             continue;
         };
+        let module = summary.module;
         modules.push(ModuleDoctests {
             name: name.to_string(),
-            module: summary.module,
             docstrings_passing: summary.docstrings_passing,
             docstrings: summary.docstrings,
             examples_passing: summary.examples_passing,
             examples: summary.examples,
+            tests_passing: summary.tests_passing,
+            tests: summary.tests.unwrap_or_else(|| total_tests(&module)),
+            module,
+            harnessed: true,
+        });
+    }
+    for total in &totals {
+        if modules.iter().any(|m| m.module == total.module) {
+            continue;
+        }
+        // A module in scope that no harness runs yet. Leaving it off the page
+        // would flatter the score, so it goes in at nought against the total
+        // music21's own DocTestFinder counted.
+        let name = total
+            .module
+            .rsplit('.')
+            .next()
+            .unwrap_or(&total.module)
+            .to_string();
+        modules.push(ModuleDoctests {
+            name,
+            module: total.module.clone(),
+            docstrings_passing: 0,
+            docstrings: total.docstrings,
+            examples_passing: 0,
+            examples: total.examples,
+            tests_passing: 0,
+            tests: total.tests,
+            harnessed: false,
         });
     }
     modules.sort_by(|a, b| b.examples.cmp(&a.examples).then(a.name.cmp(&b.name)));
     modules
 }
 
-fn scan_features(workspace_root: &Path) -> Result<Vec<ClassReport>, Box<dyn Error>> {
-    let map_path = workspace_root.join("data/feature_map.toml");
-    let map: FeatureMap = toml::from_str(&fs::read_to_string(&map_path)?)
-        .map_err(|err| format!("{} does not parse: {err}", map_path.display()))?;
+/// The checked-in totals for every music21 module the crate ports, generated
+/// from music21 by `xtask regenerate-fixtures`. Absent on a tree that has
+/// never generated it, in which case the page simply says less.
+fn read_doctest_totals(workspace_root: &Path) -> Vec<DoctestTotal> {
+    let path = workspace_root.join("data/doctest_totals.toml");
+    let Ok(text) = fs::read_to_string(path) else {
+        return Vec::new();
+    };
+    toml::from_str::<DoctestTotals>(&text)
+        .map(|totals| totals.module)
+        .unwrap_or_default()
+}
 
+/// Adds up every file under a directory.
+fn directory_size(path: &Path) -> Option<u64> {
+    let mut total = 0;
+    let mut stack = vec![path.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        for entry in fs::read_dir(&dir).ok()?.flatten() {
+            let Ok(kind) = entry.file_type() else {
+                continue;
+            };
+            if kind.is_dir() {
+                stack.push(entry.path());
+            } else if let Ok(meta) = entry.metadata() {
+                total += meta.len();
+            }
+        }
+    }
+    (total > 0).then_some(total)
+}
+
+/// How big each of the three things is to install. Nothing here is built for
+/// the measurement: the wheel is whatever the wheel job left behind, and a
+/// figure with nothing to measure is simply absent.
+fn measure_sizes(workspace_root: &Path) -> Sizes {
+    // What `cargo package` ships: `src`, and the loose example files. The
+    // example *crates* are workspace members of their own and never go in the
+    // `.crate`, so counting their build output would overstate this twofold.
+    let loose_examples: u64 = fs::read_dir(workspace_root.join("examples"))
+        .map(|entries| {
+            entries
+                .flatten()
+                .filter(|entry| entry.path().extension().is_some_and(|e| e == "rs"))
+                .filter_map(|entry| entry.metadata().ok().map(|meta| meta.len()))
+                .sum()
+        })
+        .unwrap_or(0);
+    let crate_source = directory_size(&workspace_root.join("src")).unwrap_or(0) + loose_examples;
+
+    let wheel = fs::read_dir(workspace_root.join("target/wheels"))
+        .ok()
+        .map(|entries| {
+            entries
+                .flatten()
+                .filter(|entry| {
+                    entry
+                        .path()
+                        .extension()
+                        .is_some_and(|extension| extension == "whl")
+                })
+                .filter_map(|entry| entry.metadata().ok().map(|meta| meta.len()))
+                .max()
+        })
+        .unwrap_or_default();
+
+    Sizes {
+        music21: directory_size(&workspace_root.join("music21/music21")),
+        crate_source: (crate_source > 0).then_some(crate_source),
+        wheel,
+    }
+}
+
+/// The declared length of a `const NAME: [T; N]`, which is the one place a
+/// table's size is written down and cannot be wrong.
+fn declared_length(rust: &str, name: &str) -> Option<usize> {
+    let start = rust.find(&format!("{name}:"))? + name.len() + 1;
+    let rest = &rust[start..];
+    let close = rest.find(']')?;
+    let (_, count) = rest[..close].rsplit_once(';')?;
+    count.trim().parse().ok()
+}
+
+/// Counts what the crate has beyond music21, reading each number out of the
+/// source so none of them can go stale silently.
+fn scan_beyond(
+    workspace_root: &Path,
+    map: &[BeyondMap],
+) -> Result<Vec<BeyondReport>, Box<dyn Error>> {
+    let mut reports = Vec::new();
+    for entry in map {
+        let mut count = None;
+        if let Some(constant) = &entry.count {
+            let relative = entry
+                .rust
+                .as_deref()
+                .ok_or_else(|| format!("{}: a count needs a rust file", entry.name))?;
+            let path = workspace_root.join(relative);
+            let rust = fs::read_to_string(&path)
+                .map_err(|err| format!("{} is unreadable: {err}", path.display()))?;
+            count = Some(declared_length(&rust, constant).ok_or_else(|| {
+                format!(
+                    "{}: {relative} declares no `const {constant}: [_; N]`",
+                    entry.name
+                )
+            })?);
+        }
+        let mut music21 = None;
+        if entry.scala_archive {
+            let archive = workspace_root.join("data/scala_archive.toml");
+            let text = fs::read_to_string(&archive)
+                .map_err(|err| format!("{} is unreadable: {err}", archive.display()))?;
+            count = Some(
+                text.matches(
+                    "
+[[scale]]",
+                )
+                .count()
+                    + text.starts_with("[[scale]]") as usize,
+            );
+            music21 = count_scl_files(&workspace_root.join("music21/music21"));
+        }
+        reports.push(BeyondReport {
+            name: entry.name.clone(),
+            note: entry.note.clone(),
+            count,
+            unit: entry.unit.clone(),
+            music21,
+        });
+    }
+    Ok(reports)
+}
+
+/// music21's own Scala archive, counted where it ships.
+fn count_scl_files(root: &Path) -> Option<usize> {
+    let mut found = 0;
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        for entry in fs::read_dir(&dir).ok()?.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.extension().is_some_and(|e| e == "scl") {
+                found += 1;
+            }
+        }
+    }
+    (found > 0).then_some(found)
+}
+
+fn scan_features(
+    workspace_root: &Path,
+    map: &FeatureMap,
+) -> Result<Vec<ClassReport>, Box<dyn Error>> {
     let mut classes = Vec::new();
     let mut problems = Vec::new();
 
@@ -767,9 +1263,11 @@ fn scan_features(workspace_root: &Path) -> Result<Vec<ClassReport>, Box<dyn Erro
         let mut reports = Vec::new();
         for member in &members {
             let report = if let Some(reason) = class.excluded.get(member) {
+                // Left out on purpose is still left out. The reason is worth
+                // showing; carving it out of the total is not.
                 MemberReport {
                     name: member.clone(),
-                    status: Status::Excluded,
+                    status: Status::Missing,
                     detail: Some(reason.clone()),
                 }
             } else if let Some(found) = candidates(member, &class.renames, class.members)
@@ -798,15 +1296,13 @@ fn scan_features(workspace_root: &Path) -> Result<Vec<ClassReport>, Box<dyn Erro
             note: class.note.clone(),
             ported: count(Status::Ported),
             missing: count(Status::Missing),
-            excluded: count(Status::Excluded),
             members: reports,
         });
     }
 
     if !problems.is_empty() {
         return Err(format!(
-            "{} is out of date:\n  {}",
-            map_path.display(),
+            "data/feature_map.toml is out of date:\n  {}",
             problems.join("\n  ")
         )
         .into());
@@ -994,6 +1490,24 @@ fn meter(percent: f64, warn: bool, extra_class: &str) -> String {
     )
 }
 
+/// The bar in two parts: what is ported and what is not. Every member
+/// music21 has counts against the whole.
+fn stacked_meter(ported: usize, missing: usize) -> String {
+    let total = ported + missing;
+    let mut html = String::from("<div class=\"meter is-stacked\">");
+    for (class, part) in [("is-ported", ported), ("is-missing", missing)] {
+        if part > 0 {
+            let _ = write!(
+                html,
+                "<span class=\"{class}\" style=\"width: {:.2}%\"></span>",
+                share(part, total)
+            );
+        }
+    }
+    html.push_str("</div>");
+    html
+}
+
 /// One headline figure at the top of the page, linking to the section it
 /// summarises.
 struct Score {
@@ -1001,17 +1515,14 @@ struct Score {
     label: &'static str,
     value: String,
     sub: String,
-    /// The bar under the figure, if the figure is a proportion.
-    percent: Option<f64>,
+    /// The bar under the figure, already rendered; empty for a figure that is
+    /// not a proportion.
+    bar: String,
     warn: bool,
 }
 
 impl Score {
     fn render(&self) -> String {
-        let bar = match self.percent {
-            Some(percent) => meter(percent, self.warn, ""),
-            None => String::new(),
-        };
         format!(
             r##"                <a class="score{warn}" href="#{anchor}">
                     <span class="label">{label}</span>
@@ -1025,6 +1536,7 @@ impl Score {
             label = self.label,
             value = self.value,
             sub = self.sub,
+            bar = self.bar,
         )
     }
 }
@@ -1046,7 +1558,7 @@ fn render_coverage(coverage: &Coverage) -> String {
     let mut html = section_head(
         "coverage",
         "Test coverage",
-        "the library's own unit tests, generated tables left out",
+        "of music21-rs, across every suite below",
     );
     html.push_str("                <div class=\"section-body\">\n                    <div class=\"coverage-grid\">\n");
     for (label, percent) in [
@@ -1070,7 +1582,7 @@ fn render_coverage(coverage: &Coverage) -> String {
     }
     html.push_str("                    </div>\n                </div>\n");
     html.push_str(
-        "                <p class=\"section-foot\">Measured by <code>cargo llvm-cov</code> over <code>cargo test --lib</code>, with the generated chord and Scala tables excluded — they are data, and counting their thousands of lines would say nothing about the code. <a href=\"./coverage/html/index.html\">Read it file by file</a>.</p>\n            </section>\n",
+        "                <p class=\"section-foot\">Measured by <code>cargo llvm-cov</code> across <em>every</em> suite above, not the library's own unit tests alone: each is run instrumented and their profiles merge, so the crate code that music21's own doctests drive through the parity facades counts here too. The figure is still the library's &mdash; the tooling crates are excluded, as are the generated chord and Scala tables, which are data and whose thousands of lines would say nothing about the code. The wheel's own tests are the one suite outside it: its Rust half ships in the installed package, where the report step cannot reach the object file. <a href=\"./coverage/html/index.html\">Read it file by file</a>.</p>\n            </section>\n",
     );
     html
 }
@@ -1092,7 +1604,7 @@ fn render_suites(suites: &[Suite]) -> String {
     } else {
         format!("{passed} passing, all green")
     };
-    let mut html = section_head("suites", "Test suites", &escape(&note));
+    let mut html = section_head("suites", "music21-rs's own tests", &escape(&note));
     html.push_str(
         r#"                <div class="table-wrap">
                     <table>
@@ -1148,24 +1660,234 @@ fn render_suites(suites: &[Suite]) -> String {
     html
 }
 
+/// Bytes, as a person reads them.
+fn human_bytes(bytes: u64) -> String {
+    const UNITS: [&str; 4] = ["B", "KB", "MB", "GB"];
+    let mut value = bytes as f64;
+    let mut unit = 0;
+    while value >= 1024.0 && unit + 1 < UNITS.len() {
+        value /= 1024.0;
+        unit += 1;
+    }
+    if unit == 0 {
+        format!("{bytes} B")
+    } else {
+        format!("{value:.1} {}", UNITS[unit])
+    }
+}
+
+/// What each of the three costs to install, biggest first, as bars against
+/// the largest.
+fn render_sizes(sizes: &Sizes) -> String {
+    let rows = [
+        (
+            "music21",
+            "installed package, corpus and all",
+            sizes.music21,
+        ),
+        (
+            "music21-rs",
+            "the source cargo publishes",
+            sizes.crate_source,
+        ),
+        ("music21-rs wheel", "what pip installs", sizes.wheel),
+    ];
+    let largest = rows.iter().filter_map(|(_, _, size)| *size).max();
+    let Some(largest) = largest.filter(|largest| *largest > 0) else {
+        return String::new();
+    };
+
+    let mut html = String::from(
+        "                <div class=\"section-body\">
+                    <div class=\"coverage-grid\">
+",
+    );
+    for (name, note, size) in rows {
+        let Some(size) = size else { continue };
+        let percent = 100.0 * size as f64 / largest as f64;
+        let _ = write!(
+            html,
+            r#"                        <div class="coverage-row">
+                            <span class="label">{name}</span>
+                            {bar}
+                            <span class="figure">{value}<small>{note}</small></span>
+                        </div>
+"#,
+            name = escape(name),
+            bar = meter(percent, false, ""),
+            value = human_bytes(size),
+            note = escape(note),
+        );
+    }
+    html.push_str(
+        "                    </div>
+                </div>
+",
+    );
+    html
+}
+
+/// What the crate does that music21 has no counterpart for.
+fn render_beyond(beyond: &[BeyondReport]) -> String {
+    let mut html = section_head(
+        "beyond",
+        "Beyond music21",
+        &escape(&plural(beyond.len(), "capability", "capabilities")),
+    );
+    html.push_str(
+        r#"                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Capability</th><th>music21-rs</th><th>music21</th></tr></thead>
+                        <tbody>
+"#,
+    );
+    for entry in beyond {
+        let unit = entry.unit.as_deref().unwrap_or("");
+        let ours = match entry.count {
+            Some(count) => format!("<b>{count}</b> {}", escape(unit)),
+            None => "<span class=\"pill good\">present</span>".to_string(),
+        };
+        let theirs = match entry.music21 {
+            Some(count) => format!("{count} {}", escape(unit)),
+            None => "<span class=\"of\">nothing of the kind</span>".to_string(),
+        };
+        let _ = write!(
+            html,
+            r#"                            <tr>
+                                <td class="name">{name}<span class="detail">{note}</span></td>
+                                <td class="num">{ours}</td>
+                                <td class="num">{theirs}</td>
+                            </tr>
+"#,
+            name = escape(&entry.name),
+            note = escape(&entry.note),
+        );
+    }
+    html.push_str(
+        "                        </tbody>
+                    </table>
+                </div>
+",
+    );
+    html.push_str(
+        "                <p class=\"section-foot\">The counts are read out of the crate's own tables rather than written down here, so one that grows says so by itself and the report fails when a table it names has gone. The rest of the page measures music21-rs against music21; this is the part with nothing to measure against.</p>
+            </section>
+",
+    );
+    html
+}
+
+fn render_benchmarks(benchmarks: &Benchmarks, sizes: Option<&Sizes>) -> String {
+    if benchmarks.cases.is_empty() {
+        let mut html = section_head(
+            "speedups",
+            "Speedups over music21",
+            &escape(benchmarks.detail.as_deref().unwrap_or("not run")),
+        );
+        let _ = write!(
+            html,
+            "                <p class=\"section-foot\">The benchmarks time the crate against music21 through the same Python API, and need both installed in the interpreter that runs them: <code>{}</code>.</p>\n            </section>\n",
+            escape(&benchmarks.command),
+        );
+        return html;
+    }
+
+    let median = median_speedup(&benchmarks.cases);
+    let mut html = section_head(
+        "speedups",
+        "Speedups over music21",
+        &escape(&format!(
+            "{median:.1}\u{d7} median across {}",
+            plural(benchmarks.cases.len(), "case", "cases")
+        )),
+    );
+    html.push_str(
+        r#"                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Case</th><th class="num">music21</th><th class="num">music21-rs</th><th class="num">Speedup</th></tr></thead>
+                        <tbody>
+"#,
+    );
+    let mut group = "";
+    for case in &benchmarks.cases {
+        if case.group != group {
+            group = &case.group;
+            let _ = writeln!(
+                html,
+                "                            <tr class=\"group-row\"><td colspan=\"4\">{}</td></tr>",
+                escape(group)
+            );
+        }
+        let note = if case.notes.is_empty() {
+            String::new()
+        } else {
+            format!("<span class=\"detail\">{}</span>", escape(&case.notes))
+        };
+        // A case where music21 is quicker is worth seeing as such.
+        let pill = if case.speedup >= 1.0 { "good" } else { "bad" };
+        let _ = write!(
+            html,
+            r#"                            <tr>
+                                <td class="name">{name}{note}</td>
+                                <td class="num">{slow}</td>
+                                <td class="num">{fast}</td>
+                                <td class="num"><span class="pill {pill}">{speedup:.1}&#215;</span></td>
+                            </tr>
+"#,
+            name = escape(&case.case),
+            slow = humanise(case.music21_ns),
+            fast = humanise(case.music21_rs_ns),
+            speedup = case.speedup,
+        );
+    }
+    html.push_str(
+        "                        </tbody>\n                    </table>\n                </div>\n",
+    );
+    // What each costs to install is the other half of what each costs to run.
+    if let Some(sizes) = sizes {
+        let block = render_sizes(sizes);
+        if !block.is_empty() {
+            html.push_str(
+                "                <div class=\"sub-head\">What each costs to install</div>\n",
+            );
+            html.push_str(&block);
+        }
+    }
+    let _ = write!(
+        html,
+        "                <p class=\"section-foot\">The crate and music21 asked the same question through the same Python API by <code>python/benchmarks/bench.py</code>, on music21 {music21} and Python {python} ({platform}). Both sides have to agree on the answer before either is timed, so a speedup here is a speedup at doing the same work. Each case builds a fresh object, because music21 memoizes its analysis on the object that was asked.</p>\n            </section>\n",
+        music21 = escape(&benchmarks.music21),
+        python = escape(&benchmarks.python),
+        platform = escape(&benchmarks.platform),
+    );
+    html
+}
+
 fn render_doctests(doctests: &[ModuleDoctests]) -> String {
     let docstrings_passing: usize = doctests.iter().map(|m| m.docstrings_passing).sum();
     let docstrings: usize = doctests.iter().map(|m| m.docstrings).sum();
     let examples_passing: usize = doctests.iter().map(|m| m.examples_passing).sum();
     let examples: usize = doctests.iter().map(|m| m.examples).sum();
+    let tests_passing: usize = doctests.iter().map(|m| m.tests_passing).sum();
+    let tests: usize = doctests.iter().map(|m| m.tests).sum();
 
+    let unharnessed = doctests.iter().filter(|m| !m.harnessed).count();
+    let mut note = format!(
+        "music21-rs passes {examples_passing} of {examples} examples and {tests_passing} of {tests} unit tests, across {modules}",
+        modules = plural(doctests.len(), "module", "modules")
+    );
+    if unharnessed > 0 {
+        let _ = write!(note, ", {unharnessed} with no harness yet");
+    }
     let mut html = section_head(
         "doctests",
-        "music21's own doctests",
-        &format!(
-            "{modules}, {examples_passing} of {examples} examples",
-            modules = plural(doctests.len(), "module", "modules")
-        ),
+        "music21-rs against music21's tests",
+        &escape(&note),
     );
     html.push_str(
         r#"                <div class="table-wrap">
                     <table>
-                        <thead><tr><th>Module</th><th>Docstrings</th><th>Examples</th></tr></thead>
+                        <thead><tr><th>Module</th><th>Docstrings</th><th>Examples</th><th>Unit tests</th></tr></thead>
                         <tbody>
 "#,
     );
@@ -1180,14 +1902,21 @@ fn render_doctests(doctests: &[ModuleDoctests]) -> String {
         let _ = write!(
             html,
             r#"                            <tr>
-                                <td class="name"><code>{module}</code></td>
+                                <td class="name"><code>{module}</code>{note}</td>
                                 <td>{docstrings}</td>
                                 <td>{examples}</td>
+                                <td>{tests}</td>
                             </tr>
 "#,
             module = escape(&module.module),
+            note = if module.harnessed {
+                ""
+            } else {
+                "<span class=\"detail\">no harness yet</span>"
+            },
             docstrings = cell(module.docstrings_passing, module.docstrings),
             examples = cell(module.examples_passing, module.examples),
+            tests = cell(module.tests_passing, module.tests),
         );
     }
     let _ = write!(
@@ -1198,6 +1927,7 @@ fn render_doctests(doctests: &[ModuleDoctests]) -> String {
                                 <td class="name">every module</td>
                                 <td>{docstrings}</td>
                                 <td>{examples}</td>
+                                <td>{tests}</td>
                             </tr>
                         </tfoot>
                     </table>
@@ -1205,9 +1935,10 @@ fn render_doctests(doctests: &[ModuleDoctests]) -> String {
 "#,
         docstrings = cell(docstrings_passing, docstrings),
         examples = cell(examples_passing, examples),
+        tests = cell(tests_passing, tests),
     );
     html.push_str(
-        "                <p class=\"section-foot\">music21's own docstrings, collected from the submodule and run against the crate through the music21-shaped facades in <code>python-parity</code>. A docstring counts as passing only when every one of its examples does, which is why that share is always the harsher of the two. The failures of each module are written to <code>target/doctest_&lt;module&gt;.log</code>.</p>\n            </section>\n",
+        "                <p class=\"section-foot\">What music21-rs passes of music21's own documentation and test suite. The docstrings are collected from the submodule and run against the crate through the music21-shaped facades in <code>python-parity</code>. A docstring counts as passing only when every one of its examples does, which is why that share is always the harsher of the two. The failures of each module are written to <code>target/doctest_&lt;module&gt;.log</code>. A module the crate ports but no harness runs yet counts at nought against the total music21's own <code>DocTestFinder</code> gives it, recorded in <code>data/doctest_totals.toml</code>. The unit-test column is music21's own <code>unittest</code> suites, wherever it keeps them &mdash; beside the module, inside its package, or in <code>music21/test/</code>. Nothing runs those against the crate yet, so that column is nought all the way down: it is the to-do list, not a score.</p>\n            </section>\n",
     );
     html
 }
@@ -1215,15 +1946,22 @@ fn render_doctests(doctests: &[ModuleDoctests]) -> String {
 fn render_features(features: &[ClassReport]) -> String {
     let ported: usize = features.iter().map(|c| c.ported).sum();
     let missing: usize = features.iter().map(|c| c.missing).sum();
-    let excluded: usize = features.iter().map(|c| c.excluded).sum();
     let total = ported + missing;
 
-    let note = if missing == 0 {
-        format!("{ported} of {total} members in scope, nothing outstanding")
-    } else {
-        format!("{missing} of {total} members in scope still to port")
-    };
-    let mut html = section_head("ported", "Ported from music21", &escape(&note));
+    // The legend doubles as the summary: it names each part of the bar and
+    // gives its count.
+    let mut note = format!(
+        "<span class=\"legend\">{members}: <span class=\"ported\">{ported} ported</span>",
+        members = plural(total, "member", "members"),
+    );
+    if missing > 0 {
+        let _ = write!(
+            note,
+            "<span class=\"missing\">{missing} still to port</span>"
+        );
+    }
+    note.push_str("</span>");
+    let mut html = section_head("ported", "Ported from music21", &note);
 
     let _ = write!(
         html,
@@ -1241,27 +1979,19 @@ fn render_features(features: &[ClassReport]) -> String {
 
     for class in features {
         let counted = class.ported + class.missing;
-        let percent = share(class.ported, counted);
         let mut haystack = format!("{} {}", class.name, class.python).to_lowercase();
         for member in &class.members {
             haystack.push(' ');
             haystack.push_str(&member.name.to_lowercase());
         }
         // A complete class says so with a full bar and its own count; only a
-        // shortfall or a deliberate omission is worth a pill of its own.
+        // shortfall is worth a pill of its own.
         let mut pills = String::new();
         if class.missing > 0 {
             let _ = write!(
                 pills,
                 "<span class=\"pill bad\">{} missing</span>",
                 class.missing
-            );
-        }
-        if class.excluded > 0 {
-            let _ = write!(
-                pills,
-                "<span class=\"pill\">{} excluded</span>",
-                class.excluded
             );
         }
         let _ = write!(
@@ -1280,7 +2010,7 @@ fn render_features(features: &[ClassReport]) -> String {
             name = escape(&class.name),
             python = escape(&class.python),
             ported = class.ported,
-            bar = meter(percent, class.missing > 0, ""),
+            bar = stacked_meter(class.ported, class.missing),
         );
         if let Some(note) = &class.note {
             let _ = writeln!(
@@ -1300,7 +2030,6 @@ fn render_features(features: &[ClassReport]) -> String {
         ordered.sort_by_key(|member| match member.status {
             Status::Missing => 0,
             Status::Ported => 1,
-            Status::Excluded => 2,
         });
         for member in ordered {
             let (pill, label, detail) = match member.status {
@@ -1312,10 +2041,9 @@ fn render_features(features: &[ClassReport]) -> String {
                         escape(member.detail.as_deref().unwrap_or(""))
                     ),
                 ),
-                Status::Missing => ("pill bad", "missing", String::new()),
-                Status::Excluded => (
-                    "pill",
-                    "excluded",
+                Status::Missing => (
+                    "pill bad",
+                    "missing",
                     escape(member.detail.as_deref().unwrap_or("")),
                 ),
             };
@@ -1334,7 +2062,7 @@ fn render_features(features: &[ClassReport]) -> String {
         html,
         r#"                    <p class="empty-note" data-filter-empty hidden>Nothing matches that filter.</p>
                 </div>
-                <p class="section-foot">Every public method of the music21 classes the crate ports, read from the submodule, against the <code>pub fn</code>s of the Rust files that port them. {excluded} members are left out on purpose and say why; the mapping lives in <code>data/feature_map.toml</code>, and the report fails when it goes stale.</p>
+                <p class="section-foot">Every public method of the music21 classes the crate ports, read from the submodule, against the <code>pub fn</code>s of the Rust files that port them. A member music21 has is ported or it is not; where the crate has a reason for not porting one, the reason is shown beside it, but it still counts against the total. The mapping lives in <code>data/feature_map.toml</code>, and the report fails when it goes stale.</p>
             </section>
 "#
     );
@@ -1352,7 +2080,7 @@ fn render_html(report: &Report) -> String {
                 "{} of {} lines",
                 coverage.lines.covered, coverage.lines.count
             ),
-            percent: Some(coverage.lines.percent),
+            bar: meter(coverage.lines.percent, false, ""),
             warn: false,
         });
     }
@@ -1376,11 +2104,27 @@ fn render_html(report: &Report) -> String {
         };
         scores.push(Score {
             anchor: "suites",
-            label: "Tests",
+            label: "music21-rs's own tests",
             value: passed.to_string(),
             sub,
-            percent: Some(share(passed, passed + failed)),
+            bar: meter(share(passed, passed + failed), failed > 0, ""),
             warn: failed > 0,
+        });
+    }
+    if let Some(benchmarks) = &report.benchmarks
+        && !benchmarks.cases.is_empty()
+    {
+        let median = median_speedup(&benchmarks.cases);
+        scores.push(Score {
+            anchor: "speedups",
+            label: "Median speedup",
+            value: format!("{median:.1}\u{d7}"),
+            sub: format!(
+                "over music21, across {}",
+                plural(benchmarks.cases.len(), "case", "cases")
+            ),
+            bar: String::new(),
+            warn: median < 1.0,
         });
     }
     if !report.doctests.is_empty() {
@@ -1388,10 +2132,10 @@ fn render_html(report: &Report) -> String {
         let total: usize = report.doctests.iter().map(|m| m.examples).sum();
         scores.push(Score {
             anchor: "doctests",
-            label: "music21 doctests",
+            label: "music21's tests passed",
             value: format!("{:.1}%", share(passing, total)),
             sub: format!("{passing} of {total} examples"),
-            percent: Some(share(passing, total)),
+            bar: meter(share(passing, total), passing < total, ""),
             warn: passing < total,
         });
     }
@@ -1404,16 +2148,18 @@ fn render_html(report: &Report) -> String {
             label: "music21 API ported",
             value: format!("{:.1}%", share(ported, total)),
             sub: format!("{ported} of {total} members"),
-            percent: Some(share(ported, total)),
+            bar: stacked_meter(ported, missing),
             warn: missing > 0,
         });
     }
 
     let nav: Vec<(&str, &str)> = [
         ("coverage", "Coverage", report.coverage.is_some()),
-        ("suites", "Test suites", !report.suites.is_empty()),
-        ("doctests", "Doctests", !report.doctests.is_empty()),
+        ("suites", "Own tests", !report.suites.is_empty()),
+        ("speedups", "Speedups", report.benchmarks.is_some()),
+        ("doctests", "Against music21", !report.doctests.is_empty()),
         ("ported", "Ported", !report.features.is_empty()),
+        ("beyond", "Beyond music21", !report.beyond.is_empty()),
     ]
     .into_iter()
     .filter(|(_, _, present)| *present)
@@ -1442,6 +2188,7 @@ fn render_html(report: &Report) -> String {
                 </div>
                 <div class="top-links">
                     <a href="../docs/music21_rs/index.html">Rust docs</a>
+                    <a href="../python/">Python docs</a>
                 </div>
             </header>
             <p class="report-meta">
@@ -1476,6 +2223,12 @@ fn render_html(report: &Report) -> String {
     }
     if !report.suites.is_empty() {
         html.push_str(&render_suites(&report.suites));
+    }
+    if let Some(benchmarks) = &report.benchmarks {
+        html.push_str(&render_benchmarks(benchmarks, report.sizes.as_ref()));
+    }
+    if !report.beyond.is_empty() {
+        html.push_str(&render_beyond(&report.beyond));
     }
     if !report.doctests.is_empty() {
         html.push_str(&render_doctests(&report.doctests));

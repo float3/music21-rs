@@ -120,6 +120,54 @@ a.score:hover {
     margin: 0;
 }
 
+/* Ported, still missing and left out on purpose, in one bar. All three are
+   members music21 has, so all three count against the whole. */
+.meter.is-stacked {
+    display: flex;
+}
+
+.meter.is-stacked > span {
+    flex: none;
+}
+
+.meter .is-ported {
+    background: var(--accent);
+}
+
+.meter .is-missing {
+    background: var(--warn);
+}
+
+.legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+    color: var(--muted);
+    font-size: 12.5px;
+}
+
+.legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.legend span::before {
+    content: "";
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    background: var(--muted-line);
+}
+
+.legend .ported::before {
+    background: var(--accent);
+}
+
+.legend .missing::before {
+    background: var(--warn);
+}
+
 /* ---- section navigation ------------------------------------------------ */
 
 .section-nav {
@@ -187,6 +235,18 @@ a.score:hover {
     padding: 18px 20px;
 }
 
+/* A rule inside a section, where one section carries two things. */
+.sub-head {
+    padding: 16px 20px 0;
+    border-top: 1px solid var(--line);
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
 .section-foot {
     margin: 0;
     padding: 14px 20px 16px;
@@ -243,6 +303,26 @@ a.score:hover {
 .table-wrap > table th:last-child,
 .table-wrap > table td:last-child {
     padding-right: 20px;
+}
+
+/* The benchmark table's group headings, run across every column. */
+.group-row td {
+    padding-top: 16px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.group-row:first-child td {
+    padding-top: 10px;
+}
+
+tbody tr.group-row:hover {
+    background: none;
 }
 
 .num {

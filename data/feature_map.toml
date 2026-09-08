@@ -411,3 +411,41 @@ note = "Module-level helpers."
 [class.excluded]
 getVerticalityFromObject = "walks a stream"
 iterateAllVoiceLeadingQuartets = "walks a stream"
+
+# ---------------------------------------------------------------------------
+# What the crate has that music21 does not.
+#
+# The counts are not written here: each names a Rust `const` whose declared
+# length is read out of the source, so a table that grows says so by itself
+# and the report fails when one of these can no longer be found.
+# ---------------------------------------------------------------------------
+
+[[beyond]]
+name = "Polyrhythm"
+rust = "src/polyrhythm.rs"
+note = "Cross-rhythms as a first-class thing: the cycle two or more pulses make together, where the hits fall in it, and the chord that cycle maps onto when its ratios are read as pitches. music21 has no counterpart."
+
+[[beyond]]
+name = "Tuning systems"
+rust = "src/tuningsystem/mod.rs"
+count = "ALL_TUNING_SYSTEMS"
+unit = "systems"
+note = "Exact ratio tables - just intonation, meantone, well temperaments, Bohlen-Pierce, the Carlos scales - with frequencies derived from the ratios rather than from equal temperament. music21 tunes a scale only by reading a Scala file."
+
+[[beyond]]
+name = "Historical temperaments"
+rust = "src/tuningsystem/mod.rs"
+count = "HISTORICAL_TEMPERAMENTS"
+unit = "temperaments"
+note = "Salinas 1577 through Lehman 2005, transcribed from the Scala archive and checked against it. A subset of the tuning systems above."
+
+[[beyond]]
+name = "Adaptive tuning"
+rust = "src/tuningsystem/adaptive.rs"
+note = "Tuning where a pitch's frequency depends on the harmony it is sounding in rather than on a fixed table - recursive just intonation over the harmonic series."
+
+[[beyond]]
+name = "Scala archive"
+scala_archive = true
+unit = "scales"
+note = "Every scale music21 ships, plus the hexatone collection, parsed into one table at build time rather than read from disk. The reader also handles the inline comments and EDO notation that music21's own parser mis-reads."
