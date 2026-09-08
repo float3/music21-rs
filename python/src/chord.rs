@@ -3,7 +3,6 @@
 
 #![allow(non_snake_case)]
 
-use std::collections::HashMap;
 use std::sync::Mutex;
 
 use pyo3::exceptions::{PyIndexError, PyKeyError, PyTypeError, PyValueError};
@@ -180,9 +179,34 @@ struct ChordCache {
     interval_vector_string: Option<String>,
     ordered_pitch_classes: Option<Vec<u32>>,
     ordered_pitch_classes_string: Option<String>,
-    /// The fourteen `is...` questions, under the names music21 keeps them by.
-    predicates: HashMap<&'static str, bool>,
+    /// The fourteen `is...` questions, two bits each: whether it has been
+    /// asked, and what the answer was.
+    ///
+    /// A map here cost a heap allocation on the first question and made every
+    /// chord bigger to build, which a cache has no business doing — an
+    /// earlier attempt at this was measured at two to three percent on every
+    /// fresh chord and left on a branch for it. Fourteen answers fit in a
+    /// pair of `u16`s.
+    asked: u16,
+    answers: u16,
 }
+
+/// Which bit of [`ChordCache::asked`] each `is...` question sits in. The
+/// order is music21's own, and only the position matters.
+const ISTRIAD: u32 = 0;
+const ISSEVENTH: u32 = 1;
+const ISMAJORTRIAD: u32 = 2;
+const ISMINORTRIAD: u32 = 3;
+const ISDIMINISHEDTRIAD: u32 = 4;
+const ISAUGMENTEDTRIAD: u32 = 5;
+const ISDOMINANTSEVENTH: u32 = 6;
+const ISDIMINISHEDSEVENTH: u32 = 7;
+const ISHALFDIMINISHEDSEVENTH: u32 = 8;
+const ISFALSEDIMINISHEDSEVENTH: u32 = 9;
+const ISINCOMPLETEMAJORTRIAD: u32 = 10;
+const ISINCOMPLETEMINORTRIAD: u32 = 11;
+const ISCONSONANT: u32 = 12;
+const ISNINTH: u32 = 13;
 
 /// Answers from the cache, or works it out and keeps it.
 ///
@@ -201,12 +225,20 @@ macro_rules! cached {
 
 /// The same, for the `is...` questions, which share one map.
 macro_rules! cached_predicate {
-    ($self:ident, $name:literal, $compute:expr) => {{
-        if let Some(value) = $self.cache().predicates.get($name) {
-            return *value;
+    ($self:ident, $bit:expr, $compute:expr) => {{
+        let bit = 1u16 << $bit;
+        {
+            let cache = $self.cache();
+            if cache.asked & bit != 0 {
+                return cache.answers & bit != 0;
+            }
         }
         let value = $compute;
-        $self.cache().predicates.insert($name, value);
+        let mut cache = $self.cache();
+        cache.asked |= bit;
+        if value {
+            cache.answers |= bit;
+        }
         value
     }};
 }
@@ -402,6 +434,12 @@ impl Chord {
         let mut me = slf.borrow_mut();
         me.inner = rebuilt;
         me.notes = notes;
+        // The notes have changed, so nothing the chord had worked out about
+        // itself still describes it. This is the path `add` takes, and
+        // music21 has a test for exactly it: `testCacheClearedOnAdd` asks a
+        // consonant triad whether it is consonant, adds a C#5, and asks
+        // again.
+        me.clear_cache();
         drop(me);
         Chord::note_objects(slf);
         Ok(())
@@ -1923,37 +1961,37 @@ impl Chord {
     // ---- predicates ------------------------------------------------------
 
     fn isTriad(&self) -> bool {
-        cached_predicate!(self, "isTriad", self.inner.is_triad())
+        cached_predicate!(self, ISTRIAD, self.inner.is_triad())
     }
 
     fn isSeventh(&self) -> bool {
-        cached_predicate!(self, "isSeventh", self.inner.is_seventh())
+        cached_predicate!(self, ISSEVENTH, self.inner.is_seventh())
     }
 
     fn isMajorTriad(&self) -> bool {
-        cached_predicate!(self, "isMajorTriad", self.inner.is_major_triad())
+        cached_predicate!(self, ISMAJORTRIAD, self.inner.is_major_triad())
     }
 
     fn isMinorTriad(&self) -> bool {
-        cached_predicate!(self, "isMinorTriad", self.inner.is_minor_triad())
+        cached_predicate!(self, ISMINORTRIAD, self.inner.is_minor_triad())
     }
 
     fn isDiminishedTriad(&self) -> bool {
-        cached_predicate!(self, "isDiminishedTriad", self.inner.is_diminished_triad())
+        cached_predicate!(self, ISDIMINISHEDTRIAD, self.inner.is_diminished_triad())
     }
 
     fn isAugmentedTriad(&self) -> bool {
-        cached_predicate!(self, "isAugmentedTriad", self.inner.is_augmented_triad())
+        cached_predicate!(self, ISAUGMENTEDTRIAD, self.inner.is_augmented_triad())
     }
 
     fn isDominantSeventh(&self) -> bool {
-        cached_predicate!(self, "isDominantSeventh", self.inner.is_dominant_seventh())
+        cached_predicate!(self, ISDOMINANTSEVENTH, self.inner.is_dominant_seventh())
     }
 
     fn isDiminishedSeventh(&self) -> bool {
         cached_predicate!(
             self,
-            "isDiminishedSeventh",
+            ISDIMINISHEDSEVENTH,
             self.inner.is_diminished_seventh()
         )
     }
@@ -1961,7 +1999,7 @@ impl Chord {
     fn isHalfDiminishedSeventh(&self) -> bool {
         cached_predicate!(
             self,
-            "isHalfDiminishedSeventh",
+            ISHALFDIMINISHEDSEVENTH,
             self.inner.is_half_diminished_seventh()
         )
     }
@@ -1969,7 +2007,7 @@ impl Chord {
     fn isFalseDiminishedSeventh(&self) -> bool {
         cached_predicate!(
             self,
-            "isFalseDiminishedSeventh",
+            ISFALSEDIMINISHEDSEVENTH,
             self.inner.is_false_diminished_seventh()
         )
     }
@@ -1977,7 +2015,7 @@ impl Chord {
     fn isIncompleteMajorTriad(&self) -> bool {
         cached_predicate!(
             self,
-            "isIncompleteMajorTriad",
+            ISINCOMPLETEMAJORTRIAD,
             self.inner.is_incomplete_major_triad()
         )
     }
@@ -1985,17 +2023,17 @@ impl Chord {
     fn isIncompleteMinorTriad(&self) -> bool {
         cached_predicate!(
             self,
-            "isIncompleteMinorTriad",
+            ISINCOMPLETEMINORTRIAD,
             self.inner.is_incomplete_minor_triad()
         )
     }
 
     fn isConsonant(&self) -> bool {
-        cached_predicate!(self, "isConsonant", self.inner.is_consonant())
+        cached_predicate!(self, ISCONSONANT, self.inner.is_consonant())
     }
 
     fn isNinth(&self) -> bool {
-        cached_predicate!(self, "isNinth", self.inner.is_ninth())
+        cached_predicate!(self, ISNINTH, self.inner.is_ninth())
     }
 
     #[pyo3(signature = (*, permitAnyInversion = false))]
