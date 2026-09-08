@@ -2991,8 +2991,10 @@ impl Note {
     }
 
     #[getter]
-    fn get_lyric(&self) -> Option<String> {
-        self.inner.lyric()
+    fn get_lyric(&self, py: Python<'_>) -> Option<String> {
+        // Through the value as it stands: a verse appended to the list the
+        // note handed out has not reached the value until something reads it.
+        self.synced(py).lyric()
     }
 
     /// music21 takes a string here, splitting it into a verse per line, or a

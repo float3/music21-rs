@@ -27,6 +27,56 @@ pub const NAMES: &[&str] = &["Chord", "ChordException"];
 
 pyo3::create_exception!(music21_rs_facade, ChordException, crate::Music21Exception);
 
+/// The duration a caller asked for by keyword, if they asked for one.
+///
+/// music21 lets any note-like object be timed as it is built, and hands the
+/// keywords it does not read itself on to `Duration` — so `Chord(notes,
+/// type='whole')` is a whole note and `RomanNumeral('I', k,
+/// quarterLength=4.0)` lasts a bar. A duration object given by keyword *is*
+/// the object the thing built carries, which is what makes
+/// `chord.Chord('A4 C#5', duration=d).duration is d` hold.
+pub(crate) fn duration_from_keywords(
+    py: Python<'_>,
+    keywords: Option<&Bound<'_, PyDict>>,
+) -> PyResult<Option<Py<PyAny>>> {
+    let Some(keywords) = keywords else {
+        return Ok(None);
+    };
+    if let Some(value) = keywords.get_item("duration")? {
+        if value.hasattr("quarterLength")? {
+            return Ok(Some(value.clone().unbind()));
+        }
+        return Ok(Some(
+            crate::installed_new(
+                py,
+                "music21.duration",
+                "Duration",
+                Duration::wrap(duration_from_any(&value)?),
+            )?
+            .into_any(),
+        ));
+    }
+    if let Some(value) = keywords.get_item("quarterLength")? {
+        let length = RsDuration::new(value.extract::<f64>()?).map_err(chord_error)?;
+        return Ok(Some(
+            crate::installed_new(py, "music21.duration", "Duration", Duration::wrap(length))?
+                .into_any(),
+        ));
+    }
+    if keywords.contains("type")? || keywords.contains("dots")? {
+        return Ok(Some(
+            crate::installed_new(
+                py,
+                "music21.duration",
+                "Duration",
+                Duration::new(None, Some(keywords))?,
+            )?
+            .into_any(),
+        ));
+    }
+    Ok(None)
+}
+
 fn chord_error(error: music21_rs::Error) -> PyErr {
     ChordException::new_err(message(&error))
 }
@@ -130,42 +180,9 @@ impl Chord {
             Duration::wrap(RsDuration::quarter()),
         )?
         .into_any();
-        if let Some(keywords) = keywords {
-            if let Some(value) = keywords.get_item("duration")? {
-                quick = false;
-                shared = if value.hasattr("quarterLength")? {
-                    value.clone().unbind()
-                } else {
-                    crate::installed_new(
-                        py,
-                        "music21.duration",
-                        "Duration",
-                        Duration::wrap(duration_from_any(&value)?),
-                    )?
-                    .into_any()
-                };
-            } else if let Some(value) = keywords.get_item("quarterLength")? {
-                quick = false;
-                let length = RsDuration::new(value.extract::<f64>()?).map_err(chord_error)?;
-                shared = crate::installed_new(
-                    py,
-                    "music21.duration",
-                    "Duration",
-                    Duration::wrap(length),
-                )?
-                .into_any();
-            } else if keywords.contains("type")? || keywords.contains("dots")? {
-                // music21 hands its own keywords on to `Duration`, so
-                // `Chord(notes, type='whole')` is a whole note.
-                quick = false;
-                shared = crate::installed_new(
-                    py,
-                    "music21.duration",
-                    "Duration",
-                    Duration::new(None, Some(keywords))?,
-                )?
-                .into_any();
-            }
+        if let Some(given) = duration_from_keywords(py, keywords)? {
+            quick = false;
+            shared = given;
         }
         let adopted = adopted_notes(py, notes, &shared, quick)?;
         let duration = adopted.taken.unwrap_or(shared);
@@ -2463,7 +2480,7 @@ impl Chord {
     fn get_lyric(&self, py: Python<'_>) -> Option<String> {
         self.notes
             .first()
-            .and_then(|note| note.borrow(py).inner.lyric())
+            .and_then(|note| note.borrow(py).synced(py).lyric())
     }
 
     #[setter]
@@ -2629,11 +2646,15 @@ impl Chord {
 
     /// This chord as a fresh value, its notes, duration and volume copied
     /// rather than shared.
-    fn copied_value(&mut self, py: Python<'_>) -> PyResult<Self> {
+    pub(crate) fn copied_value(&mut self, py: Python<'_>) -> PyResult<Self> {
         self.settle_beams(py);
         let mut copied = Self::from_inner(py, self.inner.clone())?;
+        // Each note is copied as it stands *now*, not as the chord's own
+        // value last saw it: a lyric written on a note lives in the object
+        // until something reads the note as a value, and a copy taken from
+        // the stale value would not be sung to anything.
         for (target, source) in copied.notes.iter().zip(&self.notes) {
-            target.borrow_mut(py).inner = source.borrow(py).inner.clone();
+            target.borrow_mut(py).inner = source.borrow(py).synced(py);
         }
         if let Some(duration) = &self.duration {
             copied.duration = Some(crate::note::copied_duration(py, duration)?);

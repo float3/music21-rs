@@ -616,7 +616,15 @@ def make_class(facade, original):
     def __deepcopy__(self, memo=None):
         # The facade copies as whatever class it was asked on, so this is
         # already one of these; it just has no music21 half yet.
-        copied = facade.__deepcopy__(self, memo)
+        copier = getattr(facade, '__deepcopy__', None)
+        if copier is not None:
+            copied = copier(self, memo)
+        else:
+            # A facade with no copy of its own is copied the way a pickle of
+            # it is read back: the class it names, told what it was.
+            maker, arguments, state = self.__reduce__()
+            copied = maker(*arguments)
+            copied.__setstate__(state)
         if isinstance(copied, _base.Music21Object):
             _base.Music21Object.__init__(copied)
         elif hasattr(type(copied), 'editorial'):

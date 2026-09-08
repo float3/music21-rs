@@ -174,7 +174,11 @@ impl RomanNumeral {
             numeral.pivot = me.pivot.as_ref().map(|pivot| pivot.clone_ref(py));
             numeral
         };
-        let chord = Chord::from_inner(py, numeral.chord()?)?;
+        // The chord half is copied rather than built afresh from the
+        // figure: a numeral in a score has been timed, and one whose copy
+        // lasted a quarter again would shorten every measure it was copied
+        // into — which is what expanding a repeat does.
+        let chord = slf.as_super().borrow_mut().copied_value(py)?;
         let class = slf.as_any().get_type();
         let copy = crate::blank_installed(class.as_any())?;
         {
@@ -521,11 +525,32 @@ fn figure_for_degree(key: Option<&RsKey>, degree: usize) -> PyResult<String> {
 impl RomanNumeral {
     /// A numeral is written out as text and read back, and the chord it
     /// stands on is worked out again from the figure.
+    /// A numeral is written out as its figure and what it was told, and the
+    /// chord it stands on goes with it: a score is frozen to a file and read
+    /// back, and a numeral that came back a quarter long would shorten every
+    /// bar it was read into.
     fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<crate::Pickled> {
+        let py = slf.py();
+        let extra = PyDict::new(py);
+        {
+            let me = slf.borrow();
+            extra.set_item("_scale", me.key_object.as_ref())?;
+            extra.set_item("pivotChord", me.pivot.as_ref())?;
+        }
         let me = slf.borrow();
-        let written = (me.inner.clone(), me.octave, me.implied_key, me.score);
+        let written = (
+            me.inner.clone(),
+            me.octave,
+            me.implied_key,
+            me.score,
+            me.silent,
+            me.blank,
+            me.follows_key_change,
+            me.write_as_chord,
+            slf.as_super().borrow().inner.clone(),
+        );
         drop(me);
-        crate::pickled(slf, &written)
+        crate::pickled_extra(slf, &written, Some(&extra))
     }
 
     fn __setstate__(
@@ -533,19 +558,59 @@ impl RomanNumeral {
         py: Python<'_>,
         state: &Bound<'_, PyAny>,
     ) -> PyResult<()> {
-        type State = (RsRomanNumeral, Option<i32>, bool, Option<u8>);
-        let Some((inner, octave, implied_key, score)) = crate::unpickled::<_, State>(slf, state)?
+        type State = (
+            RsRomanNumeral,
+            Option<i32>,
+            bool,
+            Option<u8>,
+            bool,
+            bool,
+            bool,
+            bool,
+            RsChord,
+        );
+        let (written, extra) = crate::unpickled_extra::<_, State>(slf, state)?;
+        let Some((
+            inner,
+            octave,
+            implied_key,
+            score,
+            silent,
+            blank,
+            follows_key_change,
+            write_as_chord,
+            chord,
+        )) = written
         else {
             return Ok(());
         };
-        let numeral = Self::wrap(inner, octave);
-        let chord = numeral.chord()?;
         slf.as_super().borrow_mut().replace_value(py, chord)?;
-        let mut me = slf.borrow_mut();
-        me.inner = numeral.inner;
-        me.octave = octave;
-        me.implied_key = implied_key;
-        me.score = score;
+        {
+            let mut me = slf.borrow_mut();
+            me.inner = inner;
+            me.octave = octave;
+            me.implied_key = implied_key;
+            me.score = score;
+            me.silent = silent;
+            me.blank = blank;
+            me.follows_key_change = follows_key_change;
+            me.write_as_chord = write_as_chord;
+        }
+        if let Some(extra) = extra {
+            let extra = extra.bind(py);
+            let taken = |name: &str| -> Option<Py<PyAny>> {
+                extra
+                    .get_item(name)
+                    .ok()
+                    .filter(|value| !value.is_none())
+                    .map(pyo3::Bound::unbind)
+            };
+            let key_object = taken("_scale");
+            let pivot = taken("pivotChord");
+            let mut me = slf.borrow_mut();
+            me.key_object = key_object;
+            me.pivot = pivot;
+        }
         Ok(())
     }
 
@@ -584,6 +649,14 @@ impl RomanNumeral {
         me.blank = built.blank;
         me.silent = built.silent;
         me.key_object = built.key_object;
+        drop(me);
+        // A numeral may be timed as it is built, the way every other thing
+        // a stream holds may be: `RomanNumeral('I', k, quarterLength=4.0)`
+        // lasts a bar, and the measures a roman-text score is read into are
+        // as long as the numerals in them say.
+        if let Some(duration) = crate::chord::duration_from_keywords(py, _keywords)? {
+            slf.as_any().setattr("duration", duration.bind(py))?;
+        }
         Ok(())
     }
 

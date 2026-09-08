@@ -902,9 +902,16 @@ impl Scale {
     /// through octave once and so silently drops a degree beyond the octave.
     pub fn pitches_from_scale_degrees(&self, degrees: &[usize]) -> Result<Vec<Pitch>> {
         let octave = self.pitches()?;
-        Ok(degrees
-            .iter()
-            .filter_map(|&degree| octave.get(degree.checked_sub(1)?).cloned())
+        // The realization closes on the tonic an octave up, and that closing
+        // pitch is degree one again — music21 asks the whole realization
+        // which of its pitches stand on the degrees wanted, so the first
+        // degree of A minor answers with both `A3` and `A4`.
+        let count = octave.len().saturating_sub(1).max(1);
+        Ok(octave
+            .into_iter()
+            .enumerate()
+            .filter(|(index, _)| degrees.contains(&(index % count + 1)))
+            .map(|(_, pitch)| pitch)
             .collect())
     }
 
