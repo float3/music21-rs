@@ -894,6 +894,29 @@ fn clear_override(chord: &Bound<'_, Chord>, key: &str) -> PyResult<()> {
     Ok(())
 }
 
+/// A chord's fixed answers moved by an interval: music21 transposes every
+/// pitch in `_overrides` along with the chord, so a chord symbol whose root
+/// was fixed is, once transposed, a chord on the note that root moved to.
+fn moved_overrides(
+    py: Python<'_>,
+    overrides: Option<&Py<PyDict>>,
+    value: &Bound<'_, PyAny>,
+) -> PyResult<Option<Py<PyDict>>> {
+    let Some(overrides) = overrides else {
+        return Ok(None);
+    };
+    let moved = PyDict::new(py);
+    for (key, fixed) in overrides.bind(py).iter() {
+        if let Ok(pitch) = fixed.extract::<PyRef<'_, Pitch>>() {
+            drop(pitch);
+            moved.set_item(key, fixed.call_method1("transpose", (value,))?)?;
+        } else {
+            moved.set_item(key, fixed)?;
+        }
+    }
+    Ok(Some(moved.unbind()))
+}
+
 /// The answer fixed by hand for `key` in a chord's `_overrides`, if one has
 /// been fixed at all. The outer `Option` says whether there is an entry; the
 /// value inside it may itself be `None`, which is the entry saying there is
@@ -2049,11 +2072,16 @@ impl Chord {
             .synced_inner(py)
             .transpose(&interval)
             .map_err(chord_error)?;
+        let overrides = moved_overrides(py, slf.borrow().overrides.as_ref(), value)?;
         if inPlace {
-            slf.borrow_mut().replace_inner(py, moved)?;
+            let mut chord = slf.borrow_mut();
+            chord.replace_inner(py, moved)?;
+            chord.overrides = overrides;
             return Ok(None);
         }
-        let copy = crate::copy_as_same_type(slf, Self::from_inner(py, moved)?)?;
+        let mut built = Self::from_inner(py, moved)?;
+        built.overrides = overrides;
+        let copy = crate::copy_as_same_type(slf, built)?;
         crate::derived_from(&copy, slf.as_any(), "transpose")?;
         Ok(Some(copy.unbind()))
     }

@@ -1196,16 +1196,13 @@ fn list_of(value: &Bound<'_, PyAny>) -> PyResult<Py<PyList>> {
 /// length is.
 /// A copy of a duration object, keeping whatever kind of duration it is.
 pub(crate) fn copied_duration(py: Python<'_>, object: &Py<PyAny>) -> PyResult<Py<PyAny>> {
-    let object = object.bind(py);
-    if let Ok(ours) = object.extract::<PyRef<'_, Duration>>() {
-        let copied = ours.clone();
-        drop(ours);
-        return Ok(crate::installed_new(py, "music21.duration", "Duration", copied)?.into_any());
-    }
+    // Through the object's own copying, so that a copy is the kind of
+    // duration the original was: a grace note copied as a plain duration
+    // would be written out as a note that sounds.
     Ok(py
         .import("copy")?
         .getattr("deepcopy")?
-        .call1((object,))?
+        .call1((object.bind(py),))?
         .unbind())
 }
 
@@ -2083,6 +2080,7 @@ impl Duration {
     subclass,
     skip_from_py_object
 )]
+#[derive(Clone)]
 pub struct GraceDuration {
     slash: bool,
     /// music21's `stealTimePrevious` and `stealTimeFollowing`: how much of
@@ -2137,6 +2135,20 @@ impl GraceDuration {
         true
     }
 
+    /// A copy is a grace note too, and keeps what makes it one: music21's
+    /// own notation code deep-copies a score before writing it, and a copy
+    /// that had become a plain duration would be written as a real note.
+    fn __deepcopy__<'py>(
+        slf: &Bound<'py, Self>,
+        _memo: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        Self::copied(slf)
+    }
+
+    fn __copy__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        Self::copied(slf)
+    }
+
     #[getter]
     fn get_slash(&self) -> bool {
         self.slash
@@ -2182,6 +2194,25 @@ impl GraceDuration {
     #[setter]
     fn set_makeTime(&mut self, value: bool) {
         self.make_time = value;
+    }
+}
+
+impl GraceDuration {
+    /// Both halves of a grace duration copied into a blank of its own class.
+    fn copied<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        let class = slf.as_any().get_type();
+        let copy = crate::blank_installed(class.as_any())?;
+        let (written, marks) = {
+            let me = slf.borrow();
+            ((**me.as_super()).clone(), me.clone())
+        };
+        {
+            let cell = copy.cast::<Self>()?;
+            let mut target = cell.borrow_mut();
+            **target.as_super() = written;
+            *target = marks;
+        }
+        Ok(copy)
     }
 }
 
@@ -2605,12 +2636,22 @@ impl Note {
     /// written on that pitch, such as the part name `chordify` tags it
     /// with, comes across — and the copy owning its pitch as the original
     /// did.
-    fn copied_object<'py>(slf: &Bound<'py, Self>, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    fn copied_object<'py>(
+        slf: &Bound<'py, Self>,
+        py: Python<'py>,
+        memo: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
         let mut copied = slf.borrow().copied(py)?;
-        let pitch = py
-            .import("copy")?
-            .getattr("deepcopy")?
-            .call1((slf.borrow().pitch.bind(py),))?;
+        // Through the copier's own record of what it has copied, so a pitch
+        // object something else holds as well — a chord symbol fixes its
+        // root to the pitch of one of its notes — is copied once and shared
+        // by the copies, as music21's own copying shares it.
+        let deepcopy = py.import("copy")?.getattr("deepcopy")?;
+        let held = slf.borrow().pitch.bind(py).clone();
+        let pitch = match memo {
+            Some(memo) => deepcopy.call1((held, memo))?,
+            None => deepcopy.call1((held,))?,
+        };
         if let Ok(pitch) = pitch.extract::<Py<Pitch>>() {
             copied.pitch = pitch;
         }
@@ -2731,6 +2772,16 @@ impl Note {
             },
         };
         let mut note = Self::wrap(py, inner)?;
+        // A note built on a pitch object keeps that object, as music21's
+        // does: its own harmony code fixes a chord's root to the pitch of
+        // one of its notes, and moving the note has to move the root.
+        if let Some(given) = pitch
+            .filter(|value| !value.is_none())
+            .and_then(|value| value.cast::<Pitch>().ok())
+        {
+            note.inner.set_pitch(given.borrow().inner.clone());
+            note.pitch = given.clone().unbind();
+        }
         // music21 hands the same keywords on to `Duration`, so `type='eighth',
         // dots=2` is an eighth with two dots and not a quarter.
         if Duration::keywords_say_duration(keywords)? {
@@ -3437,13 +3488,13 @@ impl Note {
     fn __deepcopy__<'py>(
         slf: &Bound<'py, Self>,
         py: Python<'py>,
-        _memo: &Bound<'py, PyAny>,
+        memo: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        Self::copied_object(slf, py)
+        Self::copied_object(slf, py, Some(memo))
     }
 
     fn __copy__<'py>(slf: &Bound<'py, Self>, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        Self::copied_object(slf, py)
+        Self::copied_object(slf, py, None)
     }
 
     /// music21's `storedInstrument`.

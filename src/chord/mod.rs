@@ -20,6 +20,7 @@ pub use guitar::{GuitarFingering, GuitarStringFingering, GuitarTuning, GuitarTun
 
 use num::integer::{gcd, lcm};
 use std::fmt::{Display, Formatter};
+use std::ops::Index;
 use std::str::FromStr;
 use std::sync::LazyLock;
 
@@ -30,6 +31,7 @@ use std::sync::LazyLock;
 /// `Chord` accepts several note-like inputs, including whitespace-separated
 /// pitch names, slices of pitches or notes, MIDI pitch numbers, vectors, and
 /// `None` for an empty chord.
+#[must_use]
 pub struct Chord {
     notes: Vec<Note>,
     duration: Option<Duration>,
@@ -83,6 +85,7 @@ pub struct KnownChordType {
 
 #[derive(Debug, Clone)]
 /// A likely tonal resolution for a chord, including the key context used.
+#[must_use]
 pub struct ChordResolutionSuggestion {
     /// The suggested resolution chord.
     pub chord: Chord,
@@ -109,6 +112,41 @@ static PERFECT_FIFTH: LazyLock<Interval> =
 const CANDIDATE_TONICS: [&str; 12] = [
     "C", "D-", "D", "E-", "E", "F", "F#", "G", "A-", "A", "B-", "B",
 ];
+
+impl Index<usize> for Chord {
+    type Output = Note;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.notes[index]
+    }
+}
+
+impl IntoIterator for Chord {
+    type Item = Note;
+    type IntoIter = std::vec::IntoIter<Note>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.notes.into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a Chord {
+    type Item = &'a Note;
+    type IntoIter = std::slice::Iter<'a, Note>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.notes.iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a mut Chord {
+    type Item = &'a mut Note;
+    type IntoIter = std::slice::IterMut<'a, Note>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.notes.iter_mut()
+    }
+}
 
 impl FromStr for Chord {
     type Err = Error;
@@ -872,7 +910,7 @@ impl Chord {
         let found = self.notes.iter().position(|note| &note.pitch == pitch);
         match found {
             Some(index) => {
-                self.notes.remove(index);
+                let _ = self.notes.remove(index);
                 Ok(())
             }
             None => Err(Error::Chord("Chord.remove(x), x not in chord".to_string())),
@@ -888,7 +926,7 @@ impl Chord {
             .position(|note| note.pitch.name_with_octave() == name_with_octave);
         match found {
             Some(index) => {
-                self.notes.remove(index);
+                let _ = self.notes.remove(index);
                 Ok(())
             }
             None => Err(Error::Chord("Chord.remove(x), x not in chord".to_string())),
@@ -898,6 +936,15 @@ impl Chord {
     /// Returns cloned pitches for every note in the chord, in input order.
     pub fn pitches(&self) -> Vec<Pitch> {
         self.notes.iter().map(|note| note.pitch.clone()).collect()
+    }
+
+    /// Borrows the pitches in input order.
+    ///
+    /// [`Chord::pitches`] is music21's accessor and clones each pitch; an
+    /// `Accidental` owns two `String`s, so that is two allocations a pitch a
+    /// caller that only reads them does not need.
+    pub fn iter_pitches(&self) -> impl Iterator<Item = &Pitch> + '_ {
+        self.notes.iter().map(|note| &note.pitch)
     }
 
     /// Returns the notes in input order.
@@ -910,6 +957,16 @@ impl Chord {
     /// .set_notehead(Notehead::Diamond)`.
     pub fn notes_mut(&mut self) -> &mut [Note] {
         &mut self.notes
+    }
+
+    /// How many notes the chord holds: what `len(chord)` answers upstream.
+    pub fn len(&self) -> usize {
+        self.notes.len()
+    }
+
+    /// Whether the chord holds no notes at all.
+    pub fn is_empty(&self) -> bool {
+        self.notes.is_empty()
     }
 
     /// The first note whose pitch equals this one: music21's per-note
@@ -2022,6 +2079,15 @@ impl Chord {
         for note in &mut chord.notes {
             note.pitch = interval.transpose_pitch(&note.pitch)?;
         }
+        // A root or bass a caller fixed moves with the chord, as music21
+        // moves it: a chord symbol carries its root as an override, and one
+        // transposed up a semitone is a chord on the note above.
+        if let Some(root) = &chord.root_override {
+            chord.root_override = Some(interval.transpose_pitch(root)?);
+        }
+        if let Some(bass) = &chord.bass_override {
+            chord.bass_override = Some(interval.transpose_pitch(bass)?);
+        }
         Ok(chord)
     }
 
@@ -2830,6 +2896,7 @@ impl IntoNotes for &[IntegerType] {
 /// transposed away from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
 pub struct ChordTableAddress {
     /// How many distinct pitch classes the chord has.
     pub cardinality: u8,
@@ -3242,6 +3309,22 @@ mod notation_tests {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_chord_indexes_and_iterates_over_its_notes() {
+        let chord = Chord::new("C4 E4 G4").unwrap();
+
+        assert_eq!(chord.len(), 3);
+        assert!(!chord.is_empty());
+        assert_eq!(chord[1].pitch.name_with_octave(), "E4");
+
+        let borrowed: Vec<String> = (&chord)
+            .into_iter()
+            .map(|note| note.pitch.name_with_octave())
+            .collect();
+        assert_eq!(borrowed, vec!["C4", "E4", "G4"]);
+        assert_eq!(chord.into_iter().count(), 3);
+    }
 
     #[test]
     fn forte_and_interval_vector_constructors_match_music21() {
