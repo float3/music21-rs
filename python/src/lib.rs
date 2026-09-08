@@ -385,9 +385,18 @@ where
 }
 
 /// A blank instance of an installed class, with its music21 half started.
+///
+/// The helper is built on music21 being there to import. Where it is not —
+/// the wheel on its own — nothing can have been installed either, since
+/// installing reads music21's own classes to build on; so the class here is
+/// the bare facade, whose whole blank is `__new__`. A copy made in that
+/// process must not fail for the want of a half it does not have.
 pub(crate) fn blank_installed<'py>(class: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
     let py = class.py();
-    install_helper(py)?.getattr("blank")?.call1((class,))
+    let Ok(helper) = install_helper(py) else {
+        return class.getattr("__new__")?.call1((class,));
+    };
+    helper.getattr("blank")?.call1((class,))
 }
 
 /// The Python half of installing a facade class into music21.
