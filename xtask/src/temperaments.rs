@@ -55,6 +55,9 @@ pub struct NamedTemperament {
     pub generator_cents: Vec<f64>,
     /// Which optimum those widths are — `CWE`, `CTE`, and so on.
     pub optimization: String,
+    /// The infobox's own `Title`, where a page names more than one temperament.
+    #[serde(default)]
+    pub titles: Option<String>,
     /// The commas it tempers out, as the wiki lists them for this subgroup.
     #[serde(default)]
     pub commas: Vec<String>,
@@ -204,6 +207,14 @@ pub fn render(data: &Temperaments) -> String {
              pub generator_cents: &'static [FloatType],\n    \
              /// Which optimum those widths are.\n    \
              pub optimization: &'static str,\n    \
+             /// The infobox's own `Title`, empty unless the page names more\n    \
+             /// than one temperament.\n    \
+             ///\n    \
+             /// The constant is named after the *page*, not after this: which\n    \
+             /// of several names goes with which of the subgroups a page lists\n    \
+             /// is not something the infobox states, so it is recorded here\n    \
+             /// rather than guessed at.\n    \
+             pub titles: &'static str,\n    \
              /// The commas it tempers out, as the wiki lists them.\n    \
              pub commas: &'static [&'static str],\n    \
              /// The moment-of-symmetry scales the wiki lists for it, if any.\n    \
@@ -228,7 +239,10 @@ pub fn render(data: &Temperaments) -> String {
     let _ = write!(
         out,
         "/// Every regular temperament collected from the wiki, by name.\n\
-         pub const WIKI_TEMPERAMENTS: [NamedTemperament; {}] = [\n",
+         ///\n\
+         /// A `static` rather than a `const`: at this size a const would be\n\
+         /// copied into every place that reads it.\n\
+         pub static WIKI_TEMPERAMENTS: [NamedTemperament; {}] = [\n",
         data.temperaments.len()
     );
     for entry in &data.temperaments {
@@ -282,6 +296,8 @@ pub fn render(data: &Temperaments) -> String {
                  generator_ratios: &[{}],\n    \
                  generator_cents: &[{}],\n    \
                  optimization: {:?},\n    \
+                 titles: {:?},
+    \
                  commas: &[{}],\n    \
                  moments: &[{}],\n\
              }};\n\n",
@@ -305,6 +321,7 @@ pub fn render(data: &Temperaments) -> String {
             strings(&entry.generator_ratios),
             floats(&entry.generator_cents),
             entry.optimization,
+            entry.titles.as_deref().unwrap_or_default(),
             strings(&entry.commas),
             strings(&entry.moments),
         );

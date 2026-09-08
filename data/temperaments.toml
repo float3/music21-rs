@@ -26,6 +26,18 @@
 # `3.5.7` repeats at a tritave. A page whose `Generators tuning` lists one more
 # number than it has rows is giving the period first.
 #
+# The mapping is recorded exactly as the wiki writes it, even where that is
+# written for the other end of the generator's chain than the tuning beside it.
+# A generator and its inverse inside the period reach the same notes, so those
+# describe one temperament and only look inconsistent; `Temperament::
+# from_published` reads a rank-2 mapping either way round. `Mabilic and
+# trismegistus` is the one that needs it today.
+#
+# `titles` is the infobox's own `Title` field, kept only where a page names
+# more than one temperament. The constant is named after the page, not after
+# that field, because which name goes with which of the subgroups a page lists
+# is not something the infobox states.
+#
 # Only the numbers are taken. The wiki is CC BY-SA and this crate is
 # AGPL-3.0-only, so no prose is copied across; mappings, generators, commas and
 # MOS patterns are facts and carry no licence weight.
@@ -81,6 +93,7 @@ moments = ["1L 1s", "2L 1s", "3L 2s"]
 name = "ARCHYTAS"
 page = "Archytas and ares"
 revision = 226335
+titles = "Archytas; ares"
 subgroup = [2, 3, 5, 7, 11]
 periods_per_equave = 1
 generator_rows = [[1, 0, -2, -2], [0, 1, 0, 2]]
@@ -146,6 +159,7 @@ moments = []
 name = "BUG"
 page = "Bug and beep"
 revision = 230456
+titles = "Bug / Beep"
 subgroup = [2, 3, 5, 7]
 periods_per_equave = 1
 generator_rows = [[2, 3, 1]]
@@ -367,6 +381,7 @@ moments = ["5L 2s", "7L 5s", "7L 12s"]
 name = "GAMELISMIC"
 page = "Gamelismic and portent"
 revision = 231995
+titles = "Gamelismic; portent"
 subgroup = [2, 3, 5, 7, 11]
 periods_per_equave = 1
 generator_rows = [[3, 0, -1, 4], [0, 1, 0, -1]]
@@ -393,6 +408,7 @@ moments = ["5L 2s", "5L 7s", "12L 5s", "12L 17s"]
 name = "GRAVITY"
 page = "Gravity"
 revision = 227055
+titles = "Gravity; Larry"
 subgroup = [2, 3, 5, 11]
 periods_per_equave = 1
 generator_rows = [[6, 17, 15]]
@@ -523,6 +539,7 @@ moments = ["4L 2s", "6L 4s", "10L 6s"]
 name = "LUNA"
 page = "Luna and hemithirds"
 revision = 223644
+titles = "Hemithirds"
 subgroup = [2, 3, 5, 7]
 periods_per_equave = 1
 generator_rows = [[-15, 2, 5]]
@@ -900,6 +917,7 @@ moments = ["22L 1s"]
 name = "QUASISUPER"
 page = "Quasisuper"
 revision = 224309
+titles = "Quasisuper; quasisupra"
 subgroup = [2, 3, 5, 7, 11]
 periods_per_equave = 1
 generator_rows = [[1, -13, -2, -6]]
@@ -1030,6 +1048,7 @@ moments = ["1L 4s", "5L 1s", "5L 6s", "5L 11s"]
 name = "SQUARES"
 page = "Squares"
 revision = 223661
+titles = "Skwares; Squares"
 subgroup = [2, 3, 5, 7, 11]
 periods_per_equave = 1
 generator_rows = [[-4, -16, -9, -10]]
@@ -1043,6 +1062,7 @@ moments = ["3L 2s", "3L 5s", "3L 8s", "3L 11s", "14L 3s"]
 name = "STARLING"
 page = "Starling and thrush"
 revision = 231979
+titles = "Starling; thrush"
 subgroup = [2, 3, 5, 7, 11]
 periods_per_equave = 1
 generator_rows = [[1, 0, -2, -2], [0, 1, 3, 5]]
@@ -1082,6 +1102,7 @@ moments = ["3L 1s", "4L 3s", "4L 7s", "11L 4s", "15L 11s"]
 name = "SUPERPYTH"
 page = "Superpyth"
 revision = 228424
+titles = "Archy; superpyth"
 subgroup = [2, 3, 5, 7, 11]
 periods_per_equave = 1
 generator_rows = [[1, 9, -2, 16]]
@@ -1116,6 +1137,20 @@ generator_cents = [635.0]
 optimization = "CWE"
 commas = ["56/55", "91/90", "128/125", "1029/1000"]
 moments = ["6L 9s", "15L 6s", "15L 21s"]
+
+[[temperament]]
+name = "TRISMEGISTUS"
+page = "Mabilic and trismegistus"
+revision = 232517
+titles = "Mabilic; Trismegistus"
+subgroup = [2, 3, 5, 7]
+periods_per_equave = 1
+generator_rows = [[-15, -3, 5]]
+generator_ratios = ["175/128"]
+generator_cents = [526.7]
+optimization = "CWE"
+commas = ["1029/1024", "3125/3072"]
+moments = ["7L 2s", "9L 7s"]
 
 [[temperament]]
 name = "TRITIKLEISMIC"
@@ -1261,10 +1296,5 @@ commas = ["121/120", "176/175", "351/350"]
 moments = []
 
 # Pages carrying an `Infobox regtemp` that this crate does not model.
-# Listed rather than dropped, so a later refresh can tell a page it has
-# never handled from one it has deliberately left alone.
-
-[[excluded]]
-page = "Mabilic and trismegistus"
-revision = 232517
-reason = "its infobox does not reconcile: the generators leave a prime 0.387 periods from a whole mapping"
+# Empty today: every one of the 95 builds. Kept so a later collection can
+# record a page it deliberately leaves alone, rather than dropping it.

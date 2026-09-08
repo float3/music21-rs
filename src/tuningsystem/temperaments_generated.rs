@@ -41,6 +41,14 @@ pub struct NamedTemperament {
     pub generator_cents: &'static [FloatType],
     /// Which optimum those widths are.
     pub optimization: &'static str,
+    /// The infobox's own `Title`, empty unless the page names more
+    /// than one temperament.
+    ///
+    /// The constant is named after the *page*, not after this: which
+    /// of several names goes with which of the subgroups a page lists
+    /// is not something the infobox states, so it is recorded here
+    /// rather than guessed at.
+    pub titles: &'static str,
     /// The commas it tempers out, as the wiki lists them.
     pub commas: &'static [&'static str],
     /// The moment-of-symmetry scales the wiki lists for it, if any.
@@ -65,7 +73,10 @@ impl NamedTemperament {
 }
 
 /// Every regular temperament collected from the wiki, by name.
-pub const WIKI_TEMPERAMENTS: [NamedTemperament; 94] = [
+///
+/// A `static` rather than a `const`: at this size a const would be
+/// copied into every place that reads it.
+pub static WIKI_TEMPERAMENTS: [NamedTemperament; 95] = [
     ABERSCHISMIC,
     AMITY,
     ANTONIAN,
@@ -149,6 +160,7 @@ pub const WIKI_TEMPERAMENTS: [NamedTemperament; 94] = [
     SUPERPYTH,
     TETRACOT,
     TRISECTED,
+    TRISMEGISTUS,
     TRITIKLEISMIC,
     ULTRAPYTH,
     UNIDEC,
@@ -178,11 +190,7 @@ pub struct UnmodelledTemperament {
 }
 
 /// The wiki's temperaments this crate does not model, and why.
-pub const UNMODELLED_TEMPERAMENTS: [UnmodelledTemperament; 1] = [UnmodelledTemperament {
-    page: "Mabilic and trismegistus",
-    revision: 232517,
-    reason: "its infobox does not reconcile: the generators leave a prime 0.387 periods from a whole mapping",
-}];
+pub const UNMODELLED_TEMPERAMENTS: [UnmodelledTemperament; 0] = [];
 
 /// Aberschismic (2.3.5.7), rank 3, generator 3/2, 5/4 at 702.8, 386.5 cents.
 pub const ABERSCHISMIC: NamedTemperament = NamedTemperament {
@@ -195,6 +203,7 @@ pub const ABERSCHISMIC: NamedTemperament = NamedTemperament {
     generator_ratios: &["3/2", "5/4"],
     generator_cents: &[702.8, 386.5],
     optimization: "CWE",
+    titles: "",
     commas: &["5120/5103"],
     moments: &[],
 };
@@ -210,6 +219,7 @@ pub const AMITY: NamedTemperament = NamedTemperament {
     generator_ratios: &["243/200"],
     generator_cents: &[339.4],
     optimization: "CWE",
+    titles: "",
     commas: &["4375/4374", "5120/5103"],
     moments: &["7L 4s", "7L 11s", "7L 18s", "7L 25s"],
 };
@@ -225,6 +235,7 @@ pub const ANTONIAN: NamedTemperament = NamedTemperament {
     generator_ratios: &["3/2"],
     generator_cents: &[743.086],
     optimization: "CWE",
+    titles: "",
     commas: &["10/9", "10/9", "15/14"],
     moments: &["1L 1s", "2L 1s", "3L 2s"],
 };
@@ -240,6 +251,7 @@ pub const ARCHYTAS: NamedTemperament = NamedTemperament {
     generator_ratios: &["3/2", "5/4"],
     generator_cents: &[709.7, 390.0],
     optimization: "CWE",
+    titles: "Archytas; ares",
     commas: &["64/63", "100/99"],
     moments: &[],
 };
@@ -255,6 +267,7 @@ pub const AUGMENTED: NamedTemperament = NamedTemperament {
     generator_ratios: &["3/2"],
     generator_cents: &[711.6],
     optimization: "CWE",
+    titles: "",
     commas: &["56/55", "64/63", "100/99"],
     moments: &["3L 3s", "3L 6s", "3L 9s", "12L 3s"],
 };
@@ -270,6 +283,7 @@ pub const BLACKWOOD: NamedTemperament = NamedTemperament {
     generator_ratios: &["5/4"],
     generator_cents: &[391.1],
     optimization: "CWE",
+    titles: "",
     commas: &["28/27", "49/48"],
     moments: &["5L 5s", "10L 5s"],
 };
@@ -285,6 +299,7 @@ pub const BOHPIER: NamedTemperament = NamedTemperament {
     generator_ratios: &["12/11"],
     generator_cents: &[146.5],
     optimization: "CWE",
+    titles: "",
     commas: &["100/99", "144/143", "196/195", "275/273"],
     moments: &["1L 7s", "8L 1s", "8L 9s", "8L 17s"],
 };
@@ -300,6 +315,7 @@ pub const BPS: NamedTemperament = NamedTemperament {
     generator_ratios: &["9/7"],
     generator_cents: &[440.7],
     optimization: "CWE",
+    titles: "",
     commas: &["245/243"],
     moments: &[],
 };
@@ -315,6 +331,7 @@ pub const BUG: NamedTemperament = NamedTemperament {
     generator_ratios: &["5/3"],
     generator_cents: &[938.0],
     optimization: "CWE",
+    titles: "Bug / Beep",
     commas: &["21/20", "27/25"],
     moments: &["1L 3s", "4L 1s", "5L 4s"],
 };
@@ -330,6 +347,7 @@ pub const BUNYA: NamedTemperament = NamedTemperament {
     generator_ratios: &["10/9"],
     generator_cents: &[175.9],
     optimization: "CWE",
+    titles: "",
     commas: &[
         "100/99", "225/224", "243/242", "100/99", "144/143", "225/224", "243/242",
     ],
@@ -347,6 +365,7 @@ pub const BUZZARD: NamedTemperament = NamedTemperament {
     generator_ratios: &["21/16"],
     generator_cents: &[475.7],
     optimization: "CWE",
+    titles: "",
     commas: &["176/175", "351/350", "540/539", "676/675"],
     moments: &["3L 2s"],
 };
@@ -362,6 +381,7 @@ pub const CANOPUS: NamedTemperament = NamedTemperament {
     generator_ratios: &["7/5"],
     generator_cents: &[583.986],
     optimization: "CWE",
+    titles: "",
     commas: &["16875/16807"],
     moments: &[],
 };
@@ -377,6 +397,7 @@ pub const CATAKLEISMIC: NamedTemperament = NamedTemperament {
     generator_ratios: &["6/5"],
     generator_cents: &[316.7],
     optimization: "CWE",
+    titles: "",
     commas: &["169/168", "225/224", "325/324", "385/384"],
     moments: &["4L 7s", "4L 11s", "15L 4s", "15L 19s"],
 };
@@ -392,6 +413,7 @@ pub const COMPTON: NamedTemperament = NamedTemperament {
     generator_ratios: &["5/4"],
     generator_cents: &[384.1],
     optimization: "CWE",
+    titles: "",
     commas: &["225/224", "250047/250000"],
     moments: &["12L 12s", "12L 24s"],
 };
@@ -407,6 +429,7 @@ pub const COTONEUM: NamedTemperament = NamedTemperament {
     generator_ratios: &["3/2"],
     generator_cents: &[702.31],
     optimization: "CWE",
+    titles: "",
     commas: &[
         "343/342",
         "364/363",
@@ -429,6 +452,7 @@ pub const DECIMAL: NamedTemperament = NamedTemperament {
     generator_ratios: &["7/4"],
     generator_cents: &[951.0],
     optimization: "CWE",
+    titles: "",
     commas: &["25/24", "49/48"],
     moments: &["4L 2s", "4L 6s", "10L 4s"],
 };
@@ -444,6 +468,7 @@ pub const DEEPTONE: NamedTemperament = NamedTemperament {
     generator_ratios: &["3/2"],
     generator_cents: &[689.6],
     optimization: "CWE",
+    titles: "",
     commas: &["1053/1024", "2187/2080"],
     moments: &["5L 2s", "7L 5s", "7L 12s"],
 };
@@ -459,6 +484,7 @@ pub const DIASCHISMIC: NamedTemperament = NamedTemperament {
     generator_ratios: &["3/2"],
     generator_cents: &[703.9],
     optimization: "CWE",
+    titles: "",
     commas: &["126/125", "136/135", "176/175", "196/195", "256/255"],
     moments: &["2L 8s", "10L 2s", "12L 10s"],
 };
@@ -474,6 +500,7 @@ pub const DICOT: NamedTemperament = NamedTemperament {
     generator_ratios: &["6/5"],
     generator_cents: &[351.1],
     optimization: "CWE",
+    titles: "",
     commas: &["25/24", "45/44"],
     moments: &["3L 1s", "3L 4s", "7L 3s"],
 };
@@ -489,6 +516,7 @@ pub const DIDACUS: NamedTemperament = NamedTemperament {
     generator_ratios: &["28/25"],
     generator_cents: &[194.4],
     optimization: "CWE",
+    titles: "",
     commas: &["176/175", "1375/1372"],
     moments: &["1L 5s", "6L 1s", "6L 7s", "6L 13s", "6L 19s"],
 };
@@ -504,6 +532,7 @@ pub const DIMINISHED: NamedTemperament = NamedTemperament {
     generator_ratios: &["3/2"],
     generator_cents: &[696.0],
     optimization: "CWE",
+    titles: "",
     commas: &["36/35", "50/49"],
     moments: &["4L 4s", "4L 8s", "12L 4s"],
 };
@@ -519,6 +548,7 @@ pub const DOMINANT: NamedTemperament = NamedTemperament {
     generator_ratios: &["3/2"],
     generator_cents: &[701.1],
     optimization: "CWE",
+    titles: "",
     commas: &["36/35", "64/63"],
     moments: &["2L 3s", "5L 2s", "5L 7s"],
 };
@@ -534,6 +564,7 @@ pub const ENNEALIMMAL: NamedTemperament = NamedTemperament {
     generator_ratios: &["5/3"],
     generator_cents: &[884.322],
     optimization: "CWE",
+    titles: "",
     commas: &["2401/2400", "4375/4374"],
     moments: &["18L 9s", "27L 18s", "27L 45s"],
 };
@@ -549,6 +580,7 @@ pub const FATHER: NamedTemperament = NamedTemperament {
     generator_ratios: &["3/2"],
     generator_cents: &[738.443],
     optimization: "CWE",
+    titles: "",
     commas: &["16/15", "16/15", "28/27"],
     moments: &["1L 1s", "2L 1s", "3L 2s"],
 };
@@ -564,6 +596,7 @@ pub const FLATTONE: NamedTemperament = NamedTemperament {
     generator_ratios: &["3/2"],
     generator_cents: &[693.1],
     optimization: "CWE",
+    titles: "",
     commas: &["45/44", "65/64", "78/77", "81/80"],
     moments: &["5L 2s", "7L 5s", "7L 12s"],
 };
@@ -579,6 +612,7 @@ pub const GAMELISMIC: NamedTemperament = NamedTemperament {
     generator_ratios: &["8/7", "5/4"],
     generator_cents: &[233.8, 385.3],
     optimization: "CWE",
+    titles: "Gamelismic; portent",
     commas: &["385/384", "441/440"],
     moments: &[],
 };
@@ -594,6 +628,7 @@ pub const GARIBALDI: NamedTemperament = NamedTemperament {
     generator_ratios: &["3/2"],
     generator_cents: &[702.1],
     optimization: "CWE",
+    titles: "",
     commas: &["190/189", "225/224", "361/360"],
     moments: &["5L 2s", "5L 7s", "12L 5s", "12L 17s"],
 };
@@ -609,6 +644,7 @@ pub const GRAVITY: NamedTemperament = NamedTemperament {
     generator_ratios: &["27/20"],
     generator_cents: &[516.8],
     optimization: "CWE",
+    titles: "Gravity; Larry",
     commas: &["243/242", "4000/3993"],
     moments: &["2L 5s", "7L 2s", "7L 9s", "7L 51s"],
 };
@@ -624,6 +660,7 @@ pub const GUNN: NamedTemperament = NamedTemperament {
     generator_ratios: &["5/4", "7/4"],
     generator_cents: &[384.84, 965.14],
     optimization: "CWE",
+    titles: "",
     commas: &["729/728", "273/272", "153/152", "364/363", "1729/1728"],
     moments: &[],
 };
@@ -639,6 +676,7 @@ pub const HARRY: NamedTemperament = NamedTemperament {
     generator_ratios: &["21/20"],
     generator_cents: &[83.1],
     optimization: "CWE",
+    titles: "",
     commas: &["243/242", "351/350", "364/363", "441/440"],
     moments: &["2L 12s", "14L 2s", "14L 16s", "14L 30s"],
 };
@@ -654,6 +692,7 @@ pub const HEMIFIFTHS: NamedTemperament = NamedTemperament {
     generator_ratios: &["49/40"],
     generator_cents: &[351.5],
     optimization: "CWE",
+    titles: "",
     commas: &["144/143", "196/195", "243/242", "364/363"],
     moments: &["3L 4s", "7L 3s", "7L 10s", "17L 7s", "17L 24s"],
 };
@@ -669,6 +708,7 @@ pub const JOVE: NamedTemperament = NamedTemperament {
     generator_ratios: &["11/9", "10/7"],
     generator_cents: &[350.5, 617.9],
     optimization: "CWE",
+    titles: "",
     commas: &["243/242", "441/440"],
     moments: &[],
 };
@@ -684,6 +724,7 @@ pub const KEEMUN: NamedTemperament = NamedTemperament {
     generator_ratios: &["6/5"],
     generator_cents: &[317.6],
     optimization: "CWE",
+    titles: "",
     commas: &["49/48", "126/125", "49/48", "56/55", "100/99"],
     moments: &["4L 3s", "4L 7s", "4L 11s", "15L 4s"],
 };
@@ -699,6 +740,7 @@ pub const KLEISMIC: NamedTemperament = NamedTemperament {
     generator_ratios: &["6/5"],
     generator_cents: &[317.1],
     optimization: "CWE",
+    titles: "",
     commas: &["325/324", "625/624"],
     moments: &["3L 1s", "4L 3s", "4L 7s", "4L 11s", "15L 4s"],
 };
@@ -714,6 +756,7 @@ pub const LAKA: NamedTemperament = NamedTemperament {
     generator_ratios: &["3/2", "5/4"],
     generator_cents: &[702.6, 386.8],
     optimization: "CWE",
+    titles: "",
     commas: &[],
     moments: &[],
 };
@@ -729,6 +772,7 @@ pub const LEAPDAY: NamedTemperament = NamedTemperament {
     generator_ratios: &["3/2"],
     generator_cents: &[704.2],
     optimization: "CWE",
+    titles: "",
     commas: &["91/90", "121/120", "169/168", "352/351"],
     moments: &["2L 3s", "5L 2s", "5L 7s", "12L 5s"],
 };
@@ -744,6 +788,7 @@ pub const LEMBA: NamedTemperament = NamedTemperament {
     generator_ratios: &["8/7"],
     generator_cents: &[231.2],
     optimization: "CWE",
+    titles: "",
     commas: &["45/44", "50/49", "65/64", "78/77"],
     moments: &["4L 2s", "6L 4s", "10L 6s"],
 };
@@ -759,6 +804,7 @@ pub const LUNA: NamedTemperament = NamedTemperament {
     generator_ratios: &["28/25"],
     generator_cents: &[193.2],
     optimization: "CWE",
+    titles: "Hemithirds",
     commas: &["1029/1024", "3136/3125"],
     moments: &["1L 5s", "6L 1s", "6L 7s", "6L 13s", "6L 19s", "25L 6s"],
 };
@@ -774,6 +820,7 @@ pub const MAGIC: NamedTemperament = NamedTemperament {
     generator_ratios: &["5/4"],
     generator_cents: &[380.5],
     optimization: "CWE",
+    titles: "",
     commas: &["225/224", "245/243"],
     moments: &["3L 4s", "3L 7s", "3L 16s", "19L 3s"],
 };
@@ -789,6 +836,7 @@ pub const MARVEL: NamedTemperament = NamedTemperament {
     generator_ratios: &["3/2", "5/4"],
     generator_cents: &[700.6, 383.5],
     optimization: "CWE",
+    titles: "",
     commas: &["225/224", "385/384"],
     moments: &[],
 };
@@ -804,6 +852,7 @@ pub const MAVILA: NamedTemperament = NamedTemperament {
     generator_ratios: &["3/2"],
     generator_cents: &[679.0],
     optimization: "CWE",
+    titles: "",
     commas: &["135/128", "33/32", "45/44"],
     moments: &["2L 3s", "2L 5s", "7L 2s"],
 };
@@ -819,6 +868,7 @@ pub const MEANTONE: NamedTemperament = NamedTemperament {
     generator_ratios: &["3/2"],
     generator_cents: &[696.7],
     optimization: "CWE",
+    titles: "",
     commas: &["81/80", "126/125"],
     moments: &["2L 3s", "5L 2s", "7L 5s", "12L 7s"],
 };
@@ -834,6 +884,7 @@ pub const MINTAKA: NamedTemperament = NamedTemperament {
     generator_ratios: &["11/7"],
     generator_cents: &[778.7],
     optimization: "CWE",
+    titles: "",
     commas: &["1331/1323"],
     moments: &["2L 3s", "5L 2s", "5L 7s", "5L 12s"],
 };
@@ -849,6 +900,7 @@ pub const MIRACLE: NamedTemperament = NamedTemperament {
     generator_ratios: &["15/14"],
     generator_cents: &[116.7],
     optimization: "CTE",
+    titles: "",
     commas: &["225/224", "243/242", "385/384"],
     moments: &["1L 9s", "10L 1s", "10L 11s", "10L 21s"],
 };
@@ -864,6 +916,7 @@ pub const MISTY: NamedTemperament = NamedTemperament {
     generator_ratios: &["3/2"],
     generator_cents: &[703.1],
     optimization: "CWE",
+    titles: "",
     commas: &["256/255", "324/323", "400/399", "476/475"],
     moments: &["3L 9s", "12L 3s", "12L 15s", "12L 27s"],
 };
@@ -879,6 +932,7 @@ pub const MODUS: NamedTemperament = NamedTemperament {
     generator_ratios: &["10/9"],
     generator_cents: &[176.8],
     optimization: "CWE",
+    titles: "",
     commas: &[
         "64/63", "100/99", "243/242", "64/63", "78/77", "100/99", "144/143",
     ],
@@ -896,6 +950,7 @@ pub const MOHAJIRA: NamedTemperament = NamedTemperament {
     generator_ratios: &["11/9"],
     generator_cents: &[348.5],
     optimization: "CWE",
+    titles: "",
     commas: &["81/80", "121/120", "176/175"],
     moments: &["3L 4s", "7L 3s", "7L 10s", "7L 17s"],
 };
@@ -911,6 +966,7 @@ pub const MONKEY: NamedTemperament = NamedTemperament {
     generator_ratios: &["10/9"],
     generator_cents: &[175.6],
     optimization: "CWE",
+    titles: "",
     commas: &[
         "100/99", "243/242", "385/384", "100/99", "144/143", "243/242", "385/384",
     ],
@@ -928,6 +984,7 @@ pub const MOTHRA: NamedTemperament = NamedTemperament {
     generator_ratios: &["8/7"],
     generator_cents: &[232.3],
     optimization: "CWE",
+    titles: "",
     commas: &["81/80", "1029/1024"],
     moments: &["1L 4s", "5L 1s", "5L 6s", "5L 21s"],
 };
@@ -943,6 +1000,7 @@ pub const MUGGLES: NamedTemperament = NamedTemperament {
     generator_ratios: &["5/4"],
     generator_cents: &[377.7],
     optimization: "CWE",
+    titles: "",
     commas: &["45/44", "65/64", "78/77", "126/125"],
     moments: &["3L 7s", "3L 10s", "3L 13s", "16L 3s"],
 };
@@ -958,6 +1016,7 @@ pub const MYNA: NamedTemperament = NamedTemperament {
     generator_ratios: &["6/5"],
     generator_cents: &[310.1],
     optimization: "CWE",
+    titles: "",
     commas: &["126/125", "176/175", "243/242"],
     moments: &["3L 1s", "4L 3s", "4L 7s", "4L 23s", "27L 4s"],
 };
@@ -973,6 +1032,7 @@ pub const MYSTERY: NamedTemperament = NamedTemperament {
     generator_ratios: &["5/4"],
     generator_cents: &[387.9],
     optimization: "CWE",
+    titles: "",
     commas: &["196/195", "352/351", "364/363", "676/675"],
     moments: &["29L 29s", "58L 29s"],
 };
@@ -988,6 +1048,7 @@ pub const NEGRI: NamedTemperament = NamedTemperament {
     generator_ratios: &["16/15"],
     generator_cents: &[125.4],
     optimization: "CWE",
+    titles: "",
     commas: &["49/48", "65/64", "91/90"],
     moments: &["1L 8s", "9L 1s", "10L 9s"],
 };
@@ -1003,6 +1064,7 @@ pub const NEUTROMINANT: NamedTemperament = NamedTemperament {
     generator_ratios: &["11/9"],
     generator_cents: &[350.7],
     optimization: "CWE",
+    titles: "",
     commas: &["36/35", "64/63", "66/65", "121/120"],
     moments: &["3L 4s", "7L 3s", "7L 10s"],
 };
@@ -1018,6 +1080,7 @@ pub const OCTOID: NamedTemperament = NamedTemperament {
     generator_ratios: &["7/5"],
     generator_cents: &[583.948],
     optimization: "CWE",
+    titles: "",
     commas: &["540/539", "1375/1372", "4000/3993"],
     moments: &["8L 64s", "72L 8s"],
 };
@@ -1033,6 +1096,7 @@ pub const OOLONG: NamedTemperament = NamedTemperament {
     generator_ratios: &["6/5"],
     generator_cents: &[311.7],
     optimization: "CWE",
+    titles: "",
     commas: &["126/125", "196/195", "15379/15360"],
     moments: &["4L 3s", "4L 7s", "4L 11s", "4L 15s", "4L 19s", "23L 4s"],
 };
@@ -1048,6 +1112,7 @@ pub const OPOSSUM: NamedTemperament = NamedTemperament {
     generator_ratios: &["11/10"],
     generator_cents: &[160.5],
     optimization: "CWE",
+    titles: "",
     commas: &["28/27", "55/54", "77/75"],
     moments: &["1L 6s", "7L 1s"],
 };
@@ -1063,6 +1128,7 @@ pub const ORWELL: NamedTemperament = NamedTemperament {
     generator_ratios: &["7/6"],
     generator_cents: &[271.5],
     optimization: "CWE",
+    titles: "",
     commas: &["99/98", "121/120", "176/175"],
     moments: &["4L 1s", "4L 5s", "9L 4s", "9L 13s"],
 };
@@ -1078,6 +1144,7 @@ pub const PAJARA: NamedTemperament = NamedTemperament {
     generator_ratios: &["3/2"],
     generator_cents: &[707.4],
     optimization: "CWE",
+    titles: "",
     commas: &["50/49", "64/63", "85/84", "99/98"],
     moments: &["2L 8s", "10L 2s", "12L 10s"],
 };
@@ -1093,6 +1160,7 @@ pub const PARAKLEISMIC: NamedTemperament = NamedTemperament {
     generator_ratios: &["5/3"],
     generator_cents: &[884.81],
     optimization: "CWE",
+    titles: "",
     commas: &["3136/3125", "4375/4374"],
     moments: &["4L 15s", "19L 4s", "19L 23s"],
 };
@@ -1108,6 +1176,7 @@ pub const PARAPYTH: NamedTemperament = NamedTemperament {
     generator_ratios: &["3/2", "7/4"],
     generator_cents: &[703.8, 969.2],
     optimization: "CWE",
+    titles: "",
     commas: &["352/351", "364/363"],
     moments: &[],
 };
@@ -1123,6 +1192,7 @@ pub const PELE: NamedTemperament = NamedTemperament {
     generator_ratios: &["3/2", "5/4"],
     generator_cents: &[703.4, 387.8],
     optimization: "CWE",
+    titles: "",
     commas: &[],
     moments: &[],
 };
@@ -1138,6 +1208,7 @@ pub const PENTADACUS: NamedTemperament = NamedTemperament {
     generator_ratios: &["55/49"],
     generator_cents: &[194.8],
     optimization: "CWE",
+    titles: "",
     commas: &["831875/823543"],
     moments: &[],
 };
@@ -1153,6 +1224,7 @@ pub const PONTIAC: NamedTemperament = NamedTemperament {
     generator_ratios: &["3/2"],
     generator_cents: &[701.758],
     optimization: "CWE",
+    titles: "",
     commas: &["4375/4374", "32805/32768"],
     moments: &["12L 17s", "12L 29s", "12L 41s", "53L 12s"],
 };
@@ -1168,6 +1240,7 @@ pub const PORCUPINE: NamedTemperament = NamedTemperament {
     generator_ratios: &["10/9"],
     generator_cents: &[163.0],
     optimization: "CWE",
+    titles: "",
     commas: &["55/54", "64/63", "100/99"],
     moments: &["1L 6s", "7L 1s", "7L 8s"],
 };
@@ -1183,6 +1256,7 @@ pub const QUARTKEENLIG: NamedTemperament = NamedTemperament {
     generator_ratios: &["36/35"],
     generator_cents: &[52.845],
     optimization: "CWE",
+    titles: "",
     commas: &["385/384", "6250/6237", "67228/66825"],
     moments: &["22L 1s"],
 };
@@ -1198,6 +1272,7 @@ pub const QUASISUPER: NamedTemperament = NamedTemperament {
     generator_ratios: &["3/2"],
     generator_cents: &[708.3],
     optimization: "CWE",
+    titles: "Quasisuper; quasisupra",
     commas: &["64/63", "99/98", "121/120"],
     moments: &["5L 2s", "5L 7s", "5L 12s", "17L 5s"],
 };
@@ -1213,6 +1288,7 @@ pub const RODAN: NamedTemperament = NamedTemperament {
     generator_ratios: &["8/7"],
     generator_cents: &[234.4],
     optimization: "CWE",
+    titles: "",
     commas: &["245/243", "385/384", "441/440"],
     moments: &["1L 4s", "5L 1s", "5L 6s", "5L 36s", "41L 5s"],
 };
@@ -1228,6 +1304,7 @@ pub const SCHISMIC: NamedTemperament = NamedTemperament {
     generator_ratios: &["3/2"],
     generator_cents: &[701.731],
     optimization: "CWE",
+    titles: "",
     commas: &["32805/32768"],
     moments: &["2L 3s", "5L 2s", "5L 7s", "12L 5s"],
 };
@@ -1243,6 +1320,7 @@ pub const SEMAPHORE: NamedTemperament = NamedTemperament {
     generator_ratios: &["7/4"],
     generator_cents: &[948.0],
     optimization: "CWE",
+    titles: "",
     commas: &[],
     moments: &["4L 1s", "5L 4s", "5L 9s", "5L 14s"],
 };
@@ -1258,6 +1336,7 @@ pub const SENSAMAGIC: NamedTemperament = NamedTemperament {
     generator_ratios: &["3/2", "9/7"],
     generator_cents: &[703.8, 440.9],
     optimization: "CWE",
+    titles: "",
     commas: &["245/243", "385/384"],
     moments: &[],
 };
@@ -1273,6 +1352,7 @@ pub const SENSI: NamedTemperament = NamedTemperament {
     generator_ratios: &["9/7"],
     generator_cents: &[443.3],
     optimization: "CWE",
+    titles: "",
     commas: &["91/90", "126/125", "169/168"],
     moments: &["3L 2s", "3L 5s", "8L 3s", "8L 11s"],
 };
@@ -1288,6 +1368,7 @@ pub const SEPTISCHISMIC: NamedTemperament = NamedTemperament {
     generator_ratios: &["3/2", "5/4"],
     generator_cents: &[702.2307, 386.3245],
     optimization: "CWE",
+    titles: "",
     commas: &["1216/1215", "1540/1539", "1729/1728", "2080/2079"],
     moments: &[],
 };
@@ -1303,6 +1384,7 @@ pub const SHALLOWTONE: NamedTemperament = NamedTemperament {
     generator_ratios: &["3/2"],
     generator_cents: &[681.2],
     optimization: "CWE",
+    titles: "",
     commas: &["295245/262144", "36/35", "295245/262144"],
     moments: &["2L 3s", "2L 5s", "7L 2s"],
 };
@@ -1318,6 +1400,7 @@ pub const SIRIUS: NamedTemperament = NamedTemperament {
     generator_ratios: &["25/21"],
     generator_cents: &[293.759],
     optimization: "CWE",
+    titles: "",
     commas: &["3125/3087"],
     moments: &[],
 };
@@ -1333,6 +1416,7 @@ pub const SLENDRIC: NamedTemperament = NamedTemperament {
     generator_ratios: &["8/7"],
     generator_cents: &[233.7],
     optimization: "CWE",
+    titles: "",
     commas: &["1029/1024"],
     moments: &["1L 4s", "5L 1s", "5L 6s", "5L 11s"],
 };
@@ -1348,6 +1432,7 @@ pub const SQUARES: NamedTemperament = NamedTemperament {
     generator_ratios: &["9/7"],
     generator_cents: &[426.0],
     optimization: "CWE",
+    titles: "Skwares; Squares",
     commas: &["81/80", "99/98", "121/120"],
     moments: &["3L 2s", "3L 5s", "3L 8s", "3L 11s", "14L 3s"],
 };
@@ -1363,6 +1448,7 @@ pub const STARLING: NamedTemperament = NamedTemperament {
     generator_ratios: &["3/2", "5/4"],
     generator_cents: &[701.6, 390.9],
     optimization: "CWE",
+    titles: "Starling; thrush",
     commas: &["126/125", "176/175"],
     moments: &[],
 };
@@ -1378,6 +1464,7 @@ pub const SUBMERGED: NamedTemperament = NamedTemperament {
     generator_ratios: &["8/5"],
     generator_cents: &[827.0],
     optimization: "CWE",
+    titles: "",
     commas: &["65/64", "105/104", "121/120", "441/440"],
     moments: &["3L 7s", "3L 10s", "13L 3s"],
 };
@@ -1393,6 +1480,7 @@ pub const SUPERKLEISMIC: NamedTemperament = NamedTemperament {
     generator_ratios: &["5/3"],
     generator_cents: &[878.2],
     optimization: "CWE",
+    titles: "",
     commas: &[],
     moments: &["3L 1s", "4L 3s", "4L 7s", "11L 4s", "15L 11s"],
 };
@@ -1408,6 +1496,7 @@ pub const SUPERPYTH: NamedTemperament = NamedTemperament {
     generator_ratios: &["3/2"],
     generator_cents: &[710.1],
     optimization: "CWE",
+    titles: "Archy; superpyth",
     commas: &["64/63", "100/99", "245/243"],
     moments: &["2L 3s", "5L 2s", "5L 7s", "5L 12s", "5L 17s"],
 };
@@ -1423,6 +1512,7 @@ pub const TETRACOT: NamedTemperament = NamedTemperament {
     generator_ratios: &["10/9"],
     generator_cents: &[176.1],
     optimization: "CWE",
+    titles: "",
     commas: &["100/99", "243/242", "100/99", "144/143", "243/242"],
     moments: &["6L 1s", "7L 6s", "7L 13s"],
 };
@@ -1438,8 +1528,25 @@ pub const TRISECTED: NamedTemperament = NamedTemperament {
     generator_ratios: &["10/7"],
     generator_cents: &[635.0],
     optimization: "CWE",
+    titles: "",
     commas: &["56/55", "91/90", "128/125", "1029/1000"],
     moments: &["6L 9s", "15L 6s", "15L 21s"],
+};
+
+/// Mabilic and trismegistus (2.3.5.7), rank 2, generator 175/128 at 526.7 cents.
+pub const TRISMEGISTUS: NamedTemperament = NamedTemperament {
+    name: "TRISMEGISTUS",
+    page: "Mabilic and trismegistus",
+    revision: 232517,
+    subgroup: &[2, 3, 5, 7],
+    periods_per_equave: 1,
+    generator_rows: &[&[-15, -3, 5]],
+    generator_ratios: &["175/128"],
+    generator_cents: &[526.7],
+    optimization: "CWE",
+    titles: "Mabilic; Trismegistus",
+    commas: &["1029/1024", "3125/3072"],
+    moments: &["7L 2s", "9L 7s"],
 };
 
 /// Tritikleismic (2.3.5.7.11.13.17), rank 2, generator 6/5 at 316.938 cents.
@@ -1453,6 +1560,7 @@ pub const TRITIKLEISMIC: NamedTemperament = NamedTemperament {
     generator_ratios: &["6/5"],
     generator_cents: &[316.938],
     optimization: "CWE",
+    titles: "",
     commas: &[],
     moments: &["3L 6s", "9L 3s", "12L 3s", "15L 12s"],
 };
@@ -1468,6 +1576,7 @@ pub const ULTRAPYTH: NamedTemperament = NamedTemperament {
     generator_ratios: &["3/2"],
     generator_cents: &[713.6],
     optimization: "CWE",
+    titles: "",
     commas: &["64/63", "6860/6561", "64/63", "91/90", "6125/6084"],
     moments: &["5L 7s", "5L 12s", "5L 17s", "5L 22s"],
 };
@@ -1483,6 +1592,7 @@ pub const UNIDEC: NamedTemperament = NamedTemperament {
     generator_ratios: &["14/11"],
     generator_cents: &[416.9],
     optimization: "CWE",
+    titles: "",
     commas: &["385/384", "441/440", "4375/4374"],
     moments: &["6L 2s", "6L 8s", "6L 14s", "20L 6s"],
 };
@@ -1498,6 +1608,7 @@ pub const VALENTINE: NamedTemperament = NamedTemperament {
     generator_ratios: &["22/21"],
     generator_cents: &[77.9],
     optimization: "CWE",
+    titles: "",
     commas: &["121/120", "126/125", "176/175"],
     moments: &["1L 14s", "15L 1s", "15L 16s"],
 };
@@ -1513,6 +1624,7 @@ pub const VENGEANCE: NamedTemperament = NamedTemperament {
     generator_ratios: &["34/25"],
     generator_cents: &[527.718],
     optimization: "CWE",
+    titles: "",
     commas: &["78608/78125", "2023/2000", "4165/4096"],
     moments: &["2L 5s", "7L 2s"],
 };
@@ -1528,6 +1640,7 @@ pub const WHITEWOOD: NamedTemperament = NamedTemperament {
     generator_ratios: &["5/4"],
     generator_cents: &[392.7],
     optimization: "CWE",
+    titles: "",
     commas: &["36/35", "2187/2048"],
     moments: &["7L 7s", "7L 14s"],
 };
@@ -1543,6 +1656,7 @@ pub const WIZARD: NamedTemperament = NamedTemperament {
     generator_ratios: &["17/15"],
     generator_cents: &[216.8],
     optimization: "CWE",
+    titles: "",
     commas: &["225/224", "289/288", "385/384", "561/560"],
     moments: &["6L 4s", "6L 10s", "6L 16s", "22L 6s"],
 };
@@ -1558,6 +1672,7 @@ pub const WOLLEMIA: NamedTemperament = NamedTemperament {
     generator_ratios: &["10/9"],
     generator_cents: &[177.1],
     optimization: "CWE",
+    titles: "",
     commas: &[
         "56/55", "100/99", "243/242", "56/55", "91/90", "100/99", "243/242",
     ],
@@ -1575,6 +1690,7 @@ pub const WURSCHMIDT: NamedTemperament = NamedTemperament {
     generator_ratios: &["5/4"],
     generator_cents: &[387.8],
     optimization: "CWE",
+    titles: "",
     commas: &["576/575", "12167/12150"],
     moments: &["3L 1s", "3L 4s", "3L 28s", "31L 3s"],
 };
@@ -1590,6 +1706,7 @@ pub const XENIAL: NamedTemperament = NamedTemperament {
     generator_ratios: &["10/9"],
     generator_cents: &[188.8],
     optimization: "CWE",
+    titles: "",
     commas: &[
         "126/125", "162/161", "169/168", "171/170", "208/207", "221/220", "231/230",
     ],
@@ -1607,6 +1724,7 @@ pub const ZEUS: NamedTemperament = NamedTemperament {
     generator_ratios: &["3/2", "12/11"],
     generator_cents: &[701.9, 157.0],
     optimization: "CWE",
+    titles: "",
     commas: &["121/120", "176/175", "351/350"],
     moments: &[],
 };

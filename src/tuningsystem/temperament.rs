@@ -41,10 +41,18 @@ use std::fmt::{Display, Formatter};
 
 /// How far a derived period count may sit from a whole number.
 ///
-/// The mappings the literature publishes land within a fortieth of a step, so
-/// anything past a third of one is a generator that does not go with the
-/// mapping it was handed rather than a rounding to be swallowed.
-const MAPPING_TOLERANCE: FloatType = 0.35;
+/// Measured rather than guessed: across the 95 mappings the Xenharmonic Wiki
+/// publishes, the worst any prime lands from a whole number of periods is
+/// 0.113, and all but a handful are inside 0.06. A fifth of a step therefore
+/// leaves most of a step of headroom over real data while still refusing a
+/// generator that does not go with its mapping.
+///
+/// It is deliberately not looser than that. [`Temperament::from_published`]
+/// tries two readings, which doubles the chance of accepting a pairing that is
+/// simply wrong, and a wrong pairing is not always far out: meantone's mapping
+/// against porcupine's generator lands 0.279 away when negated, so a tolerance
+/// of a third of a step would wave it through.
+const MAPPING_TOLERANCE: FloatType = 0.2;
 
 /// A regular temperament: a period, some generators, and a mapping onto primes.
 ///
@@ -202,6 +210,48 @@ impl Temperament {
             period_cents,
             generator_cents: generator_cents.to_vec(),
         })
+    }
+
+    /// Builds a rank-2 temperament from a published mapping, taking the
+    /// generator either way round.
+    ///
+    /// A generator and its inverse inside the period reach the same notes — a
+    /// fifth up and a fourth down are the same chain — so a mapping written
+    /// for one of them and a tuning quoted for the other describe one
+    /// temperament and only *look* inconsistent. Sources do mix the two:
+    /// the Xenharmonic Wiki's `Mabilic and trismegistus` gives the mapping
+    /// `1; -15 -3 5`, which wants a generator of 672.8 cents, beside a tuning
+    /// of 526.7, which wants `1; 15 3 -5`.
+    ///
+    /// So this tries the mapping as written, and failing that tries it negated
+    /// against the inverse generator. [`Temperament::from_mapping`] is the
+    /// strict reading and stays strict; reach for that when the caller knows
+    /// which way round it meant. The error reported on failure is the one from
+    /// the mapping as written, since that is what the caller handed over.
+    pub fn from_published(
+        periods_per_equave: UnsignedIntegerType,
+        generator_steps: &[IntegerType],
+        generator_cents: FloatType,
+        primes: &[IntegerType],
+    ) -> Result<Self> {
+        let as_written = match Self::from_mapping(
+            periods_per_equave,
+            generator_steps,
+            generator_cents,
+            primes,
+        ) {
+            Ok(temperament) => return Ok(temperament),
+            Err(as_written) => as_written,
+        };
+        // Exactly one of the two is turned round. Negating the mapping *and*
+        // inverting the generator is the identity — it describes the same
+        // chain read the same way, and fails identically — so this negates the
+        // mapping and keeps the tuning as published. That is also the reading
+        // the prose of such a page usually agrees with, since the tuning is
+        // what its interval table is written in.
+        let flipped: Vec<IntegerType> = generator_steps.iter().map(|step| -step).collect();
+        Self::from_mapping(periods_per_equave, &flipped, generator_cents, primes)
+            .map_err(|_| as_written)
     }
 
     /// How many rows the mapping has: one for the period, one per generator.
@@ -428,12 +478,24 @@ impl crate::tuningsystem::NamedTemperament {
     /// collected entry means the wiki's generators and its mapping disagree —
     /// a mistranscription, or a page that has changed under us.
     pub fn temperament(&self) -> Result<Temperament> {
-        Temperament::from_mapping_rows(
-            self.periods_per_equave,
-            self.generator_rows,
-            self.generator_cents,
-            self.subgroup,
-        )
+        // A rank-2 entry is read either way round, because a published mapping
+        // and a published generator are not always written for the same
+        // direction of the same chain. Above rank 2 there is no single
+        // generator to invert, and every such entry here reads as written.
+        match self.generator_rows {
+            [only] => Temperament::from_published(
+                self.periods_per_equave,
+                only,
+                self.generator_cents[0],
+                self.subgroup,
+            ),
+            rows => Temperament::from_mapping_rows(
+                self.periods_per_equave,
+                rows,
+                self.generator_cents,
+                self.subgroup,
+            ),
+        }
     }
 }
 
@@ -631,7 +693,51 @@ mod tests {
             .count();
         assert_eq!(rank_three, 13, "rank-3 temperaments carried");
         assert_eq!(non_octave, 5, "temperaments repeating at something else");
-        assert_eq!(WIKI_TEMPERAMENTS.len(), 94);
+        assert_eq!(WIKI_TEMPERAMENTS.len(), 95, "every infobox on the wiki");
+        assert!(
+            crate::tuningsystem::UNMODELLED_TEMPERAMENTS.is_empty(),
+            "nothing is left out today; if something is, say why in the TOML"
+        );
+    }
+
+    /// A published mapping and a published tuning are not always written for
+    /// the same end of the same chain.
+    #[test]
+    fn a_mapping_written_for_the_other_end_of_the_chain_still_reads() {
+        // The Xenharmonic Wiki's `Mabilic and trismegistus`, verbatim: the
+        // mapping wants a generator of about 672.8 cents, and the tuning
+        // beside it is 526.7, which wants the mapping negated. Strictly, that
+        // does not resolve.
+        let steps = [-15, -3, 5];
+        let subgroup = [2, 3, 5, 7];
+        assert!(Temperament::from_mapping(1, &steps, 526.7, &subgroup).is_err());
+
+        // Read either way round, it is a perfectly ordinary temperament.
+        let read = Temperament::from_published(1, &steps, 526.7, &subgroup)
+            .expect("a mapping written the other way round");
+        assert_eq!(read.rank(), 2);
+        assert_eq!(read.period_map(), [1, -5, 1, 5]);
+        // Trismegistus finds 3 at fifteen generators and 5 at three, which is
+        // what its page says of it.
+        assert_eq!(
+            read.map(&Monzo::from_ratio(3, 1).expect("the twelfth"))
+                .expect("in the subgroup"),
+            [-5, 15]
+        );
+        assert!(read.tempers_out(&Monzo::from_ratio(1029, 1024).expect("a comma")));
+        assert!(read.tempers_out(&Monzo::from_ratio(3125, 3072).expect("a comma")));
+
+        // Turning both round is the identity, not a second reading, so a
+        // mapping that is simply wrong stays wrong.
+        assert!(Temperament::from_published(1, &[1, 4, 10], 163.6, &subgroup).is_err());
+
+        // And a mapping that reads as written is not disturbed by the fallback.
+        let meantone =
+            Temperament::from_published(1, &[1, 4, 10], 696.7, &subgroup).expect("meantone");
+        assert_eq!(
+            meantone,
+            Temperament::from_mapping(1, &[1, 4, 10], 696.7, &subgroup).expect("meantone")
+        );
     }
 
     /// Marvel has two generators, which is what rank 3 means and what the
