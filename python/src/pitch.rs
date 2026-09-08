@@ -59,7 +59,12 @@ pub(crate) fn accidental_error(error: music21_rs::Error) -> PyErr {
 }
 
 /// music21's `pitch.Microtone`.
-#[pyclass(name = "Microtone", module = "music21.pitch", skip_from_py_object)]
+#[pyclass(
+    name = "Microtone",
+    module = "music21.pitch",
+    subclass,
+    skip_from_py_object
+)]
 #[derive(Clone)]
 pub struct Microtone {
     inner: RsMicrotone,
@@ -171,7 +176,12 @@ impl Microtone {
 }
 
 /// music21's `pitch.Accidental`.
-#[pyclass(name = "Accidental", module = "music21.pitch", skip_from_py_object)]
+#[pyclass(
+    name = "Accidental",
+    module = "music21.pitch",
+    subclass,
+    skip_from_py_object
+)]
 pub struct Accidental {
     pub(crate) inner: RsAccidental,
     /// The pitch this accidental belongs to, when it came out of one.
@@ -181,12 +191,23 @@ pub struct Accidental {
     /// calling `set` on the accidental it read off a pitch, and expects the
     /// pitch to change. [`Accidental::write_back`] is what carries it there.
     owner: Option<Py<Pitch>>,
+    /// music21's `style`, once something has asked for one: the object
+    /// saying how this is drawn. It is music21's own object — the page is
+    /// not something this crate models — and its mere existence is what
+    /// `hasStyleInformation` answers, as music21's does.
+    style: Option<Py<PyAny>>,
 }
 
 impl Clone for Accidental {
-    /// A copy of an accidental is a loose one, as a copy of a pitch is.
+    /// A copy of an accidental is a loose one, as a copy of a pitch is —
+    /// but it is drawn the way the original was, so the style comes across
+    /// as music21's own deepcopy carries it.
     fn clone(&self) -> Self {
-        Self::from_inner(self.inner.clone())
+        Python::attach(|py| Self {
+            inner: self.inner.clone(),
+            owner: None,
+            style: crate::notation::copied_style(py, self.style.as_ref()),
+        })
     }
 }
 
@@ -208,7 +229,11 @@ fn accidental_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsAccidental> {
 
 impl Accidental {
     pub(crate) fn from_inner(inner: RsAccidental) -> Self {
-        Self { inner, owner: None }
+        Self {
+            inner,
+            owner: None,
+            style: None,
+        }
     }
 
     /// The same accidental, knowing which pitch it came off.
@@ -216,6 +241,7 @@ impl Accidental {
         Self {
             inner,
             owner: Some(pitch),
+            style: None,
         }
     }
 
@@ -230,7 +256,13 @@ impl Accidental {
         let Some(owner) = &self.owner else {
             return Ok(());
         };
-        Pitch::take_accidental_value(owner.bind(py), self.inner.clone())
+        let mut value = self.inner.clone();
+        // music21 keeps the colour on the style, so an edit through
+        // `a.style.color` is an edit to the accidental.
+        if self.style.is_some() {
+            value.set_color(crate::notation::style_colour(py, self.style.as_ref()));
+        }
+        Pitch::take_accidental_value(owner.bind(py), value)
     }
 }
 
@@ -363,16 +395,22 @@ impl Accidental {
         self.inner.full_name().to_string()
     }
 
+    /// music21's `style`: the object saying how this is drawn, made on
+    /// first asking and the same one after that. It is music21's own — the
+    /// page is not something this crate models — with the colour, which it
+    /// does model, written into it.
     #[getter]
-    fn get_style(slf: &Bound<'_, Self>) -> crate::notation::Style {
-        crate::notation::Style {
-            owner: crate::notation::StyleOwner::Accidental(slf.clone().unbind()),
+    fn get_style(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
+        let py = slf.py();
+        if let Some(style) = &slf.borrow().style {
+            return Ok(style.clone_ref(py));
         }
+        let colour = slf.borrow().inner.color().map(str::to_string);
+        let style = crate::notation::new_style(slf.as_any(), colour.as_deref())?;
+        slf.borrow_mut().style = Some(style.clone_ref(py));
+        Ok(style)
     }
 
-    /// music21 hands a whole style object over. What this crate keeps of a
-    /// style is the colour, so that is what comes across; the rest of what
-    /// music21 puts there is the page, which the crate does not model.
     #[setter]
     fn set_style(slf: &Bound<'_, Self>, value: &Bound<'_, PyAny>) -> PyResult<()> {
         let colour: Option<String> = value
@@ -380,12 +418,16 @@ impl Accidental {
             .ok()
             .and_then(|colour| colour.extract().ok());
         slf.borrow_mut().inner.set_color(colour);
-        slf.borrow().write_back(slf.py())
+        slf.borrow().write_back(slf.py())?;
+        slf.borrow_mut().style = Some(value.clone().unbind());
+        Ok(())
     }
 
+    /// music21's `hasStyleInformation`: whether a style object has been made
+    /// for this yet, which is what its own code asks before making one.
     #[getter]
     fn hasStyleInformation(&self) -> bool {
-        self.inner.color().is_some()
+        self.style.is_some()
     }
 
     /// music21's `inheritDisplay`: copies every display setting from another
@@ -558,7 +600,13 @@ impl Accidental {
 // `dict`: music21's own pitch is not slotted, and its code decorates one —
 // `audioSearch` hangs the frequency it heard on the pitch it decided — so a
 // pitch here takes an attribute nobody here has heard of, as that one does.
-#[pyclass(name = "Pitch", module = "music21.pitch", dict, skip_from_py_object)]
+#[pyclass(
+    name = "Pitch",
+    module = "music21.pitch",
+    dict,
+    subclass,
+    skip_from_py_object
+)]
 pub struct Pitch {
     pub(crate) inner: RsPitch,
     pub(crate) spelling_is_inferred: bool,

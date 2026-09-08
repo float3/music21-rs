@@ -14,9 +14,7 @@ use music21_rs::{
 };
 
 use crate::interval::interval_from_any;
-use crate::notation::{
-    Beams, Lyric, Style, StyleOwner, Tie, Volume, tie_from_any, volume_from_any,
-};
+use crate::notation::{Beams, Tie, Volume, tie_from_any, volume_from_any};
 use crate::note::{
     Duration, Note, augment_or_diminish_note, duration_from_any, grace_note, instrument_for_note,
     note_from_any,
@@ -74,9 +72,24 @@ pub struct Chord {
     /// say "this chord has no root at all". So the dictionary is the storage
     /// the facade reads, made on first asking and kept.
     overrides: Option<Py<PyDict>>,
+    /// music21's `style`, once something has asked for one: the object
+    /// saying how this is drawn. It is music21's own object — the page is
+    /// not something this crate models — and its mere existence is what
+    /// `hasStyleInformation` answers, as music21's does.
+    style: Option<Py<PyAny>>,
 }
 
 impl Chord {
+    /// The colour the chord is written in: what its style says if it has
+    /// one, since that is where music21 keeps it, and what the value says
+    /// otherwise.
+    pub(crate) fn colour(&self, py: Python<'_>) -> Option<String> {
+        if self.style.is_some() {
+            return crate::notation::style_colour(py, self.style.as_ref());
+        }
+        self.inner.color().map(str::to_string)
+    }
+
     /// Builds the facade around a chord, giving each of its notes a Python
     /// object of its own.
     pub(crate) fn from_inner(py: Python<'_>, inner: RsChord) -> PyResult<Self> {
@@ -89,6 +102,7 @@ impl Chord {
             expressions: None,
             articulations: None,
             overrides: None,
+            style: None,
         };
         chord.rebuild_notes(py)?;
         Ok(chord)
@@ -155,6 +169,7 @@ impl Chord {
             expressions: None,
             articulations: None,
             overrides: None,
+            style: None,
         })
     }
 
@@ -575,6 +590,7 @@ fn require_iterable(value: &Bound<'_, PyAny>, field: &str) -> PyResult<()> {
 #[pyclass(
     name = "ChordTableAddress",
     module = "music21.chord.tables",
+    subclass,
     skip_from_py_object
 )]
 #[derive(Clone)]
@@ -751,9 +767,20 @@ fn key_value(value: &Bound<'_, PyAny>) -> Option<RsKey> {
 #[pymethods]
 impl Chord {
     /// A chord is written out as text and read back, and its notes are made
-    /// again from what it says.
+    /// again from what it says. Its ornaments, its marks and the root a
+    /// caller fixed are Python objects the value does not carry, so they go
+    /// beside it.
     fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<(Py<PyAny>, (), Py<PyAny>)> {
-        crate::pickled(slf, &slf.borrow().inner)
+        let py = slf.py();
+        let extra = PyDict::new(py);
+        {
+            let chord = slf.borrow();
+            extra.set_item("expressions", chord.expressions.as_ref())?;
+            extra.set_item("articulations", chord.articulations.as_ref())?;
+            extra.set_item("storedInstrument", chord.stored_instrument.as_ref())?;
+            extra.set_item("_overrides", chord.overrides.as_ref())?;
+        }
+        crate::pickled_extra(slf, &slf.borrow().inner, Some(&extra))
     }
 
     fn __setstate__(
@@ -761,11 +788,21 @@ impl Chord {
         py: Python<'_>,
         state: &Bound<'_, PyAny>,
     ) -> PyResult<()> {
-        let Some(inner) = crate::unpickled::<_, RsChord>(slf, state)? else {
+        let (inner, extra) = crate::unpickled_extra::<_, RsChord>(slf, state)?;
+        let Some(inner) = inner else {
             return Ok(());
         };
         let rebuilt = Self::from_inner(py, inner)?;
         *slf.borrow_mut() = rebuilt;
+        if let Some(extra) = extra {
+            let extra = extra.bind(py);
+            let mut chord = slf.borrow_mut();
+            chord.expressions = extra.get_item("expressions")?.extract().ok();
+            chord.articulations = extra.get_item("articulations")?.extract().ok();
+            chord.overrides = extra.get_item("_overrides")?.extract().ok();
+            chord.stored_instrument = Some(extra.get_item("storedInstrument")?.unbind())
+                .filter(|value| !value.is_none(py));
+        }
         Ok(())
     }
 
@@ -834,6 +871,19 @@ impl Chord {
     #[getter]
     fn get_notes<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyTuple>> {
         PyTuple::new(slf.py(), Self::note_objects(slf))
+    }
+
+    /// music21 keeps the notes in `_notes` and its own code reaches for the
+    /// slot — its tests tie a note by writing through it — so the slot
+    /// answers here too, as the chord's own note objects.
+    #[getter]
+    fn _notes<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyList>> {
+        PyList::new(slf.py(), Self::note_objects(slf))
+    }
+
+    #[setter]
+    fn set__notes(slf: &Bound<'_, Self>, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        Self::set_notes(&mut slf.borrow_mut(), py, value)
     }
 
     #[setter]
@@ -1793,11 +1843,16 @@ impl Chord {
     /// music21's `beams`: the beams joining the chord's flags to its
     /// neighbours'.
     #[getter]
-    fn get_beams(slf: &Bound<'_, Self>) -> PyResult<Beams> {
-        Ok(Beams::owned_by(
-            slf.borrow().inner.beams().clone(),
-            slf.clone().unbind().into_any(),
-        ))
+    fn get_beams(slf: &Bound<'_, Self>) -> PyResult<Py<Beams>> {
+        crate::installed_new(
+            slf.py(),
+            "music21.beam",
+            "Beams",
+            Beams::owned_by(
+                slf.borrow().inner.beams().clone(),
+                slf.clone().unbind().into_any(),
+            ),
+        )
     }
 
     #[setter]
@@ -1809,16 +1864,22 @@ impl Chord {
 
     // ---- notation --------------------------------------------------------
 
+    /// music21's `style`: the object saying how this is drawn, made on
+    /// first asking and the same one after that. It is music21's own — the
+    /// page is not something this crate models — with the colour, which it
+    /// does model, written into it.
     #[getter]
-    fn get_style(slf: &Bound<'_, Self>) -> Style {
-        Style {
-            owner: StyleOwner::Chord(slf.clone().unbind()),
+    fn get_style(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
+        let py = slf.py();
+        if let Some(style) = &slf.borrow().style {
+            return Ok(style.clone_ref(py));
         }
+        let colour = slf.borrow().inner.color().map(str::to_string);
+        let style = crate::notation::new_style(slf.as_any(), colour.as_deref())?;
+        slf.borrow_mut().style = Some(style.clone_ref(py));
+        Ok(style)
     }
 
-    /// music21 hands a whole style object over. What this crate keeps of a
-    /// style is the colour, so that is what comes across; the rest of what
-    /// music21 puts there is the page, which the crate does not model.
     #[setter]
     fn set_style(slf: &Bound<'_, Self>, value: &Bound<'_, PyAny>) -> PyResult<()> {
         let colour: Option<String> = value
@@ -1826,20 +1887,23 @@ impl Chord {
             .ok()
             .and_then(|colour| colour.extract().ok());
         slf.borrow_mut().inner.set_color(colour);
+        slf.borrow_mut().style = Some(value.clone().unbind());
         Ok(())
     }
 
+    /// music21's `hasStyleInformation`: whether a style object has been made
+    /// for this yet, which is what its own code asks before making one.
     #[getter]
     fn hasStyleInformation(&self) -> bool {
-        self.inner.color().is_some()
+        self.style.is_some()
     }
 
     /// music21's `getColor`: the note's own colour when it has one, and the
     /// chord's otherwise.
     fn getColor(&self, py: Python<'_>, pitchTarget: &Bound<'_, PyAny>) -> PyResult<Option<String>> {
         let note = self.note_object(py, pitchTarget)?;
-        let color = note.borrow(py).inner.color().map(str::to_string);
-        Ok(color.or_else(|| self.inner.color().map(str::to_string)))
+        let color = note.borrow(py).colour(py);
+        Ok(color.or_else(|| self.colour(py)))
     }
 
     #[pyo3(signature = (value, pitchTarget = None))]
@@ -2074,18 +2138,18 @@ impl Chord {
     }
 
     #[getter]
-    fn get_lyrics(&self, py: Python<'_>) -> Vec<Lyric> {
-        self.notes
-            .first()
-            .map(|note| note.borrow(py).get_lyrics())
-            .unwrap_or_default()
+    fn get_lyrics<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
+        match self.notes.first() {
+            Some(note) => crate::note::Note::get_lyrics(note.bind(py)),
+            None => Ok(PyList::empty(py)),
+        }
     }
 
     /// A chord is sung to one text, which its first note carries.
     #[setter]
     fn set_lyrics(&mut self, py: Python<'_>, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
         if let Some(note) = self.notes.first() {
-            note.borrow_mut(py).set_lyrics(value)?;
+            crate::note::Note::set_lyrics(note.bind(py), value)?;
         }
         Ok(())
     }
@@ -2138,7 +2202,7 @@ impl Chord {
     #[setter]
     fn set_lyric(&mut self, py: Python<'_>, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
         match self.notes.first() {
-            Some(note) => note.borrow_mut(py).set_lyric(value),
+            Some(note) => note.borrow_mut(py).set_lyric(py, value),
             None => Ok(()),
         }
     }
@@ -2316,6 +2380,7 @@ impl Chord {
         // be written.
         copied.expressions = crate::note::copied_list(py, self.expressions.as_ref())?;
         copied.articulations = crate::note::copied_list(py, self.articulations.as_ref())?;
+        copied.style = crate::notation::copied_style(py, self.style.as_ref());
         Ok(copied)
     }
 }

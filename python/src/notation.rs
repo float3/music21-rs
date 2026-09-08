@@ -1,5 +1,5 @@
-//! music21's `tie.Tie`, `note.Lyric`, `volume.Volume` and the slice of
-//! `style.Style` that a note carries, over `music21-rs`.
+//! music21's `tie.Tie`, `note.Lyric`, `volume.Volume`, its beams and the
+//! colour a note is written in, over `music21-rs`.
 
 #![allow(non_snake_case)]
 
@@ -20,9 +20,6 @@ pub const TIE_NAMES: &[&str] = &["Tie", "TieException"];
 
 /// The names the `notation` facade replaces in `music21.volume`.
 pub const VOLUME_NAMES: &[&str] = &["Volume", "VolumeException"];
-
-/// The names the `notation` facade replaces in `music21.style`.
-pub const STYLE_NAMES: &[&str] = &["Style"];
 
 /// The names the `notation` facade replaces in `music21.beam`.
 pub const BEAM_NAMES: &[&str] = &["Beam", "Beams", "BeamException"];
@@ -49,7 +46,7 @@ fn volume_error(error: music21_rs::Error) -> PyErr {
 }
 
 /// music21's `tie.Tie`.
-#[pyclass(name = "Tie", module = "music21.tie", skip_from_py_object)]
+#[pyclass(name = "Tie", module = "music21.tie", subclass, skip_from_py_object)]
 #[derive(Clone)]
 pub struct Tie {
     pub(crate) inner: RsTie,
@@ -103,20 +100,6 @@ impl Tie {
         Ok(())
     }
 
-    /// music21 gives everything that is written a style. What this crate
-    /// models of one is the colour, and this carries none — so the style is
-    /// there, and says nothing.
-    #[getter]
-    fn style(&self) -> Style {
-        Style {
-            owner: StyleOwner::Detached,
-        }
-    }
-
-    #[getter]
-    fn hasStyleInformation(&self) -> bool {
-        false
-    }
     #[new]
     #[pyo3(signature = (r#type = "start"))]
     fn new(r#type: &str) -> PyResult<Self> {
@@ -186,7 +169,7 @@ impl Tie {
 }
 
 /// music21's `note.Lyric`.
-#[pyclass(name = "Lyric", module = "music21.note", skip_from_py_object)]
+#[pyclass(name = "Lyric", module = "music21.note", subclass, skip_from_py_object)]
 pub struct Lyric {
     pub(crate) inner: RsLyric,
     /// The syllables an elided lyric is made of, as the Python list a
@@ -199,6 +182,8 @@ pub struct Lyric {
     /// elision character and then the syllabic on a component already inside
     /// the composite, and both have to show through.
     components: Option<Py<PyList>>,
+    /// music21's `style`, once something has asked for one.
+    style: Option<Py<PyAny>>,
 }
 
 impl Lyric {
@@ -206,6 +191,7 @@ impl Lyric {
         Self {
             inner,
             components: None,
+            style: None,
         }
     }
 
@@ -234,6 +220,7 @@ impl Clone for Lyric {
     fn clone(&self) -> Self {
         Python::attach(|py| Self {
             inner: self.inner.clone(),
+            style: copied_style(py, self.style.as_ref()),
             components: self.components.as_ref().and_then(|list| {
                 let copies: Vec<Py<Lyric>> = list
                     .bind(py)
@@ -291,20 +278,6 @@ impl Lyric {
         Ok(())
     }
 
-    /// music21 gives everything that is written a style. What this crate
-    /// models of one is the colour, and this carries none — so the style is
-    /// there, and says nothing.
-    #[getter]
-    fn style(&self) -> Style {
-        Style {
-            owner: StyleOwner::Detached,
-        }
-    }
-
-    #[getter]
-    fn hasStyleInformation(&self) -> bool {
-        false
-    }
     #[new]
     #[pyo3(signature = (text = None, number = 1, *, applyRaw = false, syllabic = None, identifier = None))]
     fn new(
@@ -325,6 +298,33 @@ impl Lyric {
         }
         inner.set_identifier(identifier);
         Ok(Self::wrap(inner))
+    }
+
+    /// music21's `style`: the object saying how this is drawn, made on
+    /// first asking and the same one after that. It is music21's own — the
+    /// page is not something this crate models.
+    #[getter]
+    fn get_style(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
+        let py = slf.py();
+        if let Some(style) = &slf.borrow().style {
+            return Ok(style.clone_ref(py));
+        }
+        let style = new_style(slf.as_any(), None)?;
+        slf.borrow_mut().style = Some(style.clone_ref(py));
+        Ok(style)
+    }
+
+    #[setter]
+    fn set_style(slf: &Bound<'_, Self>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        slf.borrow_mut().style = Some(value.clone().unbind());
+        Ok(())
+    }
+
+    /// music21's `hasStyleInformation`: whether a style object has been made
+    /// for this yet, which is what its own code asks before making one.
+    #[getter]
+    fn hasStyleInformation(&self) -> bool {
+        self.style.is_some()
     }
 
     #[getter]
@@ -482,10 +482,37 @@ impl Lyric {
 }
 
 /// music21's `beam.Beam`: one beam at one level.
-#[pyclass(name = "Beam", module = "music21.beam", skip_from_py_object)]
-#[derive(Clone)]
+#[pyclass(name = "Beam", module = "music21.beam", subclass, skip_from_py_object)]
 pub struct Beam {
     pub(crate) inner: RsBeam,
+    /// music21's `id`, which its MusicXML exporter reads. It is an
+    /// identifier and not a musical fact, so nothing here works it out — it
+    /// starts as the object's own address, as music21's does, and whatever
+    /// a caller writes stands.
+    identifier: Option<Py<PyAny>>,
+    /// music21's `independentAngle`: the angle this one beam is drawn at,
+    /// where it is not the angle the rest of the beam group takes. It is
+    /// the page, which the crate does not model, so it is kept as given.
+    independent_angle: Option<Py<PyAny>>,
+    /// music21's `style`, once something has asked for one: the object
+    /// saying how this is drawn. It is music21's own object — the page is
+    /// not something this crate models — and its mere existence is what
+    /// `hasStyleInformation` answers, as music21's does.
+    style: Option<Py<PyAny>>,
+}
+
+impl Clone for Beam {
+    /// A copy of a beam is a loose one: it says the same thing about the
+    /// note and is drawn the same way, and carries neither the identifier
+    /// the original went by nor its angle.
+    fn clone(&self) -> Self {
+        Python::attach(|py| Self {
+            inner: self.inner,
+            identifier: None,
+            independent_angle: None,
+            style: copied_style(py, self.style.as_ref()),
+        })
+    }
 }
 
 /// Reads music21's beam type name.
@@ -561,20 +588,6 @@ impl Beam {
         Ok(())
     }
 
-    /// music21 gives everything that is written a style. What this crate
-    /// models of one is the colour, and this carries none — so the style is
-    /// there, and says nothing.
-    #[getter]
-    fn style(&self) -> Style {
-        Style {
-            owner: StyleOwner::Detached,
-        }
-    }
-
-    #[getter]
-    fn hasStyleInformation(&self) -> bool {
-        false
-    }
     #[new]
     #[pyo3(signature = (r#type = None, direction = None, number = None, **_keywords))]
     fn new(
@@ -585,7 +598,12 @@ impl Beam {
     ) -> PyResult<Self> {
         let mut inner = RsBeam::new(beam_type_or_none(r#type)?, beam_direction_of(direction)?);
         inner.set_number(number);
-        Ok(Self { inner })
+        Ok(Self {
+            inner,
+            identifier: None,
+            independent_angle: None,
+            style: None,
+        })
     }
 
     #[getter]
@@ -620,6 +638,70 @@ impl Beam {
         self.inner.set_number(value);
     }
 
+    /// music21's `style`: the object saying how this is drawn, made on
+    /// first asking and the same one after that. It is music21's own — the
+    /// page is not something this crate models.
+    #[getter]
+    fn get_style(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
+        let py = slf.py();
+        if let Some(style) = &slf.borrow().style {
+            return Ok(style.clone_ref(py));
+        }
+        let style = new_style(slf.as_any(), None)?;
+        slf.borrow_mut().style = Some(style.clone_ref(py));
+        Ok(style)
+    }
+
+    #[setter]
+    fn set_style(slf: &Bound<'_, Self>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        slf.borrow_mut().style = Some(value.clone().unbind());
+        Ok(())
+    }
+
+    /// music21's `hasStyleInformation`: whether a style object has been made
+    /// for this yet, which is what its own code asks before making one.
+    #[getter]
+    fn hasStyleInformation(&self) -> bool {
+        self.style.is_some()
+    }
+
+    /// music21's `id`: an identifier its MusicXML exporter writes out. It
+    /// starts as the object's own address, as music21's does.
+    #[getter]
+    fn get_id(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
+        let py = slf.py();
+        if let Some(identifier) = &slf.borrow().identifier {
+            return Ok(identifier.clone_ref(py));
+        }
+        let address = (slf.as_ptr() as usize)
+            .into_pyobject(py)?
+            .into_any()
+            .unbind();
+        slf.borrow_mut().identifier = Some(address.clone_ref(py));
+        Ok(address)
+    }
+
+    #[setter]
+    fn set_id(&mut self, value: &Bound<'_, PyAny>) {
+        self.identifier = Some(value.clone().unbind());
+    }
+
+    /// music21's `independentAngle`: the angle this one beam is drawn at.
+    /// The page is not modelled here, so what a caller writes is kept and
+    /// handed back.
+    #[getter]
+    fn get_independentAngle(&self, py: Python<'_>) -> Py<PyAny> {
+        match &self.independent_angle {
+            Some(angle) => angle.clone_ref(py),
+            None => py.None(),
+        }
+    }
+
+    #[setter]
+    fn set_independentAngle(&mut self, value: &Bound<'_, PyAny>) {
+        self.independent_angle = (!value.is_none()).then(|| value.clone().unbind());
+    }
+
     fn __repr__(&self) -> String {
         format!("<music21.beam.Beam {}>", self.inner)
     }
@@ -641,7 +723,7 @@ impl Beam {
 
 /// music21's `beam.Beams`: the beams of one note, one for each level it is
 /// beamed at.
-#[pyclass(name = "Beams", module = "music21.beam", skip_from_py_object)]
+#[pyclass(name = "Beams", module = "music21.beam", subclass, skip_from_py_object)]
 pub struct Beams {
     pub(crate) inner: RsBeams,
     /// The note or chord these belong to, so an edit through them reaches it.
@@ -781,7 +863,12 @@ impl Beams {
         self.inner
             .beams()
             .iter()
-            .map(|beam| Beam { inner: *beam })
+            .map(|beam| Beam {
+                inner: *beam,
+                identifier: None,
+                independent_angle: None,
+                style: None,
+            })
             .collect()
     }
 
@@ -886,7 +973,12 @@ impl Beams {
     fn getByNumber(&self, number: u32) -> PyResult<Beam> {
         self.inner
             .by_number(number)
-            .map(|beam| Beam { inner: *beam })
+            .map(|beam| Beam {
+                inner: *beam,
+                identifier: None,
+                independent_angle: None,
+                style: None,
+            })
             .ok_or_else(|| {
                 PyIndexError::new_err(format!("beam number {number} cannot be accessed"))
             })
@@ -1046,7 +1138,12 @@ impl Beams {
 }
 
 /// music21's `volume.Volume`.
-#[pyclass(name = "Volume", module = "music21.volume", skip_from_py_object)]
+#[pyclass(
+    name = "Volume",
+    module = "music21.volume",
+    subclass,
+    skip_from_py_object
+)]
 pub struct Volume {
     pub(crate) inner: RsVolume,
     /// The note or chord this volume belongs to. music21's `_setVolume`
@@ -1123,9 +1220,14 @@ impl Volume {
 }
 
 impl Clone for Volume {
-    /// A copy of a volume belongs to nobody yet, as music21's does.
+    /// A copy of a volume belongs to whoever the original did: music21's
+    /// `__deepcopy__` leaves the client out of the copying and then writes
+    /// the same one in, so a copy is still the volume of that note.
     fn clone(&self) -> Self {
-        Self::wrap(self.inner.clone())
+        Python::attach(|py| Self {
+            inner: self.inner.clone(),
+            client: self.client.as_ref().map(|client| client.clone_ref(py)),
+        })
     }
 }
 
@@ -1369,122 +1471,51 @@ impl Volume {
     }
 }
 
-/// Which object a [`Style`] writes back into.
-pub(crate) enum StyleOwner {
-    /// A note's style.
-    Note(Py<crate::note::Note>),
-    /// A chord's own style, which its notes fall back to.
-    Chord(Py<crate::chord::Chord>),
-    /// An accidental's style.
-    Accidental(Py<crate::pitch::Accidental>),
-    /// The style of something that carries no colour of its own here — a
-    /// lyric, a beam. music21 gives everything a style; what this crate
-    /// models of one is the colour, and these have none to model.
-    Detached,
+/// The music21 style object something is drawn with, made the way music21
+/// makes it.
+///
+/// This crate models the colour and nothing else of a style; music21's own
+/// `Style` carries the page — where the object sits, how large it is drawn,
+/// what encloses it, what an editor wrote about it — and a class of ours
+/// standing in its place would take all of that away. So the object handed
+/// back is music21's, of whatever `_styleClass` the thing being drawn asks
+/// for, and the colour the crate does model is written into it and read
+/// back out of it.
+pub(crate) fn new_style<'py>(
+    owner: &Bound<'py, PyAny>,
+    colour: Option<&str>,
+) -> PyResult<Py<PyAny>> {
+    let py = owner.py();
+    let module = py.import("music21.style")?;
+    let class = match owner.get_type().getattr("_styleClass") {
+        Ok(class) => class,
+        Err(_) => module.getattr("Style")?,
+    };
+    let style = class.call0()?;
+    if let Some(colour) = colour {
+        style.setattr("color", colour)?;
+    }
+    Ok(style.unbind())
 }
 
-/// The part of music21's `style.Style` a note or chord carries here: the
-/// colour it is written in. music21's Style also holds layout — absolute and
-/// relative positions, sizes, page breaks — which needs a page to mean
-/// anything and is not modelled.
-#[pyclass(name = "Style", module = "music21.style", skip_from_py_object)]
-pub struct Style {
-    pub(crate) owner: StyleOwner,
+/// A copy of a style object, as music21's own deepcopy makes one: a copy of
+/// a note is drawn the same way the note was.
+pub(crate) fn copied_style(py: Python<'_>, style: Option<&Py<PyAny>>) -> Option<Py<PyAny>> {
+    let style = style?;
+    Some(
+        py.import("copy")
+            .ok()?
+            .getattr("deepcopy")
+            .ok()?
+            .call1((style,))
+            .ok()?
+            .unbind(),
+    )
 }
 
-/// The fields music21 keeps on a style, none of which this crate models:
-/// where on the page the object sits, how large it is drawn, what encloses
-/// it. music21's own notation code reads them, so they answer — with
-/// nothing, which is what music21's own style says until a score writes
-/// something there.
-const LAYOUT_FIELDS: &[&str] = &[
-    "absoluteX",
-    "absoluteY",
-    "accidentalStyle",
-    "alignHorizontal",
-    "alignVertical",
-    "dashLength",
-    "enclosure",
-    "fontFamily",
-    "fontRepresentation",
-    "fontSize",
-    "fontStyle",
-    "fontWeight",
-    "hideObjectOnPrint",
-    "justify",
-    "letterSpacing",
-    "noteSize",
-    "relativeX",
-    "relativeY",
-    "size",
-    "spaceLength",
-    "stemStyle",
-    "units",
-];
-
-#[pymethods]
-impl Style {
-    /// One of those fields, which reads as nothing.
-    fn __getattr__(&self, py: Python<'_>, name: &str) -> PyResult<Py<PyAny>> {
-        if !LAYOUT_FIELDS.contains(&name) {
-            return Err(pyo3::exceptions::PyAttributeError::new_err(format!(
-                "'music21.style.Style' object has no attribute '{name}'"
-            )));
-        }
-        Ok(py.None())
-    }
-
-    /// Writing one is taken and not kept. The page is not something this
-    /// crate models, and pretending to remember where a note sits on one
-    /// would say more than it knows.
-    fn __setattr__(
-        &mut self,
-        py: Python<'_>,
-        name: &str,
-        value: &Bound<'_, PyAny>,
-    ) -> PyResult<()> {
-        // Defining this at all takes the colour setter out of play, so the
-        // one field the crate does model is passed on by hand.
-        if name == "color" {
-            self.set_color(py, value.extract()?);
-            return Ok(());
-        }
-        if !LAYOUT_FIELDS.contains(&name) {
-            return Err(pyo3::exceptions::PyAttributeError::new_err(format!(
-                "'music21.style.Style' object has no attribute '{name}'"
-            )));
-        }
-        Ok(())
-    }
-
-    #[getter]
-    fn get_color(&self, py: Python<'_>) -> Option<String> {
-        match &self.owner {
-            StyleOwner::Note(note) => note.borrow(py).inner.color().map(str::to_string),
-            StyleOwner::Chord(chord) => chord.borrow(py).inner.color().map(str::to_string),
-            StyleOwner::Accidental(accidental) => {
-                accidental.borrow(py).inner.color().map(str::to_string)
-            }
-            StyleOwner::Detached => None,
-        }
-    }
-
-    #[setter]
-    fn set_color(&mut self, py: Python<'_>, value: Option<String>) {
-        match &self.owner {
-            StyleOwner::Note(note) => note.borrow_mut(py).inner.set_color(value),
-            StyleOwner::Chord(chord) => chord.borrow_mut(py).inner.set_color(value),
-            StyleOwner::Accidental(accidental) => accidental.borrow_mut(py).inner.set_color(value),
-            StyleOwner::Detached => {}
-        }
-    }
-
-    fn __repr__(&self, py: Python<'_>) -> String {
-        match self.get_color(py) {
-            Some(color) => format!("<music21.style.Style color={color:?}>"),
-            None => "<music21.style.Style>".to_string(),
-        }
-    }
+/// The colour a style object is carrying, if it is carrying one.
+pub(crate) fn style_colour(py: Python<'_>, style: Option<&Py<PyAny>>) -> Option<String> {
+    style?.bind(py).getattr("color").ok()?.extract().ok()
 }
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -1492,7 +1523,6 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Tie>()?;
     m.add_class::<Lyric>()?;
     m.add_class::<Volume>()?;
-    m.add_class::<Style>()?;
     m.add_class::<Beam>()?;
     m.add_class::<Beams>()?;
     let tie_exception = py.get_type::<TieException>();

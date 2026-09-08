@@ -1692,7 +1692,7 @@ impl Reading {
             Self::Scale(scale) => {
                 let count = IntegerType::from(self.cardinality());
                 let wrapped = (degree - 1).rem_euclid(count) + 1;
-                scale.pitch_at_degree(wrapped as usize)
+                scale.pitch_at_degree(wrapped)
             }
         }
     }

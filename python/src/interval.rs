@@ -579,7 +579,7 @@ impl GenericInterval {
             self.complemented = Some(crate::installed_new(
                 py,
                 "music21.interval",
-                "Interval",
+                "GenericInterval",
                 Self::wrap(self.inner.complement()),
             )?);
         }

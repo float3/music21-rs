@@ -495,6 +495,7 @@ impl HistoricalTwelveToneRow {
 #[pyclass(
     name = "TwelveToneMatrix",
     module = "music21.serial",
+    subclass,
     skip_from_py_object
 )]
 pub struct TwelveToneMatrix {

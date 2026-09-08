@@ -1512,7 +1512,10 @@ impl Pitch {
     /// octave and any microtone, as in `E-flat in octave 4 (+20c)`.
     pub fn full_name(&self) -> String {
         let mut name = self.step.as_char().to_string();
-        if self.accidental.alter() != 0.0 {
+        // music21 asks whether the pitch carries an accidental object, not
+        // whether that accidental alters anything: a written natural is
+        // named, and a bare `C` — which carries none — is not.
+        if self.has_accidental {
             name.push('-');
             name.push_str(self.accidental.full_name());
         }

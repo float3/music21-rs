@@ -850,7 +850,7 @@ impl ConcreteScale {
     ))]
     fn pitchFromDegree(
         &self,
-        degree: usize,
+        degree: i32,
         minPitch: Option<&Bound<'_, PyAny>>,
         maxPitch: Option<&Bound<'_, PyAny>>,
         direction: Option<&Bound<'_, PyAny>>,

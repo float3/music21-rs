@@ -44,6 +44,7 @@ fn notation_error(error: music21_rs::Error) -> PyErr {
 #[pyclass(
     name = "Modifier",
     module = "music21.figuredBass.notation",
+    subclass,
     skip_from_py_object
 )]
 #[derive(Clone)]
@@ -133,6 +134,7 @@ impl Modifier {
 #[pyclass(
     name = "Figure",
     module = "music21.figuredBass.notation",
+    subclass,
     skip_from_py_object
 )]
 #[derive(Clone)]
@@ -215,6 +217,7 @@ impl Figure {
 #[pyclass(
     name = "Notation",
     module = "music21.figuredBass.notation",
+    subclass,
     skip_from_py_object
 )]
 #[derive(Clone)]

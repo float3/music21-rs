@@ -767,19 +767,19 @@ impl Scale {
 
     /// Returns the pitch at a one-based scale degree.
     ///
-    /// Degree 1 is the tonic and `degree_count() + 1` is the octave above it.
-    /// Degrees beyond that continue into higher octaves.
-    pub fn pitch_at_degree(&self, degree: usize) -> Result<Pitch> {
-        if degree == 0 {
-            return Err(crate::error::Error::Scale(
-                "scale degree must be >= 1".to_string(),
-            ));
-        }
-
+    /// Degree 1 is the tonic. Every other degree is read within the one
+    /// octave the scale is realized in, so the eighth degree is the tonic
+    /// again and not the octave above it, and the zeroth and the negative
+    /// degrees count back round from the top. That is music21's
+    /// `pitchFromDegree`, which asks its interval network for the node the
+    /// degree names and gets one of the nodes it has.
+    pub fn pitch_at_degree(&self, degree: IntegerType) -> Result<Pitch> {
         let simplification = self.scale_type.simplification();
         let steps = self.walk()?;
+        let count = self.degree_count().max(1) as IntegerType;
+        let wrapped = (degree - 1).rem_euclid(count);
         let mut current = self.realization_start()?;
-        for index in 0..(degree - 1) {
+        for index in 0..wrapped as usize {
             current = advance(&current, &steps[index % steps.len()], simplification)?;
         }
         Ok(current)
@@ -841,12 +841,12 @@ impl Scale {
     /// The note the scale comes to rest on, as it sounds: music21's
     /// `getTonic`, which is the fourth degree of a plagal mode.
     pub fn final_pitch(&self) -> Result<Pitch> {
-        self.pitch_at_degree(self.scale_type.tonic_degree())
+        self.pitch_at_degree(self.scale_type.tonic_degree() as IntegerType)
     }
 
     /// The reciting tone: music21's `getDominant`.
     pub fn dominant(&self) -> Result<Pitch> {
-        self.pitch_at_degree(self.scale_type.dominant_degree())
+        self.pitch_at_degree(self.scale_type.dominant_degree() as IntegerType)
     }
 
     /// The seventh degree raised or lowered to sit a semitone below the
@@ -875,7 +875,8 @@ impl Scale {
         if tonic.octave().is_none() {
             tonic.octave_setter(implicit_octave);
         }
-        let degree_pitch = Scale::new(self.scale_type, tonic.clone()).pitch_at_degree(degree)?;
+        let degree_pitch =
+            Scale::new(self.scale_type, tonic.clone()).pitch_at_degree(degree as IntegerType)?;
         let up_to_degree = Interval::between_pitches(&tonic, &degree_pitch)?;
         let mut reference = pitch.clone();
         if reference.octave().is_none() {
@@ -933,17 +934,9 @@ impl Scale {
     /// 9 of a seven-note scale is degree 2 and the interval from 2 to 9 is a
     /// unison.
     pub fn interval_between_degrees(&self, start: usize, end: usize) -> Result<Interval> {
-        let fold = |degree: usize| -> usize {
-            let count = self.scale_type.degree_count();
-            if degree <= count + 1 {
-                degree
-            } else {
-                (degree - 1) % count + 1
-            }
-        };
         Interval::between_pitches(
-            &self.pitch_at_degree(fold(start))?,
-            &self.pitch_at_degree(fold(end))?,
+            &self.pitch_at_degree(start as IntegerType)?,
+            &self.pitch_at_degree(end as IntegerType)?,
         )
     }
 
@@ -1225,7 +1218,11 @@ mod tests {
             .map(Pitch::name_with_octave)
             .collect();
         assert_eq!(realized, ["C4", "E-4", "G-4", "A4", "C5"]);
-        assert_eq!(scale.pitch_at_degree(5).unwrap().name_with_octave(), "C5");
+        assert_eq!(scale.pitch_at_degree(4).unwrap().name_with_octave(), "A4");
+        // The fifth degree of a four-note scale is the first again, in the
+        // octave the scale stands in — music21 reads a degree within the one
+        // octave its network holds.
+        assert_eq!(scale.pitch_at_degree(5).unwrap().name_with_octave(), "C4");
         assert_eq!(
             scale.degree_of(&Pitch::from_name("G-").unwrap()).unwrap(),
             Some(3)
@@ -1864,8 +1861,10 @@ mod tests {
         for scale_type in ScaleType::ALL {
             let scale = Scale::new(scale_type, Pitch::from_name("E-4").unwrap());
             let pitches = scale.pitches().unwrap();
-            for (index, expected) in pitches.iter().enumerate() {
-                let actual = scale.pitch_at_degree(index + 1).unwrap();
+            // Every degree but the closing octave, which is the first degree
+            // again as far as a degree lookup is concerned.
+            for (index, expected) in pitches.iter().take(scale.degree_count()).enumerate() {
+                let actual = scale.pitch_at_degree(index as IntegerType + 1).unwrap();
                 assert_eq!(
                     actual.name_with_octave(),
                     expected.name_with_octave(),
@@ -1877,9 +1876,24 @@ mod tests {
     }
 
     #[test]
-    fn degree_zero_is_rejected() {
-        let scale = Scale::new(ScaleType::Major, Pitch::from_name("C4").unwrap());
-        assert!(scale.pitch_at_degree(0).is_err());
+    fn a_degree_outside_the_scale_counts_round_it() {
+        // music21's own answers for `scale.PhrygianScale('g').pitchFromDegree`.
+        let scale = Scale::new(ScaleType::Phrygian, Pitch::from_name("G4").unwrap());
+        for (degree, expected) in [
+            (-1, "E-5"),
+            (0, "F5"),
+            (1, "G4"),
+            (7, "F5"),
+            (8, "G4"),
+            (11, "C5"),
+            (15, "G4"),
+        ] {
+            assert_eq!(
+                scale.pitch_at_degree(degree).unwrap().name_with_octave(),
+                expected,
+                "degree {degree}"
+            );
+        }
     }
 
     #[test]

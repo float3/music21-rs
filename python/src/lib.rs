@@ -139,8 +139,43 @@ where
     T: pyo3::PyClass,
     V: serde::Serialize,
 {
+    pickled_extra(slf, value, None)
+}
+
+/// The same, for a facade that holds Python objects of its own.
+///
+/// A note's ornaments and marks are plain Python objects the crate does not
+/// model, kept in the facade rather than in the object's `__dict__`, so a
+/// pickle that carried only the two halves would thaw a note with no
+/// articulations on it — and music21 freezes every score it parses.
+pub(crate) fn pickled_extra<T, V>(
+    slf: &Bound<'_, T>,
+    value: &V,
+    extra: Option<&Bound<'_, pyo3::types::PyDict>>,
+) -> PyResult<(Py<PyAny>, (), Py<PyAny>)>
+where
+    T: pyo3::PyClass,
+    V: serde::Serialize,
+{
     let py = slf.py();
-    let class = slf.as_any().get_type().into_any().unbind();
+    // The class music21 now has under this name, which is what a pickle
+    // looking it up by name will find: an object built as the plain facade
+    // is thawed as the class that stands in its place.
+    let class = slf.as_any().get_type();
+    let class = match (
+        class
+            .getattr("__module__")
+            .and_then(|m| m.extract::<String>()),
+        class
+            .getattr("__qualname__")
+            .and_then(|n| n.extract::<String>()),
+    ) {
+        (Ok(module), Ok(name)) => {
+            installed_class(py, &module, &name).unwrap_or_else(|| class.into_any())
+        }
+        _ => class.into_any(),
+    };
+    let class = class.unbind();
     let written = written_state(value)?;
     // The Python half is music21's own: everything it keeps on the object,
     // with the two fields it never freezes emptied, as `Music21Object`
@@ -154,7 +189,14 @@ where
         }
         Err(_) => py.None(),
     };
-    let state = (written, carried).into_pyobject(py)?.into_any().unbind();
+    let extra = match extra {
+        Some(extra) => extra.clone().into_any().unbind(),
+        None => py.None(),
+    };
+    let state = (written, carried, extra)
+        .into_pyobject(py)?
+        .into_any()
+        .unbind();
     Ok((class, (), state))
 }
 
@@ -165,21 +207,43 @@ where
     T: pyo3::PyClass,
     V: serde::de::DeserializeOwned,
 {
+    unpickled_extra(slf, state).map(|(value, _)| value)
+}
+
+/// The same, handing back whatever Python objects the facade froze beside
+/// its two halves.
+#[allow(clippy::type_complexity)]
+pub(crate) fn unpickled_extra<T, V>(
+    slf: &Bound<'_, T>,
+    state: &Bound<'_, PyAny>,
+) -> PyResult<(Option<V>, Option<Py<PyAny>>)>
+where
+    T: pyo3::PyClass,
+    V: serde::de::DeserializeOwned,
+{
     let py = slf.py();
-    let Ok((written, carried)) = state.extract::<(String, Py<PyAny>)>() else {
+    let read = state
+        .extract::<(String, Py<PyAny>, Py<PyAny>)>()
+        .or_else(|_| {
+            state
+                .extract::<(String, Py<PyAny>)>()
+                .map(|(written, carried)| (written, carried, py.None()))
+        });
+    let Ok((written, carried, extra)) = read else {
         // Not one of ours. music21 freezes its own half as a plain dictionary
         // of attributes and hands it straight back, so that is what this is.
         if let Ok(own) = slf.as_any().getattr("__dict__") {
             own.call_method1("update", (state,))?;
         }
-        return Ok(None);
+        return Ok((None, None));
     };
     if !carried.is_none(py)
         && let Ok(own) = slf.as_any().getattr("__dict__")
     {
         own.call_method1("update", (carried,))?;
     }
-    read_state(&written).map(Some)
+    let extra = (!extra.is_none(py)).then_some(extra);
+    read_state(&written).map(|value| (Some(value), extra))
 }
 
 /// A new facade object, as the class music21 now has under that name.
@@ -242,10 +306,32 @@ import sys
 
 from music21 import base as _base
 from music21 import derivation as _derivation
+from music21 import style as _style
 
 # What `Music21Object._deepcopySubclassable` leaves behind: where the object
 # sat, what it was derived from, and what it had worked out about both.
 _NOT_COPIED = frozenset(('_derivation', '_activeSite', '_sites', '_cache'))
+
+# music21's own plumbing, which every one of its classes is built on and
+# none of which says anything musical: what an object reports itself as,
+# where it is drawn, what an editor wrote about it, and the slots machinery
+# underneath both. Inheriting it is the point of installing a class at all —
+# it is `Music21Object` for the things a stream does not hold.
+_MACHINERY = frozenset((
+    'ProtoM21Object',
+    'StyleMixin',
+    'SlottedObjectMixin',
+    'EqualSlottedObjectMixin',
+))
+
+
+def machinery_of(original):
+    """The plumbing classes `original` is built on, in its own order."""
+    return tuple(
+        ancestor for ancestor in original.__mro__
+        if ancestor.__name__ in _MACHINERY
+        and getattr(ancestor, '__module__', '').startswith('music21')
+    )
 
 
 def rebind(original, installed):
@@ -273,6 +359,24 @@ def rebind(original, installed):
 installed = {}
 
 
+def style_and_editorial(original):
+    """What `StyleMixin` gives a class that a stream does not hold.
+
+    Its `__slots__` cannot share an instance layout with a pyo3 class, so
+    what it defines is put on the installed class rather than inherited. The
+    style half is the facade's own — the crate models the colour — and the
+    editorial half is music21's, which the crate models nothing of.
+    """
+    if not issubclass(original, _style.StyleMixin):
+        return {}
+    members = {
+        name: getattr(_style.StyleMixin, name)
+        for name in ('editorial', 'hasEditorialInformation')
+    }
+    members['_styleClass'] = original._styleClass
+    return members
+
+
 def blank(cls):
     """An instance of an installed class with nothing said about it yet.
 
@@ -285,6 +389,8 @@ def blank(cls):
     # start; a pitch or a duration is not one of those.
     if issubclass(cls, _base.Music21Object):
         _base.Music21Object.__init__(made)
+    elif hasattr(cls, 'editorial'):
+        made._editorial = None
     return made
 
 
@@ -315,8 +421,10 @@ def unported_members(facade, original):
     facade does not."""
     blocked = {}
     for ancestor in original.__mro__:
-        if ancestor is _base.Music21Object:
-            break
+        if ancestor is _base.Music21Object or ancestor is object:
+            continue
+        if ancestor.__name__ in _MACHINERY:
+            continue
         for name in vars(ancestor):
             if name.startswith('_') or name in blocked:
                 continue
@@ -328,7 +436,10 @@ def unported_members(facade, original):
 
 def make_class(facade, original):
     def __init__(self, *arguments, **keywords):
-        _base.Music21Object.__init__(self)
+        if issubclass(original, _base.Music21Object):
+            _base.Music21Object.__init__(self)
+        elif hasattr(type(self), 'editorial'):
+            self._editorial = None
         if facade.__init__ is not object.__init__:
             facade.__init__(self, *arguments, **keywords)
 
@@ -336,7 +447,10 @@ def make_class(facade, original):
         # The facade copies as whatever class it was asked on, so this is
         # already one of these; it just has no music21 half yet.
         copied = facade.__deepcopy__(self, memo)
-        _base.Music21Object.__init__(copied)
+        if isinstance(copied, _base.Music21Object):
+            _base.Music21Object.__init__(copied)
+        elif hasattr(type(copied), 'editorial'):
+            copied._editorial = None
         # The music21 half comes across as music21 copies it — the offset,
         # the editorial, the labels — and what tied the object to where it
         # sat does not: a copy belongs to no stream until something puts it
@@ -351,12 +465,14 @@ def make_class(facade, original):
         # music21 records where a copy came from, and a stream's own deepcopy
         # reads that back to move its spanners onto the copies. Without it a
         # crescendo would still point at the notes of the original and would
-        # be written out over nothing.
-        derived = _derivation.Derivation(client=copied)
-        derived.origin = self
-        derived.method = '__deepcopy__'
-        copied._derivation = derived
-        copied.purgeOrphans()
+        # be written out over nothing. Only the things a stream holds have
+        # any of that; a pitch or an accidental is not one of them.
+        if isinstance(copied, _base.Music21Object):
+            derived = _derivation.Derivation(client=copied)
+            derived.origin = self
+            derived.method = '__deepcopy__'
+            copied._derivation = derived
+            copied.purgeOrphans()
         return copied
 
     def __copy__(self):
@@ -368,6 +484,7 @@ def make_class(facade, original):
         classified.add(ancestor.__name__)
         classified.add(ancestor.__module__ + '.' + ancestor.__name__)
     namespace = dict(unported_members(facade, original))
+    namespace.update(style_and_editorial(original))
     namespace.update({
         '__init__': __init__,
         '__deepcopy__': __deepcopy__,
@@ -390,30 +507,49 @@ def make_class(facade, original):
         """
 
         def __instancecheck__(cls, instance):
+            # The facade counts too: a method of one facade that hands back
+            # another builds the plain class, and that is the same object
+            # this is, without the half music21 keeps.
             return (type.__instancecheck__(cls, instance)
-                    or isinstance(instance, original))
+                    or isinstance(instance, (original, facade)))
 
         def __subclasscheck__(cls, subclass):
             return (type.__subclasscheck__(cls, subclass)
-                    or issubclass(subclass, original))
+                    or issubclass(subclass, (original, facade)))
 
+    if issubclass(original, _base.Music21Object):
+        bases = (facade, original)
+        fallback = (facade, _base.Music21Object)
+    else:
+        # Not something a stream holds — an accidental, a duration, a beam.
+        # music21's own class is still never a base, but the plumbing it is
+        # built on is: that is where `editorial`, `style` and the slots
+        # machinery live, and none of it says anything musical.
+        bases = (facade,) + machinery_of(original)
+        fallback = (facade,)
     try:
-        installed = Stands(original.__name__, (facade, original), namespace)
+        installed = Stands(original.__name__, bases, namespace)
     except TypeError:
         # Some pairs cannot share a layout; those keep the old arrangement,
         # where only the container machinery is inherited.
-        installed = Stands(original.__name__, (facade, _base.Music21Object), namespace)
+        try:
+            installed = Stands(original.__name__, fallback, namespace)
+        except TypeError:
+            # A facade nothing can be built on at all stands as it is.
+            return facade
     # A caller who asks a stream for `note.Note` is asking for this class now.
     installed.classSet = frozenset(classified | {installed})
     return installed
 
 
-def wants_music21_object(facade, original):
+def wants_installing(facade, original):
+    """Whether this pair is one to build an installed class for.
+
+    Everything music21 has a class for is, except a Stream: a stream is a
+    container rather than an element, and none of these are one.
+    """
     if not isinstance(facade, type) or not isinstance(original, type):
         return False
-    if not issubclass(original, _base.Music21Object):
-        return False
-    # A Stream is a container, not an element, and none of these are one.
     return not getattr(original, 'isStream', False)
 "#;
 
@@ -425,18 +561,25 @@ pub fn class_to_install<'py>(
     name: &str,
     facade: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let Ok(original) = module.getattr(name) else {
-        return Ok(facade.clone());
-    };
     let helper = install_helper(py)?;
-    if !helper
-        .getattr("wants_music21_object")?
-        .call1((facade, &original))?
-        .extract::<bool>()?
-    {
-        return Ok(facade.clone());
-    }
-    helper.getattr("make_class")?.call1((facade, &original))
+    let built = match module.getattr(name) {
+        Ok(original)
+            if helper
+                .getattr("wants_installing")?
+                .call1((facade, &original))?
+                .extract::<bool>()? =>
+        {
+            helper.getattr("make_class")?.call1((facade, &original))?
+        }
+        _ => facade.clone(),
+    };
+    // Whatever was built is what music21 now has under that name, and what
+    // everything here must build to match it — so it is recorded before it
+    // is handed back, for `installed_new` to find.
+    helper
+        .getattr("installed")?
+        .set_item((module.name()?, name), &built)?;
+    Ok(built)
 }
 
 /// The helper module, compiled once per interpreter.
@@ -480,9 +623,6 @@ fn install_into_music21(py: Python<'_>) -> PyResult<usize> {
                 let value = class_to_install(py, &module, name, &value)?;
                 module.setattr(*name, &value)?;
                 let helper = install_helper(py)?;
-                helper
-                    .getattr("installed")?
-                    .set_item((module_name, *name), &value)?;
                 if let Some(original) = original {
                     helper.getattr("rebind")?.call1((original, &value))?;
                 }
