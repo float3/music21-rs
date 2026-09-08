@@ -127,6 +127,10 @@ def test_tone_row_operations():
 
 def test_errors_are_music21s_exception_classes():
     with pytest.raises(m.PitchException):
+        m.Pitch("Q")
+    # music21 reads an octave written before the name as a bad argument
+    # rather than as a musical failure, and raises Python's own ValueError.
+    with pytest.raises(ValueError):
         m.Pitch("4c")
     with pytest.raises(m.NotRestException):
         m.Note("C4").notehead = "junk"

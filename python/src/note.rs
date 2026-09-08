@@ -743,6 +743,20 @@ pub struct Duration {
     pub(crate) client: Option<Py<PyAny>>,
 }
 
+/// music21's `informSites`, called on whatever holds a duration that has
+/// just been replaced. A thing no stream holds has no sites and nothing to
+/// tell.
+pub(crate) fn told_sites(holder: &Bound<'_, PyAny>, length: &Bound<'_, PyAny>) -> PyResult<()> {
+    if !holder.hasattr("informSites")? {
+        return Ok(());
+    }
+    let message = pyo3::types::PyDict::new(holder.py());
+    message.set_item("changedElement", "duration")?;
+    message.set_item("quarterLength", length)?;
+    holder.call_method1("informSites", (message,))?;
+    Ok(())
+}
+
 /// Tells a duration what holds it, the way music21's own `duration` setter
 /// does. A duration announces a change to its holder, and one that was never
 /// told who that is announces to nobody.
@@ -898,6 +912,7 @@ impl Duration {
         if !self.linked {
             return Ok(());
         }
+        let was = self.inner.quarter_length();
         let (numerator, denominator) = self.aggregate_ratio(py)?;
         let mut quarter_length =
             self.written_quarter_length() * numerator as f64 / denominator as f64;
@@ -907,6 +922,9 @@ impl Duration {
             }
         }
         self.inner = RsDuration::new(quarter_length).map_err(duration_error)?;
+        if self.inner.quarter_length() != was {
+            self.informClient(py)?;
+        }
         Ok(())
     }
 
@@ -1258,14 +1276,21 @@ impl Duration {
     #[setter]
     fn set_quarterLength(&mut self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<()> {
         let value = quarter_length_from_any(value)?;
+        let was = self.inner.quarter_length();
         if !self.linked {
             self.inner = RsDuration::new(value).map_err(duration_error)?;
-            return Ok(());
+        } else {
+            self.reinfer();
+            self.expression_is_inferred = true;
+            self.inner.set_quarter_length(value).map_err(note_error)?;
         }
-        self.reinfer();
-        self.expression_is_inferred = true;
-        let _ = py;
-        self.inner.set_quarter_length(value).map_err(note_error)
+        // A stream keeps the length of what it holds, so a note that has just
+        // been made longer has to say so or the stream goes on reporting the
+        // length it had.
+        if self.inner.quarter_length() != was {
+            self.informClient(py)?;
+        }
+        Ok(())
     }
 
     /// music21's `type`: the written value when there is one of them, and
@@ -2055,6 +2080,14 @@ pub struct Note {
     /// not something this crate models — and its mere existence is what
     /// `hasStyleInformation` answers, as music21's does.
     style: Option<Py<PyAny>>,
+    /// music21's `beams`, as the object itself.
+    ///
+    /// Its own MusicXML reader reads a note's beams *into* what `n.beams`
+    /// hands back — `xmlToBeams(mxBeamList, inputM21=n.beams)` — so a getter
+    /// that built a fresh object every time dropped every beam the score
+    /// wrote. Once the object exists it is what the note's beams are, and
+    /// `synced` writes it into the value.
+    beams: Option<Py<Beams>>,
 }
 
 impl Note {
@@ -2081,6 +2114,7 @@ impl Note {
             lyrics: None,
             tie: None,
             style: None,
+            beams: None,
             stored_instrument: None,
             unread_pitch: None,
         })
@@ -2112,6 +2146,7 @@ impl Note {
                 lyrics: None,
                 tie: None,
                 style: None,
+                beams: None,
                 stored_instrument: None,
                 unread_pitch: None,
             },
@@ -2281,6 +2316,11 @@ impl Note {
     /// written into it, for the answers the crate reads off a whole note.
     pub(crate) fn synced(&self, py: Python<'_>) -> RsNote {
         let mut note = self.inner.clone();
+        // music21's own readers write beams into the object `n.beams` gave
+        // them, so the object is where the score's beaming is.
+        if let Some(beams) = &self.beams {
+            note.set_beams(beams.borrow_mut(py).settled_value(py));
+        }
         if let Some(duration) = self.duration_value(py) {
             note.set_duration(duration);
         }
@@ -2634,8 +2674,16 @@ impl Note {
     #[setter]
     fn set_duration(slf: &Bound<'_, Self>, value: &Bound<'_, PyAny>) -> PyResult<()> {
         let py = slf.py();
+        let had_one = slf.borrow().duration.is_some();
         let duration = slf.borrow_mut().attach_duration(py, value)?;
         adopt_duration(py, &duration, slf.as_any());
+        // Replacing the duration a note already had changes how long the
+        // note is, and the streams holding it keep that length; music21
+        // tells them so here, and a note whose length nobody has asked for
+        // yet has nothing to tell.
+        if had_one {
+            told_sites(slf.as_any(), &duration.bind(py).getattr("quarterLength")?)?;
+        }
         Ok(())
     }
 
@@ -3159,21 +3207,28 @@ impl Note {
     /// through it is an edit to the note.
     #[getter]
     fn get_beams(slf: &Bound<'_, Self>) -> PyResult<Py<Beams>> {
-        crate::installed_new(
-            slf.py(),
+        let py = slf.py();
+        if let Some(beams) = &slf.borrow().beams {
+            return Ok(beams.clone_ref(py));
+        }
+        let beams = crate::installed_new(
+            py,
             "music21.beam",
             "Beams",
-            Beams::owned_by(
-                slf.borrow().inner.beams().clone(),
-                slf.clone().unbind().into_any(),
-            ),
-        )
+            Beams::wrap(slf.borrow().inner.beams().clone()),
+        )?;
+        slf.borrow_mut().beams = Some(beams.clone_ref(py));
+        Ok(beams)
     }
 
+    /// Setting them keeps the object given, as music21 does: its own
+    /// `stripTies` clears a note's beams by handing it a fresh `Beams()` and
+    /// writing into that afterwards.
     #[setter]
-    fn set_beams(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
-        let beams = value.extract::<PyRef<'_, Beams>>()?;
-        self.inner.set_beams(beams.inner.clone());
+    fn set_beams(&mut self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        let beams = value.extract::<Py<Beams>>()?;
+        self.inner.set_beams(beams.borrow(py).inner.clone());
+        self.beams = Some(beams);
         Ok(())
     }
 

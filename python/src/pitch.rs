@@ -57,6 +57,7 @@ pub(crate) fn pitch_error(error: music21_rs::Error) -> PyErr {
     match error {
         music21_rs::Error::Accidental(_) => AccidentalException::new_err(message(&error)),
         music21_rs::Error::Microtone(_) => MicrotoneException::new_err(message(&error)),
+        music21_rs::Error::Value(_) => pyo3::exceptions::PyValueError::new_err(message(&error)),
         _ => PitchException::new_err(message(&error)),
     }
 }
@@ -942,7 +943,20 @@ impl Pitch {
     }
 
     #[setter]
-    fn set_name(&mut self, value: &str) -> PyResult<()> {
+    fn set_name(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        // music21 refuses anything but a string here, and says so as a
+        // `ValueError` rather than letting Python raise its own `TypeError`.
+        let value = &value.extract::<String>().map_err(|_| {
+            pyo3::exceptions::PyValueError::new_err(format!(
+                "Argument to name, {}, must be a string, not {}.",
+                value
+                    .repr()
+                    .map(|repr| repr.to_string())
+                    .unwrap_or_default(),
+                value.get_type(),
+            ))
+        })?;
+        let value = value.as_str();
         let octave = self.inner.octave();
         let mut options = PitchOptions::new().name(value);
         if let Some(octave) = octave
@@ -1332,9 +1346,13 @@ impl Pitch {
         inPlace: bool,
     ) -> PyResult<Option<Pitch>> {
         let transposed = crate::interval::transpose_pitch_by_any(&slf.inner, value)?;
-        let inferred = slf.spelling_is_inferred;
+        // Transposing by a bare number of semitones says nothing about how
+        // the answer should be spelled, so music21 marks the spelling of
+        // what comes back as one nobody chose.
+        let inferred = value.is_instance_of::<pyo3::types::PyInt>() || slf.spelling_is_inferred;
         if inPlace {
             slf.inner = transposed;
+            slf.spelling_is_inferred = inferred;
             slf.write_back()?;
             Ok(None)
         } else {

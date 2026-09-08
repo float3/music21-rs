@@ -53,6 +53,13 @@ pub enum Error {
     Notation(String),
     /// Error associated with note volumes.
     Volume(String),
+    /// A value the caller gave that nothing musical could be read from.
+    ///
+    /// music21 keeps this apart from its own exceptions — an octave written
+    /// before a pitch name, or a name that is not a string at all, is a
+    /// `ValueError` there and not a `PitchException` — and callers catch the
+    /// two separately, so the crate keeps them apart too.
+    Value(String),
 }
 
 impl fmt::Display for Error {
@@ -81,6 +88,7 @@ impl fmt::Display for Error {
             Error::Scale(msg) => write!(f, "Scale error: {msg}"),
             Error::Tempo(msg) => write!(f, "Tempo error: {msg}"),
             Error::Serial(msg) => write!(f, "Serial error: {msg}"),
+            Error::Value(msg) => write!(f, "Value error: {msg}"),
         }
     }
 }

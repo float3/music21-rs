@@ -457,6 +457,11 @@ installed = {}
 # music21's own class for each one installed over it.
 replaced = {}
 
+# The classes of ours that an installed class is built on. They are the
+# other half of a class music21 has, not a kind of thing in their own right,
+# so `classes` and `classSet` do not name them.
+_facades = set()
+
 # What `classes` and `classSet` answer for a class, worked out once.
 _lineages = {}
 
@@ -481,6 +486,10 @@ def lineage(cls):
     walked = []
     for ancestor in (cls,) + cls.__mro__:
         stands_for = ancestor.__dict__.get('_replaces')
+        if stands_for is None and ancestor in _facades:
+            # The facade under an installed class is that class's other
+            # half, not a kind of thing music21 knows about.
+            continue
         for member in (stands_for.__mro__ if stands_for is not None else (ancestor,)):
             if member not in walked:
                 walked.append(member)
@@ -491,9 +500,15 @@ def lineage(cls):
     members = set(walked)
     for member in walked:
         members.add(member.__name__)
-        members.add(member.__module__ + '.' + member.__name__)
+        qualified = member.__module__ + '.' + member.__name__
+        members.add(qualified)
+        if qualified.startswith('music21.'):
+            members.add(qualified[len('music21.'):])
         # `getElementsByClass` matches on the classes themselves, and the
-        # name it is given now means the installed class.
+        # name it is given now means the installed class. Both are listed:
+        # music21's own default arguments hold the class it had when the
+        # module was read, which is the one being replaced, while anything
+        # asking by name today gets the one standing in for it.
         if member in replaced:
             members.add(replaced[member])
     known = (tuple(names), frozenset(members), tuple(walked))
@@ -633,6 +648,7 @@ def make_class(facade, original):
     def __copy__(self):
         return __deepcopy__(self)
 
+    _facades.add(facade)
     namespace = dict(unported_members(facade, original))
     namespace.update(style_and_editorial(original))
     namespace.update({

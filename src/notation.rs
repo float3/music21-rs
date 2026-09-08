@@ -1007,7 +1007,10 @@ impl fmt::Display for Syllabic {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Lyric {
-    text: String,
+    /// The syllable, or nothing at all: music21 leaves the text of a bare
+    /// `Lyric()` unset, and a lyric nobody has sung anything to is not the
+    /// same as one sung to silence.
+    text: Option<String>,
     number: IntegerType,
     syllabic: Syllabic,
     /// Whether anything has said where this syllable falls in its word.
@@ -1029,7 +1032,7 @@ impl Lyric {
     /// A lyric on the first verse, spelled as a whole word.
     pub fn new(text: impl Into<String>) -> Self {
         let mut lyric = Self::unsung();
-        lyric.text = text.into();
+        lyric.text = Some(text.into());
         lyric.said_syllabic = true;
         lyric
     }
@@ -1039,7 +1042,7 @@ impl Lyric {
     /// writing its text does not make it say so.
     pub fn unsung() -> Self {
         Self {
-            text: String::new(),
+            text: Some(String::new()),
             number: 1,
             syllabic: Syllabic::Single,
             said_syllabic: false,
@@ -1063,7 +1066,7 @@ impl Lyric {
     /// run together, each joined on by its own [`Self::elision_before`].
     pub fn text(&self) -> String {
         let Some((first, rest)) = self.components.split_first() else {
-            return self.text.clone();
+            return self.text.clone().unwrap_or_default();
         };
         let mut text = first.text();
         for component in rest {
@@ -1079,7 +1082,25 @@ impl Lyric {
     /// what music21 does: the text you gave it is now the whole of it.
     pub fn set_text(&mut self, text: impl Into<String>) {
         self.components.clear();
-        self.text = text.into();
+        self.text = Some(text.into());
+    }
+
+    /// The syllable as music21's `text` reads it, which may be nothing at
+    /// all: music21 starts a lyric off sung to the empty string, and setting
+    /// its text to nothing is how a score says the syllable was taken away.
+    pub fn explicit_text(&self) -> Option<String> {
+        if self.is_composite() {
+            return Some(self.text());
+        }
+        self.text.clone()
+    }
+
+    /// Takes the text away, leaving a lyric with nothing sung to it at all —
+    /// which music21 tells apart from one sung to the empty string, and
+    /// writes out as neither.
+    pub fn clear_text(&mut self) {
+        self.components.clear();
+        self.text = None;
     }
 
     /// Whether this lyric is several lyrics sung together rather than one
@@ -1176,6 +1197,9 @@ impl Lyric {
     /// first component decides whether one leads, the last whether one
     /// trails.
     pub fn raw_text(&self) -> String {
+        if self.explicit_text().is_none() {
+            return String::new();
+        }
         let text = self.text();
         let (Some(first), Some(last)) = (self.components.first(), self.components.last()) else {
             return match self.syllabic {
@@ -1212,7 +1236,7 @@ impl Lyric {
             (false, true) => Syllabic::Begin,
             (false, false) => Syllabic::Single,
         });
-        self.text = trimmed;
+        self.text = Some(trimmed);
     }
 }
 

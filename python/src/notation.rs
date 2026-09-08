@@ -373,16 +373,20 @@ impl Lyric {
     }
 
     #[getter]
-    fn get_text(&self, py: Python<'_>) -> String {
-        self.synced(py).text()
+    fn get_text(&self, py: Python<'_>) -> Option<String> {
+        self.synced(py).explicit_text()
     }
 
     /// Setting the text of an elided lyric makes it an ordinary one, since
     /// the syllables it was made of are what the text used to come from.
+    /// Setting it to nothing at all makes it a lyric nobody has sung to.
     #[setter]
-    fn set_text(&mut self, value: &str) {
+    fn set_text(&mut self, value: Option<&str>) {
         self.components = None;
-        self.inner.set_text(value);
+        match value {
+            Some(value) => self.inner.set_text(value),
+            None => self.inner.clear_text(),
+        }
     }
 
     #[getter]
@@ -451,11 +455,29 @@ impl Lyric {
 
     /// music21's `components`: the lyrics a composite one is made of, and
     /// `None` when it is an ordinary syllable.
+    ///
+    /// A lyric read from a value already knows its syllables, and music21's
+    /// own writer walks them off this attribute, so they are made into
+    /// objects the first time something asks.
     #[getter]
-    fn get_components(&self, py: Python<'_>) -> Option<Py<PyList>> {
-        self.components
-            .as_ref()
-            .map(|components| components.clone_ref(py))
+    fn get_components(&mut self, py: Python<'_>) -> PyResult<Option<Py<PyList>>> {
+        if let Some(components) = &self.components {
+            return Ok(Some(components.clone_ref(py)));
+        }
+        if self.inner.components().is_empty() {
+            return Ok(None);
+        }
+        let syllables = self
+            .inner
+            .components()
+            .iter()
+            .map(|syllable| {
+                crate::installed_new(py, "music21.note", "Lyric", Self::wrap(syllable.clone()))
+            })
+            .collect::<PyResult<Vec<_>>>()?;
+        let list = PyList::new(py, syllables)?.unbind();
+        self.components = Some(list.clone_ref(py));
+        Ok(Some(list))
     }
 
     /// The list assigned is kept as it stands, not copied: music21's own
@@ -830,8 +852,6 @@ impl Beam {
 #[pyclass(name = "Beams", module = "music21.beam", subclass, skip_from_py_object)]
 pub struct Beams {
     pub(crate) inner: RsBeams,
-    /// The note or chord these belong to, so an edit through them reaches it.
-    owner: Option<Py<PyAny>>,
     /// music21's `beamsList`, as the list object itself.
     ///
     /// Its own MusicXML reader appends each beam to what `beams.beamsList`
@@ -843,20 +863,7 @@ pub struct Beams {
 
 impl Beams {
     pub(crate) fn wrap(inner: RsBeams) -> Self {
-        Self {
-            inner,
-            owner: None,
-            beams: None,
-        }
-    }
-
-    /// The same, knowing what carries them.
-    pub(crate) fn owned_by(inner: RsBeams, owner: Py<PyAny>) -> Self {
-        Self {
-            inner,
-            owner: Some(owner),
-            beams: None,
-        }
+        Self { inner, beams: None }
     }
 
     /// Folds the beam objects into the value, so every question about the
@@ -874,6 +881,13 @@ impl Beams {
         self.inner.set_beams(held);
     }
 
+    /// The value, with whatever Python has done to the beam objects folded
+    /// in: what the note carrying them is really beamed as.
+    pub(crate) fn settled_value(&mut self, py: Python<'_>) -> RsBeams {
+        self.settle(py);
+        self.inner.clone()
+    }
+
     /// The same, and then letting the objects go so the next reader builds
     /// them again from the answer.
     fn settled(&mut self, py: Python<'_>) {
@@ -884,12 +898,7 @@ impl Beams {
     /// Writes these beams back into whatever carries them.
     fn write_back(&mut self, py: Python<'_>) -> PyResult<()> {
         self.settle(py);
-        let Some(owner) = &self.owner else {
-            return Ok(());
-        };
-        let beams =
-            crate::installed_new(py, "music21.beam", "Beams", Self::wrap(self.inner.clone()))?;
-        owner.bind(py).setattr("beams", beams.bind(py).as_any())
+        Ok(())
     }
 }
 

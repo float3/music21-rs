@@ -1703,10 +1703,16 @@ impl Interval {
     }
 }
 
-/// Wraps a pitch object in a music21 `Note`, the way the `noteStart` and
-/// `noteEnd` properties do upstream.
+/// The note a pitch belongs to, the way the `noteStart` and `noteEnd`
+/// properties find it upstream: the note that owns it if it has one, and a
+/// note wrapped round it if it does not.
 fn note_around(pitch: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
     let py = pitch.py();
+    if let Ok(client) = pitch.getattr("_client")
+        && !client.is_none()
+    {
+        return Ok(client.unbind());
+    }
     let note = py.import("music21.note")?.getattr("Note")?.call0()?;
     note.setattr("pitch", pitch)?;
     Ok(note.unbind())
@@ -1831,18 +1837,25 @@ fn intervals_to_diatonic_py(
 #[pyfunction]
 #[pyo3(name = "intervalFromGenericAndChromatic")]
 fn interval_from_generic_and_chromatic(
+    py: Python<'_>,
     gInt: &Bound<'_, PyAny>,
     cInt: &Bound<'_, PyAny>,
-) -> PyResult<Interval> {
+) -> PyResult<Py<PyAny>> {
     let generic = generic_from_any(gInt)?;
     let chromatic = match cInt.extract::<PyRef<ChromaticInterval>>() {
         Ok(facade) => facade.inner.clone(),
         Err(_) => RsChromatic::new(semitones_from_any(cInt)?),
     };
     let diatonic = intervals_to_diatonic(&generic, &chromatic).map_err(interval_error)?;
-    RsInterval::from_diatonic_and_chromatic(diatonic, chromatic)
-        .map(Interval::wrap)
-        .map_err(interval_error)
+    let inner =
+        RsInterval::from_diatonic_and_chromatic(diatonic, chromatic).map_err(interval_error)?;
+    interval_object(py, inner)
+}
+
+/// An interval as the class music21 now has under that name, so a stream
+/// can hold it and its own code can write an identifier on it.
+fn interval_object(py: Python<'_>, inner: RsInterval) -> PyResult<Py<PyAny>> {
+    Ok(crate::installed_new(py, "music21.interval", "Interval", Interval::wrap(inner))?.into_any())
 }
 
 fn pick<'py>(
@@ -1941,12 +1954,22 @@ fn transpose_note<'py>(
 
 #[pyfunction]
 #[pyo3(name = "notesToInterval")]
-fn notes_to_interval(n1: &Bound<'_, PyAny>, n2: &Bound<'_, PyAny>) -> PyResult<Interval> {
+fn notes_to_interval(
+    py: Python<'_>,
+    n1: &Bound<'_, PyAny>,
+    n2: &Bound<'_, PyAny>,
+) -> PyResult<Py<PyAny>> {
     let start = extract_pitch_object(n1)?;
     let end = extract_pitch_object(n2)?;
     let inner = RsInterval::between_pitches(&pitch_from_any(&start)?, &pitch_from_any(&end)?)
         .map_err(interval_error)?;
-    Ok(Interval::with_pitches(inner, &start, &end))
+    Ok(crate::installed_new(
+        py,
+        "music21.interval",
+        "Interval",
+        Interval::with_pitches(inner, &start, &end),
+    )?
+    .into_any())
 }
 
 fn intervals_from_list(intervalList: &Bound<'_, PyAny>) -> PyResult<Vec<RsInterval>> {
@@ -1958,30 +1981,29 @@ fn intervals_from_list(intervalList: &Bound<'_, PyAny>) -> PyResult<Vec<RsInterv
 
 #[pyfunction]
 #[pyo3(name = "add")]
-fn add(intervalList: &Bound<'_, PyAny>) -> PyResult<Interval> {
+fn add(py: Python<'_>, intervalList: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
     let intervals = intervals_from_list(intervalList)?;
     if intervals.is_empty() {
         return Err(IntervalException::new_err(
             "Cannot add an empty set of intervals",
         ));
     }
-    RsInterval::sum(&intervals)
-        .map(Interval::wrap)
-        .map_err(interval_error)
+    interval_object(py, RsInterval::sum(&intervals).map_err(interval_error)?)
 }
 
 #[pyfunction]
 #[pyo3(name = "subtract")]
-fn subtract(intervalList: &Bound<'_, PyAny>) -> PyResult<Interval> {
+fn subtract(py: Python<'_>, intervalList: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
     let intervals = intervals_from_list(intervalList)?;
     if intervals.is_empty() {
         return Err(IntervalException::new_err(
             "Cannot subtract an empty set of intervals",
         ));
     }
-    RsInterval::difference(&intervals)
-        .map(Interval::wrap)
-        .map_err(interval_error)
+    interval_object(
+        py,
+        RsInterval::difference(&intervals).map_err(interval_error)?,
+    )
 }
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {

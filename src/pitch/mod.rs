@@ -450,8 +450,8 @@ impl Pitch {
         for character in usr_str.chars() {
             if character.is_ascii_digit() {
                 if pitch_part.is_empty() {
-                    return Err(Error::Pitch(format!(
-                        "Cannot have octave given before pitch name in {usr_str:?}"
+                    return Err(Error::Value(format!(
+                        "Cannot have octave given before pitch name in '{usr_str}'."
                     )));
                 }
                 octave_part.push(character);

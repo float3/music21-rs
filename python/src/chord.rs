@@ -74,6 +74,9 @@ pub struct Chord {
     /// say "this chord has no root at all". So the dictionary is the storage
     /// the facade reads, made on first asking and kept.
     overrides: Option<Py<PyDict>>,
+    /// music21's `beams`, as the object itself, once something has asked
+    /// for one — music21's own readers write into what it hands back.
+    beams: Option<Py<Beams>>,
     /// music21's `style`, once something has asked for one: the object
     /// saying how this is drawn. It is music21's own object — the page is
     /// not something this crate models — and its mere existence is what
@@ -105,6 +108,7 @@ impl Chord {
             articulations: None,
             overrides: None,
             style: None,
+            beams: None,
         };
         chord.rebuild_notes(py)?;
         Ok(chord)
@@ -189,6 +193,7 @@ impl Chord {
             articulations: None,
             overrides: None,
             style: None,
+            beams: None,
         })
     }
 
@@ -916,6 +921,7 @@ impl Chord {
             extra.set_item("storedInstrument", chord.stored_instrument.as_ref())?;
             extra.set_item("_overrides", chord.overrides.as_ref())?;
         }
+        slf.borrow_mut().settle_beams(py);
         crate::pickled_extra(slf, &slf.borrow().inner, Some(&extra))
     }
 
@@ -1223,9 +1229,17 @@ impl Chord {
             .into_any()
         };
         crate::note::adopt_duration(py, &duration, slf.as_any());
-        let mut chord = slf.borrow_mut();
-        chord.inner.set_duration(inner);
-        chord.duration = Some(duration);
+        let had_one = slf.borrow().duration.is_some();
+        {
+            let mut chord = slf.borrow_mut();
+            chord.inner.set_duration(inner);
+            chord.duration = Some(duration.clone_ref(py));
+        }
+        // As on a note: a chord already timed that is timed again is a
+        // change the streams holding it have to hear about.
+        if had_one {
+            crate::note::told_sites(slf.as_any(), &duration.bind(py).getattr("quarterLength")?)?;
+        }
         Ok(())
     }
 
@@ -2070,21 +2084,26 @@ impl Chord {
     /// neighbours'.
     #[getter]
     fn get_beams(slf: &Bound<'_, Self>) -> PyResult<Py<Beams>> {
-        crate::installed_new(
-            slf.py(),
+        let py = slf.py();
+        if let Some(beams) = &slf.borrow().beams {
+            return Ok(beams.clone_ref(py));
+        }
+        let beams = crate::installed_new(
+            py,
             "music21.beam",
             "Beams",
-            Beams::owned_by(
-                slf.borrow().inner.beams().clone(),
-                slf.clone().unbind().into_any(),
-            ),
-        )
+            Beams::wrap(slf.borrow().inner.beams().clone()),
+        )?;
+        slf.borrow_mut().beams = Some(beams.clone_ref(py));
+        Ok(beams)
     }
 
+    /// Setting them keeps the object given, as music21 does.
     #[setter]
-    fn set_beams(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
-        let beams = value.extract::<PyRef<'_, Beams>>()?;
-        self.inner.set_beams(beams.inner.clone());
+    fn set_beams(&mut self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        let beams = value.extract::<Py<Beams>>()?;
+        self.inner.set_beams(beams.borrow(py).inner.clone());
+        self.beams = Some(beams);
         Ok(())
     }
 
@@ -2594,15 +2613,24 @@ impl Chord {
     }
 
     fn __copy__<'py>(slf: &Bound<'py, Self>, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        let copied = slf.borrow().copied_value(py)?;
+        let copied = slf.borrow_mut().copied_value(py)?;
         crate::copy_as_same_type(slf, copied)
     }
 }
 
 impl Chord {
+    /// Writes whatever Python has done to the beam objects into the value,
+    /// which is where every other reader looks.
+    fn settle_beams(&mut self, py: Python<'_>) {
+        if let Some(beams) = &self.beams {
+            self.inner.set_beams(beams.borrow_mut(py).settled_value(py));
+        }
+    }
+
     /// This chord as a fresh value, its notes, duration and volume copied
     /// rather than shared.
-    fn copied_value(&self, py: Python<'_>) -> PyResult<Self> {
+    fn copied_value(&mut self, py: Python<'_>) -> PyResult<Self> {
+        self.settle_beams(py);
         let mut copied = Self::from_inner(py, self.inner.clone())?;
         for (target, source) in copied.notes.iter().zip(&self.notes) {
             target.borrow_mut(py).inner = source.borrow(py).inner.clone();
