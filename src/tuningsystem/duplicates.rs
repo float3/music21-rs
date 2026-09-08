@@ -357,6 +357,66 @@ mod tests {
         );
     }
 
+    /// What the crate's own collections hold twice *between* them.
+    ///
+    /// Each list is checked against itself elsewhere here; this is the check
+    /// across them, and it says something the separate checks cannot: the
+    /// ratio tables and the Scala archive are largely the same scales stored
+    /// two ways. 23 of the 28 tables are in the archive too, by sound — the
+    /// five that are not are the equal-step approximations, which the archive
+    /// has no exact counterpart for.
+    ///
+    /// That overlap is deliberate, not a defect to remove. A `TuningSystem` is
+    /// an exact `Fraction` table available with no features turned on; an
+    /// archive entry is parsed cents behind `scala-archive` and a megabyte of
+    /// data. They answer different questions about the same scale. What is
+    /// worth pinning is that the overlap is *known*, so nobody adds a table
+    /// believing it is new when the archive already had it.
+    #[test]
+    #[cfg(feature = "scala-archive")]
+    fn the_tables_and_the_archive_are_largely_the_same_scales_stored_twice() {
+        use crate::tuningsystem::{HISTORICAL_TEMPERAMENTS, scala::ScalaArchive};
+
+        // The historical temperaments are a strict subset of the tables, so
+        // counting them as a separate collection counts fourteen of them twice.
+        assert!(
+            HISTORICAL_TEMPERAMENTS
+                .iter()
+                .all(|entry| ALL_TUNING_SYSTEMS.contains(entry)),
+            "the historical temperaments are a subset of the tuning systems"
+        );
+
+        // Both sides list the root and keep the period out of the degrees, so
+        // the fingerprints compare as they stand.
+        let archive = ScalaArchive::bundled();
+        let mut index: std::collections::HashSet<ScaleFingerprint> =
+            std::collections::HashSet::new();
+        for (_, scale) in archive.iter() {
+            if scale.is_empty() {
+                continue;
+            }
+            let degrees: Vec<FloatType> = scale
+                .degrees()
+                .iter()
+                .map(|degree| degree.cents())
+                .collect();
+            if let Ok(fingerprint) = ScaleFingerprint::from_cents(&degrees, DEFAULT_TOLERANCE) {
+                let _ = index.insert(fingerprint);
+            }
+        }
+        let shared = ALL_TUNING_SYSTEMS
+            .into_iter()
+            .filter(|system| {
+                ScaleFingerprint::from_cents(&system_cents(*system), DEFAULT_TOLERANCE)
+                    .is_ok_and(|fingerprint| index.contains(&fingerprint))
+            })
+            .count();
+        assert_eq!(
+            shared, 23,
+            "tuning tables the bundled Scala archive also holds"
+        );
+    }
+
     /// The wiki names some temperaments twice, on separate pages. Which those
     /// are is pinned, so a collection that introduces a new one is noticed.
     #[test]

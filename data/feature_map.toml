@@ -441,14 +441,7 @@ name = "Tuning systems"
 rust = "src/tuningsystem/mod.rs"
 count = "ALL_TUNING_SYSTEMS"
 unit = "systems"
-note = "Exact ratio tables - just intonation, meantone, well temperaments, Bohlen-Pierce, the Carlos scales - with frequencies derived from the ratios rather than from equal temperament. music21 tunes a scale only by reading a Scala file."
-
-[[beyond]]
-name = "Historical temperaments"
-rust = "src/tuningsystem/mod.rs"
-count = "HISTORICAL_TEMPERAMENTS"
-unit = "temperaments"
-note = "Salinas 1577 through Lehman 2005, transcribed from the Scala archive and checked against it. A subset of the tuning systems above."
+note = "Exact ratio tables - just intonation, meantone, Bohlen-Pierce, the Carlos scales - with frequencies derived from the ratios rather than from equal temperament, and available with no features turned on. Fourteen of them are the historical keyboard temperaments, Salinas 1577 through Lehman 2005, reachable together as HISTORICAL_TEMPERAMENTS; they are counted here rather than again, being the same tables. 23 of the 28 are in the bundled Scala archive too - the same scales stored the other way, exact ratios against parsed cents - which is deliberate and pinned by a test. music21 tunes a scale only by reading a Scala file."
 
 [[beyond]]
 name = "Adaptive tuning"
