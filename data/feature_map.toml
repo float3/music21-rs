@@ -295,6 +295,64 @@ collect = "compression and segment formats have no caller here"
 represent = "compression and segment formats have no caller here"
 
 [[class]]
+python = "beam.py"
+name = "Beams"
+rust = ["src/notation.rs"]
+note = "All the beams over one note, and the rules for a run of them."
+
+[class.renames]
+getTypeByNumber = "by_number"
+
+[class.excluded]
+naiveBeams = "it asks each object for its written value and whether it sounds, which is the facade's to ask; the rules it feeds are here as pure functions over the beams"
+
+[[class]]
+python = "volume.py"
+name = "Volume"
+rust = ["src/volume.rs"]
+note = "How loud a note sounds, as a velocity and as a scalar."
+
+[class.excluded]
+getDynamicContext = "the dynamic in force is a search through the stream the note sits in; `realized_with` takes it as an argument instead"
+cachedRealized = "the crate caches nothing -- a value that answers the same question twice is doing arithmetic. The wheel caches as music21 does"
+cachedRealizedStr = "the crate caches nothing -- a value that answers the same question twice is doing arithmetic. The wheel caches as music21 does"
+
+[[class]]
+python = "volume.py"
+rust = ["src/volume.rs"]
+
+[class.excluded]
+realizeVolume = "walks a stream, setting each note's volume from the dynamics in force"
+
+[[class]]
+python = "figuredBass/notation.py"
+name = "Figure"
+rust = ["src/figuredbass.rs"]
+note = "One number of that column, with the accidental written against it."
+
+[[class]]
+python = "figuredBass/notation.py"
+name = "Modifier"
+rust = ["src/figuredbass.rs"]
+note = "The mark as written beside the accidental it means: figured bass has marks no accidental name covers, a `+` that raises and a `/` that lowers."
+
+[[class]]
+python = "figuredBass/notation.py"
+rust = ["src/figuredbass.rs"]
+
+[[class]]
+python = "sieve.py"
+rust = ["src/sieve.rs"]
+
+[class.excluded]
+eratosthenes = "number theory of its own; only what SieveScale needs is ported"
+rabinMiller = "number theory of its own; only what SieveScale needs is ported"
+discreteBinaryPad = "compression and segment formats have no caller here"
+unitNormRange = "compression and segment formats have no caller here"
+unitNormEqual = "compression and segment formats have no caller here"
+unitNormStep = "compression and segment formats have no caller here"
+
+[[class]]
 python = "note.py"
 name = "GeneralNote"
 rust = ["src/note/mod.rs", "src/notation.rs", "src/duration.rs"]
