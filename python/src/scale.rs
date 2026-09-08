@@ -216,6 +216,19 @@ impl AbstractScale {
         Ok(PyClassInitializer::from(Scale).add_subclass(Self { scale_type }))
     }
 
+    /// music21's `buildNetwork`: says which pattern this abstract scale
+    /// stands for. Upstream it builds the interval network the scale is
+    /// realized through; here the pattern is the whole of it, so naming the
+    /// pattern is all there is to do.
+    #[pyo3(signature = (mode = None))]
+    fn buildNetwork(&mut self, mode: Option<&Bound<'_, PyAny>>) {
+        if let Some(mode) = mode.filter(|mode| !mode.is_none())
+            && let Some(scale_type) = Self::scale_type_of(mode)
+        {
+            self.scale_type = Some(scale_type);
+        }
+    }
+
     /// music21's `getDegreeMaxUnique`: how many degrees the pattern has
     /// before it repeats.
     fn getDegreeMaxUnique(&self) -> usize {

@@ -1119,7 +1119,13 @@ impl Beams {
     }
 
     fn __repr__(&self) -> String {
-        format!("<music21.beam.Beams {}>", self.inner)
+        // music21 writes the class alone when there is nothing to say about
+        // it, so a note with no beams is `<music21.beam.Beams>`.
+        let written = self.inner.to_string();
+        if written.is_empty() {
+            return "<music21.beam.Beams>".to_string();
+        }
+        format!("<music21.beam.Beams {written}>")
     }
 
     fn __eq__(&self, other: &Bound<'_, PyAny>) -> bool {

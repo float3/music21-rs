@@ -48,8 +48,10 @@ pub struct Chord {
     /// rebuild them from it.
     notes: Vec<Py<Note>>,
     /// The chord's own `Duration`, kept as the Python object music21 hands
-    /// back so `chord.duration is d` holds and edits through it stick.
-    duration: Option<Py<Duration>>,
+    /// back so `chord.duration is d` holds and edits through it stick. It
+    /// may be one of music21's own subclasses of it — a `GraceDuration` —
+    /// which one of ours put in its place would stop being.
+    duration: Option<Py<PyAny>>,
     /// The chord's own `Volume`, likewise.
     volume: Option<Py<Volume>>,
     /// music21's `storedInstrument`: the instrument this chord is played on,
@@ -122,18 +124,21 @@ impl Chord {
             "music21.duration",
             "Duration",
             Duration::wrap(RsDuration::quarter()),
-        )?;
+        )?
+        .into_any();
         if let Some(keywords) = keywords {
             if let Some(value) = keywords.get_item("duration")? {
                 quick = false;
-                shared = match value.extract::<Py<Duration>>() {
-                    Ok(object) => object,
-                    Err(_) => crate::installed_new(
+                shared = if value.hasattr("quarterLength")? {
+                    value.clone().unbind()
+                } else {
+                    crate::installed_new(
                         py,
                         "music21.duration",
                         "Duration",
                         Duration::wrap(duration_from_any(&value)?),
-                    )?,
+                    )?
+                    .into_any()
                 };
             } else if let Some(value) = keywords.get_item("quarterLength")? {
                 quick = false;
@@ -143,7 +148,8 @@ impl Chord {
                     "music21.duration",
                     "Duration",
                     Duration::wrap(length),
-                )?;
+                )?
+                .into_any();
             }
         }
         let adopted = adopted_notes(py, notes, &shared, quick)?;
@@ -153,13 +159,15 @@ impl Chord {
 
     /// Builds the facade around note objects the caller already holds,
     /// reading the chord off them, with the duration object they share.
-    fn from_notes(py: Python<'_>, notes: Vec<Py<Note>>, duration: Py<Duration>) -> PyResult<Self> {
+    fn from_notes(py: Python<'_>, notes: Vec<Py<Note>>, duration: Py<PyAny>) -> PyResult<Self> {
         let inners: Vec<RsNote> = notes
             .iter()
             .map(|note| note.borrow(py).synced(py))
             .collect();
         let mut inner = RsChord::new(inners.as_slice()).map_err(chord_error)?;
-        inner.set_duration(duration.borrow(py).inner.clone());
+        if let Some(value) = crate::note::duration_value_of(py, &duration) {
+            inner.set_duration(value);
+        }
         Ok(Self {
             inner,
             notes,
@@ -356,26 +364,30 @@ impl Chord {
             })
     }
 
-    fn duration_object(&mut self, py: Python<'_>) -> PyResult<Py<Duration>> {
+    fn duration_object(&mut self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         if let Some(duration) = &self.duration {
             return Ok(duration.clone_ref(py));
         }
-        let created = Py::new(
+        let created = crate::installed_new(
             py,
+            "music21.duration",
+            "Duration",
             Duration::wrap(
                 self.inner
                     .duration()
                     .cloned()
                     .unwrap_or_else(RsDuration::quarter),
             ),
-        )?;
+        )?
+        .into_any();
         self.duration = Some(created.clone_ref(py));
         Ok(created)
     }
 
     pub(crate) fn quarter_length(&self, py: Python<'_>) -> f64 {
         match &self.duration {
-            Some(duration) => duration.borrow(py).inner.quarter_length(),
+            Some(duration) => crate::note::duration_value_of(py, duration)
+                .map_or(1.0, |value| value.quarter_length()),
             None => self
                 .inner
                 .duration()
@@ -480,13 +492,13 @@ struct AdoptedNotes {
     notes: Vec<Py<Note>>,
     /// The duration object the chord should take, when a note handed in gave
     /// it one.
-    taken: Option<Py<Duration>>,
+    taken: Option<Py<PyAny>>,
 }
 
 fn adopted_notes(
     py: Python<'_>,
     value: Option<&Bound<'_, PyAny>>,
-    shared: &Py<Duration>,
+    shared: &Py<PyAny>,
     mut quick: bool,
 ) -> PyResult<AdoptedNotes> {
     let fresh = |chord: RsChord| -> PyResult<Vec<Py<Note>>> {
@@ -526,7 +538,7 @@ fn adopted_notes(
         return loose(fresh(chord_from_any(Some(value))?)?);
     }
     let mut notes: Vec<Py<Note>> = Vec::with_capacity(items.len());
-    let mut taken: Option<Py<Duration>> = None;
+    let mut taken: Option<Py<PyAny>> = None;
     let mut use_duration = Some(shared.clone_ref(py));
     for item in &items {
         if let Ok(note) = item.extract::<Py<Note>>() {
@@ -706,6 +718,37 @@ impl ChordTableAddress {
 /// One pitch's place in a key: which degree it is, and how it is altered
 /// from that degree.
 type ScaleDegree = (Option<usize>, Option<Accidental>);
+
+/// Fixes an answer by hand, in the dictionary music21 keeps them in: its own
+/// `root()` and `bass()` setters write there, and its `harmony` module reads
+/// the entries straight back out.
+fn override_with(chord: &Bound<'_, Chord>, key: &str, value: &RsPitch) -> PyResult<()> {
+    let py = chord.py();
+    // The pitch itself, not whatever named it: music21 reads these entries
+    // back as pitches, and its `harmony` module sets an octave on one.
+    let pitch = crate::installed_new(
+        py,
+        "music21.pitch",
+        "Pitch",
+        Pitch::wrap(value.clone(), false),
+    )?;
+    let overrides = chord.borrow_mut()._overrides(py);
+    overrides.bind(py).set_item(key, pitch)
+}
+
+/// Throws away an answer fixed by hand, which is what `find=True` does: it
+/// asks the chord to work the answer out again and to go on doing so.
+fn clear_override(chord: &Bound<'_, Chord>, key: &str) -> PyResult<()> {
+    let py = chord.py();
+    let Some(overrides) = chord.borrow().overrides.as_ref().map(|d| d.clone_ref(py)) else {
+        return Ok(());
+    };
+    let overrides = overrides.bind(py);
+    if overrides.contains(key)? {
+        overrides.del_item(key)?;
+    }
+    Ok(())
+}
 
 /// The answer fixed by hand for `key` in a chord's `_overrides`, if one has
 /// been fixed at all. The outer `Option` says whether there is an entry; the
@@ -1050,7 +1093,7 @@ impl Chord {
     // ---- duration --------------------------------------------------------
 
     #[getter]
-    fn get_duration(slf: &Bound<'_, Self>) -> PyResult<Py<Duration>> {
+    fn get_duration(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
         let py = slf.py();
         let duration = slf.borrow_mut().duration_object(py)?;
         crate::note::adopt_duration(py, &duration, slf.as_any());
@@ -1061,14 +1104,18 @@ impl Chord {
     fn set_duration(slf: &Bound<'_, Self>, value: &Bound<'_, PyAny>) -> PyResult<()> {
         let py = slf.py();
         let inner = duration_from_any(value)?;
-        let duration = match value.extract::<Py<Duration>>() {
-            Ok(object) => object,
-            Err(_) => crate::installed_new(
+        // A duration object is kept as it stands, whether it is one of ours
+        // or one of music21's own kinds of duration.
+        let duration = if value.hasattr("quarterLength")? {
+            value.clone().unbind()
+        } else {
+            crate::installed_new(
                 py,
                 "music21.duration",
                 "Duration",
                 Duration::wrap(inner.clone()),
-            )?,
+            )?
+            .into_any()
         };
         crate::note::adopt_duration(py, &duration, slf.as_any());
         let mut chord = slf.borrow_mut();
@@ -1087,14 +1134,23 @@ impl Chord {
         let inner = RsDuration::new(value).map_err(chord_error)?;
         self.inner.set_duration(inner.clone());
         match &self.duration {
-            Some(duration) => duration.borrow_mut(py).inner = inner,
+            Some(duration) => {
+                let duration = duration.bind(py);
+                match duration.extract::<PyRefMut<'_, Duration>>() {
+                    Ok(mut ours) => ours.inner = inner,
+                    Err(_) => duration.setattr("quarterLength", value)?,
+                }
+            }
             None => {
-                self.duration = Some(crate::installed_new(
-                    py,
-                    "music21.duration",
-                    "Duration",
-                    Duration::wrap(inner),
-                )?);
+                self.duration = Some(
+                    crate::installed_new(
+                        py,
+                        "music21.duration",
+                        "Duration",
+                        Duration::wrap(inner),
+                    )?
+                    .into_any(),
+                );
             }
         }
         Ok(())
@@ -1155,7 +1211,14 @@ impl Chord {
         let found = {
             let mut me = slf.borrow_mut();
             if let Some(newroot) = newroot.filter(|value| !value.is_none()) {
-                me.inner.set_root(Some(pitch_from_any(newroot)?));
+                let root = pitch_from_any(newroot)?;
+                me.inner.set_root(Some(root.clone()));
+                drop(me);
+                // music21's own setter writes the pitch it was given into
+                // `_overrides`, and its `harmony` module reads it back from
+                // there — the root of a chord symbol is the root it was
+                // named with, not one read off the notes.
+                override_with(slf, "root", &root)?;
                 return Ok(None);
             }
             match find {
@@ -1163,7 +1226,9 @@ impl Chord {
                 // again.
                 Some(true) => {
                     me.inner.set_root(None);
-                    me.found_root()?
+                    drop(me);
+                    clear_override(slf, "root")?;
+                    slf.borrow_mut().found_root()?
                 }
                 // `find=False` asks only whether a root was ever set, and
                 // never runs the search — which is how a caller tells an
@@ -1185,28 +1250,56 @@ impl Chord {
         find: Option<bool>,
         allow_add: bool,
     ) -> PyResult<Option<Py<Pitch>>> {
-        let found = {
-            let mut me = slf.borrow_mut();
-            if let Some(newbass) = newbass.filter(|value| !value.is_none()) {
-                let bass = pitch_from_any(newbass)?;
-                let known = me
-                    .inner
-                    .pitches()
-                    .iter()
-                    .any(|pitch| pitch.name() == bass.name());
-                if !known && !allow_add {
+        let py = slf.py();
+        if let Some(newbass) = newbass.filter(|value| !value.is_none()) {
+            let bass = pitch_from_any(newbass)?;
+            let known = slf
+                .borrow()
+                .inner
+                .pitches()
+                .iter()
+                .any(|pitch| pitch.name() == bass.name());
+            if !known {
+                if !allow_add {
                     return Err(ChordException::new_err(format!(
                         "Pitch {} not found in chord",
                         bass.name_with_octave()
                     )));
                 }
-                me.inner.set_bass(Some(bass));
+                // music21 puts a bass the chord does not have in front of
+                // the notes it does: that is how a chord symbol names a bass
+                // outside the chord.
+                let mut pitches = vec![bass.clone()];
+                pitches.extend(slf.borrow().inner.pitches().iter().cloned());
+                let mut rebuilt = RsChord::new(pitches.as_slice()).map_err(chord_error)?;
+                if let Some(duration) = slf.borrow().inner.duration().cloned() {
+                    rebuilt.set_duration(duration);
+                }
+                slf.borrow_mut().replace_inner(py, rebuilt)?;
+            }
+            slf.borrow_mut().inner.set_bass(Some(bass.clone()));
+            override_with(slf, "bass", &bass)?;
+            return Ok(None);
+        }
+        // An answer fixed by hand wins, as it does for the root: music21
+        // keeps both in the same dictionary and reads them back from there.
+        if find != Some(true)
+            && let Some(fixed) = overridden(slf, "bass")?
+        {
+            if fixed.is_none() {
                 return Ok(None);
             }
+            let pitch = pitch_from_any(&fixed)?;
+            return Self::own_pitch(slf, Some(&pitch));
+        }
+        let found = {
+            let mut me = slf.borrow_mut();
             match find {
                 Some(true) => {
                     me.inner.set_bass(None);
-                    me.inner.found_bass().cloned()
+                    drop(me);
+                    clear_override(slf, "bass")?;
+                    slf.borrow().inner.found_bass().cloned()
                 }
                 Some(false) => me.inner.overridden_bass().cloned(),
                 None => me.inner.bass().cloned(),
@@ -2365,12 +2458,7 @@ impl Chord {
             target.borrow_mut(py).inner = source.borrow(py).inner.clone();
         }
         if let Some(duration) = &self.duration {
-            copied.duration = Some(crate::installed_new(
-                py,
-                "music21.duration",
-                "Duration",
-                duration.borrow(py).clone(),
-            )?);
+            copied.duration = Some(crate::note::copied_duration(py, duration)?);
         }
         if let Some(volume) = &self.volume {
             copied.volume = Some(crate::installed_new(

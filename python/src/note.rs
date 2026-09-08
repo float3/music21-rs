@@ -732,8 +732,15 @@ pub struct Duration {
 /// Tells a duration what holds it, the way music21's own `duration` setter
 /// does. A duration announces a change to its holder, and one that was never
 /// told who that is announces to nobody.
-pub(crate) fn adopt_duration(py: Python<'_>, duration: &Py<Duration>, holder: &Bound<'_, PyAny>) {
-    duration.borrow_mut(py).client = Some(holder.clone().unbind());
+pub(crate) fn adopt_duration(py: Python<'_>, duration: &Py<PyAny>, holder: &Bound<'_, PyAny>) {
+    let duration = duration.bind(py);
+    if let Ok(mut ours) = duration.extract::<PyRefMut<'_, Duration>>() {
+        ours.client = Some(holder.clone().unbind());
+        return;
+    }
+    // One of music21's own durations keeps the same slot, and writing it is
+    // what its `GeneralNote.duration` setter does.
+    let _ = duration.setattr("client", holder);
 }
 
 impl Clone for Duration {
@@ -1072,6 +1079,32 @@ fn list_of(value: &Bound<'_, PyAny>) -> PyResult<Py<PyList>> {
 
 /// Reads a duration argument: a `Duration`, a quarter length, or a type name
 /// such as `"half"`.
+/// The duration value an object stands for: one of ours as it stands, and
+/// anything else — music21's own `GraceDuration`, say — by what it says its
+/// length is.
+/// A copy of a duration object, keeping whatever kind of duration it is.
+pub(crate) fn copied_duration(py: Python<'_>, object: &Py<PyAny>) -> PyResult<Py<PyAny>> {
+    let object = object.bind(py);
+    if let Ok(ours) = object.extract::<PyRef<'_, Duration>>() {
+        let copied = ours.clone();
+        drop(ours);
+        return Ok(crate::installed_new(py, "music21.duration", "Duration", copied)?.into_any());
+    }
+    Ok(py
+        .import("copy")?
+        .getattr("deepcopy")?
+        .call1((object,))?
+        .unbind())
+}
+
+pub(crate) fn duration_value_of(py: Python<'_>, object: &Py<PyAny>) -> Option<RsDuration> {
+    let object = object.bind(py);
+    if let Ok(ours) = object.extract::<PyRef<'_, Duration>>() {
+        return Some(ours.inner.clone());
+    }
+    duration_from_any(object).ok()
+}
+
 pub(crate) fn duration_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsDuration> {
     if let Ok(facade) = value.extract::<PyRef<Duration>>() {
         return Ok(facade.inner.clone());
@@ -1590,12 +1623,22 @@ impl Duration {
         grace.linked = false;
         grace.unlinked_type = Some(written_type);
         grace.inner = RsDuration::new(0.0).map_err(duration_error)?;
-        let initializer = GraceDuration { slash: true };
+        let initializer = GraceDuration {
+            slash: true,
+            steal_previous: None,
+            steal_following: None,
+            make_time: false,
+        };
         let grace = if appoggiatura {
             Py::new(
                 py,
                 PyClassInitializer::from(grace)
-                    .add_subclass(GraceDuration { slash: false })
+                    .add_subclass(GraceDuration {
+                        slash: false,
+                        steal_previous: None,
+                        steal_following: None,
+                        make_time: false,
+                    })
                     .add_subclass(AppoggiaturaDuration),
             )?
             .into_any()
@@ -1777,6 +1820,13 @@ impl Duration {
 )]
 pub struct GraceDuration {
     slash: bool,
+    /// music21's `stealTimePrevious` and `stealTimeFollowing`: how much of
+    /// the neighbouring note's time this one takes, as a share of it. The
+    /// crate models no performance, so what a caller writes is kept.
+    steal_previous: Option<f64>,
+    steal_following: Option<f64>,
+    /// music21's `makeTime`: whether the grace note takes time of its own.
+    make_time: bool,
 }
 
 #[pymethods]
@@ -1791,7 +1841,12 @@ impl GraceDuration {
         base.linked = false;
         base.unlinked_type = Some("eighth".to_string());
         base.inner = RsDuration::new(0.0).map_err(duration_error)?;
-        Ok(PyClassInitializer::from(base).add_subclass(Self { slash: true }))
+        Ok(PyClassInitializer::from(base).add_subclass(Self {
+            slash: true,
+            steal_previous: None,
+            steal_following: None,
+            make_time: false,
+        }))
     }
 
     #[getter]
@@ -1807,6 +1862,43 @@ impl GraceDuration {
     #[setter]
     fn set_slash(&mut self, value: bool) {
         self.slash = value;
+    }
+
+    /// music21's `stealTimePrevious`: how much of the previous note's time
+    /// this grace note takes, as a share of it. Its MusicXML reader writes
+    /// the score's `steal-time-previous` here.
+    #[getter]
+    fn get_stealTimePrevious(&self) -> Option<f64> {
+        self.steal_previous
+    }
+
+    #[setter]
+    fn set_stealTimePrevious(&mut self, value: Option<f64>) {
+        self.steal_previous = value;
+    }
+
+    /// music21's `stealTimeFollowing`, the same for the note after.
+    #[getter]
+    fn get_stealTimeFollowing(&self) -> Option<f64> {
+        self.steal_following
+    }
+
+    #[setter]
+    fn set_stealTimeFollowing(&mut self, value: Option<f64>) {
+        self.steal_following = value;
+    }
+
+    /// music21's `makeTime`: whether the grace note takes time of its own in
+    /// performance. Nothing here plays anything, so it is kept and handed
+    /// back.
+    #[getter]
+    fn get_makeTime(&self) -> bool {
+        self.make_time
+    }
+
+    #[setter]
+    fn set_makeTime(&mut self, value: bool) {
+        self.make_time = value;
     }
 }
 
@@ -1849,7 +1941,11 @@ pub struct Note {
     /// something has asked for one. Notes a chord builds are given the
     /// chord's, which is what makes `chord.duration is chord[0].duration`
     /// hold; a note that came with its own keeps it.
-    duration: Option<Py<Duration>>,
+    /// The `Duration` object music21 hands back from `.duration`, which may
+    /// be one of music21's own subclasses of it — a `GraceDuration` is what
+    /// makes a note a grace note, and one replaced by a plain duration of
+    /// ours would stop being one.
+    duration: Option<Py<PyAny>>,
     /// The chord this note is part of: music21's `_chordAttached`, which its
     /// own `ChordBase` sets on every note it takes in. An edit to the pitch
     /// has to reach the chord through it.
@@ -2006,14 +2102,14 @@ impl Note {
     /// is an edit to the note, and `inner`'s otherwise.
     pub(crate) fn duration_value(&self, py: Python<'_>) -> Option<RsDuration> {
         match &self.duration {
-            Some(object) => Some(object.borrow(py).inner.clone()),
+            Some(object) => duration_value_of(py, object),
             None => self.inner.duration().cloned(),
         }
     }
 
     /// The `Duration` object for this note, made on first asking as music21
     /// makes one on first asking.
-    pub(crate) fn duration_object(&mut self, py: Python<'_>) -> PyResult<Py<Duration>> {
+    pub(crate) fn duration_object(&mut self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         if let Some(object) = &self.duration {
             return Ok(object.clone_ref(py));
         }
@@ -2023,7 +2119,8 @@ impl Note {
             .cloned()
             .unwrap_or_else(RsDuration::quarter);
         let created =
-            crate::installed_new(py, "music21.duration", "Duration", Duration::wrap(inner))?;
+            crate::installed_new(py, "music21.duration", "Duration", Duration::wrap(inner))?
+                .into_any();
         self.duration = Some(created.clone_ref(py));
         Ok(created)
     }
@@ -2034,16 +2131,21 @@ impl Note {
         &mut self,
         py: Python<'_>,
         value: &Bound<'_, PyAny>,
-    ) -> PyResult<Py<Duration>> {
+    ) -> PyResult<Py<PyAny>> {
         let inner = duration_from_any(value)?;
-        let duration = match value.extract::<Py<Duration>>() {
-            Ok(object) => object,
-            Err(_) => crate::installed_new(
+        // A duration object is kept as it stands, whether it is one of ours
+        // or one of music21's own kinds of duration; anything else — a
+        // length, a note-value name — becomes one of ours.
+        let duration = if value.hasattr("quarterLength")? {
+            value.clone().unbind()
+        } else {
+            crate::installed_new(
                 py,
                 "music21.duration",
                 "Duration",
                 Duration::wrap(inner.clone()),
-            )?,
+            )?
+            .into_any()
         };
         self.inner.set_duration(inner);
         self.duration = Some(duration.clone_ref(py));
@@ -2080,8 +2182,10 @@ impl Note {
 
     /// Hands this note a `Duration` object to share, the way a chord shares
     /// its own with the notes it builds.
-    pub(crate) fn share_duration(&mut self, py: Python<'_>, duration: &Py<Duration>) {
-        self.inner.set_duration(duration.borrow(py).inner.clone());
+    pub(crate) fn share_duration(&mut self, py: Python<'_>, duration: &Py<PyAny>) {
+        if let Some(value) = duration_value_of(py, duration) {
+            self.inner.set_duration(value);
+        }
         self.duration = Some(duration.clone_ref(py));
     }
 
@@ -2160,6 +2264,11 @@ impl Note {
         copy.expressions = copied_list(py, self.expressions.as_ref())?;
         copy.articulations = copied_list(py, self.articulations.as_ref())?;
         copy.style = crate::notation::copied_style(py, self.style.as_ref());
+        // The duration comes across as the kind of duration it is: a grace
+        // note whose copy carried a plain duration would stop being one.
+        if let Some(duration) = &self.duration {
+            copy.duration = Some(copied_duration(py, duration)?);
+        }
         Ok(copy)
     }
 }
@@ -2409,7 +2518,7 @@ impl Note {
     /// music21's `.duration`, the same object every time: `n.duration.type =
     /// 'half'` is how music21's own doctests lengthen a note.
     #[getter]
-    fn get_duration(slf: &Bound<'_, Self>) -> PyResult<Py<Duration>> {
+    fn get_duration(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
         let py = slf.py();
         let duration = slf.borrow_mut().duration_object(py)?;
         adopt_duration(py, &duration, slf.as_any());
@@ -2434,14 +2543,23 @@ impl Note {
         let inner = RsDuration::new(value).map_err(note_error)?;
         self.inner.set_duration(inner.clone());
         match &self.duration {
-            Some(duration) => duration.borrow_mut(py).inner = inner,
+            Some(duration) => {
+                let duration = duration.bind(py);
+                match duration.extract::<PyRefMut<'_, Duration>>() {
+                    Ok(mut ours) => ours.inner = inner,
+                    Err(_) => duration.setattr("quarterLength", value)?,
+                }
+            }
             None => {
-                self.duration = Some(crate::installed_new(
-                    py,
-                    "music21.duration",
-                    "Duration",
-                    Duration::wrap(inner),
-                )?);
+                self.duration = Some(
+                    crate::installed_new(
+                        py,
+                        "music21.duration",
+                        "Duration",
+                        Duration::wrap(inner),
+                    )?
+                    .into_any(),
+                );
             }
         }
         Ok(())

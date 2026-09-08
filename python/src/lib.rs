@@ -377,13 +377,26 @@ _MACHINERY = frozenset((
 ))
 
 
-def machinery_of(original):
-    """The plumbing classes `original` is built on, in its own order."""
-    return tuple(
-        ancestor for ancestor in original.__mro__
-        if ancestor.__name__ in _MACHINERY
-        and getattr(ancestor, '__module__', '').startswith('music21')
-    )
+def machinery_of(original, facade):
+    """The plumbing classes `original` is built on, in its own order.
+
+    One at a time, because not all of them can be a base of a pyo3 class:
+    `StyleMixin` has real `__slots__` and will not share an instance layout
+    with one. Taking the rest anyway is the difference between a beam that
+    knows its own slots and one that knows nothing.
+    """
+    taken = (facade,)
+    for ancestor in original.__mro__:
+        if ancestor.__name__ not in _MACHINERY:
+            continue
+        if not getattr(ancestor, '__module__', '').startswith('music21'):
+            continue
+        try:
+            type('probe', taken + (ancestor,), {})
+        except TypeError:
+            continue
+        taken += (ancestor,)
+    return taken
 
 
 def rebind(original, installed):
@@ -564,7 +577,7 @@ def make_class(facade, original):
         '__copy__': __copy__,
         '__module__': original.__module__,
         '__qualname__': original.__qualname__,
-        'classes': tuple(a.__name__ for a in original.__mro__ if a is not object),
+        'classes': tuple(a.__name__ for a in original.__mro__),
     })
     for name in ('isNote', 'isRest', 'isChord', 'classSortOrder', 'equalityAttributes'):
         if hasattr(original, name):
@@ -598,7 +611,7 @@ def make_class(facade, original):
         # music21's own class is still never a base, but the plumbing it is
         # built on is: that is where `editorial`, `style` and the slots
         # machinery live, and none of it says anything musical.
-        bases = (facade,) + machinery_of(original)
+        bases = machinery_of(original, facade)
         fallback = (facade,)
     try:
         installed = Stands(original.__name__, bases, namespace)
@@ -745,12 +758,13 @@ pub fn music21_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
         .keys()
         .iter()
         .filter_map(|key| key.extract::<String>().ok())
-        .filter(|name| !name.starts_with('_'))
+        // Everything but the dunders, since the package the wheel installs
+        // takes its contents from this list: a pickle written by one of
+        // these classes names `_thawed`, and music21's own `key` doctest
+        // reads `_sharpsToPitchCache` back.
+        .filter(|name| !name.starts_with("__"))
         .collect();
     names.sort();
-    // A pickle written by one of these classes names this function, so the
-    // package has to carry it even though nobody calls it by hand.
-    names.push("_thawed".to_string());
     m.add("__all__", names)?;
     Ok(())
 }
