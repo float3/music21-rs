@@ -518,6 +518,8 @@ impl Scale {
     /// neighbours, and the scale closes back on the octave, so the notes
     /// repeat an octave higher as any scale's do.
     pub fn from_pitches(pitches: &[Pitch]) -> Result<Self> {
+        let pitches = rising_octaves(pitches);
+        let pitches = pitches.as_slice();
         let Some(tonic) = pitches.first() else {
             return Err(crate::error::Error::Scale(
                 "a scale needs at least one pitch".to_string(),
@@ -828,6 +830,19 @@ impl Scale {
             current = advance(&current, &steps[index % steps.len()], simplification)?;
         }
         Ok(pitches)
+    }
+
+    /// Whether the pattern can be walked at all.
+    ///
+    /// A collection given by its notes may rise and fall back to where it
+    /// began — `A4 B4 C4 D4 E4 F4 G4 A4` does — and a pattern that goes
+    /// nowhere cannot be realized over a range, however many times it is
+    /// walked. music21 says so as well, out of the network it walks.
+    pub fn is_realizable(&self) -> bool {
+        match &self.custom_steps {
+            Some(steps) => steps.iter().map(Interval::semitones).sum::<FloatType>() > 0.0,
+            None => true,
+        }
     }
 
     /// Whether the pattern repeats at the octave: music21's
@@ -1214,6 +1229,40 @@ impl Scale {
         pitch.octave_setter(octave);
         Ok(pitch)
     }
+}
+
+/// A collection's notes with the octaves a caller left out filled in so that
+/// the collection rises: music21's `fixDefaultOctaveForPitchList`.
+///
+/// `A B C D E F G# A` is a scale on A, not a collection that climbs a tone
+/// and then falls a seventh, and a caller who names no octaves means the
+/// first. Notes that carry an octave are left exactly as they are.
+fn rising_octaves(pitches: &[Pitch]) -> Vec<Pitch> {
+    let mut risen: Vec<Pitch> = Vec::with_capacity(pitches.len());
+    let mut last_ps = 0.0;
+    let mut last_octave =
+        pitches
+            .first()
+            .map_or(crate::defaults::PITCH_OCTAVE as IntegerType, |pitch| {
+                pitch
+                    .octave()
+                    .unwrap_or(crate::defaults::PITCH_OCTAVE as IntegerType)
+            });
+    for pitch in pitches {
+        let mut pitch = pitch.clone();
+        if pitch.octave().is_none() {
+            if last_ps > pitch.ps() {
+                pitch.octave_setter(Some(last_octave));
+            }
+            while last_ps > pitch.ps() {
+                last_octave += 1;
+                pitch.octave_setter(Some(last_octave));
+            }
+        }
+        last_ps = pitch.ps();
+        risen.push(pitch);
+    }
+    risen
 }
 
 /// Transposes one scale step, applying the scale's simplification.

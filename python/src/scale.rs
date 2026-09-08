@@ -362,6 +362,14 @@ pub struct ConcreteScale {
     /// it or handed one over. music21 keeps what it was given and hands the
     /// same object back.
     tonic_object: Option<Py<Pitch>>,
+    /// A pattern of music21's own that this crate has no counterpart for.
+    ///
+    /// music21's `SieveScale` and `ScalaScale` build their own interval
+    /// networks and assign them here, and a scale standing on one of those
+    /// is realized by asking it rather than by walking a pattern the crate
+    /// knows. Nothing here reads such a network; it is handed straight back
+    /// to the code that made it.
+    abstract_scale: Option<Py<PyAny>>,
 }
 
 impl ConcreteScale {
@@ -373,6 +381,7 @@ impl ConcreteScale {
             named_type: None,
             has_tonic: true,
             tonic_object: None,
+            abstract_scale: None,
         }
     }
 
@@ -385,6 +394,65 @@ impl ConcreteScale {
         } else {
             scale.clone()
         })
+    }
+
+    /// music21's complaint about a collection that rises and falls back to
+    /// where it began: a pattern that goes nowhere cannot be walked over a
+    /// range, however many times it is walked.
+    fn must_be_realizable(slf: &Bound<'_, Self>) -> PyResult<()> {
+        if slf.borrow().inner.is_realizable() {
+            return Ok(());
+        }
+        let said = "Cannot realize these pitches; is your scale well-formed?              (especially check if you're giving notes without octaves)";
+        // music21's own class where music21 is there to be asked, since its
+        // own code and its own tests catch that one by name.
+        let py = slf.py();
+        if let Ok(class) = py
+            .import("music21.scale.intervalNetwork")
+            .and_then(|module| module.getattr("IntervalNetworkException"))
+        {
+            return Err(PyErr::from_value(class.call1((said,))?));
+        }
+        Err(IntervalNetworkException::new_err(said))
+    }
+
+    /// The scale realized by music21's own network, where the pattern is one
+    /// of its own that this crate has no counterpart for.
+    fn foreign_realization(
+        &self,
+        py: Python<'_>,
+        minimum: Option<&Bound<'_, PyAny>>,
+        maximum: Option<&Bound<'_, PyAny>>,
+        direction: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<Option<Vec<Pitch>>> {
+        let Some(pattern) = &self.abstract_scale else {
+            return Ok(None);
+        };
+        let pattern = pattern.bind(py);
+        let tonic = Bound::new(py, Pitch::wrap(self.inner.tonic().clone(), false))?;
+        let degree = pattern.getattr("tonicDegree")?;
+        // As pitch objects, which is what music21 hands its own network:
+        // a range written as text is read into one first.
+        let bound = |value: Option<&Bound<'_, PyAny>>| -> PyResult<Option<Py<Pitch>>> {
+            value
+                .filter(|value| !value.is_none())
+                .map(|value| {
+                    Ok(Bound::new(py, Pitch::wrap(pitch_from_any(value)?, false))?.unbind())
+                })
+                .transpose()
+        };
+        let keywords = PyDict::new(py);
+        keywords.set_item("minPitch", bound(minimum)?)?;
+        keywords.set_item("maxPitch", bound(maximum)?)?;
+        if let Some(direction) = direction.filter(|value| !value.is_none()) {
+            keywords.set_item("direction", direction)?;
+        }
+        let realized = pattern.call_method("getRealization", (tonic, degree), Some(&keywords))?;
+        let mut pitches = Vec::new();
+        for item in realized.try_iter()? {
+            pitches.push(item?.extract::<PyRef<'_, Pitch>>()?.clone());
+        }
+        Ok(Some(pitches))
     }
 
     /// The scale as something that can actually be realized, or music21's
@@ -419,6 +487,7 @@ impl ConcreteScale {
                 named_type: None,
                 has_tonic: true,
                 tonic_object: None,
+                abstract_scale: None,
             };
             built.named_pattern = false;
             return Ok(
@@ -444,6 +513,7 @@ impl ConcreteScale {
                 named_type: None,
                 has_tonic: true,
                 tonic_object: None,
+                abstract_scale: None,
             }),
         )?
         .into_any())
@@ -637,7 +707,10 @@ impl ConcreteScale {
     /// music21's `pitches`: the scale from its tonic through the octave, the
     /// closing octave included.
     #[getter]
-    fn pitches(&self) -> PyResult<Vec<Pitch>> {
+    fn pitches(&self, py: Python<'_>) -> PyResult<Vec<Pitch>> {
+        if let Some(realized) = self.foreign_realization(py, None, None, None)? {
+            return Ok(realized);
+        }
         Ok(self
             .realized_anywhere()
             .pitches()
@@ -652,11 +725,15 @@ impl ConcreteScale {
     #[pyo3(signature = (minPitch = None, maxPitch = None, direction = None, **_keywords))]
     fn getPitches(
         &self,
+        py: Python<'_>,
         minPitch: Option<&Bound<'_, PyAny>>,
         maxPitch: Option<&Bound<'_, PyAny>>,
         direction: Option<&Bound<'_, PyAny>>,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Vec<Pitch>> {
+        if let Some(realized) = self.foreign_realization(py, minPitch, maxPitch, direction)? {
+            return Ok(realized);
+        }
         if is_bidirectional(direction) {
             let scale = self.realized_anywhere();
             let up = scale.pitches().map_err(scale_error)?;
@@ -698,7 +775,7 @@ impl ConcreteScale {
                         .map_err(scale_error)?,
                 ));
             }
-            return self.pitches();
+            return self.pitches(py);
         };
         let (low, high) = (pitch_from_any(low)?, pitch_from_any(high)?);
         // A scale nobody gave a tonic to still has a pattern, and music21
@@ -781,6 +858,11 @@ impl ConcreteScale {
     /// music21 turns a scale of one kind into a scale of another.
     #[getter]
     fn get_abstract(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        // A pattern of music21's own is handed straight back, since it is
+        // the thing that knows what this scale is.
+        if let Some(pattern) = &self.abstract_scale {
+            return Ok(pattern.clone_ref(py));
+        }
         AbstractScale::object(
             py,
             self.named_pattern.then(|| self.inner.scale_type()),
@@ -803,16 +885,16 @@ impl ConcreteScale {
 
     #[setter]
     fn set_abstract(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
-        let scale_type = AbstractScale::scale_type_of(value).ok_or_else(|| {
-            ScaleException::new_err(format!(
-                "cannot read a scale pattern from {}",
-                value
-                    .str()
-                    .map_or_else(|_| "?".to_string(), |v| v.to_string())
-            ))
-        })?;
+        // A pattern this crate has one of its own for is read as that
+        // pattern; anything else is music21's own network, kept as it stands
+        // and asked whenever the scale is realized.
+        let Some(scale_type) = AbstractScale::scale_type_of(value) else {
+            self.abstract_scale = Some(value.clone().unbind());
+            return Ok(());
+        };
         self.inner = RsScale::new(scale_type, self.inner.tonic().clone());
         self.named_pattern = true;
+        self.abstract_scale = None;
         Ok(())
     }
 
@@ -837,6 +919,7 @@ impl ConcreteScale {
         removeDuplicates: bool,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Vec<(usize, Py<PyAny>)>> {
+        Self::must_be_realizable(slf)?;
         let comparison = comparison_of(comparisonAttribute);
         let mut pitches = pitch_list(other)?;
         if removeDuplicates {
@@ -861,6 +944,7 @@ impl ConcreteScale {
         comparisonAttribute: &str,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Py<PyAny>> {
+        Self::must_be_realizable(slf)?;
         let pitches = pitch_list(other)?;
         let mut ranked = slf
             .borrow()
@@ -883,6 +967,7 @@ impl ConcreteScale {
         comparisonAttribute: &str,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Vec<Py<PyAny>>> {
+        Self::must_be_realizable(slf)?;
         let pitches = pitch_list(other)?;
         let wanted = pitches.len();
         let ranked = slf
