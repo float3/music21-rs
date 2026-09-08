@@ -4,9 +4,10 @@
 # the parity test compares them so the hand-maintained copy cannot
 # drift from upstream unnoticed.
 #
-# music21 11.0.0b8
+# music21 11.0.0b9 at 89e85db9257aa98e39abd0c419e0c8765688e5c3
 
-music21_version = "11.0.0b8"
+music21_version = "11.0.0b9"
+music21_commit = "89e85db9257aa98e39abd0c419e0c8765688e5c3"
 
 [[chord_type]]
 kind = "major"

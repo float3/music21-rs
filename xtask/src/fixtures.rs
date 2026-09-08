@@ -11,6 +11,7 @@
 //! `import music21` can succeed: the submodule for the package itself, plus a
 //! virtualenv holding music21's own dependencies.
 
+use crate::submodule::Stamp;
 use pyo3::prelude::*;
 use pyo3::types::{PyAnyMethods, PyDict, PyDictMethods, PyList};
 
@@ -127,24 +128,6 @@ fn import_music21<'py>(py: Python<'py>, workspace_root: &Path) -> PyResult<Bound
         modules.del_item(name)?;
     }
 
-    // Undo the chord-table bridge's stubbing if this process has already done
-    // it. That bridge installs dummy `music21`, `music21.environment` and
-    // `music21.exceptions21` modules so `chord/tables.py` imports without
-    // music21's dependencies, and they stay in `sys.modules` for the life of
-    // the interpreter -- so `regenerate-all`, which runs the bridge first and
-    // the fixtures second in one process, would otherwise import the stub
-    // package here and find no `__version__` on it.
-    let modules = sys.getattr("modules")?.cast_into::<PyDict>()?;
-    let stubbed: Vec<String> = modules
-        .keys()
-        .iter()
-        .filter_map(|key| key.extract::<String>().ok())
-        .filter(|name| name == "music21" || name.starts_with("music21."))
-        .collect();
-    for name in stubbed {
-        modules.del_item(name)?;
-    }
-
     Ok(py.import("music21")?.into_any())
 }
 
@@ -167,28 +150,36 @@ pub(crate) fn regenerate(workspace_root: &Path) -> Result<Vec<PathBuf>, Box<dyn 
         let music21 = import_music21(py, workspace_root)?;
         let version: String = music21.getattr("__version__")?.extract()?;
         println!("  music21 {version} imported from the submodule");
+        // The version alone spans many commits, so the exact one is recorded
+        // beside it; a bump inside one version would otherwise leave every
+        // fixture looking fresh.
+        let commit = crate::submodule::commit(workspace_root, "music21").map_err(|error| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(error.to_string())
+        })?;
+        let stamp = &Stamp { version, commit };
 
         Ok(vec![
-            write_scales(py, workspace_root, &version)?,
-            write_chord_types(py, workspace_root, &version)?,
-            write_meters(py, workspace_root, &version)?,
-            write_small_tables(py, workspace_root, &version)?,
-            write_serial(py, workspace_root, &version)?,
-            write_doctest_totals(py, workspace_root, &version)?,
+            write_scales(py, workspace_root, stamp)?,
+            write_chord_types(py, workspace_root, stamp)?,
+            write_meters(py, workspace_root, stamp)?,
+            write_small_tables(py, workspace_root, stamp)?,
+            write_serial(py, workspace_root, stamp)?,
+            write_doctest_totals(py, workspace_root, stamp)?,
         ])
     })
     .map_err(|error| -> Box<dyn Error> { Box::new(error) })
 }
 
-fn header(lines: &[&str], version: &str) -> String {
+fn header(lines: &[&str], stamp: &Stamp) -> String {
     let mut out = String::new();
     for line in lines {
         let _ = writeln!(out, "{line}");
     }
     let _ = writeln!(out, "#");
-    let _ = writeln!(out, "# music21 {version}");
+    let _ = writeln!(out, "# music21 {} at {}", stamp.version, stamp.commit);
     let _ = writeln!(out);
-    let _ = writeln!(out, "music21_version = {}", toml_string(version));
+    let _ = writeln!(out, "music21_version = {}", toml_string(&stamp.version));
+    let _ = writeln!(out, "music21_commit = {}", toml_string(&stamp.commit));
     let _ = writeln!(out);
     out
 }
@@ -272,7 +263,7 @@ fn test_modules_for(workspace_root: &Path, module: &str) -> Vec<String> {
 /// flatters the score. There is no counting this from the Rust side, because a
 /// docstring is what `DocTestFinder` says it is — a text scan for `>>>` misses
 /// by as much as 14% on `roman.py`.
-fn write_doctest_totals(py: Python<'_>, workspace_root: &Path, version: &str) -> PyResult<PathBuf> {
+fn write_doctest_totals(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> PyResult<PathBuf> {
     let doctest = py.import("doctest")?;
     let finder = doctest.getattr("DocTestFinder")?.call0()?;
     let unittest = py.import("unittest")?;
@@ -310,7 +301,7 @@ fn write_doctest_totals(py: Python<'_>, workspace_root: &Path, version: &str) ->
             "# keeps them. Nothing runs those against the crate yet, so the report",
             "# shows nought against every one of them; that column is the to-do list.",
         ],
-        version,
+        stamp,
     );
 
     let modules = scoped_modules(workspace_root)?;
@@ -348,7 +339,7 @@ fn write_doctest_totals(py: Python<'_>, workspace_root: &Path, version: &str) ->
     Ok(path)
 }
 
-fn write_scales(py: Python<'_>, workspace_root: &Path, version: &str) -> PyResult<PathBuf> {
+fn write_scales(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> PyResult<PathBuf> {
     let scale_module = py.import("music21.scale")?;
     let pitch_module = py.import("music21.pitch")?;
 
@@ -358,7 +349,7 @@ fn write_scales(py: Python<'_>, workspace_root: &Path, version: &str) -> PyResul
             "# `cargo run -p xtask --features python -- regenerate-fixtures`.",
             "# Checked in so the library can be verified without importing music21.",
         ],
-        version,
+        stamp,
     );
 
     for (scale_type, class_name) in SCALE_TYPES {
@@ -401,7 +392,7 @@ fn write_scales(py: Python<'_>, workspace_root: &Path, version: &str) -> PyResul
     Ok(path)
 }
 
-fn write_chord_types(py: Python<'_>, workspace_root: &Path, version: &str) -> PyResult<PathBuf> {
+fn write_chord_types(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> PyResult<PathBuf> {
     let harmony = py.import("music21.harmony")?;
     let chord_types = harmony.getattr("CHORD_TYPES")?.cast_into::<PyDict>()?;
     let aliases = harmony.getattr("CHORD_ALIASES")?.cast_into::<PyDict>()?;
@@ -414,7 +405,7 @@ fn write_chord_types(py: Python<'_>, workspace_root: &Path, version: &str) -> Py
             "# the parity test compares them so the hand-maintained copy cannot",
             "# drift from upstream unnoticed.",
         ],
-        version,
+        stamp,
     );
 
     let mut count = 0;
@@ -450,7 +441,7 @@ fn write_chord_types(py: Python<'_>, workspace_root: &Path, version: &str) -> Py
     Ok(path)
 }
 
-fn write_meters(py: Python<'_>, workspace_root: &Path, version: &str) -> PyResult<PathBuf> {
+fn write_meters(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> PyResult<PathBuf> {
     let meter = py.import("music21.meter")?;
 
     let mut out = header(
@@ -461,7 +452,7 @@ fn write_meters(py: Python<'_>, workspace_root: &Path, version: &str) -> PyResul
             "# music21 derives them from a MeterSequence partition tree, so this",
             "# file is what proves the shortcut agrees with the tree.",
         ],
-        version,
+        stamp,
     );
 
     let mut count = 0;
@@ -525,7 +516,7 @@ fn write_meters(py: Python<'_>, workspace_root: &Path, version: &str) -> PyResul
     Ok(path)
 }
 
-fn write_small_tables(py: Python<'_>, workspace_root: &Path, version: &str) -> PyResult<PathBuf> {
+fn write_small_tables(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> PyResult<PathBuf> {
     let pitch_module = py.import("music21.pitch")?;
     let key_module = py.import("music21.key")?;
     let interval_module = py.import("music21.interval")?;
@@ -538,7 +529,7 @@ fn write_small_tables(py: Python<'_>, workspace_root: &Path, version: &str) -> P
             "# They are small enough to transcribe, which is exactly why they drift",
             "# silently; these fixtures are what stops that.",
         ],
-        version,
+        stamp,
     );
 
     let modifiers = pitch_module
@@ -727,7 +718,7 @@ fn write_link_classification(
     Ok(())
 }
 
-fn write_serial(py: Python<'_>, workspace_root: &Path, version: &str) -> PyResult<PathBuf> {
+fn write_serial(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> PyResult<PathBuf> {
     let serial = py.import("music21.serial")?;
 
     let mut out = header(
@@ -738,7 +729,7 @@ fn write_serial(py: Python<'_>, workspace_root: &Path, version: &str) -> PyResul
             "# table is checked behaviourally, by classifying a row built from each",
             "# of music21's interval strings.",
         ],
-        version,
+        stamp,
     );
 
     let historical = serial.getattr("historicalDict")?.cast_into::<PyDict>()?;

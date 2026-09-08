@@ -49,6 +49,35 @@ const MUSIC21_MODULES: [(&str, &[&str]); 15] = [
     ("music21.voiceLeading", voiceleading::NAMES),
 ];
 
+/// An argument that may not have been given at all, which is not the same
+/// thing as one given as `None`.
+///
+/// pyo3 hands `None` for both, and normally that is exactly right. It is not
+/// where music21 has deprecated passing `None` — `KeySignature(sharps=None)`
+/// warns and `KeySignature()` does not — so those keywords take one of these
+/// instead, and the default in the signature is the argument nobody wrote.
+pub(crate) struct Given<'py>(pub(crate) Option<Bound<'py, PyAny>>);
+
+impl<'py> FromPyObject<'_, 'py> for Given<'py> {
+    type Error = PyErr;
+
+    fn extract(value: pyo3::Borrowed<'_, 'py, PyAny>) -> Result<Self, Self::Error> {
+        Ok(Self(Some(value.to_owned())))
+    }
+}
+
+impl<'py> Given<'py> {
+    /// Whether the argument was written as `None`, rather than left out.
+    pub(crate) fn written_as_none(&self) -> bool {
+        self.0.as_ref().is_some_and(|value| value.is_none())
+    }
+
+    /// The argument, where one was given and it says something.
+    pub(crate) fn value(&self) -> Option<&Bound<'py, PyAny>> {
+        self.0.as_ref().filter(|value| !value.is_none())
+    }
+}
+
 /// music21's own coercion of a number written some other way.
 ///
 /// Its setters are `int(value)` and `float(value)`, so a score reader that
@@ -546,7 +575,10 @@ def lineage(cls):
         # name it is given now means the installed class. Both are listed:
         # music21's own default arguments hold the class it had when the
         # module was read, which is the one being replaced, while anything
-        # asking by name today gets the one standing in for it.
+        # asking by name today gets the one standing in for it. Dropping the
+        # replaced class costs 250 of music21's own tests, which is the price
+        # of the one `prebase.classSet` doctest that counts the classes and
+        # finds one more than music21 has.
         if member in replaced:
             members.add(replaced[member])
     known = (tuple(names), frozenset(members), tuple(walked))

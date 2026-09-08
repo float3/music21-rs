@@ -65,6 +65,7 @@ passing = [
     "music21.pitch.Pitch.name",
     "music21.pitch.Pitch.nameWithOctave",
     "music21.pitch.Pitch.octave",
+    "music21.pitch.Pitch.octaveIsImplicit",
     "music21.pitch.Pitch.pitchClass",
     "music21.pitch.Pitch.pitchClassString",
     "music21.pitch.Pitch.ps",

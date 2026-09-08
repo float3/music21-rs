@@ -4,6 +4,7 @@
 mod fixtures;
 mod report;
 mod scala_archive;
+mod submodule;
 mod tuning;
 
 mod shared {
@@ -32,6 +33,16 @@ const CARDINALITIES: usize = 13;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct ChordTablesData {
+    /// music21 version `chord/tables.py` was read from, so a submodule bump
+    /// that is not followed by a regenerate is caught by `fixture_freshness`
+    /// rather than sitting here unnoticed. `verify-tables` only compares this
+    /// file against the Rust emitted from it, which cannot see such drift.
+    #[serde(default)]
+    music21_version: String,
+    /// The `music21` submodule commit it was read at. The version alone spans
+    /// many commits, so it cannot pin the source on its own.
+    #[serde(default)]
+    music21_commit: String,
     forte: Vec<ForteEntryData>,
     inversion_default_pitch_classes: Vec<InversionDefaultPitchClassesData>,
     forte_number_with_inversion_to_index: Vec<ForteNumberWithInversionToIndexData>,
@@ -310,6 +321,9 @@ fn regenerate_tables(workspace_root: &Path) -> Result<(), Box<dyn Error>> {
         extract_chord_tables(py, &tables)
     })?;
 
+    let stamp = submodule::Stamp::music21(workspace_root)?;
+    data.music21_version = stamp.version;
+    data.music21_commit = stamp.commit;
     normalize_table_data(&mut data);
     write_table_data(&data_path, &data)?;
     emit_generated_rust(workspace_root, &data)?;
@@ -405,6 +419,9 @@ fn extract_chord_tables(_: Python<'_>, tables: &Tables<'_>) -> PyResult<ChordTab
         extract_maximum_index_number(tables, "maximumIndexNumberWithInversionEquivalence")?;
 
     Ok(ChordTablesData {
+        // Filled in by the caller, which knows where the submodule is.
+        music21_version: String::new(),
+        music21_commit: String::new(),
         forte,
         inversion_default_pitch_classes,
         forte_number_with_inversion_to_index,

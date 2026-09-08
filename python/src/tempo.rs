@@ -78,6 +78,10 @@ pub struct MetronomeMark {
     /// The referent as an object, so `mark.referent.type` answers and an edit
     /// through it is one the mark sees.
     referent: Option<Py<Duration>>,
+    /// music21's `_tempoText`, built when it is first asked for. The word is
+    /// kept here as a value; music21 keeps it in a `TempoText` of its own and
+    /// shares this mark's style with it.
+    tempo_text: Option<Py<PyAny>>,
 }
 
 impl MetronomeMark {
@@ -88,6 +92,7 @@ impl MetronomeMark {
             parentheses: false,
             placement: None,
             referent: None,
+            tempo_text: None,
         }
     }
 
@@ -133,8 +138,9 @@ impl MetronomeMark {
         Ok(mark)
     }
 
-    /// The same mark again. A copy has no referent object of its own yet;
-    /// it makes one when something asks.
+    /// The same mark again. A copy has no referent object and no words of
+    /// its own yet; it makes them when something asks, so that the copy's
+    /// are its own and share the copy's style rather than the original's.
     fn copied(&self) -> Self {
         Self {
             inner: self.inner.clone(),
@@ -142,6 +148,7 @@ impl MetronomeMark {
             parentheses: self.parentheses,
             placement: self.placement.clone(),
             referent: None,
+            tempo_text: None,
         }
     }
 
@@ -273,7 +280,45 @@ impl MetronomeMark {
             _ => value.extract::<String>()?,
         };
         self.inner.set_text(written);
+        // The `TempoText` built for the old word says the old word.
+        self.tempo_text = None;
         Ok(())
+    }
+
+    /// music21's `_tempoText`: the word as a `TempoText` of its own.
+    ///
+    /// The word is a value here, so the object is built when it is first
+    /// asked for — and built sharing this mark's style, as music21's own
+    /// `text` setter does, so that anything said about how the mark is
+    /// written is said about the words and the text expression inside them.
+    #[getter]
+    fn _tempoText(slf: &Bound<'_, Self>, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let Some(text) = slf.borrow().inner.text().map(str::to_string) else {
+            return Ok(py.None());
+        };
+        if let Some(existing) = &slf.borrow().tempo_text {
+            return Ok(existing.clone_ref(py));
+        }
+        let object = py
+            .import("music21.tempo")?
+            .getattr("TempoText")?
+            .call1((text,))?;
+        if slf
+            .getattr("hasStyleInformation")
+            .and_then(|said| said.extract::<bool>())
+            .unwrap_or(false)
+        {
+            object.setattr("style", slf.getattr("style")?)?;
+        } else {
+            slf.setattr("style", object.getattr("style")?)?;
+        }
+        // `TempoText` gave its own style to the expression when it built it,
+        // so the expression has to be pointed at the shared one too.
+        object
+            .getattr("_textExpression")?
+            .setattr("style", slf.getattr("style")?)?;
+        slf.borrow_mut().tempo_text = Some(object.clone().unbind());
+        Ok(object.unbind())
     }
 
     /// music21's `textImplicit`: whether the word was read off the number.

@@ -5,7 +5,7 @@
 //! the submodule again.
 
 /// music21 version this archive was generated from.
-pub const MUSIC21_VERSION: &str = "11.0.0b8";
+pub const MUSIC21_VERSION: &str = "11.0.0b9";
 
 /// Every bundled scale as (file name, description, degrees, period),
 /// sorted by file name. Degrees are written as the archive writes them.

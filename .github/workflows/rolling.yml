@@ -1,0 +1,63 @@
+name: Rolling
+
+# The toolchains and the platforms, crossed, once a week. Stable is in the
+# matrix as the control: it is what says whether a beta or nightly failure is
+# the toolchain's doing or the platform's.
+#
+# This gates nothing, and it is kept out of `ci.yml` on purpose — the README's
+# badge reads that workflow's latest run, and a lint which does not exist on
+# stable yet must not be able to make the badge say the code is broken.
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rolling:
+    name: Rolling (${{ matrix.toolchain }} / ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Nine independent weather reports; one going red must not cancel the
+      # other eight, which are the context for reading it.
+      fail-fast: false
+      matrix:
+        toolchain: [stable, beta, nightly]
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      # The action exports RUSTUP_TOOLCHAIN, which outranks the `stable` that
+      # rust-toolchain.toml pins — without it every job would test stable.
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+          components: clippy
+
+      - name: Install Linux audio dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev pkg-config
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Cargo test
+        run: cargo test --workspace --all-targets
+
+      # `--all-targets` excludes doctests, so they need their own run.
+      - name: Cargo test (doctests)
+        run: cargo test --workspace --doc
+
+      # Lints that stable has not shipped yet. This is the half most likely to
+      # fail on nightly, and failing early is what it is for.
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings

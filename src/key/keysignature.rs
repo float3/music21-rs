@@ -111,6 +111,7 @@ pub fn pitch_name_to_sharps(pitch_name: &str, mode: Option<&str>) -> Result<Inte
 /// A key signature represented by the number of sharps.
 ///
 /// Flats are represented as negative sharps, so B-flat major has `-2`.
+#[must_use]
 pub struct KeySignature {
     sharps: Option<IntegerType>,
     altered: Option<Vec<Pitch>>,
@@ -160,8 +161,31 @@ impl KeySignature {
 
     /// Whether the signature is a list of altered pitches rather than a
     /// count of sharps or flats.
+    ///
+    /// music21 v11 made this a settable attribute and gave `sharps` the value
+    /// nought rather than `None` when it is true; [`Self::sharps`] keeps the
+    /// `Option`, which says both things at once.
     pub fn is_non_traditional(&self) -> bool {
         self.sharps.is_none()
+    }
+
+    /// Makes the signature non-traditional, or traditional again: music21's
+    /// settable `isNonTraditional`, new in v11.
+    ///
+    /// Turning it on drops the sharp count and starts an empty list of
+    /// altered pitches; turning it off restores a count of nought. Setting it
+    /// to what it already is does nothing.
+    pub fn set_non_traditional(&mut self, non_traditional: bool) {
+        if non_traditional == self.sharps.is_none() {
+            return;
+        }
+        if non_traditional {
+            self.sharps = None;
+            self.altered = Some(Vec::new());
+        } else {
+            self.sharps = Some(0);
+            self.altered = None;
+        }
     }
 
     /// Whether the altered pitches of a non-traditional signature carry
@@ -335,6 +359,27 @@ impl std::fmt::Display for KeySignature {
 #[cfg(test)]
 mod non_traditional_tests {
     use super::*;
+
+    /// music21 v11 made `isNonTraditional` settable and gave `sharps` the
+    /// value nought rather than `None` while it is true.
+    #[test]
+    fn a_signature_can_be_made_non_traditional_and_back() {
+        let mut signature = KeySignature::new(3);
+        assert!(!signature.is_non_traditional());
+
+        signature.set_non_traditional(true);
+        assert!(signature.is_non_traditional());
+        assert_eq!(signature.sharps(), None);
+
+        signature.set_non_traditional(false);
+        assert!(!signature.is_non_traditional());
+        assert_eq!(signature.sharps(), Some(0));
+
+        // Setting it to what it already is leaves the count alone.
+        let mut three = KeySignature::new(3);
+        three.set_non_traditional(false);
+        assert_eq!(three.sharps(), Some(3));
+    }
 
     fn pitches(names: &[&str]) -> Vec<Pitch> {
         names

@@ -3,7 +3,7 @@
 
 #![allow(non_snake_case)]
 
-use pyo3::exceptions::PyValueError;
+use pyo3::exceptions::{PyKeyError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
 
@@ -14,7 +14,8 @@ use music21_rs::scale::{
 use crate::scale::ConcreteScale;
 
 use music21_rs::{
-    Key as RsKey, KeySignature as RsKeySignature, convert_key_string_to_music21_key_string,
+    Key as RsKey, KeySignature as RsKeySignature, Pitch as RsPitch,
+    convert_key_string_to_music21_key_string,
     key::{pitch_to_sharps, sharps_to_pitch},
 };
 
@@ -76,6 +77,48 @@ fn mode_of(value: Option<&Bound<'_, PyAny>>) -> PyResult<Option<String>> {
     }
 }
 
+/// The sharp count of the major key on this tonic, which is the half of the
+/// mode lookup that music21 does before its table miss raises.
+fn unsolved_mode_lookup(tonic: &str) -> Option<i32> {
+    pitch_to_sharps(&RsPitch::from_name(tonic).ok()?, None).ok()
+}
+
+/// music21's warning that `sharps=None` is on its way out: it goes in v13,
+/// and `isNonTraditional` says the same thing today.
+fn warn_sharps_none(py: Python<'_>) -> PyResult<()> {
+    let Ok(category) = py
+        .import("music21.exceptions21")
+        .and_then(|module| module.getattr("Music21DeprecationWarning"))
+    else {
+        return Ok(());
+    };
+    py.import("warnings")?.call_method1(
+        "warn",
+        (
+            "sharps=None is deprecated: set isNonTraditional to True instead.",
+            category,
+            2,
+        ),
+    )?;
+    Ok(())
+}
+
+/// music21's warning that a tonic given beside a mode says nothing: the mode
+/// alone decides the key, so the tonic is dropped.
+fn warn_ignored_tonic(py: Python<'_>, tonic: &str) -> PyResult<()> {
+    let Ok(module) = py.import("music21.key") else {
+        return Ok(());
+    };
+    let Ok(category) = module.getattr("KeyWarning") else {
+        return Ok(());
+    };
+    py.import("warnings")?.call_method1(
+        "warn",
+        (format!("ignoring provided tonic: {tonic}"), category, 2),
+    )?;
+    Ok(())
+}
+
 fn tonic_name(value: &Bound<'_, PyAny>) -> PyResult<String> {
     if let Ok(text) = value.extract::<String>() {
         return Ok(text);
@@ -102,15 +145,25 @@ impl KeySignature {
     }
 
     #[new]
-    #[pyo3(signature = (sharps = None, **kwargs))]
+    #[pyo3(signature = (sharps = crate::Given(None), **kwargs))]
     fn new(
-        sharps: Option<&Bound<'_, PyAny>>,
+        py: Python<'_>,
+        sharps: crate::Given<'_>,
         kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Self> {
         let _ = kwargs;
-        let sharps = match sharps {
+        // `sharps=None` used to be how a non-traditional signature was
+        // asked for. It says the same thing today by turning
+        // `isNonTraditional` on, and music21 warns rather than reading a
+        // count of nought as a signature with no sharps in it.
+        if sharps.written_as_none() {
+            warn_sharps_none(py)?;
+            let mut signature = Self::of(0);
+            signature.signature.set_non_traditional(true);
+            return Ok(signature);
+        }
+        let sharps = match sharps.value() {
             None => 0,
-            Some(value) if value.is_none() => 0,
             Some(value) => match value.extract::<f64>() {
                 Ok(number) if number.fract() == 0.0 && value.extract::<String>().is_err() => {
                     number as i32
@@ -126,9 +179,11 @@ impl KeySignature {
         Ok(Self::of(sharps))
     }
 
+    /// music21 v11's `sharps` is always an `int`: a non-traditional signature
+    /// reports nought and says so through `isNonTraditional`.
     #[getter]
-    fn sharps(&self) -> Option<i32> {
-        self.signature.sharps()
+    fn sharps(&self) -> i32 {
+        self.signature.sharps().unwrap_or(0)
     }
 
     #[setter]
@@ -169,6 +224,13 @@ impl KeySignature {
         self.signature.is_non_traditional()
     }
 
+    /// Settable since v11: turning it on drops the sharp count and lets
+    /// `alteredPitches` be assigned.
+    #[setter]
+    fn set_isNonTraditional(&mut self, value: bool) {
+        self.signature.set_non_traditional(value);
+    }
+
     fn accidentalByStep(&self, step: &str) -> PyResult<Option<Accidental>> {
         let letter = step
             .chars()
@@ -194,10 +256,32 @@ impl KeySignature {
             .filter(|value| !value.is_none())
             .map(tonic_name)
             .transpose()?;
+        // A mode says which key this signature is; a tonic asks for the mode
+        // to be solved from it. Given both, the mode wins and the tonic is
+        // ignored — which music21 says out loud rather than silently.
+        if let (Some(_), Some(tonic)) = (&mode, &tonic) {
+            warn_ignored_tonic(py, tonic)?;
+        }
         let key = self
             .inner()
             .try_as_key(mode.as_deref(), tonic.as_deref())
-            .map_err(key_error)?;
+            .map_err(|error| {
+                let raised = key_error(error);
+                // music21 solves the mode by looking the sharp difference up
+                // in a table, and lets the `KeyError` that a miss raises
+                // stand as what caused the failure. Its own tests catch the
+                // pair, so the cause is carried across here too.
+                if mode.is_none()
+                    && let Some(missing) = tonic
+                        .as_deref()
+                        .filter(|_| self.signature.sharps().is_some())
+                        .and_then(unsolved_mode_lookup)
+                        .map(|major| self.signature.sharps().unwrap_or(0) - major)
+                {
+                    raised.set_cause(py, Some(PyKeyError::new_err(missing)));
+                }
+                raised
+            })?;
         Key::object(py, key)
     }
 

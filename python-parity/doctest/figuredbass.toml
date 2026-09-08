@@ -1,0 +1,19 @@
+# Docstrings of music21.figuredBass.notation whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_figuredbass`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.figuredBass.notation.Figure",
+    "music21.figuredBass.notation.Figure.isPureExtender",
+    "music21.figuredBass.notation.Modifier",
+    "music21.figuredBass.notation.Modifier._toAccidental",
+    "music21.figuredBass.notation.Modifier.modifyPitch",
+    "music21.figuredBass.notation.Modifier.modifyPitchName",
+    "music21.figuredBass.notation.Notation",
+    "music21.figuredBass.notation.Notation._getFigures",
+    "music21.figuredBass.notation.Notation._getModifiers",
+    "music21.figuredBass.notation.Notation._parseNotationColumn",
+    "music21.figuredBass.notation.Notation._translateToLonghand",
+    "music21.figuredBass.notation.convertToPitch",
+]

@@ -38,6 +38,16 @@ pub(crate) struct TuningTable {
 /// The whole `data/tuning_tables.toml` document.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct TuningTables {
+    /// music21 version whose Scala archive the ratios were read from, so a
+    /// submodule bump that is not followed by a regenerate is caught by
+    /// `fixture_freshness`. `verify-tuning-tables` only compares this file
+    /// against the Rust emitted from it, which cannot see such drift.
+    #[serde(default)]
+    pub(crate) music21_version: String,
+    /// The `music21` submodule commit that archive was read at. The version
+    /// alone spans many commits, so it cannot pin the source on its own.
+    #[serde(default)]
+    pub(crate) music21_commit: String,
     pub(crate) table: Vec<TuningTable>,
 }
 
@@ -169,6 +179,9 @@ pub(crate) fn regenerate(workspace_root: &Path) -> Result<TuningTables, Box<dyn 
     }
 
     let mut data = read(&data_path(workspace_root))?;
+    let stamp = crate::submodule::Stamp::music21(workspace_root)?;
+    data.music21_version = stamp.version;
+    data.music21_commit = stamp.commit;
     for table in &mut data.table {
         let Some(file) = table.scala_file.clone() else {
             println!("  {:<20} hand-maintained, left as-is", table.name);
@@ -218,6 +231,16 @@ pub(crate) fn write(path: &Path, data: &TuningTables) -> Result<(), Box<dyn Erro
          #\n\
          # Emit the Rust with `cargo run -p xtask -- emit-tuning-tables`.\n\n",
     );
+    writeln!(
+        out,
+        "music21_version = {}",
+        toml_string(&data.music21_version)
+    )?;
+    writeln!(
+        out,
+        "music21_commit = {}\n",
+        toml_string(&data.music21_commit)
+    )?;
     for table in &data.table {
         writeln!(out, "[[table]]")?;
         writeln!(out, "name = {}", toml_string(&table.name))?;

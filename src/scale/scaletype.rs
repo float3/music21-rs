@@ -10,7 +10,7 @@
 
 use crate::chord::{Chord, root};
 use crate::defaults::{FloatType, IntegerType};
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::interval::Interval;
 use crate::pitch::Pitch;
 
@@ -304,6 +304,38 @@ impl ScaleType {
         }
     }
 
+    /// The degrees the notes of this scale's ascent stand on, where they are
+    /// not simply counted off one to a note.
+    ///
+    /// Rag Asawari's aroha leaves out the third and the seventh, so its five
+    /// notes stand on the first, second, fourth, fifth and sixth degrees. It
+    /// has no third going up at all — which is what music21 answers when
+    /// asked for one — and its fourth degree is its third note.
+    pub fn ascending_degrees(self) -> Option<&'static [u8]> {
+        match self {
+            Self::RagAsawari => Some(&[1, 2, 4, 5, 6]),
+            _ => None,
+        }
+    }
+
+    /// The steps this scale is walked by coming down, where coming down is
+    /// not simply the ascending pattern read backwards and no other named
+    /// scale is that pattern.
+    ///
+    /// Rag Marwa's avarohana is the one: from its tonic it rises a semitone
+    /// to the flat second *above* the octave and falls from there, which is
+    /// music21's network edge from the high terminus upward before anything
+    /// descends. Written as a rising list from the tonic it closes by falling
+    /// back onto it, so the flat second is both the second degree and the
+    /// seventh — which is what music21 answers when asked which degree a
+    /// `D-` is coming down.
+    pub fn descending_steps(self) -> Option<&'static [&'static str]> {
+        match self {
+            Self::RagMarwa => Some(&["m2", "A2", "M2", "m3", "M2", "d3", "-m2"]),
+            _ => None,
+        }
+    }
+
     /// Whether this is a plagal mode, whose range sits below its final.
     pub fn is_plagal(self) -> bool {
         matches!(
@@ -553,13 +585,26 @@ impl Scale {
 
     /// This scale as it sounds coming down, which for most is itself.
     pub fn descending(&self) -> Scale {
-        match self.custom_steps {
-            Some(_) => self.clone(),
-            None => match self.scale_type.descending_form() {
-                Some(scale_type) => Scale::new(scale_type, self.tonic.clone()),
-                None => self.clone(),
-            },
+        if self.custom_steps.is_some() {
+            return self.clone();
         }
+        if let Some(scale_type) = self.scale_type.descending_form() {
+            return Scale::new(scale_type, self.tonic.clone());
+        }
+        // A pattern no other named scale spells, walked as its own list of
+        // steps: Rag Marwa comes down through the flat second above its
+        // octave and no scale here rises that way.
+        if let Some(steps) = self.scale_type.descending_steps() {
+            let walked: Result<Vec<Interval>> = steps.iter().copied().map(step_interval).collect();
+            if let Ok(walked) = walked {
+                return Self {
+                    scale_type: self.scale_type,
+                    tonic: self.tonic.clone(),
+                    custom_steps: Some(walked),
+                };
+            }
+        }
+        self.clone()
     }
 
     /// The scale coming down: highest note first, through the collection it
@@ -769,7 +814,34 @@ impl Scale {
         Ok(Scale::new(wanted, tonic))
     }
 
-    /// Returns the pitch at a one-based scale degree.
+    /// The degree each of this scale's notes stands on, in order from the
+    /// tonic, where those are not simply the notes counted off.
+    ///
+    /// Only a named pattern can say so — a collection given by its notes is
+    /// counted — and only one of them does: see
+    /// [`ScaleType::ascending_degrees`].
+    pub fn named_degrees(&self) -> Option<Vec<IntegerType>> {
+        if self.custom_steps.is_some() {
+            return None;
+        }
+        Some(
+            self.scale_type
+                .ascending_degrees()?
+                .iter()
+                .map(|&degree| IntegerType::from(degree))
+                .collect(),
+        )
+    }
+
+    /// The degree the note at this position stands on, counting from one.
+    fn degree_at_position(&self, position: usize) -> usize {
+        self.named_degrees()
+            .and_then(|degrees| degrees.get(position).copied())
+            .map_or(position + 1, |degree| degree as usize)
+    }
+
+    /// Returns the pitch standing on a one-based scale degree, or nothing
+    /// where the scale has no such degree.
     ///
     /// Degree 1 is the tonic. Every other degree is read within the one
     /// octave the scale is realized in, so the eighth degree is the tonic
@@ -777,16 +849,40 @@ impl Scale {
     /// degrees count back round from the top. That is music21's
     /// `pitchFromDegree`, which asks its interval network for the node the
     /// degree names and gets one of the nodes it has.
-    pub fn pitch_at_degree(&self, degree: IntegerType) -> Result<Pitch> {
+    ///
+    /// A scale that names its degrees has only the ones it names: Rag
+    /// Asawari's ascent has no third, and answers nothing when asked for
+    /// one rather than handing back the note that would be third in line.
+    pub fn pitch_on_degree(&self, degree: IntegerType) -> Result<Option<Pitch>> {
+        let position = match self.named_degrees() {
+            Some(degrees) => match degrees.iter().position(|&named| named == degree) {
+                Some(position) => position,
+                None => return Ok(None),
+            },
+            None => {
+                let count = self.degree_count().max(1) as IntegerType;
+                (degree - 1).rem_euclid(count) as usize
+            }
+        };
         let simplification = self.scale_type.simplification();
         let steps = self.walk()?;
-        let count = self.degree_count().max(1) as IntegerType;
-        let wrapped = (degree - 1).rem_euclid(count);
         let mut current = self.realization_start()?;
-        for index in 0..wrapped as usize {
+        for index in 0..position {
             current = advance(&current, &steps[index % steps.len()], simplification)?;
         }
-        Ok(current)
+        Ok(Some(current))
+    }
+
+    /// The pitch standing on a one-based scale degree, which the scale is
+    /// expected to have: [`Self::pitch_on_degree`] is the one that says when
+    /// it does not.
+    pub fn pitch_at_degree(&self, degree: IntegerType) -> Result<Pitch> {
+        self.pitch_on_degree(degree)?.ok_or_else(|| {
+            Error::Scale(format!(
+                "{} has no degree {degree}",
+                self.scale_type.music21_descriptive_name()
+            ))
+        })
     }
     /// Returns every pitch of the scale from `minimum` up to `maximum`,
     /// inclusive: music21's `getPitches` given a range.
@@ -821,12 +917,17 @@ impl Scale {
         // Two octaves of headroom past the range, so a scale whose degrees
         // are not evenly spaced still reaches the top of it.
         let limit = steps.len() * (MAX_RANGE_OCTAVES + 2) + 1;
+        // A pattern may rise above the range and fall back into it — Rag
+        // Marwa's descending form goes up to the flat second above its
+        // octave and closes on the octave below that — so the walk carries
+        // on until it is clear of the range by a whole period.
+        let clear_of = highest + 12.0 * FloatType::from(period);
         for index in 0..limit {
             let sounding = current.ps();
-            if sounding > highest {
+            if sounding > clear_of {
                 break;
             }
-            if sounding >= lowest {
+            if (lowest..=highest).contains(&sounding) {
                 pitches.push(current.clone());
             }
             current = advance(&current, &steps[index % steps.len()], simplification)?;
@@ -1078,7 +1179,7 @@ impl Scale {
             .scale_pitches()?
             .iter()
             .position(|candidate| comparison.key(candidate) == wanted)
-            .map(|index| index + 1))
+            .map(|index| self.degree_at_position(index)))
     }
 
     /// Every one-based degree the pitch stands on.
@@ -1094,7 +1195,7 @@ impl Scale {
             .iter()
             .enumerate()
             .filter(|(_, candidate)| comparison.key(candidate) == wanted)
-            .map(|(index, _)| index + 1)
+            .map(|(index, _)| self.degree_at_position(index))
             .collect())
     }
 
@@ -1106,7 +1207,7 @@ impl Scale {
             .scale_pitches()?
             .iter()
             .position(|candidate| candidate.name() == name)
-            .map(|index| index + 1))
+            .map(|index| self.degree_at_position(index)))
     }
 
     /// Returns the one-based degree whose pitch class matches, so `F-` finds
@@ -1117,7 +1218,7 @@ impl Scale {
             .scale_pitches()?
             .iter()
             .position(|candidate| candidate.pitch_class().number() == pitch_class)
-            .map(|index| index + 1))
+            .map(|index| self.degree_at_position(index)))
     }
 
     /// Returns the scale pitch `steps` degrees above `origin`. A pitch outside
@@ -1186,6 +1287,68 @@ impl Scale {
         steps: IntegerType,
         neighbour_below: Option<bool>,
     ) -> Result<Pitch> {
+        self.pitch_steps_from_place(origin, steps, neighbour_below, 0)
+    }
+
+    /// How many places in this scale's realization stand on `origin`.
+    ///
+    /// A scale may name the same note twice: Rag Marwa's `D-` is both the
+    /// note above its tonic and the one it passes through coming down from
+    /// the octave, and where the next note is depends on which of them is
+    /// meant. music21 chooses between them at random — the choosing is the
+    /// caller's, and [`Self::next_pitch_below_from`] takes it.
+    pub fn places_of(&self, origin: &Pitch) -> Result<usize> {
+        Ok(self.places_on(origin)?.len())
+    }
+
+    /// The places of the realization, and the octave shift each stands at,
+    /// that sound `origin`.
+    fn places_on(&self, origin: &Pitch) -> Result<Vec<(usize, IntegerType)>> {
+        let pitches = self.scale_pitches()?;
+        let origin_ps = origin.ps();
+        let name = origin.name();
+        let base_shift = ((origin_ps - self.tonic.ps()) / 12.0).floor() as IntegerType;
+        Ok((base_shift - 1..=base_shift + 1)
+            .flat_map(|shift| {
+                pitches.iter().enumerate().map(move |(index, pitch)| {
+                    (pitch.ps() + 12.0 * shift as FloatType, index, shift)
+                })
+            })
+            .filter(|(ps, index, _)| {
+                pitches[*index].name() == name && (ps - origin_ps).abs() < 1e-9
+            })
+            .map(|(_, index, shift)| (index, shift))
+            .collect())
+    }
+
+    /// The note `steps` below `origin`, read as the `place`-th of the places
+    /// this scale stands that note on. See [`Self::places_of`].
+    pub fn next_pitch_below_from(
+        &self,
+        origin: &Pitch,
+        steps: usize,
+        place: usize,
+    ) -> Result<Pitch> {
+        self.pitch_steps_from_place(origin, -(steps as IntegerType), None, place)
+    }
+
+    /// The note `steps` above `origin`, read the same way.
+    pub fn next_pitch_above_from(
+        &self,
+        origin: &Pitch,
+        steps: usize,
+        place: usize,
+    ) -> Result<Pitch> {
+        self.pitch_steps_from_place(origin, steps as IntegerType, None, place)
+    }
+
+    fn pitch_steps_from_place(
+        &self,
+        origin: &Pitch,
+        steps: IntegerType,
+        neighbour_below: Option<bool>,
+        place: usize,
+    ) -> Result<Pitch> {
         if steps == 0 {
             return Err(crate::error::Error::Scale(
                 "step size must be at least 1".to_string(),
@@ -1203,12 +1366,9 @@ impl Scale {
             })
             .collect::<Vec<_>>();
         let ascending = steps > 0;
-        let name = origin.name();
-        let (index, shift, remaining) = match candidates
-            .iter()
-            .find(|(ps, index, _)| pitches[*index].name() == name && (ps - origin_ps).abs() < 1e-9)
-        {
-            Some(&(_, index, shift)) => (index, shift, steps),
+        let standing = self.places_on(origin)?;
+        let (index, shift, remaining) = match standing.get(place % standing.len().max(1)).copied() {
+            Some((index, shift)) => (index, shift, steps),
             None => {
                 // Which side of the pitch to come onto the scale at: the way
                 // the move is going unless a caller has said otherwise, and
@@ -1970,20 +2130,78 @@ mod tests {
     }
 
     #[test]
+    fn a_note_a_scale_stands_twice_has_two_notes_below_it() {
+        // Rag Marwa comes down through the flat second twice over: once
+        // above the octave and once above the tonic. music21 reads `D-2` as
+        // either, and the note below it is `B1` or `C2` accordingly.
+        let marwa = Scale::new(ScaleType::RagMarwa, Pitch::from_name("C4").unwrap()).descending();
+        let from = Pitch::from_name("D-2").unwrap();
+        assert_eq!(marwa.places_of(&from).unwrap(), 2);
+        let below: Vec<String> = (0..2)
+            .map(|place| {
+                marwa
+                    .next_pitch_below_from(&from, 1, place)
+                    .unwrap()
+                    .name_with_octave()
+            })
+            .collect();
+        assert_eq!(below, ["B1", "C2"]);
+
+        // A note the scale stands only once is the same whichever place is
+        // asked for, so a caller that always asks for the first is right.
+        let major = Scale::new(ScaleType::Major, Pitch::from_name("C4").unwrap());
+        let d = Pitch::from_name("D4").unwrap();
+        assert_eq!(major.places_of(&d).unwrap(), 1);
+        assert_eq!(
+            major
+                .next_pitch_below_from(&d, 1, 7)
+                .unwrap()
+                .name_with_octave(),
+            "C4"
+        );
+    }
+
+    #[test]
     fn degree_lookup_matches_the_realized_pitches() {
         for scale_type in ScaleType::ALL {
             let scale = Scale::new(scale_type, Pitch::from_name("E-4").unwrap());
             let pitches = scale.pitches().unwrap();
             // Every degree but the closing octave, which is the first degree
-            // again as far as a degree lookup is concerned.
-            for (index, expected) in pitches.iter().take(scale.degree_count()).enumerate() {
-                let actual = scale.pitch_at_degree(index as IntegerType + 1).unwrap();
+            // again as far as a degree lookup is concerned. Asked by the
+            // scale's own degrees, since Rag Asawari's are not its positions.
+            let degrees = scale
+                .named_degrees()
+                .unwrap_or_else(|| (1..=scale.degree_count() as IntegerType).collect());
+            for (expected, degree) in pitches.iter().zip(degrees) {
+                let actual = scale.pitch_at_degree(degree).unwrap();
                 assert_eq!(
                     actual.name_with_octave(),
                     expected.name_with_octave(),
-                    "{scale_type:?} degree {}",
-                    index + 1
+                    "{scale_type:?} degree {degree}"
                 );
+                // Read back the other way: the degree the note is found on
+                // stands on that note. Not necessarily the degree asked for
+                // — Rag Marwa's A is both its fifth and its seventh.
+                let found = scale.degree_of(expected).unwrap().unwrap();
+                assert_eq!(
+                    scale
+                        .pitch_at_degree(found as IntegerType)
+                        .unwrap()
+                        .name_with_octave(),
+                    expected.name_with_octave(),
+                    "{scale_type:?} degree {degree} read back as {found}"
+                );
+            }
+            // A degree the scale does not have is nothing, rather than the
+            // note that would stand there had the degrees been counted off.
+            if let Some(named) = scale.named_degrees() {
+                for degree in 1..=*named.last().unwrap() {
+                    assert_eq!(
+                        scale.pitch_on_degree(degree).unwrap().is_some(),
+                        named.contains(&degree),
+                        "{scale_type:?} degree {degree}"
+                    );
+                }
             }
         }
     }

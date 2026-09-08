@@ -1107,6 +1107,33 @@ impl Pitch {
         self.octave.unwrap_or(PITCH_OCTAVE as IntegerType)
     }
 
+    /// Whether this pitch was never given an octave, so it stands for its
+    /// pitch class in any octave: music21's `octaveIsImplicit`, new in v11.
+    ///
+    /// Such a pitch prints without an octave number and reports the default
+    /// octave from [`Self::implicit_octave`].
+    #[must_use]
+    pub fn octave_is_implicit(&self) -> bool {
+        self.octave.is_none()
+    }
+
+    /// Makes the octave implicit or explicit: music21's settable
+    /// `octaveIsImplicit`, new in v11.
+    ///
+    /// Making it explicit puts the pitch in the default octave, as music21
+    /// does; making it implicit takes the octave away. Setting it to what it
+    /// already is does nothing.
+    pub fn set_octave_is_implicit(&mut self, implicit: bool) {
+        if implicit == self.octave.is_none() {
+            return;
+        }
+        self.octave = if implicit {
+            None
+        } else {
+            Some(PITCH_OCTAVE as IntegerType)
+        };
+    }
+
     /// Returns the pitch class as music21's `pitchClassString`, one
     /// character with `A` and `B` for ten and eleven. Like music21's integer
     /// `pitchClass` it rounds a microtone away with Python's round-half-to-even,
@@ -1998,6 +2025,36 @@ fn cents_to_alter_and_cents(shift: FloatType) -> (FloatType, FloatType) {
 
 #[cfg(test)]
 mod tests {
+    /// music21 v11 split the absent octave in two: `.octave` always answers a
+    /// number, and `.octaveIsImplicit` says whether one was ever given.
+    #[test]
+    fn an_octave_is_implicit_until_one_is_given() {
+        use crate::pitch::Pitch;
+
+        let mut anywhere = Pitch::from_name("G#").unwrap();
+        assert!(anywhere.octave_is_implicit());
+        assert_eq!(anywhere.octave(), None);
+        assert_eq!(anywhere.implicit_octave(), 4);
+
+        let somewhere = Pitch::from_name("E-6").unwrap();
+        assert!(!somewhere.octave_is_implicit());
+        assert_eq!(somewhere.octave(), Some(6));
+        assert_eq!(somewhere.implicit_octave(), 6);
+
+        // Making it explicit puts the pitch in the default octave; making it
+        // implicit again takes the octave away.
+        anywhere.set_octave_is_implicit(false);
+        assert!(!anywhere.octave_is_implicit());
+        assert_eq!(anywhere.octave(), Some(4));
+        anywhere.set_octave_is_implicit(true);
+        assert_eq!(anywhere.octave(), None);
+
+        // Setting it to what it already is leaves the octave alone.
+        let mut high = Pitch::from_name("C7").unwrap();
+        high.set_octave_is_implicit(false);
+        assert_eq!(high.octave(), Some(7));
+    }
+
     #[test]
     fn a_pitch_is_respelled_to_agree_with_the_key_signature() {
         use crate::key::KeySignature;

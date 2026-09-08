@@ -223,10 +223,11 @@ impl RomanNumeral {
         let given = keyOrScale.filter(|value| !value.is_none()).is_some();
         let (key, octave) = key_and_octave(keyOrScale)?;
         let blank = figure.filter(|value| !value.is_none()).is_none();
+        let case_matters = case_matters(keywords)?;
         let figure = match figure.filter(|value| !value.is_none()) {
             None => "I".to_string(),
             Some(value) => match value.extract::<usize>() {
-                Ok(degree) => figure_for_degree(given.then_some(&key), degree)?,
+                Ok(degree) => figure_for_degree(given.then_some(&key), degree, case_matters)?,
                 Err(_) => value.extract::<String>()?,
             },
         };
@@ -236,7 +237,7 @@ impl RomanNumeral {
             collection(keyOrScale),
             minor_reading(keywords, "sixthMinor")?,
             minor_reading(keywords, "seventhMinor")?,
-            case_matters(keywords)?,
+            case_matters,
         )
         .map_err(roman_error)?;
         let mut numeral = Self::wrap(inner, octave);
@@ -246,6 +247,9 @@ impl RomanNumeral {
         numeral.key_object = keyOrScale
             .filter(|value| !value.is_none() && value.extract::<String>().is_err())
             .map(|value| value.clone().unbind());
+        if let Some(value) = keyOrScale.filter(|value| !value.is_none()) {
+            cache_key_object(value)?;
+        }
         Ok(numeral)
     }
 
@@ -385,6 +389,35 @@ fn key_and_octave(value: Option<&Bound<'_, PyAny>>) -> PyResult<(RsKey, Option<i
     Ok((key, octave))
 }
 
+/// Puts a key a numeral was built on into music21's module-level cache, the
+/// way music21's own `key` setter does.
+///
+/// It is what makes a later `RomanNumeral('V', 'C')` read against the very
+/// key object an earlier numeral was given, rather than build a second one —
+/// and music21's own tests read that cache to see which keys a passage has
+/// been read in, so a numeral that filled nothing would leave it empty.
+/// A scale is left alone: music21 caches those under a hash of their pitches,
+/// which is its own machinery and not a key.
+fn cache_key_object(value: &Bound<'_, PyAny>) -> PyResult<()> {
+    let py = value.py();
+    let Ok(roman) = py.import("music21.roman") else {
+        return Ok(());
+    };
+    let is_key = value
+        .getattr("classes")
+        .and_then(|classes| classes.contains("Key"))
+        .unwrap_or(false);
+    if !is_key {
+        return Ok(());
+    }
+    let cache = roman.getattr("_keyCache")?;
+    let name = roman.call_method1("_keyCacheKey", (value,))?;
+    if !cache.contains(&name)? {
+        cache.set_item(name, value)?;
+    }
+    Ok(())
+}
+
 /// The reading, as music21's own `Minor67Default` member.
 fn minor_default(py: Python<'_>, reading: RsMinor67Default) -> PyResult<Py<PyAny>> {
     let Ok(roman) = py.import("music21.roman") else {
@@ -502,13 +535,18 @@ fn mark_alteration(mark: &str) -> i8 {
 /// It is the numeral alone, lower-cased on the degrees whose ordinary triad
 /// is minor or diminished in that mode — and left upper-case throughout when
 /// no key was given, since then there is no mode to read it against.
-fn figure_for_degree(key: Option<&RsKey>, degree: usize) -> PyResult<String> {
+fn figure_for_degree(key: Option<&RsKey>, degree: usize, case_matters: bool) -> PyResult<String> {
     if degree == 0 || degree > 7 {
         return Err(RomanNumeralException::new_err(format!(
             "cannot make a roman numeral on degree {degree}"
         )));
     }
     let numeral = NUMERALS[degree - 1];
+    if !case_matters {
+        // With the case saying nothing, every degree is written upper case
+        // and the key alone says what the chord is.
+        return Ok(numeral.to_string());
+    }
     let lower = match key.map(RsKey::mode) {
         Some("minor") => matches!(degree, 1 | 2 | 4 | 5),
         Some(_) => matches!(degree, 2 | 3 | 6 | 7),

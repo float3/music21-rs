@@ -7,7 +7,6 @@ passing = [
     "music21.duration",
     "music21.duration.Duration",
     "music21.duration.Duration.__eq__",
-    "music21.duration.Duration._getLinked",
     "music21.duration.Duration.addDurationTuple",
     "music21.duration.Duration.aggregateTupletMultiplier",
     "music21.duration.Duration.appendTuplet",

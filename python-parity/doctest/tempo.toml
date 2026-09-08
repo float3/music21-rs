@@ -1,0 +1,34 @@
+# Docstrings of music21.tempo whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_tempo`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.tempo.MetricModulation",
+    "music21.tempo.MetricModulation.newMetronome",
+    "music21.tempo.MetricModulation.newReferent",
+    "music21.tempo.MetricModulation.number",
+    "music21.tempo.MetricModulation.oldMetronome",
+    "music21.tempo.MetricModulation.oldReferent",
+    "music21.tempo.MetricModulation.setEqualityByReferent",
+    "music21.tempo.MetronomeMark",
+    "music21.tempo.MetronomeMark._getDefaultNumber",
+    "music21.tempo.MetronomeMark._getDefaultText",
+    "music21.tempo.MetronomeMark.durationToSeconds",
+    "music21.tempo.MetronomeMark.getEquivalentByReferent",
+    "music21.tempo.MetronomeMark.getQuarterBPM",
+    "music21.tempo.MetronomeMark.getTextExpression",
+    "music21.tempo.MetronomeMark.number",
+    "music21.tempo.MetronomeMark.numberSounding",
+    "music21.tempo.MetronomeMark.secondsPerQuarter",
+    "music21.tempo.MetronomeMark.secondsToDuration",
+    "music21.tempo.MetronomeMark.setQuarterBPM",
+    "music21.tempo.MetronomeMark.text",
+    "music21.tempo.TempoIndication.getPreviousMetronomeMark",
+    "music21.tempo.TempoText",
+    "music21.tempo.TempoText.getMetronomeMark",
+    "music21.tempo.TempoText.isCommonTempoText",
+    "music21.tempo.TempoText.text",
+    "music21.tempo.convertTempoByReferent",
+    "music21.tempo.interpolateElements",
+]

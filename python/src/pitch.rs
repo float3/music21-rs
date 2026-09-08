@@ -76,6 +76,23 @@ pub(crate) fn accidental_error(error: music21_rs::Error) -> PyErr {
     AccidentalException::new_err(message(&error))
 }
 
+/// The octave a pitch that was never given one sounds in: music21's
+/// `defaults.pitchOctave`.
+///
+/// It is read afresh every time rather than taken once, because it is a
+/// module-level setting a caller may change — set it to three and every
+/// octaveless pitch drops an octave, which is what music21's own test for it
+/// checks. Four is the crate's own answer, and stands when there is no
+/// music21 to ask, which is how the wheel answers on its own.
+pub(crate) fn default_octave() -> i32 {
+    Python::attach(|py| {
+        py.import("music21.defaults")
+            .and_then(|module| module.getattr("pitchOctave"))
+            .and_then(|value| value.extract::<i32>())
+            .unwrap_or(4)
+    })
+}
+
 /// music21's `pitch.Microtone`.
 #[pyclass(
     name = "Microtone",
@@ -853,6 +870,22 @@ impl Pitch {
         Python::attach(|py| Note::adopt_pitch(py, owner, &self.inner))
     }
 
+    /// This pitch as it sounds, which for one that was never given an octave
+    /// means in music21's [`default_octave`].
+    ///
+    /// Everything that reads a pitch as a number — its pitch space, its MIDI
+    /// number, its frequency, the note number it is written on — goes through
+    /// here, because music21 reads all of them off `.octave` and `.octave`
+    /// answers the default when none was given.
+    fn sounding(&self) -> RsPitch {
+        if !self.inner.octave_is_implicit() {
+            return self.inner.clone();
+        }
+        let mut sounding = self.inner.clone();
+        sounding.set_octave(Some(default_octave()));
+        sounding
+    }
+
     fn accidental_name(&self) -> String {
         self.inner.accidental().name().to_string()
     }
@@ -1106,9 +1139,36 @@ impl Pitch {
         self.write_back()
     }
 
+    /// music21 v11's `octave` is always an `int`: a pitch given no octave
+    /// reports the default, 4, and `octaveIsImplicit` says which it was.
     #[getter]
-    fn octave(&self) -> Option<i32> {
-        self.inner.octave()
+    fn octave(&self) -> i32 {
+        self.inner.octave().unwrap_or_else(default_octave)
+    }
+
+    /// music21's `octaveIsImplicit`, new in v11: true for a pitch that was
+    /// never given an octave and so stands for its pitch class in any.
+    #[getter]
+    fn octaveIsImplicit(&self) -> bool {
+        self.inner.octave_is_implicit()
+    }
+
+    /// Setting it true takes the octave away; setting it false puts the pitch
+    /// in the default octave. Setting it to what it already is does nothing,
+    /// as upstream's does.
+    #[setter]
+    fn set_octaveIsImplicit(&mut self, value: bool) -> PyResult<()> {
+        if value == self.inner.octave_is_implicit() {
+            return Ok(());
+        }
+        let octave = if value { None } else { Some(self.octave()) };
+        self.inner = self.rebuilt(
+            self.step_char(),
+            &self.accidental_name(),
+            octave,
+            self.microtone_cents(),
+        )?;
+        self.write_back()
     }
 
     /// music21's setter is `int(value)`, so an octave read out of a file as
@@ -1130,7 +1190,7 @@ impl Pitch {
 
     #[getter]
     fn implicitOctave(&self) -> i32 {
-        self.inner.implicit_octave()
+        self.octave()
     }
 
     /// music21's `accidental`, which is the pitch's own: editing it edits
@@ -1274,7 +1334,7 @@ impl Pitch {
 
     #[getter]
     fn ps(&self) -> f64 {
-        self.inner.ps()
+        self.sounding().ps()
     }
 
     #[setter]
@@ -1286,7 +1346,7 @@ impl Pitch {
 
     #[getter]
     fn midi(&self) -> i32 {
-        self.inner.midi()
+        self.sounding().midi()
     }
 
     #[setter]
@@ -1342,7 +1402,7 @@ impl Pitch {
 
     #[getter]
     fn diatonicNoteNum(&self) -> i32 {
-        self.inner.diatonic_note_number()
+        self.sounding().diatonic_note_number()
     }
 
     #[setter]
@@ -1361,7 +1421,7 @@ impl Pitch {
 
     #[getter]
     fn frequency(&self) -> f64 {
-        self.inner.frequency_hz()
+        self.sounding().frequency_hz()
     }
 
     #[setter]
@@ -1373,7 +1433,7 @@ impl Pitch {
 
     #[getter]
     fn freq440(&self) -> f64 {
-        self.inner.frequency_hz()
+        self.sounding().frequency_hz()
     }
 
     #[setter]

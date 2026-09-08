@@ -1223,6 +1223,51 @@ fn list_of(value: &Bound<'_, PyAny>) -> PyResult<Py<PyList>> {
 /// The duration value an object stands for: one of ours as it stands, and
 /// anything else — music21's own `GraceDuration`, say — by what it says its
 /// length is.
+/// music21's `True`, `False` or `None` and nothing else, read as a bool.
+///
+/// Its grace-note flags take those three and report anything else as a
+/// `ValueError`, which is what its own tests catch — a plain bool argument
+/// would raise pyo3's `TypeError` instead.
+fn true_false_or_none(value: &Bound<'_, PyAny>) -> PyResult<Option<bool>> {
+    if value.is_none() {
+        return Ok(None);
+    }
+    if let Ok(said) = value.extract::<bool>()
+        && value.is_instance_of::<pyo3::types::PyBool>()
+    {
+        return Ok(Some(said));
+    }
+    Err(PyValueError::new_err("expr must be True, False, or None"))
+}
+
+/// Copies of the objects a duration is written inside.
+///
+/// The tuplets are the duration's own, not something two copies may share:
+/// music21's own notation code writes a bracket type into the tuplet object
+/// it finds on a note, so two durations holding one tuplet would each be
+/// written as whatever the other was. Copied through the copier's memo, so
+/// that a tuplet two things really do share is still shared afterwards.
+fn deep_copied_objects(
+    py: Python<'_>,
+    memo: &Bound<'_, PyAny>,
+    objects: Option<Vec<Py<PyAny>>>,
+) -> PyResult<Option<Vec<Py<PyAny>>>> {
+    let Some(objects) = objects else {
+        return Ok(None);
+    };
+    let deepcopy = py.import("copy")?.getattr("deepcopy")?;
+    let mut copied = Vec::with_capacity(objects.len());
+    for object in objects {
+        let one = if memo.is_instance_of::<PyDict>() {
+            deepcopy.call1((object.bind(py), memo))?
+        } else {
+            deepcopy.call1((object.bind(py),))?
+        };
+        copied.push(one.unbind());
+    }
+    Ok(Some(copied))
+}
+
 /// A copy of a duration object, keeping whatever kind of duration it is.
 pub(crate) fn copied_duration(py: Python<'_>, object: &Py<PyAny>) -> PyResult<Py<PyAny>> {
     // Through the object's own copying, so that a copy is the kind of
@@ -1253,12 +1298,35 @@ pub(crate) fn duration_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsDuration
             .ok_or_else(|| NoteException::new_err(format!("no such duration type: {name}")));
     }
     if let Ok(quarter_length) = value.extract::<f64>() {
+        // A length that is not a number at all is the caller's mistake, and
+        // music21 reports it the way Python does rather than as a duration
+        // that could not be worked out. Left unguarded it would reach
+        // `makeMeasures`, where a bar never as long as itself loops forever.
+        if quarter_length.is_nan() {
+            return Err(PyValueError::new_err(
+                "Cannot convert nan to a quarter length",
+            ));
+        }
         return RsDuration::new(quarter_length).map_err(note_error);
     }
     if let Ok(quarter_length) = value
         .getattr("quarterLength")
         .and_then(|value| value.extract::<f64>())
     {
+        if quarter_length.is_nan() {
+            // music21 names the written value in its message, and a
+            // `DurationTuple` may be its own namedtuple rather than one of
+            // ours — the class is not replaced — so it is known by name.
+            let written = value
+                .get_type()
+                .name()
+                .is_ok_and(|name| name.to_string() == "DurationTuple");
+            return Err(PyValueError::new_err(if written {
+                "Invalid quarterLength for DurationTuple: nan"
+            } else {
+                "Cannot convert nan to a quarter length"
+            }));
+        }
         return RsDuration::new(quarter_length).map_err(note_error);
     }
     Err(NoteException::new_err(format!(
@@ -1345,6 +1413,32 @@ impl Duration {
         value: Option<&Bound<'_, PyAny>>,
         keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Self> {
+        // music21 reads the one positional argument as whichever keyword it
+        // looks like, and refuses it outright when that keyword was given as
+        // well: a duration told its written value twice is a mistake to
+        // report rather than one to guess at.
+        if let Some(given) = value.filter(|value| !value.is_none()) {
+            let also_given = |name: &str| -> PyResult<bool> {
+                let Some(keywords) = keywords else {
+                    return Ok(false);
+                };
+                Ok(keywords
+                    .get_item(name)?
+                    .is_some_and(|value| !value.is_none()))
+            };
+            let clash = if given.extract::<String>().is_ok() {
+                also_given("type")?
+            } else if given.extract::<PyRef<'_, DurationTuple>>().is_ok() {
+                also_given("durationTuple")?
+            } else {
+                also_given("quarterLength")?
+            };
+            if clash {
+                return Err(PyTypeError::new_err(format!(
+                    "Cannot parse argument {given} or conflicts with keywords"
+                )));
+            }
+        }
         let mut duration = match value.filter(|value| !value.is_none()) {
             Some(value) => match value.extract::<String>() {
                 Ok(name) => {
@@ -1465,6 +1559,38 @@ impl Duration {
     /// nothing, and answers properly once anything has observed it.
     fn currentComponents<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
         PyTuple::new(py, self.components.clone().unwrap_or_default())
+    }
+
+    /// music21's `_components`, which is `currentComponents` under its own
+    /// name. Its tests read it to see that a length just set has not been
+    /// written out into note values until something asks for them.
+    #[getter]
+    fn _components<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
+        self.currentComponents(py)
+    }
+
+    /// music21's `_componentsNeedUpdating`: whether the note values this
+    /// length is written as are still to be worked out from it.
+    #[getter(_componentsNeedUpdating)]
+    fn get_componentsNeedUpdating(&self) -> bool {
+        self.components.is_none()
+    }
+
+    #[setter(_componentsNeedUpdating)]
+    fn set_componentsNeedUpdating(&mut self, py: Python<'_>, value: bool) -> PyResult<()> {
+        if value {
+            self.components = None;
+            return Ok(());
+        }
+        self.materialize(py)
+    }
+
+    /// music21's `_quarterLengthNeedsUpdating`, which is never true here:
+    /// the length is the value this duration keeps, so it is never the half
+    /// that is behind.
+    #[getter]
+    fn _quarterLengthNeedsUpdating(&self) -> bool {
+        false
     }
 
     /// music21's `addDurationTuple`: another written value tied on the end.
@@ -2088,9 +2214,10 @@ impl Duration {
     /// bare facade would not equal the original.
     fn __deepcopy__<'py>(
         slf: &Bound<'py, Self>,
-        _memo: &Bound<'py, PyAny>,
+        memo: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let copied = slf.borrow().clone();
+        let mut copied = slf.borrow().clone();
+        copied.tuplets = deep_copied_objects(slf.py(), memo, copied.tuplets)?;
         crate::copy_as_same_type(slf, copied)
     }
 
@@ -2183,9 +2310,12 @@ impl GraceDuration {
         self.slash
     }
 
+    /// music21 takes `True`, `False` or `None` here and nothing else, and
+    /// says so as a `ValueError` — its own tests catch that class.
     #[setter]
-    fn set_slash(&mut self, value: bool) {
-        self.slash = value;
+    fn set_slash(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        self.slash = true_false_or_none(value)?.unwrap_or(false);
+        Ok(())
     }
 
     /// music21's `stealTimePrevious`: how much of the previous note's time
@@ -2221,8 +2351,9 @@ impl GraceDuration {
     }
 
     #[setter]
-    fn set_makeTime(&mut self, value: bool) {
-        self.make_time = value;
+    fn set_makeTime(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        self.make_time = true_false_or_none(value)?.unwrap_or(false);
+        Ok(())
     }
 }
 
@@ -2231,10 +2362,16 @@ impl GraceDuration {
     fn copied<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
         let class = slf.as_any().get_type();
         let copy = crate::blank_installed(class.as_any())?;
-        let (written, marks) = {
+        let (mut written, marks) = {
             let me = slf.borrow();
             ((**me.as_super()).clone(), me.clone())
         };
+        // As for a plain duration: the tuplets are the copy's own.
+        written.tuplets = deep_copied_objects(
+            slf.py(),
+            &slf.py().None().into_bound(slf.py()),
+            written.tuplets,
+        )?;
         {
             let cell = copy.cast::<Self>()?;
             let mut target = cell.borrow_mut();
@@ -2426,6 +2563,10 @@ impl Note {
     /// left alone, because it is the one calling and is already borrowed.
     pub(crate) fn adopt_pitch(py: Python<'_>, note: &Py<Self>, pitch: &RsPitch) -> PyResult<()> {
         note.borrow_mut(py).inner.set_pitch(pitch.clone());
+        // Anything a note has worked out about itself was worked out from
+        // the pitch it has just been given, so it is thrown away — music21's
+        // `pitchChanged`, which is what its own pitch setters end with.
+        let _ = note.bind(py).call_method0("pitchChanged");
         Self::tell_chord(py, note, pitch)
     }
 
@@ -2930,9 +3071,25 @@ impl Note {
         Self::get_pitch(slf).setattr(slf.py(), "step", value)
     }
 
+    /// Always an `int`, as music21 v11's `Pitch.octave` is.
     #[getter]
-    fn get_octave(&self, py: Python<'_>) -> Option<i32> {
-        self.pitch_value(py).octave()
+    fn get_octave(&self, py: Python<'_>) -> i32 {
+        self.pitch_value(py)
+            .octave()
+            .unwrap_or_else(crate::pitch::default_octave)
+    }
+
+    /// music21's `octaveIsImplicit`, read and written through the note's own
+    /// pitch object so a caller holding that pitch sees the change.
+    #[getter]
+    fn get_octaveIsImplicit(&self, py: Python<'_>) -> bool {
+        self.pitch_value(py).octave_is_implicit()
+    }
+
+    #[setter]
+    fn set_octaveIsImplicit(slf: &Bound<'_, Self>, value: bool) -> PyResult<()> {
+        Self::get_pitch(slf).setattr(slf.py(), "octaveIsImplicit", value)?;
+        Self::broadcast_pitch(slf.py(), &slf.clone().unbind())
     }
 
     #[setter]
@@ -3639,6 +3796,24 @@ impl Note {
         self.chord = value
             .filter(|value| !value.is_none())
             .map(|value| value.clone().unbind());
+    }
+
+    /// music21's `pitchChanged`: the note's pitch has been edited through the
+    /// pitch object, so whatever the note had worked out about itself is no
+    /// longer about this note, and the chord holding it is in the same case.
+    fn pitchChanged(slf: &Bound<'_, Self>) -> PyResult<()> {
+        let py = slf.py();
+        if slf.hasattr("_cache")? {
+            slf.setattr("_cache", PyDict::new(py))?;
+        }
+        let Some(chord) = slf.borrow().chord.as_ref().map(|chord| chord.clone_ref(py)) else {
+            return Ok(());
+        };
+        let chord = chord.bind(py);
+        if chord.hasattr("clearCache")? {
+            chord.call_method0("clearCache")?;
+        }
+        Ok(())
     }
 }
 

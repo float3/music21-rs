@@ -4,18 +4,18 @@
 //!
 //! music21's rows are streams of notes; the crate's is a list of pitch
 //! classes. The facade keeps the three-class hierarchy, because doctests
-//! print `type(row)` and `repr(row)`, and yields note-shaped objects when a
-//! row is iterated, because they read `.pitch` and `.name` off the elements.
+//! print `type(row)` and `repr(row)`, and yields real notes when a row is
+//! iterated or sliced, because a caller hands those straight to `Chord`.
 
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList, PyTuple};
+use pyo3::types::{PyDict, PyList, PySlice, PyTuple};
 
 use music21_rs::{
     HISTORICAL_ROWS, ToneRow as RsToneRow, Transformation, TransformationConvention,
     TwelveToneMatrix as RsMatrix, historical_row_by_name, row_to_matrix,
 };
 
-use crate::pitch::{Pitch, pitch_from_any};
+use crate::pitch::pitch_from_any;
 
 /// The names the serial facade provides, for swapping into `music21.serial`.
 pub const NAMES: &[&str] = &[
@@ -92,28 +92,13 @@ fn row_from_any(row: Option<&Bound<'_, PyAny>>) -> PyResult<RsToneRow> {
     Ok(RsToneRow::new(classes))
 }
 
-/// A note-shaped element of a row: what iterating a music21 `ToneRow`
-/// yields. Only what the doctests read.
-#[pyclass(name = "Note", module = "music21.note", skip_from_py_object)]
-pub struct RowNote {
-    #[pyo3(get)]
-    pitch: Pitch,
-}
-
-#[pymethods]
-impl RowNote {
-    #[getter]
-    fn name(&self) -> String {
-        self.pitch.inner.name()
-    }
-
-    fn __repr__(&self) -> String {
-        format!("<music21.note.Note {}>", self.pitch.inner.name())
-    }
-
-    fn __str__(&self) -> String {
-        self.__repr__()
-    }
+/// One note of a row, as a real note.
+///
+/// music21 keeps a row as a stream of `note.Note`s, and its own tests hand
+/// three of them straight to `Chord` — so what a row yields has to be a note
+/// a chord can be built from, not a note-shaped stand-in.
+fn row_note(py: Python<'_>, pitch: music21_rs::Pitch) -> PyResult<Py<PyAny>> {
+    Ok(crate::note::Note::object(py, music21_rs::Note::from_pitch(pitch))?.into_any())
 }
 
 /// music21's `serial.ToneRow`.
@@ -390,8 +375,24 @@ impl ToneRow {
         self.inner.len()
     }
 
-    fn __getitem__(&self, index: isize) -> PyResult<RowNote> {
+    /// A row reads like the stream music21 keeps it in: an index gives the
+    /// note there, a slice gives a list of the notes it covers — which is
+    /// what a caller hands to `Chord` to hear three notes of a row at once.
+    fn __getitem__(&self, py: Python<'_>, index: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
         let pitches = self.inner.pitches();
+        if let Ok(slice) = index.cast::<PySlice>() {
+            let taken = slice.indices(pitches.len() as isize)?;
+            let mut notes: Vec<Py<PyAny>> = Vec::new();
+            let mut at = taken.start;
+            for _ in 0..taken.slicelength {
+                if let Some(pitch) = usize::try_from(at).ok().and_then(|i| pitches.get(i)) {
+                    notes.push(row_note(py, pitch.clone())?);
+                }
+                at += taken.step;
+            }
+            return Ok(PyList::new(py, notes)?.into_any().unbind());
+        }
+        let index: isize = index.extract()?;
         let resolved = if index < 0 {
             pitches.len() as isize + index
         } else {
@@ -401,20 +402,14 @@ impl ToneRow {
             .ok()
             .and_then(|i| pitches.get(i).cloned())
             .ok_or_else(|| pyo3::exceptions::PyIndexError::new_err("row index out of range"))?;
-        Ok(RowNote {
-            pitch: Pitch::wrap(pitch, true),
-        })
+        row_note(py, pitch)
     }
 
     fn __iter__(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        let notes: Vec<RowNote> = self
-            .inner
-            .pitches()
-            .into_iter()
-            .map(|pitch| RowNote {
-                pitch: Pitch::wrap(pitch, true),
-            })
-            .collect();
+        let mut notes: Vec<Py<PyAny>> = Vec::new();
+        for pitch in self.inner.pitches() {
+            notes.push(row_note(py, pitch)?);
+        }
         let list = PyList::new(py, notes)?;
         Ok(list.try_iter()?.unbind().into_any())
     }
@@ -540,8 +535,26 @@ impl TwelveToneMatrix {
         self.inner.rows().len()
     }
 
-    fn __getitem__(&self, py: Python<'_>, index: isize) -> PyResult<Py<PyAny>> {
+    /// As with a row, a slice of the matrix is the list of rows it covers.
+    fn __getitem__(&self, py: Python<'_>, index: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
         let rows = self.inner.rows();
+        if let Ok(slice) = index.cast::<PySlice>() {
+            let taken = slice.indices(rows.len() as isize)?;
+            let mut taken_rows: Vec<Py<PyAny>> = Vec::new();
+            let mut at = taken.start;
+            for _ in 0..taken.slicelength {
+                if let Some(row) = usize::try_from(at).ok().and_then(|i| rows.get(i)) {
+                    taken_rows.push(ToneRow::twelve(
+                        py,
+                        row.clone(),
+                        Some(format!("row-{}", at + 1)),
+                    )?);
+                }
+                at += taken.step;
+            }
+            return Ok(PyList::new(py, taken_rows)?.into_any().unbind());
+        }
+        let index: isize = index.extract()?;
         let resolved = if index < 0 {
             rows.len() as isize + index
         } else {
@@ -605,7 +618,6 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<TwelveToneRow>()?;
     m.add_class::<HistoricalTwelveToneRow>()?;
     m.add_class::<TwelveToneMatrix>()?;
-    m.add_class::<RowNote>()?;
     m.add_function(wrap_pyfunction!(pc_to_tone_row, m)?)?;
     m.add_function(wrap_pyfunction!(row_to_matrix_text, m)?)?;
     m.add_function(wrap_pyfunction!(get_historical_row_by_name, m)?)?;

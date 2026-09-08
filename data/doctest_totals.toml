@@ -9,9 +9,10 @@
 # keeps them. Nothing runs those against the crate yet, so the report
 # shows nought against every one of them; that column is the to-do list.
 #
-# music21 11.0.0b9
+# music21 11.0.0b9 at 89e85db9257aa98e39abd0c419e0c8765688e5c3
 
 music21_version = "11.0.0b9"
+music21_commit = "89e85db9257aa98e39abd0c419e0c8765688e5c3"
 
 [[module]]
 module = "music21.chord"

@@ -142,11 +142,16 @@ impl AccidentalEnum {
             AccidentalEnum::Sharp => "\u{266f}",
             AccidentalEnum::HalfSharp => "\u{1d132}",
             AccidentalEnum::QuadrupleFlat => "\u{1d12b}\u{1d12b}",
-            AccidentalEnum::TripleFlat => "\u{266d}",
+            // A triple flat is a flat plus a double flat, as a triple sharp is
+            // a sharp plus a double sharp; the half flat and the one-and-a-half
+            // flat take QUARTER TONE FLAT rather than the sharp of that name.
+            // Upstream fixed these in 11.0.0b9 -- before it, thirteen
+            // accidentals collapsed onto eleven spellings.
+            AccidentalEnum::TripleFlat => "\u{266d}\u{1d12b}",
             AccidentalEnum::DoubleFlat => "\u{1d12b}",
-            AccidentalEnum::OneAndAHalfFlat => "\u{266d}\u{1d132}",
+            AccidentalEnum::OneAndAHalfFlat => "\u{266d}\u{1d133}",
             AccidentalEnum::Flat => "\u{266d}",
-            AccidentalEnum::HalfFlat => "\u{1d132}",
+            AccidentalEnum::HalfFlat => "\u{1d133}",
             AccidentalEnum::Natural => "\u{266e}",
         }
     }
@@ -159,9 +164,11 @@ impl AccidentalEnum {
             "\u{266f}\u{1d132}" => Some(AccidentalEnum::OneAndAHalfSharp),
             "\u{266f}" => Some(AccidentalEnum::Sharp),
             "\u{1d12b}\u{1d12b}" => Some(AccidentalEnum::QuadrupleFlat),
-            "\u{266d}" => Some(AccidentalEnum::Flat),
+            "\u{266d}\u{1d12b}" => Some(AccidentalEnum::TripleFlat),
             "\u{1d12b}" => Some(AccidentalEnum::DoubleFlat),
-            "\u{266d}\u{1d132}" => Some(AccidentalEnum::OneAndAHalfFlat),
+            "\u{266d}\u{1d133}" => Some(AccidentalEnum::OneAndAHalfFlat),
+            "\u{266d}" => Some(AccidentalEnum::Flat),
+            "\u{1d133}" => Some(AccidentalEnum::HalfFlat),
             "\u{1d132}" => Some(AccidentalEnum::HalfSharp),
             "\u{266e}" => Some(AccidentalEnum::Natural),
             _ => None,
@@ -297,6 +304,7 @@ pub enum AccidentalAttribute {
 /// This mirrors the main behavior of Python music21's
 /// `music21.pitch.Accidental`: a standard accidental has a `name`, `modifier`,
 /// and semitone `alter`; names compare by spelling while ordering uses `alter`.
+#[must_use]
 pub struct Accidental {
     display_type: DisplayType,
     display_status: Option<bool>,

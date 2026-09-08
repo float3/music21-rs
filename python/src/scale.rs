@@ -155,6 +155,87 @@ impl Scale {
     }
 }
 
+/// The nodes and edges music21 spells a two-way scale out as.
+///
+/// A scale with a descending pattern of its own is not a set of edges walked
+/// in both directions: the way up and the way down are separate chains
+/// between the same two ends, and Rag Marwa's descent passes through a note
+/// above the octave that the ascent never reaches. `ascending` and
+/// `descending` are both written as rising steps from the tonic, so the
+/// descending chain is that list read backwards, from the top down.
+fn arbitrary_network<'py>(
+    module: &Bound<'py, PyModule>,
+    ascending: &[&str],
+    descending: &[&str],
+) -> PyResult<(Bound<'py, PyTuple>, Bound<'py, PyTuple>)> {
+    let py = module.py();
+    let terminus = module.getattr("Terminus")?;
+    let direction = module.getattr("Direction")?;
+    let (low, high) = (terminus.getattr("LOW")?, terminus.getattr("HIGH")?);
+    let (up, down) = (
+        direction.getattr("ASCENDING")?,
+        direction.getattr("DESCENDING")?,
+    );
+
+    let node = |id: &Bound<'py, PyAny>, degree: usize| -> PyResult<Bound<'py, PyDict>> {
+        let node = PyDict::new(py);
+        node.set_item("id", id)?;
+        node.set_item("degree", degree)?;
+        Ok(node)
+    };
+    let edge = |step: &str,
+                from: &Bound<'py, PyAny>,
+                to: &Bound<'py, PyAny>,
+                way: &Bound<'py, PyAny>|
+     -> PyResult<Bound<'py, PyDict>> {
+        let edge = PyDict::new(py);
+        edge.set_item("interval", step)?;
+        edge.set_item(
+            "connections",
+            PyTuple::new(py, [PyTuple::new(py, [from, to, way])?])?,
+        )?;
+        Ok(edge)
+    };
+
+    // The way up: the tonic, a node for every step but the last, and the
+    // octave. Degrees run straight up, one per node.
+    let mut ids: Vec<Bound<'py, PyAny>> = vec![low.clone()];
+    let mut nodes = Vec::new();
+    nodes.push(node(&low, 1)?);
+    for (index, degree) in (2..=ascending.len()).enumerate() {
+        let id = index.into_pyobject(py)?.into_any();
+        nodes.push(node(&id, degree)?);
+        ids.push(id);
+    }
+    nodes.push(node(&high, ascending.len() + 1)?);
+    ids.push(high.clone());
+
+    let mut edges = Vec::new();
+    for (index, step) in ascending.iter().enumerate() {
+        edges.push(edge(step, &ids[index], &ids[index + 1], &up)?);
+    }
+
+    // The way down, from the octave back to the tonic through nodes of its
+    // own, whose degrees count back down to the second.
+    let mut coming_down: Vec<Bound<'py, PyAny>> = vec![high.clone()];
+    for (index, degree) in (2..=descending.len()).rev().enumerate() {
+        let id = (ascending.len() - 1 + index).into_pyobject(py)?.into_any();
+        nodes.push(node(&id, degree)?);
+        coming_down.push(id);
+    }
+    coming_down.push(low.clone());
+    for (index, step) in descending.iter().rev().enumerate() {
+        edges.push(edge(
+            step,
+            &coming_down[index],
+            &coming_down[index + 1],
+            &down,
+        )?);
+    }
+
+    Ok((PyTuple::new(py, nodes)?, PyTuple::new(py, edges)?))
+}
+
 /// music21's `scale.AbstractScale`: a pattern of steps with no note to
 /// stand on.
 ///
@@ -276,11 +357,23 @@ impl AbstractScale {
                 "'music21.scale.AbstractScale' object has no attribute '_net'",
             ));
         };
-        let network = py
-            .import("music21.scale.intervalNetwork")?
-            .getattr("IntervalNetwork")?
-            .call0()?;
-        network.call_method1("fillBiDirectedEdges", (scale_type.realization_steps(),))?;
+        let module = py.import("music21.scale.intervalNetwork")?;
+        let network = module.getattr("IntervalNetwork")?.call0()?;
+        network.setattr("octaveDuplicating", self.octave_duplicating)?;
+        match scale_type.descending_steps() {
+            // A scale that comes down by a pattern of its own is not a set of
+            // edges walked either way: music21 spells out the nodes and the
+            // edges between them, and Rag Marwa's descent runs through a node
+            // above the octave that the ascent never reaches.
+            Some(descending) => {
+                let (nodes, edges) =
+                    arbitrary_network(&module, &scale_type.realization_steps(), descending)?;
+                network.call_method1("fillArbitrary", (nodes, edges))?;
+            }
+            None => {
+                network.call_method1("fillBiDirectedEdges", (scale_type.realization_steps(),))?;
+            }
+        }
         Ok(network.unbind())
     }
 
@@ -1098,7 +1191,14 @@ impl ConcreteScale {
         let Ok(value) = pitch_from_any(other) else {
             return Ok(false);
         };
-        let next = self.nextPitch(Some(pitchOrigin), direction, stepSize, getNeighbor, None)?;
+        let next = self.nextPitch(
+            py,
+            Some(pitchOrigin),
+            direction,
+            stepSize,
+            getNeighbor,
+            None,
+        )?;
         // Compared on whatever music21 was told to compare on: two pitches
         // may share a name and stand an octave apart, and a search for a
         // run of scale steps says so.
@@ -1129,12 +1229,16 @@ impl ConcreteScale {
         maxPitch: Option<&Bound<'_, PyAny>>,
         direction: Option<&Bound<'_, PyAny>>,
         equateTermini: bool,
-    ) -> PyResult<Pitch> {
+    ) -> PyResult<Option<Pitch>> {
         let _ = (minPitch, maxPitch, equateTermini);
-        self.heard(direction)?
-            .pitch_at_degree(degree)
-            .map(|pitch| Pitch::wrap(pitch, false))
-            .map_err(scale_error)
+        // A scale need not have the degree asked for: Rag Asawari's ascent
+        // leaves out the third and the seventh, and music21 answers nothing
+        // rather than the note that would be third in line.
+        Ok(self
+            .heard(direction)?
+            .pitch_on_degree(degree)
+            .map_err(scale_error)?
+            .map(|pitch| Pitch::wrap(pitch, false)))
     }
 
     /// music21's `getChord`: the scale's own notes, sounded together.
@@ -1243,6 +1347,7 @@ impl ConcreteScale {
     ))]
     fn nextPitch(
         &self,
+        py: Python<'_>,
         pitchOrigin: Option<&Bound<'_, PyAny>>,
         direction: Option<&Bound<'_, PyAny>>,
         stepSize: usize,
@@ -1273,8 +1378,19 @@ impl ConcreteScale {
                 };
                 scale.next_pitch_beside(&origin, steps, below)
             }
-            None if is_descending(direction) => scale.next_pitch_below(&origin, stepSize),
-            None => scale.next_pitch_above(&origin, stepSize),
+            // A scale may stand this note on more than one of its places —
+            // Rag Marwa's `D-` is both the note above the tonic and the one
+            // it passes through coming down from the octave — and where the
+            // next note is depends on which was meant. music21 chooses
+            // between them at random, and so does this.
+            None => {
+                let place = chosen_place(py, scale.places_of(&origin).map_err(scale_error)?)?;
+                if is_descending(direction) {
+                    scale.next_pitch_below_from(&origin, stepSize, place)
+                } else {
+                    scale.next_pitch_above_from(&origin, stepSize, place)
+                }
+            }
         };
         moved
             .map(|pitch| Pitch::wrap(pitch, false))
@@ -1517,6 +1633,17 @@ pub(crate) fn comparison_of(attribute: &str) -> RsDegreeComparison {
 /// is asked, which is what its own tests count on. The choosing is done here
 /// rather than in the crate: which degrees there are is a musical question
 /// and which one is answered is not.
+/// One of the places a scale stands a note on, chosen the same way.
+fn chosen_place(py: Python<'_>, places: usize) -> PyResult<usize> {
+    if places < 2 {
+        return Ok(0);
+    }
+    py.import("random")?
+        .getattr("randrange")?
+        .call1((places,))?
+        .extract()
+}
+
 fn chosen_degree(py: Python<'_>, degrees: &[usize]) -> PyResult<Option<usize>> {
     match degrees {
         [] => Ok(None),

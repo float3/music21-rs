@@ -61,6 +61,14 @@ pub(crate) struct ArchiveScale {
 pub(crate) struct ScalaArchiveData {
     /// music21 version the archive was taken from.
     pub(crate) music21_version: String,
+    /// The `music21` submodule commit those scales were read at.
+    #[serde(default)]
+    pub(crate) music21_commit: String,
+    /// The `hexatone` submodule commit the rest were read at. This archive is
+    /// the only generated file merging two submodules, so it is the only one
+    /// that records a second commit.
+    #[serde(default)]
+    pub(crate) hexatone_commit: String,
     pub(crate) scale: Vec<ArchiveScale>,
 }
 
@@ -153,21 +161,6 @@ fn read_directory(
 
 pub(crate) fn read(path: &Path) -> Result<ScalaArchiveData, Box<dyn Error>> {
     Ok(toml::from_str(&fs::read_to_string(path)?)?)
-}
-
-/// Reads the music21 version out of the submodule, for the freshness stamp.
-pub(crate) fn music21_version(workspace_root: &Path) -> Result<String, Box<dyn Error>> {
-    let path = workspace_root.join("music21/music21/_version.py");
-    let text = fs::read_to_string(&path)
-        .map_err(|error| format!("{} is unreadable: {error}", path.display()))?;
-    for line in text.lines() {
-        if let Some((_, rest)) = line.split_once('=')
-            && line.trim_start().starts_with("__version__")
-        {
-            return Ok(rest.trim().trim_matches(['\'', '"']).to_string());
-        }
-    }
-    Err(format!("no __version__ in {}", path.display()).into())
 }
 
 /// Splits a `.scl` file into its description, degrees and repeat interval.
@@ -340,8 +333,11 @@ pub(crate) fn regenerate(workspace_root: &Path) -> Result<ScalaArchiveData, Box<
         "  {from_submodule} scales from music21, {} from hexatone",
         scale.len() - from_submodule
     );
+    let music21 = crate::submodule::Stamp::music21(workspace_root)?;
     Ok(ScalaArchiveData {
-        music21_version: music21_version(workspace_root)?,
+        music21_version: music21.version,
+        music21_commit: music21.commit,
+        hexatone_commit: crate::submodule::commit(workspace_root, "hexatone")?,
         scale,
     })
 }
@@ -362,7 +358,9 @@ pub(crate) fn write(path: &Path, data: &ScalaArchiveData) -> Result<(), Box<dyn 
          # than Scala's.\n\
         ",
     );
-    writeln!(out, "music21_version = {:?}\n", data.music21_version)?;
+    writeln!(out, "music21_version = {:?}", data.music21_version)?;
+    writeln!(out, "music21_commit = {:?}", data.music21_commit)?;
+    writeln!(out, "hexatone_commit = {:?}\n", data.hexatone_commit)?;
     for scale in &data.scale {
         writeln!(out, "[[scale]]")?;
         writeln!(out, "file = {}", toml_string(&scale.file))?;

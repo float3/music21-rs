@@ -110,6 +110,8 @@ jobs:
           else
             cargo test --workspace --all-targets $FLAGS
           fi
+          # `--all-targets` excludes doctests, so they need their own run.
+          cargo test --workspace --doc $FLAGS
 
   python-parity:
     name: Python Parity
@@ -240,13 +242,66 @@ jobs:
       - name: Cargo check
         run: cargo check --workspace --all-targets
 
+  msrv:
+    name: MSRV
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # Read the floor out of the manifest so the two cannot drift apart.
+      - name: Read the declared MSRV
+        id: msrv
+        run: echo "version=$(grep '^rust-version' Cargo.toml | cut -d'"' -f2)" >> "$GITHUB_OUTPUT"
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.msrv.outputs.version }}
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      # Only the published crate: the examples pull in cpal and wasm-bindgen,
+      # whose own floors are no promise this crate makes.
+      - name: Check the published crate on its declared MSRV
+        run: cargo check --package music21-rs --all-features --locked
+
+  semver:
+    name: Semver Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-semver-checks
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-semver-checks
+
+      # `fraction` is a public dependency and the release job tags whatever
+      # version reaches master, so a breaking change has to be caught before
+      # the tag rather than after it.
+      - name: Compare the public API against the base commit
+        env:
+          BASELINE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || 'HEAD^' }}
+        run: cargo semver-checks --package music21-rs --all-features --baseline-rev "$BASELINE"
+
   test:
     name: Test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -265,6 +320,10 @@ jobs:
 
       - name: Cargo test
         run: cargo test --workspace --all-targets
+
+      # `--all-targets` excludes doctests, so they need their own run.
+      - name: Cargo test (doctests)
+        run: cargo test --workspace --doc
 
   docs:
     name: Build Docs
@@ -492,18 +551,28 @@ jobs:
   release:
     name: GitHub Release
     runs-on: ubuntu-latest
+    # Everything the repository gates on. A release is the one thing that
+    # cannot be taken back, so it waits for all of it — the wheel job
+    # included, which builds and tests the very artifact PyPI then receives.
     needs:
       - nix
       - stable-check
       - feature-matrix
       - python-parity
+      - wheel
       - lint
+      - msrv
+      - semver
       - test
       - docs
       - pages
     if: github.event_name == 'push'
     permissions:
       contents: write
+    outputs:
+      changed: ${{ steps.version.outputs.changed }}
+      version: ${{ steps.version.outputs.current_version }}
+      tag: ${{ steps.version.outputs.tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -565,3 +634,172 @@ jobs:
             --target "$GITHUB_SHA" \
             --title "$TAG" \
             --generate-notes
+
+  # ---------------------------------------------------------------------------
+  # Publishing. Everything below hangs off `release`, so it can only run for a
+  # commit where every other job passed and the version actually changed: one
+  # bump, one tag, one crates.io release and one PyPI release, together.
+  #
+  # Nothing here holds a token but crates.io's. PyPI uses Trusted Publishing,
+  # which authenticates the workflow itself over OIDC.
+  # ---------------------------------------------------------------------------
+
+  wheels-linux:
+    name: Wheels (linux ${{ matrix.target }})
+    runs-on: ubuntu-latest
+    needs: release
+    if: needs.release.outputs.changed == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [x86_64, aarch64]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # The manylinux image carries every interpreter, so one job per
+      # architecture builds the whole column.
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          manylinux: auto
+          args: >-
+            --release
+            --manifest-path python/Cargo.toml
+            --out dist
+            --interpreter 3.9 3.10 3.11 3.12 3.13 3.14
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-linux-${{ matrix.target }}
+          path: dist
+
+  wheels-native:
+    name: Wheels (${{ matrix.os }} py${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    needs: release
+    if: needs.release.outputs.changed == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        # macos-13 is the x86_64 runner, macos-14 the Apple Silicon one.
+        os: [windows-latest, macos-13, macos-14]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
+        exclude:
+          # setup-python has no 3.9 build for Apple Silicon; that one
+          # combination installs from the sdist instead.
+          - os: macos-14
+            python-version: "3.9"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Build wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          args: >-
+            --release
+            --manifest-path python/Cargo.toml
+            --out dist
+            --interpreter python
+
+      - name: Upload wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.os }}-${{ matrix.python-version }}
+          path: dist
+
+  sdist:
+    name: Source distribution
+    runs-on: ubuntu-latest
+    needs: release
+    if: needs.release.outputs.changed == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # maturin vendors the parent crate into the sdist, so it builds without
+      # the rest of the repository.
+      - name: Build sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --manifest-path python/Cargo.toml --out dist
+
+      - name: Upload sdist
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-sdist
+          path: dist
+
+  publish-pypi:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    needs:
+      - release
+      - wheels-linux
+      - wheels-native
+      - sdist
+    if: needs.release.outputs.changed == 'true'
+    environment:
+      name: pypi
+      url: https://pypi.org/p/music21-rs
+    # Trusted Publishing: PyPI trusts this workflow by name, so there is no
+    # API token in the repository.
+    permissions:
+      id-token: write
+    steps:
+      - name: Collect every wheel and the sdist
+        uses: actions/download-artifact@v4
+        with:
+          pattern: dist-*
+          merge-multiple: true
+          path: dist
+
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # A re-run of the workflow must not fail on files already uploaded;
+          # a version can never be replaced on PyPI.
+          skip-existing: true
+
+  publish-crates:
+    name: Publish to crates.io
+    runs-on: ubuntu-latest
+    needs:
+      - release
+      - wheels-linux
+      - wheels-native
+      - sdist
+    if: needs.release.outputs.changed == 'true'
+    environment: crates-io
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Is this version already on crates.io?
+        id: published
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          version="${{ needs.release.outputs.version }}"
+          url="https://crates.io/api/v1/crates/music21-rs/$version"
+          if curl -sfL -H "User-Agent: music21-rs release workflow" "$url" >/dev/null; then
+            echo "already=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "already=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish
+        if: steps.published.outputs.already == 'false'
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish --locked
