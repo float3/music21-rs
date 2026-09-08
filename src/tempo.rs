@@ -103,6 +103,9 @@ pub struct MetronomeMark {
     referent: Duration,
     number_implicit: bool,
     text_implicit: bool,
+    /// What the mark is played at, where that is not what it says.
+    #[cfg_attr(feature = "serde", serde(default))]
+    number_sounding: Option<FloatType>,
 }
 
 impl Default for MetronomeMark {
@@ -149,6 +152,7 @@ impl MetronomeMark {
             number,
             text,
             referent,
+            number_sounding: None,
         }
     }
 
@@ -238,10 +242,50 @@ impl MetronomeMark {
         self.text_implicit
     }
 
+    /// music21's `numberSounding`: how fast the mark is actually played,
+    /// where that is not the number written over the staff.
+    ///
+    /// A score may say *Allegro* and be played at a hundred and forty-four,
+    /// and a MusicXML `<sound tempo=...>` with no metronome mark beside it
+    /// is a tempo that sounds and is never written. Nothing here is
+    /// answered from it unless it is asked for: [`Self::quarter_bpm`] reads
+    /// the written number, and [`Self::sounding_quarter_bpm`] reads this.
+    pub fn number_sounding(&self) -> Option<FloatType> {
+        self.number_sounding
+    }
+
+    /// Sets how fast the mark is played, apart from what it says.
+    pub fn set_number_sounding(&mut self, number: Option<FloatType>) {
+        self.number_sounding = number;
+    }
+
+    /// A mark built to be played at this speed.
+    ///
+    /// It does not become the mark's number: a mark that says nothing and
+    /// sounds at a hundred and sixty-eight still says nothing, which is how
+    /// music21 carries a tempo that is played and never written.
+    pub fn with_number_sounding(mut self, number: FloatType) -> Self {
+        self.number_sounding = Some(number);
+        self
+    }
+
     /// The tempo as quarter notes per minute, whatever the referent.
     pub fn quarter_bpm(&self) -> Option<FloatType> {
         self.number
             .map(|number| convert_tempo_by_referent(number, self.referent.quarter_length(), 1.0))
+    }
+
+    /// The same, at the speed the mark is played rather than the one it
+    /// says: music21's `getQuarterBPM(useNumberSounding=True)`.
+    pub fn sounding_quarter_bpm(&self) -> Option<FloatType> {
+        match self.number_sounding {
+            Some(number) => Some(convert_tempo_by_referent(
+                number,
+                self.referent.quarter_length(),
+                1.0,
+            )),
+            None => self.quarter_bpm(),
+        }
     }
 
     /// Seconds each quarter note lasts.
@@ -274,6 +318,29 @@ impl MetronomeMark {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    #[test]
+    fn a_mark_may_be_played_faster_than_it_is_written() {
+        // music21's own example: a tempo that sounds and is never written.
+        let playback = MetronomeMark::default().with_number_sounding(168.0);
+        assert_eq!(playback.number_sounding(), Some(168.0));
+        // It says nothing: the tempo is played and never written.
+        assert_eq!(playback.number(), None);
+        assert_eq!(playback.text(), None);
+        assert_eq!(playback.quarter_bpm(), None);
+        assert_eq!(playback.sounding_quarter_bpm(), Some(168.0));
+
+        // A mark that says a number keeps it, and only the sounding tempo
+        // reads the other.
+        let mut written = MetronomeMark::new(60.0).with_referent(Duration::half());
+        assert_eq!(written.quarter_bpm(), Some(120.0));
+        assert_eq!(written.sounding_quarter_bpm(), Some(120.0));
+        written.set_number_sounding(Some(90.0));
+        assert_eq!(written.number(), Some(60.0));
+        assert_eq!(written.quarter_bpm(), Some(120.0));
+        assert_eq!(written.sounding_quarter_bpm(), Some(180.0));
+    }
 
     #[test]
     fn referent_changes_match_music21() {
@@ -300,7 +367,6 @@ mod tests {
         assert_eq!(kept.referent().quarter_length(), 0.5);
         assert_eq!(kept.text(), Some("andante"));
     }
-    use super::*;
 
     #[test]
     fn numbers_imply_the_tempo_words_music21_picks() {

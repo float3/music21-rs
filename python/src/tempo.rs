@@ -70,9 +70,6 @@ fn referent_duration(value: Option<&Bound<'_, PyAny>>) -> PyResult<RsDuration> {
 )]
 pub struct MetronomeMark {
     pub(crate) inner: RsMetronomeMark,
-    /// music21's `numberSounding`: what the mark is played at, where that
-    /// differs from what it says.
-    sounding: Option<f64>,
     parentheses: bool,
     placement: Option<String>,
     /// The referent as an object, so `mark.referent.type` answers and an edit
@@ -88,7 +85,6 @@ impl MetronomeMark {
     pub(crate) fn wrap(inner: RsMetronomeMark) -> Self {
         Self {
             inner,
-            sounding: None,
             parentheses: false,
             placement: None,
             referent: None,
@@ -129,7 +125,7 @@ impl MetronomeMark {
             if let Some(value) = keywords.get_item("numberSounding")?
                 && !value.is_none()
             {
-                mark.sounding = Some(value.extract()?);
+                mark.inner = mark.inner.with_number_sounding(value.extract()?);
             }
             if let Some(value) = keywords.get_item("parentheses")? {
                 mark.parentheses = value.extract()?;
@@ -144,7 +140,6 @@ impl MetronomeMark {
     fn copied(&self) -> Self {
         Self {
             inner: self.inner.clone(),
-            sounding: self.sounding,
             parentheses: self.parentheses,
             placement: self.placement.clone(),
             referent: None,
@@ -177,26 +172,19 @@ impl MetronomeMark {
         let me = slf.borrow();
         // What it is played at goes with it: a mark imported from a score
         // often says nothing and sounds at ninety-six.
-        let written = (
-            me.inner.clone(),
-            me.sounding,
-            me.parentheses,
-            me.placement.clone(),
-        );
+        let written = (me.inner.clone(), me.parentheses, me.placement.clone());
         drop(me);
         crate::pickled(slf, &written)
     }
 
     fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
-        type State = (RsMetronomeMark, Option<f64>, bool, Option<String>);
-        let Some((inner, sounding, parentheses, placement)) =
-            crate::unpickled::<_, State>(slf, state)?
+        type State = (RsMetronomeMark, bool, Option<String>);
+        let Some((inner, parentheses, placement)) = crate::unpickled::<_, State>(slf, state)?
         else {
             return Ok(());
         };
         let mut me = slf.borrow_mut();
         me.inner = inner;
-        me.sounding = sounding;
         me.parentheses = parentheses;
         me.placement = placement;
         me.referent = None;
@@ -227,7 +215,6 @@ impl MetronomeMark {
         let built = Self::build(text, number, referent, keywords)?;
         let mut me = slf.borrow_mut();
         me.inner = built.inner;
-        me.sounding = built.sounding;
         me.parentheses = built.parentheses;
         me.referent = None;
         Ok(())
@@ -257,12 +244,12 @@ impl MetronomeMark {
 
     #[getter]
     fn get_numberSounding(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        number_object(py, self.sounding)
+        number_object(py, self.inner.number_sounding())
     }
 
     #[setter]
     fn set_numberSounding(&mut self, value: Option<f64>) {
-        self.sounding = value;
+        self.inner.set_number_sounding(value);
     }
 
     #[getter]
@@ -376,10 +363,8 @@ impl MetronomeMark {
     /// where the mark's own number is whole.
     #[pyo3(signature = (useNumberSounding = true))]
     fn getQuarterBPM(&self, useNumberSounding: bool) -> Option<f64> {
-        if useNumberSounding && let Some(sounding) = self.sounding {
-            let mut sounding_mark = self.inner.clone();
-            sounding_mark.set_number(Some(sounding));
-            return sounding_mark.quarter_bpm();
+        if useNumberSounding {
+            return self.inner.sounding_quarter_bpm();
         }
         self.inner.quarter_bpm()
     }
@@ -391,7 +376,7 @@ impl MetronomeMark {
         let counted =
             rs_convert_tempo_by_referent(value, 1.0, self.inner.referent().quarter_length());
         if !setNumber {
-            self.sounding = Some(counted);
+            self.inner.set_number_sounding(Some(counted));
         } else {
             self.inner.set_number(Some(counted));
         }
@@ -539,9 +524,9 @@ impl MetronomeMark {
     fn __repr__(&self) -> String {
         let mut sounding = "";
         let mut number = self.inner.number();
-        if self.inner.number().is_none() && self.sounding.is_some() {
+        if self.inner.number().is_none() && self.inner.number_sounding().is_some() {
             sounding = " (playback only)";
-            number = self.sounding;
+            number = self.inner.number_sounding();
         }
         let written = match number {
             Some(number) if number.fract() == 0.0 => format!("{}", number as i64),
@@ -560,7 +545,7 @@ impl MetronomeMark {
     fn __eq__(&self, other: &Bound<'_, PyAny>) -> bool {
         other
             .extract::<PyRef<'_, Self>>()
-            .is_ok_and(|other| other.inner == self.inner && other.sounding == self.sounding)
+            .is_ok_and(|other| other.inner == self.inner)
     }
 
     /// music21 restores hashing on identity where it defines equality, so
