@@ -764,6 +764,14 @@ fn sharps_to_pitch_facade<'py>(
 /// then kept on the facade module so that it is the same object music21's
 /// `key._sharpsToPitchCache` names once the facade is installed.
 fn sharps_to_pitch_cache<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+    // Where music21 keeps it once these are installed, since that is the
+    // dictionary its own doctest reads back; the facade module's otherwise.
+    if let Ok(key) = py.import("music21.key")
+        && let Ok(cache) = key.getattr("_sharpsToPitchCache")
+        && let Ok(cache) = cache.cast_into::<PyDict>()
+    {
+        return Ok(cache);
+    }
     let facade = py
         .import("music21_rs_facade")
         .or_else(|_| py.import("music21_rs"))?;

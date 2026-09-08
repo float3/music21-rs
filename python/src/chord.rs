@@ -228,6 +228,42 @@ impl Chord {
         Ok(())
     }
 
+    /// Takes note objects as the chord's own, rebuilding the value from
+    /// what they say. music21's `add` keeps the very note it is given —
+    /// `chordify` writes the part's name on a note's pitch and then adds the
+    /// note — so the objects come through rather than being made again.
+    fn take_notes(slf: &Bound<'_, Self>, mut notes: Vec<Py<Note>>, run_sort: bool) -> PyResult<()> {
+        let py = slf.py();
+        if run_sort {
+            notes.sort_by(|left, right| {
+                let left = left.borrow(py).inner.pitch().ps();
+                let right = right.borrow(py).inner.pitch().ps();
+                left.partial_cmp(&right)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+        }
+        let inners: Vec<RsNote> = notes
+            .iter()
+            .map(|note| note.borrow(py).synced(py))
+            .collect();
+        let mut rebuilt = RsChord::new(inners.as_slice()).map_err(chord_error)?;
+        {
+            let me = slf.borrow();
+            if let Some(duration) = me.inner.duration().cloned() {
+                rebuilt.set_duration(duration);
+            }
+            if let Some(root) = me.inner.overridden_root().cloned() {
+                rebuilt.set_root(Some(root));
+            }
+        }
+        let mut me = slf.borrow_mut();
+        me.inner = rebuilt;
+        me.notes = notes;
+        drop(me);
+        Chord::note_objects(slf);
+        Ok(())
+    }
+
     fn rebuild_notes(&mut self, py: Python<'_>) -> PyResult<()> {
         self.notes = self
             .inner
@@ -1079,18 +1115,21 @@ impl Chord {
     }
 
     #[pyo3(signature = (notes, *, runSort = true))]
-    fn add(&mut self, py: Python<'_>, notes: &Bound<'_, PyAny>, runSort: bool) -> PyResult<()> {
-        let added = if notes.extract::<String>().is_ok() || notes.try_iter().is_err() {
-            vec![note_from_any(notes)?]
+    fn add(slf: &Bound<'_, Self>, notes: &Bound<'_, PyAny>, runSort: bool) -> PyResult<()> {
+        let py = slf.py();
+        let shared = slf.borrow_mut().duration_object(py)?;
+        // One note is a list of one: the reader below takes a sequence, and
+        // a single note handed in has to come through as the object it is.
+        let one;
+        let notes = if notes.extract::<String>().is_err() && notes.try_iter().is_err() {
+            one = PyList::new(py, [notes])?.into_any();
+            &one
         } else {
-            chord_from_any(Some(notes))?.notes().to_vec()
+            notes
         };
-        let mut grown = self.with_note_notation(py)?;
-        grown.add(added.as_slice()).map_err(chord_error)?;
-        if runSort {
-            grown = grown.sort_ascending();
-        }
-        self.replace_inner(py, grown)
+        let mut held = Chord::note_objects(slf);
+        held.extend(adopted_notes(py, Some(notes), &shared, false)?.notes);
+        Self::take_notes(slf, held, runSort)
     }
 
     fn remove(&mut self, py: Python<'_>, removeItem: &Bound<'_, PyAny>) -> PyResult<()> {

@@ -465,9 +465,22 @@ def lineage(cls):
         # name it is given now means the installed class.
         if member in replaced:
             members.add(replaced[member])
-    known = (tuple(names), frozenset(members))
+    known = (tuple(names), frozenset(members), tuple(walked))
     _lineages[cls] = known
     return known
+
+
+def slots_of(cls):
+    """The slots music21 keeps this kind of object's values in.
+
+    They live in Rust here rather than in slots, but music21's own code asks
+    what the slots are — its pickling of a slotted object does — and the
+    answer is the one the class being replaced would give.
+    """
+    names = set()
+    for ancestor in lineage(cls)[2]:
+        names.update(getattr(ancestor, '__slots__', ()))
+    return names
 
 
 def style_and_editorial(original):
@@ -601,6 +614,7 @@ def make_class(facade, original):
         # of one of these reports itself and not the class it was built on.
         'classes': property(lambda self: lineage(type(self))[0]),
         'classSet': property(lambda self: lineage(type(self))[1]),
+        '_getSlotsRecursive': lambda self: slots_of(type(self)),
         '_replaces': original,
     })
     for name in ('isNote', 'isRest', 'isChord', 'classSortOrder', 'equalityAttributes'):

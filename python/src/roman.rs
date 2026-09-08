@@ -661,13 +661,24 @@ impl RomanNumeral {
         self.implied_key
     }
 
-    /// music21's `impliedScale`: the scale a numeral with no key reads in.
+    /// music21's `impliedScale`: the scale a numeral with no key reads in,
+    /// which upstream is a scale rather than a key — a numeral told no key
+    /// is not in one.
     #[getter]
     fn impliedScale(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         if !self.implied_key {
             return Ok(py.None());
         }
-        crate::key::Key::object(py, self.inner.key().clone())
+        let key = self.inner.key();
+        let scale = music21_rs::scale::Scale::new(
+            if key.mode() == "minor" {
+                music21_rs::scale::ScaleType::Minor
+            } else {
+                music21_rs::scale::ScaleType::Major
+            },
+            key.tonic(),
+        );
+        crate::scale::ConcreteScale::object(py, scale)
     }
 
     /// music21's `secondaryRomanNumeralKey`: the key a secondary numeral
@@ -1218,6 +1229,25 @@ impl RomanNumeral {
             return "";
         }
         self.inner.figures_written()
+    }
+
+    /// music21's `figuresNotationObj`: the column of numbers the numeral's
+    /// digits stand for, expanded out of the shorthand and read as figured
+    /// bass — which is what the numeral spells its notes from.
+    #[getter]
+    fn get_figuresNotationObj(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let column = if self.blank {
+            music21_rs::figuredbass::Notation::default()
+        } else {
+            self.inner.figures_notation().clone()
+        };
+        Ok(crate::installed_new(
+            py,
+            "music21.figuredBass.notation",
+            "Notation",
+            crate::figuredbass::Notation { inner: column },
+        )?
+        .into_any())
     }
 
     /// music21's `primaryFigure`: the figure with the secondary numeral

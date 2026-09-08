@@ -83,8 +83,8 @@ pub struct Scale;
 #[pymethods]
 impl Scale {
     #[new]
-    #[pyo3(signature = (**_keywords))]
-    fn new(_keywords: Option<&Bound<'_, PyDict>>) -> Self {
+    #[pyo3(signature = (*_arguments, **_keywords))]
+    fn new(_arguments: &Bound<'_, PyTuple>, _keywords: Option<&Bound<'_, PyDict>>) -> Self {
         Self
     }
 
@@ -205,9 +205,10 @@ impl AbstractScale {
 #[pymethods]
 impl AbstractScale {
     #[new]
-    #[pyo3(signature = (mode = None, **_keywords))]
+    #[pyo3(signature = (mode = None, *_arguments, **_keywords))]
     fn new(
         mode: Option<&Bound<'_, PyAny>>,
+        _arguments: &Bound<'_, PyTuple>,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<PyClassInitializer<Self>> {
         let scale_type = mode
@@ -463,9 +464,10 @@ impl ConcreteScale {
     /// from the class and only the tonic is given. No tonic means C, as it
     /// does upstream.
     #[new]
-    #[pyo3(signature = (tonic = None, **keywords))]
+    #[pyo3(signature = (tonic = None, *_arguments, **keywords))]
     fn new(
         tonic: Option<&Bound<'_, PyAny>>,
+        _arguments: &Bound<'_, PyTuple>,
         keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<PyClassInitializer<Self>> {
         let mut built = Self::of(
@@ -1119,12 +1121,13 @@ impl DiatonicScale {
     const scaleFamilyName: &'static str = "diatonic";
 
     #[new]
-    #[pyo3(signature = (tonic = None, **keywords))]
+    #[pyo3(signature = (tonic = None, *_arguments, **keywords))]
     fn new(
         tonic: Option<&Bound<'_, PyAny>>,
+        _arguments: &Bound<'_, PyTuple>,
         keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<PyClassInitializer<Self>> {
-        Ok(ConcreteScale::new(tonic, keywords)?.add_subclass(Self))
+        Ok(ConcreteScale::new(tonic, _arguments, keywords)?.add_subclass(Self))
     }
 
     /// music21's `getRelativeMajor`: the major scale written with the same

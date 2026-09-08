@@ -463,6 +463,12 @@ impl RomanNumeral {
         &self.figures.written
     }
 
+    /// The figured-bass column the numeral's digits stand for, expanded out
+    /// of the shorthand they were written in: music21's `figuresNotationObj`.
+    pub fn figures_notation(&self) -> &Notation {
+        &self.figures.column
+    }
+
     pub fn figure(&self) -> &str {
         &self.figure
     }
@@ -524,7 +530,12 @@ impl RomanNumeral {
             return kind.figure().trim_end_matches(['+', '6']).to_string();
         }
         let primary = self.figure.split('/').next().unwrap_or_default();
-        let (_, unaltered) = split_roman_accidental_prefix(primary);
+        // A chord written by name is read as the figure it stands for
+        // first, so the numeral alone of `N6` is `II` and of `Cad64` is the
+        // tonic — which is what music21 answers.
+        let reading = self.effective_key().unwrap_or_else(|_| self.key.clone());
+        let named = named_figure(primary, &reading);
+        let (_, unaltered) = split_roman_accidental_prefix(&named);
         unaltered
             .chars()
             .take_while(|c| matches!(c, 'i' | 'v' | 'x' | 'I' | 'V' | 'X'))

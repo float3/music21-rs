@@ -2256,6 +2256,25 @@ impl Note {
     }
 
     /// A detached copy: new pitch and duration objects, and no chord.
+    /// A copy of the note as a Python object of the class it was asked on,
+    /// with its pitch a copy of the very pitch object it had — so anything
+    /// written on that pitch, such as the part name `chordify` tags it
+    /// with, comes across — and the copy owning its pitch as the original
+    /// did.
+    fn copied_object<'py>(slf: &Bound<'py, Self>, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let mut copied = slf.borrow().copied(py)?;
+        let pitch = py
+            .import("copy")?
+            .getattr("deepcopy")?
+            .call1((slf.borrow().pitch.bind(py),))?;
+        if let Ok(pitch) = pitch.extract::<Py<Pitch>>() {
+            copied.pitch = pitch;
+        }
+        let object = crate::copy_as_same_type(slf, copied)?;
+        Self::claim_pitch(py, &object.clone().cast_into::<Self>()?.unbind());
+        Ok(object)
+    }
+
     fn copied(&self, py: Python<'_>) -> PyResult<Self> {
         let mut copy = Self::wrap(py, self.synced(py))?;
         // The ornaments and the marks come across: music21 copies a note to
@@ -2986,13 +3005,11 @@ impl Note {
         py: Python<'py>,
         _memo: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let copied = slf.borrow().copied(py)?;
-        crate::copy_as_same_type(slf, copied)
+        Self::copied_object(slf, py)
     }
 
     fn __copy__<'py>(slf: &Bound<'py, Self>, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        let copied = slf.borrow().copied(py)?;
-        crate::copy_as_same_type(slf, copied)
+        Self::copied_object(slf, py)
     }
 
     /// music21's `storedInstrument`.

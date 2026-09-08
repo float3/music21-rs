@@ -1649,9 +1649,19 @@ impl Pitch {
         if let Ok(groups) = own.get_item("_groups") {
             return Ok(groups.unbind());
         }
-        let groups = pyo3::types::PyList::empty(py);
+        // music21's own `Groups`, which is a list that refuses a name it
+        // already has — `chordify` labels the same pitch once per bar and
+        // expects to see the part named once.
+        let groups = match py
+            .import("music21.base")
+            .and_then(|base| base.getattr("Groups"))
+            .and_then(|class| class.call0())
+        {
+            Ok(groups) => groups,
+            Err(_) => pyo3::types::PyList::empty(py).into_any(),
+        };
         own.set_item("_groups", &groups)?;
-        Ok(groups.into_any().unbind())
+        Ok(groups.unbind())
     }
 
     #[setter]
