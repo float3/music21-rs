@@ -42,6 +42,7 @@ static DEFAULT_STEP: LazyLock<Interval> =
 /// `Interval` implements neither `PartialEq` nor `Hash`, so neither is derived
 /// here; compare realized [`pitches`](StepScale::pitches) instead.
 #[derive(Clone, Debug)]
+#[must_use]
 pub struct StepScale {
     tonic: Pitch,
     steps: Vec<Interval>,

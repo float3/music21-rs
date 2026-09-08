@@ -31,6 +31,7 @@ use crate::error::{Error, Result};
 /// # Ok::<(), music21_rs::Error>(())
 /// ```
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[must_use]
 pub struct Sieve {
     root: Node,
 }

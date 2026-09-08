@@ -89,6 +89,7 @@ impl From<IntegerType> for ParallelRequirement {
 /// Two consecutive notes in each of two voices. Voice one is the upper voice.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
 pub struct VoiceLeadingQuartet {
     v1n1: Pitch,
     v1n2: Pitch,

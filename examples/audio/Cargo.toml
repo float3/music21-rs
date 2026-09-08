@@ -7,3 +7,6 @@ version = "0.0.0"
 [dependencies]
 music21-rs = { path = "../..", default-features = false }
 rodio = "0.22.2"
+
+[lints]
+workspace = true

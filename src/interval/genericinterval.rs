@@ -18,6 +18,7 @@ use super::{
 /// third down, `1` a unison. Zero is not an interval.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
 pub struct GenericInterval {
     value: IntegerType,
 }

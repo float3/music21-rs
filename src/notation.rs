@@ -166,6 +166,7 @@ impl fmt::Display for Placement {
 /// the music needs.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
 pub struct Tie {
     tie_type: TieType,
     style: TieStyle,
@@ -243,6 +244,7 @@ impl FromStr for Tie {
 /// The shape drawn for a note head: music21's `noteheadTypeNames`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
 pub enum Notehead {
     /// `arrow down`
     ArrowDown,
@@ -474,6 +476,7 @@ impl fmt::Display for BeamDirection {
 /// One beam at one level: music21's `beam.Beam`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
 pub struct Beam {
     /// What the beam does at this note. music21 leaves it unsaid on a beam
     /// that has been counted but not yet decided — which is what `fill`
@@ -548,6 +551,7 @@ impl fmt::Display for Beam {
 /// `beam.Beams`.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
 pub struct Beams {
     beams: Vec<Beam>,
     /// Whether the beam group is drawn fanned out, for an accelerando.
@@ -1006,6 +1010,7 @@ impl fmt::Display for Syllabic {
 /// and [`Self::raw_text`] writes the hyphens back.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
 pub struct Lyric {
     /// The syllable, or nothing at all: music21 leaves the text of a bare
     /// `Lyric()` unset, and a lyric nobody has sung anything to is not the

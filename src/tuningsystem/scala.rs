@@ -43,6 +43,7 @@ const CENTS_PER_OCTAVE: FloatType = 1200.0;
 /// because a ratio carries exactness that cents cannot express.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
 pub enum ScalaDegree {
     /// An exact integer ratio, such as `3/2`.
     Ratio(Fraction),
@@ -179,6 +180,7 @@ impl Display for ScalaDegree {
 /// 12 degrees plus a period, and `degrees()[0]` is always `1/1`.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
 pub struct ScalaScale {
     description: String,
     degrees: Vec<ScalaDegree>,
@@ -386,6 +388,7 @@ impl Display for ScalaScale {
 /// ```
 #[derive(Clone, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
 pub struct ScalaArchive {
     scales: BTreeMap<String, ScalaScale>,
 }

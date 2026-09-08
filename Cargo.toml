@@ -1,18 +1,52 @@
 [package]
 authors = ["hill <hill@hilll.dev>"]
+categories = ["multimedia::audio", "science"]
 description = "Rust helpers inspired by music21 for chord, pitch, polyrhythm, and tuning analysis"
 edition = "2024"
-include = ["/src", "/examples"]
-keywords = ["music", "chords", "music21"]
+include = ["/src", "/examples", "/LICENSE"]
+keywords = [
+    "music",
+    "chords",
+    "music21",
+    "music-theory",
+    "music-analysis",
+    "music21-rs",
+    "computational-musicology",
+    "polyrhythm",
+    "tuning",
+    "scala",
+    "scala-archive",
+]
 license = "AGPL-3.0-only"
 name = "music21-rs"
 readme = "README.md"
 repository = "https://github.com/float3/music21-rs"
+rust-version = "1.90"
 version = "0.3.0"
+
+# docs.rs builds default features only, and this crate's defaults are empty --
+# without this every `serde` impl and all of `ScalaArchive::bundled()` would be
+# missing from the published documentation.
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [workspace]
 exclude = ["python", "python-parity"]
 members = ["utils", "examples/audio", "examples/web", "xtask"]
+
+# CI denies warnings on the command line; stating the same levels here means a
+# local `cargo clippy` fails on exactly what CI fails on.
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+
+# `docsrs` is set by the [package.metadata.docs.rs] rustdoc-args above; declare
+# it so check-cfg does not read it as a typo.
+[workspace.lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(docsrs)'] }
+
+[lints]
+workspace = true
 
 [features]
 default = []

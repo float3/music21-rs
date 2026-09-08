@@ -15,6 +15,7 @@ use std::str::FromStr;
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
+#[must_use]
 pub enum DurationType {
     /// Duplex maxima, sixteen whole notes.
     DuplexMaxima,
@@ -227,6 +228,7 @@ impl FromStr for DurationType {
 ///
 /// A quarter note has a quarter length of `1.0`; an eighth note is `0.5`;
 /// a whole note is `4.0`.
+#[must_use]
 pub struct Duration {
     quarter_length: FloatType,
     /// The tuplets this length is written inside, when a caller has said so.
@@ -348,6 +350,7 @@ const TUPLET_TOLERANCE: FloatType = 1e-5;
 /// that two thirds of a quarter is a quarter triplet.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
 pub struct Tuplet {
     actual: u32,
     normal: u32,
@@ -609,6 +612,10 @@ impl Duration {
         ))
     }
 
+    /// The tuplet this length is written as, if any.
+    ///
+    /// A length that is already a plain written value is that value rather
+    /// than a tuplet of some other one, so a quarter answers `None`.
     pub fn tuplet(&self) -> Option<Tuplet> {
         if self.quarter_length <= 0.0 {
             return None;

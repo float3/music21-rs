@@ -3,6 +3,7 @@ use crate::duration::Duration;
 /// A silent musical event with a duration.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
 pub struct Rest {
     duration: Duration,
 }

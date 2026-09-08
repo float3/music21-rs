@@ -1,3 +1,5 @@
+/// Tuning systems whose frequencies depend on the harmonic context they
+/// sound in, rather than on a fixed table.
 pub mod adaptive;
 mod generated;
 /// Runtime parsing of Scala `.scl` scale files.
@@ -102,12 +104,19 @@ pub const HISTORICAL_TEMPERAMENTS: [TuningSystem; 14] = [
 /// Either a normal tuning system or a context-sensitive adaptive tuning system.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
 pub enum AnyTuningSystem {
+    /// A fixed system, which answers the same way whatever it sounds against.
     Fixed(TuningSystem),
+    /// An adaptive system, whose answer depends on the context it is given.
     Adaptive(AdaptiveTuningSystem),
 }
 
 impl AnyTuningSystem {
+    /// The frequency of a degree, in Hz.
+    ///
+    /// `context` is the frequency an adaptive system tunes against; a fixed
+    /// system ignores it.
     pub fn frequency_at(
         self,
         context: FloatType,
@@ -125,6 +134,10 @@ impl AnyTuningSystem {
         }
     }
 
+    /// The degree's distance above the tonic, in cents.
+    ///
+    /// `context` is the frequency an adaptive system tunes against; a fixed
+    /// system ignores it.
     pub fn cents_at(
         self,
         context: FloatType,
@@ -142,6 +155,7 @@ impl AnyTuningSystem {
         }
     }
 
+    /// Whether this system's answers depend on the context they are asked in.
     pub fn is_adaptive(self) -> bool {
         matches!(self, Self::Adaptive(_))
     }
@@ -196,6 +210,7 @@ pub const ALL_TUNING_SYSTEMS: [TuningSystem; 28] = [
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// A ratio-like value used by tuning tables.
+#[must_use]
 pub struct Fraction {
     /// Numerator for a rational ratio, or exponent numerator when `base` is set.
     pub numerator: UnsignedIntegerType,
@@ -332,6 +347,7 @@ impl
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Supported tuning systems and ratio tables.
+#[must_use]
 pub enum TuningSystem {
     /// Equal temperament with a configurable octave size.
     EqualTemperament {

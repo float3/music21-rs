@@ -39,6 +39,7 @@ pub enum Minor67Default {
 /// A parsed Roman numeral in a key.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
 pub struct RomanNumeral {
     figure: String,
     key: Key,
@@ -538,6 +539,7 @@ impl RomanNumeral {
         &self.figures.column
     }
 
+    /// The figure the numeral was written with, as given: music21's `figure`.
     pub fn figure(&self) -> &str {
         &self.figure
     }
@@ -664,11 +666,15 @@ impl RomanNumeral {
         if self.kind != RomanKind::Diatonic || !(1..=7).contains(&self.degree) {
             return Ok(false);
         }
+        // music21 asks the *chord* for its quality here, and a chord answers
+        // for its triad — so a half-diminished seventh reads as diminished,
+        // and the seventh above the triad is what the degree-seven rule below
+        // then asks about separately.
         let quality = match self.quality {
-            RomanQuality::Diminished => "diminished",
+            RomanQuality::Diminished | RomanQuality::HalfDiminished => "diminished",
             RomanQuality::Minor => "minor",
             RomanQuality::Major => "major",
-            RomanQuality::HalfDiminished | RomanQuality::Augmented => return Ok(false),
+            RomanQuality::Augmented => return Ok(false),
         };
         let front = match self.accidental {
             0 => "natural",
@@ -1111,6 +1117,8 @@ pub fn analyze_chord_with_root(
     RomanNumeral::analyze_with_root(chord, key, root)
 }
 
+/// Splits the accidentals written in front of a roman numeral off the rest of
+/// the figure, counting sharps as positive and flats as negative.
 pub fn split_roman_accidental_prefix(value: &str) -> (i8, &str) {
     let mut accidental = 0;
     let mut end = 0;
@@ -1288,11 +1296,17 @@ pub enum ImpliedQuality {
     /// No quality was implied, and the scale's own spelling stands.
     #[default]
     Unstated,
+    /// A major triad.
     Major,
+    /// A minor triad.
     Minor,
+    /// A diminished triad, or a fully diminished seventh.
     Diminished,
+    /// A half-diminished seventh: a diminished triad under a minor seventh.
     HalfDiminished,
+    /// An augmented triad.
     Augmented,
+    /// A major triad under a minor seventh.
     DominantSeventh,
 }
 
@@ -1928,6 +1942,8 @@ fn sharpen_figure(figure: &mut String) {
     }
 }
 
+/// Splits the leading roman numeral off a figure, returning the numeral and
+/// what follows it. Errors when the value does not begin with one.
 pub fn split_roman_prefix(value: &str) -> Result<(&str, &str)> {
     let end = value
         .char_indices()
@@ -2709,6 +2725,14 @@ mod tests {
             assert_eq!(rn.is_mixture(false).unwrap(), mixture, "{figure} in {key}");
             assert_eq!(rn.is_mixture(true).unwrap(), mixture, "{figure} in {key}");
         }
+        // A half-diminished seventh on the leading note is mixture in a minor
+        // key and not in a major one, which only works because its quality
+        // reads as its triad's — diminished — the way music21's chord does.
+        for (key, mixture) in [("a", true), ("A", false)] {
+            let half = RomanNumeral::new("viiø7", Key::from_tonic(key).unwrap()).unwrap();
+            assert_eq!(half.is_mixture(false).unwrap(), mixture, "viiø7 in {key}");
+        }
+
         let italian = RomanNumeral::new("It6", Key::from_tonic("C").unwrap()).unwrap();
         assert_eq!(italian.roman_numeral(), "It");
         assert_eq!(italian.functionality_score(), 34);

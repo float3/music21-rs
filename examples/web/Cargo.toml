@@ -28,3 +28,6 @@ omit-default-module-path = false
 
 [package.metadata.wasm-pack.profile.profiling]
 wasm-opt = ["-O3"]
+
+[lints]
+workspace = true

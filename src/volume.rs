@@ -25,6 +25,7 @@ const BASE_LEVEL: FloatType = 0.5;
 /// How loud a note is: music21's `volume.Volume`.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
 pub struct Volume {
     velocity_scalar: Option<FloatType>,
     velocity_is_relative: bool,

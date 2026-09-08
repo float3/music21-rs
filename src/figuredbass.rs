@@ -65,6 +65,7 @@ const SPECIAL: &[(&str, &str)] = &[
 /// string it was written with is kept alongside the accidental it means.
 #[derive(Clone, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
 pub struct Modifier {
     written: Option<String>,
     accidental: Option<Accidental>,
@@ -145,6 +146,7 @@ impl fmt::Display for Modifier {
 /// beside it.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
 pub struct Figure {
     number: Option<IntegerType>,
     modifier: Modifier,
@@ -212,6 +214,7 @@ impl fmt::Display for Figure {
 /// string, comma-separated: `'7,5,#3'`, `'6,4'`, `'4+,2'`.
 #[derive(Clone, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
 pub struct Notation {
     column: String,
     figure_strings: Vec<String>,

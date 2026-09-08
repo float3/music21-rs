@@ -82,6 +82,7 @@ impl BeatDivision {
 /// ```
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
 pub struct TimeSignature {
     numerator: UnsignedIntegerType,
     denominator: UnsignedIntegerType,

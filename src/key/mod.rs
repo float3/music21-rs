@@ -18,6 +18,7 @@ pub mod keysignature;
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// A tonal key with a tonic pitch and mode.
+#[must_use]
 pub struct Key {
     tonic_pitch: Pitch,
     mode: String,
@@ -196,6 +197,8 @@ impl Key {
         Ok(Self::new(tonic, &self.mode, sharps))
     }
 
+    /// Returns the relative major or minor key -- the one sharing this key's
+    /// signature. A mode that is neither answers with itself.
     pub fn relative(&self) -> Result<Self> {
         match self.mode.as_str() {
             "major" => self.key_signature().try_as_key(Some("minor"), None),

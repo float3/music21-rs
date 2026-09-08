@@ -15,6 +15,7 @@ pub const DEFAULT_TICKS_PER_QUARTER: u16 = 480;
 /// A note event in quarter-length time.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
 pub struct MidiNote {
     /// MIDI key number, from 0 to 127.
     pub pitch: u8,

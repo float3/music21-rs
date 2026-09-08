@@ -96,6 +96,7 @@ const TONICS: [&str; 12] = [
 
 /// A ranked key estimate.
 #[derive(Clone, Debug)]
+#[must_use]
 pub struct KeyEstimate {
     key: Key,
     score: FloatType,

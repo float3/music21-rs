@@ -4,6 +4,7 @@ use super::concretescale::ConcreteScale;
 
 #[derive(Clone, Debug)]
 /// A diatonic scale realized from a tonic, key signature, and mode.
+#[must_use]
 pub struct DiatonicScale {
     concrete: ConcreteScale,
     mode: String,

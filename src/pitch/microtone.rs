@@ -64,6 +64,7 @@ impl Display for MicrotoneSpecifier {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// A microtonal pitch adjustment measured in cents, optionally shifted by a
 /// harmonic like Python music21's `music21.pitch.Microtone`.
+#[must_use]
 pub struct Microtone {
     cent_shift: FloatType,
     harmonic_shift: IntegerType,

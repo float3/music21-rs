@@ -11,6 +11,7 @@ use crate::{
 /// An interval quality, numbered as music21 numbers its `Specifier` enum.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
 pub enum Specifier {
     /// `P`
     Perfect = 1,

@@ -6,6 +6,7 @@ use crate::{
 /// Adaptive tuning systems whose note frequencies depend on harmonic context.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
 pub enum AdaptiveTuningSystem {
     /// A recursive tuning system:
     ///

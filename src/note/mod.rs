@@ -12,6 +12,7 @@ use std::str::FromStr;
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// A pitched note.
+#[must_use]
 pub struct Note {
     pub(crate) pitch: Pitch,
     duration: Option<Duration>,

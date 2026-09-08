@@ -143,6 +143,7 @@ impl TryFrom<FloatType> for PitchClass {
 /// 11.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
 pub struct PitchClass {
     value: FloatType,
 }

@@ -16,6 +16,7 @@ use super::{
 /// A quality and a generic interval together: `M3`, `-P5`, `dd7`.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
 pub struct DiatonicInterval {
     pub(crate) generic: GenericInterval,
     pub(crate) specifier: Specifier,

@@ -64,6 +64,7 @@ impl ChordAlteration {
 /// Parsed chord symbol.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
 pub struct ChordSymbol {
     figure: String,
     root: Pitch,

@@ -9,6 +9,7 @@ use crate::pitch::Pitch;
 
 #[derive(Debug, Clone)]
 /// A repeating polyrhythm defined by a base meter and subdivision voices.
+#[must_use]
 pub struct Polyrhythm {
     /// Beats per measure (e.g. 4 for 4/4 time)
     pub base: UnsignedIntegerType,
@@ -24,6 +25,7 @@ pub struct Polyrhythm {
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// A single tick in a polyrhythm cycle.
+#[must_use]
 pub struct PolyrhythmEvent {
     /// Tick index within the cycle.
     pub tick: UnsignedIntegerType,
@@ -36,6 +38,7 @@ pub struct PolyrhythmEvent {
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// A chord tone inferred from a polyrhythm's subdivision ratios.
+#[must_use]
 pub struct PolyrhythmRatioTone {
     /// The reduced subdivision component that produced this tone.
     pub component: UnsignedIntegerType,
@@ -48,6 +51,7 @@ pub struct PolyrhythmRatioTone {
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Timing and ratio analysis for one polyrhythm cycle.
+#[must_use]
 pub struct PolyrhythmAnalysis {
     /// Beats per measure.
     pub base: UnsignedIntegerType,

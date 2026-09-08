@@ -2,6 +2,10 @@
 //!
 //! The crate currently focuses on pitch construction, chord naming and
 //! lightweight theory utilities such as polyrhythm and tuning-system helpers.
+#![cfg_attr(docsrs, feature(doc_cfg))]
+#![deny(missing_docs)]
+#![deny(missing_debug_implementations)]
+#![forbid(unsafe_code)]
 // #![feature(inline_const_pat)]
 // #![feature(negative_impls)]
 // #![feature(specialization)]
@@ -30,11 +34,13 @@ pub(crate) mod fraction_pow;
 pub mod interval;
 /// Public key and key-signature helpers.
 pub mod key;
-/// Minimal MIDI import/export helpers.
+/// Time signatures: bar length, beat count, beat length and beat division.
 pub mod meter;
+/// Minimal MIDI import/export helpers.
 pub mod midi;
-/// Note construction and pitch access helpers.
+/// Ties, noteheads, stem direction, colour, lyrics and beams.
 pub mod notation;
+/// Note construction and pitch access helpers.
 pub mod note;
 /// Pitch construction, spelling and pitch-space helpers.
 pub mod pitch;

@@ -19,6 +19,7 @@ const WHOLE_SEMITONE_TOLERANCE: FloatType = 1e-9;
 /// A signed number of semitones, fractional for microtonal intervals.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
 pub struct ChromaticInterval {
     pub(crate) semitones: FloatType,
 }

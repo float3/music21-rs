@@ -182,6 +182,7 @@ impl PitchOptions {
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// A musical pitch with spelling, octave, accidental and optional microtone.
+#[must_use]
 pub struct Pitch {
     step: StepName,
     octave: Octave,
@@ -1096,6 +1097,12 @@ impl Pitch {
     }
 
     /// Returns the octave, or music21's default of 4 when none is set.
+    ///
+    /// This is what music21 v11's `.octave` answers -- there the property is
+    /// always an `int`, and `implicitOctave` is a deprecated synonym for it.
+    /// [`Self::octave`] keeps the `Option`, which is music21's own `_octave`
+    /// and says strictly more; [`Self::octave_is_implicit`] is the flag v11
+    /// added to tell the two apart.
     pub fn implicit_octave(&self) -> IntegerType {
         self.octave.unwrap_or(PITCH_OCTAVE as IntegerType)
     }
@@ -1150,6 +1157,11 @@ impl Pitch {
         Ok(self.clone())
     }
 
+    /// The next enharmonic spelling of this pitch: music21's `getEnharmonic`.
+    ///
+    /// A sharpened pitch respells on the letter above and a flattened one on
+    /// the letter below; a natural takes whichever direction its letter has
+    /// room for, so `C` answers `B#`.
     pub fn get_enharmonic(&self) -> Result<Pitch> {
         let alter = self.accidental.alter();
         let downward = if alter > 0.0 {
@@ -1765,7 +1777,7 @@ pub fn simplify_multiple_enharmonics(
     }
 
     if remove_first {
-        simplified_pitches.remove(0);
+        let _ = simplified_pitches.remove(0);
     }
 
     Ok(simplified_pitches)
