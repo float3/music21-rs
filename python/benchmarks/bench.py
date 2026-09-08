@@ -18,12 +18,26 @@ memoization buys once it is warm.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import platform
 import sys
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Callable
+
+_spec = importlib.util.find_spec("music21")
+if _spec is None or _spec.origin is None:
+    # Fall back to the pinned submodule, as the fixture generator does: the
+    # comparison should be against the music21 this repository pins, and CI
+    # installs music21's dependencies without music21 itself for exactly that
+    # reason. The `origin` test matters because the submodule's own directory
+    # sits in the working directory, and `find_spec` answers for it as a
+    # namespace package with no code in it at all.
+    _submodule = Path(__file__).resolve().parents[2] / "music21"
+    if (_submodule / "music21" / "__init__.py").is_file():
+        sys.path.insert(0, str(_submodule))
 
 import music21
 import music21_rs
