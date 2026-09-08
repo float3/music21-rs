@@ -181,7 +181,7 @@ impl VoiceLeadingQuartet {
 impl VoiceLeadingQuartet {
     /// A quartet is written out as text and read back, and its four notes
     /// are made again from what it says.
-    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<(Py<PyAny>, (), Py<PyAny>)> {
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<crate::Pickled> {
         crate::pickled(slf, &slf.borrow().inner)
     }
 

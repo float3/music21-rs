@@ -499,7 +499,7 @@ fn figure_for_degree(key: Option<&RsKey>, degree: usize) -> PyResult<String> {
 impl RomanNumeral {
     /// A numeral is written out as text and read back, and the chord it
     /// stands on is worked out again from the figure.
-    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<(Py<PyAny>, (), Py<PyAny>)> {
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<crate::Pickled> {
         let me = slf.borrow();
         let written = (me.inner.clone(), me.octave, me.implied_key, me.score);
         drop(me);

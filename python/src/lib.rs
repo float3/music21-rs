@@ -81,9 +81,34 @@ where
     T: pyo3::PyClass<Frozen = pyo3::pyclass::boolean_struct::False>,
 {
     let class = slf.as_any().get_type();
-    let copy = class.call_method1("__new__", (&class,))?;
+    // Through the helper, so that the copy gets the music21 half started as
+    // a fresh object of that class would: `__new__` alone leaves an object
+    // with no sites for a stream to hold it by.
+    let copy = blank_installed(class.as_any())?;
     *copy.cast::<T>()?.borrow_mut() = value;
     Ok(copy)
+}
+
+/// Records where a new object came from, as music21's own methods do.
+///
+/// `n.transpose('P5')` hands back a copy, and music21 writes on the copy
+/// what it was made from and how; its own streams read that back — a
+/// deepcopy of a stream moves its spanners onto the copies by it. A thing no
+/// stream holds keeps no derivation, and nothing is written on one.
+pub(crate) fn derived_from(
+    made: &Bound<'_, PyAny>,
+    origin: &Bound<'_, PyAny>,
+    method: &str,
+) -> PyResult<()> {
+    let Ok(derivation) = made.getattr("derivation") else {
+        return Ok(());
+    };
+    if derivation.is_none() {
+        return Ok(());
+    }
+    derivation.setattr("origin", origin)?;
+    derivation.setattr("method", method)?;
+    Ok(())
 }
 
 /// The class music21 now has under a name, where one of ours was installed
@@ -101,6 +126,11 @@ pub(crate) fn installed_class<'py>(
     let installed = helper.getattr("installed").ok()?;
     installed.get_item((module, name)).ok()
 }
+
+/// What `__reduce__` hands back: the function that makes a blank object of
+/// the right class, the module and name to make it under, and the state to
+/// write into it.
+pub(crate) type Pickled = (Py<PyAny>, (String, String), Py<PyAny>);
 
 /// A facade object's musical half, written out as text a pickle can carry.
 ///
@@ -134,7 +164,7 @@ where
 /// The musical half lives in Rust where a pickle cannot see it, so it is
 /// written out as text; the Python half of an installed object — the offset,
 /// the sites, everything music21 keeps — goes along as its own dictionary.
-pub(crate) fn pickled<T, V>(slf: &Bound<'_, T>, value: &V) -> PyResult<(Py<PyAny>, (), Py<PyAny>)>
+pub(crate) fn pickled<T, V>(slf: &Bound<'_, T>, value: &V) -> PyResult<Pickled>
 where
     T: pyo3::PyClass,
     V: serde::Serialize,
@@ -152,30 +182,31 @@ pub(crate) fn pickled_extra<T, V>(
     slf: &Bound<'_, T>,
     value: &V,
     extra: Option<&Bound<'_, pyo3::types::PyDict>>,
-) -> PyResult<(Py<PyAny>, (), Py<PyAny>)>
+) -> PyResult<Pickled>
 where
     T: pyo3::PyClass,
     V: serde::Serialize,
 {
     let py = slf.py();
-    // The class music21 now has under this name, which is what a pickle
-    // looking it up by name will find: an object built as the plain facade
-    // is thawed as the class that stands in its place.
+    // Not the class itself: a pickle carrying a class carries its module
+    // and its name, and in another process — joblib starts one to measure a
+    // score's features — that name is still music21's own class, which
+    // cannot read what this wrote. So the pickle carries the name and a
+    // function of ours that puts the class there before reading it.
     let class = slf.as_any().get_type();
-    let class = match (
-        class
-            .getattr("__module__")
-            .and_then(|m| m.extract::<String>()),
-        class
-            .getattr("__qualname__")
-            .and_then(|n| n.extract::<String>()),
-    ) {
-        (Ok(module), Ok(name)) => {
-            installed_class(py, &module, &name).unwrap_or_else(|| class.into_any())
-        }
-        _ => class.into_any(),
-    };
-    let class = class.unbind();
+    let module = class
+        .getattr("__module__")
+        .and_then(|module| module.extract::<String>())
+        .unwrap_or_default();
+    let name = class
+        .getattr("__qualname__")
+        .and_then(|name| name.extract::<String>())
+        .unwrap_or_default();
+    let thaw = py
+        .import("music21_rs")
+        .or_else(|_| py.import("music21_rs_facade"))?
+        .getattr("_thawed")?
+        .unbind();
     let written = written_state(value)?;
     // The Python half is music21's own: everything it keeps on the object,
     // with the two fields it never freezes emptied, as `Music21Object`
@@ -197,7 +228,28 @@ where
         .into_pyobject(py)?
         .into_any()
         .unbind();
-    Ok((class, (), state))
+    Ok((thaw, (module, name), state))
+}
+
+/// The other end of a pickle: a blank object of the class music21 has under
+/// that name, with these classes put in place first if they are not there.
+///
+/// A score frozen with the crate installed can only be read back with the
+/// crate installed — the objects in it are these classes — so a process that
+/// has not installed them installs them now. That is what lets a score cross
+/// into a worker process, which is how music21's own feature extraction runs.
+#[pyfunction]
+#[pyo3(name = "_thawed")]
+fn thawed(py: Python<'_>, module: &str, name: &str) -> PyResult<Py<PyAny>> {
+    if installed_class(py, module, name).is_none() {
+        install_into_music21(py)?;
+    }
+    let Some(class) = installed_class(py, module, name) else {
+        return Err(pyo3::exceptions::PyValueError::new_err(format!(
+            "{module}.{name} is not one of these classes"
+        )));
+    };
+    Ok(blank_installed(&class)?.unbind())
 }
 
 /// The other half of that: what the object was, read back, with the Python
@@ -357,6 +409,27 @@ def rebind(original, installed):
 # hold the installed class, so an object built as the bare facade is one no
 # stream can take and no pickle can find.
 installed = {}
+
+# music21's own class for each one installed over it.
+replaced = {}
+
+
+def refresh_class_sets():
+    """Every installed class counts as the installed classes it replaces.
+
+    `getElementsByClass` matches on `classSet`, which holds classes and not
+    only their names. An installed `Key` carries music21's own
+    `KeySignature` there, but `key.KeySignature` now *means* the installed
+    one — so a part would report no key signature at all until the installed
+    class is in the set too.
+    """
+    for cls in installed.values():
+        members = getattr(cls, 'classSet', None)
+        if not members:
+            continue
+        also = {replaced[member] for member in members if member in replaced}
+        if not also <= members:
+            cls.classSet = frozenset(members | also)
 
 
 def style_and_editorial(original):
@@ -539,6 +612,7 @@ def make_class(facade, original):
             return facade
     # A caller who asks a stream for `note.Note` is asking for this class now.
     installed.classSet = frozenset(classified | {installed})
+    replaced[original] = installed
     return installed
 
 
@@ -579,6 +653,10 @@ pub fn class_to_install<'py>(
     helper
         .getattr("installed")?
         .set_item((module.name()?, name), &built)?;
+    // Each class installed makes every other one a little more itself: what
+    // `getElementsByClass` matches on has to name the installed classes, not
+    // only the ones they replaced.
+    helper.getattr("refresh_class_sets")?.call0()?;
     Ok(built)
 }
 
@@ -659,6 +737,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
 pub fn music21_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     register_all(m)?;
     m.add_function(wrap_pyfunction!(install_into_music21, m)?)?;
+    m.add_function(wrap_pyfunction!(thawed, m)?)?;
     // maturin's generated package does `from .music21_rs import *`, which
     // without this would pull the extension module in under its own name.
     let mut names: Vec<String> = m
@@ -669,6 +748,9 @@ pub fn music21_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
         .filter(|name| !name.starts_with('_'))
         .collect();
     names.sort();
+    // A pickle written by one of these classes names this function, so the
+    // package has to carry it even though nobody calls it by hand.
+    names.push("_thawed".to_string());
     m.add("__all__", names)?;
     Ok(())
 }

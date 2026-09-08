@@ -85,7 +85,7 @@ fn tonic_name(value: &Bound<'_, PyAny>) -> PyResult<String> {
 #[pymethods]
 impl KeySignature {
     /// A key signature is written out as text and read back.
-    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<(Py<PyAny>, (), Py<PyAny>)> {
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<crate::Pickled> {
         crate::pickled(slf, &slf.borrow().signature)
     }
 
@@ -417,7 +417,7 @@ impl Key {
 impl Key {
     /// A key is written out as text and read back, and its signature is made
     /// again from what it says.
-    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<(Py<PyAny>, (), Py<PyAny>)> {
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<crate::Pickled> {
         crate::pickled(slf, &slf.borrow().inner)
     }
 
@@ -655,6 +655,18 @@ impl Key {
         self.abstract_scale
             .as_ref()
             .map(|scale| scale.clone_ref(py))
+    }
+
+    /// music21 keeps the pattern in a private slot and its own `__init__`
+    /// reaches for it, so the slot answers here too.
+    #[getter]
+    fn _abstract(&self, py: Python<'_>) -> Option<Py<PyAny>> {
+        self.get_abstract(py)
+    }
+
+    #[setter]
+    fn set__abstract(&mut self, value: Option<&Bound<'_, PyAny>>) {
+        self.set_abstract(value);
     }
 
     #[setter]

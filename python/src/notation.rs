@@ -88,7 +88,7 @@ impl Tie {
     /// music21 freezes a score by pickling it, and what this object is lives
     /// in Rust where a pickle cannot see it — so it is written out as text,
     /// and read back into a fresh one of these.
-    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<(Py<PyAny>, (), Py<PyAny>)> {
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<crate::Pickled> {
         crate::pickled(slf, &slf.borrow().inner)
     }
 
@@ -266,7 +266,7 @@ impl Lyric {
     /// music21 freezes a score by pickling it, and what this object is lives
     /// in Rust where a pickle cannot see it — so it is written out as text,
     /// and read back into a fresh one of these.
-    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<(Py<PyAny>, (), Py<PyAny>)> {
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<crate::Pickled> {
         crate::pickled(slf, &slf.borrow().inner)
     }
 
@@ -576,7 +576,7 @@ impl Beam {
     /// music21 freezes a score by pickling it, and what this object is lives
     /// in Rust where a pickle cannot see it — so it is written out as text,
     /// and read back into a fresh one of these.
-    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<(Py<PyAny>, (), Py<PyAny>)> {
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<crate::Pickled> {
         crate::pickled(slf, &slf.borrow().inner)
     }
 
@@ -839,7 +839,7 @@ impl Beams {
     /// music21 freezes a score by pickling it, and what this object is lives
     /// in Rust where a pickle cannot see it — so it is written out as text,
     /// and read back into a fresh one of these.
-    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<(Py<PyAny>, (), Py<PyAny>)> {
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<crate::Pickled> {
         crate::pickled(slf, &slf.borrow().inner)
     }
 
@@ -1265,7 +1265,7 @@ impl Volume {
     /// music21 freezes a score by pickling it, and what this object is lives
     /// in Rust where a pickle cannot see it — so it is written out as text,
     /// and read back into a fresh one of these.
-    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<(Py<PyAny>, (), Py<PyAny>)> {
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<crate::Pickled> {
         crate::pickled(slf, &slf.borrow().inner)
     }
 

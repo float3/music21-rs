@@ -286,7 +286,7 @@ impl Tuplet {
     /// music21 freezes a score by pickling it, and what this object is lives
     /// in Rust where a pickle cannot see it — so it is written out as text,
     /// and read back into a fresh one of these.
-    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<(Py<PyAny>, (), Py<PyAny>)> {
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<crate::Pickled> {
         crate::pickled(slf, &slf.borrow().inner)
     }
 
@@ -1117,7 +1117,7 @@ impl Duration {
     /// music21 freezes a score by pickling it. A duration keeps what it is
     /// in Rust, where a pickle cannot see it, so it is written out as text
     /// and read back.
-    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<(Py<PyAny>, (), Py<PyAny>)> {
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<crate::Pickled> {
         crate::pickled(slf, &slf.borrow().inner)
     }
 
@@ -2198,7 +2198,7 @@ impl Note {
     /// are Python objects the crate does not model, so they are frozen
     /// beside it — music21 freezes every score it parses, and a thawed note
     /// with no articulations on it would have lost what the score said.
-    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<(Py<PyAny>, (), Py<PyAny>)> {
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<crate::Pickled> {
         let py = slf.py();
         let extra = PyDict::new(py);
         {
@@ -2820,7 +2820,12 @@ impl Note {
         if let Some(duration) = slf.borrow().inner.duration().cloned() {
             moved.set_duration(duration);
         }
-        Ok(Some(Self::object(py, moved)?))
+        let mut copy = Self::wrap(py, moved)?;
+        copy.style = crate::notation::copied_style(py, slf.borrow().style.as_ref());
+        let copy = crate::copy_as_same_type(slf, copy)?;
+        Self::claim_pitch(py, &copy.clone().cast_into::<Self>()?.unbind());
+        crate::derived_from(&copy, slf.as_any(), "transpose")?;
+        Ok(Some(copy.cast_into::<Self>()?.unbind()))
     }
 
     fn __eq__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> bool {

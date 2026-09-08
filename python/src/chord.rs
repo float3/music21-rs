@@ -603,7 +603,7 @@ impl ChordTableAddress {
     /// music21 freezes a score by pickling it, and what this object is lives
     /// in Rust where a pickle cannot see it — so it is written out as text,
     /// and read back into a fresh one of these.
-    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<(Py<PyAny>, (), Py<PyAny>)> {
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<crate::Pickled> {
         crate::pickled(slf, &slf.borrow().inner)
     }
 
@@ -770,7 +770,7 @@ impl Chord {
     /// again from what it says. Its ornaments, its marks and the root a
     /// caller fixed are Python objects the value does not carry, so they go
     /// beside it.
-    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<(Py<PyAny>, (), Py<PyAny>)> {
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<crate::Pickled> {
         let py = slf.py();
         let extra = PyDict::new(py);
         {
@@ -1739,19 +1739,24 @@ impl Chord {
 
     #[pyo3(signature = (value, *, inPlace = false))]
     fn transpose(
-        &mut self,
-        py: Python<'_>,
+        slf: &Bound<'_, Self>,
         value: &Bound<'_, PyAny>,
         inPlace: bool,
-    ) -> PyResult<Option<Chord>> {
+    ) -> PyResult<Option<Py<PyAny>>> {
+        let py = slf.py();
         let interval: RsInterval = interval_from_any(value)?;
-        let moved = self.inner.transpose(&interval).map_err(chord_error)?;
+        let moved = slf
+            .borrow()
+            .inner
+            .transpose(&interval)
+            .map_err(chord_error)?;
         if inPlace {
-            self.replace_inner(py, moved)?;
-            Ok(None)
-        } else {
-            Ok(Some(Self::from_inner(py, moved)?))
+            slf.borrow_mut().replace_inner(py, moved)?;
+            return Ok(None);
         }
+        let copy = crate::copy_as_same_type(slf, Self::from_inner(py, moved)?)?;
+        crate::derived_from(&copy, slf.as_any(), "transpose")?;
+        Ok(Some(copy.unbind()))
     }
 
     /// music21's `chordTablesAddress`: where this chord's set class sits in

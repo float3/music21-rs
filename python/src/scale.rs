@@ -419,7 +419,7 @@ impl ConcreteScale {
 #[pymethods]
 impl ConcreteScale {
     /// A scale is written out as text and read back.
-    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<(Py<PyAny>, (), Py<PyAny>)> {
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<crate::Pickled> {
         let me = slf.borrow();
         let written = (
             me.inner.clone(),
@@ -600,13 +600,18 @@ impl ConcreteScale {
         ) else {
             if descending {
                 return Ok(wrap_pitches(
-                    self.realized()?.pitches_descending().map_err(scale_error)?,
+                    self.realized_anywhere()
+                        .pitches_descending()
+                        .map_err(scale_error)?,
                 ));
             }
             return self.pitches();
         };
         let (low, high) = (pitch_from_any(low)?, pitch_from_any(high)?);
-        let scale = self.realized()?;
+        // A scale nobody gave a tonic to still has a pattern, and music21
+        // sounds it from middle C rather than refusing: "could raise an
+        // error here, but instead will use a pseudo-tonic".
+        let scale = self.realized_anywhere();
         Ok(wrap_pitches(if descending {
             scale
                 .pitches_between_descending(&low, &high)
@@ -652,6 +657,19 @@ impl ConcreteScale {
     #[getter]
     fn get_abstract(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         AbstractScale::object(py, self.named_pattern.then(|| self.inner.scale_type()))
+    }
+
+    /// music21 keeps the pattern in a private slot and its own code reaches
+    /// for it — `key.Key.__init__` builds its network through the slot — so
+    /// the slot answers here too.
+    #[getter]
+    fn _abstract(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        self.get_abstract(py)
+    }
+
+    #[setter]
+    fn set__abstract(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        self.set_abstract(value)
     }
 
     #[setter]
