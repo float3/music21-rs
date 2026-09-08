@@ -1,6 +1,8 @@
 /// Tuning systems whose frequencies depend on the harmonic context they
 /// sound in, rather than on a fixed table.
 pub mod adaptive;
+/// Finding the same tuning under two different names.
+pub mod duplicates;
 /// Equal divisions of any interval, not only of the octave.
 pub mod equal;
 mod generated;
@@ -16,6 +18,9 @@ pub mod scala_bundled;
 pub mod temperament;
 mod temperaments_generated;
 
+pub use duplicates::{
+    DEFAULT_TOLERANCE, ScaleFingerprint, TemperamentFingerprint, duplicate_groups,
+};
 pub use equal::{EqualDivision, TRITAVE_CENTS};
 pub use generated::*;
 pub use monzo::{Monzo, PRIMES, Val};
