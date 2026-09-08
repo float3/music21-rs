@@ -138,13 +138,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         #[cfg(feature = "python")]
         Some("music21-suite") => {
             let rest = &args[2..];
-            let one =
-                match flag_value(rest, "--run") {
-                    Some(side) => Some(music21_suite::Which::parse(&side).ok_or_else(|| {
-                        format!("--run takes music21 or music21_rs, not {side:?}")
-                    })?),
-                    None => None,
-                };
+            let one = match flag_value(rest, "--run") {
+                Some(side) => Some(music21_suite::Which::parse(&side).ok_or_else(|| {
+                    format!("--run takes music21, music21_rs or music21_rs_wheel, not {side:?}")
+                })?),
+                None => None,
+            };
             let code = music21_suite::run(
                 &workspace_root,
                 flag_value(rest, "--only"),

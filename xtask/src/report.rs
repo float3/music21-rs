@@ -197,22 +197,92 @@ struct DoctestSummary {
 /// The benchmark above is twenty-one cases written for the purpose; this is
 /// every test music21 has, timed on both sides of a run that was happening
 /// anyway.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 struct Timings {
+    #[serde(default)]
     paired: usize,
-    music21_seconds: f64,
-    music21_rs_seconds: f64,
-    median_speedup: f64,
+    /// The columns, music21 first, then every subject that ran: the crate as
+    /// it is compiled, and the wheel that ships.
+    #[serde(default)]
+    sides: Vec<SideTotal>,
+    /// Every paired test. The section shows the two tails; the whole of it is
+    /// a page of its own, which is the only place all of these fit.
+    #[serde(default)]
+    rows: Vec<TestTiming>,
+    #[serde(default)]
     fastest: Vec<TestTiming>,
+    #[serde(default)]
     slowest: Vec<TestTiming>,
+}
+
+impl Timings {
+    /// Whether there is anything to draw. An old `report.json` written before
+    /// the columns existed deserializes to nothing rather than failing the
+    /// whole read, and this is what notices.
+    fn is_empty(&self) -> bool {
+        self.sides.len() < 2 || self.rows.is_empty()
+    }
+
+    /// What each side spent on the paired tests, as one phrase.
+    fn totals(&self) -> String {
+        self.sides
+            .iter()
+            .map(|side| format!("{:.0}s on {}", side.seconds, escape(&side.name)))
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+
+    /// One column's name, or what that column would have been called had it
+    /// run. A skipped wheel leaves the prose with nothing to point at.
+    fn side_name(&self, index: usize) -> &str {
+        const NAMES: [&str; 3] = ["music21", "music21-rs", "music21-rs-wheel"];
+        self.sides.get(index).map_or_else(
+            || NAMES.get(index).copied().unwrap_or("music21-rs"),
+            |side| side.name.as_str(),
+        )
+    }
+
+    /// The column a headline speedup should be read off, and its name.
+    ///
+    /// The wheel where there is one: it is what a caller installs, so it is
+    /// what a caller gets. The crate compiled here is the fallback, and is
+    /// what the number means on a machine with no wheel built.
+    fn headline(&self) -> Option<(&SideTotal, usize)> {
+        let wheel = self
+            .sides
+            .iter()
+            .enumerate()
+            .rfind(|(_, side)| side.median_speedup.is_some())?;
+        Some((wheel.1, wheel.0))
+    }
+}
+
+/// One column of the comparison.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SideTotal {
+    name: String,
+    seconds: f64,
+    /// The median of this side's per-test speedup against music21, absent for
+    /// music21 itself.
+    #[serde(default)]
+    median_speedup: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct TestTiming {
     name: String,
-    music21_seconds: f64,
-    music21_rs_seconds: f64,
+    /// One duration per side, in the order `sides` gives them.
+    seconds: Vec<f64>,
     speedup: f64,
+}
+
+impl TestTiming {
+    /// This test's speedup on one column against music21.
+    fn speedup_of(&self, side: usize) -> Option<f64> {
+        let theirs = *self.seconds.first()?;
+        let mine = *self.seconds.get(side)?;
+        (side > 0).then(|| theirs / mine.max(f64::MIN_POSITIVE))
+    }
 }
 
 /// One module's share of music21's own unit tests, as `xtask music21-suite`
@@ -418,13 +488,37 @@ pub(crate) fn parse_options(workspace_root: &Path, args: &[String]) -> Result<Op
     Ok(options)
 }
 
+/// Writes the report and whatever pages hang off it.
+///
+/// The timings page is written only where there are timings, and removed
+/// where there are not: a stale copy left beside a report that no longer
+/// links to it would be a page describing a run nobody made.
+fn write_pages(out: &Path, report: &Report) -> Result<(), Box<dyn Error>> {
+    fs::write(out.join("index.html"), render_html(report))?;
+    let page = out.join(TIMINGS_PAGE);
+    match report
+        .timings
+        .as_ref()
+        .filter(|timings| !timings.is_empty())
+    {
+        Some(timings) => {
+            fs::write(&page, render_timings_page(report, timings))?;
+            println!("wrote {}", page.display());
+        }
+        None => {
+            let _ = fs::remove_file(&page);
+        }
+    }
+    Ok(())
+}
+
 pub(crate) fn report(workspace_root: &Path, options: &Options) -> Result<(), Box<dyn Error>> {
     fs::create_dir_all(&options.out)?;
 
     if let Some(path) = &options.from_json {
         let report: Report = serde_json::from_str(&fs::read_to_string(path)?)?;
         let page = options.out.join("index.html");
-        fs::write(&page, render_html(&report))?;
+        write_pages(&options.out, &report)?;
         println!("wrote {} from {}", page.display(), path.display());
         return Ok(());
     }
@@ -493,7 +587,7 @@ pub(crate) fn report(workspace_root: &Path, options: &Options) -> Result<(), Box
         options.out.join("report.json"),
         serde_json::to_string_pretty(&report)?,
     )?;
-    fs::write(options.out.join("index.html"), render_html(&report))?;
+    write_pages(&options.out, &report)?;
 
     println!("wrote {}", options.out.join("index.html").display());
     if let Some(coverage) = &report.coverage {
@@ -2225,52 +2319,172 @@ fn render_beyond(beyond: &[BeyondReport], modules: &[BeyondModule]) -> String {
 /// argue about in the pairing — but most of what a music21 test does is
 /// music21's own code either way, which is why the middle sits near parity
 /// and the tails are the part worth reading.
+///
+/// Three columns where all three ran: music21, the crate compiled from the
+/// working tree, and the wheel out of site-packages. Only the tails are here;
+/// [`TIMINGS_PAGE`] carries every paired test.
 fn render_timings(timings: &Timings) -> String {
+    if timings.is_empty() {
+        return String::new();
+    }
     let mut html = String::new();
     let _ = writeln!(
         html,
-        "                <h3 class=\"beyond-head\">{paired} of music21's own tests, timed on both sides<span class=\"detail\">{theirs:.0}s on music21, {ours:.0}s on music21-rs, median {median:.2}&#215;</span></h3>",
+        "                <h3 class=\"beyond-head\">{paired} of music21's own tests, timed on every side<span class=\"detail\">{totals}; {medians}</span></h3>",
         paired = timings.paired,
-        theirs = timings.music21_seconds,
-        ours = timings.music21_rs_seconds,
-        median = timings.median_speedup,
+        totals = timings.totals(),
+        medians = timings
+            .sides
+            .iter()
+            .filter_map(|side| side
+                .median_speedup
+                .map(|median| format!("{} median {median:.2}&#215;", escape(&side.name))))
+            .collect::<Vec<_>>()
+            .join(", "),
     );
-    html.push_str(
-        r#"                <div class="table-wrap">
+    html.push_str(&timing_table(
+        timings,
+        &[
+            ("furthest ahead", &timings.fastest),
+            ("furthest behind", &timings.slowest),
+        ],
+    ));
+    let _ = writeln!(
+        html,
+        "                <p class=\"section-foot\">A test counts only where every side ran it, passed it, and took longer than a millisecond. <em>{ours}</em> is the crate linked into the binary that ran the suite &mdash; the working tree &mdash; and <em>{wheel}</em> is the wheel a caller installs, so what lies between those two columns is the packaging rather than the code. <a href=\"./{page}\">All {paired} tests, side by side &rarr;</a></p>",
+        ours = escape(timings.side_name(1)),
+        wheel = escape(timings.side_name(2)),
+        page = TIMINGS_PAGE,
+        paired = timings.paired,
+    );
+    html
+}
+
+/// One table of timings, however many rows and however many columns.
+///
+/// Shared by the section and the page it links to, so the two cannot drift
+/// apart on what a column means. A group with no label is drawn without a
+/// heading row, which is how the whole list is written.
+fn timing_table(timings: &Timings, groups: &[(&str, &Vec<TestTiming>)]) -> String {
+    let mut html = String::from(
+        "                <div class=\"table-wrap\">
                     <table>
-                        <thead><tr><th>Test</th><th>music21</th><th>music21-rs</th><th>Speedup</th></tr></thead>
-                        <tbody>
-"#,
+                        <thead><tr><th>Test</th>",
     );
-    for (label, rows) in [
-        ("furthest ahead", &timings.fastest),
-        ("furthest behind", &timings.slowest),
-    ] {
-        let _ = writeln!(
-            html,
-            "                            <tr class=\"group-row\"><td colspan=\"4\">{label}</td></tr>"
-        );
-        for row in rows {
+    for side in &timings.sides {
+        let _ = write!(html, "<th class=\"num\">{}</th>", escape(&side.name));
+    }
+    // One speedup column per subject, which is every column but music21's.
+    for side in timings.sides.iter().skip(1) {
+        let _ = write!(html, "<th class=\"num\">{} &#215;</th>", escape(&side.name));
+    }
+    html.push_str(
+        "</tr></thead>
+                        <tbody>
+",
+    );
+    let columns = timings.sides.len() * 2;
+    for (label, rows) in groups {
+        if !label.is_empty() {
+            let _ = writeln!(
+                html,
+                "                            <tr class=\"group-row\"><td colspan=\"{columns}\">{}</td></tr>",
+                escape(label)
+            );
+        }
+        for row in rows.iter() {
             let _ = write!(
                 html,
-                r#"                            <tr>
-                                <td class="name"><code>{name}</code></td>
-                                <td class="num">{theirs}</td>
-                                <td class="num">{ours}</td>
-                                <td class="num">{speedup:.2}&#215;</td>
-                            </tr>
-"#,
+                "                            <tr><td class=\"name\"><code>{name}</code></td>",
                 name = escape(&row.name),
-                theirs = seconds(row.music21_seconds),
-                ours = seconds(row.music21_rs_seconds),
-                speedup = row.speedup,
             );
+            for taken in &row.seconds {
+                let _ = write!(html, "<td class=\"num\">{}</td>", seconds(*taken));
+            }
+            for column in 1..timings.sides.len() {
+                let cell = match row.speedup_of(column) {
+                    Some(speedup) => {
+                        let pill = if speedup >= 1.0 { "good" } else { "bad" };
+                        format!("<span class=\"pill {pill}\">{speedup:.2}&#215;</span>")
+                    }
+                    None => "<span class=\"of\">&mdash;</span>".to_string(),
+                };
+                let _ = write!(html, "<td class=\"num\">{cell}</td>");
+            }
+            html.push_str("</tr>\n");
         }
     }
     html.push_str(
         "                        </tbody>
                     </table>
                 </div>
+",
+    );
+    html
+}
+
+/// The file the whole comparison is written to, beside the report.
+const TIMINGS_PAGE: &str = "timings.html";
+
+/// Every paired test, on a page of its own.
+///
+/// Thousands of rows do not belong in a section read for its totals, but they
+/// are the measurement: a reader who wants to know what one particular test
+/// cost should be able to find out rather than take the tails on trust.
+/// Ordered as the tails are, furthest behind first.
+fn render_timings_page(report: &Report, timings: &Timings) -> String {
+    let mut html = String::new();
+    let _ = write!(
+        html,
+        r#"<!doctype html>
+<html lang="en" class="no-js">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>music21-rs Test Timings</title>
+        <link rel="stylesheet" href="../theme.css" />
+        <style>
+{style}        </style>
+    </head>
+    <body class="page-reports">
+        <main class="shell">
+            <header>
+                <div class="title-row">
+                    <a class="home-link" href="./">Reports</a>
+                    <h1>Test timings</h1>
+                </div>
+                <div class="top-links">
+                    <a href="../docs/music21_rs/index.html">Rust docs</a>
+                    <a href="../python/">Python docs</a>
+                </div>
+            </header>
+            <p class="report-meta">
+                <span>commit <code>{head}</code></span>
+                <span class="sep">/</span>
+                <span>music21 <code>{version}</code></span>
+            </p>
+"#,
+        style = STYLE,
+        head = escape(&report.generated_from),
+        version = escape(&report.music21_version),
+    );
+    html.push_str(&section_head(
+        "timings",
+        "Every test, timed on every side",
+        &escape(&format!("{} paired", timings.paired)),
+    ));
+    let _ = writeln!(
+        html,
+        "                <p class=\"section-foot\">{totals}. A test is here only where every side ran it, passed it, and took longer than a millisecond, so this is fewer tests than the suite runs. Ordered by what the crate made of it, furthest behind first.</p>",
+        totals = timings.totals(),
+    );
+    html.push_str(&timing_table(timings, &[("", &timings.rows)]));
+    html.push_str(
+        "            </section>
+        </main>
+        <script type=\"module\" src=\"../theme.js\"></script>
+    </body>
+</html>
 ",
     );
     html
@@ -2681,7 +2895,31 @@ fn render_html(report: &Report) -> String {
             warn: failed > 0,
         });
     }
-    if let Some(benchmarks) = &report.benchmarks
+    // The headline speedup is read off music21's own suite wherever that has
+    // been run: thousands of tests doing the same work on both sides beats
+    // twenty-one cases written for the purpose, even though it is much the
+    // smaller number — most of what a music21 test does is music21's own code
+    // whichever side it runs on. The benchmark's own figure keeps its place in
+    // the section below, where what it measures is written down beside it.
+    let suite_median = report
+        .timings
+        .as_ref()
+        .filter(|timings| !timings.is_empty())
+        .and_then(|timings| timings.headline().map(|(side, _)| (timings, side)));
+    if let Some((timings, side)) = suite_median {
+        let median = side.median_speedup.unwrap_or(1.0);
+        scores.push(Score {
+            anchor: "speedups",
+            label: "Median speedup",
+            value: format!("{median:.2}\u{d7}"),
+            sub: format!(
+                "{} over music21, across {} of its own tests",
+                side.name, timings.paired
+            ),
+            bar: String::new(),
+            warn: median < 1.0,
+        });
+    } else if let Some(benchmarks) = &report.benchmarks
         && !benchmarks.cases.is_empty()
     {
         let median = median_speedup(&benchmarks.cases);

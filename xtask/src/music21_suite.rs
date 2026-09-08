@@ -2,9 +2,17 @@
 //!
 //! [`crate::downstream`] measures the crate against somebody else's library.
 //! This measures it against music21 itself: every `Test` class and every
-//! docstring in every music21 module, run twice — once on music21, once with
-//! `music21_rs.install_into_music21()` in front of it — with the two sets of
-//! failures compared.
+//! docstring in every music21 module, run three times — once on music21, once
+//! with the crate linked into this binary installed over it, and once with the
+//! wheel out of site-packages installed over it — with each of the two sets of
+//! failures compared against music21's own.
+//!
+//! Two subjects rather than one because they are two artifacts. The linked
+//! crate is the working tree; the wheel is what ships and what a user runs. A
+//! difference between them is a stale wheel or a packaging fault, and it is
+//! worth seeing. The wheel is also the one side that may be absent, on a
+//! machine that has not built one — it is then skipped, with the reason, and
+//! the comparison has one fewer column.
 //!
 //! music21's suite has failures of its own in any given environment (a missing
 //! optional package, a platform difference), so the test is a comparison and
@@ -15,12 +23,12 @@
 //! cargo run --release -p xtask --features python -- music21-suite
 //! ```
 //!
-//! The two runs are separate processes, because installing over music21
+//! The runs are separate processes, because installing over music21
 //! cannot be undone inside one: `install_into_music21` rebinds music21's own
 //! classes wherever they were already imported, and there is no putting that
 //! back. So this command re-runs *itself* with `--run`, once per side. Needs
-//! the `music21` submodule checked out, the `music21_rs` wheel installed, and
-//! music21's own test dependencies — `scipy` and `python-Levenshtein` on top
+//! the `music21` submodule checked out, the `music21_rs` wheel installed for
+//! the third side to run at all, and music21's own test dependencies — `scipy` and `python-Levenshtein` on top
 //! of what music21 itself needs.
 //!
 //! music21's own `testSingleCoreAll.main` is not used: it insists on lilypond
@@ -41,25 +49,44 @@ use crate::bench::add_dependency_venv;
 use crate::fixtures::{scoped_modules, test_modules_for};
 
 /// Which side a `--run` is.
-#[derive(Clone, Copy, PartialEq, Eq)]
+///
+/// Three, not two, because the crate reaches music21 by two different roads
+/// and they are not the same artifact. [`Which::Music21Rs`] is the crate
+/// linked into this very binary — the code in the working tree, whatever it
+/// says today. [`Which::Music21RsWheel`] is the wheel `pip install` put in
+/// site-packages, which is what ships and what a user actually runs. Timing
+/// both against music21 says what the crate costs and what the packaging
+/// costs, and a difference between the two is worth seeing rather than
+/// averaging away.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Which {
     Music21,
     Music21Rs,
+    Music21RsWheel,
 }
+
+/// Every side, in the order they are run and reported in.
+pub const SIDES: [Which; 3] = [Which::Music21, Which::Music21Rs, Which::Music21RsWheel];
 
 impl Which {
     pub fn parse(text: &str) -> Option<Self> {
-        match text {
-            "music21" => Some(Which::Music21),
-            "music21_rs" => Some(Which::Music21Rs),
-            _ => None,
-        }
+        SIDES.into_iter().find(|side| side.name() == text)
     }
 
     fn name(self) -> &'static str {
         match self {
             Which::Music21 => "music21",
             Which::Music21Rs => "music21_rs",
+            Which::Music21RsWheel => "music21_rs_wheel",
+        }
+    }
+
+    /// How the page and the console name it.
+    pub fn label(self) -> &'static str {
+        match self {
+            Which::Music21 => "music21",
+            Which::Music21Rs => "music21-rs",
+            Which::Music21RsWheel => "music21-rs-wheel",
         }
     }
 
@@ -67,9 +94,18 @@ impl Which {
         match self {
             Which::Music21 => "music21.json",
             Which::Music21Rs => "music21_rs.json",
+            Which::Music21RsWheel => "music21_rs_wheel.json",
         }
     }
 }
+
+/// What a `--run` answers when the side it was asked for is not there to run.
+///
+/// Only the wheel can be missing: the other two are the submodule and this
+/// binary. It is a skip and not a failure, so that the command still works on
+/// a machine with no wheel built — the comparison then has one fewer column
+/// and says so.
+const EXIT_SIDE_ABSENT: i32 = 2;
 
 /// The tests that fail under `music21_rs` on purpose, and why.
 ///
@@ -83,13 +119,24 @@ const EXPECTED_DIVERGENCES: &[(&str, &str)] = &[
         "classSet (music21.prebase.ProtoM21Object)",
         "an installed class lists both itself and the class it replaced in \
          classSet, so this doctest counts one more than music21 has. Dropping \
-         the replaced class to make it pass costs 250 of music21's own tests.",
+         the replaced class to make it pass costs 250 of music21's own tests. \
+         Hiding it instead — a frozenset subclass that iterates the six and \
+         matches the seventh — cannot work either: music21 asks the question \
+         as `classFilterSet.intersection(e.classSet)` (stream/base.py:1497, \
+         1512, 4340, 4957, 4962), and set intersection is done in C against \
+         the real contents, so a Python-level __contains__ is never consulted.",
     ),
     (
         "testRagAsawari (music21.scale.test_scale_main.Test.testRagAsawari)",
-        "music21 reads a degree out of its interval network's realization \
-         cache, so the answer depends on what was last asked. Reproducing that \
-         would mean modelling IntervalNetwork's node cache.",
+        "the test asserts a value music21 only answers out of a stale cache. \
+         RagAsawari('c4').pitchFromDegree(1) is C4 on a fresh scale — what \
+         this crate answers — and C1 once nextPitch('c1') has run. The cache \
+         is why: IntervalNetwork._ascendingCache then holds an entry keyed \
+         (Terminus.LOW, 'C4', 'C4', 'C5', False, None) whose first pitch is \
+         C1, a pitch from the earlier C0-C2 realization left in a list whose \
+         own key says C4 to C5. Clearing the two caches restores C4. So this \
+         is an upstream aliasing bug, not a gap here, and passing it would \
+         mean reproducing the bug rather than the music.",
     ),
 ];
 
@@ -162,7 +209,8 @@ pub fn run(
     }
 
     let exe = std::env::current_exe()?;
-    for which in [Which::Music21, Which::Music21Rs] {
+    let mut ran: Vec<Which> = Vec::new();
+    for which in SIDES {
         println!("$ running music21's suite on {}", which.name());
         let mut command = Command::new(&exe);
         command
@@ -176,20 +224,47 @@ pub fn run(
             command.arg("--only").arg(only);
         }
         let status = command.status()?;
-        if !status.success() {
-            eprintln!("the {} run did not finish", which.name());
-            return Ok(1);
+        match status.code() {
+            Some(0) => ran.push(which),
+            // The wheel is the one side that may simply not be there. The
+            // run says so itself and answers this code; nothing else does.
+            Some(code) if code == EXIT_SIDE_ABSENT => {
+                println!("  skipped: {} is not installed", which.name());
+                let _ = fs::remove_file(out.join(which.file()));
+            }
+            _ => {
+                eprintln!("the {} run did not finish", which.name());
+                return Ok(1);
+            }
         }
     }
 
     let plain = read(&out.join(Which::Music21.file()))?;
-    let ours = read(&out.join(Which::Music21Rs.file()))?;
-    if let Some(timings) = compare_timings(&plain, &ours) {
+    let mut sides: Vec<(Which, Report)> = Vec::new();
+    for which in ran.into_iter().filter(|side| *side != Which::Music21) {
+        sides.push((which, read(&out.join(which.file()))?));
+    }
+
+    if let Some(timings) = compare_timings(&plain, &sides) {
         report_timings(&timings);
         let path = out.join("timings.json");
         fs::write(&path, serde_json::to_string_pretty(&timings)?)?;
     }
-    compare(&plain, &ours, only.is_none())
+
+    // Every side that ran is held to music21's own result. The crate reaching
+    // music21 by two roads is two chances to diverge, and averaging them would
+    // hide whichever one broke.
+    let mut code = 0;
+    for (which, report) in &sides {
+        println!();
+        println!("== {} against music21 ==", which.label());
+        code = code.max(compare(&plain, report, only.is_none())?);
+    }
+    if sides.is_empty() {
+        eprintln!("nothing to compare music21 against: no side but music21 ran");
+        return Ok(1);
+    }
+    Ok(code)
 }
 
 fn read(path: &Path) -> Result<Report, Box<dyn Error>> {
@@ -225,10 +300,32 @@ fn run_one(workspace_root: &Path, out: &Path, which: Which, only: Option<&str>) 
             music21.getattr("__file__")?.extract::<String>()?
         );
         clear_corpus_cache(py)?;
-        if which == Which::Music21Rs {
-            let ours = py.import("music21_rs")?;
-            let names: usize = ours.call_method0("install_into_music21")?.extract()?;
-            println!("music21_rs over {names} names");
+        match which {
+            Which::Music21 => {}
+            // The crate compiled into this binary. `install_into_music21`
+            // never needed the wheel — it builds its module in process out of
+            // `register_all` — so calling it here installs the working tree.
+            Which::Music21Rs => {
+                let names = music21_rs_python::install_into_music21(py)?;
+                println!("music21_rs (linked in) over {names} names");
+            }
+            // The wheel `pip install` put in site-packages, which is the
+            // artifact that ships. Absent is a skip, not a failure.
+            Which::Music21RsWheel => match py.import("music21_rs") {
+                Ok(ours) => {
+                    let names: usize = ours.call_method0("install_into_music21")?.extract()?;
+                    let file: String = ours
+                        .getattr("__file__")
+                        .and_then(|file| file.extract())
+                        .unwrap_or_else(|_| "an unnamed place".to_string());
+                    println!("music21_rs {file} over {names} names");
+                }
+                Err(error) if error.is_instance_of::<pyo3::exceptions::PyImportError>(py) => {
+                    println!("the music21_rs wheel is not installed: {error}");
+                    return Ok(EXIT_SIDE_ABSENT);
+                }
+                Err(error) => return Err(error),
+            },
         }
 
         // A one-shot process, so the filter is simply set rather than set and
@@ -486,36 +583,71 @@ fn clear_corpus_cache(py: Python<'_>) -> PyResult<()> {
     Ok(())
 }
 
-/// How the two runs compare in time, test by test.
+/// How the runs compare in time, test by test.
 ///
-/// The suite is already run twice; this is what that pair of runs says about
+/// The suite is already run on every side; this is what that says about
 /// speed. Every case is the same test doing the same work, so unlike a
 /// benchmark written for the purpose there is nothing to argue about in the
 /// comparison — but most of what a music21 test does is music21's own code
 /// either way, so the middle of the distribution sits near parity by
 /// construction. The tails are the part worth reading.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+///
+/// A test counts only where every side ran it, passed it, and took long
+/// enough to time. Three columns of which one is blank say less than two
+/// columns that are both real.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Timings {
-    /// Tests timed on both sides, passing on both, and slow enough to time.
+    /// Tests timed on every side, passing on every side, and slow enough to
+    /// time.
+    #[serde(default)]
     pub paired: usize,
-    /// Total seconds those tests took, each way.
-    pub music21_seconds: f64,
-    pub music21_rs_seconds: f64,
-    pub median_speedup: f64,
+    /// The sides, in column order, music21 first.
+    #[serde(default)]
+    pub sides: Vec<SideTotal>,
+    /// Every paired test, worst first by the headline speedup. The report
+    /// shows the two tails and puts the whole of it on a page of its own.
+    #[serde(default)]
+    pub rows: Vec<TestTiming>,
     /// The tests where the crate is furthest ahead, and furthest behind.
+    #[serde(default)]
     pub fastest: Vec<TestTiming>,
+    #[serde(default)]
     pub slowest: Vec<TestTiming>,
+}
+
+/// One column: a side, what it spent, and how that compares to music21.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SideTotal {
+    /// `music21`, `music21-rs`, `music21-rs-wheel`.
+    pub name: String,
+    /// Total seconds the paired tests took on this side.
+    pub seconds: f64,
+    /// The median of this side's per-test speedup against music21. Absent for
+    /// music21 itself, which is the thing being compared against.
+    pub median_speedup: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TestTiming {
     pub name: String,
-    pub music21_seconds: f64,
-    pub music21_rs_seconds: f64,
+    /// One duration per side, in the order [`Timings::sides`] gives them.
+    pub seconds: Vec<f64>,
+    /// music21's time over the first side that is not music21 — the crate as
+    /// it is compiled here, where it ran. What the tails are ordered by.
     pub speedup: f64,
 }
 
-/// Below this a duration is mostly the timer, not the test. Both sides have
+impl TestTiming {
+    /// This test's speedup on one column against music21.
+    #[must_use]
+    pub fn speedup_of(&self, side: usize) -> Option<f64> {
+        let theirs = *self.seconds.first()?;
+        let mine = *self.seconds.get(side)?;
+        (side > 0).then(|| theirs / mine.max(f64::MIN_POSITIVE))
+    }
+}
+
+/// Below this a duration is mostly the timer, not the test. Every side has
 /// to clear it: a ratio taken against a denominator of a few microseconds
 /// says more about the clock than about either implementation, and letting
 /// those through put a 277x at the head of the list off a test that took
@@ -525,7 +657,16 @@ const TOO_QUICK_TO_TIME: f64 = 0.001;
 /// How many of each tail to keep.
 const TAIL: usize = 12;
 
-fn compare_timings(plain: &Report, ours: &Report) -> Option<Timings> {
+/// The median of a list that need not be sorted.
+fn median(values: &mut [f64]) -> f64 {
+    values.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    values.get(values.len() / 2).copied().unwrap_or(1.0)
+}
+
+fn compare_timings(plain: &Report, others: &[(Which, Report)]) -> Option<Timings> {
+    if others.is_empty() {
+        return None;
+    }
     let bad = |report: &Report| {
         report
             .bad()
@@ -533,28 +674,38 @@ fn compare_timings(plain: &Report, ours: &Report) -> Option<Timings> {
             .map(|s| s.to_string())
             .collect::<BTreeSet<_>>()
     };
-    let (theirs_bad, ours_bad) = (bad(plain), bad(ours));
+    let theirs_bad = bad(plain);
+    let others_bad: Vec<BTreeSet<String>> = others.iter().map(|(_, report)| bad(report)).collect();
+
     let mut rows: Vec<TestTiming> = Vec::new();
-    let mut music21_seconds = 0.0;
-    let mut music21_rs_seconds = 0.0;
+    let mut totals = vec![0.0; others.len() + 1];
     for (name, theirs) in &plain.durations {
-        let Some(mine) = ours.durations.get(name) else {
-            continue;
-        };
-        // A test that failed did not do the work the other side did.
-        if theirs_bad.contains(name) || ours_bad.contains(name) {
+        if theirs_bad.contains(name) || *theirs < TOO_QUICK_TO_TIME {
             continue;
         }
-        if *theirs < TOO_QUICK_TO_TIME || *mine < TOO_QUICK_TO_TIME {
+        // Every side or none: a row with a hole in it cannot be compared
+        // across, and the tests missing from one side are the ones it failed.
+        let mut seconds = vec![*theirs];
+        let complete = others.iter().zip(&others_bad).all(|((_, report), bad)| {
+            match report.durations.get(name) {
+                Some(mine) if *mine >= TOO_QUICK_TO_TIME && !bad.contains(name) => {
+                    seconds.push(*mine);
+                    true
+                }
+                _ => false,
+            }
+        });
+        if !complete {
             continue;
         }
-        music21_seconds += theirs;
-        music21_rs_seconds += mine;
+        for (total, taken) in totals.iter_mut().zip(&seconds) {
+            *total += taken;
+        }
+        let speedup = theirs / seconds[1].max(f64::MIN_POSITIVE);
         rows.push(TestTiming {
             name: name.clone(),
-            music21_seconds: *theirs,
-            music21_rs_seconds: *mine,
-            speedup: theirs / mine.max(f64::MIN_POSITIVE),
+            seconds,
+            speedup,
         });
     }
     if rows.is_empty() {
@@ -565,26 +716,55 @@ fn compare_timings(plain: &Report, ours: &Report) -> Option<Timings> {
             .partial_cmp(&b.speedup)
             .unwrap_or(std::cmp::Ordering::Equal)
     });
-    let median = rows[rows.len() / 2].speedup;
+
+    let mut sides = vec![SideTotal {
+        name: Which::Music21.label().to_string(),
+        seconds: totals[0],
+        median_speedup: None,
+    }];
+    for (index, (which, _)) in others.iter().enumerate() {
+        let mut ratios: Vec<f64> = rows
+            .iter()
+            .filter_map(|row| row.speedup_of(index + 1))
+            .collect();
+        sides.push(SideTotal {
+            name: which.label().to_string(),
+            seconds: totals[index + 1],
+            median_speedup: Some(median(&mut ratios)),
+        });
+    }
+
     let slowest = rows.iter().take(TAIL).cloned().collect();
     let fastest = rows.iter().rev().take(TAIL).cloned().collect();
     Some(Timings {
         paired: rows.len(),
-        music21_seconds,
-        music21_rs_seconds,
-        median_speedup: median,
+        sides,
+        rows,
         fastest,
         slowest,
     })
 }
 
-/// Prints what the pair of runs said about time.
+/// Prints what the runs said about time.
 fn report_timings(timings: &Timings) {
     println!();
+    let totals = timings
+        .sides
+        .iter()
+        .map(|side| format!("{:.1}s on {}", side.seconds, side.name))
+        .collect::<Vec<_>>()
+        .join(", ");
     println!(
-        "  {} of music21's own tests timed on both sides: {:.1}s on music21, {:.1}s on music21_rs, median {:.2}x",
-        timings.paired, timings.music21_seconds, timings.music21_rs_seconds, timings.median_speedup
+        "  {} of music21's own tests timed on every side: {totals}",
+        timings.paired
     );
+    for side in timings.sides.iter().skip(1) {
+        println!(
+            "    {} median {:.2}x",
+            side.name,
+            side.median_speedup.unwrap_or(1.0)
+        );
+    }
     for (label, rows) in [
         ("furthest ahead", &timings.fastest),
         ("furthest behind", &timings.slowest),
@@ -592,10 +772,13 @@ fn report_timings(timings: &Timings) {
         println!();
         println!("  {label}:");
         for row in rows {
-            println!(
-                "    {:>6.2}x  {:>8.3}s -> {:>8.3}s  {}",
-                row.speedup, row.music21_seconds, row.music21_rs_seconds, row.name
-            );
+            let times = row
+                .seconds
+                .iter()
+                .map(|taken| format!("{taken:>8.3}s"))
+                .collect::<Vec<_>>()
+                .join(" ->");
+            println!("    {:>6.2}x  {times}  {}", row.speedup, row.name);
         }
     }
 }
@@ -730,7 +913,79 @@ mod tests {
     fn a_side_is_named_by_the_flag_it_is_asked_for() {
         assert!(matches!(Which::parse("music21"), Some(Which::Music21)));
         assert!(matches!(Which::parse("music21_rs"), Some(Which::Music21Rs)));
+        assert!(matches!(
+            Which::parse("music21_rs_wheel"),
+            Some(Which::Music21RsWheel)
+        ));
         assert!(Which::parse("neither").is_none());
         assert_eq!(Which::Music21Rs.file(), "music21_rs.json");
+        // Every side has a name, a label and a file of its own, or one run
+        // would overwrite another's results.
+        let files: BTreeSet<&str> = SIDES.iter().map(|side| side.file()).collect();
+        assert_eq!(files.len(), SIDES.len());
+    }
+
+    fn timed(run: usize, durations: &[(&str, f64)]) -> Report {
+        let mut report = report(run, &[], &[]);
+        report.durations = durations
+            .iter()
+            .map(|(name, seconds)| ((*name).to_string(), *seconds))
+            .collect();
+        report
+    }
+
+    #[test]
+    fn a_test_is_timed_only_where_every_side_ran_it() {
+        let plain = timed(3, &[("slow", 1.0), ("only_here", 1.0), ("blink", 0.0001)]);
+        let linked = timed(3, &[("slow", 0.5), ("blink", 0.0001)]);
+        let wheel = timed(3, &[("slow", 0.25), ("only_here", 1.0)]);
+        let timings = compare_timings(
+            &plain,
+            &[(Which::Music21Rs, linked), (Which::Music21RsWheel, wheel)],
+        )
+        .expect("a comparison");
+
+        // `only_here` is missing from one side and `blink` is under the
+        // timer's floor, so one test is left.
+        assert_eq!(timings.paired, 1);
+        assert_eq!(timings.rows[0].name, "slow");
+        assert_eq!(timings.rows[0].seconds, vec![1.0, 0.5, 0.25]);
+
+        // Three columns, music21 first, each with its own total.
+        let names: Vec<&str> = timings
+            .sides
+            .iter()
+            .map(|side| side.name.as_str())
+            .collect();
+        assert_eq!(names, vec!["music21", "music21-rs", "music21-rs-wheel"]);
+        assert_eq!(timings.sides[0].median_speedup, None);
+        assert_eq!(timings.sides[1].median_speedup, Some(2.0));
+        assert_eq!(timings.sides[2].median_speedup, Some(4.0));
+        assert_eq!(timings.sides[2].seconds, 0.25);
+
+        // The headline is the linked crate, and each column reads its own.
+        assert!((timings.rows[0].speedup - 2.0).abs() < 1e-9);
+        assert_eq!(timings.rows[0].speedup_of(0), None);
+        assert_eq!(timings.rows[0].speedup_of(2), Some(4.0));
+    }
+
+    #[test]
+    fn a_test_that_failed_somewhere_is_not_timed() {
+        let plain = timed(2, &[("a", 1.0), ("b", 1.0)]);
+        let mut ours = timed(2, &[("a", 0.5), ("b", 0.5)]);
+        ours.failures.push("b".to_string());
+        let timings = compare_timings(&plain, &[(Which::Music21Rs, ours)]).expect("a comparison");
+        assert_eq!(timings.paired, 1);
+        assert_eq!(timings.rows[0].name, "a");
+    }
+
+    #[test]
+    fn nothing_to_compare_against_is_no_comparison() {
+        let plain = timed(1, &[("a", 1.0)]);
+        assert!(compare_timings(&plain, &[]).is_none());
+        // Nothing paired is the same answer: a table with no rows says less
+        // than no table at all.
+        let ours = timed(1, &[("b", 1.0)]);
+        assert!(compare_timings(&plain, &[(Which::Music21Rs, ours)]).is_none());
     }
 }

@@ -630,6 +630,13 @@ jobs:
               if missing_needles:
                   joined = ", ".join(missing_needles)
                   raise SystemExit(f"{name} is missing expected demo references: {joined}")
+
+          # The timings page exists only where music21's own suite was timed,
+          # so it cannot simply be required. What can be required is that the
+          # report and the page agree: a report that links to it must ship it.
+          report = (root / "reports/index.html").read_text(encoding="utf-8")
+          if "./timings.html" in report and not (root / "reports/timings.html").is_file():
+              raise SystemExit("reports/index.html links to timings.html, which was not built")
           PY
 
       - name: Configure Pages

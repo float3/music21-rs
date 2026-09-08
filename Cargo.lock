@@ -957,6 +957,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "music21-rs-python"
+version = "0.3.0"
+dependencies = [
+ "music21-rs",
+ "pyo3",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "music21-rs-web"
 version = "0.0.0"
 dependencies = [
@@ -2680,6 +2690,7 @@ name = "xtask"
 version = "0.1.0"
 dependencies = [
  "music21-rs",
+ "music21-rs-python",
  "proc-macro2",
  "pyo3",
  "quote",
