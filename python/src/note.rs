@@ -62,6 +62,35 @@ pub(crate) fn named_with_duration(holder: &Bound<'_, PyAny>, named: &str, value:
     named.replacen(value, &written, 1)
 }
 
+/// Whether two lists of ornaments or marks hold the same kinds of thing.
+///
+/// music21 compares them by class rather than by object, and by set as well
+/// as by count, which is how a note that has been given a turn stops being
+/// equal to the same note without one.
+pub(crate) fn same_kinds(
+    py: Python<'_>,
+    mine: Option<&Py<PyList>>,
+    theirs: Option<&Py<PyList>>,
+) -> PyResult<bool> {
+    let kinds = |list: Option<&Py<PyList>>| -> PyResult<Vec<Py<PyAny>>> {
+        let Some(list) = list else {
+            return Ok(Vec::new());
+        };
+        list.bind(py)
+            .iter()
+            .map(|item| Ok(item.get_type().into_any().unbind()))
+            .collect()
+    };
+    let (mine, theirs) = (kinds(mine)?, kinds(theirs)?);
+    if mine.len() != theirs.len() {
+        return Ok(false);
+    }
+    let set = |kinds: Vec<Py<PyAny>>| -> PyResult<Bound<'_, PyAny>> {
+        py.import("builtins")?.getattr("set")?.call1((kinds,))
+    };
+    set(mine)?.eq(set(theirs)?)
+}
+
 /// A number written the way music21's `common.mixedNumeral` writes it: a
 /// whole number where it is one, and a whole number and a fraction where the
 /// two are both there.
@@ -3443,18 +3472,31 @@ impl Note {
     /// music21 compares two notes on what it lists as their equality
     /// attributes: the pitch, the duration, the tie, and how the note is
     /// written — its notehead and its beams. What is sung to it and how loud
-    /// it is do not count.
-    fn __eq__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> bool {
-        other.extract::<PyRef<Note>>().is_ok_and(|other| {
-            let (mine, theirs) = (self.synced(py), other.synced(py));
-            mine.pitch() == theirs.pitch()
-                && self.quarter_length(py) == other.quarter_length(py)
-                && mine.tie() == theirs.tie()
-                && mine.notehead() == theirs.notehead()
-                && mine.notehead_fill() == theirs.notehead_fill()
-                && mine.notehead_parenthesis() == theirs.notehead_parenthesis()
-                && mine.beams() == theirs.beams()
-        })
+    /// it is do not count; the ornaments over it and the marks under it do,
+    /// by their kinds rather than by the objects themselves.
+    fn __eq__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<bool> {
+        let Ok(other) = other.extract::<PyRef<Note>>() else {
+            return Ok(false);
+        };
+        let (mine, theirs) = (self.synced(py), other.synced(py));
+        let same = mine.pitch() == theirs.pitch()
+            && self.quarter_length(py) == other.quarter_length(py)
+            && mine.tie() == theirs.tie()
+            && mine.notehead() == theirs.notehead()
+            && mine.notehead_fill() == theirs.notehead_fill()
+            && mine.notehead_parenthesis() == theirs.notehead_parenthesis()
+            && mine.beams() == theirs.beams();
+        if !same {
+            return Ok(false);
+        }
+        Ok(
+            same_kinds(py, self.expressions.as_ref(), other.expressions.as_ref())?
+                && same_kinds(
+                    py,
+                    self.articulations.as_ref(),
+                    other.articulations.as_ref(),
+                )?,
+        )
     }
 
     fn __lt__(slf: &Bound<'_, Self>, other: &Bound<'_, PyAny>) -> PyResult<bool> {

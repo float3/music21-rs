@@ -2694,7 +2694,19 @@ impl Chord {
             .collect();
         ours.sort();
         theirs.sort();
-        ours == theirs
+        if ours != theirs {
+            return false;
+        }
+        // As on a note: the ornaments over it and the marks under it count,
+        // by their kinds.
+        crate::note::same_kinds(py, self.expressions.as_ref(), other.expressions.as_ref())
+            .unwrap_or(false)
+            && crate::note::same_kinds(
+                py,
+                self.articulations.as_ref(),
+                other.articulations.as_ref(),
+            )
+            .unwrap_or(false)
     }
 
     fn __hash__(slf: &Bound<'_, Self>) -> isize {
