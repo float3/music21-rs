@@ -1270,6 +1270,14 @@ pub struct Volume {
     /// a volume that has a client is copied rather than stolen — so without
     /// it music21's own `NotRest` cannot take one of ours at all.
     client: Option<Py<PyAny>>,
+    /// music21's `_cachedRealized`: the last answer `getRealized` gave.
+    ///
+    /// Realizing a volume means searching the stream for the dynamic in
+    /// force, which is slow, so music21 keeps the answer and hands it back
+    /// until something realizes it again. Its own `realizeVolume` walks a
+    /// score realizing every note once so that the cache is what the score
+    /// says.
+    cached: Option<f64>,
 }
 
 impl Volume {
@@ -1277,6 +1285,7 @@ impl Volume {
         Self {
             inner,
             client: None,
+            cached: None,
         }
     }
 
@@ -1334,6 +1343,7 @@ impl Volume {
         Self {
             inner,
             client: Some(client),
+            cached: None,
         }
     }
 }
@@ -1346,6 +1356,7 @@ impl Clone for Volume {
         Python::attach(|py| Self {
             inner: self.inner.clone(),
             client: self.client.as_ref().map(|client| client.clone_ref(py)),
+            cached: self.cached,
         })
     }
 }
@@ -1475,14 +1486,19 @@ impl Volume {
         self.inner.realized()
     }
 
+    /// music21's `cachedRealized`: the last answer, or a fresh one where
+    /// nothing has realized this volume yet.
     #[getter]
-    fn cachedRealized(&self) -> f64 {
-        self.inner.realized()
+    fn cachedRealized(&mut self, py: Python<'_>) -> PyResult<f64> {
+        if let Some(cached) = self.cached {
+            return Ok(cached);
+        }
+        self.getRealized(py, None, true, None, 0.5, true)
     }
 
     #[getter]
-    fn cachedRealizedStr(&self) -> String {
-        self.inner.realized_str()
+    fn cachedRealizedStr(&mut self, py: Python<'_>) -> PyResult<String> {
+        Ok(music21_rs::volume::rounded_str(self.cachedRealized(py)?))
     }
 
     /// music21's `mergeAttributes`: everything the other volume says except
@@ -1524,7 +1540,7 @@ impl Volume {
         clip = true,
     ))]
     fn getRealized(
-        &self,
+        &mut self,
         py: Python<'_>,
         useDynamicContext: Option<&Bound<'_, PyAny>>,
         useVelocity: bool,
@@ -1536,12 +1552,16 @@ impl Volume {
         if !useVelocity {
             volume.set_velocity(None);
         }
-        Ok(volume.realized_with(
+        let realized = volume.realized_with(
             self.dynamic_scalar(py, useDynamicContext)?,
             self.articulation_shift(py, useArticulations)?,
             baseLevel,
             clip,
-        ))
+        );
+        // music21 keeps every answer, which is what `realizeVolume` walks a
+        // score to fill in.
+        self.cached = Some(realized);
+        Ok(realized)
     }
 
     #[pyo3(signature = (
@@ -1552,7 +1572,7 @@ impl Volume {
         clip = true,
     ))]
     fn getRealizedStr(
-        &self,
+        &mut self,
         py: Python<'_>,
         useDynamicContext: Option<&Bound<'_, PyAny>>,
         useVelocity: bool,

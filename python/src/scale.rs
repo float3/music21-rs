@@ -608,6 +608,35 @@ impl ConcreteScale {
         direction: Option<&Bound<'_, PyAny>>,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Vec<Pitch>> {
+        if is_bidirectional(direction) {
+            let scale = self.realized_anywhere();
+            let up = scale.pitches().map_err(scale_error)?;
+            let mut down = scale.descending().pitches().map_err(scale_error)?;
+            down.sort_by(|left, right| {
+                left.ps()
+                    .partial_cmp(&right.ps())
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+            let mut both = Vec::with_capacity(up.len() * 2);
+            for (index, rising) in up.iter().enumerate() {
+                let falling = down.get(index);
+                both.push(rising.clone());
+                if let Some(falling) = falling
+                    && falling.name_with_octave() != rising.name_with_octave()
+                {
+                    both.push(falling.clone());
+                }
+            }
+            let range = (
+                minPitch.filter(|value| !value.is_none()),
+                maxPitch.filter(|value| !value.is_none()),
+            );
+            if let (Some(low), Some(high)) = range {
+                let (low, high) = (pitch_from_any(low)?, pitch_from_any(high)?);
+                both.retain(|pitch| pitch.ps() >= low.ps() && pitch.ps() <= high.ps());
+            }
+            return Ok(wrap_pitches(both));
+        }
         let descending = is_descending(direction);
         let (Some(low), Some(high)) = (
             minPitch.filter(|value| !value.is_none()),
@@ -806,15 +835,16 @@ impl ConcreteScale {
     }
 
     /// music21's `pitchesFromScaleDegrees`.
-    #[pyo3(signature = (degreeTargets, minPitch = None, maxPitch = None, **_keywords))]
+    #[pyo3(signature = (degreeTargets, minPitch = None, maxPitch = None, direction = None, **_keywords))]
     fn pitchesFromScaleDegrees(
         &self,
         degreeTargets: Vec<usize>,
         minPitch: Option<&Bound<'_, PyAny>>,
         maxPitch: Option<&Bound<'_, PyAny>>,
+        direction: Option<&Bound<'_, PyAny>>,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Vec<Pitch>> {
-        let scale = self.realized()?;
+        let scale = self.heard(direction)?;
         let (Some(low), Some(high)) = (
             minPitch.filter(|value| !value.is_none()),
             maxPitch.filter(|value| !value.is_none()),
@@ -849,17 +879,27 @@ impl ConcreteScale {
 
     /// music21's `isNext`: whether one pitch is so many degrees above another
     /// in this scale.
-    #[pyo3(signature = (other, pitchOrigin, direction = None, stepSize = 1, **_keywords))]
+    #[pyo3(signature = (
+        other,
+        pitchOrigin,
+        direction = None,
+        stepSize = 1,
+        getNeighbor = None,
+        comparisonAttribute = "name",
+        **_keywords
+    ))]
     fn isNext(
         &self,
         other: &Bound<'_, PyAny>,
         pitchOrigin: &Bound<'_, PyAny>,
         direction: Option<&Bound<'_, PyAny>>,
         stepSize: usize,
+        getNeighbor: Option<&Bound<'_, PyAny>>,
+        comparisonAttribute: &str,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<bool> {
-        let _ = direction;
-        self.realized()?
+        let _ = (getNeighbor, comparisonAttribute);
+        self.heard(direction)?
             .is_next(
                 &pitch_from_any(other)?,
                 &pitch_from_any(pitchOrigin)?,
@@ -871,9 +911,10 @@ impl ConcreteScale {
     /// music21's `pitchFromDegree`: the pitch at a scale degree, counting the
     /// tonic as one.
     ///
-    /// The range and the direction are music21's, and are ignored here: the
-    /// scale is realized from its tonic either way, and the crate has no
-    /// bounded realization to narrow.
+    /// The range is music21's and is ignored here: the scale is realized
+    /// from its tonic either way, and the crate has no bounded realization
+    /// to narrow. The direction is read, since a scale that falls
+    /// differently names its degrees differently coming down.
     #[pyo3(signature = (
         degree,
         minPitch = None,
@@ -889,8 +930,8 @@ impl ConcreteScale {
         direction: Option<&Bound<'_, PyAny>>,
         equateTermini: bool,
     ) -> PyResult<Pitch> {
-        let _ = (minPitch, maxPitch, direction, equateTermini);
-        self.realized()?
+        let _ = (minPitch, maxPitch, equateTermini);
+        self.heard(direction)?
             .pitch_at_degree(degree)
             .map(|pitch| Pitch::wrap(pitch, false))
             .map_err(scale_error)
@@ -930,17 +971,34 @@ impl ConcreteScale {
 
     /// music21's `getScaleDegreeFromPitch`: which degree a pitch is, or
     /// nothing when it is not in the scale.
-    #[pyo3(signature = (pitchTarget, comparisonAttribute = "name", direction = None, **_keywords))]
+    #[pyo3(signature = (pitchTarget, direction = None, comparisonAttribute = "name", **_keywords))]
     fn getScaleDegreeFromPitch(
         &self,
         pitchTarget: &Bound<'_, PyAny>,
-        comparisonAttribute: &str,
         direction: Option<&Bound<'_, PyAny>>,
+        comparisonAttribute: &str,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Option<usize>> {
         let pitch = pitch_from_any(pitchTarget)?;
+        let comparison = comparison_of(comparisonAttribute);
+        // Read in both directions, a degree is whichever of the two spellings
+        // the pitch matches: `G` and `G#` are both the seventh of A melodic
+        // minor.
+        if is_bidirectional(direction) {
+            let scale = self.realized_anywhere();
+            if let Some(degree) = scale
+                .degree_of_by(&pitch, comparison)
+                .map_err(scale_error)?
+            {
+                return Ok(Some(degree));
+            }
+            return scale
+                .descending()
+                .degree_of_by(&pitch, comparison)
+                .map_err(scale_error);
+        }
         self.heard(direction)?
-            .degree_of_by(&pitch, comparison_of(comparisonAttribute))
+            .degree_of_by(&pitch, comparison)
             .map_err(scale_error)
     }
 
@@ -973,23 +1031,33 @@ impl ConcreteScale {
     }
 
     /// music21's `nextPitch`: the pitch so many steps along the scale.
-    #[pyo3(signature = (pitchOrigin = None, direction = None, stepSize = 1, **_keywords))]
+    #[pyo3(signature = (
+        pitchOrigin = None,
+        direction = None,
+        stepSize = 1,
+        getNeighbor = None,
+        **_keywords
+    ))]
     fn nextPitch(
         &self,
         pitchOrigin: Option<&Bound<'_, PyAny>>,
         direction: Option<&Bound<'_, PyAny>>,
         stepSize: usize,
+        getNeighbor: Option<&Bound<'_, PyAny>>,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Pitch> {
+        let _ = getNeighbor;
         let origin = match pitchOrigin.filter(|value| !value.is_none()) {
             Some(value) => pitch_from_any(value)?,
             None => self.inner.tonic().clone(),
         };
-        let descending = is_descending(direction);
-        let moved = if descending {
-            self.inner.next_pitch_below(&origin, stepSize)
+        // Coming down, a scale that falls differently is read in its falling
+        // form: the note below G in A melodic minor is F, not F sharp.
+        let scale = self.heard(direction)?;
+        let moved = if is_descending(direction) {
+            scale.next_pitch_below(&origin, stepSize)
         } else {
-            self.inner.next_pitch_above(&origin, stepSize)
+            scale.next_pitch_above(&origin, stepSize)
         };
         moved
             .map(|pitch| Pitch::wrap(pitch, false))
@@ -1226,6 +1294,19 @@ fn is_descending(direction: Option<&Bound<'_, PyAny>>) -> bool {
             .map(|name| name.to_string_lossy().to_lowercase().contains("descending"))
             .unwrap_or(false)
             || direction.extract::<i32>().is_ok_and(|value| value < 0)
+    })
+}
+
+/// Whether the caller asked for the scale in both directions at once:
+/// music21's `Direction.BI`, which realizes a scale that rises and falls
+/// differently as both, with each degree named the ascending way and then
+/// the descending way where the two disagree.
+fn is_bidirectional(direction: Option<&Bound<'_, PyAny>>) -> bool {
+    direction.is_some_and(|direction| {
+        direction
+            .str()
+            .map(|name| name.to_string_lossy().to_lowercase().ends_with(".bi"))
+            .unwrap_or(false)
     })
 }
 
