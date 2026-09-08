@@ -1,13 +1,25 @@
 /// Tuning systems whose frequencies depend on the harmonic context they
 /// sound in, rather than on a fixed table.
 pub mod adaptive;
+/// Equal divisions of any interval, not only of the octave.
+pub mod equal;
 mod generated;
+/// Monzos and vals, the vectors regular temperament theory is written in.
+pub mod monzo;
+/// Moments of symmetry, the scales a single generator makes.
+pub mod mos;
 /// Runtime parsing of Scala `.scl` scale files.
 pub mod scala;
 #[cfg(feature = "scala-archive")]
 pub mod scala_bundled;
+/// Rank-2 regular temperaments, a period and a generator over a mapping.
+pub mod temperament;
 
+pub use equal::{EqualDivision, TRITAVE_CENTS};
 pub use generated::*;
+pub use monzo::{Monzo, PRIMES, Val};
+pub use mos::{Mos, MosScale, OCTAVE_CENTS, moment_of_symmetry_sizes};
+pub use temperament::Temperament;
 
 use crate::defaults::{FloatType, IntegerType, UnsignedIntegerType};
 use crate::error::{Error, Result};

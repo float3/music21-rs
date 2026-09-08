@@ -132,8 +132,9 @@ pub use sieve::Sieve;
 pub use stream::{Stream, StreamElement, StreamEvent, StreamKind};
 pub use tempo::{DEFAULT_TEMPO_VALUES, MetronomeMark, convert_tempo_by_referent};
 pub use tuningsystem::{
-    ALL_TUNING_SYSTEMS, COMMON_EQUAL_TEMPERAMENTS, COMMON_TWELVE_TONE_TUNING_SYSTEMS, Fraction,
-    HISTORICAL_TEMPERAMENTS, TuningSystem,
+    ALL_TUNING_SYSTEMS, COMMON_EQUAL_TEMPERAMENTS, COMMON_TWELVE_TONE_TUNING_SYSTEMS,
+    EqualDivision, Fraction, HISTORICAL_TEMPERAMENTS, Monzo, Mos, MosScale, OCTAVE_CENTS,
+    TRITAVE_CENTS, Temperament, TuningSystem, Val, moment_of_symmetry_sizes,
     scala::{ScalaArchive, ScalaDegree, ScalaScale},
 };
 pub use voiceleading::{MotionType, VoiceLeadingQuartet};
