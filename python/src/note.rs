@@ -32,7 +32,7 @@ pub const NAMES: &[&str] = &[
 /// swapped into music21's: music21's own are richer than these and already
 /// pass their docstrings, and replacing a working implementation with a
 /// thinner one costs more than it gains.
-pub const DURATION_NAMES: &[&str] = &["Duration"];
+pub const DURATION_NAMES: &[&str] = &["Duration", "GraceDuration", "AppoggiaturaDuration"];
 
 pyo3::create_exception!(music21_rs_facade, NoteException, crate::Music21Exception);
 pyo3::create_exception!(music21_rs_facade, NotRestException, crate::Music21Exception);
@@ -1298,7 +1298,14 @@ impl Duration {
         let was = self.inner.quarter_length();
         if !self.linked {
             self.inner = RsDuration::new(value).map_err(duration_error)?;
-        } else {
+        } else if value != was || self.components.is_none() || self.get_type(py)? == "inexpressible"
+        {
+            // Only a length that has actually changed throws away the
+            // written values: music21 leaves them alone otherwise, and its
+            // own notation code sets a duration to the length it already has
+            // — which would have cost a note the tuplets it was written in.
+            // A length nothing can write is the exception, and setting one to
+            // itself is how music21 asks for it to be worked out again.
             self.reinfer();
             self.expression_is_inferred = true;
             self.inner.set_quarter_length(value).map_err(note_error)?;
@@ -1725,27 +1732,49 @@ impl Duration {
             steal_following: None,
             make_time: false,
         };
-        let grace = if appoggiatura {
-            Py::new(
+        if appoggiatura {
+            let marks = GraceDuration {
+                slash: false,
+                steal_previous: None,
+                steal_following: None,
+                make_time: false,
+            };
+            if let Some(class) =
+                crate::installed_class(py, "music21.duration", "AppoggiaturaDuration")
+            {
+                let object = crate::blank_installed(&class)?;
+                {
+                    let cell = object.cast::<AppoggiaturaDuration>()?;
+                    let mut me = cell.borrow_mut();
+                    let graces = me.as_super();
+                    **graces.as_super() = grace;
+                    **graces = marks;
+                }
+                return Ok(object.unbind());
+            }
+            return Ok(Py::new(
                 py,
                 PyClassInitializer::from(grace)
-                    .add_subclass(GraceDuration {
-                        slash: false,
-                        steal_previous: None,
-                        steal_following: None,
-                        make_time: false,
-                    })
+                    .add_subclass(marks)
                     .add_subclass(AppoggiaturaDuration),
             )?
-            .into_any()
-        } else {
-            Py::new(
-                py,
-                PyClassInitializer::from(grace).add_subclass(initializer),
-            )?
-            .into_any()
-        };
-        Ok(grace)
+            .into_any());
+        }
+        if let Some(class) = crate::installed_class(py, "music21.duration", "GraceDuration") {
+            let object = crate::blank_installed(&class)?;
+            {
+                let cell = object.cast::<GraceDuration>()?;
+                let mut me = cell.borrow_mut();
+                **me.as_super() = grace;
+                *me = initializer;
+            }
+            return Ok(object.unbind());
+        }
+        Ok(Py::new(
+            py,
+            PyClassInitializer::from(grace).add_subclass(initializer),
+        )?
+        .into_any())
     }
 
     /// music21's `dots`: how many dots the first written value carries.
@@ -1942,14 +1971,32 @@ pub struct GraceDuration {
 #[pymethods]
 impl GraceDuration {
     #[new]
+    /// music21's `GraceDuration.__init__`: the written value it is given is
+    /// kept and given no length, so a grace note written as a half note
+    /// still says it is one while sounding for nothing at all. A grace note
+    /// nobody has written a value for is an eighth.
     #[pyo3(signature = (value = None, **keywords))]
     fn new(
+        py: Python<'_>,
         value: Option<&Bound<'_, PyAny>>,
         keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<PyClassInitializer<Self>> {
         let mut base = Duration::new(value, keywords)?;
+        let mut written = base.get_type(py)?;
+        if written == "zero" {
+            written = "eighth".to_string();
+        }
+        let mut components: Vec<DurationTuple> = base
+            .component_list_materialized(py)?
+            .into_iter()
+            .map(|component| DurationTuple::new(component.r#type(), component.dots(), 0.0))
+            .collect();
+        if components.is_empty() {
+            components.push(DurationTuple::new("eighth".to_string(), 0, 0.0));
+        }
+        base.components = Some(components);
         base.linked = false;
-        base.unlinked_type = Some("eighth".to_string());
+        base.unlinked_type = Some(written);
         base.inner = RsDuration::new(0.0).map_err(duration_error)?;
         Ok(PyClassInitializer::from(base).add_subclass(Self {
             slash: true,
@@ -2028,10 +2075,11 @@ impl AppoggiaturaDuration {
     #[new]
     #[pyo3(signature = (value = None, **keywords))]
     fn new(
+        py: Python<'_>,
         value: Option<&Bound<'_, PyAny>>,
         keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<PyClassInitializer<Self>> {
-        Ok(GraceDuration::new(value, keywords)?.add_subclass(Self))
+        Ok(GraceDuration::new(py, value, keywords)?.add_subclass(Self))
     }
 }
 
