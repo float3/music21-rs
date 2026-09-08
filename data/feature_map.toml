@@ -296,6 +296,57 @@ represent = "compression and segment formats have no caller here"
 
 [[class]]
 python = "note.py"
+name = "GeneralNote"
+rust = ["src/note/mod.rs", "src/notation.rs", "src/duration.rs"]
+note = "What every written note and chord has: a length, what is sung to it, and the marks over it. The crate has no type of its own for it -- the GeneralNote to NotRest to Note chain was mirrored here once as wrapper structs and taken out again -- so its members are matched against the types that carry them."
+
+[[class]]
+python = "note.py"
+name = "NotRest"
+rust = ["src/note/mod.rs", "src/notation.rs", "src/volume.rs"]
+note = "A note or chord as distinct from a rest: what it is written as, which way its stem goes, and how loud it sounds."
+
+[class.excluded]
+storedInstrument = "the crate models no instruments"
+getInstrument = "the crate models no instruments"
+
+[[class]]
+python = "note.py"
+name = "Lyric"
+rust = ["src/notation.rs"]
+note = "A syllable sung to a note."
+
+[[class]]
+python = "note.py"
+name = "Rest"
+rust = ["src/rest.rs"]
+note = "A silence of a written length."
+
+[[class]]
+python = "chord/__init__.py"
+name = "ChordBase"
+rust = ["src/chord/mod.rs", "src/notation.rs"]
+note = "What a chord is before it is asked anything: the notes it holds, and adding to and taking from them."
+
+[[class]]
+python = "duration.py"
+name = "Tuplet"
+rust = ["src/duration.rs"]
+note = "The bracket that says a length is written as one thing and sounds as another."
+
+[class.renames]
+tupletMultiplier = "multiplier"
+
+[class.excluded]
+setDurationType = "a Tuplet is immutable here; it is built with `new` and `with_normal`"
+setRatio = "a Tuplet is immutable here; it is built with `new` and `with_normal`"
+durationActual = "music21 pairs a count with a DurationTuple; the crate keeps the written value and its dots, as `duration_type` and `dots`"
+durationNormal = "music21 pairs a count with a DurationTuple; the crate keeps the written value and its dots, as `normal_duration_type` and `normal_dots`"
+tupletActual = "the count alone is `actual`; music21's pairs it with a DurationTuple the crate does not model"
+tupletNormal = "the count alone is `normal`; music21's pairs it with a DurationTuple the crate does not model"
+
+[[class]]
+python = "note.py"
 name = "Note"
 rust = ["src/note/mod.rs"]
 note = "A pitch and an optional duration."
