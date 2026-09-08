@@ -199,6 +199,50 @@ jobs:
           name: wheel-${{ matrix.os }}
           path: target/wheels/*.whl
 
+  # music21's own test suite, run twice and diffed: once on music21, once
+  # with `music21_rs.install_into_music21()` in front of it. music21's suite
+  # has failures of its own in any environment, so the gate is the comparison
+  # and not a pass mark — anything failing only under `music21_rs` is a gap
+  # here. It is the harshest measure the repository has, exercising the
+  # MusicXML importer, the stream machinery, `freezeThaw` and the corpus.
+  #
+  # The wheel is downloaded rather than rebuilt: `wheel` already built the
+  # very artifact this should be measuring, and a rebuild underneath a run
+  # gives numbers that mean nothing.
+  music21-suite:
+    name: music21's Own Suite
+    runs-on: ubuntu-latest
+    needs: wheel
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Download the wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: wheel-ubuntu-latest
+          path: target/wheels
+
+      # music21's own dependencies, plus what its *test* suite needs on top:
+      # scipy and python-Levenshtein.
+      - name: Install music21's dependencies and its test dependencies
+        run: |
+          python -m pip install chardet joblib jsonpickle more_itertools numpy requests webcolors
+          python -m pip install scipy python-Levenshtein
+
+      - name: Install the wheel
+        run: python -m pip install --no-index --find-links target/wheels music21-rs
+
+      - name: Run music21's suite on music21 and on music21_rs
+        run: python python/downstream/music21_suite.py
+
   lint:
     name: Lint (fmt + clippy + check)
     runs-on: ubuntu-latest
@@ -560,6 +604,7 @@ jobs:
       - feature-matrix
       - python-parity
       - wheel
+      - music21-suite
       - lint
       - msrv
       - semver

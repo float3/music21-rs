@@ -614,6 +614,19 @@ fn run_suites(workspace_root: &Path, env: &[(String, String)]) -> Vec<Suite> {
             None,
             env,
         ),
+        // `--all-targets` does not include doctests, so without this the
+        // crate's own rustdoc examples are never run here at all. They do
+        // not reach the *coverage* figure even so: rustdoc compiles a
+        // doctest itself and never sees `RUSTC_WRAPPER`, and folding them in
+        // properly needs cargo-llvm-cov's `--doctests`, which is unstable and
+        // nightly-only while this repository is pinned to stable.
+        cargo_suite(
+            workspace_root,
+            "Workspace doctests",
+            &["test", "--workspace", "--doc"],
+            None,
+            env,
+        ),
         cargo_suite(
             workspace_root,
             "Python parity and music21's doctests",
@@ -636,7 +649,105 @@ fn run_suites(workspace_root: &Path, env: &[(String, String)]) -> Vec<Suite> {
     let (build, tests) = wheel_suites(workspace_root);
     suites.push(build);
     suites.push(tests);
+    suites.push(music21_suite(workspace_root, &submodule));
     suites
+}
+
+/// Runs music21's own test suite twice — once on music21, once with the
+/// crate installed over it — and records the difference.
+///
+/// Like the wheel's own tests, this runs against the *installed* wheel, whose
+/// Rust half is a `.pyd` in site-packages rather than an object under the
+/// target directory; so it is not instrumented and adds nothing to the
+/// coverage figure. What it adds is the measure: it drives the MusicXML
+/// importer, the stream machinery, `freezeThaw` and the corpus, none of which
+/// any other suite here reaches.
+///
+/// music21's suite has failures of its own in any environment, so what is
+/// reported is the comparison. `failed` counts everything red under the
+/// crate; the status is green only when nothing is red under the crate that
+/// was not already red under music21.
+fn music21_suite(workspace_root: &Path, submodule: &Path) -> Suite {
+    const NAME: &str = "music21's own test suite";
+    let python = python_command();
+    let command = format!("{python} python/downstream/music21_suite.py");
+
+    let skipped = |detail: String| Suite {
+        name: NAME.to_string(),
+        command: command.clone(),
+        status: SuiteStatus::Skipped,
+        passed: 0,
+        failed: 0,
+        detail: Some(detail),
+    };
+
+    if !submodule.exists() {
+        return skipped("the music21 submodule is not checked out".to_string());
+    }
+
+    let out = workspace_root.join("target/music21-suite");
+    let output = Command::new(&python)
+        .arg("python/downstream/music21_suite.py")
+        .arg("--out")
+        .arg(&out)
+        .current_dir(workspace_root)
+        .output();
+    let output = match output {
+        Ok(output) => output,
+        Err(err) => return skipped(format!("could not run {python} ({err})")),
+    };
+
+    // The two reports are what the run means; a non-zero exit only says the
+    // comparison found something, which is read off them too.
+    let read = |name: &str| -> Option<serde_json::Value> {
+        serde_json::from_str(&fs::read_to_string(out.join(name)).ok()?).ok()
+    };
+    let (Some(plain), Some(ours)) = (read("music21.json"), read("music21_rs.json")) else {
+        let text = merged(&output);
+        return match missing_module(&text) {
+            Some(module) => skipped(format!("{module} is not installed in this interpreter")),
+            None => Suite {
+                name: NAME.to_string(),
+                command,
+                status: SuiteStatus::Failed,
+                passed: 0,
+                failed: 0,
+                detail: last_line(&text),
+            },
+        };
+    };
+
+    let bad = |report: &serde_json::Value| -> Vec<String> {
+        ["failures", "errors"]
+            .iter()
+            .filter_map(|key| report.get(*key)?.as_array())
+            .flatten()
+            .filter_map(|case| case.as_str().map(str::to_string))
+            .collect()
+    };
+    let theirs = bad(&plain);
+    let mine = bad(&ours);
+    let regressions = mine.iter().filter(|case| !theirs.contains(case)).count();
+    let run = ours
+        .get("run")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or_default() as usize;
+
+    Suite {
+        name: NAME.to_string(),
+        command,
+        status: if regressions == 0 {
+            SuiteStatus::Passed
+        } else {
+            SuiteStatus::Failed
+        },
+        passed: run.saturating_sub(mine.len()),
+        failed: mine.len(),
+        detail: Some(format!(
+            "{} of these fail on music21 itself; {regressions} fail only under music21_rs",
+            theirs.len()
+        )),
+    }
 }
 
 /// The interpreter the wheel suite should use: whatever `PYO3_PYTHON` names,
