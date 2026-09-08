@@ -345,6 +345,18 @@ impl Chord {
         Ok(())
     }
 
+    /// The chord as it stands, with whatever its note objects carry written
+    /// into it — the ties, the lyrics, the volumes — and everything the
+    /// chord itself was told kept: its duration, and a root or bass a caller
+    /// fixed. Anything that works on the chord as a value works on this.
+    pub(crate) fn synced_inner(&self, py: Python<'_>) -> RsChord {
+        let mut chord = self.inner.clone();
+        for (held, note) in chord.notes_mut().iter_mut().zip(&self.notes) {
+            *held = note.borrow(py).synced(py);
+        }
+        chord
+    }
+
     /// The chord with the notation its note objects carry written back onto
     /// it, for the few questions that read notation rather than pitch.
     fn with_note_notation(&self, py: Python<'_>) -> PyResult<RsChord> {
@@ -1276,13 +1288,10 @@ impl Chord {
         let inner = RsDuration::new(value).map_err(chord_error)?;
         self.inner.set_duration(inner.clone());
         match &self.duration {
-            Some(duration) => {
-                let duration = duration.bind(py);
-                match duration.extract::<PyRefMut<'_, Duration>>() {
-                    Ok(mut ours) => ours.inner = inner,
-                    Err(_) => duration.setattr("quarterLength", value)?,
-                }
-            }
+            // Through the duration's own setter, so the written values it
+            // stands for are worked out again: a whole note lengthened to
+            // four and three quarters is written as two notes tied.
+            Some(duration) => duration.bind(py).setattr("quarterLength", value)?,
             None => {
                 self.duration = Some(
                     crate::installed_new(
@@ -2003,9 +2012,12 @@ impl Chord {
     ) -> PyResult<Option<Py<PyAny>>> {
         let py = slf.py();
         let interval: RsInterval = interval_from_any(value)?;
+        // From the chord as its notes now stand: a tie written on one of
+        // them lives in the object until something reads it as a value, and
+        // a transposed chord that had lost its ties could not be stripped.
         let moved = slf
             .borrow()
-            .inner
+            .synced_inner(py)
             .transpose(&interval)
             .map_err(chord_error)?;
         if inPlace {

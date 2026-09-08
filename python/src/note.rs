@@ -2761,13 +2761,10 @@ impl Note {
         let inner = RsDuration::new(value).map_err(note_error)?;
         self.inner.set_duration(inner.clone());
         match &self.duration {
-            Some(duration) => {
-                let duration = duration.bind(py);
-                match duration.extract::<PyRefMut<'_, Duration>>() {
-                    Ok(mut ours) => ours.inner = inner,
-                    Err(_) => duration.setattr("quarterLength", value)?,
-                }
-            }
+            // Through the duration's own setter, so the written values it
+            // stands for are worked out again: a whole note lengthened to
+            // four and three quarters is written as two notes tied.
+            Some(duration) => duration.bind(py).setattr("quarterLength", value)?,
             None => {
                 self.duration = Some(
                     crate::installed_new(
