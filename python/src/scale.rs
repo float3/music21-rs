@@ -897,14 +897,14 @@ impl ConcreteScale {
     }
 
     /// music21's `getChord`: the scale's own notes, sounded together.
-    #[pyo3(signature = (minPitch = None, maxPitch = None, direction = None, **_keywords))]
+    #[pyo3(signature = (minPitch = None, maxPitch = None, direction = None, **keywords))]
     fn getChord(
         &self,
         py: Python<'_>,
         minPitch: Option<&Bound<'_, PyAny>>,
         maxPitch: Option<&Bound<'_, PyAny>>,
         direction: Option<&Bound<'_, PyAny>>,
-        _keywords: Option<&Bound<'_, PyDict>>,
+        keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Py<PyAny>> {
         let pitches = match (minPitch, maxPitch) {
             (Some(low), Some(high)) if !low.is_none() && !high.is_none() => self
@@ -914,9 +914,16 @@ impl ConcreteScale {
             _ => self.realized()?.pitches().map_err(scale_error)?,
         };
         let _ = direction;
-        let chord = music21_rs::Chord::new(pitches.as_slice()).map_err(scale_error)?;
-        let facade = crate::chord::Chord::from_inner(py, chord)?;
-        Ok(crate::installed_new(py, "music21.chord", "Chord", facade)?.into_any())
+        // Whatever else was asked for goes to the chord, which is how
+        // music21 lets `getChord(..., quarterLength=0.5)` say how long the
+        // chord sounds.
+        let names: Vec<String> = pitches
+            .iter()
+            .map(|pitch| pitch.name_with_octave())
+            .collect();
+        let class = crate::installed_class(py, "music21.chord", "Chord")
+            .map_or_else(|| py.import("music21.chord")?.getattr("Chord"), Ok)?;
+        Ok(class.call((names.join(" "),), keywords)?.unbind())
     }
 
     /// music21's `getScaleDegreeFromPitch`: which degree a pitch is, or

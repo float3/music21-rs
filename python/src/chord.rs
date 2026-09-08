@@ -2178,15 +2178,19 @@ impl Chord {
         pitchTarget: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<()> {
         let target = self.first_or_named(py, pitchTarget)?;
-        target.borrow_mut(py).set_tie(Some(tieObjOrStr))
+        crate::note::Note::set_tie(target.bind(py), Some(tieObjOrStr))
     }
 
     #[getter]
-    fn get_tie(&self, py: Python<'_>) -> Option<Tie> {
-        self.notes
-            .iter()
-            .find_map(|note| note.borrow(py).inner.tie().cloned())
-            .map(Tie::wrap)
+    fn get_tie(slf: &Bound<'_, Self>, py: Python<'_>) -> PyResult<Option<Py<Tie>>> {
+        // The first note that carries one, as its own object: music21's own
+        // note-splitting writes through the tie it reads back.
+        for note in Chord::note_objects(slf) {
+            if let Some(tie) = crate::note::Note::get_tie(note.bind(py))? {
+                return Ok(Some(tie));
+            }
+        }
+        Ok(None)
     }
 
     #[setter]
@@ -2196,7 +2200,7 @@ impl Chord {
             None => None,
         };
         for note in &self.notes {
-            note.borrow_mut(py).inner.set_tie(tie.clone());
+            note.borrow_mut(py).replace_tie(tie.clone());
         }
         Ok(())
     }

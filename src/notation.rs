@@ -1010,6 +1010,12 @@ pub struct Lyric {
     text: String,
     number: IntegerType,
     syllabic: Syllabic,
+    /// Whether anything has said where this syllable falls in its word.
+    ///
+    /// music21 leaves `syllabic` unset on a lyric with nothing sung yet, and
+    /// a lyric that says nothing about its place in a word is not the same
+    /// as one that says it is a whole word.
+    said_syllabic: bool,
     identifier: Option<String>,
     components: Vec<Lyric>,
     elision_before: String,
@@ -1022,10 +1028,21 @@ const DEFAULT_ELISION: &str = " ";
 impl Lyric {
     /// A lyric on the first verse, spelled as a whole word.
     pub fn new(text: impl Into<String>) -> Self {
+        let mut lyric = Self::unsung();
+        lyric.text = text.into();
+        lyric.said_syllabic = true;
+        lyric
+    }
+
+    /// A lyric with nothing sung to it yet, which is music21's bare
+    /// `Lyric()`: it says nothing about where it falls in a word, and
+    /// writing its text does not make it say so.
+    pub fn unsung() -> Self {
         Self {
-            text: text.into(),
+            text: String::new(),
             number: 1,
             syllabic: Syllabic::Single,
+            said_syllabic: false,
             identifier: None,
             components: Vec::new(),
             elision_before: DEFAULT_ELISION.to_string(),
@@ -1035,7 +1052,7 @@ impl Lyric {
     /// Reads a lyric from text whose hyphens say where it falls in its word:
     /// `"-ci-"` is a middle syllable, `"ci-"` a beginning, `"-us"` an end.
     pub fn from_raw_text(raw_text: &str) -> Self {
-        let mut lyric = Self::new("");
+        let mut lyric = Self::unsung();
         lyric.set_raw_text(raw_text);
         lyric
     }
@@ -1118,9 +1135,19 @@ impl Lyric {
         self.syllabic
     }
 
+    /// The same, where something has actually said it: music21 leaves it
+    /// unset on a lyric nobody has sung anything to.
+    pub fn explicit_syllabic(&self) -> Option<Syllabic> {
+        if self.is_composite() {
+            return Some(Syllabic::Composite);
+        }
+        self.said_syllabic.then_some(self.syllabic)
+    }
+
     /// Sets where the syllable falls in its word.
     pub fn set_syllabic(&mut self, syllabic: Syllabic) {
         self.syllabic = syllabic;
+        self.said_syllabic = true;
     }
 
     /// The name this verse goes by, which music21 falls back to the number
@@ -1179,12 +1206,12 @@ impl Lyric {
         } else {
             trimmed
         };
-        self.syllabic = match (starts, ends) {
+        self.set_syllabic(match (starts, ends) {
             (true, true) => Syllabic::Middle,
             (true, false) => Syllabic::End,
             (false, true) => Syllabic::Begin,
             (false, false) => Syllabic::Single,
-        };
+        });
         self.text = trimmed;
     }
 }

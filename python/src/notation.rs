@@ -290,7 +290,9 @@ impl Lyric {
         let mut inner = match text {
             Some(text) if !applyRaw => RsLyric::from_raw_text(text),
             Some(text) => RsLyric::new(text),
-            None => RsLyric::new(""),
+            // Nothing sung to it yet, which is not the same as a whole
+            // word with no letters in it.
+            None => RsLyric::unsung(),
         };
         inner.set_number(number).map_err(lyric_error)?;
         if let Some(syllabic) = syllabic {
@@ -367,9 +369,13 @@ impl Lyric {
         self.inner.set_number(number).map_err(lyric_error)
     }
 
+    /// music21's `syllabic`, which is nothing at all until something says
+    /// where the syllable falls.
     #[getter]
-    fn get_syllabic(&self, py: Python<'_>) -> &'static str {
-        self.synced(py).syllabic().as_str()
+    fn get_syllabic(&self, py: Python<'_>) -> Option<&'static str> {
+        self.synced(py)
+            .explicit_syllabic()
+            .map(music21_rs::Syllabic::as_str)
     }
 
     #[setter]
@@ -443,6 +449,12 @@ impl Lyric {
     fn setTextAndSyllabic(&mut self, rawText: &str, applyRaw: bool) {
         if applyRaw {
             self.inner.set_text(rawText);
+            // The hyphens are the text here, so nothing about the word is
+            // read out of them — but a lyric that had said nothing about
+            // where it falls is now a whole word, as music21 makes it.
+            if self.inner.explicit_syllabic().is_none() {
+                self.inner.set_syllabic(Syllabic::Single);
+            }
         } else {
             self.inner.set_raw_text(rawText);
         }
@@ -459,13 +471,20 @@ impl Lyric {
     }
 
     fn __repr__(&self, py: Python<'_>) -> String {
+        // music21 names only what the lyric actually says: a lyric nobody
+        // has sung anything to is `<music21.note.Lyric number=1>`.
         let lyric = self.synced(py);
-        format!(
-            "<music21.note.Lyric number={} syllabic={} text='{}'>",
-            lyric.number(),
-            lyric.syllabic(),
-            lyric.text()
-        )
+        let mut said = format!("number={}", lyric.number());
+        if let Some(identifier) = lyric.explicit_identifier() {
+            said.push_str(&format!(" identifier='{identifier}'"));
+        }
+        if let Some(syllabic) = lyric.explicit_syllabic() {
+            said.push_str(&format!(" syllabic={}", syllabic.as_str()));
+        }
+        if !lyric.text().is_empty() {
+            said.push_str(&format!(" text='{}'", lyric.text()));
+        }
+        format!("<music21.note.Lyric {said}>")
     }
 
     fn __str__(&self, py: Python<'_>) -> String {

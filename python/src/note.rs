@@ -1149,16 +1149,45 @@ impl Duration {
 
     /// music21 freezes a score by pickling it. A duration keeps what it is
     /// in Rust, where a pickle cannot see it, so it is written out as text
-    /// and read back.
+    /// and read back, with whatever was said about how it is written beside
+    /// it — a thawed duration that had forgotten its written value could not
+    /// be written out to a file at all.
     fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<crate::Pickled> {
-        crate::pickled(slf, &slf.borrow().inner)
+        let py = slf.py();
+        let extra = PyDict::new(py);
+        {
+            let duration = slf.borrow();
+            extra.set_item("linked", duration.linked)?;
+            extra.set_item("unlinkedType", duration.unlinked_type.as_ref())?;
+            extra.set_item("expressionIsInferred", duration.expression_is_inferred)?;
+            extra.set_item("dotGroups", duration.dot_groups.clone())?;
+        }
+        crate::pickled_extra(slf, &slf.borrow().inner, Some(&extra))
     }
 
     fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
-        let Some(inner) = crate::unpickled::<_, RsDuration>(slf, state)? else {
+        let py = slf.py();
+        let (inner, extra) = crate::unpickled_extra::<_, RsDuration>(slf, state)?;
+        let Some(inner) = inner else {
             return Ok(());
         };
-        slf.borrow_mut().inner = inner;
+        let mut duration = slf.borrow_mut();
+        duration.inner = inner;
+        // The written values are worked out again from the length, since the
+        // ones a blank object was made with say nothing about it.
+        duration.components = None;
+        if let Some(extra) = extra {
+            let extra = extra.bind(py);
+            duration.linked = extra.get_item("linked")?.extract().unwrap_or(true);
+            duration.unlinked_type = extra.get_item("unlinkedType")?.extract().unwrap_or(None);
+            duration.expression_is_inferred = extra
+                .get_item("expressionIsInferred")?
+                .extract()
+                .unwrap_or(true);
+            if let Ok(groups) = extra.get_item("dotGroups")?.extract::<Vec<u32>>() {
+                duration.dot_groups = groups;
+            }
+        }
         Ok(())
     }
 
@@ -1960,6 +1989,14 @@ pub struct Note {
     /// no such list is a note music21's own notation code cannot process.
     expressions: Option<Py<PyList>>,
     articulations: Option<Py<PyList>>,
+    /// The `Tie` object music21 hands back from `.tie`, once something has
+    /// asked for one.
+    ///
+    /// music21's own `splitAtQuarterLength` writes through it — the middle
+    /// of a note split across three bars is turned from a stop into a
+    /// continue by `e.tie.type = 'continue'` — so the object has to be the
+    /// note's own and not one made afresh each time.
+    tie: Option<Py<Tie>>,
     /// music21's `lyrics`, as the list object itself.
     ///
     /// Its own MusicXML reader appends each verse to what `n.lyrics` hands
@@ -2008,6 +2045,7 @@ impl Note {
             expressions: None,
             articulations: None,
             lyrics: None,
+            tie: None,
             style: None,
             stored_instrument: None,
             unread_pitch: None,
@@ -2036,6 +2074,7 @@ impl Note {
                 expressions: None,
                 articulations: None,
                 lyrics: None,
+                tie: None,
                 style: None,
                 stored_instrument: None,
                 unread_pitch: None,
@@ -2152,6 +2191,13 @@ impl Note {
         Ok(duration)
     }
 
+    /// Writes a tie value straight in, letting go of whatever object was
+    /// standing for the old one.
+    pub(crate) fn replace_tie(&mut self, tie: Option<music21_rs::Tie>) {
+        self.inner.set_tie(tie);
+        self.tie = None;
+    }
+
     /// The colour the note is written in: what its style says if it has
     /// one, since that is where music21 keeps it, and what the value says
     /// otherwise.
@@ -2209,6 +2255,11 @@ impl Note {
         // `n.style.color` is an edit to the note.
         if self.style.is_some() {
             note.set_color(crate::notation::style_colour(py, self.style.as_ref()));
+        }
+        // music21 keeps the tie on an object a caller may still be holding,
+        // and its own note-splitting writes through it.
+        if let Some(tie) = &self.tie {
+            note.set_tie(Some(tie.borrow(py).inner.clone()));
         }
         // Every note music21 has sounds for some length. The crate lets a
         // note carry none — a pitch nobody has said a length for — but one
@@ -2602,17 +2653,38 @@ impl Note {
     // ---- notation --------------------------------------------------------
 
     #[getter]
-    fn get_tie(&self) -> Option<Tie> {
-        self.inner.tie().cloned().map(Tie::wrap)
+    pub(crate) fn get_tie(slf: &Bound<'_, Self>) -> PyResult<Option<Py<Tie>>> {
+        let py = slf.py();
+        if let Some(tie) = &slf.borrow().tie {
+            return Ok(Some(tie.clone_ref(py)));
+        }
+        let Some(value) = slf.borrow().inner.tie().cloned() else {
+            return Ok(None);
+        };
+        let tie = crate::installed_new(py, "music21.tie", "Tie", Tie::wrap(value))?;
+        slf.borrow_mut().tie = Some(tie.clone_ref(py));
+        Ok(Some(tie))
     }
 
+    /// A tie object handed over is kept, as music21 keeps it: its own
+    /// `splitAtQuarterLength` writes through the object it reads back.
     #[setter]
-    pub(crate) fn set_tie(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
-        let tie = match value.filter(|value| !value.is_none()) {
-            Some(value) => Some(tie_from_any(value)?),
-            None => None,
+    pub(crate) fn set_tie(slf: &Bound<'_, Self>, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        let py = slf.py();
+        let Some(value) = value.filter(|value| !value.is_none()) else {
+            let mut note = slf.borrow_mut();
+            note.inner.set_tie(None);
+            note.tie = None;
+            return Ok(());
         };
-        self.inner.set_tie(tie);
+        let inner = tie_from_any(value)?;
+        let tie = match value.extract::<Py<Tie>>() {
+            Ok(object) => object,
+            Err(_) => crate::installed_new(py, "music21.tie", "Tie", Tie::wrap(inner.clone()))?,
+        };
+        let mut note = slf.borrow_mut();
+        note.inner.set_tie(Some(inner));
+        note.tie = Some(tie);
         Ok(())
     }
 

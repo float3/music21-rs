@@ -1623,6 +1623,26 @@ impl Interval {
             .transpose()
     }
 
+    /// music21's `noteStart` setter, which is its `pitchStart` setter given
+    /// the note's pitch.
+    #[setter]
+    fn set_noteStart(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        let pitch = match value.filter(|value| !value.is_none()) {
+            Some(note) => Some(note.getattr("pitch")?),
+            None => None,
+        };
+        self.set_pitchStart(pitch.as_ref())
+    }
+
+    #[setter]
+    fn set_noteEnd(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        let pitch = match value.filter(|value| !value.is_none()) {
+            Some(note) => Some(note.getattr("pitch")?),
+            None => None,
+        };
+        self.set_pitchEnd(pitch.as_ref())
+    }
+
     #[getter]
     fn get_noteEnd(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
         self.pitch_end

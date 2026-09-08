@@ -1640,6 +1640,13 @@ impl Pitch {
         }
     }
 
+    /// music21's `Note.__init__` writes itself here, which is how a pitch
+    /// finds the note around it.
+    #[setter]
+    fn set__client(slf: &Bound<'_, Self>, value: &Bound<'_, PyAny>) {
+        slf.borrow_mut().owner = value.extract::<Py<Note>>().ok();
+    }
+
     /// music21's `groups`: the labels a caller has put on this pitch. The
     /// list is made on first asking and kept, so appending to what a caller
     /// was handed reaches the pitch.
