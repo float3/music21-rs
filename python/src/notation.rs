@@ -47,14 +47,28 @@ fn volume_error(error: music21_rs::Error) -> PyErr {
 
 /// music21's `tie.Tie`.
 #[pyclass(name = "Tie", module = "music21.tie", subclass, skip_from_py_object)]
-#[derive(Clone)]
 pub struct Tie {
     pub(crate) inner: RsTie,
+    /// music21's `id`, which its MusicXML exporter writes out. It is an
+    /// identifier and not a musical fact, so nothing here works it out — it
+    /// starts as the object's own address, as music21's does.
+    identifier: Option<Py<PyAny>>,
+}
+
+impl Clone for Tie {
+    /// A copy of a tie says the same thing and goes by no identifier: the
+    /// one the original went by named that one.
+    fn clone(&self) -> Self {
+        Self::wrap(self.inner.clone())
+    }
 }
 
 impl Tie {
     pub(crate) fn wrap(inner: RsTie) -> Self {
-        Self { inner }
+        Self {
+            inner,
+            identifier: None,
+        }
     }
 }
 
@@ -116,6 +130,27 @@ impl Tie {
         self.inner
             .set_tie_type(TieType::from_name(value).map_err(tie_error)?);
         Ok(())
+    }
+
+    /// music21's `id`: an identifier its MusicXML exporter writes out. It
+    /// starts as the object's own address, as music21's does.
+    #[getter]
+    fn get_id(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
+        let py = slf.py();
+        if let Some(identifier) = &slf.borrow().identifier {
+            return Ok(identifier.clone_ref(py));
+        }
+        let address = (slf.as_ptr() as usize)
+            .into_pyobject(py)?
+            .into_any()
+            .unbind();
+        slf.borrow_mut().identifier = Some(address.clone_ref(py));
+        Ok(address)
+    }
+
+    #[setter]
+    fn set_id(&mut self, value: &Bound<'_, PyAny>) {
+        self.identifier = Some(value.clone().unbind());
     }
 
     #[getter]
@@ -534,6 +569,12 @@ pub struct Beam {
     /// not something this crate models — and its mere existence is what
     /// `hasStyleInformation` answers, as music21's does.
     style: Option<Py<PyAny>>,
+    /// A beam type music21 has no name for.
+    ///
+    /// Its own `type` is a plain attribute that takes anything; a beam
+    /// written as `crazy` is refused by its MusicXML exporter and not by the
+    /// beam, and its own doctest for that refusal writes one.
+    unnamed_type: Option<String>,
 }
 
 impl Clone for Beam {
@@ -546,6 +587,7 @@ impl Clone for Beam {
             identifier: None,
             independent_angle: None,
             style: copied_style(py, self.style.as_ref()),
+            unnamed_type: self.unnamed_type.clone(),
         })
     }
 }
@@ -638,17 +680,35 @@ impl Beam {
             identifier: None,
             independent_angle: None,
             style: None,
+            unnamed_type: None,
         })
     }
 
     #[getter]
-    fn get_type(&self) -> Option<&'static str> {
-        self.inner.beam_type().map(RsBeamType::as_str)
+    fn get_type(&self) -> Option<String> {
+        if let Some(unnamed) = &self.unnamed_type {
+            return Some(unnamed.clone());
+        }
+        self.inner.beam_type().map(|kind| kind.as_str().to_string())
     }
 
+    /// music21's `type` is a plain attribute and takes whatever it is given:
+    /// a beam written as something no notation knows is refused by its
+    /// MusicXML exporter, not by the beam.
     #[setter]
     fn set_type(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
-        self.inner.set_beam_type(beam_type_or_none(value)?);
+        match beam_type_or_none(value) {
+            Ok(beam_type) => {
+                self.inner.set_beam_type(beam_type);
+                self.unnamed_type = None;
+            }
+            Err(refusal) => {
+                let Some(value) = value else {
+                    return Err(refusal);
+                };
+                self.unnamed_type = Some(value.extract::<String>().map_err(|_| refusal)?);
+            }
+        }
         Ok(())
     }
 
@@ -911,6 +971,7 @@ impl Beams {
                 identifier: None,
                 independent_angle: None,
                 style: None,
+                unnamed_type: None,
             })
             .collect()
     }
@@ -1021,6 +1082,7 @@ impl Beams {
                 identifier: None,
                 independent_angle: None,
                 style: None,
+                unnamed_type: None,
             })
             .ok_or_else(|| {
                 PyIndexError::new_err(format!("beam number {number} cannot be accessed"))

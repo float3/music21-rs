@@ -39,11 +39,14 @@ impl ConcreteScale {
 
         let (step, octave) = diatonic_number_to_step_and_octave(target_dnn)?;
         let alter = self.altered_steps.get(&step).copied().unwrap_or(0);
-        Pitch::builder()
-            .step(step.as_char())
-            .accidental(alter)
-            .octave(octave)
-            .build()
+        let options = Pitch::builder().step(step.as_char()).octave(octave);
+        // A degree the key signature does not alter carries no accidental at
+        // all, as music21's does: a written natural is something somebody
+        // asked for.
+        if alter == 0 {
+            return options.build();
+        }
+        options.accidental(alter).build()
     }
 
     pub(crate) fn pitches(&self) -> Result<Vec<Pitch>> {

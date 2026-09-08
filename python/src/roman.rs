@@ -92,6 +92,11 @@ pub struct RomanNumeral {
     /// music21's `followsKeyChange`, which its `romanText` reader sets on
     /// the first numeral after a key is declared.
     follows_key_change: bool,
+    /// music21's `writeAsChord`: whether the numeral is written out as the
+    /// notes it stands for rather than as a figure. A `RomanNumeral` starts
+    /// as `True`, and its MusicXML exporter writes a `<numeral>` tag instead
+    /// when a caller turns it off.
+    write_as_chord: bool,
 }
 
 /// The fields music21's parsing steps write on a numeral as they read its
@@ -130,6 +135,7 @@ impl RomanNumeral {
             state: ParseState::default(),
             pivot: None,
             follows_key_change: false,
+            write_as_chord: true,
         }
     }
 
@@ -1285,14 +1291,16 @@ impl RomanNumeral {
     }
 
     /// music21's `writeAsChord`: whether the numeral is written out as the
-    /// notes it stands for rather than as a figure. `RomanNumeral` always is.
+    /// notes it stands for rather than as a figure.
     #[getter]
     fn get_writeAsChord(&self) -> bool {
-        true
+        self.write_as_chord
     }
 
     #[setter]
-    fn set_writeAsChord(&mut self, _value: bool) {}
+    fn set_writeAsChord(&mut self, value: bool) {
+        self.write_as_chord = value;
+    }
 
     /// music21 hashes a numeral by identity, since two numerals that read
     /// the same are still two objects a stream can hold apart.
