@@ -78,9 +78,17 @@ pub(crate) fn copy_as_same_type<'py, T>(
     value: T,
 ) -> PyResult<Bound<'py, PyAny>>
 where
-    T: pyo3::PyClass<Frozen = pyo3::pyclass::boolean_struct::False>,
+    T: pyo3::PyClass<Frozen = pyo3::pyclass::boolean_struct::False, BaseType = PyAny>,
 {
+    let py = slf.py();
     let class = slf.as_any().get_type();
+    // A plain facade object is the whole of itself: nothing was installed into
+    // music21, so there is no music21 half to start. Going through the helper
+    // for one would import music21, and the wheel has to work for someone who
+    // installed only the wheel.
+    if class.is(&T::type_object(py)) {
+        return Ok(Bound::new(py, value)?.into_any());
+    }
     // Through the helper, so that the copy gets the music21 half started as
     // a fresh object of that class would: `__new__` alone leaves an object
     // with no sites for a stream to hold it by.
