@@ -167,6 +167,9 @@ impl AugmentedSixthKind {
             .trim()
             .trim_start_matches(['I', 't', 'G', 'e', 'r', 'F', 'S', 'w'])
             .trim_start_matches('+');
+        // A figure written `6/5` is the same as `65`.
+        let rest = unslash_inversion(rest);
+        let rest = rest.as_str();
         let leading_digit = rest
             .chars()
             .next()
@@ -183,21 +186,45 @@ impl AugmentedSixthKind {
         rest.to_string()
     }
 
+    /// The scale degree music21 reads one of these on: the fourth for the
+    /// Italian and German sixths, the second for the French and Swiss.
+    fn degree(self) -> u8 {
+        match self {
+            Self::Italian | Self::German => 4,
+            Self::French | Self::Swiss => 2,
+        }
+    }
+
+    /// The alteration music21 records in front of it, in semitones. It is
+    /// written down and not applied — the sharp that makes the chord is the
+    /// bracketed one.
+    fn written_alteration(self) -> i8 {
+        match self {
+            Self::French => 0,
+            _ => 1,
+        }
+    }
+
+    /// The alterations that make the chord augmented: music21's
+    /// `bracketedAlterations`, a sharp on the root for every kind but the
+    /// French, and one on the third for the French and the Swiss.
+    fn bracketed_alterations(self) -> Vec<(i8, u8)> {
+        let mut alterations = Vec::new();
+        if self != Self::French {
+            alterations.push((1, 1));
+        }
+        if matches!(self, Self::French | Self::Swiss) {
+            alterations.push((1, 3));
+        }
+        alterations
+    }
+
     fn figure(self) -> &'static str {
         match self {
             Self::Italian => "It+6",
             Self::French => "Fr+6",
             Self::German => "Ger+6",
             Self::Swiss => "Sw+6",
-        }
-    }
-
-    fn interval_names(self) -> Vec<&'static str> {
-        match self {
-            Self::Italian => vec!["P1", "M3", "a6"],
-            Self::French => vec!["P1", "M3", "a4", "a6"],
-            Self::German => vec!["P1", "M3", "P5", "a6"],
-            Self::Swiss => vec!["P1", "M3", "aa4", "a6"],
         }
     }
 }
@@ -262,23 +289,37 @@ impl RomanNumeral {
         validate_figure(trimmed)?;
 
         // The applied part comes off first, so that `Ger6/vi` is a German
-        // sixth read in the key its `vi` establishes.
-        let (aug6_primary, aug6_secondary) = split_secondary(trimmed);
+        // sixth read in the key its `vi` establishes — but a slash inside
+        // the inversion figure is not an applied part at all, and `Ger6/5`
+        // is the German sixth in the position it is usually written in.
+        let (aug6_primary, aug6_secondary) = if AugmentedSixthKind::from_figure(trimmed).is_some() {
+            (trimmed, None)
+        } else {
+            split_secondary(trimmed)
+        };
         if let Some(kind) = AugmentedSixthKind::from_figure(aug6_primary) {
+            // music21's `_parseRNAloneAmidstAug6`: an augmented sixth is a
+            // figured-bass column over an altered degree, read in the
+            // parallel minor. The alteration in front of it is *recorded*
+            // and not applied — what makes the chord augmented is the
+            // bracketed sharp, which the ordinary path puts on afterwards.
+            let column = kind.written_figure(aug6_primary);
             return Ok(Self {
                 // The figure is kept as written, since music21 names these
                 // several ways and reports back the one it was given.
                 figure: written.clone(),
                 key,
-                degree: 6,
-                accidental: -1,
-                written_accidental: -1,
-                inversion: 0,
-                seventh: false,
-                quality: RomanQuality::Augmented,
-                implied_quality: ImpliedQuality::Augmented,
+                degree: kind.degree(),
+                accidental: 0,
+                written_accidental: kind.written_alteration(),
+                inversion: parse_inversion(&column),
+                seventh: suffix_has_seventh(&column),
+                quality: RomanQuality::from(ImpliedQuality::Unstated),
+                implied_quality: ImpliedQuality::Unstated,
                 figures: FiguredBass {
-                    written: kind.written_figure(aug6_primary),
+                    column: Notation::parse(&expand_shorthand(&column).join(","))?,
+                    written: column,
+                    bracketed: kind.bracketed_alterations(),
                     ..FiguredBass::default()
                 },
                 secondary: aug6_secondary,
@@ -441,10 +482,19 @@ impl RomanNumeral {
 
     /// The collection the figure's degrees are read off.
     fn reading(&self) -> Result<Reading> {
-        Ok(match &self.scale {
-            Some(scale) => Reading::Scale(scale.clone()),
-            None => Reading::Key(self.effective_key()?),
-        })
+        if let Some(scale) = &self.scale {
+            return Ok(Reading::Scale(scale.clone()));
+        }
+        let key = self.effective_key()?;
+        // Every augmented sixth is read in the parallel minor, whatever key
+        // it is written in: its sixth degree is the flat one.
+        if matches!(self.kind, RomanKind::AugmentedSixth(_)) && key.mode() != "minor" {
+            return Ok(Reading::Key(Key::from_tonic_mode(
+                &key.tonic_pitch().name(),
+                Some("minor"),
+            )?));
+        }
+        Ok(Reading::Key(key))
     }
 
     /// The quality the figure states, which is what the notes read off the
@@ -659,10 +709,6 @@ impl RomanNumeral {
     /// scale is what lets a numeral mean something in a mode, and what makes
     /// `V7b5` alter one note rather than name a different chord.
     pub fn to_chord(&self) -> Result<Chord> {
-        if let RomanKind::AugmentedSixth(kind) = self.kind {
-            return self.augmented_sixth_chord(kind);
-        }
-
         let reading = self.reading()?;
         let numbers = self.figures.numbers();
         let implies_root = FIGURES_IMPLYING_ROOT.contains(&numbers.as_slice());
@@ -819,22 +865,6 @@ impl RomanNumeral {
                 )
         });
         Ok(())
-    }
-
-    fn augmented_sixth_chord(&self, kind: AugmentedSixthKind) -> Result<Chord> {
-        // Read in the key the figure actually sounds in, so the German
-        // sixth of `Ger6/vi` stands on the sixth degree of that `vi`.
-        let key = self.effective_key()?;
-        let mut lowered_sixth = key.pitch_from_degree(6)?;
-        if key.mode() != "minor" {
-            lowered_sixth = Interval::from_semitones(-1)?.transpose_pitch(&lowered_sixth)?;
-        }
-        let pitches = kind
-            .interval_names()
-            .into_iter()
-            .map(|name| Interval::from_name(name)?.transpose_pitch(&lowered_sixth))
-            .collect::<Result<Vec<_>>>()?;
-        Chord::new(pitches.as_slice())
     }
 
     /// Performs functional Roman-numeral analysis in a key.
@@ -2942,8 +2972,11 @@ mod tests {
     fn roman_numerals_parse_augmented_sixth_figures() {
         let key = Key::from_tonic_mode("C", "minor").unwrap();
         let french = RomanNumeral::new("Fr+6", key).unwrap();
-        assert_eq!(french.degree(), 6);
-        assert_eq!(french.accidental(), -1);
+        // music21 reads a French sixth on the second degree, with nothing
+        // written in front of it; the sharp that makes it augmented is the
+        // bracketed one on its third.
+        assert_eq!(french.degree(), 2);
+        assert_eq!(french.accidental(), 0);
         assert_eq!(
             french
                 .to_chord()

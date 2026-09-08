@@ -708,8 +708,13 @@ impl Key {
         kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Pitch> {
         let _ = (args, kwargs);
+        // A degree past the octave is the same degree again, in the octave
+        // the key stands in: music21 asks its network for the node at that
+        // degree, and the nodes go round. Its own roman-numeral code counts
+        // a thirteenth as degree seventeen and expects the third back.
+        let wrapped = degree.checked_sub(1).map_or(degree, |below| below % 7 + 1);
         Ok(Pitch::wrap(
-            self.inner.pitch_from_degree(degree).map_err(key_error)?,
+            self.inner.pitch_from_degree(wrapped).map_err(key_error)?,
             false,
         ))
     }
