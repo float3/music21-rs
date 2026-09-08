@@ -1,57 +1,82 @@
-use std::{convert::Infallible, error, fmt};
+use std::convert::Infallible;
+
+use thiserror::Error as ThisError;
 
 /// Result type returned by fallible `music21-rs` operations.
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 /// Error variants produced by the crate's theory helpers.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, ThisError)]
 #[non_exhaustive]
 pub enum Error {
     /// Error associated with a generic music21-style object.
+    #[error("Music21Object error: {0}")]
     Music21Object(String),
     /// Error associated with chord construction or analysis.
+    #[error("Chord error: {0}")]
     Chord(String),
     /// Error associated with pitch construction, spelling or conversion.
+    #[error("Pitch error: {0}")]
     Pitch(String),
     /// Error associated with microtone construction or conversion.
+    #[error("Microtone error: {0}")]
     Microtone(String),
     /// Error associated with accidental parsing or conversion.
+    #[error("Accidental error: {0}")]
     Accidental(String),
     /// Error associated with generated chord-table lookup data.
+    #[error("ChordTables error: {0}")]
     ChordTables(String),
     /// Error associated with interval construction or conversion.
+    #[error("Interval error: {0}")]
     Interval(String),
     /// Error associated with step-name parsing or conversion.
+    #[error("StepName error: {0}")]
     StepName(String),
     /// Error associated with numeric pitch-class parsing.
+    #[error("PitchClass error: {0}")]
     PitchClass(String),
     /// Error associated with ordinal-name parsing.
+    #[error("Ordinal error: {0}")]
     Ordinal(String),
     /// Error associated with polyrhythm construction or timing.
+    #[error("Polyrhythm error: {0}")]
     Polyrhythm(String),
     /// Error associated with tuning-system parsing or lookup.
+    #[error("TuningSystem error: {0}")]
     TuningSystem(String),
     /// Error associated with MIDI import or export.
+    #[error("Midi error: {0}")]
     Midi(String),
     /// Error associated with analysis helpers.
+    #[error("Analysis error: {0}")]
     Analysis(String),
     /// Error associated with time-signature parsing or beat lookup.
+    #[error("Meter error: {0}")]
     Meter(String),
     /// Error associated with Xenakis sieve parsing or evaluation.
+    #[error("Sieve error: {0}")]
     Sieve(String),
     /// Error associated with duration values.
+    #[error("Duration error: {0}")]
     Duration(String),
     /// Error associated with keys and key signatures.
+    #[error("Key error: {0}")]
     Key(String),
     /// Error associated with scale degrees and realization.
+    #[error("Scale error: {0}")]
     Scale(String),
     /// Error associated with tempo marks.
+    #[error("Tempo error: {0}")]
     Tempo(String),
     /// Error associated with tone rows and serial transformations.
+    #[error("Serial error: {0}")]
     Serial(String),
     /// Error associated with ties, noteheads, stems and lyrics.
+    #[error("Notation error: {0}")]
     Notation(String),
     /// Error associated with note volumes.
+    #[error("Volume error: {0}")]
     Volume(String),
     /// A value the caller gave that nothing musical could be read from.
     ///
@@ -59,44 +84,8 @@ pub enum Error {
     /// before a pitch name, or a name that is not a string at all, is a
     /// `ValueError` there and not a `PitchException` — and callers catch the
     /// two separately, so the crate keeps them apart too.
+    #[error("Value error: {0}")]
     Value(String),
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Error::Music21Object(msg) => write!(f, "Music21Object error: {msg}"),
-            Error::Chord(msg) => write!(f, "Chord error: {msg}"),
-            Error::Pitch(msg) => write!(f, "Pitch error: {msg}"),
-            Error::Microtone(msg) => write!(f, "Microtone error: {msg}"),
-            Error::Accidental(msg) => write!(f, "Accidental error: {msg}"),
-            Error::ChordTables(msg) => write!(f, "ChordTables error: {msg}"),
-            Error::Interval(msg) => write!(f, "Interval error: {msg}"),
-            Error::StepName(msg) => write!(f, "StepName error: {msg}"),
-            Error::PitchClass(msg) => write!(f, "PitchClass error: {msg}"),
-            Error::Ordinal(msg) => write!(f, "Ordinal error: {msg}"),
-            Error::Polyrhythm(msg) => write!(f, "Polyrhythm error: {msg}"),
-            Error::TuningSystem(msg) => write!(f, "TuningSystem error: {msg}"),
-            Error::Midi(msg) => write!(f, "Midi error: {msg}"),
-            Error::Analysis(msg) => write!(f, "Analysis error: {msg}"),
-            Error::Meter(msg) => write!(f, "Meter error: {msg}"),
-            Error::Notation(msg) => write!(f, "Notation error: {msg}"),
-            Error::Volume(msg) => write!(f, "Volume error: {msg}"),
-            Error::Sieve(msg) => write!(f, "Sieve error: {msg}"),
-            Error::Duration(msg) => write!(f, "Duration error: {msg}"),
-            Error::Key(msg) => write!(f, "Key error: {msg}"),
-            Error::Scale(msg) => write!(f, "Scale error: {msg}"),
-            Error::Tempo(msg) => write!(f, "Tempo error: {msg}"),
-            Error::Serial(msg) => write!(f, "Serial error: {msg}"),
-            Error::Value(msg) => write!(f, "Value error: {msg}"),
-        }
-    }
-}
-
-impl error::Error for Error {
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        None
-    }
 }
 
 impl From<Infallible> for Error {

@@ -26,3 +26,4 @@ num = "0.4.3"
 num-traits = "0.2.19"
 ordered-float = "5.5.0"
 serde = { version = "1.0.228", optional = true, features = ["derive"] }
+thiserror = "2.0.17"
