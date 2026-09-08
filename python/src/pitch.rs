@@ -769,13 +769,24 @@ pub(crate) fn pitch_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsPitch> {
 }
 
 impl Pitch {
-    pub(crate) fn wrap(inner: RsPitch, spelling_is_inferred: bool) -> Self {
+    pub(crate) fn wrap(mut inner: RsPitch, spelling_is_inferred: bool) -> Self {
+        // The value carries the same answer, since it is what decides
+        // whether transposing respells: a caller who says the spelling was
+        // chosen must be believed by everything downstream.
+        inner.set_spelling_is_inferred(spelling_is_inferred);
         Self {
             inner,
             spelling_is_inferred,
             owner: None,
             accidental: None,
         }
+    }
+
+    /// Says whether the spelling was chosen or merely worked out, on both
+    /// halves at once.
+    fn mark_inferred(&mut self, inferred: bool) {
+        self.spelling_is_inferred = inferred;
+        self.inner.set_spelling_is_inferred(inferred);
     }
 
     /// Takes a value written through the pitch's own accidental object,
@@ -975,7 +986,7 @@ impl Pitch {
             options = options.octave(octave);
         }
         self.inner = options.build().map_err(pitch_error)?;
-        self.spelling_is_inferred = false;
+        self.mark_inferred(false);
         self.write_back()
     }
 
@@ -992,7 +1003,7 @@ impl Pitch {
             )));
         }
         self.inner = RsPitch::from_name(value).map_err(pitch_error)?;
-        self.spelling_is_inferred = false;
+        self.mark_inferred(false);
         self.write_back()
     }
 
@@ -1060,7 +1071,7 @@ impl Pitch {
             self.inner.octave(),
             self.microtone_cents(),
         )?;
-        self.spelling_is_inferred = false;
+        self.mark_inferred(false);
         self.write_back()
     }
 
@@ -1218,7 +1229,7 @@ impl Pitch {
 
     #[setter]
     fn set_spellingIsInferred(&mut self, value: bool) {
-        self.spelling_is_inferred = value;
+        self.mark_inferred(value);
     }
 
     #[getter]
@@ -1238,7 +1249,7 @@ impl Pitch {
     #[setter]
     fn set_ps(&mut self, value: f64) -> PyResult<()> {
         self.inner = RsPitch::from_pitch_space(value).map_err(pitch_error)?;
-        self.spelling_is_inferred = true;
+        self.mark_inferred(true);
         self.write_back()
     }
 
@@ -1259,7 +1270,7 @@ impl Pitch {
             midi = midi.rem_euclid(12);
         }
         self.inner = RsPitch::from_midi(midi).map_err(pitch_error)?;
-        self.spelling_is_inferred = true;
+        self.mark_inferred(true);
         self.write_back()
     }
 
@@ -1284,7 +1295,7 @@ impl Pitch {
             options = options.microtone(cents);
         }
         self.inner = options.build().map_err(pitch_error)?;
-        self.spelling_is_inferred = true;
+        self.mark_inferred(true);
         self.write_back()
     }
 
@@ -1325,7 +1336,7 @@ impl Pitch {
     #[setter]
     fn set_frequency(&mut self, value: f64) -> PyResult<()> {
         self.inner = RsPitch::from_frequency(value).map_err(pitch_error)?;
-        self.spelling_is_inferred = true;
+        self.mark_inferred(true);
         self.write_back()
     }
 
@@ -1362,7 +1373,7 @@ impl Pitch {
         let inferred = value.is_instance_of::<pyo3::types::PyInt>() || slf.spelling_is_inferred;
         if inPlace {
             slf.inner = transposed;
-            slf.spelling_is_inferred = inferred;
+            slf.mark_inferred(inferred);
             slf.write_back()?;
             Ok(None)
         } else {
