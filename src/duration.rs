@@ -652,7 +652,9 @@ impl Duration {
             remainder -= next.quarter_length();
             components.push((next, 0));
         }
-        components
+        // A length the tie never finished covering is one no notation can
+        // write, which is music21's `inexpressible` and not a shorter note.
+        Vec::new()
     }
 
     /// Returns music21's `fullName` for a single written note value, such as

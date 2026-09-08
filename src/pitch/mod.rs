@@ -668,6 +668,19 @@ impl Pitch {
         self.has_accidental
     }
 
+    /// music21's `spellingIsInferred`: whether the crate chose the spelling
+    /// rather than being told it. A pitch built from a number, a MIDI value,
+    /// a pitch class or a frequency has an inferred spelling, and only such
+    /// a pitch is respelled by a transposition.
+    pub fn spelling_is_inferred(&self) -> bool {
+        self.spelling_is_inferred
+    }
+
+    /// Says whether the spelling was chosen or given.
+    pub fn set_spelling_is_inferred(&mut self, inferred: bool) {
+        self.spelling_is_inferred = inferred;
+    }
+
     /// The accidental object, if the pitch carries one; see
     /// [`Self::has_accidental`].
     pub fn explicit_accidental(&self) -> Option<&Accidental> {

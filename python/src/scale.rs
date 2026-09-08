@@ -906,12 +906,14 @@ impl ConcreteScale {
         direction: Option<&Bound<'_, PyAny>>,
         keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Py<PyAny>> {
+        // A scale nobody gave a tonic to still sounds, from middle C, as it
+        // does for `getPitches`.
         let pitches = match (minPitch, maxPitch) {
             (Some(low), Some(high)) if !low.is_none() && !high.is_none() => self
-                .realized()?
+                .realized_anywhere()
                 .pitches_between(&pitch_from_any(low)?, &pitch_from_any(high)?)
                 .map_err(scale_error)?,
-            _ => self.realized()?.pitches().map_err(scale_error)?,
+            _ => self.realized_anywhere().pitches().map_err(scale_error)?,
         };
         let _ = direction;
         // Whatever else was asked for goes to the chord, which is how
@@ -1003,13 +1005,24 @@ impl ConcreteScale {
         inPlace: bool,
     ) -> PyResult<Option<Py<PyAny>>> {
         let interval: RsInterval = interval_from_any(value)?;
-        let moved = slf
-            .borrow()
-            .realized()?
-            .transpose(&interval)
-            .map_err(scale_error)?;
+        // music21 transposes the tonic, and a scale that has none is given
+        // middle C first: "could raise an error; just assume a 'c'".
+        let standing = {
+            let me = slf.borrow();
+            if me.has_tonic {
+                me.inner.clone()
+            } else {
+                RsScale::new(
+                    me.inner.scale_type(),
+                    RsPitch::from_name("C4").map_err(scale_error)?,
+                )
+            }
+        };
+        let moved = standing.transpose(&interval).map_err(scale_error)?;
         if inPlace {
-            slf.borrow_mut().inner = moved;
+            let mut me = slf.borrow_mut();
+            me.inner = moved;
+            me.has_tonic = true;
             return Ok(None);
         }
         Ok(Some(Self::object(slf.py(), moved)?))

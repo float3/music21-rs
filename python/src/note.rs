@@ -810,8 +810,17 @@ impl Duration {
 
     /// The written values the crate reads off the sounding length.
     fn inferred_components(&self) -> Vec<DurationTuple> {
-        self.inner
-            .components()
+        let components = self.inner.components();
+        // No written value covers this length, and it is not nothing: music21
+        // writes one component saying so rather than none at all.
+        if components.is_empty() && self.inner.quarter_length() != 0.0 {
+            return vec![DurationTuple {
+                kind: "inexpressible".to_string(),
+                dots: 0,
+                quarter_length: self.inner.quarter_length(),
+            }];
+        }
+        components
             .into_iter()
             .map(|(kind, dots)| DurationTuple::of(kind, dots))
             .collect()
@@ -2030,11 +2039,14 @@ impl Note {
     /// Builds the facade around a note, giving its pitch a Python object of
     /// its own.
     pub(crate) fn wrap(py: Python<'_>, inner: RsNote) -> PyResult<Self> {
+        // Whether the spelling was chosen or given is the pitch's own answer:
+        // `note.Note(63)` spells an E flat that nobody asked for by name.
+        let inferred = inner.pitch().spelling_is_inferred();
         let pitch = crate::installed_new(
             py,
             "music21.pitch",
             "Pitch",
-            Pitch::wrap(inner.pitch().clone(), false),
+            Pitch::wrap(inner.pitch().clone(), inferred),
         )?;
         Ok(Self {
             inner,
