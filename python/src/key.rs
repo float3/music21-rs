@@ -349,6 +349,10 @@ pub struct Key {
     /// The object is kept as it was given; which pattern it stands for is
     /// read off its class name.
     abstract_scale: Option<Py<PyAny>>,
+    /// The `Pitch` object the key stands on, once something has asked for it
+    /// or handed one over. music21 keeps what it was given and hands the
+    /// same object back, so `k.tonic = b` leaves `k.tonic is b` true.
+    tonic_object: Option<Py<Pitch>>,
     /// A type name a caller wrote over the mode's.
     ///
     /// music21's `type` is a plain attribute — a key writes its own mode
@@ -364,6 +368,7 @@ impl Key {
             correlation_coefficient: 0.0,
             alternate_interpretations: None,
             abstract_scale: None,
+            tonic_object: None,
             named_type: None,
         };
         // Where the class has been installed over music21's, the object has
@@ -513,14 +518,41 @@ impl Key {
                 correlation_coefficient: 0.0,
                 alternate_interpretations: None,
                 abstract_scale: None,
+                tonic_object: None,
                 named_type: None,
             }),
         )
     }
 
     #[getter]
-    fn tonic(&self) -> Pitch {
-        Pitch::wrap(self.inner.tonic(), false)
+    fn tonic(slf: &Bound<'_, Self>, py: Python<'_>) -> PyResult<Py<Pitch>> {
+        let wanted = slf.borrow().inner.tonic();
+        if let Some(object) = &slf.borrow().tonic_object
+            && object.borrow(py).inner == wanted
+        {
+            return Ok(object.clone_ref(py));
+        }
+        let object =
+            crate::installed_new(py, "music21.pitch", "Pitch", Pitch::wrap(wanted, false))?;
+        slf.borrow_mut().tonic_object = Some(object.clone_ref(py));
+        Ok(object)
+    }
+
+    /// Setting it keeps the pitch object given, which is what music21 does:
+    /// a key built on a pitch a caller holds reports that very pitch.
+    #[setter]
+    fn set_tonic(slf: &Bound<'_, Self>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        let name = tonic_name(value)?;
+        let mode = slf.borrow().inner.mode().to_string();
+        let inner = RsKey::from_tonic_mode(&name, Some(mode.as_str())).map_err(key_error)?;
+        let sharps = inner.sharps();
+        {
+            let mut me = slf.borrow_mut();
+            me.inner = inner;
+            me.tonic_object = value.extract::<Py<Pitch>>().ok();
+        }
+        slf.as_super().borrow_mut().signature = RsKeySignature::new(sharps);
+        Ok(())
     }
 
     #[getter]

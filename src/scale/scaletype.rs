@@ -830,6 +830,17 @@ impl Scale {
         Ok(pitches)
     }
 
+    /// Whether the pattern repeats at the octave: music21's
+    /// `octaveDuplicating`. Every named scale does, and one given by its
+    /// notes need not — a collection spanning two octaves before it comes
+    /// back to its tonic is a pattern two octaves long.
+    pub fn octave_duplicating(&self) -> bool {
+        match &self.custom_steps {
+            Some(steps) => self.period_in_octaves(steps) == 1,
+            None => true,
+        }
+    }
+
     /// How many octaves the pattern takes to come back to where it began,
     /// which is one for every scale that has a name and may be more for one
     /// given by its notes.
@@ -1078,13 +1089,26 @@ impl Scale {
     /// Returns the scale pitch `steps` degrees above `origin`. A pitch outside
     /// the scale first moves to the nearest scale pitch above it.
     pub fn next_pitch_above(&self, origin: &Pitch, steps: usize) -> Result<Pitch> {
-        self.pitch_steps_from(origin, steps as IntegerType)
+        self.pitch_steps_from(origin, steps as IntegerType, None)
+    }
+
+    /// The same, told which side of a pitch outside the scale to start from:
+    /// music21's `getNeighbor`, where naming a side means stepping the whole
+    /// way from the neighbour on it rather than counting the move onto the
+    /// scale as one of the steps.
+    pub fn next_pitch_beside(
+        &self,
+        origin: &Pitch,
+        steps: IntegerType,
+        below: bool,
+    ) -> Result<Pitch> {
+        self.pitch_steps_from(origin, steps, Some(below))
     }
 
     /// Returns the scale pitch `steps` degrees below `origin`. A pitch outside
     /// the scale first moves to the nearest scale pitch below it.
     pub fn next_pitch_below(&self, origin: &Pitch, steps: usize) -> Result<Pitch> {
-        self.pitch_steps_from(origin, -(steps as IntegerType))
+        self.pitch_steps_from(origin, -(steps as IntegerType), None)
     }
 
     /// Returns the degree a pitch sits on together with the accidental that
@@ -1122,7 +1146,12 @@ impl Scale {
         Ok(pitches)
     }
 
-    fn pitch_steps_from(&self, origin: &Pitch, steps: IntegerType) -> Result<Pitch> {
+    fn pitch_steps_from(
+        &self,
+        origin: &Pitch,
+        steps: IntegerType,
+        neighbour_below: Option<bool>,
+    ) -> Result<Pitch> {
         if steps == 0 {
             return Err(crate::error::Error::Scale(
                 "step size must be at least 1".to_string(),
@@ -1147,21 +1176,30 @@ impl Scale {
         {
             Some(&(_, index, shift)) => (index, shift, steps),
             None => {
-                let neighbour = if ascending {
-                    candidates
-                        .iter()
-                        .filter(|(ps, _, _)| *ps > origin_ps)
-                        .min_by(|left, right| left.0.total_cmp(&right.0))
-                } else {
+                // Which side of the pitch to come onto the scale at: the way
+                // the move is going unless a caller has said otherwise, and
+                // then the move onto the scale counts as one of the steps.
+                let take_below = neighbour_below.unwrap_or(!ascending);
+                let neighbour = if take_below {
                     candidates
                         .iter()
                         .filter(|(ps, _, _)| *ps < origin_ps)
                         .max_by(|left, right| left.0.total_cmp(&right.0))
+                } else {
+                    candidates
+                        .iter()
+                        .filter(|(ps, _, _)| *ps > origin_ps)
+                        .min_by(|left, right| left.0.total_cmp(&right.0))
                 };
                 let &(_, index, shift) = neighbour.ok_or_else(|| {
                     crate::error::Error::Scale(format!("no scale pitch beside {origin}"))
                 })?;
-                (index, shift, steps - steps.signum())
+                let remaining = if neighbour_below.is_some() {
+                    steps
+                } else {
+                    steps - steps.signum()
+                };
+                (index, shift, remaining)
             }
         };
         let total = index as IntegerType + remaining;

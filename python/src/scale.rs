@@ -172,13 +172,24 @@ impl Scale {
 )]
 pub struct AbstractScale {
     scale_type: Option<RsScaleType>,
+    /// Whether the pattern comes back to where it began an octave up. A
+    /// collection given by its notes may take two octaves to do that, and
+    /// music21 says so.
+    octave_duplicating: bool,
 }
 
 impl AbstractScale {
-    fn object(py: Python<'_>, scale_type: Option<RsScaleType>) -> PyResult<Py<PyAny>> {
+    fn object(
+        py: Python<'_>,
+        scale_type: Option<RsScaleType>,
+        octave_duplicating: bool,
+    ) -> PyResult<Py<PyAny>> {
         Ok(Py::new(
             py,
-            PyClassInitializer::from(Scale).add_subclass(Self { scale_type }),
+            PyClassInitializer::from(Scale).add_subclass(Self {
+                scale_type,
+                octave_duplicating,
+            }),
         )?
         .into_any())
     }
@@ -217,7 +228,11 @@ impl AbstractScale {
         let scale_type = mode
             .filter(|value| !value.is_none())
             .and_then(|value| Self::scale_type_of(value));
-        Ok(PyClassInitializer::from(Scale).add_subclass(Self { scale_type }))
+        Ok(PyClassInitializer::from(Scale).add_subclass(Self {
+            scale_type,
+            // A pattern named by mode alone repeats at the octave.
+            octave_duplicating: true,
+        }))
     }
 
     /// music21's `buildNetwork`: says which pattern this abstract scale
@@ -240,10 +255,10 @@ impl AbstractScale {
     }
 
     /// music21's `octaveDuplicating`: whether the pattern repeats at the
-    /// octave, which every one of these does.
+    /// octave.
     #[getter]
     fn octaveDuplicating(&self) -> bool {
-        true
+        self.octave_duplicating
     }
 
     #[getter]
@@ -343,6 +358,10 @@ pub struct ConcreteScale {
     /// stand on, which is what `isConcrete` and the `Abstract …` name say.
     /// Anything that needs an actual pitch raises until it has one.
     has_tonic: bool,
+    /// The `Pitch` object the scale stands on, once something has asked for
+    /// it or handed one over. music21 keeps what it was given and hands the
+    /// same object back.
+    tonic_object: Option<Py<Pitch>>,
 }
 
 impl ConcreteScale {
@@ -353,6 +372,7 @@ impl ConcreteScale {
             named_pattern: true,
             named_type: None,
             has_tonic: true,
+            tonic_object: None,
         }
     }
 
@@ -398,6 +418,7 @@ impl ConcreteScale {
                 named_pattern: false,
                 named_type: None,
                 has_tonic: true,
+                tonic_object: None,
             };
             built.named_pattern = false;
             return Ok(
@@ -422,6 +443,7 @@ impl ConcreteScale {
                 named_pattern: true,
                 named_type: None,
                 has_tonic: true,
+                tonic_object: None,
             }),
         )?
         .into_any())
@@ -577,19 +599,37 @@ impl ConcreteScale {
     }
 
     #[getter]
-    fn get_tonic(&self) -> Option<Pitch> {
-        self.has_tonic
-            .then(|| Pitch::wrap(self.inner.tonic().clone(), false))
+    fn get_tonic(slf: &Bound<'_, Self>, py: Python<'_>) -> PyResult<Option<Py<Pitch>>> {
+        if !slf.borrow().has_tonic {
+            return Ok(None);
+        }
+        let wanted = slf.borrow().inner.tonic().clone();
+        if let Some(object) = &slf.borrow().tonic_object
+            && object.borrow(py).inner == wanted
+        {
+            return Ok(Some(object.clone_ref(py)));
+        }
+        let object =
+            crate::installed_new(py, "music21.pitch", "Pitch", Pitch::wrap(wanted, false))?;
+        slf.borrow_mut().tonic_object = Some(object.clone_ref(py));
+        Ok(Some(object))
     }
 
+    /// Setting it keeps the pitch object given, which is what music21 does:
+    /// a scale built on a pitch a caller holds reports that very pitch, and
+    /// its own key tests turn on it.
     #[setter]
     fn set_tonic(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
         match value.filter(|value| !value.is_none()) {
             Some(value) => {
                 self.inner = RsScale::new(self.inner.scale_type(), pitch_from_any(value)?);
                 self.has_tonic = true;
+                self.tonic_object = value.extract::<Py<Pitch>>().ok();
             }
-            None => self.has_tonic = false,
+            None => {
+                self.has_tonic = false;
+                self.tonic_object = None;
+            }
         }
         Ok(())
     }
@@ -702,6 +742,38 @@ impl ConcreteScale {
             .map_err(scale_error)
     }
 
+    /// music21's `getScalaData`: this scale written out as a Scala file
+    /// would write it, one interval per degree.
+    ///
+    /// The object handed back is music21's own `ScalaData` — it is what
+    /// music21's writer takes, and nothing about it is musical — filled with
+    /// the intervals between this scale's degrees.
+    #[pyo3(signature = (direction = None))]
+    fn getScalaData(
+        slf: &Bound<'_, Self>,
+        direction: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<Py<PyAny>> {
+        let py = slf.py();
+        let pitches = slf
+            .borrow()
+            .heard(direction)?
+            .pitches()
+            .map_err(scale_error)?;
+        let mut steps = Vec::with_capacity(pitches.len().saturating_sub(1));
+        for pair in pitches.windows(2) {
+            steps.push(crate::interval::Interval::wrap(
+                RsInterval::between_pitches(&pair[0], &pair[1]).map_err(scale_error)?,
+            ));
+        }
+        let data = py
+            .import("music21.scale.scala")?
+            .getattr("ScalaData")?
+            .call0()?;
+        data.call_method1("setIntervalSequence", (steps,))?;
+        data.setattr("description", slf.repr()?)?;
+        Ok(data.unbind())
+    }
+
     /// music21's `abstract`: the pattern of steps this scale stands on,
     /// which here is the scale type it was built with.
     ///
@@ -709,7 +781,11 @@ impl ConcreteScale {
     /// music21 turns a scale of one kind into a scale of another.
     #[getter]
     fn get_abstract(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        AbstractScale::object(py, self.named_pattern.then(|| self.inner.scale_type()))
+        AbstractScale::object(
+            py,
+            self.named_pattern.then(|| self.inner.scale_type()),
+            self.inner.octave_duplicating(),
+        )
     }
 
     /// music21 keeps the pattern in a private slot and its own code reaches
@@ -1062,7 +1138,6 @@ impl ConcreteScale {
         getNeighbor: Option<&Bound<'_, PyAny>>,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Pitch> {
-        let _ = getNeighbor;
         let origin = match pitchOrigin.filter(|value| !value.is_none()) {
             Some(value) => pitch_from_any(value)?,
             None => self.inner.tonic().clone(),
@@ -1070,10 +1145,25 @@ impl ConcreteScale {
         // Coming down, a scale that falls differently is read in its falling
         // form: the note below G in A melodic minor is F, not F sharp.
         let scale = self.heard(direction)?;
-        let moved = if is_descending(direction) {
-            scale.next_pitch_below(&origin, stepSize)
-        } else {
-            scale.next_pitch_above(&origin, stepSize)
+        // music21's `getNeighbor` names which side of a pitch outside the
+        // scale to come onto it at. A plain yes or no leaves it to the way
+        // the move is going; a direction says the side outright, and the
+        // whole step is then taken from there.
+        let beside = getNeighbor
+            .filter(|value| !value.is_none() && value.extract::<bool>().is_err())
+            .map(|value| is_descending(Some(value)));
+        let moved = match beside {
+            Some(below) => {
+                let steps = i32::try_from(stepSize).unwrap_or(1);
+                let steps = if is_descending(direction) {
+                    -steps
+                } else {
+                    steps
+                };
+                scale.next_pitch_beside(&origin, steps, below)
+            }
+            None if is_descending(direction) => scale.next_pitch_below(&origin, stepSize),
+            None => scale.next_pitch_above(&origin, stepSize),
         };
         moved
             .map(|pitch| Pitch::wrap(pitch, false))
