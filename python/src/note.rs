@@ -225,7 +225,9 @@ impl Tuplet {
             bracket: true,
             placement: Some("above".to_string()),
             tuplet_actual_show: Some("number".to_string()),
-            tuplet_normal_show: Some("number".to_string()),
+            // music21 shows the actual number and says nothing about the
+            // normal one, which is why a plain triplet writes `3` alone.
+            tuplet_normal_show: None,
             nested_level: 1,
             tuplet_id: 0,
             frozen: false,

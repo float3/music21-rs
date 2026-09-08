@@ -405,18 +405,42 @@ impl MetronomeMark {
     /// music21's `getTextExpression`: the word as something a score can
     /// carry, and nothing where the word was only implied.
     #[pyo3(signature = (returnImplicit = false))]
-    fn getTextExpression(&self, py: Python<'_>, returnImplicit: bool) -> PyResult<Py<PyAny>> {
-        let Some(text) = self.inner.text() else {
-            return Ok(py.None());
+    fn getTextExpression(
+        slf: &Bound<'_, Self>,
+        py: Python<'_>,
+        returnImplicit: bool,
+    ) -> PyResult<Py<PyAny>> {
+        let (text, number_implicit) = {
+            let mark = slf.borrow();
+            let Some(text) = mark.inner.text() else {
+                return Ok(py.None());
+            };
+            if mark.inner.text_implicit() && !returnImplicit {
+                return Ok(py.None());
+            }
+            (text.to_string(), mark.inner.number_implicit())
         };
-        if self.inner.text_implicit() && !returnImplicit {
-            return Ok(py.None());
-        }
-        Ok(py
+        let expression = py
             .import("music21.expressions")?
             .getattr("TextExpression")?
-            .call1((text,))?
-            .unbind())
+            .call1((text,))?;
+        // music21's `applyTextFormatting`: a tempo word is written in bold,
+        // four and a half staff lines up — or two, when the number it stands
+        // for is not written beside it.
+        // music21 links the mark's style to the words, so anything said
+        // about how the mark is written is said about them: its own
+        // `setTextExpression` shares the one object between the two.
+        if slf
+            .getattr("hasStyleInformation")
+            .and_then(|said| said.extract::<bool>())
+            .unwrap_or(false)
+        {
+            expression.setattr("style", slf.getattr("style")?)?;
+        }
+        let style = expression.getattr("style")?;
+        style.setattr("fontStyle", "bold")?;
+        style.setattr("absoluteY", if number_implicit { 20 } else { 45 })?;
+        Ok(expression.unbind())
     }
 
     /// music21's `getSoundingMetronomeMark`: the mark a tempo indication of
