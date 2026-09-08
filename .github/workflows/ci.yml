@@ -303,15 +303,21 @@ jobs:
       - name: Install the suites' dependencies
         run: |
           python -m pip install chardet joblib jsonpickle more_itertools numpy requests webcolors
-          python -m pip install "maturin>=1.7,<2" pytest
+          python -m pip install "maturin>=1.7,<2" pytest pdoc
 
       # The wheel's own tests import music21_rs, so the wheel has to be
       # installed before the report runs them; the report rebuilds it, which
-      # is cheap once cargo has cached the artifacts.
+      # is cheap once cargo has cached the artifacts. The Python API docs are
+      # read off the installed module, so they need it too.
       - name: Install the wheel the report tests
         run: |
           maturin build --release --manifest-path python/Cargo.toml --out target/wheels
           python -m pip install --no-index --find-links target/wheels music21-rs
+
+      # pdoc imports music21_rs and renders what the classes carry: their
+      # docstrings and, for every method, the signature pyo3 emits.
+      - name: Build Python API docs
+        run: pdoc -o target/pythondocs music21_rs
 
       # Coverage, every test suite, and the ported feature set, published
       # beside the docs. The feature half also fails when data/feature_map.toml
@@ -347,8 +353,10 @@ jobs:
           mkdir -p target/pages/chords
           mkdir -p target/pages/docs
           mkdir -p target/pages/polyrhythm
+          mkdir -p target/pages/python
           mkdir -p target/pages/tuning
           cp -R target/doc/. target/pages/docs/
+          cp -R target/pythondocs/. target/pages/python/
           cp -R target/reports target/pages/reports
           cp examples/web/help-tooltips.js target/pages/help-tooltips.js
           cp examples/web/theme.css target/pages/theme.css
@@ -383,6 +391,8 @@ jobs:
               "theme.css",
               "theme.js",
               "docs/music21_rs/index.html",
+              "python/index.html",
+              "python/music21_rs.html",
               "chord/app.js",
               "chords/app.js",
               "polyrhythm/index.html",
@@ -399,7 +409,8 @@ jobs:
               raise SystemExit(f"missing demo build output: {', '.join(missing)}")
 
           file_checks = {
-              "index.html": ["chord/", "chords/", "polyrhythm/", "tuning/", "reports/", "./theme.css", "./theme.js"],
+              "index.html": ["chord/", "chords/", "polyrhythm/", "tuning/", "reports/", "./python/", "./theme.css", "./theme.js"],
+              "python/music21_rs.html": ["id=\"Chord\"", "id=\"Pitch\"", "id=\"Pitch.transpose\"", "install_into_music21"],
               "reports/index.html": ["../theme.css", "../theme.js", "./coverage/html/index.html"],
               "theme.css": ["--accent", ":root[data-theme=\"dark\"]", ".theme-toggle"],
               "chord/index.html": ["./app.js", "../theme.css", "../chords/", "../polyrhythm/"],
