@@ -635,9 +635,6 @@ fn run_suites(workspace_root: &Path, env: &[(String, String)]) -> Vec<Suite> {
             &["test", "--workspace", "--all-targets"],
             None,
             env,
-        )
-        .describing(
-            "The crate's own unit tests, run against nothing but themselves.              Instrumented, so this is most of the coverage figure above.",
         ),
         // `--all-targets` does not include doctests, so without this the
         // crate's own rustdoc examples are never run here at all. They do
@@ -651,9 +648,6 @@ fn run_suites(workspace_root: &Path, env: &[(String, String)]) -> Vec<Suite> {
             &["test", "--workspace", "--doc"],
             None,
             env,
-        )
-        .describing(
-            "Every example in the crate's own documentation, run as a test.              `--all-targets` above does not include these, so without this              command nothing runs them. They gate, but they do not reach the              coverage figure: rustdoc compiles a doctest itself and never sees              the instrumentation.",
         ),
         cargo_suite(
             workspace_root,
@@ -667,9 +661,6 @@ fn run_suites(workspace_root: &Path, env: &[(String, String)]) -> Vec<Suite> {
             ],
             (!submodule.exists()).then_some("the music21 submodule is not checked out"),
             env,
-        )
-        .describing(
-            "music21's own docstrings, collected from the submodule and run              against the crate. The classes in music21's modules are replaced              with the music21-shaped facades in `python-parity`, so each              example runs music21's text against our values. Embedded and              linked against the crate, so it is instrumented and counts              towards coverage.",
         ),
     ];
     // The wheel is deliberately built uninstrumented. Its Rust half lives in
@@ -678,14 +669,11 @@ fn run_suites(workspace_root: &Path, env: &[(String, String)]) -> Vec<Suite> {
     // profiles onto; and an instrumented wheel is not the artifact CI ships.
     // What it tests of the crate, the parity suite covers far more of anyway.
     let (build, tests) = wheel_suites(workspace_root);
-    suites.push(build.describing(
-        "Builds the Python package a caller installs to get the crate without          a Rust toolchain. Deliberately uninstrumented: an instrumented wheel          is not the artifact CI ships.",
-    ));
-    suites.push(tests.describing(
-        "The wheel's own pytest suite, run against the installed package          rather than the source tree, so what is tested is what a user gets.",
-    ));
+    suites.push(build);
+    suites.push(tests);
+    // The one row whose result is not a pass mark, which the title cannot say.
     suites.push(music21_suite(workspace_root, &submodule).describing(
-        "music21's entire test suite — every `Test` class and every docstring          in every module — run against the crate. Not the suite translated to          Rust: it is music21's own Python suite running against classes whose          insides are Rust. `install_into_music21()` swaps the pyo3 facade          classes, backed by music21-rs values, over music21's own, and the          suite is then run twice — once on music21, once on ours — and the two          sets of failures diffed. music21's suite has failures of its own in          any environment, so the result is that comparison and not a pass          mark: only a test that fails under music21_rs and not under music21          is a gap here. It is the harshest measure the repository has,          reaching the MusicXML importer, the stream machinery, `freezeThaw`          and the corpus. It runs through the installed wheel, so like the          wheel's own tests it adds nothing to the coverage figure.",
+        "Run twice, once on music21 and once on the crate, and diffed: music21's own suite fails a number of its own tests in any environment, so what counts is that the two sets match.",
     ));
     suites
 }
@@ -1821,7 +1809,7 @@ fn render_coverage(coverage: &Coverage) -> String {
     }
     html.push_str("                    </div>\n                </div>\n");
     html.push_str(
-        "                <p class=\"section-foot\">Measured by <code>cargo llvm-cov</code> across <em>every</em> suite above, not the library's own unit tests alone: each is run instrumented and their profiles merge, so the crate code that music21's own doctests drive through the parity facades counts here too. The figure is still the library's &mdash; the tooling crates are excluded, as are the generated chord and Scala tables, which are data and whose thousands of lines would say nothing about the code. The wheel's own tests are the one suite outside it: its Rust half ships in the installed package, where the report step cannot reach the object file. <a href=\"./coverage/html/index.html\">Read it file by file</a>.</p>\n            </section>\n",
+        "                <p class=\"section-foot\">Every suite above is run instrumented and the profiles merged, except those going through the installed wheel. Generated tables and the tooling crates are excluded. <a href=\"./coverage/html/index.html\">Read it file by file</a>.</p>\n            </section>\n",
     );
     html
 }
@@ -1898,7 +1886,7 @@ fn render_suites(suites: &[Suite]) -> String {
         "                        </tbody>\n                    </table>\n                </div>\n",
     );
     html.push_str(
-        "                <p class=\"section-foot\">Every suite the repository has, run when this report was generated. A suite whose tooling is not present is skipped rather than failed, and says why. The wheel's own tests import <code>music21_rs</code>, so they need the built wheel installed in the interpreter that runs them. Two of these are <em>comparisons</em> rather than pass marks: music21's own suite, and the downstream library run in CI, are each run twice &mdash; once on music21, once with <code>install_into_music21()</code> in front of it &mdash; and what counts is that the two sets of failures match. Both subjects fail a number of their own tests in any environment, so a green result there means the crate changed nothing, not that nothing was red.</p>\n            </section>\n",
+        "                <p class=\"section-foot\">A suite whose tooling is not installed is skipped, with the reason, rather than failed.</p>\n            </section>\n",
     );
     html
 }
@@ -2013,7 +2001,7 @@ fn render_beyond(beyond: &[BeyondReport]) -> String {
 ",
     );
     html.push_str(
-        "                <p class=\"section-foot\">The counts are read out of the crate's own tables rather than written down here, so one that grows says so by itself and the report fails when a table it names has gone. The rest of the page measures music21-rs against music21; this is the part with nothing to measure against.</p>
+        "                <p class=\"section-foot\">Counts are read out of the crate's own tables, so the report fails when one it names has gone.</p>
             </section>
 ",
     );
@@ -2098,7 +2086,7 @@ fn render_benchmarks(benchmarks: &Benchmarks, sizes: Option<&Sizes>) -> String {
     }
     let _ = write!(
         html,
-        "                <p class=\"section-foot\">The crate and music21 asked the same question through the same Python API by <code>xtask bench</code>, on music21 {music21} and Python {python} ({platform}). Both sides have to agree on the answer before either is timed, so a speedup here is a speedup at doing the same work. Each case builds a fresh object, because music21 memoizes its analysis on the object that was asked.</p>\n            </section>\n",
+        "                <p class=\"section-foot\">music21 {music21}, Python {python} ({platform}). Both sides must agree on the answer before either is timed. Each case builds a fresh object, except those marked cached.</p>\n            </section>\n",
         music21 = escape(&benchmarks.music21),
         python = escape(&benchmarks.python),
         platform = escape(&benchmarks.platform),
@@ -2181,7 +2169,7 @@ fn render_doctests(doctests: &[ModuleDoctests]) -> String {
         tests = cell(tests_passing, tests),
     );
     html.push_str(
-        "                <p class=\"section-foot\">What music21-rs passes of music21's own documentation and test suite. The docstrings are collected from the submodule and run against the crate through the music21-shaped facades in <code>python-parity</code>. A docstring counts as passing only when every one of its examples does, which is why that share is always the harsher of the two. The failures of each module are written to <code>target/doctest_&lt;module&gt;.log</code>. A module the crate ports but no harness runs yet counts at nought against the total music21's own <code>DocTestFinder</code> gives it, recorded in <code>data/doctest_totals.toml</code>. The unit-test column is music21's own <code>unittest</code> suites, wherever it keeps them &mdash; beside the module, inside its package, or in <code>music21/test/</code>. Those are the very tests the <em>music21's own test suite</em> row above runs, attributed back to the module each belongs to; where a module keeps them is found by looking rather than guessed at from its name, since <code>music21/test/test_base.py</code> tests <code>music21.base</code> and not <code>music21.meter.base</code>. A test music21 itself fails in this environment counts here as not passing, because what this column answers is what the crate passes of music21's suite &mdash; whether a failure is the crate's doing is the comparison the row above makes, and is reported there.</p>\n            </section>\n",
+        "                <p class=\"section-foot\">music21's own docstrings and unit tests, run against the crate. A docstring passes only when every one of its examples does. The unit-test column is the <em>music21's own test suite</em> row above, attributed per module; a test music21 itself fails counts here as not passing.</p>\n            </section>\n",
     );
     html
 }
@@ -2305,7 +2293,7 @@ fn render_features(features: &[ClassReport]) -> String {
         html,
         r#"                    <p class="empty-note" data-filter-empty hidden>Nothing matches that filter.</p>
                 </div>
-                <p class="section-foot">Every public method of the music21 classes the crate ports, read from the submodule, against the <code>pub fn</code>s of the Rust files that port them. A member music21 has is ported or it is not; where the crate has a reason for not porting one, the reason is shown beside it, but it still counts against the total. The mapping lives in <code>data/feature_map.toml</code>, and the report fails when it goes stale.</p>
+                <p class="section-foot">Every public member of the music21 classes the crate ports, read from the submodule. A reason for not porting one is shown beside it but still counts against the total.</p>
             </section>
 "#
     );
