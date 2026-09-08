@@ -118,19 +118,61 @@ def run_one(out: Path, use_rs: bool, only: str | None) -> int:
     return 0
 
 
+# The tests that fail under `music21_rs` on purpose, and why.
+#
+# Both are documented divergences, not gaps: making either one pass costs more
+# than it buys, and both were measured. Anything *not* on this list that fails
+# only under `music21_rs` is a real regression and fails the run — the same
+# shape as `python-parity/doctest/*.toml`, where what passes is listed and a
+# newly broken one is named.
+EXPECTED_DIVERGENCES = {
+    "classSet (music21.prebase.ProtoM21Object)": (
+        "an installed class lists both itself and the class it replaced in "
+        "classSet, so this doctest counts one more than music21 has. Dropping "
+        "the replaced class to make it pass costs 250 of music21's own tests."
+    ),
+    "testRagAsawari (music21.scale.test_scale_main.Test.testRagAsawari)": (
+        "music21 reads a degree out of its interval network's realization "
+        "cache, so the answer depends on what was last asked. Reproducing that "
+        "would mean modelling IntervalNetwork's node cache."
+    ),
+}
+
+
 def compare(plain: Path, ours: Path) -> int:
     """What fails under `music21_rs` and not under music21."""
     left = json.loads(plain.read_text(encoding="utf-8"))
     right = json.loads(ours.read_text(encoding="utf-8"))
     bad = lambda report: set(report["failures"]) | set(report["errors"])  # noqa: E731
     theirs, mine = bad(left), bad(right)
-    new = sorted(mine - theirs)
+    divergent = sorted(mine - theirs)
+    new = [name for name in divergent if name not in EXPECTED_DIVERGENCES]
+    expected = [name for name in divergent if name in EXPECTED_DIVERGENCES]
     print()
     print(f"  music21   : {len(theirs)} of its own failures, {left['run']} tests")
     print(f"  music21_rs: {len(mine)} failures, {right['run']} tests")
+
+    if expected:
+        print()
+        print(f"{len(expected)} known divergence(s), allowed:")
+        for name in expected:
+            print(f"  {name}")
+            print(f"      {EXPECTED_DIVERGENCES[name]}")
+
+    # A divergence that has been fixed should stop being excused, or the list
+    # quietly grows stale and starts hiding real regressions.
+    stale = sorted(set(EXPECTED_DIVERGENCES) - mine)
+    if stale:
+        print()
+        print(f"{len(stale)} listed divergence(s) no longer fail; drop them from")
+        print("EXPECTED_DIVERGENCES in this file:")
+        for name in stale:
+            print(f"  {name}")
+        return 1
+
     if not new:
         print()
-        print("music21's own suite behaves identically on music21_rs.")
+        print("music21's own suite behaves the same on music21_rs, bar the known divergences.")
         return 0
     print()
     print(f"{len(new)} tests fail only under music21_rs:")

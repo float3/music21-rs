@@ -230,6 +230,21 @@ struct Suite {
     failed: usize,
     /// Why a suite was skipped, or what a run of it produced.
     detail: Option<String>,
+    /// What the suite actually measures, in a sentence.
+    ///
+    /// The name and the command say what was run; this says what running it
+    /// proves, which for the ones that reach outside this repository is not
+    /// obvious from either. Optional so an older `report.json` still reads.
+    #[serde(default)]
+    note: Option<String>,
+}
+
+impl Suite {
+    /// Attaches the sentence saying what this suite measures.
+    fn describing(mut self, note: &str) -> Self {
+        self.note = Some(note.to_string());
+        self
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
@@ -613,6 +628,9 @@ fn run_suites(workspace_root: &Path, env: &[(String, String)]) -> Vec<Suite> {
             &["test", "--workspace", "--all-targets"],
             None,
             env,
+        )
+        .describing(
+            "The crate's own unit tests, run against nothing but themselves.              Instrumented, so this is most of the coverage figure above.",
         ),
         // `--all-targets` does not include doctests, so without this the
         // crate's own rustdoc examples are never run here at all. They do
@@ -626,6 +644,9 @@ fn run_suites(workspace_root: &Path, env: &[(String, String)]) -> Vec<Suite> {
             &["test", "--workspace", "--doc"],
             None,
             env,
+        )
+        .describing(
+            "Every example in the crate's own documentation, run as a test.              `--all-targets` above does not include these, so without this              command nothing runs them. They gate, but they do not reach the              coverage figure: rustdoc compiles a doctest itself and never sees              the instrumentation.",
         ),
         cargo_suite(
             workspace_root,
@@ -639,6 +660,9 @@ fn run_suites(workspace_root: &Path, env: &[(String, String)]) -> Vec<Suite> {
             ],
             (!submodule.exists()).then_some("the music21 submodule is not checked out"),
             env,
+        )
+        .describing(
+            "music21's own docstrings, collected from the submodule and run              against the crate. The classes in music21's modules are replaced              with the music21-shaped facades in `python-parity`, so each              example runs music21's text against our values. Embedded and              linked against the crate, so it is instrumented and counts              towards coverage.",
         ),
     ];
     // The wheel is deliberately built uninstrumented. Its Rust half lives in
@@ -647,9 +671,15 @@ fn run_suites(workspace_root: &Path, env: &[(String, String)]) -> Vec<Suite> {
     // profiles onto; and an instrumented wheel is not the artifact CI ships.
     // What it tests of the crate, the parity suite covers far more of anyway.
     let (build, tests) = wheel_suites(workspace_root);
-    suites.push(build);
-    suites.push(tests);
-    suites.push(music21_suite(workspace_root, &submodule));
+    suites.push(build.describing(
+        "Builds the Python package a caller installs to get the crate without          a Rust toolchain. Deliberately uninstrumented: an instrumented wheel          is not the artifact CI ships.",
+    ));
+    suites.push(tests.describing(
+        "The wheel's own pytest suite, run against the installed package          rather than the source tree, so what is tested is what a user gets.",
+    ));
+    suites.push(music21_suite(workspace_root, &submodule).describing(
+        "music21's entire test suite — every `Test` class and every docstring          in every module — run against the crate. Not the suite translated to          Rust: it is music21's own Python suite running against classes whose          insides are Rust. `install_into_music21()` swaps the pyo3 facade          classes, backed by music21-rs values, over music21's own, and the          suite is then run twice — once on music21, once on ours — and the two          sets of failures diffed. music21's suite has failures of its own in          any environment, so the result is that comparison and not a pass          mark: only a test that fails under music21_rs and not under music21          is a gap here. It is the harshest measure the repository has,          reaching the MusicXML importer, the stream machinery, `freezeThaw`          and the corpus. It runs through the installed wheel, so like the          wheel's own tests it adds nothing to the coverage figure.",
+    ));
     suites
 }
 
@@ -679,6 +709,7 @@ fn music21_suite(workspace_root: &Path, submodule: &Path) -> Suite {
         passed: 0,
         failed: 0,
         detail: Some(detail),
+        note: None,
     };
 
     if !submodule.exists() {
@@ -713,6 +744,7 @@ fn music21_suite(workspace_root: &Path, submodule: &Path) -> Suite {
                 passed: 0,
                 failed: 0,
                 detail: last_line(&text),
+                note: None,
             },
         };
     };
@@ -747,6 +779,7 @@ fn music21_suite(workspace_root: &Path, submodule: &Path) -> Suite {
             "{} of these fail on music21 itself; {regressions} fail only under music21_rs",
             theirs.len()
         )),
+        note: None,
     }
 }
 
@@ -873,6 +906,7 @@ fn cargo_suite(
             passed: 0,
             failed: 0,
             detail: Some(reason.to_string()),
+            note: None,
         };
     }
     let output = Command::new("cargo")
@@ -890,6 +924,7 @@ fn cargo_suite(
                 passed: 0,
                 failed: 0,
                 detail: Some(format!("could not run cargo ({err})")),
+                note: None,
             };
         }
     };
@@ -905,6 +940,7 @@ fn cargo_suite(
         passed,
         failed,
         detail: None,
+        note: None,
     }
 }
 
@@ -931,6 +967,7 @@ fn wheel_suites(workspace_root: &Path) -> (Suite, Suite) {
             passed: 0,
             failed: 0,
             detail: Some(format!("maturin is not installed ({err})")),
+            note: None,
         },
         Ok(output) if output.status.success() => Suite {
             name: BUILD.to_string(),
@@ -939,6 +976,7 @@ fn wheel_suites(workspace_root: &Path) -> (Suite, Suite) {
             passed: 0,
             failed: 0,
             detail: built_wheel_name(&merged(&output)),
+            note: None,
         },
         Ok(output) => Suite {
             name: BUILD.to_string(),
@@ -947,6 +985,7 @@ fn wheel_suites(workspace_root: &Path) -> (Suite, Suite) {
             passed: 0,
             failed: 0,
             detail: last_line(&merged(&output)),
+            note: None,
         },
     };
 
@@ -964,6 +1003,7 @@ fn wheel_suites(workspace_root: &Path) -> (Suite, Suite) {
             passed: 0,
             failed: 0,
             detail: Some(format!("could not run {python} ({err})")),
+            note: None,
         },
         Ok(output) => {
             let text = merged(&output);
@@ -975,6 +1015,7 @@ fn wheel_suites(workspace_root: &Path) -> (Suite, Suite) {
                     passed: 0,
                     failed: 0,
                     detail: Some(format!("{python} has no {missing}")),
+                    note: None,
                 },
                 None => {
                     let (passed, failed) = pytest_counts(&text);
@@ -989,6 +1030,7 @@ fn wheel_suites(workspace_root: &Path) -> (Suite, Suite) {
                         passed,
                         failed,
                         detail: None,
+                        note: None,
                     }
                 }
             }
@@ -1554,6 +1596,27 @@ fn defines(rust: &str, name: &str, members: Members) -> bool {
     }
 }
 
+/// Escapes prose for the page, and lets a `backtick` span through as `<code>`.
+///
+/// The suite notes are written as sentences with the odd command or symbol in
+/// them; writing the tags by hand in a Rust string literal would make them
+/// unreadable at the point they are edited.
+fn prose(text: &str) -> String {
+    let escaped = escape(text);
+    let mut html = String::with_capacity(escaped.len());
+    let mut open = false;
+    for piece in escaped.split('`') {
+        html.push_str(piece);
+        html.push_str(if open { "</code>" } else { "<code>" });
+        open = !open;
+    }
+    // The split leaves one tag too many; a note with unbalanced backticks
+    // keeps its text and loses only the markup.
+    let extra = if open { "<code>" } else { "</code>" };
+    html.truncate(html.len() - extra.len());
+    html
+}
+
 fn escape(text: &str) -> String {
     text.replace('&', "&amp;")
         .replace('<', "&lt;")
@@ -1746,10 +1809,14 @@ fn render_suites(suites: &[Suite]) -> String {
                 n.to_string()
             }
         };
+        let note = match &suite.note {
+            Some(note) => format!("<span class=\"detail\">{}</span>", prose(note)),
+            None => String::new(),
+        };
         let _ = write!(
             html,
             r#"                            <tr>
-                                <td class="name">{name}{detail}</td>
+                                <td class="name">{name}{note}{detail}</td>
                                 <td><span class="{pill}">{label}</span></td>
                                 <td class="num">{passed}</td>
                                 <td class="num">{failed}</td>
@@ -1766,7 +1833,7 @@ fn render_suites(suites: &[Suite]) -> String {
         "                        </tbody>\n                    </table>\n                </div>\n",
     );
     html.push_str(
-        "                <p class=\"section-foot\">Every suite the repository has, run when this report was generated. A suite whose tooling is not present is skipped rather than failed, and says why. The wheel's own tests import <code>music21_rs</code>, so they need the built wheel installed in the interpreter that runs them.</p>\n            </section>\n",
+        "                <p class=\"section-foot\">Every suite the repository has, run when this report was generated. A suite whose tooling is not present is skipped rather than failed, and says why. The wheel's own tests import <code>music21_rs</code>, so they need the built wheel installed in the interpreter that runs them. Two of these are <em>comparisons</em> rather than pass marks: music21's own suite, and the downstream library run in CI, are each run twice &mdash; once on music21, once with <code>install_into_music21()</code> in front of it &mdash; and what counts is that the two sets of failures match. Both subjects fail a number of their own tests in any environment, so a green result there means the crate changed nothing, not that nothing was red.</p>\n            </section>\n",
     );
     html
 }
@@ -2049,7 +2116,7 @@ fn render_doctests(doctests: &[ModuleDoctests]) -> String {
         tests = cell(tests_passing, tests),
     );
     html.push_str(
-        "                <p class=\"section-foot\">What music21-rs passes of music21's own documentation and test suite. The docstrings are collected from the submodule and run against the crate through the music21-shaped facades in <code>python-parity</code>. A docstring counts as passing only when every one of its examples does, which is why that share is always the harsher of the two. The failures of each module are written to <code>target/doctest_&lt;module&gt;.log</code>. A module the crate ports but no harness runs yet counts at nought against the total music21's own <code>DocTestFinder</code> gives it, recorded in <code>data/doctest_totals.toml</code>. The unit-test column is music21's own <code>unittest</code> suites, wherever it keeps them &mdash; beside the module, inside its package, or in <code>music21/test/</code>. Nothing runs those against the crate yet, so that column is nought all the way down: it is the to-do list, not a score.</p>\n            </section>\n",
+        "                <p class=\"section-foot\">What music21-rs passes of music21's own documentation and test suite. The docstrings are collected from the submodule and run against the crate through the music21-shaped facades in <code>python-parity</code>. A docstring counts as passing only when every one of its examples does, which is why that share is always the harsher of the two. The failures of each module are written to <code>target/doctest_&lt;module&gt;.log</code>. A module the crate ports but no harness runs yet counts at nought against the total music21's own <code>DocTestFinder</code> gives it, recorded in <code>data/doctest_totals.toml</code>. The unit-test column is music21's own <code>unittest</code> suites, wherever it keeps them &mdash; beside the module, inside its package, or in <code>music21/test/</code>. No <em>harness here</em> runs those module by module, so that column is nought all the way down: it is the to-do list for this table, not a score. They are not unrun, though &mdash; music21's own suite above runs all of them against the crate at once, and reports the difference rather than a per-module share.</p>\n            </section>\n",
     );
     html
 }
@@ -2363,6 +2430,29 @@ fn render_html(report: &Report) -> String {
 }
 #[cfg(test)]
 mod tests {
+    /// The suite notes are written as sentences with `code` spans in them, and
+    /// the page has to escape the prose without eating the markup.
+    #[test]
+    fn prose_escapes_the_sentence_and_keeps_its_code_spans() {
+        assert_eq!(
+            super::prose("run `cargo test` first"),
+            "run <code>cargo test</code> first"
+        );
+        assert_eq!(super::prose("no spans here"), "no spans here");
+        assert_eq!(
+            super::prose("a & b <c>"),
+            "a &amp; b &lt;c&gt;",
+            "the prose still has to be escaped"
+        );
+        assert_eq!(
+            super::prose("`a` and `b`"),
+            "<code>a</code> and <code>b</code>"
+        );
+        // An unbalanced backtick keeps the words and loses only the markup.
+        assert!(super::prose("half `open").contains("half "));
+        assert!(!super::prose("").contains("code"));
+    }
+
     use super::*;
 
     #[test]
