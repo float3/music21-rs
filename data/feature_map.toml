@@ -460,3 +460,30 @@ name = "Scala archive"
 scala_archive = true
 unit = "scales"
 note = "Every scale music21 ships, plus the hexatone collection, parsed into one table at build time rather than read from disk. The reader also handles the inline comments and EDO notation that music21's own parser mis-reads."
+
+[[beyond]]
+name = "Regular temperaments"
+rust = "src/tuningsystem/temperaments_generated.rs"
+count = "WIKI_TEMPERAMENTS"
+unit = "temperaments"
+note = "Meantone, porcupine, marvel, miracle, mavila and the rest, as the Xenharmonic Wiki publishes them: a mapping from primes onto a period and its generators, the commas it tempers out, and the scales that come of stacking it. Every one is checked against the wiki - each comma has to vanish under the mapping, each published scale has to come out of the generator - so a mistranscribed number fails the build. music21 has no notion of a temperament at all; it tunes a scale by reading a Scala file and stops there."
+
+[[beyond]]
+name = "Monzos and vals"
+rust = "src/tuningsystem/monzo.rs"
+note = "An interval written as the exponents of the primes making up its ratio, so 81/80 is [-4 4 -1>, and its counterpart: how many steps of a tuning each prime is worth, 12edo being <12 19 28]. Multiplying intervals becomes adding vectors, and a val that maps a comma to nothing is a tuning that tempers it out - which is what says 12edo is a meantone and 22edo deliberately is not."
+
+[[beyond]]
+name = "Moments of symmetry"
+rust = "src/tuningsystem/mos.rs"
+note = "The scales a single generator makes. Seven fifths folded into an octave come out with exactly two step sizes, which is the diatonic scale, 5L 2s; stop at five and it is the pentatonic. The pattern and the tuning are kept apart, so 5L 2s is the diatonic whether its whole tone is 200 cents or 193, and nothing assumes the period is an octave."
+
+[[beyond]]
+name = "Equal divisions of anything"
+rust = "src/tuningsystem/equal.rs"
+note = "Equal steps of any interval, not only of the octave. Bohlen-Pierce divides a twelfth into thirteen and never sounds an octave at all, and the Carlos scales repeat at nothing in particular. The octave-repeating tuning tables above cannot express those by construction, so they live here and name themselves the way the literature does - 13edt, 9ed3/2."
+
+[[beyond]]
+name = "Duplicate detection"
+rust = "src/tuningsystem/duplicates.rs"
+note = "Which of these are the same tuning under another name, compared by sound rather than by spelling, so a scale written as ratios matches the same scale written in cents. It finds 44 groups of repeats among the archive's 3,994 scales - four names for quarter-comma meantone, five files that are 12edo to within half a cent - and guards the crate's own tables against the defect that once shipped IndianFull as a second name for Indian22."
