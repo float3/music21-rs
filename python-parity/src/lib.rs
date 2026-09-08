@@ -12,6 +12,7 @@
 use pyo3::prelude::*;
 
 pub mod doctest;
+pub mod suite;
 
 /// Buffer for doctest output, so a runner's report can be read back from Rust
 /// instead of going to stdout.

@@ -899,7 +899,7 @@ fn install_helper<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyModule>> {
 /// It patches a live module, so it changes music21 for everything in the
 /// process. Nothing in this module calls it for you.
 #[pyfunction]
-fn install_into_music21(py: Python<'_>) -> PyResult<usize> {
+pub fn install_into_music21(py: Python<'_>) -> PyResult<usize> {
     let ours = PyModule::new(py, "music21_rs")?;
     register_all(&ours)?;
     let mut replaced = 0;

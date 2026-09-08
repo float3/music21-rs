@@ -74,7 +74,7 @@ struct Outcome {
     report: String,
 }
 
-fn repo_root() -> PathBuf {
+pub fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .expect("python-parity has a parent directory")
@@ -83,7 +83,7 @@ fn repo_root() -> PathBuf {
 
 /// Puts the dependency virtualenv on `sys.path`, the way `xtask`'s fixture
 /// generator does, so the full music21 imports.
-fn add_dependency_venv(py: Python<'_>, root: &Path) -> PyResult<()> {
+pub fn add_dependency_venv(py: Python<'_>, root: &Path) -> PyResult<()> {
     let sys = py.import("sys")?;
     let path = sys.getattr("path")?;
     let path = path.cast::<PyList>()?;
