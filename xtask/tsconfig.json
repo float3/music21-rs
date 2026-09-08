@@ -1,0 +1,12 @@
+{
+    "compilerOptions": {
+        "allowJs": false,
+        "lib": ["DOM", "ES2022"],
+        "module": "ES2022",
+        "moduleResolution": "Bundler",
+        "newLine": "lf",
+        "strict": true,
+        "target": "ES2022"
+    },
+    "include": ["./src/report.ts"]
+}

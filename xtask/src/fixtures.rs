@@ -187,7 +187,7 @@ fn header(lines: &[&str], stamp: &Stamp) -> String {
 /// The music21 modules the crate ports, as import names, read out of
 /// `data/feature_map.toml` so the two cannot drift. `chord/__init__.py` is
 /// `music21.chord`, `meter/base.py` is `music21.meter.base`.
-fn scoped_modules(workspace_root: &Path) -> PyResult<Vec<String>> {
+pub(crate) fn scoped_modules(workspace_root: &Path) -> PyResult<Vec<String>> {
     let text = fs::read_to_string(workspace_root.join("data/feature_map.toml"))?;
     let mut modules = Vec::new();
     for line in text.lines() {
@@ -218,7 +218,7 @@ fn scoped_modules(workspace_root: &Path) -> PyResult<Vec<String>> {
 /// wrong: `music21.meter.base` would take `music21/test/test_base.py`, which
 /// is the test of `music21.base` and counts 43 tests that are nothing to do
 /// with meter.
-fn test_modules_for(workspace_root: &Path, module: &str) -> Vec<String> {
+pub(crate) fn test_modules_for(workspace_root: &Path, module: &str) -> Vec<String> {
     let root = workspace_root.join("music21/music21");
     let Some(path) = module.strip_prefix("music21.") else {
         return Vec::new();
@@ -298,8 +298,10 @@ fn write_doctest_totals(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) ->
             "# rather than being left off the page.",
             "#",
             "# `tests` counts music21's own unit tests for the module, wherever it",
-            "# keeps them. Nothing runs those against the crate yet, so the report",
-            "# shows nought against every one of them; that column is the to-do list.",
+            "# keeps them. It is a denominator of last resort: `xtask music21-suite`",
+            "# runs those tests and records how each module fared, and the report",
+            "# reads that. This is what the report falls back to where no such run",
+            "# has happened.",
         ],
         stamp,
     );

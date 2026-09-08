@@ -135,7 +135,7 @@ struct Report {
 }
 
 /// The crate timed against music21 through the same Python API, by
-/// `python/benchmarks/bench.py`. Both sides are asked the same question and
+/// `xtask bench`. Both sides are asked the same question and
 /// have to agree on the answer before either is timed, so a speedup here is a
 /// speedup at doing the same work.
 #[derive(Debug, Serialize, Deserialize)]
@@ -154,7 +154,7 @@ struct Benchmarks {
     cases: Vec<BenchCase>,
 }
 
-/// One benchmark case, as `bench.py --json` writes it.
+/// One benchmark case, as `xtask bench --json` writes it.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct BenchCase {
     case: String,
@@ -174,12 +174,19 @@ struct DoctestSummary {
     docstrings: usize,
     examples_passing: usize,
     examples: usize,
-    /// Written once something runs music21's unit tests against the crate.
-    /// Until then the report shows nought against the total in the fixture.
-    #[serde(default)]
+}
+
+/// One module's share of music21's own unit tests, as `xtask music21-suite`
+/// writes it into `target/music21-suite/music21_rs.json`.
+///
+/// Declared again here rather than shared with that module: it is only
+/// compiled under the `python` feature and the report is not, so what crosses
+/// between them is the file, exactly as it is for every other suite here.
+#[derive(Debug, Clone, Deserialize)]
+struct ModuleTests {
+    module: String,
+    tests: usize,
     tests_passing: usize,
-    #[serde(default)]
-    tests: Option<usize>,
 }
 
 /// `data/doctest_totals.toml`: how much documentation each module in scope
@@ -699,8 +706,7 @@ fn run_suites(workspace_root: &Path, env: &[(String, String)]) -> Vec<Suite> {
 /// was not already red under music21.
 fn music21_suite(workspace_root: &Path, submodule: &Path) -> Suite {
     const NAME: &str = "music21's own test suite";
-    let python = python_command();
-    let command = format!("{python} python/downstream/music21_suite.py");
+    let command = "cargo run --release -p xtask --features python -- music21-suite".to_string();
 
     let skipped = |detail: String| Suite {
         name: NAME.to_string(),
@@ -717,15 +723,15 @@ fn music21_suite(workspace_root: &Path, submodule: &Path) -> Suite {
     }
 
     let out = workspace_root.join("target/music21-suite");
-    let output = Command::new(&python)
-        .arg("python/downstream/music21_suite.py")
+    let output = xtask_command()
+        .arg("music21-suite")
         .arg("--out")
         .arg(&out)
         .current_dir(workspace_root)
         .output();
     let output = match output {
         Ok(output) => output,
-        Err(err) => return skipped(format!("could not run {python} ({err})")),
+        Err(err) => return skipped(format!("could not run xtask again ({err})")),
     };
 
     // The two reports are what the run means; a non-zero exit only says the
@@ -735,6 +741,9 @@ fn music21_suite(workspace_root: &Path, submodule: &Path) -> Suite {
     };
     let (Some(plain), Some(ours)) = (read("music21.json"), read("music21_rs.json")) else {
         let text = merged(&output);
+        if without_python_feature(&text) {
+            return skipped("xtask was built without its `python` feature".to_string());
+        }
         return match missing_module(&text) {
             Some(module) => skipped(format!("{module} is not installed in this interpreter")),
             None => Suite {
@@ -785,17 +794,37 @@ fn music21_suite(workspace_root: &Path, submodule: &Path) -> Suite {
 
 /// The interpreter the wheel suite should use: whatever `PYO3_PYTHON` names,
 /// since that is what the pyo3 crates here link against.
-fn python_command() -> String {
+pub(crate) fn python_command() -> String {
     env::var("PYO3_PYTHON").unwrap_or_else(|_| "python".to_string())
+}
+
+/// This very binary, ready to be run again with a subcommand.
+///
+/// The benchmark and music21's suite used to be Python scripts this shelled
+/// out to; they are pyo3 subcommands of `xtask` now, so driving them means
+/// running this program again. Taking the running executable rather than
+/// `cargo run` keeps the report from rebuilding itself underneath its own run.
+fn xtask_command() -> Command {
+    Command::new(env::current_exe().unwrap_or_else(|_| PathBuf::from("xtask")))
+}
+
+/// Whether some output is this program saying it was built without pyo3.
+///
+/// Those subcommands exist either way and say what is missing, so a report run
+/// from a build with no `python` feature records them as skipped with the
+/// reason rather than as failures.
+fn without_python_feature(text: &str) -> bool {
+    text.contains("built without its `python` feature")
 }
 
 /// Times the crate against music21 through the same Python API. Both need to
 /// be importable — the wheel installed, music21 with its dependencies — so
 /// this is skipped with the reason wherever they are not, like the suites.
 fn run_benchmarks(workspace_root: &Path) -> Benchmarks {
-    let python = python_command();
     let json = workspace_root.join("target/benchmarks.json");
-    let command = format!("{python} python/benchmarks/bench.py --json target/benchmarks.json");
+    let command =
+        "cargo run --release -p xtask --features python -- bench --json target/benchmarks.json"
+            .to_string();
 
     let skipped = |detail: String| Benchmarks {
         status: SuiteStatus::Skipped,
@@ -807,18 +836,21 @@ fn run_benchmarks(workspace_root: &Path) -> Benchmarks {
         cases: Vec::new(),
     };
 
-    let output = Command::new(&python)
-        .arg("python/benchmarks/bench.py")
+    let output = xtask_command()
+        .arg("bench")
         .arg("--json")
         .arg(&json)
         .current_dir(workspace_root)
         .output();
     let output = match output {
         Ok(output) => output,
-        Err(err) => return skipped(format!("could not run {python} ({err})")),
+        Err(err) => return skipped(format!("could not run xtask again ({err})")),
     };
     if !output.status.success() {
         let text = merged(&output);
+        if without_python_feature(&text) {
+            return skipped("xtask was built without its `python` feature".to_string());
+        }
         return match missing_module(&text) {
             Some(module) => skipped(format!("{module} is not installed in this interpreter")),
             None => Benchmarks {
@@ -878,7 +910,7 @@ fn median_speedup(cases: &[BenchCase]) -> f64 {
     speedups[speedups.len() / 2]
 }
 
-/// `bench.py`'s own rendering of a duration, so the page and the terminal
+/// `xtask bench`'s own rendering of a duration, so the page and the terminal
 /// agree.
 fn humanise(nanoseconds: f64) -> String {
     if nanoseconds < 1_000.0 {
@@ -1125,6 +1157,28 @@ fn last_line(text: &str) -> Option<String> {
         .map(str::to_string)
 }
 
+/// What music21's own suite made of each module the crate ports, read out of
+/// the run `xtask music21-suite` last wrote.
+///
+/// The suite is one run over the whole of music21 and reports one comparison;
+/// this is the same run attributed back per module, which is what the
+/// unit-test column of the doctest table says. Absent — no suite run here —
+/// the column falls back to nought against the fixture's totals.
+fn read_module_tests(workspace_root: &Path) -> Vec<ModuleTests> {
+    let path = workspace_root.join("target/music21-suite/music21_rs.json");
+    let Ok(text) = fs::read_to_string(&path) else {
+        return Vec::new();
+    };
+    let Ok(report) = serde_json::from_str::<serde_json::Value>(&text) else {
+        return Vec::new();
+    };
+    report
+        .get("modules")
+        .cloned()
+        .and_then(|modules| serde_json::from_value(modules).ok())
+        .unwrap_or_default()
+}
+
 /// Reads the summaries the parity doctest harness writes beside its logs,
 /// one per music21 module it runs. They are written by the parity suite, so
 /// they describe the run that just happened when the suites ran, and the last
@@ -1133,16 +1187,23 @@ fn read_doctests(workspace_root: &Path) -> Vec<ModuleDoctests> {
     let Ok(entries) = fs::read_dir(workspace_root.join("target")) else {
         return Vec::new();
     };
-    // The unit-test totals come from the fixture whether a harness covers the
-    // module or not, since nothing runs music21's unit tests against the crate
-    // yet — that column is nought all the way down, and is the to-do list.
+    // The doctest totals come from the fixture whether a harness covers the
+    // module or not, so a module with no harness is counted at nought rather
+    // than left off the page.
     let totals = read_doctest_totals(workspace_root);
-    let total_tests = |module: &str| {
-        totals
+    // The unit-test half comes from music21's own suite, which runs all of
+    // them; what it made of each module in scope is read back here.
+    let ran = read_module_tests(workspace_root);
+    let unit_tests = |module: &str| -> (usize, usize) {
+        if let Some(row) = ran.iter().find(|row| row.module == module) {
+            return (row.tests_passing, row.tests);
+        }
+        let total = totals
             .iter()
             .find(|total| total.module == module)
             .map(|total| total.tests)
-            .unwrap_or(0)
+            .unwrap_or(0);
+        (0, total)
     };
 
     let mut modules = Vec::new();
@@ -1164,14 +1225,15 @@ fn read_doctests(workspace_root: &Path) -> Vec<ModuleDoctests> {
             continue;
         };
         let module = summary.module;
+        let (tests_passing, tests) = unit_tests(&module);
         modules.push(ModuleDoctests {
             name: name.to_string(),
             docstrings_passing: summary.docstrings_passing,
             docstrings: summary.docstrings,
             examples_passing: summary.examples_passing,
             examples: summary.examples,
-            tests_passing: summary.tests_passing,
-            tests: summary.tests.unwrap_or_else(|| total_tests(&module)),
+            tests_passing,
+            tests,
             module,
             harnessed: true,
         });
@@ -1180,15 +1242,18 @@ fn read_doctests(workspace_root: &Path) -> Vec<ModuleDoctests> {
         if modules.iter().any(|m| m.module == total.module) {
             continue;
         }
-        // A module in scope that no harness runs yet. Leaving it off the page
-        // would flatter the score, so it goes in at nought against the total
-        // music21's own DocTestFinder counted.
+        // A module whose *docstrings* no parity harness runs yet. Leaving it
+        // off the page would flatter the score, so it goes in at nought
+        // against the total music21's own DocTestFinder counted. Its unit
+        // tests are another matter: music21's own suite runs every module's,
+        // harness here or no, so that column is the real figure either way.
         let name = total
             .module
             .rsplit('.')
             .next()
             .unwrap_or(&total.module)
             .to_string();
+        let (tests_passing, tests) = unit_tests(&total.module);
         modules.push(ModuleDoctests {
             name,
             module: total.module.clone(),
@@ -1196,8 +1261,8 @@ fn read_doctests(workspace_root: &Path) -> Vec<ModuleDoctests> {
             docstrings: total.docstrings,
             examples_passing: 0,
             examples: total.examples,
-            tests_passing: 0,
-            tests: total.tests,
+            tests_passing,
+            tests,
             harnessed: false,
         });
     }
@@ -2033,7 +2098,7 @@ fn render_benchmarks(benchmarks: &Benchmarks, sizes: Option<&Sizes>) -> String {
     }
     let _ = write!(
         html,
-        "                <p class=\"section-foot\">The crate and music21 asked the same question through the same Python API by <code>python/benchmarks/bench.py</code>, on music21 {music21} and Python {python} ({platform}). Both sides have to agree on the answer before either is timed, so a speedup here is a speedup at doing the same work. Each case builds a fresh object, because music21 memoizes its analysis on the object that was asked.</p>\n            </section>\n",
+        "                <p class=\"section-foot\">The crate and music21 asked the same question through the same Python API by <code>xtask bench</code>, on music21 {music21} and Python {python} ({platform}). Both sides have to agree on the answer before either is timed, so a speedup here is a speedup at doing the same work. Each case builds a fresh object, because music21 memoizes its analysis on the object that was asked.</p>\n            </section>\n",
         music21 = escape(&benchmarks.music21),
         python = escape(&benchmarks.python),
         platform = escape(&benchmarks.platform),
@@ -2116,7 +2181,7 @@ fn render_doctests(doctests: &[ModuleDoctests]) -> String {
         tests = cell(tests_passing, tests),
     );
     html.push_str(
-        "                <p class=\"section-foot\">What music21-rs passes of music21's own documentation and test suite. The docstrings are collected from the submodule and run against the crate through the music21-shaped facades in <code>python-parity</code>. A docstring counts as passing only when every one of its examples does, which is why that share is always the harsher of the two. The failures of each module are written to <code>target/doctest_&lt;module&gt;.log</code>. A module the crate ports but no harness runs yet counts at nought against the total music21's own <code>DocTestFinder</code> gives it, recorded in <code>data/doctest_totals.toml</code>. The unit-test column is music21's own <code>unittest</code> suites, wherever it keeps them &mdash; beside the module, inside its package, or in <code>music21/test/</code>. No <em>harness here</em> runs those module by module, so that column is nought all the way down: it is the to-do list for this table, not a score. They are not unrun, though &mdash; music21's own suite above runs all of them against the crate at once, and reports the difference rather than a per-module share.</p>\n            </section>\n",
+        "                <p class=\"section-foot\">What music21-rs passes of music21's own documentation and test suite. The docstrings are collected from the submodule and run against the crate through the music21-shaped facades in <code>python-parity</code>. A docstring counts as passing only when every one of its examples does, which is why that share is always the harsher of the two. The failures of each module are written to <code>target/doctest_&lt;module&gt;.log</code>. A module the crate ports but no harness runs yet counts at nought against the total music21's own <code>DocTestFinder</code> gives it, recorded in <code>data/doctest_totals.toml</code>. The unit-test column is music21's own <code>unittest</code> suites, wherever it keeps them &mdash; beside the module, inside its package, or in <code>music21/test/</code>. Those are the very tests the <em>music21's own test suite</em> row above runs, attributed back to the module each belongs to; where a module keeps them is found by looking rather than guessed at from its name, since <code>music21/test/test_base.py</code> tests <code>music21.base</code> and not <code>music21.meter.base</code>. A test music21 itself fails in this environment counts here as not passing, because what this column answers is what the crate passes of music21's suite &mdash; whether a failure is the crate's doing is the comparison the row above makes, and is reported there.</p>\n            </section>\n",
     );
     html
 }

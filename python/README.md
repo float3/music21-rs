@@ -43,7 +43,7 @@ process; nothing calls it for you. Call it before the program does
 `from music21.chord import Chord`, since that binds whatever it finds at
 import time — a `conftest.py` is early enough for a test suite.
 
-`python/downstream/run.py` is that idea as a test: it checks out
+`cargo run --release -p xtask -- downstream` is that idea as a test: it checks out
 [harte-library](https://github.com/andreamust/harte-library) — a Harte chord
 notation parser that subclasses `chord.Chord` and `interval.Interval` — runs
 its 8,116-test suite twice, once each way, and requires the two sets of

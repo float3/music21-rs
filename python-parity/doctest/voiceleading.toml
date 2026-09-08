@@ -63,4 +63,6 @@ passing = [
     "music21.voiceLeading.VoiceLeadingQuartet.v2n2",
     "music21.voiceLeading.VoiceLeadingQuartet.voiceCrossing",
     "music21.voiceLeading.VoiceLeadingQuartet.voiceOverlap",
+    "music21.voiceLeading.getVerticalityFromObject",
+    "music21.voiceLeading.iterateAllVoiceLeadingQuartets",
 ]

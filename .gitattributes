@@ -3,3 +3,5 @@
 *.py eol=lf
 *.txt eol=lf
 *.rs eol=lf
+*.ts eol=lf
+*.js eol=lf

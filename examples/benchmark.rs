@@ -1,6 +1,7 @@
 //! Times the crate itself, with no Python in the way.
 //!
-//! `python/benchmarks/bench.py` compares the wheel against music21 through
+//! `cargo run --release -p xtask --features python -- bench` compares the
+//! wheel against music21 through
 //! the same Python API; this is the other half of that measurement, and what
 //! says whether a cost lives in the crate or in the binding. Run it with
 //! `cargo run --release --example benchmark` — a debug build measures

@@ -187,11 +187,11 @@ cargo test --manifest-path python-parity/Cargo.toml -- --test-threads=1
 maturin build --release --manifest-path python/Cargo.toml --out target/wheels
 pip install --no-index --find-links target/wheels music21-rs
 pytest python/tests -q
-python python/downstream/run.py
+cargo run --release -p xtask -- downstream
 
 # 8. what the docs job builds; `report` also fails when the feature map is stale
 cargo doc --workspace --no-deps
-cargo run --release -p xtask -- report --features-only
+cargo run --release -p xtask --features python -- report --features-only
 
 # `report` with no flags runs every suite above and records how each one did,
 # alongside coverage. `--suites-only` runs just that part; `--no-suites` skips
@@ -208,8 +208,8 @@ uv venv .m21venv --python 3.12
 uv pip install --python .m21venv chardet joblib jsonpickle more_itertools numpy requests webcolors
 ```
 
-Step 7 needs `maturin`, `pytest`, and — for `downstream/run.py` — `git`,
-`music21`, `lark` and `numpy`. That script clones a pinned copy of
+Step 7 needs `maturin`, `pytest`, and — for `xtask downstream` — `git`,
+`music21`, `lark` and `numpy`. That command clones a pinned copy of
 `harte-library`, a library written for music21 by someone with no knowledge of
 this crate, and runs its several-thousand-test suite twice: once on music21 and
 once on `music21_rs`. It is a comparison rather than a pass mark, and it fails

@@ -6,8 +6,10 @@
 # rather than being left off the page.
 #
 # `tests` counts music21's own unit tests for the module, wherever it
-# keeps them. Nothing runs those against the crate yet, so the report
-# shows nought against every one of them; that column is the to-do list.
+# keeps them. It is a denominator of last resort: `xtask music21-suite`
+# runs those tests and records how each module fared, and the report
+# reads that. This is what the report falls back to where no such run
+# has happened.
 #
 # music21 11.0.0b9 at 89e85db9257aa98e39abd0c419e0c8765688e5c3
 
