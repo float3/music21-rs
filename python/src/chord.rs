@@ -1337,8 +1337,20 @@ impl Chord {
     }
 
     #[getter]
-    fn fullName(&self) -> String {
-        self.inner.full_name()
+    fn fullName(slf: &Bound<'_, Self>) -> PyResult<String> {
+        let named = slf.borrow().inner.full_name();
+        let timed = slf
+            .borrow()
+            .inner
+            .duration()
+            .cloned()
+            .unwrap_or_else(RsDuration::quarter)
+            .full_name();
+        Ok(crate::note::named_with_duration(
+            slf.as_any(),
+            &named,
+            &timed,
+        ))
     }
 
     #[getter]

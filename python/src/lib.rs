@@ -696,7 +696,10 @@ def make_class(facade, original):
         '_getSlotsRecursive': lambda self: slots_of(type(self)),
         '_replaces': original,
     })
-    for name in ('isNote', 'isRest', 'isChord', 'classSortOrder', 'equalityAttributes'):
+    for name in ('isNote', 'isRest', 'isChord', 'classSortOrder', 'equalityAttributes',
+                 # What music21 says about its own attributes, which its test
+                 # runner reads off the class to build a doctest per entry.
+                 '_DOC_ATTR', '_DOC_ORDER'):
         if hasattr(original, name):
             namespace[name] = getattr(original, name)
     class Stands(type):

@@ -42,6 +42,26 @@ pyo3::create_exception!(
     crate::Music21Exception
 );
 
+/// A note or chord's name with the length written on the end taken from its
+/// duration object rather than from its value.
+///
+/// The object is where an unlinked length lives: a grace note sounds for
+/// nothing at all while still being written as a sixteenth, and music21
+/// names it by what is written.
+pub(crate) fn named_with_duration(holder: &Bound<'_, PyAny>, named: &str, value: &str) -> String {
+    let Ok(written) = holder
+        .getattr("duration")
+        .and_then(|duration| duration.getattr("fullName"))
+        .and_then(|name| name.extract::<String>())
+    else {
+        return named.to_string();
+    };
+    if written == value {
+        return named.to_string();
+    }
+    named.replacen(value, &written, 1)
+}
+
 /// A number written the way music21's `common.mixedNumeral` writes it: a
 /// whole number where it is one, and a whole number and a fraction where the
 /// two are both there.
@@ -1872,10 +1892,12 @@ impl Duration {
         // off the value: the tuplets a caller has appended are Python
         // objects, and the name says which they are.
         let tuplets = self.tuplet_objects(py)?;
-        // A duration nobody has written a tuplet onto knows its own name,
-        // and the value's reading of what it is written inside is the
-        // fuller one — it names the odd ratio a length like 53/25 needs.
-        if tuplets.is_empty() {
+        // A duration nobody has written a tuplet onto, and whose length is
+        // the one its written values add up to, knows its own name — and the
+        // value's reading is the fuller one, since it names the odd ratio a
+        // length like 53/25 needs. An unlinked one does not: a grace note
+        // sounds for nothing while still being written as a sixteenth.
+        if tuplets.is_empty() && self.linked {
             return Ok(self.inner.full_name());
         }
         let mut named = Vec::with_capacity(tuplets.len());
@@ -2883,8 +2905,18 @@ impl Note {
     }
 
     #[getter]
-    fn fullName(&self, py: Python<'_>) -> String {
-        self.synced(py).full_name()
+    fn fullName(slf: &Bound<'_, Self>, py: Python<'_>) -> PyResult<String> {
+        let value = slf.borrow().synced(py);
+        let named = value.full_name();
+        let timed = value
+            .duration()
+            .map(RsDuration::full_name)
+            .unwrap_or_default();
+        Ok(crate::note::named_with_duration(
+            slf.as_any(),
+            &named,
+            &timed,
+        ))
     }
 
     /// music21's `.duration`, the same object every time: `n.duration.type =
