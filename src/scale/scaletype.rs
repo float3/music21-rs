@@ -94,6 +94,7 @@ pub const HUMDRUM_SOLFEG_SYLLABLES: [[&str; 5]; 7] = [
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
+#[must_use]
 pub enum ScaleType {
     /// Major (Ionian).
     Major,
@@ -485,6 +486,7 @@ impl DegreeComparison {
 /// ```
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
 pub struct Scale {
     scale_type: ScaleType,
     tonic: Pitch,
@@ -1077,6 +1079,23 @@ impl Scale {
             .iter()
             .position(|candidate| comparison.key(candidate) == wanted)
             .map(|index| index + 1))
+    }
+
+    /// Every one-based degree the pitch stands on.
+    ///
+    /// A scale may name the same note twice — Rag Marwa's A is both its
+    /// fifth degree and its seventh, since the pattern dips before it closes
+    /// — and music21 chooses between them at random. The choosing is left to
+    /// the caller; this says what there is to choose from.
+    pub fn degrees_of_by(&self, pitch: &Pitch, comparison: DegreeComparison) -> Result<Vec<usize>> {
+        let wanted = comparison.key(pitch);
+        Ok(self
+            .scale_pitches()?
+            .iter()
+            .enumerate()
+            .filter(|(_, candidate)| comparison.key(candidate) == wanted)
+            .map(|(index, _)| index + 1)
+            .collect())
     }
 
     /// Returns the one-based degree whose pitch name matches, ignoring octave,

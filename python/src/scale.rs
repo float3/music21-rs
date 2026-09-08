@@ -1151,6 +1151,7 @@ impl ConcreteScale {
     #[pyo3(signature = (pitchTarget, direction = None, comparisonAttribute = "name", **_keywords))]
     fn getScaleDegreeFromPitch(
         &self,
+        py: Python<'_>,
         pitchTarget: &Bound<'_, PyAny>,
         direction: Option<&Bound<'_, PyAny>>,
         comparisonAttribute: &str,
@@ -1174,9 +1175,11 @@ impl ConcreteScale {
                 .degree_of_by(&pitch, comparison)
                 .map_err(scale_error);
         }
-        self.heard(direction)?
-            .degree_of_by(&pitch, comparison)
-            .map_err(scale_error)
+        let degrees = self
+            .heard(direction)?
+            .degrees_of_by(&pitch, comparison)
+            .map_err(scale_error)?;
+        chosen_degree(py, &degrees)
     }
 
     /// music21's `getScaleDegreeAndAccidentalFromPitch`: the degree and how
@@ -1484,6 +1487,28 @@ pub(crate) fn comparison_of(attribute: &str) -> RsDegreeComparison {
 
 /// Whether a `direction` argument says downwards. music21 passes its own
 /// `Direction` enum, a name, or a signed number.
+/// One of the degrees a pitch stands on, chosen the way music21 chooses.
+///
+/// A scale may name the same note twice — Rag Marwa's A is its fifth degree
+/// and its seventh — and music21 picks between them at random each time it
+/// is asked, which is what its own tests count on. The choosing is done here
+/// rather than in the crate: which degrees there are is a musical question
+/// and which one is answered is not.
+fn chosen_degree(py: Python<'_>, degrees: &[usize]) -> PyResult<Option<usize>> {
+    match degrees {
+        [] => Ok(None),
+        [only] => Ok(Some(*only)),
+        many => {
+            let index: usize = py
+                .import("random")?
+                .getattr("randrange")?
+                .call1((many.len(),))?
+                .extract()?;
+            Ok(many.get(index).copied())
+        }
+    }
+}
+
 fn is_descending(direction: Option<&Bound<'_, PyAny>>) -> bool {
     direction.is_some_and(|direction| {
         direction
