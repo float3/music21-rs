@@ -263,7 +263,7 @@ impl Note {
         };
         for (index, line) in lyric.split('\n').enumerate() {
             let mut parsed = Lyric::from_raw_text(line);
-            parsed.set_number(index as IntegerType + 1)?;
+            parsed.set_number(index as IntegerType + 1);
             self.notation.lyrics.push(parsed);
         }
         Ok(())
@@ -286,7 +286,7 @@ impl Note {
     ) -> Result<()> {
         let Some(number) = number else {
             let mut lyric = Self::build_lyric(text, apply_raw);
-            lyric.set_number(self.notation.lyrics.len() as IntegerType + 1)?;
+            lyric.set_number(self.notation.lyrics.len() as IntegerType + 1);
             self.notation.lyrics.push(lyric);
             return Ok(());
         };
@@ -300,7 +300,7 @@ impl Note {
             return Ok(());
         }
         let mut lyric = Self::build_lyric(text, apply_raw);
-        lyric.set_number(number)?;
+        lyric.set_number(number);
         self.notation.lyrics.push(lyric);
         Ok(())
     }
@@ -312,10 +312,10 @@ impl Note {
     pub fn insert_lyric(&mut self, text: &str, index: usize, apply_raw: bool) -> Result<()> {
         let index = index.min(self.notation.lyrics.len());
         for (offset, lyric) in self.notation.lyrics[index..].iter_mut().enumerate() {
-            lyric.set_number(index as IntegerType + offset as IntegerType + 2)?;
+            lyric.set_number(index as IntegerType + offset as IntegerType + 2);
         }
         let mut lyric = Self::build_lyric(text, apply_raw);
-        lyric.set_number(index as IntegerType + 1)?;
+        lyric.set_number(index as IntegerType + 1);
         self.notation.lyrics.insert(index, lyric);
         Ok(())
     }

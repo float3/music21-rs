@@ -3,7 +3,6 @@
 
 #![allow(non_snake_case)]
 
-use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
@@ -28,9 +27,17 @@ pub const NAMES: &[&str] = &[
     "standardizeAccidentalName",
 ];
 
-pyo3::create_exception!(music21_rs_facade, PitchException, PyException);
-pyo3::create_exception!(music21_rs_facade, AccidentalException, PyException);
-pyo3::create_exception!(music21_rs_facade, MicrotoneException, PyException);
+pyo3::create_exception!(music21_rs_facade, PitchException, crate::Music21Exception);
+pyo3::create_exception!(
+    music21_rs_facade,
+    AccidentalException,
+    crate::Music21Exception
+);
+pyo3::create_exception!(
+    music21_rs_facade,
+    MicrotoneException,
+    crate::Music21Exception
+);
 
 /// The crate's `Display` prefixes every message with its kind, `Pitch error:`;
 /// music21's exceptions carry the message alone, and the doctests compare

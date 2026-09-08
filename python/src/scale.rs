@@ -9,7 +9,6 @@
 
 #![allow(non_snake_case)]
 
-use pyo3::exceptions::PyException;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyTuple, PyType};
@@ -61,10 +60,14 @@ pub const NAMES: &[&str] = &[
     "RagMarwa",
 ];
 
-pyo3::create_exception!(music21_rs_facade, ScaleException, PyException);
+pyo3::create_exception!(music21_rs_facade, ScaleException, crate::Music21Exception);
 // music21 raises this one from the interval network underneath a scale, and
 // names it after that module rather than after `scale` itself.
-pyo3::create_exception!(music21_rs_facade, IntervalNetworkException, PyException);
+pyo3::create_exception!(
+    music21_rs_facade,
+    IntervalNetworkException,
+    crate::Music21Exception
+);
 
 fn scale_error(error: music21_rs::Error) -> PyErr {
     ScaleException::new_err(message(&error))

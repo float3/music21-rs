@@ -1116,14 +1116,14 @@ impl Lyric {
     }
 
     /// Sets the verse number, which must be positive as music21 requires.
-    pub fn set_number(&mut self, number: IntegerType) -> Result<()> {
-        if number <= 0 {
-            return Err(Error::Notation(format!(
-                "Number best be number {number}, not a string"
-            )));
-        }
+    /// Sets which verse this lyric belongs to.
+    ///
+    /// Any whole number will do, as music21's own setter allows: its
+    /// MusicXML reader numbers a verse `0` when the score named it with
+    /// something that is not a number at all, and keeps the name as the
+    /// identifier.
+    pub fn set_number(&mut self, number: IntegerType) {
         self.number = number;
-        Ok(())
     }
 
     /// Where the syllable falls in its word. A composite lyric reads as
@@ -1338,11 +1338,14 @@ mod tests {
         let mut lyric = Lyric::new("shine");
         assert_eq!(lyric.number(), 1);
         assert_eq!(lyric.identifier(), "1");
-        lyric.set_number(3).unwrap();
+        lyric.set_number(3);
         assert_eq!(lyric.identifier(), "3");
         lyric.set_identifier(Some("chorus".to_string()));
         assert_eq!(lyric.identifier(), "chorus");
-        assert!(lyric.set_number(0).is_err());
+        // Any whole number, as music21 allows: a verse the score named
+        // with something that is not a number at all is numbered nought.
+        lyric.set_number(0);
+        assert_eq!(lyric.number(), 0);
         assert_eq!(lyric.to_string(), "shine");
         assert_eq!(Syllabic::from_name("middle").unwrap(), Syllabic::Middle);
         assert!(Syllabic::from_name("half").is_err());

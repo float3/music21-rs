@@ -7,7 +7,6 @@
 // music21's own names, kept as music21 spells them.
 #![allow(non_snake_case)]
 
-use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
@@ -26,7 +25,7 @@ pub const NAMES: &[&str] = &[
     "convertTempoByReferent",
 ];
 
-pyo3::create_exception!(music21_rs_facade, TempoException, PyException);
+pyo3::create_exception!(music21_rs_facade, TempoException, crate::Music21Exception);
 pyo3::create_exception!(music21_rs_facade, MetronomeMarkException, TempoException);
 
 fn tempo_error(error: music21_rs::Error) -> PyErr {

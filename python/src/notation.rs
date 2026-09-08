@@ -3,7 +3,7 @@
 
 #![allow(non_snake_case)]
 
-use pyo3::exceptions::{PyException, PyIndexError, PyValueError};
+use pyo3::exceptions::PyIndexError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
@@ -24,10 +24,10 @@ pub const VOLUME_NAMES: &[&str] = &["Volume", "VolumeException"];
 /// The names the `notation` facade replaces in `music21.beam`.
 pub const BEAM_NAMES: &[&str] = &["Beam", "Beams", "BeamException"];
 
-pyo3::create_exception!(music21_rs_facade, TieException, PyValueError);
-pyo3::create_exception!(music21_rs_facade, LyricException, PyException);
-pyo3::create_exception!(music21_rs_facade, VolumeException, PyException);
-pyo3::create_exception!(music21_rs_facade, BeamException, PyException);
+pyo3::create_exception!(music21_rs_facade, TieException, crate::Music21Exception);
+pyo3::create_exception!(music21_rs_facade, LyricException, crate::Music21Exception);
+pyo3::create_exception!(music21_rs_facade, VolumeException, crate::Music21Exception);
+pyo3::create_exception!(music21_rs_facade, BeamException, crate::Music21Exception);
 
 fn beam_error(error: music21_rs::Error) -> PyErr {
     BeamException::new_err(message(&error))
@@ -337,7 +337,7 @@ impl Lyric {
             // word with no letters in it.
             None => RsLyric::unsung(),
         };
-        inner.set_number(number).map_err(lyric_error)?;
+        inner.set_number(number);
         if let Some(syllabic) = syllabic {
             inner.set_syllabic(Syllabic::from_name(syllabic).map_err(lyric_error)?);
         }
@@ -409,7 +409,8 @@ impl Lyric {
         let Ok(number) = value.extract::<i32>() else {
             return Err(LyricException::new_err("Number best be number"));
         };
-        self.inner.set_number(number).map_err(lyric_error)
+        self.inner.set_number(number);
+        Ok(())
     }
 
     /// music21's `syllabic`, which is nothing at all until something says
@@ -831,11 +832,22 @@ pub struct Beams {
     pub(crate) inner: RsBeams,
     /// The note or chord these belong to, so an edit through them reaches it.
     owner: Option<Py<PyAny>>,
+    /// music21's `beamsList`, as the list object itself.
+    ///
+    /// Its own MusicXML reader appends each beam to what `beams.beamsList`
+    /// hands back, so a getter that built a fresh list every time dropped
+    /// every beam the score wrote. Once the list exists it is what the beams
+    /// are, and `settle` writes it into the value.
+    beams: Option<Py<PyList>>,
 }
 
 impl Beams {
     pub(crate) fn wrap(inner: RsBeams) -> Self {
-        Self { inner, owner: None }
+        Self {
+            inner,
+            owner: None,
+            beams: None,
+        }
     }
 
     /// The same, knowing what carries them.
@@ -843,11 +855,35 @@ impl Beams {
         Self {
             inner,
             owner: Some(owner),
+            beams: None,
         }
     }
 
+    /// Folds the beam objects into the value, so every question about the
+    /// beams is answered from what Python has actually got.
+    fn settle(&mut self, py: Python<'_>) {
+        let Some(beams) = &self.beams else {
+            return;
+        };
+        let held: Vec<RsBeam> = beams
+            .bind(py)
+            .iter()
+            .filter_map(|beam| beam.extract::<PyRef<'_, Beam>>().ok())
+            .map(|beam| beam.inner)
+            .collect();
+        self.inner.set_beams(held);
+    }
+
+    /// The same, and then letting the objects go so the next reader builds
+    /// them again from the answer.
+    fn settled(&mut self, py: Python<'_>) {
+        self.settle(py);
+        self.beams = None;
+    }
+
     /// Writes these beams back into whatever carries them.
-    fn write_back(&self, py: Python<'_>) -> PyResult<()> {
+    fn write_back(&mut self, py: Python<'_>) -> PyResult<()> {
+        self.settle(py);
         let Some(owner) = &self.owner else {
             return Ok(());
         };
@@ -962,26 +998,39 @@ impl Beams {
 
     /// music21's `beamsList`: the beams themselves, in level order.
     #[getter]
-    fn get_beamsList(&self) -> Vec<Beam> {
-        self.inner
-            .beams()
-            .iter()
-            .map(|beam| Beam {
-                inner: *beam,
-                identifier: None,
-                independent_angle: None,
-                style: None,
-                unnamed_type: None,
-            })
-            .collect()
+    fn get_beamsList<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyList>> {
+        let py = slf.py();
+        if let Some(beams) = &slf.borrow().beams {
+            return Ok(beams.bind(py).clone());
+        }
+        let held = slf.borrow().inner.beams().to_vec();
+        let list = PyList::empty(py);
+        for beam in held {
+            list.append(crate::installed_new(
+                py,
+                "music21.beam",
+                "Beam",
+                Beam {
+                    inner: beam,
+                    identifier: None,
+                    independent_angle: None,
+                    style: None,
+                    unnamed_type: None,
+                },
+            )?)?;
+        }
+        slf.borrow_mut().beams = Some(list.clone().unbind());
+        Ok(list)
     }
 
     /// Setting it replaces them outright, which is how music21 says a note
     /// carries no beam at all.
     #[setter]
-    fn set_beamsList(&mut self, py: Python<'_>, value: Vec<PyRef<'_, Beam>>) -> PyResult<()> {
+    fn set_beamsList(&mut self, py: Python<'_>, value: Vec<Py<Beam>>) -> PyResult<()> {
         self.inner
-            .set_beams(value.into_iter().map(|beam| beam.inner).collect());
+            .set_beams(value.iter().map(|beam| beam.borrow(py).inner).collect());
+        // The objects given are kept, as music21 keeps them.
+        self.beams = Some(PyList::new(py, value)?.unbind());
         self.write_back(py)
     }
 
@@ -994,10 +1043,12 @@ impl Beams {
         r#type: Option<&Bound<'_, PyAny>>,
         direction: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<()> {
+        self.settled(py);
         if let Some(value) = r#type
             && let Ok(beam) = value.extract::<PyRef<'_, Beam>>()
         {
             self.inner.beams_mut().push(beam.inner);
+            drop(beam);
             return self.write_back(py);
         }
         self.inner
@@ -1016,6 +1067,7 @@ impl Beams {
         level: Option<&Bound<'_, PyAny>>,
         r#type: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<()> {
+        self.settled(py);
         let levels = beam_levels(level)?;
         self.inner
             .fill_levels(levels, beam_type_or_none(r#type)?)
@@ -1031,6 +1083,7 @@ impl Beams {
         r#type: &Bound<'_, PyAny>,
         direction: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<()> {
+        self.settled(py);
         self.inner
             .set_all(beam_type_of(r#type)?, beam_direction_of(direction)?);
         self.write_back(py)
@@ -1048,6 +1101,7 @@ impl Beams {
         r#type: &Bound<'_, PyAny>,
         direction: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<()> {
+        self.settled(py);
         let (beam_type, beam_direction) = match r#type.extract::<String>() {
             Ok(written) if written.contains('-') => {
                 let (name, side) = written.split_once('-').expect("a hyphen was just found");
@@ -1074,7 +1128,8 @@ impl Beams {
     }
 
     /// music21's `getByNumber`.
-    fn getByNumber(&self, number: u32) -> PyResult<Beam> {
+    fn getByNumber(&mut self, py: Python<'_>, number: u32) -> PyResult<Beam> {
+        self.settle(py);
         self.inner
             .by_number(number)
             .map(|beam| Beam {
@@ -1091,8 +1146,8 @@ impl Beams {
 
     /// music21's `getTypeByNumber`, which writes a stub's direction into the
     /// name with a hyphen.
-    fn getTypeByNumber(&self, number: u32) -> PyResult<Option<String>> {
-        let beam = self.getByNumber(number)?;
+    fn getTypeByNumber(&mut self, py: Python<'_>, number: u32) -> PyResult<Option<String>> {
+        let beam = self.getByNumber(py, number)?;
         let Some(name) = beam.get_type() else {
             return Ok(None);
         };
@@ -1103,7 +1158,8 @@ impl Beams {
     }
 
     /// music21's `getTypes`.
-    fn getTypes(&self) -> Vec<Option<&'static str>> {
+    fn getTypes(&mut self, py: Python<'_>) -> Vec<Option<&'static str>> {
+        self.settle(py);
         self.inner
             .types()
             .into_iter()
@@ -1112,7 +1168,8 @@ impl Beams {
     }
 
     /// music21's `getNumbers`.
-    fn getNumbers(&self) -> Vec<Option<u32>> {
+    fn getNumbers(&mut self, py: Python<'_>) -> Vec<Option<u32>> {
+        self.settle(py);
         self.inner.numbers()
     }
 
@@ -1211,19 +1268,17 @@ impl Beams {
         self.inner.set_feathered(value);
     }
 
-    fn __len__(&self) -> usize {
+    fn __len__(&mut self, py: Python<'_>) -> usize {
+        self.settle(py);
         self.inner.len()
     }
 
-    fn __iter__(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        let list = PyList::empty(py);
-        for beam in self.get_beamsList() {
-            list.append(beam.into_pyobject(py)?)?;
-        }
-        Ok(list.try_iter()?.unbind().into_any())
+    fn __iter__(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
+        Ok(Self::get_beamsList(slf)?.try_iter()?.unbind().into_any())
     }
 
-    fn __repr__(&self) -> String {
+    fn __repr__(&mut self, py: Python<'_>) -> String {
+        self.settle(py);
         // music21 writes the class alone when there is nothing to say about
         // it, so a note with no beams is `<music21.beam.Beams>`.
         let written = self.inner.to_string();

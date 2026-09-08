@@ -7,7 +7,6 @@
 // music21's own names, kept as music21 spells them.
 #![allow(non_snake_case)]
 
-use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyTuple};
 
@@ -22,7 +21,11 @@ use crate::pitch::{message, pitch_from_any};
 /// The names the `voiceleading` facade replaces in `music21.voiceLeading`.
 pub const NAMES: &[&str] = &["VoiceLeadingQuartet", "VoiceLeadingQuartetException"];
 
-pyo3::create_exception!(music21_rs_facade, VoiceLeadingQuartetException, PyException);
+pyo3::create_exception!(
+    music21_rs_facade,
+    VoiceLeadingQuartetException,
+    crate::Music21Exception
+);
 
 fn quartet_error(error: music21_rs::Error) -> PyErr {
     VoiceLeadingQuartetException::new_err(message(&error))

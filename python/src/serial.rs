@@ -7,7 +7,6 @@
 //! print `type(row)` and `repr(row)`, and yields note-shaped objects when a
 //! row is iterated, because they read `.pitch` and `.name` off the elements.
 
-use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
 
@@ -31,7 +30,7 @@ pub const NAMES: &[&str] = &[
     "historicalDict",
 ];
 
-pyo3::create_exception!(music21_rs_facade, SerialException, PyException);
+pyo3::create_exception!(music21_rs_facade, SerialException, crate::Music21Exception);
 
 fn serial_error(error: music21_rs::Error) -> PyErr {
     SerialException::new_err(crate::pitch::message(&error))

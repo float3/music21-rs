@@ -127,6 +127,37 @@ pub(crate) fn installed_class<'py>(
     installed.get_item((module, name)).ok()
 }
 
+/// music21's own `Music21Exception`, as a type these classes can be built on.
+///
+/// Every exception music21 raises is one of these, and its own code catches
+/// that base all over: its MusicXML reader tries the mode a score names for
+/// its key signature and lets a bad one go by catching it. An exception of
+/// ours that was not one of these would not be caught, and the reader would
+/// fail on a score it can read. Where music21 is not there to be imported —
+/// the wheel used on its own — a plain `Exception` stands in.
+pub struct Music21Exception;
+
+#[allow(deprecated)]
+unsafe impl pyo3::type_object::PyTypeInfo for Music21Exception {
+    const NAME: &'static str = "Music21Exception";
+    const MODULE: Option<&'static str> = Some("music21.exceptions21");
+
+    fn type_object_raw(py: Python<'_>) -> *mut pyo3::ffi::PyTypeObject {
+        static TYPE_OBJECT: pyo3::sync::PyOnceLock<Py<pyo3::types::PyType>> =
+            pyo3::sync::PyOnceLock::new();
+        TYPE_OBJECT
+            .get_or_init(py, || {
+                py.import("music21.exceptions21")
+                    .and_then(|module| module.getattr("Music21Exception"))
+                    .and_then(|class| Ok(class.cast_into::<pyo3::types::PyType>()?))
+                    .map(pyo3::Bound::unbind)
+                    .unwrap_or_else(|_| py.get_type::<pyo3::exceptions::PyException>().unbind())
+            })
+            .as_ptr()
+            .cast()
+    }
+}
+
 /// What `__reduce__` hands back: the function that makes a blank object of
 /// the right class, the module and name to make it under, and the state to
 /// write into it.

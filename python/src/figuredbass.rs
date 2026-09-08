@@ -8,7 +8,6 @@
 // music21's own names, kept as music21 spells them.
 #![allow(non_snake_case)]
 
-use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
 use pyo3::types::PyTuple;
 
@@ -29,8 +28,16 @@ pub const NAMES: &[&str] = &[
     "convertToPitch",
 ];
 
-pyo3::create_exception!(music21_rs_facade, NotationException, PyException);
-pyo3::create_exception!(music21_rs_facade, ModifierException, PyException);
+pyo3::create_exception!(
+    music21_rs_facade,
+    NotationException,
+    crate::Music21Exception
+);
+pyo3::create_exception!(
+    music21_rs_facade,
+    ModifierException,
+    crate::Music21Exception
+);
 
 fn modifier_error(error: music21_rs::Error) -> PyErr {
     ModifierException::new_err(message(&error))

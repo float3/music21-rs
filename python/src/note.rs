@@ -3,7 +3,7 @@
 
 #![allow(non_snake_case)]
 
-use pyo3::exceptions::{PyException, PyIndexError, PyTypeError, PyValueError};
+use pyo3::exceptions::{PyIndexError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyFloat, PyList, PyTuple};
 
@@ -34,9 +34,13 @@ pub const NAMES: &[&str] = &[
 /// thinner one costs more than it gains.
 pub const DURATION_NAMES: &[&str] = &["Duration"];
 
-pyo3::create_exception!(music21_rs_facade, NoteException, PyException);
-pyo3::create_exception!(music21_rs_facade, NotRestException, PyException);
-pyo3::create_exception!(music21_rs_facade, DurationException, PyException);
+pyo3::create_exception!(music21_rs_facade, NoteException, crate::Music21Exception);
+pyo3::create_exception!(music21_rs_facade, NotRestException, crate::Music21Exception);
+pyo3::create_exception!(
+    music21_rs_facade,
+    DurationException,
+    crate::Music21Exception
+);
 
 fn duration_error(error: music21_rs::Error) -> PyErr {
     DurationException::new_err(message(&error))

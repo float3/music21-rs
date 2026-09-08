@@ -4,7 +4,7 @@
 
 #![allow(non_snake_case)]
 
-use pyo3::exceptions::{PyException, PyValueError};
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
@@ -49,7 +49,11 @@ pub const NAMES: &[&str] = &[
     "subtract",
 ];
 
-pyo3::create_exception!(music21_rs_facade, IntervalException, PyException);
+pyo3::create_exception!(
+    music21_rs_facade,
+    IntervalException,
+    crate::Music21Exception
+);
 
 fn interval_error(error: music21_rs::Error) -> PyErr {
     IntervalException::new_err(message(&error))

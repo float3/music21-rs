@@ -3,7 +3,7 @@
 
 #![allow(non_snake_case)]
 
-use pyo3::exceptions::{PyException, PyIndexError, PyKeyError, PyTypeError, PyValueError};
+use pyo3::exceptions::{PyIndexError, PyKeyError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
 
@@ -25,7 +25,7 @@ use crate::pitch::{Accidental, Pitch, message, pitch_from_any};
 /// The names the `chord` facade replaces in `music21.chord`.
 pub const NAMES: &[&str] = &["Chord", "ChordException"];
 
-pyo3::create_exception!(music21_rs_facade, ChordException, PyException);
+pyo3::create_exception!(music21_rs_facade, ChordException, crate::Music21Exception);
 
 fn chord_error(error: music21_rs::Error) -> PyErr {
     ChordException::new_err(message(&error))

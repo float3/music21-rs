@@ -3,7 +3,7 @@
 
 #![allow(non_snake_case)]
 
-use pyo3::exceptions::{PyException, PyValueError};
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
 
@@ -31,8 +31,12 @@ pub const NAMES: &[&str] = &[
     "convertKeyStringToMusic21KeyString",
 ];
 
-pyo3::create_exception!(music21_rs_facade, KeySignatureException, PyException);
-pyo3::create_exception!(music21_rs_facade, KeyException, PyException);
+pyo3::create_exception!(
+    music21_rs_facade,
+    KeySignatureException,
+    crate::Music21Exception
+);
+pyo3::create_exception!(music21_rs_facade, KeyException, crate::Music21Exception);
 
 fn key_error(error: music21_rs::Error) -> PyErr {
     KeyException::new_err(message(&error))

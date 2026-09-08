@@ -9,7 +9,7 @@
 
 #![allow(non_snake_case)]
 
-use pyo3::exceptions::{PyException, PyValueError};
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
@@ -26,7 +26,11 @@ use crate::pitch::message;
 /// The names the `roman` facade replaces in `music21.roman`.
 pub const NAMES: &[&str] = &["RomanNumeral", "RomanNumeralException"];
 
-pyo3::create_exception!(music21_rs_facade, RomanNumeralException, PyException);
+pyo3::create_exception!(
+    music21_rs_facade,
+    RomanNumeralException,
+    crate::Music21Exception
+);
 
 fn roman_error(error: music21_rs::Error) -> PyErr {
     RomanNumeralException::new_err(message(&error))
