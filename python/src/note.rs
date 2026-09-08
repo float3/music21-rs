@@ -2794,7 +2794,9 @@ impl Note {
         keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Self> {
         let inner = match pitch.filter(|value| !value.is_none()) {
-            Some(value) => RsNote::from_pitch(pitch_from_any(value)?),
+            Some(value) => RsNote::from_pitch(crate::pitch::pitch_from_any_with_keywords(
+                py, value, keywords,
+            )?),
             None => match crate::pitch::pitch_from_keywords(py, keywords)? {
                 Some(pitch) => RsNote::from_pitch(pitch),
                 None => RsNote::from_name("C4").map_err(note_error)?,

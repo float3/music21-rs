@@ -722,10 +722,24 @@ pub(crate) fn pitch_from_keywords(
     py: Python<'_>,
     keywords: Option<&Bound<'_, PyDict>>,
 ) -> PyResult<Option<RsPitch>> {
-    let Some(keywords) = keywords else {
+    let wanted = pitch_keywords(py, keywords)?;
+    if wanted.is_empty() {
         return Ok(None);
-    };
+    }
+    let built = py.get_type::<Pitch>().call((), Some(&wanted))?;
+    Ok(Some(built.extract::<PyRef<'_, Pitch>>()?.inner.clone()))
+}
+
+/// The pitch keywords out of a note's keywords, under the names `Pitch`
+/// itself takes.
+fn pitch_keywords<'py>(
+    py: Python<'py>,
+    keywords: Option<&Bound<'py, PyDict>>,
+) -> PyResult<Bound<'py, PyDict>> {
     let wanted = PyDict::new(py);
+    let Some(keywords) = keywords else {
+        return Ok(wanted);
+    };
     for name in PITCH_KEYWORDS {
         if let Some(value) = keywords.get_item(name)? {
             wanted.set_item(
@@ -738,11 +752,28 @@ pub(crate) fn pitch_from_keywords(
             )?;
         }
     }
-    if wanted.is_empty() {
-        return Ok(None);
+    Ok(wanted)
+}
+
+/// The pitch music21 builds from a positional argument *and* the keywords
+/// beside it: its `Note.__init__` writes `Pitch(pitch, **keywords)`, so
+/// `Note('A', octave=4)` is `A4` rather than an octave-less `A`. A `Pitch`
+/// already built is kept as it stands, which is the other half of what
+/// music21 writes there.
+pub(crate) fn pitch_from_any_with_keywords(
+    py: Python<'_>,
+    value: &Bound<'_, PyAny>,
+    keywords: Option<&Bound<'_, PyDict>>,
+) -> PyResult<RsPitch> {
+    let wanted = pitch_keywords(py, keywords)?;
+    // Only a name or a number is something `Pitch` takes positionally; any
+    // other object is read for its pitch as it always was.
+    let positional = value.extract::<String>().is_ok() || value.extract::<f64>().is_ok();
+    if wanted.is_empty() || !positional {
+        return pitch_from_any(value);
     }
-    let built = py.get_type::<Pitch>().call((), Some(&wanted))?;
-    Ok(Some(built.extract::<PyRef<'_, Pitch>>()?.inner.clone()))
+    let built = py.get_type::<Pitch>().call((value,), Some(&wanted))?;
+    Ok(built.extract::<PyRef<'_, Pitch>>()?.inner.clone())
 }
 
 /// Reads a pitch argument: a facade, a name, or a number.
