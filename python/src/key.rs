@@ -84,6 +84,17 @@ fn tonic_name(value: &Bound<'_, PyAny>) -> PyResult<String> {
 
 #[pymethods]
 impl KeySignature {
+    /// A key signature is written out as text and read back.
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<(Py<PyAny>, (), Py<PyAny>)> {
+        crate::pickled(slf, &slf.borrow().signature)
+    }
+
+    fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
+        let signature: RsKeySignature = crate::unpickled(slf, state)?;
+        slf.borrow_mut().signature = signature;
+        Ok(())
+    }
+
     #[new]
     #[pyo3(signature = (sharps = None, **kwargs))]
     fn new(
@@ -336,12 +347,27 @@ pub struct Key {
 
 impl Key {
     pub(crate) fn object(py: Python<'_>, inner: RsKey) -> PyResult<Py<PyAny>> {
-        let init = PyClassInitializer::from(KeySignature::of(inner.sharps())).add_subclass(Key {
+        let signature = KeySignature::of(inner.sharps());
+        let key = Key {
             inner,
             correlation_coefficient: 0.0,
             alternate_interpretations: None,
             abstract_scale: None,
-        });
+        };
+        // Where the class has been installed over music21's, the object has
+        // to be one of those: music21 will hold nothing else, and a pickle
+        // looking the class up by name finds that one.
+        if let Some(class) = crate::installed_class(py, "music21.key", "Key") {
+            let object = crate::blank_installed(&class)?;
+            {
+                let cell = object.cast::<Key>()?;
+                let mut me = cell.borrow_mut();
+                *me = key;
+                *me.into_super() = signature;
+            }
+            return Ok(object.unbind());
+        }
+        let init = PyClassInitializer::from(signature).add_subclass(key);
         Ok(Py::new(py, init)?.into_any())
     }
 
@@ -381,6 +407,21 @@ impl Key {
 
 #[pymethods]
 impl Key {
+    /// A key is written out as text and read back, and its signature is made
+    /// again from what it says.
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<(Py<PyAny>, (), Py<PyAny>)> {
+        crate::pickled(slf, &slf.borrow().inner)
+    }
+
+    fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
+        let inner: RsKey = crate::unpickled(slf, state)?;
+        let sharps = inner.sharps();
+        let mut me = slf.borrow_mut();
+        me.inner = inner;
+        me.as_super().signature = RsKeySignature::new(sharps);
+        Ok(())
+    }
+
     /// music21's `correlationCoefficient`: how well this key fitted the
     /// music it was analysed from. Zero until an analysis says otherwise.
     #[getter]

@@ -142,6 +142,23 @@ impl RomanNumeral {
         Ok(PyClassInitializer::from(chord).add_subclass(numeral))
     }
 
+    /// The same as an object, and as the class music21 now has under that
+    /// name — a numeral built as the bare facade is one no stream can hold.
+    pub(crate) fn object(py: Python<'_>, numeral: Self) -> PyResult<Py<Self>> {
+        let Some(class) = crate::installed_class(py, "music21.roman", "RomanNumeral") else {
+            return Py::new(py, Self::initializer(py, numeral)?);
+        };
+        let chord = Chord::from_inner(py, numeral.chord()?)?;
+        let object = crate::blank_installed(&class)?;
+        let cell = object.cast::<Self>()?;
+        {
+            let mut me = cell.borrow_mut();
+            *me = numeral;
+            *me.into_super() = chord;
+        }
+        Ok(cell.clone().unbind())
+    }
+
     /// Builds one from music21's two arguments: a figure or a scale degree,
     /// and a key or a scale.
     pub(crate) fn build(
@@ -452,6 +469,25 @@ fn figure_for_degree(key: Option<&RsKey>, degree: usize) -> PyResult<String> {
 
 #[pymethods]
 impl RomanNumeral {
+    /// A numeral is written out as text and read back, and the chord it
+    /// stands on is worked out again from the figure.
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<(Py<PyAny>, (), Py<PyAny>)> {
+        crate::pickled(slf, &slf.borrow().inner)
+    }
+
+    fn __setstate__(
+        slf: &Bound<'_, Self>,
+        py: Python<'_>,
+        state: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
+        let inner: RsRomanNumeral = crate::unpickled(slf, state)?;
+        let numeral = Self::wrap(inner, None);
+        let chord = numeral.chord()?;
+        slf.as_super().borrow_mut().replace_value(py, chord)?;
+        slf.borrow_mut().inner = numeral.inner;
+        Ok(())
+    }
+
     #[new]
     #[pyo3(signature = (figure = None, keyOrScale = None, **_keywords))]
     fn new(
@@ -835,7 +871,7 @@ impl RomanNumeral {
         };
         let inner = RsRomanNumeral::new(secondary.to_string(), self.inner.key().clone())
             .map_err(roman_error)?;
-        Ok(Py::new(py, Self::initializer(py, Self::wrap(inner, self.octave))?)?.into_any())
+        Ok(Self::object(py, Self::wrap(inner, self.octave))?.into_any())
     }
 
     /// music21's `functionalityScore`: how strongly the figure pulls, on
@@ -1105,6 +1141,22 @@ impl RomanNumeral {
             py,
             Self::initializer(py, Self::wrap(moved, octave))?,
         )?))
+    }
+
+    /// music21's `writeAsChord`: whether the numeral is written out as the
+    /// notes it stands for rather than as a figure. `RomanNumeral` always is.
+    #[getter]
+    fn get_writeAsChord(&self) -> bool {
+        true
+    }
+
+    #[setter]
+    fn set_writeAsChord(&mut self, _value: bool) {}
+
+    /// music21 hashes a numeral by identity, since two numerals that read
+    /// the same are still two objects a stream can hold apart.
+    fn __hash__(slf: &Bound<'_, Self>) -> isize {
+        slf.as_ptr() as isize >> 4
     }
 
     fn __repr__(&self) -> String {

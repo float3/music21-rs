@@ -261,37 +261,64 @@ fn specifier_from_generic_chromatic(
     let diff = (these_semis + rounding_error).round() as IntegerType - normal_semis;
 
     if g_int.is_perfectable() {
-        match diff {
-            0 => Ok(Specifier::Perfect),
-            1 => Ok(Specifier::Augmented),
-            2 => Ok(Specifier::DoubleAugmented),
-            3 => Ok(Specifier::TripleAugmented),
-            4 => Ok(Specifier::QuadrupleAugmented),
-            -1 => Ok(Specifier::Diminished),
-            -2 => Ok(Specifier::DoubleDiminished),
-            -3 => Ok(Specifier::TripleDiminished),
-            -4 => Ok(Specifier::QuadrupleDiminished),
-            _ => Err(Error::Interval(format!(
-                "cannot get specifier from perfectable diff {diff}"
-            ))),
-        }
+        specifier_at(&PERFECTABLE_SPECIFIERS, 4 + diff, "Perfect", diff)
     } else {
-        match diff {
-            0 => Ok(Specifier::Major),
-            -1 => Ok(Specifier::Minor),
-            1 => Ok(Specifier::Augmented),
-            2 => Ok(Specifier::DoubleAugmented),
-            3 => Ok(Specifier::TripleAugmented),
-            4 => Ok(Specifier::QuadrupleAugmented),
-            -2 => Ok(Specifier::Diminished),
-            -3 => Ok(Specifier::DoubleDiminished),
-            -4 => Ok(Specifier::TripleDiminished),
-            -5 => Ok(Specifier::QuadrupleDiminished),
-            _ => Err(Error::Interval(format!(
-                "cannot get specifier from major diff {diff}"
-            ))),
-        }
+        specifier_at(&MAJOR_SPECIFIERS, 5 + diff, "Major", diff)
     }
+}
+
+/// The qualities a perfectable interval takes, widest flat to widest sharp:
+/// music21's `perfSpecifiers`, with `Perfect` in the middle.
+const PERFECTABLE_SPECIFIERS: [Specifier; 9] = [
+    Specifier::QuadrupleDiminished,
+    Specifier::TripleDiminished,
+    Specifier::DoubleDiminished,
+    Specifier::Diminished,
+    Specifier::Perfect,
+    Specifier::Augmented,
+    Specifier::DoubleAugmented,
+    Specifier::TripleAugmented,
+    Specifier::QuadrupleAugmented,
+];
+
+/// The same for an interval that is major or minor rather than perfect:
+/// music21's `specifiers`.
+const MAJOR_SPECIFIERS: [Specifier; 10] = [
+    Specifier::QuadrupleDiminished,
+    Specifier::TripleDiminished,
+    Specifier::DoubleDiminished,
+    Specifier::Diminished,
+    Specifier::Minor,
+    Specifier::Major,
+    Specifier::Augmented,
+    Specifier::DoubleAugmented,
+    Specifier::TripleAugmented,
+    Specifier::QuadrupleAugmented,
+];
+
+/// The quality at a place in one of those tables.
+///
+/// music21 indexes the table with a plain Python subscript, so a note flatter
+/// than the widest diminished it can spell does not raise — the index goes
+/// negative and Python counts back from the end, which answers an augmented
+/// interval for a flattened one. It is a strange answer and it is the one
+/// music21 gives, and the interval's own cent shift still says how far off
+/// the note really is. Only an index off the sharp end raises, as it does
+/// upstream.
+fn specifier_at(
+    table: &[Specifier],
+    index: IntegerType,
+    from: &str,
+    diff: IntegerType,
+) -> Result<Specifier> {
+    let length = table.len() as IntegerType;
+    let wrapped = if index < 0 { index + length } else { index };
+    if index >= length || wrapped < 0 {
+        return Err(Error::Interval(format!(
+            "cannot get a specifier for a note with this many semitones off of {from}: {diff}"
+        )));
+    }
+    Ok(table[wrapped as usize])
 }
 
 /// Reads the quality off a generic and a chromatic interval together:
@@ -1129,6 +1156,29 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: &Interval) -> Result<Fract
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_note_flatter_than_the_table_wraps_the_way_music21_does() {
+        // music21 subscripts its own quality table with a plain index, so a
+        // fifth five semitones flat comes back quadruply *augmented* with a
+        // nine-hundred-cent shift saying how far off it really is.
+        let interval = Interval::between_pitches(
+            &Pitch::from_name("A##3").unwrap(),
+            &Pitch::from_name("E---4").unwrap(),
+        )
+        .unwrap();
+        assert_eq!(interval.short_name(), "AAAA5");
+        assert_eq!(interval.chromatic().semitones(), 2.0);
+
+        // The sharp end of the table is reached but never passed, since the
+        // widest accidental a pitch can spell stops short of it.
+        let widest = Interval::between_pitches(
+            &Pitch::from_name("C4").unwrap(),
+            &Pitch::from_name("E####4").unwrap(),
+        )
+        .unwrap();
+        assert_eq!(widest.short_name(), "AAAA3");
+    }
 
     #[test]
     fn generic_and_chromatic_build_the_interval_music21_does() {

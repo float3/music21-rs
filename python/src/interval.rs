@@ -424,6 +424,19 @@ fn generic_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsGeneric> {
 
 #[pymethods]
 impl GenericInterval {
+    /// music21 freezes a score by pickling it, and what this object is lives
+    /// in Rust where a pickle cannot see it — so it is written out as text,
+    /// and read back into a fresh one of these.
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<(Py<PyAny>, (), Py<PyAny>)> {
+        crate::pickled(slf, &slf.borrow().inner)
+    }
+
+    fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
+        let inner: RsGeneric = crate::unpickled(slf, state)?;
+        slf.borrow_mut().inner = inner;
+        Ok(())
+    }
+
     #[new]
     #[pyo3(signature = (value = None, **_keywords))]
     fn new(
@@ -561,7 +574,12 @@ impl GenericInterval {
     /// when it does.
     fn complement(&mut self, py: Python<'_>) -> PyResult<Py<Self>> {
         if self.complemented.is_none() {
-            self.complemented = Some(Py::new(py, Self::wrap(self.inner.complement()))?);
+            self.complemented = Some(crate::installed_new(
+                py,
+                "music21.interval",
+                "Interval",
+                Self::wrap(self.inner.complement()),
+            )?);
         }
         Ok(self
             .complemented
@@ -652,6 +670,19 @@ impl DiatonicInterval {
 
 #[pymethods]
 impl DiatonicInterval {
+    /// music21 freezes a score by pickling it, and what this object is lives
+    /// in Rust where a pickle cannot see it — so it is written out as text,
+    /// and read back into a fresh one of these.
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<(Py<PyAny>, (), Py<PyAny>)> {
+        crate::pickled(slf, &slf.borrow().inner)
+    }
+
+    fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
+        let inner: RsDiatonic = crate::unpickled(slf, state)?;
+        slf.borrow_mut().inner = inner;
+        Ok(())
+    }
+
     #[new]
     #[pyo3(signature = (specifier = None, generic = None, **_keywords))]
     fn new(
@@ -875,6 +906,19 @@ fn semitone_object(py: Python<'_>, semitones: f64) -> PyResult<Py<PyAny>> {
 
 #[pymethods]
 impl ChromaticInterval {
+    /// music21 freezes a score by pickling it, and what this object is lives
+    /// in Rust where a pickle cannot see it — so it is written out as text,
+    /// and read back into a fresh one of these.
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<(Py<PyAny>, (), Py<PyAny>)> {
+        crate::pickled(slf, &slf.borrow().inner)
+    }
+
+    fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
+        let inner: RsChromatic = crate::unpickled(slf, state)?;
+        slf.borrow_mut().inner = inner;
+        Ok(())
+    }
+
     #[new]
     #[pyo3(signature = (semitones = None, **_keywords))]
     fn new(
@@ -1013,6 +1057,22 @@ impl Interval {
             pitch_start: None,
             pitch_end: None,
             interval_type: String::new(),
+        }
+    }
+
+    /// The same, spanning two objects the caller already holds, so that
+    /// `interval.noteStart is n1`.
+    pub(crate) fn between(
+        inner: RsInterval,
+        start: Py<PyAny>,
+        end: Py<PyAny>,
+        interval_type: &str,
+    ) -> Self {
+        Self {
+            inner,
+            pitch_start: Some(start),
+            pitch_end: Some(end),
+            interval_type: interval_type.to_string(),
         }
     }
 
@@ -1223,6 +1283,19 @@ pub(crate) fn transpose_pitch_by_any(
 
 #[pymethods]
 impl Interval {
+    /// music21 freezes a score by pickling it, and what this object is lives
+    /// in Rust where a pickle cannot see it — so it is written out as text,
+    /// and read back into a fresh one of these.
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<(Py<PyAny>, (), Py<PyAny>)> {
+        crate::pickled(slf, &slf.borrow().inner)
+    }
+
+    fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
+        let inner: RsInterval = crate::unpickled(slf, state)?;
+        slf.borrow_mut().inner = inner;
+        Ok(())
+    }
+
     #[new]
     #[pyo3(signature = (
         arg0 = None,

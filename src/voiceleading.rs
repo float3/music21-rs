@@ -6,6 +6,7 @@
 //! forbids.
 
 use crate::{
+    defaults::IntegerType,
     error::{Error, Result},
     interval::{Interval, IntervalDirection},
     key::Key,
@@ -60,8 +61,34 @@ impl std::fmt::Display for MotionType {
     }
 }
 
+/// What a caller may ask of a parallel motion.
+///
+/// music21 takes either: a number is how wide the interval must be, whatever
+/// it is spelled — `3` for parallel thirds of any quality — and an interval
+/// is the interval itself, spelling and all.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ParallelRequirement {
+    /// However many steps wide, counted inclusively.
+    Wide(IntegerType),
+    /// This interval exactly.
+    Named(Box<Interval>),
+}
+
+impl From<Interval> for ParallelRequirement {
+    fn from(interval: Interval) -> Self {
+        Self::Named(Box::new(interval))
+    }
+}
+
+impl From<IntegerType> for ParallelRequirement {
+    fn from(steps: IntegerType) -> Self {
+        Self::Wide(steps)
+    }
+}
+
 /// Two consecutive notes in each of two voices. Voice one is the upper voice.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct VoiceLeadingQuartet {
     v1n1: Pitch,
     v1n2: Pitch,
@@ -115,6 +142,11 @@ impl VoiceLeadingQuartet {
     /// The key the progression is heard in, if one was given.
     pub fn key(&self) -> Option<&Key> {
         self.key.as_ref()
+    }
+
+    /// Attaches a key, or takes one away.
+    pub fn set_key(&mut self, key: Option<Key>) {
+        self.key = key;
     }
 
     /// Whether a dissonant first interval resolves the way voice-leading
@@ -199,6 +231,41 @@ impl VoiceLeadingQuartet {
         } else {
             false
         }
+    }
+
+    /// Whether the two voices open the way sixteenth-century counterpoint
+    /// opens: music21's `modalOpening`. Errors without a key.
+    ///
+    /// One of the two harmonic intervals must be a unison or a fifth — the
+    /// second may be, to allow for an anacrusis — and the pair must establish
+    /// the tonic or the dominant. Which of the two says so is whichever can
+    /// be read at all: music21 asks the first, and only falls to the second
+    /// when the first says nothing.
+    pub fn modal_opening(&self) -> Result<bool> {
+        let Some(key) = &self.key else {
+            return Err(Error::Analysis(
+                "modalOpening requires a key to be set on the VoiceLeadingQuartet".to_string(),
+            ));
+        };
+        let opening = ["P1", "P5"];
+        let sounds_open = opening.contains(&self.vertical[0].simple_name().as_str())
+            || opening.contains(&self.vertical[1].simple_name().as_str());
+        let function_of = |first: &Pitch, second: &Pitch| -> Result<Option<bool>> {
+            let chord = crate::chord::Chord::new([first.clone(), second.clone()].as_slice())?;
+            Ok(
+                crate::roman::identify_as_tonic_or_dominant(&chord, key)?.map(|figure| {
+                    figure
+                        .chars()
+                        .next()
+                        .is_some_and(|numeral| matches!(numeral.to_ascii_uppercase(), 'I' | 'V'))
+                }),
+            )
+        };
+        let established = match function_of(&self.v1n1, &self.v2n1)? {
+            Some(established) => established,
+            None => function_of(&self.v1n2, &self.v2n2)?.unwrap_or(false),
+        };
+        Ok(sounds_open && established)
     }
 
     /// Whether the two voices close a clausula vera: stepwise contrary
@@ -292,7 +359,7 @@ impl VoiceLeadingQuartet {
     /// `allow_octave_displacement` accepts a fifth answered by a twelfth.
     pub fn parallel_motion(
         &self,
-        required: Option<&Interval>,
+        required: Option<&ParallelRequirement>,
         allow_octave_displacement: bool,
     ) -> bool {
         let [first, second] = &self.vertical;
@@ -305,10 +372,16 @@ impl VoiceLeadingQuartet {
         if first.generic().semi_simple_undirected() != second.generic().semi_simple_undirected() {
             return false;
         }
-        required.is_none_or(|required| {
-            first.semi_simple_key() == required.semi_simple_key()
-                && second.semi_simple_key() == required.semi_simple_key()
-        })
+        match required {
+            None => true,
+            Some(ParallelRequirement::Wide(steps)) => {
+                first.generic().semi_simple_undirected() == *steps
+            }
+            Some(ParallelRequirement::Named(required)) => {
+                first.semi_simple_key() == required.semi_simple_key()
+                    && second.semi_simple_key() == required.semi_simple_key()
+            }
+        }
     }
 
     /// Returns whether the voices move in opposite directions.
@@ -341,7 +414,8 @@ impl VoiceLeadingQuartet {
     /// Returns whether the voices move in parallel or anti-parallel through
     /// the given interval, in any octave.
     pub fn parallel_interval(&self, interval: &Interval) -> bool {
-        self.parallel_motion(Some(interval), true) || self.anti_parallel_motion(Some(interval))
+        let required = ParallelRequirement::Named(Box::new(interval.clone()));
+        self.parallel_motion(Some(&required), true) || self.anti_parallel_motion(Some(interval))
     }
 
     /// Returns whether the voices move in parallel fifths.
@@ -397,6 +471,31 @@ impl VoiceLeadingQuartet {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_modal_opening_needs_a_perfect_interval_and_a_tonic_or_dominant() {
+        // music21's own examples.
+        let opening = |v1n1, v1n2, v2n1, v2n2, key: &str| {
+            VoiceLeadingQuartet::from_names(v1n1, v1n2, v2n1, v2n2)
+                .unwrap()
+                .with_key(Key::from_tonic(key).unwrap())
+                .modal_opening()
+                .unwrap()
+        };
+        assert!(opening("D", "D", "D", "F#", "D"));
+        assert!(opening("B", "A", "G#", "A", "A"));
+        assert!(opening("A", "A", "F#", "D", "A"));
+        assert!(!opening("C#", "C#", "D", "E", "A"));
+        assert!(!opening("B", "B", "A", "A", "C"));
+
+        // Without a key there is nothing to be the tonic of.
+        assert!(
+            VoiceLeadingQuartet::from_names("D", "D", "D", "F#")
+                .unwrap()
+                .modal_opening()
+                .is_err()
+        );
+    }
 
     #[test]
     #[allow(clippy::type_complexity)]

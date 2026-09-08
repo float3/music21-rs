@@ -38,6 +38,7 @@ pub enum Minor67Default {
 
 /// A parsed Roman numeral in a key.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RomanNumeral {
     figure: String,
     key: Key,
@@ -85,12 +86,14 @@ pub struct RomanNumeral {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 enum RomanKind {
     Diatonic,
     AugmentedSixth(AugmentedSixthKind),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 enum AugmentedSixthKind {
     Italian,
     French,
@@ -99,6 +102,7 @@ enum AugmentedSixthKind {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 enum RomanQuality {
     Major,
     Minor,
@@ -1086,6 +1090,7 @@ fn validate_figure(figure: &str) -> Result<()> {
 /// with the omissions, additions and alterations music21 parses out of the
 /// figure before the column is read.
 #[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 struct FiguredBass {
     /// The column itself, expanded out of the shorthand it was written in.
     column: Notation,

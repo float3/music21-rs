@@ -134,12 +134,29 @@ impl MetronomeMark {
         Ok(mark)
     }
 
+    /// The same mark again. A copy has no referent object of its own yet;
+    /// it makes one when something asks.
+    fn copied(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            sounding: self.sounding,
+            parentheses: self.parentheses,
+            placement: self.placement.clone(),
+            referent: None,
+        }
+    }
+
     /// The referent as an object, made on first asking and the same after.
     fn referent_object(slf: &Bound<'_, Self>, py: Python<'_>) -> PyResult<Py<Duration>> {
         if let Some(referent) = &slf.borrow().referent {
             return Ok(referent.clone_ref(py));
         }
-        let made = Py::new(py, Duration::wrap(slf.borrow().inner.referent().clone()))?;
+        let made = crate::installed_new(
+            py,
+            "music21.duration",
+            "Duration",
+            Duration::wrap(slf.borrow().inner.referent().clone()),
+        )?;
         slf.borrow_mut().referent = Some(made.clone_ref(py));
         Ok(made)
     }
@@ -147,6 +164,19 @@ impl MetronomeMark {
 
 #[pymethods]
 impl MetronomeMark {
+    /// music21 freezes a score by pickling it, and what this object is lives
+    /// in Rust where a pickle cannot see it — so it is written out as text,
+    /// and read back into a fresh one of these.
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<(Py<PyAny>, (), Py<PyAny>)> {
+        crate::pickled(slf, &slf.borrow().inner)
+    }
+
+    fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
+        let inner: RsMetronomeMark = crate::unpickled(slf, state)?;
+        slf.borrow_mut().inner = inner;
+        Ok(())
+    }
+
     #[new]
     #[pyo3(signature = (text = None, number = None, referent = None, **keywords))]
     fn new(
@@ -311,7 +341,7 @@ impl MetronomeMark {
         let equivalent = self
             .inner
             .equivalent_by_referent(referent_duration(Some(referent))?);
-        Py::new(py, Self::wrap(equivalent))
+        crate::installed_new(py, "music21.tempo", "MetronomeMark", Self::wrap(equivalent))
     }
 
     /// music21's `getMaintainedNumberWithReferent`: the same number counted
@@ -324,7 +354,7 @@ impl MetronomeMark {
         let moved = self
             .inner
             .maintained_number_with_referent(referent_duration(Some(referent))?);
-        Py::new(py, Self::wrap(moved))
+        crate::installed_new(py, "music21.tempo", "MetronomeMark", Self::wrap(moved))
     }
 
     /// music21's `secondsPerQuarter`.
@@ -346,7 +376,7 @@ impl MetronomeMark {
             .inner
             .seconds_to_duration(seconds)
             .map_err(tempo_error)?;
-        Py::new(py, Duration::wrap(duration))
+        crate::installed_new(py, "music21.duration", "Duration", Duration::wrap(duration))
     }
 
     /// music21's `getTextExpression`: the word as something a score can
@@ -440,20 +470,17 @@ impl MetronomeMark {
             .is_ok_and(|other| other.inner == self.inner && other.sounding == self.sounding)
     }
 
-    fn __deepcopy__(&self, py: Python<'_>, memo: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
-        let copied = Self {
-            inner: self.inner.clone(),
-            sounding: self.sounding,
-            parentheses: self.parentheses,
-            placement: self.placement.clone(),
-            referent: None,
-        };
-        let _ = memo;
-        Ok(Py::new(py, copied)?.into_any())
+    fn __deepcopy__<'py>(
+        slf: &Bound<'py, Self>,
+        _memo: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let copied = slf.borrow().copied();
+        crate::copy_as_same_type(slf, copied)
     }
 
-    fn __copy__(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        self.__deepcopy__(py, py.None().into_bound(py).as_any())
+    fn __copy__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        let copied = slf.borrow().copied();
+        crate::copy_as_same_type(slf, copied)
     }
 }
 

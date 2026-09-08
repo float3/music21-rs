@@ -160,6 +160,19 @@ fn other_row(value: &Bound<'_, PyAny>) -> PyResult<RsToneRow> {
 
 #[pymethods]
 impl ToneRow {
+    /// music21 freezes a score by pickling it, and what this object is lives
+    /// in Rust where a pickle cannot see it — so it is written out as text,
+    /// and read back into a fresh one of these.
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<(Py<PyAny>, (), Py<PyAny>)> {
+        crate::pickled(slf, &slf.borrow().inner)
+    }
+
+    fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
+        let inner: RsToneRow = crate::unpickled(slf, state)?;
+        slf.borrow_mut().inner = inner;
+        Ok(())
+    }
+
     #[new]
     #[pyo3(signature = (row = None, **kwargs))]
     fn new(row: Option<&Bound<'_, PyAny>>, kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {

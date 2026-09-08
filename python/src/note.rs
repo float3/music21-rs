@@ -262,6 +262,19 @@ impl Tuplet {
 
 #[pymethods]
 impl Tuplet {
+    /// music21 freezes a score by pickling it, and what this object is lives
+    /// in Rust where a pickle cannot see it — so it is written out as text,
+    /// and read back into a fresh one of these.
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<(Py<PyAny>, (), Py<PyAny>)> {
+        crate::pickled(slf, &slf.borrow().inner)
+    }
+
+    fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
+        let inner: RsTuplet = crate::unpickled(slf, state)?;
+        slf.borrow_mut().inner = inner;
+        Ok(())
+    }
+
     #[new]
     #[pyo3(signature = (numberNotesActual = 3, numberNotesNormal = 2, durationActual = None, durationNormal = None, **_keywords))]
     fn new(
@@ -1055,6 +1068,18 @@ pub(crate) fn duration_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsDuration
 
 #[pymethods]
 impl Duration {
+    /// music21 freezes a score by pickling it. A duration keeps what it is
+    /// in Rust, where a pickle cannot see it, so it is written out as text
+    /// and read back.
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<(Py<PyAny>, (), Py<PyAny>)> {
+        crate::pickled(slf, &slf.borrow().inner)
+    }
+
+    fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
+        slf.borrow_mut().inner = crate::unpickled(slf, state)?;
+        Ok(())
+    }
+
     /// music21's `Duration(value, **keywords)`, where `type`, `dots` and
     /// `quarterLength` are the keywords its `GeneralNote` passes through when
     /// a note is built with them.
@@ -1810,7 +1835,12 @@ impl Note {
     /// Builds the facade around a note, giving its pitch a Python object of
     /// its own.
     pub(crate) fn wrap(py: Python<'_>, inner: RsNote) -> PyResult<Self> {
-        let pitch = Py::new(py, Pitch::wrap(inner.pitch().clone(), false))?;
+        let pitch = crate::installed_new(
+            py,
+            "music21.pitch",
+            "Pitch",
+            Pitch::wrap(inner.pitch().clone(), false),
+        )?;
         Ok(Self {
             inner,
             pitch,
@@ -1826,7 +1856,7 @@ impl Note {
 
     /// A Python note object whose pitch already points back at it.
     pub(crate) fn object(py: Python<'_>, inner: RsNote) -> PyResult<Py<Self>> {
-        let note = Py::new(py, Self::wrap(py, inner)?)?;
+        let note = crate::installed_new(py, "music21.note", "Note", Self::wrap(py, inner)?)?;
         Self::claim_pitch(py, &note);
         Ok(note)
     }
@@ -1926,7 +1956,8 @@ impl Note {
             .duration()
             .cloned()
             .unwrap_or_else(RsDuration::quarter);
-        let created = Py::new(py, Duration::wrap(inner))?;
+        let created =
+            crate::installed_new(py, "music21.duration", "Duration", Duration::wrap(inner))?;
         self.duration = Some(created.clone_ref(py));
         Ok(created)
     }
@@ -1999,6 +2030,25 @@ pub(crate) fn note_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsNote> {
 
 #[pymethods]
 impl Note {
+    /// A note is written out as text and read back, and its pitch and its
+    /// duration are made again from what it says.
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<(Py<PyAny>, (), Py<PyAny>)> {
+        crate::pickled(slf, &slf.borrow().synced(slf.py()))
+    }
+
+    fn __setstate__(
+        slf: &Bound<'_, Self>,
+        py: Python<'_>,
+        state: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
+        let inner: RsNote = crate::unpickled(slf, state)?;
+        let rebuilt = Self::wrap(py, inner)?;
+        *slf.borrow_mut() = rebuilt;
+        let pitch = slf.borrow().pitch.clone_ref(py);
+        pitch.borrow_mut(py).owner = Some(slf.clone().unbind());
+        Ok(())
+    }
+
     #[new]
     #[pyo3(signature = (pitch = None, **keywords))]
     fn new(
@@ -2174,7 +2224,12 @@ impl Note {
         self.inner.set_duration(inner.clone());
         self.duration = match value.extract::<Py<Duration>>() {
             Ok(object) => Some(object),
-            Err(_) => Some(Py::new(py, Duration::wrap(inner))?),
+            Err(_) => Some(crate::installed_new(
+                py,
+                "music21.duration",
+                "Duration",
+                Duration::wrap(inner),
+            )?),
         };
         Ok(())
     }
@@ -2190,7 +2245,14 @@ impl Note {
         self.inner.set_duration(inner.clone());
         match &self.duration {
             Some(duration) => duration.borrow_mut(py).inner = inner,
-            None => self.duration = Some(Py::new(py, Duration::wrap(inner))?),
+            None => {
+                self.duration = Some(crate::installed_new(
+                    py,
+                    "music21.duration",
+                    "Duration",
+                    Duration::wrap(inner),
+                )?);
+            }
         }
         Ok(())
     }
@@ -2311,10 +2373,23 @@ impl Note {
     }
 
     #[getter]
-    fn style(slf: &Bound<'_, Self>) -> Style {
+    fn get_style(slf: &Bound<'_, Self>) -> Style {
         Style {
             owner: StyleOwner::Note(slf.clone().unbind()),
         }
+    }
+
+    /// music21 hands a whole style object over. What this crate keeps of a
+    /// style is the colour, so that is what comes across; the rest of what
+    /// music21 puts there is the page, which the crate does not model.
+    #[setter]
+    fn set_style(slf: &Bound<'_, Self>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        let colour: Option<String> = value
+            .getattr("color")
+            .ok()
+            .and_then(|colour| colour.extract().ok());
+        slf.borrow_mut().inner.set_color(colour);
+        Ok(())
     }
 
     #[getter]
@@ -2332,7 +2407,12 @@ impl Note {
         // The volume knows whose it is, which is how music21 tells a volume
         // already spoken for from a loose one.
         let inner = slf.borrow().inner.volume();
-        let created = Py::new(py, Volume::owned_by(inner, slf.clone().into_any().unbind()))?;
+        let created = crate::installed_new(
+            py,
+            "music21.volume",
+            "Volume",
+            Volume::owned_by(inner, slf.clone().into_any().unbind()),
+        )?;
         slf.borrow_mut().volume = Some(created.clone_ref(py));
         Ok(created)
     }
@@ -2348,7 +2428,12 @@ impl Note {
         self.inner.set_volume(Some(inner.clone()));
         self.volume = match value.extract::<Py<Volume>>() {
             Ok(object) => Some(object),
-            Err(_) => Some(Py::new(py, Volume::wrap(inner))?),
+            Err(_) => Some(crate::installed_new(
+                py,
+                "music21.volume",
+                "Volume",
+                Volume::wrap(inner),
+            )?),
         };
         Ok(())
     }
@@ -2361,13 +2446,33 @@ impl Note {
     }
 
     #[getter]
-    pub(crate) fn lyrics(&self) -> Vec<Lyric> {
+    pub(crate) fn get_lyrics(&self) -> Vec<Lyric> {
         self.inner
             .lyrics()
             .iter()
             .cloned()
             .map(Lyric::wrap)
             .collect()
+    }
+
+    /// Setting them replaces every verse at once, which is how music21 says
+    /// a note is sung to something else, or to nothing.
+    #[setter]
+    pub(crate) fn set_lyrics(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        let verses = self.inner.lyrics_mut();
+        verses.clear();
+        let Some(value) = value.filter(|value| !value.is_none()) else {
+            return Ok(());
+        };
+        for item in value.try_iter()? {
+            let item = item?;
+            let verse = match item.extract::<PyRef<'_, Lyric>>() {
+                Ok(lyric) => lyric.inner.clone(),
+                Err(_) => music21_rs::notation::Lyric::new(item.extract::<String>()?),
+            };
+            verses.push(verse);
+        }
+        Ok(())
     }
 
     #[getter]

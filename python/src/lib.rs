@@ -24,13 +24,14 @@ pub mod roman;
 pub mod scale;
 pub mod serial;
 pub mod tempo;
+pub mod voiceleading;
 
 pub use pitch::{Accidental, Microtone, Pitch};
 
 /// The names each music21 module has a counterpart for here, which is what
 /// [`install_into_music21`] replaces and what `python-parity`'s doctest
 /// harness swaps one module at a time.
-const MUSIC21_MODULES: [(&str, &[&str]); 14] = [
+const MUSIC21_MODULES: [(&str, &[&str]); 15] = [
     ("music21.pitch", pitch::NAMES),
     ("music21.interval", interval::NAMES),
     ("music21.note", note::NAMES),
@@ -45,6 +46,7 @@ const MUSIC21_MODULES: [(&str, &[&str]); 14] = [
     ("music21.roman", roman::NAMES),
     ("music21.figuredBass.notation", figuredbass::NAMES),
     ("music21.tempo", tempo::NAMES),
+    ("music21.voiceLeading", voiceleading::NAMES),
 ];
 
 /// A copy of a facade value as an instance of the class it was asked on,
@@ -65,6 +67,119 @@ where
     let copy = class.call_method1("__new__", (&class,))?;
     *copy.cast::<T>()?.borrow_mut() = value;
     Ok(copy)
+}
+
+/// The class music21 now has under a name, where one of ours was installed
+/// there.
+///
+/// A facade that builds a new object of its own kind has to build one of
+/// these: music21 will only hold the installed class, and a pickle looking
+/// the class up by name finds it and not the bare facade.
+pub(crate) fn installed_class<'py>(
+    py: Python<'py>,
+    module: &str,
+    name: &str,
+) -> Option<Bound<'py, PyAny>> {
+    let helper = install_helper(py).ok()?;
+    let installed = helper.getattr("installed").ok()?;
+    installed.get_item((module, name)).ok()
+}
+
+/// A facade object's musical half, written out as text a pickle can carry.
+///
+/// music21 freezes a score by pickling it, and an object of one of these
+/// classes carries its state in Rust where a pickle cannot see it. Writing
+/// it out is how it survives the round trip; the Python half of an installed
+/// object, which is the offset and the sites, pickles itself as it always
+/// did.
+pub(crate) fn written_state<T>(value: &T) -> PyResult<String>
+where
+    T: serde::Serialize,
+{
+    serde_json::to_string(value).map_err(|error| {
+        pyo3::exceptions::PyValueError::new_err(format!("cannot write this out: {error}"))
+    })
+}
+
+/// The same read back.
+pub(crate) fn read_state<T>(text: &str) -> PyResult<T>
+where
+    T: serde::de::DeserializeOwned,
+{
+    serde_json::from_str(text).map_err(|error| {
+        pyo3::exceptions::PyValueError::new_err(format!("cannot read this back: {error}"))
+    })
+}
+
+/// How a facade object is pickled: rebuilt by calling its own class with no
+/// arguments, then told what it was.
+///
+/// The musical half lives in Rust where a pickle cannot see it, so it is
+/// written out as text; the Python half of an installed object — the offset,
+/// the sites, everything music21 keeps — goes along as its own dictionary.
+pub(crate) fn pickled<T, V>(slf: &Bound<'_, T>, value: &V) -> PyResult<(Py<PyAny>, (), Py<PyAny>)>
+where
+    T: pyo3::PyClass,
+    V: serde::Serialize,
+{
+    let py = slf.py();
+    let class = slf.as_any().get_type().into_any().unbind();
+    let written = written_state(value)?;
+    let carried = match slf.as_any().getattr("__dict__") {
+        Ok(carried) => carried.unbind(),
+        Err(_) => py.None(),
+    };
+    let state = (written, carried).into_pyobject(py)?.into_any().unbind();
+    Ok((class, (), state))
+}
+
+/// The other half of that: what the object was, read back, with the Python
+/// half put where it was.
+pub(crate) fn unpickled<T, V>(slf: &Bound<'_, T>, state: &Bound<'_, PyAny>) -> PyResult<V>
+where
+    T: pyo3::PyClass,
+    V: serde::de::DeserializeOwned,
+{
+    let (written, carried): (String, Py<PyAny>) = state.extract()?;
+    let py = slf.py();
+    if !carried.is_none(py)
+        && let Ok(own) = slf.as_any().getattr("__dict__")
+    {
+        own.call_method1("update", (carried,))?;
+    }
+    read_state(&written)
+}
+
+/// A new facade object, as the class music21 now has under that name.
+///
+/// Every object a facade builds has to be one of the installed classes where
+/// there is one: music21 will hold nothing else, `isinstance` reads it as
+/// what it replaced, and a pickle looking the class up by module and name
+/// finds the installed one and refuses anything else. Where nothing has been
+/// installed — the wheel on its own — the bare facade is what there is.
+pub(crate) fn installed_new<T>(
+    py: Python<'_>,
+    module: &str,
+    name: &str,
+    value: T,
+) -> PyResult<Py<T>>
+where
+    T: pyo3::PyClass<Frozen = pyo3::pyclass::boolean_struct::False>,
+    T: Into<pyo3::PyClassInitializer<T>>,
+{
+    let Some(class) = installed_class(py, module, name) else {
+        return Py::new(py, value);
+    };
+    let object = blank_installed(&class)?;
+    let cell = object.cast::<T>()?;
+    *cell.borrow_mut() = value;
+    Ok(cell.clone().unbind())
+}
+
+/// A blank instance of an installed class, with its music21 half started.
+pub(crate) fn blank_installed<'py>(class: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    let py = class.py();
+    install_helper(py)?.getattr("blank")?.call1((class,))
 }
 
 /// The Python half of installing a facade class into music21.
@@ -91,6 +206,28 @@ where
 /// point of inheriting from it.
 const INSTALL_HELPER: &str = r#"
 from music21 import base as _base
+
+
+# The classes installed over music21's, by module and name. A facade that
+# builds a new object of its own kind looks here first: music21 will only
+# hold the installed class, so an object built as the bare facade is one no
+# stream can take and no pickle can find.
+installed = {}
+
+
+def blank(cls):
+    """An instance of an installed class with nothing said about it yet.
+
+    `__new__` alone leaves the music21 half unstarted, which is where the
+    offset and the sites live, so that half is started here. The caller
+    writes the musical half in afterwards.
+    """
+    made = cls.__new__(cls)
+    # Only the classes music21 keeps in a stream have a music21 half to
+    # start; a pitch or a duration is not one of those.
+    if issubclass(cls, _base.Music21Object):
+        _base.Music21Object.__init__(made)
+    return made
 
 
 class NotPorted:
@@ -165,12 +302,30 @@ def make_class(facade, original):
     for name in ('isNote', 'isRest', 'isChord', 'classSortOrder', 'equalityAttributes'):
         if hasattr(original, name):
             namespace[name] = getattr(original, name)
+    class Stands(type):
+        """Metaclass under which the class replaced still counts as this one.
+
+        music21's own subclasses — `harmony.ChordSymbol` and the rest — were
+        built on the class this replaces and go on inheriting from it, so a
+        plain `isinstance(chordSymbol, chord.Chord)` inside music21 would say
+        no once `chord.Chord` is this class instead. It says yes: anything
+        the old class would have accepted, the new one accepts.
+        """
+
+        def __instancecheck__(cls, instance):
+            return (type.__instancecheck__(cls, instance)
+                    or isinstance(instance, original))
+
+        def __subclasscheck__(cls, subclass):
+            return (type.__subclasscheck__(cls, subclass)
+                    or issubclass(subclass, original))
+
     try:
-        installed = type(original.__name__, (facade, original), namespace)
+        installed = Stands(original.__name__, (facade, original), namespace)
     except TypeError:
         # Some pairs cannot share a layout; those keep the old arrangement,
         # where only the container machinery is inherited.
-        installed = type(original.__name__, (facade, _base.Music21Object), namespace)
+        installed = Stands(original.__name__, (facade, _base.Music21Object), namespace)
     # A caller who asks a stream for `note.Note` is asking for this class now.
     installed.classSet = frozenset(classified | {installed})
     return installed
@@ -245,7 +400,10 @@ fn install_into_music21(py: Python<'_>) -> PyResult<usize> {
         for name in names {
             if let Ok(value) = ours.getattr(*name) {
                 let value = class_to_install(py, &module, name, &value)?;
-                module.setattr(*name, value)?;
+                module.setattr(*name, &value)?;
+                install_helper(py)?
+                    .getattr("installed")?
+                    .set_item((module_name, *name), &value)?;
                 replaced += 1;
             }
         }
@@ -260,6 +418,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     pitch::register(m)?;
     figuredbass::register(m)?;
     tempo::register(m)?;
+    voiceleading::register(m)?;
     serial::register(m)?;
     key::register(m)?;
     interval::register(m)?;

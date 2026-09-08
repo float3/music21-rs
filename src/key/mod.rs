@@ -16,6 +16,7 @@ use std::str::FromStr;
 pub mod keysignature;
 
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// A tonal key with a tonic pitch and mode.
 pub struct Key {
     tonic_pitch: Pitch,

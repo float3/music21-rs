@@ -72,6 +72,33 @@ pub(crate) fn tie_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsTie> {
 
 #[pymethods]
 impl Tie {
+    /// music21 freezes a score by pickling it, and what this object is lives
+    /// in Rust where a pickle cannot see it — so it is written out as text,
+    /// and read back into a fresh one of these.
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<(Py<PyAny>, (), Py<PyAny>)> {
+        crate::pickled(slf, &slf.borrow().inner)
+    }
+
+    fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
+        let inner: RsTie = crate::unpickled(slf, state)?;
+        slf.borrow_mut().inner = inner;
+        Ok(())
+    }
+
+    /// music21 gives everything that is written a style. What this crate
+    /// models of one is the colour, and this carries none — so the style is
+    /// there, and says nothing.
+    #[getter]
+    fn style(&self) -> Style {
+        Style {
+            owner: StyleOwner::Detached,
+        }
+    }
+
+    #[getter]
+    fn hasStyleInformation(&self) -> bool {
+        false
+    }
     #[new]
     #[pyo3(signature = (r#type = "start"))]
     fn new(r#type: &str) -> PyResult<Self> {
@@ -195,6 +222,33 @@ impl Clone for Lyric {
 
 #[pymethods]
 impl Lyric {
+    /// music21 freezes a score by pickling it, and what this object is lives
+    /// in Rust where a pickle cannot see it — so it is written out as text,
+    /// and read back into a fresh one of these.
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<(Py<PyAny>, (), Py<PyAny>)> {
+        crate::pickled(slf, &slf.borrow().inner)
+    }
+
+    fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
+        let inner: RsLyric = crate::unpickled(slf, state)?;
+        slf.borrow_mut().inner = inner;
+        Ok(())
+    }
+
+    /// music21 gives everything that is written a style. What this crate
+    /// models of one is the colour, and this carries none — so the style is
+    /// there, and says nothing.
+    #[getter]
+    fn style(&self) -> Style {
+        Style {
+            owner: StyleOwner::Detached,
+        }
+    }
+
+    #[getter]
+    fn hasStyleInformation(&self) -> bool {
+        false
+    }
     #[new]
     #[pyo3(signature = (text = None, number = 1, *, applyRaw = false, syllabic = None, identifier = None))]
     fn new(
@@ -410,6 +464,33 @@ fn beam_direction_of(value: Option<&Bound<'_, PyAny>>) -> PyResult<Option<RsBeam
 
 #[pymethods]
 impl Beam {
+    /// music21 freezes a score by pickling it, and what this object is lives
+    /// in Rust where a pickle cannot see it — so it is written out as text,
+    /// and read back into a fresh one of these.
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<(Py<PyAny>, (), Py<PyAny>)> {
+        crate::pickled(slf, &slf.borrow().inner)
+    }
+
+    fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
+        let inner: RsBeam = crate::unpickled(slf, state)?;
+        slf.borrow_mut().inner = inner;
+        Ok(())
+    }
+
+    /// music21 gives everything that is written a style. What this crate
+    /// models of one is the colour, and this carries none — so the style is
+    /// there, and says nothing.
+    #[getter]
+    fn style(&self) -> Style {
+        Style {
+            owner: StyleOwner::Detached,
+        }
+    }
+
+    #[getter]
+    fn hasStyleInformation(&self) -> bool {
+        false
+    }
     #[new]
     #[pyo3(signature = (r#type = None, direction = None, number = None, **_keywords))]
     fn new(
@@ -501,7 +582,8 @@ impl Beams {
         let Some(owner) = &self.owner else {
             return Ok(());
         };
-        let beams = Py::new(py, Self::wrap(self.inner.clone()))?;
+        let beams =
+            crate::installed_new(py, "music21.beam", "Beams", Self::wrap(self.inner.clone()))?;
         owner.bind(py).setattr("beams", beams.bind(py).as_any())
     }
 }
@@ -547,7 +629,12 @@ fn beams_list<'py>(py: Python<'py>, beams: Vec<Option<RsBeams>>) -> PyResult<Bou
     let list = PyList::empty(py);
     for entry in beams {
         match entry {
-            Some(beams) => list.append(Py::new(py, Beams::wrap(beams))?)?,
+            Some(beams) => list.append(crate::installed_new(
+                py,
+                "music21.beam",
+                "Beams",
+                Beams::wrap(beams),
+            )?)?,
             None => list.append(py.None())?,
         }
     }
@@ -556,6 +643,19 @@ fn beams_list<'py>(py: Python<'py>, beams: Vec<Option<RsBeams>>) -> PyResult<Bou
 
 #[pymethods]
 impl Beams {
+    /// music21 freezes a score by pickling it, and what this object is lives
+    /// in Rust where a pickle cannot see it — so it is written out as text,
+    /// and read back into a fresh one of these.
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<(Py<PyAny>, (), Py<PyAny>)> {
+        crate::pickled(slf, &slf.borrow().inner)
+    }
+
+    fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
+        let inner: RsBeams = crate::unpickled(slf, state)?;
+        slf.borrow_mut().inner = inner;
+        Ok(())
+    }
+
     #[new]
     #[pyo3(signature = (**_keywords))]
     fn new(_keywords: Option<&Bound<'_, PyDict>>) -> Self {
@@ -931,6 +1031,19 @@ pub(crate) fn volume_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsVolume> {
 
 #[pymethods]
 impl Volume {
+    /// music21 freezes a score by pickling it, and what this object is lives
+    /// in Rust where a pickle cannot see it — so it is written out as text,
+    /// and read back into a fresh one of these.
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<(Py<PyAny>, (), Py<PyAny>)> {
+        crate::pickled(slf, &slf.borrow().inner)
+    }
+
+    fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
+        let inner: RsVolume = crate::unpickled(slf, state)?;
+        slf.borrow_mut().inner = inner;
+        Ok(())
+    }
+
     #[new]
     #[pyo3(signature = (*, client = None, velocity = None, velocityScalar = None, velocityIsRelative = true))]
     fn new(
@@ -1133,6 +1246,10 @@ pub(crate) enum StyleOwner {
     Chord(Py<crate::chord::Chord>),
     /// An accidental's style.
     Accidental(Py<crate::pitch::Accidental>),
+    /// The style of something that carries no colour of its own here — a
+    /// lyric, a beam. music21 gives everything a style; what this crate
+    /// models of one is the colour, and these have none to model.
+    Detached,
 }
 
 /// The part of music21's `style.Style` a note or chord carries here: the
@@ -1144,8 +1261,71 @@ pub struct Style {
     pub(crate) owner: StyleOwner,
 }
 
+/// The fields music21 keeps on a style, none of which this crate models:
+/// where on the page the object sits, how large it is drawn, what encloses
+/// it. music21's own notation code reads them, so they answer — with
+/// nothing, which is what music21's own style says until a score writes
+/// something there.
+const LAYOUT_FIELDS: &[&str] = &[
+    "absoluteX",
+    "absoluteY",
+    "accidentalStyle",
+    "alignHorizontal",
+    "alignVertical",
+    "dashLength",
+    "enclosure",
+    "fontFamily",
+    "fontRepresentation",
+    "fontSize",
+    "fontStyle",
+    "fontWeight",
+    "hideObjectOnPrint",
+    "justify",
+    "letterSpacing",
+    "noteSize",
+    "relativeX",
+    "relativeY",
+    "size",
+    "spaceLength",
+    "stemStyle",
+    "units",
+];
+
 #[pymethods]
 impl Style {
+    /// One of those fields, which reads as nothing.
+    fn __getattr__(&self, py: Python<'_>, name: &str) -> PyResult<Py<PyAny>> {
+        if !LAYOUT_FIELDS.contains(&name) {
+            return Err(pyo3::exceptions::PyAttributeError::new_err(format!(
+                "'music21.style.Style' object has no attribute '{name}'"
+            )));
+        }
+        Ok(py.None())
+    }
+
+    /// Writing one is taken and not kept. The page is not something this
+    /// crate models, and pretending to remember where a note sits on one
+    /// would say more than it knows.
+    fn __setattr__(
+        &mut self,
+        py: Python<'_>,
+        name: &str,
+        value: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
+        // Defining this at all takes the colour setter out of play, so the
+        // one field the crate does model is passed on by hand.
+        if name == "color" {
+            self.set_color(py, value.extract()?);
+            return Ok(());
+        }
+        if !LAYOUT_FIELDS.contains(&name) {
+            return Err(pyo3::exceptions::PyAttributeError::new_err(format!(
+                "'music21.style.Style' object has no attribute '{name}'"
+            )));
+        }
+        Ok(())
+    }
+
     #[getter]
     fn get_color(&self, py: Python<'_>) -> Option<String> {
         match &self.owner {
@@ -1154,6 +1334,7 @@ impl Style {
             StyleOwner::Accidental(accidental) => {
                 accidental.borrow(py).inner.color().map(str::to_string)
             }
+            StyleOwner::Detached => None,
         }
     }
 
@@ -1163,6 +1344,7 @@ impl Style {
             StyleOwner::Note(note) => note.borrow_mut(py).inner.set_color(value),
             StyleOwner::Chord(chord) => chord.borrow_mut(py).inner.set_color(value),
             StyleOwner::Accidental(accidental) => accidental.borrow_mut(py).inner.set_color(value),
+            StyleOwner::Detached => {}
         }
     }
 

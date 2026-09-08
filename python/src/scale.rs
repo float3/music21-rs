@@ -401,6 +401,17 @@ impl ConcreteScale {
 
 #[pymethods]
 impl ConcreteScale {
+    /// A scale is written out as text and read back.
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<(Py<PyAny>, (), Py<PyAny>)> {
+        crate::pickled(slf, &slf.borrow().inner)
+    }
+
+    fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
+        let inner: RsScale = crate::unpickled(slf, state)?;
+        slf.borrow_mut().inner = inner;
+        Ok(())
+    }
+
     /// music21's `ConcreteScale(tonic)`, where the pattern of steps comes
     /// from the class and only the tonic is given. No tonic means C, as it
     /// does upstream.
@@ -756,7 +767,7 @@ impl ConcreteScale {
         degree: &Bound<'_, PyAny>,
     ) -> PyResult<Py<crate::roman::RomanNumeral>> {
         let numeral = crate::roman::RomanNumeral::build(Some(degree), Some(slf.as_any()), None)?;
-        Py::new(py, crate::roman::RomanNumeral::initializer(py, numeral)?)
+        crate::roman::RomanNumeral::object(py, numeral)
     }
 
     /// music21's `isNext`: whether one pitch is so many degrees above another
@@ -782,11 +793,53 @@ impl ConcreteScale {
 
     /// music21's `pitchFromDegree`: the pitch at a scale degree, counting the
     /// tonic as one.
-    fn pitchFromDegree(&self, degree: usize) -> PyResult<Pitch> {
+    ///
+    /// The range and the direction are music21's, and are ignored here: the
+    /// scale is realized from its tonic either way, and the crate has no
+    /// bounded realization to narrow.
+    #[pyo3(signature = (
+        degree,
+        minPitch = None,
+        maxPitch = None,
+        direction = None,
+        equateTermini = true,
+    ))]
+    fn pitchFromDegree(
+        &self,
+        degree: usize,
+        minPitch: Option<&Bound<'_, PyAny>>,
+        maxPitch: Option<&Bound<'_, PyAny>>,
+        direction: Option<&Bound<'_, PyAny>>,
+        equateTermini: bool,
+    ) -> PyResult<Pitch> {
+        let _ = (minPitch, maxPitch, direction, equateTermini);
         self.realized()?
             .pitch_at_degree(degree)
             .map(|pitch| Pitch::wrap(pitch, false))
             .map_err(scale_error)
+    }
+
+    /// music21's `getChord`: the scale's own notes, sounded together.
+    #[pyo3(signature = (minPitch = None, maxPitch = None, direction = None, **_keywords))]
+    fn getChord(
+        &self,
+        py: Python<'_>,
+        minPitch: Option<&Bound<'_, PyAny>>,
+        maxPitch: Option<&Bound<'_, PyAny>>,
+        direction: Option<&Bound<'_, PyAny>>,
+        _keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Py<PyAny>> {
+        let pitches = match (minPitch, maxPitch) {
+            (Some(low), Some(high)) if !low.is_none() && !high.is_none() => self
+                .realized()?
+                .pitches_between(&pitch_from_any(low)?, &pitch_from_any(high)?)
+                .map_err(scale_error)?,
+            _ => self.realized()?.pitches().map_err(scale_error)?,
+        };
+        let _ = direction;
+        let chord = music21_rs::Chord::new(pitches.as_slice()).map_err(scale_error)?;
+        let facade = crate::chord::Chord::from_inner(py, chord)?;
+        Ok(crate::installed_new(py, "music21.chord", "Chord", facade)?.into_any())
     }
 
     /// music21's `getScaleDegreeFromPitch`: which degree a pitch is, or

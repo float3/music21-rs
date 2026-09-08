@@ -67,6 +67,19 @@ pub struct Microtone {
 
 #[pymethods]
 impl Microtone {
+    /// music21 freezes a score by pickling it, and what this object is lives
+    /// in Rust where a pickle cannot see it — so it is written out as text,
+    /// and read back into a fresh one of these.
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<(Py<PyAny>, (), Py<PyAny>)> {
+        crate::pickled(slf, &slf.borrow().inner)
+    }
+
+    fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
+        let inner: RsMicrotone = crate::unpickled(slf, state)?;
+        slf.borrow_mut().inner = inner;
+        Ok(())
+    }
+
     #[new]
     #[pyo3(signature = (centsOrString = None, harmonicShift = 1))]
     fn new(centsOrString: Option<&Bound<'_, PyAny>>, harmonicShift: i32) -> PyResult<Self> {
@@ -195,7 +208,12 @@ impl Accidental {
         let Some(owner) = &self.owner else {
             return Ok(());
         };
-        let accidental = Py::new(py, Self::from_inner(self.inner.clone()))?;
+        let accidental = crate::installed_new(
+            py,
+            "music21.pitch",
+            "Accidental",
+            Self::from_inner(self.inner.clone()),
+        )?;
         owner
             .bind(py)
             .setattr("accidental", accidental.bind(py).as_any())
@@ -204,6 +222,19 @@ impl Accidental {
 
 #[pymethods]
 impl Accidental {
+    /// music21 freezes a score by pickling it, and what this object is lives
+    /// in Rust where a pickle cannot see it — so it is written out as text,
+    /// and read back into a fresh one of these.
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<(Py<PyAny>, (), Py<PyAny>)> {
+        crate::pickled(slf, &slf.borrow().inner)
+    }
+
+    fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
+        let inner: RsAccidental = crate::unpickled(slf, state)?;
+        slf.borrow_mut().inner = inner;
+        Ok(())
+    }
+
     #[new]
     #[pyo3(signature = (specifier = None))]
     fn new(specifier: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
@@ -290,10 +321,23 @@ impl Accidental {
     }
 
     #[getter]
-    fn style(slf: &Bound<'_, Self>) -> crate::notation::Style {
+    fn get_style(slf: &Bound<'_, Self>) -> crate::notation::Style {
         crate::notation::Style {
             owner: crate::notation::StyleOwner::Accidental(slf.clone().unbind()),
         }
+    }
+
+    /// music21 hands a whole style object over. What this crate keeps of a
+    /// style is the colour, so that is what comes across; the rest of what
+    /// music21 puts there is the page, which the crate does not model.
+    #[setter]
+    fn set_style(slf: &Bound<'_, Self>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        let colour: Option<String> = value
+            .getattr("color")
+            .ok()
+            .and_then(|colour| colour.extract().ok());
+        slf.borrow_mut().inner.set_color(colour);
+        Ok(())
     }
 
     #[getter]
@@ -345,6 +389,44 @@ impl Accidental {
     #[setter]
     fn set_displayType(&mut self, value: &str) -> PyResult<()> {
         self.inner.set_display_type(value).map_err(accidental_error)
+    }
+
+    /// music21's `displayStyle`: whether the accidental is written plainly,
+    /// in parentheses or in brackets.
+    #[getter]
+    fn get_displayStyle(&self) -> &'static str {
+        self.inner.display_style()
+    }
+
+    #[setter]
+    fn set_displayStyle(&mut self, value: &str) -> PyResult<()> {
+        self.inner
+            .set_display_style(value)
+            .map_err(accidental_error)
+    }
+
+    /// music21's `displaySize`: full size, or a cue.
+    #[getter]
+    fn get_displaySize(&self) -> String {
+        self.inner.display_size()
+    }
+
+    #[setter]
+    fn set_displaySize(&mut self, value: &str) -> PyResult<()> {
+        self.inner.set_display_size(value).map_err(accidental_error)
+    }
+
+    /// music21's `displayLocation`: beside the note, or above or below it.
+    #[getter]
+    fn get_displayLocation(&self) -> &'static str {
+        self.inner.display_location()
+    }
+
+    #[setter]
+    fn set_displayLocation(&mut self, value: &str) -> PyResult<()> {
+        self.inner
+            .set_display_location(value)
+            .map_err(accidental_error)
     }
 
     #[getter]
@@ -602,6 +684,20 @@ impl Pitch {
 
 #[pymethods]
 impl Pitch {
+    /// music21 freezes a score by pickling it, and what a pitch is lives in
+    /// Rust where a pickle cannot see it — so it is written out as text and
+    /// read back. The accidental object a caller may be holding is not: a
+    /// thawed pitch spells its own.
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<(Py<PyAny>, (), Py<PyAny>)> {
+        crate::pickled(slf, &slf.borrow().inner)
+    }
+
+    fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
+        let inner: RsPitch = crate::unpickled(slf, state)?;
+        slf.borrow_mut().inner = inner;
+        Ok(())
+    }
+
     #[new]
     #[pyo3(signature = (name = None, *, step = None, octave = None, accidental = None, microtone = None, pitchClass = None, midi = None, ps = None, fundamental = None, **kwargs))]
     #[allow(non_snake_case, clippy::too_many_arguments)]
@@ -839,6 +935,19 @@ impl Pitch {
             self.inner.set_accidental(None);
         }
         self.write_back()
+    }
+
+    /// music21 keeps the accidental in a private slot and its own code
+    /// reaches for it — `musedata` writes one straight in — so the slot
+    /// answers here too, as the accidental itself.
+    #[getter]
+    fn _accidental(slf: &Bound<'_, Self>) -> PyResult<Option<Accidental>> {
+        Self::accidental(slf)
+    }
+
+    #[setter]
+    fn set__accidental(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        self.set_accidental(value)
     }
 
     #[getter]
