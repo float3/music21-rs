@@ -1436,7 +1436,7 @@ impl Volume {
     }
 
     #[setter]
-    fn set_client(&mut self, value: Option<&Bound<'_, PyAny>>) {
+    pub(crate) fn set_client(&mut self, value: Option<&Bound<'_, PyAny>>) {
         self.client = value
             .filter(|value| !value.is_none())
             .map(|value| value.clone().unbind());

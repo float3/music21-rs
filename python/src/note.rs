@@ -1215,7 +1215,7 @@ impl Duration {
     /// a note is built with them.
     #[new]
     #[pyo3(signature = (value = None, **keywords))]
-    fn new(
+    pub(crate) fn new(
         value: Option<&Bound<'_, PyAny>>,
         keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Self> {
@@ -2223,11 +2223,11 @@ impl Note {
         Ok(duration)
     }
 
-    /// Writes a tie value straight in, letting go of whatever object was
+    /// Writes a volume straight in, letting go of whatever object was
     /// standing for the old one.
-    pub(crate) fn replace_tie(&mut self, tie: Option<music21_rs::Tie>) {
-        self.inner.set_tie(tie);
-        self.tie = None;
+    pub(crate) fn replace_volume(&mut self, volume: Option<music21_rs::Volume>) {
+        self.inner.set_volume(volume);
+        self.volume = None;
     }
 
     /// The colour the note is written in: what its style says if it has
@@ -2840,7 +2840,7 @@ impl Note {
     /// music21's `.volume`, made on first asking and the same object after
     /// that, so `n.volume.velocity = 20` sticks.
     #[getter]
-    fn get_volume(slf: &Bound<'_, Self>, py: Python<'_>) -> PyResult<Py<Volume>> {
+    pub(crate) fn get_volume(slf: &Bound<'_, Self>, py: Python<'_>) -> PyResult<Py<Volume>> {
         if let Some(volume) = &slf.borrow().volume {
             return Ok(volume.clone_ref(py));
         }

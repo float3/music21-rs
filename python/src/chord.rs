@@ -14,7 +14,7 @@ use music21_rs::{
 };
 
 use crate::interval::interval_from_any;
-use crate::notation::{Beams, Tie, Volume, tie_from_any, volume_from_any};
+use crate::notation::{Beams, Tie, Volume, volume_from_any};
 use crate::note::{
     Duration, Note, augment_or_diminish_note, duration_from_any, grace_note, instrument_for_note,
     note_from_any,
@@ -148,6 +148,17 @@ impl Chord {
                     "music21.duration",
                     "Duration",
                     Duration::wrap(length),
+                )?
+                .into_any();
+            } else if keywords.contains("type")? || keywords.contains("dots")? {
+                // music21 hands its own keywords on to `Duration`, so
+                // `Chord(notes, type='whole')` is a whole note.
+                quick = false;
+                shared = crate::installed_new(
+                    py,
+                    "music21.duration",
+                    "Duration",
+                    Duration::new(None, Some(keywords))?,
                 )?
                 .into_any();
             }
@@ -379,6 +390,16 @@ impl Chord {
                 .map(|note| note.clone_ref(py))
                 .ok_or_else(|| PyIndexError::new_err("list index out of range"));
         } else {
+            // The very pitch object first, as music21 looks: a chord with
+            // two D4s in it is asked about one of them, not about the note.
+            if let Ok(given) = target.extract::<Py<Pitch>>()
+                && let Some(note) = self
+                    .notes
+                    .iter()
+                    .find(|note| Note::get_pitch(note.bind(py)).is(&given))
+            {
+                return Ok(note.clone_ref(py));
+            }
             pitch_from_any(target)?
         };
         self.notes
@@ -595,6 +616,19 @@ fn adopted_notes(
             }
             continue;
         } else {
+            // music21 names the class a caller should have reached for
+            // rather than saying it could not read the argument.
+            if item.getattr("classes").is_ok_and(|classes| {
+                classes
+                    .extract::<Vec<String>>()
+                    .is_ok_and(|classes| classes.iter().any(|name| name == "Unpitched"))
+            }) {
+                return Err(PyTypeError::new_err(format!(
+                    "Use a PercussionChord to contain Unpitched objects; got [{}]",
+                    item.repr()
+                        .map_or_else(|_| "?".to_string(), |value| value.to_string())
+                )));
+            }
             let note = note_from_any(item).map_err(|_| {
                 PyTypeError::new_err(format!(
                     "Could not process input argument {}",
@@ -1047,6 +1081,15 @@ impl Chord {
                 return Err(PyIndexError::new_err("list index out of range"));
             }
             return Ok(notes[resolved as usize].clone_ref(py));
+        }
+        // The very pitch object first, as music21 looks: a chord with two
+        // D4s in it is asked about one of them.
+        if let Ok(given) = key.extract::<Py<Pitch>>()
+            && let Some(note) = notes
+                .iter()
+                .find(|note| Note::get_pitch(note.bind(py)).is(&given))
+        {
+            return Ok(note.clone_ref(py));
         }
         let wanted = if let Ok(name) = key.extract::<String>() {
             name.to_uppercase()
@@ -2193,22 +2236,28 @@ impl Chord {
         Ok(None)
     }
 
+    /// music21 gives every note the very tie object it was handed, so
+    /// `id(chord.tie) == id(chord[0].tie)` after setting one.
     #[setter]
-    fn set_tie(&mut self, py: Python<'_>, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
-        let tie = match value.filter(|value| !value.is_none()) {
-            Some(value) => Some(tie_from_any(value)?),
-            None => None,
-        };
-        for note in &self.notes {
-            note.borrow_mut(py).replace_tie(tie.clone());
+    fn set_tie(
+        slf: &Bound<'_, Self>,
+        py: Python<'_>,
+        value: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<()> {
+        for note in Chord::note_objects(slf) {
+            crate::note::Note::set_tie(note.bind(py), value)?;
         }
         Ok(())
     }
 
-    fn getVolume(&self, py: Python<'_>, p: &Bound<'_, PyAny>) -> PyResult<Volume> {
-        let note = self.note_object(py, p)?;
-        let volume = note.borrow(py).inner.volume();
-        Ok(Volume::wrap(volume))
+    fn getVolume(slf: &Bound<'_, Self>, p: &Bound<'_, PyAny>) -> PyResult<Py<Volume>> {
+        let py = slf.py();
+        let note = slf.borrow().note_object(py, p)?;
+        // The note's own volume object, told that the chord is what it
+        // belongs to: music21's `_getVolume(forceClient=self)`.
+        let volume = crate::note::Note::get_volume(note.bind(py), py)?;
+        volume.borrow_mut(py).set_client(Some(slf.as_any()));
+        Ok(volume)
     }
 
     #[pyo3(signature = (vol, target = None))]
@@ -2220,8 +2269,21 @@ impl Chord {
     ) -> PyResult<()> {
         let note = self.first_or_named(py, target)?;
         let parsed = volume_from_any(vol)?;
-        note.borrow_mut(py).inner.set_volume(Some(parsed));
+        note.borrow_mut(py).replace_volume(Some(parsed));
         Ok(())
+    }
+
+    /// music21's `_volume`: the chord's own volume object, or nothing where
+    /// it has none. Its own tests read the slot to tell a chord that has one
+    /// from a chord whose notes have theirs.
+    #[getter]
+    fn _volume(&self, py: Python<'_>) -> Option<Py<Volume>> {
+        self.volume.as_ref().map(|volume| volume.clone_ref(py))
+    }
+
+    #[setter]
+    fn set__volume(&mut self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        self.set_volume(py, value)
     }
 
     /// Whether the chord carries a volume of its own. Volumes on its
@@ -2279,8 +2341,7 @@ impl Chord {
         self.volume = None;
         for (index, note) in self.notes.iter().enumerate() {
             note.borrow_mut(py)
-                .inner
-                .set_volume(Some(parsed[index % parsed.len()].clone()));
+                .replace_volume(Some(parsed[index % parsed.len()].clone()));
         }
         Ok(())
     }
