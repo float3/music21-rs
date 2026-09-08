@@ -26,6 +26,7 @@ use std::process::{Command, Output};
 
 use serde::{Deserialize, Serialize};
 
+use crate::facade::{self, Facade};
 use crate::surface::{self, BeyondModule};
 
 /// What the coverage figure leaves out. Generated data rather than code
@@ -170,7 +171,13 @@ struct BenchCase {
     #[serde(default)]
     notes: String,
     music21_ns: f64,
+    /// The wheel, which is what a caller installs.
     music21_rs_ns: f64,
+    /// The crate with no Python in the way, where the case has a counterpart
+    /// there. Absent means unmeasured, not nought: the difference between
+    /// this and the wheel is what the binding costs.
+    #[serde(default)]
+    music21_rs_native_ns: Option<f64>,
     speedup: f64,
 }
 
@@ -325,6 +332,11 @@ struct ClassReport {
     note: Option<String>,
     ported: usize,
     missing: usize,
+    /// The same count for the wheel, which is held to the harder standard:
+    /// the crate may leave a member out, but a member the facade lacks is one
+    /// an existing program loses when it installs over music21.
+    #[serde(default)]
+    in_wheel: usize,
     members: Vec<MemberReport>,
 }
 
@@ -334,6 +346,9 @@ struct MemberReport {
     status: Status,
     /// The Rust name for a ported member, or why an unported one is unported.
     detail: Option<String>,
+    /// Whether the Python wheel carries it, which is asked separately.
+    #[serde(default)]
+    in_wheel: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
@@ -1531,6 +1546,7 @@ fn scan_features(
 ) -> Result<Vec<ClassReport>, Box<dyn Error>> {
     let mut classes = Vec::new();
     let mut problems = Vec::new();
+    let facade = Facade::read(workspace_root);
 
     for class in &map.class {
         let python_path = workspace_root.join("music21/music21").join(&class.python);
@@ -1583,8 +1599,24 @@ fn scan_features(
             }
         }
 
+        // What the wheel carries for this class, under music21's own names.
+        // A class the facade does not stand in for at all has nothing here,
+        // and every member of it counts as missing from the wheel.
+        let wheel = match (&class.name, class.members) {
+            (Some(name), Members::Methods) => facade.class_body(name),
+            _ => None,
+        };
+
         let mut reports = Vec::new();
         for member in &members {
+            let in_wheel = match (&wheel, class.members) {
+                (Some(body), _) => facade::defines_member(body, member),
+                // A module's own functions live wherever the facade put them,
+                // and a class is either there or it is not.
+                (None, Members::Methods) if class.name.is_none() => facade.has_function(member),
+                (None, Members::Classes) => facade.has_class(member),
+                (None, _) => false,
+            };
             let report = if let Some(reason) = class.excluded.get(member) {
                 // Left out on purpose is still left out. The reason is worth
                 // showing; carving it out of the total is not.
@@ -1592,6 +1624,7 @@ fn scan_features(
                     name: member.clone(),
                     status: Status::Missing,
                     detail: Some(reason.clone()),
+                    in_wheel,
                 }
             } else if let Some(found) = candidates(member, &class.renames, class.members)
                 .into_iter()
@@ -1601,24 +1634,28 @@ fn scan_features(
                     name: member.clone(),
                     status: Status::Ported,
                     detail: Some(found),
+                    in_wheel,
                 }
             } else {
                 MemberReport {
                     name: member.clone(),
                     status: Status::Missing,
                     detail: None,
+                    in_wheel,
                 }
             };
             reports.push(report);
         }
 
         let count = |status: Status| reports.iter().filter(|r| r.status == status).count();
+        let in_wheel = reports.iter().filter(|r| r.in_wheel).count();
         classes.push(ClassReport {
             python: class.python.clone(),
             name: label,
             note: class.note.clone(),
             ported: count(Status::Ported),
             missing: count(Status::Missing),
+            in_wheel,
             members: reports,
         });
     }
@@ -2304,7 +2341,7 @@ fn render_benchmarks(
     html.push_str(
         r#"                <div class="table-wrap">
                     <table>
-                        <thead><tr><th>Case</th><th class="num">music21</th><th class="num">music21-rs</th><th class="num">Speedup</th></tr></thead>
+                        <thead><tr><th>Case</th><th class="num">music21</th><th class="num">crate</th><th class="num">wheel</th><th class="num">Speedup</th></tr></thead>
                         <tbody>
 "#,
     );
@@ -2314,7 +2351,7 @@ fn render_benchmarks(
             group = &case.group;
             let _ = writeln!(
                 html,
-                "                            <tr class=\"group-row\"><td colspan=\"4\">{}</td></tr>",
+                "                            <tr class=\"group-row\"><td colspan=\"5\">{}</td></tr>",
                 escape(group)
             );
         }
@@ -2330,12 +2367,16 @@ fn render_benchmarks(
             r#"                            <tr>
                                 <td class="name">{name}{note}</td>
                                 <td class="num">{slow}</td>
+                                <td class="num">{native}</td>
                                 <td class="num">{fast}</td>
                                 <td class="num"><span class="pill {pill}">{speedup:.1}&#215;</span></td>
                             </tr>
 "#,
             name = escape(&case.case),
             slow = humanise(case.music21_ns),
+            native = case
+                .music21_rs_native_ns
+                .map_or_else(|| "<span class=\"of\">&mdash;</span>".to_string(), humanise),
             fast = humanise(case.music21_rs_ns),
             speedup = case.speedup,
         );
@@ -2355,7 +2396,7 @@ fn render_benchmarks(
     }
     let _ = writeln!(
         html,
-        "                <p class=\"section-foot\">music21 {music21}, Python {python} ({platform}). Both sides must agree on the answer before either is timed. Each case builds a fresh object, except those marked cached.</p>",
+        "                <p class=\"section-foot\">music21 {music21}, Python {python} ({platform}). Every side must agree on the answer before any of them is timed. <em>wheel</em> is what a caller installs and what the speedup is taken from; <em>crate</em> is the same operation in Rust with no Python in the way, so the gap between them is what the binding costs. Each case builds a fresh object, except those marked cached.</p>",
         music21 = escape(&benchmarks.music21),
         python = escape(&benchmarks.python),
         platform = escape(&benchmarks.platform),
@@ -2450,8 +2491,9 @@ fn render_doctests(doctests: &[ModuleDoctests]) -> String {
     html
 }
 
-fn render_features(features: &[ClassReport]) -> String {
+fn render_features(features: &[ClassReport], wheel: bool) -> String {
     let ported: usize = features.iter().map(|c| c.ported).sum();
+    let in_wheel: usize = features.iter().map(|c| c.in_wheel).sum();
     let missing: usize = features.iter().map(|c| c.missing).sum();
     let total = ported + missing;
 
@@ -2466,6 +2508,9 @@ fn render_features(features: &[ClassReport]) -> String {
             note,
             "<span class=\"missing\">{missing} still to port</span>"
         );
+    }
+    if wheel {
+        let _ = write!(note, "<span class=\"wheel\">{in_wheel} in the wheel</span>");
     }
     note.push_str("</span>");
     let mut html = section_head("ported", "Ported from music21", &note);
@@ -2506,7 +2551,7 @@ fn render_features(features: &[ClassReport]) -> String {
             r#"                    <details class="class-item" data-missing="{missing}" data-search="{haystack}">
                         <summary>
                             <span class="class-name"><span class="caret">&#9654;</span><b>{name}</b><span class="path"><code>{python}</code></span></span>
-                            <span class="of">{ported} of {counted}</span>
+                            <span class="of">{ported} of {counted}{wheel}</span>
                             {bar}
                             <span class="class-counts">{pills}</span>
                         </summary>
@@ -2517,6 +2562,14 @@ fn render_features(features: &[ClassReport]) -> String {
             name = escape(&class.name),
             python = escape(&class.python),
             ported = class.ported,
+            wheel = if wheel {
+                format!(
+                    "<span class=\"wheel-of\">{} in the wheel</span>",
+                    class.in_wheel
+                )
+            } else {
+                String::new()
+            },
             bar = stacked_meter(class.ported, class.missing),
         );
         if let Some(note) = &class.note {
@@ -2528,7 +2581,7 @@ fn render_features(features: &[ClassReport]) -> String {
         }
         html.push_str(
             r#"                            <table>
-                                <thead><tr><th>music21</th><th>Status</th><th>music21-rs</th></tr></thead>
+                                <thead><tr><th>music21</th><th>Status</th><th>music21-rs</th><th>Wheel</th></tr></thead>
                                 <tbody>
 "#,
         );
@@ -2554,9 +2607,19 @@ fn render_features(features: &[ClassReport]) -> String {
                     escape(member.detail.as_deref().unwrap_or("")),
                 ),
             };
+            // The wheel is asked separately: the crate is allowed to leave a
+            // member out, but one the facade lacks is a member an existing
+            // program loses when it installs over music21.
+            let carried = if !wheel {
+                String::new()
+            } else if member.in_wheel {
+                "<span class=\"pill good\">yes</span>".to_string()
+            } else {
+                "<span class=\"pill bad\">no</span>".to_string()
+            };
             let _ = writeln!(
                 html,
-                "                                    <tr><td class=\"name\"><code>{name}</code></td><td><span class=\"{pill}\">{label}</span></td><td>{detail}</td></tr>",
+                "                                    <tr><td class=\"name\"><code>{name}</code></td><td><span class=\"{pill}\">{label}</span></td><td>{detail}</td><td>{carried}</td></tr>",
                 name = escape(&member.name),
             );
         }
@@ -2569,7 +2632,7 @@ fn render_features(features: &[ClassReport]) -> String {
         html,
         r#"                    <p class="empty-note" data-filter-empty hidden>Nothing matches that filter.</p>
                 </div>
-                <p class="section-foot">Every public member of the music21 classes the crate ports, read from the submodule. A reason for not porting one is shown beside it but still counts against the total.</p>
+                <p class="section-foot">Every public member of the music21 classes the crate ports, read from the submodule. A reason for not porting one is shown beside it but still counts against the total. The wheel is asked separately and under music21's own names: the crate may leave a member out on purpose, but one the wheel lacks is a member a program loses when it calls <code>install_into_music21()</code>.</p>
             </section>
 "#
     );
@@ -2745,7 +2808,10 @@ fn render_html(report: &Report) -> String {
         html.push_str(&render_doctests(&report.doctests));
     }
     if !report.features.is_empty() {
-        html.push_str(&render_features(&report.features));
+        // A checkout with no `python/src` can say nothing about the wheel, so
+        // the column is left off rather than shown as nought everywhere.
+        let wheel_known = report.features.iter().any(|class| class.in_wheel > 0);
+        html.push_str(&render_features(&report.features, wheel_known));
     }
 
     let _ = write!(

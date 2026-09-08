@@ -117,7 +117,7 @@ where
     // music21, so there is no music21 half to start. Going through the helper
     // for one would import music21, and the wheel has to work for someone who
     // installed only the wheel.
-    if class.is(&T::type_object(py)) {
+    if class.is(T::type_object(py)) {
         return Ok(Bound::new(py, value)?.into_any());
     }
     // Through the helper, so that the copy gets the music21 half started as

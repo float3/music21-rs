@@ -3,6 +3,9 @@
 
 #![allow(non_snake_case)]
 
+use std::collections::HashMap;
+use std::sync::Mutex;
+
 use pyo3::exceptions::{PyIndexError, PyKeyError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
@@ -132,6 +135,80 @@ pub struct Chord {
     /// not something this crate models — and its mere existence is what
     /// `hasStyleInformation` answers, as music21's does.
     style: Option<Py<PyAny>>,
+    /// What the chord has already worked out. See [`ChordCache`].
+    ///
+    /// A mutex rather than a `RefCell` because pyo3 asks a `#[pyclass]` to be
+    /// `Sync`; it is never contended — the interpreter holds one object at a
+    /// time — and a lock it never waits on costs nothing beside the work it
+    /// saves.
+    cache: Mutex<ChordCache>,
+}
+
+/// music21's `_cache`: the answers a chord has already worked out.
+///
+/// music21 decorates twenty-one of `Chord`'s members with `@cacheMethod`,
+/// which keeps each under its own name in a `_cache` dictionary that
+/// `clearCache()` empties, and puts `root`, `bass` and `inversion` there by
+/// hand. The facade worked every one of them out afresh on each asking,
+/// which is what made `Chord.commonName` ten times slower here than in
+/// music21 on a chord that had already answered, and what made music21's own
+/// `collapseArpeggios` twenty times slower.
+///
+/// The crate underneath deliberately caches nothing — a value type that
+/// answers the same question twice is doing arithmetic, not keeping state.
+/// The facade is the other thing: it is music21's object, and how music21's
+/// object behaves is part of what it has to get right.
+///
+/// Fields rather than a dictionary because each answer has its own type, and
+/// the whole of it is emptied at once, which is what `clearCache` does.
+#[derive(Default)]
+struct ChordCache {
+    common_name: Option<String>,
+    quality: Option<&'static str>,
+    normal_order: Option<Vec<u32>>,
+    chord_tables_address: Option<RsChordTableAddress>,
+    // music21 caches only the address, because its own prime form and
+    // interval vector are read off that. The crate works each out from the
+    // pitches instead, so caching the address alone would buy nothing; these
+    // are kept beside it. Every one is a pure function of the notes, so what
+    // a caller sees is unchanged — it is only reached for sooner.
+    pitched_common_name: Option<String>,
+    forte_class: Option<String>,
+    prime_form: Option<Vec<u32>>,
+    prime_form_string: Option<String>,
+    interval_vector: Option<Vec<u32>>,
+    interval_vector_string: Option<String>,
+    ordered_pitch_classes: Option<Vec<u32>>,
+    ordered_pitch_classes_string: Option<String>,
+    /// The fourteen `is...` questions, under the names music21 keeps them by.
+    predicates: HashMap<&'static str, bool>,
+}
+
+/// Answers from the cache, or works it out and keeps it.
+///
+/// `$slot` is the field on [`ChordCache`]; the borrow is dropped before
+/// `$compute` runs, since working the answer out reads the chord.
+macro_rules! cached {
+    ($self:ident, $slot:ident, $compute:expr) => {{
+        if let Some(value) = $self.cache().$slot.clone() {
+            return value;
+        }
+        let value = $compute;
+        $self.cache().$slot = Some(value.clone());
+        value
+    }};
+}
+
+/// The same, for the `is...` questions, which share one map.
+macro_rules! cached_predicate {
+    ($self:ident, $name:literal, $compute:expr) => {{
+        if let Some(value) = $self.cache().predicates.get($name) {
+            return *value;
+        }
+        let value = $compute;
+        $self.cache().predicates.insert($name, value);
+        value
+    }};
 }
 
 impl Chord {
@@ -159,6 +236,7 @@ impl Chord {
             overrides: None,
             style: None,
             beams: None,
+            cache: Mutex::default(),
         };
         chord.rebuild_notes(py)?;
         Ok(chord)
@@ -211,6 +289,7 @@ impl Chord {
             overrides: None,
             style: None,
             beams: None,
+            cache: Mutex::default(),
         })
     }
 
@@ -242,7 +321,26 @@ impl Chord {
 
     fn replace_inner(&mut self, py: Python<'_>, inner: RsChord) -> PyResult<()> {
         self.inner = inner;
+        self.clear_cache();
         self.rebuild_notes(py)
+    }
+
+    /// Throws away what the chord had worked out. music21 does this wherever
+    /// the notes change — `add`, `remove`, the `pitches` and `pitchNames`
+    /// setters, `sortDiatonicAscending`, `semiClosedPosition` — and every one
+    /// of those goes through one of the three places this is called from.
+    pub(crate) fn clear_cache(&mut self) {
+        *self.cache() = ChordCache::default();
+    }
+
+    /// The cache, whoever last held it. A lock is only ever poisoned by a
+    /// panic while it was held, and what is behind it is answers that can be
+    /// worked out again, so the value is taken rather than the panic
+    /// repeated.
+    fn cache(&self) -> std::sync::MutexGuard<'_, ChordCache> {
+        self.cache
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     /// Replaces the chord with one of its own reductions, keeping the note
@@ -269,6 +367,7 @@ impl Chord {
         }
         self.inner = inner;
         self.notes = kept;
+        self.clear_cache();
         Ok(())
     }
 
@@ -353,6 +452,10 @@ impl Chord {
             return Ok(());
         };
         me.inner.notes_mut()[index].set_pitch(pitch.clone());
+        // A note of it was renamed, so what the chord had worked out about
+        // itself was worked out about a chord it no longer is. This is the
+        // chord half of music21's `pitchChanged`.
+        me.clear_cache();
         Ok(())
     }
 
@@ -1130,12 +1233,20 @@ impl Chord {
 
     #[getter]
     fn orderedPitchClasses(&self) -> Vec<u32> {
-        into_numbers(self.inner.pitch_classes())
+        cached!(
+            self,
+            ordered_pitch_classes,
+            into_numbers(self.inner.pitch_classes())
+        )
     }
 
     #[getter]
     fn orderedPitchClassesString(&self) -> String {
-        self.inner.ordered_pitch_classes_string()
+        cached!(
+            self,
+            ordered_pitch_classes_string,
+            self.inner.ordered_pitch_classes_string()
+        )
     }
 
     #[getter]
@@ -1351,12 +1462,12 @@ impl Chord {
 
     #[getter]
     fn commonName(&self) -> String {
-        self.inner.common_name()
+        cached!(self, common_name, self.inner.common_name())
     }
 
     #[getter]
     fn pitchedCommonName(&self) -> String {
-        self.inner.pitched_common_name()
+        cached!(self, pitched_common_name, self.inner.pitched_common_name())
     }
 
     #[getter]
@@ -1378,7 +1489,7 @@ impl Chord {
 
     #[getter]
     fn quality(&self) -> &'static str {
-        self.inner.quality().as_str()
+        cached!(self, quality, self.inner.quality().as_str())
     }
 
     // ---- members ---------------------------------------------------------
@@ -1416,6 +1527,7 @@ impl Chord {
             if let Some(newroot) = newroot.filter(|value| !value.is_none()) {
                 let root = pitch_from_any(newroot)?;
                 me.inner.set_root(Some(root.clone()));
+                me.clear_cache();
                 drop(me);
                 // music21's own setter writes the pitch it was given into
                 // `_overrides`, and its `harmony` module reads it back from
@@ -1429,6 +1541,7 @@ impl Chord {
                 // again.
                 Some(true) => {
                     me.inner.set_root(None);
+                    me.clear_cache();
                     drop(me);
                     clear_override(slf, "root")?;
                     slf.borrow_mut().found_root()?
@@ -1488,7 +1601,11 @@ impl Chord {
                 }
                 slf.borrow_mut().replace_inner(py, rebuilt)?;
             }
-            slf.borrow_mut().inner.set_bass(Some(bass.clone()));
+            {
+                let mut me = slf.borrow_mut();
+                me.inner.set_bass(Some(bass.clone()));
+                me.clear_cache();
+            }
             override_with(slf, "bass", &bass)?;
             return Ok(None);
         }
@@ -1508,6 +1625,7 @@ impl Chord {
             match find {
                 Some(true) => {
                     me.inner.set_bass(None);
+                    me.clear_cache();
                     drop(me);
                     clear_override(slf, "bass")?;
                     slf.borrow().inner.found_bass().cloned()
@@ -1698,7 +1816,7 @@ impl Chord {
 
     #[getter]
     fn normalOrder(&self) -> Vec<u32> {
-        into_numbers(self.inner.normal_order())
+        cached!(self, normal_order, into_numbers(self.inner.normal_order()))
     }
 
     #[getter]
@@ -1708,32 +1826,44 @@ impl Chord {
 
     #[getter]
     fn primeForm(&self) -> Vec<u32> {
-        into_numbers(self.inner.prime_form())
+        cached!(self, prime_form, into_numbers(self.inner.prime_form()))
     }
 
     #[getter]
     fn primeFormString(&self) -> String {
-        self.inner.prime_form_string()
+        cached!(self, prime_form_string, self.inner.prime_form_string())
     }
 
     #[getter]
     fn intervalVector(&self) -> Vec<u32> {
-        self.inner
-            .interval_class_vector()
-            .map(into_numbers)
-            .unwrap_or_else(|| vec![0; 6])
+        cached!(
+            self,
+            interval_vector,
+            self.inner
+                .interval_class_vector()
+                .map(into_numbers)
+                .unwrap_or_else(|| vec![0; 6])
+        )
     }
 
     #[getter]
     fn intervalVectorString(&self) -> String {
-        self.inner.interval_vector_string()
+        cached!(
+            self,
+            interval_vector_string,
+            self.inner.interval_vector_string()
+        )
     }
 
     #[getter]
     fn forteClass(&self) -> String {
-        self.inner
-            .forte_class()
-            .unwrap_or_else(|| "N/A".to_string())
+        cached!(
+            self,
+            forte_class,
+            self.inner
+                .forte_class()
+                .unwrap_or_else(|| "N/A".to_string())
+        )
     }
 
     #[getter]
@@ -1793,59 +1923,79 @@ impl Chord {
     // ---- predicates ------------------------------------------------------
 
     fn isTriad(&self) -> bool {
-        self.inner.is_triad()
+        cached_predicate!(self, "isTriad", self.inner.is_triad())
     }
 
     fn isSeventh(&self) -> bool {
-        self.inner.is_seventh()
+        cached_predicate!(self, "isSeventh", self.inner.is_seventh())
     }
 
     fn isMajorTriad(&self) -> bool {
-        self.inner.is_major_triad()
+        cached_predicate!(self, "isMajorTriad", self.inner.is_major_triad())
     }
 
     fn isMinorTriad(&self) -> bool {
-        self.inner.is_minor_triad()
+        cached_predicate!(self, "isMinorTriad", self.inner.is_minor_triad())
     }
 
     fn isDiminishedTriad(&self) -> bool {
-        self.inner.is_diminished_triad()
+        cached_predicate!(self, "isDiminishedTriad", self.inner.is_diminished_triad())
     }
 
     fn isAugmentedTriad(&self) -> bool {
-        self.inner.is_augmented_triad()
+        cached_predicate!(self, "isAugmentedTriad", self.inner.is_augmented_triad())
     }
 
     fn isDominantSeventh(&self) -> bool {
-        self.inner.is_dominant_seventh()
+        cached_predicate!(self, "isDominantSeventh", self.inner.is_dominant_seventh())
     }
 
     fn isDiminishedSeventh(&self) -> bool {
-        self.inner.is_diminished_seventh()
+        cached_predicate!(
+            self,
+            "isDiminishedSeventh",
+            self.inner.is_diminished_seventh()
+        )
     }
 
     fn isHalfDiminishedSeventh(&self) -> bool {
-        self.inner.is_half_diminished_seventh()
+        cached_predicate!(
+            self,
+            "isHalfDiminishedSeventh",
+            self.inner.is_half_diminished_seventh()
+        )
     }
 
     fn isFalseDiminishedSeventh(&self) -> bool {
-        self.inner.is_false_diminished_seventh()
+        cached_predicate!(
+            self,
+            "isFalseDiminishedSeventh",
+            self.inner.is_false_diminished_seventh()
+        )
     }
 
     fn isIncompleteMajorTriad(&self) -> bool {
-        self.inner.is_incomplete_major_triad()
+        cached_predicate!(
+            self,
+            "isIncompleteMajorTriad",
+            self.inner.is_incomplete_major_triad()
+        )
     }
 
     fn isIncompleteMinorTriad(&self) -> bool {
-        self.inner.is_incomplete_minor_triad()
+        cached_predicate!(
+            self,
+            "isIncompleteMinorTriad",
+            self.inner.is_incomplete_minor_triad()
+        )
     }
 
     fn isConsonant(&self) -> bool {
-        self.inner.is_consonant()
+        cached_predicate!(self, "isConsonant", self.inner.is_consonant())
     }
 
     fn isNinth(&self) -> bool {
-        self.inner.is_ninth()
+        cached_predicate!(self, "isNinth", self.inner.is_ninth())
     }
 
     #[pyo3(signature = (*, permitAnyInversion = false))]
@@ -2090,9 +2240,15 @@ impl Chord {
     /// the Forte tables.
     #[getter]
     fn chordTablesAddress(&self) -> ChordTableAddress {
-        ChordTableAddress {
-            inner: self.inner.chord_tables_address_entry(),
+        // The Forte address is what the prime form, the interval vector and
+        // every Forte-class member are read off, so caching it is most of
+        // what caching those would buy.
+        if let Some(inner) = self.cache().chord_tables_address {
+            return ChordTableAddress { inner };
         }
+        let inner = self.inner.chord_tables_address_entry();
+        self.cache().chord_tables_address = Some(inner);
+        ChordTableAddress { inner }
     }
 
     /// music21's `scaleDegrees`: what degree of the key each pitch is, and

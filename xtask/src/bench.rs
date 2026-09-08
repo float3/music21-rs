@@ -41,6 +41,7 @@ use std::error::Error;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
+use music21_rs::{Chord as RsChord, Interval as RsInterval, Note as RsNote, Pitch as RsPitch};
 use pyo3::prelude::*;
 use pyo3::types::{PyList, PyString};
 use serde::Serialize;
@@ -61,6 +62,20 @@ type Thunk = Box<dyn Fn(Python<'_>) -> PyResult<Py<PyAny>>>;
 /// Prepares one side of a case against the classes that side provides.
 type Build = Box<dyn Fn(Python<'_>, &Side) -> PyResult<Thunk>>;
 
+/// The same operation against the crate itself, with no Python in the way.
+///
+/// The wheel is what a caller installs, and timing it measures the whole cost
+/// a caller pays — the interpreter's, the binding's and the crate's. This is
+/// the other half of that pair: where the two differ is what the binding
+/// costs, and where they agree the cost is the crate's own.
+///
+/// It answers a string, so it is held to the same rule as the other two: a
+/// case is timed only once every side agrees, and what it answers is compared
+/// against Python's `str()` of music21's answer. A case with no clean
+/// counterpart has none, and its column reads as unmeasured rather than as
+/// nought.
+type Native = fn() -> String;
+
 /// One row of the JSON `report` reads back, and of the table printed here.
 #[derive(Debug, Serialize)]
 struct Timing {
@@ -68,7 +83,11 @@ struct Timing {
     group: String,
     notes: String,
     music21_ns: f64,
+    /// The wheel, which is what a caller installs.
     music21_rs_ns: f64,
+    /// The crate with no Python in the way, where the case has a counterpart.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    music21_rs_native_ns: Option<f64>,
     speedup: f64,
 }
 
@@ -115,6 +134,7 @@ struct Case {
     group: &'static str,
     notes: &'static str,
     build: Build,
+    native: Option<Native>,
 }
 
 impl Case {
@@ -124,7 +144,14 @@ impl Case {
             group,
             notes: "",
             build,
+            native: None,
         }
+    }
+
+    /// The same operation written against the crate directly.
+    fn natively(mut self, native: Native) -> Self {
+        self.native = Some(native);
+        self
     }
 
     fn noting(mut self, notes: &'static str) -> Self {
@@ -231,20 +258,30 @@ pub fn run(workspace_root: &Path, json: Option<PathBuf>) -> Result<i32, Box<dyn 
             }
             let slow = measure(py, &slow_call, seconds, repeats)?;
             let fast = measure(py, &fast_call, seconds, repeats)?;
+            // The crate on its own, but only where it answers the same thing.
+            // A case whose native counterpart disagrees is left unmeasured
+            // rather than timed against a different question.
+            let native = case.native.and_then(|native| {
+                let answer = native();
+                let expected = left.bind(py).str().ok()?.extract::<String>().ok()?;
+                (answer == expected).then(|| measure_native(native, seconds, repeats))
+            });
             if group != Some(case.group) {
                 group = Some(case.group);
                 println!(
-                    "{:<38} {:>11} {:>11} {:>9}",
+                    "{:<38} {:>11} {:>11} {:>11} {:>9}",
                     case.group.to_uppercase(),
                     "music21",
-                    "music21_rs",
+                    "crate",
+                    "wheel",
                     "speedup"
                 );
             }
             println!(
-                "  {:<36} {:>11} {:>11} {:>8.1}x",
+                "  {:<36} {:>11} {:>11} {:>11} {:>8.1}x",
                 case.name,
                 humanise(slow),
+                native.map_or_else(|| "—".to_string(), humanise),
                 humanise(fast),
                 slow / fast
             );
@@ -254,6 +291,7 @@ pub fn run(workspace_root: &Path, json: Option<PathBuf>) -> Result<i32, Box<dyn 
                 notes: case.notes.to_string(),
                 music21_ns: slow,
                 music21_rs_ns: fast,
+                music21_rs_native_ns: native,
                 speedup: slow / fast,
             });
         }
@@ -405,35 +443,63 @@ fn cases() -> Vec<Case> {
     let mut out = Vec::new();
 
     // ---- construction ----------------------------------------------------
-    out.push(Case::new(
-        "Pitch('C#4')",
-        "construction",
-        attribute_of("Pitch", "C#4", "nameWithOctave"),
-    ));
-    out.push(Case::new(
-        "Note('C#4')",
-        "construction",
-        attribute_of("Note", "C#4", "nameWithOctave"),
-    ));
-    out.push(Case::new(
-        "Interval('P5')",
-        "construction",
-        attribute_of("Interval", "P5", "directedName"),
-    ));
-    out.push(Case::new(
-        "Chord('C4 E4 G4')",
-        "construction",
-        Box::new(|py, side| {
-            let class = side.get(py, "Chord")?.unbind();
-            let text = interned(py, "C4 E4 G4");
-            let pitches = interned(py, "pitches");
-            Ok(Box::new(move |py| {
-                let chord = class.bind(py).call1((text.bind(py),))?;
-                let count = chord.getattr(pitches.bind(py))?.len()?;
-                Ok(count.into_pyobject(py)?.into_any().unbind())
-            }))
+    out.push(
+        Case::new(
+            "Pitch('C#4')",
+            "construction",
+            attribute_of("Pitch", "C#4", "nameWithOctave"),
+        )
+        .natively(|| {
+            RsPitch::from_name("C#4")
+                .map(|pitch| pitch.name_with_octave())
+                .unwrap_or_default()
         }),
-    ));
+    );
+    out.push(
+        Case::new(
+            "Note('C#4')",
+            "construction",
+            attribute_of("Note", "C#4", "nameWithOctave"),
+        )
+        .natively(|| {
+            RsNote::from_name("C#4")
+                .map(|note| note.pitch().name_with_octave())
+                .unwrap_or_default()
+        }),
+    );
+    out.push(
+        Case::new(
+            "Interval('P5')",
+            "construction",
+            attribute_of("Interval", "P5", "directedName"),
+        )
+        .natively(|| {
+            RsInterval::from_name("P5")
+                .map(|interval| interval.directed_name())
+                .unwrap_or_default()
+        }),
+    );
+    out.push(
+        Case::new(
+            "Chord('C4 E4 G4')",
+            "construction",
+            Box::new(|py, side| {
+                let class = side.get(py, "Chord")?.unbind();
+                let text = interned(py, "C4 E4 G4");
+                let pitches = interned(py, "pitches");
+                Ok(Box::new(move |py| {
+                    let chord = class.bind(py).call1((text.bind(py),))?;
+                    let count = chord.getattr(pitches.bind(py))?.len()?;
+                    Ok(count.into_pyobject(py)?.into_any().unbind())
+                }))
+            }),
+        )
+        .natively(|| {
+            RsChord::new("C4 E4 G4")
+                .map(|chord| chord.pitches().len().to_string())
+                .unwrap_or_default()
+        }),
+    );
 
     // ---- chord analysis, a fresh object each time ------------------------
     for ask in [
@@ -467,6 +533,10 @@ fn cases() -> Vec<Case> {
             )
             .noting("5 chords"),
         );
+        if let Some(native) = native_for(ask) {
+            let last = out.len() - 1;
+            out[last].native = Some(native);
+        }
     }
 
     // The pattern a memo is for: several set-class questions of one chord,
@@ -495,25 +565,34 @@ fn cases() -> Vec<Case> {
     );
 
     // ---- pitch and interval work -----------------------------------------
-    out.push(Case::new(
-        "Pitch.transpose('M3')",
-        "pitch",
-        Box::new(|py, side| {
-            let class = side.get(py, "Pitch")?.unbind();
-            let text = interned(py, "C#4");
-            let third = interned(py, "M3");
-            let transpose = interned(py, "transpose");
-            let name = interned(py, "nameWithOctave");
-            Ok(Box::new(move |py| {
-                Ok(class
-                    .bind(py)
-                    .call1((text.bind(py),))?
-                    .call_method1(transpose.bind(py), (third.bind(py),))?
-                    .getattr(name.bind(py))?
-                    .unbind())
-            }))
+    out.push(
+        Case::new(
+            "Pitch.transpose('M3')",
+            "pitch",
+            Box::new(|py, side| {
+                let class = side.get(py, "Pitch")?.unbind();
+                let text = interned(py, "C#4");
+                let third = interned(py, "M3");
+                let transpose = interned(py, "transpose");
+                let name = interned(py, "nameWithOctave");
+                Ok(Box::new(move |py| {
+                    Ok(class
+                        .bind(py)
+                        .call1((text.bind(py),))?
+                        .call_method1(transpose.bind(py), (third.bind(py),))?
+                        .getattr(name.bind(py))?
+                        .unbind())
+                }))
+            }),
+        )
+        .natively(|| {
+            let third = RsInterval::from_name("M3").expect("a major third");
+            RsPitch::from_name("C#4")
+                .and_then(|pitch| pitch.transpose(&third))
+                .map(|pitch| pitch.name_with_octave())
+                .unwrap_or_default()
         }),
-    ));
+    );
     out.push(Case::new(
         "Pitch.frequency",
         "pitch",
@@ -531,45 +610,62 @@ fn cases() -> Vec<Case> {
             }))
         }),
     ));
-    out.push(Case::new(
-        "Pitch.getEnharmonic()",
-        "pitch",
-        Box::new(|py, side| {
-            let class = side.get(py, "Pitch")?.unbind();
-            let text = interned(py, "C#4");
-            let enharmonic = interned(py, "getEnharmonic");
-            let name = interned(py, "nameWithOctave");
-            Ok(Box::new(move |py| {
-                Ok(class
-                    .bind(py)
-                    .call1((text.bind(py),))?
-                    .call_method0(enharmonic.bind(py))?
-                    .getattr(name.bind(py))?
-                    .unbind())
-            }))
+    out.push(
+        Case::new(
+            "Pitch.getEnharmonic()",
+            "pitch",
+            Box::new(|py, side| {
+                let class = side.get(py, "Pitch")?.unbind();
+                let text = interned(py, "C#4");
+                let enharmonic = interned(py, "getEnharmonic");
+                let name = interned(py, "nameWithOctave");
+                Ok(Box::new(move |py| {
+                    Ok(class
+                        .bind(py)
+                        .call1((text.bind(py),))?
+                        .call_method0(enharmonic.bind(py))?
+                        .getattr(name.bind(py))?
+                        .unbind())
+                }))
+            }),
+        )
+        .natively(|| {
+            RsPitch::from_name("C#4")
+                .and_then(|pitch| pitch.get_enharmonic())
+                .map(|pitch| pitch.name_with_octave())
+                .unwrap_or_default()
         }),
-    ));
-    out.push(Case::new(
-        "Interval(p1, p2)",
-        "pitch",
-        Box::new(|py, side| {
-            let pitch = side.get(py, "Pitch")?.unbind();
-            let interval = side.get(py, "Interval")?.unbind();
-            let low = interned(py, "C4");
-            let high = interned(py, "A-5");
-            let name = interned(py, "directedName");
-            Ok(Box::new(move |py| {
-                let pitch = pitch.bind(py);
-                let one = pitch.call1((low.bind(py),))?;
-                let two = pitch.call1((high.bind(py),))?;
-                Ok(interval
-                    .bind(py)
-                    .call1((one, two))?
-                    .getattr(name.bind(py))?
-                    .unbind())
-            }))
+    );
+    out.push(
+        Case::new(
+            "Interval(p1, p2)",
+            "pitch",
+            Box::new(|py, side| {
+                let pitch = side.get(py, "Pitch")?.unbind();
+                let interval = side.get(py, "Interval")?.unbind();
+                let low = interned(py, "C4");
+                let high = interned(py, "A-5");
+                let name = interned(py, "directedName");
+                Ok(Box::new(move |py| {
+                    let pitch = pitch.bind(py);
+                    let one = pitch.call1((low.bind(py),))?;
+                    let two = pitch.call1((high.bind(py),))?;
+                    Ok(interval
+                        .bind(py)
+                        .call1((one, two))?
+                        .getattr(name.bind(py))?
+                        .unbind())
+                }))
+            }),
+        )
+        .natively(|| {
+            let low = RsPitch::from_name("C4").expect("a C");
+            let high = RsPitch::from_name("A-5").expect("an A flat");
+            RsInterval::between_pitches(&low, &high)
+                .map(|interval| interval.directed_name())
+                .unwrap_or_default()
         }),
-    ));
+    );
 
     // ---- twelve-tone rows -------------------------------------------------
     out.push(Case::new(
@@ -653,6 +749,65 @@ fn attribute_of(class: &'static str, argument: &'static str, attribute: &'static
     })
 }
 
+/// A list written the way Python prints one, since a native answer is checked
+/// against the text of music21's.
+fn python_list(items: impl IntoIterator<Item = String>) -> String {
+    let joined: Vec<String> = items.into_iter().collect();
+    format!("[{}]", joined.join(", "))
+}
+
+/// A string as Python reprs one, inside a list.
+fn python_str(text: &str) -> String {
+    format!("'{text}'")
+}
+
+/// The same question of each of the five chords, natively.
+fn over_chords(ask: impl Fn(&RsChord) -> String) -> String {
+    python_list(CHORDS.iter().map(|text| match RsChord::new(*text) {
+        Ok(chord) => ask(&chord),
+        Err(_) => String::new(),
+    }))
+}
+
+fn numbers(values: &[u8]) -> String {
+    python_list(values.iter().map(u8::to_string))
+}
+
+/// What the crate answers for each of the eight chord questions, where it can
+/// be compared with music21's answer as text.
+fn native_for(ask: Ask) -> Option<Native> {
+    Some(match ask {
+        Ask::Attribute("commonName") => || over_chords(|c| python_str(&c.common_name())),
+        // The facade answers `N/A` where there is no Forte class, as music21
+        // does, so the native side has to as well.
+        Ask::Attribute("forteClass") => {
+            || over_chords(|c| python_str(&c.forte_class().unwrap_or_else(|| "N/A".to_string())))
+        }
+        Ask::MethodAttribute("root", "nameWithOctave") => || {
+            over_chords(|c| {
+                python_str(&c.root().map(RsPitch::name_with_octave).unwrap_or_default())
+            })
+        },
+        Ask::Method("isDominantSeventh") => || {
+            over_chords(|c| {
+                if c.is_dominant_seventh() {
+                    "True".to_string()
+                } else {
+                    "False".to_string()
+                }
+            })
+        },
+        Ask::AttributeList("primeForm") => || over_chords(|c| numbers(&c.prime_form())),
+        Ask::AttributeList("intervalVector") => {
+            || over_chords(|c| numbers(&c.interval_class_vector().unwrap_or_else(|| vec![0; 6])))
+        }
+        Ask::AttributeList("orderedPitchClasses") => {
+            || over_chords(|c| numbers(&c.pitch_classes()))
+        }
+        _ => return None,
+    })
+}
+
 /// A string held as a Python object for the life of a case.
 ///
 /// Python's own loops name an attribute with a constant the compiler interned
@@ -667,13 +822,35 @@ fn interned(py: Python<'_>, text: &str) -> Py<PyString> {
 /// The best batch is used rather than the mean: the true cost is bounded
 /// below, and everything above it is noise from the machine.
 fn measure(py: Python<'_>, call: &Thunk, seconds: f64, repeats: usize) -> PyResult<f64> {
+    measure_with(|| call(py).map(|_| ()), seconds, repeats)
+}
+
+/// The same, for the crate on its own. `black_box` so that nothing is elided
+/// for having an answer nobody reads.
+fn measure_native(call: Native, seconds: f64, repeats: usize) -> f64 {
+    measure_with(
+        || {
+            std::hint::black_box(call());
+            Ok(())
+        },
+        seconds,
+        repeats,
+    )
+    .unwrap_or(f64::NAN)
+}
+
+fn measure_with(
+    mut run: impl FnMut() -> PyResult<()>,
+    seconds: f64,
+    repeats: usize,
+) -> PyResult<f64> {
     // Calibrate: grow the batch until one takes long enough to time well.
     let target = seconds / repeats as f64;
     let mut batch: u64 = 1;
     loop {
         let start = Instant::now();
         for _ in 0..batch {
-            call(py)?;
+            run()?;
         }
         let elapsed = start.elapsed().as_secs_f64();
         if elapsed >= target || batch >= 1 << 22 {
@@ -687,7 +864,7 @@ fn measure(py: Python<'_>, call: &Thunk, seconds: f64, repeats: usize) -> PyResu
     for _ in 0..repeats {
         let start = Instant::now();
         for _ in 0..batch {
-            call(py)?;
+            run()?;
         }
         let each = start.elapsed().as_nanos() as f64 / batch as f64;
         best = best.min(each);

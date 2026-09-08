@@ -3,6 +3,7 @@
 #[cfg(feature = "python")]
 mod bench;
 mod downstream;
+mod facade;
 #[cfg(feature = "python")]
 mod fixtures;
 #[cfg(feature = "python")]

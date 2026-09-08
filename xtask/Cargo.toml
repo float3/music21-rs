@@ -13,6 +13,9 @@ default = []
 python = ["dep:pyo3", "dep:reqwest"]
 
 [dependencies]
+# The crate itself, so the benchmark can time it with no Python in the way
+# beside timing it through the wheel. Only the `bench` command reads it.
+music21-rs = { path = ".." }
 proc-macro2 = "1.0.106"
 pyo3 = { version = "0.29.0", features = ["auto-initialize"], optional = true }
 quote = "1.0.45"
