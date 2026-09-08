@@ -1868,8 +1868,13 @@ fn get_written_higher_note<'py>(
     note1: &Bound<'py, PyAny>,
     note2: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    // Higher on the staff; where they stand on the same line, the one that
+    // sounds higher, and the first of two that sound the same.
     pick(note1, note2, |p1, p2| {
-        p1.diatonic_note_number() >= p2.diatonic_note_number()
+        match p1.diatonic_note_number().cmp(&p2.diatonic_note_number()) {
+            std::cmp::Ordering::Equal => p1.ps() >= p2.ps(),
+            ordering => ordering.is_gt(),
+        }
     })
 }
 
@@ -1879,8 +1884,13 @@ fn get_written_lower_note<'py>(
     note1: &Bound<'py, PyAny>,
     note2: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    // Lower on the staff; where they stand on the same line, the one that
+    // sounds lower, and the first of two that sound the same.
     pick(note1, note2, |p1, p2| {
-        p1.diatonic_note_number() <= p2.diatonic_note_number()
+        match p1.diatonic_note_number().cmp(&p2.diatonic_note_number()) {
+            std::cmp::Ordering::Equal => p1.ps() <= p2.ps(),
+            ordering => ordering.is_lt(),
+        }
     })
 }
 
@@ -1890,6 +1900,7 @@ fn get_absolute_higher_note<'py>(
     note1: &Bound<'py, PyAny>,
     note2: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    // Sounding higher, and the first of two that sound the same.
     pick(note1, note2, |p1, p2| p1.ps() >= p2.ps())
 }
 
@@ -1899,6 +1910,7 @@ fn get_absolute_lower_note<'py>(
     note1: &Bound<'py, PyAny>,
     note2: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    // Sounding lower, and the first of two that sound the same.
     pick(note1, note2, |p1, p2| p1.ps() <= p2.ps())
 }
 

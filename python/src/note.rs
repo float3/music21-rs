@@ -3065,10 +3065,20 @@ impl Note {
         Ok(Some(copy.cast_into::<Self>()?.unbind()))
     }
 
+    /// music21 compares two notes on what it lists as their equality
+    /// attributes: the pitch, the duration, the tie, and how the note is
+    /// written — its notehead and its beams. What is sung to it and how loud
+    /// it is do not count.
     fn __eq__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> bool {
         other.extract::<PyRef<Note>>().is_ok_and(|other| {
-            other.inner.pitch() == self.inner.pitch()
-                && other.quarter_length(py) == self.quarter_length(py)
+            let (mine, theirs) = (self.synced(py), other.synced(py));
+            mine.pitch() == theirs.pitch()
+                && self.quarter_length(py) == other.quarter_length(py)
+                && mine.tie() == theirs.tie()
+                && mine.notehead() == theirs.notehead()
+                && mine.notehead_fill() == theirs.notehead_fill()
+                && mine.notehead_parenthesis() == theirs.notehead_parenthesis()
+                && mine.beams() == theirs.beams()
         })
     }
 
