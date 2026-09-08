@@ -15,6 +15,7 @@ const MAX_FRET_SPAN: u8 = 4;
 /// not just pitch classes, so fingering generation can respect octaves.
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
 pub struct GuitarTuningString {
     /// Open-string pitch name, including octave.
     pub name: String,
@@ -30,6 +31,7 @@ pub struct GuitarTuningString {
 /// tuning is `["E2", "A2", "D3", "G3", "B3", "E4"]`.
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
 pub struct GuitarTuning {
     strings: Vec<GuitarTuningString>,
 }
@@ -92,6 +94,7 @@ impl Default for GuitarTuning {
 /// One string in a suggested guitar fingering.
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
 pub struct GuitarStringFingering {
     /// Guitar string number, where the lowest string has the highest number.
     pub string_number: u8,
@@ -116,6 +119,7 @@ pub struct GuitarStringFingering {
 /// A suggested guitar fingering for a chord.
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
 pub struct GuitarFingering {
     /// String fingerings from low string to high string.
     pub strings: Vec<GuitarStringFingering>,
@@ -169,7 +173,7 @@ pub(crate) fn suggested_guitar_fingering_with_tuning(
     chord: &Chord,
     tuning: &GuitarTuning,
 ) -> Option<GuitarFingering> {
-    if chord.pitches().iter().any(|pitch| {
+    if chord.iter_pitches().any(|pitch| {
         let ps = pitch.ps();
         (ps - ps.round()).abs() > FloatType::EPSILON
     }) {
@@ -177,8 +181,7 @@ pub(crate) fn suggested_guitar_fingering_with_tuning(
     }
 
     let target_pitch_spaces = chord
-        .pitches()
-        .iter()
+        .iter_pitches()
         .map(pitch_space)
         .collect::<crate::Result<BTreeSet<_>>>()
         .ok()?;

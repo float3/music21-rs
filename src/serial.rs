@@ -13,6 +13,7 @@
 //! entries that build a `ToneRow` on demand.
 
 use std::fmt;
+use std::ops::Index;
 use std::str::FromStr;
 
 use crate::{
@@ -117,6 +118,7 @@ pub type IndexedTransformation = (Transformation, u8);
 /// An ordered sequence of pitch classes.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
 pub struct ToneRow {
     pitch_classes: Vec<u8>,
 }
@@ -462,6 +464,23 @@ impl ToneRow {
     }
 }
 
+impl Index<usize> for ToneRow {
+    type Output = u8;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.pitch_classes[index]
+    }
+}
+
+impl<'a> IntoIterator for &'a ToneRow {
+    type Item = &'a u8;
+    type IntoIter = std::slice::Iter<'a, u8>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.pitch_classes.iter()
+    }
+}
+
 impl fmt::Display for ToneRow {
     /// The pitch classes as single characters, `A` and `B` for ten and eleven.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -497,6 +516,7 @@ pub struct LinkClassification {
 
 /// The transpositions of a row laid out as a matrix.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[must_use]
 pub struct TwelveToneMatrix {
     rows: Vec<ToneRow>,
 }
@@ -553,6 +573,7 @@ pub fn row_to_matrix(pitch_classes: &[IntegerType]) -> String {
 /// A twelve-tone row from the historical literature, with the attributes
 /// music21 stores for it.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[must_use]
 pub struct HistoricalRow {
     /// music21's key for the row, such as `SchoenbergOp37`.
     pub name: &'static str,
@@ -2288,6 +2309,15 @@ const LINK_CHORDS: [LinkChord; 238] = [
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_row_indexes_and_iterates_over_its_pitch_classes() {
+        let row = ToneRow::new([0, 13, -1]);
+
+        assert_eq!(row[1], 1);
+        let collected: Vec<u8> = (&row).into_iter().copied().collect();
+        assert_eq!(collected, vec![0, 1, 11]);
+    }
 
     fn row(pitch_classes: impl IntoIterator<Item = IntegerType>) -> ToneRow {
         ToneRow::new(pitch_classes)

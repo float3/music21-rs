@@ -259,6 +259,7 @@ impl StreamEvent {
 /// An ordered stream of music, which may hold other streams.
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
 pub struct Stream {
     #[cfg_attr(feature = "serde", serde(default))]
     kind: StreamKind,
@@ -497,9 +498,29 @@ impl Stream {
     }
 }
 
+impl<'a> IntoIterator for &'a Stream {
+    type Item = &'a StreamEvent;
+    type IntoIter = std::slice::Iter<'a, StreamEvent>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.events.iter()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_stream_iterates_by_reference() {
+        let mut stream = Stream::new();
+        stream.push(Note::from_name("C4").unwrap());
+        stream.push(Note::from_name("E4").unwrap());
+
+        let offsets: Vec<FloatType> = (&stream).into_iter().map(StreamEvent::offset).collect();
+        assert_eq!(offsets, vec![0.0, 1.0]);
+        assert_eq!((&stream).into_iter().count(), stream.len());
+    }
 
     #[test]
     fn stream_push_uses_durations() {
