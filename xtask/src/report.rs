@@ -16,7 +16,7 @@
 //! exist, or an exclusion of a member music21 no longer has, is an error, so
 //! the map cannot go stale silently. That is the "check" in the command.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::error::Error;
 use std::fmt::Write as _;
@@ -25,6 +25,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 use serde::{Deserialize, Serialize};
+
+use crate::surface::{self, BeyondModule};
 
 /// What the coverage figure leaves out. Generated data rather than code
 /// (`chord/tables/generated.rs`, `scala_bundled.rs`), and every crate that is
@@ -130,6 +132,12 @@ struct Report {
     benchmarks: Option<Benchmarks>,
     doctests: Vec<ModuleDoctests>,
     features: Vec<ClassReport>,
+    /// What music21's own suite said about speed, where it has been run.
+    #[serde(default)]
+    timings: Option<Timings>,
+    /// Every public member of the crate no music21 member accounts for.
+    #[serde(default)]
+    beyond_members: Vec<BeyondModule>,
     #[serde(default)]
     beyond: Vec<BeyondReport>,
 }
@@ -174,6 +182,30 @@ struct DoctestSummary {
     docstrings: usize,
     examples_passing: usize,
     examples: usize,
+}
+
+/// What the pair of runs of music21's own suite said about time, as
+/// `xtask music21-suite` writes it into `target/music21-suite/timings.json`.
+///
+/// The benchmark above is twenty-one cases written for the purpose; this is
+/// every test music21 has, timed on both sides of a run that was happening
+/// anyway.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Timings {
+    paired: usize,
+    music21_seconds: f64,
+    music21_rs_seconds: f64,
+    median_speedup: f64,
+    fastest: Vec<TestTiming>,
+    slowest: Vec<TestTiming>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct TestTiming {
+    name: String,
+    music21_seconds: f64,
+    music21_rs_seconds: f64,
+    speedup: f64,
 }
 
 /// One module's share of music21's own unit tests, as `xtask music21-suite`
@@ -412,17 +444,20 @@ pub(crate) fn report(workspace_root: &Path, options: &Options) -> Result<(), Box
     let benchmarks = options.benchmarks.then(|| run_benchmarks(workspace_root));
 
     let doctests = read_doctests(workspace_root);
+    let timings = read_timings(workspace_root);
 
-    let (features, beyond) = if options.features {
+    let (features, beyond, beyond_members) = if options.features {
         let map_path = workspace_root.join("data/feature_map.toml");
         let map: FeatureMap = toml::from_str(&fs::read_to_string(&map_path)?)
             .map_err(|err| format!("{} does not parse: {err}", map_path.display()))?;
+        let claims = claimed_names(workspace_root, &map)?;
         (
             scan_features(workspace_root, &map)?,
             scan_beyond(workspace_root, &map.beyond)?,
+            surface::beyond_music21(workspace_root, &claims.ported, &claims.known),
         )
     } else {
-        (Vec::new(), Vec::new())
+        (Vec::new(), Vec::new(), Vec::new())
     };
 
     let report = Report {
@@ -433,7 +468,9 @@ pub(crate) fn report(workspace_root: &Path, options: &Options) -> Result<(), Box
         suites,
         benchmarks,
         doctests,
+        timings,
         features,
+        beyond_members,
         beyond,
     };
 
@@ -1167,6 +1204,12 @@ fn read_module_tests(workspace_root: &Path) -> Vec<ModuleTests> {
         .unwrap_or_default()
 }
 
+/// What the last run of music21's own suite said about time, if there is one.
+fn read_timings(workspace_root: &Path) -> Option<Timings> {
+    let path = workspace_root.join("target/music21-suite/timings.json");
+    serde_json::from_str(&fs::read_to_string(path).ok()?).ok()
+}
+
 /// Reads the summaries the parity doctest harness writes beside its logs,
 /// one per music21 module it runs. They are written by the parity suite, so
 /// they describe the run that just happened when the suites ran, and the last
@@ -1406,6 +1449,67 @@ fn count_scl_files(root: &Path) -> Option<usize> {
         }
     }
     (found > 0).then_some(found)
+}
+
+/// What the feature map accounts for: the ports it matched, file by file, and
+/// every name music21 uses anywhere.
+struct Claims {
+    /// `(rust file, name)` pairs the map matched — a real port.
+    ported: BTreeSet<(String, String)>,
+    /// Every name music21 has, matched or not.
+    known: BTreeSet<String>,
+}
+
+/// Which `(rust file, name)` pairs some music21 member already accounts for.
+///
+/// The ported list matches a music21 member against the whole of a class's
+/// Rust files at once, so which file it landed in is asked again here: a
+/// member is only excused on the file it is actually declared in, or a name
+/// that means two different things in two modules would be excused twice
+/// over by one port.
+fn claimed_names(workspace_root: &Path, map: &FeatureMap) -> Result<Claims, Box<dyn Error>> {
+    let mut ported = BTreeSet::new();
+    let mut known = BTreeSet::new();
+    for class in &map.class {
+        let python_path = workspace_root.join("music21/music21").join(&class.python);
+        let Ok(python) = fs::read_to_string(&python_path) else {
+            continue;
+        };
+        let members = match class.members {
+            Members::Methods => match &class.name {
+                Some(name) => class_methods(&python, name),
+                None => module_functions(&python),
+            },
+            Members::Classes => module_classes(&python, class.suffix.as_deref()),
+        };
+        // Every name music21 uses anywhere, whatever the crate did with it.
+        // music21 reaches a member through inheritance that its own class body
+        // never mentions — `addLyric` is a `Chord` member and is written in
+        // `GeneralNote` — so a file-scoped claim alone would announce
+        // `Chord::add_lyric` as something music21 has no counterpart for.
+        for member in &members {
+            known.extend(candidates(member, &class.renames, class.members));
+        }
+        // The class itself, so that `Chord` is not announced as something
+        // music21 has no counterpart for.
+        if let Some(name) = &class.name {
+            known.insert(name.clone());
+            known.insert(snake_case(name));
+        }
+        for file in &class.rust {
+            let Ok(rust) = fs::read_to_string(workspace_root.join(file)) else {
+                continue;
+            };
+            for member in &members {
+                for candidate in candidates(member, &class.renames, class.members) {
+                    if defines(&rust, &candidate, class.members) {
+                        ported.insert((file.clone(), candidate));
+                    }
+                }
+            }
+        }
+    }
+    Ok(Claims { ported, known })
 }
 
 fn scan_features(
@@ -1959,7 +2063,63 @@ fn render_sizes(sizes: &Sizes) -> String {
 }
 
 /// What the crate does that music21 has no counterpart for.
-fn render_beyond(beyond: &[BeyondReport]) -> String {
+/// The derived half of the section: every public member of the crate that no
+/// music21 member accounts for, one collapsed block per module.
+///
+/// Collapsed because there are several hundred of them; the summary line
+/// carries the count, so the section reads as a set of totals until a module
+/// is opened.
+fn render_beyond_members(modules: &[BeyondModule]) -> String {
+    if modules.is_empty() {
+        return String::new();
+    }
+    let (total, by_kind) = surface::totals(modules);
+    let mut html = String::new();
+    let kinds = by_kind
+        .iter()
+        .map(|(kind, count)| format!("{count} {}", kind.label()))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let _ = write!(
+        html,
+        "                <h3 class=\"beyond-head\">{total} public members the map matches to nothing in music21<span class=\"detail\">{kinds}, across {modules} modules</span></h3>
+                <div class=\"beyond-list\">
+",
+        modules = modules.len(),
+        kinds = escape(&kinds),
+    );
+    for module in modules {
+        let _ = write!(
+            html,
+            "                    <details class=\"beyond-item\">
+                        <summary><span class=\"feature-name\">{name}</span><span class=\"of\">{count}</span></summary>
+                        <ul class=\"member-list\">
+",
+            name = escape(&module.module),
+            count = plural(module.members.len(), "member", "members"),
+        );
+        for member in &module.members {
+            let _ = writeln!(
+                html,
+                "                            <li><code>{name}</code> <span class=\"of\">{kind}</span></li>",
+                name = escape(&member.name),
+                kind = member.kind.label(),
+            );
+        }
+        html.push_str(
+            "                        </ul>
+                    </details>
+",
+        );
+    }
+    html.push_str(
+        "                </div>
+",
+    );
+    html
+}
+
+fn render_beyond(beyond: &[BeyondReport], modules: &[BeyondModule]) -> String {
     let mut html = section_head(
         "beyond",
         "Beyond music21",
@@ -2000,25 +2160,121 @@ fn render_beyond(beyond: &[BeyondReport]) -> String {
                 </div>
 ",
     );
+    html.push_str(&render_beyond_members(modules));
     html.push_str(
-        "                <p class=\"section-foot\">Counts are read out of the crate's own tables, so the report fails when one it names has gone.</p>
+        "                <p class=\"section-foot\">Counts are read out of the crate's own tables, so the report fails when one it names has gone. The list below is derived: every public member of the crate, less every name music21 uses. It is bounded by what the map enumerates, so a member of a music21 class the map does not carry can appear here.</p>
             </section>
 ",
     );
     html
 }
 
-fn render_benchmarks(benchmarks: &Benchmarks, sizes: Option<&Sizes>) -> String {
+/// A second-per-test comparison drawn from music21's own suite.
+///
+/// Every case is the same test doing the same work, so there is nothing to
+/// argue about in the pairing — but most of what a music21 test does is
+/// music21's own code either way, which is why the middle sits near parity
+/// and the tails are the part worth reading.
+fn render_timings(timings: &Timings) -> String {
+    let mut html = String::new();
+    let _ = writeln!(
+        html,
+        "                <h3 class=\"beyond-head\">{paired} of music21's own tests, timed on both sides<span class=\"detail\">{theirs:.0}s on music21, {ours:.0}s on music21-rs, median {median:.2}&#215;</span></h3>",
+        paired = timings.paired,
+        theirs = timings.music21_seconds,
+        ours = timings.music21_rs_seconds,
+        median = timings.median_speedup,
+    );
+    html.push_str(
+        r#"                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Test</th><th>music21</th><th>music21-rs</th><th>Speedup</th></tr></thead>
+                        <tbody>
+"#,
+    );
+    for (label, rows) in [
+        ("furthest ahead", &timings.fastest),
+        ("furthest behind", &timings.slowest),
+    ] {
+        let _ = writeln!(
+            html,
+            "                            <tr class=\"group-row\"><td colspan=\"4\">{label}</td></tr>"
+        );
+        for row in rows {
+            let _ = write!(
+                html,
+                r#"                            <tr>
+                                <td class="name"><code>{name}</code></td>
+                                <td class="num">{theirs}</td>
+                                <td class="num">{ours}</td>
+                                <td class="num">{speedup:.2}&#215;</td>
+                            </tr>
+"#,
+                name = escape(&row.name),
+                theirs = seconds(row.music21_seconds),
+                ours = seconds(row.music21_rs_seconds),
+                speedup = row.speedup,
+            );
+        }
+    }
+    html.push_str(
+        "                        </tbody>
+                    </table>
+                </div>
+",
+    );
+    html
+}
+
+/// A duration in the units the eye wants.
+fn seconds(value: f64) -> String {
+    if value < 1.0 {
+        format!("{:.0} ms", value * 1000.0)
+    } else {
+        format!("{value:.2} s")
+    }
+}
+
+fn render_benchmarks(
+    benchmarks: Option<&Benchmarks>,
+    sizes: Option<&Sizes>,
+    timings: Option<&Timings>,
+) -> String {
+    // The two halves are measured by different commands. music21's own suite
+    // may have been timed where the benchmark was never run, and the section
+    // is worth having for either alone.
+    let Some(benchmarks) = benchmarks else {
+        let mut html = section_head(
+            "speedups",
+            "Speedups over music21",
+            &escape("from music21's own test suite"),
+        );
+        if let Some(timings) = timings {
+            html.push_str(&render_timings(timings));
+        }
+        html.push_str(
+            "            </section>
+",
+        );
+        return html;
+    };
     if benchmarks.cases.is_empty() {
         let mut html = section_head(
             "speedups",
             "Speedups over music21",
             &escape(benchmarks.detail.as_deref().unwrap_or("not run")),
         );
-        let _ = write!(
+        let _ = writeln!(
             html,
-            "                <p class=\"section-foot\">The benchmarks time the crate against music21 through the same Python API, and need both installed in the interpreter that runs them: <code>{}</code>.</p>\n            </section>\n",
+            "                <p class=\"section-foot\">The benchmarks time the crate against music21 through the same Python API, and need both installed in the interpreter that runs them: <code>{}</code>.</p>",
             escape(&benchmarks.command),
+        );
+        if let Some(timings) = timings {
+            html.push_str(&render_timings(timings));
+        }
+        html.push_str(
+            "            </section>
+",
         );
         return html;
     }
@@ -2084,12 +2340,19 @@ fn render_benchmarks(benchmarks: &Benchmarks, sizes: Option<&Sizes>) -> String {
             html.push_str(&block);
         }
     }
-    let _ = write!(
+    let _ = writeln!(
         html,
-        "                <p class=\"section-foot\">music21 {music21}, Python {python} ({platform}). Both sides must agree on the answer before either is timed. Each case builds a fresh object, except those marked cached.</p>\n            </section>\n",
+        "                <p class=\"section-foot\">music21 {music21}, Python {python} ({platform}). Both sides must agree on the answer before either is timed. Each case builds a fresh object, except those marked cached.</p>",
         music21 = escape(&benchmarks.music21),
         python = escape(&benchmarks.python),
         platform = escape(&benchmarks.platform),
+    );
+    if let Some(timings) = timings {
+        html.push_str(&render_timings(timings));
+    }
+    html.push_str(
+        "            </section>
+",
     );
     html
 }
@@ -2455,11 +2718,15 @@ fn render_html(report: &Report) -> String {
     if !report.suites.is_empty() {
         html.push_str(&render_suites(&report.suites));
     }
-    if let Some(benchmarks) = &report.benchmarks {
-        html.push_str(&render_benchmarks(benchmarks, report.sizes.as_ref()));
+    if report.benchmarks.is_some() || report.timings.is_some() {
+        html.push_str(&render_benchmarks(
+            report.benchmarks.as_ref(),
+            report.sizes.as_ref(),
+            report.timings.as_ref(),
+        ));
     }
     if !report.beyond.is_empty() {
-        html.push_str(&render_beyond(&report.beyond));
+        html.push_str(&render_beyond(&report.beyond, &report.beyond_members));
     }
     if !report.doctests.is_empty() {
         html.push_str(&render_doctests(&report.doctests));

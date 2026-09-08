@@ -27,7 +27,7 @@
 //! being installed before it will run anything. Everything after that check is
 //! what happens here.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -115,6 +115,11 @@ struct Report {
     failures: Vec<String>,
     errors: Vec<String>,
     detail: std::collections::BTreeMap<String, String>,
+    /// How long each test took, in seconds, by the same name the failures
+    /// are listed under. `unittest` collects these itself when the runner is
+    /// asked for durations; nothing here times anything by hand.
+    #[serde(default)]
+    durations: BTreeMap<String, f64>,
     /// Empty on the music21 side, which nothing reads per module.
     #[serde(default)]
     modules: Vec<ModuleTests>,
@@ -177,11 +182,14 @@ pub fn run(
         }
     }
 
-    compare(
-        &read(&out.join(Which::Music21.file()))?,
-        &read(&out.join(Which::Music21Rs.file()))?,
-        only.is_none(),
-    )
+    let plain = read(&out.join(Which::Music21.file()))?;
+    let ours = read(&out.join(Which::Music21Rs.file()))?;
+    if let Some(timings) = compare_timings(&plain, &ours) {
+        report_timings(&timings);
+        let path = out.join("timings.json");
+        fs::write(&path, serde_json::to_string_pretty(&timings)?)?;
+    }
+    compare(&plain, &ours, only.is_none())
 }
 
 fn read(path: &Path) -> Result<Report, Box<dyn Error>> {
@@ -232,6 +240,10 @@ fn run_one(workspace_root: &Path, out: &Path, which: Which, only: Option<&str>) 
         let kwargs = PyDict::new(py);
         kwargs.set_item("verbosity", 0)?;
         kwargs.set_item("stream", sys.getattr("stdout")?)?;
+        // Asking for durations is what makes `unittest` time each test and
+        // keep the list; nought is how many of the slowest to print, which is
+        // none. Python 3.12 and up.
+        kwargs.set_item("durations", 0)?;
         let result = unittest
             .getattr("TextTestRunner")?
             .call((), Some(&kwargs))?
@@ -268,6 +280,14 @@ fn run_one(workspace_root: &Path, out: &Path, which: Which, only: Option<&str>) 
             }
         }
         report.modules = module_tally(py, workspace_root, &failed_ids)?;
+        if let Ok(collected) = result.getattr("collectedDurations") {
+            for pair in collected.try_iter()? {
+                let pair = pair?;
+                let name: String = pair.get_item(0)?.str()?.extract()?;
+                let seconds: f64 = pair.get_item(1)?.extract()?;
+                report.durations.insert(name, seconds);
+            }
+        }
 
         let text = serde_json::to_string_pretty(&report)
             .map_err(|err| pyo3::exceptions::PyRuntimeError::new_err(err.to_string()))?;
@@ -466,6 +486,120 @@ fn clear_corpus_cache(py: Python<'_>) -> PyResult<()> {
     Ok(())
 }
 
+/// How the two runs compare in time, test by test.
+///
+/// The suite is already run twice; this is what that pair of runs says about
+/// speed. Every case is the same test doing the same work, so unlike a
+/// benchmark written for the purpose there is nothing to argue about in the
+/// comparison — but most of what a music21 test does is music21's own code
+/// either way, so the middle of the distribution sits near parity by
+/// construction. The tails are the part worth reading.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Timings {
+    /// Tests timed on both sides, passing on both, and slow enough to time.
+    pub paired: usize,
+    /// Total seconds those tests took, each way.
+    pub music21_seconds: f64,
+    pub music21_rs_seconds: f64,
+    pub median_speedup: f64,
+    /// The tests where the crate is furthest ahead, and furthest behind.
+    pub fastest: Vec<TestTiming>,
+    pub slowest: Vec<TestTiming>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TestTiming {
+    pub name: String,
+    pub music21_seconds: f64,
+    pub music21_rs_seconds: f64,
+    pub speedup: f64,
+}
+
+/// Below this a duration is mostly the timer, not the test. Both sides have
+/// to clear it: a ratio taken against a denominator of a few microseconds
+/// says more about the clock than about either implementation, and letting
+/// those through put a 277x at the head of the list off a test that took
+/// nineteen milliseconds one way and none the other.
+const TOO_QUICK_TO_TIME: f64 = 0.001;
+
+/// How many of each tail to keep.
+const TAIL: usize = 12;
+
+fn compare_timings(plain: &Report, ours: &Report) -> Option<Timings> {
+    let bad = |report: &Report| {
+        report
+            .bad()
+            .iter()
+            .map(|s| s.to_string())
+            .collect::<BTreeSet<_>>()
+    };
+    let (theirs_bad, ours_bad) = (bad(plain), bad(ours));
+    let mut rows: Vec<TestTiming> = Vec::new();
+    let mut music21_seconds = 0.0;
+    let mut music21_rs_seconds = 0.0;
+    for (name, theirs) in &plain.durations {
+        let Some(mine) = ours.durations.get(name) else {
+            continue;
+        };
+        // A test that failed did not do the work the other side did.
+        if theirs_bad.contains(name) || ours_bad.contains(name) {
+            continue;
+        }
+        if *theirs < TOO_QUICK_TO_TIME || *mine < TOO_QUICK_TO_TIME {
+            continue;
+        }
+        music21_seconds += theirs;
+        music21_rs_seconds += mine;
+        rows.push(TestTiming {
+            name: name.clone(),
+            music21_seconds: *theirs,
+            music21_rs_seconds: *mine,
+            speedup: theirs / mine.max(f64::MIN_POSITIVE),
+        });
+    }
+    if rows.is_empty() {
+        return None;
+    }
+    rows.sort_by(|a, b| {
+        a.speedup
+            .partial_cmp(&b.speedup)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    let median = rows[rows.len() / 2].speedup;
+    let slowest = rows.iter().take(TAIL).cloned().collect();
+    let fastest = rows.iter().rev().take(TAIL).cloned().collect();
+    Some(Timings {
+        paired: rows.len(),
+        music21_seconds,
+        music21_rs_seconds,
+        median_speedup: median,
+        fastest,
+        slowest,
+    })
+}
+
+/// Prints what the pair of runs said about time.
+fn report_timings(timings: &Timings) {
+    println!();
+    println!(
+        "  {} of music21's own tests timed on both sides: {:.1}s on music21, {:.1}s on music21_rs, median {:.2}x",
+        timings.paired, timings.music21_seconds, timings.music21_rs_seconds, timings.median_speedup
+    );
+    for (label, rows) in [
+        ("furthest ahead", &timings.fastest),
+        ("furthest behind", &timings.slowest),
+    ] {
+        println!();
+        println!("  {label}:");
+        for row in rows {
+            println!(
+                "    {:>6.2}x  {:>8.3}s -> {:>8.3}s  {}",
+                row.speedup, row.music21_seconds, row.music21_rs_seconds, row.name
+            );
+        }
+    }
+}
+
 /// What fails under `music21_rs` and not under music21.
 fn compare(plain: &Report, ours: &Report, whole: bool) -> Result<i32, Box<dyn Error>> {
     let theirs = plain.bad();
@@ -555,6 +689,7 @@ mod tests {
             errors: errors.iter().map(|name| name.to_string()).collect(),
             detail: Default::default(),
             modules: Vec::new(),
+            durations: BTreeMap::new(),
         }
     }
 

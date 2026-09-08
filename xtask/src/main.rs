@@ -11,6 +11,7 @@ mod report;
 mod report_script;
 mod scala_archive;
 mod submodule;
+mod surface;
 mod temperaments;
 mod tuning;
 
