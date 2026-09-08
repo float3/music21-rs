@@ -157,7 +157,11 @@ fn regenerate_fixtures(_: &Path) -> Result<(), Box<dyn Error>> {
 fn regenerate_all(workspace_root: &Path) -> Result<(), Box<dyn Error>> {
     regenerate_tables(workspace_root)?;
     regenerate_tuning_tables(workspace_root)?;
-    emit_scala_archive(workspace_root)?;
+    // Rebuild the archive from the submodules rather than only re-emitting the
+    // Rust from the committed TOML: this is the command to run after a bump,
+    // and upstream adding, removing or correcting a `.scl` file has to reach
+    // `data/scala_archive.toml` for the emitted Rust to mean anything.
+    regenerate_scala_archive(workspace_root)?;
     regenerate_fixtures(workspace_root)?;
     println!(
         "

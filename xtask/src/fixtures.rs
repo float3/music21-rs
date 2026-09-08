@@ -127,6 +127,24 @@ fn import_music21<'py>(py: Python<'py>, workspace_root: &Path) -> PyResult<Bound
         modules.del_item(name)?;
     }
 
+    // Undo the chord-table bridge's stubbing if this process has already done
+    // it. That bridge installs dummy `music21`, `music21.environment` and
+    // `music21.exceptions21` modules so `chord/tables.py` imports without
+    // music21's dependencies, and they stay in `sys.modules` for the life of
+    // the interpreter -- so `regenerate-all`, which runs the bridge first and
+    // the fixtures second in one process, would otherwise import the stub
+    // package here and find no `__version__` on it.
+    let modules = sys.getattr("modules")?.cast_into::<PyDict>()?;
+    let stubbed: Vec<String> = modules
+        .keys()
+        .iter()
+        .filter_map(|key| key.extract::<String>().ok())
+        .filter(|name| name == "music21" || name.starts_with("music21."))
+        .collect();
+    for name in stubbed {
+        modules.del_item(name)?;
+    }
+
     Ok(py.import("music21")?.into_any())
 }
 
