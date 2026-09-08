@@ -252,6 +252,85 @@ const TUPLET_DOTS: [u32; 2] = [0, 1];
 /// `range(8)`.
 const MAX_TIED_COMPONENTS: usize = 8;
 
+/// music21's `defaults.limitOffsetDenominator`: the largest denominator it
+/// will read a length as a fraction with.
+const DENOMINATOR_LIMIT: i128 = 65535;
+
+/// Reduces a fraction to its lowest terms.
+fn reduce(numerator: &mut i128, denominator: &mut i128) {
+    let mut left = *numerator;
+    let mut right = *denominator;
+    while right != 0 {
+        let next = left % right;
+        left = right;
+        right = next;
+    }
+    if left > 1 {
+        *numerator /= left;
+        *denominator /= left;
+    }
+}
+
+/// The fraction closest to a value with a denominator no larger than the
+/// limit, as Python's `Fraction.limit_denominator` finds it.
+fn limited_fraction(value: FloatType, max_denominator: i128) -> Option<(i128, i128)> {
+    if !value.is_finite() || value <= 0.0 {
+        return None;
+    }
+    // The exact fraction the float stands for, as `Fraction.from_float` reads
+    // it: a float is a binary fraction, so doubling reaches a whole number.
+    let mut exact = value;
+    let mut denominator: i128 = 1;
+    for _ in 0..64 {
+        if exact.fract() == 0.0 {
+            break;
+        }
+        exact *= 2.0;
+        denominator = denominator.checked_mul(2)?;
+    }
+    let mut numerator = exact as i128;
+    if exact.fract() != 0.0 {
+        return None;
+    }
+    if denominator <= max_denominator {
+        reduce(&mut numerator, &mut denominator);
+        return Some((numerator, denominator));
+    }
+    // Python's own walk up the Stern-Brocot tree.
+    let (mut p0, mut q0, mut p1, mut q1) = (0i128, 1i128, 1i128, 0i128);
+    let (mut n, mut d) = (numerator, denominator);
+    loop {
+        let a = n / d;
+        let q2 = q0 + a * q1;
+        if q2 > max_denominator {
+            break;
+        }
+        (p0, q0, p1, q1) = (p1, q1, p0 + a * p1, q2);
+        let next = n - a * d;
+        n = d;
+        d = next;
+        if d == 0 {
+            break;
+        }
+    }
+    if q1 == 0 {
+        return None;
+    }
+    let k = (max_denominator - q0) / q1;
+    let (bound_numerator, bound_denominator) = (p0 + k * p1, q0 + k * q1);
+    let value_as =
+        |numerator: i128, denominator: i128| numerator as FloatType / denominator as FloatType;
+    let one = (value_as(bound_numerator, bound_denominator) - value).abs();
+    let two = (value_as(p1, q1) - value).abs();
+    let (mut numerator, mut denominator) = if one <= two {
+        (bound_numerator, bound_denominator)
+    } else {
+        (p1, q1)
+    };
+    reduce(&mut numerator, &mut denominator);
+    Some((numerator, denominator))
+}
+
 /// How close a length has to be to a tuplet's to be read as one, relative to
 /// the length itself.
 ///
@@ -486,6 +565,50 @@ impl Duration {
     /// Order is what decides the answer: two thirds of a quarter matches a
     /// quarter in a triplet before it matches anything longer, which is why
     /// music21 calls it a quarter triplet and not two eighth triplets.
+    /// The one enormous tuplet music21 falls back on for a length no tie of
+    /// written values reaches: its `quarterLengthToNonPowerOf2Tuplet`.
+    ///
+    /// Any length can be written as a single note inside a strange enough
+    /// tuplet — 53/25 of a quarter is a whole note in a tuplet of a hundred
+    /// in the time of fifty-three — and music21 tries that before it calls a
+    /// length inexpressible. The answer is the tuplet together with the note
+    /// value written inside it.
+    fn last_resort_tuplet(&self) -> Option<(Tuplet, DurationType, u32)> {
+        let quarter_length = self.written_quarter_length();
+        if quarter_length <= 0.0 {
+            return None;
+        }
+        let (original_actual, original_normal) =
+            limited_fraction(1.0 / quarter_length, DENOMINATOR_LIMIT)?;
+        let (mut actual, mut normal) = (original_actual, original_normal);
+        // Between one and two, which is where a tuplet ratio belongs.
+        while actual < normal {
+            actual *= 2;
+            reduce(&mut actual, &mut normal);
+        }
+        while actual > normal * 2 {
+            normal *= 2;
+            reduce(&mut actual, &mut normal);
+        }
+        let (written, _) =
+            quarter_length_to_closest_type(quarter_length / normal as FloatType).ok()?;
+        // What is written inside the tuplet, which is the ratio the
+        // normalising undid.
+        let inside = (actual as FloatType / normal as FloatType)
+            / (original_actual as FloatType / original_normal as FloatType);
+        let (kind, dots) = exact_type_and_dots(inside)?;
+        Some((
+            Tuplet::new(
+                u32::try_from(actual).ok()?,
+                u32::try_from(normal).ok()?,
+                written,
+                0,
+            ),
+            kind,
+            dots,
+        ))
+    }
+
     pub fn tuplet(&self) -> Option<Tuplet> {
         if self.quarter_length <= 0.0 {
             return None;
@@ -531,7 +654,17 @@ impl Duration {
     pub fn tuplets(&self) -> Vec<Tuplet> {
         match &self.tuplets {
             Some(tuplets) => tuplets.clone(),
-            None => self.tuplet().into_iter().collect(),
+            None => match self.tuplet() {
+                Some(tuplet) => vec![tuplet],
+                // The written values fall back to one enormous tuplet for a
+                // length no tie reaches, and that tuplet is this length's.
+                None if !self.tie_reaches() => self
+                    .last_resort_tuplet()
+                    .map(|(tuplet, _, _)| tuplet)
+                    .into_iter()
+                    .collect(),
+                None => Vec::new(),
+            },
         }
     }
 
@@ -652,9 +785,43 @@ impl Duration {
             remainder -= next.quarter_length();
             components.push((next, 0));
         }
-        // A length the tie never finished covering is one no notation can
-        // write, which is music21's `inexpressible` and not a shorter note.
-        Vec::new()
+        // A length no tie of written values reached: music21's last resort
+        // is one enormous tuplet over the whole of it, and only a length
+        // that defeats even that is inexpressible.
+        match self.last_resort_tuplet() {
+            Some((_, kind, dots)) => vec![(kind, dots)],
+            None => Vec::new(),
+        }
+    }
+
+    /// Whether the written values were found by tying ordinary notes
+    /// together rather than by the last-resort tuplet.
+    fn tie_reaches(&self) -> bool {
+        let written = self.written_quarter_length();
+        if written == 0.0 || exact_type_and_dots(written).is_some() {
+            return true;
+        }
+        let Ok((largest, _)) = quarter_length_to_closest_type(written) else {
+            return true;
+        };
+        if largest.next_larger().is_none() {
+            return true;
+        }
+        let mut remainder = written - largest.quarter_length();
+        for _ in 0..MAX_TIED_COMPONENTS {
+            if Duration::new(remainder)
+                .ok()
+                .and_then(|duration| duration.type_and_dots())
+                .is_some()
+            {
+                return true;
+            }
+            let Ok((next, _)) = quarter_length_to_closest_type(remainder) else {
+                return false;
+            };
+            remainder -= next.quarter_length();
+        }
+        false
     }
 
     /// Returns music21's `fullName` for a single written note value, such as

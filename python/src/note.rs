@@ -2091,8 +2091,10 @@ impl Note {
     /// `chord.Chord([p1, p2]).pitches[0] is p1`, as music21's is.
     pub(crate) fn object_for_pitch(py: Python<'_>, pitch: Py<Pitch>) -> PyResult<Py<Self>> {
         let inner = RsNote::from_pitch(pitch.borrow(py).inner.clone());
-        let note = Py::new(
+        let note = crate::installed_new(
             py,
+            "music21.note",
+            "Note",
             Self {
                 inner,
                 pitch,
