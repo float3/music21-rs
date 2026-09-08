@@ -724,16 +724,39 @@ type ScaleDegree = (Option<usize>, Option<Accidental>);
 /// the entries straight back out.
 fn override_with(chord: &Bound<'_, Chord>, key: &str, value: &RsPitch) -> PyResult<()> {
     let py = chord.py();
-    // The pitch itself, not whatever named it: music21 reads these entries
-    // back as pitches, and its `harmony` module sets an octave on one.
-    let pitch = crate::installed_new(
-        py,
-        "music21.pitch",
-        "Pitch",
-        Pitch::wrap(value.clone(), false),
-    )?;
+    // The chord's own pitch object where the chord has that pitch — music21
+    // looks for it by octave and then by name alone, so that an edit to the
+    // chord's octaves is an edit to the answer it was told. Only a pitch the
+    // chord does not carry is stored loose.
+    let pitch = match chord_pitch_named(chord, value)? {
+        Some(pitch) => pitch,
+        None => crate::installed_new(
+            py,
+            "music21.pitch",
+            "Pitch",
+            Pitch::wrap(value.clone(), false),
+        )?,
+    };
     let overrides = chord.borrow_mut()._overrides(py);
     overrides.bind(py).set_item(key, pitch)
+}
+
+/// The chord's own object for a pitch, matched as music21 matches it: the
+/// same note in the same octave, then the same note in any octave.
+fn chord_pitch_named(chord: &Bound<'_, Chord>, value: &RsPitch) -> PyResult<Option<Py<Pitch>>> {
+    let py = chord.py();
+    let notes = Chord::note_objects(chord);
+    for note in &notes {
+        if note.borrow(py).inner.pitch().name_with_octave() == value.name_with_octave() {
+            return Ok(Some(Note::get_pitch(note.bind(py))));
+        }
+    }
+    for note in &notes {
+        if note.borrow(py).inner.pitch().name() == value.name() {
+            return Ok(Some(Note::get_pitch(note.bind(py))));
+        }
+    }
+    Ok(None)
 }
 
 /// Throws away an answer fixed by hand, which is what `find=True` does: it
@@ -1272,8 +1295,16 @@ impl Chord {
                 let mut pitches = vec![bass.clone()];
                 pitches.extend(slf.borrow().inner.pitches().iter().cloned());
                 let mut rebuilt = RsChord::new(pitches.as_slice()).map_err(chord_error)?;
-                if let Some(duration) = slf.borrow().inner.duration().cloned() {
-                    rebuilt.set_duration(duration);
+                {
+                    let me = slf.borrow();
+                    if let Some(duration) = me.inner.duration().cloned() {
+                        rebuilt.set_duration(duration);
+                    }
+                    // The chord is being rebuilt around a note it did not
+                    // have; a root somebody fixed by hand is still that root.
+                    if let Some(root) = me.inner.overridden_root().cloned() {
+                        rebuilt.set_root(Some(root));
+                    }
                 }
                 slf.borrow_mut().replace_inner(py, rebuilt)?;
             }
@@ -1422,14 +1453,13 @@ impl Chord {
 
     #[pyo3(signature = (newInversion = None, *, find = true, testRoot = None, transposeOnSet = true))]
     fn inversion(
-        &mut self,
+        slf: &Bound<'_, Self>,
         newInversion: Option<&Bound<'_, PyAny>>,
         find: bool,
         testRoot: Option<&Bound<'_, PyAny>>,
         transposeOnSet: bool,
     ) -> PyResult<Option<i32>> {
-        let _ = find;
-        if self.inner.pitches().is_empty() {
+        if slf.borrow().inner.pitches().is_empty() {
             return Ok(Some(-1));
         }
         if let Some(newInversion) = newInversion.filter(|value| !value.is_none()) {
@@ -1440,24 +1470,40 @@ impl Chord {
                 )));
             };
             if !transposeOnSet {
-                return Err(ChordException::new_err(
-                    "music21-rs reads the inversion off the pitches, so it cannot record one \
-                     without transposing",
-                ));
+                // music21 records the answer without moving anything, which
+                // is how a chord badly spelt or with a note added is told
+                // what inversion it stands in.
+                let py = slf.py();
+                let overrides = slf.borrow_mut()._overrides(py);
+                overrides.bind(py).set_item("inversion", inversion)?;
+                return Ok(None);
             }
             let inversion = u8::try_from(inversion).map_err(|_| {
                 ChordException::new_err("Could not invert chord: inversion may not exist")
             })?;
-            self.inner.set_inversion(inversion).map_err(chord_error)?;
+            clear_override(slf, "inversion")?;
+            clear_override(slf, "bass")?;
+            slf.borrow_mut()
+                .inner
+                .set_inversion(inversion)
+                .map_err(chord_error)?;
             return Ok(None);
         }
         if let Some(testRoot) = testRoot.filter(|value| !value.is_none()) {
             let root = pitch_from_any(testRoot)?;
             return Ok(Some(
-                self.inner.inversion_from_root(&root).map_or(-1, i32::from),
+                slf.borrow()
+                    .inner
+                    .inversion_from_root(&root)
+                    .map_or(-1, i32::from),
             ));
         }
-        Ok(Some(self.inner.inversion().map_or(-1, i32::from)))
+        // An answer fixed by hand stands, unless the caller asks for the
+        // search outright.
+        if !find && let Some(fixed) = overridden(slf, "inversion")? {
+            return Ok(Some(fixed.extract::<i32>().unwrap_or(-1)));
+        }
+        Ok(Some(slf.borrow().inner.inversion().map_or(-1, i32::from)))
     }
 
     fn inversionName(&self) -> PyResult<Option<i32>> {

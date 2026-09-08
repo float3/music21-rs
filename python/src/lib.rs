@@ -426,23 +426,48 @@ installed = {}
 # music21's own class for each one installed over it.
 replaced = {}
 
+# What `classes` and `classSet` answer for a class, worked out once.
+_lineages = {}
+
 
 def refresh_class_sets():
-    """Every installed class counts as the installed classes it replaces.
+    """Forget what was worked out, since there is a new class in the world."""
+    _lineages.clear()
 
-    `getElementsByClass` matches on `classSet`, which holds classes and not
-    only their names. An installed `Key` carries music21's own
-    `KeySignature` there, but `key.KeySignature` now *means* the installed
-    one — so a part would report no key signature at all until the installed
-    class is in the set too.
+
+def lineage(cls):
+    """What `cls` is, and everything it is a kind of, in music21's order.
+
+    An installed class stands in for one of music21's own, so the chain it
+    reports is that class's chain and not the arrangement of bases that put
+    it there: an accidental of ours is still a `StyleMixin` as far as
+    anything reading `classes` is concerned, and a `ChordSymbol` built on an
+    installed `Chord` is still a `Chord`.
     """
-    for cls in installed.values():
-        members = getattr(cls, 'classSet', None)
-        if not members:
-            continue
-        also = {replaced[member] for member in members if member in replaced}
-        if not also <= members:
-            cls.classSet = frozenset(members | also)
+    known = _lineages.get(cls)
+    if known is not None:
+        return known
+    walked = []
+    for ancestor in (cls,) + cls.__mro__:
+        stands_for = ancestor.__dict__.get('_replaces')
+        for member in (stands_for.__mro__ if stands_for is not None else (ancestor,)):
+            if member not in walked:
+                walked.append(member)
+    names = []
+    for member in walked:
+        if member.__name__ not in names:
+            names.append(member.__name__)
+    members = set(walked)
+    for member in walked:
+        members.add(member.__name__)
+        members.add(member.__module__ + '.' + member.__name__)
+        # `getElementsByClass` matches on the classes themselves, and the
+        # name it is given now means the installed class.
+        if member in replaced:
+            members.add(replaced[member])
+    known = (tuple(names), frozenset(members))
+    _lineages[cls] = known
+    return known
 
 
 def style_and_editorial(original):
@@ -564,11 +589,6 @@ def make_class(facade, original):
     def __copy__(self):
         return __deepcopy__(self)
 
-    classified = set()
-    for ancestor in original.__mro__:
-        classified.add(ancestor)
-        classified.add(ancestor.__name__)
-        classified.add(ancestor.__module__ + '.' + ancestor.__name__)
     namespace = dict(unported_members(facade, original))
     namespace.update(style_and_editorial(original))
     namespace.update({
@@ -577,7 +597,11 @@ def make_class(facade, original):
         '__copy__': __copy__,
         '__module__': original.__module__,
         '__qualname__': original.__qualname__,
-        'classes': tuple(a.__name__ for a in original.__mro__),
+        # Worked out per class rather than fixed, so that a Python subclass
+        # of one of these reports itself and not the class it was built on.
+        'classes': property(lambda self: lineage(type(self))[0]),
+        'classSet': property(lambda self: lineage(type(self))[1]),
+        '_replaces': original,
     })
     for name in ('isNote', 'isRest', 'isChord', 'classSortOrder', 'equalityAttributes'):
         if hasattr(original, name):
@@ -623,8 +647,6 @@ def make_class(facade, original):
         except TypeError:
             # A facade nothing can be built on at all stands as it is.
             return facade
-    # A caller who asks a stream for `note.Note` is asking for this class now.
-    installed.classSet = frozenset(classified | {installed})
     replaced[original] = installed
     return installed
 
