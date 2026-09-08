@@ -151,6 +151,12 @@ impl Modifier {
             .extract::<PyRef<'_, Self>>()
             .is_ok_and(|other| other.inner == self.inner)
     }
+
+    /// music21 restores hashing on identity where it defines equality, so
+    /// that a set or a dictionary can hold one of these however it compares.
+    fn __hash__(slf: &Bound<'_, Self>) -> isize {
+        slf.as_ptr() as isize >> 4
+    }
 }
 
 /// music21's `Figure`: one number of a column, with its modifier.
@@ -249,6 +255,12 @@ impl Figure {
         other
             .extract::<PyRef<'_, Self>>()
             .is_ok_and(|other| other.inner == self.inner)
+    }
+
+    /// music21 restores hashing on identity where it defines equality, so
+    /// that a set or a dictionary can hold one of these however it compares.
+    fn __hash__(slf: &Bound<'_, Self>) -> isize {
+        slf.as_ptr() as isize >> 4
     }
 }
 
@@ -413,6 +425,12 @@ impl Notation {
         other
             .extract::<PyRef<'_, Self>>()
             .is_ok_and(|other| other.inner == self.inner)
+    }
+
+    /// music21 restores hashing on identity where it defines equality, so
+    /// that a set or a dictionary can hold one of these however it compares.
+    fn __hash__(slf: &Bound<'_, Self>) -> isize {
+        slf.as_ptr() as isize >> 4
     }
 }
 

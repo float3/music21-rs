@@ -267,6 +267,12 @@ impl AbstractScale {
     fn __eq__(&self, other: &Bound<'_, PyAny>) -> bool {
         Self::scale_type_of(other) == self.scale_type
     }
+
+    /// music21 restores hashing on identity where it defines equality, so
+    /// that a set or a dictionary can hold one of these however it compares.
+    fn __hash__(slf: &Bound<'_, Self>) -> isize {
+        slf.as_ptr() as isize >> 4
+    }
 }
 
 /// The scale type music21 calls by this name, whether it is written as a
@@ -1190,6 +1196,12 @@ impl ConcreteScale {
             }
             other.inner.tonic().name_with_octave() == self.inner.tonic().name_with_octave()
         })
+    }
+
+    /// music21 restores hashing on identity where it defines equality, so
+    /// that a set or a dictionary can hold one of these however it compares.
+    fn __hash__(slf: &Bound<'_, Self>) -> isize {
+        slf.as_ptr() as isize >> 4
     }
 }
 

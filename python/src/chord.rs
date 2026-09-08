@@ -796,6 +796,12 @@ impl ChordTableAddress {
         })
     }
 
+    /// music21 restores hashing on identity where it defines equality, so
+    /// that a set or a dictionary can hold one of these however it compares.
+    fn __hash__(slf: &Bound<'_, Self>) -> isize {
+        slf.as_ptr() as isize >> 4
+    }
+
     fn __repr__(&self) -> String {
         format!(
             "ChordTableAddress(cardinality={}, forteClass={}, inversion={}, pcOriginal={})",

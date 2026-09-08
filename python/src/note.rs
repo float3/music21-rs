@@ -179,6 +179,12 @@ impl DurationTuple {
         })
     }
 
+    /// music21 restores hashing on identity where it defines equality, so
+    /// that a set or a dictionary can hold one of these however it compares.
+    fn __hash__(slf: &Bound<'_, Self>) -> isize {
+        slf.as_ptr() as isize >> 4
+    }
+
     fn __repr__(&self) -> String {
         format!(
             "DurationTuple(type='{}', dots={}, quarterLength={:?})",
@@ -597,6 +603,12 @@ impl Tuplet {
         other
             .extract::<PyRef<'_, Self>>()
             .is_ok_and(|other| other.inner == self.inner)
+    }
+
+    /// music21 restores hashing on identity where it defines equality, so
+    /// that a set or a dictionary can hold one of these however it compares.
+    fn __hash__(slf: &Bound<'_, Self>) -> isize {
+        slf.as_ptr() as isize >> 4
     }
 
     fn __repr__(&self) -> String {
@@ -1844,6 +1856,12 @@ impl Duration {
         Ok(quarter_lengths_agree)
     }
 
+    /// music21 restores hashing on identity where it defines equality, so
+    /// that a set or a dictionary can hold one of these however it compares.
+    fn __hash__(slf: &Bound<'_, Self>) -> isize {
+        slf.as_ptr() as isize >> 4
+    }
+
     fn __repr__(slf: &Bound<'_, Self>) -> PyResult<String> {
         let name = slf.get_type().qualname()?;
         let duration = slf.borrow();
@@ -2909,24 +2927,35 @@ impl Note {
         Ok(created)
     }
 
+    /// music21 takes the volume object itself when nothing else has claimed
+    /// it, and a copy of it when something has — either way the note is what
+    /// the volume is the volume of, which is what `Volume.client` answers.
     #[setter]
-    fn set_volume(&mut self, py: Python<'_>, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+    fn set_volume(
+        slf: &Bound<'_, Self>,
+        py: Python<'_>,
+        value: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<()> {
         let Some(value) = value.filter(|value| !value.is_none()) else {
-            self.inner.set_volume(None);
-            self.volume = None;
+            let mut me = slf.borrow_mut();
+            me.inner.set_volume(None);
+            me.volume = None;
             return Ok(());
         };
         let inner = volume_from_any(value)?;
-        self.inner.set_volume(Some(inner.clone()));
-        self.volume = match value.extract::<Py<Volume>>() {
-            Ok(object) => Some(object),
-            Err(_) => Some(crate::installed_new(
-                py,
-                "music21.volume",
-                "Volume",
-                Volume::wrap(inner),
-            )?),
+        slf.borrow_mut().inner.set_volume(Some(inner.clone()));
+        let object = match value.extract::<Py<Volume>>() {
+            Ok(object) => {
+                if object.borrow(py).is_claimed() {
+                    crate::installed_new(py, "music21.volume", "Volume", object.borrow(py).clone())?
+                } else {
+                    object
+                }
+            }
+            Err(_) => crate::installed_new(py, "music21.volume", "Volume", Volume::wrap(inner))?,
         };
+        object.borrow_mut(py).set_client(Some(slf.as_any()));
+        slf.borrow_mut().volume = Some(object);
         Ok(())
     }
 

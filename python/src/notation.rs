@@ -830,6 +830,12 @@ impl Beam {
             .is_ok_and(|other| other.inner == self.inner)
     }
 
+    /// music21 restores hashing on identity where it defines equality, so
+    /// that a set or a dictionary can hold one of these however it compares.
+    fn __hash__(slf: &Bound<'_, Self>) -> isize {
+        slf.as_ptr() as isize >> 4
+    }
+
     /// A copy as an object of the class it was asked on: music21 compares
     /// two of these by class before anything else, so a copy built as the
     /// bare facade would not equal the original.
@@ -1303,6 +1309,12 @@ impl Beams {
             .is_ok_and(|other| other.inner == self.inner)
     }
 
+    /// music21 restores hashing on identity where it defines equality, so
+    /// that a set or a dictionary can hold one of these however it compares.
+    fn __hash__(slf: &Bound<'_, Self>) -> isize {
+        slf.as_ptr() as isize >> 4
+    }
+
     /// A copy as an object of the class it was asked on: music21 compares
     /// two of these by class before anything else, so a copy built as the
     /// bare facade would not equal the original.
@@ -1403,6 +1415,11 @@ impl Volume {
     }
 
     /// The same, knowing what it is the volume of.
+    /// Whether something has already claimed this volume as its own.
+    pub(crate) fn is_claimed(&self) -> bool {
+        self.client.is_some()
+    }
+
     pub(crate) fn owned_by(inner: RsVolume, client: Py<PyAny>) -> Self {
         Self {
             inner,
@@ -1659,6 +1676,12 @@ impl Volume {
         other
             .extract::<PyRef<Volume>>()
             .is_ok_and(|other| other.inner == self.inner)
+    }
+
+    /// music21 restores hashing on identity where it defines equality, so
+    /// that a set or a dictionary can hold one of these however it compares.
+    fn __hash__(slf: &Bound<'_, Self>) -> isize {
+        slf.as_ptr() as isize >> 4
     }
 
     fn __repr__(&self) -> String {

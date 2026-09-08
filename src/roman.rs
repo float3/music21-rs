@@ -112,17 +112,26 @@ enum RomanQuality {
 }
 
 impl AugmentedSixthKind {
+    /// The augmented sixth a figure names, if it names one.
+    ///
+    /// music21 reads these as the country's name, an optional `+`, and
+    /// whatever inversion figure follows — so `It`, `It+`, `It6`, `It+6` and
+    /// `Ger6/5` are all augmented sixths, and the inversion is read off
+    /// afterwards.
     fn from_figure(figure: &str) -> Option<Self> {
-        match figure.trim() {
-            // music21 writes these with or without the `+6`, and with the
-            // inversion figure in place of it — `Ger65` is the German sixth
-            // in the position it is nearly always used in.
-            "It" | "It+6" | "It6" | "It53" | "It63" | "It64" => Some(Self::Italian),
-            "Fr" | "Fr+6" | "Fr6" | "Fr43" | "Fr7" | "Fr42" | "Fr65" => Some(Self::French),
-            "Ger" | "Ger+6" | "Ger6" | "Ger65" | "Ger7" | "Ger43" | "Ger42" => Some(Self::German),
-            "Sw" | "Sw+6" | "Sw6" | "Sw43" | "Sw7" | "Sw65" | "Sw42" => Some(Self::Swiss),
-            _ => None,
-        }
+        let figure = figure.trim();
+        let kind = augmented_sixth_prefix(figure)?;
+        let name = match kind {
+            Self::Italian => "It",
+            Self::French => "Fr",
+            Self::German => "Ger",
+            Self::Swiss => "Sw",
+        };
+        let rest = figure[name.len()..].trim_start_matches('+');
+        unslash_inversion(rest)
+            .chars()
+            .all(|written| written.is_ascii_digit())
+            .then_some(kind)
     }
 
     fn from_common_name(name: &str) -> Option<Self> {
@@ -354,6 +363,13 @@ impl RomanNumeral {
     /// and `VII` ask for, and those are left alone.
     fn raise_minor_sixth_and_seventh(&mut self, column: &mut String) -> Result<()> {
         if !matches!(self.degree, 6 | 7) {
+            return Ok(());
+        }
+        // A numeral read against a collection takes that collection's
+        // degrees as they are written. Raising the sixth and the seventh is
+        // a rule about minor *keys* — music21 asks the thing it was given
+        // for its mode, and a scale has none.
+        if self.scale.is_some() {
             return Ok(());
         }
         // Against the key the figure is actually read in, so the `vi` of a
@@ -1444,8 +1460,10 @@ pub fn expand_shorthand(shorthand: &str) -> Vec<String> {
             index = start + 1;
         }
     }
-    // A column written as a third alone is a fifth and a third.
-    if tokens.len() == 1 && tokens[0].ends_with('3') {
+    // A column written as a third alone is a fifth and a third — the third
+    // itself, not any figure whose digits happen to end in one: `13` is a
+    // thirteenth and stands for the whole stack under it.
+    if tokens.len() == 1 && tokens[0].trim_start_matches(['#', '-', 'b', 'o']) == "3" {
         tokens.insert(0, "5".to_string());
     }
     tokens

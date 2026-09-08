@@ -516,6 +516,12 @@ impl MetronomeMark {
             .is_ok_and(|other| other.inner == self.inner && other.sounding == self.sounding)
     }
 
+    /// music21 restores hashing on identity where it defines equality, so
+    /// that a set or a dictionary can hold one of these however it compares.
+    fn __hash__(slf: &Bound<'_, Self>) -> isize {
+        slf.as_ptr() as isize >> 4
+    }
+
     fn __deepcopy__<'py>(
         slf: &Bound<'py, Self>,
         _memo: &Bound<'py, PyAny>,

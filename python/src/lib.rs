@@ -111,6 +111,14 @@ pub(crate) fn derived_from(
     Ok(())
 }
 
+/// Whether these classes have been installed into music21 at all.
+fn anything_installed(py: Python<'_>) -> bool {
+    install_helper(py)
+        .and_then(|helper| helper.getattr("installed"))
+        .map(|installed| installed.len().unwrap_or(0) > 0)
+        .unwrap_or(false)
+}
+
 /// The class music21 now has under a name, where one of ours was installed
 /// there.
 ///
@@ -272,10 +280,23 @@ where
 #[pyfunction]
 #[pyo3(name = "_thawed")]
 fn thawed(py: Python<'_>, module: &str, name: &str) -> PyResult<Py<PyAny>> {
-    if installed_class(py, module, name).is_none() {
+    // Only where *nothing* is installed: a process that has never installed
+    // these classes — joblib starts one to measure a score's features — has
+    // to install them to read a score at all. Installing again where they
+    // are already in place would build every class a second time, and every
+    // object made before that would stop being of the class its module now
+    // names, which is a far worse thing than a name this cannot resolve.
+    if !anything_installed(py) {
         install_into_music21(py)?;
     }
-    let Some(class) = installed_class(py, module, name) else {
+    // A class of ours that was registered but never installed — music21
+    // does something with it that this does not — is still the class the
+    // module has under that name, and still what was written out.
+    let Some(class) = installed_class(py, module, name).or_else(|| {
+        py.import(module)
+            .and_then(|module| module.getattr(name))
+            .ok()
+    }) else {
         return Err(pyo3::exceptions::PyValueError::new_err(format!(
             "{module}.{name} is not one of these classes"
         )));
@@ -621,10 +642,13 @@ def make_class(facade, original):
             copied = copier(self, memo)
         else:
             # A facade with no copy of its own is copied the way a pickle of
-            # it is read back: the class it names, told what it was.
-            maker, arguments, state = self.__reduce__()
-            copied = maker(*arguments)
-            copied.__setstate__(state)
+            # it is read back — but into a blank of *this* class rather than
+            # through the name the pickle carries, since looking a class up
+            # by name would install the classes afresh if a test had reloaded
+            # the module underneath, and every object made before that would
+            # stop being of the class its module now names.
+            copied = blank(type(self))
+            copied.__setstate__(self.__reduce__()[2])
         if isinstance(copied, _base.Music21Object):
             _base.Music21Object.__init__(copied)
         elif hasattr(type(copied), 'editorial'):
