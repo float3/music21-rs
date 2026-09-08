@@ -225,6 +225,13 @@ impl MetronomeMark {
         self.number_implicit
     }
 
+    /// Says so, or unsays it. music21 lets a caller write this: its MIDI
+    /// reader copies a mark onto every staff and marks the copies implicit,
+    /// which is how the parts after the first hide the number.
+    pub fn set_number_implicit(&mut self, implicit: bool) {
+        self.number_implicit = implicit;
+    }
+
     /// Whether the tempo word was implied from the number.
     pub fn text_implicit(&self) -> bool {
         self.text_implicit

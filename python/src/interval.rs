@@ -1264,6 +1264,11 @@ pub(crate) fn interval_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsInterval
     if let Ok(semitones) = value.extract::<i32>() {
         return RsInterval::from_semitones(semitones).map_err(interval_error);
     }
+    // A number of semitones written with a decimal point, which music21
+    // reads as a microtonal interval: its own analysis transposes by one.
+    if let Ok(semitones) = value.extract::<f64>() {
+        return RsInterval::from_chromatic(RsChromatic::new(semitones)).map_err(interval_error);
+    }
     if let Ok(name) = value
         .getattr("directedName")
         .and_then(|name| name.extract::<String>())

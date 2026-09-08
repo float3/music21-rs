@@ -42,6 +42,38 @@ pyo3::create_exception!(
     crate::Music21Exception
 );
 
+/// A number written the way music21's `common.mixedNumeral` writes it: a
+/// whole number where it is one, and a whole number and a fraction where the
+/// two are both there.
+fn mixed_numeral(py: Python<'_>, value: f64) -> PyResult<String> {
+    let exact = py
+        .import("fractions")?
+        .getattr("Fraction")?
+        .call1((value,))?
+        .call_method1("limit_denominator", (65_535,))?;
+    let numerator: i64 = exact.getattr("numerator")?.extract()?;
+    let denominator: i64 = exact.getattr("denominator")?.extract()?;
+    if denominator == 1 {
+        return Ok(numerator.to_string());
+    }
+    let whole = numerator.div_euclid(denominator);
+    let rest = numerator.rem_euclid(denominator);
+    if whole == 0 {
+        return Ok(format!("{rest}/{denominator}"));
+    }
+    Ok(format!("{whole} {rest}/{denominator}"))
+}
+
+/// A written value's name with its first letter capitalized, which is what
+/// Python's `str.title` does to the one-word names these carry.
+fn title_case(name: &str) -> String {
+    let mut letters = name.chars();
+    match letters.next() {
+        Some(first) => first.to_uppercase().collect::<String>() + letters.as_str(),
+        None => String::new(),
+    }
+}
+
 fn duration_error(error: music21_rs::Error) -> PyErr {
     DurationException::new_err(message(&error))
 }
@@ -1828,8 +1860,73 @@ impl Duration {
     }
 
     #[getter]
-    fn fullName(&self) -> String {
-        self.inner.full_name()
+    fn fullName(&mut self, py: Python<'_>) -> PyResult<String> {
+        // music21's `Duration.fullName`, written out here rather than read
+        // off the value: the tuplets a caller has appended are Python
+        // objects, and the name says which they are.
+        let tuplets = self.tuplet_objects(py)?;
+        // A duration nobody has written a tuplet onto knows its own name,
+        // and the value's reading of what it is written inside is the
+        // fuller one — it names the odd ratio a length like 53/25 needs.
+        if tuplets.is_empty() {
+            return Ok(self.inner.full_name());
+        }
+        let mut named = Vec::with_capacity(tuplets.len());
+        for tuplet in &tuplets {
+            named.push(tuplet.bind(py).getattr("fullName")?.extract::<String>()?);
+        }
+        let tuplet_name = named.join(" ");
+        let components = self.component_list_materialized(py)?;
+        let length = mixed_numeral(py, self.inner.quarter_length())?;
+        let mut written: Vec<String> = Vec::with_capacity(components.len());
+        for component in &components {
+            let dots = component.dots();
+            let dotted = match dots {
+                0 => String::new(),
+                1 => "Dotted".to_string(),
+                2 => "Double Dotted".to_string(),
+                3 => "Triple Dotted".to_string(),
+                4 => "Quadruple Dotted".to_string(),
+                many => format!("{many}-Times Dotted"),
+            };
+            let mut name = String::new();
+            let value = component.r#type();
+            // The old long values are perfect or imperfect rather than
+            // dotted, which is how they were written before the bar line.
+            if dots >= 2 || !matches!(value.as_str(), "longa" | "maxima") {
+                name.push_str(&dotted);
+                name.push(' ');
+            } else if dots == 0 {
+                name.push_str("Imperfect ");
+            } else {
+                name.push_str("Perfect ");
+            }
+            let value = if value.starts_with(['1', '2', '3', '5', '6']) {
+                value
+            } else {
+                title_case(&value)
+            };
+            if !value.eq_ignore_ascii_case("complex") {
+                name.push_str(&value);
+                name.push(' ');
+            }
+            if !tuplet_name.is_empty() {
+                name.push_str(&tuplet_name);
+                name.push(' ');
+            }
+            if !tuplet_name.is_empty() || dots >= 3 || value.eq_ignore_ascii_case("complex") {
+                name.push_str(&format!("({length} QL)"));
+            }
+            written.push(name.trim().to_string());
+        }
+        if components.is_empty() {
+            written.push("Zero Duration".to_string());
+        }
+        let mut whole = written.join(" tied to ");
+        if components.len() != 1 {
+            whole.push_str(&format!(" ({length} total QL)"));
+        }
+        Ok(whole)
     }
 
     /// music21's `informClient`: tells whatever owns this duration that its

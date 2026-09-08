@@ -907,14 +907,21 @@ impl ConcreteScale {
         comparisonAttribute: &str,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<bool> {
-        let _ = (getNeighbor, comparisonAttribute);
-        self.heard(direction)?
-            .is_next(
-                &pitch_from_any(other)?,
-                &pitch_from_any(pitchOrigin)?,
-                stepSize,
-            )
-            .map_err(scale_error)
+        let py = other.py();
+        // Anything that is not a pitch is simply not the next one: music21
+        // says no rather than raising, and its own scale search asks about
+        // the note after the last one in a part, which is nothing at all.
+        let Ok(value) = pitch_from_any(other) else {
+            return Ok(false);
+        };
+        let next = self.nextPitch(Some(pitchOrigin), direction, stepSize, getNeighbor, None)?;
+        // Compared on whatever music21 was told to compare on: two pitches
+        // may share a name and stand an octave apart, and a search for a
+        // run of scale steps says so.
+        let asked = Bound::new(py, Pitch::wrap(value, false))?;
+        let next = Bound::new(py, next)?;
+        next.getattr(comparisonAttribute)?
+            .eq(asked.getattr(comparisonAttribute)?)
     }
 
     /// music21's `pitchFromDegree`: the pitch at a scale degree, counting the

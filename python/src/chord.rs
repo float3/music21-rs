@@ -229,6 +229,17 @@ impl Chord {
     /// Replaces the pitches and everything read off them, rebuilding the
     /// note objects to match. Notation on the old notes does not survive a
     /// structural change, which is what music21 does too.
+    /// Makes the chord the pitches given, keeping how long it sounds: a
+    /// chord that was timed and then told what its notes are is still that
+    /// long, which is what music21's own `pitches` setter leaves alone.
+    fn replace_pitches(&mut self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        let mut replaced = chord_from_any(Some(value))?;
+        if let Some(duration) = self.inner.duration().cloned() {
+            replaced.set_duration(duration);
+        }
+        self.replace_inner(py, replaced)
+    }
+
     fn replace_inner(&mut self, py: Python<'_>, inner: RsChord) -> PyResult<()> {
         self.inner = inner;
         self.rebuild_notes(py)
@@ -1034,15 +1045,13 @@ impl Chord {
     #[setter]
     fn set_pitches(&mut self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<()> {
         require_iterable(value, "pitches")?;
-        let replaced = chord_from_any(Some(value))?;
-        self.replace_inner(py, replaced)
+        self.replace_pitches(py, value)
     }
 
     #[setter]
     fn set_pitchNames(&mut self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<()> {
         require_iterable(value, "pitchNames")?;
-        let replaced = chord_from_any(Some(value))?;
-        self.replace_inner(py, replaced)
+        self.replace_pitches(py, value)
     }
 
     #[getter]

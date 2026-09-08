@@ -244,7 +244,9 @@ impl MetronomeMark {
     }
 
     #[setter]
-    fn set_numberImplicit(&mut self, _value: Option<bool>) {}
+    fn set_numberImplicit(&mut self, value: Option<bool>) {
+        self.inner.set_number_implicit(value.unwrap_or(false));
+    }
 
     #[getter]
     fn get_numberSounding(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
