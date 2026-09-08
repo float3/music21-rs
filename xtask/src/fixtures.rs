@@ -109,6 +109,24 @@ fn import_music21<'py>(py: Python<'py>, workspace_root: &Path) -> PyResult<Bound
             .into_owned(),
     )?;
 
+    // Undo the chord-table bridge's stubbing if this process has already done
+    // it. That bridge installs dummy `music21`, `music21.environment` and
+    // `music21.exceptions21` modules so `chord/tables.py` imports without
+    // music21's dependencies, and they stay in `sys.modules` for the life of
+    // the interpreter -- so `regenerate-all`, which runs the bridge first and
+    // the fixtures second in one process, would otherwise import the stub
+    // package here and find no `__version__` on it.
+    let modules = sys.getattr("modules")?.cast_into::<PyDict>()?;
+    let stubbed: Vec<String> = modules
+        .keys()
+        .iter()
+        .filter_map(|key| key.extract::<String>().ok())
+        .filter(|name| name == "music21" || name.starts_with("music21."))
+        .collect();
+    for name in stubbed {
+        modules.del_item(name)?;
+    }
+
     Ok(py.import("music21")?.into_any())
 }
 
@@ -138,6 +156,7 @@ pub(crate) fn regenerate(workspace_root: &Path) -> Result<Vec<PathBuf>, Box<dyn 
             write_meters(py, workspace_root, &version)?,
             write_small_tables(py, workspace_root, &version)?,
             write_serial(py, workspace_root, &version)?,
+            write_doctest_totals(py, workspace_root, &version)?,
         ])
     })
     .map_err(|error| -> Box<dyn Error> { Box::new(error) })
@@ -154,6 +173,161 @@ fn header(lines: &[&str], version: &str) -> String {
     let _ = writeln!(out, "music21_version = {}", toml_string(version));
     let _ = writeln!(out);
     out
+}
+
+/// The music21 modules the crate ports, as import names, read out of
+/// `data/feature_map.toml` so the two cannot drift. `chord/__init__.py` is
+/// `music21.chord`, `meter/base.py` is `music21.meter.base`.
+fn scoped_modules(workspace_root: &Path) -> PyResult<Vec<String>> {
+    let text = fs::read_to_string(workspace_root.join("data/feature_map.toml"))?;
+    let mut modules = Vec::new();
+    for line in text.lines() {
+        let Some(rest) = line.trim().strip_prefix("python") else {
+            continue;
+        };
+        let Some((_, value)) = rest.split_once('=') else {
+            continue;
+        };
+        let path = value.trim().trim_matches(['\'', '"'].as_slice());
+        let Some(stem) = path.strip_suffix(".py") else {
+            continue;
+        };
+        let stem = stem.strip_suffix("/__init__").unwrap_or(stem);
+        let module = format!("music21.{}", stem.replace('/', "."));
+        if !modules.contains(&module) {
+            modules.push(module);
+        }
+    }
+    modules.sort();
+    Ok(modules)
+}
+
+/// The modules holding a module's unit tests, found by looking rather than by
+/// guessing at a name. music21 keeps them three ways — a `Test` class in the
+/// module itself, a `tests.py` or `test_*.py` beside it inside its own
+/// package, and `music21/test/test_<name>.py` — and a name guess gets it
+/// wrong: `music21.meter.base` would take `music21/test/test_base.py`, which
+/// is the test of `music21.base` and counts 43 tests that are nothing to do
+/// with meter.
+fn test_modules_for(workspace_root: &Path, module: &str) -> Vec<String> {
+    let root = workspace_root.join("music21/music21");
+    let Some(path) = module.strip_prefix("music21.") else {
+        return Vec::new();
+    };
+    let segments: Vec<&str> = path.split('.').collect();
+    let mut found = Vec::new();
+
+    // A package of its own — `music21/scale`, `music21/meter` — keeps its
+    // tests inside it.
+    let package = (segments.len() > 1 || root.join(segments[0]).is_dir()).then_some(segments[0]);
+    if let Some(package) = package
+        && let Ok(entries) = fs::read_dir(root.join(package))
+    {
+        let mut names: Vec<String> = entries
+            .flatten()
+            .filter_map(|entry| {
+                let name = entry.file_name().to_str()?.to_string();
+                let stem = name.strip_suffix(".py")?.to_string();
+                (stem == "tests" || stem.starts_with("test_"))
+                    .then(|| format!("music21.{package}.{stem}"))
+            })
+            .collect();
+        names.sort();
+        found.extend(names);
+    }
+
+    // And `music21/test/` holds the rest, named after the top-level module.
+    let sidecar = root.join("test").join(format!("test_{}.py", segments[0]));
+    if sidecar.is_file() {
+        found.push(format!("music21.test.test_{}", segments[0]));
+    }
+    found
+}
+
+/// How much documentation each module in scope has, counted by music21's own
+/// `DocTestFinder` — the same collection the parity harness runs, so the two
+/// agree on the denominator.
+///
+/// The report needs this for the modules the harness does *not* cover yet: it
+/// reads the passing counts out of what the harness wrote, and without a total
+/// from somewhere it could only leave those modules off the page, which
+/// flatters the score. There is no counting this from the Rust side, because a
+/// docstring is what `DocTestFinder` says it is — a text scan for `>>>` misses
+/// by as much as 14% on `roman.py`.
+fn write_doctest_totals(py: Python<'_>, workspace_root: &Path, version: &str) -> PyResult<PathBuf> {
+    let doctest = py.import("doctest")?;
+    let finder = doctest.getattr("DocTestFinder")?.call0()?;
+    let unittest = py.import("unittest")?;
+    let loader = unittest.getattr("TestLoader")?.call0()?;
+    let test_case = unittest.getattr("TestCase")?;
+
+    // music21's own runner loads a module's `Test` class; `TestExternal`
+    // needs a score viewer and is not counted here.
+    let count_tests = |module: &Bound<'_, PyAny>| -> PyResult<usize> {
+        let Ok(case) = module.getattr("Test") else {
+            return Ok(0);
+        };
+        let Ok(case) = case.cast_into::<pyo3::types::PyType>() else {
+            return Ok(0);
+        };
+        if !case.is_subclass(&test_case)? {
+            return Ok(0);
+        }
+        loader
+            .call_method1("loadTestsFromTestCase", (case,))?
+            .call_method0("countTestCases")?
+            .extract()
+    };
+
+    let mut out = header(
+        &[
+            "# How many doctests each music21 module the crate ports has, counted by",
+            "# music21's own DocTestFinder and generated by",
+            "# `cargo run -p xtask --features python -- regenerate-fixtures`.",
+            "# The report reads these as the denominator for a module the parity",
+            "# harness does not cover yet, which is how such a module shows as 0 of N",
+            "# rather than being left off the page.",
+            "#",
+            "# `tests` counts music21's own unit tests for the module, wherever it",
+            "# keeps them. Nothing runs those against the crate yet, so the report",
+            "# shows nought against every one of them; that column is the to-do list.",
+        ],
+        version,
+    );
+
+    let modules = scoped_modules(workspace_root)?;
+    for name in &modules {
+        let module = py.import(name.as_str())?;
+        let tests = finder.call_method1("find", (&module,))?;
+        let mut docstrings = 0usize;
+        let mut examples = 0usize;
+        for test in tests.try_iter()? {
+            let count = test?.getattr("examples")?.len()?;
+            if count > 0 {
+                docstrings += 1;
+                examples += count;
+            }
+        }
+        let mut tests = count_tests(&module)?;
+        for test_module in test_modules_for(workspace_root, name) {
+            let Ok(imported) = py.import(test_module.as_str()) else {
+                continue;
+            };
+            tests += count_tests(&imported)?;
+        }
+
+        let _ = writeln!(out, "[[module]]");
+        let _ = writeln!(out, "module = {}", toml_string(name));
+        let _ = writeln!(out, "docstrings = {docstrings}");
+        let _ = writeln!(out, "examples = {examples}");
+        let _ = writeln!(out, "tests = {tests}");
+        let _ = writeln!(out);
+    }
+
+    let path = workspace_root.join("data/doctest_totals.toml");
+    fs::write(&path, out)?;
+    println!("  wrote {} ({} modules)", path.display(), modules.len());
+    Ok(path)
 }
 
 fn write_scales(py: Python<'_>, workspace_root: &Path, version: &str) -> PyResult<PathBuf> {

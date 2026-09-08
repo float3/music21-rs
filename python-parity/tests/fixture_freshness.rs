@@ -12,12 +12,15 @@
 use std::path::{Path, PathBuf};
 
 /// Fixtures generated from music21, all of which must carry a version stamp.
-const VERSIONED_FIXTURES: [&str; 6] = [
+const VERSIONED_FIXTURES: [&str; 7] = [
     "data/scale_expectations.toml",
     "data/chord_type_expectations.toml",
     "data/meter_expectations.toml",
     "data/table_expectations.toml",
     "data/serial_expectations.toml",
+    // Not an expectation either: the doctest totals the report shows for a
+    // module the harness does not cover yet.
+    "data/doctest_totals.toml",
     // Not an expectation fixture but generated from the submodule all the same,
     // so a submodule bump has to refresh it too.
     "data/scala_archive.toml",
