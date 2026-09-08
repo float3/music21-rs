@@ -711,7 +711,12 @@ impl ChordSymbol {
             if alteration.degree == 5 {
                 continue;
             }
-            intervals.push(altered_interval(alteration)?);
+            let altered = altered_interval(alteration)?;
+            // An altered degree stands in place of the one the chord's own
+            // quality would give, rather than sounding beside it: the seventh
+            // of `F#mM7` is `E#` alone, not `E` and `E#` together.
+            intervals.retain(|(degree, _)| *degree != altered.0);
+            intervals.push(altered);
         }
 
         for addition in &self.additions {
@@ -1270,8 +1275,41 @@ fn pitch_name_degree(root: &Pitch, pitch_name: &str) -> Option<u8> {
     })
 }
 
+/// Whether the figure names a major seventh over a triad that is not major.
+///
+/// music21 writes those as `mM7`, `+M9`, `minmaj11`, `augmaj13` and `m#7`.
+/// The seventh they name is a semitone above the one the triad's own quality
+/// gives — `F#mM7` is `F# A C# E#` where `F#m7` is `F# A C# E` — so it is
+/// recorded as an alteration of the seventh. Read on the figure as written,
+/// since the `m` and the `M` are the same letter in different cases.
+fn major_seventh_over_a_lesser_triad(suffix: &str) -> bool {
+    // Longest marker first, so `minmaj7` is not read as `m` followed by
+    // `inmaj7`.
+    let Some(rest) = ["min", "aug", "dim", "m", "+", "o"]
+        .into_iter()
+        .find_map(|marker| suffix.strip_prefix(marker))
+    else {
+        return false;
+    };
+    let Some(rest) = rest
+        .strip_prefix("maj")
+        .or_else(|| rest.strip_prefix('M'))
+        .or_else(|| rest.strip_prefix('#'))
+    else {
+        return false;
+    };
+    ["7", "9", "11", "13"]
+        .into_iter()
+        .any(|degree| rest.starts_with(degree))
+}
+
 fn add_implicit_music21_alterations(suffix: &str, alterations: &mut Vec<ChordAlteration>) {
     let lower = suffix.to_ascii_lowercase();
+    if major_seventh_over_a_lesser_triad(suffix)
+        && !alterations.iter().any(|alteration| alteration.degree == 7)
+    {
+        alterations.push(ChordAlteration::new(7, 1));
+    }
     if lower.contains("dim5")
         && !alterations
             .iter()
@@ -1558,6 +1596,10 @@ fn altered_interval(alteration: &ChordAlteration) -> Result<(u8, &'static str)> 
     match (alteration.degree, alteration.semitones) {
         (5, -1) => Ok((5, "d5")),
         (5, 1) => Ok((5, "a5")),
+        // The seventh a figure raises is the major seventh, since the one it
+        // is raised from is the minor seventh every non-major kind carries.
+        (7, -1) => Ok((7, "d7")),
+        (7, 1) => Ok((7, "M7")),
         (9, -1) => Ok((9, "m9")),
         (9, 1) => Ok((9, "a9")),
         (11, 1) => Ok((11, "a11")),
@@ -1776,6 +1818,21 @@ pub fn chord_symbol_figure_from_chord(chord: &Chord) -> Result<Option<String>> {
         figure.pop();
     }
     Ok(Some(figure))
+}
+
+/// The kind of chord a figure is written with: what music21 answers beside
+/// the figure when `chordSymbolFigureFromChord` is asked to include the chord
+/// type, so `C E G` is `major` and a lone `C` is `pedal`.
+///
+/// `None` for an empty chord, which has no figure either, and for a chord no
+/// kind in music21's table fits.
+#[must_use]
+pub fn chord_symbol_kind_from_chord(chord: &Chord) -> Option<&'static str> {
+    chord.root()?;
+    if chord.notes().len() == 1 {
+        return Some("pedal");
+    }
+    kind_of_chord(chord).map(|chord_type| chord_type.kind)
 }
 
 /// A [`ChordSymbol`] read off a chord: music21's `chordSymbolFromChord`,

@@ -1,0 +1,13 @@
+# Docstrings of music21.meter.base whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_meter`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.meter.base.SenzaMisuraTimeSignature",
+    "music21.meter.base.TimeSignature.beatCountName",
+    "music21.meter.base.TimeSignature.beatLengthToQuarterLengthRatio",
+    "music21.meter.base.TimeSignature.beatSubDivisionDurations",
+    "music21.meter.base.TimeSignature.classification",
+    "music21.meter.base.TimeSignature.getBeatOffsets",
+]

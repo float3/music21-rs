@@ -1,0 +1,31 @@
+# Docstrings of music21.sieve whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_sieve`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.sieve",
+    "music21.sieve.CompressionSegment",
+    "music21.sieve.CompressionSegment.__call__",
+    "music21.sieve.PitchSieve",
+    "music21.sieve.PitchSieve.__call__",
+    "music21.sieve.PitchSieve.getIntervalSequence",
+    "music21.sieve.PrimeSegment.__init__",
+    "music21.sieve.Residual",
+    "music21.sieve.Residual.__and__",
+    "music21.sieve.Residual.__call__",
+    "music21.sieve.Residual.__str__",
+    "music21.sieve.Residual.period",
+    "music21.sieve.Residual.segment",
+    "music21.sieve.Sieve",
+    "music21.sieve.Sieve.__and__",
+    "music21.sieve.Sieve.__or__",
+    "music21.sieve.Sieve.collect",
+    "music21.sieve.Sieve.period",
+    "music21.sieve.discreteBinaryPad",
+    "music21.sieve.eratosthenes",
+    "music21.sieve.rabinMiller",
+    "music21.sieve.unitNormEqual",
+    "music21.sieve.unitNormRange",
+    "music21.sieve.unitNormStep",
+]

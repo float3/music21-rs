@@ -1,0 +1,29 @@
+# Docstrings of music21.harmony whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_harmony`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.harmony.ChordStepModification",
+    "music21.harmony.ChordStepModification.degree",
+    "music21.harmony.ChordStepModification.interval",
+    "music21.harmony.ChordStepModification.modType",
+    "music21.harmony.ChordSymbol._notationString",
+    "music21.harmony.ChordSymbol._parseAddAlterSubtract",
+    "music21.harmony.ChordSymbol._updatePitches",
+    "music21.harmony.ChordSymbol.findFigure",
+    "music21.harmony.ChordSymbol.transpose",
+    "music21.harmony.Harmony",
+    "music21.harmony.Harmony.addChordStepModification",
+    "music21.harmony.Harmony.figure",
+    "music21.harmony.Harmony.key",
+    "music21.harmony.Harmony.romanNumeral",
+    "music21.harmony.NoChord",
+    "music21.harmony.NoChord.transpose",
+    "music21.harmony.addNewChordSymbol",
+    "music21.harmony.changeAbbreviationFor",
+    "music21.harmony.getAbbreviationListGivenChordType",
+    "music21.harmony.getCurrentAbbreviationFor",
+    "music21.harmony.getNotationStringGivenChordType",
+    "music21.harmony.realizeChordSymbolDurations",
+]

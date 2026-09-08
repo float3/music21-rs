@@ -1,10 +1,18 @@
 # Unreleased
 
-Cleanup of the Python-shaped plumbing that remained in the pitch, note and
-chord constructors, and a round of music21 features the crate had not
-modelled: accidental display state, non-traditional key signatures, the
-mutating half of `Chord`, and the interval halves as public types. Several
-signatures change, so the next release needs a minor bump.
+The release that makes the crate something music21 itself can be run on.
+The classes ship as a Python wheel, `music21_rs`, and
+`install_into_music21()` puts them into an installed music21 in place of its
+own, so a program written against music21 runs on the crate without a line
+changed — checked against music21's whole test suite and against a library
+written by someone who had never heard of this crate. Fifteen of music21's
+modules pass every one of their own doctests, 5,460 examples in all.
+
+Beside that: roman numerals are figured bass over a scale rather than a
+stack of intervals, figured bass is a module of its own, durations carry
+what they are written as, notes and chords carry beams and lyrics, and the
+tuning half grew regular temperament theory and all 95 of the Xenharmonic
+Wiki's temperaments. Several signatures change, so this is a minor bump.
 
 ## Added
 
@@ -210,6 +218,101 @@ signatures change, so the next release needs a minor bump.
 - `ChromaticInterval::from_int` and `whole_semitones`, and
   `Interval::whole_semitones`, for the whole-semitone count where the
   fractional one is not wanted.
+- The crate's classes ship as a Python wheel, `music21_rs`, built from
+  `python/` by maturin — music21-shaped `Pitch`, `Note`, `Chord`,
+  `Duration`, `Interval`, `Key`, `RomanNumeral`, `MetronomeMark`, `ToneRow`
+  and the rest, with music21's names, keyword arguments, properties and
+  `repr`. `install_into_music21()` puts them into an installed music21 in
+  place of its own, so an existing program runs on the crate without a line
+  changed.
+- `chord::tables` is public, and is music21's own `chord.tables` module: a
+  caller holding a cardinality and a Forte class number reads a prime form,
+  an interval vector, a Forte name or the common names without building a
+  chord to ask.
+- Regular temperament theory, the Xenharmonic Wiki's half of the subject, in
+  four new types under `tuningsystem`. `Monzo` is an interval as the
+  exponents of the primes making up its ratio and `Val` is how many steps of
+  a tuning each prime is worth, both reading and writing the wiki's bracket
+  notation; `Mos` is a moment-of-symmetry pattern and `MosScale` a generator
+  and a period in cents; `Temperament` is a period, some generators and a
+  mapping onto a subgroup, built from the wiki's own infobox line by
+  `from_mapping` and `from_published`; `EqualDivision` is an equal division
+  of any interval, which is where Bohlen-Pierce and Carlos Alpha, Beta and
+  Gamma live. Rank is not fixed at two and the equave need not be the octave.
+- All 95 of the wiki's `Infobox regtemp` temperaments are carried as data, in
+  `data/temperaments.toml` and the `WIKI_TEMPERAMENTS` table emitted from it.
+  Nothing in it is trusted: a test builds every entry, checks that each of the
+  277 commas the wiki lists really does vanish under the mapping, and checks
+  that each published MOS pattern really does come out of the generator.
+- Finding the same tuning under two names: `ScaleFingerprint` reduces a scale
+  to sorted cents within a tolerance, `TemperamentFingerprint` reduces a
+  mapping to its canonical reading, and `duplicate_groups` groups anything by
+  anything. Duplication is checked within each collection and across them —
+  23 of the 28 ratio tables are in the bundled Scala archive too, and the
+  archive itself holds 44 groups covering 54 redundant files out of 3,994.
+- `RomanNumeral` is figured bass over a scale, which is what music21's
+  `_updatePitches` is: the bass is the scale degree the inversion figure
+  names, every number of the column is that many scale steps above it, and
+  only then is the result respelled to the quality the numeral asked for.
+  That is what makes `V7b5` alter one note rather than name a different
+  chord, and what gives `[no3]`, `[add4]` and `[#7]` something to mean.
+  `over_scale` reads a numeral against a `scale::Scale` rather than a key, so
+  a figure means something in a collection no key signature can write; an
+  augmented sixth is read as music21 reads it, as figured bass over an
+  altered degree, so `Ger6/5` and `It+6` land in the right inversion in any
+  key. `written_accidental` and `accidental` are kept apart.
+- `figuredbass` is a new module: a column of numbers under a bass note, read
+  both as written and expanded to every note the shorthand stands for.
+  `Modifier` keeps the mark as written beside the accidental it means,
+  because figured bass has marks no accidental name covers. `RomanNumeral`
+  reads its own digits with it, so there is one shorthand table and not two.
+- Scales gained the whole of music21's `ConcreteScale` behaviour that needed
+  more than a table: a scale given by its notes (`Scale::from_pitches`,
+  filling in the octaves a caller left out), a scale that comes down a
+  different way from the way it goes up, `derive_by_degree`,
+  `next_pitch_beside` for music21's `getNeighbor`, and the degree machinery a
+  gapped scale needs — `named_degrees`, `pitch_on_degree`, `degrees_of_by`
+  and `places_of`, since Rag Asawari's five notes stand on degrees 1, 2, 4, 5
+  and 6 and Rag Marwa stands one note in two places. `is_realizable` says
+  when a collection cannot be walked over a range at all.
+- Durations carry what they are written as, not only how long they sound:
+  components, tuplets, `appendTuplet` and `aggregateTupletMultiplier`,
+  `quarterLengthNoTuplets`, the grace durations, and music21's full names for
+  a tied, a tuplet and an unwritable length.
+- Notes and chords carry beams and lyrics as music21 models them.
+  `notation::Beam` and `notation::Beams` are music21's `beam` module,
+  including the unsaid beam type its `naiveBeams` builds and the list helpers
+  that walk a run of notes; a lyric may have several components and may have
+  nothing sung to it at all.
+- `Volume::realized_with` realizes a loudness against the dynamic in force
+  and the articulations' shift, with `realized_str` and `realized_dynamic`
+  for music21's `getRealizedStr` and `dynamicStrFromDecimal`.
+- `MetronomeMark` says how fast it is played apart from what it says:
+  `number_sounding` and `sounding_quarter_bpm` are music21's
+  `numberSounding`, which is a `<sound tempo=…>` with no mark beside it or a
+  score marked *Allegro* played at a hundred and forty-four.
+- `stream` grew enough to hold streams within streams and to answer what is
+  in force at an offset.
+- A chord, a tone row and a stream are walked the way Rust walks a
+  collection: each implements `IntoIterator`, by value and by reference.
+- The bundled Scala archive merges two submodules, music21's 3,932 scales and
+  hexatone's 62, every one of which parses. A zero-degree file is legal
+  rather than malformed, and `bundled_with_failures()` now returns nothing.
+- A sieve says more than whether an integer is in it. `Sieve` gains a
+  `Display` that writes the expression back out the way music21 does — each
+  residual normalized, the groups it was written with kept, so `3@11` reads
+  `3@2` and `(5|2)&4&8` reads `{5@0|2@0}&4@0&8@0` — together with music21's
+  segment formats (`segment_binary`, `segment_widths`, `segment_unit`),
+  `collect` for the first so many members from a starting point, `shifted`,
+  and `intersection`, `union` and `symmetric_difference`.
+- `chordsymbol::chord_symbol_kind_from_chord` names the kind a figure is
+  written with, which is what music21 answers beside the figure when
+  `chordSymbolFigureFromChord` is asked to include the chord type.
+- The absent octave is readable both of music21 v11's ways —
+  `Pitch::implicit_octave` and `octave_is_implicit` — and the default octave
+  is read live from music21's `defaults.pitchOctave` where there is a music21
+  to ask. `crate::Given` is the argument type that tells a deprecated `None`
+  from an argument nobody wrote.
 
 ## Bug Fixes
 
@@ -241,6 +344,36 @@ signatures change, so the next release needs a minor bump.
   `Triply-Augmented` and so on in interval names, as music21 spells them,
   rather than `Double Diminished`. The specifier fixture now checks the
   names as well as the semitone counts.
+- A minor key raises its sixth and seventh where the figure asks, which is
+  music21's `_adjustMinorVIandVIIByQuality` at its default setting: `viio7`
+  in A minor is `G# B D F`, where it used to keep the accidental as written
+  and come out `G B- D- F-`. `VI` and `VII` ask for the natural degrees and
+  still get them.
+- A microtonal interval says the cents itself. Transposition no longer
+  carries the cents a pitch came with across an interval measured in
+  fractions of a semitone — the interval already says how far from its
+  written value the answer sits — so a sieve scale realized in quarter tones
+  comes out as pitches rather than as one note two octaves flat.
+- A scale realized from an octave-less tonic keeps its octaves:
+  `Scale::derive_by_degree` reads the interval to the requested degree off a
+  realization in octave 4, where realizing from the octave-less tonic gave
+  the degree pitch no octave, made the interval descending and put the tonic
+  an octave high.
+- `ScaleType::pitch_on_degree` answers `None` for a degree a gapped scale has
+  not got, rather than the note that happens to be that many notes along.
+- A pitch's chosen spelling is recorded on both halves of it at once, so a
+  respelling no longer half-applies.
+- A major seventh over a triad that is not major is a major seventh.
+  `ChordSymbol::parse` read the `M` of `mM7`, `+M9`, `minmaj11` and `m#7` as
+  part of the triad and gave the seventh the triad's own quality, so `F#mM7`
+  came out `F# A C# E` instead of `F# A C# E#` and `F+M7` lost its seventh
+  altogether. An altered degree now stands in place of the one the chord's
+  quality would give rather than sounding beside it. Found by running
+  music21's own `harmony` doctests against the crate.
+- A zero-degree Scala file is read as a scale with no pitches rather than
+  rejected, which made `ScalaScale::is_empty` dead by construction;
+  `ratio_at` answers `1.0` for one instead of dividing by a zero degree
+  count.
 
 ## Breaking Changes
 
@@ -294,6 +427,31 @@ signatures change, so the next release needs a minor bump.
 - `Specifier::parse` reports an unknown quality as
   `Cannot find a match for value: 'x'`, and a zero generic interval as
   `The Zeroth is not an interval`, music21's texts.
+- Two misnamed tuning systems are renamed, and one duplicate is gone.
+  `TuningSystem::JustIntonation` held Wendy Carlos's Harmonic scale, reaching
+  the 19-limit, and is now `CarlosHarmonic`; `FiveLimit` is the classical
+  12-tone just scale. `Indian` held Ptolemy's intense diatonic, a European
+  scale, and is now `PtolemyIntenseDiatonic`. `IndianFull` was a second name
+  for the same twenty-two ratios as `Indian22` and is removed.
+- `Duration::full_name` returns `String` rather than `Option<String>`: every
+  duration has a name, including the tied and tuplet ones it could not write
+  before.
+- `Volume::realized_str` returns `String` rather than `&'static str`, since
+  it is music21's `getRealizedStr` — the number written to two places, not a
+  mark from a fixed list. `realized_dynamic` is the mark.
+- `Lyric::text` returns `String` and `Lyric::set_number` takes an
+  `IntegerType` without a `Result`; `explicit_text` is music21's `.text`,
+  which may be `None`, and `clear_text` is the assignment of it.
+  `Note::add_lyric` and `Chord::add_lyric` take music21's `number` argument
+  beside the text.
+- `StemDirection::NoneDirection` is gone and `StemDirection::ALL` holds five
+  directions rather than six. `"none"` is an input spelling of `"noStem"`
+  that music21's setter rewrites, so no note ever reads back as `"none"`;
+  `StemDirection::NAMES` still lists all six spellings the setter takes.
+- `ScaleType::pitch_at_degree` takes an `IntegerType` rather than a `usize`,
+  matching the degree numbering everything else in `scale` uses.
+- `MetronomeMark::set_number` takes an `Option<FloatType>`, since a mark may
+  say a word and no number.
 
 ## Internal
 
@@ -340,6 +498,51 @@ signatures change, so the next release needs a minor bump.
   class hierarchy, are gone; nothing dispatched on them. Under `serde` a
   note now serializes as `{"pitch", "duration"}` rather than nesting the
   duration two wrappers deep.
+- The doctest harness now covers fifteen of music21's modules — `pitch`,
+  `interval`, `chord`, `note`, `duration`, `key`, `serial`, `scale`, `roman`,
+  `beam`, `volume`, `tie`, `figuredBass.notation`, `tempo` and
+  `chord.tables` — and every one of them passes every one of music21's own
+  examples: 590 docstrings and 5,460 examples against music21 11.0.0b9.
+  `voiceLeading` is under the harness too and is not there yet.
+- music21's own test suite runs against the crate, in CI and in the report.
+  `xtask music21-suite` runs every `Test` class and every docstring in every
+  music21 module twice — once on music21, once with `install_into_music21()`
+  in front of it — and diffs the two, so only a test that fails under the
+  crate and not under music21 counts. Two divergences are listed by name with
+  the reason for each, and a listed one that stops failing fails the run too,
+  so the list cannot go stale. `xtask downstream` is the same idea against a
+  library written by someone who had never heard of this crate: harte-library
+  at a pinned commit, 8,116 tests, run both ways with the failures required
+  to match exactly.
+- Three more of music21's modules are under the doctest harness:
+  `music21.sieve` at 24 of 25 docstrings and 106 of 107 examples,
+  `music21.harmony` at 22 of 25 and 346 of 361, and `music21.meter.base` at
+  6 of 34 and 239 of 387. Each replaces less than the whole module on
+  purpose, so that music21's own `PitchSieve`, `ChordSymbol` and
+  `bestTimeSignature` run over the crate's objects; none of the three is
+  installed by `install_into_music21`, since music21's `Sieve` and
+  `TimeSignature` carry machinery the crate does not model. What the numbers
+  say is not modelled: sieve compression, `MeterSequence`, and the
+  augmented-sixth and Neapolitan chord figures.
+- Nothing that drives Python is written in Python any more. The benchmark,
+  music21's suite and the harte-library comparison were `bench.py`,
+  `music21_suite.py` and `run.py`; each is now an `xtask` command driving
+  music21 through pyo3, ported answer-for-answer and checked against the
+  Python it replaces on the same wheel and the same interpreter before that
+  was deleted.
+- `xtask report` writes the Pages report: coverage, every test suite and
+  whether it ran or was skipped and why, the doctest scoreboard, the unit
+  tests music21's own suite runs per module, and the ported feature set. Its
+  layout is a stylesheet and a TypeScript file beside it, compiled and
+  verified the way every other generated file here is.
+- The Xenharmonic Wiki temperaments, the Scala archive and the tuning tables
+  each have the three-stage `regenerate` / `emit` / `verify` shape the chord
+  tables have, and `xtask regenerate-all` rebuilds every generated file from
+  the submodules and stamps each with the version and commit it read.
+- The `music21` submodule moves to 11.0.0b9, which carries this repository's
+  own fix to music21's Scala reader (cuthbertLab/music21#2026): 21 archive
+  files raised on read and 2 more parsed to the wrong cents, because a
+  comment after a degree's value had its digits spliced onto the number.
 
 # music21-rs 0.3.0
 

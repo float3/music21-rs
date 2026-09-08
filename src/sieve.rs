@@ -12,7 +12,9 @@
 //! compression, `Zeroth`/`Sieve` segment formats and pitch-range realization,
 //! none of which has a caller here.
 
-use crate::defaults::{IntegerType, UnsignedIntegerType};
+use std::fmt;
+
+use crate::defaults::{FloatType, IntegerType, UnsignedIntegerType};
 use crate::error::{Error, Result};
 
 /// A parsed Xenakis sieve.
@@ -47,6 +49,13 @@ enum Node {
     And(Box<Node>, Box<Node>),
     Or(Box<Node>, Box<Node>),
     Xor(Box<Node>, Box<Node>),
+    /// A group the expression was written with, `{}` or `()`.
+    ///
+    /// Kept because music21 writes a sieve back out as it was given, with
+    /// only the residuals normalized, so `(5|2)&4&8` reads back as
+    /// `{5@0|2@0}&4@0&8@0` and a combined sieve wraps each side in braces
+    /// whether or not the precedence needs them.
+    Group(Box<Node>),
 }
 
 impl Node {
@@ -55,6 +64,7 @@ impl Node {
             Self::Residual { modulus, shift } => {
                 z.rem_euclid(*modulus as IntegerType) == *shift as IntegerType
             }
+            Self::Group(inner) => inner.contains(z),
             Self::Not(inner) => !inner.contains(z),
             Self::And(left, right) => left.contains(z) && right.contains(z),
             Self::Or(left, right) => left.contains(z) || right.contains(z),
@@ -62,10 +72,36 @@ impl Node {
         }
     }
 
+    /// The same tree with every residual's shift moved on by `n`.
+    ///
+    /// music21 passes an `n` down to each residual when it reads a segment,
+    /// which is the same thing: `3@2` read at `n = 10` selects the multiples
+    /// of three.
+    fn shifted(&self, n: IntegerType) -> Node {
+        match self {
+            Self::Residual { modulus, shift } => Self::Residual {
+                modulus: *modulus,
+                shift: (*shift as IntegerType + n).rem_euclid(*modulus as IntegerType)
+                    as UnsignedIntegerType,
+            },
+            Self::Group(inner) => Self::Group(Box::new(inner.shifted(n))),
+            Self::Not(inner) => Self::Not(Box::new(inner.shifted(n))),
+            Self::And(left, right) => {
+                Self::And(Box::new(left.shifted(n)), Box::new(right.shifted(n)))
+            }
+            Self::Or(left, right) => {
+                Self::Or(Box::new(left.shifted(n)), Box::new(right.shifted(n)))
+            }
+            Self::Xor(left, right) => {
+                Self::Xor(Box::new(left.shifted(n)), Box::new(right.shifted(n)))
+            }
+        }
+    }
+
     fn collect_moduli(&self, out: &mut Vec<UnsignedIntegerType>) {
         match self {
             Self::Residual { modulus, .. } => out.push(*modulus),
-            Self::Not(inner) => inner.collect_moduli(out),
+            Self::Group(inner) | Self::Not(inner) => inner.collect_moduli(out),
             Self::And(left, right) | Self::Or(left, right) | Self::Xor(left, right) => {
                 left.collect_moduli(out);
                 right.collect_moduli(out);
@@ -132,6 +168,149 @@ impl Sieve {
             )));
         }
         Ok(members.windows(2).map(|pair| pair[1] - pair[0]).collect())
+    }
+
+    /// The same sieve with every residual's shift moved on by `n`.
+    ///
+    /// This is the `n` music21 takes beside a range when it reads a segment.
+    pub fn shifted(&self, n: IntegerType) -> Self {
+        Self {
+            root: self.root.shifted(n),
+        }
+    }
+
+    /// The sieve over `low..=high` as ones and noughts, one per integer in
+    /// the range rather than one per member.
+    ///
+    /// music21's `segmentFormat='binary'`.
+    pub fn segment_binary(&self, low: IntegerType, high: IntegerType) -> Vec<IntegerType> {
+        (low..=high)
+            .map(|z| IntegerType::from(self.contains(z)))
+            .collect()
+    }
+
+    /// The widths between consecutive members over `low..=high`, one shorter
+    /// than the segment itself.
+    ///
+    /// music21's `segmentFormat='width'`. Unlike [`Sieve::interval_widths`]
+    /// this reads whatever range it is given rather than one period, so it
+    /// says nothing about where the pattern repeats.
+    pub fn segment_widths(&self, low: IntegerType, high: IntegerType) -> Vec<IntegerType> {
+        let members = self.segment(low, high);
+        members.windows(2).map(|pair| pair[1] - pair[0]).collect()
+    }
+
+    /// Each member's place in `low..=high` as a fraction of the way across
+    /// it, so the range's own ends are nought and one.
+    ///
+    /// music21's `segmentFormat='unit'`. A range with no width answers nought
+    /// for every member, as music21 does rather than dividing by it.
+    pub fn segment_unit(&self, low: IntegerType, high: IntegerType) -> Vec<FloatType> {
+        let members = self.segment(low, high);
+        if members.len() < 2 {
+            return vec![0.0; members.len().min(1)];
+        }
+        let span = FloatType::from(high - low);
+        if span == 0.0 {
+            return vec![0.0; members.len()];
+        }
+        members
+            .into_iter()
+            .map(|member| FloatType::from(member - low) / span)
+            .collect()
+    }
+
+    /// The first `length` members at or above `z_minimum`, reading the sieve
+    /// shifted on by `n`.
+    ///
+    /// music21's `collect`, which walks upward a hundred integers at a time
+    /// until it has enough. The walk is bounded, so a sieve with too few
+    /// members to fill the length is an error rather than a loop that never
+    /// ends.
+    pub fn collect(
+        &self,
+        n: IntegerType,
+        z_minimum: IntegerType,
+        length: usize,
+    ) -> Result<Vec<IntegerType>> {
+        const STEP: IntegerType = 100;
+        const ROUNDS: usize = 10_000;
+
+        let shifted = self.shifted(n);
+        let mut found = Vec::with_capacity(length);
+        let mut low = z_minimum;
+        for _ in 0..ROUNDS {
+            found.extend(shifted.segment(low, low + STEP - 1));
+            if found.len() >= length {
+                found.truncate(length);
+                return Ok(found);
+            }
+            low += STEP;
+        }
+        Err(Error::Sieve(format!(
+            "desired length of {length} cannot be found in sieve {self}"
+        )))
+    }
+
+    /// The members of both sieves, written the way music21 writes a combined
+    /// sieve: each side in braces around the operator.
+    ///
+    /// Note the order. music21's `a & b` answers `{b}&{a}`, so the facade
+    /// calls this the other way round; the crate keeps the order a reader
+    /// would expect.
+    pub fn intersection(&self, other: &Self) -> Self {
+        self.combined(other, Node::And)
+    }
+
+    /// The members of either sieve. See [`Sieve::intersection`] for the
+    /// bracketing and the order.
+    pub fn union(&self, other: &Self) -> Self {
+        self.combined(other, Node::Or)
+    }
+
+    /// The members of one sieve or the other but not both. See
+    /// [`Sieve::intersection`] for the bracketing and the order.
+    pub fn symmetric_difference(&self, other: &Self) -> Self {
+        self.combined(other, Node::Xor)
+    }
+
+    fn combined(&self, other: &Self, join: fn(Box<Node>, Box<Node>) -> Node) -> Self {
+        Self {
+            root: join(
+                Box::new(Node::Group(Box::new(self.root.clone()))),
+                Box::new(Node::Group(Box::new(other.root.clone()))),
+            ),
+        }
+    }
+}
+
+impl fmt::Display for Node {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Residual { modulus, shift } => write!(f, "{modulus}@{shift}"),
+            Self::Group(inner) => write!(f, "{{{inner}}}"),
+            Self::Not(inner) => write!(f, "-{inner}"),
+            Self::And(left, right) => write!(f, "{left}&{right}"),
+            Self::Or(left, right) => write!(f, "{left}|{right}"),
+            Self::Xor(left, right) => write!(f, "{left}^{right}"),
+        }
+    }
+}
+
+/// Writes the sieve as music21 writes it: the expression it was given, with
+/// each residual normalized to `modulus@shift` and the groups it was written
+/// with kept.
+///
+/// ```
+/// use music21_rs::Sieve;
+///
+/// assert_eq!(Sieve::parse("3@11")?.to_string(), "3@2");
+/// assert_eq!(Sieve::parse("(5|2)&4&8")?.to_string(), "{5@0|2@0}&4@0&8@0");
+/// # Ok::<(), music21_rs::Error>(())
+/// ```
+impl fmt::Display for Sieve {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.root)
     }
 }
 
@@ -288,7 +467,7 @@ impl Parser<'_> {
             if !self.eat(Token::Close) {
                 return Err(Error::Sieve("unclosed group in sieve".to_string()));
             }
-            return Ok(inner);
+            return Ok(Node::Group(Box::new(inner)));
         }
 
         let Some(Token::Number(modulus)) = self.peek() else {
@@ -326,6 +505,61 @@ impl Parser<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// music21 writes a sieve back out as it was given, with the residuals
+    /// normalized and the groups kept. Every string here was read off
+    /// music21 11.0.0b9.
+    #[test]
+    fn a_sieve_is_written_the_way_music21_writes_one() {
+        for (written, expected) in [
+            ("3@11", "3@2"),
+            ("2&4&8|5", "2@0&4@0&8@0|5@0"),
+            ("(5|2)&4&8", "{5@0|2@0}&4@0&8@0"),
+            ("3@2|7@1", "3@2|7@1"),
+        ] {
+            let sieve = Sieve::parse(written).expect("the expression parses");
+            assert_eq!(sieve.to_string(), expected, "writing {written}");
+        }
+    }
+
+    /// music21's `a & b` puts the right operand first and braces both sides.
+    #[test]
+    fn combining_two_sieves_braces_each_side() {
+        let a = Sieve::parse("3@11").expect("a parses");
+        let b = Sieve::parse("2&4&8|5").expect("b parses");
+        assert_eq!(b.intersection(&a).to_string(), "{2@0&4@0&8@0|5@0}&{3@2}");
+        assert_eq!(b.union(&a).to_string(), "{2@0&4@0&8@0|5@0}|{3@2}");
+        assert_eq!(
+            b.symmetric_difference(&a).to_string(),
+            "{2@0&4@0&8@0|5@0}^{3@2}"
+        );
+    }
+
+    #[test]
+    fn collecting_reads_the_sieve_shifted_on_from_a_starting_point() {
+        let sieve = Sieve::parse("3@11").expect("the expression parses");
+        assert_eq!(
+            sieve.collect(10, 100, 10).expect("ten members are found"),
+            [102, 105, 108, 111, 114, 117, 120, 123, 126, 129]
+        );
+    }
+
+    #[test]
+    fn the_segment_formats_answer_what_music21_answers() {
+        let sieve = Sieve::parse("3@2|7@1").expect("the expression parses");
+        assert_eq!(
+            sieve.segment_binary(0, 99)[..12],
+            [0, 1, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1]
+        );
+        assert_eq!(
+            sieve.segment_widths(0, 99)[..12],
+            [1, 3, 3, 3, 3, 1, 2, 3, 2, 1, 3, 3]
+        );
+        let unit = sieve.segment_unit(0, 99);
+        assert_eq!(unit.len(), 43);
+        assert_eq!(unit[0], 1.0 / 99.0);
+        assert_eq!(*unit.last().expect("the segment is not empty"), 1.0);
+    }
 
     fn widths(expression: &str) -> Vec<IntegerType> {
         Sieve::parse(expression)
