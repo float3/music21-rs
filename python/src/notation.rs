@@ -159,12 +159,20 @@ impl Tie {
         format!("<music21.tie.Tie {}>", self.inner.tie_type())
     }
 
-    fn __deepcopy__(&self, _memo: &Bound<'_, PyAny>) -> Self {
-        self.clone()
+    /// A copy as an object of the class it was asked on: music21 compares
+    /// two of these by class before anything else, so a copy built as the
+    /// bare facade would not equal the original.
+    fn __deepcopy__<'py>(
+        slf: &Bound<'py, Self>,
+        _memo: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let copied = slf.borrow().clone();
+        crate::copy_as_same_type(slf, copied)
     }
 
-    fn __copy__(&self) -> Self {
-        self.clone()
+    fn __copy__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        let copied = slf.borrow().clone();
+        crate::copy_as_same_type(slf, copied)
     }
 }
 
@@ -491,12 +499,20 @@ impl Lyric {
         self.synced(py).text()
     }
 
-    fn __deepcopy__(&self, _memo: &Bound<'_, PyAny>) -> Self {
-        self.clone()
+    /// A copy as an object of the class it was asked on: music21 compares
+    /// two of these by class before anything else, so a copy built as the
+    /// bare facade would not equal the original.
+    fn __deepcopy__<'py>(
+        slf: &Bound<'py, Self>,
+        _memo: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let copied = slf.borrow().clone();
+        crate::copy_as_same_type(slf, copied)
     }
 
-    fn __copy__(&self) -> Self {
-        self.clone()
+    fn __copy__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        let copied = slf.borrow().clone();
+        crate::copy_as_same_type(slf, copied)
     }
 }
 
@@ -731,12 +747,20 @@ impl Beam {
             .is_ok_and(|other| other.inner == self.inner)
     }
 
-    fn __deepcopy__(&self, _memo: &Bound<'_, PyAny>) -> Self {
-        self.clone()
+    /// A copy as an object of the class it was asked on: music21 compares
+    /// two of these by class before anything else, so a copy built as the
+    /// bare facade would not equal the original.
+    fn __deepcopy__<'py>(
+        slf: &Bound<'py, Self>,
+        _memo: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let copied = slf.borrow().clone();
+        crate::copy_as_same_type(slf, copied)
     }
 
-    fn __copy__(&self) -> Self {
-        self.clone()
+    fn __copy__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        let copied = slf.borrow().clone();
+        crate::copy_as_same_type(slf, copied)
     }
 }
 
@@ -1153,12 +1177,20 @@ impl Beams {
             .is_ok_and(|other| other.inner == self.inner)
     }
 
-    fn __deepcopy__(&self, _memo: &Bound<'_, PyAny>) -> Self {
-        self.clone()
+    /// A copy as an object of the class it was asked on: music21 compares
+    /// two of these by class before anything else, so a copy built as the
+    /// bare facade would not equal the original.
+    fn __deepcopy__<'py>(
+        slf: &Bound<'py, Self>,
+        _memo: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let copied = slf.borrow().clone();
+        crate::copy_as_same_type(slf, copied)
     }
 
-    fn __copy__(&self) -> Self {
-        self.clone()
+    fn __copy__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        let copied = slf.borrow().clone();
+        crate::copy_as_same_type(slf, copied)
     }
 }
 
@@ -1487,12 +1519,20 @@ impl Volume {
         format!("<music21.volume.Volume {}>", self.inner)
     }
 
-    fn __deepcopy__(&self, _memo: &Bound<'_, PyAny>) -> Self {
-        self.clone()
+    /// A copy as an object of the class it was asked on: music21 compares
+    /// two of these by class before anything else, so a copy built as the
+    /// bare facade would not equal the original.
+    fn __deepcopy__<'py>(
+        slf: &Bound<'py, Self>,
+        _memo: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let copied = slf.borrow().clone();
+        crate::copy_as_same_type(slf, copied)
     }
 
-    fn __copy__(&self) -> Self {
-        self.clone()
+    fn __copy__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        let copied = slf.borrow().clone();
+        crate::copy_as_same_type(slf, copied)
     }
 }
 

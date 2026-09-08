@@ -54,12 +54,20 @@ pub struct Modifier {
 
 #[pymethods]
 impl Modifier {
-    fn __deepcopy__(&self, _memo: &Bound<'_, PyAny>) -> Self {
-        self.clone()
+    /// A copy as an object of the class it was asked on: music21 compares
+    /// two of these by class before anything else, so a copy built as the
+    /// bare facade would not equal the original.
+    fn __deepcopy__<'py>(
+        slf: &Bound<'py, Self>,
+        _memo: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let copied = slf.borrow().clone();
+        crate::copy_as_same_type(slf, copied)
     }
 
-    fn __copy__(&self) -> Self {
-        self.clone()
+    fn __copy__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        let copied = slf.borrow().clone();
+        crate::copy_as_same_type(slf, copied)
     }
 
     /// music21 freezes a score by pickling it, and what this object is lives
@@ -152,12 +160,20 @@ pub struct Figure {
 
 #[pymethods]
 impl Figure {
-    fn __deepcopy__(&self, _memo: &Bound<'_, PyAny>) -> Self {
-        self.clone()
+    /// A copy as an object of the class it was asked on: music21 compares
+    /// two of these by class before anything else, so a copy built as the
+    /// bare facade would not equal the original.
+    fn __deepcopy__<'py>(
+        slf: &Bound<'py, Self>,
+        _memo: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let copied = slf.borrow().clone();
+        crate::copy_as_same_type(slf, copied)
     }
 
-    fn __copy__(&self) -> Self {
-        self.clone()
+    fn __copy__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        let copied = slf.borrow().clone();
+        crate::copy_as_same_type(slf, copied)
     }
 
     /// music21 freezes a score by pickling it, and what this object is lives
@@ -268,12 +284,20 @@ fn marks_tuple<'py>(py: Python<'py>, marks: &[Option<String>]) -> PyResult<Bound
 
 #[pymethods]
 impl Notation {
-    fn __deepcopy__(&self, _memo: &Bound<'_, PyAny>) -> Self {
-        self.clone()
+    /// A copy as an object of the class it was asked on: music21 compares
+    /// two of these by class before anything else, so a copy built as the
+    /// bare facade would not equal the original.
+    fn __deepcopy__<'py>(
+        slf: &Bound<'py, Self>,
+        _memo: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let copied = slf.borrow().clone();
+        crate::copy_as_same_type(slf, copied)
     }
 
-    fn __copy__(&self) -> Self {
-        self.clone()
+    fn __copy__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        let copied = slf.borrow().clone();
+        crate::copy_as_same_type(slf, copied)
     }
 
     /// music21 freezes a score by pickling it, and what this object is lives

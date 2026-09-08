@@ -602,12 +602,20 @@ impl Tuplet {
         )
     }
 
-    fn __deepcopy__(&self, _memo: &Bound<'_, PyAny>) -> Self {
-        self.clone()
+    /// A copy as an object of the class it was asked on: music21 compares
+    /// two of these by class before anything else, so a copy built as the
+    /// bare facade would not equal the original.
+    fn __deepcopy__<'py>(
+        slf: &Bound<'py, Self>,
+        _memo: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let copied = slf.borrow().clone();
+        crate::copy_as_same_type(slf, copied)
     }
 
-    fn __copy__(&self) -> Self {
-        self.clone()
+    fn __copy__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        let copied = slf.borrow().clone();
+        crate::copy_as_same_type(slf, copied)
     }
 }
 
@@ -1838,12 +1846,20 @@ impl Duration {
             .map(|value| value.clone().unbind());
     }
 
-    fn __deepcopy__(&self, _memo: &Bound<'_, PyAny>) -> Self {
-        self.clone()
+    /// A copy as an object of the class it was asked on: music21 compares
+    /// two of these by class before anything else, so a copy built as the
+    /// bare facade would not equal the original.
+    fn __deepcopy__<'py>(
+        slf: &Bound<'py, Self>,
+        _memo: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let copied = slf.borrow().clone();
+        crate::copy_as_same_type(slf, copied)
     }
 
-    fn __copy__(&self) -> Self {
-        self.clone()
+    fn __copy__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        let copied = slf.borrow().clone();
+        crate::copy_as_same_type(slf, copied)
     }
 }
 
