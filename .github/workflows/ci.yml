@@ -278,14 +278,37 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      # `doc_cfg` is a nightly rustdoc feature, so the documentation build --
+      # and only that -- runs on nightly. rust-toolchain.toml pins every other
+      # command in this job to stable.
+      - name: Install nightly rustdoc
+        uses: dtolnay/rust-toolchain@nightly
+
       - name: Install Linux audio dependencies
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev pkg-config
 
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@v2
 
+      # Built the way docs.rs builds it: every feature on, so the `serde` impls
+      # and `ScalaArchive::bundled()` are documented at all, and `--cfg docsrs`
+      # so each gated item says which feature gates it rather than looking
+      # unconditional. One site therefore covers every feature combination.
       - name: Build docs
-        run: cargo doc --workspace --no-deps
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # The whole workspace at its defaults, then the published crate
+          # again with everything on -- in that order, so the full version of
+          # music21-rs is the one left in target/doc. `--workspace
+          # --all-features` in one go would also turn on `utils` and `xtask`'s
+          # `python` feature, dragging pyo3 and reqwest into a documentation
+          # build with no use for either.
+          cargo +nightly doc --workspace --no-deps
+          cargo +nightly doc --package music21-rs --all-features --no-deps
+        env:
+          RUSTDOCFLAGS: --cfg docsrs
 
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@v2
@@ -444,13 +467,14 @@ jobs:
   pages:
     name: Publish Docs
     runs-on: ubuntu-latest
+    # Only what the site is made of. Documentation that builds should reach
+    # the reader whether or not some other suite is red: gating the deploy on
+    # every job meant one stale fixture kept the whole site -- Rust docs,
+    # Python docs, reports and demos -- from being republished at all. What
+    # must not ship from a red build is a release, and `release` still waits
+    # for every job.
     needs:
-      - nix
-      - stable-check
-      - feature-matrix
-      - python-parity
       - lint
-      - test
       - docs
     if: github.event_name == 'push'
     permissions:
