@@ -480,7 +480,9 @@ impl RomanNumeral {
         py: Python<'_>,
         state: &Bound<'_, PyAny>,
     ) -> PyResult<()> {
-        let inner: RsRomanNumeral = crate::unpickled(slf, state)?;
+        let Some(inner) = crate::unpickled::<_, RsRomanNumeral>(slf, state)? else {
+            return Ok(());
+        };
         let numeral = Self::wrap(inner, None);
         let chord = numeral.chord()?;
         slf.as_super().borrow_mut().replace_value(py, chord)?;

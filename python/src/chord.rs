@@ -592,7 +592,9 @@ impl ChordTableAddress {
     }
 
     fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
-        let inner: RsChordTableAddress = crate::unpickled(slf, state)?;
+        let Some(inner) = crate::unpickled::<_, RsChordTableAddress>(slf, state)? else {
+            return Ok(());
+        };
         slf.borrow_mut().inner = inner;
         Ok(())
     }
@@ -759,7 +761,9 @@ impl Chord {
         py: Python<'_>,
         state: &Bound<'_, PyAny>,
     ) -> PyResult<()> {
-        let inner: RsChord = crate::unpickled(slf, state)?;
+        let Some(inner) = crate::unpickled::<_, RsChord>(slf, state)? else {
+            return Ok(());
+        };
         let rebuilt = Self::from_inner(py, inner)?;
         *slf.borrow_mut() = rebuilt;
         Ok(())

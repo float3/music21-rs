@@ -432,7 +432,9 @@ impl GenericInterval {
     }
 
     fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
-        let inner: RsGeneric = crate::unpickled(slf, state)?;
+        let Some(inner) = crate::unpickled::<_, RsGeneric>(slf, state)? else {
+            return Ok(());
+        };
         slf.borrow_mut().inner = inner;
         Ok(())
     }
@@ -678,7 +680,9 @@ impl DiatonicInterval {
     }
 
     fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
-        let inner: RsDiatonic = crate::unpickled(slf, state)?;
+        let Some(inner) = crate::unpickled::<_, RsDiatonic>(slf, state)? else {
+            return Ok(());
+        };
         slf.borrow_mut().inner = inner;
         Ok(())
     }
@@ -914,7 +918,9 @@ impl ChromaticInterval {
     }
 
     fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
-        let inner: RsChromatic = crate::unpickled(slf, state)?;
+        let Some(inner) = crate::unpickled::<_, RsChromatic>(slf, state)? else {
+            return Ok(());
+        };
         slf.borrow_mut().inner = inner;
         Ok(())
     }
@@ -1291,7 +1297,9 @@ impl Interval {
     }
 
     fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
-        let inner: RsInterval = crate::unpickled(slf, state)?;
+        let Some(inner) = crate::unpickled::<_, RsInterval>(slf, state)? else {
+            return Ok(());
+        };
         slf.borrow_mut().inner = inner;
         Ok(())
     }

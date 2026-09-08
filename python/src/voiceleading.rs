@@ -190,7 +190,9 @@ impl VoiceLeadingQuartet {
         py: Python<'_>,
         state: &Bound<'_, PyAny>,
     ) -> PyResult<()> {
-        let inner: RsQuartet = crate::unpickled(slf, state)?;
+        let Some(inner) = crate::unpickled::<_, RsQuartet>(slf, state)? else {
+            return Ok(());
+        };
         let notes = [inner.v1n1(), inner.v1n2(), inner.v2n1(), inner.v2n2()]
             .into_iter()
             .map(|pitch| Note::object(py, RsNote::from_pitch(pitch.clone())))

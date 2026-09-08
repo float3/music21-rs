@@ -262,6 +262,21 @@ impl Tuplet {
 
 #[pymethods]
 impl Tuplet {
+    /// music21's `classes`: what this is, and everything it is a kind of.
+    /// Its own code reads this to decide what it is looking at.
+    #[getter]
+    fn classes(&self) -> Vec<&'static str> {
+        vec!["Tuplet", "ProtoM21Object", "object"]
+    }
+
+    #[getter]
+    fn classSet(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let names: Vec<&'static str> = vec!["Tuplet", "ProtoM21Object", "object"];
+        Ok(pyo3::types::PyFrozenSet::new(py, &names)?
+            .into_any()
+            .unbind())
+    }
+
     /// music21 freezes a score by pickling it, and what this object is lives
     /// in Rust where a pickle cannot see it — so it is written out as text,
     /// and read back into a fresh one of these.
@@ -270,7 +285,9 @@ impl Tuplet {
     }
 
     fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
-        let inner: RsTuplet = crate::unpickled(slf, state)?;
+        let Some(inner) = crate::unpickled::<_, RsTuplet>(slf, state)? else {
+            return Ok(());
+        };
         slf.borrow_mut().inner = inner;
         Ok(())
     }
@@ -1068,6 +1085,22 @@ pub(crate) fn duration_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsDuration
 
 #[pymethods]
 impl Duration {
+    /// music21's `classes`: what this is, and everything it is a kind of.
+    /// Its own code reads this to decide what it is looking at.
+    #[getter]
+    fn classes(&self) -> Vec<&'static str> {
+        vec!["Duration", "ProtoM21Object", "SlottedObjectMixin", "object"]
+    }
+
+    #[getter]
+    fn classSet(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let names: Vec<&'static str> =
+            vec!["Duration", "ProtoM21Object", "SlottedObjectMixin", "object"];
+        Ok(pyo3::types::PyFrozenSet::new(py, &names)?
+            .into_any()
+            .unbind())
+    }
+
     /// music21 freezes a score by pickling it. A duration keeps what it is
     /// in Rust, where a pickle cannot see it, so it is written out as text
     /// and read back.
@@ -1076,7 +1109,10 @@ impl Duration {
     }
 
     fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
-        slf.borrow_mut().inner = crate::unpickled(slf, state)?;
+        let Some(inner) = crate::unpickled::<_, RsDuration>(slf, state)? else {
+            return Ok(());
+        };
+        slf.borrow_mut().inner = inner;
         Ok(())
     }
 
@@ -2041,7 +2077,9 @@ impl Note {
         py: Python<'_>,
         state: &Bound<'_, PyAny>,
     ) -> PyResult<()> {
-        let inner: RsNote = crate::unpickled(slf, state)?;
+        let Some(inner) = crate::unpickled::<_, RsNote>(slf, state)? else {
+            return Ok(());
+        };
         let rebuilt = Self::wrap(py, inner)?;
         *slf.borrow_mut() = rebuilt;
         let pitch = slf.borrow().pitch.clone_ref(py);
@@ -2131,8 +2169,18 @@ impl Note {
     }
 
     #[getter]
-    fn nameWithOctave(&self) -> String {
+    fn get_nameWithOctave(&self) -> String {
         self.inner.pitch_name_with_octave()
+    }
+
+    /// Setting it renames the note's pitch, which is what music21 does.
+    #[setter]
+    fn set_nameWithOctave(slf: &Bound<'_, Self>, py: Python<'_>, value: &str) -> PyResult<()> {
+        let pitch = slf.borrow().pitch.clone_ref(py);
+        pitch.bind(py).setattr("nameWithOctave", value)?;
+        let renamed = pitch.borrow(py).inner.clone();
+        slf.borrow_mut().inner.set_pitch(renamed);
+        Ok(())
     }
 
     #[getter]

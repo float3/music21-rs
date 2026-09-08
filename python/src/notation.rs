@@ -72,6 +72,22 @@ pub(crate) fn tie_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsTie> {
 
 #[pymethods]
 impl Tie {
+    /// music21's `classes`: what this is, and everything it is a kind of.
+    /// Its own code reads this to decide what it is looking at.
+    #[getter]
+    fn classes(&self) -> Vec<&'static str> {
+        vec!["Tie", "ProtoM21Object", "SlottedObjectMixin", "object"]
+    }
+
+    #[getter]
+    fn classSet(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let names: Vec<&'static str> =
+            vec!["Tie", "ProtoM21Object", "SlottedObjectMixin", "object"];
+        Ok(pyo3::types::PyFrozenSet::new(py, &names)?
+            .into_any()
+            .unbind())
+    }
+
     /// music21 freezes a score by pickling it, and what this object is lives
     /// in Rust where a pickle cannot see it — so it is written out as text,
     /// and read back into a fresh one of these.
@@ -80,7 +96,9 @@ impl Tie {
     }
 
     fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
-        let inner: RsTie = crate::unpickled(slf, state)?;
+        let Some(inner) = crate::unpickled::<_, RsTie>(slf, state)? else {
+            return Ok(());
+        };
         slf.borrow_mut().inner = inner;
         Ok(())
     }
@@ -222,6 +240,33 @@ impl Clone for Lyric {
 
 #[pymethods]
 impl Lyric {
+    /// music21's `classes`: what this is, and everything it is a kind of.
+    /// Its own code reads this to decide what it is looking at.
+    #[getter]
+    fn classes(&self) -> Vec<&'static str> {
+        vec![
+            "Lyric",
+            "ProtoM21Object",
+            "StyleMixin",
+            "SlottedObjectMixin",
+            "object",
+        ]
+    }
+
+    #[getter]
+    fn classSet(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let names: Vec<&'static str> = vec![
+            "Lyric",
+            "ProtoM21Object",
+            "StyleMixin",
+            "SlottedObjectMixin",
+            "object",
+        ];
+        Ok(pyo3::types::PyFrozenSet::new(py, &names)?
+            .into_any()
+            .unbind())
+    }
+
     /// music21 freezes a score by pickling it, and what this object is lives
     /// in Rust where a pickle cannot see it — so it is written out as text,
     /// and read back into a fresh one of these.
@@ -230,7 +275,9 @@ impl Lyric {
     }
 
     fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
-        let inner: RsLyric = crate::unpickled(slf, state)?;
+        let Some(inner) = crate::unpickled::<_, RsLyric>(slf, state)? else {
+            return Ok(());
+        };
         slf.borrow_mut().inner = inner;
         Ok(())
     }
@@ -464,6 +511,35 @@ fn beam_direction_of(value: Option<&Bound<'_, PyAny>>) -> PyResult<Option<RsBeam
 
 #[pymethods]
 impl Beam {
+    /// music21's `classes`: what this is, and everything it is a kind of.
+    /// Its own code reads this to decide what it is looking at.
+    #[getter]
+    fn classes(&self) -> Vec<&'static str> {
+        vec![
+            "Beam",
+            "ProtoM21Object",
+            "EqualSlottedObjectMixin",
+            "StyleMixin",
+            "SlottedObjectMixin",
+            "object",
+        ]
+    }
+
+    #[getter]
+    fn classSet(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let names: Vec<&'static str> = vec![
+            "Beam",
+            "ProtoM21Object",
+            "EqualSlottedObjectMixin",
+            "StyleMixin",
+            "SlottedObjectMixin",
+            "object",
+        ];
+        Ok(pyo3::types::PyFrozenSet::new(py, &names)?
+            .into_any()
+            .unbind())
+    }
+
     /// music21 freezes a score by pickling it, and what this object is lives
     /// in Rust where a pickle cannot see it — so it is written out as text,
     /// and read back into a fresh one of these.
@@ -472,7 +548,9 @@ impl Beam {
     }
 
     fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
-        let inner: RsBeam = crate::unpickled(slf, state)?;
+        let Some(inner) = crate::unpickled::<_, RsBeam>(slf, state)? else {
+            return Ok(());
+        };
         slf.borrow_mut().inner = inner;
         Ok(())
     }
@@ -643,6 +721,33 @@ fn beams_list<'py>(py: Python<'py>, beams: Vec<Option<RsBeams>>) -> PyResult<Bou
 
 #[pymethods]
 impl Beams {
+    /// music21's `classes`: what this is, and everything it is a kind of.
+    /// Its own code reads this to decide what it is looking at.
+    #[getter]
+    fn classes(&self) -> Vec<&'static str> {
+        vec![
+            "Beams",
+            "ProtoM21Object",
+            "EqualSlottedObjectMixin",
+            "SlottedObjectMixin",
+            "object",
+        ]
+    }
+
+    #[getter]
+    fn classSet(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let names: Vec<&'static str> = vec![
+            "Beams",
+            "ProtoM21Object",
+            "EqualSlottedObjectMixin",
+            "SlottedObjectMixin",
+            "object",
+        ];
+        Ok(pyo3::types::PyFrozenSet::new(py, &names)?
+            .into_any()
+            .unbind())
+    }
+
     /// music21 freezes a score by pickling it, and what this object is lives
     /// in Rust where a pickle cannot see it — so it is written out as text,
     /// and read back into a fresh one of these.
@@ -651,7 +756,9 @@ impl Beams {
     }
 
     fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
-        let inner: RsBeams = crate::unpickled(slf, state)?;
+        let Some(inner) = crate::unpickled::<_, RsBeams>(slf, state)? else {
+            return Ok(());
+        };
         slf.borrow_mut().inner = inner;
         Ok(())
     }
@@ -1031,6 +1138,22 @@ pub(crate) fn volume_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsVolume> {
 
 #[pymethods]
 impl Volume {
+    /// music21's `classes`: what this is, and everything it is a kind of.
+    /// Its own code reads this to decide what it is looking at.
+    #[getter]
+    fn classes(&self) -> Vec<&'static str> {
+        vec!["Volume", "ProtoM21Object", "SlottedObjectMixin", "object"]
+    }
+
+    #[getter]
+    fn classSet(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let names: Vec<&'static str> =
+            vec!["Volume", "ProtoM21Object", "SlottedObjectMixin", "object"];
+        Ok(pyo3::types::PyFrozenSet::new(py, &names)?
+            .into_any()
+            .unbind())
+    }
+
     /// music21 freezes a score by pickling it, and what this object is lives
     /// in Rust where a pickle cannot see it — so it is written out as text,
     /// and read back into a fresh one of these.
@@ -1039,7 +1162,9 @@ impl Volume {
     }
 
     fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
-        let inner: RsVolume = crate::unpickled(slf, state)?;
+        let Some(inner) = crate::unpickled::<_, RsVolume>(slf, state)? else {
+            return Ok(());
+        };
         slf.borrow_mut().inner = inner;
         Ok(())
     }

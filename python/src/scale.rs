@@ -407,7 +407,9 @@ impl ConcreteScale {
     }
 
     fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
-        let inner: RsScale = crate::unpickled(slf, state)?;
+        let Some(inner) = crate::unpickled::<_, RsScale>(slf, state)? else {
+            return Ok(());
+        };
         slf.borrow_mut().inner = inner;
         Ok(())
     }

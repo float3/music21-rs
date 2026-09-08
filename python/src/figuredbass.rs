@@ -61,7 +61,9 @@ impl Modifier {
     }
 
     fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
-        let inner: RsModifier = crate::unpickled(slf, state)?;
+        let Some(inner) = crate::unpickled::<_, RsModifier>(slf, state)? else {
+            return Ok(());
+        };
         slf.borrow_mut().inner = inner;
         Ok(())
     }
@@ -148,7 +150,9 @@ impl Figure {
     }
 
     fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
-        let inner: RsFigure = crate::unpickled(slf, state)?;
+        let Some(inner) = crate::unpickled::<_, RsFigure>(slf, state)? else {
+            return Ok(());
+        };
         slf.borrow_mut().inner = inner;
         Ok(())
     }
@@ -253,7 +257,9 @@ impl Notation {
     }
 
     fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
-        let inner: RsNotation = crate::unpickled(slf, state)?;
+        let Some(inner) = crate::unpickled::<_, RsNotation>(slf, state)? else {
+            return Ok(());
+        };
         slf.borrow_mut().inner = inner;
         Ok(())
     }

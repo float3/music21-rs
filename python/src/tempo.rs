@@ -172,7 +172,9 @@ impl MetronomeMark {
     }
 
     fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
-        let inner: RsMetronomeMark = crate::unpickled(slf, state)?;
+        let Some(inner) = crate::unpickled::<_, RsMetronomeMark>(slf, state)? else {
+            return Ok(());
+        };
         slf.borrow_mut().inner = inner;
         Ok(())
     }
@@ -357,25 +359,28 @@ impl MetronomeMark {
         crate::installed_new(py, "music21.tempo", "MetronomeMark", Self::wrap(moved))
     }
 
-    /// music21's `secondsPerQuarter`.
+    /// music21's `secondsPerQuarter`, which counts what the mark is played
+    /// at where that differs from what it says.
     fn secondsPerQuarter(&self) -> PyResult<f64> {
-        self.inner.seconds_per_quarter().map_err(tempo_error)
+        self.getQuarterBPM(true)
+            .map(|bpm| 60.0 / bpm)
+            .ok_or_else(|| MetronomeMarkException::new_err("this mark says no tempo"))
     }
 
     /// music21's `durationToSeconds`: how long a span lasts at this tempo.
     fn durationToSeconds(&self, durationOrQuarterLength: &Bound<'_, PyAny>) -> PyResult<f64> {
         let duration = duration_from_any(durationOrQuarterLength)?;
-        self.inner
-            .duration_to_seconds(&duration)
-            .map_err(tempo_error)
+        Ok(self.secondsPerQuarter()? * duration.quarter_length())
     }
 
     /// music21's `secondsToDuration`: the span that lasts that long.
     fn secondsToDuration(&self, py: Python<'_>, seconds: f64) -> PyResult<Py<Duration>> {
-        let duration = self
-            .inner
-            .seconds_to_duration(seconds)
-            .map_err(tempo_error)?;
+        if seconds.is_nan() || seconds <= 0.0 {
+            return Err(MetronomeMarkException::new_err(
+                "seconds must be a number greater than zero",
+            ));
+        }
+        let duration = RsDuration::new(seconds / self.secondsPerQuarter()?).map_err(tempo_error)?;
         crate::installed_new(py, "music21.duration", "Duration", Duration::wrap(duration))
     }
 

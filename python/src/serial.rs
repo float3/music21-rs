@@ -168,7 +168,9 @@ impl ToneRow {
     }
 
     fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
-        let inner: RsToneRow = crate::unpickled(slf, state)?;
+        let Some(inner) = crate::unpickled::<_, RsToneRow>(slf, state)? else {
+            return Ok(());
+        };
         slf.borrow_mut().inner = inner;
         Ok(())
     }

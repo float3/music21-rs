@@ -67,6 +67,21 @@ pub struct Microtone {
 
 #[pymethods]
 impl Microtone {
+    /// music21's `classes`: what this is, and everything it is a kind of.
+    /// Its own code reads this to decide what it is looking at.
+    #[getter]
+    fn classes(&self) -> Vec<&'static str> {
+        vec!["Microtone", "ProtoM21Object", "object"]
+    }
+
+    #[getter]
+    fn classSet(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let names: Vec<&'static str> = vec!["Microtone", "ProtoM21Object", "object"];
+        Ok(pyo3::types::PyFrozenSet::new(py, &names)?
+            .into_any()
+            .unbind())
+    }
+
     /// music21 freezes a score by pickling it, and what this object is lives
     /// in Rust where a pickle cannot see it — so it is written out as text,
     /// and read back into a fresh one of these.
@@ -75,7 +90,9 @@ impl Microtone {
     }
 
     fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
-        let inner: RsMicrotone = crate::unpickled(slf, state)?;
+        let Some(inner) = crate::unpickled::<_, RsMicrotone>(slf, state)? else {
+            return Ok(());
+        };
         slf.borrow_mut().inner = inner;
         Ok(())
     }
@@ -222,6 +239,33 @@ impl Accidental {
 
 #[pymethods]
 impl Accidental {
+    /// music21's `classes`: what this is, and everything it is a kind of.
+    /// Its own code reads this to decide what it is looking at.
+    #[getter]
+    fn classes(&self) -> Vec<&'static str> {
+        vec![
+            "Accidental",
+            "ProtoM21Object",
+            "StyleMixin",
+            "SlottedObjectMixin",
+            "object",
+        ]
+    }
+
+    #[getter]
+    fn classSet(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let names: Vec<&'static str> = vec![
+            "Accidental",
+            "ProtoM21Object",
+            "StyleMixin",
+            "SlottedObjectMixin",
+            "object",
+        ];
+        Ok(pyo3::types::PyFrozenSet::new(py, &names)?
+            .into_any()
+            .unbind())
+    }
+
     /// music21 freezes a score by pickling it, and what this object is lives
     /// in Rust where a pickle cannot see it — so it is written out as text,
     /// and read back into a fresh one of these.
@@ -230,7 +274,9 @@ impl Accidental {
     }
 
     fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
-        let inner: RsAccidental = crate::unpickled(slf, state)?;
+        let Some(inner) = crate::unpickled::<_, RsAccidental>(slf, state)? else {
+            return Ok(());
+        };
         slf.borrow_mut().inner = inner;
         Ok(())
     }
@@ -503,7 +549,10 @@ impl Accidental {
 }
 
 /// music21's `pitch.Pitch`.
-#[pyclass(name = "Pitch", module = "music21.pitch", skip_from_py_object)]
+// `dict`: music21's own pitch is not slotted, and its code decorates one —
+// `audioSearch` hangs the frequency it heard on the pitch it decided — so a
+// pitch here takes an attribute nobody here has heard of, as that one does.
+#[pyclass(name = "Pitch", module = "music21.pitch", dict, skip_from_py_object)]
 pub struct Pitch {
     pub(crate) inner: RsPitch,
     pub(crate) spelling_is_inferred: bool,
@@ -693,7 +742,9 @@ impl Pitch {
     }
 
     fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
-        let inner: RsPitch = crate::unpickled(slf, state)?;
+        let Some(inner) = crate::unpickled::<_, RsPitch>(slf, state)? else {
+            return Ok(());
+        };
         slf.borrow_mut().inner = inner;
         Ok(())
     }
@@ -1448,6 +1499,43 @@ impl Pitch {
     #[getter]
     fn classes(&self) -> [&'static str; 3] {
         ["Pitch", "ProtoM21Object", "object"]
+    }
+
+    #[getter]
+    fn classSet(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        Ok(pyo3::types::PyFrozenSet::new(py, self.classes())?
+            .into_any()
+            .unbind())
+    }
+
+    /// music21's `_client`: the note this pitch belongs to, where it belongs
+    /// to one. Its own `interval._extractPitch` reads it to tell a pitch
+    /// from the note around it.
+    #[getter]
+    fn _client(&self, py: Python<'_>) -> Py<PyAny> {
+        match &self.owner {
+            Some(owner) => owner.clone_ref(py).into_any(),
+            None => py.None(),
+        }
+    }
+
+    /// music21's `groups`: the labels a caller has put on this pitch. The
+    /// list is made on first asking and kept, so appending to what a caller
+    /// was handed reaches the pitch.
+    #[getter]
+    fn get_groups(slf: &Bound<'_, Self>, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let own = slf.as_any().getattr("__dict__")?;
+        if let Ok(groups) = own.get_item("_groups") {
+            return Ok(groups.unbind());
+        }
+        let groups = pyo3::types::PyList::empty(py);
+        own.set_item("_groups", &groups)?;
+        Ok(groups.into_any().unbind())
+    }
+
+    #[setter]
+    fn set_groups(slf: &Bound<'_, Self>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        slf.as_any().getattr("__dict__")?.set_item("_groups", value)
     }
 
     // ---- dunders ---------------------------------------------------------

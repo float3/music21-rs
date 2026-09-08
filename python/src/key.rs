@@ -90,7 +90,9 @@ impl KeySignature {
     }
 
     fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
-        let signature: RsKeySignature = crate::unpickled(slf, state)?;
+        let Some(signature) = crate::unpickled::<_, RsKeySignature>(slf, state)? else {
+            return Ok(());
+        };
         slf.borrow_mut().signature = signature;
         Ok(())
     }
@@ -414,7 +416,9 @@ impl Key {
     }
 
     fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
-        let inner: RsKey = crate::unpickled(slf, state)?;
+        let Some(inner) = crate::unpickled::<_, RsKey>(slf, state)? else {
+            return Ok(());
+        };
         let sharps = inner.sharps();
         let mut me = slf.borrow_mut();
         me.inner = inner;

@@ -125,8 +125,16 @@ where
     let py = slf.py();
     let class = slf.as_any().get_type().into_any().unbind();
     let written = written_state(value)?;
+    // The Python half is music21's own: everything it keeps on the object,
+    // with the two fields it never freezes emptied, as `Music21Object`
+    // freezes it.
     let carried = match slf.as_any().getattr("__dict__") {
-        Ok(carried) => carried.unbind(),
+        Ok(carried) => {
+            let copied = carried.call_method0("copy")?;
+            copied.set_item("_derivation", py.None())?;
+            copied.set_item("_activeSite", py.None())?;
+            copied.unbind()
+        }
         Err(_) => py.None(),
     };
     let state = (written, carried).into_pyobject(py)?.into_any().unbind();
@@ -135,19 +143,26 @@ where
 
 /// The other half of that: what the object was, read back, with the Python
 /// half put where it was.
-pub(crate) fn unpickled<T, V>(slf: &Bound<'_, T>, state: &Bound<'_, PyAny>) -> PyResult<V>
+pub(crate) fn unpickled<T, V>(slf: &Bound<'_, T>, state: &Bound<'_, PyAny>) -> PyResult<Option<V>>
 where
     T: pyo3::PyClass,
     V: serde::de::DeserializeOwned,
 {
-    let (written, carried): (String, Py<PyAny>) = state.extract()?;
     let py = slf.py();
+    let Ok((written, carried)) = state.extract::<(String, Py<PyAny>)>() else {
+        // Not one of ours. music21 freezes its own half as a plain dictionary
+        // of attributes and hands it straight back, so that is what this is.
+        if let Ok(own) = slf.as_any().getattr("__dict__") {
+            own.call_method1("update", (state,))?;
+        }
+        return Ok(None);
+    };
     if !carried.is_none(py)
         && let Ok(own) = slf.as_any().getattr("__dict__")
     {
         own.call_method1("update", (carried,))?;
     }
-    read_state(&written)
+    read_state(&written).map(Some)
 }
 
 /// A new facade object, as the class music21 now has under that name.
@@ -205,7 +220,27 @@ pub(crate) fn blank_installed<'py>(class: &Bound<'py, PyAny>) -> PyResult<Bound<
 /// offsets are the container machinery, and using music21's is the whole
 /// point of inheriting from it.
 const INSTALL_HELPER: &str = r#"
+import sys
+
 from music21 import base as _base
+
+
+def rebind(original, installed):
+    """Replace a class everywhere music21 has already bound it.
+
+    music21 is fully imported before any of this runs, and a module that
+    wrote `from music21.duration import Duration` at the top holds the class
+    it had then — `music21.base` is one of them, and every object it builds
+    would go on being the old class. Those bindings are replaced too.
+    """
+    for module in list(sys.modules.values()):
+        if module is None:
+            continue
+        if not getattr(module, '__name__', '').startswith('music21'):
+            continue
+        for name, value in list(vars(module).items()):
+            if value is original:
+                setattr(module, name, installed)
 
 
 # The classes installed over music21's, by module and name. A facade that
@@ -399,11 +434,16 @@ fn install_into_music21(py: Python<'_>) -> PyResult<usize> {
         let module = py.import(module_name)?;
         for name in names {
             if let Ok(value) = ours.getattr(*name) {
+                let original = module.getattr(*name).ok();
                 let value = class_to_install(py, &module, name, &value)?;
                 module.setattr(*name, &value)?;
-                install_helper(py)?
+                let helper = install_helper(py)?;
+                helper
                     .getattr("installed")?
                     .set_item((module_name, *name), &value)?;
+                if let Some(original) = original {
+                    helper.getattr("rebind")?.call1((original, &value))?;
+                }
                 replaced += 1;
             }
         }
