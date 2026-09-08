@@ -14,12 +14,14 @@ pub mod scala;
 pub mod scala_bundled;
 /// Rank-2 regular temperaments, a period and a generator over a mapping.
 pub mod temperament;
+mod temperaments_generated;
 
 pub use equal::{EqualDivision, TRITAVE_CENTS};
 pub use generated::*;
 pub use monzo::{Monzo, PRIMES, Val};
 pub use mos::{Mos, MosScale, OCTAVE_CENTS, moment_of_symmetry_sizes};
 pub use temperament::Temperament;
+pub use temperaments_generated::*;
 
 use crate::defaults::{FloatType, IntegerType, UnsignedIntegerType};
 use crate::error::{Error, Result};

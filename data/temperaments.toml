@@ -1,0 +1,1270 @@
+# Regular temperaments, as the Xenharmonic Wiki publishes them.
+#
+# Hand-collected, not generated: the wiki sits behind a bot check that returns
+# 403 to every non-browser client, so no `xtask regenerate-*` command can fetch
+# this. Refresh it by hand every few months. Each entry records the `revid` of
+# the page it was read from, so a refresh can tell which pages actually
+# changed. `xtask emit-temperaments` turns this into
+# `src/tuningsystem/temperaments_generated.rs`, and `xtask verify-temperaments`
+# (run in CI's lint job) asserts the two agree.
+#
+# To collect it again, open https://en.xen.wiki in a real browser -- the check
+# clears itself, no captcha -- then read the pages carrying `Infobox regtemp`
+# through the API on that same origin:
+#
+#   /api.php?action=query&list=embeddedin&eititle=Template:Infobox regtemp
+#             &eilimit=500&einamespace=0&format=json&formatversion=2
+#   /api.php?action=query&prop=revisions&rvprop=content|ids&rvslots=main
+#             &rvsection=0&format=json&formatversion=2&titles=A|B|C
+#
+# How to read an infobox `Mapping`. It is `periods; row; row; ...`: the first
+# number is how many periods there are to an equave, and each row after it says
+# how many of one generator every prime *after the equave* is worth. So a row
+# is always one shorter than the subgroup, and that is what says which of the
+# listed subgroups the mapping belongs to -- it is not always the last. The
+# equave is the subgroup's first prime, which is 2 for all but five of these;
+# `3.5.7` repeats at a tritave. A page whose `Generators tuning` lists one more
+# number than it has rows is giving the period first.
+#
+# Only the numbers are taken. The wiki is CC BY-SA and this crate is
+# AGPL-3.0-only, so no prose is copied across; mappings, generators, commas and
+# MOS patterns are facts and carry no licence weight.
+#
+# Nothing here is trusted. `wiki_temperaments_build_and_agree_with_the_wiki`
+# builds every entry, checks each comma really is tempered out, and checks each
+# published MOS pattern really comes out of the generator, so a mistranscribed
+# number fails the build rather than shipping.
+
+collected = "2026-09-08"
+source = "https://en.xen.wiki"
+
+[[temperament]]
+name = "ABERSCHISMIC"
+page = "Aberschismic"
+revision = 236716
+subgroup = [2, 3, 5, 7]
+periods_per_equave = 1
+generator_rows = [[1, 0, -6], [0, 1, 1]]
+generator_ratios = ["3/2", "5/4"]
+generator_cents = [702.8, 386.5]
+optimization = "CWE"
+commas = ["5120/5103"]
+moments = []
+
+[[temperament]]
+name = "AMITY"
+page = "Amity"
+revision = 231767
+subgroup = [2, 3, 5, 7]
+periods_per_equave = 1
+generator_rows = [[-5, -13, 17]]
+generator_ratios = ["243/200"]
+generator_cents = [339.4]
+optimization = "CWE"
+commas = ["4375/4374", "5120/5103"]
+moments = ["7L 4s", "7L 11s", "7L 18s", "7L 25s"]
+
+[[temperament]]
+name = "ANTONIAN"
+page = "Antonian"
+revision = 225047
+subgroup = [2, 3, 5, 7]
+periods_per_equave = 1
+generator_rows = [[1, 2, 3]]
+generator_ratios = ["3/2"]
+generator_cents = [743.086]
+optimization = "CWE"
+commas = ["10/9", "10/9", "15/14"]
+moments = ["1L 1s", "2L 1s", "3L 2s"]
+
+[[temperament]]
+name = "ARCHYTAS"
+page = "Archytas and ares"
+revision = 226335
+subgroup = [2, 3, 5, 7, 11]
+periods_per_equave = 1
+generator_rows = [[1, 0, -2, -2], [0, 1, 0, 2]]
+generator_ratios = ["3/2", "5/4"]
+generator_cents = [709.7, 390.0]
+optimization = "CWE"
+commas = ["64/63", "100/99"]
+moments = []
+
+[[temperament]]
+name = "AUGMENTED"
+page = "Augmented (temperament)"
+revision = 235640
+subgroup = [2, 3, 5, 7, 11]
+periods_per_equave = 3
+generator_rows = [[1, 0, -2, -2]]
+generator_ratios = ["3/2"]
+generator_cents = [711.6]
+optimization = "CWE"
+commas = ["56/55", "64/63", "100/99"]
+moments = ["3L 3s", "3L 6s", "3L 9s", "12L 3s"]
+
+[[temperament]]
+name = "BLACKWOOD"
+page = "Blackwood"
+revision = 232912
+subgroup = [2, 3, 5, 7]
+periods_per_equave = 5
+generator_rows = [[0, 1, 0]]
+generator_ratios = ["5/4"]
+generator_cents = [391.1]
+optimization = "CWE"
+commas = ["28/27", "49/48"]
+moments = ["5L 5s", "10L 5s"]
+
+[[temperament]]
+name = "BOHPIER"
+page = "Bohpier"
+revision = 234402
+subgroup = [2, 3, 5, 7, 11, 13]
+periods_per_equave = 1
+generator_rows = [[13, 19, 23, 12, 14]]
+generator_ratios = ["12/11"]
+generator_cents = [146.5]
+optimization = "CWE"
+commas = ["100/99", "144/143", "196/195", "275/273"]
+moments = ["1L 7s", "8L 1s", "8L 9s", "8L 17s"]
+
+[[temperament]]
+name = "BPS"
+page = "BPS"
+revision = 236047
+subgroup = [3, 5, 7]
+periods_per_equave = 1
+generator_rows = [[2, -1]]
+generator_ratios = ["9/7"]
+generator_cents = [440.7]
+optimization = "CWE"
+commas = ["245/243"]
+moments = []
+
+[[temperament]]
+name = "BUG"
+page = "Bug and beep"
+revision = 230456
+subgroup = [2, 3, 5, 7]
+periods_per_equave = 1
+generator_rows = [[2, 3, 1]]
+generator_ratios = ["5/3"]
+generator_cents = [938.0]
+optimization = "CWE"
+commas = ["21/20", "27/25"]
+moments = ["1L 3s", "4L 1s", "5L 4s"]
+
+[[temperament]]
+name = "BUNYA"
+page = "Bunya"
+revision = 232103
+subgroup = [2, 3, 5, 7, 11, 13]
+periods_per_equave = 1
+generator_rows = [[4, 9, 26, 10, -2]]
+generator_ratios = ["10/9"]
+generator_cents = [175.9]
+optimization = "CWE"
+commas = ["100/99", "225/224", "243/242", "100/99", "144/143", "225/224", "243/242"]
+moments = ["6L 1s", "7L 6s", "7L 13s", "7L 20s"]
+
+[[temperament]]
+name = "BUZZARD"
+page = "Buzzard"
+revision = 233828
+subgroup = [2, 3, 5, 7, 11, 13]
+periods_per_equave = 1
+generator_rows = [[4, 21, -3, 39, 27]]
+generator_ratios = ["21/16"]
+generator_cents = [475.7]
+optimization = "CWE"
+commas = ["176/175", "351/350", "540/539", "676/675"]
+moments = ["3L 2s"]
+
+[[temperament]]
+name = "CANOPUS"
+page = "Canopus"
+revision = 231671
+subgroup = [3, 5, 7]
+periods_per_equave = 1
+generator_rows = [[-5, -4]]
+generator_ratios = ["7/5"]
+generator_cents = [583.986]
+optimization = "CWE"
+commas = ["16875/16807"]
+moments = []
+
+[[temperament]]
+name = "CATAKLEISMIC"
+page = "Catakleismic"
+revision = 235730
+subgroup = [2, 3, 5, 7, 11, 13]
+periods_per_equave = 1
+generator_rows = [[6, 5, 22, -21, 14]]
+generator_ratios = ["6/5"]
+generator_cents = [316.7]
+optimization = "CWE"
+commas = ["169/168", "225/224", "325/324", "385/384"]
+moments = ["4L 7s", "4L 11s", "15L 4s", "15L 19s"]
+
+[[temperament]]
+name = "COMPTON"
+page = "Compton"
+revision = 225555
+subgroup = [2, 3, 5, 7]
+periods_per_equave = 12
+generator_rows = [[0, 1, 2]]
+generator_ratios = ["5/4"]
+generator_cents = [384.1]
+optimization = "CWE"
+commas = ["225/224", "250047/250000"]
+moments = ["12L 12s", "12L 24s"]
+
+[[temperament]]
+name = "COTONEUM"
+page = "Cotoneum"
+revision = 235863
+subgroup = [2, 3, 5, 7, 11, 13, 17, 19]
+periods_per_equave = 1
+generator_rows = [[1, -49, -14, 23, 61, 89, -44]]
+generator_ratios = ["3/2"]
+generator_cents = [702.31]
+optimization = "CWE"
+commas = ["343/342", "364/363", "441/440", "595/594", "1216/1215", "1729/1728"]
+moments = ["12L 17s", "12L 29s", "41L 12s", "41L 53s"]
+
+[[temperament]]
+name = "DECIMAL"
+page = "Decimal"
+revision = 223634
+subgroup = [2, 3, 5, 7]
+periods_per_equave = 2
+generator_rows = [[2, 1, 1]]
+generator_ratios = ["7/4"]
+generator_cents = [951.0]
+optimization = "CWE"
+commas = ["25/24", "49/48"]
+moments = ["4L 2s", "4L 6s", "10L 4s"]
+
+[[temperament]]
+name = "DEEPTONE"
+page = "Deeptone"
+revision = 223673
+subgroup = [2, 3, 5, 13]
+periods_per_equave = 1
+generator_rows = [[1, 11, -4]]
+generator_ratios = ["3/2"]
+generator_cents = [689.6]
+optimization = "CWE"
+commas = ["1053/1024", "2187/2080"]
+moments = ["5L 2s", "7L 5s", "7L 12s"]
+
+[[temperament]]
+name = "DIASCHISMIC"
+page = "Diaschismic"
+revision = 232513
+subgroup = [2, 3, 5, 7, 11, 13, 17]
+periods_per_equave = 2
+generator_rows = [[1, -2, -8, -12, -15, 1]]
+generator_ratios = ["3/2"]
+generator_cents = [703.9]
+optimization = "CWE"
+commas = ["126/125", "136/135", "176/175", "196/195", "256/255"]
+moments = ["2L 8s", "10L 2s", "12L 10s"]
+
+[[temperament]]
+name = "DICOT"
+page = "Dicot"
+revision = 232876
+subgroup = [2, 3, 5, 11]
+periods_per_equave = 1
+generator_rows = [[2, 1, 5]]
+generator_ratios = ["6/5"]
+generator_cents = [351.1]
+optimization = "CWE"
+commas = ["25/24", "45/44"]
+moments = ["3L 1s", "3L 4s", "7L 3s"]
+
+[[temperament]]
+name = "DIDACUS"
+page = "Didacus"
+revision = 223688
+subgroup = [2, 5, 7, 11]
+periods_per_equave = 1
+generator_rows = [[2, 5, 9]]
+generator_ratios = ["28/25"]
+generator_cents = [194.4]
+optimization = "CWE"
+commas = ["176/175", "1375/1372"]
+moments = ["1L 5s", "6L 1s", "6L 7s", "6L 13s", "6L 19s"]
+
+[[temperament]]
+name = "DIMINISHED"
+page = "Diminished (temperament)"
+revision = 226097
+subgroup = [2, 3, 5, 7]
+periods_per_equave = 4
+generator_rows = [[1, 1, 1]]
+generator_ratios = ["3/2"]
+generator_cents = [696.0]
+optimization = "CWE"
+commas = ["36/35", "50/49"]
+moments = ["4L 4s", "4L 8s", "12L 4s"]
+
+[[temperament]]
+name = "DOMINANT"
+page = "Dominant (temperament)"
+revision = 223637
+subgroup = [2, 3, 5, 7]
+periods_per_equave = 1
+generator_rows = [[1, 4, -2]]
+generator_ratios = ["3/2"]
+generator_cents = [701.1]
+optimization = "CWE"
+commas = ["36/35", "64/63"]
+moments = ["2L 3s", "5L 2s", "5L 7s"]
+
+[[temperament]]
+name = "ENNEALIMMAL"
+page = "Ennealimmal"
+revision = 231237
+subgroup = [2, 3, 5, 7]
+periods_per_equave = 9
+generator_rows = [[2, 3, 2]]
+generator_ratios = ["5/3"]
+generator_cents = [884.322]
+optimization = "CWE"
+commas = ["2401/2400", "4375/4374"]
+moments = ["18L 9s", "27L 18s", "27L 45s"]
+
+[[temperament]]
+name = "FATHER"
+page = "Father"
+revision = 223994
+subgroup = [2, 3, 5, 7]
+periods_per_equave = 1
+generator_rows = [[1, -1, 3]]
+generator_ratios = ["3/2"]
+generator_cents = [738.443]
+optimization = "CWE"
+commas = ["16/15", "16/15", "28/27"]
+moments = ["1L 1s", "2L 1s", "3L 2s"]
+
+[[temperament]]
+name = "FLATTONE"
+page = "Flattone"
+revision = 223639
+subgroup = [2, 3, 5, 7, 11, 13]
+periods_per_equave = 1
+generator_rows = [[1, 4, -9, 6, -4]]
+generator_ratios = ["3/2"]
+generator_cents = [693.1]
+optimization = "CWE"
+commas = ["45/44", "65/64", "78/77", "81/80"]
+moments = ["5L 2s", "7L 5s", "7L 12s"]
+
+[[temperament]]
+name = "GAMELISMIC"
+page = "Gamelismic and portent"
+revision = 231995
+subgroup = [2, 3, 5, 7, 11]
+periods_per_equave = 1
+generator_rows = [[3, 0, -1, 4], [0, 1, 0, -1]]
+generator_ratios = ["8/7", "5/4"]
+generator_cents = [233.8, 385.3]
+optimization = "CWE"
+commas = ["385/384", "441/440"]
+moments = []
+
+[[temperament]]
+name = "GARIBALDI"
+page = "Garibaldi"
+revision = 231769
+subgroup = [2, 3, 5, 7, 19]
+periods_per_equave = 1
+generator_rows = [[1, -8, -14, -3]]
+generator_ratios = ["3/2"]
+generator_cents = [702.1]
+optimization = "CWE"
+commas = ["190/189", "225/224", "361/360"]
+moments = ["5L 2s", "5L 7s", "12L 5s", "12L 17s"]
+
+[[temperament]]
+name = "GRAVITY"
+page = "Gravity"
+revision = 227055
+subgroup = [2, 3, 5, 11]
+periods_per_equave = 1
+generator_rows = [[6, 17, 15]]
+generator_ratios = ["27/20"]
+generator_cents = [516.8]
+optimization = "CWE"
+commas = ["243/242", "4000/3993"]
+moments = ["2L 5s", "7L 2s", "7L 9s", "7L 51s"]
+
+[[temperament]]
+name = "GUNN"
+page = "Gunn"
+revision = 235544
+subgroup = [2, 3, 5, 7, 11, 13, 17, 19]
+periods_per_equave = 24
+generator_rows = [[0, 1, 0, 0, 0, 0, 0], [0, 0, 1, 0, -1, 0, 0]]
+generator_ratios = ["5/4", "7/4"]
+generator_cents = [384.84, 965.14]
+optimization = "CWE"
+commas = ["729/728", "273/272", "153/152", "364/363", "1729/1728"]
+moments = []
+
+[[temperament]]
+name = "HARRY"
+page = "Harry"
+revision = 227469
+subgroup = [2, 3, 5, 7, 11, 13]
+periods_per_equave = 2
+generator_rows = [[-6, -17, -10, -15, -26]]
+generator_ratios = ["21/20"]
+generator_cents = [83.1]
+optimization = "CWE"
+commas = ["243/242", "351/350", "364/363", "441/440"]
+moments = ["2L 12s", "14L 2s", "14L 16s", "14L 30s"]
+
+[[temperament]]
+name = "HEMIFIFTHS"
+page = "Hemififths"
+revision = 231760
+subgroup = [2, 3, 5, 7, 11, 13]
+periods_per_equave = 1
+generator_rows = [[2, 25, 13, 5, -1]]
+generator_ratios = ["49/40"]
+generator_cents = [351.5]
+optimization = "CWE"
+commas = ["144/143", "196/195", "243/242", "364/363"]
+moments = ["3L 4s", "7L 3s", "7L 10s", "17L 7s", "17L 24s"]
+
+[[temperament]]
+name = "JOVE"
+page = "Jove"
+revision = 231992
+subgroup = [2, 3, 5, 7, 11]
+periods_per_equave = 1
+generator_rows = [[2, 1, 1, 5], [0, 2, 1, 0]]
+generator_ratios = ["11/9", "10/7"]
+generator_cents = [350.5, 617.9]
+optimization = "CWE"
+commas = ["243/242", "441/440"]
+moments = []
+
+[[temperament]]
+name = "KEEMUN"
+page = "Keemun"
+revision = 227969
+subgroup = [2, 3, 5, 7, 11]
+periods_per_equave = 1
+generator_rows = [[6, 5, 3, -2]]
+generator_ratios = ["6/5"]
+generator_cents = [317.6]
+optimization = "CWE"
+commas = ["49/48", "126/125", "49/48", "56/55", "100/99"]
+moments = ["4L 3s", "4L 7s", "4L 11s", "15L 4s"]
+
+[[temperament]]
+name = "KLEISMIC"
+page = "Kleismic"
+revision = 226929
+subgroup = [2, 3, 5, 13]
+periods_per_equave = 1
+generator_rows = [[6, 5, 14]]
+generator_ratios = ["6/5"]
+generator_cents = [317.1]
+optimization = "CWE"
+commas = ["325/324", "625/624"]
+moments = ["3L 1s", "4L 3s", "4L 7s", "4L 11s", "15L 4s"]
+
+[[temperament]]
+name = "LAKA"
+page = "Laka"
+revision = 234653
+subgroup = [2, 3, 5, 7, 11, 13]
+periods_per_equave = 1
+generator_rows = [[1, 0, -6, 15, 12], [0, 1, 1, -1, -1]]
+generator_ratios = ["3/2", "5/4"]
+generator_cents = [702.6, 386.8]
+optimization = "CWE"
+commas = []
+moments = []
+
+[[temperament]]
+name = "LEAPDAY"
+page = "Leapday"
+revision = 235394
+subgroup = [2, 3, 5, 7, 11, 13]
+periods_per_equave = 1
+generator_rows = [[1, 21, 15, 11, 8]]
+generator_ratios = ["3/2"]
+generator_cents = [704.2]
+optimization = "CWE"
+commas = ["91/90", "121/120", "169/168", "352/351"]
+moments = ["2L 3s", "5L 2s", "5L 7s", "12L 5s"]
+
+[[temperament]]
+name = "LEMBA"
+page = "Lemba"
+revision = 224710
+subgroup = [2, 3, 5, 7, 11, 13]
+periods_per_equave = 2
+generator_rows = [[3, -1, -1, 5, 1]]
+generator_ratios = ["8/7"]
+generator_cents = [231.2]
+optimization = "CWE"
+commas = ["45/44", "50/49", "65/64", "78/77"]
+moments = ["4L 2s", "6L 4s", "10L 6s"]
+
+[[temperament]]
+name = "LUNA"
+page = "Luna and hemithirds"
+revision = 223644
+subgroup = [2, 3, 5, 7]
+periods_per_equave = 1
+generator_rows = [[-15, 2, 5]]
+generator_ratios = ["28/25"]
+generator_cents = [193.2]
+optimization = "CWE"
+commas = ["1029/1024", "3136/3125"]
+moments = ["1L 5s", "6L 1s", "6L 7s", "6L 13s", "6L 19s", "25L 6s"]
+
+[[temperament]]
+name = "MAGIC"
+page = "Magic"
+revision = 231155
+subgroup = [2, 3, 5, 7]
+periods_per_equave = 1
+generator_rows = [[5, 1, 12]]
+generator_ratios = ["5/4"]
+generator_cents = [380.5]
+optimization = "CWE"
+commas = ["225/224", "245/243"]
+moments = ["3L 4s", "3L 7s", "3L 16s", "19L 3s"]
+
+[[temperament]]
+name = "MARVEL"
+page = "Marvel"
+revision = 231983
+subgroup = [2, 3, 5, 7, 11]
+periods_per_equave = 1
+generator_rows = [[1, 0, 2, -1], [0, 1, 2, -3]]
+generator_ratios = ["3/2", "5/4"]
+generator_cents = [700.6, 383.5]
+optimization = "CWE"
+commas = ["225/224", "385/384"]
+moments = []
+
+[[temperament]]
+name = "MAVILA"
+page = "Mavila"
+revision = 225302
+subgroup = [2, 3, 5, 11]
+periods_per_equave = 1
+generator_rows = [[1, -3, -1]]
+generator_ratios = ["3/2"]
+generator_cents = [679.0]
+optimization = "CWE"
+commas = ["135/128", "33/32", "45/44"]
+moments = ["2L 3s", "2L 5s", "7L 2s"]
+
+[[temperament]]
+name = "MEANTONE"
+page = "Meantone"
+revision = 234286
+subgroup = [2, 3, 5, 7]
+periods_per_equave = 1
+generator_rows = [[1, 4, 10]]
+generator_ratios = ["3/2"]
+generator_cents = [696.7]
+optimization = "CWE"
+commas = ["81/80", "126/125"]
+moments = ["2L 3s", "5L 2s", "7L 5s", "12L 7s"]
+
+[[temperament]]
+name = "MINTAKA"
+page = "Mintaka"
+revision = 223712
+subgroup = [3, 7, 11]
+periods_per_equave = 1
+generator_rows = [[-3, -2]]
+generator_ratios = ["11/7"]
+generator_cents = [778.7]
+optimization = "CWE"
+commas = ["1331/1323"]
+moments = ["2L 3s", "5L 2s", "5L 7s", "5L 12s"]
+
+[[temperament]]
+name = "MIRACLE"
+page = "Miracle"
+revision = 233546
+subgroup = [2, 3, 5, 7, 11]
+periods_per_equave = 1
+generator_rows = [[6, -7, -2, 15]]
+generator_ratios = ["15/14"]
+generator_cents = [116.7]
+optimization = "CTE"
+commas = ["225/224", "243/242", "385/384"]
+moments = ["1L 9s", "10L 1s", "10L 11s", "10L 21s"]
+
+[[temperament]]
+name = "MISTY"
+page = "Misty"
+revision = 231776
+subgroup = [2, 3, 5, 7, 17, 19]
+periods_per_equave = 3
+generator_rows = [[1, -4, -10, 3, 1]]
+generator_ratios = ["3/2"]
+generator_cents = [703.1]
+optimization = "CWE"
+commas = ["256/255", "324/323", "400/399", "476/475"]
+moments = ["3L 9s", "12L 3s", "12L 15s", "12L 27s"]
+
+[[temperament]]
+name = "MODUS"
+page = "Modus"
+revision = 234650
+subgroup = [2, 3, 5, 7, 11, 13]
+periods_per_equave = 1
+generator_rows = [[4, 9, -8, 10, -2]]
+generator_ratios = ["10/9"]
+generator_cents = [176.8]
+optimization = "CWE"
+commas = ["64/63", "100/99", "243/242", "64/63", "78/77", "100/99", "144/143"]
+moments = ["6L 1s", "7L 6s", "7L 13s", "7L 20s"]
+
+[[temperament]]
+name = "MOHAJIRA"
+page = "Mohajira"
+revision = 227468
+subgroup = [2, 3, 5, 7, 11]
+periods_per_equave = 1
+generator_rows = [[2, 8, -11, 5]]
+generator_ratios = ["11/9"]
+generator_cents = [348.5]
+optimization = "CWE"
+commas = ["81/80", "121/120", "176/175"]
+moments = ["3L 4s", "7L 3s", "7L 10s", "7L 17s"]
+
+[[temperament]]
+name = "MONKEY"
+page = "Monkey"
+revision = 231770
+subgroup = [2, 3, 5, 7, 11, 13]
+periods_per_equave = 1
+generator_rows = [[4, 9, -15, 10, -2]]
+generator_ratios = ["10/9"]
+generator_cents = [175.6]
+optimization = "CWE"
+commas = ["100/99", "243/242", "385/384", "100/99", "144/143", "243/242", "385/384"]
+moments = ["6L 1s", "7L 6s", "7L 13s", "7L 20s"]
+
+[[temperament]]
+name = "MOTHRA"
+page = "Mothra"
+revision = 226452
+subgroup = [2, 3, 5, 7]
+periods_per_equave = 1
+generator_rows = [[3, 12, -1]]
+generator_ratios = ["8/7"]
+generator_cents = [232.3]
+optimization = "CWE"
+commas = ["81/80", "1029/1024"]
+moments = ["1L 4s", "5L 1s", "5L 6s", "5L 21s"]
+
+[[temperament]]
+name = "MUGGLES"
+page = "Muggles"
+revision = 227466
+subgroup = [2, 3, 5, 7, 11, 13]
+periods_per_equave = 1
+generator_rows = [[5, 1, -7, 11, -1]]
+generator_ratios = ["5/4"]
+generator_cents = [377.7]
+optimization = "CWE"
+commas = ["45/44", "65/64", "78/77", "126/125"]
+moments = ["3L 7s", "3L 10s", "3L 13s", "16L 3s"]
+
+[[temperament]]
+name = "MYNA"
+page = "Myna"
+revision = 230321
+subgroup = [2, 3, 5, 7, 11]
+periods_per_equave = 1
+generator_rows = [[10, 9, 7, 25]]
+generator_ratios = ["6/5"]
+generator_cents = [310.1]
+optimization = "CWE"
+commas = ["126/125", "176/175", "243/242"]
+moments = ["3L 1s", "4L 3s", "4L 7s", "4L 23s", "27L 4s"]
+
+[[temperament]]
+name = "MYSTERY"
+page = "Mystery"
+revision = 231766
+subgroup = [2, 3, 5, 7, 11, 13]
+periods_per_equave = 29
+generator_rows = [[0, 1, 1, 1, 1]]
+generator_ratios = ["5/4"]
+generator_cents = [387.9]
+optimization = "CWE"
+commas = ["196/195", "352/351", "364/363", "676/675"]
+moments = ["29L 29s", "58L 29s"]
+
+[[temperament]]
+name = "NEGRI"
+page = "Negri"
+revision = 233544
+subgroup = [2, 3, 5, 7, 13]
+periods_per_equave = 1
+generator_rows = [[-4, 3, -2, -3]]
+generator_ratios = ["16/15"]
+generator_cents = [125.4]
+optimization = "CWE"
+commas = ["49/48", "65/64", "91/90"]
+moments = ["1L 8s", "9L 1s", "10L 9s"]
+
+[[temperament]]
+name = "NEUTROMINANT"
+page = "Neutrominant"
+revision = 227457
+subgroup = [2, 3, 5, 7, 11, 13]
+periods_per_equave = 1
+generator_rows = [[2, 8, -4, 5, -1]]
+generator_ratios = ["11/9"]
+generator_cents = [350.7]
+optimization = "CWE"
+commas = ["36/35", "64/63", "66/65", "121/120"]
+moments = ["3L 4s", "7L 3s", "7L 10s"]
+
+[[temperament]]
+name = "OCTOID"
+page = "Octoid"
+revision = 231672
+subgroup = [2, 3, 5, 7, 11]
+periods_per_equave = 8
+generator_rows = [[3, 4, 5, 3]]
+generator_ratios = ["7/5"]
+generator_cents = [583.948]
+optimization = "CWE"
+commas = ["540/539", "1375/1372", "4000/3993"]
+moments = ["8L 64s", "72L 8s"]
+
+[[temperament]]
+name = "OOLONG"
+page = "Oolong"
+revision = 229456
+subgroup = [2, 3, 5, 7, 13]
+periods_per_equave = 1
+generator_rows = [[-17, -18, -20, -5]]
+generator_ratios = ["6/5"]
+generator_cents = [311.7]
+optimization = "CWE"
+commas = ["126/125", "196/195", "15379/15360"]
+moments = ["4L 3s", "4L 7s", "4L 11s", "4L 15s", "4L 19s", "23L 4s"]
+
+[[temperament]]
+name = "OPOSSUM"
+page = "Opossum"
+revision = 227460
+subgroup = [2, 3, 5, 7, 11]
+periods_per_equave = 1
+generator_rows = [[-3, -5, -9, -4]]
+generator_ratios = ["11/10"]
+generator_cents = [160.5]
+optimization = "CWE"
+commas = ["28/27", "55/54", "77/75"]
+moments = ["1L 6s", "7L 1s"]
+
+[[temperament]]
+name = "ORWELL"
+page = "Orwell"
+revision = 233021
+subgroup = [2, 3, 5, 7, 11]
+periods_per_equave = 1
+generator_rows = [[7, -3, 8, 2]]
+generator_ratios = ["7/6"]
+generator_cents = [271.5]
+optimization = "CWE"
+commas = ["99/98", "121/120", "176/175"]
+moments = ["4L 1s", "4L 5s", "9L 4s", "9L 13s"]
+
+[[temperament]]
+name = "PAJARA"
+page = "Pajara"
+revision = 231604
+subgroup = [2, 3, 5, 7, 11, 17]
+periods_per_equave = 2
+generator_rows = [[1, -2, -2, -6, 1]]
+generator_ratios = ["3/2"]
+generator_cents = [707.4]
+optimization = "CWE"
+commas = ["50/49", "64/63", "85/84", "99/98"]
+moments = ["2L 8s", "10L 2s", "12L 10s"]
+
+[[temperament]]
+name = "PARAKLEISMIC"
+page = "Parakleismic"
+revision = 235440
+subgroup = [2, 3, 5, 7]
+periods_per_equave = 1
+generator_rows = [[13, 14, 35]]
+generator_ratios = ["5/3"]
+generator_cents = [884.81]
+optimization = "CWE"
+commas = ["3136/3125", "4375/4374"]
+moments = ["4L 15s", "19L 4s", "19L 23s"]
+
+[[temperament]]
+name = "PARAPYTH"
+page = "Parapyth"
+revision = 231575
+subgroup = [2, 3, 7, 11, 13]
+periods_per_equave = 1
+generator_rows = [[1, 0, -4, -7], [0, 1, 1, 1]]
+generator_ratios = ["3/2", "7/4"]
+generator_cents = [703.8, 969.2]
+optimization = "CWE"
+commas = ["352/351", "364/363"]
+moments = []
+
+[[temperament]]
+name = "PELE"
+page = "Pele"
+revision = 234652
+subgroup = [2, 3, 5, 7, 11, 13]
+periods_per_equave = 1
+generator_rows = [[1, 0, -6, -10, -13], [0, 1, 1, 1, 1]]
+generator_ratios = ["3/2", "5/4"]
+generator_cents = [703.4, 387.8]
+optimization = "CWE"
+commas = []
+moments = []
+
+[[temperament]]
+name = "PENTADACUS"
+page = "Pentadacus"
+revision = 236333
+subgroup = [5, 7, 11]
+periods_per_equave = 1
+generator_rows = [[3, 7]]
+generator_ratios = ["55/49"]
+generator_cents = [194.8]
+optimization = "CWE"
+commas = ["831875/823543"]
+moments = []
+
+[[temperament]]
+name = "PONTIAC"
+page = "Pontiac"
+revision = 223671
+subgroup = [2, 3, 5, 7]
+periods_per_equave = 1
+generator_rows = [[1, -8, 39]]
+generator_ratios = ["3/2"]
+generator_cents = [701.758]
+optimization = "CWE"
+commas = ["4375/4374", "32805/32768"]
+moments = ["12L 17s", "12L 29s", "12L 41s", "53L 12s"]
+
+[[temperament]]
+name = "PORCUPINE"
+page = "Porcupine"
+revision = 229003
+subgroup = [2, 3, 5, 7, 11]
+periods_per_equave = 1
+generator_rows = [[-3, -5, 6, -4]]
+generator_ratios = ["10/9"]
+generator_cents = [163.0]
+optimization = "CWE"
+commas = ["55/54", "64/63", "100/99"]
+moments = ["1L 6s", "7L 1s", "7L 8s"]
+
+[[temperament]]
+name = "QUARTKEENLIG"
+page = "Quartkeenlig"
+revision = 235979
+subgroup = [2, 3, 5, 7, 11]
+periods_per_equave = 1
+generator_rows = [[36, 30, 41, -35]]
+generator_ratios = ["36/35"]
+generator_cents = [52.845]
+optimization = "CWE"
+commas = ["385/384", "6250/6237", "67228/66825"]
+moments = ["22L 1s"]
+
+[[temperament]]
+name = "QUASISUPER"
+page = "Quasisuper"
+revision = 224309
+subgroup = [2, 3, 5, 7, 11]
+periods_per_equave = 1
+generator_rows = [[1, -13, -2, -6]]
+generator_ratios = ["3/2"]
+generator_cents = [708.3]
+optimization = "CWE"
+commas = ["64/63", "99/98", "121/120"]
+moments = ["5L 2s", "5L 7s", "5L 12s", "17L 5s"]
+
+[[temperament]]
+name = "RODAN"
+page = "Rodan"
+revision = 231761
+subgroup = [2, 3, 5, 7, 11]
+periods_per_equave = 1
+generator_rows = [[3, 17, -1, -13]]
+generator_ratios = ["8/7"]
+generator_cents = [234.4]
+optimization = "CWE"
+commas = ["245/243", "385/384", "441/440"]
+moments = ["1L 4s", "5L 1s", "5L 6s", "5L 36s", "41L 5s"]
+
+[[temperament]]
+name = "SCHISMIC"
+page = "Schismic"
+revision = 235694
+subgroup = [2, 3, 5]
+periods_per_equave = 1
+generator_rows = [[1, -8]]
+generator_ratios = ["3/2"]
+generator_cents = [701.731]
+optimization = "CWE"
+commas = ["32805/32768"]
+moments = ["2L 3s", "5L 2s", "5L 7s", "12L 5s"]
+
+[[temperament]]
+name = "SEMAPHORE"
+page = "Semaphore and godzilla"
+revision = 233995
+subgroup = [2, 3, 5, 7, 13]
+periods_per_equave = 1
+generator_rows = [[2, 8, 1, 11]]
+generator_ratios = ["7/4"]
+generator_cents = [948.0]
+optimization = "CWE"
+commas = []
+moments = ["4L 1s", "5L 4s", "5L 9s", "5L 14s"]
+
+[[temperament]]
+name = "SENSAMAGIC"
+page = "Sensamagic"
+revision = 231982
+subgroup = [2, 3, 5, 7, 11]
+periods_per_equave = 1
+generator_rows = [[1, 1, 2, -2], [0, 2, -1, -1]]
+generator_ratios = ["3/2", "9/7"]
+generator_cents = [703.8, 440.9]
+optimization = "CWE"
+commas = ["245/243", "385/384"]
+moments = []
+
+[[temperament]]
+name = "SENSI"
+page = "Sensi"
+revision = 229838
+subgroup = [2, 3, 5, 7, 13]
+periods_per_equave = 1
+generator_rows = [[7, 9, 13, 10]]
+generator_ratios = ["9/7"]
+generator_cents = [443.3]
+optimization = "CWE"
+commas = ["91/90", "126/125", "169/168"]
+moments = ["3L 2s", "3L 5s", "8L 3s", "8L 11s"]
+
+[[temperament]]
+name = "SEPTISCHISMIC"
+page = "Septischismic"
+revision = 235909
+subgroup = [2, 3, 5, 7, 11, 13, 19]
+periods_per_equave = 1
+generator_rows = [[1, 0, -14, 23, 12, 5], [0, 1, 0, 0, -1, 1]]
+generator_ratios = ["3/2", "5/4"]
+generator_cents = [702.2307, 386.3245]
+optimization = "CWE"
+commas = ["1216/1215", "1540/1539", "1729/1728", "2080/2079"]
+moments = []
+
+[[temperament]]
+name = "SHALLOWTONE"
+page = "Shallowtone"
+revision = 233303
+subgroup = [2, 3, 5, 7]
+periods_per_equave = 1
+generator_rows = [[1, -10, 12]]
+generator_ratios = ["3/2"]
+generator_cents = [681.2]
+optimization = "CWE"
+commas = ["295245/262144", "36/35", "295245/262144"]
+moments = ["2L 3s", "2L 5s", "7L 2s"]
+
+[[temperament]]
+name = "SIRIUS"
+page = "Sirius"
+revision = 225422
+subgroup = [3, 5, 7]
+periods_per_equave = 1
+generator_rows = [[3, 5]]
+generator_ratios = ["25/21"]
+generator_cents = [293.759]
+optimization = "CWE"
+commas = ["3125/3087"]
+moments = []
+
+[[temperament]]
+name = "SLENDRIC"
+page = "Slendric"
+revision = 223660
+subgroup = [2, 3, 7]
+periods_per_equave = 1
+generator_rows = [[3, -1]]
+generator_ratios = ["8/7"]
+generator_cents = [233.7]
+optimization = "CWE"
+commas = ["1029/1024"]
+moments = ["1L 4s", "5L 1s", "5L 6s", "5L 11s"]
+
+[[temperament]]
+name = "SQUARES"
+page = "Squares"
+revision = 223661
+subgroup = [2, 3, 5, 7, 11]
+periods_per_equave = 1
+generator_rows = [[-4, -16, -9, -10]]
+generator_ratios = ["9/7"]
+generator_cents = [426.0]
+optimization = "CWE"
+commas = ["81/80", "99/98", "121/120"]
+moments = ["3L 2s", "3L 5s", "3L 8s", "3L 11s", "14L 3s"]
+
+[[temperament]]
+name = "STARLING"
+page = "Starling and thrush"
+revision = 231979
+subgroup = [2, 3, 5, 7, 11]
+periods_per_equave = 1
+generator_rows = [[1, 0, -2, -2], [0, 1, 3, 5]]
+generator_ratios = ["3/2", "5/4"]
+generator_cents = [701.6, 390.9]
+optimization = "CWE"
+commas = ["126/125", "176/175"]
+moments = []
+
+[[temperament]]
+name = "SUBMERGED"
+page = "Submerged"
+revision = 235409
+subgroup = [2, 3, 5, 7, 11, 13]
+periods_per_equave = 1
+generator_rows = [[11, -1, -9, 5, 1]]
+generator_ratios = ["8/5"]
+generator_cents = [827.0]
+optimization = "CWE"
+commas = ["65/64", "105/104", "121/120", "441/440"]
+moments = ["3L 7s", "3L 10s", "13L 3s"]
+
+[[temperament]]
+name = "SUPERKLEISMIC"
+page = "Superkleismic"
+revision = 225040
+subgroup = [2, 3, 5, 7, 11, 19]
+periods_per_equave = 1
+generator_rows = [[9, 10, -3, 2, 14]]
+generator_ratios = ["5/3"]
+generator_cents = [878.2]
+optimization = "CWE"
+commas = []
+moments = ["3L 1s", "4L 3s", "4L 7s", "11L 4s", "15L 11s"]
+
+[[temperament]]
+name = "SUPERPYTH"
+page = "Superpyth"
+revision = 228424
+subgroup = [2, 3, 5, 7, 11]
+periods_per_equave = 1
+generator_rows = [[1, 9, -2, 16]]
+generator_ratios = ["3/2"]
+generator_cents = [710.1]
+optimization = "CWE"
+commas = ["64/63", "100/99", "245/243"]
+moments = ["2L 3s", "5L 2s", "5L 7s", "5L 12s", "5L 17s"]
+
+[[temperament]]
+name = "TETRACOT"
+page = "Tetracot"
+revision = 232444
+subgroup = [2, 3, 5, 11, 13]
+periods_per_equave = 1
+generator_rows = [[4, 9, 10, -2]]
+generator_ratios = ["10/9"]
+generator_cents = [176.1]
+optimization = "CWE"
+commas = ["100/99", "243/242", "100/99", "144/143", "243/242"]
+moments = ["6L 1s", "7L 6s", "7L 13s"]
+
+[[temperament]]
+name = "TRISECTED"
+page = "Trisected"
+revision = 233786
+subgroup = [2, 3, 5, 7, 11, 13]
+periods_per_equave = 3
+generator_rows = [[3, 0, -1, -1, 7]]
+generator_ratios = ["10/7"]
+generator_cents = [635.0]
+optimization = "CWE"
+commas = ["56/55", "91/90", "128/125", "1029/1000"]
+moments = ["6L 9s", "15L 6s", "15L 21s"]
+
+[[temperament]]
+name = "TRITIKLEISMIC"
+page = "Tritikleismic"
+revision = 230636
+subgroup = [2, 3, 5, 7, 11, 13, 17]
+periods_per_equave = 3
+generator_rows = [[6, 5, -2, 3, 14, 18]]
+generator_ratios = ["6/5"]
+generator_cents = [316.938]
+optimization = "CWE"
+commas = []
+moments = ["3L 6s", "9L 3s", "12L 3s", "15L 12s"]
+
+[[temperament]]
+name = "ULTRAPYTH"
+page = "Ultrapyth"
+revision = 223678
+subgroup = [2, 3, 5, 7, 13]
+periods_per_equave = 1
+generator_rows = [[1, 14, -2, 18]]
+generator_ratios = ["3/2"]
+generator_cents = [713.6]
+optimization = "CWE"
+commas = ["64/63", "6860/6561", "64/63", "91/90", "6125/6084"]
+moments = ["5L 7s", "5L 12s", "5L 17s", "5L 22s"]
+
+[[temperament]]
+name = "UNIDEC"
+page = "Unidec"
+revision = 236473
+subgroup = [2, 3, 5, 7, 11]
+periods_per_equave = 2
+generator_rows = [[6, 11, -2, -3]]
+generator_ratios = ["14/11"]
+generator_cents = [416.9]
+optimization = "CWE"
+commas = ["385/384", "441/440", "4375/4374"]
+moments = ["6L 2s", "6L 8s", "6L 14s", "20L 6s"]
+
+[[temperament]]
+name = "VALENTINE"
+page = "Valentine"
+revision = 236084
+subgroup = [2, 3, 5, 7, 11]
+periods_per_equave = 1
+generator_rows = [[9, 5, -3, 7]]
+generator_ratios = ["22/21"]
+generator_cents = [77.9]
+optimization = "CWE"
+commas = ["121/120", "126/125", "176/175"]
+moments = ["1L 14s", "15L 1s", "15L 16s"]
+
+[[temperament]]
+name = "VENGEANCE"
+page = "Vengeance"
+revision = 231841
+subgroup = [2, 5, 7, 17]
+periods_per_equave = 1
+generator_rows = [[3, -5, 7]]
+generator_ratios = ["34/25"]
+generator_cents = [527.718]
+optimization = "CWE"
+commas = ["78608/78125", "2023/2000", "4165/4096"]
+moments = ["2L 5s", "7L 2s"]
+
+[[temperament]]
+name = "WHITEWOOD"
+page = "Whitewood"
+revision = 232189
+subgroup = [2, 3, 5, 7]
+periods_per_equave = 7
+generator_rows = [[0, 1, -1]]
+generator_ratios = ["5/4"]
+generator_cents = [392.7]
+optimization = "CWE"
+commas = ["36/35", "2187/2048"]
+moments = ["7L 7s", "7L 14s"]
+
+[[temperament]]
+name = "WIZARD"
+page = "Wizard"
+revision = 226921
+subgroup = [2, 3, 5, 7, 11, 17]
+periods_per_equave = 2
+generator_rows = [[6, -1, 10, -3, 6]]
+generator_ratios = ["17/15"]
+generator_cents = [216.8]
+optimization = "CWE"
+commas = ["225/224", "289/288", "385/384", "561/560"]
+moments = ["6L 4s", "6L 10s", "6L 16s", "22L 6s"]
+
+[[temperament]]
+name = "WOLLEMIA"
+page = "Wollemia"
+revision = 231333
+subgroup = [2, 3, 5, 7, 11, 13]
+periods_per_equave = 1
+generator_rows = [[4, 9, 19, 10, -2]]
+generator_ratios = ["10/9"]
+generator_cents = [177.1]
+optimization = "CWE"
+commas = ["56/55", "100/99", "243/242", "56/55", "91/90", "100/99", "243/242"]
+moments = ["6L 1s", "7L 6s", "7L 13s", "7L 20s"]
+
+[[temperament]]
+name = "WURSCHMIDT"
+page = "W\u00fcrschmidt"
+revision = 232954
+subgroup = [2, 3, 5, 23]
+periods_per_equave = 1
+generator_rows = [[8, 1, 14]]
+generator_ratios = ["5/4"]
+generator_cents = [387.8]
+optimization = "CWE"
+commas = ["576/575", "12167/12150"]
+moments = ["3L 1s", "3L 4s", "3L 28s", "31L 3s"]
+
+[[temperament]]
+name = "XENIAL"
+page = "Xenial"
+revision = 233320
+subgroup = [2, 3, 5, 7, 11, 13, 17, 19, 23]
+periods_per_equave = 1
+generator_rows = [[-9, -17, -33, 22, -21, 26, 27, -3]]
+generator_ratios = ["10/9"]
+generator_cents = [188.8]
+optimization = "CWE"
+commas = ["126/125", "162/161", "169/168", "171/170", "208/207", "221/220", "231/230"]
+moments = ["6L 1s", "6L 7s", "13L 6s", "19L 13s", "19L 32s", "19L 51s"]
+
+[[temperament]]
+name = "ZEUS"
+page = "Zeus"
+revision = 233799
+subgroup = [2, 3, 5, 7, 11, 13]
+periods_per_equave = 1
+generator_rows = [[1, 1, -1, 1, -2], [0, -2, 3, -1, -1]]
+generator_ratios = ["3/2", "12/11"]
+generator_cents = [701.9, 157.0]
+optimization = "CWE"
+commas = ["121/120", "176/175", "351/350"]
+moments = []
+
+# Pages carrying an `Infobox regtemp` that this crate does not model.
+# Listed rather than dropped, so a later refresh can tell a page it has
+# never handled from one it has deliberately left alone.
+
+[[excluded]]
+page = "Mabilic and trismegistus"
+revision = 232517
+reason = "its infobox does not reconcile: the generators leave a prime 0.387 periods from a whole mapping"

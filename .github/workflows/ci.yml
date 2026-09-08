@@ -283,6 +283,12 @@ jobs:
       - name: Verify bundled Scala archive index
         run: cargo run --release -p xtask -- verify-scala-archive
 
+      # The wiki temperaments have no `regenerate` half — the wiki answers 403
+      # to every non-browser client, so `data/temperaments.toml` is collected
+      # by hand. This only checks the committed Rust still matches it.
+      - name: Verify generated wiki temperaments
+        run: cargo run --release -p xtask -- verify-temperaments
+
       - name: Cargo check
         run: cargo check --workspace --all-targets
 

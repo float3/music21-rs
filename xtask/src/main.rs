@@ -5,6 +5,7 @@ mod fixtures;
 mod report;
 mod scala_archive;
 mod submodule;
+mod temperaments;
 mod tuning;
 
 mod shared {
@@ -109,6 +110,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         Some("regenerate-scala-archive") => regenerate_scala_archive(&workspace_root),
         Some("emit-scala-archive") => emit_scala_archive(&workspace_root),
         Some("verify-scala-archive") => verify_scala_archive(&workspace_root),
+        Some("emit-temperaments") => emit_temperaments(&workspace_root),
+        Some("verify-temperaments") => verify_temperaments(&workspace_root),
         Some("regenerate-fixtures") => regenerate_fixtures(&workspace_root),
         Some("regenerate-all") => regenerate_all(&workspace_root),
         Some("report") => {
@@ -131,6 +134,8 @@ fn print_help() {
     eprintln!("  cargo run --release -p xtask -- regenerate-tuning-tables");
     eprintln!("  cargo run --release -p xtask -- emit-tuning-tables");
     eprintln!("  cargo run --release -p xtask -- verify-tuning-tables");
+    eprintln!("  cargo run --release -p xtask -- emit-temperaments");
+    eprintln!("  cargo run --release -p xtask -- verify-temperaments");
     eprintln!("  cargo run --release -p xtask -- regenerate-scala-archive");
     eprintln!("  cargo run --release -p xtask -- emit-scala-archive");
     eprintln!("  cargo run --release -p xtask -- verify-scala-archive");
@@ -234,6 +239,58 @@ fn regenerate_tuning_tables(workspace_root: &Path) -> Result<(), Box<dyn Error>>
     let data = tuning::regenerate(workspace_root)?;
     tuning::write(&tuning::data_path(workspace_root), &data)?;
     emit_tuning_rust(workspace_root, &data)
+}
+
+/// Turns the hand-collected wiki temperaments into Rust.
+///
+/// There is deliberately no `regenerate-temperaments` beside this: the wiki
+/// answers 403 to every non-browser client, so the TOML is collected by hand.
+fn emit_temperaments(workspace_root: &Path) -> Result<(), Box<dyn Error>> {
+    let data = temperaments::read(&temperaments::data_path(workspace_root))?;
+    let path = temperaments::generated_path(workspace_root);
+    fs::write(&path, formatted_temperaments(workspace_root, &data)?)?;
+    println!(
+        "{} temperaments emitted at {}",
+        data.temperaments.len(),
+        path.display()
+    );
+    Ok(())
+}
+
+fn verify_temperaments(workspace_root: &Path) -> Result<(), Box<dyn Error>> {
+    let data = temperaments::read(&temperaments::data_path(workspace_root))?;
+    let expected = formatted_temperaments(workspace_root, &data)?;
+    let path = temperaments::generated_path(workspace_root);
+    let actual = fs::read_to_string(&path)?;
+    if actual != expected {
+        return Err(format!(
+            "{} is out of date; run `cargo run --release -p xtask -- emit-temperaments`",
+            path.display()
+        )
+        .into());
+    }
+    println!(
+        "Committed Rust temperaments match {}",
+        temperaments::data_path(workspace_root).display()
+    );
+    Ok(())
+}
+
+fn formatted_temperaments(
+    workspace_root: &Path,
+    data: &temperaments::Temperaments,
+) -> Result<String, Box<dyn Error>> {
+    let scratch_dir = workspace_root.join("target/xtask");
+    fs::create_dir_all(&scratch_dir)?;
+    let scratch_path = scratch_dir.join(format!("temperaments-{}.rs", std::process::id()));
+    fs::write(&scratch_path, temperaments::render(data))?;
+    let rustfmt_path = scratch_path
+        .to_str()
+        .ok_or_else(|| "temperament scratch path is not valid UTF-8".to_string())?;
+    run_command(&["rustfmt", rustfmt_path], "rustfmt generated temperaments")?;
+    let formatted = fs::read_to_string(&scratch_path);
+    let _ = fs::remove_file(&scratch_path);
+    Ok(formatted?)
 }
 
 fn emit_tuning_tables(workspace_root: &Path) -> Result<(), Box<dyn Error>> {
