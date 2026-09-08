@@ -1,5 +1,5 @@
 # The Scala scale archive, generated from the music21 submodule by
-# `cargo run -p xtask -- regenerate-scala-archive`.
+# `cargo run --release -p xtask -- regenerate-scala-archive`.
 #
 # Never hand-edit. A submodule bump that adds, removes or corrects a
 # `.scl` file is picked up automatically by re-running that command;

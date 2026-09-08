@@ -1,11 +1,11 @@
 # Source of truth for the tuning-system ratio tables.
 #
-# Regenerate with `cargo run -p xtask -- regenerate-tuning-tables`, which
+# Regenerate with `cargo run --release -p xtask -- regenerate-tuning-tables`, which
 # re-reads every table that declares `scala_file` from music21's Scala
 # archive in the `music21` submodule. Tables without one are maintained by
 # hand and are carried through untouched.
 #
-# Emit the Rust with `cargo run -p xtask -- emit-tuning-tables`.
+# Emit the Rust with `cargo run --release -p xtask -- emit-tuning-tables`.
 
 music21_version = "11.0.0b9"
 music21_commit = "89e85db9257aa98e39abd0c419e0c8765688e5c3"

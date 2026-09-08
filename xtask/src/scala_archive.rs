@@ -346,7 +346,7 @@ pub(crate) fn write(path: &Path, data: &ScalaArchiveData) -> Result<(), Box<dyn 
     let mut out = String::new();
     out.push_str(
         "# The Scala scale archive, generated from the music21 submodule by\n\
-         # `cargo run -p xtask -- regenerate-scala-archive`.\n\
+         # `cargo run --release -p xtask -- regenerate-scala-archive`.\n\
          #\n\
          # Never hand-edit. A submodule bump that adds, removes or corrects a\n\
          # `.scl` file is picked up automatically by re-running that command;\n\

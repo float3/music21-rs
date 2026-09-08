@@ -1,5 +1,5 @@
 # Expected tone-row values, generated from music21 by
-# `cargo run -p xtask --features python -- regenerate-fixtures`.
+# `cargo run --release -p xtask --features python -- regenerate-fixtures`.
 # The historical rows are transcribed into src/serial.rs; the Link chord
 # table is checked behaviourally, by classifying a row built from each
 # of music21's interval strings.

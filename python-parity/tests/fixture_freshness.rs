@@ -116,7 +116,7 @@ fn fixture_stamp(relative: &str, key: &str) -> String {
 
     panic!(
         "{relative} has no `{key}` stamp; regenerate it with \
-         `cargo run -p xtask --features python -- regenerate-all`"
+         `cargo run --release -p xtask --features python -- regenerate-all`"
     );
 }
 
@@ -155,7 +155,7 @@ fn every_fixture_was_generated_from_the_pinned_submodule() {
     assert!(
         stale.is_empty(),
         "{} stamp(s) are stale; regenerate with \
-         `cargo run -p xtask --features python -- regenerate-all`:\n    {}",
+         `cargo run --release -p xtask --features python -- regenerate-all`:\n    {}",
         stale.len(),
         stale.join("\n    ")
     );

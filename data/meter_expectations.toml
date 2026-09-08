@@ -1,5 +1,5 @@
 # Expected time-signature properties, generated from music21 by
-# `cargo run -p xtask --features python -- regenerate-fixtures`.
+# `cargo run --release -p xtask --features python -- regenerate-fixtures`.
 # The crate derives these from the numerator and denominator alone;
 # music21 derives them from a MeterSequence partition tree, so this
 # file is what proves the shortcut agrees with the tree.

@@ -6,7 +6,7 @@
 //! the plagal modes, whose default realization starts below their final.
 //!
 //! The expectations in `data/scale_expectations.toml` are generated from the
-//! music21 submodule by `cargo run -p xtask --features python -- regenerate-fixtures`. They
+//! music21 submodule by `cargo run --release -p xtask --features python -- regenerate-fixtures`. They
 //! are committed because a full `music21.scale` import needs music21's own
 //! dependencies, which the chord-table bridge deliberately stubs out. This test
 //! therefore needs neither Python nor the submodule — only the checked-in file.
@@ -129,6 +129,6 @@ fn every_scale_type_is_covered_by_the_fixture() {
     assert_eq!(
         declared, covered,
         "every ScaleType needs expectations; regenerate with \
-         cargo run -p xtask --features python -- regenerate-fixtures"
+         cargo run --release -p xtask --features python -- regenerate-fixtures"
     );
 }

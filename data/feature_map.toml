@@ -1,5 +1,5 @@
 # Which music21 classes the crate ports, and where. Read by
-# `cargo run -p xtask -- report`, which lists every public method of each
+# `cargo run --release -p xtask -- report`, which lists every public method of each
 # class against the `pub fn`s of the Rust files named here.
 #
 # A member is found by convention — `isMajorTriad` is `is_major_triad`, and a

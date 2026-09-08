@@ -4,7 +4,7 @@
 //! correct today, but nothing stopped it drifting, which is the same failure
 //! mode that let two mistranscribed Partch ratios ship. The expectations in
 //! `data/chord_type_expectations.toml` are generated from the submodule by
-//! `cargo run -p xtask --features python -- regenerate-fixtures`, so this test needs neither
+//! `cargo run --release -p xtask --features python -- regenerate-fixtures`, so this test needs neither
 //! Python nor the submodule.
 
 use music21_rs::known_chord_symbol_types;
@@ -79,7 +79,7 @@ fn chord_types_match_music21_in_order() {
     assert!(
         problems.is_empty(),
         "{} chord types differ from music21:\n    {}\nregenerate with \
-         cargo run -p xtask --features python -- regenerate-fixtures",
+         cargo run --release -p xtask --features python -- regenerate-fixtures",
         problems.len(),
         problems.join("\n    ")
     );

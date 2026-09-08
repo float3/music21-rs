@@ -1,5 +1,5 @@
 # Expected scale realizations, generated from music21 by
-# `cargo run -p xtask --features python -- regenerate-fixtures`.
+# `cargo run --release -p xtask --features python -- regenerate-fixtures`.
 # Checked in so the library can be verified without importing music21.
 #
 # music21 11.0.0b9 at 89e85db9257aa98e39abd0c419e0c8765688e5c3

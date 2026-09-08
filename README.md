@@ -128,7 +128,7 @@ the workspace, the parity suite, and the Python wheel with its own tests — how
 much of music21's own documentation runs against the crate, docstring by
 docstring and example by example for each module covered, and every public
 method of the music21 classes the crate ports against what has been ported so
-far, with the deliberate omissions and their reasons. It is written by `cargo run -p xtask -- report` from
+far, with the deliberate omissions and their reasons. It is written by `cargo run --release -p xtask -- report` from
 [data/feature_map.toml](./data/feature_map.toml).
 
 ## Local Development
@@ -158,9 +158,9 @@ cargo fmt --manifest-path python-parity/Cargo.toml --all -- --check
 
 # 3. lints, and the generated files that must match their source data
 cargo clippy --workspace --all-targets -- -D warnings
-cargo run -p xtask -- verify-tables
-cargo run -p xtask -- verify-tuning-tables
-cargo run -p xtask -- verify-scala-archive
+cargo run --release -p xtask -- verify-tables
+cargo run --release -p xtask -- verify-tuning-tables
+cargo run --release -p xtask -- verify-scala-archive
 cargo check --workspace --locked
 
 # 4. the library, the examples and xtask
@@ -191,7 +191,7 @@ python python/downstream/run.py
 
 # 8. what the docs job builds; `report` also fails when the feature map is stale
 cargo doc --workspace --no-deps
-cargo run -p xtask -- report --features-only
+cargo run --release -p xtask -- report --features-only
 
 # `report` with no flags runs every suite above and records how each one did,
 # alongside coverage. `--suites-only` runs just that part; `--no-suites` skips
@@ -233,7 +233,7 @@ Chord table code is committed to the repository so normal builds do not need
 Python. To regenerate the table source from upstream `music21`, run:
 
 ```bash
-cargo run -p xtask --features python -- regenerate-tables
+cargo run --release -p xtask --features python -- regenerate-tables
 ```
 
 That command refreshes [data/chord_tables.toml](./data/chord_tables.toml) and
@@ -241,22 +241,22 @@ then emits [src/chord/tables/generated.rs](./src/chord/tables/generated.rs).
 To emit Rust from the committed TOML without touching Python, run:
 
 ```bash
-cargo run -p xtask -- emit-tables
+cargo run --release -p xtask -- emit-tables
 ```
 
 To verify that the committed Rust source matches the TOML, run:
 
 ```bash
-cargo run -p xtask -- verify-tables
+cargo run --release -p xtask -- verify-tables
 ```
 
 The tuning-system ratio tables follow the same pattern, sourced from the Scala
 archive shipped inside the `music21` submodule rather than from Python:
 
 ```bash
-cargo run -p xtask -- regenerate-tuning-tables
-cargo run -p xtask -- emit-tuning-tables
-cargo run -p xtask -- verify-tuning-tables
+cargo run --release -p xtask -- regenerate-tuning-tables
+cargo run --release -p xtask -- emit-tuning-tables
+cargo run --release -p xtask -- verify-tuning-tables
 ```
 
 If you use Nix, `nix develop` opens a shell with the Rust and Python pieces used

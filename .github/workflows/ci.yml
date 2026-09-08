@@ -231,13 +231,13 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: Verify generated chord tables
-        run: cargo run -p xtask -- verify-tables
+        run: cargo run --release -p xtask -- verify-tables
 
       - name: Verify generated tuning tables
-        run: cargo run -p xtask -- verify-tuning-tables
+        run: cargo run --release -p xtask -- verify-tuning-tables
 
       - name: Verify bundled Scala archive index
-        run: cargo run -p xtask -- verify-scala-archive
+        run: cargo run --release -p xtask -- verify-scala-archive
 
       - name: Cargo check
         run: cargo check --workspace --all-targets
@@ -405,7 +405,7 @@ jobs:
       # beside the docs. The feature half also fails when data/feature_map.toml
       # has gone stale.
       - name: Build reports
-        run: cargo run -p xtask -- report --out target/reports
+        run: cargo run --release -p xtask -- report --out target/reports
         env:
           PYO3_PYTHON: python
 
