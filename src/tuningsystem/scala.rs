@@ -188,21 +188,28 @@ pub struct ScalaScale {
 }
 
 impl ScalaScale {
-    /// Builds a scale from already-split parts.
-    ///
-    /// Used by the bundled archive, whose degrees were separated from the file
-    /// structure when the archive was generated.
+    /// A scale from its parts: a description, the degrees with the unison
+    /// at index 0, and the interval it repeats at.
+    pub fn new(
+        description: impl Into<String>,
+        degrees: Vec<ScalaDegree>,
+        period: ScalaDegree,
+    ) -> Self {
+        Self {
+            description: description.into(),
+            degrees,
+            period,
+        }
+    }
+
+    /// [`Self::new`] under the name the bundled archive is emitted with.
     #[cfg(feature = "scala-archive")]
     pub(crate) fn from_parts(
         description: String,
         degrees: Vec<ScalaDegree>,
         period: ScalaDegree,
     ) -> Self {
-        Self {
-            description,
-            degrees,
-            period,
-        }
+        Self::new(description, degrees, period)
     }
 
     /// Parses the contents of a `.scl` file.
@@ -615,6 +622,34 @@ mod bundled_tests {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn an_archive_is_built_from_scales_and_walked() {
+        use super::{ScalaArchive, ScalaDegree, ScalaScale};
+
+        let text = "! five.scl\nFive equal steps\n 5\n 240.0\n 480.0\n 720.0\n 960.0\n 2/1\n";
+        let scale = ScalaScale::parse(text).unwrap();
+        assert_eq!(scale.to_string(), "Five equal steps (5 degrees)");
+        assert_eq!(scale.degrees()[1].to_string(), "240");
+        assert_eq!(scale.period().to_string(), "2");
+
+        let mut archive = ScalaArchive::new();
+        assert!(archive.is_empty());
+        assert!(archive.insert_scale("five.scl", scale.clone()).is_none());
+        assert!(archive.insert_scale("five.scl", scale.clone()).is_some());
+        archive.extend([("six.scl".to_string(), scale.clone())]);
+        assert_eq!(archive.len(), 2);
+        let names: Vec<&str> = archive.iter().map(|(name, _)| name).collect();
+        assert!(names.contains(&"five.scl") && names.contains(&"six.scl"));
+        let collected: ScalaArchive = [("one.scl".to_string(), scale)].into_iter().collect();
+        assert_eq!(collected.len(), 1);
+        assert!(!collected.is_empty());
+
+        assert!(ScalaScale::parse("Bad\n 1\n 3//2\n").is_err());
+        assert!(matches!(
+            ScalaScale::parse("Cents\n 1\n 701.955\n").unwrap().period(),
+            ScalaDegree::Cents(_)
+        ));
+    }
 
     #[test]
     fn accepts_a_scale_declaring_zero_degrees() {

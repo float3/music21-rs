@@ -448,6 +448,31 @@ impl IntoNote for IntegerType {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_note_is_built_from_a_name_or_a_pitch_and_carries_beams_and_lyrics() {
+        use super::Note;
+        use crate::notation::{BeamType, Beams, Lyric};
+        use crate::pitch::Pitch;
+
+        let note = Note::try_from("E-4".to_string()).unwrap();
+        assert_eq!(note.pitch_name(), "E-");
+        let pitch = Pitch::from_name("G#3").unwrap();
+        let mut from_pitch = Note::from(&pitch);
+        assert_eq!(from_pitch.pitch_name(), "G#");
+        assert_eq!(from_pitch.notehead_fill(), None);
+        from_pitch.set_notehead_fill(Some(true));
+        assert_eq!(from_pitch.notehead_fill(), Some(true));
+
+        assert!(from_pitch.beams().is_empty());
+        from_pitch.beams_mut().append(BeamType::Start, None);
+        assert_eq!(from_pitch.beams().beams().len(), 1);
+        from_pitch.set_beams(Beams::default());
+        assert!(from_pitch.beams().is_empty());
+
+        from_pitch.lyrics_mut().push(Lyric::new("la"));
+        assert_eq!(from_pitch.lyrics().len(), 1);
+        assert_eq!(from_pitch.lyrics()[0].text(), "la");
+    }
 
     #[test]
     fn full_name_step_and_octave_match_music21() {

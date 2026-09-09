@@ -256,6 +256,23 @@ pub(crate) fn convert_ps_to_oct(ps: FloatType) -> IntegerType {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_pitch_class_is_read_from_a_number_a_name_or_a_string() {
+        use super::{PitchClass, PitchClassSpecifier};
+
+        assert_eq!(PitchClass::try_from("A").unwrap().to_string(), "A");
+        assert_eq!(
+            PitchClass::try_from("B".to_string()).unwrap().to_string(),
+            "B"
+        );
+        assert_eq!(PitchClass::try_from(3u8).unwrap().to_string(), "3");
+        assert_eq!(PitchClass::try_from(1.5).unwrap().to_string(), "1.5");
+        assert!(PitchClass::try_from("Z").is_err());
+        assert_eq!(PitchClass::try_from(12u8).unwrap().to_string(), "0");
+        assert_eq!(PitchClassSpecifier::from(4.0).to_string(), "4");
+        assert_eq!(PitchClassSpecifier::from("E".to_string()).to_string(), "E");
+    }
+
     use super::*;
 
     #[test]

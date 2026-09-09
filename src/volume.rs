@@ -48,6 +48,13 @@ impl Volume {
         Self::default()
     }
 
+    /// Takes everything another volume says, the velocity and whether it is
+    /// relative: music21's `mergeAttributes`.
+    pub fn merge_attributes(&mut self, other: &Volume) {
+        self.velocity_scalar = other.velocity_scalar;
+        self.velocity_is_relative = other.velocity_is_relative;
+    }
+
     /// A volume at a MIDI velocity, `0` to `127`, clamped to that range.
     pub fn from_velocity(velocity: IntegerType) -> Self {
         let mut volume = Self::new();
@@ -221,6 +228,16 @@ impl fmt::Display for Volume {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn merging_takes_the_other_volumes_velocity() {
+        let mut loud = Volume::from_velocity(111);
+        loud.set_velocity_is_relative(false);
+        let mut volume = Volume::new();
+        volume.merge_attributes(&loud);
+        assert_eq!(volume.velocity(), Some(111));
+        assert!(!volume.velocity_is_relative());
+    }
 
     #[test]
     fn velocity_and_scalar_are_the_same_number() {

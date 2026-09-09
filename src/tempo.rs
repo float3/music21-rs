@@ -220,6 +220,16 @@ impl MetronomeMark {
         self.text.as_deref()
     }
 
+    /// The tempo word as something a score would carry: music21's
+    /// `getTextExpression`. A word only implied from the number is not
+    /// answered unless `return_implicit` asks for it.
+    pub fn text_expression(&self, return_implicit: bool) -> Option<&str> {
+        if self.text_implicit && !return_implicit {
+            return None;
+        }
+        self.text.as_deref()
+    }
+
     /// The note value the number counts.
     pub fn referent(&self) -> &Duration {
         &self.referent
@@ -319,6 +329,19 @@ impl MetronomeMark {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// music21's own `getTextExpression` examples.
+    #[test]
+    fn an_implied_word_is_only_answered_when_asked_for() {
+        let presto = MetronomeMark::from_text("presto");
+        assert_eq!(presto.number(), Some(184.0));
+        assert_eq!(presto.text_expression(false), Some("presto"));
+
+        let ninety = MetronomeMark::new(90.0);
+        assert!(ninety.text_implicit());
+        assert_eq!(ninety.text_expression(false), None);
+        assert_eq!(ninety.text_expression(true), Some("maestoso"));
+    }
 
     #[test]
     fn a_mark_may_be_played_faster_than_it_is_written() {

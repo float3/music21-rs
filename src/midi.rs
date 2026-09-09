@@ -399,6 +399,31 @@ fn read_u32(bytes: &[u8], pos: &mut usize) -> Result<u32> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_stream_round_trips_through_midi_bytes() {
+        use super::{
+            MidiNote, midi_notes_from_stream, read_midi_bytes, read_midi_bytes_with_tempo,
+            stream_from_midi_notes, write_midi_bytes,
+        };
+
+        let notes = vec![
+            MidiNote::new(60, 0.0, 1.0, 90).unwrap(),
+            MidiNote::new(64, 1.0, 0.5, 100).unwrap(),
+        ];
+        let bytes = write_midi_bytes(&notes, 120.0).unwrap();
+        let (read, tempo) = read_midi_bytes_with_tempo(&bytes).unwrap();
+        assert_eq!(tempo.map(|bpm| bpm.round()), Some(120.0));
+        assert_eq!(read.len(), 2);
+        assert_eq!(read[0].pitch, 60);
+        assert_eq!(read[1].start, 1.0);
+        assert_eq!(read_midi_bytes(&bytes).unwrap().len(), 2);
+
+        let stream = stream_from_midi_notes(&notes).unwrap();
+        assert_eq!(midi_notes_from_stream(&stream).unwrap().len(), 2);
+        assert!(read_midi_bytes(b"not a midi file").is_err());
+        assert!(read_midi_bytes(&bytes[..10]).is_err());
+    }
+
     use super::*;
 
     #[test]

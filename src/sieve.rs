@@ -6,11 +6,12 @@
 //! group. Applied to semitones, the resulting integer set is a scale — the
 //! major scale is `(-3@2 & 4) | (-3@1 & 4@1) | (3@2 & 4@2) | (-3 & 4@3)`.
 //!
-//! Only the part music21's `SieveScale` actually needs is ported: parsing an
-//! expression, testing membership, and reading off the interval widths of one
-//! period. music21's `sieve.py` is a 2,000-line module that also does sieve
-//! compression, `Zeroth`/`Sieve` segment formats and pitch-range realization,
-//! none of which has a caller here.
+//! What is here is the sieve itself — parsing an expression, testing
+//! membership, the segment formats and the interval widths of one period —
+//! and the number helpers music21 keeps beside it: primes by
+//! [`eratosthenes`] and [`rabin_miller`], and the unit-interval spacings
+//! [`unit_norm_range`], [`unit_norm_equal`] and [`unit_norm_step`]. Sieve
+//! compression and pitch-range realization stay music21's.
 
 use std::fmt;
 
@@ -502,9 +503,265 @@ impl Parser<'_> {
     }
 }
 
+/// The primes in order from `first_candidate` up: music21's `eratosthenes`.
+///
+/// An incremental sieve: each prime found is filed under its next multiple,
+/// so a candidate that is nobody's multiple is prime and the primes need no
+/// upper bound. The iterator is endless.
+pub fn eratosthenes(first_candidate: u64) -> impl Iterator<Item = u64> {
+    let mut composites: std::collections::HashMap<u64, u64> = std::collections::HashMap::new();
+    let mut candidate: u64 = 2;
+    std::iter::from_fn(move || {
+        loop {
+            let found = candidate;
+            candidate += 1;
+            match composites.remove(&found) {
+                Some(prime) => {
+                    let mut next = found + prime;
+                    while composites.contains_key(&next) {
+                        next += prime;
+                    }
+                    composites.insert(next, prime);
+                }
+                None => {
+                    composites.insert(found * found, found);
+                    if found >= first_candidate {
+                        return Some(found);
+                    }
+                }
+            }
+        }
+    })
+}
+
+/// The witnesses that make Miller-Rabin exact for every number below
+/// 2<sup>64</sup>, so the answer is never a probability.
+const MILLER_RABIN_WITNESSES: [u64; 12] = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37];
+
+fn power_mod(mut base: u64, mut exponent: u64, modulus: u64) -> u64 {
+    let mut result: u64 = 1;
+    base %= modulus;
+    while exponent > 0 {
+        if exponent & 1 == 1 {
+            result = ((u128::from(result) * u128::from(base)) % u128::from(modulus)) as u64;
+        }
+        base = ((u128::from(base) * u128::from(base)) % u128::from(modulus)) as u64;
+        exponent >>= 1;
+    }
+    result
+}
+
+/// Whether a number is prime: music21's `rabinMiller`, answered for the
+/// number's magnitude, so a negative number is as prime as its opposite.
+///
+/// music21 tests random witnesses and answers "probably"; the witnesses
+/// here are the ones that decide every 64-bit number exactly.
+pub fn rabin_miller(n: i64) -> bool {
+    let n = n.unsigned_abs();
+    if n < 2 {
+        return false;
+    }
+    if n < 4 {
+        return true;
+    }
+    if !matches!(n % 6, 1 | 5) {
+        return false;
+    }
+    for witness in MILLER_RABIN_WITNESSES {
+        if n == witness {
+            return true;
+        }
+        if n.is_multiple_of(witness) {
+            return false;
+        }
+    }
+    let (mut odd, mut rounds) = (n - 1, 0);
+    while odd.is_multiple_of(2) {
+        odd /= 2;
+        rounds += 1;
+    }
+    'witnesses: for witness in MILLER_RABIN_WITNESSES {
+        let mut x = power_mod(witness, odd, n);
+        if x == 1 || x == n - 1 {
+            continue;
+        }
+        for _ in 1..rounds {
+            x = ((u128::from(x) * u128::from(x)) % u128::from(n)) as u64;
+            if x == n - 1 {
+                continue 'witnesses;
+            }
+        }
+        return false;
+    }
+    true
+}
+
+/// A set of integers as a run of ones and zeros over its range: music21's
+/// `discreteBinaryPad`, so `[3, 10, 12]` is a one, six noughts, a one, a
+/// nought and a one.
+///
+/// The range is the smallest to the largest member unless `fix_range` gives
+/// another, in which case its own smallest and largest bound the run. An
+/// empty series with no range is an error, since it has no range of its own.
+pub fn discrete_binary_pad(
+    series: &[IntegerType],
+    fix_range: Option<&[IntegerType]>,
+) -> Result<Vec<u8>> {
+    let bounds = fix_range.unwrap_or(series);
+    let (Some(lowest), Some(highest)) = (bounds.iter().min(), bounds.iter().max()) else {
+        return Err(Error::Sieve(
+            "a binary pad needs a range: give a series or a fixRange".to_string(),
+        ));
+    };
+    Ok((*lowest..=*highest)
+        .map(|value| u8::from(series.contains(&value)))
+        .collect())
+}
+
+/// Numbers spaced across the unit interval in proportion to where each
+/// falls between the smallest and the largest: music21's `unitNormRange`,
+/// so `[0, 3, 4]` is `[0, 0.75, 1]`.
+///
+/// `fix_range` bounds the interval with a range other than the series' own.
+/// A series of one number answers nought, and so does every number of a
+/// series with no spread at all.
+pub fn unit_norm_range(series: &[FloatType], fix_range: Option<&[FloatType]>) -> Vec<FloatType> {
+    let bounds = fix_range.unwrap_or(series);
+    let lowest = bounds
+        .iter()
+        .copied()
+        .fold(FloatType::INFINITY, FloatType::min);
+    let highest = bounds
+        .iter()
+        .copied()
+        .fold(FloatType::NEG_INFINITY, FloatType::max);
+    let span = highest - lowest;
+    if series.len() <= 1 {
+        return vec![0.0];
+    }
+    series
+        .iter()
+        .map(|value| {
+            if span == 0.0 {
+                0.0
+            } else {
+                (value - lowest) / span
+            }
+        })
+        .collect()
+}
+
+/// The unit interval cut into `parts` points, nought and one included:
+/// music21's `unitNormEqual`, so three parts are `[0, 0.5, 1]`. One part or
+/// none is a single nought.
+pub fn unit_norm_equal(parts: usize) -> Vec<FloatType> {
+    match parts {
+        0 | 1 => vec![0.0],
+        2 => vec![0.0, 1.0],
+        _ => {
+            let step = 1.0 / (parts - 1) as FloatType;
+            let mut unit: Vec<FloatType> = (0..parts - 1).map(|y| y as FloatType * step).collect();
+            unit.push(1.0);
+            unit
+        }
+    }
+}
+
+/// The values a step of `step` reaches from `a` to `b` inclusive, either as
+/// they are or normalized onto the unit interval: music21's `unitNormStep`.
+/// A range of no width answers nothing; a step of no width cannot cross one
+/// and is an error.
+pub fn unit_norm_step(
+    step: FloatType,
+    a: FloatType,
+    b: FloatType,
+    normalized: bool,
+) -> Result<Vec<FloatType>> {
+    if a == b {
+        return Ok(Vec::new());
+    }
+    if step.is_nan() || step <= 0.0 {
+        return Err(Error::Sieve(format!(
+            "a step of {step} never crosses the range"
+        )));
+    }
+    let (lowest, highest) = if a < b { (a, b) } else { (b, a) };
+    let mut values = Vec::new();
+    let mut x = lowest;
+    while x <= highest {
+        values.push(x);
+        x += step;
+    }
+    Ok(if normalized {
+        unit_norm_equal(values.len())
+    } else {
+        values
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every answer here was read off music21's own docstrings.
+    #[test]
+    fn the_number_helpers_answer_what_music21_answers() {
+        assert_eq!(
+            eratosthenes(2).take(5).collect::<Vec<_>>(),
+            [2, 3, 5, 7, 11]
+        );
+        assert_eq!(eratosthenes(95).take(2).collect::<Vec<_>>(), [97, 101]);
+
+        assert!(!rabin_miller(234));
+        assert!(rabin_miller(5));
+        assert!(!rabin_miller(4));
+        assert!(!rabin_miller(97 * 2));
+        assert!(rabin_miller(6_i64.pow(4) + 1));
+        assert!(!rabin_miller(123_986_234_193));
+        assert!(rabin_miller(-7));
+        assert!(!rabin_miller(1));
+        assert!(rabin_miller(1_000_000_007));
+        assert!(!rabin_miller(1_000_000_007 * 3));
+
+        assert_eq!(
+            discrete_binary_pad(&[3, 10, 12], None).unwrap(),
+            [1, 0, 0, 0, 0, 0, 0, 1, 0, 1]
+        );
+        assert_eq!(discrete_binary_pad(&[3, 4, 5], None).unwrap(), [1, 1, 1]);
+        assert_eq!(
+            discrete_binary_pad(&[4], Some(&[2, 5])).unwrap(),
+            [0, 0, 1, 0]
+        );
+        assert!(discrete_binary_pad(&[], None).is_err());
+
+        assert_eq!(unit_norm_range(&[0.0, 3.0, 4.0], None), [0.0, 0.75, 1.0]);
+        let thirds = unit_norm_range(&[1.0, 3.0, 4.0], None);
+        assert!((thirds[1] - 2.0 / 3.0).abs() < 1e-12);
+        assert_eq!(unit_norm_range(&[5.0], None), [0.0]);
+        assert_eq!(unit_norm_range(&[2.0, 2.0], None), [0.0, 0.0]);
+        assert_eq!(unit_norm_range(&[1.0, 2.0], Some(&[0.0, 4.0])), [0.25, 0.5]);
+
+        assert_eq!(unit_norm_equal(3), [0.0, 0.5, 1.0]);
+        assert_eq!(unit_norm_equal(1), [0.0]);
+        assert_eq!(unit_norm_equal(2), [0.0, 1.0]);
+
+        assert_eq!(
+            unit_norm_step(0.5, 0.0, 1.0, true).unwrap(),
+            [0.0, 0.5, 1.0]
+        );
+        assert_eq!(
+            unit_norm_step(0.5, -1.0, 1.0, true).unwrap(),
+            [0.0, 0.25, 0.5, 0.75, 1.0]
+        );
+        assert_eq!(
+            unit_norm_step(0.5, -1.0, 1.0, false).unwrap(),
+            [-1.0, -0.5, 0.0, 0.5, 1.0]
+        );
+        assert_eq!(unit_norm_step(0.25, 0.0, 20.0, true).unwrap().len(), 81);
+        assert_eq!(unit_norm_step(0.25, 0.0, 20.0, false).unwrap().len(), 81);
+        assert!(unit_norm_step(0.5, 1.0, 1.0, true).unwrap().is_empty());
+        assert!(unit_norm_step(0.0, 0.0, 1.0, true).is_err());
+    }
 
     /// music21 writes a sieve back out as it was given, with the residuals
     /// normalized and the groups kept. Every string here was read off

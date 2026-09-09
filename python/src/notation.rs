@@ -513,17 +513,7 @@ impl Lyric {
     /// never had one becomes a whole word.
     #[pyo3(signature = (rawText, applyRaw = false))]
     fn setTextAndSyllabic(&mut self, rawText: &str, applyRaw: bool) {
-        if applyRaw {
-            self.inner.set_text(rawText);
-            // The hyphens are the text here, so nothing about the word is
-            // read out of them — but a lyric that had said nothing about
-            // where it falls is now a whole word, as music21 makes it.
-            if self.inner.explicit_syllabic().is_none() {
-                self.inner.set_syllabic(Syllabic::Single);
-            }
-        } else {
-            self.inner.set_raw_text(rawText);
-        }
+        self.inner.set_text_and_syllabic(rawText, applyRaw);
     }
 
     fn __eq__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> bool {
@@ -1589,11 +1579,7 @@ impl Volume {
             return Ok(());
         };
         let other = other.extract::<PyRef<'_, Self>>()?;
-        self.inner
-            .set_velocity_scalar(other.inner.velocity_scalar())
-            .map_err(volume_error)?;
-        self.inner
-            .set_velocity_is_relative(other.inner.velocity_is_relative());
+        self.inner.merge_attributes(&other.inner);
         Ok(())
     }
 

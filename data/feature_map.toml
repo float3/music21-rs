@@ -85,8 +85,6 @@ rust = ["src/interval/diatonicinterval.rs"]
 perfectable = "is_perfectable"
 mod7inversion = "mod7_inversion"
 
-[class.excluded]
-specifierAbbreviation = "Specifier::prefix; the abbreviation belongs to the quality, not the interval"
 
 [[class]]
 python = "interval.py"
@@ -147,9 +145,7 @@ abstract = "the AbstractScale layer is not modelled"
 isConcrete = "the AbstractScale layer is not modelled"
 show = "notation output"
 write = "notation output"
-getScalaData = "Scala output; ScalaScale is the runtime reader"
 tune = "retunes the notes of a stream"
-romanNumeral = "a RomanNumeral is built from a Key here"
 
 [[class]]
 python = "scale/__init__.py"
@@ -180,8 +176,8 @@ python = "roman.py"
 name = "RomanNumeral"
 rust = ["src/roman.rs"]
 
-[class.excluded]
-adjustMinorVIandVIIByQuality = "the rule is applied when the figure is read, rather than exposed as a step a caller runs afterwards"
+[class.renames]
+adjustMinorVIandVIIByQuality = "adjust_minor_vi_and_vii_by_quality"
 
 [[class]]
 python = "meter/base.py"
@@ -217,9 +213,6 @@ rust = ["src/tempo.rs"]
 [class.renames]
 setQuarterBPM = "quarter_bpm"
 
-[class.excluded]
-getTextExpression = "expressions are notation objects"
-
 [[class]]
 python = "duration.py"
 name = "Duration"
@@ -240,7 +233,6 @@ sliceComponentAtPosition = "the written values are read off the length here rath
 currentComponents = "the working-out is not deferred here, so there is no half-worked-out state to read"
 splitDotGroups = "dot groups are a way of writing one length twice over; the crate keeps the length"
 dotGroups = "dot groups are a way of writing one length twice over; the crate keeps the length"
-isComplex = "whether the length needs more than one written value: read `components` and count them"
 linked = "an unlinked duration is written as one value and sounds as another, which needs a written value the length does not decide"
 informClient = "observer callback for a containing note; there is none"
 
@@ -274,25 +266,21 @@ python = "voiceLeading.py"
 name = "VoiceLeadingQuartet"
 rust = ["src/voiceleading.rs"]
 
-[class.excluded]
-modalOpening = "needs roman.identifyAsTonicOrDominant, which is not ported"
-opensIncorrectly = "deprecated upstream in favour of modalOpening"
-closesIncorrectly = "deprecated upstream in favour of clausulaVera"
+
 
 [[class]]
 python = "sieve.py"
 name = "Sieve"
 rust = ["src/sieve.rs"]
-note = "Only what SieveScale needs: parse, membership and the interval widths of one period."
+note = "The sieve as written: parse, membership, the segment formats and the interval widths of one period."
 
 [class.excluded]
-expand = "compression and segment formats have no caller here"
-compress = "compression and segment formats have no caller here"
-setZ = "compression and segment formats have no caller here"
-setZRange = "compression and segment formats have no caller here"
-setSegmentFormat = "compression and segment formats have no caller here"
-collect = "compression and segment formats have no caller here"
-represent = "compression and segment formats have no caller here"
+expand = "the compressed reading of a sieve is not modelled"
+compress = "the compressed reading of a sieve is not modelled"
+setZ = "the range is an argument of each question here, not state on the sieve"
+setZRange = "the range is an argument of each question here, not state on the sieve"
+setSegmentFormat = "the segment format is an argument of each question here, not state on the sieve"
+represent = "the sieve is written by `Display`, which is not a function the map can name"
 
 [[class]]
 python = "beam.py"
@@ -336,6 +324,9 @@ name = "Modifier"
 rust = ["src/figuredbass.rs"]
 note = "The mark as written beside the accidental it means: figured bass has marks no accidental name covers, a `+` that raises and a `/` that lowers."
 
+[class.renames]
+modifyPitch = "modify"
+
 [[class]]
 python = "figuredBass/notation.py"
 rust = ["src/figuredbass.rs"]
@@ -343,14 +334,7 @@ rust = ["src/figuredbass.rs"]
 [[class]]
 python = "sieve.py"
 rust = ["src/sieve.rs"]
-
-[class.excluded]
-eratosthenes = "number theory of its own; only what SieveScale needs is ported"
-rabinMiller = "number theory of its own; only what SieveScale needs is ported"
-discreteBinaryPad = "compression and segment formats have no caller here"
-unitNormRange = "compression and segment formats have no caller here"
-unitNormEqual = "compression and segment formats have no caller here"
-unitNormStep = "compression and segment formats have no caller here"
+note = "The number helpers music21 keeps beside the sieve: primes, and spacings across the unit interval."
 
 [[class]]
 python = "note.py"
@@ -448,12 +432,8 @@ dottedMatch = "type_and_dots"
 nextLargerType = "next_larger"
 nextSmallerType = "next_smaller"
 durationTupleFromTypeDots = "from_type_with_dots"
-
-[class.excluded]
-quarterLengthToNonPowerOf2Tuplet = "a length written inside a tuplet of an unwritable value; `Duration::tuplet` reads the writable ones"
-quarterLengthToTuplet = "the best tuplet for a length is `Duration::tuplet`; the other ways of writing it have no caller here"
-quarterConversion = "the two halves of the answer are `Duration::components` and `Duration::tuplets`, asked separately"
-durationTupleFromQuarterLength = "a duration built from a length is `Duration::new`, and its written value is `type_and_dots`"
+durationTupleFromQuarterLength = "type_and_dots"
+quarterLengthToNonPowerOf2Tuplet = "quarter_length_to_non_power_of_2_tuplet"
 
 [[class]]
 python = "tempo.py"
@@ -471,8 +451,9 @@ note = "Module-level helpers."
 [class.renames]
 romanNumeralFromChord = "analyze_chord"
 
+expandShortHand = "expand_shorthand"
+
 [class.excluded]
-expandShortHand = "figure-parsing internals; the parser here reads the figure directly"
 correctSuffixForChordQuality = "figure-parsing internals; the parser here reads the figure directly"
 correctRNAlterationForMinor = "figure-parsing internals; the parser here reads the figure directly"
 figureTuples = "figured-bass tuples are not modelled"

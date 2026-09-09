@@ -419,38 +419,19 @@ impl RomanNumeral {
         if !self.case_matters {
             return Ok(());
         }
-        if self.effective_key()?.mode() != "minor" {
-            return Ok(());
-        }
         let reading = if self.degree == 6 {
             self.sixth_minor
         } else {
             self.seventh_minor
         };
-        // A chord that only the raised degree gives.
-        let wants_raised = matches!(
+        let adjusted = adjust_minor_vi_and_vii_by_quality(
+            &self.effective_key()?,
+            reading,
             self.implied_quality,
-            ImpliedQuality::Minor | ImpliedQuality::Diminished | ImpliedQuality::HalfDiminished
+            self.accidental,
         );
-        let raise = match reading {
-            Minor67Default::Flat => false,
-            Minor67Default::Sharp => true,
-            Minor67Default::Quality => wants_raised,
-            // An accidental already written is a caution, not a further
-            // change: `#vi` and `vi` are the same chord, and so are `bVI`
-            // and `VI`.
-            Minor67Default::Cautionary => match self.accidental {
-                0 => wants_raised,
-                // A sharp already written is the caution, and says nothing
-                // more; a flat is a caution against the raised degree, so
-                // the raise it cancels is applied and the two meet at the
-                // natural one.
-                sharps if sharps >= 1 => false,
-                _ => true,
-            },
-        };
-        if raise {
-            self.accidental += 1;
+        if adjusted != self.accidental {
+            self.accidental = adjusted;
             sharpen_figure(column);
         }
         Ok(())
@@ -1066,6 +1047,43 @@ fn inversion_name_from_root(chord: &Chord, root: &Pitch, inversion: Option<u8>) 
 }
 
 /// Reads a chord as the tonic or the dominant of a key, with its inversion:
+/// The accidental a numeral on the sixth or seventh degree of a minor key
+/// ends up with, given how the key is read and the chord the figure asks
+/// for: music21's `adjustMinorVIandVIIByQuality`.
+///
+/// A minor triad on the sixth or a diminished chord on the seventh is one
+/// only the raised degree gives, so under the `Quality` reading such a
+/// figure takes a sharp and a major one takes the natural degree. `Flat` and
+/// `Sharp` decide without looking at the chord, and `Cautionary` reads an
+/// accidental already written as a caution rather than as a further change:
+/// a sharp says nothing more, and a flat cancels the raise, so the two meet
+/// at the natural degree. In a major key the accidental stands as written.
+pub fn adjust_minor_vi_and_vii_by_quality(
+    key: &Key,
+    reading: Minor67Default,
+    quality: ImpliedQuality,
+    accidental: i8,
+) -> i8 {
+    if key.mode() != "minor" {
+        return accidental;
+    }
+    let wants_raised = matches!(
+        quality,
+        ImpliedQuality::Minor | ImpliedQuality::Diminished | ImpliedQuality::HalfDiminished
+    );
+    let raise = match reading {
+        Minor67Default::Flat => false,
+        Minor67Default::Sharp => true,
+        Minor67Default::Quality => wants_raised,
+        Minor67Default::Cautionary => match accidental {
+            0 => wants_raised,
+            sharps if sharps >= 1 => false,
+            _ => true,
+        },
+    };
+    if raise { accidental + 1 } else { accidental }
+}
+
 /// music21's `identifyAsTonicOrDominant`, so `G B D F` in C major is `V7`
 /// and `A C E` in A minor is `i`. A chord containing the tonic is the tonic,
 /// one containing the dominant is the dominant, and anything else is judged
@@ -2318,7 +2336,7 @@ fn has_triad_shape(intervals: &[u8]) -> bool {
         && intervals.iter().any(|interval| matches!(interval, 6..=8))
 }
 
-fn degree_to_roman(degree: u8) -> &'static str {
+pub(crate) fn degree_to_roman(degree: u8) -> &'static str {
     match degree {
         1 => "I",
         2 => "II",
@@ -2349,6 +2367,138 @@ fn normalize_pitch_name(name: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_numeral_reports_how_it_was_read() {
+        use super::{
+            ImpliedQuality, Minor67Default, NumeralAlone, RomanNumeral, analyze_chord_with_root,
+            parse_numeral_alone, secondary_key,
+        };
+        use crate::{Chord, Key, Pitch};
+
+        let key = Key::from_tonic("C").unwrap();
+        let numeral = RomanNumeral::new("V7[no3][add4][#5]/ii", key.clone()).unwrap();
+        assert_eq!(numeral.key().tonic().name(), "C");
+        assert!(numeral.scale().is_none());
+        assert!(numeral.case_matters());
+        assert_eq!(numeral.sixth_minor(), Minor67Default::Quality);
+        assert_eq!(numeral.seventh_minor(), Minor67Default::Quality);
+        assert_eq!(numeral.implied_quality(), ImpliedQuality::Major);
+        assert_eq!(numeral.written_accidental(), 0);
+        assert_eq!(numeral.omitted_steps(), [3]);
+        assert_eq!(numeral.added_steps(), [(0, 4)]);
+        assert_eq!(numeral.bracketed_alterations(), [(1, 5)]);
+        // A bare `7` expands to the seventh, fifth and third.
+        assert_eq!(numeral.figures_notation().numbers().len(), 3);
+        assert_eq!(numeral.effective_key_of().unwrap().tonic().name(), "D");
+        assert_eq!(numeral.roman_numeral_alone(), "V");
+        assert_eq!(numeral.to_string(), "V7[no3][add4][#5]/ii");
+        assert_eq!(numeral.figure_and_key(), "V7[no3][add4][#5]/ii in C major");
+
+        assert_eq!(
+            ImpliedQuality::from_name("half-diminished").name(),
+            "half-diminished"
+        );
+        assert_eq!(
+            ImpliedQuality::from_name("nonsense"),
+            ImpliedQuality::Unstated
+        );
+        assert_eq!(ImpliedQuality::Unstated.name(), "");
+
+        let alone: NumeralAlone = parse_numeral_alone("VI6").unwrap();
+        assert_eq!((alone.numeral.as_str(), alone.rest.as_str()), ("VI", "6"));
+        assert_eq!(
+            (alone.degree, alone.alteration, alone.minor),
+            (6, 0, false)
+        );
+        let german = parse_numeral_alone("Ger").unwrap();
+        assert_eq!(
+            (german.numeral.as_str(), german.rest.as_str()),
+            ("Ger", "65")
+        );
+        assert!(german.minor);
+        assert!(parse_numeral_alone("").is_err());
+
+        let dominant_of_dominant = secondary_key(
+            &key,
+            "V",
+            Minor67Default::Quality,
+            Minor67Default::Quality,
+            true,
+        )
+        .unwrap();
+        assert_eq!(dominant_of_dominant.tonic().name(), "G");
+        assert_eq!(dominant_of_dominant.mode(), "major");
+        let of_supertonic = secondary_key(
+            &key,
+            "ii",
+            Minor67Default::Quality,
+            Minor67Default::Quality,
+            true,
+        )
+        .unwrap();
+        assert_eq!(of_supertonic.mode(), "minor");
+
+        let chord = Chord::new("E4 G4 C5").unwrap();
+        let root = Pitch::from_name("C4").unwrap();
+        let analyzed = analyze_chord_with_root(&chord, key, &root)
+            .unwrap()
+            .unwrap();
+        assert_eq!(analyzed.figure(), "I6");
+    }
+
+    /// music21's own examples: in C minor a minor `vi` is raised and a
+    /// major `VI` is not, and in a major key nothing moves.
+    #[test]
+    fn the_sixth_and_seventh_of_a_minor_key_are_raised_by_quality() {
+        use super::{ImpliedQuality, Minor67Default, adjust_minor_vi_and_vii_by_quality};
+        use crate::Key;
+
+        let minor = Key::from_tonic("c").unwrap();
+        let major = Key::from_tonic("C").unwrap();
+        let adjust = |key: &Key, reading, quality, accidental| {
+            adjust_minor_vi_and_vii_by_quality(key, reading, quality, accidental)
+        };
+        assert_eq!(
+            adjust(&minor, Minor67Default::Quality, ImpliedQuality::Minor, 0),
+            1
+        );
+        assert_eq!(
+            adjust(&minor, Minor67Default::Quality, ImpliedQuality::Major, 0),
+            0
+        );
+        assert_eq!(
+            adjust(&major, Minor67Default::Quality, ImpliedQuality::Minor, 0),
+            0
+        );
+        assert_eq!(
+            adjust(&minor, Minor67Default::Flat, ImpliedQuality::Diminished, 0),
+            0
+        );
+        assert_eq!(
+            adjust(&minor, Minor67Default::Sharp, ImpliedQuality::Major, 0),
+            1
+        );
+        // A caution already written says nothing more; a flat cancels the
+        // raise and the two meet at the natural degree.
+        assert_eq!(
+            adjust(&minor, Minor67Default::Cautionary, ImpliedQuality::Minor, 1),
+            1
+        );
+        assert_eq!(
+            adjust(
+                &minor,
+                Minor67Default::Cautionary,
+                ImpliedQuality::Major,
+                -1
+            ),
+            0
+        );
+        assert_eq!(
+            adjust(&minor, Minor67Default::Cautionary, ImpliedQuality::Minor, 0),
+            1
+        );
+    }
+
     #[test]
     fn a_numeral_reports_the_digits_it_was_written_with() {
         let major = Key::from_tonic("C").unwrap();

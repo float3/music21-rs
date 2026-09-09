@@ -1846,6 +1846,34 @@ pub fn chord_symbol_from_chord(chord: &Chord) -> Result<Option<ChordSymbol>> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_symbol_is_parsed_through_try_from_and_reports_its_alterations() {
+        use super::{ChordSymbol, chord_symbol_kind_from_chord};
+        use crate::chord::Chord;
+
+        let symbol = ChordSymbol::try_from("C7#11").unwrap();
+        assert_eq!(symbol.alterations().len(), 1);
+        assert_eq!(symbol.alterations()[0].degree(), 11);
+        assert_eq!(symbol.alterations()[0].semitones(), 1);
+        assert!(symbol.omissions().is_empty());
+        let omitting = ChordSymbol::try_from("C[no3]".to_string()).unwrap();
+        assert_eq!(omitting.omissions(), [3]);
+        assert!(ChordSymbol::try_from("").is_err());
+
+        assert_eq!(
+            chord_symbol_kind_from_chord(&Chord::new("C").unwrap()),
+            Some("pedal")
+        );
+        assert_eq!(
+            chord_symbol_kind_from_chord(&Chord::new("C G").unwrap()),
+            Some("power")
+        );
+        assert_eq!(
+            chord_symbol_kind_from_chord(&Chord::new("C E G").unwrap()),
+            Some("major")
+        );
+        assert_eq!(chord_symbol_kind_from_chord(&Chord::new("").unwrap()), None);
+    }
 
     #[test]
     fn chord_symbol_figures_match_music21() {

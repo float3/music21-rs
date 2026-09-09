@@ -12,7 +12,10 @@ use crate::chord::{Chord, root};
 use crate::defaults::{FloatType, IntegerType};
 use crate::error::{Error, Result};
 use crate::interval::Interval;
+use crate::key::Key;
 use crate::pitch::Pitch;
+use crate::roman::{Minor67Default, RomanNumeral, degree_to_roman};
+use crate::tuningsystem::scala::{ScalaDegree, ScalaScale};
 
 use std::collections::HashMap;
 use std::sync::LazyLock;
@@ -536,6 +539,50 @@ pub struct Scale {
 }
 
 impl Scale {
+    /// The roman numeral on a degree of this scale: music21's `romanNumeral`,
+    /// the triad that degree carries read against the major key of the
+    /// tonic, whatever its case would say.
+    pub fn roman_numeral(&self, degree: u8) -> Result<RomanNumeral> {
+        if !(1..=7).contains(&degree) {
+            return Err(Error::Scale(format!(
+                "a roman numeral stands on a degree from 1 to 7, not {degree}"
+            )));
+        }
+        let key = Key::from_tonic_mode(&self.tonic.name(), "major")?;
+        RomanNumeral::over_scale(
+            degree_to_roman(degree),
+            key,
+            Some(self.clone()),
+            Minor67Default::default(),
+            Minor67Default::default(),
+            false,
+        )
+    }
+
+    /// This scale written as a Scala file writes one: music21's
+    /// `getScalaData`, each degree as the cents above the tonic, with the
+    /// interval the scale closes on as the period.
+    pub fn scala_data(&self) -> Result<ScalaScale> {
+        let pitches = self.pitches()?;
+        let (Some(tonic), Some(closing)) = (pitches.first(), pitches.last()) else {
+            return Err(Error::Scale(
+                "a scale with no pitches has no degrees".to_string(),
+            ));
+        };
+        let cents = |pitch: &Pitch| ScalaDegree::Cents((pitch.ps() - tonic.ps()) * 100.0);
+        let mut degrees = vec![ScalaDegree::Ratio(crate::tuningsystem::Fraction::new(1, 1))];
+        degrees.extend(pitches[1..pitches.len() - 1].iter().map(cents));
+        Ok(ScalaScale::new(
+            format!(
+                "{} {}",
+                self.tonic.name(),
+                self.scale_type.music21_descriptive_name()
+            ),
+            degrees,
+            cents(closing),
+        ))
+    }
+
     /// Builds a scale of the given type on a tonic.
     pub fn new(scale_type: ScaleType, tonic: Pitch) -> Self {
         Self {
@@ -1473,6 +1520,219 @@ fn max_alter(pitches: &[Pitch]) -> crate::defaults::IntegerType {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn degrees_are_found_by_pitch_class_name_or_step() {
+        use super::{DegreeComparison, Scale, ScaleType};
+        use crate::Pitch;
+
+        let major = Scale::new(ScaleType::Major, Pitch::from_name("C").unwrap());
+        let e_sharp = Pitch::from_name("E#").unwrap();
+        assert_eq!(
+            major
+                .degree_of_by(&e_sharp, DegreeComparison::PitchClass)
+                .unwrap(),
+            Some(4)
+        );
+        assert_eq!(
+            major
+                .degree_of_by(&e_sharp, DegreeComparison::Name)
+                .unwrap(),
+            None
+        );
+        assert_eq!(
+            major
+                .degree_of_by(&e_sharp, DegreeComparison::Step)
+                .unwrap(),
+            Some(3)
+        );
+        let e_flat = Pitch::from_name("E-").unwrap();
+        let (degree, accidental) = major.degree_and_accidental_of(&e_flat).unwrap();
+        assert_eq!(degree, 3);
+        assert_eq!(accidental.as_ref().map(|a| a.name()), Some("flat"));
+        let whole_tone = Scale::new(ScaleType::WholeTone, Pitch::from_name("C").unwrap());
+        assert!(
+            whole_tone
+                .degree_and_accidental_of(&Pitch::from_name("B").unwrap())
+                .is_err()
+        );
+
+        // Rag Marwa names its A twice, as the fifth degree and the seventh.
+        let marwa = Scale::new(ScaleType::RagMarwa, Pitch::from_name("C4").unwrap());
+        assert_eq!(
+            marwa
+                .degrees_of_by(&Pitch::from_name("A").unwrap(), DegreeComparison::Name)
+                .unwrap(),
+            [5, 7]
+        );
+    }
+
+    #[test]
+    fn a_scale_moves_to_its_relatives_parallels_and_a_new_tonic() {
+        use super::{Scale, ScaleType};
+        use crate::Pitch;
+
+        let tonic = |scale: &Scale| scale.tonic().name();
+        let c_minor = Scale::new(ScaleType::Minor, Pitch::from_name("C").unwrap());
+        assert_eq!(tonic(&c_minor.parallel_major()), "C");
+        assert_eq!(c_minor.parallel_major().scale_type(), ScaleType::Major);
+        assert_eq!(tonic(&c_minor.relative_major().unwrap()), "E-");
+        let c_major = Scale::new(ScaleType::Major, Pitch::from_name("C").unwrap());
+        assert_eq!(tonic(&c_major.relative_minor().unwrap()), "A");
+        assert_eq!(c_major.parallel_minor().scale_type(), ScaleType::Minor);
+        let mut moved = c_major.clone();
+        moved.set_tonic(Pitch::from_name("D").unwrap());
+        assert_eq!(tonic(&moved), "D");
+        assert_eq!(moved.pitches().unwrap()[1].name(), "E");
+        assert!(c_major.octave_duplicating());
+        assert!(c_major.is_realizable());
+        assert_eq!(
+            ScaleType::from_music21_name("MajorScale"),
+            Some(ScaleType::Major)
+        );
+        assert_eq!(ScaleType::from_music21_name("NoSuchScale"), None);
+    }
+
+    #[test]
+    fn a_scale_walks_down_as_well_as_up() {
+        use super::{Scale, ScaleType};
+        use crate::Pitch;
+
+        let names = |pitches: Vec<Pitch>| -> Vec<String> {
+            pitches.iter().map(Pitch::name_with_octave).collect()
+        };
+        let major = Scale::new(ScaleType::Major, Pitch::from_name("C4").unwrap());
+        assert_eq!(
+            names(major.pitches_descending().unwrap()),
+            ["C5", "B4", "A4", "G4", "F4", "E4", "D4", "C4"]
+        );
+        let low = Pitch::from_name("C3").unwrap();
+        let high = Pitch::from_name("C5").unwrap();
+        assert_eq!(
+            names(
+                major
+                    .pitches_between_descending(&Pitch::from_name("G4").unwrap(), &high)
+                    .unwrap()
+            ),
+            ["C5", "B4", "A4", "G4"]
+        );
+        assert_eq!(
+            names(
+                major
+                    .pitches_from_scale_degrees_between(&[1, 5], &low, &high)
+                    .unwrap()
+            ),
+            ["C3", "G3", "C4", "G4", "C5"]
+        );
+
+        // A pitch off the scale comes onto it first: below C#4 in C major
+        // is B3 from the lower neighbour and C4 from the upper.
+        let c_sharp = Pitch::from_name("C#4").unwrap();
+        assert_eq!(
+            major
+                .next_pitch_below(&c_sharp, 1)
+                .unwrap()
+                .name_with_octave(),
+            "C4"
+        );
+        assert_eq!(
+            major
+                .next_pitch_beside(&c_sharp, -1, true)
+                .unwrap()
+                .name_with_octave(),
+            "B3"
+        );
+        assert_eq!(
+            major
+                .next_pitch_beside(&c_sharp, -1, false)
+                .unwrap()
+                .name_with_octave(),
+            "C4"
+        );
+        assert_eq!(
+            major
+                .next_pitch_beside(&c_sharp, 1, false)
+                .unwrap()
+                .name_with_octave(),
+            "E4"
+        );
+
+        // Rag Marwa stands D- in two places, as the note above its tonic and
+        // the one it passes through coming down from the octave, and each
+        // has its own neighbour.
+        let marwa = Scale::new(ScaleType::RagMarwa, Pitch::from_name("C4").unwrap());
+        let d_flat = Pitch::from_name("D-4").unwrap();
+        assert_eq!(marwa.places_of(&d_flat).unwrap(), 1);
+        assert_eq!(
+            marwa
+                .next_pitch_above_from(&d_flat, 1, 0)
+                .unwrap()
+                .name_with_octave(),
+            "E4"
+        );
+        assert_eq!(
+            marwa
+                .next_pitch_below_from(&Pitch::from_name("C5").unwrap(), 1, 0)
+                .unwrap()
+                .name_with_octave(),
+            "A4"
+        );
+    }
+
+    #[test]
+    fn a_custom_scale_ranks_the_tonics_that_fit_a_set_of_pitches() {
+        use super::{DegreeComparison, Scale};
+        use crate::Pitch;
+
+        let pitches: Vec<Pitch> = ["C4", "D4", "E4", "F4", "G4", "A4", "B4", "C5"]
+            .iter()
+            .map(|name| Pitch::from_name(*name).unwrap())
+            .collect();
+        let custom = Scale::from_pitches(&pitches).unwrap();
+        assert!(custom.is_custom());
+        let targets: Vec<Pitch> = ["G4", "B4", "D5"]
+            .iter()
+            .map(|name| Pitch::from_name(*name).unwrap())
+            .collect();
+        let ranked = custom
+            .derive_ranked_by(&targets, Some(2), DegreeComparison::PitchClass)
+            .unwrap();
+        assert_eq!(ranked.len(), 2);
+        assert_eq!(ranked[0].0, 3);
+        assert!(ranked[0].1.is_custom());
+    }
+
+    /// music21's own `romanNumeral` example, and the Scala reading of a
+    /// major scale.
+    #[test]
+    fn a_scale_carries_numerals_and_writes_itself_as_scala() {
+        use super::{Scale, ScaleType};
+        use crate::Pitch;
+        use crate::tuningsystem::scala::ScalaDegree;
+
+        let scale = Scale::new(ScaleType::Major, Pitch::from_name("A-4").unwrap());
+        let tonic = scale.roman_numeral(1).unwrap();
+        assert_eq!(tonic.to_chord().unwrap().root().unwrap().to_string(), "A-4");
+        let dominant = scale.roman_numeral(5).unwrap();
+        assert_eq!(
+            dominant.to_chord().unwrap().root().unwrap().to_string(),
+            "E-5"
+        );
+        assert_eq!(dominant.figure_and_key(), "V in A- major");
+        assert!(scale.roman_numeral(8).is_err());
+
+        let scala = scale.scala_data().unwrap();
+        assert_eq!(scala.len(), 7);
+        assert!(matches!(scala.degrees()[0], ScalaDegree::Ratio(_)));
+        let cents: Vec<i64> = scala
+            .degrees()
+            .iter()
+            .map(|degree| degree.cents().round() as i64)
+            .collect();
+        assert_eq!(cents, [0, 200, 400, 500, 700, 900, 1100]);
+        assert_eq!(scala.period().cents().round() as i64, 1200);
+        assert_eq!(scala.description(), "A- major");
+    }
+
     #[test]
     fn a_scale_can_be_given_by_its_notes() {
         // music21's own example: a scale of four notes, which repeats at the

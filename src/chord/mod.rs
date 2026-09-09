@@ -3740,6 +3740,172 @@ mod tests {
     use crate::{Duration, GuitarTuning, Interval, Key, Pitch, chord::Chord, chord::TriadQuality};
 
     #[test]
+    fn a_chord_carries_notation_for_all_its_notes() {
+        use crate::notation::{Beams, Notehead, StemDirection};
+
+        let mut chord = Chord::new("C4 E4 G4").unwrap();
+        assert_eq!(chord.notehead(), Notehead::Normal);
+        chord.set_notehead(Notehead::Diamond);
+        assert_eq!(chord.notehead(), Notehead::Diamond);
+        assert_eq!(chord.notehead_fill(), None);
+        chord.set_notehead_fill(Some(false));
+        assert_eq!(chord.notehead_fill(), Some(false));
+        assert!(!chord.notehead_parenthesis());
+        chord.set_notehead_parenthesis(true);
+        assert!(chord.notehead_parenthesis());
+        chord.set_stem_direction(StemDirection::Down);
+        assert_eq!(chord.stem_direction(), StemDirection::Down);
+        assert!(chord.beams().is_empty());
+        let mut beams = Beams::default();
+        beams
+            .fill(crate::duration::DurationType::Eighth, None)
+            .unwrap();
+        chord.set_beams(beams.clone());
+        assert_eq!(chord.beams(), &beams);
+    }
+
+    #[test]
+    fn notes_are_added_and_removed_as_music21_adds_and_removes_them() {
+        let mut chord = Chord::new("C4 E4 G4").unwrap();
+        chord.add("B-4").unwrap();
+        assert_eq!(chord.pitch_names(), ["C", "E", "G", "B-"]);
+        chord.remove(&Pitch::from_name("E4").unwrap()).unwrap();
+        assert!(chord.remove(&Pitch::from_name("E4").unwrap()).is_err());
+        chord.remove_named("G4").unwrap();
+        assert!(chord.remove_named("G4").is_err());
+        assert_eq!(chord.pitch_names(), ["C", "B-"]);
+        assert_eq!(chord.note_pitch_classes(), [0, 10]);
+        assert_eq!(
+            Chord::new("E4 C4 G4 C5").unwrap().note_pitch_classes(),
+            [4, 0, 7, 0]
+        );
+    }
+
+    #[test]
+    fn an_overridden_bass_or_root_is_kept_apart_from_the_inferred_one() {
+        let mut chord = Chord::new("C4 E4 G4").unwrap();
+        let e = Pitch::from_name("E4").unwrap();
+        assert_eq!(chord.overridden_bass(), None);
+        assert_eq!(chord.found_bass().map(Pitch::name), Some("C".to_string()));
+        chord.set_bass(Some(e.clone()));
+        assert_eq!(chord.overridden_bass(), Some(&e));
+        assert_eq!(chord.bass().map(Pitch::name), Some("E".to_string()));
+        assert_eq!(chord.found_bass().map(Pitch::name), Some("C".to_string()));
+        chord.set_bass(None);
+        assert_eq!(chord.overridden_bass(), None);
+        // A bass the chord does not carry is added below the others.
+        chord.set_bass(Some(Pitch::from_name("A3").unwrap()));
+        assert_eq!(chord.pitch_names(), ["A", "C", "E", "G"]);
+
+        let mut chord = Chord::new("C4 E4 G4").unwrap();
+        assert_eq!(chord.overridden_root(), None);
+        chord.set_root(Some(e.clone()));
+        assert_eq!(chord.overridden_root(), Some(&e));
+        assert_eq!(chord.root().map(Pitch::name), Some("E".to_string()));
+        assert_eq!(chord.found_root().map(Pitch::name), Some("C".to_string()));
+    }
+
+    #[test]
+    fn set_inversion_raises_the_bass_until_the_chord_stands_in_it() {
+        let mut chord = Chord::new("C4 E4 G4").unwrap();
+        chord.set_inversion(1).unwrap();
+        assert_eq!(chord.inversion(), Some(1));
+        assert_eq!(
+            chord
+                .pitches()
+                .iter()
+                .map(Pitch::name_with_octave)
+                .collect::<Vec<_>>(),
+            ["E4", "G4", "C5"]
+        );
+        chord.set_inversion(0).unwrap();
+        assert_eq!(chord.bass().map(Pitch::name), Some("C".to_string()));
+        assert!(chord.set_inversion(5).is_err());
+    }
+
+    #[test]
+    fn chord_steps_can_be_measured_from_a_root_the_caller_names() {
+        let chord = Chord::new("E4 G4 C5").unwrap();
+        let c = Pitch::from_name("C4").unwrap();
+        let g = Pitch::from_name("G4").unwrap();
+        assert_eq!(chord.inversion_from_root(&c), Some(1));
+        // A bass a sixth above the root is music21's sixth inversion.
+        assert_eq!(chord.inversion_from_root(&g), Some(6));
+        assert_eq!(
+            chord.chord_step_with_root(3, &c).map(Pitch::name),
+            Some("E".to_string())
+        );
+        assert_eq!(chord.chord_step_with_root(3, &g), None);
+        assert_eq!(chord.semitones_from_chord_step_with_root(5, &c), Some(7));
+        assert_eq!(chord.semitones_from_chord_step_with_root(3, &g), None);
+    }
+
+    #[test]
+    fn the_reductions_report_what_they_dropped() {
+        let names = |pitches: Vec<Pitch>| -> Vec<String> {
+            pitches.iter().map(Pitch::name_with_octave).collect()
+        };
+        let (kept, dropped) = Chord::new("C4 E4 G4 C4")
+            .unwrap()
+            .remove_redundant_pitches_reporting();
+        assert_eq!(kept.pitch_names(), ["C", "E", "G"]);
+        assert_eq!(names(dropped), ["C4"]);
+        let (kept, dropped) = Chord::new("C4 E4 G4 C5")
+            .unwrap()
+            .remove_redundant_pitch_names_reporting();
+        assert_eq!(kept.pitch_names(), ["C", "E", "G"]);
+        assert_eq!(names(dropped), ["C5"]);
+        let (kept, dropped) = Chord::new("C4 E4 G4 B#4")
+            .unwrap()
+            .remove_redundant_pitch_classes_reporting();
+        assert_eq!(kept.pitch_names(), ["C", "E", "G"]);
+        assert_eq!(names(dropped), ["B#4"]);
+    }
+
+    #[test]
+    fn the_chord_table_address_is_a_record_and_an_empty_chord_has_one() {
+        let address = Chord::new("C E G").unwrap().chord_tables_address_entry();
+        assert_eq!(address.cardinality, 3);
+        assert_eq!(address.forte_class, 11);
+        assert_eq!(address.inversion, -1);
+        assert_eq!(address.pitch_class_original, 0);
+        let empty = Chord::new("").unwrap().chord_tables_address_entry();
+        assert_eq!(
+            (
+                empty.cardinality,
+                empty.forte_class,
+                empty.inversion,
+                empty.pitch_class_original
+            ),
+            (0, 0, 0, 0)
+        );
+        assert_eq!(super::format_vector_string(&[0, 0, 1, 1, 1, 0]), "<001110>");
+    }
+
+    #[test]
+    fn a_chord_is_built_from_any_of_the_inputs_try_from_accepts() {
+        use crate::note::Note;
+
+        let names = |chord: Chord| chord.pitch_names();
+        assert_eq!(names(Chord::try_from("C E G").unwrap()), ["C", "E", "G"]);
+        assert_eq!(
+            names(Chord::try_from("C E G".to_string()).unwrap()),
+            ["C", "E", "G"]
+        );
+        let pitches = [
+            Pitch::from_name("C4").unwrap(),
+            Pitch::from_name("E4").unwrap(),
+        ];
+        assert_eq!(names(Chord::try_from(&pitches[..]).unwrap()), ["C", "E"]);
+        let notes = [Note::from_pitch(pitches[0].clone())];
+        assert_eq!(names(Chord::try_from(&notes[..]).unwrap()), ["C"]);
+        assert_eq!(names(Chord::try_from(&[60, 64][..]).unwrap()), ["C", "E"]);
+        assert_eq!(names(Chord::try_from(&["C", "G"][..]).unwrap()), ["C", "G"]);
+        let owned = ["D".to_string(), "A".to_string()];
+        assert_eq!(names(Chord::try_from(&owned[..]).unwrap()), ["D", "A"]);
+    }
+
+    #[test]
     fn set_duration_applies_to_non_empty_chords() {
         // Regression: the duration used to live behind an `Arc<ChordBase>` that
         // every note in the chord also held a reference to, so `Arc::get_mut`

@@ -126,6 +126,19 @@ impl Modifier {
         modified.set_accidental(Some(Accidental::new(alter)?));
         Ok(modified)
     }
+
+    /// The name of a pitch spelled as this modifier asks: music21's
+    /// `modifyPitchName`, so a sharp makes `D` into `D#`.
+    pub fn modify_pitch_name(&self, name: &str) -> Result<String> {
+        Ok(self.modify(&Pitch::from_name(name)?)?.name())
+    }
+}
+
+/// A pitch from its name: music21's `convertToPitch`, which raises a
+/// `ValueError` rather than a pitch error for a name it cannot read.
+pub fn convert_to_pitch(name: &str) -> Result<Pitch> {
+    Pitch::from_name(name)
+        .map_err(|_| Error::Value(format!("Cannot convert string {name} to a music21 Pitch.")))
 }
 
 impl fmt::Display for Modifier {
@@ -392,6 +405,69 @@ impl fmt::Display for Notation {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_column_keeps_what_it_was_written_with_beside_what_it_means() {
+        let notation = Notation::parse("6,#").unwrap();
+        assert_eq!(notation.column(), "6,#");
+        assert_eq!(notation.figures_as_written().len(), 2);
+        assert_eq!(notation.original_modifiers(), [None, Some("#".to_string())]);
+        assert_eq!(notation.extenders(), [false, false]);
+        assert_eq!(notation.modifiers().len(), notation.figures().len());
+        assert_eq!(notation.modifiers()[1].written(), Some("#"));
+        assert_eq!(notation.modifiers()[0].written(), None);
+        assert!(notation.to_string().contains("6,#"));
+
+        let mut figure = Figure::new(Some(6), Modifier::new(None).unwrap(), true);
+        assert!(figure.has_extender());
+        assert!(!figure.is_pure_extender());
+        figure.set_number(Some(1));
+        assert!(figure.is_pure_extender());
+        figure.set_number(None);
+        assert_eq!(figure.number(), None);
+    }
+
+    /// music21's own examples for `modifyPitchName` and `convertToPitch`.
+    #[test]
+    fn a_modifier_respells_a_pitch_name() {
+        assert_eq!(
+            Modifier::new(Some("#"))
+                .unwrap()
+                .modify_pitch_name("D")
+                .unwrap(),
+            "D#"
+        );
+        assert_eq!(
+            Modifier::new(Some("-"))
+                .unwrap()
+                .modify_pitch_name("F")
+                .unwrap(),
+            "F-"
+        );
+        assert_eq!(
+            Modifier::new(Some("n"))
+                .unwrap()
+                .modify_pitch_name("C#")
+                .unwrap(),
+            "C"
+        );
+        assert_eq!(
+            Modifier::new(None)
+                .unwrap()
+                .modify_pitch_name("B-")
+                .unwrap(),
+            "B-"
+        );
+        assert!(
+            Modifier::new(Some("#"))
+                .unwrap()
+                .modify_pitch_name("H")
+                .is_err()
+        );
+
+        assert_eq!(convert_to_pitch("C5").unwrap().to_string(), "C5");
+        assert!(matches!(convert_to_pitch("nonsense"), Err(Error::Value(_))));
+    }
 
     #[test]
     fn a_column_expands_out_of_its_shorthand() {

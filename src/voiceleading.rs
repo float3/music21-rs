@@ -269,6 +269,16 @@ impl VoiceLeadingQuartet {
         Ok(sounds_open && established)
     }
 
+    /// The opposite of [`Self::modal_opening`]: music21's `opensIncorrectly`.
+    pub fn opens_incorrectly(&self) -> Result<bool> {
+        self.modal_opening().map(|opens| !opens)
+    }
+
+    /// The opposite of [`Self::clausula_vera`]: music21's `closesIncorrectly`.
+    pub fn closes_incorrectly(&self) -> Result<bool> {
+        self.clausula_vera().map(|closes| !closes)
+    }
+
     /// Whether the two voices close a clausula vera: stepwise contrary
     /// motion, one voice by a semitone and the other by a tone, onto a unison
     /// or octave on the tonic. Errors without a key.
@@ -472,6 +482,62 @@ impl VoiceLeadingQuartet {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_quartet_hands_back_its_pitches_intervals_and_key() {
+        use super::ParallelRequirement;
+        use crate::Interval;
+
+        let mut quartet = VoiceLeadingQuartet::from_names("C5", "D5", "C4", "D4").unwrap();
+        assert_eq!(quartet.v1n1().name_with_octave(), "C5");
+        assert_eq!(quartet.v1n2().name_with_octave(), "D5");
+        assert_eq!(quartet.v2n1().name_with_octave(), "C4");
+        assert_eq!(quartet.v2n2().name_with_octave(), "D4");
+        let vertical: Vec<String> = quartet
+            .vertical_intervals()
+            .iter()
+            .map(Interval::short_name)
+            .collect();
+        assert_eq!(vertical, ["P8", "P8"]);
+        let horizontal: Vec<String> = quartet
+            .horizontal_intervals()
+            .iter()
+            .map(Interval::short_name)
+            .collect();
+        assert_eq!(horizontal, ["M2", "M2"]);
+        assert!(quartet.parallel_unison_or_octave());
+        assert!(quartet.key().is_none());
+        quartet.set_key(Some(Key::from_tonic("C").unwrap()));
+        assert!(quartet.key().is_some());
+        assert!(matches!(
+            ParallelRequirement::from(8),
+            ParallelRequirement::Wide(8)
+        ));
+        assert!(matches!(
+            ParallelRequirement::from(Interval::from_name("P5").unwrap()),
+            ParallelRequirement::Named(_)
+        ));
+    }
+
+    #[test]
+    fn opening_and_closing_incorrectly_are_the_opposites_of_the_rules() {
+        let quartet = |v1n1, v1n2, v2n1, v2n2, key: &str| {
+            VoiceLeadingQuartet::from_names(v1n1, v1n2, v2n1, v2n2)
+                .unwrap()
+                .with_key(Key::from_tonic(key).unwrap())
+        };
+        let opens = quartet("D", "D", "D", "F#", "D");
+        assert!(opens.modal_opening().unwrap());
+        assert!(!opens.opens_incorrectly().unwrap());
+        let closes = quartet("B4", "C5", "D4", "C4", "C");
+        assert_eq!(
+            closes.closes_incorrectly().unwrap(),
+            !closes.clausula_vera().unwrap()
+        );
+        let unkeyed = VoiceLeadingQuartet::from_names("D", "D", "D", "F#").unwrap();
+        assert!(unkeyed.opens_incorrectly().is_err());
+        assert!(unkeyed.closes_incorrectly().is_err());
+    }
 
     #[test]
     fn a_modal_opening_needs_a_perfect_interval_and_a_tonic_or_dominant() {

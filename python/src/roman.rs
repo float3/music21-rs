@@ -1215,37 +1215,24 @@ impl RomanNumeral {
     /// it names is one only the raised degree gives.
     fn adjustMinorVIandVIIByQuality(&mut self, useScale: &Bound<'_, PyAny>) -> PyResult<()> {
         let (key, _) = key_and_octave(Some(useScale))?;
-        if key.mode() != "minor" || !self.inner.case_matters() {
+        if !self.inner.case_matters() {
             return Ok(());
         }
         let degree = self.get_scaleDegree();
-        if !matches!(degree, 6 | 7) {
-            return Ok(());
-        }
-        let reading = if degree == 6 {
-            self.inner.sixth_minor()
-        } else {
-            self.inner.seventh_minor()
+        let reading = match degree {
+            6 => self.inner.sixth_minor(),
+            7 => self.inner.seventh_minor(),
+            _ => return Ok(()),
         };
-        let wants_raised = matches!(
-            self.implied_quality(),
-            RsImpliedQuality::Minor
-                | RsImpliedQuality::Diminished
-                | RsImpliedQuality::HalfDiminished
-        );
         let alteration = self.front_alteration();
-        let raise = match reading {
-            RsMinor67Default::Flat => false,
-            RsMinor67Default::Sharp => true,
-            RsMinor67Default::Quality => wants_raised,
-            RsMinor67Default::Cautionary => match alteration {
-                0 => wants_raised,
-                sharps if sharps >= 1 => false,
-                _ => true,
-            },
-        };
-        if raise {
-            self.state.alteration = Some(alteration + 1);
+        let adjusted = rs_roman::adjust_minor_vi_and_vii_by_quality(
+            &key,
+            reading,
+            self.implied_quality(),
+            alteration,
+        );
+        if adjusted != alteration {
+            self.state.alteration = Some(adjusted);
         }
         Ok(())
     }

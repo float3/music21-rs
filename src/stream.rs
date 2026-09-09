@@ -509,6 +509,34 @@ impl<'a> IntoIterator for &'a Stream {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_stream_says_what_kind_it_is_and_walks_its_events() {
+        use super::{Stream, StreamElement, StreamEvent, StreamKind};
+        use crate::note::Note;
+        use crate::pitch::Pitch;
+        use crate::tempo::MetronomeMark;
+
+        assert_eq!(StreamKind::Voice.as_str(), "Voice");
+        assert_eq!(StreamKind::Voice.to_string(), "Voice");
+        let mut stream = Stream::new();
+        assert!(stream.is_empty());
+        stream.set_kind(StreamKind::Voice);
+        assert_eq!(stream.kind(), StreamKind::Voice);
+        assert!(matches!(
+            StreamElement::from(MetronomeMark::new(120.0)),
+            StreamElement::MetronomeMark(_)
+        ));
+
+        let note = Note::from_pitch(Pitch::from_name("C4").unwrap());
+        let rebuilt = Stream::from_events([StreamEvent::new(0.0, note)]);
+        assert_eq!(rebuilt.iter().count(), 1);
+        assert!(!rebuilt.is_empty());
+        assert!(rebuilt.voices().is_empty());
+        let mut outer = Stream::new();
+        outer.push(stream);
+        assert_eq!(outer.voices().len(), 1);
+    }
+
     use super::*;
 
     #[test]

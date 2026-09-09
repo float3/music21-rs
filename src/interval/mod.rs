@@ -1164,6 +1164,55 @@ pub(crate) fn interval_to_pythagorean_ratio(interval: &Interval) -> Result<Fract
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn an_interval_is_read_from_a_name_a_number_or_one_of_its_halves() {
+        use super::{ChromaticInterval, DiatonicInterval, Interval, Specifier, parse_specifier};
+        use crate::note::Note;
+        use crate::pitch::Pitch;
+        use std::str::FromStr;
+
+        assert_eq!(Interval::from_str("M3").unwrap().short_name(), "M3");
+        assert_eq!(Interval::try_from("P5").unwrap().short_name(), "P5");
+        assert_eq!(
+            Interval::try_from("m6".to_string()).unwrap().short_name(),
+            "m6"
+        );
+        assert_eq!(Interval::try_from(7).unwrap().short_name(), "P5");
+        assert!(Interval::from_str("Q9").is_err());
+        assert_eq!(parse_specifier("M").unwrap(), Specifier::Major);
+        assert!(parse_specifier("Q").is_err());
+
+        let diatonic = Interval::from_diatonic(DiatonicInterval::from_name("M3").unwrap()).unwrap();
+        assert_eq!(diatonic.semitones(), 4.0);
+        assert!(!diatonic.is_implicit_diatonic());
+        assert_eq!(diatonic.diatonic().name(), "M3");
+        assert_eq!(diatonic.specifier(), Specifier::Major);
+        let chromatic = Interval::from_chromatic(ChromaticInterval::from_int(6)).unwrap();
+        assert!(chromatic.is_implicit_diatonic());
+        assert_eq!(chromatic.whole_semitones(), 6);
+        assert_eq!(chromatic.directed_simple_name(), "d5");
+        assert_eq!(
+            Interval::from_str("M-10").unwrap().directed_simple_name(),
+            "M-3"
+        );
+        assert_eq!(
+            Interval::from_str("M3").unwrap(),
+            Interval::from_str("M3").unwrap()
+        );
+        assert_ne!(
+            Interval::from_str("M3").unwrap(),
+            Interval::from_str("m3").unwrap()
+        );
+
+        let c = Note::from_pitch(Pitch::from_name("C4").unwrap());
+        let g = Note::from_pitch(Pitch::from_name("G4").unwrap());
+        let fifth = Interval::between_notes(&c, &g).unwrap();
+        assert_eq!(fifth.short_name(), "P5");
+        assert_eq!(
+            fifth.transpose_note(&g).unwrap().pitch_name_with_octave(),
+            "D5"
+        );
+    }
 
     #[test]
     fn a_note_flatter_than_the_table_wraps_the_way_music21_does() {

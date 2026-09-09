@@ -2025,6 +2025,112 @@ fn cents_to_alter_and_cents(shift: FloatType) -> (FloatType, FloatType) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_pitch_is_built_from_a_step_a_number_or_an_owned_name() {
+        use crate::pitch::{Pitch, PitchName, pitch_class_name};
+
+        assert_eq!(Pitch::from_step('d').unwrap().name(), "D");
+        assert!(Pitch::from_step('h').is_err());
+        assert_eq!(
+            Pitch::try_from("E-4".to_string())
+                .unwrap()
+                .name_with_octave(),
+            "E-4"
+        );
+        assert!(matches!(PitchName::from(60), PitchName::Number(n) if n == 60.0));
+        assert!(matches!(PitchName::from(61.5), PitchName::Number(n) if n == 61.5));
+        assert_eq!(pitch_class_name(1), "D-");
+        assert_eq!(pitch_class_name(13), "D-");
+        assert_eq!(pitch_class_name(10), "B-");
+    }
+
+    #[test]
+    fn spelling_is_inferred_for_a_pitch_built_from_a_number_and_can_be_unsaid() {
+        use crate::pitch::Pitch;
+
+        let mut pitch = Pitch::from_midi(61).unwrap();
+        assert!(pitch.spelling_is_inferred());
+        pitch.set_spelling_is_inferred(false);
+        assert!(!pitch.spelling_is_inferred());
+        assert!(!Pitch::from_name("C#").unwrap().spelling_is_inferred());
+
+        let mut raised = Pitch::from_name("C#4").unwrap();
+        raised.get_higher_enharmonic_in_place().unwrap();
+        assert_eq!(raised.name_with_octave(), "D-4");
+    }
+
+    #[test]
+    fn a_pitch_knows_whether_a_key_signature_already_writes_it() {
+        use crate::pitch::Pitch;
+
+        let altered = [
+            Pitch::from_name("F#").unwrap(),
+            Pitch::from_name("C#").unwrap(),
+        ];
+        assert!(
+            Pitch::from_name("F#4")
+                .unwrap()
+                .name_in_key_signature(&altered)
+        );
+        assert!(
+            !Pitch::from_name("F4")
+                .unwrap()
+                .name_in_key_signature(&altered)
+        );
+        assert!(
+            !Pitch::from_name("F-4")
+                .unwrap()
+                .name_in_key_signature(&altered)
+        );
+        assert!(
+            Pitch::from_name("F4")
+                .unwrap()
+                .step_in_key_signature(&altered)
+        );
+        assert!(
+            !Pitch::from_name("G4")
+                .unwrap()
+                .step_in_key_signature(&altered)
+        );
+    }
+
+    /// music21's `updateAccidentalDisplay` on its simplest shapes: a repeat
+    /// of a written accidental in the bar is not written again, a natural
+    /// after an accidental in the bar is a caution, and a note the key
+    /// signature already alters needs nothing.
+    #[test]
+    fn accidental_display_follows_the_pitches_before_it() {
+        use crate::pitch::{AccidentalDisplayOptions, Pitch};
+
+        let first = Pitch::from_name("F#4").unwrap();
+        let mut repeat = Pitch::from_name("F#4").unwrap();
+        let past = [first.clone()];
+        repeat.update_accidental_display(&AccidentalDisplayOptions {
+            pitch_past: &past,
+            ..AccidentalDisplayOptions::default()
+        });
+        assert_eq!(repeat.accidental().display_status(), Some(false));
+
+        let mut natural = Pitch::from_name("F4").unwrap();
+        natural.update_accidental_display(&AccidentalDisplayOptions {
+            pitch_past: &past,
+            ..AccidentalDisplayOptions::default()
+        });
+        assert!(natural.has_accidental());
+        assert_eq!(natural.accidental().display_status(), Some(true));
+
+        let mut in_key = Pitch::from_name("F#4").unwrap();
+        in_key.update_accidental_display(&AccidentalDisplayOptions {
+            altered_pitches: &[Pitch::from_name("F#").unwrap()],
+            ..AccidentalDisplayOptions::default()
+        });
+        assert_eq!(in_key.accidental().display_status(), Some(false));
+
+        let mut fresh = Pitch::from_name("B-4").unwrap();
+        fresh.update_accidental_display(&AccidentalDisplayOptions::default());
+        assert_eq!(fresh.accidental().display_status(), Some(true));
+    }
+
     /// music21 v11 split the absent octave in two: `.octave` always answers a
     /// number, and `.octaveIsImplicit` says whether one was ever given.
     #[test]

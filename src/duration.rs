@@ -559,96 +559,21 @@ impl Duration {
         Duration::new(self.quarter_length * factor)
     }
 
-    /// The tuplet this length is written as, when it is one: music21's
-    /// `quarterLengthToTuplet`, keeping the first match as its `fullName`
-    /// does.
-    ///
-    /// The search walks the note values from shortest to longest and, for
-    /// each, tries every tuplet numerator and every count of them that fits.
-    /// Order is what decides the answer: two thirds of a quarter matches a
-    /// quarter in a triplet before it matches anything longer, which is why
-    /// music21 calls it a quarter triplet and not two eighth triplets.
-    /// The one enormous tuplet music21 falls back on for a length no tie of
-    /// written values reaches: its `quarterLengthToNonPowerOf2Tuplet`.
-    ///
-    /// Any length can be written as a single note inside a strange enough
-    /// tuplet — 53/25 of a quarter is a whole note in a tuplet of a hundred
-    /// in the time of fifty-three — and music21 tries that before it calls a
-    /// length inexpressible. The answer is the tuplet together with the note
-    /// value written inside it.
-    fn last_resort_tuplet(&self) -> Option<(Tuplet, DurationType, u32)> {
-        let quarter_length = self.written_quarter_length();
-        if quarter_length <= 0.0 {
-            return None;
-        }
-        let (original_actual, original_normal) =
-            limited_fraction(1.0 / quarter_length, DENOMINATOR_LIMIT)?;
-        let (mut actual, mut normal) = (original_actual, original_normal);
-        // Between one and two, which is where a tuplet ratio belongs.
-        while actual < normal {
-            actual *= 2;
-            reduce(&mut actual, &mut normal);
-        }
-        while actual > normal * 2 {
-            normal *= 2;
-            reduce(&mut actual, &mut normal);
-        }
-        let (written, _) =
-            quarter_length_to_closest_type(quarter_length / normal as FloatType).ok()?;
-        // What is written inside the tuplet, which is the ratio the
-        // normalising undid.
-        let inside = (actual as FloatType / normal as FloatType)
-            / (original_actual as FloatType / original_normal as FloatType);
-        let (kind, dots) = exact_type_and_dots(inside)?;
-        Some((
-            Tuplet::new(
-                u32::try_from(actual).ok()?,
-                u32::try_from(normal).ok()?,
-                written,
-                0,
-            ),
-            kind,
-            dots,
-        ))
-    }
-
-    /// The tuplet this length is written as, if any.
+    /// The tuplet this length is written as, if any: the first of
+    /// [`quarter_length_to_tuplet`].
     ///
     /// A length that is already a plain written value is that value rather
-    /// than a tuplet of some other one, so a quarter answers `None`.
+    /// than a tuplet of some other one, so a quarter answers `None`: music21
+    /// tries the exact match before it tries any ratio, and a plain quarter
+    /// is a quarter even though it is also two thirds of a dotted quarter in
+    /// a triplet.
     pub fn tuplet(&self) -> Option<Tuplet> {
-        if self.quarter_length <= 0.0 {
-            return None;
-        }
-        // A length that is already a written value is that value, not a
-        // tuplet of some other one: music21 tries the exact match before it
-        // tries any ratio, and a plain quarter is a quarter even though it
-        // is also two thirds of a dotted quarter in a triplet.
         if self.type_and_dots().is_some() {
             return None;
         }
-        let mut values = DurationType::ALL;
-        values.sort_by(|left, right| {
-            left.quarter_length()
-                .partial_cmp(&right.quarter_length())
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
-        let tolerance = self.quarter_length * TUPLET_TOLERANCE;
-        for duration_type in values {
-            for actual in TUPLET_NUMERATORS {
-                for normal in 1..actual {
-                    for dots in TUPLET_DOTS {
-                        let candidate = duration_type.quarter_length_with_dots(dots)
-                            * FloatType::from(normal)
-                            / FloatType::from(actual);
-                        if (candidate - self.quarter_length).abs() <= tolerance {
-                            return Some(Tuplet::new(actual, normal, duration_type, dots));
-                        }
-                    }
-                }
-            }
-        }
-        None
+        quarter_length_to_tuplet(self.quarter_length, 1)
+            .into_iter()
+            .next()
     }
 
     /// The tuplets this length is written inside: the ones a caller set, or
@@ -661,17 +586,7 @@ impl Duration {
     pub fn tuplets(&self) -> Vec<Tuplet> {
         match &self.tuplets {
             Some(tuplets) => tuplets.clone(),
-            None => match self.tuplet() {
-                Some(tuplet) => vec![tuplet],
-                // The written values fall back to one enormous tuplet for a
-                // length no tie reaches, and that tuplet is this length's.
-                None if !self.tie_reaches() => self
-                    .last_resort_tuplet()
-                    .map(|(tuplet, _, _)| tuplet)
-                    .into_iter()
-                    .collect(),
-                None => Vec::new(),
-            },
+            None => convert(self.quarter_length, true).1.into_iter().collect(),
         }
     }
 
@@ -743,92 +658,17 @@ impl Duration {
     /// The written note values this length is made of, tied together:
     /// music21's `components`.
     ///
-    /// One value for a plain or dotted note, one for a tuplet (the written
-    /// value, which the tuplet's ratio then scales), and several for a
-    /// length that can only be written as a tie — a quarter tied to a
-    /// sixteenth for five sixteenths. Empty for a length that runs off the
-    /// end of the note values, which is music21's `inexpressible`.
-    ///
-    /// The tie is found greedily, largest value first, as music21 finds it:
-    /// take the largest note that fits, and look for a single dotted value
-    /// covering what is left before taking another bite.
+    /// This is the first half of [`quarter_conversion`], read over the
+    /// written length. A length whose tuplets a caller has set is read as
+    /// the tie those tuplets leave, without looking for a tuplet of its own.
     pub fn components(&self) -> Vec<(DurationType, u32)> {
-        let written = self.written_quarter_length();
-        // Zero is written as nothing at all, which is what music21's empty
-        // `components` says; `type_and_dots` would call it a `zero` note.
-        if written == 0.0 {
-            return Vec::new();
-        }
-        if let Some((duration_type, dots)) = exact_type_and_dots(written) {
-            return vec![(duration_type, dots)];
-        }
-        // Shorter than the shortest note value, or longer than a tie of the
-        // longest can reach: music21 calls both *inexpressible*, and asks
-        // this before it looks for a tuplet.
-        let Ok((largest, _)) = quarter_length_to_closest_type(written) else {
-            return Vec::new();
-        };
-        if largest.next_larger().is_none() {
-            return Vec::new();
-        }
-        if self.tuplets.is_none()
-            && let Some(tuplet) = self.tuplet()
-        {
-            return vec![(tuplet.duration_type(), tuplet.dots())];
-        }
-        let mut components = vec![(largest, 0)];
-        let mut remainder = written - largest.quarter_length();
-        for _ in 0..MAX_TIED_COMPONENTS {
-            if let Some(rest) = Duration::new(remainder)
-                .ok()
-                .and_then(|duration| duration.type_and_dots())
-            {
-                components.push(rest);
-                return components;
-            }
-            let Ok((next, _)) = quarter_length_to_closest_type(remainder) else {
-                break;
-            };
-            remainder -= next.quarter_length();
-            components.push((next, 0));
-        }
-        // A length no tie of written values reached: music21's last resort
-        // is one enormous tuplet over the whole of it, and only a length
-        // that defeats even that is inexpressible.
-        match self.last_resort_tuplet() {
-            Some((_, kind, dots)) => vec![(kind, dots)],
-            None => Vec::new(),
-        }
+        convert(self.written_quarter_length(), self.tuplets.is_none()).0
     }
 
-    /// Whether the written values were found by tying ordinary notes
-    /// together rather than by the last-resort tuplet.
-    fn tie_reaches(&self) -> bool {
-        let written = self.written_quarter_length();
-        if written == 0.0 || exact_type_and_dots(written).is_some() {
-            return true;
-        }
-        let Ok((largest, _)) = quarter_length_to_closest_type(written) else {
-            return true;
-        };
-        if largest.next_larger().is_none() {
-            return true;
-        }
-        let mut remainder = written - largest.quarter_length();
-        for _ in 0..MAX_TIED_COMPONENTS {
-            if Duration::new(remainder)
-                .ok()
-                .and_then(|duration| duration.type_and_dots())
-                .is_some()
-            {
-                return true;
-            }
-            let Ok((next, _)) = quarter_length_to_closest_type(remainder) else {
-                return false;
-            };
-            remainder -= next.quarter_length();
-        }
-        false
+    /// Whether the length needs more than one written value, tied: music21's
+    /// `isComplex`.
+    pub fn is_complex(&self) -> bool {
+        self.components().len() > 1
     }
 
     /// Returns music21's `fullName` for a single written note value, such as
@@ -957,8 +797,159 @@ pub fn quarter_length_to_closest_type(quarter_length: FloatType) -> Result<(Dura
     Err(too_small())
 }
 
-/// Writes a quarter length the way music21's `mixedNumeral` does: `"2"`,
-/// `"1/2"`, `"1 3/4"`.
+/// The tuplets a length can be written as, shortest note value first:
+/// music21's `quarterLengthToTuplet`, stopping after `max_to_return` of
+/// them.
+///
+/// The search walks the note values from shortest to longest and, for
+/// each, tries every tuplet numerator and every count of them that fits.
+/// Order is what decides the answer: two thirds of a quarter matches a
+/// quarter in a triplet before it matches anything longer, which is why
+/// music21 calls it a quarter triplet and not two eighth triplets. Dotted
+/// tuplets are found; nested ones and four in the time of three are not,
+/// the latter being a dotted note.
+pub fn quarter_length_to_tuplet(quarter_length: FloatType, max_to_return: usize) -> Vec<Tuplet> {
+    let mut found = Vec::new();
+    if quarter_length.is_nan() || quarter_length <= 0.0 || max_to_return == 0 {
+        return found;
+    }
+    let mut values = DurationType::ALL;
+    values.sort_by(|left, right| {
+        left.quarter_length()
+            .partial_cmp(&right.quarter_length())
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    let tolerance = quarter_length * TUPLET_TOLERANCE;
+    for duration_type in values {
+        for actual in TUPLET_NUMERATORS {
+            for normal in 1..actual {
+                for dots in TUPLET_DOTS {
+                    let candidate = duration_type.quarter_length_with_dots(dots)
+                        * FloatType::from(normal)
+                        / FloatType::from(actual);
+                    if (candidate - quarter_length).abs() <= tolerance {
+                        found.push(Tuplet::new(actual, normal, duration_type, dots));
+                        break;
+                    }
+                }
+            }
+            if found.len() >= max_to_return {
+                return found;
+            }
+        }
+    }
+    found
+}
+
+/// The one enormous tuplet music21 falls back on for a length no tie of
+/// written values reaches: its `quarterLengthToNonPowerOf2Tuplet`.
+///
+/// Any length can be written as a single note inside a strange enough
+/// tuplet — 53/25 of a quarter is a whole note in a tuplet of a hundred
+/// in the time of fifty-three — and music21 tries that before it calls a
+/// length inexpressible. The answer is the tuplet together with the note
+/// value and dots written inside it, or nothing for a length that defeats
+/// even that.
+pub fn quarter_length_to_non_power_of_2_tuplet(
+    quarter_length: FloatType,
+) -> Option<(Tuplet, DurationType, u32)> {
+    if quarter_length.is_nan() || quarter_length <= 0.0 {
+        return None;
+    }
+    let (original_actual, original_normal) =
+        limited_fraction(1.0 / quarter_length, DENOMINATOR_LIMIT)?;
+    let (mut actual, mut normal) = (original_actual, original_normal);
+    // Between one and two, which is where a tuplet ratio belongs.
+    while actual < normal {
+        actual *= 2;
+        reduce(&mut actual, &mut normal);
+    }
+    while actual > normal * 2 {
+        normal *= 2;
+        reduce(&mut actual, &mut normal);
+    }
+    let (written, _) = quarter_length_to_closest_type(quarter_length / normal as FloatType).ok()?;
+    // What is written inside the tuplet, which is the ratio the normalising
+    // undid.
+    let inside = (actual as FloatType / normal as FloatType)
+        / (original_actual as FloatType / original_normal as FloatType);
+    let (kind, dots) = exact_type_and_dots(inside)?;
+    Some((
+        Tuplet::new(
+            u32::try_from(actual).ok()?,
+            u32::try_from(normal).ok()?,
+            written,
+            0,
+        ),
+        kind,
+        dots,
+    ))
+}
+
+/// The written note values a length is made of and the tuplet, if any, they
+/// are written inside: music21's `quarterConversion`.
+///
+/// One value for a plain or dotted note, one for a tuplet (the written
+/// value, which the tuplet's ratio then scales), and several for a length
+/// that can only be written as a tie — a quarter tied to a sixteenth for
+/// five sixteenths. Empty for a length that runs off the end of the note
+/// values, which is music21's `inexpressible`, and for a length of nought.
+///
+/// The tie is found greedily, largest value first, as music21 finds it:
+/// take the largest note that fits, and look for a single dotted value
+/// covering what is left before taking another bite. A length no tie of
+/// eight values reaches is written as one note inside the tuplet
+/// [`quarter_length_to_non_power_of_2_tuplet`] finds.
+pub fn quarter_conversion(quarter_length: FloatType) -> (Vec<(DurationType, u32)>, Option<Tuplet>) {
+    convert(quarter_length, true)
+}
+
+/// [`quarter_conversion`], with the search for an ordinary tuplet turned off
+/// where a caller has already said which tuplets the length is written in.
+fn convert(
+    written: FloatType,
+    look_for_tuplet: bool,
+) -> (Vec<(DurationType, u32)>, Option<Tuplet>) {
+    // Zero is written as nothing at all, which is what music21's empty
+    // `components` says; `type_and_dots` would call it a `zero` note.
+    if written == 0.0 {
+        return (Vec::new(), None);
+    }
+    if let Some(value) = exact_type_and_dots(written) {
+        return (vec![value], None);
+    }
+    // Shorter than the shortest note value, or longer than a tie of the
+    // longest can reach: music21 calls both *inexpressible*, and asks this
+    // before it looks for a tuplet.
+    let Ok((largest, _)) = quarter_length_to_closest_type(written) else {
+        return (Vec::new(), None);
+    };
+    if largest.next_larger().is_none() {
+        return (Vec::new(), None);
+    }
+    if look_for_tuplet && let Some(tuplet) = quarter_length_to_tuplet(written, 1).into_iter().next()
+    {
+        return (vec![(tuplet.duration_type(), tuplet.dots())], Some(tuplet));
+    }
+    let mut components = vec![(largest, 0)];
+    let mut remainder = written - largest.quarter_length();
+    for _ in 0..MAX_TIED_COMPONENTS {
+        if let Some(rest) = exact_type_and_dots(remainder) {
+            components.push(rest);
+            return (components, None);
+        }
+        let Ok((next, _)) = quarter_length_to_closest_type(remainder) else {
+            break;
+        };
+        remainder -= next.quarter_length();
+        components.push((next, 0));
+    }
+    match quarter_length_to_non_power_of_2_tuplet(written) {
+        Some((tuplet, kind, dots)) => (vec![(kind, dots)], Some(tuplet)),
+        None => (Vec::new(), None),
+    }
+}
+
 /// The largest denominator [`mixed_numeral`] will write. music21 allows any
 /// up to 65535, but it prints the quarter length of a written note, and a
 /// note nobody can write does not want a fraction with a four-digit
@@ -969,6 +960,8 @@ const MAX_MIXED_NUMERAL_DENOMINATOR: u32 = 1024;
 /// value.
 const MIXED_NUMERAL_TOLERANCE: FloatType = 1e-6;
 
+/// Writes a quarter length the way music21's `mixedNumeral` does: `"2"`,
+/// `"1/2"`, `"1 3/4"`.
 fn mixed_numeral(value: FloatType) -> String {
     let whole = value.trunc() as IntegerType;
     let remainder = value - value.trunc();
@@ -1025,6 +1018,75 @@ impl TryFrom<IntegerType> for Duration {
 
 #[cfg(test)]
 mod tests {
+
+    /// music21's own examples for `quarterLengthToTuplet`,
+    /// `quarterLengthToNonPowerOf2Tuplet` and `quarterConversion`.
+    #[test]
+    fn a_length_is_read_as_the_tuplets_and_ties_music21_reads() {
+        use super::{
+            Duration, DurationType, quarter_conversion, quarter_length_to_non_power_of_2_tuplet,
+            quarter_length_to_tuplet,
+        };
+
+        let names = |tuplets: Vec<Tuplet>| -> Vec<String> {
+            tuplets
+                .iter()
+                .map(|tuplet| {
+                    format!(
+                        "{}/{}/{}",
+                        tuplet.actual(),
+                        tuplet.normal(),
+                        tuplet.duration_type().music21_name()
+                    )
+                })
+                .collect()
+        };
+        assert_eq!(
+            names(quarter_length_to_tuplet(0.333_333_33, 4)),
+            ["3/2/eighth", "3/1/quarter"]
+        );
+        assert_eq!(
+            names(quarter_length_to_tuplet(0.20, 4)),
+            ["5/4/16th", "5/2/eighth", "5/1/quarter"]
+        );
+        assert_eq!(
+            names(quarter_length_to_tuplet(0.333_333_3, 1)),
+            ["3/2/eighth"]
+        );
+        // A plain quarter is also two dotted quarters in the time of three,
+        // which is why `Duration::tuplet` asks for the exact value first.
+        let plain = quarter_length_to_tuplet(1.0, 1);
+        assert_eq!(names(plain.clone()), ["3/2/quarter"]);
+        assert_eq!(plain[0].dots(), 1);
+        assert!(quarter_length_to_tuplet(0.0, 4).is_empty());
+
+        let (tuplet, kind, dots) = quarter_length_to_non_power_of_2_tuplet(7.0).unwrap();
+        assert_eq!(names(vec![tuplet]), ["8/7/quarter"]);
+        assert_eq!((kind, dots), (DurationType::Breve, 0));
+        let (tuplet, kind, _) = quarter_length_to_non_power_of_2_tuplet(7.0 / 3.0).unwrap();
+        assert_eq!(names(vec![tuplet]), ["12/7/16th"]);
+        assert_eq!(kind, DurationType::Whole);
+        assert!(quarter_length_to_non_power_of_2_tuplet(0.0).is_none());
+
+        let (components, tuplet) = quarter_conversion(2.5);
+        assert_eq!(
+            components,
+            [(DurationType::Half, 0), (DurationType::Eighth, 0)]
+        );
+        assert!(tuplet.is_none());
+        let (components, tuplet) = quarter_conversion(2.0 / 3.0);
+        assert_eq!(components, [(DurationType::Quarter, 0)]);
+        assert_eq!(names(tuplet.into_iter().collect()), ["3/2/quarter"]);
+        let (components, tuplet) = quarter_conversion(3.75);
+        assert_eq!(components, [(DurationType::Half, 3)]);
+        assert!(tuplet.is_none());
+        assert_eq!(quarter_conversion(99.0), (Vec::new(), None));
+        assert_eq!(quarter_conversion(0.0), (Vec::new(), None));
+
+        assert!(Duration::new(2.5).unwrap().is_complex());
+        assert!(!Duration::new(3.0).unwrap().is_complex());
+        assert!(!Duration::new(2.0 / 3.0).unwrap().is_complex());
+    }
 
     #[test]
     fn neighbouring_types_match_music21() {

@@ -1226,6 +1226,22 @@ impl Lyric {
     /// Reads the syllable and its position out of hyphenated text. Like
     /// [`Self::set_text`], this drops any components.
     pub fn set_raw_text(&mut self, raw_text: &str) {
+        self.set_text_and_syllabic(raw_text, false);
+    }
+
+    /// music21's `setTextAndSyllabic`: [`Self::set_raw_text`], unless
+    /// `apply_raw` says the hyphens are the text itself. Then nothing about
+    /// the word is read out of them and the position stands as it was,
+    /// except that a lyric that had said nothing about where it falls is now
+    /// a whole word. Either way drops any components.
+    pub fn set_text_and_syllabic(&mut self, raw_text: &str, apply_raw: bool) {
+        if apply_raw {
+            self.set_text(raw_text);
+            if !self.said_syllabic {
+                self.set_syllabic(Syllabic::Single);
+            }
+            return;
+        }
         self.components.clear();
         let starts = raw_text.starts_with('-');
         let ends = raw_text.ends_with('-') && raw_text.len() > 1;
@@ -1253,6 +1269,170 @@ impl fmt::Display for Lyric {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn ties_beams_and_placements_are_written_and_read_by_name() {
+        use super::{
+            Beam, BeamDirection, BeamType, Beams, Lyric, Placement, Syllabic, Tie, TieStyle,
+            TieType,
+        };
+        use std::str::FromStr;
+
+        let mut tie = Tie::from_str("start").unwrap();
+        assert_eq!(tie.tie_type(), TieType::Start);
+        tie.set_tie_type(TieType::Stop);
+        assert_eq!(tie.tie_type(), TieType::Stop);
+        assert!(Tie::from_str("sideways").is_err());
+        assert_eq!(TieStyle::Dotted.to_string(), "dotted");
+        assert_eq!(Placement::Above.to_string(), "above");
+        assert_eq!(Syllabic::Middle.to_string(), "middle");
+
+        assert_eq!(
+            BeamType::from_music21_name("partial"),
+            Some(BeamType::PartialBeam)
+        );
+        assert_eq!(BeamType::from_music21_name("sideways"), None);
+        assert_eq!(
+            BeamDirection::from_music21_name("left"),
+            Some(BeamDirection::Left)
+        );
+        assert_eq!(BeamDirection::from_music21_name("up"), None);
+
+        let mut beam = Beam::new(BeamType::Start, None);
+        beam.set_beam_type(Some(BeamType::Continue));
+        beam.set_direction(Some(BeamDirection::Right));
+        assert_eq!(beam.beam_type(), Some(BeamType::Continue));
+        assert_eq!(beam.direction(), Some(BeamDirection::Right));
+
+        let mut beams = Beams::default();
+        assert!(beams.is_empty());
+        beams.set_beams(vec![beam]);
+        assert_eq!(beams.beams().len(), 1);
+        beams.beams_mut()[0].set_beam_type(Some(BeamType::Stop));
+        assert_eq!(beams.beams()[0].beam_type(), Some(BeamType::Stop));
+        assert!(!beams.feathered());
+        beams.set_feathered(true);
+        assert!(beams.feathered());
+
+        let mut lyric = Lyric::new("hel");
+        assert_eq!(lyric.elision_before(), " ");
+        assert_eq!(lyric.explicit_syllabic(), Some(Syllabic::Single));
+        lyric.clear_text();
+        assert_eq!(lyric.explicit_text(), None);
+        assert_eq!(Lyric::unsung().explicit_syllabic(), None);
+    }
+
+    /// The three passes music21 runs over a bar's naive beams, on the
+    /// shapes each one exists for.
+    #[test]
+    fn the_beam_passes_tidy_a_run_of_beams() {
+        use super::{
+            BeamDirection, BeamType, Beams, merge_connecting_partial_beams,
+            remove_sandwiched_unbeamables, sanitize_partial_beams,
+        };
+        use crate::duration::DurationType;
+
+        let filled = |beam_type: BeamType| {
+            let mut beams = Beams::default();
+            beams.fill(DurationType::Eighth, Some(beam_type)).unwrap();
+            Some(beams)
+        };
+        let partial = |direction: BeamDirection| {
+            let mut beams = Beams::default();
+            beams
+                .fill(DurationType::Eighth, Some(BeamType::PartialBeam))
+                .unwrap();
+            beams.beams_mut()[0].set_direction(Some(direction));
+            Some(beams)
+        };
+
+        // A beamable note between two unbeamable ones cannot be beamed.
+        let mut run = vec![
+            None,
+            filled(BeamType::Start),
+            None,
+            filled(BeamType::Start),
+            filled(BeamType::Stop),
+        ];
+        remove_sandwiched_unbeamables(&mut run);
+        assert!(run[1].is_none());
+        assert!(run[3].is_some());
+
+        // A group of nothing but partials is dropped; a partial after a
+        // start points right and one after a stop points left.
+        let mut lone = vec![partial(BeamDirection::Left)];
+        sanitize_partial_beams(&mut lone);
+        assert!(lone[0].is_none());
+        let mut mixed = Beams::default();
+        mixed.append(BeamType::Start, None);
+        mixed.append(BeamType::PartialBeam, Some(BeamDirection::Left));
+        let mut run = vec![Some(mixed)];
+        sanitize_partial_beams(&mut run);
+        let group = run[0].as_ref().unwrap();
+        assert_eq!(group.beams()[1].direction(), Some(BeamDirection::Right));
+
+        // Two partials pointing at each other are one beam.
+        let mut run = vec![partial(BeamDirection::Right), partial(BeamDirection::Left)];
+        merge_connecting_partial_beams(&mut run);
+        assert_eq!(
+            run[0].as_ref().unwrap().beams()[0].beam_type(),
+            Some(BeamType::Start)
+        );
+        assert_eq!(
+            run[1].as_ref().unwrap().beams()[0].beam_type(),
+            Some(BeamType::Stop)
+        );
+        // A partial pointing into a beam that starts carries it on.
+        let mut run = vec![partial(BeamDirection::Right), filled(BeamType::Start)];
+        merge_connecting_partial_beams(&mut run);
+        assert_eq!(
+            run[1].as_ref().unwrap().beams()[0].beam_type(),
+            Some(BeamType::Continue)
+        );
+        // One pointing into a beam that ends is left alone.
+        let mut run = vec![partial(BeamDirection::Right), filled(BeamType::Stop)];
+        merge_connecting_partial_beams(&mut run);
+        assert_eq!(
+            run[0].as_ref().unwrap().beams()[0].beam_type(),
+            Some(BeamType::PartialBeam)
+        );
+    }
+
+    /// music21's own `setTextAndSyllabic` examples.
+    #[test]
+    fn text_and_syllabic_are_read_from_the_hyphens_unless_told_not_to() {
+        use super::{Lyric, Syllabic};
+
+        let mut lyric = Lyric::unsung();
+        lyric.set_text_and_syllabic("hel-", false);
+        assert_eq!(
+            (lyric.text(), lyric.syllabic()),
+            ("hel".to_string(), Syllabic::Begin)
+        );
+        lyric.set_text_and_syllabic("-lo", false);
+        assert_eq!(
+            (lyric.text(), lyric.syllabic()),
+            ("lo".to_string(), Syllabic::End)
+        );
+        lyric.set_text_and_syllabic("the", false);
+        assert_eq!(
+            (lyric.text(), lyric.syllabic()),
+            ("the".to_string(), Syllabic::Single)
+        );
+
+        let mut raw = Lyric::unsung();
+        raw.set_text_and_syllabic("hel-", true);
+        assert_eq!(
+            (raw.text(), raw.syllabic()),
+            ("hel-".to_string(), Syllabic::Single)
+        );
+        raw.set_syllabic(Syllabic::Begin);
+        raw.set_text_and_syllabic("-lo", true);
+        assert_eq!(
+            (raw.text(), raw.syllabic()),
+            ("-lo".to_string(), Syllabic::Begin)
+        );
+    }
+
     #[test]
     fn beams_fill_one_level_for_each_flag() {
         // music21's own example: a sixteenth is beamed at two levels.

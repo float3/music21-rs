@@ -77,6 +77,11 @@ impl DiatonicInterval {
     }
 
     /// The quality.
+    pub fn specifier_abbreviation(&self) -> &'static str {
+        self.specifier.prefix()
+    }
+
+    /// The quality of the interval.
     pub fn specifier(&self) -> Specifier {
         self.specifier
     }
@@ -316,6 +321,28 @@ fn semitones_generic(r#in: UnsignedIntegerType) -> Result<UnsignedIntegerType> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_specifier_abbreviation_is_the_quality_prefix() {
+        assert_eq!(
+            DiatonicInterval::from_name("M-10")
+                .unwrap()
+                .specifier_abbreviation(),
+            "M"
+        );
+        assert_eq!(
+            DiatonicInterval::from_name("P5")
+                .unwrap()
+                .specifier_abbreviation(),
+            "P"
+        );
+        assert_eq!(
+            DiatonicInterval::from_name("d4")
+                .unwrap()
+                .specifier_abbreviation(),
+            "d"
+        );
+    }
 
     #[test]
     fn diatonic_get_chromatic_major_third() {
