@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use crate::{
     chord::Chord,
-    chord::root::{bass_pitch, find_root_pitch, pitch_class, step_num},
+    chord::root::{pitch_class, step_num},
     defaults::{FloatType, IntegerType},
     error::{Error, Result},
     interval::Interval,
@@ -76,6 +76,9 @@ pub struct ChordSymbol {
     omissions: Vec<u8>,
     #[cfg_attr(feature = "serde", serde(default))]
     additions: Vec<ChordAlteration>,
+    /// music21's kind, where the shorthand is one of its abbreviations.
+    #[cfg_attr(feature = "serde", serde(default))]
+    kind: Option<String>,
 }
 
 /// A chord type from music21's `harmony.CHORD_TYPES` table.
@@ -503,6 +506,13 @@ impl ChordSymbol {
         add_implicit_music21_alterations(&suffix_without_additions, &mut alterations);
         let extensions = parse_extensions(&suffix_without_additions, &alterations);
         let quality = parse_quality(&suffix_without_additions, &alterations);
+        // music21's `_getKindFromShortHand`: a shorthand that is one of its
+        // abbreviations names the kind outright.
+        let shorthand: &str = &suffix_without_additions;
+        let kind = MUSIC21_CHORD_TYPES
+            .iter()
+            .find(|chord_type| chord_type.abbreviations.contains(&shorthand))
+            .map(|chord_type| chord_type.kind.to_string());
 
         Ok(Self {
             figure: trimmed.to_string(),
@@ -513,7 +523,15 @@ impl ChordSymbol {
             alterations,
             omissions,
             additions,
+            kind,
         })
+    }
+
+    /// music21's `chordKind`: the kind the shorthand names, where it is one
+    /// of music21's abbreviations, so `Cmaj7` is `major-seventh` and `CN6`
+    /// the Neapolitan. `None` for a shorthand the crate reads on its own.
+    pub fn kind(&self) -> Option<&str> {
+        self.kind.as_deref()
     }
 
     /// Returns the original chord-symbol figure.
@@ -684,6 +702,51 @@ impl ChordSymbol {
     /// thirteenth implies the ninth and eleventh, as music21's chord kinds
     /// spell them, unless the figure omits them.
     pub fn to_chord(&self) -> Result<Chord> {
+        let mut intervals: Vec<(u8, String)> = match self.kind_notation() {
+            Some(notation) => {
+                let mut intervals = notation_intervals(notation)?;
+                intervals.retain(|(degree, _)| !self.omissions.contains(degree));
+                for addition in &self.additions {
+                    let (degree, name) = added_interval(addition)?;
+                    intervals.push((degree, name.to_string()));
+                }
+                intervals
+            }
+            None => self.spelled_intervals()?,
+        };
+        intervals.sort_unstable_by_key(|(degree, _)| *degree);
+        intervals.dedup();
+
+        let mut pitches = intervals
+            .into_iter()
+            .map(|(_, name)| Interval::from_name(&name)?.transpose_pitch(&self.root))
+            .collect::<Result<Vec<_>>>()?;
+
+        if let Some(bass) = &self.bass {
+            if let Some(index) = pitches.iter().position(|pitch| pitch.name() == bass.name()) {
+                let bass = pitches.remove(index);
+                pitches.insert(0, bass);
+            } else {
+                pitches.insert(0, bass.clone());
+            }
+        }
+
+        Chord::new(pitches.as_slice())
+    }
+
+    /// The notation the symbol is realized from when its shorthand names one
+    /// of music21's kinds outright and nothing alters it: `N6` is the
+    /// Neapolitan whatever the crate's own reading of the letters would be.
+    fn kind_notation(&self) -> Option<&'static str> {
+        if !self.alterations.is_empty() {
+            return None;
+        }
+        notation_for_kind(self.kind.as_deref()?)
+    }
+
+    /// The intervals the symbol's quality, extensions, alterations and
+    /// additions spell, for a shorthand that names no kind outright.
+    fn spelled_intervals(&self) -> Result<Vec<(u8, String)>> {
         let mut intervals = self.base_intervals();
 
         let highest = self
@@ -723,24 +786,10 @@ impl ChordSymbol {
             intervals.push(added_interval(addition)?);
         }
 
-        intervals.sort_unstable_by_key(|(degree, _)| *degree);
-        intervals.dedup();
-
-        let mut pitches = intervals
+        Ok(intervals
             .into_iter()
-            .map(|(_, name)| Interval::from_name(name)?.transpose_pitch(&self.root))
-            .collect::<Result<Vec<_>>>()?;
-
-        if let Some(bass) = &self.bass {
-            if let Some(index) = pitches.iter().position(|pitch| pitch.name() == bass.name()) {
-                let bass = pitches.remove(index);
-                pitches.insert(0, bass);
-            } else {
-                pitches.insert(0, bass.clone());
-            }
-        }
-
-        Chord::new(pitches.as_slice())
+            .map(|(degree, name)| (degree, name.to_string()))
+            .collect())
     }
 
     fn base_intervals(&self) -> Vec<(u8, &'static str)> {
@@ -798,124 +847,169 @@ impl ChordSymbol {
     }
 }
 
-/// Returns the music21 chord-symbol figure for a chord, when identified.
-///
-/// This ports music21's `harmony.chordSymbolFigureFromChord` matching order and
-/// spelling conventions. Music21's "Chord Symbol Cannot Be Identified" result
-/// is represented by an empty list so callers can keep using `Option<String>`.
+/// The lead-sheet symbol a chord is written as, as a list so a caller can
+/// keep using it where several were once offered: [`ChordSymbolFigure`]
+/// written out, or nothing when no kind fits.
 pub(crate) fn chord_symbol_spellings(chord: &Chord) -> Vec<String> {
-    chord_symbol_spellings_for_root(chord, None)
-}
-
-pub(crate) fn chord_symbol_spellings_with_root(chord: &Chord, root: u8) -> Vec<String> {
-    chord_symbol_spellings_for_root(chord, Some(root % 12))
-}
-
-fn chord_symbol_spellings_for_root(chord: &Chord, explicit_root: Option<u8>) -> Vec<String> {
-    music21_chord_symbol_figure(chord, explicit_root)
+    ChordSymbolFigure::from_chord(chord)
+        .map(|figure| figure.to_string())
         .into_iter()
         .collect()
 }
 
-fn music21_chord_symbol_figure(chord: &Chord, explicit_root: Option<u8>) -> Option<String> {
-    let pitches = chord.pitches();
-    if pitches.iter().any(|pitch| {
-        let ps = pitch.ps();
-        (ps - ps.round()).abs() > FloatType::EPSILON
-    }) {
-        return None;
-    }
-
-    if pitches.is_empty() {
-        return None;
-    }
-
-    let mut root_pitch = if let Some(root) = explicit_root {
-        pitches
-            .iter()
-            .find(|pitch| pitch_class(pitch) == root)
-            .cloned()?
-    } else {
-        find_root_pitch(&pitches).cloned()?
+/// [`chord_symbol_spellings`] with the root fixed as the pitch of the chord
+/// that has the given pitch class, or nothing when no pitch has it.
+pub(crate) fn chord_symbol_spellings_with_root(chord: &Chord, root: u8) -> Vec<String> {
+    let Some(root) = chord
+        .pitches()
+        .into_iter()
+        .find(|pitch| pitch_class(pitch) == root % 12)
+    else {
+        return Vec::new();
     };
+    ChordSymbolFigure::from_chord_with_root(chord, &root)
+        .map(|figure| figure.to_string())
+        .into_iter()
+        .collect()
+}
 
-    if pitches.len() == 1 {
-        return Some(format!("{}pedal", root_pitch.name()));
+/// A chord named as a lead-sheet symbol, in the parts music21's
+/// `chordSymbolFigureFromChord` writes it from: the root, the kind and its
+/// abbreviation, the bass where it is not the root, and the notes the kind
+/// does not account for.
+///
+/// `Display` writes the figure as music21 writes it — `C7`, `E-m7/G-`,
+/// `CaddD-` — and [`Self::written_with`] writes it with another abbreviation
+/// for the kind.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[must_use]
+pub struct ChordSymbolFigure {
+    /// The root the figure is written on.
+    ///
+    /// A suspended second in inversion is read as a suspended fourth on its
+    /// bass, as music21 reads it, so for that chord this is the bass.
+    pub root: String,
+    /// music21's name for the kind, `dominant-seventh`.
+    pub kind: &'static str,
+    /// The abbreviation music21 writes the kind with, `7`.
+    pub abbreviation: &'static str,
+    /// The bass, where it is not the root.
+    pub bass: Option<String>,
+    /// The notes of the chord the kind does not account for.
+    pub additions: Vec<String>,
+    /// The notes the kind expects that the chord lacks. music21 writes these
+    /// only beside additions: a chord that leaves out a note of its kind is
+    /// still that kind, and says nothing about it.
+    pub omissions: Vec<String>,
+}
+
+impl ChordSymbolFigure {
+    /// The figure of a chord, or `None` for an empty chord, a microtonal one,
+    /// or one no kind in music21's table fits.
+    pub fn from_chord(chord: &Chord) -> Option<Self> {
+        let pitches = chord.pitches();
+        let microtonal = pitches
+            .iter()
+            .any(|pitch| (pitch.ps() - pitch.ps().round()).abs() > FloatType::EPSILON);
+        if pitches.is_empty() || microtonal {
+            return None;
+        }
+        let root = chord.root()?.clone();
+        if pitches.len() == 1 {
+            return Some(Self {
+                root: root.name(),
+                kind: "pedal",
+                abbreviation: "pedal",
+                bass: None,
+                additions: Vec::new(),
+                omissions: Vec::new(),
+            });
+        }
+        let matched = identify_music21_chord_type(&Music21ChordAnalysis::of(chord))?;
+        let bass = chord.bass()?.clone();
+        let inverted = pitch_class(&bass) != pitch_class(&root);
+        let (root, kind, abbreviation, notation) = if inverted && matched.kind == "suspended-second"
+        {
+            (bass.clone(), "suspended-fourth", "sus", "1,4,5")
+        } else {
+            (root, matched.kind, matched.abbreviation, matched.notation)
+        };
+        let bass = (pitch_class(&bass) != pitch_class(&root)).then(|| bass.name());
+        let mut perfect = kind_pitch_names(&root, notation).ok()?;
+        // music21 reads the figure back through its `ChordSymbol`, which
+        // adds a bass the kind does not carry to the notes it sounds, so a
+        // bass is never an addition.
+        perfect.extend(bass.clone());
+        let present: BTreeSet<String> = pitches.iter().map(Pitch::name).collect();
+        let (additions, omissions) = if perfect.is_superset(&present) {
+            (Vec::new(), Vec::new())
+        } else {
+            (
+                present.difference(&perfect).cloned().collect(),
+                perfect.difference(&present).cloned().collect(),
+            )
+        };
+        Some(Self {
+            root: root.name(),
+            kind,
+            abbreviation,
+            bass,
+            additions,
+            omissions,
+        })
     }
 
-    let analysis = Music21ChordAnalysis::new(&pitches, &root_pitch);
-    let matched = identify_music21_chord_type(&analysis)?;
-    let bass_pitch = bass_pitch(&pitches)?;
-    let mut notation = matched.notation;
-    let mut abbreviation = matched.abbreviation;
-
-    if pitch_class(bass_pitch) != pitch_class(&root_pitch)
-        && matched.kind == "suspended-second"
-        && matched.abbreviation == "sus2"
-    {
-        root_pitch = bass_pitch.clone();
-        notation = "1,4,5";
-        abbreviation = "sus";
+    /// The figure with the root fixed by the caller rather than inferred,
+    /// which is how music21 names the augmented sixths.
+    pub fn from_chord_with_root(chord: &Chord, root: &Pitch) -> Option<Self> {
+        let mut chord = chord.clone();
+        chord.set_root(Some(root.clone()));
+        Self::from_chord(&chord)
     }
 
-    let mut figure = format!("{}{}", root_pitch.name(), abbreviation);
-    if pitch_class(bass_pitch) != pitch_class(&root_pitch) {
-        figure.push('/');
-        figure.push_str(&bass_pitch.name());
-    }
-
-    let perfect = perfect_pitch_names(&root_pitch, notation)?;
-    let in_pitches = pitches
-        .iter()
-        .map(Pitch::name)
-        .collect::<BTreeSet<String>>();
-
-    if !perfect.is_superset(&in_pitches) {
-        let additions = in_pitches.difference(&perfect).cloned().collect::<Vec<_>>();
-        let subtractions = perfect.difference(&in_pitches).cloned().collect::<Vec<_>>();
-
-        if !additions.is_empty() {
+    /// The figure written with another abbreviation for its kind, which is
+    /// how music21 writes it after `changeAbbreviationFor`.
+    pub fn written_with(&self, abbreviation: &str) -> String {
+        let mut figure = format!("{}{abbreviation}", self.root);
+        if let Some(bass) = &self.bass {
+            figure.push('/');
+            figure.push_str(bass);
+        }
+        if !self.additions.is_empty() {
             figure.push_str("add");
-            figure.push_str(&additions.join(","));
+            figure.push_str(&self.additions.join(","));
+            if !self.omissions.is_empty() {
+                figure.push_str("omit");
+                figure.push_str(&self.omissions.join(","));
+            }
         }
-        if !subtractions.is_empty() {
-            figure.push_str("omit");
-            figure.push_str(&subtractions.join(","));
-        }
+        figure
     }
+}
 
-    Some(figure)
+impl std::fmt::Display for ChordSymbolFigure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.written_with(self.abbreviation))
+    }
 }
 
 impl Music21ChordAnalysis {
-    fn new(pitches: &[Pitch], root_pitch: &Pitch) -> Self {
-        let d3 = semitones_from_chord_step(pitches, root_pitch, 3);
-        let d5 = semitones_from_chord_step(pitches, root_pitch, 5);
-        let d7 = semitones_from_chord_step(pitches, root_pitch, 7);
-        let d9 = semitones_from_chord_step(pitches, root_pitch, 2);
-        let d11 = semitones_from_chord_step(pitches, root_pitch, 4);
-        let d13 = semitones_from_chord_step(pitches, root_pitch, 6);
-        let unique_pitch_names = pitches
-            .iter()
-            .map(Pitch::name)
-            .collect::<BTreeSet<String>>();
-
+    /// What music21's `chordSymbolFigureFromChord` reads off a chord before
+    /// it looks for a kind, above the root the chord reports.
+    fn of(chord: &Chord) -> Self {
+        let step = |degree: u8| chord.semitones_from_chord_step(degree);
         Self {
-            d3,
-            d5,
-            d7,
-            d9,
-            d11,
-            d13,
-            is_triad: unique_pitch_names.len() == 3 && d3.is_some() && d5.is_some(),
-            is_seventh: unique_pitch_names.len() == 4
-                && d3.is_some()
-                && d5.is_some()
-                && d7.is_some(),
+            d3: step(3),
+            d5: step(5),
+            d7: step(7),
+            d9: step(2),
+            d11: step(4),
+            d13: step(6),
+            is_triad: chord.is_triad(),
+            is_seventh: chord.is_seventh(),
         }
     }
 }
-
 fn identify_music21_chord_type(analysis: &Music21ChordAnalysis) -> Option<Music21FigureMatch> {
     let mut matched = None;
 
@@ -1103,60 +1197,42 @@ fn analysis_value_for_degree(analysis: &Music21ChordAnalysis, degree: u8) -> Opt
     }
 }
 
-fn semitones_from_chord_step(pitches: &[Pitch], root_pitch: &Pitch, chord_step: u8) -> Option<u8> {
-    let root_step = step_num(root_pitch);
-    let root_pc = pitch_class(root_pitch);
-
-    pitches.iter().find_map(|pitch| {
-        let generic_interval = (step_num(pitch) - root_step).rem_euclid(7) + 1;
-        if generic_interval == chord_step as IntegerType {
-            Some((pitch_class(pitch) + 12 - root_pc) % 12)
-        } else {
-            None
-        }
-    })
+/// The names of the notes a chord kind's notation stands for above a root:
+/// what music21's `ChordSymbol` realizes for the kind alone, and what the
+/// figure writer compares a chord against.
+fn kind_pitch_names(root: &Pitch, notation: &str) -> Result<BTreeSet<String>> {
+    notation_intervals(notation)?
+        .iter()
+        .map(|(_, name)| Ok(Interval::from_name(name)?.transpose_pitch(root)?.name()))
+        .collect()
 }
 
-fn perfect_pitch_names(root_pitch: &Pitch, notation: &str) -> Option<BTreeSet<String>> {
-    let mut pitch_names = BTreeSet::new();
-    pitch_names.insert(root_pitch.name());
-    for token in notation.split(',').filter(|token| *token != "1") {
-        let degree = parse_music21_degree(token)?;
-        pitch_names.insert(pitch_name_for_music21_degree(
-            root_pitch,
-            degree.degree,
-            degree.semitone,
-        )?);
-    }
-    Some(pitch_names)
+/// The interval above the root each degree of a kind's notation stands for,
+/// `1,3,#5,-7` being `P1`, `M3`, `a5` and `m7`: the major-scale interval of
+/// the degree, raised or lowered by each `#` or `-` written against it.
+fn notation_intervals(notation: &str) -> Result<Vec<(u8, String)>> {
+    notation
+        .split(',')
+        .map(|token| {
+            let degree: u8 = token
+                .trim_matches(['#', '-'])
+                .parse()
+                .map_err(|_| Error::Chord(format!("{token} is not a chord degree")))?;
+            let alter = token.matches('#').count() as IntegerType
+                - token.matches('-').count() as IntegerType;
+            let perfect = matches!(degree % 7, 1 | 4 | 5);
+            let quality = match (perfect, alter) {
+                (true, 0) => "P".to_string(),
+                (false, 0) => "M".to_string(),
+                (_, raised) if raised > 0 => "a".repeat(raised as usize),
+                (true, lowered) => "d".repeat(lowered.unsigned_abs() as usize),
+                (false, -1) => "m".to_string(),
+                (false, lowered) => "d".repeat((lowered.unsigned_abs() - 1) as usize),
+            };
+            Ok((degree, format!("{quality}{degree}")))
+        })
+        .collect()
 }
-
-fn pitch_name_for_music21_degree(root_pitch: &Pitch, degree: u8, semitone: u8) -> Option<String> {
-    const LETTERS: [char; 7] = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
-    const NATURAL_PCS: [IntegerType; 7] = [0, 2, 4, 5, 7, 9, 11];
-
-    let root_letter = root_pitch.name().chars().next()?.to_ascii_uppercase();
-    let root_index = LETTERS.iter().position(|letter| *letter == root_letter)?;
-    let target_index = (root_index + (degree.saturating_sub(1) as usize % 7)) % 7;
-    let desired_pc =
-        ((pitch_class(root_pitch) as IntegerType) + semitone as IntegerType).rem_euclid(12);
-    let mut accidental = desired_pc - NATURAL_PCS[target_index];
-    while accidental > 6 {
-        accidental -= 12;
-    }
-    while accidental < -6 {
-        accidental += 12;
-    }
-
-    let mut name = LETTERS[target_index].to_string();
-    if accidental > 0 {
-        name.push_str(&"#".repeat(accidental as usize));
-    } else if accidental < 0 {
-        name.push_str(&"-".repeat((-accidental) as usize));
-    }
-    Some(name)
-}
-
 impl FromStr for ChordSymbol {
     type Err = Error;
 
@@ -1643,181 +1719,19 @@ fn added_interval(addition: &ChordAlteration) -> Result<(u8, &'static str)> {
     }
 }
 
-/// The semitone steps each figured-bass degree of a chord kind's notation
-/// stands for above the root, the way music21's `chordSymbolFigureFromChord`
-/// reads `1,3,5,-7` as `[4, 7, 10]`.
-fn notation_semitones(notation: &str) -> Vec<Option<u8>> {
-    notation
-        .split(',')
-        .filter(|part| *part != "1")
-        .map(|part| {
-            let flats = part.matches('-').count() as IntegerType;
-            let sharps = part.matches('#').count() as IntegerType;
-            let degree: u8 = part.replace(['-', '#'], "").parse().ok()?;
-            let base: IntegerType = match degree {
-                3 => 4,
-                5 => 7,
-                7 => 11,
-                9 | 2 => 2,
-                11 | 4 => 5,
-                13 | 6 => 9,
-                _ => return None,
-            };
-            u8::try_from(base + sharps - flats).ok()
-        })
-        .collect()
-}
-
-/// music21's `compare` inside `chordSymbolFigureFromChord`: whether the
-/// chord's semitone steps match a kind's, a missing step being forgiven only
-/// for the degrees in `permitted_omissions` and only at that degree's
-/// unaltered size.
-fn steps_match(found: &[Option<u8>], wanted: &[Option<u8>], permitted_omissions: &[u8]) -> bool {
-    if wanted.len() > found.len() {
-        return false;
-    }
-    const DEGREES: [(u8, u8); 6] = [(3, 4), (5, 7), (7, 11), (9, 2), (11, 5), (13, 9)];
-    for (index, wanted_step) in wanted.iter().enumerate() {
-        if found[index] == *wanted_step {
-            continue;
-        }
-        let (degree, plain) = DEGREES[index];
-        let forgiven = permitted_omissions.contains(&degree) && *wanted_step == Some(plain);
-        if !forgiven || found[index].is_some() {
-            return false;
-        }
-    }
-    true
-}
-
-/// The music21 chord kind a chord is, with the abbreviation music21 writes it
-/// with, or `None` when no kind fits.
-fn kind_of_chord(chord: &Chord) -> Option<&'static Music21ChordType> {
-    let step = |degree: u8| chord.semitones_from_chord_step(degree);
-    let (d3, d5, d7, d9, d11, d13) = (step(3), step(5), step(7), step(2), step(4), step(6));
-    let is_triad = chord.is_triad();
-    let is_seventh = chord.is_seventh();
-
-    let mut kind = None;
-    for chord_type in MUSIC21_CHORD_TYPES {
-        let wanted = notation_semitones(chord_type.notation);
-        if wanted.iter().any(Option::is_none) {
-            continue;
-        }
-        let matched = match wanted.len() {
-            2 if is_triad => steps_match(&[d3, d5], &wanted, &[]),
-            3 if is_seventh => steps_match(&[d3, d5, d7], &wanted, &[]),
-            4 if d9.is_some() && d11.is_none() && d13.is_none() => {
-                steps_match(&[d3, d5, d7, d9], &wanted, &[5])
-            }
-            5 if d11.is_some() && d13.is_none() => {
-                steps_match(&[d3, d5, d7, d9, d11], &wanted, &[3, 5])
-            }
-            6 if d13.is_some() => steps_match(&[d3, d5, d7, d9, d11, d13], &wanted, &[5, 11, 9]),
-            _ => false,
-        };
-        if matched {
-            kind = Some(chord_type);
-        }
-    }
-    if kind.is_some() {
-        return kind;
-    }
-
-    let mut matched_degrees = 0;
-    for chord_type in MUSIC21_CHORD_TYPES {
-        let wanted = notation_semitones(chord_type.notation);
-        if wanted.iter().any(Option::is_none) {
-            continue;
-        }
-        let mut degrees: Vec<u8> = chord_type
-            .notation
-            .split(',')
-            .filter_map(|part| part.replace(['-', '#'], "").parse().ok())
-            .filter(|degree| *degree != 1)
-            .collect();
-        degrees.sort_unstable();
-        let found: Vec<Option<u8>> = degrees
-            .iter()
-            .map(|degree| match degree {
-                2 | 9 => d9,
-                3 => d3,
-                4 | 11 => d11,
-                5 => d5,
-                6 | 13 => d13,
-                7 => d7,
-                _ => None,
-            })
-            .collect();
-        if steps_match(&found, &wanted, &[]) && matched_degrees < wanted.len() {
-            matched_degrees = wanted.len();
-            kind = Some(chord_type);
-        }
-    }
-    kind
-}
-
 /// Names a chord as a lead-sheet symbol: music21's
 /// `chordSymbolFigureFromChord`, so `C E G B-` is `C7`, `E G C` is `C/E`
 /// and a lone `C` is `Cpedal`. Notes the kind cannot account for are listed
-/// after `add` and notes the kind expects but the chord lacks after `omit`,
-/// as music21 writes them. `None` when no kind fits, where music21 returns
-/// the sentence "Chord Symbol Cannot Be Identified"; an empty chord gives an
-/// empty string.
+/// after `add`, and beside them the notes the kind expects but the chord
+/// lacks after `omit`, as music21 writes them. `None` when no kind fits,
+/// where music21 returns the sentence "Chord Symbol Cannot Be Identified";
+/// an empty chord gives an empty string. The parts the figure is written
+/// from are [`ChordSymbolFigure`].
 pub fn chord_symbol_figure_from_chord(chord: &Chord) -> Result<Option<String>> {
-    let Some(root) = chord.root() else {
+    if chord.notes().is_empty() {
         return Ok(Some(String::new()));
-    };
-    if chord.notes().len() == 1 {
-        return Ok(Some(format!("{}pedal", root.name())));
     }
-    let Some(kind) = kind_of_chord(chord) else {
-        return Ok(None);
-    };
-    let mut figure = match (chord.inversion().unwrap_or(0), kind.abbreviation) {
-        (0, abbreviation) => format!("{}{abbreviation}", root.name()),
-        (_, "sus2") => {
-            let bass = chord.bass().unwrap_or(root);
-            format!("{}sus", bass.name())
-        }
-        (_, abbreviation) => {
-            let bass = chord.bass().unwrap_or(root);
-            format!("{}{abbreviation}/{}", root.name(), bass.name())
-        }
-    };
-
-    let perfect: Vec<String> = ChordSymbol::parse(figure.as_str())?
-        .to_chord()?
-        .pitch_names();
-    let present: Vec<String> = chord.pitch_names();
-    let mut additions: Vec<&String> = present
-        .iter()
-        .filter(|name| !perfect.contains(name))
-        .collect();
-    additions.dedup();
-    let mut subtractions: Vec<&String> = perfect
-        .iter()
-        .filter(|name| !present.contains(name))
-        .collect();
-    subtractions.dedup();
-    if !additions.is_empty() || !subtractions.is_empty() {
-        if !additions.is_empty() {
-            figure.push_str("add");
-            for name in &additions {
-                figure.push_str(name);
-                figure.push(',');
-            }
-        }
-        if !subtractions.is_empty() {
-            figure.push_str("omit");
-            for name in &subtractions {
-                figure.push_str(name);
-                figure.push(',');
-            }
-        }
-        figure.pop();
-    }
-    Ok(Some(figure))
+    Ok(ChordSymbolFigure::from_chord(chord).map(|figure| figure.to_string()))
 }
 
 /// The kind of chord a figure is written with: what music21 answers beside
@@ -1828,13 +1742,8 @@ pub fn chord_symbol_figure_from_chord(chord: &Chord) -> Result<Option<String>> {
 /// kind in music21's table fits.
 #[must_use]
 pub fn chord_symbol_kind_from_chord(chord: &Chord) -> Option<&'static str> {
-    chord.root()?;
-    if chord.notes().len() == 1 {
-        return Some("pedal");
-    }
-    kind_of_chord(chord).map(|chord_type| chord_type.kind)
+    ChordSymbolFigure::from_chord(chord).map(|figure| figure.kind)
 }
-
 /// A [`ChordSymbol`] read off a chord: music21's `chordSymbolFromChord`,
 /// [`chord_symbol_figure_from_chord`] parsed back. `None` when no kind fits.
 pub fn chord_symbol_from_chord(chord: &Chord) -> Result<Option<ChordSymbol>> {
@@ -1846,6 +1755,112 @@ pub fn chord_symbol_from_chord(chord: &Chord) -> Result<Option<ChordSymbol>> {
 
 #[cfg(test)]
 mod tests {
+    /// Every shorthand in music21's table realizes the notes its notation
+    /// names, read independently off the root's major scale.
+    #[test]
+    fn every_music21_kind_realizes_its_own_notation() {
+        use super::{ChordSymbol, MUSIC21_CHORD_TYPES};
+        use crate::pitch::Accidental;
+        use crate::{Key, Pitch};
+        use std::collections::BTreeSet;
+
+        let major = Key::from_tonic("C").unwrap();
+        for chord_type in MUSIC21_CHORD_TYPES {
+            let expected: BTreeSet<String> = chord_type
+                .notation
+                .split(',')
+                .map(|token| {
+                    let degree: usize = token.trim_matches(['#', '-']).parse().unwrap();
+                    let alter =
+                        token.matches('#').count() as f64 - token.matches('-').count() as f64;
+                    let mut pitch = major.pitch_from_degree((degree - 1) % 7 + 1).unwrap();
+                    if alter != 0.0 {
+                        pitch.set_accidental(Some(Accidental::new(alter).unwrap()));
+                    }
+                    pitch.name()
+                })
+                .collect();
+            for abbreviation in chord_type.abbreviations {
+                let symbol = ChordSymbol::parse(format!("C{abbreviation}")).unwrap();
+                assert_eq!(symbol.kind(), Some(chord_type.kind), "C{abbreviation}");
+                let names: BTreeSet<String> = symbol
+                    .to_chord()
+                    .unwrap()
+                    .pitch_names()
+                    .into_iter()
+                    .collect();
+                assert_eq!(names, expected, "C{abbreviation} ({})", chord_type.kind);
+            }
+        }
+        assert_eq!(ChordSymbol::parse("C7#11").unwrap().kind(), None);
+        assert_eq!(
+            ChordSymbol::parse("CN6/E")
+                .unwrap()
+                .to_chord()
+                .unwrap()
+                .pitch_names(),
+            ["E", "C", "D-", "G-"]
+        );
+        let _ = Pitch::from_name("C").unwrap();
+    }
+
+    /// music21's own `chordSymbolFigureFromChord` examples, the special
+    /// kinds and the suspended second in inversion among them.
+    #[test]
+    fn figures_are_written_as_music21_writes_them() {
+        use super::{
+            ChordSymbolFigure, chord_symbol_figure_from_chord, chord_symbol_kind_from_chord,
+        };
+        use crate::{Chord, Pitch};
+
+        let figure =
+            |notes: &str| chord_symbol_figure_from_chord(&Chord::new(notes).unwrap()).unwrap();
+        let kind = |notes: &str| chord_symbol_kind_from_chord(&Chord::new(notes).unwrap());
+        assert_eq!(figure("F3 A3 C#4 E-4 G4 B-4").as_deref(), Some("F+11"));
+        assert_eq!(kind("F3 A3 C#4 E-4 G4 B-4"), Some("augmented-11th"));
+        assert_eq!(figure("C3 E3 B3 D4").as_deref(), Some("CM9"));
+        assert_eq!(figure("C3 D-3 E3 G-3").as_deref(), Some("CN6"));
+        assert_eq!(kind("C3 D-3 E3 G-3"), Some("Neapolitan"));
+        assert_eq!(figure("C3 D3 G3").as_deref(), Some("Csus2"));
+        assert_eq!(figure("C3 E3 G3 D-4").as_deref(), Some("CaddD-"));
+        assert_eq!(figure("C3").as_deref(), Some("Cpedal"));
+        assert_eq!(figure("").as_deref(), Some(""));
+
+        // A suspended second in inversion is a suspended fourth on the bass.
+        let inverted = Chord::new("C3 F3 G3").unwrap();
+        let parts = ChordSymbolFigure::from_chord(&inverted).unwrap();
+        assert_eq!(parts.root, "C");
+        assert_eq!(
+            (parts.kind, parts.abbreviation, parts.bass.as_deref()),
+            ("suspended-fourth", "sus", None)
+        );
+        assert_eq!(parts.to_string(), "Csus");
+        assert_eq!(parts.written_with("sus4"), "Csus4");
+
+        // The augmented sixths are named from a root the caller fixes.
+        let with_root = |notes: &str, root: &str| {
+            ChordSymbolFigure::from_chord_with_root(
+                &Chord::new(notes).unwrap(),
+                &Pitch::from_name(root).unwrap(),
+            )
+            .unwrap()
+        };
+        assert_eq!(with_root("C3 F#3 A-3", "C3").to_string(), "CIt+6");
+        assert_eq!(with_root("C3 D3 F#3 A-3", "C3").to_string(), "CFr+6");
+        assert_eq!(with_root("C3 E-3 F#3 A-3", "C3").to_string(), "CGr+6");
+        assert_eq!(with_root("F2 B2 D#3 G#3", "F2").to_string(), "Ftristan");
+        assert_eq!(with_root("F2 B2 D#3 G#3", "F2").kind, "Tristan");
+
+        // An inversion writes the bass, and additions are written with the
+        // notes the kind lacks beside them.
+        let parts = ChordSymbolFigure::from_chord(&Chord::new("E3 G3 C4 B-4").unwrap()).unwrap();
+        assert_eq!(parts.to_string(), "C7/E");
+        // A bass the kind does not carry is written as the bass alone.
+        assert_eq!(figure("D3 C4 E-4 G4").as_deref(), Some("Cm/D"));
+        assert!(ChordSymbolFigure::from_chord(&Chord::new("C4 C~4").unwrap()).is_none());
+        assert!(ChordSymbolFigure::from_chord(&Chord::new("").unwrap()).is_none());
+    }
+
     #[test]
     fn a_symbol_is_parsed_through_try_from_and_reports_its_alterations() {
         use super::{ChordSymbol, chord_symbol_kind_from_chord};
