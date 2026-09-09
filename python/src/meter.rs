@@ -300,6 +300,40 @@ impl TimeSignature {
         self.inner.offset_from_beat(beat).map_err(meter_error)
     }
 
+    /// music21's `getAccent`: whether the offset starts one of the default
+    /// accent partitions.
+    fn getAccent(&self, qLenPos: FloatType) -> bool {
+        self.inner.accent(qLenPos)
+    }
+
+    /// music21's `getAccentWeight` over the default accent hierarchy, which
+    /// has one level, so `level` picks nothing.
+    #[pyo3(signature = (qLenPos, level = 0, forcePositionMatch = false, permitMeterModulus = false))]
+    fn getAccentWeight(
+        &self,
+        qLenPos: FloatType,
+        level: u32,
+        forcePositionMatch: bool,
+        permitMeterModulus: bool,
+    ) -> PyResult<FloatType> {
+        let _ = level;
+        self.inner
+            .accent_weight_with(qLenPos, forcePositionMatch, permitMeterModulus)
+            .map_err(meter_error)
+    }
+
+    /// music21's `getBeatDepth`, quantized to the beat's division as its
+    /// default alignment is.
+    #[pyo3(signature = (qLenPos, align = "quantize"))]
+    fn getBeatDepth(&self, qLenPos: FloatType, align: &str) -> PyResult<u8> {
+        if align != "quantize" {
+            return Err(MeterException::new_err(format!(
+                "the beat depth is read with the quantize alignment here, not {align}"
+            )));
+        }
+        self.inner.beat_depth(qLenPos).map_err(meter_error)
+    }
+
     fn ratioEqual(&self, other: &Bound<'_, PyAny>) -> bool {
         other
             .extract::<PyRef<'_, Self>>()

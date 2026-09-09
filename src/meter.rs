@@ -408,8 +408,288 @@ impl std::fmt::Display for TimeSignature {
     }
 }
 
+/// How far an offset may sit from a partition boundary and still be read as
+/// on it.
+const OFFSET_TOLERANCE: FloatType = 1e-9;
+
+/// The shortest accent partition music21 can write, a 128th note.
+const SHORTEST_PARTITION: FloatType = 4.0 / 128.0;
+
+/// The longest, a whole note.
+const LONGEST_PARTITION: FloatType = 4.0;
+
+impl TimeSignature {
+    /// How music21's default accent hierarchy divides the bar, three levels
+    /// deep: how many parts the bar divides into, how many each of those
+    /// divides into, and how many each of those divides into.
+    ///
+    /// music21 builds the hierarchy by subdividing a `MeterSequence`. The top
+    /// level takes the beat count, except that one, two, four, eight, sixteen
+    /// and thirty-two beats divide in two and three beats divide in three; a
+    /// single beat takes the numerator's place in that rule. Below that, each
+    /// span divides the way music21 divides a span by default: two or more
+    /// triples into its triples, an even count of anything in two, a single
+    /// unit in two, and an odd count into its units.
+    fn accent_hierarchy(
+        self,
+    ) -> (
+        UnsignedIntegerType,
+        UnsignedIntegerType,
+        UnsignedIntegerType,
+    ) {
+        let beats = self.beat_count();
+        let first = if beats > 1 { beats } else { self.numerator };
+        let top = match first {
+            1 | 2 | 4 | 8 | 16 | 32 => 2,
+            3 => 3,
+            other => other,
+        };
+        let (span, unit) = split_span(self.numerator, self.denominator, top);
+        let second = default_division(span, unit);
+        let (span, unit) = split_span(span, unit, second);
+        let third = default_division(span, unit);
+        // music21 partitions the accent sequence into that many equal parts
+        // written as whole numbers of a note value, and gives up — leaving
+        // the bar as one partition — when a part would be longer than a
+        // whole note or shorter than a 128th.
+        let partition = self.bar_quarter_length() / FloatType::from(top * second * third);
+        if !(SHORTEST_PARTITION..=LONGEST_PARTITION).contains(&partition) {
+            return (1, 1, 1);
+        }
+        (top, second, third)
+    }
+
+    /// The length of one partition of music21's default accent hierarchy, the
+    /// finest level the accent weights are given at.
+    pub fn accent_partition_quarter_length(self) -> FloatType {
+        let (top, second, third) = self.accent_hierarchy();
+        self.bar_quarter_length() / FloatType::from(top * second * third)
+    }
+
+    /// The accent weight of every partition of the bar, music21's default
+    /// `accentSequence`: `1.0` on the downbeat, halving with every level of
+    /// the hierarchy a partition's start is not a boundary of, so `4/4` reads
+    /// `1.0, 0.125, 0.25, 0.125, 0.5, 0.125, 0.25, 0.125`.
+    pub fn accent_weights(self) -> Vec<FloatType> {
+        let (top, second, third) = self.accent_hierarchy();
+        let count = top * second * third;
+        (0..count)
+            .map(|index| {
+                let depth = 1
+                    + UnsignedIntegerType::from(index.is_multiple_of(third))
+                    + UnsignedIntegerType::from(index.is_multiple_of(second * third))
+                    + UnsignedIntegerType::from(index == 0);
+                FloatType::from(2u32.pow(depth - 1)) / 8.0
+            })
+            .collect()
+    }
+
+    /// Whether an offset in quarter lengths starts an accent partition:
+    /// music21's `getAccent`, which is false for any offset off the grid,
+    /// beyond the bar included.
+    pub fn accent(self, offset: FloatType) -> bool {
+        let partition = self.accent_partition_quarter_length();
+        let index = (offset / partition).round();
+        index >= 0.0
+            && index < FloatType::from(self.accent_weights().len() as u32)
+            && (offset - index * partition).abs() < OFFSET_TOLERANCE
+    }
+
+    /// The accent weight at an offset in quarter lengths: music21's
+    /// `getAccentWeight`, the weight of the partition the offset falls in.
+    /// An offset outside the bar is an error.
+    pub fn accent_weight(self, offset: FloatType) -> Result<FloatType> {
+        self.accent_weight_with(offset, false, false)
+    }
+
+    /// [`Self::accent_weight`] with music21's two options. With
+    /// `force_position_match` an offset that does not start a partition
+    /// answers half the smallest weight rather than its partition's; with
+    /// `permit_meter_modulus` an offset beyond the bar is read within it.
+    pub fn accent_weight_with(
+        self,
+        offset: FloatType,
+        force_position_match: bool,
+        permit_meter_modulus: bool,
+    ) -> Result<FloatType> {
+        let bar = self.bar_quarter_length();
+        let offset = if permit_meter_modulus {
+            offset.rem_euclid(bar)
+        } else {
+            offset
+        };
+        if offset.is_nan() || offset < 0.0 || offset >= bar {
+            return Err(Error::Meter(format!(
+                "cannot access from qLenPos {} where total duration is {}",
+                offset_repr(offset),
+                offset_repr(bar)
+            )));
+        }
+        let weights = self.accent_weights();
+        let partition = self.accent_partition_quarter_length();
+        let index = ((offset + OFFSET_TOLERANCE) / partition).floor() as usize;
+        let index = index.min(weights.len() - 1);
+        if force_position_match
+            && (offset - index as FloatType * partition).abs() >= OFFSET_TOLERANCE
+        {
+            let smallest = weights
+                .iter()
+                .copied()
+                .fold(FloatType::INFINITY, FloatType::min);
+            return Ok(smallest * 0.5);
+        }
+        Ok(weights[index])
+    }
+
+    /// How many levels of the beat hierarchy start at an offset: music21's
+    /// `getBeatDepth`, which quantizes the offset to the beat's division and
+    /// then counts the beat level and the division level. A meter of one beat
+    /// has one level and answers one everywhere in the bar; an offset outside
+    /// the bar is an error.
+    pub fn beat_depth(self, offset: FloatType) -> Result<u8> {
+        let bar = self.bar_quarter_length();
+        if offset.is_nan() || offset < 0.0 || offset >= bar {
+            return Err(Error::Meter(format!(
+                "cannot access from qLenPos {}",
+                offset_repr(offset)
+            )));
+        }
+        if self.beat_count() == 1 {
+            return Ok(1);
+        }
+        let division = self.beat_quarter_length() / FloatType::from(self.beat_division_count());
+        let quantized = ((offset + OFFSET_TOLERANCE) / division).floor() * division;
+        let on_beat = (quantized / self.beat_quarter_length()).fract().abs() < OFFSET_TOLERANCE
+            || (1.0 - (quantized / self.beat_quarter_length()).fract()).abs() < OFFSET_TOLERANCE;
+        Ok(if on_beat { 2 } else { 1 })
+    }
+}
+
+/// A span of `count` units of `1/unit`, divided into `parts` equal spans, as
+/// a count of a unit: `6/8` in two is `3/8`, and `1/4` in two is `1/8`.
+fn split_span(
+    count: UnsignedIntegerType,
+    unit: UnsignedIntegerType,
+    parts: UnsignedIntegerType,
+) -> (UnsignedIntegerType, UnsignedIntegerType) {
+    if count.is_multiple_of(parts) {
+        (count / parts, unit)
+    } else {
+        (count, unit * parts)
+    }
+}
+
+/// How music21 divides a span by default when nothing says otherwise: its
+/// `MeterSequence.subdivide` with no count given, which takes the first of
+/// the span's division options.
+fn default_division(count: UnsignedIntegerType, unit: UnsignedIntegerType) -> UnsignedIntegerType {
+    let _ = unit;
+    if count > 3 && count.is_multiple_of(3) {
+        count / 3
+    } else if count == 1 || count.is_multiple_of(2) {
+        2
+    } else {
+        count
+    }
+}
+
+/// An offset written the way music21 writes one in a message: a whole number
+/// as `3.0`, anything else as it is.
+fn offset_repr(offset: FloatType) -> String {
+    if offset.fract() == 0.0 {
+        format!("{offset:.1}")
+    } else {
+        offset.to_string()
+    }
+}
+
 #[cfg(test)]
 mod tests {
+
+    /// Read off music21's default `accentSequence` and `getBeatDepth`.
+    #[test]
+    fn accent_weights_and_beat_depths_follow_the_default_hierarchy() {
+        let weights = |ratio: &str| {
+            TimeSignature::from_ratio_string(ratio)
+                .unwrap()
+                .accent_weights()
+        };
+        assert_eq!(
+            weights("4/4"),
+            [1.0, 0.125, 0.25, 0.125, 0.5, 0.125, 0.25, 0.125]
+        );
+        assert_eq!(
+            weights("6/8"),
+            [
+                1.0, 0.125, 0.25, 0.125, 0.25, 0.125, 0.5, 0.125, 0.25, 0.125, 0.25, 0.125
+            ]
+        );
+        assert_eq!(
+            weights("12/8"),
+            [
+                1.0, 0.125, 0.125, 0.25, 0.125, 0.125, 0.5, 0.125, 0.125, 0.25, 0.125, 0.125
+            ]
+        );
+        assert_eq!(weights("3/4").len(), 12);
+        assert_eq!(weights("24/8").len(), 24);
+        assert_eq!(
+            TimeSignature::new(1, 4)
+                .unwrap()
+                .accent_partition_quarter_length(),
+            0.125
+        );
+
+        let three_four = TimeSignature::new(3, 4).unwrap();
+        let read: Vec<FloatType> = (0..3)
+            .map(|beat| three_four.accent_weight(FloatType::from(beat)).unwrap())
+            .collect();
+        assert_eq!(read, [1.0, 0.5, 0.5]);
+        let beyond = three_four.accent_weight(3.0).unwrap_err().to_string();
+        assert!(beyond.ends_with("cannot access from qLenPos 3.0 where total duration is 3.0"));
+        // A bar whose parts would be longer than a whole note, or shorter
+        // than a 128th, is one partition.
+        assert_eq!(weights("16/1"), [1.0]);
+        assert_eq!(weights("1/32"), [1.0]);
+        assert_eq!(
+            TimeSignature::new(24, 4)
+                .unwrap()
+                .accent_partition_quarter_length(),
+            1.0
+        );
+        assert_eq!(
+            three_four.accent_weight_with(4.0, false, true).unwrap(),
+            0.5
+        );
+        assert_eq!(
+            three_four.accent_weight_with(0.1, true, false).unwrap(),
+            0.0625
+        );
+        assert_eq!(
+            three_four.accent_weight_with(0.1, false, false).unwrap(),
+            1.0
+        );
+        assert!(three_four.accent(2.0));
+        assert!(!three_four.accent(0.1));
+        assert!(!three_four.accent(3.0));
+
+        assert_eq!(three_four.beat_depth(0.0).unwrap(), 2);
+        assert_eq!(three_four.beat_depth(0.25).unwrap(), 2);
+        assert_eq!(three_four.beat_depth(0.5).unwrap(), 1);
+        assert_eq!(three_four.beat_depth(1.0).unwrap(), 2);
+        assert!(three_four.beat_depth(3.0).is_err());
+        assert_eq!(
+            TimeSignature::new(3, 8).unwrap().beat_depth(0.5).unwrap(),
+            1
+        );
+        assert_eq!(
+            TimeSignature::new(6, 8).unwrap().beat_depth(1.0).unwrap(),
+            1
+        );
+        assert_eq!(
+            TimeSignature::new(6, 8).unwrap().beat_depth(1.5).unwrap(),
+            2
+        );
+    }
 
     #[test]
     fn a_signature_reports_its_two_numbers_and_its_bar() {

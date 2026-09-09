@@ -487,6 +487,24 @@ fn write_meters(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> PyResul
                 divisions.push(float_repr(quarter_length));
             }
             let offsets: Vec<String> = offsets.into_iter().map(float_repr).collect();
+            let mut accent_weights = Vec::new();
+            let mut beat_depths = Vec::new();
+            let mut accent_partition = 0.0;
+            let mut position = 0.0;
+            for partition in time_signature.getattr("accentSequence")?.try_iter()? {
+                let partition = partition?;
+                let weight: f64 = partition.getattr("weight")?.extract()?;
+                accent_partition = partition
+                    .getattr("duration")?
+                    .getattr("quarterLength")?
+                    .extract()?;
+                accent_weights.push(float_repr(weight));
+                let depth: u32 = time_signature
+                    .call_method1("getBeatDepth", (position,))?
+                    .extract()?;
+                beat_depths.push(depth.to_string());
+                position += accent_partition;
+            }
 
             let _ = writeln!(out, "[[meter]]");
             let _ = writeln!(out, "ratio = {}", toml_string(&ratio));
@@ -507,6 +525,13 @@ fn write_meters(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> PyResul
                 "beat_division_quarter_lengths = [{}]",
                 divisions.join(", ")
             );
+            let _ = writeln!(
+                out,
+                "accent_partition_quarter_length = {}",
+                float_repr(accent_partition)
+            );
+            let _ = writeln!(out, "accent_weights = [{}]", accent_weights.join(", "));
+            let _ = writeln!(out, "beat_depths = [{}]", beat_depths.join(", "));
             let _ = writeln!(out);
             count += 1;
         }

@@ -39,6 +39,10 @@ pub const NAMES: &[&str] = &[
     "HarmonyException",
 ];
 
+/// The names installed over music21's own: the two functions, since the
+/// exception class is music21's to raise.
+pub const INSTALLED_NAMES: &[&str] = &["chordSymbolFigureFromChord", "chordSymbolFromChord"];
+
 pyo3::create_exception!(music21_rs_facade, HarmonyException, crate::Music21Exception);
 
 /// music21's sentence for a chord no kind in its table fits.

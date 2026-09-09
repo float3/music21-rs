@@ -183,7 +183,7 @@ adjustMinorVIandVIIByQuality = "adjust_minor_vi_and_vii_by_quality"
 python = "meter/base.py"
 name = "TimeSignature"
 rust = ["src/meter.rs"]
-note = "Derived from numerator and denominator alone; beaming, display and accent weighting need a MeterSequence."
+note = "Derived from numerator and denominator alone, the default accent weights included; beaming and display need a MeterSequence."
 
 [class.renames]
 getBeat = "beat_at_offset"
@@ -199,11 +199,8 @@ resetValues = "a TimeSignature is immutable here"
 load = "a TimeSignature is immutable here"
 getBeams = "beaming needs the MeterSequence partition tree"
 setDisplay = "display sequences need the MeterSequence partition tree"
-getAccent = "accent weighting needs the MeterSequence partition tree"
-setAccentWeight = "accent weighting needs the MeterSequence partition tree"
-getAccentWeight = "accent weighting needs the MeterSequence partition tree"
-averageBeatStrength = "accent weighting needs the MeterSequence partition tree"
-getBeatDepth = "accent weighting needs the MeterSequence partition tree"
+setAccentWeight = "the accent weights are the default hierarchy's, not a partition a caller has set"
+averageBeatStrength = "averages `accent_weight` over the notes of a stream"
 
 [[class]]
 python = "tempo.py"

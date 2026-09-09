@@ -31,6 +31,9 @@ struct MeterExpectation {
     classification: String,
     beat_offsets: Vec<f64>,
     beat_division_quarter_lengths: Vec<f64>,
+    accent_partition_quarter_length: f64,
+    accent_weights: Vec<f64>,
+    beat_depths: Vec<u8>,
 }
 
 fn expectations() -> Expectations {
@@ -109,6 +112,36 @@ fn every_time_signature_matches_music21() {
             mismatches.push(format!(
                 "{} beat_division_quarter_lengths: music21 {:?}, crate {:?}",
                 expected.ratio, expected.beat_division_quarter_lengths, divisions
+            ));
+        }
+        if !close(
+            actual.accent_partition_quarter_length(),
+            expected.accent_partition_quarter_length,
+        ) {
+            mismatches.push(format!(
+                "{ratio} accent_partition_quarter_length: music21 {}, crate {}",
+                expected.accent_partition_quarter_length,
+                actual.accent_partition_quarter_length()
+            ));
+        }
+        let weights = actual.accent_weights();
+        if weights != expected.accent_weights {
+            mismatches.push(format!(
+                "{ratio} accent_weights: music21 {:?}, crate {weights:?}",
+                expected.accent_weights
+            ));
+        }
+        let depths: Vec<u8> = (0..expected.accent_weights.len())
+            .map(|index| {
+                actual
+                    .beat_depth(index as f64 * expected.accent_partition_quarter_length)
+                    .unwrap_or(0)
+            })
+            .collect();
+        if depths != expected.beat_depths {
+            mismatches.push(format!(
+                "{ratio} beat_depths: music21 {:?}, crate {depths:?}",
+                expected.beat_depths
             ));
         }
         let offsets = actual.beat_offsets();

@@ -17,16 +17,34 @@ music21_version = "11.0.0b9"
 music21_commit = "89e85db9257aa98e39abd0c419e0c8765688e5c3"
 
 [[module]]
+module = "music21.beam"
+docstrings = 13
+examples = 112
+tests = 2
+
+[[module]]
 module = "music21.chord"
 docstrings = 105
 examples = 971
 tests = 27
 
 [[module]]
+module = "music21.chord.tables"
+docstrings = 10
+examples = 65
+tests = 31
+
+[[module]]
 module = "music21.duration"
 docstrings = 53
 examples = 588
 tests = 15
+
+[[module]]
+module = "music21.figuredBass.notation"
+docstrings = 12
+examples = 129
+tests = 3
 
 [[module]]
 module = "music21.harmony"
@@ -99,4 +117,10 @@ module = "music21.voiceLeading"
 docstrings = 61
 examples = 513
 tests = 2
+
+[[module]]
+module = "music21.volume"
+docstrings = 9
+examples = 46
+tests = 9
 
