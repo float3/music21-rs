@@ -83,8 +83,8 @@ fn unsolved_mode_lookup(tonic: &str) -> Option<i32> {
     pitch_to_sharps(&RsPitch::from_name(tonic).ok()?, None).ok()
 }
 
-/// music21's warning that `sharps=None` is on its way out: it goes in v13,
-/// and `isNonTraditional` says the same thing today.
+/// music21's deprecation warning for `sharps=None`: turning
+/// `isNonTraditional` on is how a non-traditional signature is asked for.
 fn warn_sharps_none(py: Python<'_>) -> PyResult<()> {
     let Ok(category) = py
         .import("music21.exceptions21")
@@ -152,10 +152,8 @@ impl KeySignature {
         kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Self> {
         let _ = kwargs;
-        // `sharps=None` used to be how a non-traditional signature was
-        // asked for. It says the same thing today by turning
-        // `isNonTraditional` on, and music21 warns rather than reading a
-        // count of nought as a signature with no sharps in it.
+        // `sharps=None` asks for a non-traditional signature, with music21's
+        // deprecation warning, rather than for a count of nought.
         if sharps.written_as_none() {
             warn_sharps_none(py)?;
             let mut signature = Self::of(0);
@@ -179,7 +177,7 @@ impl KeySignature {
         Ok(Self::of(sharps))
     }
 
-    /// music21 v11's `sharps` is always an `int`: a non-traditional signature
+    /// music21's `sharps` is always an `int`: a non-traditional signature
     /// reports nought and says so through `isNonTraditional`.
     #[getter]
     fn sharps(&self) -> i32 {
@@ -224,8 +222,8 @@ impl KeySignature {
         self.signature.is_non_traditional()
     }
 
-    /// Settable since v11: turning it on drops the sharp count and lets
-    /// `alteredPitches` be assigned.
+    /// Turning it on drops the sharp count and lets `alteredPitches` be
+    /// assigned.
     #[setter]
     fn set_isNonTraditional(&mut self, value: bool) {
         self.signature.set_non_traditional(value);

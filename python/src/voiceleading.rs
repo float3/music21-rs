@@ -120,7 +120,7 @@ impl VoiceLeadingQuartet {
         key: Option<&Bound<'_, PyAny>>,
         keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Self> {
-        // `analyticKey` is what this argument used to be called.
+        // `analyticKey` is accepted as a keyword synonym for `key`.
         let named = match keywords {
             Some(keywords) => keywords.get_item("analyticKey")?,
             None => None,

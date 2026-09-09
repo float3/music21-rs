@@ -182,11 +182,8 @@ struct ChordCache {
     /// The fourteen `is...` questions, two bits each: whether it has been
     /// asked, and what the answer was.
     ///
-    /// A map here cost a heap allocation on the first question and made every
-    /// chord bigger to build, which a cache has no business doing — an
-    /// earlier attempt at this was measured at two to three percent on every
-    /// fresh chord and left on a branch for it. Fourteen answers fit in a
-    /// pair of `u16`s.
+    /// Fourteen answers fit in a pair of `u16`s, so the cache allocates
+    /// nothing and adds nothing to the cost of building a chord.
     asked: u16,
     answers: u16,
 }

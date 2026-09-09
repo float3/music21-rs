@@ -3071,7 +3071,7 @@ impl Note {
         Self::get_pitch(slf).setattr(slf.py(), "step", value)
     }
 
-    /// Always an `int`, as music21 v11's `Pitch.octave` is.
+    /// Always an `int`, as music21's `Pitch.octave` is.
     #[getter]
     fn get_octave(&self, py: Python<'_>) -> i32 {
         self.pitch_value(py)

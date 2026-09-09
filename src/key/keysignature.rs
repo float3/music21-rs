@@ -162,15 +162,15 @@ impl KeySignature {
     /// Whether the signature is a list of altered pitches rather than a
     /// count of sharps or flats.
     ///
-    /// music21 v11 made this a settable attribute and gave `sharps` the value
-    /// nought rather than `None` when it is true; [`Self::sharps`] keeps the
-    /// `Option`, which says both things at once.
+    /// music21's `isNonTraditional`. There `sharps` answers nought when this
+    /// is true; [`Self::sharps`] answers `None`, which says both things at
+    /// once.
     pub fn is_non_traditional(&self) -> bool {
         self.sharps.is_none()
     }
 
-    /// Makes the signature non-traditional, or traditional again: music21's
-    /// settable `isNonTraditional`, new in v11.
+    /// Makes the signature non-traditional, or traditional again: the setter
+    /// of music21's `isNonTraditional`.
     ///
     /// Turning it on drops the sharp count and starts an empty list of
     /// altered pitches; turning it off restores a count of nought. Setting it
@@ -360,8 +360,8 @@ impl std::fmt::Display for KeySignature {
 mod non_traditional_tests {
     use super::*;
 
-    /// music21 v11 made `isNonTraditional` settable and gave `sharps` the
-    /// value nought rather than `None` while it is true.
+    /// A non-traditional signature reports no sharp count, and the flag can
+    /// be turned on and off again.
     #[test]
     fn a_signature_can_be_made_non_traditional_and_back() {
         let mut signature = KeySignature::new(3);

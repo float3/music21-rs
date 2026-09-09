@@ -66,9 +66,8 @@ where
                     remaining /= 2;
                     // Squaring after the last bit is consumed produces a value
                     // nothing reads, and near the backing type's ceiling it is
-                    // what overflows: `(3/2).powi(18)` used to raise the base
-                    // to the thirty-second power to reach an answer that fits
-                    // in an `i32` with room to spare, and panicked doing it.
+                    // what overflows: `(3/2).powi(18)` fits an `i32` with room
+                    // to spare while the thirty-second power does not.
                     if remaining > 0 {
                         squared = squared.clone() * squared;
                     }
@@ -105,9 +104,8 @@ mod tests {
     }
 
     /// `interval::pythagorean_ratio` walks up to eighteen fifths before it
-    /// gives up, so every power to eighteen has to be reachable. Raising the
-    /// base one step past the answer used to overflow `IntegerType` and panic
-    /// out of a `Result`-returning API for the last three of them.
+    /// gives up, so every power to eighteen has to be reachable without
+    /// overflowing `IntegerType`.
     #[test]
     fn powi_reaches_the_largest_power_its_caller_asks_for() {
         let fifth: GenericFraction<IntegerType> = GenericFraction::new(3, 2);

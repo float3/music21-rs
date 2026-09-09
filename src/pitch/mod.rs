@@ -1098,17 +1098,16 @@ impl Pitch {
 
     /// Returns the octave, or music21's default of 4 when none is set.
     ///
-    /// This is what music21 v11's `.octave` answers -- there the property is
-    /// always an `int`, and `implicitOctave` is a deprecated synonym for it.
+    /// This is what music21's `.octave` answers, which is always an `int`.
     /// [`Self::octave`] keeps the `Option`, which is music21's own `_octave`
-    /// and says strictly more; [`Self::octave_is_implicit`] is the flag v11
-    /// added to tell the two apart.
+    /// and says strictly more; [`Self::octave_is_implicit`] tells the two
+    /// apart.
     pub fn implicit_octave(&self) -> IntegerType {
         self.octave.unwrap_or(PITCH_OCTAVE as IntegerType)
     }
 
     /// Whether this pitch was never given an octave, so it stands for its
-    /// pitch class in any octave: music21's `octaveIsImplicit`, new in v11.
+    /// pitch class in any octave: music21's `octaveIsImplicit`.
     ///
     /// Such a pitch prints without an octave number and reports the default
     /// octave from [`Self::implicit_octave`].
@@ -1117,8 +1116,8 @@ impl Pitch {
         self.octave.is_none()
     }
 
-    /// Makes the octave implicit or explicit: music21's settable
-    /// `octaveIsImplicit`, new in v11.
+    /// Makes the octave implicit or explicit: the setter of music21's
+    /// `octaveIsImplicit`.
     ///
     /// Making it explicit puts the pitch in the default octave, as music21
     /// does; making it implicit takes the octave away. Setting it to what it
@@ -2131,8 +2130,8 @@ mod tests {
         assert_eq!(fresh.accidental().display_status(), Some(true));
     }
 
-    /// music21 v11 split the absent octave in two: `.octave` always answers a
-    /// number, and `.octaveIsImplicit` says whether one was ever given.
+    /// music21's `.octave` always answers a number, and `.octaveIsImplicit`
+    /// says whether one was ever given.
     #[test]
     fn an_octave_is_implicit_until_one_is_given() {
         use crate::pitch::Pitch;

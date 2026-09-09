@@ -10,15 +10,9 @@ use std::path::{Path, PathBuf};
 
 /// Files in the archive that are not valid Scala and are expected to fail.
 ///
-/// Empty, and that is the point: every file in the pinned archive now parses.
-///
-/// `sparschuh-stanhope.scl` was listed here for writing a degree as `697//441`
-/// with a doubled slash. Upstream fixed it in cuthbertLab/music21#2003, which
-/// this submodule pin now includes, so the entry is gone.
-///
-/// `xxx.scl` was listed for declaring zero degrees. That is legal Scala —
-/// music21 reads it as a scale with no pitches — and rejecting it was a bug in
-/// this crate, since fixed.
+/// Empty: every file in the pinned archive parses, `xxx.scl` included, since
+/// a scale declaring no degrees is legal Scala and music21 reads it as a scale
+/// with no pitches.
 const KNOWN_BAD: [&str; 0] = [];
 
 fn archive_dir() -> PathBuf {

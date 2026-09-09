@@ -2002,10 +2002,9 @@ fn suffix_has_seventh(suffix: &str) -> bool {
 /// music21's `roman.figureShorthands`, mapping a full figured-bass string to
 /// the abbreviation musicians actually write.
 ///
-/// This is the table the inversion logic used to approximate with
-/// `suffix.contains("64")`-style probes, which read `642` as a second inversion
-/// because `64` matched before `42` was ever tested. Normalizing through the
-/// real table removes that ordering hazard rather than reshuffling the probes.
+/// The inversion logic normalizes a figure through this table rather than
+/// probing it for substrings, so `642` reads as the third inversion it is and
+/// not as the `64` inside it.
 const FIGURE_SHORTHANDS: [(&str, &str); 20] = [
     ("53", ""),
     ("3", ""),
@@ -2980,9 +2979,8 @@ mod tests {
 
     #[test]
     fn figured_bass_shorthands_give_music21_inversions() {
-        // Captured from music21's RomanNumeral(...).inversion(). `V642` is the
-        // case the old `contains("64")` probe got wrong: it matched `64` and
-        // reported a second inversion where music21 reports a third.
+        // Captured from music21's RomanNumeral(...).inversion(). `V642` holds
+        // `64` inside it and is a third inversion all the same.
         let key = Key::from_tonic_mode("C", "major").unwrap();
         for (figure, expected) in [
             ("V", 0),

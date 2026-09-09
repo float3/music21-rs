@@ -526,8 +526,7 @@ pub(crate) fn report(workspace_root: &Path, options: &Options) -> Result<(), Box
     // Coverage is not a run of its own: it is what the suites leave behind.
     // Every suite is run under the instrumentation `cargo llvm-cov show-env`
     // describes, so the profiles they all write merge into one figure — the
-    // parity suite and music21's own doctests included, which used to drive
-    // thousands of lines that the report then called uncovered.
+    // parity suite and music21's own doctests included.
     let coverage_env = if options.coverage {
         Some(start_coverage(workspace_root)?)
     } else {
@@ -947,9 +946,8 @@ pub(crate) fn python_command() -> String {
 
 /// This very binary, ready to be run again with a subcommand.
 ///
-/// The benchmark and music21's suite used to be Python scripts this shelled
-/// out to; they are pyo3 subcommands of `xtask` now, so driving them means
-/// running this program again. Taking the running executable rather than
+/// The benchmark and music21's suite are subcommands of `xtask`, so driving
+/// them means running this program again. Taking the running executable rather than
 /// `cargo run` keeps the report from rebuilding itself underneath its own run.
 fn xtask_command() -> Command {
     Command::new(env::current_exe().unwrap_or_else(|_| PathBuf::from("xtask")))

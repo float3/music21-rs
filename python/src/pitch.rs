@@ -1139,14 +1139,14 @@ impl Pitch {
         self.write_back()
     }
 
-    /// music21 v11's `octave` is always an `int`: a pitch given no octave
+    /// music21's `octave` is always an `int`: a pitch given no octave
     /// reports the default, 4, and `octaveIsImplicit` says which it was.
     #[getter]
     fn octave(&self) -> i32 {
         self.inner.octave().unwrap_or_else(default_octave)
     }
 
-    /// music21's `octaveIsImplicit`, new in v11: true for a pitch that was
+    /// music21's `octaveIsImplicit`: true for a pitch that was
     /// never given an octave and so stands for its pitch class in any.
     #[getter]
     fn octaveIsImplicit(&self) -> bool {

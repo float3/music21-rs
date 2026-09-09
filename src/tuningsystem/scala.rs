@@ -571,10 +571,8 @@ mod bundled_tests {
     fn the_whole_bundled_archive_parses() {
         let (archive, failures) = ScalaArchive::bundled_with_failures();
         let names: Vec<&str> = failures.iter().map(|(name, _)| *name).collect();
-        // Every scale in the bundle parses. `sparschuh-stanhope.scl` used to
-        // fail here for writing a degree as `697//441`; upstream fixed it in
-        // cuthbertLab/music21#2003. `xxx.scl` declares zero degrees, which is
-        // legal Scala and which music21 accepts too.
+        // Every scale in the bundle parses. `xxx.scl` declares zero degrees,
+        // which is legal Scala and which music21 accepts too.
         assert_eq!(names, [] as [&str; 0]);
         assert_eq!(archive.len(), ScalaArchive::bundled_len());
         // 3932 from the music21 submodule plus 62 from the hexatone one.

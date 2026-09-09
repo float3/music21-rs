@@ -73,10 +73,9 @@ impl ScaleFingerprint {
             .map(|degree| (degree / tolerance).round() as i64)
             .collect();
         // Sorted, because the order a scale was written in says nothing about
-        // it; *not* deduplicated, because how many degrees it has does. An
-        // earlier version deduplicated and made Young II and Neidhardt I look
-        // like one temperament: they use the same handful of deviations, in
-        // different places.
+        // it; *not* deduplicated, because how many degrees it has does: Young
+        // II and Neidhardt I use the same handful of deviations in different
+        // places, and only the multiset tells them apart.
         steps.sort_unstable();
         Ok(Self { steps })
     }
@@ -260,9 +259,7 @@ mod tests {
         assert!(duplicate_groups(Vec::<&str>::new(), |word| word.len()).is_empty());
     }
 
-    /// The guard for the defect this module exists because of: `IndianFull`
-    /// was a second name for `Indian22`'s twenty-two ratios and shipped that
-    /// way. Nothing in the table may be a second name for anything else in it.
+    /// Nothing in the table may be a second name for anything else in it.
     #[test]
     fn no_two_tuning_systems_are_the_same_tuning() {
         let groups = duplicate_groups(ALL_TUNING_SYSTEMS, |system| {

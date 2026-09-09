@@ -772,8 +772,8 @@ mod tests {
         assert!(marvel.moments(12).is_err());
     }
 
-    /// A subgroup with no 2 in it repeats at something else, and everything
-    /// that used to say "octave" has to mean "equave" for it to work.
+    /// A subgroup with no 2 in it repeats at something other than the octave,
+    /// and every count is taken to that equave.
     #[test]
     fn a_temperament_can_repeat_at_a_tritave() {
         // Canopus, from its own infobox: 1; -5 -4 over 3.5.7, generator 7/5.

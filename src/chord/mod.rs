@@ -3907,10 +3907,7 @@ mod tests {
 
     #[test]
     fn set_duration_applies_to_non_empty_chords() {
-        // Regression: the duration used to live behind an `Arc<ChordBase>` that
-        // every note in the chord also held a reference to, so `Arc::get_mut`
-        // returned `None` and the setter silently did nothing for any chord
-        // that actually had notes in it.
+        // The setter applies whether or not the chord holds notes.
         for input in ["", "C", "C E G", "C E G B-"] {
             let mut chord = Chord::new(input).unwrap();
             chord.set_duration(Duration::whole());
@@ -4839,8 +4836,7 @@ mod tests {
 
         assert_eq!(fingering.strings.len(), 6);
         // A voicing sounds chord *tones*, in whatever octave falls under the
-        // hand — it is not required to reproduce the written octaves, which is
-        // what used to confine every shape to the top three strings.
+        // hand; it is not required to reproduce the written octaves.
         assert_eq!(fingering.covered_pitch_classes, vec![0, 4, 7]);
         assert!(fingering.omitted_pitch_classes.is_empty());
         assert!(
@@ -4915,9 +4911,8 @@ mod tests {
 
     #[test]
     fn guitar_fingering_keeps_every_chord_tone() {
-        // A seventh chord that silently dropped its seventh was the other half
-        // of the old scoring: omitting a written octave was punished a thousand
-        // times harder than omitting an actual chord tone.
+        // Omitting a chord tone costs a voicing far more than omitting a
+        // written octave, so a seventh chord keeps its seventh.
         for notes in ["G B D F", "C E G B-", "A C E G", "C E G B", "B D F"] {
             let fingering = Chord::new(notes).unwrap().guitar_fingering().unwrap();
             assert!(
