@@ -262,7 +262,7 @@ impl ScaleType {
     /// The steps walked from the pitch the scale is *realized* from, which
     /// for a plagal mode is not its final.
     ///
-    /// [`Self::steps`] is the collection written from the final, which is
+    /// `steps` is the collection written from the final, which is
     /// how every one of these scales is named. A plagal mode is realized
     /// from a fourth below that, so its walk starts three steps earlier in
     /// the same cycle — the rotation that puts the final at the degree
