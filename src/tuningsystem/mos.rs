@@ -375,6 +375,15 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_pattern_is_read_from_its_name() {
+        let diatonic: Mos = "5L 2s".parse().unwrap();
+        assert_eq!(diatonic.notes(), 7);
+        assert_eq!("2L5s".parse::<Mos>().unwrap().notes(), 7);
+        assert!("5L".parse::<Mos>().is_err());
+        assert!("xL 2s".parse::<Mos>().is_err());
+    }
+
+    #[test]
     fn the_diatonic_scale_is_five_large_steps_and_two_small() {
         let diatonic = MosScale::new(701.955, OCTAVE_CENTS, 7).expect("a fifth");
         assert!(diatonic.is_moment_of_symmetry());

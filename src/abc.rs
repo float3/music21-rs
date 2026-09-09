@@ -254,6 +254,31 @@ fn gcd(mut left: u32, mut right: u32) -> u32 {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn abc_notes_are_written_and_read_back() {
+        use super::{abc_note, pitch_name_from_abc_note};
+        use crate::pitch::Pitch;
+
+        assert_eq!(abc_note(&Pitch::from_name("C4").unwrap()).unwrap(), "C");
+        assert_eq!(abc_note(&Pitch::from_name("C#5").unwrap()).unwrap(), "^c");
+        assert_eq!(abc_note(&Pitch::from_name("B-3").unwrap()).unwrap(), "_B,");
+        assert_eq!(
+            pitch_name_from_abc_note("^c'").unwrap().as_deref(),
+            Some("C#6")
+        );
+        assert_eq!(
+            pitch_name_from_abc_note("_B,").unwrap().as_deref(),
+            Some("B-3")
+        );
+        assert_eq!(
+            pitch_name_from_abc_note("=F").unwrap().as_deref(),
+            Some("Fn4")
+        );
+        assert_eq!(pitch_name_from_abc_note("z").unwrap(), None);
+        assert!(pitch_name_from_abc_note("?").is_err());
+    }
+
     use super::{
         abc_chord, abc_duration, abc_note, abc_rest, pitch_name_from_abc_note,
         pitch_names_from_abc_chord,

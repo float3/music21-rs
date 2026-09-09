@@ -260,6 +260,28 @@ impl PartialEq for Microtone {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_microtone_is_read_from_owned_text_and_from_an_integer() {
+        use super::{Microtone, MicrotoneSpecifier};
+
+        assert_eq!(
+            Microtone::try_from("+20".to_string()).unwrap().cents(),
+            20.0
+        );
+        assert_eq!(
+            Microtone::try_from("(-15)".to_string()).unwrap().cents(),
+            -15.0
+        );
+        assert_eq!(Microtone::try_from(33).unwrap().cents(), 33.0);
+        assert!(Microtone::try_from("".to_string()).is_err());
+        assert!(Microtone::try_from("+abc".to_string()).is_err());
+        assert_eq!(
+            MicrotoneSpecifier::from("+20".to_string()).to_string(),
+            "+20"
+        );
+    }
+
     use super::{Microtone, MicrotoneSpecifier};
 
     #[test]

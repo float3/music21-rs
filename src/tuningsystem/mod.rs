@@ -939,6 +939,16 @@ pub const INDIAN_SCALE_NAMES: [&str; 7] = ["Sa", "Re", "Ga", "Ma", "Pa", "Dha", 
 mod tests {
     use super::*;
 
+    #[test]
+    fn every_system_answers_cents_and_a_fraction_for_its_degrees() {
+        for system in ALL_TUNING_SYSTEMS {
+            let unison = system.fraction(0);
+            assert!(unison.numerator == 0 || unison.numerator == unison.denominator);
+            assert_eq!(system.cents(0), 0.0);
+            assert!(system.cents(system.octave_size()).abs() < 1e-9);
+        }
+    }
+
     /// Cents above the tonic for a degree of a twelve-tone table.
     fn cents_at_degree(system: TuningSystem, degree: usize) -> FloatType {
         1200.0 * system.ratio(degree).log2()

@@ -238,6 +238,15 @@ pub fn tonal_certainty_from_scores(scores: &[FloatType]) -> FloatType {
 mod tests {
 
     #[test]
+    fn a_profile_names_its_music21_class() {
+        assert_eq!(KeyProfile::AardenEssen.music21_class_name(), "AardenEssen");
+        assert_eq!(
+            KeyProfile::KrumhanslSchmuckler.music21_class_name(),
+            "KrumhanslSchmuckler"
+        );
+    }
+
+    #[test]
     fn tonal_certainty_rewards_a_clear_leader() {
         let scale: Vec<Pitch> = ["C4", "D4", "E4", "F4", "G4", "A4", "B4", "C5"]
             .iter()

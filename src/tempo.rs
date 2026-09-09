@@ -330,6 +330,33 @@ impl MetronomeMark {
 mod tests {
     use super::*;
 
+    #[test]
+    fn a_mark_can_be_rewritten_one_half_at_a_time() {
+        let mut mark = MetronomeMark::from_text("adagio");
+        assert!(mark.number_implicit());
+        mark.set_number(Some(60.0));
+        assert!(!mark.number_implicit());
+        assert_eq!(mark.number(), Some(60.0));
+        mark.set_number_implicit(true);
+        assert!(mark.number_implicit());
+        mark.set_referent(Duration::half());
+        assert_eq!(mark.referent().quarter_length(), 2.0);
+        assert_eq!(mark.quarter_bpm(), Some(120.0));
+
+        let mut numbered = MetronomeMark::new(90.0);
+        assert!(numbered.text_implicit());
+        numbered.set_text("largo");
+        assert!(!numbered.text_implicit());
+        assert_eq!(numbered.text(), Some("largo"));
+        assert_eq!(numbered.number(), Some(90.0));
+        let mut wordless = MetronomeMark::default();
+        wordless.set_number(Some(184.0));
+        assert_eq!(wordless.text(), Some("presto"));
+        assert!(wordless.text_implicit());
+        wordless.set_number(None);
+        assert_eq!(wordless.number(), None);
+    }
+
     /// music21's own `getTextExpression` examples.
     #[test]
     fn an_implied_word_is_only_answered_when_asked_for() {

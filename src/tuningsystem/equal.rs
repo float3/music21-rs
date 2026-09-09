@@ -255,6 +255,17 @@ mod tests {
     use super::*;
 
     #[test]
+    fn an_equal_division_is_read_from_its_name() {
+        assert_eq!("13edt".parse::<EqualDivision>().unwrap().divisions(), 13);
+        assert_eq!("12edo".parse::<EqualDivision>().unwrap().divisions(), 12);
+        assert_eq!("9ed3/2".parse::<EqualDivision>().unwrap().divisions(), 9);
+        assert_eq!("13ed3".parse::<EqualDivision>().unwrap().divisions(), 13);
+        assert!("13".parse::<EqualDivision>().is_err());
+        assert!("xedo".parse::<EqualDivision>().is_err());
+        assert!("9ed3/x".parse::<EqualDivision>().is_err());
+    }
+
+    #[test]
     fn an_octave_division_is_the_equal_temperament_everyone_means() {
         let twelve = EqualDivision::octave(12).expect("an octave");
         assert_eq!(twelve.to_string(), "12edo");

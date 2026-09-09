@@ -447,6 +447,47 @@ mod non_traditional_tests {
 mod tests {
 
     #[test]
+    fn a_signature_names_a_key_in_a_mode_or_from_a_tonic() {
+        let two_sharps = KeySignature::new(2);
+        assert_eq!(two_sharps.as_key("major").tonic().name(), "D");
+        assert_eq!(two_sharps.as_key("minor").tonic().name(), "B");
+        let from_tonic = two_sharps.try_as_key(None, Some("b")).unwrap();
+        assert_eq!(
+            (from_tonic.tonic().name(), from_tonic.mode()),
+            ("B".to_string(), "aeolian")
+        );
+        assert_eq!(
+            two_sharps.try_as_key(None, None).unwrap().tonic().name(),
+            "D"
+        );
+        // A mode given beside a tonic wins, and the tonic is not consulted.
+        assert_eq!(
+            two_sharps
+                .try_as_key(Some("major"), Some("C"))
+                .unwrap()
+                .tonic()
+                .name(),
+            "D"
+        );
+        let altered = KeySignature::from_altered_pitches(vec![Pitch::from_name("F#").unwrap()]);
+        assert!(altered.try_as_key(Some("major"), None).is_err());
+        assert_eq!(altered.as_key("major").tonic().name(), "C");
+        assert_eq!(
+            pitch_to_sharps(&Pitch::from_name("D").unwrap(), Some("major")).unwrap(),
+            2
+        );
+        assert_eq!(
+            pitch_to_sharps(&Pitch::from_name("D").unwrap(), Some("minor")).unwrap(),
+            -1
+        );
+        // A mode with no signature alteration leaves the major key's count.
+        assert_eq!(
+            pitch_to_sharps(&Pitch::from_name("D").unwrap(), Some("nonsense")).unwrap(),
+            2
+        );
+    }
+
+    #[test]
     fn transpose_pitch_from_c_matches_music21() {
         let cases: [(i32, [&str; 5]); 7] = [
             (0, ["C4", "E4", "B-3", "F#5", "G"]),

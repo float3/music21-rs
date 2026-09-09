@@ -323,6 +323,31 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_diatonic_interval_classifies_itself_and_transposes() {
+        use crate::pitch::Pitch;
+
+        let third = DiatonicInterval::from_name("M3").unwrap();
+        assert_eq!(third.specifier(), Specifier::Major);
+        assert_eq!(third.generic().value(), 3);
+        assert!(!third.is_perfectable());
+        assert!(!third.is_step());
+        assert!(!third.is_diatonic_step());
+        assert!(third.is_skip());
+        assert_eq!(
+            third
+                .transpose_pitch(&Pitch::from_name("C4").unwrap())
+                .unwrap()
+                .name_with_octave(),
+            "E4"
+        );
+        let second = DiatonicInterval::from_name("M2").unwrap();
+        assert!(second.is_step());
+        assert!(second.is_diatonic_step());
+        assert!(!second.is_skip());
+        assert!(DiatonicInterval::from_name("P5").unwrap().is_perfectable());
+    }
+
+    #[test]
     fn the_specifier_abbreviation_is_the_quality_prefix() {
         assert_eq!(
             DiatonicInterval::from_name("M-10")

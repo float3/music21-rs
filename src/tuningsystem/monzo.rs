@@ -447,6 +447,21 @@ impl FromStr for Val {
 mod tests {
     use super::*;
 
+    #[test]
+    fn a_monzo_is_read_from_a_fraction_and_back() {
+        use super::Monzo;
+        use crate::FractionType;
+
+        let comma = Monzo::from_fraction(FractionType::new(81, 80)).unwrap();
+        assert_eq!(comma.limit(), Some(5));
+        assert!(!comma.is_unison());
+        assert_eq!(comma.ratio().unwrap(), FractionType::new(81, 80));
+        let unison = Monzo::from_fraction(FractionType::new(1, 1)).unwrap();
+        assert!(unison.is_unison());
+        assert_eq!(unison.limit(), None);
+        assert!(Monzo::from_fraction(FractionType::new(1, 0)).is_err());
+    }
+
     /// Every ratio the wiki writes a monzo for, factored and written back.
     #[test]
     fn monzos_factor_the_commas_they_are_named_for() {

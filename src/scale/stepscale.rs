@@ -161,6 +161,15 @@ fn parse_steps(steps: &[&str]) -> Result<Vec<Interval>> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn a_step_scale_reports_its_tonic_and_steps() {
+        let tonic = Pitch::from_name("C4").unwrap();
+        let scale = StepScale::cyclical(tonic.clone(), &["M2", "M2"]).unwrap();
+        assert_eq!(scale.tonic(), &tonic);
+        assert_eq!(scale.steps().len(), 2);
+        assert_eq!(scale.degree_count(), 2);
+    }
+
     fn names(scale: &StepScale) -> Vec<String> {
         scale
             .pitches()

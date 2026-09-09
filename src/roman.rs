@@ -1047,6 +1047,143 @@ fn inversion_name_from_root(chord: &Chord, root: &Pitch, inversion: Option<u8>) 
 }
 
 /// Reads a chord as the tonic or the dominant of a key, with its inversion:
+/// A pitch as a figure over a reference pitch: the scale step it stands
+/// above the reference, how far it is altered from the key's own spelling of
+/// that degree, and the accidental written in front of a figure for it.
+/// music21's `FigureTuple`.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
+pub struct FigureTuple {
+    /// The generic step above the reference pitch, `1` to `7`.
+    pub deg_from_ref_pitch: u8,
+    /// Semitones away from the key's own spelling of the degree.
+    pub alter: FloatType,
+    /// The accidental written in front of a figure for it: `#`, `b`, `##`
+    /// and so on, or nothing.
+    pub prefix: String,
+}
+
+impl FigureTuple {
+    /// The figure of `pitch` above `reference` in `key`: music21's
+    /// `FigureTuple.fromPitchAndReference`. An `A-3` above an `F#2` bass in C
+    /// major is a third above the bass and a semitone below the `A` C major
+    /// has, so it is `3`, altered by `-1`, written `b`. A minor key is read
+    /// as the natural minor.
+    pub fn from_pitch_and_reference(pitch: &Pitch, key: &Key, reference: &Pitch) -> Result<Self> {
+        let (_, accidental) = key.as_scale()?.degree_and_accidental_of(pitch)?;
+        let degree = Interval::between_pitches(reference, pitch)?
+            .generic()
+            .mod7();
+        let alter = accidental.map_or(0.0, |accidental| accidental.alter());
+        Ok(Self {
+            deg_from_ref_pitch: u8::try_from(degree).unwrap_or(1),
+            alter,
+            prefix: figure_prefix(alter as IntegerType),
+        })
+    }
+}
+
+/// A [`FigureTuple`] beside the pitch it describes: music21's
+/// `PitchFigureTuple`.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
+pub struct PitchFigureTuple {
+    /// The figure.
+    pub figure: FigureTuple,
+    /// The pitch it was read from.
+    pub pitch: Pitch,
+}
+
+/// The accidental written in front of a figure for an alteration: sharps
+/// for a positive one, flats for a negative one.
+fn figure_prefix(alter: IntegerType) -> String {
+    match alter {
+        0 => String::new(),
+        sharps if sharps > 0 => "#".repeat(sharps as usize),
+        flats => "b".repeat(flats.unsigned_abs() as usize),
+    }
+}
+
+/// One figure per pitch of the chord, each read above the chord's bass:
+/// music21's `figureTuples`.
+pub fn figure_tuples(chord: &Chord, key: &Key) -> Result<Vec<PitchFigureTuple>> {
+    let Some(bass) = chord.bass() else {
+        return Ok(Vec::new());
+    };
+    chord
+        .pitches()
+        .iter()
+        .map(|pitch| {
+            Ok(PitchFigureTuple {
+                figure: FigureTuple::from_pitch_and_reference(pitch, key, bass)?,
+                pitch: pitch.clone(),
+            })
+        })
+        .collect()
+}
+
+/// The figure of a chord's root corrected for a minor key, where the sixth
+/// and seventh degrees are named against the natural minor: music21's
+/// `correctRNAlterationForMinor`, in its cautionary reading.
+///
+/// A raised sixth or seventh loses its sharp, since the lower case numeral
+/// a minor or diminished chord takes already says the degree is raised, and
+/// a natural one gains a flat as a caution. A chord with a major third keeps
+/// its sharp, because `VI` alone would name the chord on the lowered degree.
+/// Figures in a major key, and on any other degree, come back as they are.
+pub fn correct_rn_alteration_for_minor(
+    figure: &FigureTuple,
+    key: &Key,
+    chord_has_major_third: bool,
+) -> FigureTuple {
+    if key.mode() != "minor" || !matches!(figure.deg_from_ref_pitch, 6 | 7) {
+        return figure.clone();
+    }
+    if chord_has_major_third && figure.alter >= 1.0 {
+        return figure.clone();
+    }
+    let (alter, prefix) = if figure.alter == 1.0 {
+        (0.0, String::new())
+    } else if figure.alter == 0.0 {
+        (0.0, "b".to_string())
+    } else if figure.alter > 1.0 {
+        (figure.alter - 1.0, figure.prefix.chars().skip(1).collect())
+    } else {
+        (figure.alter, format!("b{}", figure.prefix))
+    };
+    FigureTuple {
+        deg_from_ref_pitch: figure.deg_from_ref_pitch,
+        alter,
+        prefix,
+    }
+}
+
+/// The inversion figure with the quality mark a chord's fifth and seventh
+/// call for in front of it: music21's `correctSuffixForChordQuality`. A
+/// diminished fifth writes `o`, an augmented one `+`, and a diminished
+/// fifth under a minor seventh `ø`; a figure that already carries the mark
+/// is left as it is.
+pub fn correct_suffix_for_chord_quality(chord: &Chord, inversion_string: &str) -> String {
+    let fifth = chord.semitones_from_chord_step(5);
+    let mut quality = match fifth {
+        Some(6) => "o",
+        Some(8) => "+",
+        _ => "",
+    };
+    let marked = ["o", "°", "/o", "ø"]
+        .iter()
+        .any(|mark| inversion_string.starts_with(mark));
+    if marked && quality == "o" {
+        quality = "";
+    }
+    if fifth == Some(6) && chord.semitones_from_chord_step(7) == Some(10) && quality == "o" {
+        quality = "ø";
+    }
+    format!("{quality}{inversion_string}")
+}
+
 /// The accidental a numeral on the sixth or seventh degree of a minor key
 /// ends up with, given how the key is read and the chord the figure asks
 /// for: music21's `adjustMinorVIandVIIByQuality`.
@@ -2405,10 +2542,7 @@ mod tests {
 
         let alone: NumeralAlone = parse_numeral_alone("VI6").unwrap();
         assert_eq!((alone.numeral.as_str(), alone.rest.as_str()), ("VI", "6"));
-        assert_eq!(
-            (alone.degree, alone.alteration, alone.minor),
-            (6, 0, false)
-        );
+        assert_eq!((alone.degree, alone.alteration, alone.minor), (6, 0, false));
         let german = parse_numeral_alone("Ger").unwrap();
         assert_eq!(
             (german.numeral.as_str(), german.rest.as_str()),
@@ -2443,6 +2577,154 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(analyzed.figure(), "I6");
+    }
+
+    /// music21's own examples for `FigureTuple.fromPitchAndReference`,
+    /// `figureTuples`, `correctRNAlterationForMinor` and
+    /// `correctSuffixForChordQuality`.
+    #[test]
+    fn figures_are_read_above_a_reference_pitch_and_corrected_for_minor() {
+        use super::{
+            FigureTuple, correct_rn_alteration_for_minor, correct_suffix_for_chord_quality,
+            figure_tuples,
+        };
+        use crate::{Chord, Key, Pitch};
+
+        let c_major = Key::from_tonic("C").unwrap();
+        let c_minor = Key::from_tonic("c").unwrap();
+        let figure = |name: &str, key: &Key, reference: &str| {
+            FigureTuple::from_pitch_and_reference(
+                &Pitch::from_name(name).unwrap(),
+                key,
+                &Pitch::from_name(reference).unwrap(),
+            )
+            .unwrap()
+        };
+        let read = |figure: FigureTuple| (figure.deg_from_ref_pitch, figure.alter, figure.prefix);
+        assert_eq!(
+            read(figure("A-3", &c_major, "F#2")),
+            (3, -1.0, "b".to_string())
+        );
+        assert_eq!(
+            read(figure("E--4", &c_minor, "C3")),
+            (3, -1.0, "b".to_string())
+        );
+        assert_eq!(read(figure("E-4", &c_minor, "C3")), (3, 0.0, String::new()));
+        assert_eq!(
+            read(figure("E#4", &c_minor, "C3")),
+            (3, 2.0, "##".to_string())
+        );
+        assert_eq!(
+            read(figure("A4", &c_minor, "C3")),
+            (6, 1.0, "#".to_string())
+        );
+        assert_eq!(
+            read(figure("B5", &c_minor, "C3")),
+            (7, 1.0, "#".to_string())
+        );
+
+        let tuples = figure_tuples(&Chord::new("F#2 D3 A-3 C#4").unwrap(), &c_minor).unwrap();
+        let read_all: Vec<(u8, FloatType, String)> = tuples
+            .iter()
+            .map(|tuple| read(tuple.figure.clone()))
+            .collect();
+        assert_eq!(
+            read_all,
+            [
+                (1, 1.0, "#".to_string()),
+                (6, 0.0, String::new()),
+                (3, 0.0, String::new()),
+                (5, 1.0, "#".to_string()),
+            ]
+        );
+        assert_eq!(tuples[2].pitch.name_with_octave(), "A-3");
+        assert!(
+            figure_tuples(&Chord::new("").unwrap(), &c_minor)
+                .unwrap()
+                .is_empty()
+        );
+
+        let sixth = |alter: FloatType, prefix: &str| FigureTuple {
+            deg_from_ref_pitch: 6,
+            alter,
+            prefix: prefix.to_string(),
+        };
+        assert_eq!(
+            read(correct_rn_alteration_for_minor(
+                &sixth(-1.0, ""),
+                &c_minor,
+                false
+            )),
+            (6, -1.0, "b".to_string())
+        );
+        assert_eq!(
+            read(correct_rn_alteration_for_minor(
+                &sixth(0.0, ""),
+                &c_minor,
+                false
+            )),
+            (6, 0.0, "b".to_string())
+        );
+        let raised_seventh = figure("B5", &c_minor, "C3");
+        assert_eq!(
+            read(correct_rn_alteration_for_minor(
+                &raised_seventh,
+                &c_minor,
+                false
+            )),
+            (7, 0.0, String::new())
+        );
+        assert_eq!(
+            read(correct_rn_alteration_for_minor(
+                &raised_seventh,
+                &c_minor,
+                true
+            )),
+            (7, 1.0, "#".to_string())
+        );
+        assert_eq!(
+            read(correct_rn_alteration_for_minor(
+                &sixth(2.0, "##"),
+                &c_minor,
+                false
+            )),
+            (6, 1.0, "#".to_string())
+        );
+        let in_major = sixth(-1.0, "b");
+        assert_eq!(
+            correct_rn_alteration_for_minor(&in_major, &c_major, false),
+            in_major
+        );
+        let fourth = FigureTuple {
+            deg_from_ref_pitch: 4,
+            alter: -1.0,
+            prefix: "b".to_string(),
+        };
+        assert_eq!(
+            correct_rn_alteration_for_minor(&fourth, &c_minor, false),
+            fourth
+        );
+
+        assert_eq!(
+            correct_suffix_for_chord_quality(&Chord::new("E3 C4 G4").unwrap(), "6"),
+            "6"
+        );
+        assert_eq!(
+            correct_suffix_for_chord_quality(&Chord::new("E3 C4 G-4").unwrap(), "6"),
+            "o6"
+        );
+        assert_eq!(
+            correct_suffix_for_chord_quality(&Chord::new("C4 E4 G#4").unwrap(), ""),
+            "+"
+        );
+        assert_eq!(
+            correct_suffix_for_chord_quality(&Chord::new("B3 D4 F4 A4").unwrap(), "7"),
+            "ø7"
+        );
+        assert_eq!(
+            correct_suffix_for_chord_quality(&Chord::new("B3 D4 F4 A-4").unwrap(), "o7"),
+            "o7"
+        );
     }
 
     /// music21's own examples: in C minor a minor `vi` is raised and a

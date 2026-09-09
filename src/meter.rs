@@ -412,6 +412,13 @@ impl std::fmt::Display for TimeSignature {
 mod tests {
 
     #[test]
+    fn a_signature_reports_its_two_numbers_and_its_bar() {
+        let six_eight = TimeSignature::new(6, 8).unwrap();
+        assert_eq!((six_eight.numerator(), six_eight.denominator()), (6, 8));
+        assert_eq!(six_eight.bar_duration().quarter_length(), 3.0);
+    }
+
+    #[test]
     fn division_helpers_match_music21() {
         let quarter_lengths = |durations: Vec<Duration>| -> Vec<FloatType> {
             durations.into_iter().map(|d| d.quarter_length()).collect()

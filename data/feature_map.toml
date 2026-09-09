@@ -379,14 +379,6 @@ note = "The bracket that says a length is written as one thing and sounds as ano
 [class.renames]
 tupletMultiplier = "multiplier"
 
-[class.excluded]
-setDurationType = "a Tuplet is immutable here; it is built with `new` and `with_normal`"
-setRatio = "a Tuplet is immutable here; it is built with `new` and `with_normal`"
-durationActual = "music21 pairs a count with a DurationTuple; the crate keeps the written value and its dots, as `duration_type` and `dots`"
-durationNormal = "music21 pairs a count with a DurationTuple; the crate keeps the written value and its dots, as `normal_duration_type` and `normal_dots`"
-tupletActual = "the count alone is `actual`; music21's pairs it with a DurationTuple the crate does not model"
-tupletNormal = "the count alone is `normal`; music21's pairs it with a DurationTuple the crate does not model"
-
 [[class]]
 python = "note.py"
 name = "Note"
@@ -452,12 +444,7 @@ note = "Module-level helpers."
 romanNumeralFromChord = "analyze_chord"
 
 expandShortHand = "expand_shorthand"
-
-[class.excluded]
-correctSuffixForChordQuality = "figure-parsing internals; the parser here reads the figure directly"
-correctRNAlterationForMinor = "figure-parsing internals; the parser here reads the figure directly"
-figureTuples = "figured-bass tuples are not modelled"
-figureTupleSolo = "figured-bass tuples are not modelled"
+figureTupleSolo = "from_pitch_and_reference"
 
 [[class]]
 python = "chord/__init__.py"

@@ -312,6 +312,24 @@ pub fn convert_key_string_to_music21_key_string(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_key_is_read_from_an_owned_name_and_harmonizes_its_degrees() {
+        use super::Key;
+
+        let key = Key::try_from("a".to_string()).unwrap();
+        assert_eq!((key.tonic().name(), key.mode()), ("A".to_string(), "minor"));
+        let dorian = Key::from_tonic_mode("D", "dorian").unwrap();
+        assert_eq!(dorian.mode(), "dorian");
+        let major = Key::try_from("E-").unwrap();
+        let pitches: Vec<String> = major.pitches().unwrap().iter().map(|p| p.name()).collect();
+        assert_eq!(pitches, ["E-", "F", "G", "A-", "B-", "C", "D", "E-"]);
+        let sevenths = major.harmonized_sevenths().unwrap();
+        assert_eq!(sevenths.len(), 7);
+        assert_eq!(sevenths[4].pitch_names(), ["B-", "D", "F", "A-"]);
+        assert!(Key::try_from("H").is_err());
+    }
+
     #[test]
     fn the_pattern_read_by_decides_which_key_has_a_pitch_at_a_degree() {
         // music21's own example: the minor key whose seventh degree is E is

@@ -163,6 +163,18 @@ impl fmt::Display for ChromaticInterval {
 mod tests {
     use super::*;
 
+    #[test]
+    fn a_chromatic_interval_names_its_diatonic_reading() {
+        assert_eq!(ChromaticInterval::from_int(4).get_diatonic().name(), "M3");
+        assert_eq!(ChromaticInterval::from_int(6).get_diatonic().name(), "d5");
+        assert_eq!(
+            ChromaticInterval::from_int(-7)
+                .get_diatonic()
+                .directed_name(),
+            "P-5"
+        );
+    }
+
     fn pitch(name: &str) -> Pitch {
         Pitch::from_name(name).expect("valid pitch")
     }

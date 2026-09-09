@@ -716,6 +716,14 @@ fn pitch_space(pitch: &Pitch) -> crate::Result<IntegerType> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn a_tuning_is_built_from_its_open_strings() {
+        let standard = GuitarTuning::default();
+        let custom = GuitarTuning::new(["E2", "A2", "D3", "G3", "B3", "E4"]).unwrap();
+        assert_eq!(standard.strings().len(), custom.strings().len());
+        assert!(GuitarTuning::new(["E2", "H2"]).is_err());
+    }
+
     fn choices(frets: &[Option<u8>]) -> Vec<StringChoice> {
         frets
             .iter()

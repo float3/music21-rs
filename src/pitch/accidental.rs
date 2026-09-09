@@ -798,6 +798,35 @@ impl std::fmt::Display for Accidental {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn an_accidental_is_built_from_a_number_or_an_owned_name_and_recoloured() {
+        use super::{Accidental, AccidentalAttribute, AccidentalSpecifier};
+
+        assert_eq!(
+            Accidental::try_from("#".to_string()).unwrap().name(),
+            "sharp"
+        );
+        assert_eq!(Accidental::try_from(-1).unwrap().name(), "flat");
+        assert_eq!(Accidental::try_from(2i8).unwrap().name(), "double-sharp");
+        assert!(Accidental::try_from(9).is_err());
+        assert!(matches!(
+            AccidentalSpecifier::from(1i8),
+            AccidentalSpecifier::Alter(_)
+        ));
+
+        let mut accidental = Accidental::natural();
+        assert_eq!(accidental.color(), None);
+        accidental.set_color(Some("red".to_string()));
+        assert_eq!(accidental.color(), Some("red"));
+        accidental.set_attribute_independently(AccidentalAttribute::Name("sharp".to_string()));
+        assert_eq!(accidental.name(), "sharp");
+        accidental.set_attribute_independently(AccidentalAttribute::Alter(-1.0));
+        assert_eq!(accidental.alter(), -1.0);
+        accidental.set_attribute_independently(AccidentalAttribute::Modifier("--".to_string()));
+        assert_eq!(accidental.modifier(), "--");
+    }
+
     use super::{Accidental, AccidentalSpecifier};
 
     #[test]

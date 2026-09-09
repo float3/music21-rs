@@ -646,6 +646,35 @@ pub fn address_of_pitch_classes(pitch_classes: &[u8]) -> Result<ChordTableAddres
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn the_address_helpers_read_the_tables_for_a_major_triad() {
+        use super::{
+            interval_class_vector_from_address, invariance_vector_from_address,
+            prime_form_from_address, transposed_normal_form_from_address, z_relation_from_address,
+        };
+
+        let major = (3, 11, -1, Some(0));
+        assert_eq!(prime_form_from_address(major).unwrap(), [0, 3, 7]);
+        assert_eq!(
+            transposed_normal_form_from_address(major).unwrap(),
+            [0, 4, 7]
+        );
+        assert_eq!(
+            interval_class_vector_from_address(major).unwrap(),
+            [0, 0, 1, 1, 1, 0]
+        );
+        assert_eq!(invariance_vector_from_address(major).unwrap().len(), 8);
+        assert_eq!(z_relation_from_address(major).unwrap(), None);
+        assert_eq!(
+            z_relation_from_address((4, 15, 1, Some(0)))
+                .unwrap()
+                .as_deref(),
+            Some("4-29")
+        );
+        assert!(prime_form_from_address((3, 99, 0, None)).is_err());
+    }
+
     use super::{Sign, find_cardinality_member};
 
     #[test]

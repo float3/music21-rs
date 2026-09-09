@@ -380,6 +380,12 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_zeroth_is_not_an_interval() {
+        assert!(GenericInterval::new(0).is_err());
+        assert_eq!(GenericInterval::new(-3).unwrap().value(), -3);
+    }
+
+    #[test]
     fn generic_interval_direction_and_simple_values() {
         let descending_ninth = GenericInterval::from_int(-9).unwrap();
         assert_eq!(descending_ninth.simple_undirected(), 2);
