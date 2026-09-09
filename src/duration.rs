@@ -260,16 +260,10 @@ const DENOMINATOR_LIMIT: i128 = 65535;
 
 /// Reduces a fraction to its lowest terms.
 fn reduce(numerator: &mut i128, denominator: &mut i128) {
-    let mut left = *numerator;
-    let mut right = *denominator;
-    while right != 0 {
-        let next = left % right;
-        left = right;
-        right = next;
-    }
-    if left > 1 {
-        *numerator /= left;
-        *denominator /= left;
+    let divisor = num::integer::gcd(*numerator, *denominator);
+    if divisor > 1 {
+        *numerator /= divisor;
+        *denominator /= divisor;
     }
 }
 

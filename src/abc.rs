@@ -70,7 +70,7 @@ pub fn abc_duration(numerator: u32, denominator: u32) -> Result<String> {
         ));
     }
 
-    let divisor = gcd(numerator, denominator);
+    let divisor = num::integer::gcd(numerator, denominator);
     let top = numerator / divisor;
     let bottom = denominator / divisor;
 
@@ -243,13 +243,6 @@ fn ensure_duration_suffix(token: &str, suffix: impl IntoIterator<Item = char>) -
     } else {
         Ok(())
     }
-}
-
-fn gcd(mut left: u32, mut right: u32) -> u32 {
-    while right != 0 {
-        (left, right) = (right, left % right);
-    }
-    left
 }
 
 #[cfg(test)]

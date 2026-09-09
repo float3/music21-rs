@@ -699,7 +699,7 @@ pub fn best_time_signature(measure: &crate::Stream) -> Result<TimeSignature> {
         float_denominator *= multiplier;
         let numerator = numerator_float as UnsignedIntegerType;
         let denominator = float_denominator as UnsignedIntegerType;
-        let divisor = gcd(numerator, denominator);
+        let divisor = num::integer::gcd(numerator, denominator);
         (numerator / divisor.max(1), denominator / divisor.max(1))
     };
 
@@ -751,15 +751,6 @@ pub fn best_time_signature(measure: &crate::Stream) -> Result<TimeSignature> {
 /// power of two no larger than its `DENOM_LIMIT`.
 fn is_binary(quarter_length: FloatType) -> bool {
     (quarter_length * 32768.0).fract() == 0.0
-}
-
-fn gcd(mut a: UnsignedIntegerType, mut b: UnsignedIntegerType) -> UnsignedIntegerType {
-    while b != 0 {
-        let next = a % b;
-        a = b;
-        b = next;
-    }
-    a
 }
 
 /// A span of `count` units of `1/unit`, divided into `parts` equal spans, as

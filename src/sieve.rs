@@ -315,20 +315,12 @@ impl fmt::Display for Sieve {
     }
 }
 
+/// The least common multiple, with nought where either side is nought.
 fn lcm(a: UnsignedIntegerType, b: UnsignedIntegerType) -> UnsignedIntegerType {
     if a == 0 || b == 0 {
         return 0;
     }
-    a / gcd(a, b) * b
-}
-
-fn gcd(mut a: UnsignedIntegerType, mut b: UnsignedIntegerType) -> UnsignedIntegerType {
-    while b != 0 {
-        let remainder = a % b;
-        a = b;
-        b = remainder;
-    }
-    a
+    num::integer::lcm(a, b)
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
