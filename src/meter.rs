@@ -599,6 +599,169 @@ impl TimeSignature {
     }
 }
 
+/// The time signature that fits what a measure holds: music21's
+/// `bestTimeSignature`.
+///
+/// The shortest note value in the measure that is not a tuplet is the
+/// denominator, halved until it divides the measure's length evenly, and the
+/// count of it in the measure is the numerator, reduced to lowest terms with
+/// the whole and half taken up to quarters. A measure that reads as `3/4` is
+/// `6/8` instead when that weighs its notes at least as strongly, and one
+/// that reads as `6/4` is whichever of `6/4`, `12/8` and `3/2` weighs them
+/// most. A measure whose length is no binary fraction — tuplets — takes the
+/// fraction itself.
+pub fn best_time_signature(measure: &crate::Stream) -> Result<TimeSignature> {
+    let elements = measure.recurse();
+    let sounding: Vec<&crate::stream::StreamElement> = elements
+        .iter()
+        .map(|(_, element)| *element)
+        .filter(|element| {
+            element.is_note_or_chord() || matches!(element, crate::stream::StreamElement::Rest(_))
+        })
+        .collect();
+    let sum = elements
+        .iter()
+        .filter(|(_, element)| element.as_stream().is_none())
+        .map(|(offset, element)| offset + element.quarter_length())
+        .fold(0.0, FloatType::max);
+    let smallest_type = crate::duration::DurationType::from_music21_name("128th")
+        .expect("music21 names the 128th note");
+    let limit = smallest_type.quarter_length();
+
+    let mut min_dur = 4.0;
+    let mut min_dots = 0;
+    for element in &sounding {
+        let quarter_length = element.quarter_length();
+        if quarter_length == 0.0 {
+            continue;
+        }
+        if quarter_length < min_dur && is_binary(quarter_length) {
+            min_dur = quarter_length;
+            min_dots = element.duration().map_or(0, Duration::dots);
+        }
+    }
+    let dot_multiplier =
+        FloatType::from(2u32.pow(min_dots + 1) - 1) / FloatType::from(2u32.pow(min_dots));
+
+    let (mut numerator, mut denominator) = if !is_binary(sum) {
+        let (numerator, denominator) = crate::duration::limited_fraction(sum, 65535)
+            .ok_or_else(|| Error::Meter("Cannot find a good match for this measure".to_string()))?;
+        (
+            numerator as UnsignedIntegerType,
+            denominator as UnsignedIntegerType,
+        )
+    } else {
+        let mut min_test = min_dur;
+        let mut remaining = 10;
+        while remaining > 0 {
+            let parts = sum / min_test;
+            if parts.floor() == parts || min_test <= limit {
+                break;
+            }
+            min_test /= 2.0 * dot_multiplier;
+            remaining -= 1;
+        }
+        let mut remaining = 10;
+        while remaining > 0 {
+            if min_test < limit {
+                min_test = limit;
+                break;
+            }
+            let (duration_type, matched) =
+                crate::duration::quarter_length_to_closest_type(min_test).map_err(|_| {
+                    Error::Meter("Cannot find a good match for this measure".to_string())
+                })?;
+            if matched || duration_type == smallest_type {
+                break;
+            }
+            min_test /= 2.0 * dot_multiplier;
+            remaining -= 1;
+        }
+        min_dur = min_test;
+        let (duration_type, matched) = crate::duration::quarter_length_to_closest_type(min_dur)
+            .map_err(|_| Error::Meter("Cannot find a good match for this measure".to_string()))?;
+        if !matched {
+            return Err(Error::Meter(format!(
+                "cannot find a type for denominator {min_dur}"
+            )));
+        }
+        let mut float_denominator = duration_type.type_number().unwrap_or(1.0);
+        let mut multiplier = 1.0;
+        let mut numerator_float = 0.0;
+        while remaining > 0 {
+            numerator_float = multiplier * sum / min_dur;
+            if numerator_float == numerator_float.floor() {
+                break;
+            }
+            multiplier *= 2.0;
+            remaining -= 1;
+        }
+        float_denominator *= multiplier;
+        let numerator = numerator_float as UnsignedIntegerType;
+        let denominator = float_denominator as UnsignedIntegerType;
+        let divisor = gcd(numerator, denominator);
+        (numerator / divisor.max(1), denominator / divisor.max(1))
+    };
+
+    // The rare signatures simplify: 16/16 and 1/1 are 4/4, and a whole or
+    // half denominator is written in quarters.
+    if numerator == denominator && !matches!(numerator, 2 | 4) {
+        numerator = 4;
+        denominator = 4;
+    } else if numerator != denominator && denominator == 1 {
+        numerator *= 4;
+        denominator *= 4;
+    } else if numerator != denominator && denominator == 2 {
+        numerator *= 2;
+        denominator *= 2;
+    }
+
+    let strength =
+        |ratio: (UnsignedIntegerType, UnsignedIntegerType)| -> Result<(TimeSignature, FloatType)> {
+            let signature = TimeSignature::new(ratio.0, ratio.1)?;
+            Ok((signature, signature.average_beat_strength(measure, true)))
+        };
+    if (numerator, denominator) == (3, 4) {
+        let (three_four, simple) = strength((3, 4))?;
+        let (six_eight, compound) = strength((6, 8))?;
+        return Ok(if simple <= compound {
+            six_eight
+        } else {
+            three_four
+        });
+    }
+    if (numerator, denominator) == (6, 4) {
+        let (six_four, first) = strength((6, 4))?;
+        let (twelve_eight, second) = strength((12, 8))?;
+        let (three_two, third) = strength((3, 2))?;
+        let most = first.max(second).max(third);
+        return Ok(if most == first {
+            six_four
+        } else if most == third {
+            three_two
+        } else {
+            twelve_eight
+        });
+    }
+    TimeSignature::new(numerator, denominator)
+}
+
+/// Whether a quarter length is a binary fraction music21 keeps as a float
+/// rather than turning into a `Fraction`: one whose exact denominator is a
+/// power of two no larger than its `DENOM_LIMIT`.
+fn is_binary(quarter_length: FloatType) -> bool {
+    (quarter_length * 32768.0).fract() == 0.0
+}
+
+fn gcd(mut a: UnsignedIntegerType, mut b: UnsignedIntegerType) -> UnsignedIntegerType {
+    while b != 0 {
+        let next = a % b;
+        a = b;
+        b = next;
+    }
+    a
+}
+
 /// A span of `count` units of `1/unit`, divided into `parts` equal spans, as
 /// a count of a unit: `6/8` in two is `3/8`, and `1/4` in two is `1/8`.
 fn split_span(
@@ -723,6 +886,38 @@ mod tests {
             TimeSignature::new(6, 8).unwrap().beat_depth(1.5).unwrap(),
             2
         );
+    }
+
+    /// music21's own `bestTimeSignature` examples.
+    #[test]
+    fn the_best_time_signature_fits_what_the_measure_holds() {
+        use crate::{Note, Pitch, Stream};
+
+        let measure = |lengths: &[FloatType]| {
+            let mut stream = Stream::new();
+            for length in lengths {
+                let mut note = Note::from_pitch(Pitch::from_name("C4").unwrap());
+                note.set_duration(Duration::new(*length).unwrap());
+                stream.push(note);
+            }
+            stream
+        };
+        let best = |lengths: &[FloatType]| {
+            best_time_signature(&measure(lengths))
+                .unwrap()
+                .ratio_string()
+        };
+        assert_eq!(best(&[1.0, 1.0, 0.5, 0.5]), "3/4");
+        assert_eq!(best(&[0.75, 0.25, 0.5, 0.75, 0.25, 0.5]), "6/8");
+        assert_eq!(best(&[2.0, 2.0, 2.0]), "3/2");
+        assert_eq!(best(&[0.75, 0.25, 0.5, 0.75, 0.25, 0.5, 1.5, 1.5]), "12/8");
+        assert_eq!(best(&[1.0, 2.0, 1.0, 2.0]), "6/4");
+        assert_eq!(best(&[1.0, 0.375]), "11/32");
+        assert_eq!(best(&[3.5, 5.5]), "9/4");
+        assert_eq!(best(&[1.0, 1.0, 1.0, 1.0]), "4/4");
+        assert_eq!(best(&[4.0]), "4/4");
+        // Tuplets are passed over when the shortest value is looked for.
+        assert_eq!(best(&[1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0, 1.0]), "2/4");
     }
 
     /// music21's own `averageBeatStrength` example: `C4 D4 E8 F8` under

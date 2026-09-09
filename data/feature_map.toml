@@ -219,13 +219,10 @@ type = "duration_type"
 
 [class.excluded]
 getGraceDuration = "a grace note is written but does not sound, which is the note's business and not the length's"
-addDurationTuple = "the written values are read off the length here rather than assembled by hand"
-clear = "the written values are read off the length here rather than assembled by hand"
 consolidate = "the written values are read off the length here rather than assembled by hand"
 sliceComponentAtPosition = "the written values are read off the length here rather than assembled by hand"
 currentComponents = "the working-out is not deferred here, so there is no half-worked-out state to read"
 splitDotGroups = "dot groups are a way of writing one length twice over; the crate keeps the length"
-dotGroups = "dot groups are a way of writing one length twice over; the crate keeps the length"
 linked = "an unlinked duration is written as one value and sounds as another, which needs a written value the length does not decide"
 informClient = "observer callback for a containing note; there is none"
 
@@ -479,8 +476,6 @@ python = "meter/base.py"
 rust = ["src/meter.rs"]
 note = "Module-level helpers."
 
-[class.excluded]
-bestTimeSignature = "guesses a meter from the notes of a measure"
 
 [[class]]
 python = "voiceLeading.py"

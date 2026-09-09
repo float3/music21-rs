@@ -15,7 +15,7 @@ use music21_rs::{
 
 use crate::interval::transpose_pitch_by_any;
 use crate::notation::{Beams, Lyric, Tie, Volume, tie_from_any, volume_from_any};
-use crate::pitch::{Pitch, message, pitch_from_any};
+use crate::pitch::{Pitch, pitch_from_any};
 
 /// The names the `note` facade replaces in `music21.note`.
 pub const NAMES: &[&str] = &[
@@ -123,20 +123,14 @@ fn title_case(name: &str) -> String {
     }
 }
 
-fn duration_error(error: music21_rs::Error) -> PyErr {
-    DurationException::new_err(message(&error))
-}
+error_into!(duration_error, DurationException);
 
-pub(crate) fn note_error(error: music21_rs::Error) -> PyErr {
-    NoteException::new_err(message(&error))
-}
+error_into!(pub(crate) note_error, NoteException);
 
-/// The error music21 raises out of the `NotRest` properties — notehead, its
-/// fill and parentheses, and stem direction — which is a different class
-/// from the one its `Note` methods raise.
-fn not_rest_error(error: music21_rs::Error) -> PyErr {
-    NotRestException::new_err(message(&error))
-}
+// The error music21 raises out of the `NotRest` properties — notehead, its
+// fill and parentheses, and stem direction — which is a different class
+// from the one its `Note` methods raise.
+error_into!(not_rest_error, NotRestException);
 
 /// One written note value inside a duration: music21's `DurationTuple`.
 ///

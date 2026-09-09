@@ -13,6 +13,16 @@
 
 use pyo3::prelude::*;
 
+/// The function each facade module writes to hand a crate error to Python
+/// as that module's exception class.
+macro_rules! error_into {
+    ($vis:vis $name:ident, $exception:ty) => {
+        $vis fn $name(error: music21_rs::Error) -> PyErr {
+            <$exception>::new_err($crate::pitch::message(&error))
+        }
+    };
+}
+
 pub mod chord;
 pub mod chordtables;
 pub mod figuredbass;

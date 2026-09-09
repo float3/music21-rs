@@ -72,9 +72,7 @@ pub(crate) fn specific_error(error: &music21_rs::Error) -> Option<PyErr> {
     }
 }
 
-pub(crate) fn accidental_error(error: music21_rs::Error) -> PyErr {
-    AccidentalException::new_err(message(&error))
-}
+error_into!(pub(crate) accidental_error, AccidentalException);
 
 /// The octave a pitch that was never given one sounds in: music21's
 /// `defaults.pitchOctave`.

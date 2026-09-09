@@ -16,7 +16,6 @@ use music21_rs::tempo::{
 };
 
 use crate::note::{Duration, duration_from_any};
-use crate::pitch::message;
 
 /// The names the `tempo` facade replaces in `music21.tempo`.
 pub const NAMES: &[&str] = &[
@@ -28,9 +27,7 @@ pub const NAMES: &[&str] = &[
 pyo3::create_exception!(music21_rs_facade, TempoException, crate::Music21Exception);
 pyo3::create_exception!(music21_rs_facade, MetronomeMarkException, TempoException);
 
-fn tempo_error(error: music21_rs::Error) -> PyErr {
-    MetronomeMarkException::new_err(message(&error))
-}
+error_into!(tempo_error, MetronomeMarkException);
 
 /// A number as music21 writes it: whole numbers stay whole, so a tempo of
 /// sixty reads `60` and not `60.0`.

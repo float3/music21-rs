@@ -23,16 +23,13 @@ use music21_rs::meter::TimeSignature as RsTimeSignature;
 use music21_rs::{FloatType, UnsignedIntegerType};
 
 use crate::note::Duration;
-use crate::pitch::message;
 
 /// The names the `meter` facade replaces in `music21.meter.base`.
 pub const NAMES: &[&str] = &["TimeSignature", "MeterException"];
 
 pyo3::create_exception!(music21_rs_facade, MeterException, crate::Music21Exception);
 
-fn meter_error(error: music21_rs::Error) -> PyErr {
-    MeterException::new_err(message(&error))
-}
+error_into!(meter_error, MeterException);
 
 /// music21 writes `common` and `cut` for the two meters that have names, and
 /// takes a bare ratio otherwise. The name is kept beside the meter, since

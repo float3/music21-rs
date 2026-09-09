@@ -16,7 +16,7 @@ use music21_rs::voiceleading::{
 use music21_rs::{Interval as RsInterval, Key as RsKey, Note as RsNote, Pitch as RsPitch};
 
 use crate::note::Note;
-use crate::pitch::{message, pitch_from_any};
+use crate::pitch::pitch_from_any;
 
 /// The names the `voiceleading` facade replaces in `music21.voiceLeading`.
 pub const NAMES: &[&str] = &["VoiceLeadingQuartet", "VoiceLeadingQuartetException"];
@@ -27,9 +27,7 @@ pyo3::create_exception!(
     crate::Music21Exception
 );
 
-fn quartet_error(error: music21_rs::Error) -> PyErr {
-    VoiceLeadingQuartetException::new_err(message(&error))
-}
+error_into!(quartet_error, VoiceLeadingQuartetException);
 
 /// One of the four notes, as music21 takes it: a note, a pitch, or a name.
 ///

@@ -275,7 +275,7 @@ fn reduce(numerator: &mut i128, denominator: &mut i128) {
 
 /// The fraction closest to a value with a denominator no larger than the
 /// limit, as Python's `Fraction.limit_denominator` finds it.
-fn limited_fraction(value: FloatType, max_denominator: i128) -> Option<(i128, i128)> {
+pub(crate) fn limited_fraction(value: FloatType, max_denominator: i128) -> Option<(i128, i128)> {
     if !value.is_finite() || value <= 0.0 {
         return None;
     }
@@ -712,6 +712,29 @@ impl Duration {
         self.components().len() > 1
     }
 
+    /// The dots on the written value, as the one dot group the crate keeps:
+    /// music21's `dotGroups`, which can also write one length twice over
+    /// where a mensural notation asks for it.
+    pub fn dot_groups(&self) -> Vec<u32> {
+        vec![self.dots()]
+    }
+
+    /// Takes the length away: music21's `clear`, which empties the written
+    /// values so the duration sounds for no time. The tuplets it was told
+    /// stay.
+    pub fn clear(&mut self) {
+        self.quarter_length = 0.0;
+    }
+
+    /// Ties one more written value onto the end: music21's
+    /// `addDurationTuple`, which lengthens the duration by that value inside
+    /// whatever tuplets it is written in.
+    pub fn add_duration_tuple(&mut self, duration_type: DurationType, dots: u32) {
+        let written =
+            self.quarter_length_no_tuplets() + duration_type.quarter_length_with_dots(dots);
+        self.quarter_length = written * float_from_fraction(self.aggregate_tuplet_multiplier());
+    }
+
     /// Which written value is sounding at a position within the duration:
     /// music21's `componentIndexAtQtrPosition`. The positions are counted
     /// in the written values, before any tuplet scales them, and the start
@@ -1125,6 +1148,21 @@ mod tests {
         assert_eq!(DurationType::from_quarter_length(3.0), None);
         assert_eq!(super::mixed_numeral(2.0 / 3.0), "2/3");
         assert_eq!(super::mixed_numeral(1.0 / 3.0 + 1.0), "1 1/3");
+    }
+
+    #[test]
+    fn a_duration_is_cleared_and_lengthened_a_value_at_a_time() {
+        let mut duration = Duration::new(1.5).unwrap();
+        assert_eq!(duration.dot_groups(), [1]);
+        duration.add_duration_tuple(DurationType::Eighth, 0);
+        assert_eq!(duration.quarter_length(), 2.0);
+        duration.clear();
+        assert_eq!(duration.quarter_length(), 0.0);
+        assert_eq!(duration.dot_groups(), [0]);
+        // Inside a triplet the value added is scaled as the rest is.
+        let mut triplet = Duration::new(2.0 / 3.0).unwrap();
+        triplet.add_duration_tuple(DurationType::Quarter, 0);
+        assert!((triplet.quarter_length() - 4.0 / 3.0).abs() < 1e-9);
     }
 
     /// music21's own examples, over a tie the crate reads off the length.

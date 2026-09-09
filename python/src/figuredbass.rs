@@ -15,7 +15,7 @@ use music21_rs::figuredbass::{
     EXTENDER, Figure as RsFigure, Modifier as RsModifier, Notation as RsNotation,
 };
 
-use crate::pitch::{Accidental, Pitch, message, pitch_from_any};
+use crate::pitch::{Accidental, Pitch, pitch_from_any};
 
 /// The names the `figuredbass` facade replaces in
 /// `music21.figuredBass.notation`.
@@ -39,13 +39,9 @@ pyo3::create_exception!(
     crate::Music21Exception
 );
 
-fn modifier_error(error: music21_rs::Error) -> PyErr {
-    ModifierException::new_err(message(&error))
-}
+error_into!(modifier_error, ModifierException);
 
-fn notation_error(error: music21_rs::Error) -> PyErr {
-    NotationException::new_err(message(&error))
-}
+error_into!(notation_error, NotationException);
 
 /// music21's `Modifier`: the accidental written beside a figure.
 #[pyclass(

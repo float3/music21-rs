@@ -79,9 +79,7 @@ pub(crate) fn duration_from_keywords(
     Ok(None)
 }
 
-fn chord_error(error: music21_rs::Error) -> PyErr {
-    ChordException::new_err(message(&error))
-}
+error_into!(chord_error, ChordException);
 
 /// music21's `chord.Chord`.
 #[pyclass(

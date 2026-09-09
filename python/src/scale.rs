@@ -20,7 +20,7 @@ use music21_rs::scale::{
 use music21_rs::{Interval as RsInterval, Pitch as RsPitch};
 
 use crate::interval::interval_from_any;
-use crate::pitch::{Pitch, message, pitch_from_any};
+use crate::pitch::{Pitch, pitch_from_any};
 
 /// The names the `scale` facade replaces in `music21.scale`.
 ///
@@ -69,9 +69,7 @@ pyo3::create_exception!(
     crate::Music21Exception
 );
 
-fn scale_error(error: music21_rs::Error) -> PyErr {
-    ScaleException::new_err(message(&error))
-}
+error_into!(scale_error, ScaleException);
 
 /// music21's `scale.Scale`: the root of the hierarchy, which says only that
 /// something is a scale and whether it stands on a tonic.

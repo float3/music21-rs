@@ -32,9 +32,7 @@ pub const NAMES: &[&str] = &[
 
 pyo3::create_exception!(music21_rs_facade, SerialException, crate::Music21Exception);
 
-fn serial_error(error: music21_rs::Error) -> PyErr {
-    SerialException::new_err(crate::pitch::message(&error))
-}
+error_into!(serial_error, SerialException);
 
 fn transformation(name: &str) -> PyResult<Transformation> {
     Transformation::from_name(name).map_err(serial_error)

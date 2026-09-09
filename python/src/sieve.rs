@@ -20,8 +20,6 @@ use pyo3::prelude::*;
 
 use music21_rs::{IntegerType, Sieve as RsSieve};
 
-use crate::pitch::message;
-
 /// The names the `sieve` facade replaces in `music21.sieve`.
 ///
 /// One class. See the module comment for why the rest of `music21.sieve` is
@@ -30,9 +28,7 @@ pub const NAMES: &[&str] = &["Sieve", "SieveException"];
 
 pyo3::create_exception!(music21_rs_facade, SieveException, crate::Music21Exception);
 
-fn sieve_error(error: music21_rs::Error) -> PyErr {
-    SieveException::new_err(message(&error))
-}
+error_into!(sieve_error, SieveException);
 
 /// The integers a segment is read over: music21's `z`, which defaults to
 /// `range(100)`.

@@ -35,9 +35,7 @@ pyo3::create_exception!(
     crate::Music21Exception
 );
 
-fn tables_error(error: music21_rs::Error) -> PyErr {
-    ChordTablesException::new_err(crate::pitch::message(&error))
-}
+error_into!(tables_error, ChordTablesException);
 
 /// An address as music21 takes one: a cardinality, a Forte class number, and
 /// an inversion that may be left out or given as `None`.

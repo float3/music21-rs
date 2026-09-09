@@ -19,7 +19,7 @@ use music21_rs::{
     key::{pitch_to_sharps, sharps_to_pitch},
 };
 
-use crate::pitch::{Accidental, Pitch, interval_from_any, message, pitch_from_any};
+use crate::pitch::{Accidental, Pitch, interval_from_any, pitch_from_any};
 
 pub const NAMES: &[&str] = &[
     "KeySignature",
@@ -39,13 +39,9 @@ pyo3::create_exception!(
 );
 pyo3::create_exception!(music21_rs_facade, KeyException, crate::Music21Exception);
 
-fn key_error(error: music21_rs::Error) -> PyErr {
-    KeyException::new_err(message(&error))
-}
+error_into!(key_error, KeyException);
 
-fn signature_error(error: music21_rs::Error) -> PyErr {
-    KeySignatureException::new_err(message(&error))
-}
+error_into!(signature_error, KeySignatureException);
 
 /// music21's `key.KeySignature`.
 #[pyclass(

@@ -21,7 +21,6 @@ use music21_rs::{
 };
 
 use crate::chord::Chord;
-use crate::pitch::message;
 
 /// The names the `roman` facade replaces in `music21.roman`.
 pub const NAMES: &[&str] = &["RomanNumeral", "RomanNumeralException"];
@@ -32,9 +31,7 @@ pyo3::create_exception!(
     crate::Music21Exception
 );
 
-fn roman_error(error: music21_rs::Error) -> PyErr {
-    RomanNumeralException::new_err(message(&error))
-}
+error_into!(roman_error, RomanNumeralException);
 
 /// The figures music21 writes for the seven degrees, upper case in a major
 /// key and lower where the triad on that degree is minor or diminished.

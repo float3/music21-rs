@@ -13,8 +13,6 @@ use music21_rs::{
     TieType, Volume as RsVolume,
 };
 
-use crate::pitch::message;
-
 /// The names the `notation` facade replaces in `music21.tie`.
 pub const TIE_NAMES: &[&str] = &["Tie", "TieException"];
 
@@ -29,21 +27,13 @@ pyo3::create_exception!(music21_rs_facade, LyricException, crate::Music21Excepti
 pyo3::create_exception!(music21_rs_facade, VolumeException, crate::Music21Exception);
 pyo3::create_exception!(music21_rs_facade, BeamException, crate::Music21Exception);
 
-fn beam_error(error: music21_rs::Error) -> PyErr {
-    BeamException::new_err(message(&error))
-}
+error_into!(beam_error, BeamException);
 
-fn tie_error(error: music21_rs::Error) -> PyErr {
-    TieException::new_err(message(&error))
-}
+error_into!(tie_error, TieException);
 
-fn lyric_error(error: music21_rs::Error) -> PyErr {
-    LyricException::new_err(message(&error))
-}
+error_into!(lyric_error, LyricException);
 
-fn volume_error(error: music21_rs::Error) -> PyErr {
-    VolumeException::new_err(message(&error))
-}
+error_into!(volume_error, VolumeException);
 
 /// music21's `tie.Tie`.
 #[pyclass(name = "Tie", module = "music21.tie", subclass, skip_from_py_object)]
