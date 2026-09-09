@@ -1,8 +1,12 @@
 /// Tuning systems whose frequencies depend on the harmonic context they
 /// sound in, rather than on a fixed table.
 pub mod adaptive;
-/// Finding the same tuning under two different names.
-pub mod duplicates;
+// Finding the same tuning under two different names. Every caller is one of
+// this crate's own tests -- nothing in the library asks the question, and a
+// caller who wants to ask it wants a scale, not a fingerprint -- so the module
+// is compiled for tests alone rather than published as API.
+#[cfg(test)]
+mod duplicates;
 /// Equal divisions of any interval, not only of the octave.
 pub mod equal;
 mod generated;
@@ -18,9 +22,6 @@ pub mod scala_bundled;
 pub mod temperament;
 mod temperaments_generated;
 
-pub use duplicates::{
-    DEFAULT_TOLERANCE, ScaleFingerprint, TemperamentFingerprint, duplicate_groups,
-};
 pub use equal::{EqualDivision, TRITAVE_CENTS};
 pub use generated::*;
 pub use monzo::{Monzo, PRIMES, Val};

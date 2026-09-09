@@ -15,16 +15,16 @@
 //! The comparison is deliberately by *sound*, not by spelling. A scale written
 //! in cents and the same scale written as ratios are the same scale, so
 //! everything is reduced to cents within a tolerance before being compared.
+//! `a_scale_written_two_ways_fingerprints_the_same` below is that in three
+//! notes.
 //!
-//! ```
-//! use music21_rs::tuningsystem::{ScaleFingerprint, DEFAULT_TOLERANCE};
-//!
-//! // The same three notes, one written as ratios and one in cents.
-//! let ratios = ScaleFingerprint::from_cents(&[0.0, 701.955, 1200.0], DEFAULT_TOLERANCE)?;
-//! let cents = ScaleFingerprint::from_cents(&[0.0, 701.96, 1200.0], DEFAULT_TOLERANCE)?;
-//! assert_eq!(ratios, cents);
-//! # Ok::<(), music21_rs::Error>(())
-//! ```
+//! None of this is public API, and the module is compiled for tests alone.
+//! What it answers is a question about *this crate's own tables* and the
+//! archive bundled beside them — that nothing in `ALL_TUNING_SYSTEMS` is a
+//! second name for anything else in it, and that the archive still holds the
+//! 44 groups it is known to hold. A caller of the library wants a scale it can
+//! play, not a fingerprint it can only compare; if one ever asks for the
+//! comparison, exporting it then is an addition rather than a break.
 
 use crate::defaults::FloatType;
 use crate::error::{Error, Result};
