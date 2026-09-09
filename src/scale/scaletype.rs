@@ -559,6 +559,53 @@ impl Scale {
         )
     }
 
+    /// Moves every note and chord of a stream onto this scale: music21's
+    /// `tune`. A pitch whose name, or any enharmonic of it within two
+    /// accidentals, is a name of the scale's octave from the tonic becomes
+    /// that scale pitch in its own octave, spelled as it was where the scale
+    /// pitch has such a spelling; a pitch the scale has no name for is left
+    /// alone. Nested streams are tuned too.
+    pub fn tune(&self, stream: &mut crate::Stream) -> Result<()> {
+        let scale_pitches = self.pitches()?;
+        let names: Vec<String> = scale_pitches.iter().map(Pitch::name).collect();
+        let tuned = |pitch: &Pitch| -> Result<Option<Pitch>> {
+            let mut candidates = pitch.all_common_enharmonics(2);
+            candidates.push(pitch.clone());
+            for candidate in candidates {
+                let Some(index) = names.iter().position(|name| *name == candidate.name()) else {
+                    continue;
+                };
+                let mut target = scale_pitches[index].clone();
+                target.set_octave(candidate.octave());
+                let spelled = target
+                    .all_common_enharmonics(2)
+                    .into_iter()
+                    .find(|spelling| spelling.name() == pitch.name());
+                return Ok(Some(spelled.unwrap_or(target)));
+            }
+            Ok(None)
+        };
+        for event in stream.events_mut() {
+            match event.element_mut() {
+                crate::stream::StreamElement::Note(note) => {
+                    if let Some(pitch) = tuned(note.pitch())? {
+                        note.set_pitch(pitch);
+                    }
+                }
+                crate::stream::StreamElement::Chord(chord) => {
+                    for note in chord.notes_mut() {
+                        if let Some(pitch) = tuned(note.pitch())? {
+                            note.set_pitch(pitch);
+                        }
+                    }
+                }
+                crate::stream::StreamElement::Stream(inner) => self.tune(inner)?,
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
     /// This scale written as a Scala file writes one: music21's
     /// `getScalaData`, each degree as the cents above the tonic, with the
     /// interval the scale closes on as the period.
@@ -1699,6 +1746,77 @@ mod tests {
         assert_eq!(ranked.len(), 2);
         assert_eq!(ranked[0].0, 3);
         assert!(ranked[0].1.is_custom());
+    }
+
+    /// A scale carrying its own tuning retunes the notes it names, in their
+    /// own octaves and spellings, and leaves the notes it does not name
+    /// where they are.
+    #[test]
+    fn a_stream_is_tuned_onto_a_scale() {
+        use super::Scale;
+        use crate::stream::StreamElement;
+        use crate::{Chord, Note, Pitch, Stream};
+
+        let tuned: Vec<Pitch> = [
+            ("C4", 0.0),
+            ("D4", 20.0),
+            ("E4", 0.0),
+            ("F4", 0.0),
+            ("G4", 0.0),
+            ("A4", -15.0),
+            ("B4", 0.0),
+            ("C5", 0.0),
+        ]
+        .iter()
+        .map(|(name, cents)| {
+            let mut pitch = Pitch::from_name(*name).unwrap();
+            pitch.set_microtone_cents(*cents).unwrap();
+            pitch
+        })
+        .collect();
+        let scale = Scale::from_pitches(&tuned).unwrap();
+        let mut stream = Stream::new();
+        for name in ["D5", "F#4", "A3", "B#4", "G-5"] {
+            stream.push(Note::from_pitch(Pitch::from_name(name).unwrap()));
+        }
+        stream.push(Chord::new("C5 E5 G5").unwrap());
+        scale.tune(&mut stream).unwrap();
+        let sounding: Vec<(String, FloatType)> = stream
+            .events()
+            .iter()
+            .flat_map(|event| match event.element() {
+                StreamElement::Note(note) => {
+                    vec![(note.pitch().name_with_octave(), note.pitch().ps())]
+                }
+                StreamElement::Chord(chord) => chord
+                    .pitches()
+                    .iter()
+                    .map(|pitch| (pitch.name_with_octave(), pitch.ps()))
+                    .collect(),
+                _ => Vec::new(),
+            })
+            .collect();
+        let expected: Vec<(String, FloatType)> = [
+            ("D5", 74.2),
+            ("F#4", 66.0),
+            ("A3", 56.85),
+            ("B#4", 72.0),
+            ("G-5", 78.0),
+            ("C5", 72.0),
+            ("E5", 76.0),
+            ("G5", 79.0),
+        ]
+        .iter()
+        .map(|(name, ps)| (name.to_string(), *ps))
+        .collect();
+        assert_eq!(sounding.len(), expected.len());
+        for ((name, ps), (wanted_name, wanted_ps)) in sounding.iter().zip(&expected) {
+            assert_eq!(name, wanted_name);
+            assert!(
+                (ps - wanted_ps).abs() < 1e-9,
+                "{name} sounds at {ps}, not {wanted_ps}"
+            );
+        }
     }
 
     /// music21's own `romanNumeral` example, and the Scala reading of a

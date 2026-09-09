@@ -246,6 +246,11 @@ impl StreamEvent {
     }
 
     /// Returns the stream element.
+    pub fn element_mut(&mut self) -> &mut StreamElement {
+        &mut self.element
+    }
+
+    /// The element itself.
     pub fn element(&self) -> &StreamElement {
         &self.element
     }
@@ -314,6 +319,11 @@ impl Stream {
     }
 
     /// Returns immutable events in offset order.
+    pub fn events_mut(&mut self) -> &mut [StreamEvent] {
+        &mut self.events
+    }
+
+    /// The events in offset order.
     pub fn events(&self) -> &[StreamEvent] {
         &self.events
     }

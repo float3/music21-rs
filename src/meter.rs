@@ -541,6 +541,40 @@ impl TimeSignature {
         Ok(weights[index])
     }
 
+    /// The mean accent weight of what a stream holds: music21's
+    /// `averageBeatStrength`, each element weighed where it falls in the
+    /// bar, with an element off the accent grid counting half the smallest
+    /// weight. `notes_only` weighs the notes, chords and rests alone; an empty
+    /// stream weighs nothing.
+    pub fn average_beat_strength(self, stream: &crate::Stream, notes_only: bool) -> FloatType {
+        let bar = self.bar_quarter_length();
+        let offsets: Vec<FloatType> = if notes_only {
+            stream
+                .notes()
+                .into_iter()
+                .map(|(offset, _)| offset)
+                .collect()
+        } else {
+            stream
+                .recurse()
+                .into_iter()
+                .filter(|(_, element)| element.as_stream().is_none())
+                .map(|(offset, _)| offset)
+                .collect()
+        };
+        if offsets.is_empty() {
+            return 0.0;
+        }
+        let total: FloatType = offsets
+            .iter()
+            .map(|offset| {
+                self.accent_weight_with(offset.rem_euclid(bar), true, false)
+                    .unwrap_or(0.0)
+            })
+            .sum();
+        total / offsets.len() as FloatType
+    }
+
     /// How many levels of the beat hierarchy start at an offset: music21's
     /// `getBeatDepth`, which quantizes the offset to the beat's division and
     /// then counts the beat level and the division level. A meter of one beat
@@ -688,6 +722,46 @@ mod tests {
         assert_eq!(
             TimeSignature::new(6, 8).unwrap().beat_depth(1.5).unwrap(),
             2
+        );
+    }
+
+    /// music21's own `averageBeatStrength` example: `C4 D4 E8 F8` under
+    /// six-eight and three-four.
+    #[test]
+    fn beat_strength_is_averaged_over_a_stream() {
+        use crate::{Note, Pitch, Stream};
+
+        let mut stream = Stream::new();
+        for (name, length) in [("C4", 1.0), ("D4", 1.0), ("E4", 0.5), ("F4", 0.5)] {
+            let mut note = Note::from_pitch(Pitch::from_name(name).unwrap());
+            note.set_duration(Duration::new(length).unwrap());
+            stream.push(note);
+        }
+        assert_eq!(
+            TimeSignature::new(6, 8)
+                .unwrap()
+                .average_beat_strength(&stream, true),
+            0.4375
+        );
+        assert_eq!(
+            TimeSignature::new(3, 4)
+                .unwrap()
+                .average_beat_strength(&stream, true),
+            0.5625
+        );
+        stream.insert(0.0, TimeSignature::new(3, 4).unwrap());
+        stream.insert(0.0, TimeSignature::new(6, 8).unwrap());
+        assert_eq!(
+            TimeSignature::new(6, 8)
+                .unwrap()
+                .average_beat_strength(&stream, false),
+            0.625
+        );
+        assert_eq!(
+            TimeSignature::new(4, 4)
+                .unwrap()
+                .average_beat_strength(&Stream::new(), true),
+            0.0
         );
     }
 

@@ -180,6 +180,19 @@ impl ToneRow {
         self.pitch_classes.len() == 12 && (0..12u8).all(|pc| self.pitch_classes.contains(&pc))
     }
 
+    /// The row as a twelve-tone row: music21's `makeTwelveToneRow`. There is
+    /// one row type here, so this is the row itself, and a row that is not a
+    /// permutation of the twelve pitch classes is an error rather than a row
+    /// whose twelve-tone questions fail one by one.
+    pub fn make_twelve_tone_row(&self) -> Result<ToneRow> {
+        if !self.is_twelve_tone_row() {
+            return Err(Error::Serial(
+                "A twelve-tone row must contain each pitch class exactly once".to_string(),
+            ));
+        }
+        Ok(self.clone())
+    }
+
     /// Whether two rows have the same pitch classes in the same order.
     pub fn is_same_row(&self, other: &ToneRow) -> bool {
         self == other
@@ -2309,6 +2322,13 @@ const LINK_CHORDS: [LinkChord; 238] = [
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_a_permutation_of_the_twelve_classes_makes_a_twelve_tone_row() {
+        assert!(ToneRow::new(0..11).make_twelve_tone_row().is_err());
+        let row = ToneRow::new(0..12).make_twelve_tone_row().unwrap();
+        assert_eq!(row.pitch_classes().len(), 12);
+    }
 
     #[test]
     fn a_row_indexes_and_iterates_over_its_pitch_classes() {

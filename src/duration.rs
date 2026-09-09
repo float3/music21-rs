@@ -712,6 +712,58 @@ impl Duration {
         self.components().len() > 1
     }
 
+    /// Which written value is sounding at a position within the duration:
+    /// music21's `componentIndexAtQtrPosition`. The positions are counted
+    /// in the written values, before any tuplet scales them, and the start
+    /// and the very end answer the first and the last value.
+    pub fn component_index_at_qtr_position(&self, position: FloatType) -> Result<usize> {
+        let components = self.components();
+        if components.is_empty() {
+            return Err(Error::Duration(
+                "Need components to run getComponentIndexAtQtrPosition".to_string(),
+            ));
+        }
+        let total = self.quarter_length_no_tuplets();
+        if position.is_nan() || position < 0.0 {
+            return Err(Error::Value(
+                "position is before the start of the duration".to_string(),
+            ));
+        }
+        if position > total {
+            return Err(Error::Value(
+                "position is after the end of the duration".to_string(),
+            ));
+        }
+        if position == total {
+            return Ok(components.len() - 1);
+        }
+        let mut reached = 0.0;
+        for (index, (duration_type, dots)) in components.iter().enumerate() {
+            reached += duration_type.quarter_length_with_dots(*dots);
+            if reached > position {
+                return Ok(index);
+            }
+        }
+        Ok(components.len() - 1)
+    }
+
+    /// Where a written value starts within the duration, counted in the
+    /// written values: music21's `componentStartTime`. An index past the
+    /// values is an error.
+    pub fn component_start_time(&self, index: usize) -> Result<FloatType> {
+        let components = self.components();
+        if index >= components.len() {
+            return Err(Error::Duration(format!(
+                "invalid component index value {index} submitted; value must be an integer between 0 and {}",
+                components.len().saturating_sub(1)
+            )));
+        }
+        Ok(components[..index]
+            .iter()
+            .map(|(duration_type, dots)| duration_type.quarter_length_with_dots(*dots))
+            .sum())
+    }
+
     /// Returns music21's `fullName` for a single written note value, such as
     /// `"Dotted Quarter"`, `"Double Dotted Half"`, `"Imperfect Longa"` or
     /// `"Quarter Triplet (2/3 QL)"`.
@@ -1073,6 +1125,28 @@ mod tests {
         assert_eq!(DurationType::from_quarter_length(3.0), None);
         assert_eq!(super::mixed_numeral(2.0 / 3.0), "2/3");
         assert_eq!(super::mixed_numeral(1.0 / 3.0 + 1.0), "1 1/3");
+    }
+
+    /// music21's own examples, over a tie the crate reads off the length.
+    #[test]
+    fn a_position_within_a_tie_names_the_value_sounding_there() {
+        let tied = Duration::new(2.5).unwrap();
+        assert_eq!(tied.components().len(), 2);
+        assert_eq!(tied.component_index_at_qtr_position(0.0).unwrap(), 0);
+        assert_eq!(tied.component_index_at_qtr_position(1.5).unwrap(), 0);
+        assert_eq!(tied.component_index_at_qtr_position(2.0).unwrap(), 1);
+        assert_eq!(tied.component_index_at_qtr_position(2.5).unwrap(), 1);
+        assert!(tied.component_index_at_qtr_position(3.0).is_err());
+        assert!(tied.component_index_at_qtr_position(-1.0).is_err());
+        assert!(
+            Duration::new(0.0)
+                .unwrap()
+                .component_index_at_qtr_position(0.0)
+                .is_err()
+        );
+        assert_eq!(tied.component_start_time(0).unwrap(), 0.0);
+        assert_eq!(tied.component_start_time(1).unwrap(), 2.0);
+        assert!(tied.component_start_time(2).is_err());
     }
 
     #[test]

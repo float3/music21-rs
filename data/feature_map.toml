@@ -145,7 +145,6 @@ abstract = "the AbstractScale layer is not modelled"
 isConcrete = "the AbstractScale layer is not modelled"
 show = "notation output"
 write = "notation output"
-tune = "retunes the notes of a stream"
 
 [[class]]
 python = "scale/__init__.py"
@@ -200,7 +199,6 @@ load = "a TimeSignature is immutable here"
 getBeams = "beaming needs the MeterSequence partition tree"
 setDisplay = "display sequences need the MeterSequence partition tree"
 setAccentWeight = "the accent weights are the default hierarchy's, not a partition a caller has set"
-averageBeatStrength = "averages `accent_weight` over the notes of a stream"
 
 [[class]]
 python = "tempo.py"
@@ -223,8 +221,6 @@ type = "duration_type"
 getGraceDuration = "a grace note is written but does not sound, which is the note's business and not the length's"
 addDurationTuple = "the written values are read off the length here rather than assembled by hand"
 clear = "the written values are read off the length here rather than assembled by hand"
-componentIndexAtQtrPosition = "an offset into a tied group, which needs the group to have been assembled by hand"
-componentStartTime = "an offset into a tied group, which needs the group to have been assembled by hand"
 consolidate = "the written values are read off the length here rather than assembled by hand"
 sliceComponentAtPosition = "the written values are read off the length here rather than assembled by hand"
 currentComponents = "the working-out is not deferred here, so there is no half-worked-out state to read"
@@ -238,8 +234,6 @@ python = "serial.py"
 name = "ToneRow"
 rust = ["src/serial.rs"]
 
-[class.excluded]
-makeTwelveToneRow = "there is one row type"
 
 [[class]]
 python = "serial.py"
