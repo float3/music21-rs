@@ -1,4 +1,4 @@
-# Unreleased
+# music21-rs 0.4.0
 
 The release that makes the crate something music21 itself can be run on.
 The classes ship as a Python wheel, `music21_rs`, and
@@ -244,12 +244,15 @@ Wiki's temperaments. Several signatures change, so this is a minor bump.
   Nothing in it is trusted: a test builds every entry, checks that each of the
   277 commas the wiki lists really does vanish under the mapping, and checks
   that each published MOS pattern really does come out of the generator.
-- Finding the same tuning under two names: `ScaleFingerprint` reduces a scale
-  to sorted cents within a tolerance, `TemperamentFingerprint` reduces a
-  mapping to its canonical reading, and `duplicate_groups` groups anything by
-  anything. Duplication is checked within each collection and across them —
-  23 of the 28 ratio tables are in the bundled Scala archive too, and the
-  archive itself holds 44 groups covering 54 redundant files out of 3,994.
+- The tuning collections are checked for holding the same scale twice, within
+  each of them and across them: nothing in `ALL_TUNING_SYSTEMS` or in
+  `WIKI_TEMPERAMENTS` is a second name for anything else in it, 23 of the 28
+  ratio tables are in the bundled Scala archive as well, and the archive holds
+  44 groups covering 54 redundant files out of 3,994. The comparison is by
+  sound rather than by spelling, and by multiset rather than by set. It is
+  compiled for the tests alone and is not public API — a caller wants a scale
+  it can play, not a fingerprint it can only compare — so exporting it later,
+  if anyone asks for it, stays an addition rather than a break.
 - `RomanNumeral` is figured bass over a scale, which is what music21's
   `_updatePitches` is: the bass is the scale degree the inversion figure
   names, every number of the column is that many scale steps above it, and
