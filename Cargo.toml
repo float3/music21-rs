@@ -4,19 +4,7 @@ categories = ["multimedia::audio", "science"]
 description = "Rust helpers inspired by music21 for chord, pitch, polyrhythm, and tuning analysis"
 edition = "2024"
 include = ["/src", "/examples", "/LICENSE"]
-keywords = [
-    "music",
-    "chords",
-    "music21",
-    "music-theory",
-    "music-analysis",
-    "music21-rs",
-    "computational-musicology",
-    "polyrhythm",
-    "tuning",
-    "scala",
-    "scala-archive",
-]
+keywords = ["music", "music21", "music-theory", "chords", "tuning"]
 license = "AGPL-3.0-only"
 name = "music21-rs"
 readme = "README.md"
