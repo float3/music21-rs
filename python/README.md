@@ -88,7 +88,8 @@ against music21 11 on Python 3.13.
 | `Chord.forteClass` | 244 us | 53 us | 4.6x |
 | `Pitch.transpose('M3')` | 28 us | 1.0 us | 28x |
 | `Pitch.getEnharmonic()` | 22.7 us | 0.63 us | 36x |
-| `ToneRow.zeroCenteredTransformation` | | | 741x |
+| `ToneRow.zeroCenteredTransformation` | 274 us | 0.37 us | 741x |
+| `pcToToneRow(...).matrix()` | 2.71 ms | 4.9 us | 547x |
 
 Repeated queries on the same chord are cached in both and cost the same. Over
 music21's own test suite the median test runs at the same speed, since most

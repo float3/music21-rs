@@ -55,7 +55,8 @@ Rust in the last column.
 | `Chord.forteClass` | 244 us | 53 us | 4.6x | 7.4 us |
 | `Pitch.transpose('M3')` | 28 us | 1.0 us | 28x | 0.58 us |
 | `Pitch.getEnharmonic()` | 22.7 us | 0.63 us | 36x | 0.37 us |
-| `ToneRow.zeroCenteredTransformation` | | | 741x | |
+| `ToneRow.zeroCenteredTransformation` | 274 us | 0.37 us | 741x | |
+| `pcToToneRow(...).matrix()` | 2.71 ms | 4.9 us | 547x | |
 
 Over music21's own test suite the median test runs at the same speed on both,
 since most of a music21 test is music21's own code.
