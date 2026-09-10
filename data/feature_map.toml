@@ -173,7 +173,7 @@ DiatonicScale = "the diatonic modes are ScaleType variants"
 [[class]]
 python = "roman.py"
 name = "RomanNumeral"
-rust = ["src/roman.rs"]
+rust = ["src/roman/mod.rs", "src/roman/analysis.rs", "src/roman/figure.rs", "src/roman/realize.rs"]
 
 [class.renames]
 adjustMinorVIandVIIByQuality = "adjust_minor_vi_and_vii_by_quality"
@@ -425,7 +425,7 @@ interpolateElements = "interpolates tempo across the elements of a stream"
 
 [[class]]
 python = "roman.py"
-rust = ["src/roman.rs"]
+rust = ["src/roman/mod.rs", "src/roman/analysis.rs", "src/roman/figure.rs", "src/roman/realize.rs"]
 note = "Module-level helpers."
 
 [class.renames]
