@@ -15,12 +15,10 @@ use music21_rs::{
     StemDirection as RsStemDirection, Volume as RsVolume,
 };
 
+use crate::duration::{Duration, duration_from_any};
 use crate::interval::interval_from_any;
 use crate::notation::{Beams, Tie, Volume, volume_from_any};
-use crate::note::{
-    Duration, Note, augment_or_diminish_note, duration_from_any, grace_note, instrument_for_note,
-    note_from_any,
-};
+use crate::note::{Note, augment_or_diminish_note, grace_note, instrument_for_note, note_from_any};
 use crate::pitch::{Accidental, Pitch, message, pitch_from_any};
 
 /// The names the key facade provides, for swapping into `music21.key`.
@@ -302,7 +300,7 @@ impl Chord {
             .map(|note| note.borrow(py).synced(py))
             .collect();
         let mut inner = RsChord::new(inners.as_slice()).map_err(chord_error)?;
-        if let Some(value) = crate::note::duration_value_of(py, &duration) {
+        if let Some(value) = crate::duration::duration_value_of(py, &duration) {
             inner.set_duration(value);
         }
         Ok(Self {
@@ -624,7 +622,7 @@ impl Chord {
 
     pub(crate) fn quarter_length(&self, py: Python<'_>) -> f64 {
         match &self.duration {
-            Some(duration) => crate::note::duration_value_of(py, duration)
+            Some(duration) => crate::duration::duration_value_of(py, duration)
                 .map_or(1.0, |value| value.quarter_length()),
             None => self
                 .inner
@@ -1426,7 +1424,7 @@ impl Chord {
     fn get_duration(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
         let py = slf.py();
         let duration = slf.borrow_mut().duration_object(py)?;
-        crate::note::adopt_duration(py, &duration, slf.as_any());
+        crate::duration::adopt_duration(py, &duration, slf.as_any());
         Ok(duration)
     }
 
@@ -1447,7 +1445,7 @@ impl Chord {
             )?
             .into_any()
         };
-        crate::note::adopt_duration(py, &duration, slf.as_any());
+        crate::duration::adopt_duration(py, &duration, slf.as_any());
         let had_one = slf.borrow().duration.is_some();
         {
             let mut chord = slf.borrow_mut();
@@ -1457,14 +1455,17 @@ impl Chord {
         // As on a note: a chord already timed that is timed again is a
         // change the streams holding it have to hear about.
         if had_one {
-            crate::note::told_sites(slf.as_any(), &duration.bind(py).getattr("quarterLength")?)?;
+            crate::duration::told_sites(
+                slf.as_any(),
+                &duration.bind(py).getattr("quarterLength")?,
+            )?;
         }
         Ok(())
     }
 
     #[getter]
     fn get_quarterLength<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        crate::note::op_frac(py, self.quarter_length(py))
+        crate::duration::op_frac(py, self.quarter_length(py))
     }
 
     #[setter]
@@ -2953,7 +2954,7 @@ impl Chord {
             target.borrow_mut(py).inner = source.borrow(py).synced(py);
         }
         if let Some(duration) = &self.duration {
-            copied.duration = Some(crate::note::copied_duration(py, duration)?);
+            copied.duration = Some(crate::duration::copied_duration(py, duration)?);
         }
         if let Some(volume) = &self.volume {
             copied.volume = Some(crate::installed_new(

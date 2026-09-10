@@ -15,7 +15,7 @@ use music21_rs::tempo::{
     MetronomeMark as RsMetronomeMark, convert_tempo_by_referent as rs_convert_tempo_by_referent,
 };
 
-use crate::note::{Duration, duration_from_any};
+use crate::duration::{Duration, duration_from_any};
 
 /// The names the `tempo` facade replaces in `music21.tempo`.
 pub const NAMES: &[&str] = &[

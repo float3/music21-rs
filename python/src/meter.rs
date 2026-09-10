@@ -22,7 +22,7 @@ use pyo3::types::PyTuple;
 use music21_rs::meter::TimeSignature as RsTimeSignature;
 use music21_rs::{FloatType, UnsignedIntegerType};
 
-use crate::note::Duration;
+use crate::duration::Duration;
 
 /// The names the `meter` facade replaces in `music21.meter.base`.
 pub const NAMES: &[&str] = &["TimeSignature", "MeterException"];

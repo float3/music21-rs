@@ -25,6 +25,7 @@ macro_rules! error_into {
 
 pub mod chord;
 pub mod chordtables;
+pub mod duration;
 pub mod figuredbass;
 pub mod harmony;
 pub mod interval;
@@ -49,7 +50,7 @@ const MUSIC21_MODULES: [(&str, &[&str]); 17] = [
     ("music21.pitch", pitch::NAMES),
     ("music21.interval", interval::NAMES),
     ("music21.note", note::NAMES),
-    ("music21.duration", note::DURATION_NAMES),
+    ("music21.duration", duration::NAMES),
     ("music21.chord", chord::NAMES),
     ("music21.chord.tables", chordtables::NAMES),
     ("music21.key", key::NAMES),
@@ -953,6 +954,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     roman::register(m)?;
     notation::register(m)?;
     note::register(m)?;
+    duration::register(m)?;
     chord::register(m)?;
     chordtables::register(m)?;
     // The other end of every pickle these classes write. It belongs here
