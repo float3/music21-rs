@@ -151,6 +151,16 @@ impl Chord {
         let Some(third) = self.semitones_from_chord_step(3) else {
             return TriadQuality::Other;
         };
+        // A third or fifth a fraction of a semitone off is neither major nor
+        // minor, as music21 reads it.
+        if self.root().is_some_and(|root| {
+            [3, 5].into_iter().any(|step| {
+                self.chord_step_from(step, root)
+                    .is_some_and(|pitch| ((pitch.ps() - root.ps()) * 100.0).round() % 100.0 != 0.0)
+            })
+        }) {
+            return TriadQuality::Other;
+        }
         if self.has_repeated_chord_step(1) || self.has_repeated_chord_step(3) {
             return TriadQuality::Other;
         }

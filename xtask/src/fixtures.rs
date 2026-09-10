@@ -167,6 +167,9 @@ pub(crate) fn regenerate(workspace_root: &Path) -> Result<Vec<PathBuf>, Box<dyn 
             write_doctest_totals(py, workspace_root, stamp)?,
             write_harte(py, workspace_root, stamp)?,
             write_accidental_display(py, workspace_root, stamp)?,
+            write_chord_names(py, workspace_root, stamp)?,
+            write_chord_symbols(py, workspace_root, stamp)?,
+            write_roman_figures(py, workspace_root, stamp)?,
         ])
     })
     .map_err(|error| -> Box<dyn Error> { Box::new(error) })
@@ -480,6 +483,630 @@ fn write_accidental_display(
     let path = workspace_root.join("data/accidental_display_expectations.toml");
     fs::write(&path, out)?;
     println!("  wrote {} ({} cases)", path.display(), cases.len());
+    Ok(path)
+}
+
+/// A chord symbol figure with the pitches after `add` and after `omit` in
+/// sorted order. music21 writes each group out of a set, in no fixed order.
+pub(crate) fn sort_figure_modifications(figure: &str) -> String {
+    let (head, rest) = match figure.find("add").or_else(|| figure.find("omit")) {
+        Some(at) => figure.split_at(at),
+        None => return figure.to_string(),
+    };
+    let mut out = head.to_string();
+    let mut rest = rest;
+    while !rest.is_empty() {
+        let (marker, after) = if let Some(after) = rest.strip_prefix("add") {
+            ("add", after)
+        } else if let Some(after) = rest.strip_prefix("omit") {
+            ("omit", after)
+        } else {
+            out.push_str(rest);
+            break;
+        };
+        let end = after
+            .find("add")
+            .into_iter()
+            .chain(after.find("omit"))
+            .min()
+            .unwrap_or(after.len());
+        let mut items: Vec<&str> = after[..end]
+            .split(',')
+            .filter(|item| !item.is_empty())
+            .collect();
+        items.sort_unstable();
+        out.push_str(marker);
+        out.push_str(&items.join(","));
+        rest = &after[end..];
+        if !rest.is_empty() {
+            out.push(',');
+        }
+    }
+    out
+}
+
+/// A Python exception's class name, for a fixture to record where music21
+/// refuses an input.
+fn exception_name(py: Python<'_>, error: &PyErr) -> String {
+    error
+        .get_type(py)
+        .name()
+        .map(|name| name.to_string())
+        .unwrap_or_else(|_| "Exception".to_string())
+}
+
+/// A TOML list of strings.
+fn toml_list(items: &[String]) -> String {
+    format!(
+        "[{}]",
+        items
+            .iter()
+            .map(|item| toml_string(item))
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
+}
+
+/// The names with octaves of an object's `pitches`.
+fn pitch_names(object: &Bound<'_, PyAny>) -> PyResult<Vec<String>> {
+    object
+        .getattr("pitches")?
+        .try_iter()?
+        .map(|pitch| pitch?.getattr("nameWithOctave")?.extract())
+        .collect()
+}
+
+/// What music21 calls a set of chords: the common and pitched names, the
+/// quality, the Forte class, the inversion and the chord symbol of every
+/// Forte prime form, of a list of spelled chords, and of chords built from
+/// integers. `chord_name_parity` checks the crate's names against it.
+fn write_chord_names(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> PyResult<PathBuf> {
+    let chord_module = py.import("music21.chord")?;
+    let harmony = py.import("music21.harmony")?;
+    let chord_class = chord_module.getattr("Chord")?;
+
+    const SPELLED: [&str; 62] = [
+        "C E G",
+        "C E- G",
+        "C E G#",
+        "C E- G-",
+        "C E G B-",
+        "C E G B",
+        "C E- G B-",
+        "C E- G- B--",
+        "C E- G- B-",
+        "C E G B- D",
+        "C E G B D",
+        "C E- G B- D",
+        "C E G A",
+        "C E- G A",
+        "C E G# B",
+        "G B D F A",
+        "G B D F A C",
+        "G B D F A C E",
+        "C D G",
+        "C F G",
+        "C G",
+        "C4 C5",
+        "C4 C5 C6",
+        "C4 B#4",
+        "C4 D--4",
+        "C4 E4 E5",
+        "C4 G4",
+        "C4 F#4",
+        "C4 C#4",
+        "C4 D4",
+        "C4 E4 G4 C5 E5",
+        "E4 G4 C5",
+        "G3 C4 E4",
+        "C4",
+        "C4 C4",
+        "C4 E4",
+        "C4 E-4",
+        "C4 A4",
+        "C4 E4 G4 A4",
+        "D F# A C",
+        "F A C E",
+        "B D F A",
+        "B D F A-",
+        "C E- G- A",
+        "A- C E- F#",
+        "A- C D F#",
+        "A- C E- G-",
+        "C D E F G A B",
+        "C D E F# G# A#",
+        "C C# D D# E F F# G G# A A# B",
+        "C# E- G",
+        "C# E# G B",
+        "C D F# A-",
+        "C# E- G A",
+        "C E F# A#",
+        "D E G# B-",
+        "E- F# A",
+        "C# G A#",
+        "C# D# F# A#",
+        "C# E# G# A#",
+        "E- G- A- C-",
+        "C# E# F# A#",
+    ];
+    const SPELLED_TOO: [&str; 8] = [
+        "E- F- A- C-",
+        "E- G- B- C-",
+        "E- F# A B",
+        "F# A C E-",
+        "C E G B- D F A",
+        "C4 E4 G4 B-4 D5 F5 A5",
+        "C4 E4 G4 B4 D5 F#5 A5",
+        "C4 E4 G4 B4 D5 F#5",
+    ];
+    const INTEGERS: [&[i32]; 12] = [
+        &[0, 4, 8],
+        &[0, 3, 6, 9],
+        &[0, 2, 6, 8],
+        &[0, 1, 4, 6],
+        &[0, 1, 2],
+        &[0, 4, 7],
+        &[0, 3, 7],
+        &[0, 2, 4, 6, 8, 10],
+        &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+        &[60, 64, 67],
+        &[2, 4, 8, 10],
+        &[1, 3, 7, 10],
+    ];
+    // How many Forte classes each cardinality has, before inversion.
+    const CLASSES_PER_CARDINALITY: [usize; 12] = [1, 6, 12, 29, 38, 50, 38, 29, 12, 6, 1, 1];
+
+    #[derive(Clone)]
+    enum Source {
+        Forte(String),
+        Spelled(&'static str),
+        Integers(&'static [i32]),
+    }
+    let mut sources = Vec::new();
+    for (index, count) in CLASSES_PER_CARDINALITY.iter().enumerate() {
+        let cardinality = index + 1;
+        for number in 1..=*count {
+            for inversion in ["", "A", "B"] {
+                sources.push(Source::Forte(format!("{cardinality}-{number}{inversion}")));
+            }
+        }
+    }
+    sources.extend(SPELLED.iter().map(|spelled| Source::Spelled(spelled)));
+    sources.extend(SPELLED_TOO.iter().map(|spelled| Source::Spelled(spelled)));
+    sources.extend(INTEGERS.iter().map(|integers| Source::Integers(integers)));
+
+    let mut out = header(
+        &[
+            "# What music21 calls a chord: its common and pitched common names, its",
+            "# quality, Forte class, inversion and chord symbol, for every Forte prime",
+            "# form, a list of spelled chords and some chords built from integers.",
+            "# Generated by",
+            "# `cargo run --release -p xtask --features python -- regenerate-fixtures`.",
+            "# A field music21 raises on is left out.",
+        ],
+        stamp,
+    );
+    let _ = writeln!(out, "chord = [");
+    let mut written = 0;
+    for source in &sources {
+        let (label, built) = match source {
+            Source::Forte(name) => (
+                format!("forte = {}", toml_string(name)),
+                chord_module.call_method1("fromForteClass", (name.as_str(),)),
+            ),
+            Source::Spelled(spelled) => (
+                format!("pitches = {}", toml_string(spelled)),
+                chord_class.call1((*spelled,)),
+            ),
+            Source::Integers(integers) => (
+                format!(
+                    "integers = [{}]",
+                    integers
+                        .iter()
+                        .map(|each| each.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+                chord_class.call1((integers.to_vec(),)),
+            ),
+        };
+        let Ok(chord) = built else {
+            // A Forte class with no B form, which is most of them.
+            continue;
+        };
+        let text = |attribute: &str| -> PyResult<String> { chord.getattr(attribute)?.extract() };
+        let common_name = text("commonName")?;
+        let pitched = text("pitchedCommonName")?;
+        let quality = text("quality")?;
+        let forte_class = text("forteClass")?;
+        let inversion = chord
+            .call_method0("inversion")
+            .ok()
+            .and_then(|value| value.extract::<i64>().ok())
+            .map(|value| format!(", inversion = {value}"))
+            .unwrap_or_default();
+        let inversion_name = chord
+            .call_method0("inversionName")
+            .ok()
+            .filter(|value| !value.is_none())
+            .and_then(|value| value.extract::<i64>().ok())
+            .map(|value| format!(", inversion_name = {value}"))
+            .unwrap_or_default();
+        // Read before the figure, which fixes a root on the chord it reads.
+        let root: String = chord.call_method0("root")?.getattr("name")?.extract()?;
+        let bass: String = chord.call_method0("bass")?.getattr("name")?.extract()?;
+        let figure: String = harmony
+            .call_method1("chordSymbolFigureFromChord", (&chord,))?
+            .extract()?;
+        let figure = sort_figure_modifications(&figure);
+        let _ = writeln!(
+            out,
+            "    {{ {label}, common_name = {}, pitched_common_name = {}, quality = {}, forte_class = {}{inversion}{inversion_name}, figure = {}, root = {}, bass = {} }},",
+            toml_string(&common_name),
+            toml_string(&pitched),
+            toml_string(&quality),
+            toml_string(&forte_class),
+            toml_string(&figure),
+            toml_string(&root),
+            toml_string(&bass),
+        );
+        written += 1;
+    }
+    let _ = writeln!(out, "]");
+
+    let path = workspace_root.join("data/chord_name_expectations.toml");
+    fs::write(&path, out)?;
+    println!("  wrote {} ({written} chords)", path.display());
+    Ok(path)
+}
+
+/// What music21 realizes a chord symbol figure as: every abbreviation of
+/// every kind on several roots, with bass notes, additions, omissions and
+/// alterations on some. `chord_symbol_parity` checks the crate's parser
+/// against it.
+fn write_chord_symbols(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> PyResult<PathBuf> {
+    let harmony = py.import("music21.harmony")?;
+    let symbol_class = harmony.getattr("ChordSymbol")?;
+    let chord_types = harmony.getattr("CHORD_TYPES")?.cast_into::<PyDict>()?;
+    let mut abbreviations: Vec<String> = Vec::new();
+    for (_, value) in chord_types.iter() {
+        let list = value.get_item(1)?;
+        for abbreviation in list.try_iter()? {
+            abbreviations.push(abbreviation?.extract()?);
+        }
+    }
+    const ROOTS: [&str; 3] = ["C", "F#", "B-"];
+    let mut figures: Vec<String> = Vec::new();
+    for root in ROOTS {
+        for abbreviation in &abbreviations {
+            figures.push(format!("{root}{abbreviation}"));
+        }
+    }
+    for abbreviation in &abbreviations {
+        figures.push(format!("C{abbreviation}/E"));
+        figures.push(format!("C{abbreviation}/G"));
+    }
+    for figure in [
+        "Cpower",
+        "Cpedal",
+        "C/E",
+        "C/G",
+        "Cm/E-",
+        "C7/B-",
+        "Cmaj7/B",
+        "N6",
+        "It+6",
+        "Fr+6",
+        "Ger+6",
+        "tristan",
+        "C+11",
+        "C#9",
+        "C7b5",
+        "C7#5",
+        "C9#11",
+        "C13b9",
+        "Csus",
+        "Csus2",
+        "Csus4",
+        "Cdim",
+        "Cdim7",
+        "Cm7b5",
+        "Cø7",
+        "C°7",
+        "CM7",
+        "Cmaj9",
+        "Cm9",
+        "Cm11",
+        "C13",
+        "C6",
+        "Cm6",
+        "Cadd2",
+        "Cadd11",
+        "Cmaj7#11",
+        "C7sus4",
+        "C-7",
+        "C-M7",
+        "Cb",
+        "Cbm",
+        "C#",
+        "C#dim",
+        "C##",
+        "B#",
+        "Fb",
+        "E#7",
+        "Cm7 add 11",
+        "C omit 5",
+        "C7 omit 3",
+        "C7add9",
+        "Cm7add11",
+        "Cmaj7add13",
+        "C7omit5",
+        "Cm7omit5",
+        "C9omit3",
+        "C7b9",
+        "C7#9",
+        "C7#11",
+        "C7b13",
+        "C9b5",
+        "Cm9b5",
+        "C7#5b9",
+        "Cadd#4",
+        "Caddb6",
+        "C7add#11",
+        "Dm7b5",
+        "Gm7b5/D-",
+        "Am7b5",
+        "F#7b9",
+        "B-7#11",
+        "E-maj7#5",
+        "A-m6",
+        "C#m7/E",
+        "B7/D#",
+        "F/A",
+        "Fm/A-",
+        "G7/F",
+    ] {
+        figures.push(figure.to_string());
+    }
+    figures.sort();
+    figures.dedup();
+
+    let mut out = header(
+        &[
+            "# What music21's ChordSymbol makes of a figure: the pitches it sounds,",
+            "# its kind, root and bass, or the exception it raises. Generated by",
+            "# `cargo run --release -p xtask --features python -- regenerate-fixtures`.",
+        ],
+        stamp,
+    );
+    let _ = writeln!(out, "symbol = [");
+    let mut errors = 0;
+    for figure in &figures {
+        let _ = write!(out, "    {{ figure = {}", toml_string(figure));
+        match symbol_class.call1((figure.as_str(),)) {
+            Ok(symbol) => {
+                let pitches = pitch_names(&symbol)?;
+                let kind: String = symbol.getattr("chordKind")?.extract()?;
+                let root: String = symbol.call_method0("root")?.getattr("name")?.extract()?;
+                let bass: String = symbol.call_method0("bass")?.getattr("name")?.extract()?;
+                let _ = writeln!(
+                    out,
+                    ", pitches = {}, kind = {}, root = {}, bass = {} }},",
+                    toml_list(&pitches),
+                    toml_string(&kind),
+                    toml_string(&root),
+                    toml_string(&bass),
+                );
+            }
+            Err(error) => {
+                errors += 1;
+                let _ = writeln!(
+                    out,
+                    ", error = {} }},",
+                    toml_string(&exception_name(py, &error))
+                );
+            }
+        }
+    }
+    let _ = writeln!(out, "]");
+
+    let path = workspace_root.join("data/chord_symbol_expectations.toml");
+    fs::write(&path, out)?;
+    println!(
+        "  wrote {} ({} figures, {errors} music21 refuses)",
+        path.display(),
+        figures.len()
+    );
+    Ok(path)
+}
+
+/// What music21 realizes a roman numeral figure as, in several keys: the
+/// pitches, the numeral read off it, its degree and inversion, or the
+/// exception it raises. `roman_figure_parity` checks the crate against it.
+fn write_roman_figures(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> PyResult<PathBuf> {
+    let roman_class = py.import("music21.roman")?.getattr("RomanNumeral")?;
+    let key_class = py.import("music21.key")?.getattr("Key")?;
+    const FIGURES: [&str; 118] = [
+        "I",
+        "i",
+        "ii",
+        "iio",
+        "ii°",
+        "iiø7",
+        "iii",
+        "III",
+        "III+",
+        "IV",
+        "iv",
+        "V",
+        "v",
+        "V7",
+        "V65",
+        "V43",
+        "V42",
+        "V9",
+        "V7b9",
+        "V11",
+        "V13",
+        "vi",
+        "VI",
+        "vii",
+        "VII",
+        "viio",
+        "viio7",
+        "viiø7",
+        "viio6",
+        "viio65",
+        "viio43",
+        "viio42",
+        "I6",
+        "I64",
+        "i6",
+        "i64",
+        "IV6",
+        "IV64",
+        "V6",
+        "V64",
+        "ii6",
+        "ii65",
+        "ii7",
+        "ii43",
+        "ii42",
+        "IV7",
+        "I7",
+        "IM7",
+        "i7",
+        "V+",
+        "V+6",
+        "bII",
+        "bII6",
+        "N6",
+        "N",
+        "It6",
+        "It",
+        "It+6",
+        "Ger65",
+        "Ger",
+        "Ger7",
+        "Ger6/5",
+        "Fr43",
+        "Fr",
+        "Fr4/3",
+        "Sw43",
+        "Sw",
+        "V/V",
+        "V7/V",
+        "V65/V",
+        "viio7/V",
+        "V/ii",
+        "V/vi",
+        "V7/IV",
+        "V42/IV",
+        "ii/V",
+        "Cad64",
+        "I[no3]",
+        "V[no5]",
+        "I[add9]",
+        "V7[add4]",
+        "I[no5][add9]",
+        "V#5",
+        "V7#5",
+        "Vb5",
+        "V7b5",
+        "I#7",
+        "i#7",
+        "#ivo7",
+        "#iv",
+        "bVII",
+        "bVI",
+        "bIII",
+        "iv6",
+        "iv64",
+        "IIø65",
+        "IIø7",
+        "Iø",
+        "vii°7",
+        "I9",
+        "V7[add6]",
+        "bIIb6",
+        "I53",
+        "I63",
+        "I5",
+        "V75",
+        "V73",
+        "V7[no3]",
+        "I[#5]",
+        "I[b3]",
+        "ii[#3]",
+        "IV[add#4]",
+        "V[addb9]",
+        "V6#5",
+        "#viio7",
+        "bviio",
+        "V/bVII",
+        "vi/vi",
+    ];
+    const KEYS: [&str; 6] = ["C", "c", "F#", "b-", "E-", "g"];
+
+    let mut out = header(
+        &[
+            "# What music21's RomanNumeral realizes a figure as, in several keys:",
+            "# the pitches, the numeral read back off it, its degree and inversion,",
+            "# or the exception it raises. Generated by",
+            "# `cargo run --release -p xtask --features python -- regenerate-fixtures`.",
+        ],
+        stamp,
+    );
+    let _ = writeln!(out, "numeral = [");
+    let mut errors = 0;
+    for key_name in KEYS {
+        let key = key_class.call1((key_name,))?;
+        for figure in FIGURES {
+            let _ = write!(
+                out,
+                "    {{ figure = {}, key = {}",
+                toml_string(figure),
+                toml_string(key_name)
+            );
+            match roman_class.call1((figure, &key)) {
+                Ok(numeral) => {
+                    let pitches = pitch_names(&numeral)?;
+                    let roman: String = numeral.getattr("romanNumeral")?.extract()?;
+                    let degree: i64 = numeral.getattr("scaleDegree")?.extract()?;
+                    let inversion = numeral
+                        .call_method0("inversion")
+                        .ok()
+                        .and_then(|value| value.extract::<i64>().ok())
+                        .map(|value| format!(", inversion = {value}"))
+                        .unwrap_or_default();
+                    let _ = writeln!(
+                        out,
+                        ", pitches = {}, roman_numeral = {}, degree = {degree}{inversion} }},",
+                        toml_list(&pitches),
+                        toml_string(&roman),
+                    );
+                }
+                Err(error) => {
+                    errors += 1;
+                    let _ = writeln!(
+                        out,
+                        ", error = {} }},",
+                        toml_string(&exception_name(py, &error))
+                    );
+                }
+            }
+        }
+    }
+    let _ = writeln!(out, "]");
+
+    let path = workspace_root.join("data/roman_figure_expectations.toml");
+    fs::write(&path, out)?;
+    println!(
+        "  wrote {} ({} figures x {} keys, {errors} music21 refuses)",
+        path.display(),
+        FIGURES.len(),
+        KEYS.len()
+    );
     Ok(path)
 }
 

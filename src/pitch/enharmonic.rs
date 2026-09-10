@@ -256,6 +256,10 @@ pub(super) static DIMINISHED_SECOND_DOWN: LazyLock<Interval> =
 /// simpler spelling.
 pub type CriterionFunction = fn(&[Pitch]) -> Result<FloatType>;
 
+/// How far apart two dissonance scores must be to count as different: a
+/// spelling within this of the best so far is a tie, and the first wins.
+const SCORE_TOLERANCE: FloatType = 1e-9;
+
 /// Respells a set of pitches so that they read as simply as possible
 /// together: music21's `simplifyMultipleEnharmonics`. The first pitch is kept
 /// as written and each of the others may be swapped for a common enharmonic;
@@ -322,7 +326,10 @@ pub(super) fn brute_force_enharmonics_search(
         let mut pitches: Vec<Pitch> = old_pitches[..1].to_vec();
         pitches.extend(combination);
         let score = score_func(&pitches)?;
-        if score < min_score {
+        // Two spellings that score the same keep the first, as music21's
+        // `min` does; a difference in the last bits of a logarithm is not a
+        // difference in dissonance.
+        if score < min_score - SCORE_TOLERANCE {
             min_score = score;
             best_combination = pitches;
         }
@@ -356,7 +363,7 @@ pub(super) fn greedy_enharmonics_search(
             candidate_list.push(candidate.clone());
             let score = score_func(&candidate_list)?;
             let score = OrderedFloat(score);
-            if best_score.is_none() || score < best_score.unwrap() {
+            if best_score.is_none_or(|best| score < best - SCORE_TOLERANCE) {
                 best_score = Some(score);
                 best_candidate = Some(candidate);
             }

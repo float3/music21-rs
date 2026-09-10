@@ -71,7 +71,20 @@ pub(super) fn music21_modifier_at(value: &str, idx: usize) -> Option<&'static st
     }
 }
 
+/// Whether a token after `add` or `omit` names a pitch, `D` or `A-`, rather
+/// than a degree, `9` or `b6`.
+pub(super) fn is_pitch_name_token(token: &str) -> bool {
+    let mut chars = token.chars();
+    chars
+        .next()
+        .is_some_and(|first| ('A'..='G').contains(&first))
+        && chars.all(|c| matches!(c, '#' | '-'))
+}
+
 pub(super) fn pitch_name_addition(root: &Pitch, pitch_name: &str) -> Option<ChordAlteration> {
+    if !is_pitch_name_token(pitch_name) {
+        return None;
+    }
     let pitch = Pitch::from_name(pitch_name).ok()?;
     let degree = pitch_name_degree(root, pitch_name)?;
     let actual = ((pitch_class(&pitch) + 12 - pitch_class(root)) % 12) as IntegerType;
@@ -88,6 +101,9 @@ pub(super) fn pitch_name_addition(root: &Pitch, pitch_name: &str) -> Option<Chor
 }
 
 pub(super) fn pitch_name_degree(root: &Pitch, pitch_name: &str) -> Option<u8> {
+    if !is_pitch_name_token(pitch_name) {
+        return None;
+    }
     let pitch = Pitch::from_name(pitch_name).ok()?;
     let generic = (step_num(&pitch) - step_num(root)).rem_euclid(7) + 1;
     Some(match generic as u8 {

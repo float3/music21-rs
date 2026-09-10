@@ -154,7 +154,7 @@ impl ChordSymbolFigure {
             figure.push_str("add");
             figure.push_str(&self.additions.join(","));
             if !self.omissions.is_empty() {
-                figure.push_str("omit");
+                figure.push_str(",omit");
                 figure.push_str(&self.omissions.join(","));
             }
         }

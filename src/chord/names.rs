@@ -402,14 +402,19 @@ impl Chord {
             || (self.from_integer_pitches && self.pitch_class_mask() == 0b001001001000)
         {
             "enharmonic equivalent to diminished triad"
-        } else if self.names_are(&names, &["C#", "D#", "F#", "A#"])
-            || self.names_are(&names, &["C#", "E#", "G#", "A#"])
-            || self.names_are(&names, &["E-", "G-", "A-", "C-"])
+        } else if self.from_integer_pitches
+            && (self.names_are(&names, &["C#", "D#", "F#", "A#"])
+                || self.names_are(&names, &["C#", "E#", "G#", "A#"])
+                || self.names_are(&names, &["E-", "G-", "A-", "C-"]))
         {
+            // Built from integers these spellings are what music21 calls an
+            // enharmonic equivalent; written out by name they are the chord
+            // itself.
             "enharmonic equivalent to minor seventh chord"
-        } else if self.names_are(&names, &["C#", "E#", "F#", "A#"])
-            || self.names_are(&names, &["E-", "F-", "A-", "C-"])
-            || self.names_are(&names, &["E-", "G-", "B-", "C-"])
+        } else if self.from_integer_pitches
+            && (self.names_are(&names, &["C#", "E#", "F#", "A#"])
+                || self.names_are(&names, &["E-", "F-", "A-", "C-"])
+                || self.names_are(&names, &["E-", "G-", "B-", "C-"]))
         {
             "enharmonic equivalent to major seventh chord"
         } else if self.names_are(&names, &["E-", "F#", "A", "B"]) {

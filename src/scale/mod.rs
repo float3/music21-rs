@@ -39,14 +39,16 @@ pub(crate) const FIFTHS_ORDER_FLAT: [StepName; 7] = [
 
 pub(crate) fn altered_steps_from_sharps(sharps: IntegerType) -> HashMap<StepName, IntegerType> {
     let mut map = HashMap::new();
+    // Past seven the circle comes round again and every step takes another
+    // accidental: A double-flat major has eleven flats, four of them double.
     match sharps.cmp(&0) {
         Ordering::Greater => {
-            for step in FIFTHS_ORDER_SHARP.iter().take(sharps as usize) {
+            for step in FIFTHS_ORDER_SHARP.iter().cycle().take(sharps as usize) {
                 *map.entry(*step).or_insert(0) += 1;
             }
         }
         Ordering::Less => {
-            for step in FIFTHS_ORDER_FLAT.iter().take((-sharps) as usize) {
+            for step in FIFTHS_ORDER_FLAT.iter().cycle().take((-sharps) as usize) {
                 *map.entry(*step).or_insert(0) -= 1;
             }
         }
