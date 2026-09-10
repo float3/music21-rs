@@ -229,20 +229,20 @@ informClient = "observer callback for a containing note; there is none"
 [[class]]
 python = "serial.py"
 name = "ToneRow"
-rust = ["src/serial.rs"]
+rust = ["src/serial/mod.rs"]
 
 
 [[class]]
 python = "serial.py"
 name = "TwelveToneRow"
-rust = ["src/serial.rs"]
+rust = ["src/serial/mod.rs"]
 
 [class.renames]
 getLinkClassification = "link_classification"
 
 [[class]]
 python = "serial.py"
-rust = ["src/serial.rs"]
+rust = ["src/serial/mod.rs"]
 note = "Module-level helpers."
 
 [class.renames]
