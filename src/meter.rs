@@ -612,138 +612,152 @@ impl TimeSignature {
 /// fraction itself.
 pub fn best_time_signature(measure: &crate::Stream) -> Result<TimeSignature> {
     let elements = measure.recurse();
-    let sounding: Vec<&crate::stream::StreamElement> = elements
-        .iter()
-        .map(|(_, element)| *element)
-        .filter(|element| {
-            element.is_note_or_chord() || matches!(element, crate::stream::StreamElement::Rest(_))
-        })
-        .collect();
     let sum = elements
         .iter()
         .filter(|(_, element)| element.as_stream().is_none())
         .map(|(offset, element)| offset + element.quarter_length())
         .fold(0.0, FloatType::max);
-    let smallest_type = crate::duration::DurationType::from_music21_name("128th")
-        .expect("music21 names the 128th note");
-    let limit = smallest_type.quarter_length();
 
+    // The shortest sounding value that is not a tuplet, with its dots.
     let mut min_dur = 4.0;
     let mut min_dots = 0;
-    for element in &sounding {
+    for (_, element) in &elements {
+        let sounds =
+            element.is_note_or_chord() || matches!(element, crate::stream::StreamElement::Rest(_));
         let quarter_length = element.quarter_length();
-        if quarter_length == 0.0 {
-            continue;
-        }
-        if quarter_length < min_dur && is_binary(quarter_length) {
+        if sounds && quarter_length != 0.0 && quarter_length < min_dur && is_binary(quarter_length)
+        {
             min_dur = quarter_length;
             min_dots = element.duration().map_or(0, Duration::dots);
         }
     }
-    let dot_multiplier =
-        FloatType::from(2u32.pow(min_dots + 1) - 1) / FloatType::from(2u32.pow(min_dots));
 
-    let (mut numerator, mut denominator) = if !is_binary(sum) {
+    let (numerator, denominator) = if is_binary(sum) {
+        binary_signature(sum, min_dur, min_dots)?
+    } else {
         let (numerator, denominator) = crate::duration::limited_fraction(sum, 65535)
             .ok_or_else(|| Error::Meter("Cannot find a good match for this measure".to_string()))?;
         (
             numerator as UnsignedIntegerType,
             denominator as UnsignedIntegerType,
         )
-    } else {
-        let mut min_test = min_dur;
-        let mut remaining = 10;
-        while remaining > 0 {
-            let parts = sum / min_test;
-            if parts.floor() == parts || min_test <= limit {
-                break;
-            }
-            min_test /= 2.0 * dot_multiplier;
-            remaining -= 1;
-        }
-        let mut remaining = 10;
-        while remaining > 0 {
-            if min_test < limit {
-                min_test = limit;
-                break;
-            }
-            let (duration_type, matched) =
-                crate::duration::quarter_length_to_closest_type(min_test).map_err(|_| {
-                    Error::Meter("Cannot find a good match for this measure".to_string())
-                })?;
-            if matched || duration_type == smallest_type {
-                break;
-            }
-            min_test /= 2.0 * dot_multiplier;
-            remaining -= 1;
-        }
-        min_dur = min_test;
-        let (duration_type, matched) = crate::duration::quarter_length_to_closest_type(min_dur)
-            .map_err(|_| Error::Meter("Cannot find a good match for this measure".to_string()))?;
-        if !matched {
-            return Err(Error::Meter(format!(
-                "cannot find a type for denominator {min_dur}"
-            )));
-        }
-        let mut float_denominator = duration_type.type_number().unwrap_or(1.0);
-        let mut multiplier = 1.0;
-        let mut numerator_float = 0.0;
-        while remaining > 0 {
-            numerator_float = multiplier * sum / min_dur;
-            if numerator_float == numerator_float.floor() {
-                break;
-            }
-            multiplier *= 2.0;
-            remaining -= 1;
-        }
-        float_denominator *= multiplier;
-        let numerator = numerator_float as UnsignedIntegerType;
-        let denominator = float_denominator as UnsignedIntegerType;
-        let divisor = num::integer::gcd(numerator, denominator);
-        (numerator / divisor.max(1), denominator / divisor.max(1))
     };
-
-    // The rare signatures simplify: 16/16 and 1/1 are 4/4, and a whole or
-    // half denominator is written in quarters.
-    if numerator == denominator && !matches!(numerator, 2 | 4) {
-        numerator = 4;
-        denominator = 4;
-    } else if numerator != denominator && denominator == 1 {
-        numerator *= 4;
-        denominator *= 4;
-    } else if numerator != denominator && denominator == 2 {
-        numerator *= 2;
-        denominator *= 2;
-    }
+    let (numerator, denominator) = simplified_signature(numerator, denominator);
 
     let strength =
         |ratio: (UnsignedIntegerType, UnsignedIntegerType)| -> Result<(TimeSignature, FloatType)> {
             let signature = TimeSignature::new(ratio.0, ratio.1)?;
             Ok((signature, signature.average_beat_strength(measure, true)))
         };
-    if (numerator, denominator) == (3, 4) {
-        let (three_four, simple) = strength((3, 4))?;
-        let (six_eight, compound) = strength((6, 8))?;
-        return Ok(if simple <= compound {
-            six_eight
-        } else {
-            three_four
-        });
+    match (numerator, denominator) {
+        // Three-four or six-eight, whichever weighs the notes more strongly.
+        (3, 4) => {
+            let (three_four, simple) = strength((3, 4))?;
+            let (six_eight, compound) = strength((6, 8))?;
+            Ok(if simple <= compound {
+                six_eight
+            } else {
+                three_four
+            })
+        }
+        // Six-four, twelve-eight or three-two, the same way.
+        (6, 4) => {
+            let (six_four, first) = strength((6, 4))?;
+            let (twelve_eight, second) = strength((12, 8))?;
+            let (three_two, third) = strength((3, 2))?;
+            let most = first.max(second).max(third);
+            Ok(if most == first {
+                six_four
+            } else if most == third {
+                three_two
+            } else {
+                twelve_eight
+            })
+        }
+        _ => TimeSignature::new(numerator, denominator),
     }
-    if (numerator, denominator) == (6, 4) {
-        let (six_four, first) = strength((6, 4))?;
-        let (twelve_eight, second) = strength((12, 8))?;
-        let (three_two, third) = strength((3, 2))?;
-        let most = first.max(second).max(third);
-        return Ok(if most == first {
-            six_four
-        } else if most == third {
-            three_two
-        } else {
-            twelve_eight
-        });
+}
+
+/// The numerator and denominator of a measure whose length is a binary
+/// fraction: the shortest value halved, dot and all, until it divides the
+/// length evenly, named as a note value for the denominator and counted for
+/// the numerator, in lowest terms.
+fn binary_signature(
+    sum: FloatType,
+    min_dur: FloatType,
+    min_dots: u32,
+) -> Result<(UnsignedIntegerType, UnsignedIntegerType)> {
+    let no_match = || Error::Meter("Cannot find a good match for this measure".to_string());
+    let smallest_type = crate::duration::DurationType::from_music21_name("128th")
+        .expect("music21 names the 128th note");
+    let limit = smallest_type.quarter_length();
+    let dot_multiplier =
+        FloatType::from(2u32.pow(min_dots + 1) - 1) / FloatType::from(2u32.pow(min_dots));
+
+    let mut min_test = min_dur;
+    let mut remaining = 10;
+    while remaining > 0 {
+        let parts = sum / min_test;
+        if parts.floor() == parts || min_test <= limit {
+            break;
+        }
+        min_test /= 2.0 * dot_multiplier;
+        remaining -= 1;
     }
-    TimeSignature::new(numerator, denominator)
+    let mut remaining = 10;
+    while remaining > 0 {
+        if min_test < limit {
+            min_test = limit;
+            break;
+        }
+        let (duration_type, matched) =
+            crate::duration::quarter_length_to_closest_type(min_test).map_err(|_| no_match())?;
+        if matched || duration_type == smallest_type {
+            break;
+        }
+        min_test /= 2.0 * dot_multiplier;
+        remaining -= 1;
+    }
+    let (duration_type, matched) =
+        crate::duration::quarter_length_to_closest_type(min_test).map_err(|_| no_match())?;
+    if !matched {
+        return Err(Error::Meter(format!(
+            "cannot find a type for denominator {min_test}"
+        )));
+    }
+    let mut float_denominator = duration_type.type_number().unwrap_or(1.0);
+    let mut multiplier = 1.0;
+    let mut numerator_float = 0.0;
+    while remaining > 0 {
+        numerator_float = multiplier * sum / min_test;
+        if numerator_float == numerator_float.floor() {
+            break;
+        }
+        multiplier *= 2.0;
+        remaining -= 1;
+    }
+    float_denominator *= multiplier;
+    let numerator = numerator_float as UnsignedIntegerType;
+    let denominator = float_denominator as UnsignedIntegerType;
+    let divisor = num::integer::gcd(numerator, denominator).max(1);
+    Ok((numerator / divisor, denominator / divisor))
+}
+
+/// The rare signatures written the usual way: sixteen-sixteen and one-one
+/// are four-four, and a whole or half denominator is written in quarters.
+fn simplified_signature(
+    numerator: UnsignedIntegerType,
+    denominator: UnsignedIntegerType,
+) -> (UnsignedIntegerType, UnsignedIntegerType) {
+    if numerator == denominator && !matches!(numerator, 2 | 4) {
+        (4, 4)
+    } else if numerator != denominator && denominator == 1 {
+        (numerator * 4, 4)
+    } else if numerator != denominator && denominator == 2 {
+        (numerator * 2, 4)
+    } else {
+        (numerator, denominator)
+    }
 }
 
 /// Whether a quarter length is a binary fraction music21 keeps as a float
