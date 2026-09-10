@@ -3,7 +3,7 @@
 //! Everything scripted in this repository is written in TypeScript — the four
 //! web demos are, and so is this. A browser cannot run TypeScript, and the
 //! report page carries its script inline so that the page is one
-//! self-contained file, so `report.rs` reaches for the compiled JavaScript
+//! self-contained file, so `report/html.rs` reaches for the compiled JavaScript
 //! with `include_str!` at build time.
 //!
 //! That is why the compiled `report.js` is committed rather than built: an
@@ -37,7 +37,7 @@ pub fn source_path(workspace_root: &Path) -> PathBuf {
     workspace_root.join("xtask/src/report.ts")
 }
 
-/// The JavaScript the page carries, which `report.rs` includes.
+/// The JavaScript the page carries, which `report/html.rs` includes.
 pub fn generated_path(workspace_root: &Path) -> PathBuf {
     workspace_root.join("xtask/src/report.js")
 }
