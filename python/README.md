@@ -4,13 +4,12 @@
 [![music21 members in the wheel](https://img.shields.io/endpoint?url=https%3A%2F%2Fhilll.dev%2Fmusic21-rs%2Freports%2Fbadge-wheel.json)](https://hilll.dev/music21-rs/reports/#features)
 [![music21 doctests passing](https://img.shields.io/endpoint?url=https%3A%2F%2Fhilll.dev%2Fmusic21-rs%2Freports%2Fbadge-doctests.json)](https://hilll.dev/music21-rs/reports/#doctests)
 
-`music21_rs` is [music21](https://github.com/cuthbertLab/music21)'s analysis
-classes, `Pitch`, `Interval`, `Chord`, `Note`, `Duration`, `Key`, `Scale`,
-`RomanNumeral`, `TimeSignature`, `ToneRow` and the rest, ported to Rust and
-handed back to Python with music21's names, keyword arguments, properties and
-`repr`. It is not a rewrite of music21: streams, parsing, notation output and
-the corpus stay music21's. It is the part that answers musical questions, made
-faster and checked against the original.
+`music21_rs` is a Rust port of
+[music21](https://github.com/cuthbertLab/music21)'s analysis classes:
+`Pitch`, `Interval`, `Chord`, `Note`, `Duration`, `Key`, `Scale`,
+`RomanNumeral`, `TimeSignature`, `ToneRow` and others, with music21's names,
+arguments, properties and `repr`. Streams, parsing, notation output and the
+corpus are not included; those remain music21's.
 
 ```bash
 pip install music21-rs
@@ -31,14 +30,10 @@ m.RomanNumeral("viio7", m.Key("c")).pitches
 m.TimeSignature("6/8").getAccentWeight(1.5)   # 0.5
 ```
 
-The classes report music21's own module strings, `<music21.pitch.Pitch C4>`,
-because they are meant to stand in for music21's.
+## Using it inside music21
 
-## Running a music21 program on it
-
-`install_into_music21()` replaces music21's classes with these, in the music21
-that is installed, so a program written for music21 runs on the Rust code
-without a line changed:
+`install_into_music21()` replaces the classes of an installed music21 with
+these, so existing music21 code runs on the Rust implementation unchanged:
 
 ```python
 import music21_rs
@@ -49,62 +44,44 @@ chord.Chord("C4 E4 G4").commonName          # 'major triad', out of Rust
 roman.RomanNumeral("V7", key.Key("G")).pitches
 ```
 
-It patches live modules, so it changes music21 for the whole process, and
-nothing calls it for you. Call it before the program does
-`from music21.chord import Chord`, since that binds whatever it finds at
-import time. For a test suite, a `conftest.py` is early enough.
+It patches the live modules for the whole process, so call it before any
+`from music21.chord import Chord`; for a test suite, `conftest.py` is early
+enough. The installed classes are `Music21Object` subclasses, so music21 can
+hold them in streams, find them by class, pickle them and export them to
+MusicXML.
 
-The installed classes are real `Music21Object`s: music21 puts them in
-streams, finds them with `getElementsByClass`, freezes and thaws them, and
-exports them to MusicXML as it would its own. What music21 does with them
-that the crate does not model, an offset in a stream, editorial marks, a
-style, stays music21's.
+## Coverage of music21
 
-## How much of music21 this is
+The badges above are updated on every push from the
+[reports page](https://hilll.dev/music21-rs/reports/), which lists every
+music21 method as ported, missing, or excluded with a reason.
 
-Three measurements, each redone on every push and published on the
-[reports page](https://hilll.dev/music21-rs/reports/):
+- 74% of the public methods of the ported music21 classes are reachable from
+  this wheel.
+- 17 of the 19 music21 modules whose doctests run against the port pass all
+  of them: `pitch`, `interval`, `chord`, `chord.tables`, `note`, `duration`,
+  `key`, `scale`, `roman`, `harmony`, `serial`, `beam`, `tie`, `volume`,
+  `figuredBass.notation`, `tempo` and `voiceLeading`. `sieve` and
+  `meter.base` are partial and are not installed over music21's.
+- music21's full test suite runs in CI with this wheel installed and has to
+  match music21's own results, apart from two documented differences.
+- [harte-library](https://github.com/andreamust/harte-library), a third-party
+  chord parser built on music21, runs its 8,116 tests on both with identical
+  results.
 
-- **Members.** Every public method of the music21 classes the crate ports is
-  read out of music21 itself and matched against the port. The first badge is
-  the share reachable from this wheel; the crate itself ports more, since
-  some of it has no Python-side use yet.
-- **Doctests.** Nineteen music21 modules run their own docstrings with these
-  classes swapped in. Seventeen pass every example: `pitch`, `interval`,
-  `chord`, `chord.tables`, `note`, `duration`, `key`, `scale`, `roman`,
-  `harmony`, `serial`, `beam`, `tie`, `volume`, `figuredBass.notation`,
-  `tempo` and `voiceLeading`. `sieve` and `meter.base` do not, for want of
-  sieve compression and the `MeterSequence` tree, and neither is installed.
-- **music21's own suite.** All of music21's tests run on music21, then with
-  the crate installed over it, then with this wheel installed over it. A test
-  that fails only under the port fails the build. Two divergences are expected
-  and named.
-
-A fourth: [harte-library](https://github.com/andreamust/harte-library), a
-chord grammar built on music21 by someone who had never heard of this
-project, runs its 8,116 tests on music21 and on this and the failures have to
-match. They do.
+Not included: streams, scores, parsing, writing, the corpus and `show()`.
+`Tuplet`, `AbstractScale`, `Sieve` and `style.Style` are provided but not
+installed over music21's, whose versions do more. Missing behaviour raises
+rather than falling back to music21.
 
 ## Speed
 
-The reports page carries the benchmark. Constructing a `Pitch`, `Note`,
-`Interval` or `Chord` is two to sixteen times faster than music21's; chord
-analysis, `commonName`, `forteClass` and the rest on a fresh chord, is about
-five times faster. On a chord that has already answered, music21's memoised
-result and this wheel's cache cost the same. Across music21's whole test
-suite the median test runs at the same speed either way, because most of what
-a music21 test does is music21's own code.
-
-## What is not here
-
-- Anything music21 does with a stream, a score or a file: parsing, writing,
-  the corpus, `show()`.
-- `Tuplet`, `AbstractScale`, `Sieve`, `TimeSignature`'s `MeterSequence` and
-  `style.Style` are provided but not installed over music21's, because
-  music21's own are richer.
-- Behaviour the crate does not have is left to fail rather than patched in
-  Python. The reports page lists every missing member with the reason where
-  one was decided.
+Benchmarks are on the reports page. Constructing a `Pitch`, `Note`,
+`Interval` or `Chord` is 2 to 16 times faster than in music21, and chord
+analysis (`commonName`, `forteClass` and related) is about 5 times faster on
+a fresh chord. Repeated queries on the same chord are cached in both and cost
+the same. Over music21's own test suite the median test runs at the same
+speed, since most of a music21 test is music21's own code.
 
 ## Building
 
@@ -114,8 +91,7 @@ uvx maturin develop --manifest-path python/Cargo.toml   # into the active venv
 pytest python/tests -q
 ```
 
-The wheel's Rust half is the `music21-rs` crate; its version and the crate's
-are pinned to each other by a test.
+The wheel is built from the `music21-rs` crate and shares its version number.
 
 ## Licence
 
