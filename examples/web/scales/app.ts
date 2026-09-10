@@ -51,8 +51,8 @@ function render(info) {
         fact("Tonic", info.tonic),
         fact("Notes per octave", String(info.pitch_names.length - 1)),
         fact("Steps", info.steps.join(" ")),
-        fact("Degrees", info.degrees.length ? info.degrees.join(" ") : "1 up"),
     );
+    if (info.degrees.length) facts.appendChild(fact("Degrees", info.degrees.join(" ")));
     pitches.replaceChildren();
     info.pitches.forEach((pitch, index) => {
         const node = el("div", `pitch${index === 0 || index === info.pitches.length - 1 ? " tonic" : ""}`);
