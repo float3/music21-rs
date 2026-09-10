@@ -12,9 +12,10 @@
 use std::path::{Path, PathBuf};
 
 /// Fixtures generated from music21, all of which must carry a version stamp.
-const VERSIONED_FIXTURES: [&str; 10] = [
+const VERSIONED_FIXTURES: [&str; 11] = [
     "data/scale_expectations.toml",
     "data/harte_expectations.toml",
+    "data/accidental_display_expectations.toml",
     "data/chord_type_expectations.toml",
     "data/meter_expectations.toml",
     "data/table_expectations.toml",

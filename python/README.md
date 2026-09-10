@@ -58,7 +58,7 @@ MusicXML.
 
 ## Coverage of music21
 
-- 94% of the public methods of the ported music21 classes are reachable from
+- 95% of the public methods of the ported music21 classes are reachable from
   this wheel.
 - 17 of the 19 music21 modules whose doctests run against the port pass all
   of them: `pitch`, `interval`, `chord`, `chord.tables`, `note`, `duration`,

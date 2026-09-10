@@ -834,6 +834,70 @@ impl ConcreteScale {
             .collect())
     }
 
+    /// music21's `tune`: every note and chord in a stream respelled to the
+    /// nearest pitch of this scale that carries its name, or an enharmonic
+    /// of it, keeping its octave. A pitch the scale has no spelling of is
+    /// left alone.
+    #[pyo3(signature = (streamObj, minPitch = None, maxPitch = None, direction = None))]
+    fn tune(
+        slf: &Bound<'_, Self>,
+        py: Python<'_>,
+        streamObj: &Bound<'_, PyAny>,
+        minPitch: Option<&Bound<'_, PyAny>>,
+        maxPitch: Option<&Bound<'_, PyAny>>,
+        direction: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<()> {
+        let collection: Vec<RsPitch> = slf
+            .call_method1("getPitches", (minPitch, maxPitch, direction))?
+            .try_iter()?
+            .map(|pitch| pitch_from_any(&pitch?))
+            .collect::<PyResult<_>>()?;
+        let names: Vec<String> = collection.iter().map(RsPitch::name).collect();
+        let tuned = |pitch: &RsPitch| -> Option<RsPitch> {
+            let mut candidates = pitch.all_common_enharmonics(2);
+            candidates.push(pitch.clone());
+            for candidate in candidates {
+                let Some(index) = names.iter().position(|name| *name == candidate.name()) else {
+                    continue;
+                };
+                let mut target = collection[index].clone();
+                target.set_octave(candidate.octave());
+                let spelled = target
+                    .all_common_enharmonics(2)
+                    .into_iter()
+                    .find(|spelling| spelling.name() == pitch.name());
+                return Some(spelled.unwrap_or(target));
+            }
+            None
+        };
+        let notes = streamObj.call_method0("recurse")?.getattr("notes")?;
+        for element in notes.try_iter()? {
+            let element = element?;
+            if element.getattr("isChord")?.extract::<bool>()? {
+                let pitches: Vec<Bound<'_, PyAny>> = element
+                    .getattr("pitches")?
+                    .try_iter()?
+                    .collect::<PyResult<_>>()?;
+                // The retuned pitches go in by name, so a music21 note takes
+                // them as readily as one of ours.
+                let mut retuned = Vec::with_capacity(pitches.len());
+                for pitch in &pitches {
+                    if let Some(tuned) = tuned(&pitch_from_any(pitch)?) {
+                        retuned.push(tuned.name_with_octave());
+                    }
+                }
+                if !retuned.is_empty() {
+                    element.setattr("pitches", PyTuple::new(py, retuned)?)?;
+                }
+            } else if let Some(tuned) = tuned(&pitch_from_any(&element.getattr("pitch")?)?) {
+                element
+                    .getattr("pitch")?
+                    .setattr("nameWithOctave", tuned.name_with_octave())?;
+            }
+        }
+        Ok(())
+    }
+
     /// music21's `getPitches`: the scale over a range of pitches, or over
     /// the octave above the tonic when no range is given.
     #[pyo3(signature = (minPitch = None, maxPitch = None, direction = None, **_keywords))]

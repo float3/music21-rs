@@ -166,6 +166,7 @@ pub(crate) fn regenerate(workspace_root: &Path) -> Result<Vec<PathBuf>, Box<dyn 
             write_serial(py, workspace_root, stamp)?,
             write_doctest_totals(py, workspace_root, stamp)?,
             write_harte(py, workspace_root, stamp)?,
+            write_accidental_display(py, workspace_root, stamp)?,
         ])
     })
     .map_err(|error| -> Box<dyn Error> { Box::new(error) })
@@ -264,6 +265,224 @@ pub(crate) fn test_modules_for(workspace_root: &Path, module: &str) -> Vec<Strin
 /// flatters the score. There is no counting this from the Rust side, because a
 /// docstring is what `DocTestFinder` says it is — a text scan for `>>>` misses
 /// by as much as 14% on `roman.py`.
+/// What music21's `updateAccidentalDisplay` decides across a grid of
+/// situations: the pitch, what came before it in this measure and the
+/// last, what sounds with it, the key, its accidental's display type and
+/// the cautionary switches. `Pitch::update_accidental_display` is checked
+/// against it by `accidental_display_parity`.
+fn write_accidental_display(
+    py: Python<'_>,
+    workspace_root: &Path,
+    stamp: &Stamp,
+) -> PyResult<PathBuf> {
+    let pitch_class = py.import("music21.pitch")?.getattr("Pitch")?;
+    let accidental_class = py.import("music21.pitch")?.getattr("Accidental")?;
+    let signature_class = py.import("music21.key")?.getattr("KeySignature")?;
+
+    const CURRENTS: [&str; 10] = [
+        "F4", "F#4", "F-4", "Fn4", "G4", "G#4", "B-4", "B4", "C#5", "F#5",
+    ];
+    const PASTS: [&[&str]; 13] = [
+        &[],
+        &["F#4"],
+        &["F4"],
+        &["F#5"],
+        &["Fn4"],
+        &["F#4", "F4"],
+        &["F#4", "F#4"],
+        &["G4", "F#4", "A4"],
+        &["F#4", "G4"],
+        &["B-4"],
+        &["F-4"],
+        &["F#4", "F#5"],
+        &["Fn4", "F#4"],
+    ];
+    const PAST_MEASURES: [&[&str]; 6] = [&[], &["F#4"], &["F4"], &["F#5"], &["B-3"], &["Fn4"]];
+    const SIMULTANEOUS: [&[&str]; 5] = [&[], &["F4"], &["F#4"], &["F#5"], &["G4"]];
+    const SHARPS: [i32; 4] = [0, 1, -2, 6];
+    const DISPLAY_TYPES: [Option<&str>; 6] = [
+        None,
+        Some("always"),
+        Some("never"),
+        Some("even-tied"),
+        Some("if-absolutely-necessary"),
+        Some("unless-repeated"),
+    ];
+    // cautionaryPitchClass, cautionaryAll, overrideStatus,
+    // cautionaryNotImmediateRepeat, lastNoteWasTied.
+    const DEFAULT_FLAGS: [bool; 5] = [true, false, false, true, false];
+    const FLAG_SETS: [[bool; 5]; 6] = [
+        DEFAULT_FLAGS,
+        [false, false, false, true, false],
+        [true, true, false, true, false],
+        [true, false, true, true, false],
+        [true, false, false, false, false],
+        [true, false, false, true, true],
+    ];
+
+    #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+    struct Case {
+        current: &'static str,
+        past: &'static [&'static str],
+        past_measure: &'static [&'static str],
+        simultaneous: &'static [&'static str],
+        sharps: i32,
+        display_type: Option<&'static str>,
+        flags: [bool; 5],
+    }
+    let mut cases: Vec<Case> = Vec::new();
+    let mut add = |current, past, past_measure, simultaneous, sharps, display_type, flags| {
+        let case = Case {
+            current,
+            past,
+            past_measure,
+            simultaneous,
+            sharps,
+            display_type,
+            flags,
+        };
+        if !cases.contains(&case) {
+            cases.push(case);
+        }
+    };
+    // Every pitch against every past, in every key, with the defaults.
+    for current in CURRENTS {
+        for past in PASTS {
+            for sharps in SHARPS {
+                add(current, past, &[], &[], sharps, None, DEFAULT_FLAGS);
+            }
+        }
+    }
+    // The previous measure and simultaneities, and the switches, on a
+    // smaller grid.
+    for current in &CURRENTS[..6] {
+        for past_measure in PAST_MEASURES {
+            for sharps in [0, 1] {
+                add(current, &[], past_measure, &[], sharps, None, DEFAULT_FLAGS);
+                add(
+                    current,
+                    &["G4"],
+                    past_measure,
+                    &[],
+                    sharps,
+                    None,
+                    DEFAULT_FLAGS,
+                );
+            }
+        }
+        for simultaneous in SIMULTANEOUS {
+            add(current, &[], &[], simultaneous, 0, None, DEFAULT_FLAGS);
+            add(current, &[], &[], simultaneous, 0, None, FLAG_SETS[1]);
+        }
+        for past in &PASTS[..8] {
+            for display_type in DISPLAY_TYPES {
+                add(current, past, &[], &[], 0, display_type, DEFAULT_FLAGS);
+                add(current, past, &["F#4"], &[], 1, display_type, DEFAULT_FLAGS);
+            }
+        }
+        for past in &PASTS[..9] {
+            for flags in FLAG_SETS {
+                add(current, past, &[], &[], 0, None, flags);
+                add(current, past, &[], &[], 1, None, flags);
+                add(current, past, &["F#4"], &[], 0, None, flags);
+            }
+        }
+    }
+
+    let pitches = |names: &[&str]| -> PyResult<Vec<Bound<'_, PyAny>>> {
+        names
+            .iter()
+            .map(|name| pitch_class.call1((*name,)))
+            .collect()
+    };
+    let list = |names: &[&str]| -> String {
+        format!(
+            "[{}]",
+            names
+                .iter()
+                .map(|name| toml_string(name))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    };
+
+    let mut out = header(
+        &[
+            "# What music21's updateAccidentalDisplay decides for a grid of",
+            "# situations, generated by",
+            "# `cargo run --release -p xtask --features python -- regenerate-fixtures`.",
+            "# `accidental` is the accidental the pitch carries afterwards, `none`",
+            "# where it carries none, and `shown` its display status where one was",
+            "# decided.",
+        ],
+        stamp,
+    );
+    let _ = writeln!(out, "case = [");
+    for case in &cases {
+        let pitch = pitch_class.call1((case.current,))?;
+        if let Some(display_type) = case.display_type {
+            if pitch.getattr("accidental")?.is_none() {
+                pitch.setattr("accidental", accidental_class.call1(("natural",))?)?;
+            }
+            pitch
+                .getattr("accidental")?
+                .setattr("displayType", display_type)?;
+        }
+        let signature = signature_class.call1((case.sharps,))?;
+        let keywords = PyDict::new(py);
+        keywords.set_item("pitchPast", pitches(case.past)?)?;
+        keywords.set_item("pitchPastMeasure", pitches(case.past_measure)?)?;
+        keywords.set_item("otherSimultaneousPitches", pitches(case.simultaneous)?)?;
+        keywords.set_item("alteredPitches", signature.getattr("alteredPitches")?)?;
+        keywords.set_item("cautionaryPitchClass", case.flags[0])?;
+        keywords.set_item("cautionaryAll", case.flags[1])?;
+        keywords.set_item("overrideStatus", case.flags[2])?;
+        keywords.set_item("cautionaryNotImmediateRepeat", case.flags[3])?;
+        keywords.set_item("lastNoteWasTied", case.flags[4])?;
+        pitch.call_method("updateAccidentalDisplay", (), Some(&keywords))?;
+        let accidental = pitch.getattr("accidental")?;
+        let (name, shown): (String, Option<bool>) = if accidental.is_none() {
+            ("none".to_string(), None)
+        } else {
+            (
+                accidental.getattr("name")?.extract()?,
+                accidental.getattr("displayStatus")?.extract()?,
+            )
+        };
+        let shown = match shown {
+            Some(shown) => format!(", shown = {shown}"),
+            None => String::new(),
+        };
+        let display_type = match case.display_type {
+            Some(display_type) => format!(", display_type = {}", toml_string(display_type)),
+            None => String::new(),
+        };
+        let _ = writeln!(
+            out,
+            "    {{ pitch = {}, past = {}, past_measure = {}, simultaneous = {}, sharps = {}{display_type}, \
+             cautionary_pitch_class = {}, cautionary_all = {}, override_status = {}, \
+             cautionary_not_immediate_repeat = {}, last_note_was_tied = {}, accidental = {}{shown} }},",
+            toml_string(case.current),
+            list(case.past),
+            list(case.past_measure),
+            list(case.simultaneous),
+            case.sharps,
+            case.flags[0],
+            case.flags[1],
+            case.flags[2],
+            case.flags[3],
+            case.flags[4],
+            toml_string(&name),
+        );
+    }
+    let _ = writeln!(out, "]");
+
+    let path = workspace_root.join("data/accidental_display_expectations.toml");
+    fs::write(&path, out)?;
+    println!("  wrote {} ({} cases)", path.display(), cases.len());
+    Ok(path)
+}
+
 fn write_doctest_totals(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> PyResult<PathBuf> {
     let doctest = py.import("doctest")?;
     let finder = doctest.getattr("DocTestFinder")?.call0()?;
@@ -372,7 +591,9 @@ fn write_harte(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> PyResult
             "# generated on music21 by",
             "# `cargo run --release -p xtask --features python -- regenerate-fixtures`.",
             "# Degrees inside the parentheses of `pretty` are sorted, as the",
-            "# library writes them in no fixed order.",
+            "# library writes them in no fixed order, and degrees that share a",
+            "# sort key stand in spelling order, as the library breaks that tie",
+            "# by set order.",
         ],
         stamp,
     );
@@ -383,19 +604,6 @@ fn write_harte(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> PyResult
     );
     let _ = writeln!(out);
     let _ = writeln!(out, "chord = [");
-
-    let names_of = |values: Bound<'_, PyAny>, attribute: Option<&str>| -> PyResult<String> {
-        let mut names = Vec::new();
-        for value in values.try_iter()? {
-            let value = value?;
-            let name: String = match attribute {
-                Some(attribute) => value.getattr(attribute)?.extract()?,
-                None => value.extract()?,
-            };
-            names.push(toml_string(&name));
-        }
-        Ok(format!("[{}]", names.join(", ")))
-    };
 
     let mut errors = 0;
     for label in &labels {
@@ -409,7 +617,6 @@ fn write_harte(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> PyResult
                 );
             }
             Ok(chord) => {
-                let pitches = names_of(chord.getattr("pitches")?, Some("nameWithOctave"))?;
                 let root: String = chord
                     .call_method0("root")?
                     .getattr("nameWithOctave")?
@@ -419,7 +626,38 @@ fn write_harte(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> PyResult
                     .getattr("nameWithOctave")?
                     .extract()?;
                 // Read before `prettify`, which takes the root out of the list.
-                let degrees = names_of(chord.getattr("_all_degrees")?, None)?;
+                // The library sorts its degrees by a key that ties `b3` with
+                // `bb3` and breaks the tie by set order, which changes from
+                // one run to the next; the fixture breaks it by spelling.
+                let mut pairs: Vec<(String, String)> = Vec::new();
+                for (degree, pitch) in chord
+                    .getattr("_all_degrees")?
+                    .try_iter()?
+                    .zip(chord.getattr("pitches")?.try_iter()?)
+                {
+                    pairs.push((
+                        degree?.extract()?,
+                        pitch?.getattr("nameWithOctave")?.extract()?,
+                    ));
+                }
+                pairs.sort_by(|a, b| {
+                    harte_degree_sort_key(&a.0)
+                        .partial_cmp(&harte_degree_sort_key(&b.0))
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                        .then_with(|| a.0.cmp(&b.0))
+                });
+                let toml_list = |items: Vec<String>| {
+                    format!(
+                        "[{}]",
+                        items
+                            .iter()
+                            .map(|item| toml_string(item))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
+                };
+                let degrees = toml_list(pairs.iter().map(|(degree, _)| degree.clone()).collect());
+                let pitches = toml_list(pairs.iter().map(|(_, pitch)| pitch.clone()).collect());
                 let pretty: String = chord.call_method0("prettify")?.extract()?;
                 let _ = writeln!(
                     out,
@@ -449,6 +687,24 @@ fn write_harte(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> PyResult
         labels.len()
     );
     Ok(path)
+}
+
+/// Where a Harte degree sorts: by its number, a flat just below it and a
+/// sharp just above, which is harte-library's `degree_to_sort_key`.
+fn harte_degree_sort_key(degree: &str) -> f64 {
+    let number: f64 = degree
+        .chars()
+        .filter(char::is_ascii_digit)
+        .collect::<String>()
+        .parse()
+        .unwrap_or(0.0);
+    if degree.starts_with('b') {
+        number - 0.49
+    } else if degree.starts_with('#') {
+        number + 0.49
+    } else {
+        number
+    }
 }
 
 /// `C:maj7(#11,9)` with the degrees in its parentheses sorted.

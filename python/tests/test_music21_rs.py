@@ -211,3 +211,75 @@ def test_roman_module_functions():
     assert m.figureTupleSolo(m.Pitch("G#4"), m.Key("a"), m.Pitch("E4")) == (3, 1.0, "#")
     assert m.correctRNAlterationForMinor((7, 0.0, ""), m.Key("a")) == (7, 0.0, "b")
     assert m.correctRNAlterationForMinor((7, 1.0, "#"), m.Key("a")) == (7, 0.0, "")
+
+
+class _Placed:
+    """A note or chord at an offset, as a stream would hold it."""
+
+    def __init__(self, element, offset):
+        self.element = element
+        self.offset = offset
+
+    def __getattr__(self, name):
+        return getattr(self.element, name)
+
+    @property
+    def pitches(self):
+        return self.element.pitches
+
+    @pitches.setter
+    def pitches(self, value):
+        self.element.pitches = value
+
+
+class _Stream:
+    """The little of a music21 stream the meter and scale helpers read."""
+
+    def __init__(self, elements):
+        self.elements = []
+        offset = 0.0
+        for element in elements:
+            self.elements.append(_Placed(element, offset))
+            offset += float(element.duration.quarterLength)
+
+    def __iter__(self):
+        return iter(self.elements)
+
+    def __len__(self):
+        return len(self.elements)
+
+    @property
+    def notes(self):
+        return [e for e in self.elements if not e.isRest]
+
+    @property
+    def notesAndRests(self):
+        return list(self.elements)
+
+    def flatten(self):
+        return self
+
+    def recurse(self):
+        return self
+
+
+def test_meter_functions_over_a_stream():
+    notes = [m.Note("C4", quarterLength=1.0), m.Note("D4", quarterLength=1.0), m.Note("E4", quarterLength=1.0), m.Note("F4", quarterLength=1.0)]
+    assert m.TimeSignature("4/4").averageBeatStrength(_Stream(notes)) == 0.5
+    assert m.TimeSignature("3/4").averageBeatStrength(_Stream(notes)) == 0.75
+    assert m.TimeSignature("4/4").averageBeatStrength(_Stream([])) == 0.0
+    assert m.bestTimeSignature(_Stream(notes)).ratioString == "4/4"
+    waltz = [m.Note("C4", quarterLength=1.5), m.Note("D4", quarterLength=0.5), m.Note("E4", quarterLength=1.0)]
+    assert m.bestTimeSignature(_Stream(waltz)).ratioString == "6/8"
+    eighths = [m.Note("C4", quarterLength=0.5) for _ in range(6)]
+    assert m.bestTimeSignature(_Stream(eighths)).ratioString == "3/4"
+
+
+def test_a_scale_tunes_a_stream():
+    # An equal-tempered scale carries an enharmonic of every spelling it is
+    # handed, so tuning keeps the names and moves nothing, as music21's does.
+    notes = [m.Note(name) for name in ["G-4", "D-4", "E4", "B-3", "C5"]]
+    chord = m.Chord(["G-4", "D-5", "A4"])
+    m.MajorScale("D").tune(_Stream(notes + [chord]))
+    assert [n.pitch.nameWithOctave for n in notes] == ["G-4", "D-4", "E4", "B-3", "C5"]
+    assert [p.nameWithOctave for p in chord.pitches] == ["G-4", "D-5", "A4"]

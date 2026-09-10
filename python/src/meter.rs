@@ -20,7 +20,12 @@ use pyo3::prelude::*;
 use pyo3::types::PyTuple;
 
 use music21_rs::meter::TimeSignature as RsTimeSignature;
-use music21_rs::{FloatType, UnsignedIntegerType};
+use music21_rs::{
+    Duration as RsDuration, FloatType, Rest as RsRest, Stream as RsStream, UnsignedIntegerType,
+};
+
+use crate::chord::chord_from_any;
+use crate::note::note_from_any;
 
 use crate::duration::Duration;
 
@@ -297,6 +302,40 @@ impl TimeSignature {
         self.inner.offset_from_beat(beat).map_err(meter_error)
     }
 
+    /// music21's `averageBeatStrength`: the mean accent weight of the
+    /// offsets of everything in a stream, or of its notes alone, each read
+    /// against the bar.
+    #[pyo3(signature = (streamIn, notesOnly = true))]
+    fn averageBeatStrength(
+        &self,
+        streamIn: &Bound<'_, PyAny>,
+        notesOnly: bool,
+    ) -> PyResult<FloatType> {
+        let elements = if notesOnly {
+            streamIn.getattr("notes")?
+        } else {
+            streamIn.clone()
+        };
+        let bar = self.inner.bar_quarter_length();
+        let mut total = 0.0;
+        let mut count = 0_usize;
+        for element in elements.try_iter()? {
+            let offset: FloatType = element?
+                .getattr("offset")?
+                .call_method0("__float__")?
+                .extract()?;
+            total += self
+                .inner
+                .accent_weight_with(offset.rem_euclid(bar), true, false)
+                .map_err(meter_error)?;
+            count += 1;
+        }
+        if count == 0 {
+            return Ok(0.0);
+        }
+        Ok(total / count as FloatType)
+    }
+
     /// music21's `getAccent`: whether the offset starts one of the default
     /// accent partitions.
     fn getAccent(&self, qLenPos: FloatType) -> bool {
@@ -379,7 +418,63 @@ impl TimeSignature {
     }
 }
 
+/// A crate stream holding the notes, chords and rests of a music21 stream
+/// at their offsets, flattened, which is all the meter questions read.
+fn sounding_stream(measure: &Bound<'_, PyAny>) -> PyResult<RsStream> {
+    let mut stream = RsStream::new();
+    let flat = measure.call_method0("flatten")?.getattr("notesAndRests")?;
+    for element in flat.try_iter()? {
+        let element = element?;
+        let offset: FloatType = element
+            .getattr("offset")?
+            .call_method0("__float__")?
+            .extract()?;
+        if element.getattr("isRest")?.extract::<bool>()? {
+            let quarter_length: FloatType = element
+                .getattr("duration")?
+                .getattr("quarterLength")?
+                .call_method0("__float__")?
+                .extract()?;
+            stream.insert(
+                offset,
+                RsRest::from_quarter_length(quarter_length).map_err(meter_error)?,
+            );
+        } else {
+            let quarter_length: FloatType = element
+                .getattr("duration")?
+                .getattr("quarterLength")?
+                .call_method0("__float__")?
+                .extract()?;
+            let duration = RsDuration::new(quarter_length).map_err(meter_error)?;
+            if element.getattr("isChord")?.extract::<bool>()? {
+                let mut chord = chord_from_any(Some(&element))?;
+                chord.set_duration(duration);
+                stream.insert(offset, chord);
+            } else {
+                let mut note = note_from_any(&element)?;
+                note.set_duration(duration);
+                stream.insert(offset, note);
+            }
+        }
+    }
+    Ok(stream)
+}
+
+/// music21's `bestTimeSignature`: the time signature a measure's notes and
+/// rests fill most naturally.
+#[pyfunction]
+#[pyo3(name = "bestTimeSignature")]
+fn bestTimeSignature(meas: &Bound<'_, PyAny>) -> PyResult<TimeSignature> {
+    let inner =
+        music21_rs::meter::best_time_signature(&sounding_stream(meas)?).map_err(meter_error)?;
+    Ok(TimeSignature {
+        inner,
+        symbol: String::new(),
+    })
+}
+
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(bestTimeSignature, m)?)?;
     let py = m.py();
     m.add_class::<TimeSignature>()?;
     m.add("MeterException", py.get_type::<MeterException>())?;
