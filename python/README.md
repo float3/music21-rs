@@ -120,18 +120,62 @@ cargo run --release -p xtask --features python -- music21-suite
 cargo run --release -p xtask -- downstream
 ```
 
-## Licence and credits
+## Credits and third-party data
 
 `music21_rs` is released under the
-[AGPL-3.0](https://github.com/float3/music21-rs/blob/master/LICENSE).
+[AGPL-3.0](https://github.com/float3/music21-rs/blob/master/LICENSE). It
+ports behaviour from, and compiles in data from, the projects below, each
+under its own licence.
 
-It ports behaviour from, and compiles in the chord tables and scale
-definitions of, [music21](https://github.com/cuthbertLab/music21), the Python
-library for computational musicology by Michael Scott Asato Cuthbert and
-contributors, licensed
-[BSD-3-Clause](https://github.com/cuthbertLab/music21/blob/master/LICENSE).
+### music21
+
+The chord tables, scale definitions, time-signature behaviour and
+chord-symbol kinds are derived from
+[music21](https://github.com/cuthbertLab/music21), the Python library for
+computational musicology by Michael Scott Asato Cuthbert and contributors,
+licensed [BSD-3-Clause](https://github.com/cuthbertLab/music21/blob/master/LICENSE).
+The wheel is built against music21 11.0.0b9, and its classes are checked
+against that version's own doctests and test suite. Thanks to Michael Scott
+Asato Cuthbert and all music21 contributors for the original library.
+
+### harte-library
+
+The crate's `harte` module, compiled into the wheel, is a port of
+[harte-library](https://github.com/andreamust/harte-library) by Andrea
+Poltronieri, licensed
+[MIT](https://github.com/andreamust/harte-library/blob/main/LICENSE).
+
+### The Scala scale archive
+
 Thirteen of the tuning tables compiled in are transcribed from the
-[Scala](https://www.huygens-fokker.org/scala/) scale archive, distributed with
-music21 by kind permission of Manuel Op de Coul. The Scala archive itself, the
-Hexatone scales and the Xenharmonic Wiki data the crate can bundle are not in
-the wheel.
+[Scala](https://www.huygens-fokker.org/scala/) scale archive as distributed
+with music21, which includes it by kind permission of Manuel Op de Coul. The
+archive itself, 3,994 scales in the crate's `scala-archive` feature, and the
+62 [Plainsound Hexatone](https://github.com/PLAINSOUND/hexatone) scales
+beside it are not in the wheel.
+
+### The Xenharmonic Wiki
+
+The mapping, generators, commas and scales of 95 regular temperaments from
+the [Xenharmonic Wiki](https://en.xen.wiki), which is CC BY-SA, are compiled
+in. Only the numbers are used.
+
+### Contributed back
+
+Fixes found while porting went upstream:
+
+- [cuthbertLab/music21#1746](https://github.com/cuthbertLab/music21/pull/1746):
+  the `Pitch` constructor's type annotation admits a `Pitch`.
+- [cuthbertLab/music21#2003](https://github.com/cuthbertLab/music21/pull/2003):
+  a malformed ratio in the Scala archive's `sparschuh-stanhope.scl`.
+- [cuthbertLab/music21#2004](https://github.com/cuthbertLab/music21/pull/2004):
+  a `type: ignore` left over from a closed mypy issue.
+- [cuthbertLab/music21#2026](https://github.com/cuthbertLab/music21/pull/2026):
+  Scala files with text after a pitch value, which 23 archive files have.
+- [cuthbertLab/music21#2027](https://github.com/cuthbertLab/music21/pull/2027):
+  `removeRedundantPitches` confusing a flat with a negative octave.
+- [cuthbertLab/music21#2028](https://github.com/cuthbertLab/music21/pull/2028):
+  `getPitchFromNodeDegree` handing back a pitch owned by the scale's cache
+  (open).
+- [PLAINSOUND/hexatone#3](https://github.com/PLAINSOUND/hexatone/pull/3):
+  Scala headers in five Hexatone scale files (open).
