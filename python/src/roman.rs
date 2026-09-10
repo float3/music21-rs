@@ -9,6 +9,7 @@
 
 #![allow(non_snake_case)]
 
+use pyo3::IntoPyObjectExt;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
@@ -21,6 +22,7 @@ use music21_rs::{
 };
 
 use crate::chord::Chord;
+use crate::pitch::{Pitch, pitch_from_any};
 
 /// The names the `roman` facade replaces in `music21.roman`.
 pub const NAMES: &[&str] = &["RomanNumeral", "RomanNumeralException"];
@@ -1467,7 +1469,215 @@ impl RomanNumeral {
     }
 }
 
+/// A chord out of whatever a caller hands a module function: one of ours,
+/// any object carrying `pitches`, or the list of pitches music21 also takes.
+fn chord_argument(py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<RsChord> {
+    if value.hasattr("pitches")? {
+        crate::harmony::chord_of(py, value)
+    } else {
+        crate::chord::chord_from_any(Some(value))
+    }
+}
+
+/// A key out of a `Key`, a scale or a tonic name.
+fn key_argument(value: &Bound<'_, PyAny>) -> PyResult<RsKey> {
+    Ok(key_and_octave(Some(value))?.0)
+}
+
+/// A figure tuple the way music21 writes one: `(degFromRefPitch, alter,
+/// prefix)`.
+fn figure_tuple(figure: &rs_roman::FigureTuple) -> (u8, f64, String) {
+    (
+        figure.deg_from_ref_pitch,
+        figure.alter,
+        figure.prefix.clone(),
+    )
+}
+
+/// music21's `expandShortHand`: a figured-bass shorthand as the figures it
+/// stands for.
+#[pyfunction]
+#[pyo3(name = "expandShortHand")]
+fn expandShortHand(shorthand: String) -> Vec<String> {
+    rs_roman::expand_shorthand(&shorthand)
+}
+
+/// music21's `correctSuffixForChordQuality`: the inversion figure with the
+/// mark a diminished or augmented fifth adds in front of it.
+#[pyfunction]
+#[pyo3(name = "correctSuffixForChordQuality")]
+fn correctSuffixForChordQuality(
+    py: Python<'_>,
+    chordObj: &Bound<'_, PyAny>,
+    inversionString: String,
+) -> PyResult<String> {
+    Ok(rs_roman::correct_suffix_for_chord_quality(
+        &chord_argument(py, chordObj)?,
+        &inversionString,
+    ))
+}
+
+/// music21's `romanInversionName`: the inversion figure a chord stands in.
+#[pyfunction]
+#[pyo3(name = "romanInversionName", signature = (inChord, inv = None))]
+fn romanInversionName(
+    py: Python<'_>,
+    inChord: &Bound<'_, PyAny>,
+    inv: Option<u8>,
+) -> PyResult<String> {
+    Ok(rs_roman::roman_inversion_name(
+        &chord_argument(py, inChord)?,
+        inv,
+    ))
+}
+
+/// music21's `identifyAsTonicOrDominant`: `I`, `V` or `V7` where the chord
+/// is one of those in the key, and `False` where it is not. The chord
+/// handed in is given the root the answer was read from, as music21 gives
+/// it.
+#[pyfunction]
+#[pyo3(name = "identifyAsTonicOrDominant")]
+fn identifyAsTonicOrDominant(
+    py: Python<'_>,
+    inChord: &Bound<'_, PyAny>,
+    inKey: &Bound<'_, PyAny>,
+) -> PyResult<Py<PyAny>> {
+    let chord = chord_argument(py, inChord)?;
+    let key = key_argument(inKey)?;
+    let figure = rs_roman::identify_as_tonic_or_dominant(&chord, &key).map_err(roman_error)?;
+    let Some(figure) = figure else {
+        return false.into_py_any(py);
+    };
+    if inChord.hasattr("root")? {
+        let degree = if figure.starts_with('V') { 5 } else { 1 };
+        let root = key.pitch_from_degree(degree).map_err(roman_error)?;
+        inChord.call_method1("root", (root.name(),))?;
+    }
+    figure.into_py_any(py)
+}
+
+/// music21's `romanNumeralFromChord`: the numeral a chord is in a key. With
+/// no key given the chord's root is the key, major where the chord has a
+/// major third and minor otherwise.
+///
+/// `preferSecondaryDominants`, which rewrites a chromatic chord as a
+/// secondary dominant, is not carried and is refused rather than ignored.
+#[pyfunction]
+#[pyo3(name = "romanNumeralFromChord", signature = (chordObj, keyObj = None, preferSecondaryDominants = false))]
+fn romanNumeralFromChord(
+    py: Python<'_>,
+    chordObj: &Bound<'_, PyAny>,
+    keyObj: Option<&Bound<'_, PyAny>>,
+    preferSecondaryDominants: bool,
+) -> PyResult<Py<RomanNumeral>> {
+    if preferSecondaryDominants {
+        return Err(pyo3::exceptions::PyNotImplementedError::new_err(
+            "preferSecondaryDominants is not supported",
+        ));
+    }
+    let chord = chord_argument(py, chordObj)?;
+    let (key, octave) = match keyObj.filter(|value| !value.is_none()) {
+        Some(value) => {
+            let (key, octave) = key_and_octave(Some(value))?;
+            (Some(key), octave)
+        }
+        None => (None, None),
+    };
+    let numeral =
+        match rs_roman::roman_numeral_from_chord(&chord, key.as_ref()).map_err(roman_error)? {
+            Some(numeral) => RomanNumeral::wrap(numeral, octave),
+            None => {
+                let key = RsKey::from_tonic_mode("C", Some("major")).map_err(roman_error)?;
+                let mut blank =
+                    RomanNumeral::wrap(RsRomanNumeral::new("I", key).map_err(roman_error)?, None);
+                blank.blank = true;
+                blank
+            }
+        };
+    let object = RomanNumeral::object(py, numeral)?;
+    // The numeral sounds the chord's own pitches, in the octaves the chord
+    // has them, rather than the ones its figure would realize.
+    if !chord.is_empty() {
+        object
+            .bind(py)
+            .setattr("pitches", chordObj.getattr("pitches")?)?;
+    }
+    Ok(object)
+}
+
+/// music21's `figureTuples`: for each pitch of a chord, its degree above the
+/// bass, its alteration in the key, the accidental to print and the pitch
+/// itself, as `(degFromRefPitch, alter, prefix, pitch)` tuples.
+#[pyfunction]
+#[pyo3(name = "figureTuples")]
+fn figureTuples(
+    py: Python<'_>,
+    chordObject: &Bound<'_, PyAny>,
+    keyObject: &Bound<'_, PyAny>,
+) -> PyResult<Vec<(u8, f64, String, Pitch)>> {
+    let chord = chord_argument(py, chordObject)?;
+    let key = key_argument(keyObject)?;
+    Ok(rs_roman::figure_tuples(&chord, &key)
+        .map_err(roman_error)?
+        .into_iter()
+        .map(|each| {
+            let (degree, alter, prefix) = figure_tuple(&each.figure);
+            (degree, alter, prefix, Pitch::wrap(each.pitch, false))
+        })
+        .collect())
+}
+
+/// music21's `figureTupleSolo`: one pitch's degree above a reference pitch,
+/// its alteration in the key and the accidental to print, as a
+/// `(degFromRefPitch, alter, prefix)` tuple.
+#[pyfunction]
+#[pyo3(name = "figureTupleSolo")]
+fn figureTupleSolo(
+    pitchObj: &Bound<'_, PyAny>,
+    keyObj: &Bound<'_, PyAny>,
+    bass: &Bound<'_, PyAny>,
+) -> PyResult<(u8, f64, String)> {
+    let figure = rs_roman::FigureTuple::from_pitch_and_reference(
+        &pitch_from_any(pitchObj)?,
+        &key_argument(keyObj)?,
+        &pitch_from_any(bass)?,
+    )
+    .map_err(roman_error)?;
+    Ok(figure_tuple(&figure))
+}
+
+/// music21's `correctRNAlterationForMinor`: a sixth or seventh degree in a
+/// minor key read against the raised degree, as a `(degFromRefPitch,
+/// alter, prefix)` tuple.
+#[pyfunction]
+#[pyo3(name = "correctRNAlterationForMinor", signature = (figureTuple, keyObj, *, chordHasMajorThird = false))]
+fn correctRNAlterationForMinor(
+    figureTuple: (u8, f64, String),
+    keyObj: &Bound<'_, PyAny>,
+    chordHasMajorThird: bool,
+) -> PyResult<(u8, f64, String)> {
+    let figure = rs_roman::FigureTuple {
+        deg_from_ref_pitch: figureTuple.0,
+        alter: figureTuple.1,
+        prefix: figureTuple.2,
+    };
+    let corrected = rs_roman::correct_rn_alteration_for_minor(
+        &figure,
+        &key_argument(keyObj)?,
+        chordHasMajorThird,
+    );
+    Ok(figure_tuple(&corrected))
+}
+
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(expandShortHand, m)?)?;
+    m.add_function(wrap_pyfunction!(correctSuffixForChordQuality, m)?)?;
+    m.add_function(wrap_pyfunction!(romanInversionName, m)?)?;
+    m.add_function(wrap_pyfunction!(identifyAsTonicOrDominant, m)?)?;
+    m.add_function(wrap_pyfunction!(romanNumeralFromChord, m)?)?;
+    m.add_function(wrap_pyfunction!(figureTuples, m)?)?;
+    m.add_function(wrap_pyfunction!(figureTupleSolo, m)?)?;
+    m.add_function(wrap_pyfunction!(correctRNAlterationForMinor, m)?)?;
     let py = m.py();
     m.add_class::<RomanNumeral>()?;
     let exception = py.get_type::<RomanNumeralException>();

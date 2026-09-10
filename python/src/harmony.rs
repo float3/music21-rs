@@ -25,6 +25,7 @@
 // music21's own names, kept as music21 spells them.
 #![allow(non_snake_case)]
 
+use pyo3::exceptions::PyKeyError;
 use pyo3::prelude::*;
 use pyo3::types::PyTuple;
 
@@ -53,7 +54,7 @@ const UNIDENTIFIED: &str = "Chord Symbol Cannot Be Identified";
 /// music21 passes its own `Chord` here, which under the harness is one of
 /// ours. A `ChordSymbol` is a chord of music21's own class, built before the
 /// swap, so it is read by its pitches and the root its figure fixed.
-fn chord_of(py: Python<'_>, inChord: &Bound<'_, PyAny>) -> PyResult<music21_rs::Chord> {
+pub(crate) fn chord_of(py: Python<'_>, inChord: &Bound<'_, PyAny>) -> PyResult<music21_rs::Chord> {
     if let Ok(chord) = inChord.extract::<PyRef<'_, Chord>>() {
         return Ok(chord.synced_inner(py));
     }
@@ -145,7 +146,40 @@ pub fn chordSymbolFromChord<'py>(
     Ok(symbol)
 }
 
+/// music21's `getAbbreviationListGivenChordType`: every abbreviation a kind
+/// is written with, or a `KeyError` for a kind the table has not got.
+#[pyfunction]
+#[pyo3(name = "getAbbreviationListGivenChordType")]
+fn getAbbreviationListGivenChordType(chordType: String) -> PyResult<Vec<String>> {
+    music21_rs::chordsymbol::abbreviations_for_kind(&chordType)
+        .map(|list| list.iter().map(|each| (*each).to_string()).collect())
+        .ok_or_else(|| PyKeyError::new_err(chordType))
+}
+
+/// music21's `getCurrentAbbreviationFor`: the abbreviation a kind is written
+/// with.
+#[pyfunction]
+#[pyo3(name = "getCurrentAbbreviationFor")]
+fn getCurrentAbbreviationFor(chordType: String) -> PyResult<String> {
+    music21_rs::chordsymbol::current_abbreviation_for_kind(&chordType)
+        .map(str::to_string)
+        .ok_or_else(|| PyKeyError::new_err(chordType))
+}
+
+/// music21's `getNotationStringGivenChordType`: the figured-bass notation
+/// a kind realizes from.
+#[pyfunction]
+#[pyo3(name = "getNotationStringGivenChordType")]
+fn getNotationStringGivenChordType(chordType: String) -> PyResult<String> {
+    music21_rs::chordsymbol::notation_for_kind(&chordType)
+        .map(str::to_string)
+        .ok_or_else(|| PyKeyError::new_err(chordType))
+}
+
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(getAbbreviationListGivenChordType, m)?)?;
+    m.add_function(wrap_pyfunction!(getCurrentAbbreviationFor, m)?)?;
+    m.add_function(wrap_pyfunction!(getNotationStringGivenChordType, m)?)?;
     let py = m.py();
     m.add_function(wrap_pyfunction!(chordSymbolFigureFromChord, m)?)?;
     m.add_function(wrap_pyfunction!(chordSymbolFromChord, m)?)?;

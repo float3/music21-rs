@@ -58,7 +58,7 @@ MusicXML.
 
 ## Coverage of music21
 
-- 74% of the public methods of the ported music21 classes are reachable from
+- 94% of the public methods of the ported music21 classes are reachable from
   this wheel.
 - 17 of the 19 music21 modules whose doctests run against the port pass all
   of them: `pitch`, `interval`, `chord`, `chord.tables`, `note`, `duration`,
@@ -179,3 +179,5 @@ Fixes found while porting went upstream:
   (open).
 - [PLAINSOUND/hexatone#3](https://github.com/PLAINSOUND/hexatone/pull/3):
   Scala headers in five Hexatone scale files (open).
+- Corrections to the Xenharmonic Wiki's temperament pages, found while
+  checking its infoboxes: [Special:Contributions/hill](https://en.xen.wiki/w/Special:Contributions/hill).

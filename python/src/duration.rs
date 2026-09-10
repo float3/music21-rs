@@ -4,6 +4,7 @@
 
 #![allow(non_snake_case)]
 
+use pyo3::IntoPyObjectExt;
 use pyo3::exceptions::{PyIndexError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyFloat, PyTuple};
@@ -2198,7 +2199,167 @@ fn durationTupleFromTypeDots(durType: String, dots: u32) -> PyResult<DurationTup
     Ok(DurationTuple::of(kind, dots))
 }
 
+/// A duration type by its music21 name, refused the way music21 refuses one.
+fn duration_type_named(name: &str) -> PyResult<RsDurationType> {
+    RsDurationType::from_music21_name(name)
+        .ok_or_else(|| DurationException::new_err(format!("no such duration type: {name}")))
+}
+
+/// music21's `nextLargerType`: the type one step longer than this one.
+#[pyfunction]
+#[pyo3(name = "nextLargerType")]
+fn nextLargerType(durType: String) -> PyResult<String> {
+    duration_type_named(&durType)?
+        .next_larger()
+        .map(|kind| kind.music21_name().to_string())
+        .ok_or_else(|| {
+            DurationException::new_err(format!("cannot get the next larger of {durType}"))
+        })
+}
+
+/// music21's `nextSmallerType`: the type one step shorter than this one.
+#[pyfunction]
+#[pyo3(name = "nextSmallerType")]
+fn nextSmallerType(durType: String) -> PyResult<String> {
+    duration_type_named(&durType)?
+        .next_smaller()
+        .map(|kind| kind.music21_name().to_string())
+        .ok_or_else(|| {
+            DurationException::new_err(format!("cannot get the next smaller of {durType}"))
+        })
+}
+
+/// music21's `quarterLengthToClosestType`: the type a length is nearest to,
+/// and whether it is exactly that type.
+#[pyfunction]
+#[pyo3(name = "quarterLengthToClosestType")]
+fn quarterLengthToClosestType(qLen: f64) -> PyResult<(String, bool)> {
+    let (kind, exact) =
+        music21_rs::duration::quarter_length_to_closest_type(qLen).map_err(duration_error)?;
+    Ok((kind.music21_name().to_string(), exact))
+}
+
+/// music21's `convertQuarterLengthToType`: the type a length is exactly.
+#[pyfunction]
+#[pyo3(name = "convertQuarterLengthToType")]
+fn convertQuarterLengthToType(qLen: f64) -> PyResult<String> {
+    RsDurationType::from_quarter_length(qLen)
+        .map(|kind| kind.music21_name().to_string())
+        .ok_or_else(|| {
+            DurationException::new_err(format!(
+                "cannot convert quarterLength {qLen} exactly to type"
+            ))
+        })
+}
+
+/// music21's `dottedMatch`: the dots and type that make a length exactly,
+/// or `(False, False)` where no dotting within `maxDots` does.
+#[pyfunction]
+#[pyo3(name = "dottedMatch", signature = (qLen, maxDots = 4))]
+fn dottedMatch(py: Python<'_>, qLen: f64, maxDots: u32) -> PyResult<Py<PyAny>> {
+    let matched = RsDuration::new(qLen)
+        .ok()
+        .and_then(|duration| duration.type_and_dots())
+        .filter(|(kind, dots)| *kind != RsDurationType::Zero && *dots <= maxDots);
+    match matched {
+        Some((kind, dots)) => (dots, kind.music21_name()).into_py_any(py),
+        None => (false, false).into_py_any(py),
+    }
+}
+
+/// music21's `quarterLengthToNonPowerOf2Tuplet`: the tuplet and the
+/// duration that together sound a length no dotted type can.
+#[pyfunction]
+#[pyo3(name = "quarterLengthToNonPowerOf2Tuplet")]
+fn quarterLengthToNonPowerOf2Tuplet(qLen: f64) -> PyResult<(Tuplet, DurationTuple)> {
+    let (tuplet, kind, dots) = music21_rs::duration::quarter_length_to_non_power_of_2_tuplet(qLen)
+        .ok_or_else(|| {
+            DurationException::new_err(format!("No such tuplet for quarterLength {qLen}"))
+        })?;
+    Ok((Tuplet::wrap(tuplet), DurationTuple::of(kind, dots)))
+}
+
+/// music21's `quarterLengthToTuplet`: the tuplets a length could be written
+/// in, simplest first.
+#[pyfunction]
+#[pyo3(name = "quarterLengthToTuplet", signature = (qLen, maxToReturn = 4))]
+fn quarterLengthToTuplet(qLen: f64, maxToReturn: usize) -> Vec<Tuplet> {
+    music21_rs::duration::quarter_length_to_tuplet(qLen, maxToReturn)
+        .into_iter()
+        .map(Tuplet::wrap)
+        .collect()
+}
+
+/// music21's `quarterConversion`: the components a length is written as and
+/// the tuplet over them, as a pair. A length of nought is one zero
+/// component.
+#[pyfunction]
+#[pyo3(name = "quarterConversion")]
+fn quarterConversion<'py>(
+    py: Python<'py>,
+    qLen: f64,
+) -> PyResult<(Bound<'py, PyTuple>, Option<Tuplet>)> {
+    if qLen == 0.0 {
+        let zero = DurationTuple::of(RsDurationType::Zero, 0);
+        return Ok((PyTuple::new(py, [zero])?, None));
+    }
+    let (components, tuplet) = music21_rs::duration::quarter_conversion(qLen);
+    let components: Vec<DurationTuple> = components
+        .into_iter()
+        .map(|(kind, dots)| DurationTuple::of(kind, dots))
+        .collect();
+    Ok((PyTuple::new(py, components)?, tuplet.map(Tuplet::wrap)))
+}
+
+/// music21's `convertTypeToQuarterLength`: how long a type with these dots
+/// sounds inside these tuplets. Dot groups, where given, each lengthen the
+/// note in turn instead of the plain dots.
+#[pyfunction]
+#[pyo3(name = "convertTypeToQuarterLength", signature = (dType, dots = 0, tuplets = None, dotGroups = None))]
+fn convertTypeToQuarterLength<'py>(
+    py: Python<'py>,
+    dType: String,
+    dots: u32,
+    tuplets: Option<Vec<Bound<'py, PyAny>>>,
+    dotGroups: Option<Vec<u32>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let dot_multiplier = |dots: u32| 2.0 - 0.5_f64.powi(dots as i32);
+    let mut length = duration_type_named(&dType)?.quarter_length();
+    match dotGroups {
+        Some(groups) if groups.len() > 1 => {
+            for group in groups {
+                if group > 0 {
+                    length *= dot_multiplier(group);
+                }
+            }
+        }
+        _ => length *= dot_multiplier(dots),
+    }
+    for tuplet in tuplets.unwrap_or_default() {
+        length *= tuplet.call_method0("tupletMultiplier")?.extract::<f64>()?;
+    }
+    op_frac(py, length)
+}
+
+/// music21's `convertTypeToNumber`: a type as how many of it fill a whole
+/// note, so a quarter is 4.
+#[pyfunction]
+#[pyo3(name = "convertTypeToNumber")]
+fn convertTypeToNumber(dType: String) -> PyResult<f64> {
+    Ok(duration_type_named(&dType)?.type_number().unwrap_or(0.0))
+}
+
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(nextLargerType, m)?)?;
+    m.add_function(wrap_pyfunction!(nextSmallerType, m)?)?;
+    m.add_function(wrap_pyfunction!(quarterLengthToClosestType, m)?)?;
+    m.add_function(wrap_pyfunction!(convertQuarterLengthToType, m)?)?;
+    m.add_function(wrap_pyfunction!(dottedMatch, m)?)?;
+    m.add_function(wrap_pyfunction!(quarterLengthToNonPowerOf2Tuplet, m)?)?;
+    m.add_function(wrap_pyfunction!(quarterLengthToTuplet, m)?)?;
+    m.add_function(wrap_pyfunction!(quarterConversion, m)?)?;
+    m.add_function(wrap_pyfunction!(convertTypeToQuarterLength, m)?)?;
+    m.add_function(wrap_pyfunction!(convertTypeToNumber, m)?)?;
     let py = m.py();
     m.add_class::<Duration>()?;
     m.add_class::<GraceDuration>()?;

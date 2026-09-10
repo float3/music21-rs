@@ -204,7 +204,9 @@ pub(super) fn scan_features(
         // A class the facade does not stand in for at all has nothing here,
         // and every member of it counts as missing from the wheel.
         let wheel = match (&class.name, class.members) {
-            (Some(name), Members::Methods) => facade.class_body(name),
+            (Some(name), Members::Methods) => {
+                facade.class_body(class.facade.as_deref().unwrap_or(name))
+            }
             _ => None,
         };
 

@@ -15,6 +15,9 @@ impl Chord {
                 "cannot extract set-class representation from string: {notation}"
             )));
         };
+        // A Z-related class is written `4-Z15`, or `4-z15`; the number is the
+        // same address either way.
+        let rest = rest.trim_start_matches(['z', 'Z']);
         let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
         let letters = &rest[digits.len()..];
         let inversion = match letters.to_ascii_lowercase().as_str() {

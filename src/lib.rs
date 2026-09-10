@@ -123,6 +123,7 @@ pub use pitch::{
 };
 pub use polyrhythm::{Polyrhythm, PolyrhythmAnalysis, PolyrhythmEvent, PolyrhythmRatioTone};
 pub use rest::Rest;
+pub use roman::roman_numeral_from_chord;
 pub use roman::{
     ImpliedQuality, Minor67Default, NumeralAlone, RomanNumeral, analyze_chord,
     analyze_chord_with_root, identify_as_tonic_or_dominant, roman_inversion_name,

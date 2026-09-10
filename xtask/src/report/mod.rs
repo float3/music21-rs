@@ -117,6 +117,11 @@ struct ClassMap {
     /// A short description for the page.
     #[serde(default)]
     note: Option<String>,
+    /// The wheel class that carries this class's members, where the wheel
+    /// has no class of this name: music21 writes `addLyric` on
+    /// `GeneralNote`, and the wheel writes it on `Note`.
+    #[serde(default)]
+    facade: Option<String>,
     #[serde(default)]
     renames: BTreeMap<String, String>,
     #[serde(default)]

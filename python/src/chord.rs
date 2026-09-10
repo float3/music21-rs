@@ -672,7 +672,7 @@ impl Chord {
 /// sequence of names, pitches, notes, chords or MIDI numbers, or nothing.
 /// A sequence of plain integers is spelled the way music21 spells one, which
 /// is why it does not go through the note path.
-fn chord_from_any(value: Option<&Bound<'_, PyAny>>) -> PyResult<RsChord> {
+pub(crate) fn chord_from_any(value: Option<&Bound<'_, PyAny>>) -> PyResult<RsChord> {
     let Some(value) = value.filter(|value| !value.is_none()) else {
         return Ok(RsChord::empty());
     };
@@ -2974,7 +2974,51 @@ impl Chord {
     }
 }
 
+/// music21's `fromForteClass`: the chord a Forte class name, or a
+/// `(cardinality, number)` pair, stands for, in its prime form.
+#[pyfunction]
+#[pyo3(name = "fromForteClass")]
+fn fromForteClass(py: Python<'_>, notation: &Bound<'_, PyAny>) -> PyResult<Chord> {
+    let name = match notation.extract::<String>() {
+        Ok(text) => text,
+        Err(_) => {
+            let parts: Vec<u8> = notation.extract().map_err(|_| {
+                ChordException::new_err(
+                    "cannot extract set-class representation from the given notation",
+                )
+            })?;
+            let [cardinality, number] = parts[..] else {
+                return Err(ChordException::new_err(
+                    "a Forte class is a cardinality and a number",
+                ));
+            };
+            format!("{cardinality}-{number}")
+        }
+    };
+    Chord::from_inner(py, RsChord::from_forte_class(&name).map_err(chord_error)?)
+}
+
+/// music21's `fromIntervalVector`: the chord with this interval vector, its
+/// Z-related partner with `getZRelation`, or `None` where no set class has
+/// it.
+#[pyfunction]
+#[pyo3(name = "fromIntervalVector", signature = (vector, getZRelation = false))]
+fn fromIntervalVector(
+    py: Python<'_>,
+    vector: Vec<u8>,
+    getZRelation: bool,
+) -> PyResult<Option<Chord>> {
+    let vector: [u8; 6] = vector
+        .try_into()
+        .map_err(|_| ChordException::new_err("An interval vector has six entries"))?;
+    RsChord::from_interval_vector(&vector, getZRelation)
+        .map(|inner| Chord::from_inner(py, inner))
+        .transpose()
+}
+
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(fromForteClass, m)?)?;
+    m.add_function(wrap_pyfunction!(fromIntervalVector, m)?)?;
     let py = m.py();
     m.add_class::<Chord>()?;
     m.add_class::<ChordTableAddress>()?;

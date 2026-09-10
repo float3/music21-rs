@@ -354,7 +354,95 @@ fn widest(
     (left.0.min(right.0), left.1.max(right.1))
 }
 
+/// The primes music21's `eratosthenes` yields, one at a time and without
+/// end.
+#[pyclass(module = "music21.sieve")]
+pub struct Primes {
+    inner: Box<dyn Iterator<Item = u64> + Send + Sync>,
+}
+
+impl std::fmt::Debug for Primes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Primes")
+    }
+}
+
+#[pymethods]
+impl Primes {
+    fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
+        slf
+    }
+
+    fn __next__(mut slf: PyRefMut<'_, Self>) -> Option<u64> {
+        slf.inner.next()
+    }
+}
+
+/// music21's `eratosthenes`: every prime from `firstCandidate` upward.
+#[pyfunction]
+#[pyo3(name = "eratosthenes", signature = (firstCandidate = 2))]
+fn eratosthenes(firstCandidate: u64) -> Primes {
+    Primes {
+        inner: Box::new(music21_rs::sieve::eratosthenes(firstCandidate)),
+    }
+}
+
+/// music21's `rabinMiller`: whether a number is prime.
+#[pyfunction]
+#[pyo3(name = "rabinMiller")]
+fn rabinMiller(n: i64) -> bool {
+    music21_rs::sieve::rabin_miller(n)
+}
+
+/// music21's `discreteBinaryPad`: a series of integers as one flag per
+/// integer across the range they span, or across `fixRange`.
+#[pyfunction]
+#[pyo3(name = "discreteBinaryPad", signature = (series, fixRange = None))]
+fn discreteBinaryPad(
+    series: Vec<IntegerType>,
+    fixRange: Option<Vec<IntegerType>>,
+) -> PyResult<Vec<IntegerType>> {
+    Ok(
+        music21_rs::sieve::discrete_binary_pad(&series, fixRange.as_deref())
+            .map_err(sieve_error)?
+            .into_iter()
+            .map(IntegerType::from)
+            .collect(),
+    )
+}
+
+/// music21's `unitNormRange`: a series scaled onto the unit interval, over
+/// its own range or over `fixRange`.
+#[pyfunction]
+#[pyo3(name = "unitNormRange", signature = (series, fixRange = None))]
+fn unitNormRange(series: Vec<f64>, fixRange: Option<Vec<f64>>) -> Vec<f64> {
+    music21_rs::sieve::unit_norm_range(&series, fixRange.as_deref())
+}
+
+/// music21's `unitNormEqual`: `parts` points spread evenly over the unit
+/// interval.
+#[pyfunction]
+#[pyo3(name = "unitNormEqual")]
+fn unitNormEqual(parts: usize) -> Vec<f64> {
+    music21_rs::sieve::unit_norm_equal(parts)
+}
+
+/// music21's `unitNormStep`: the interval from `a` to `b` walked in steps
+/// of `step`, scaled onto the unit interval unless `normalized` is off.
+#[pyfunction]
+#[pyo3(name = "unitNormStep", signature = (step, a = 0.0, b = 1.0, normalized = true))]
+fn unitNormStep(step: f64, a: f64, b: f64, normalized: bool) -> PyResult<Vec<f64>> {
+    music21_rs::sieve::unit_norm_step(step, a, b, normalized).map_err(sieve_error)
+}
+
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<Primes>()?;
+    m.add_function(wrap_pyfunction!(eratosthenes, m)?)?;
+    m.add_function(wrap_pyfunction!(rabinMiller, m)?)?;
+    m.add_function(wrap_pyfunction!(discreteBinaryPad, m)?)?;
+    m.add_function(wrap_pyfunction!(unitNormRange, m)?)?;
+    m.add_function(wrap_pyfunction!(unitNormEqual, m)?)?;
+    m.add_function(wrap_pyfunction!(unitNormStep, m)?)?;
     let py = m.py();
     m.add_class::<Sieve>()?;
     m.add("SieveException", py.get_type::<SieveException>())?;

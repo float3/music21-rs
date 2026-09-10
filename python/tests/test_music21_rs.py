@@ -134,3 +134,80 @@ def test_errors_are_music21s_exception_classes():
         m.Pitch("4c")
     with pytest.raises(m.NotRestException):
         m.Note("C4").notehead = "junk"
+
+
+def test_duration_module_functions():
+    assert m.nextLargerType("quarter") == "half"
+    assert m.nextSmallerType("quarter") == "eighth"
+    with pytest.raises(m.DurationException):
+        m.nextLargerType("duplex-maxima")
+    assert m.quarterLengthToClosestType(1.5) == ("quarter", False)
+    assert m.convertQuarterLengthToType(2.0) == "half"
+    assert m.dottedMatch(1.5) == (1, "quarter")
+    assert m.dottedMatch(0.4) == (False, False)
+    tuplet, component = m.quarterLengthToNonPowerOf2Tuplet(0.4)
+    assert (tuplet.numberNotesActual, tuplet.numberNotesNormal) == (5, 4)
+    assert component.type == "eighth"
+    assert [(t.numberNotesActual, t.numberNotesNormal) for t in m.quarterLengthToTuplet(1 / 3)] == [(3, 2), (3, 1)]
+    components, tuplet = m.quarterConversion(5.0)
+    assert [c.type for c in components] == ["whole", "quarter"] and tuplet is None
+    assert m.convertTypeToQuarterLength("quarter", 1) == 1.5
+    assert m.convertTypeToQuarterLength("eighth", 0, [m.Tuplet(3, 2)]) == m.Duration(1 / 3).quarterLength
+    assert m.convertTypeToNumber("eighth") == 8.0
+
+
+def test_sieve_module_functions():
+    import itertools
+
+    assert list(itertools.islice(m.eratosthenes(), 6)) == [2, 3, 5, 7, 11, 13]
+    assert list(itertools.islice(m.eratosthenes(20), 3)) == [23, 29, 31]
+    assert m.rabinMiller(7919) and not m.rabinMiller(561)
+    assert m.discreteBinaryPad([3, 4, 6]) == [1, 1, 0, 1]
+    assert m.unitNormRange([0, 3, 4]) == [0.0, 0.75, 1.0]
+    assert m.unitNormEqual(3) == [0.0, 0.5, 1.0]
+    assert m.unitNormStep(0.25) == [0.0, 0.25, 0.5, 0.75, 1.0]
+
+
+def test_harmony_module_functions():
+    assert m.getAbbreviationListGivenChordType("dominant-seventh") == ["7", "dom7"]
+    assert m.getCurrentAbbreviationFor("major") == ""
+    assert m.getNotationStringGivenChordType("minor-seventh") == "1,-3,5,-7"
+    with pytest.raises(KeyError):
+        m.getCurrentAbbreviationFor("nonsense")
+
+
+def test_chord_module_functions():
+    assert [p.name for p in m.fromForteClass("3-11").pitches] == ["C", "E-", "G"]
+    assert [p.name for p in m.fromForteClass([3, 11]).pitches] == ["C", "E-", "G"]
+    assert m.fromForteClass("4-z15").forteClass == "4-15A"
+    assert m.fromIntervalVector([1, 1, 1, 1, 1, 1]).forteClass == "4-15A"
+    assert m.fromIntervalVector([1, 1, 1, 1, 1, 1], True).forteClass == "4-29A"
+    assert m.fromIntervalVector([0, 0, 0, 0, 0, 0]).forteClass == "1-1"
+    assert m.fromIntervalVector([9, 9, 9, 9, 9, 9]) is None
+
+
+def test_roman_module_functions():
+    assert m.expandShortHand("65") == ["6", "5"]
+    assert m.romanInversionName(m.Chord("E4 G4 C5")) == "6"
+    assert m.romanInversionName(m.Chord("E G C")) == ""
+    assert m.correctSuffixForChordQuality(m.Chord("B D F"), "6") == "o6"
+    chord = m.Chord("G3 B3 D4")
+    assert m.identifyAsTonicOrDominant(chord, m.Key("C")) == "V"
+    assert chord.root().name == "G"
+    assert m.identifyAsTonicOrDominant(m.Chord("G B D"), m.Key("C")) == "V64"
+    assert m.identifyAsTonicOrDominant(["F", "A", "C"], m.Key("C")) == "I"
+    assert m.identifyAsTonicOrDominant(["D", "F#", "A"], m.Key("C")) == "V43"
+    assert m.identifyAsTonicOrDominant(["D", "F#", "A", "C"], m.Key("E")) == "V"
+    assert m.identifyAsTonicOrDominant(["E", "F"], m.Key("C")) is False
+    assert m.romanNumeralFromChord(m.Chord("G3 B3 D4 F4"), m.Key("C")).figure == "V7"
+    assert m.romanNumeralFromChord(m.Chord("G B D F"), m.Key("C")).figure == "V43"
+    assert m.romanNumeralFromChord(m.Chord("C4 E-4 G-4"), m.Key("C")).figure == "io5b3"
+    assert m.romanNumeralFromChord(m.Chord("A-3 C4 E-4 F#4"), m.Key("c")).figure == "Ger65"
+    assert m.romanNumeralFromChord(m.Chord("D F A")).figure == "i"
+    assert m.romanNumeralFromChord(m.Chord("D F# A"), "G").figure == "V"
+    tuples = m.figureTuples(m.Chord("B3 D4 F4 A4"), m.Key("C"))
+    assert [t[:3] for t in tuples] == [(1, 0.0, ""), (3, 0.0, ""), (5, 0.0, ""), (7, 0.0, "")]
+    assert tuples[0][3].name == "B"
+    assert m.figureTupleSolo(m.Pitch("G#4"), m.Key("a"), m.Pitch("E4")) == (3, 1.0, "#")
+    assert m.correctRNAlterationForMinor((7, 0.0, ""), m.Key("a")) == (7, 0.0, "b")
+    assert m.correctRNAlterationForMinor((7, 1.0, "#"), m.Key("a")) == (7, 0.0, "")

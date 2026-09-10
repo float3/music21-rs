@@ -58,9 +58,13 @@ impl Facade {
         Some(body)
     }
 
-    /// Whether the wheel carries a class of this name at all.
+    /// Whether the wheel carries a class of this name at all: declared as a
+    /// `#[pyclass]`, or built at import time and listed in the module's
+    /// `NAMES`, which is how the twenty concrete scale classes are made.
     pub fn has_class(&self, class: &str) -> bool {
-        self.files.values().any(|text| declares(text, class))
+        self.files
+            .values()
+            .any(|text| declares(text, class) || names_list(text, class))
     }
 
     /// Whether some facade module carries a free function of this name.
@@ -85,6 +89,16 @@ fn declares(text: &str, class: &str) -> bool {
     ]
     .iter()
     .any(|pattern| text.contains(pattern.as_str()))
+}
+
+/// Whether a file's `NAMES` list carries the class.
+fn names_list(text: &str, class: &str) -> bool {
+    let Some(start) = text.find("pub const NAMES") else {
+        return false;
+    };
+    let rest = &text[start..];
+    let end = rest.find("];").unwrap_or(rest.len());
+    rest[..end].contains(&format!("\"{class}\""))
 }
 
 /// Every `impl <class>` block in a file, concatenated.
@@ -116,13 +130,17 @@ fn impl_blocks(text: &str, class: &str) -> String {
 /// Whether a body defines a member under music21's own name.
 ///
 /// The facade spells its members exactly as music21 does, so the name is
-/// looked for as written. A getter renamed with `#[getter(name)]` and one
-/// declared with `#[pyo3(name = "...")]` both count, since either is what
-/// Python sees.
+/// looked for as written. A getter renamed with `#[getter(name)]`, one
+/// declared with `#[pyo3(name = "...")]` and one written as `fn get_name`
+/// or `fn set_name`, which pyo3 strips the prefix off, all count, since
+/// each is what Python sees.
 pub fn defines_member(body: &str, name: &str) -> bool {
     [
         format!("fn {name}("),
         format!("fn {name}<"),
+        format!("fn get_{name}("),
+        format!("fn get_{name}<"),
+        format!("fn set_{name}("),
         format!("getter({name})"),
         format!("setter({name})"),
         format!("name = \"{name}\""),
@@ -150,7 +168,15 @@ impl Chord {
 
     #[getter(_chordAttached)]
     fn get_chordAttached(&self) {}
+
+    #[getter]
+    fn get_pitches(&self) {}
 }
+
+pub const NAMES: &[&str] = &[
+    \"Chord\",
+    \"MajorScale\",
+];
 
 #[pymethods]
 impl Beams {
@@ -170,6 +196,18 @@ impl Beams {
         assert!(defines_member(&body, "commonName"));
         // `fill` belongs to Beams, and must not be credited to Chord.
         assert!(!defines_member(&body, "fill"));
+    }
+
+    #[test]
+    fn a_prefixed_getter_is_the_name_python_sees() {
+        let body = impl_blocks(SOURCE, "Chord");
+        assert!(defines_member(&body, "pitches"));
+    }
+
+    #[test]
+    fn a_class_built_at_import_time_is_found_in_the_names_list() {
+        assert!(names_list(SOURCE, "MajorScale"));
+        assert!(!names_list(SOURCE, "MinorScale"));
     }
 
     #[test]

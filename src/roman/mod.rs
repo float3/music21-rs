@@ -17,7 +17,7 @@ mod realize;
 pub use analysis::{
     analyze_chord, analyze_chord_with_root, correct_rn_alteration_for_minor,
     correct_suffix_for_chord_quality, figure_tuples, identify_as_tonic_or_dominant,
-    roman_inversion_name,
+    roman_inversion_name, roman_numeral_from_chord,
 };
 pub(crate) use figure::degree_to_roman;
 pub use figure::{
@@ -1640,6 +1640,79 @@ mod tests {
         assert_eq!(
             rn.to_chord().unwrap().pitched_common_name(),
             "D-dominant seventh chord"
+        );
+    }
+
+    /// Every answer here is music21's own, read off `romanNumeralFromChord`.
+    #[test]
+    fn a_chord_is_named_the_way_music21_names_it() {
+        let cases: &[(&str, &str, &str)] = &[
+            ("C E G", "C", "I"),
+            ("G B D F", "C", "V43"),
+            ("C E- G-", "C", "io5b3"),
+            ("G B D F", "a", "bVII43"),
+            ("B D F A", "C", "viiø65"),
+            ("F A C", "C", "IV64"),
+            ("A C E", "C", "vi6"),
+            ("A C E", "a", "i6"),
+            ("F A C", "a", "bVI64"),
+            ("C E G#", "a", "III+"),
+            ("D- F A-", "C", "bII"),
+            ("B4 D5 F5 A-5", "c", "viio7"),
+            ("A-3 C4 F#4", "c", "It6"),
+            ("A-3 C4 D4 F#4", "c", "Fr43"),
+            ("A-3 C4 E-4 F#4", "c", "Ger65"),
+            ("A-3 C4 E-4 F#4", "C", "Ger65"),
+            ("C4 E4 G4 B-4", "F", "V7"),
+            ("D4 F4 A4 C5", "C", "ii7"),
+            ("D4 F4 A4 C#5", "C", "ii#7"),
+            ("F4 A4 C5 E5", "C", "IV7"),
+            ("E4 G4 B4 D5", "C", "iii7"),
+            ("C4 E-4 G4 B4", "c", "i#7"),
+            ("C4 E4 G4 B4", "C", "I7"),
+            ("E-4 G4 B-4 D5", "c", "III7"),
+            ("C4 E4 G4 B4 D5", "C", "I7532"),
+            ("G3 C4 E4", "C", "I64"),
+            ("E3 G3 C4", "C", "I6"),
+            ("F#3 A3 C4 E-4", "G", "viiob753"),
+            ("D F# A", "G", "V"),
+            ("C E G B-", "C", "Ib753"),
+        ];
+        for (chord, key, figure) in cases {
+            let key = Key::from_tonic(key).unwrap();
+            let numeral = roman_numeral_from_chord(&Chord::new(*chord).unwrap(), Some(&key))
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                numeral.figure(),
+                *figure,
+                "{chord} in {}",
+                key.tonic_pitch_name_with_case()
+            );
+        }
+        for (chord, figure, key_name) in [
+            ("D F# A", "I", "D major"),
+            ("D F A", "i", "d minor"),
+            ("E G# B D", "Ib8642", "E major"),
+            ("C E G", "I", "C major"),
+            ("A-3 C4 E-4 F#4", "Ger65", "c minor"),
+            ("G B D F", "I64b3", "G major"),
+        ] {
+            let numeral = roman_numeral_from_chord(&Chord::new(chord).unwrap(), None)
+                .unwrap()
+                .unwrap();
+            assert_eq!(numeral.figure(), figure, "{chord} with no key");
+            let key = numeral.key();
+            assert_eq!(
+                format!("{} {}", key.tonic_pitch_name_with_case(), key.mode()),
+                key_name,
+                "{chord} with no key"
+            );
+        }
+        assert!(
+            roman_numeral_from_chord(&Chord::empty(), None)
+                .unwrap()
+                .is_none()
         );
     }
 

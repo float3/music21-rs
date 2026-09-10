@@ -705,7 +705,7 @@ impl Chord {
         chord
     }
 
-    fn unique_pitch_names(&self) -> std::collections::BTreeSet<String> {
+    pub(crate) fn unique_pitch_names(&self) -> std::collections::BTreeSet<String> {
         self.pitch_refs().map(Pitch::name).collect()
     }
 
@@ -1116,6 +1116,17 @@ mod tests {
         );
         assert!(Chord::from_forte_class("311").is_err());
         assert!(Chord::from_forte_class("3-99").is_err());
+        assert_eq!(
+            Chord::from_forte_class("4-z15")
+                .unwrap()
+                .forte_class()
+                .as_deref(),
+            Some("4-15A")
+        );
+        assert_eq!(
+            Chord::from_forte_class("4-Z15").unwrap().pitch_names(),
+            Chord::from_forte_class("4-15").unwrap().pitch_names()
+        );
 
         assert_eq!(
             names(&Chord::from_interval_vector(&[0, 0, 1, 1, 1, 0], false).unwrap()),

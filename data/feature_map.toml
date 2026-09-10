@@ -235,6 +235,7 @@ rust = ["src/serial/mod.rs"]
 [[class]]
 python = "serial.py"
 name = "TwelveToneRow"
+facade = "ToneRow"
 rust = ["src/serial/mod.rs"]
 
 [class.renames]
@@ -327,12 +328,14 @@ note = "The number helpers music21 keeps beside the sieve: primes, and spacings 
 [[class]]
 python = "note.py"
 name = "GeneralNote"
+facade = "Note"
 rust = ["src/note/mod.rs", "src/notation.rs", "src/duration.rs"]
 note = "What every written note and chord has: a length, what is sung to it, and the marks over it. The crate has no type of its own for it -- the GeneralNote to NotRest to Note chain was mirrored here once as wrapper structs and taken out again -- so its members are matched against the types that carry them."
 
 [[class]]
 python = "note.py"
 name = "NotRest"
+facade = "Note"
 rust = ["src/note/mod.rs", "src/notation.rs", "src/volume.rs"]
 note = "A note or chord as distinct from a rest: what it is written as, which way its stem goes, and how loud it sounds."
 
@@ -355,6 +358,7 @@ note = "A silence of a written length."
 [[class]]
 python = "chord/__init__.py"
 name = "ChordBase"
+facade = "Chord"
 rust = ["src/chord/mod.rs", "src/chord/names.rs", "src/chord/notation.rs", "src/chord/quality.rs", "src/chord/resolution.rs", "src/chord/setclass.rs", "src/notation.rs"]
 note = "What a chord is before it is asked anything: the notes it holds, and adding to and taking from them."
 
@@ -429,7 +433,7 @@ rust = ["src/roman/mod.rs", "src/roman/analysis.rs", "src/roman/figure.rs", "src
 note = "Module-level helpers."
 
 [class.renames]
-romanNumeralFromChord = "analyze_chord"
+romanNumeralFromChord = "roman_numeral_from_chord"
 
 expandShortHand = "expand_shorthand"
 figureTupleSolo = "from_pitch_and_reference"

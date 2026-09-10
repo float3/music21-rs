@@ -294,3 +294,5 @@ Fixes found while porting went upstream:
   (open).
 - [PLAINSOUND/hexatone#3](https://github.com/PLAINSOUND/hexatone/pull/3):
   Scala headers in five Hexatone scale files (open).
+- Corrections to the Xenharmonic Wiki's temperament pages, found while
+  checking its infoboxes: [Special:Contributions/hill](https://en.xen.wiki/w/Special:Contributions/hill).

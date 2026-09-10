@@ -3,6 +3,242 @@
 
 use super::*;
 
+/// The figures music21 folds into a plain seventh-chord figure when the
+/// chord is a minor seventh, keyed by the figure `post_figure` wrote.
+const MINOR_SEVENTH_SUBS: [(&str, &str); 4] = [
+    ("b75b3", "7"),
+    ("6b5", "65"),
+    ("b64b3", "43"),
+    ("6b42", "42"),
+];
+
+/// The same for a minor-major seventh, which carries its raised seventh in
+/// brackets.
+const MINOR_MAJOR_SEVENTH_SUBS: [(&str, &str); 8] = [
+    ("75b3", "7[#7]"),
+    ("65", "65[#7]"),
+    ("b643", "43[#7]"),
+    ("6b42", "42[#7]"),
+    ("#753", "#7"),
+    ("6#53", "65[#7]"),
+    ("64#3", "43[#7]"),
+    ("42", "42[#7]"),
+];
+
+/// The numerals an augmented sixth reads as in a key, and the name each is
+/// written under instead.
+const AUG6_SUBS: [(&str, &str); 27] = [
+    ("#ivo6b3", "It6"),
+    ("#ivob64", "It64"),
+    ("#ivobb64", "It64"),
+    ("#ivob5b3", "It53"),
+    ("#ivob5bb3", "It53"),
+    ("IIø#643", "Fr43"),
+    ("IIø75#3", "Fr7"),
+    ("IIø7b5#3", "Fr7"),
+    ("IIø6#42", "Fr42"),
+    ("IIøb6#42", "Fr42"),
+    ("IIø65", "Fr65"),
+    ("IIø65b3", "Fr65"),
+    ("#ii64b3", "Sw43"),
+    ("#iiø7", "Sw7"),
+    ("#iib7bb53", "Sw7"),
+    ("#iib642", "Sw42"),
+    ("#iibb642", "Sw42"),
+    ("#ii6b5b3", "Sw65"),
+    ("#ii6b5bb3", "Sw65"),
+    ("#ivo6b5b3", "Ger65"),
+    ("#ivo6bb5b3", "Ger65"),
+    ("#ivob64b3", "Ger43"),
+    ("#ivobb64bb3", "Ger43"),
+    ("#ivob6b42", "Ger42"),
+    ("#ivob6bb42", "Ger42"),
+    ("#ivø7", "Ger7"),
+    ("#ivobb7b5bb3", "Ger7"),
+];
+
+/// The same where no key was given and the chord's root stood in for one.
+const AUG6_NO_KEY_SUBS: [(&str, &str); 14] = [
+    ("io6b3", "It6"),
+    ("iob64", "It64"),
+    ("iob5b3", "It53"),
+    ("Iø64b3", "Fr43"),
+    ("Iøb7b53", "Fr7"),
+    ("Iøb642", "Fr42"),
+    ("Iø6b5b3", "Fr65"),
+    ("i64b3", "Sw43"),
+    ("ib7bb53", "Sw7"),
+    ("ibb642", "Sw42"),
+    ("i6b5bb3", "Sw65"),
+    ("io6b5b3", "Ger65"),
+    ("iob64b3", "Ger43"),
+    ("iob6b42", "Ger42"),
+];
+
+fn substitute(table: &[(&str, &'static str)], figure: &str) -> Option<&'static str> {
+    table
+        .iter()
+        .find(|(from, _)| *from == figure)
+        .map(|(_, to)| *to)
+}
+
+/// music21's `romanNumeralFromChord`: the numeral a chord is in a key,
+/// written the way music21 writes it. With no key the chord's root is the
+/// key, major where the chord has a major third and minor otherwise. The
+/// figure is read off the chord's pitches above its bass, so a chord written
+/// without octaves sounds in octave 4 and `G B D F` in C major is `V43`.
+/// An empty chord is no numeral at all.
+///
+/// [`RomanNumeral::analyze`] is the crate's own reading, which names the
+/// chord's quality rather than every altered degree; this one says what
+/// music21 says, `io5b3` and all.
+pub fn roman_numeral_from_chord(chord: &Chord, key: Option<&Key>) -> Result<Option<RomanNumeral>> {
+    let Some(root) = chord.root() else {
+        return Ok(None);
+    };
+    let chord_has_major_third = chord.semitones_from_chord_step(3) == Some(4);
+    let no_key_given = key.is_none();
+    let mut key = match key {
+        Some(key) => key.clone(),
+        None => {
+            let mode = if chord_has_major_third {
+                "major"
+            } else {
+                "minor"
+            };
+            Key::from_tonic_mode(&root.name(), mode)?
+        }
+    };
+
+    let figure = FigureTuple::from_pitch_and_reference(root, &key, &key.tonic())?;
+    let figure = correct_rn_alteration_for_minor(&figure, &key, chord_has_major_third);
+    let tonic = if figure.alter == 0.0 {
+        key.tonic()
+    } else {
+        Interval::from_generic_and_chromatic(1, figure.alter as IntegerType)?
+            .transpose_pitch(&key.tonic())?
+    };
+    let altered_key = Key::from_tonic_mode(&tonic.name(), key.mode())?;
+
+    let mut step_roman = degree_to_roman(figure.deg_from_ref_pitch).to_string();
+    if !chord_has_major_third {
+        step_roman = step_roman.to_lowercase();
+    }
+    let inversion_string = post_figure(chord, &altered_key)?;
+    let mut rn_string = format!("{}{step_roman}{inversion_string}", figure.prefix);
+
+    let minor_seventh = || chord.is_seventh_of_type(&[0, 3, 7, 10]);
+    let minor_major_seventh = || chord.is_seventh_of_type(&[0, 3, 7, 11]);
+    if !chord_has_major_third
+        && let Some(sub) = substitute(&MINOR_SEVENTH_SUBS, &inversion_string)
+        && minor_seventh()
+    {
+        rn_string = format!("{}{step_roman}{sub}", figure.prefix);
+    } else if !chord_has_major_third
+        && let Some(sub) = substitute(&MINOR_MAJOR_SEVENTH_SUBS, &inversion_string)
+        && minor_major_seventh()
+    {
+        rn_string = format!("{}{step_roman}{sub}", figure.prefix);
+    } else if !no_key_given
+        && let Some(sub) = substitute(&AUG6_SUBS, &rn_string)
+        && chord.is_augmented_sixth(true)
+    {
+        rn_string = sub.to_string();
+    } else if no_key_given
+        && let Some(sub) = substitute(&AUG6_NO_KEY_SUBS, &rn_string)
+        && chord.is_augmented_sixth(true)
+    {
+        rn_string = sub.to_string();
+        // The chord stood in for its own key; an augmented sixth resolves to
+        // the key its fifth, or its seventh, is the tonic of.
+        let tonic = if sub.starts_with("It") || sub.starts_with("Ge") {
+            chord.fifth()
+        } else {
+            chord.seventh()
+        };
+        if let Some(tonic) = tonic {
+            key = Key::from_tonic_mode(&tonic.name(), "minor")?;
+        }
+    }
+
+    RomanNumeral::with_minor_defaults(
+        rn_string,
+        key,
+        Minor67Default::Cautionary,
+        Minor67Default::Cautionary,
+    )
+    .map(Some)
+}
+
+/// music21's `_postFigureFromChordAndKey`: the figures after the numeral,
+/// read off the chord's pitches above its bass in the key, folded to the
+/// shorthand music21 writes and marked for a diminished or augmented fifth.
+fn post_figure(chord: &Chord, key: &Key) -> Result<String> {
+    let mut tuples = figure_tuples(chord, key)?;
+    let bass_alter = tuples.first().map_or(0.0, |each| each.figure.alter);
+    let third = chord.third().cloned();
+    let fifth = chord.fifth().cloned();
+    let (is_major, is_minor, standard_triad) = if chord.pitch_class_cardinality() == 3 {
+        let major = chord.is_major_triad();
+        let minor = !major && chord.is_minor_triad();
+        (
+            major,
+            minor,
+            major || minor || chord.is_diminished_triad() || chord.is_augmented_triad(),
+        )
+    } else {
+        (false, false, false)
+    };
+    tuples.sort_by(|a, b| {
+        let left = (
+            -i32::from(a.figure.deg_from_ref_pitch),
+            a.figure.alter,
+            a.pitch.ps(),
+        );
+        let right = (
+            -i32::from(b.figure.deg_from_ref_pitch),
+            b.figure.alter,
+            b.pitch.ps(),
+        );
+        left.partial_cmp(&right)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    let mut figures: Vec<String> = Vec::new();
+    for each in &tuples {
+        let degree = each.figure.deg_from_ref_pitch;
+        let mut prefix = each.figure.prefix.as_str();
+        if degree != 1 && third.as_ref() == Some(&each.pitch) {
+            if is_major || is_minor {
+                prefix = "";
+            }
+        } else if degree != 1 && fifth.as_ref() == Some(&each.pitch) && standard_triad {
+            prefix = "";
+        }
+        if degree == 1 {
+            if each.figure.alter != bass_alter && !prefix.is_empty() {
+                let figure = format!("{prefix}8");
+                if !figures.contains(&figure) {
+                    figures.insert(0, figure);
+                }
+            }
+        } else {
+            let figure = format!("{prefix}{degree}");
+            if !figures.contains(&figure) {
+                figures.push(figure);
+            }
+        }
+    }
+    let mut all = figures.concat();
+    if let Some(short) = substitute(&super::figure::FIGURE_SHORTHANDS, &all) {
+        all = short.to_string();
+    }
+    if all == "75" || all == "73" {
+        all = "7".to_string();
+    }
+    Ok(correct_suffix_for_chord_quality(chord, &all))
+}
+
 impl RomanNumeral {
     /// Performs functional Roman-numeral analysis in a key.
     pub fn analyze(chord: &Chord, key: Key) -> Result<Option<Self>> {
@@ -74,7 +310,24 @@ pub(super) fn inversion_name_from_root(
     let Some(inversion) = inversion.or_else(|| chord.inversion_with_root(root)) else {
         return String::new();
     };
+    // music21's `isTriad`, `isIncompleteMajorTriad` and
+    // `isIncompleteMinorTriad`, read from the root given rather than the
+    // chord's own.
     let has = |step: u8| chord.chord_step_from(step, root).is_some();
+    let names = chord.unique_pitch_names().len();
+    let triad = names == 3 && has(3) && has(5);
+    // A root and its third alone: every note is one or the other.
+    let incomplete_triad = names == 2
+        && has(3)
+        && chord
+            .semitones_from_chord_step_with_root(3, root)
+            .is_some_and(|third| {
+                matches!(third, 3 | 4)
+                    && chord.pitches().iter().all(|pitch| {
+                        let above = (pitch_class(pitch) + 12 - pitch_class(root)) % 12;
+                        above == 0 || above == third
+                    })
+            });
     let suffix = if has(7) {
         match inversion {
             0 => "7",
@@ -83,7 +336,7 @@ pub(super) fn inversion_name_from_root(
             3 => "42",
             _ => "",
         }
-    } else if has(1) && has(3) {
+    } else if triad || incomplete_triad {
         match inversion {
             1 => "6",
             2 => "64",

@@ -2,7 +2,7 @@
 /python-parity/target/
 /python/target/
 /venv/
-/__pycache__/
+__pycache__/
 /examples/web/pkg/
 /examples/web/pkg-*/
 /examples/web/chord/pkg/
