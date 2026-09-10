@@ -3,28 +3,24 @@
 [![CI](https://github.com/float3/music21-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/float3/music21-rs/actions/workflows/ci.yml)
 [![Crates.io](https://img.shields.io/crates/v/music21-rs.svg)](https://crates.io/crates/music21-rs)
 [![docs.rs](https://docs.rs/music21-rs/badge.svg)](https://docs.rs/music21-rs)
-[![PyPI](https://img.shields.io/pypi/v/music21-rs.svg)](https://pypi.org/project/music21-rs/)
-
 [![music21 members in the crate](https://img.shields.io/endpoint?url=https%3A%2F%2Fhilll.dev%2Fmusic21-rs%2Freports%2Fbadge-crate.json)](https://hilll.dev/music21-rs/reports/#ported)
-[![music21 members in the wheel](https://img.shields.io/endpoint?url=https%3A%2F%2Fhilll.dev%2Fmusic21-rs%2Freports%2Fbadge-wheel.json)](https://hilll.dev/music21-rs/reports/#ported)
 [![music21 doctests passing](https://img.shields.io/endpoint?url=https%3A%2F%2Fhilll.dev%2Fmusic21-rs%2Freports%2Fbadge-doctests.json)](https://hilll.dev/music21-rs/reports/#doctests)
 
 A Rust port of the analysis half of
 [music21](https://github.com/cuthbertLab/music21): pitches, intervals, chords,
 keys, scales, roman numerals, chord symbols, figured bass, durations, meters,
-tone rows, sieves, tempo marks and voice leading. It is available as a Rust
-crate and as a Python wheel. The wheel's classes have music21's names,
-arguments and properties, and can replace music21's own inside an installed
-music21, so existing music21 code runs on it unchanged. See
-[python/README.md](./python/README.md) for the wheel.
+tone rows, sieves, tempo marks and voice leading. It keeps music21's data
+model and answers, so a chord is named, a numeral realized and a scale spelled
+as music21 does it. The same code is also published as a Python package; see
+[python/README.md](./python/README.md).
+
+The [reports page](https://hilll.dev/music21-rs/reports/) has the full
+numbers: every music21 method and whether it is ported, the doctest and test
+suite results, coverage, benchmarks and sizes, refreshed on every push.
 
 ## Coverage of music21
 
-The [reports page](https://hilll.dev/music21-rs/reports/) lists each music21
-method as ported, missing, or excluded with a reason.
-
-- 92% of the public methods of the ported music21 classes are in the crate,
-  and 74% are reachable from the wheel.
+- 92% of the public methods of the ported music21 classes are in the crate.
 - The crate's own tests cover 96% of its lines and 97% of its functions.
 - 17 of the 19 music21 modules whose doctests run against the port pass all
   of them: `pitch`, `interval`, `chord`, `chord.tables`, `note`, `duration`,
@@ -32,34 +28,34 @@ method as ported, missing, or excluded with a reason.
   `figuredBass.notation`, `tempo` and `voiceLeading`. `sieve` and
   `meter.base` are partial: sieve compression and `MeterSequence` are not
   ported.
-- music21's own test suite gives the same results with the wheel installed
-  over music21 as with music21 alone, apart from two documented differences.
-- [harte-library](https://github.com/andreamust/harte-library), a third-party
-  chord parser built on music21, gives identical results for its 8,116 tests
-  on both.
+- music21's own test suite gives the same results with the crate's classes
+  standing in for music21's as with music21 alone, apart from two documented
+  differences.
 
 Not ported: streams, parsing, notation output and the corpus.
 
-## Speed
+## Speed and size
 
-Times per call, from the [benchmark](https://hilll.dev/music21-rs/reports/#speedups)
-of the wheel against music21 11 on Python 3.13, with the crate called from
-Rust in the last column.
+Times per call, from the
+[benchmark](https://hilll.dev/music21-rs/reports/#speedups) against music21
+11 on Python 3.13.
 
-| | music21 | wheel | speedup | crate |
-| --- | ---: | ---: | ---: | ---: |
-| `Pitch('C#4')` | 1.55 us | 0.37 us | 4x | 0.22 us |
-| `Interval('P5')` | 7.5 us | 0.47 us | 16x | 0.21 us |
-| `Chord('C4 E4 G4')` | 16.2 us | 8.9 us | 1.8x | 0.79 us |
-| `Chord.commonName` | 526 us | 60 us | 8.8x | 14.8 us |
-| `Chord.forteClass` | 244 us | 53 us | 4.6x | 7.4 us |
-| `Pitch.transpose('M3')` | 28 us | 1.0 us | 28x | 0.58 us |
-| `Pitch.getEnharmonic()` | 22.7 us | 0.63 us | 36x | 0.37 us |
-| `ToneRow.zeroCenteredTransformation` | 274 us | 0.37 us | 741x | |
-| `pcToToneRow(...).matrix()` | 2.71 ms | 4.9 us | 547x | |
+| | music21 | music21-rs | speedup |
+| --- | ---: | ---: | ---: |
+| `Pitch::from_name("C#4")` | 1.55 us | 0.22 us | 7x |
+| `Interval::from_name("P5")` | 7.5 us | 0.21 us | 35x |
+| `Chord::new("C4 E4 G4")` | 16.2 us | 0.79 us | 21x |
+| `Chord::common_name` | 526 us | 14.8 us | 36x |
+| `Chord::forte_class` | 244 us | 7.4 us | 33x |
+| `Chord::root` | 115 us | 6.4 us | 18x |
+| `Pitch::transpose` by a third | 28 us | 0.58 us | 49x |
+| `Pitch::get_enharmonic` | 22.7 us | 0.37 us | 62x |
+| `Interval::new(p1, p2)` | 9.7 us | 0.47 us | 21x |
 
-Over music21's own test suite the median test runs at the same speed on both,
-since most of a music21 test is music21's own code.
+The published crate is 0.7 MB of source, with the chord tables and scale
+definitions compiled in and five small dependencies. A release binary that
+names chords and transposes pitches, the benchmark example, is 441 KB.
+music21 installs 105 MB.
 
 ## Using the crate
 
@@ -122,6 +118,18 @@ assert_eq!(six_eight.accent_weight(1.5)?, 0.5);
 # Ok::<(), music21_rs::Error>(())
 ```
 
+Read a chord label in Harte notation:
+
+```rust
+use music21_rs::Harte;
+
+let harte = Harte::new("Bb:min7/b3")?;
+assert_eq!(harte.chord().pitch_names(), ["B-", "D-", "F", "A-"]);
+assert_eq!(harte.chord().bass().map(|p| p.name_with_octave()), Some("D-3".to_string()));
+assert_eq!(Harte::new("C:(b3,5)")?.prettify(), "C:min");
+# Ok::<(), music21_rs::Error>(())
+```
+
 Full API documentation is on [docs.rs](https://docs.rs/music21-rs).
 
 ## Beyond music21
@@ -156,12 +164,12 @@ audio device.
 ## Development
 
 Use the toolchain pinned in [rust-toolchain.toml](./rust-toolchain.toml).
-`cargo test` runs the crate's tests and needs no Python. The `python` and
-`python-parity` crates are outside the workspace, so CI's full check is
-several commands:
+`cargo test` runs the crate's tests and needs nothing else. The full check
+is several commands, because the parity suite lives in a crate outside the
+workspace:
 
 ```bash
-# the reference submodule, needed by python-parity and the Scala archive
+# the reference submodule, needed by the parity suite and the Scala archive
 git submodule update --init --recursive
 
 # formatting, for each manifest; `--all` does not leave the workspace
@@ -188,19 +196,16 @@ done
 # the parity suite: fixtures, the Scala archive, and music21's doctests
 cargo test --manifest-path python-parity/Cargo.toml -- --test-threads=1
 
-# the wheel, its tests, music21's suite, and harte-library on both
-maturin build --release --manifest-path python/Cargo.toml --out target/wheels
-pip install --no-index --find-links target/wheels music21-rs
-pytest python/tests -q
+# music21's own test suite, on music21 and on the crate
 cargo run --release -p xtask --features python -- music21-suite
-cargo run --release -p xtask -- downstream
 
 # the docs job; `report` fails when the feature map is stale
 cargo doc --workspace --no-deps
 cargo run --release -p xtask --features python -- report --features-only
 ```
 
-The parity suite imports music21 and needs its dependencies:
+The parity suite runs music21's doctests against the crate through an
+embedded interpreter, so it needs music21's dependencies:
 
 ```bash
 uv venv .m21venv --python 3.12
@@ -232,6 +237,14 @@ It is pinned as a git submodule, currently at 11.0.0b9, and is the source of
 truth for `data/chord_tables.toml`, `data/*_expectations.toml` and the Rust
 emitted from them. Thanks to Michael Scott Asato Cuthbert and all music21
 contributors for the original library.
+
+### harte-library
+
+The `harte` module is a port of
+[harte-library](https://github.com/andreamust/harte-library) by Andrea
+Poltronieri, licensed
+[MIT](https://github.com/andreamust/harte-library/blob/main/LICENSE), and
+`data/harte_expectations.toml` is generated from its test data.
 
 ### The Scala scale archive
 

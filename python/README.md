@@ -4,12 +4,18 @@
 [![music21 members in the wheel](https://img.shields.io/endpoint?url=https%3A%2F%2Fhilll.dev%2Fmusic21-rs%2Freports%2Fbadge-wheel.json)](https://hilll.dev/music21-rs/reports/#ported)
 [![music21 doctests passing](https://img.shields.io/endpoint?url=https%3A%2F%2Fhilll.dev%2Fmusic21-rs%2Freports%2Fbadge-doctests.json)](https://hilll.dev/music21-rs/reports/#doctests)
 
-`music21_rs` is a Rust port of
-[music21](https://github.com/cuthbertLab/music21)'s analysis classes:
-`Pitch`, `Interval`, `Chord`, `Note`, `Duration`, `Key`, `Scale`,
-`RomanNumeral`, `TimeSignature`, `ToneRow` and others, with music21's names,
-arguments, properties and `repr`. Streams, parsing, notation output and the
-corpus are not included; those remain music21's.
+`music21_rs` is [music21](https://github.com/cuthbertLab/music21)'s analysis
+classes, `Pitch`, `Interval`, `Chord`, `Note`, `Duration`, `Key`, `Scale`,
+`RomanNumeral`, `TimeSignature`, `ToneRow` and others, implemented in Rust
+and packaged for Python. The classes have music21's names, arguments,
+properties and `repr`, and give music21's answers. The Rust half is the
+[music21-rs](https://crates.io/crates/music21-rs) crate; the wheel needs no
+Rust toolchain and no music21 to run on its own. Streams, parsing, notation
+output and the corpus are not included; those remain music21's.
+
+The [reports page](https://hilll.dev/music21-rs/reports/) has the full
+numbers: every music21 method and whether it is ported, the doctest and test
+suite results, benchmarks and sizes, refreshed on every push.
 
 ```bash
 pip install music21-rs
@@ -52,9 +58,6 @@ MusicXML.
 
 ## Coverage of music21
 
-The [reports page](https://hilll.dev/music21-rs/reports/) lists every music21
-method as ported, missing, or excluded with a reason.
-
 - 74% of the public methods of the ported music21 classes are reachable from
   this wheel.
 - 17 of the 19 music21 modules whose doctests run against the port pass all
@@ -68,15 +71,15 @@ method as ported, missing, or excluded with a reason.
   chord parser built on music21, gives identical results for its 8,116 tests
   on both.
 
-Not included: streams, scores, parsing, writing, the corpus and `show()`.
 `Tuplet`, `AbstractScale`, `Sieve` and `style.Style` are provided but not
 installed over music21's, whose versions do more. Missing behaviour raises
 rather than falling back to music21.
 
-## Speed
+## Speed and size
 
-Times per call, from the [benchmark](https://hilll.dev/music21-rs/reports/#speedups)
-against music21 11 on Python 3.13.
+Times per call, from the
+[benchmark](https://hilll.dev/music21-rs/reports/#speedups) against music21
+11 on Python 3.13.
 
 | | music21 | music21_rs | speedup |
 | --- | ---: | ---: | ---: |
@@ -95,6 +98,9 @@ Repeated queries on the same chord are cached in both and cost the same. Over
 music21's own test suite the median test runs at the same speed, since most
 of a music21 test is music21's own code.
 
+The wheel is 1.7 MB, one compiled module with the chord tables and scale
+definitions inside it and no dependencies. music21 installs 105 MB.
+
 ## Building
 
 ```bash
@@ -103,8 +109,29 @@ uvx maturin develop --manifest-path python/Cargo.toml   # into the active venv
 pytest python/tests -q
 ```
 
-The wheel is built from the `music21-rs` crate and shares its version number.
+The wheel shares the crate's version number. Two further checks run it
+against music21 itself, and need music21, `lark` and `pytest` installed
+beside it:
 
-## Licence
+```bash
+# music21's own test suite, on music21, on the crate and on the wheel
+cargo run --release -p xtask --features python -- music21-suite
+# harte-library's test suite, on music21 and on the wheel
+cargo run --release -p xtask -- downstream
+```
 
-AGPL-3.0-only, as the crate is.
+## Licence and credits
+
+`music21_rs` is released under the
+[AGPL-3.0](https://github.com/float3/music21-rs/blob/master/LICENSE).
+
+It ports behaviour from, and compiles in the chord tables and scale
+definitions of, [music21](https://github.com/cuthbertLab/music21), the Python
+library for computational musicology by Michael Scott Asato Cuthbert and
+contributors, licensed
+[BSD-3-Clause](https://github.com/cuthbertLab/music21/blob/master/LICENSE).
+Thirteen of the tuning tables compiled in are transcribed from the
+[Scala](https://www.huygens-fokker.org/scala/) scale archive, distributed with
+music21 by kind permission of Manuel Op de Coul. The Scala archive itself, the
+Hexatone scales and the Xenharmonic Wiki data the crate can bundle are not in
+the wheel.
