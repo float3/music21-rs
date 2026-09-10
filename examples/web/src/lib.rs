@@ -1122,10 +1122,33 @@ pub fn adaptive_frequency(
     if !context_degree.is_finite() || !degree.is_finite() {
         return Err(JsValue::from_str("degrees must be finite"));
     }
-    // The adaptive systems count degrees from C-1, five octaves below C4.
-    let base = 60.0;
-    let frequency = RECURSIVE_JI.frequency_at(context_degree + base, degree + base, None);
+    if degree < context_degree {
+        return Err(JsValue::from_str("the context is the lowest key held"));
+    }
+    // The crate takes the root as a degree above the base and the key as an
+    // interval above that root; the base is C-1, five octaves below C4.
+    let frequency = RECURSIVE_JI.frequency_at(context_degree, degree - context_degree + 60.0, None);
     Ok(frequency * root_frequency_hz / C4)
+}
+
+#[cfg(test)]
+mod adaptive_tests {
+    use super::adaptive_frequency;
+    use music21_rs::tuningsystem::C4;
+
+    #[test]
+    fn a_third_above_a_third_is_two_just_thirds() {
+        let c = adaptive_frequency(0.0, 0.0, C4).unwrap();
+        let e_over_c = adaptive_frequency(0.0, 4.0, C4).unwrap();
+        let e_as_root = adaptive_frequency(4.0, 4.0, C4).unwrap();
+        let g_sharp_over_e = adaptive_frequency(4.0, 8.0, C4).unwrap();
+        assert!((c - C4).abs() < 1e-9);
+        assert!((e_over_c - C4 * 5.0 / 4.0).abs() < 1e-9);
+        assert!((e_as_root - e_over_c).abs() < 1e-9);
+        assert!((g_sharp_over_e - C4 * 25.0 / 16.0).abs() < 1e-9);
+        let octave_up = adaptive_frequency(0.0, 12.0, C4).unwrap();
+        assert!((octave_up - 2.0 * C4).abs() < 1e-9);
+    }
 }
 
 /// A pitch's frequency in a tuning system, which for a system of twelve

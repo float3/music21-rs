@@ -646,8 +646,9 @@ function frequencyOf(degree) {
     const count = steps(system);
     const shifted = degree + octaves() * count;
     if (system.adaptive) {
+        // The key being asked about may itself be the lowest one.
         const held = lowestHeld();
-        const context = held === null ? shifted : held + octaves() * count;
+        const context = held === null ? shifted : Math.min(shifted, held + octaves() * count);
         return wasm.adaptive_frequency(context, shifted, rootHz);
     }
     const periods = Math.floor(shifted / count);
