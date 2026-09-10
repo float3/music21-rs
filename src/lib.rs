@@ -33,6 +33,8 @@ pub mod error;
 
 /// Figured bass: the numbers written under a bass note.
 pub mod figuredbass;
+/// Harte chord notation: `C:maj7/3`, `Bb:(b3,5,b7,9)`, `N`.
+pub mod harte;
 
 pub(crate) mod fraction_pow;
 /// Public interval parsing, naming and transposition helpers.
@@ -94,6 +96,7 @@ pub use chordsymbol::{
 pub use defaults::{FloatType, FractionType, IntegerType, Octave, UnsignedIntegerType};
 pub use duration::{Duration, DurationType, Tuplet, quarter_length_to_closest_type};
 pub use error::{Error, Result};
+pub use harte::{Harte, HarteInterval, SHORTHAND_DEGREES, convert_interval};
 pub use interval::{
     ChromaticInterval, DiatonicInterval, GenericInterval, Interval, IntervalDirection, Specifier,
     absolute_higher_pitch, absolute_lower_pitch, convert_diatonic_number_to_step, convert_generic,

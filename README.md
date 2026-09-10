@@ -5,8 +5,8 @@
 [![docs.rs](https://docs.rs/music21-rs/badge.svg)](https://docs.rs/music21-rs)
 [![PyPI](https://img.shields.io/pypi/v/music21-rs.svg)](https://pypi.org/project/music21-rs/)
 
-[![music21 members in the crate](https://img.shields.io/endpoint?url=https%3A%2F%2Fhilll.dev%2Fmusic21-rs%2Freports%2Fbadge-crate.json)](https://hilll.dev/music21-rs/reports/#features)
-[![music21 members in the wheel](https://img.shields.io/endpoint?url=https%3A%2F%2Fhilll.dev%2Fmusic21-rs%2Freports%2Fbadge-wheel.json)](https://hilll.dev/music21-rs/reports/#features)
+[![music21 members in the crate](https://img.shields.io/endpoint?url=https%3A%2F%2Fhilll.dev%2Fmusic21-rs%2Freports%2Fbadge-crate.json)](https://hilll.dev/music21-rs/reports/#ported)
+[![music21 members in the wheel](https://img.shields.io/endpoint?url=https%3A%2F%2Fhilll.dev%2Fmusic21-rs%2Freports%2Fbadge-wheel.json)](https://hilll.dev/music21-rs/reports/#ported)
 [![music21 doctests passing](https://img.shields.io/endpoint?url=https%3A%2F%2Fhilll.dev%2Fmusic21-rs%2Freports%2Fbadge-doctests.json)](https://hilll.dev/music21-rs/reports/#doctests)
 
 A Rust port of the analysis half of
@@ -20,26 +20,45 @@ music21, so existing music21 code runs on it unchanged. See
 
 ## Coverage of music21
 
-The badges above are updated on every push from the
-[reports page](https://hilll.dev/music21-rs/reports/), which lists each
-music21 method as ported, missing, or excluded with a reason.
+The [reports page](https://hilll.dev/music21-rs/reports/) lists each music21
+method as ported, missing, or excluded with a reason.
 
 - 92% of the public methods of the ported music21 classes are in the crate,
   and 74% are reachable from the wheel.
+- The crate's own tests cover 96% of its lines and 97% of its functions.
 - 17 of the 19 music21 modules whose doctests run against the port pass all
   of them: `pitch`, `interval`, `chord`, `chord.tables`, `note`, `duration`,
   `key`, `scale`, `roman`, `harmony`, `serial`, `beam`, `tie`, `volume`,
   `figuredBass.notation`, `tempo` and `voiceLeading`. `sieve` and
   `meter.base` are partial: sieve compression and `MeterSequence` are not
   ported.
-- music21's full test suite runs in CI with the wheel installed over music21
-  and has to give the same results as music21 alone, apart from two documented
-  differences.
+- music21's own test suite gives the same results with the wheel installed
+  over music21 as with music21 alone, apart from two documented differences.
 - [harte-library](https://github.com/andreamust/harte-library), a third-party
-  chord parser built on music21, runs its 8,116 tests on both with identical
-  results.
+  chord parser built on music21, gives identical results for its 8,116 tests
+  on both.
 
 Not ported: streams, parsing, notation output and the corpus.
+
+## Speed
+
+Times per call, from the [benchmark](https://hilll.dev/music21-rs/reports/#speedups)
+of the wheel against music21 11 on Python 3.13, with the crate called from
+Rust in the last column.
+
+| | music21 | wheel | speedup | crate |
+| --- | ---: | ---: | ---: | ---: |
+| `Pitch('C#4')` | 1.55 us | 0.37 us | 4x | 0.22 us |
+| `Interval('P5')` | 7.5 us | 0.47 us | 16x | 0.21 us |
+| `Chord('C4 E4 G4')` | 16.2 us | 8.9 us | 1.8x | 0.79 us |
+| `Chord.commonName` | 526 us | 60 us | 8.8x | 14.8 us |
+| `Chord.forteClass` | 244 us | 53 us | 4.6x | 7.4 us |
+| `Pitch.transpose('M3')` | 28 us | 1.0 us | 28x | 0.58 us |
+| `Pitch.getEnharmonic()` | 22.7 us | 0.63 us | 36x | 0.37 us |
+| `ToneRow.zeroCenteredTransformation` | | | 741x | |
+
+Over music21's own test suite the median test runs at the same speed on both,
+since most of a music21 test is music21's own code.
 
 ## Using the crate
 
@@ -118,10 +137,12 @@ The tuning code has no counterpart in music21:
   divisions of any interval.
 - Adaptive tuning, where a pitch's frequency depends on the chord around it.
 - Polyrhythms, including the chord a rhythm's ratios give as pitches.
-- Duplicate detection across all of the above, comparing by sound rather than
-  by spelling.
-
-Every table is checked against its source in CI.
+- A check for the same scale filed under two names. Scales are compared by
+  their cents, so one written as ratios and one written as cents still match.
+  The Scala archive has 44 such groups.
+- Harte chord notation, `C:maj7/3` or `Bb:(b3,5,b7,9)`, ported from
+  [harte-library](https://github.com/andreamust/harte-library) and checked
+  against every label in that library's 8,064-chord coverage set.
 
 ## Browser demos
 
@@ -182,7 +203,7 @@ The parity suite imports music21 and needs its dependencies:
 
 ```bash
 uv venv .m21venv --python 3.12
-uv pip install --python .m21venv chardet joblib jsonpickle more_itertools numpy requests webcolors
+uv pip install --python .m21venv chardet joblib jsonpickle lark more_itertools numpy requests webcolors
 ```
 
 On Windows, pyo3 links against the first `python` on `PATH`. The Microsoft
@@ -242,9 +263,20 @@ which is CC BY-SA. Only the numbers are used.
 
 ### Contributed back
 
-Header fixes for five Hexatone scale files went upstream as
-[PLAINSOUND/hexatone#3](https://github.com/PLAINSOUND/hexatone/pull/3), a
-malformed ratio in the Scala archive as
-[cuthbertLab/music21#2003](https://github.com/cuthbertLab/music21/pull/2003),
-and music21's reading of Scala files with trailing comments as
-[cuthbertLab/music21#2026](https://github.com/cuthbertLab/music21/pull/2026).
+Fixes found while porting went upstream:
+
+- [cuthbertLab/music21#1746](https://github.com/cuthbertLab/music21/pull/1746):
+  the `Pitch` constructor's type annotation admits a `Pitch`.
+- [cuthbertLab/music21#2003](https://github.com/cuthbertLab/music21/pull/2003):
+  a malformed ratio in the Scala archive's `sparschuh-stanhope.scl`.
+- [cuthbertLab/music21#2004](https://github.com/cuthbertLab/music21/pull/2004):
+  a `type: ignore` left over from a closed mypy issue.
+- [cuthbertLab/music21#2026](https://github.com/cuthbertLab/music21/pull/2026):
+  Scala files with text after a pitch value, which 23 archive files have.
+- [cuthbertLab/music21#2027](https://github.com/cuthbertLab/music21/pull/2027):
+  `removeRedundantPitches` confusing a flat with a negative octave.
+- [cuthbertLab/music21#2028](https://github.com/cuthbertLab/music21/pull/2028):
+  `getPitchFromNodeDegree` handing back a pitch owned by the scale's cache
+  (open).
+- [PLAINSOUND/hexatone#3](https://github.com/PLAINSOUND/hexatone/pull/3):
+  Scala headers in five Hexatone scale files (open).

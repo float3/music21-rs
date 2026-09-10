@@ -1,7 +1,7 @@
 # music21-rs for Python
 
 [![PyPI](https://img.shields.io/pypi/v/music21-rs.svg)](https://pypi.org/project/music21-rs/)
-[![music21 members in the wheel](https://img.shields.io/endpoint?url=https%3A%2F%2Fhilll.dev%2Fmusic21-rs%2Freports%2Fbadge-wheel.json)](https://hilll.dev/music21-rs/reports/#features)
+[![music21 members in the wheel](https://img.shields.io/endpoint?url=https%3A%2F%2Fhilll.dev%2Fmusic21-rs%2Freports%2Fbadge-wheel.json)](https://hilll.dev/music21-rs/reports/#ported)
 [![music21 doctests passing](https://img.shields.io/endpoint?url=https%3A%2F%2Fhilll.dev%2Fmusic21-rs%2Freports%2Fbadge-doctests.json)](https://hilll.dev/music21-rs/reports/#doctests)
 
 `music21_rs` is a Rust port of
@@ -52,9 +52,8 @@ MusicXML.
 
 ## Coverage of music21
 
-The badges above are updated on every push from the
-[reports page](https://hilll.dev/music21-rs/reports/), which lists every
-music21 method as ported, missing, or excluded with a reason.
+The [reports page](https://hilll.dev/music21-rs/reports/) lists every music21
+method as ported, missing, or excluded with a reason.
 
 - 74% of the public methods of the ported music21 classes are reachable from
   this wheel.
@@ -63,11 +62,11 @@ music21 method as ported, missing, or excluded with a reason.
   `key`, `scale`, `roman`, `harmony`, `serial`, `beam`, `tie`, `volume`,
   `figuredBass.notation`, `tempo` and `voiceLeading`. `sieve` and
   `meter.base` are partial and are not installed over music21's.
-- music21's full test suite runs in CI with this wheel installed and has to
-  match music21's own results, apart from two documented differences.
+- music21's own test suite gives the same results with this wheel installed
+  over music21 as with music21 alone, apart from two documented differences.
 - [harte-library](https://github.com/andreamust/harte-library), a third-party
-  chord parser built on music21, runs its 8,116 tests on both with identical
-  results.
+  chord parser built on music21, gives identical results for its 8,116 tests
+  on both.
 
 Not included: streams, scores, parsing, writing, the corpus and `show()`.
 `Tuplet`, `AbstractScale`, `Sieve` and `style.Style` are provided but not
@@ -76,12 +75,24 @@ rather than falling back to music21.
 
 ## Speed
 
-Benchmarks are on the reports page. Constructing a `Pitch`, `Note`,
-`Interval` or `Chord` is 2 to 16 times faster than in music21, and chord
-analysis (`commonName`, `forteClass` and related) is about 5 times faster on
-a fresh chord. Repeated queries on the same chord are cached in both and cost
-the same. Over music21's own test suite the median test runs at the same
-speed, since most of a music21 test is music21's own code.
+Times per call, from the [benchmark](https://hilll.dev/music21-rs/reports/#speedups)
+against music21 11 on Python 3.13.
+
+| | music21 | music21_rs | speedup |
+| --- | ---: | ---: | ---: |
+| `Pitch('C#4')` | 1.55 us | 0.37 us | 4x |
+| `Note('C#4')` | 4.4 us | 1.3 us | 3.4x |
+| `Interval('P5')` | 7.5 us | 0.47 us | 16x |
+| `Chord('C4 E4 G4')` | 16.2 us | 8.9 us | 1.8x |
+| `Chord.commonName` | 526 us | 60 us | 8.8x |
+| `Chord.forteClass` | 244 us | 53 us | 4.6x |
+| `Pitch.transpose('M3')` | 28 us | 1.0 us | 28x |
+| `Pitch.getEnharmonic()` | 22.7 us | 0.63 us | 36x |
+| `ToneRow.zeroCenteredTransformation` | | | 741x |
+
+Repeated queries on the same chord are cached in both and cost the same. Over
+music21's own test suite the median test runs at the same speed, since most
+of a music21 test is music21's own code.
 
 ## Building
 

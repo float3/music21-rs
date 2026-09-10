@@ -68,7 +68,7 @@ fn dependency_venv(workspace_root: &Path) -> Result<PathBuf, Box<dyn Error>> {
         "no virtualenv with music21's dependencies found. The fixtures need a ",
         "real music21 import, which needs its requirements. Create one with:\n",
         "  uv venv .m21venv --python 3.12\n",
-        "  uv pip install --python .m21venv chardet joblib jsonpickle \\\n",
+        "  uv pip install --python .m21venv chardet joblib jsonpickle lark \\\n",
         "      more_itertools numpy requests webcolors"
     )
     .into())
@@ -165,6 +165,7 @@ pub(crate) fn regenerate(workspace_root: &Path) -> Result<Vec<PathBuf>, Box<dyn 
             write_small_tables(py, workspace_root, stamp)?,
             write_serial(py, workspace_root, stamp)?,
             write_doctest_totals(py, workspace_root, stamp)?,
+            write_harte(py, workspace_root, stamp)?,
         ])
     })
     .map_err(|error| -> Box<dyn Error> { Box::new(error) })
@@ -339,6 +340,128 @@ fn write_doctest_totals(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) ->
     fs::write(&path, out)?;
     println!("  wrote {} ({} modules)", path.display(), modules.len());
     Ok(path)
+}
+
+/// What harte-library, on music21, makes of every chord label in its own
+/// coverage set: the pitches, root, bass, sounding degrees and prettified
+/// spelling of each, or the exception it raises. `src/harte.rs` is checked
+/// against it by `harte_parity`.
+fn write_harte(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> PyResult<PathBuf> {
+    let checkout = crate::downstream::checkout(&workspace_root.join("target/downstream"))
+        .map_err(|error| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(error.to_string()))?;
+    let sys = py.import("sys")?;
+    sys.getattr("path")?
+        .cast_into::<PyList>()?
+        .insert(0, checkout.to_string_lossy().into_owned())?;
+    let harte = py.import("harte.harte")?.getattr("Harte")?;
+    let counts = fs::read_to_string(checkout.join("test/chords_count.json"))?;
+    let counts = py
+        .import("json")?
+        .call_method1("loads", (counts,))?
+        .cast_into::<PyDict>()?;
+    let mut labels: Vec<String> = counts
+        .keys()
+        .iter()
+        .map(|key| key.extract::<String>())
+        .collect::<PyResult<_>>()?;
+    labels.sort();
+
+    let mut out = header(
+        &[
+            "# What harte-library makes of every label in its coverage set,",
+            "# generated on music21 by",
+            "# `cargo run --release -p xtask --features python -- regenerate-fixtures`.",
+            "# Degrees inside the parentheses of `pretty` are sorted, as the",
+            "# library writes them in no fixed order.",
+        ],
+        stamp,
+    );
+    let _ = writeln!(
+        out,
+        "harte_commit = {}",
+        toml_string(crate::downstream::COMMIT)
+    );
+    let _ = writeln!(out);
+    let _ = writeln!(out, "chord = [");
+
+    let names_of = |values: Bound<'_, PyAny>, attribute: Option<&str>| -> PyResult<String> {
+        let mut names = Vec::new();
+        for value in values.try_iter()? {
+            let value = value?;
+            let name: String = match attribute {
+                Some(attribute) => value.getattr(attribute)?.extract()?,
+                None => value.extract()?,
+            };
+            names.push(toml_string(&name));
+        }
+        Ok(format!("[{}]", names.join(", ")))
+    };
+
+    let mut errors = 0;
+    for label in &labels {
+        let _ = write!(out, "    {{ label = {}", toml_string(label));
+        match harte.call1((label.as_str(),)) {
+            Ok(chord) if chord.getattr("_root")?.is_none() => {
+                let _ = writeln!(
+                    out,
+                    ", pitches = [], degrees = [], pretty = {} }},",
+                    toml_string(label)
+                );
+            }
+            Ok(chord) => {
+                let pitches = names_of(chord.getattr("pitches")?, Some("nameWithOctave"))?;
+                let root: String = chord
+                    .call_method0("root")?
+                    .getattr("nameWithOctave")?
+                    .extract()?;
+                let bass: String = chord
+                    .call_method0("bass")?
+                    .getattr("nameWithOctave")?
+                    .extract()?;
+                // Read before `prettify`, which takes the root out of the list.
+                let degrees = names_of(chord.getattr("_all_degrees")?, None)?;
+                let pretty: String = chord.call_method0("prettify")?.extract()?;
+                let _ = writeln!(
+                    out,
+                    ", pitches = {pitches}, root = {}, bass = {}, degrees = {degrees}, pretty = {} }},",
+                    toml_string(&root),
+                    toml_string(&bass),
+                    toml_string(&sort_parenthesised(&pretty)),
+                );
+            }
+            Err(error) => {
+                errors += 1;
+                let _ = writeln!(
+                    out,
+                    ", error = {} }},",
+                    toml_string(error.get_type(py).name()?.to_str()?)
+                );
+            }
+        }
+    }
+    let _ = writeln!(out, "]");
+
+    let path = workspace_root.join("data/harte_expectations.toml");
+    fs::write(&path, out)?;
+    println!(
+        "  wrote {} ({} labels, {errors} the library refuses)",
+        path.display(),
+        labels.len()
+    );
+    Ok(path)
+}
+
+/// `C:maj7(#11,9)` with the degrees in its parentheses sorted.
+fn sort_parenthesised(label: &str) -> String {
+    let Some((head, rest)) = label.split_once('(') else {
+        return label.to_string();
+    };
+    let Some((inside, tail)) = rest.split_once(')') else {
+        return label.to_string();
+    };
+    let mut degrees: Vec<&str> = inside.split(',').collect();
+    degrees.sort_unstable();
+    format!("{head}({}){tail}", degrees.join(","))
 }
 
 fn write_scales(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> PyResult<PathBuf> {

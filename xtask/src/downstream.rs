@@ -36,7 +36,7 @@ use std::process::Command;
 const PROJECT: &str = "harte-library";
 const REPOSITORY: &str = "https://github.com/andreamust/harte-library.git";
 /// Pinned so the comparison is against a fixed suite; bump deliberately.
-const COMMIT: &str = "dd8cfd728572ed728195e05c8f2062a58b3e9036";
+pub(crate) const COMMIT: &str = "dd8cfd728572ed728195e05c8f2062a58b3e9036";
 
 /// The one piece of Python left in this: a `conftest.py` written *into
 /// somebody else's pytest project*, which pytest imports before any test
@@ -95,7 +95,9 @@ pub fn run(workspace_root: &Path, directory: Option<PathBuf>) -> Result<i32, Box
 }
 
 /// Clones the project at its pinned commit, or reuses what is there.
-fn checkout(into: &Path) -> Result<PathBuf, Box<dyn Error>> {
+/// Clones harte-library at the pinned commit into `into`, or brings an
+/// earlier clone there up to it, and answers the worktree.
+pub(crate) fn checkout(into: &Path) -> Result<PathBuf, Box<dyn Error>> {
     let worktree = into.join(PROJECT);
     if !worktree.join(".git").is_dir() {
         fs::create_dir_all(&worktree)?;

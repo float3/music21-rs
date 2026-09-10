@@ -78,6 +78,9 @@ pub enum Error {
     /// Error associated with note volumes.
     #[error("Volume error: {0}")]
     Volume(String),
+    /// Error associated with Harte chord labels and degrees.
+    #[error("Harte error: {0}")]
+    Harte(String),
     /// A value the caller gave that nothing musical could be read from.
     ///
     /// music21 keeps this apart from its own exceptions — an octave written

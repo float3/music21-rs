@@ -540,6 +540,13 @@ rust = "src/tuningsystem/equal.rs"
 note = "Equal steps of any interval, not only of the octave: Bohlen-Pierce divides a twelfth into thirteen. The octave-repeating tables above cannot express those by construction."
 
 [[beyond]]
+name = "Harte chord notation"
+rust = "src/harte.rs"
+count = "SHORTHAND_DEGREES"
+unit = "shorthands"
+note = "Chord labels as harte-library reads them, C:maj7/3 or Bb:(b3,5,b7,9), built into chords with the root fixed as the label names it. Ported from harte-library and checked against every label in that library's 8,064-chord coverage set."
+
+[[beyond]]
 name = "Duplicate detection"
 rust = "src/tuningsystem/duplicates.rs"
 note = "Which of these are the same tuning under another name, compared by sound rather than spelling. It finds 44 groups of repeats among the archive's 3,994 scales."
