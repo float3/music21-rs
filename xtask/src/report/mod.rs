@@ -505,6 +505,9 @@ pub(crate) fn parse_options(workspace_root: &Path, args: &[String]) -> Result<Op
 /// links to it would be a page describing a run nobody made.
 fn write_pages(out: &Path, report: &Report) -> Result<(), Box<dyn Error>> {
     fs::write(out.join("index.html"), render_html(report))?;
+    for (file, label, part, whole) in badges(report) {
+        fs::write(out.join(file), badge(&label, part, whole))?;
+    }
     let page = out.join(TIMINGS_PAGE);
     match report
         .timings
@@ -520,6 +523,68 @@ fn write_pages(out: &Path, report: &Report) -> Result<(), Box<dyn Error>> {
         }
     }
     Ok(())
+}
+
+/// The three shares the READMEs show as badges: the music21 members the
+/// crate ports, the ones the wheel reaches, and the doctest examples that
+/// pass. Each is a file name, a label and the fraction behind it.
+fn badges(report: &Report) -> [(&'static str, String, usize, usize); 3] {
+    let members: usize = report
+        .features
+        .iter()
+        .map(|class| class.members.len())
+        .sum();
+    let ported: usize = report.features.iter().map(|class| class.ported).sum();
+    let in_wheel: usize = report.features.iter().map(|class| class.in_wheel).sum();
+    let examples: usize = report.doctests.iter().map(|module| module.examples).sum();
+    let passing: usize = report
+        .doctests
+        .iter()
+        .map(|module| module.examples_passing)
+        .sum();
+    [
+        (
+            "badge-crate.json",
+            "music21 members in the crate".to_string(),
+            ported,
+            members,
+        ),
+        (
+            "badge-wheel.json",
+            "music21 members in the wheel".to_string(),
+            in_wheel,
+            members,
+        ),
+        (
+            "badge-doctests.json",
+            "music21 doctests passing".to_string(),
+            passing,
+            examples,
+        ),
+    ]
+}
+
+/// A badge in the JSON `https://img.shields.io/endpoint?url=...` renders: the
+/// share as a percentage with the count behind it, green from nine in ten
+/// down through yellow to orange.
+fn badge(label: &str, part: usize, whole: usize) -> String {
+    let percent = share(part, whole);
+    let color = if percent >= 90.0 {
+        "brightgreen"
+    } else if percent >= 70.0 {
+        "green"
+    } else if percent >= 50.0 {
+        "yellow"
+    } else {
+        "orange"
+    };
+    serde_json::json!({
+        "schemaVersion": 1,
+        "label": label,
+        "message": format!("{percent:.0}% ({part} of {whole})"),
+        "color": color,
+    })
+    .to_string()
 }
 
 pub(crate) fn report(workspace_root: &Path, options: &Options) -> Result<(), Box<dyn Error>> {
@@ -936,6 +1001,21 @@ mod tests {
         assert_eq!(module_functions(python), ["top"]);
         assert_eq!(module_classes(python, None), ["A", "B"]);
         assert_eq!(module_classes(python, Some("B")), ["B"]);
+    }
+
+    #[test]
+    fn a_badge_carries_the_share_and_the_count_behind_it() {
+        let json: serde_json::Value = serde_json::from_str(&badge("ported", 565, 617)).unwrap();
+        assert_eq!(json["schemaVersion"], 1);
+        assert_eq!(json["label"], "ported");
+        assert_eq!(json["message"], "92% (565 of 617)");
+        assert_eq!(json["color"], "brightgreen");
+        let json: serde_json::Value = serde_json::from_str(&badge("wheel", 457, 617)).unwrap();
+        assert_eq!(json["message"], "74% (457 of 617)");
+        assert_eq!(json["color"], "green");
+        let json: serde_json::Value = serde_json::from_str(&badge("none", 0, 0)).unwrap();
+        assert_eq!(json["message"], "0% (0 of 0)");
+        assert_eq!(json["color"], "orange");
     }
 
     #[test]

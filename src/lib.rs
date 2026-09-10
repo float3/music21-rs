@@ -6,6 +6,11 @@
 #![deny(missing_docs)]
 #![deny(missing_debug_implementations)]
 #![forbid(unsafe_code)]
+
+/// The README's examples, run as doctests so they cannot go stale.
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+mod readme {}
 // #![feature(inline_const_pat)]
 // #![feature(negative_impls)]
 // #![feature(specialization)]
