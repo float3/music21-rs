@@ -191,7 +191,7 @@ jobs:
           PYO3_PYTHON: python
 
       - name: Upload the wheel
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wheel-${{ matrix.os }}
           path: target/wheels/*.whl
@@ -797,7 +797,7 @@ jobs:
             --interpreter 3.9 3.10 3.11 3.12 3.13 3.14
 
       - name: Upload wheels
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dist-linux-${{ matrix.target }}
           path: dist
@@ -841,7 +841,7 @@ jobs:
             --interpreter python
 
       - name: Upload wheel
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dist-${{ matrix.os }}-${{ matrix.python-version }}
           path: dist
@@ -864,7 +864,7 @@ jobs:
           args: --manifest-path python/Cargo.toml --out dist
 
       - name: Upload sdist
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dist-sdist
           path: dist
