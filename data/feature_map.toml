@@ -12,7 +12,7 @@
 [[class]]
 python = "chord/__init__.py"
 name = "Chord"
-rust = ["src/chord/mod.rs", "src/note/mod.rs"]
+rust = ["src/chord/mod.rs", "src/chord/names.rs", "src/chord/notation.rs", "src/chord/quality.rs", "src/chord/resolution.rs", "src/chord/setclass.rs", "src/note/mod.rs"]
 note = "Chord analysis and the notation its notes carry. The per-note getters and setters music21 deprecated in v11 are the note's own methods here, reached through `notes_mut`."
 
 [class.renames]
@@ -34,7 +34,7 @@ chordTablesAddress = "chord_tables_address_entry"
 [[class]]
 python = "pitch.py"
 name = "Pitch"
-rust = ["src/pitch/mod.rs", "src/chord/mod.rs"]
+rust = ["src/pitch/mod.rs", "src/chord/mod.rs", "src/chord/names.rs", "src/chord/notation.rs", "src/chord/quality.rs", "src/chord/resolution.rs", "src/chord/setclass.rs"]
 
 [class.renames]
 diatonicNoteNum = "diatonic_note_number"
@@ -355,7 +355,7 @@ note = "A silence of a written length."
 [[class]]
 python = "chord/__init__.py"
 name = "ChordBase"
-rust = ["src/chord/mod.rs", "src/notation.rs"]
+rust = ["src/chord/mod.rs", "src/chord/names.rs", "src/chord/notation.rs", "src/chord/quality.rs", "src/chord/resolution.rs", "src/chord/setclass.rs", "src/notation.rs"]
 note = "What a chord is before it is asked anything: the notes it holds, and adding to and taking from them."
 
 [[class]]
@@ -436,7 +436,7 @@ figureTupleSolo = "from_pitch_and_reference"
 
 [[class]]
 python = "chord/__init__.py"
-rust = ["src/chord/mod.rs"]
+rust = ["src/chord/mod.rs", "src/chord/names.rs", "src/chord/notation.rs", "src/chord/quality.rs", "src/chord/resolution.rs", "src/chord/setclass.rs"]
 note = "Module-level helpers."
 
 [[class]]
