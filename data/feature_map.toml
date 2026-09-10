@@ -129,7 +129,7 @@ note = "tonalCertainty belongs to a key that came out of analysis, so it lives o
 [[class]]
 python = "scale/__init__.py"
 name = "ConcreteScale"
-rust = ["src/scale/scaletype.rs", "src/scale/stepscale.rs"]
+rust = ["src/scale/scaletype.rs", "src/scale/realized.rs", "src/scale/stepscale.rs"]
 
 [class.renames]
 name = "music21_name"
@@ -150,7 +150,7 @@ write = "notation output"
 python = "scale/__init__.py"
 members = "classes"
 suffix = "Scale"
-rust = ["src/scale/scaletype.rs", "src/scale/stepscale.rs", "src/scale/hexatonicblues.rs", "src/tuningsystem/scala.rs"]
+rust = ["src/scale/scaletype.rs", "src/scale/realized.rs", "src/scale/stepscale.rs", "src/scale/hexatonicblues.rs", "src/tuningsystem/scala.rs"]
 note = "The ConcreteScale subclasses, as ScaleType variants or runtime constructors."
 
 [class.renames]

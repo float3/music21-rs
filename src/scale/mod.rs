@@ -7,6 +7,7 @@ pub(crate) mod concretescale;
 pub mod diatonicscale;
 pub mod hexatonicblues;
 /// The named scales music21 exposes, realized from a tonic.
+pub(crate) mod realized;
 pub mod scaletype;
 pub mod stepscale;
 
