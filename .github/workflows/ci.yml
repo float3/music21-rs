@@ -561,6 +561,13 @@ jobs:
           cp examples/web/polyrhythm/app.js target/pages/polyrhythm/app.js
           cp examples/web/tuning/index.html target/pages/tuning/index.html
           cp examples/web/tuning/app.js target/pages/tuning/app.js
+          cp examples/web/tools.css target/pages/tools.css
+          cp examples/web/play.js target/pages/play.js
+          for page in harte roman scales serial; do
+            mkdir -p "target/pages/$page"
+            cp "examples/web/$page/index.html" "target/pages/$page/index.html"
+            cp "examples/web/$page/app.js" "target/pages/$page/app.js"
+          done
           cp -R examples/web/pkg target/pages/pkg
 
       - name: Smoke check demo site

@@ -11,6 +11,10 @@ __pycache__/
 /examples/web/chords/*.js
 /examples/web/polyrhythm/*.js
 /examples/web/tuning/*.js
+/examples/web/harte/*.js
+/examples/web/roman/*.js
+/examples/web/scales/*.js
+/examples/web/serial/*.js
 
 # OS/editor noise
 .DS_Store

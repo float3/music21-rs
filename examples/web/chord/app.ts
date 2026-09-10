@@ -5,7 +5,7 @@ import init, {
     analyze_chord_with_options,
     chord_resolution_abc,
     pitch_midi_number,
-    twelve_tone_tuning_systems,
+    playable_tuning_systems,
 } from "../pkg/music21_rs_web.js";
 
 type TuningFrequencyInfo = {
@@ -1045,9 +1045,9 @@ function currentSoundTuningId(): string {
 function populateSoundTuningOptions(): void {
     let systems: TuningSystemOption[] = [];
     try {
-        systems = twelve_tone_tuning_systems() as TuningSystemOption[];
+        systems = playable_tuning_systems() as TuningSystemOption[];
     } catch (err) {
-        console.error("Twelve-tone tuning systems unavailable", err);
+        console.error("Tuning systems unavailable", err);
     }
 
     if (!systems.length) {

@@ -9,10 +9,15 @@
     },
     "include": [
         "./help-tooltips.ts",
+        "./play.ts",
         "./theme.ts",
         "./chord/app.ts",
         "./chords/app.ts",
         "./polyrhythm/app.ts",
-        "./tuning/app.ts"
+        "./tuning/app.ts",
+        "./harte/app.ts",
+        "./roman/app.ts",
+        "./scales/app.ts",
+        "./serial/app.ts"
     ]
 }

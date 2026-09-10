@@ -156,8 +156,11 @@ The tuning code has no counterpart in music21:
 ## Browser demos
 
 [hilll.dev/music21-rs](https://hilll.dev/music21-rs/) runs the crate in the
-browser via wasm: a chord inspector, a chord browser, a polyrhythm lab and a
-tuning explorer, from [examples/web/](./examples/web/).
+browser via wasm, from [examples/web/](./examples/web/): a chord inspector, a
+chord browser, a polyrhythm lab, a Harte chord reader, a roman numeral
+realizer, a scale finder, a tone row matrix, and a tuning explorer that plays
+every tuning system, regular temperament, equal division and Scala scale from
+the computer keyboard or a MIDI device.
 [examples/audio/](./examples/audio/) plays a polyrhythm through the default
 audio device.
 

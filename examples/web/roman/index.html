@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>music21-rs Roman Numerals</title>
+        <link rel="modulepreload" href="./app.js" />
+        <link rel="modulepreload" href="../pkg/music21_rs_web.js" />
+        <link rel="stylesheet" href="../theme.css" />
+        <link rel="stylesheet" href="../tools.css" />
+    </head>
+    <body class="page-roman">
+        <main class="shell">
+            <header>
+                <div class="title-row">
+                    <a class="home-link" href="../">Home</a>
+                    <h1>Roman Numerals</h1>
+                </div>
+                <nav class="top-links">
+                    <a href="../chord/">Chord Inspector</a>
+                    <a href="../chords/">Chord Browser</a>
+                    <a href="../harte/">Harte</a>
+                    <a href="../scales/">Scales</a>
+                    <a href="../tuning/">Tuning</a>
+                    <a href="../serial/">Tone Rows</a>
+                    <a href="../polyrhythm/">Polyrhythm</a>
+                    <a id="docs-link" href="../docs/music21_rs/index.html"
+                        >Rust docs</a
+                    >
+                </nav>
+            </header>
+            <div class="examples" id="modes">
+                <button class="chip active" type="button" data-mode="realize">
+                    Realize a figure
+                </button>
+                <button class="chip" type="button" data-mode="name">
+                    Name a chord
+                </button>
+            </div>
+            <form id="form" class="input-row">
+                <label class="field">
+                    <span id="input-label">Figure</span>
+                    <input
+                        id="input"
+                        type="text"
+                        value="V65/V"
+                        autocomplete="off"
+                        spellcheck="false"
+                    />
+                </label>
+                <label class="field">
+                    <span>Key</span>
+                    <input
+                        id="key"
+                        type="text"
+                        value="g"
+                        placeholder="C, c, F#, b-"
+                        autocomplete="off"
+                        spellcheck="false"
+                    />
+                </label>
+                <button class="primary" type="submit">Go</button>
+                <button id="play" class="secondary" type="button">
+                    Play
+                </button>
+            </form>
+            <div class="examples" id="examples"></div>
+            <p class="error" id="error"></p>
+            <div class="grid">
+                <section>
+                    <h2 id="title">Numeral</h2>
+                    <div class="facts" id="facts"></div>
+                    <div class="pitches" id="pitches"></div>
+                    <div class="actions" id="actions"></div>
+                </section>
+                <section>
+                    <h2>About</h2>
+                    <div class="about">
+                        <p>
+                            A figure is figured bass over a scale degree:
+                            <code>V7</code>, <code>ii65</code>,
+                            <code>viio7/V</code>, <code>It6</code>,
+                            <code>Ger65</code>, <code>N6</code>,
+                            <code>Cad64</code>, <code>I[no3]</code>,
+                            <code>V7[add4]</code>. Uppercase is major, lowercase
+                            minor; a key written lowercase is minor.
+                        </p>
+                        <p>
+                            Naming a chord is music21's
+                            <code>romanNumeralFromChord</code>: every altered
+                            degree is written into the figure, so a diminished
+                            triad on the tonic of C major is
+                            <code>io5b3</code> and an augmented sixth is named
+                            as one. Leave the key empty to read the chord in
+                            its own root.
+                        </p>
+                    </div>
+                </section>
+            </div>
+        </main>
+        <script type="module" src="./app.js"></script>
+    </body>
+</html>

@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>music21-rs Scales</title>
+        <link rel="modulepreload" href="./app.js" />
+        <link rel="modulepreload" href="../pkg/music21_rs_web.js" />
+        <link rel="stylesheet" href="../theme.css" />
+        <link rel="stylesheet" href="../tools.css" />
+    </head>
+    <body class="page-scales">
+        <main class="shell">
+            <header>
+                <div class="title-row">
+                    <a class="home-link" href="../">Home</a>
+                    <h1>Scales</h1>
+                </div>
+                <nav class="top-links">
+                    <a href="../chord/">Chord Inspector</a>
+                    <a href="../chords/">Chord Browser</a>
+                    <a href="../harte/">Harte</a>
+                    <a href="../roman/">Roman Numerals</a>
+                    <a href="../tuning/">Tuning</a>
+                    <a href="../serial/">Tone Rows</a>
+                    <a href="../polyrhythm/">Polyrhythm</a>
+                    <a id="docs-link" href="../docs/music21_rs/index.html"
+                        >Rust docs</a
+                    >
+                </nav>
+            </header>
+            <form id="form" class="input-row">
+                <label class="field">
+                    <span>Scale</span>
+                    <select id="type"></select>
+                </label>
+                <label class="field">
+                    <span>Tonic</span>
+                    <input
+                        id="tonic"
+                        type="text"
+                        value="D4"
+                        placeholder="C4, F#3, B-"
+                        autocomplete="off"
+                        spellcheck="false"
+                    />
+                </label>
+                <button class="primary" type="submit">Realize</button>
+                <button id="play" class="secondary" type="button">
+                    Play
+                </button>
+            </form>
+            <p class="error" id="error"></p>
+            <div class="grid">
+                <section>
+                    <h2 id="title">Scale</h2>
+                    <div class="facts" id="facts"></div>
+                    <div class="pitches" id="pitches"></div>
+                    <div class="actions" id="actions"></div>
+                </section>
+                <section>
+                    <h2>Which scale is this?</h2>
+                    <form id="derive-form" class="input-row two" style="padding: 12px 14px 0">
+                        <label class="field">
+                            <span>Pitches</span>
+                            <input
+                                id="derive-input"
+                                type="text"
+                                value="C E G B F#"
+                                placeholder="F# A C# E"
+                                autocomplete="off"
+                                spellcheck="false"
+                            />
+                        </label>
+                        <button class="primary" type="submit">Derive</button>
+                    </form>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Match</th>
+                                    <th>Scale</th>
+                                    <th>Pitches</th>
+                                </tr>
+                            </thead>
+                            <tbody id="derived"></tbody>
+                        </table>
+                    </div>
+                </section>
+                <section class="wide">
+                    <h2>About</h2>
+                    <div class="about">
+                        <p>
+                            The twenty scale types music21 defines as classes,
+                            realized from any tonic over one octave with the
+                            spelling music21's interval networks give them.
+                            Deriving tries every type from every tonic music21
+                            tries and ranks them by how many of the given
+                            pitches each holds.
+                        </p>
+                        <p>
+                            For scales in other tunings, the Scala archive and
+                            regular temperaments, see the
+                            <a href="../tuning/">Tuning Explorer</a>.
+                        </p>
+                    </div>
+                </section>
+            </div>
+        </main>
+        <script type="module" src="./app.js"></script>
+    </body>
+</html>

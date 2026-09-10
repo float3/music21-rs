@@ -11,17 +11,47 @@ use wasm_bindgen::prelude::*;
 
 #[derive(Serialize)]
 struct TuningFrequencyInfo {
-    id: &'static str,
-    name: &'static str,
+    id: String,
+    name: String,
     frequency_hz: f64,
     cents_from_equal_temperament: f64,
 }
 
 #[derive(Serialize)]
 struct PlayableTuningSystemInfo {
-    id: &'static str,
-    name: &'static str,
+    id: String,
+    name: String,
     description: &'static str,
+}
+
+/// Every built-in tuning system a page can offer: the ratio tables and
+/// historical temperaments, and the equal temperaments beyond twelve.
+fn all_playable() -> impl Iterator<Item = TuningSystem> {
+    ALL_TUNING_SYSTEMS.into_iter().chain(
+        music21_rs::tuningsystem::COMMON_EQUAL_TEMPERAMENTS
+            .into_iter()
+            .filter(|tuning_system| tuning_system.octave_size() != 12),
+    )
+}
+
+/// An id that tells the equal temperaments apart: the twelve-tone one keeps
+/// the bare name, so links that named it still work.
+fn tuning_id(tuning_system: TuningSystem) -> String {
+    match tuning_system {
+        TuningSystem::EqualTemperament { octave_size } if octave_size != 12 => {
+            format!("EqualTemperament{octave_size}")
+        }
+        other => other.id().to_string(),
+    }
+}
+
+fn tuning_label(tuning_system: TuningSystem) -> String {
+    match tuning_system {
+        TuningSystem::EqualTemperament { octave_size } if octave_size != 12 => {
+            format!("Equal temperament, {octave_size} per octave")
+        }
+        other => other.display_name().to_string(),
+    }
 }
 
 #[derive(Serialize)]
@@ -126,9 +156,10 @@ struct KnownChordInfo {
 
 #[derive(Serialize)]
 struct TuningSystemInfo {
-    id: &'static str,
-    name: &'static str,
+    id: String,
+    name: String,
     description: &'static str,
+    family: &'static str,
     octave_size: u32,
     root_frequency_hz: f64,
     degrees: Vec<TuningDegreeInfo>,
@@ -655,8 +686,7 @@ pub fn tuning_systems(root_frequency_hz: f64) -> Result<JsValue, JsValue> {
         ));
     }
 
-    let systems = ALL_TUNING_SYSTEMS
-        .into_iter()
+    let systems = all_playable()
         .map(|tuning_system| {
             let octave_size = tuning_system.octave_size();
             let label_base = octave_size * 5;
@@ -676,9 +706,10 @@ pub fn tuning_systems(root_frequency_hz: f64) -> Result<JsValue, JsValue> {
                 .collect();
 
             TuningSystemInfo {
-                id: tuning_system.id(),
-                name: tuning_system.display_name(),
+                id: tuning_id(tuning_system),
+                name: tuning_label(tuning_system),
                 description: tuning_system.description(),
+                family: tuning_family(tuning_system),
                 octave_size,
                 root_frequency_hz,
                 degrees,
@@ -690,12 +721,13 @@ pub fn tuning_systems(root_frequency_hz: f64) -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen]
-/// Returns the built-in twelve-tone tuning systems usable for chord playback.
-pub fn twelve_tone_tuning_systems() -> Result<JsValue, JsValue> {
-    let systems = twelve_tone_systems()
+/// Returns every built-in tuning system a chord can be sounded in: the
+/// twelve-tone ones by degree, the rest by the nearest degree in cents.
+pub fn playable_tuning_systems() -> Result<JsValue, JsValue> {
+    let systems = all_playable()
         .map(|tuning_system| PlayableTuningSystemInfo {
-            id: tuning_system.id(),
-            name: tuning_system.display_name(),
+            id: tuning_id(tuning_system),
+            name: tuning_label(tuning_system),
             description: tuning_system.description(),
         })
         .collect::<Vec<_>>();
@@ -786,12 +818,16 @@ fn pitch_infos(pitches: &[Pitch]) -> Vec<PitchInfo> {
         .enumerate()
         .map(|(index, display_pitch)| {
             let pitch_space = display_pitch.ps();
-            let tuning_frequencies = twelve_tone_systems()
-                .map(|tuning_system| TuningFrequencyInfo {
-                    id: tuning_system.id(),
-                    name: tuning_system.display_name(),
-                    frequency_hz: display_pitch.frequency_hz_in(tuning_system),
-                    cents_from_equal_temperament: tuning_system.cents_at(pitch_space),
+            let tuning_frequencies = all_playable()
+                .map(|tuning_system| {
+                    let frequency_hz = frequency_in_system(tuning_system, pitch_space);
+                    TuningFrequencyInfo {
+                        id: tuning_id(tuning_system),
+                        name: tuning_label(tuning_system),
+                        frequency_hz,
+                        cents_from_equal_temperament: 1200.0
+                            * (frequency_hz / display_pitch.frequency_hz()).log2(),
+                    }
                 })
                 .collect::<Vec<_>>();
 
@@ -811,11 +847,310 @@ fn pitch_infos(pitches: &[Pitch]) -> Vec<PitchInfo> {
         .collect()
 }
 
-fn twelve_tone_systems() -> impl Iterator<Item = TuningSystem> {
-    ALL_TUNING_SYSTEMS
+/// Which shelf a tuning system sits on in the explorer.
+fn tuning_family(tuning_system: TuningSystem) -> &'static str {
+    use music21_rs::tuningsystem::{
+        COMMON_EQUAL_TEMPERAMENTS, COMMON_TWELVE_TONE_TUNING_SYSTEMS, HISTORICAL_TEMPERAMENTS,
+    };
+    if HISTORICAL_TEMPERAMENTS.contains(&tuning_system) {
+        "Historical temperaments"
+    } else if COMMON_EQUAL_TEMPERAMENTS.contains(&tuning_system) {
+        "Equal temperaments"
+    } else if COMMON_TWELVE_TONE_TUNING_SYSTEMS.contains(&tuning_system) {
+        "Twelve-tone systems"
+    } else {
+        "Just intonation and others"
+    }
+}
+
+#[derive(Serialize)]
+struct GeneratorInfo {
+    ratio: &'static str,
+    cents: f64,
+}
+
+#[derive(Serialize)]
+struct TemperamentInfo {
+    name: &'static str,
+    page: &'static str,
+    subgroup: String,
+    rank: usize,
+    periods_per_equave: u32,
+    equave: String,
+    equave_cents: f64,
+    generators: Vec<GeneratorInfo>,
+    optimization: &'static str,
+    commas: Vec<&'static str>,
+    published_moments: Vec<&'static str>,
+    /// The moment-of-symmetry sizes up to forty notes, for a rank-2
+    /// temperament; a rank-3 one stacks two generators and has none.
+    moments: Vec<u32>,
+}
+
+#[wasm_bindgen]
+/// Lists the regular temperaments the crate carries from the Xenharmonic
+/// Wiki, with the scale sizes each one makes.
+pub fn regular_temperaments() -> Result<JsValue, JsValue> {
+    use music21_rs::tuningsystem::WIKI_TEMPERAMENTS;
+    let infos = WIKI_TEMPERAMENTS
         .iter()
-        .copied()
-        .filter(|tuning_system| tuning_system.octave_size() == 12)
+        .map(|named| {
+            let temperament = named.temperament().ok();
+            let moments = temperament
+                .as_ref()
+                .and_then(|temperament| temperament.moments(40).ok())
+                .unwrap_or_default();
+            let equave_cents = temperament
+                .as_ref()
+                .map(|temperament| temperament.equave_cents())
+                .unwrap_or(1200.0);
+            TemperamentInfo {
+                name: named.name,
+                page: named.page,
+                subgroup: named
+                    .subgroup
+                    .iter()
+                    .map(|prime| prime.to_string())
+                    .collect::<Vec<_>>()
+                    .join("."),
+                rank: named.generator_rows.len() + 1,
+                periods_per_equave: named.periods_per_equave,
+                equave: format!("{}/1", named.subgroup.first().copied().unwrap_or(2)),
+                equave_cents,
+                generators: named
+                    .generator_ratios
+                    .iter()
+                    .zip(named.generator_cents.iter())
+                    .map(|(ratio, cents)| GeneratorInfo {
+                        ratio,
+                        cents: *cents,
+                    })
+                    .collect(),
+                optimization: named.optimization,
+                commas: named.commas.to_vec(),
+                published_moments: named.moments.to_vec(),
+                moments,
+            }
+        })
+        .collect::<Vec<_>>();
+    serde_wasm_bindgen::to_value(&infos).map_err(|err| JsValue::from_str(&err.to_string()))
+}
+
+/// A scale given as cents above a root, in the shape the explorer renders
+/// every scale in.
+fn scale_from_cents(
+    file: String,
+    description: String,
+    cents: &[f64],
+    period_cents: f64,
+    root_frequency_hz: f64,
+    label: impl Fn(usize, f64) -> String,
+) -> ScalaScaleInfo {
+    let degrees = cents
+        .iter()
+        .enumerate()
+        .map(|(degree, cents)| ScalaDegreeInfo {
+            degree,
+            label: label(degree, *cents),
+            is_exact_ratio: false,
+            ratio: (2.0_f64).powf(cents / 1200.0),
+            cents: *cents,
+            frequency_hz: root_frequency_hz * (2.0_f64).powf(cents / 1200.0),
+        })
+        .collect::<Vec<_>>();
+    ScalaScaleInfo {
+        file,
+        description,
+        degree_count: degrees.len().saturating_sub(1),
+        period_ratio: (2.0_f64).powf(period_cents / 1200.0),
+        period_cents,
+        root_frequency_hz,
+        degrees,
+    }
+}
+
+#[wasm_bindgen]
+/// Realizes a regular temperament as a moment-of-symmetry scale of `notes`
+/// notes to the equave, from a root frequency.
+pub fn temperament_scale(
+    name: &str,
+    notes: u32,
+    root_frequency_hz: f64,
+) -> Result<JsValue, JsValue> {
+    use music21_rs::tuningsystem::WIKI_TEMPERAMENTS;
+    check_root_frequency(root_frequency_hz)?;
+    let named = WIKI_TEMPERAMENTS
+        .iter()
+        .find(|named| named.name == name)
+        .ok_or_else(|| JsValue::from_str(&format!("no temperament named {name}")))?;
+    let temperament = named
+        .temperament()
+        .map_err(|err| JsValue::from_str(&err.to_string()))?;
+    let scale = temperament
+        .mos(notes)
+        .map_err(|err| JsValue::from_str(&err.to_string()))?;
+    let periods = temperament.periods_per_equave().unsigned_abs().max(1);
+    let period_cents = temperament.period_cents();
+    let mut cents = Vec::new();
+    for period in 0..periods {
+        for degree in scale.degrees() {
+            cents.push(degree + f64::from(period) * period_cents);
+        }
+    }
+    cents.push(temperament.equave_cents());
+    let pattern = scale
+        .word()
+        .map(|word| format!(", pattern {word}"))
+        .unwrap_or_default();
+    let generators = named
+        .generator_ratios
+        .iter()
+        .zip(named.generator_cents.iter())
+        .map(|(ratio, cents)| format!("{ratio} ({cents:.3}c)"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let info = scale_from_cents(
+        format!("temperament:{name}:{notes}"),
+        format!(
+            "{name} temperament in the {} subgroup, {notes} notes to the equave{pattern}; generator {generators}",
+            temperament.subgroup_name()
+        ),
+        &cents,
+        temperament.equave_cents(),
+        root_frequency_hz,
+        |_, cents| format!("{cents:.1}c"),
+    );
+    serde_wasm_bindgen::to_value(&info).map_err(|err| JsValue::from_str(&err.to_string()))
+}
+
+#[derive(Serialize)]
+struct EqualDivisionPreset {
+    label: String,
+    divisions: u32,
+    numerator: i32,
+    denominator: i32,
+    note: &'static str,
+}
+
+#[wasm_bindgen]
+/// The equal divisions worth a shelf of their own: the common EDOs, and the
+/// divisions of other intervals the literature names.
+pub fn equal_division_presets() -> Result<JsValue, JsValue> {
+    let presets = [
+        (5, 2, 1, "five equal steps, the Javanese slendro's shape"),
+        (7, 2, 1, "seven equal steps, the Thai scale's shape"),
+        (12, 2, 1, "the twelve-tone equal temperament"),
+        (15, 2, 1, "Blackwood's decatonic playground"),
+        (17, 2, 1, "a neutral-third system with a sharp fifth"),
+        (19, 2, 1, "a meantone system where the diesis is one step"),
+        (
+            22,
+            2,
+            1,
+            "the Indian shruti count, and a superpyth and porcupine tuning",
+        ),
+        (24, 2, 1, "quarter tones"),
+        (31, 2, 1, "Huygens and Fokker's near-quarter-comma meantone"),
+        (41, 2, 1, "a near-Pythagorean system with good sevenths"),
+        (53, 2, 1, "the Holderian comma, close to just intonation"),
+        (72, 2, 1, "twelfth tones, a superset of 12, 24 and 36"),
+        (13, 3, 1, "Bohlen-Pierce, thirteen steps of a twelfth"),
+        (9, 3, 2, "Wendy Carlos's alpha, 78 cents a step"),
+        (11, 3, 2, "Wendy Carlos's beta, 63.8 cents a step"),
+        (20, 3, 2, "Wendy Carlos's gamma, 35.1 cents a step"),
+        (8, 5, 2, "eight steps of a major tenth"),
+    ]
+    .into_iter()
+    .map(|(divisions, numerator, denominator, note)| {
+        let label =
+            music21_rs::tuningsystem::EqualDivision::of_ratio(divisions, numerator, denominator)
+                .map(|division| division.to_string())
+                .unwrap_or_else(|_| format!("{divisions}ed{numerator}/{denominator}"));
+        EqualDivisionPreset {
+            label,
+            divisions,
+            numerator,
+            denominator,
+            note,
+        }
+    })
+    .collect::<Vec<_>>();
+    serde_wasm_bindgen::to_value(&presets).map_err(|err| JsValue::from_str(&err.to_string()))
+}
+
+#[wasm_bindgen]
+/// Realizes an equal division of any interval, `divisions` equal steps of
+/// `numerator/denominator`, from a root frequency.
+pub fn equal_division_scale(
+    divisions: u32,
+    numerator: i32,
+    denominator: i32,
+    root_frequency_hz: f64,
+) -> Result<JsValue, JsValue> {
+    use music21_rs::tuningsystem::EqualDivision;
+    check_root_frequency(root_frequency_hz)?;
+    let division = EqualDivision::of_ratio(divisions, numerator, denominator)
+        .map_err(|err| JsValue::from_str(&err.to_string()))?;
+    let cents = (0..=divisions)
+        .map(|degree| division.cents_at(degree as i32))
+        .collect::<Vec<_>>();
+    let info = scale_from_cents(
+        division.to_string(),
+        format!(
+            "{divisions} equal steps of {numerator}/{denominator}, {:.3} cents each",
+            division.step_cents()
+        ),
+        &cents,
+        division.period_cents(),
+        root_frequency_hz,
+        |degree, _| format!("{degree}\\{divisions}"),
+    );
+    serde_wasm_bindgen::to_value(&info).map_err(|err| JsValue::from_str(&err.to_string()))
+}
+
+#[wasm_bindgen]
+/// The frequency recursive just intonation sounds for a key, given the key
+/// its context stands on: both are degrees of the twelve-tone keyboard above
+/// C4, and the root frequency is C4's.
+pub fn adaptive_frequency(
+    context_degree: f64,
+    degree: f64,
+    root_frequency_hz: f64,
+) -> Result<f64, JsValue> {
+    use music21_rs::tuningsystem::{C4, adaptive::RECURSIVE_JI};
+    check_root_frequency(root_frequency_hz)?;
+    if !context_degree.is_finite() || !degree.is_finite() {
+        return Err(JsValue::from_str("degrees must be finite"));
+    }
+    // The adaptive systems count degrees from C-1, five octaves below C4.
+    let base = 60.0;
+    let frequency = RECURSIVE_JI.frequency_at(context_degree + base, degree + base, None);
+    Ok(frequency * root_frequency_hz / C4)
+}
+
+/// A pitch's frequency in a tuning system, which for a system of twelve
+/// degrees is its own degree and for any other the degree nearest it in
+/// cents within the octave.
+fn frequency_in_system(tuning_system: TuningSystem, pitch_space: f64) -> f64 {
+    let octave_size = tuning_system.octave_size();
+    if octave_size == 12 {
+        return tuning_system.frequency_at(pitch_space);
+    }
+    let cents = pitch_space.rem_euclid(12.0) * 100.0;
+    let nearest = (0..octave_size)
+        .min_by(|a, b| {
+            let distance = |degree: &u32| {
+                (1200.0 * tuning_system.fraction(*degree as usize).ratio().log2() - cents).abs()
+            };
+            distance(a)
+                .partial_cmp(&distance(b))
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .unwrap_or(0);
+    let octave = pitch_space.div_euclid(12.0);
+    music21_rs::tuningsystem::CN1
+        * (2.0_f64).powf(octave)
+        * tuning_system.fraction(nearest as usize).ratio()
 }
 
 fn parse_midi_input(input: &str) -> Option<Vec<i32>> {
@@ -1003,7 +1338,7 @@ mod tests {
     use super::{
         chord_from_input, display_key_context, display_pitches_for_sequence,
         estimated_key_for_chord, known_chord_info, parse_guitar_tuning, parse_midi_input,
-        parse_pitch_midi_number, pitch_infos, twelve_tone_systems,
+        parse_pitch_midi_number, pitch_infos,
     };
     use music21_rs::{Chord, KnownChordType, Pitch};
 
@@ -1040,19 +1375,26 @@ mod tests {
     }
 
     #[test]
-    fn pitch_infos_include_all_twelve_tone_tuning_ids() {
+    fn pitch_infos_include_every_tuning_system() {
         let pitch: Pitch = "C4".parse().unwrap();
         let infos = pitch_infos(&[pitch]);
         let ids = infos[0]
             .tuning_frequencies
             .iter()
-            .map(|tuning| tuning.id)
+            .map(|tuning| tuning.id.clone())
             .collect::<Vec<_>>();
-        let expected_ids = twelve_tone_systems()
-            .map(|tuning_system| tuning_system.id())
+        let expected_ids = super::all_playable()
+            .map(super::tuning_id)
             .collect::<Vec<_>>();
-
         assert_eq!(ids, expected_ids);
+        // A system with more than twelve degrees sounds the nearest one: a
+        // major third in 19-EDO is six steps, 378.9 cents.
+        let nineteen = infos[0]
+            .tuning_frequencies
+            .iter()
+            .find(|tuning| tuning.id == "EqualTemperament19")
+            .expect("19-EDO is a tuning system");
+        assert!((nineteen.cents_from_equal_temperament).abs() < 1e-6);
     }
 
     #[test]
@@ -1315,4 +1657,437 @@ pub fn parse_scala_scale(
         .map_err(|error| JsValue::from_str(&format!("{file_name}: {error}")))?;
     let info = describe_scale(file_name, &scale, root_frequency_hz);
     serde_wasm_bindgen::to_value(&info).map_err(|err| JsValue::from_str(&err.to_string()))
+}
+
+// ---------------------------------------------------------------- Harte
+
+#[derive(Serialize)]
+struct HarteInfo {
+    label: String,
+    canonical: String,
+    pretty: String,
+    is_empty: bool,
+    root: Option<String>,
+    bass: Option<String>,
+    shorthand: Option<String>,
+    written_degrees: Vec<String>,
+    sounding_degrees: Vec<String>,
+    pitches: Vec<String>,
+    midi: Vec<i32>,
+    multi_hot: Vec<u8>,
+    multi_hot_from_root: Vec<u8>,
+    common_name: String,
+    pitched_common_name: String,
+    forte_class: Option<String>,
+    chord_symbol: Option<String>,
+}
+
+#[wasm_bindgen]
+/// Reads a chord label in Harte notation and describes the chord it sounds.
+pub fn harte_chord(label: &str) -> Result<JsValue, JsValue> {
+    let harte = music21_rs::Harte::new(label).map_err(|err| JsValue::from_str(&err.to_string()))?;
+    let chord = harte.chord();
+    let info = HarteInfo {
+        label: label.to_string(),
+        canonical: harte.to_string(),
+        pretty: harte.prettify(),
+        is_empty: harte.is_empty(),
+        root: harte.root_name().map(str::to_string),
+        bass: harte.bass_degree().map(str::to_string),
+        shorthand: harte.shorthand().map(str::to_string),
+        written_degrees: harte.degrees().map(<[String]>::to_vec).unwrap_or_default(),
+        sounding_degrees: harte.sounding_degrees().to_vec(),
+        pitches: chord
+            .pitches()
+            .iter()
+            .map(Pitch::name_with_octave)
+            .collect(),
+        midi: harte.midi_pitches(),
+        multi_hot: harte.multi_hot_encoding(false).to_vec(),
+        multi_hot_from_root: harte.multi_hot_encoding(true).to_vec(),
+        common_name: chord.common_name(),
+        pitched_common_name: chord.pitched_common_name(),
+        forte_class: chord.forte_class(),
+        chord_symbol: chord.chord_symbol(),
+    };
+    serde_wasm_bindgen::to_value(&info).map_err(|err| JsValue::from_str(&err.to_string()))
+}
+
+#[derive(Serialize)]
+struct ShorthandInfo {
+    name: &'static str,
+    degrees: Vec<&'static str>,
+}
+
+#[wasm_bindgen]
+/// The shorthands Harte notation knows, each with the degrees it stands for.
+pub fn harte_shorthands() -> Result<JsValue, JsValue> {
+    let table = music21_rs::harte::SHORTHAND_DEGREES
+        .iter()
+        .map(|(name, degrees)| ShorthandInfo {
+            name,
+            degrees: degrees.to_vec(),
+        })
+        .collect::<Vec<_>>();
+    serde_wasm_bindgen::to_value(&table).map_err(|err| JsValue::from_str(&err.to_string()))
+}
+
+// ---------------------------------------------------------------- Roman numerals
+
+#[derive(Serialize)]
+struct RomanInfo {
+    figure: String,
+    roman_numeral: String,
+    degree: u8,
+    alteration: i8,
+    inversion: u8,
+    quality: String,
+    key: String,
+    pitches: Vec<String>,
+    pitch_names: Vec<String>,
+    common_name: String,
+    pitched_common_name: String,
+    functionality_score: u8,
+    is_neapolitan: bool,
+    is_mixture: bool,
+}
+
+fn key_from_text(key: &str) -> Result<Key, JsValue> {
+    Key::from_tonic(key.trim()).map_err(|err| JsValue::from_str(&format!("Key {key:?}: {err}")))
+}
+
+fn describe_numeral(numeral: &music21_rs::RomanNumeral) -> Result<RomanInfo, JsValue> {
+    let chord = numeral
+        .to_chord()
+        .map_err(|err| JsValue::from_str(&err.to_string()))?;
+    let (degree, alteration) = numeral.scale_degree_with_alteration();
+    let key = numeral.key();
+    Ok(RomanInfo {
+        figure: numeral.figure().to_string(),
+        roman_numeral: numeral.roman_numeral(),
+        degree,
+        alteration,
+        inversion: numeral.inversion(),
+        quality: format!("{:?}", numeral.implied_quality()).to_lowercase(),
+        key: format!("{} {}", key.tonic_pitch_name_with_case(), key.mode()),
+        pitches: chord
+            .pitches()
+            .iter()
+            .map(Pitch::name_with_octave)
+            .collect(),
+        pitch_names: chord.pitch_names(),
+        common_name: chord.common_name(),
+        pitched_common_name: chord.pitched_common_name(),
+        functionality_score: numeral.functionality_score(),
+        is_neapolitan: numeral.is_neapolitan(false),
+        is_mixture: numeral.is_mixture(true).unwrap_or(false),
+    })
+}
+
+#[wasm_bindgen]
+/// Realizes a roman numeral figure in a key: `V65/V` in `g`, say.
+pub fn realize_roman(figure: &str, key: &str) -> Result<JsValue, JsValue> {
+    let numeral = music21_rs::RomanNumeral::new(figure.trim(), key_from_text(key)?)
+        .map_err(|err| JsValue::from_str(&err.to_string()))?;
+    let info = describe_numeral(&numeral)?;
+    serde_wasm_bindgen::to_value(&info).map_err(|err| JsValue::from_str(&err.to_string()))
+}
+
+#[wasm_bindgen]
+/// Names a chord as a roman numeral in a key, the way music21's
+/// `romanNumeralFromChord` names it; with no key the chord's root is the key.
+pub fn roman_from_chord(chord: &str, key: &str) -> Result<JsValue, JsValue> {
+    let chord = Chord::new(chord.trim()).map_err(|err| JsValue::from_str(&err.to_string()))?;
+    let key = if key.trim().is_empty() {
+        None
+    } else {
+        Some(key_from_text(key)?)
+    };
+    let numeral = music21_rs::roman_numeral_from_chord(&chord, key.as_ref())
+        .map_err(|err| JsValue::from_str(&err.to_string()))?
+        .ok_or_else(|| JsValue::from_str("the chord has no root to name"))?;
+    let info = describe_numeral(&numeral)?;
+    serde_wasm_bindgen::to_value(&info).map_err(|err| JsValue::from_str(&err.to_string()))
+}
+
+// ---------------------------------------------------------------- Scales
+
+#[derive(Serialize)]
+struct ScaleTypeInfo {
+    id: &'static str,
+    name: &'static str,
+    steps: usize,
+}
+
+#[wasm_bindgen]
+/// The scale types the crate realizes, by music21's class names.
+pub fn scale_types() -> Result<JsValue, JsValue> {
+    use music21_rs::scale::{Scale, ScaleType};
+    let infos = ScaleType::ALL
+        .iter()
+        .map(|scale_type| ScaleTypeInfo {
+            id: scale_type.music21_name(),
+            name: scale_type.music21_descriptive_name(),
+            steps: Scale::new(*scale_type, Pitch::from_name("C4").expect("a pitch"))
+                .pitches()
+                .map(|pitches| pitches.len().saturating_sub(1))
+                .unwrap_or(0),
+        })
+        .collect::<Vec<_>>();
+    serde_wasm_bindgen::to_value(&infos).map_err(|err| JsValue::from_str(&err.to_string()))
+}
+
+#[derive(Serialize)]
+struct ScaleInfo {
+    id: &'static str,
+    name: &'static str,
+    tonic: String,
+    pitches: Vec<String>,
+    pitch_names: Vec<String>,
+    degrees: Vec<u8>,
+    steps: Vec<String>,
+}
+
+fn scale_type_named(id: &str) -> Result<music21_rs::scale::ScaleType, JsValue> {
+    music21_rs::scale::ScaleType::ALL
+        .into_iter()
+        .find(|scale_type| scale_type.music21_name() == id)
+        .ok_or_else(|| JsValue::from_str(&format!("no scale type named {id}")))
+}
+
+fn describe_realized(scale: &music21_rs::scale::Scale) -> Result<ScaleInfo, JsValue> {
+    let pitches = scale
+        .pitches()
+        .map_err(|err| JsValue::from_str(&err.to_string()))?;
+    let steps = pitches
+        .windows(2)
+        .map(|pair| {
+            music21_rs::Interval::between_pitches(&pair[0], &pair[1])
+                .map(|interval| interval.directed_name())
+                .unwrap_or_default()
+        })
+        .collect();
+    Ok(ScaleInfo {
+        id: scale.scale_type().music21_name(),
+        name: scale.scale_type().music21_descriptive_name(),
+        tonic: scale.tonic().name_with_octave(),
+        pitch_names: pitches.iter().map(Pitch::name).collect(),
+        pitches: pitches.iter().map(Pitch::name_with_octave).collect(),
+        degrees: scale
+            .named_degrees()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|degree| degree as u8)
+            .collect(),
+        steps,
+    })
+}
+
+#[wasm_bindgen]
+/// Realizes a scale type from a tonic, over one octave.
+pub fn realize_scale(scale_type: &str, tonic: &str) -> Result<JsValue, JsValue> {
+    let tonic =
+        Pitch::from_name(tonic.trim()).map_err(|err| JsValue::from_str(&err.to_string()))?;
+    let tonic = if tonic.octave().is_none() {
+        Pitch::from_name(format!("{}4", tonic.name()))
+            .map_err(|err| JsValue::from_str(&err.to_string()))?
+    } else {
+        tonic
+    };
+    let scale = music21_rs::scale::Scale::new(scale_type_named(scale_type)?, tonic);
+    let info = describe_realized(&scale)?;
+    serde_wasm_bindgen::to_value(&info).map_err(|err| JsValue::from_str(&err.to_string()))
+}
+
+#[derive(Serialize)]
+struct DerivedScaleInfo {
+    matched: usize,
+    total: usize,
+    scale: ScaleInfo,
+}
+
+#[wasm_bindgen]
+/// The scales a set of pitches fits best, every type tried from every tonic
+/// and ranked by how many of the pitches each holds.
+pub fn derive_scales(pitches: &str, limit: usize) -> Result<JsValue, JsValue> {
+    let pitches = pitches
+        .split_whitespace()
+        .map(Pitch::from_name)
+        .collect::<Result<Vec<_>>>()
+        .map_err(|err| JsValue::from_str(&err.to_string()))?;
+    if pitches.is_empty() {
+        return Err(JsValue::from_str("give some pitches, such as C E G B"));
+    }
+    let mut found = Vec::new();
+    for scale_type in music21_rs::scale::ScaleType::ALL {
+        let ranked = scale_type
+            .derive_ranked(&pitches, Some(3))
+            .map_err(|err| JsValue::from_str(&err.to_string()))?;
+        for (matched, scale) in ranked {
+            found.push(DerivedScaleInfo {
+                matched,
+                total: pitches.len(),
+                scale: describe_realized(&scale)?,
+            });
+        }
+    }
+    found.sort_by(|a, b| {
+        b.matched
+            .cmp(&a.matched)
+            .then_with(|| a.scale.pitch_names.len().cmp(&b.scale.pitch_names.len()))
+    });
+    found.truncate(if limit == 0 { usize::MAX } else { limit });
+    serde_wasm_bindgen::to_value(&found).map_err(|err| JsValue::from_str(&err.to_string()))
+}
+
+// ---------------------------------------------------------------- Tone rows
+
+#[derive(Serialize)]
+struct RowFormInfo {
+    label: String,
+    pitch_classes: Vec<u8>,
+    names: Vec<String>,
+}
+
+#[derive(Serialize)]
+struct LinkInfo {
+    number: u32,
+    special_intervals: Vec<&'static str>,
+}
+
+#[derive(Serialize)]
+struct HistoricalMatch {
+    name: &'static str,
+    composer: &'static str,
+    opus: Option<&'static str>,
+    title: &'static str,
+}
+
+#[derive(Serialize)]
+struct ToneRowInfo {
+    pitch_classes: Vec<u8>,
+    names: Vec<String>,
+    is_twelve_tone_row: bool,
+    intervals: String,
+    matrix: Vec<Vec<u8>>,
+    forms: Vec<RowFormInfo>,
+    is_all_interval: Option<bool>,
+    link: Option<LinkInfo>,
+    historical: Vec<HistoricalMatch>,
+}
+
+fn parse_row(input: &str) -> Result<music21_rs::serial::ToneRow, JsValue> {
+    use music21_rs::serial::ToneRow;
+    let tokens: Vec<&str> = input
+        .split(|c: char| c.is_whitespace() || c == ',')
+        .filter(|token| !token.is_empty())
+        .collect();
+    if tokens.is_empty() {
+        return Err(JsValue::from_str(
+            "give a row: pitch classes such as 0 1 4 6, or note names",
+        ));
+    }
+    if tokens.iter().all(|token| token.parse::<i32>().is_ok()) {
+        return Ok(ToneRow::new(
+            tokens.iter().map(|token| token.parse::<i32>().unwrap_or(0)),
+        ));
+    }
+    let pitches = tokens
+        .iter()
+        .map(|token| Pitch::from_name(*token))
+        .collect::<Result<Vec<_>>>()
+        .map_err(|err| JsValue::from_str(&err.to_string()))?;
+    Ok(ToneRow::from_pitches(pitches.iter()))
+}
+
+#[wasm_bindgen]
+/// Describes a tone row: its matrix, its forty-eight forms, whether it is
+/// all-interval or a Link chord, and which historical row it is.
+pub fn tone_row(input: &str) -> Result<JsValue, JsValue> {
+    use music21_rs::serial::{Transformation, TransformationConvention};
+    let row = parse_row(input)?;
+    let twelve = row.is_twelve_tone_row();
+    let matrix = if twelve {
+        row.matrix()
+            .rows()
+            .iter()
+            .map(|form| form.pitch_classes().to_vec())
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let mut forms = Vec::new();
+    if twelve {
+        for transformation in [
+            Transformation::Prime,
+            Transformation::Inversion,
+            Transformation::Retrograde,
+            Transformation::RetrogradeInversion,
+        ] {
+            for index in 0..12_i32 {
+                let form = row.zero_centered_transformation(transformation, index);
+                forms.push(RowFormInfo {
+                    label: format!(
+                        "{}{index}",
+                        transformation.label(TransformationConvention::ZeroCentered)
+                    ),
+                    pitch_classes: form.pitch_classes().to_vec(),
+                    names: form.note_names(),
+                });
+            }
+        }
+    }
+    let info = ToneRowInfo {
+        pitch_classes: row.pitch_classes().to_vec(),
+        names: row.note_names(),
+        is_twelve_tone_row: twelve,
+        intervals: row.intervals_as_string(),
+        matrix,
+        forms,
+        is_all_interval: row.is_all_interval().ok(),
+        link: row
+            .link_classification()
+            .ok()
+            .flatten()
+            .map(|link| LinkInfo {
+                number: link.number,
+                special_intervals: link.special_intervals,
+            }),
+        historical: row
+            .find_historical()
+            .into_iter()
+            .map(|historical| HistoricalMatch {
+                name: historical.name,
+                composer: historical.composer,
+                opus: historical.opus,
+                title: historical.title,
+            })
+            .collect(),
+    };
+    serde_wasm_bindgen::to_value(&info).map_err(|err| JsValue::from_str(&err.to_string()))
+}
+
+#[derive(Serialize)]
+struct HistoricalRowInfo {
+    name: &'static str,
+    composer: &'static str,
+    opus: Option<&'static str>,
+    title: &'static str,
+    pitch_classes: Vec<u8>,
+}
+
+#[wasm_bindgen]
+/// The seventy-one historical twelve-tone rows music21 carries.
+pub fn historical_rows() -> Result<JsValue, JsValue> {
+    let rows = music21_rs::serial::HISTORICAL_ROWS
+        .iter()
+        .map(|row| HistoricalRowInfo {
+            name: row.name,
+            composer: row.composer,
+            opus: row.opus,
+            title: row.title,
+            pitch_classes: row.pitch_classes.to_vec(),
+        })
+        .collect::<Vec<_>>();
+    serde_wasm_bindgen::to_value(&rows).map_err(|err| JsValue::from_str(&err.to_string()))
 }
