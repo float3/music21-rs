@@ -14,6 +14,23 @@ use pyo3::prelude::*;
 pub mod doctest;
 pub mod suite;
 
+/// One test that runs a music21 module's doctests against the crate: the
+/// module's dotted name, the name its expectation file and log carry, and
+/// the music21 modules to swap for the run, each with the names replaced.
+/// Every `tests/doctest_*.rs` is one of these; each is its own binary, since
+/// a swap lasts for the life of the interpreter.
+#[macro_export]
+macro_rules! doctest_suite {
+    ($test:ident, $module:literal, $name:literal, [$(($python:literal, $names:expr)),* $(,)?]) => {
+        #[test]
+        fn $test() {
+            use $crate::music21_rs_facade;
+            ::pyo3::append_to_inittab!(music21_rs_facade);
+            $crate::doctest::run($module, $name, &[$(($python, $names)),*]);
+        }
+    };
+}
+
 /// Buffer for doctest output, so a runner's report can be read back from Rust
 /// instead of going to stdout.
 static OUTPUT: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
