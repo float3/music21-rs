@@ -34,7 +34,7 @@ chordTablesAddress = "chord_tables_address_entry"
 [[class]]
 python = "pitch.py"
 name = "Pitch"
-rust = ["src/pitch/mod.rs", "src/chord/mod.rs", "src/chord/names.rs", "src/chord/notation.rs", "src/chord/quality.rs", "src/chord/resolution.rs", "src/chord/setclass.rs"]
+rust = ["src/pitch/mod.rs", "src/pitch/display.rs", "src/pitch/enharmonic.rs", "src/pitch/harmonics.rs", "src/pitch/names.rs", "src/chord/mod.rs", "src/chord/names.rs", "src/chord/notation.rs", "src/chord/quality.rs", "src/chord/resolution.rs", "src/chord/setclass.rs"]
 
 [class.renames]
 diatonicNoteNum = "diatonic_note_number"
@@ -383,11 +383,11 @@ pitchChanged = "observer callback; there is none"
 [[class]]
 python = "harmony.py"
 name = "ChordSymbol"
-rust = ["src/chordsymbol.rs"]
+rust = ["src/chordsymbol/mod.rs", "src/chordsymbol/figure.rs", "src/chordsymbol/tables.rs"]
 
 [[class]]
 python = "pitch.py"
-rust = ["src/pitch/mod.rs", "src/pitch/accidental.rs", "src/pitch/microtone.rs", "src/pitch/pitchclass.rs"]
+rust = ["src/pitch/mod.rs", "src/pitch/display.rs", "src/pitch/enharmonic.rs", "src/pitch/harmonics.rs", "src/pitch/names.rs", "src/pitch/accidental.rs", "src/pitch/microtone.rs", "src/pitch/pitchclass.rs"]
 note = "Module-level helpers."
 
 [class.renames]
@@ -457,7 +457,7 @@ seekChordTablesAddress = "address_of_pitch_classes"
 
 [[class]]
 python = "harmony.py"
-rust = ["src/chordsymbol.rs"]
+rust = ["src/chordsymbol/mod.rs", "src/chordsymbol/figure.rs", "src/chordsymbol/tables.rs"]
 note = "Module-level helpers."
 
 [class.renames]
