@@ -7,7 +7,7 @@ name = "music21-rs-python"
 publish = false
 repository = "https://github.com/float3/music21-rs"
 # Kept in step with the root crate by `wheel_version_matches_the_crate`.
-version = "0.4.0"
+version = "0.5.0"
 
 # `cdylib` is the wheel maturin builds; `rlib` is what `python-parity` links
 # against so music21's own doctests run against these very classes.

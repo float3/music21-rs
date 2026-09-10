@@ -937,7 +937,7 @@ checksum = "743fb55ba31b18fb1ecef6bdc9aa2743314978ac084044301a7eee33fb99a20d"
 
 [[package]]
 name = "music21-rs"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "fraction",
  "itertools",
@@ -958,7 +958,7 @@ dependencies = [
 
 [[package]]
 name = "music21-rs-python"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "music21-rs",
  "pyo3",

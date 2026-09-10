@@ -1,3 +1,70 @@
+# music21-rs 0.5.0
+
+The release that finishes what 0.4.0 started: seventeen of music21's modules
+now pass every one of their own doctests, `harmony` among them, and 565 of
+the 617 members the feature map tracks are ported, up from 516. Nothing a
+caller had changes shape; this is a minor bump for what was added and for
+the modules that moved into directories, every public path of which is
+re-exported where it was.
+
+## Added
+
+- `chordsymbol::ChordSymbolFigure`: a chord named as a lead-sheet symbol in
+  the parts music21 writes it from — root, kind, abbreviation, bass,
+  additions and omissions — with `written_with` for another abbreviation.
+  It is the one writer behind `Chord::chord_symbol`,
+  `chord_symbol_figure_from_chord` and the Python facade, and it follows
+  music21's rules: a chord that leaves out a note of its kind is still that
+  kind and says nothing about it, a bass the kind does not carry is never an
+  addition, and a suspended second in inversion is a suspended fourth on its
+  bass. `ChordSymbol::kind` names the music21 kind a shorthand is, and a
+  shorthand that is one of music21's abbreviations — `N6`, `It+6`, `+11`,
+  `tristan` — is realized from that kind's notation.
+- `TimeSignature` derives music21's default accent hierarchy from the
+  numerator and denominator: `accent_weights`, `accent_weight`,
+  `accent_weight_with`, `accent`, `accent_partition_quarter_length`,
+  `beat_depth` and `average_beat_strength` over a stream, checked against
+  music21 across the 126 meters the fixture sweeps. `meter::best_time_signature`
+  fits a signature to what a measure holds.
+- `roman::FigureTuple` and `PitchFigureTuple`, with `figure_tuples`,
+  `correct_rn_alteration_for_minor`, `correct_suffix_for_chord_quality` and
+  `adjust_minor_vi_and_vii_by_quality`; `Scale::roman_numeral` and
+  `Scale::scala_data`; `Scale::tune` over a stream.
+- `duration`: `quarter_length_to_tuplet`, `quarter_length_to_non_power_of_2_tuplet`
+  and `quarter_conversion` as functions of their own, `Duration::is_complex`,
+  `component_index_at_qtr_position`, `component_start_time`, `clear`,
+  `add_duration_tuple` and `dot_groups`, and both sides of a `Tuplet`
+  (`duration_actual`, `duration_normal`, `tuplet_actual`, `tuplet_normal`,
+  `set_duration_type`, `set_ratio`).
+- `sieve`: `eratosthenes`, `rabin_miller`, `discrete_binary_pad`,
+  `unit_norm_range`, `unit_norm_equal` and `unit_norm_step`.
+- `Modifier::modify_pitch_name` and `figuredbass::convert_to_pitch`;
+  `DiatonicInterval::specifier_abbreviation`; `Lyric::set_text_and_syllabic`;
+  `Rest::full_name`; `MetronomeMark::text_expression`;
+  `Volume::merge_attributes`; `ToneRow::make_twelve_tone_row`;
+  `VoiceLeadingQuartet::opens_incorrectly` and `closes_incorrectly`;
+  `ScalaScale::new`; `Stream::events_mut` and `StreamEvent::element_mut`.
+
+## Changed
+
+- `chord`, `roman`, `chordsymbol`, `pitch`, `scale` and `serial` are
+  directory modules split by concern; every public item is re-exported from
+  where it was.
+- The Python wheel installs `harmony.chordSymbolFigureFromChord` and
+  `chordSymbolFromChord` over music21's own, honours `changeAbbreviationFor`,
+  and reads a `ChordSymbol` by its pitches and the root its figure fixed.
+  `duration` has a facade file of its own.
+- Comments and docs describe the behaviour as it stands rather than the
+  history behind it.
+
+## Internal
+
+- The unit tests reach every public function of the crate; line coverage of
+  `src` by the unit tests alone is 95%, up from 90%.
+- The report generator is four files rather than one; the nineteen doctest
+  harness files are one `doctest_suite!` invocation each; the facade's error
+  mappers are one macro; gcd and lcm come from the `num` crate.
+
 # music21-rs 0.4.0
 
 The release that makes the crate something music21 itself can be run on.
