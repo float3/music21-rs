@@ -5,10 +5,10 @@
 # where it carries none, and `shown` its display status where one was
 # decided.
 #
-# music21 11.0.0b9 at 89e85db9257aa98e39abd0c419e0c8765688e5c3
+# music21 11.0.0b9 at ac6cf27258cbbda118f55470f41adb7a84a6f41d
 
 music21_version = "11.0.0b9"
-music21_commit = "89e85db9257aa98e39abd0c419e0c8765688e5c3"
+music21_commit = "ac6cf27258cbbda118f55470f41adb7a84a6f41d"
 
 case = [
     { pitch = "F4", past = [], past_measure = [], simultaneous = [], sharps = 0, cautionary_pitch_class = true, cautionary_all = false, override_status = false, cautionary_not_immediate_repeat = true, last_note_was_tied = false, accidental = "none" },

@@ -11,10 +11,10 @@
 # reads that. This is what the report falls back to where no such run
 # has happened.
 #
-# music21 11.0.0b9 at 89e85db9257aa98e39abd0c419e0c8765688e5c3
+# music21 11.0.0b9 at ac6cf27258cbbda118f55470f41adb7a84a6f41d
 
 music21_version = "11.0.0b9"
-music21_commit = "89e85db9257aa98e39abd0c419e0c8765688e5c3"
+music21_commit = "ac6cf27258cbbda118f55470f41adb7a84a6f41d"
 
 [[module]]
 module = "music21.beam"
@@ -25,14 +25,14 @@ tests = 2
 [[module]]
 module = "music21.chord"
 docstrings = 105
-examples = 971
-tests = 27
+examples = 970
+tests = 28
 
 [[module]]
 module = "music21.chord.tables"
 docstrings = 10
 examples = 65
-tests = 31
+tests = 32
 
 [[module]]
 module = "music21.duration"
@@ -92,7 +92,7 @@ tests = 33
 module = "music21.scale"
 docstrings = 62
 examples = 344
-tests = 37
+tests = 39
 
 [[module]]
 module = "music21.serial"

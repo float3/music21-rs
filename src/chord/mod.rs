@@ -632,7 +632,7 @@ impl Chord {
             }
         }
         if !leave_redundant_pitches {
-            chord.retain_first_by(Pitch::name_with_octave);
+            chord.retain_first_by(spelling_and_octave);
         }
         chord.sort_ascending_in_place();
         chord
@@ -641,7 +641,7 @@ impl Chord {
     /// The chord with duplicate pitches removed, and the pitches that went:
     /// music21's `removeRedundantPitches`, which hands back what it dropped.
     pub fn remove_redundant_pitches_reporting(&self) -> (Self, Vec<Pitch>) {
-        self.reduced_reporting(Pitch::name_with_octave)
+        self.reduced_reporting(spelling_and_octave)
     }
 
     /// The chord with pitches of the same name removed, and the ones that
@@ -674,10 +674,12 @@ impl Chord {
     }
 
     /// Returns a copy keeping the first of every pitch that appears more than
-    /// once with the same name and octave.
+    /// once with the same name and octave. `B-1` (B-flat, octave 1) and `B`
+    /// in octave -1 print alike but are different pitches, and so are `C`
+    /// with no octave of its own and `C4`.
     pub fn remove_redundant_pitches(&self) -> Self {
         let mut chord = self.clone();
-        chord.retain_first_by(Pitch::name_with_octave);
+        chord.retain_first_by(spelling_and_octave);
         chord
     }
 
@@ -865,6 +867,13 @@ where
         }
         Ok(notes)
     }
+}
+
+/// What `removeRedundantPitches` compares: the spelling and the octave as
+/// music21 keeps them, not the printed `nameWithOctave`, which reads the same
+/// for `B-1` and B in octave -1 and for `C` with and without an octave.
+fn spelling_and_octave(pitch: &Pitch) -> (String, crate::defaults::Octave) {
+    (pitch.name(), pitch.octave())
 }
 
 fn simplify_integer_notes(notes: &mut [Note]) -> Result<()> {
@@ -1636,6 +1645,31 @@ mod tests {
             .remove_redundant_pitch_classes_reporting();
         assert_eq!(kept.pitch_names(), ["C", "E", "G"]);
         assert_eq!(names(dropped), ["B#4"]);
+    }
+
+    #[test]
+    fn pitches_that_only_print_alike_are_not_redundant() {
+        let mut low_b: Pitch = "B".parse().unwrap();
+        low_b.octave_setter(Some(-1));
+        let mut b_flat: Pitch = "B-".parse().unwrap();
+        b_flat.octave_setter(Some(1));
+        assert_eq!(low_b.name_with_octave(), b_flat.name_with_octave());
+        let chord = Chord::new(vec![low_b, b_flat]).unwrap();
+        let (kept, dropped) = chord.remove_redundant_pitches_reporting();
+        assert_eq!(kept.notes.len(), 2);
+        assert!(dropped.is_empty());
+        assert_eq!(chord.remove_redundant_pitches().notes.len(), 2);
+
+        let chord = Chord::new("C C4").unwrap();
+        assert_eq!(chord.remove_redundant_pitches().notes.len(), 2);
+        assert_eq!(
+            Chord::new("C4 C4")
+                .unwrap()
+                .remove_redundant_pitches()
+                .notes
+                .len(),
+            1
+        );
     }
 
     #[test]
