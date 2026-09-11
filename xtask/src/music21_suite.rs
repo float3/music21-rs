@@ -109,15 +109,14 @@ const EXIT_SIDE_ABSENT: i32 = 2;
 
 /// The tests that fail under `music21_rs` on purpose, and why.
 ///
-/// Both are documented divergences, not gaps: making either one pass costs
-/// more than it buys, and both were measured. Anything *not* on this list that
-/// fails only under `music21_rs` is a real regression and fails the run — the
-/// same shape as `python-parity/doctest/*.toml`, where what passes is listed
-/// and a newly broken one is named.
-const EXPECTED_DIVERGENCES: &[(&str, &str)] = &[
-    (
-        "classSet (music21.prebase.ProtoM21Object)",
-        "an installed class lists both itself and the class it replaced in \
+/// A documented divergence, not a gap: making it pass costs more than it
+/// buys, and that was measured. Anything *not* on this list that fails only
+/// under `music21_rs` is a real regression and fails the run — the same shape
+/// as `python-parity/doctest/*.toml`, where what passes is listed and a newly
+/// broken one is named.
+const EXPECTED_DIVERGENCES: &[(&str, &str)] = &[(
+    "classSet (music21.prebase.ProtoM21Object)",
+    "an installed class lists both itself and the class it replaced in \
          classSet, so this doctest counts one more than music21 has. Dropping \
          the replaced class to make it pass costs 250 of music21's own tests. \
          Two ways of hiding it instead, one closed and one open. A frozenset \
@@ -135,20 +134,7 @@ const EXPECTED_DIVERGENCES: &[(&str, &str)] = &[
          — music21's own _classSetCacheDict, and `installed`, `replaced`, \
          `_facades` and `_lineages` here — has to be re-keyed by identity \
          first. Measure the 250 again on the way; it predates `rebind`.",
-    ),
-    (
-        "testRagAsawari (music21.scale.test_scale_main.Test.testRagAsawari)",
-        "the test asserts a value music21 only answers out of a stale cache. \
-         RagAsawari('c4').pitchFromDegree(1) is C4 on a fresh scale — what \
-         this crate answers — and C1 once nextPitch('c1') has run. The cache \
-         is why: IntervalNetwork._ascendingCache then holds an entry keyed \
-         (Terminus.LOW, 'C4', 'C4', 'C5', False, None) whose first pitch is \
-         C1, a pitch from the earlier C0-C2 realization left in a list whose \
-         own key says C4 to C5. Clearing the two caches restores C4. So this \
-         is an upstream aliasing bug, not a gap here, and passing it would \
-         mean reproducing the bug rather than the music.",
-    ),
-];
+)];
 
 /// How one module in scope fared, so that the report can say so per module
 /// rather than only in one total.
