@@ -563,7 +563,7 @@ jobs:
           cp examples/web/tuning/app.js target/pages/tuning/app.js
           cp examples/web/tools.css target/pages/tools.css
           cp examples/web/play.js target/pages/play.js
-          for page in harte roman scales serial; do
+          for page in harte roman scales serial listen; do
             mkdir -p "target/pages/$page"
             cp "examples/web/$page/index.html" "target/pages/$page/index.html"
             cp "examples/web/$page/app.js" "target/pages/$page/app.js"

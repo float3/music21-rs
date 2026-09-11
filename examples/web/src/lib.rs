@@ -9,6 +9,8 @@ use serde::Serialize;
 use std::{collections::BTreeSet, fmt};
 use wasm_bindgen::prelude::*;
 
+mod listen;
+
 #[derive(Serialize)]
 struct TuningFrequencyInfo {
     id: String,

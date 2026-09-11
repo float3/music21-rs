@@ -15,6 +15,7 @@ __pycache__/
 /examples/web/roman/*.js
 /examples/web/scales/*.js
 /examples/web/serial/*.js
+/examples/web/listen/*.js
 
 # OS/editor noise
 .DS_Store
