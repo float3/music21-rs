@@ -513,7 +513,7 @@ note = "Exact ratio tables - just intonation, meantone, Bohlen-Pierce, the Carlo
 [[beyond]]
 name = "Adaptive tuning"
 rust = "src/tuningsystem/adaptive.rs"
-note = "Tuning where a pitch's frequency depends on the harmony it is sounding in rather than on a fixed table - recursive just intonation over the harmonic series."
+note = "Tuning where a pitch's frequency depends on the harmony it is sounding in rather than on a fixed table - recursive just intonation, five-limit from whichever note is the root."
 
 [[beyond]]
 name = "Scala archive"

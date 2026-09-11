@@ -27,10 +27,15 @@ pub enum AdaptiveTuningSystem {
 
 /// Recursive just intonation:
 ///
-/// `frequency = C_base * CarlosHarmonic[root] * CarlosHarmonic[local_degree]`
+/// `frequency = C_base * FiveLimit[root] * FiveLimit[local_degree]`
+///
+/// Both tables are the classical five-limit scale, so a fourth above the
+/// root is 4/3 and a minor sixth 8/5, and a triad is just in every
+/// inversion: the table's fourth, minor sixth and major sixth are the
+/// octave complements of its fifth, major third and minor third.
 pub const RECURSIVE_JI: AdaptiveTuningSystem = AdaptiveTuningSystem::Recursive {
-    root_tuning_system: TuningSystem::CarlosHarmonic,
-    local_tuning_system: TuningSystem::CarlosHarmonic,
+    root_tuning_system: TuningSystem::FiveLimit,
+    local_tuning_system: TuningSystem::FiveLimit,
 };
 
 impl AdaptiveTuningSystem {
@@ -128,14 +133,47 @@ mod tests {
             "5/4 of 5/4 is 25/16, got {stacked}"
         );
 
-        // The fixed table's own eighth degree is 13/8 — a different pitch
-        // entirely. That difference is what makes the system adaptive.
+        // The fixed table's own eighth degree is 8/5 — a different pitch,
+        // forty-one cents up. That difference is what makes the system
+        // adaptive.
         let fixed = RECURSIVE_JI.frequency_at(0.0, 8.0, None);
-        assert!((fixed - CN1 * 13.0 / 8.0).abs() < CLOSE, "got {fixed}");
+        assert!((fixed - CN1 * 8.0 / 5.0).abs() < CLOSE, "got {fixed}");
         assert!(
-            (stacked - fixed).abs() > 0.4,
+            (1200.0 * (fixed / stacked).log2() - 41.059).abs() < 1e-3,
             "the recursive and fixed readings of the same step should differ"
         );
+    }
+
+    /// A triad is just whichever of its notes is the root: the table's
+    /// fourth and sixths are the octave complements of its fifth and thirds,
+    /// so the same three pitches come out of any inversion. The harmonic
+    /// series this once recursed on has no such property — its fourth is
+    /// 21/16 and its minor sixth 13/8 — which made a second-inversion chord
+    /// sound sour and a fourth above the bass a quarter tone sharp.
+    #[test]
+    fn a_triad_is_just_from_any_of_its_notes() {
+        let just = |context: FloatType, index: FloatType| {
+            RECURSIVE_JI.frequency_at(context, index, None) / CN1
+        };
+        // C E G, then E G C above it, then G C E above that.
+        assert!((just(0.0, 4.0) - 5.0 / 4.0).abs() < CLOSE);
+        assert!((just(0.0, 7.0) - 3.0 / 2.0).abs() < CLOSE);
+        assert!(
+            (just(4.0, 3.0) - 3.0 / 2.0).abs() < CLOSE,
+            "{}",
+            just(4.0, 3.0)
+        );
+        assert!((just(4.0, 8.0) - 2.0).abs() < CLOSE, "{}", just(4.0, 8.0));
+        assert!((just(7.0, 5.0) - 2.0).abs() < CLOSE, "{}", just(7.0, 5.0));
+        assert!(
+            (just(7.0, 9.0) - 5.0 / 2.0).abs() < CLOSE,
+            "{}",
+            just(7.0, 9.0)
+        );
+        // And the minor triad C Eb G from its third and its fifth.
+        assert!((just(3.0, 4.0) - 3.0 / 2.0).abs() < CLOSE);
+        assert!((just(3.0, 9.0) - 2.0).abs() < CLOSE);
+        assert!((just(7.0, 8.0) - 12.0 / 5.0).abs() < CLOSE);
     }
 
     /// Nothing recurses out of the tonic, so the system answers the fixed
@@ -144,7 +182,7 @@ mod tests {
     fn a_context_of_nothing_is_the_fixed_table() {
         for index in [0.0, 4.0, 7.0, 11.0] {
             let adaptive = RECURSIVE_JI.frequency_at(0.0, index, None);
-            let fixed = TuningSystem::CarlosHarmonic.frequency_at(index);
+            let fixed = TuningSystem::FiveLimit.frequency_at(index);
             assert!(
                 (adaptive - fixed).abs() < CLOSE,
                 "at index {index}: {adaptive} against {fixed}"
@@ -152,7 +190,7 @@ mod tests {
             // And measured against the very table it came from, it is nought
             // cents away — exactly, not nearly.
             assert_eq!(
-                RECURSIVE_JI.cents_vs_fixed_at(TuningSystem::CarlosHarmonic, 0.0, index, None),
+                RECURSIVE_JI.cents_vs_fixed_at(TuningSystem::FiveLimit, 0.0, index, None),
                 0.0
             );
         }
@@ -226,10 +264,11 @@ mod tests {
             root_tuning_system: TuningSystem::PythagoreanTuning,
             local_tuning_system: TuningSystem::CarlosHarmonic,
         };
-        // A Pythagorean fifth to place the root, a just third above it.
-        let sounded = mixed.frequency_at(7.0, 4.0, None);
+        // A Pythagorean fifth to place the root, a harmonic-series minor
+        // seventh above it, which five-limit does not hold.
+        let sounded = mixed.frequency_at(7.0, 10.0, None);
         assert!(
-            (sounded - CN1 * (3.0 / 2.0) * (5.0 / 4.0)).abs() < CLOSE,
+            (sounded - CN1 * (3.0 / 2.0) * (7.0 / 4.0)).abs() < CLOSE,
             "{sounded}"
         );
         assert_ne!(mixed, RECURSIVE_JI);
@@ -250,7 +289,7 @@ mod tests {
 
         // A fixed system ignores the context it is handed; an adaptive one
         // does not, which is the whole distinction the wrapper draws.
-        let fixed: AnyTuningSystem = TuningSystem::CarlosHarmonic.into();
+        let fixed: AnyTuningSystem = TuningSystem::FiveLimit.into();
         assert!(!fixed.is_adaptive());
         assert!(
             (fixed.frequency_at(4.0, 4.0, None) - fixed.frequency_at(0.0, 4.0, None)).abs() < CLOSE

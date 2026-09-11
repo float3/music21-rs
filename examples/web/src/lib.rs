@@ -1149,6 +1149,19 @@ mod adaptive_tests {
         let octave_up = adaptive_frequency(0.0, 12.0, C4).unwrap();
         assert!((octave_up - 2.0 * C4).abs() < 1e-9);
     }
+
+    /// The explorer roots every key on the lowest one held, so a chord in
+    /// inversion is tuned from its bass. That only sounds right because the
+    /// table's fourth and sixths complement its fifth and thirds.
+    #[test]
+    fn a_chord_in_inversion_is_the_same_chord() {
+        let c_over_g = adaptive_frequency(7.0, 12.0, C4).unwrap();
+        assert!((c_over_g - 2.0 * C4).abs() < 1e-9, "{c_over_g}");
+        let e_over_g = adaptive_frequency(7.0, 16.0, C4).unwrap();
+        assert!((e_over_g - C4 * 5.0 / 2.0).abs() < 1e-9, "{e_over_g}");
+        let f_over_c = adaptive_frequency(0.0, 5.0, C4).unwrap();
+        assert!((f_over_c - C4 * 4.0 / 3.0).abs() < 1e-9, "{f_over_c}");
+    }
 }
 
 /// A pitch's frequency in a tuning system, which for a system of twelve
