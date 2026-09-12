@@ -95,18 +95,36 @@ Two rules, set 2026-09-12, that most of the open work now serves:
    another push supersedes it, so a green tick has to be read against the
    commit it actually covers.
 
-5. **The version must go to 0.6.0 before a release.**
-   `ChromaticInterval::new` and `notes_to_chromatic` return `Result`
-   (`74857d1`). The bump is deliberately not made — nothing is being released
-   yet.
+5. **The version must go to 0.6.0 before a release, and the list is longer
+   than it was.** The bump is deliberately not made — nothing is being
+   released yet. What a caller would find changed, all of it on master:
 
-   **The semver gate will not catch this.** `cargo semver-checks` runs
+   - `ChromaticInterval::new` and `notes_to_chromatic` return `Result`
+     (`74857d1`).
+   - `TimeSignature` is no longer `Copy`, `Eq` or `Hash` (`0e14f8b`). It
+     carries four partition sequences now, and those weigh their parts in
+     floats.
+   - `TimeSignature::ratio_equal` takes its argument by reference rather
+     than by value (`0e14f8b`).
+   - `beat_quarter_length`, `beat_duration`, `beat_division_quarter_lengths`,
+     `beat_division_durations` and `beat_sub_division_durations` return
+     `Result` (`cab6c97`): a bar whose beats differ has no one beat length,
+     and music21 raises there rather than answering an average.
+
+   The thirty-six methods that went from taking `self` to `&self` are not on
+   that list — a caller writes the same thing either way.
+
+   **The semver gate will not catch any of it.** `cargo semver-checks` runs
    against `--baseline-rev HEAD^` (`.github/workflows/ci.yml`), so on a push
-   it compares the tip commit with its parent, not the release with the
-   branch. The push that carried the breaking change was green because the
-   tip commit was documentation only; anything breaking that lands more than
-   one commit before a push goes unnoticed. A baseline of the last released
-   tag would catch it.
+   it compares the tip commit with its parent rather than the release with
+   the branch. Run 34703705787 passed it for exactly that reason: its tip and
+   its parent are both documentation-only commits, while the breaking changes
+   sit several commits behind them. A baseline of the last released tag would
+   catch it.
+
+   `RELEASE_NOTES.md` opens with "Nothing a caller had changes shape", which
+   was true of 0.5.0 and is not true of master; a 0.6.0 section has to say
+   otherwise.
 
 6. **`sieve` passes 24 of 25 docstrings.** The one that fails,
    `Sieve.segment('cmp', segmentFormat='wid')`, wants the compressed reading
