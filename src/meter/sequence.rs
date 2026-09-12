@@ -361,6 +361,39 @@ impl MeterTerminal {
         Ok(score)
     }
 
+    /// Weighs the terminals of a level, looping the weights given over them:
+    /// the write half of music21's `setAccentWeight`.
+    ///
+    /// A level with no terminals, or no weights to give it, is an error
+    /// rather than a silent nothing.
+    pub fn set_weights_at_level(&mut self, level: usize, weights: &[FloatType]) -> Result<()> {
+        if weights.is_empty() {
+            return Err(Error::Meter(
+                "a weight has to be given to weigh a level with".to_string(),
+            ));
+        }
+        let mut index = 0;
+        Self::weigh(&mut self.parts, level, weights, &mut index);
+        if index == 0 {
+            return Err(Error::Meter(format!(
+                "this meter has no level {level} to weigh"
+            )));
+        }
+        Ok(())
+    }
+
+    /// Walks the terminals of a level in order, weighing each in turn.
+    fn weigh(parts: &mut [MeterTerminal], level: usize, weights: &[FloatType], index: &mut usize) {
+        for part in parts.iter_mut() {
+            if part.parts.is_empty() || level == 0 {
+                part.weight = weights[*index % weights.len()];
+                *index += 1;
+            } else {
+                Self::weigh(&mut part.parts, level - 1, weights, index);
+            }
+        }
+    }
+
     /// Whether every part of a level is the same ratio: music21's
     /// `isUniformPartition`.
     #[must_use]

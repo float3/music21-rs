@@ -198,7 +198,6 @@ resetValues = "rebuilding a meter in place; a new one is built instead"
 load = "rebuilding a meter in place; a new one is built instead"
 getBeams = "beams a run of notes, which needs the notes; the beam sequence they would be beamed by is modelled"
 setDisplay = "sets the display partition by hand; the display sequence is modelled, but takes only what the meter was written as"
-setAccentWeight = "the accent weights are the default hierarchy's, not a partition a caller has set"
 
 [[class]]
 python = "tempo.py"

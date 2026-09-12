@@ -2,11 +2,13 @@
 //!
 //! Only `TimeSignature` is replaced. music21 derives everything about a meter
 //! from a `MeterSequence` partition tree — one for beats, one for beaming, one
-//! for display, one for accent weights — and the crate derives the numbers it
-//! answers from the numerator and the denominator alone. What the tree is for
-//! beyond those numbers has no counterpart here, so the members that read one
-//! are not ported and raise: beaming, accents, display partitions, beat depth
-//! and the stream-walking lookups.
+//! for display, one for accent weights — and the crate carries all four, so
+//! the beat, accent and depth questions are answered from them here.
+//!
+//! What is not ported yet is the tree itself: a caller cannot reach
+//! `beatSequence` and its three siblings through this class, nor partition one
+//! by hand. `getBeams` — which beams a run of notes, and so needs the notes —
+//! goes with them.
 //!
 //! `SenzaMisuraTimeSignature` and `bestTimeSignature` stay music21's. The
 //! first is a meter with no numbers in it at all, which this crate cannot
@@ -384,8 +386,8 @@ impl TimeSignature {
         self.inner.accent(qLenPos)
     }
 
-    /// music21's `getAccentWeight` over the default accent hierarchy, which
-    /// has one level, so `level` picks nothing.
+    /// music21's `getAccentWeight`: the weight of the accent partition an
+    /// offset falls in, at a level of the accent sequence.
     #[pyo3(signature = (qLenPos, level = 0, forcePositionMatch = false, permitMeterModulus = false))]
     fn getAccentWeight(
         &self,
@@ -394,9 +396,26 @@ impl TimeSignature {
         forcePositionMatch: bool,
         permitMeterModulus: bool,
     ) -> PyResult<FloatType> {
-        let _ = level;
         self.inner
-            .accent_weight_with(qLenPos, forcePositionMatch, permitMeterModulus)
+            .accent_weight_at_level(
+                qLenPos,
+                level as usize,
+                forcePositionMatch,
+                permitMeterModulus,
+            )
+            .map_err(meter_error)
+    }
+
+    /// music21's `setAccentWeight`: weigh the accent partitions of a level,
+    /// looping the weights given over them.
+    #[pyo3(signature = (weights, level = 0))]
+    fn setAccentWeight(&mut self, weights: &Bound<'_, PyAny>, level: u32) -> PyResult<()> {
+        let weights = match weights.extract::<Vec<FloatType>>() {
+            Ok(weights) => weights,
+            Err(_) => vec![weights.extract::<FloatType>()?],
+        };
+        self.inner
+            .set_accent_weight(&weights, level as usize)
             .map_err(meter_error)
     }
 

@@ -302,7 +302,7 @@ impl TimeSignature {
     /// already gives its accent partitions rather than derived a second time
     /// from a nested hierarchy: one part per weight, carrying that weight.
     fn set_default_accent_weights(&mut self) {
-        let weights = self.accent_weights();
+        let weights = self.default_accent_weights();
         let ones = vec![1; weights.len()];
         if self.accent_sequence.partition_by_list(&ones).is_err() {
             return;
@@ -797,6 +797,10 @@ impl TimeSignature {
     /// The length of one partition of music21's default accent hierarchy, the
     /// finest level the accent weights are given at.
     pub fn accent_partition_quarter_length(&self) -> FloatType {
+        let parts = self.accent_sequence.parts();
+        if parts.len() > 1 {
+            return parts[0].quarter_length();
+        }
         let (top, second, third) = self.accent_hierarchy();
         self.bar_quarter_length() / FloatType::from(top * second * third)
     }
@@ -806,6 +810,23 @@ impl TimeSignature {
     /// the hierarchy a partition's start is not a boundary of, so `4/4` reads
     /// `1.0, 0.125, 0.25, 0.125, 0.5, 0.125, 0.25, 0.125`.
     pub fn accent_weights(&self) -> Vec<FloatType> {
+        let carried: Vec<FloatType> = self
+            .accent_sequence
+            .parts()
+            .iter()
+            .map(MeterTerminal::weight)
+            .collect();
+        if carried.len() > 1 {
+            return carried;
+        }
+        self.default_accent_weights()
+    }
+
+    /// The weights music21's default hierarchy gives the bar, which is what
+    /// the accent sequence is built carrying. Kept apart from
+    /// [`Self::accent_weights`], which reads the sequence, so that weights a
+    /// caller has set are the ones read back.
+    fn default_accent_weights(&self) -> Vec<FloatType> {
         let (top, second, third) = self.accent_hierarchy();
         let count = top * second * third;
         (0..count)
@@ -835,6 +856,54 @@ impl TimeSignature {
     /// An offset outside the bar is an error.
     pub fn accent_weight(&self, offset: FloatType) -> Result<FloatType> {
         self.accent_weight_with(offset, false, false)
+    }
+
+    /// The accent weight at an offset, read at a level of the accent
+    /// sequence: music21's `getAccentWeight` with its `level`.
+    pub fn accent_weight_at_level(
+        &self,
+        offset: FloatType,
+        level: usize,
+        force_position_match: bool,
+        permit_meter_modulus: bool,
+    ) -> Result<FloatType> {
+        let bar = self.bar_quarter_length();
+        let offset = if permit_meter_modulus {
+            offset.rem_euclid(bar)
+        } else {
+            offset
+        };
+        if offset.is_nan() || offset < 0.0 || offset >= bar {
+            return Err(Error::Meter(format!(
+                "cannot access from qLenPos {} where total duration is {}",
+                offset_repr(offset),
+                offset_repr(bar)
+            )));
+        }
+        let terminals = self.accent_sequence.level_list(level, true);
+        if terminals.len() <= 1 {
+            return self.accent_weight_with(offset, force_position_match, permit_meter_modulus);
+        }
+        let spans = self.accent_sequence.level_span(level);
+        let smallest = terminals
+            .iter()
+            .map(MeterTerminal::weight)
+            .fold(FloatType::INFINITY, FloatType::min);
+        for (index, (start, end)) in spans.iter().enumerate() {
+            if offset < end - OFFSET_TOLERANCE {
+                if force_position_match && (offset - start).abs() >= OFFSET_TOLERANCE {
+                    return Ok(smallest * 0.5);
+                }
+                return Ok(terminals[index].weight());
+            }
+        }
+        Ok(terminals[terminals.len() - 1].weight())
+    }
+
+    /// Weighs the accent partitions of a level, looping the weights given
+    /// over them: music21's `setAccentWeight`.
+    pub fn set_accent_weight(&mut self, weights: &[FloatType], level: usize) -> Result<()> {
+        self.accent_sequence.set_weights_at_level(level, weights)
     }
 
     /// [`Self::accent_weight`] with music21's two options. With
@@ -1683,6 +1752,29 @@ mod tests {
                 .unwrap(),
             1.5
         );
+    }
+
+    #[test]
+    fn weights_a_caller_sets_are_the_weights_read_back() {
+        use crate::meter::TimeSignature;
+
+        let mut common = TimeSignature::common();
+        let default = common.accent_weights();
+        assert_eq!(default[0], 1.0);
+
+        // music21 loops a shorter list over the partitions.
+        common.set_accent_weight(&[0.8, 0.2], 0).unwrap();
+        let set = common.accent_weights();
+        assert_eq!(set.len(), default.len());
+        assert!((set[0] - 0.8).abs() < 1e-9);
+        assert!((set[1] - 0.2).abs() < 1e-9);
+        assert!((set[2] - 0.8).abs() < 1e-9);
+
+        // And the reading at an offset comes off the same sequence.
+        assert!((common.accent_weight(0.0).unwrap() - 0.8).abs() < 1e-9);
+
+        // A fresh meter is untouched by that.
+        assert_eq!(TimeSignature::common().accent_weights()[0], 1.0);
     }
 
     #[test]
