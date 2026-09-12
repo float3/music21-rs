@@ -151,6 +151,51 @@ pub struct ModuleTests {
     pub tests_passing: usize,
 }
 
+/// The result class the runner is given, which records what the collector
+/// took inside each test.
+///
+/// A run of music21's suite stops now and then to collect garbage, and the
+/// pause lands on whichever test happens to be running. Each test is timed
+/// once, so a test that caught one reads as many times slower than it is —
+/// and the page called that a slowdown, in rows where the code was at
+/// parity. What the collector took is recorded against the test it landed on
+/// and taken off before anything is compared.
+const GC_TIMING_RESULT: &str = r#"
+import gc
+import time
+import unittest
+
+
+class Result(unittest.TextTestResult):
+    """A result that also records the full collections inside each test."""
+
+    def __init__(self, *arguments, **keywords):
+        super().__init__(*arguments, **keywords)
+        self.gcDurations = {}
+        self._running = None
+        self._started = 0.0
+        gc.callbacks.append(self._collected)
+
+    def _collected(self, phase, info):
+        # Only the full collections: the young generations are swept often
+        # and quickly, and are part of what any of this costs.
+        if info.get('generation') != 2:
+            return
+        if phase == 'start':
+            self._started = time.perf_counter()
+        elif self._running is not None:
+            taken = time.perf_counter() - self._started
+            self.gcDurations[self._running] = self.gcDurations.get(self._running, 0.0) + taken
+
+    def startTest(self, test):
+        self._running = str(test)
+        super().startTest(test)
+
+    def stopTest(self, test):
+        super().stopTest(test)
+        self._running = None
+"#;
+
 /// What one run writes, and what the comparison — and `xtask report` — read.
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct Report {
@@ -163,12 +208,26 @@ struct Report {
     /// asked for durations; nothing here times anything by hand.
     #[serde(default)]
     durations: BTreeMap<String, f64>,
+    /// How much of each of those seconds the garbage collector took, by the
+    /// same name. Kept beside the duration rather than subtracted from it:
+    /// the clock time is what the run actually spent, and this says how much
+    /// of it says nothing about the test.
+    #[serde(default)]
+    gc_durations: BTreeMap<String, f64>,
     /// Empty on the music21 side, which nothing reads per module.
     #[serde(default)]
     modules: Vec<ModuleTests>,
 }
 
 impl Report {
+    /// What the test itself took: the clock, less what the collector took
+    /// inside it.
+    fn timed(&self, name: &str) -> Option<f64> {
+        let taken = *self.durations.get(name)?;
+        let collected = self.gc_durations.get(name).copied().unwrap_or(0.0);
+        Some((taken - collected).max(0.0))
+    }
+
     /// Everything red, however it went red.
     fn bad(&self) -> std::collections::BTreeSet<&str> {
         self.failures
@@ -347,6 +406,13 @@ fn run_one(workspace_root: &Path, out: &Path, which: Which, only: Option<&str>) 
         // keep the list; nought is how many of the slowest to print, which is
         // none. Python 3.12 and up.
         kwargs.set_item("durations", 0)?;
+        let timing = PyModule::from_code(
+            py,
+            &std::ffi::CString::new(GC_TIMING_RESULT)?,
+            c"music21_rs_gc_timing.py",
+            c"music21_rs_gc_timing",
+        )?;
+        kwargs.set_item("resultclass", timing.getattr("Result")?)?;
         let result = unittest
             .getattr("TextTestRunner")?
             .call((), Some(&kwargs))?
@@ -390,6 +456,11 @@ fn run_one(workspace_root: &Path, out: &Path, which: Which, only: Option<&str>) 
                 let seconds: f64 = pair.get_item(1)?.extract()?;
                 report.durations.insert(name, seconds);
             }
+        }
+        if let Ok(collected) = result.getattr("gcDurations")
+            && let Ok(collected) = collected.extract::<BTreeMap<String, f64>>()
+        {
+            report.gc_durations = collected;
         }
 
         let text = serde_json::to_string_pretty(&report)
@@ -685,22 +756,27 @@ fn compare_timings(plain: &Report, others: &[(Which, Report)]) -> Option<Timings
 
     let mut rows: Vec<TestTiming> = Vec::new();
     let mut totals = vec![0.0; others.len() + 1];
-    for (name, theirs) in &plain.durations {
-        if theirs_bad.contains(name) || *theirs < TOO_QUICK_TO_TIME {
+    for name in plain.durations.keys() {
+        let Some(theirs) = plain.timed(name) else {
+            continue;
+        };
+        if theirs_bad.contains(name) || theirs < TOO_QUICK_TO_TIME {
             continue;
         }
         // Every side or none: a row with a hole in it cannot be compared
         // across, and the tests missing from one side are the ones it failed.
-        let mut seconds = vec![*theirs];
-        let complete = others.iter().zip(&others_bad).all(|((_, report), bad)| {
-            match report.durations.get(name) {
-                Some(mine) if *mine >= TOO_QUICK_TO_TIME && !bad.contains(name) => {
-                    seconds.push(*mine);
-                    true
-                }
-                _ => false,
-            }
-        });
+        let mut seconds = vec![theirs];
+        let complete =
+            others
+                .iter()
+                .zip(&others_bad)
+                .all(|((_, report), bad)| match report.timed(name) {
+                    Some(mine) if mine >= TOO_QUICK_TO_TIME && !bad.contains(name) => {
+                        seconds.push(mine);
+                        true
+                    }
+                    _ => false,
+                });
         if !complete {
             continue;
         }
@@ -879,6 +955,7 @@ mod tests {
             detail: Default::default(),
             modules: Vec::new(),
             durations: BTreeMap::new(),
+            gc_durations: BTreeMap::new(),
         }
     }
 
@@ -929,6 +1006,23 @@ mod tests {
         // would overwrite another's results.
         let files: BTreeSet<&str> = SIDES.iter().map(|side| side.file()).collect();
         assert_eq!(files.len(), SIDES.len());
+    }
+
+    /// A pause the collector took inside a test is not what the test cost.
+    /// Timed once each, a test that caught one read as many times slower
+    /// than it is, and the page called that a slowdown.
+    #[test]
+    fn what_the_collector_took_is_not_counted_against_a_test() {
+        let plain = timed(1, &[("swept", 1.0)]);
+        let mut ours = timed(1, &[("swept", 4.0)]);
+        ours.gc_durations.insert("swept".to_string(), 3.0);
+
+        assert_eq!(ours.timed("swept"), Some(1.0));
+        let timings = compare_timings(&plain, &[(Which::Music21Rs, ours)])
+            .expect("one test timed on both sides");
+        assert_eq!(timings.paired, 1);
+        assert!((timings.rows[0].speedup - 1.0).abs() < 1e-9);
+        assert!((timings.rows[0].seconds[1] - 1.0).abs() < 1e-9);
     }
 
     fn timed(run: usize, durations: &[(&str, f64)]) -> Report {

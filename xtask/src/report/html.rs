@@ -460,7 +460,7 @@ pub(super) fn render_timings(timings: &Timings) -> String {
     ));
     let _ = writeln!(
         html,
-        "                <p class=\"section-foot\">A test counts only where every side ran it, passed it, and took longer than a millisecond. <em>{ours}</em> is the crate linked into the binary that ran the suite &mdash; the working tree &mdash; and <em>{wheel}</em> is the wheel a caller installs, so what lies between those two columns is the packaging rather than the code. <a href=\"./{page}\">All {paired} tests, side by side &rarr;</a></p>",
+        "                <p class=\"section-foot\">A test counts only where every side ran it, passed it, and took longer than a millisecond, and what the garbage collector took inside a test is taken off before the sides are compared &mdash; a full collection lands on whichever test is running, and each test is timed once. <em>{ours}</em> is the crate linked into the binary that ran the suite &mdash; the working tree &mdash; and <em>{wheel}</em> is the wheel a caller installs, so what lies between those two columns is the packaging rather than the code. <a href=\"./{page}\">All {paired} tests, side by side &rarr;</a></p>",
         ours = escape(timings.side_name(1)),
         wheel = escape(timings.side_name(2)),
         page = TIMINGS_PAGE,
@@ -584,7 +584,7 @@ pub(super) fn render_timings_page(report: &Report, timings: &Timings) -> String 
     ));
     let _ = writeln!(
         html,
-        "                <p class=\"section-foot\">{totals}. A test is here only where every side ran it, passed it, and took longer than a millisecond, so this is fewer tests than the suite runs. Ordered by what the crate made of it, furthest behind first.</p>",
+        "                <p class=\"section-foot\">{totals}. A test is here only where every side ran it, passed it, and took longer than a millisecond, so this is fewer tests than the suite runs. What the garbage collector took inside a test is taken off first: a full collection lands on whichever test is running, and each test is timed once. Ordered by what the crate made of it, furthest behind first.</p>",
         totals = timings.totals(),
     );
     html.push_str(&timing_table(timings, &[("", &timings.rows)]));
