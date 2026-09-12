@@ -62,7 +62,11 @@ Two rules, set 2026-09-12, that most of the open work now serves:
    music21 fixes each note at each of nine beam depths against the span its
    level covers — and the facade half that reads a duration and whether it
    sounds off the Python objects, which `naiveBeams` already does. It is the
-   one member still excluded in `data/feature_map.toml`.
+   only one of the five exclusions left in `data/feature_map.toml` that still
+   costs a docstring: `summedNumerator` is a written form music21 will not
+   read back, `getMeasureOffsetOrMeterModulusOffset` belongs to whichever
+   stream an element sits in, and `resetValues` and `load` rebuild a meter in
+   place where a new one is built instead.
 
    One thing the tree bought beyond the members it unblocks: the closed forms
    it replaced were wrong where music21 is not, three times over. Compound
