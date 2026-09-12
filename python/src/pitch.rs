@@ -1829,6 +1829,13 @@ impl Pitch {
 
     /// music21's `Note.__init__` writes itself here, which is how a pitch
     /// finds the note around it.
+    ///
+    /// Whatever it is given, and a note out of it where it can: the note
+    /// written here is not always one of ours. A harness that swaps one
+    /// module's classes and not another's hands this music21's own `Note`,
+    /// and so does any program part-way through installing. Refusing those
+    /// broke twenty-nine of music21's own docstrings, which is what the
+    /// `.ok()` is for.
     #[setter]
     fn set__client(slf: &Bound<'_, Self>, value: &Bound<'_, PyAny>) {
         slf.borrow_mut().owner = value.extract::<Py<Note>>().ok();
