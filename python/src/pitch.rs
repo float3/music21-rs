@@ -309,6 +309,23 @@ impl Accidental {
 
 #[pymethods]
 impl Accidental {
+    /// The Python objects this holds, shown to the cycle collector. A note
+    /// and the pitch it hands out point at each other through Rust, and
+    /// without this neither of them is ever freed.
+    fn __traverse__(
+        &self,
+        visit: pyo3::pyclass::PyVisit<'_>,
+    ) -> Result<(), pyo3::pyclass::PyTraverseError> {
+        visit.call(&self.owner)?;
+        visit.call(&self.style)?;
+        Ok(())
+    }
+
+    fn __clear__(&mut self) {
+        self.owner = None;
+        self.style = None;
+    }
+
     /// music21's `classes`: what this is, and everything it is a kind of.
     /// Its own code reads this to decide what it is looking at.
     #[getter]
@@ -922,6 +939,23 @@ impl Pitch {
 
 #[pymethods]
 impl Pitch {
+    /// The Python objects this holds, shown to the cycle collector. A note
+    /// and the pitch it hands out point at each other through Rust, and
+    /// without this neither of them is ever freed.
+    fn __traverse__(
+        &self,
+        visit: pyo3::pyclass::PyVisit<'_>,
+    ) -> Result<(), pyo3::pyclass::PyTraverseError> {
+        visit.call(&self.owner)?;
+        visit.call(&self.accidental)?;
+        Ok(())
+    }
+
+    fn __clear__(&mut self) {
+        self.owner = None;
+        self.accidental = None;
+    }
+
     /// music21 freezes a score by pickling it, and what a pitch is lives in
     /// Rust where a pickle cannot see it — so it is written out as text and
     /// read back. The accidental object a caller may be holding is not: a

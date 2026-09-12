@@ -647,6 +647,23 @@ impl ConcreteScale {
 
 #[pymethods]
 impl ConcreteScale {
+    /// The Python objects this holds, shown to the cycle collector. A note
+    /// and the pitch it hands out point at each other through Rust, and
+    /// without this neither of them is ever freed.
+    fn __traverse__(
+        &self,
+        visit: pyo3::pyclass::PyVisit<'_>,
+    ) -> Result<(), pyo3::pyclass::PyTraverseError> {
+        visit.call(&self.tonic_object)?;
+        visit.call(&self.abstract_scale)?;
+        Ok(())
+    }
+
+    fn __clear__(&mut self) {
+        self.tonic_object = None;
+        self.abstract_scale = None;
+    }
+
     /// A scale is written out as text and read back.
     fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<crate::Pickled> {
         let me = slf.borrow();

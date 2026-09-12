@@ -502,6 +502,25 @@ impl Key {
 
 #[pymethods]
 impl Key {
+    /// The Python objects this holds, shown to the cycle collector. A note
+    /// and the pitch it hands out point at each other through Rust, and
+    /// without this neither of them is ever freed.
+    fn __traverse__(
+        &self,
+        visit: pyo3::pyclass::PyVisit<'_>,
+    ) -> Result<(), pyo3::pyclass::PyTraverseError> {
+        visit.call(&self.alternate_interpretations)?;
+        visit.call(&self.abstract_scale)?;
+        visit.call(&self.tonic_object)?;
+        Ok(())
+    }
+
+    fn __clear__(&mut self) {
+        self.alternate_interpretations = None;
+        self.abstract_scale = None;
+        self.tonic_object = None;
+    }
+
     /// A key is written out as text and read back, and its signature is made
     /// again from what it says.
     fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<crate::Pickled> {

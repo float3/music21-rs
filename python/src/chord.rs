@@ -1110,6 +1110,39 @@ fn key_value(value: &Bound<'_, PyAny>) -> Option<RsKey> {
 
 #[pymethods]
 impl Chord {
+    /// The Python objects this holds, shown to the cycle collector. A note
+    /// and the pitch it hands out point at each other through Rust, and
+    /// without this neither of them is ever freed.
+    fn __traverse__(
+        &self,
+        visit: pyo3::pyclass::PyVisit<'_>,
+    ) -> Result<(), pyo3::pyclass::PyTraverseError> {
+        for held in &self.notes {
+            visit.call(held)?;
+        }
+        visit.call(&self.duration)?;
+        visit.call(&self.volume)?;
+        visit.call(&self.stored_instrument)?;
+        visit.call(&self.expressions)?;
+        visit.call(&self.articulations)?;
+        visit.call(&self.overrides)?;
+        visit.call(&self.beams)?;
+        visit.call(&self.style)?;
+        Ok(())
+    }
+
+    fn __clear__(&mut self) {
+        self.notes.clear();
+        self.duration = None;
+        self.volume = None;
+        self.stored_instrument = None;
+        self.expressions = None;
+        self.articulations = None;
+        self.overrides = None;
+        self.beams = None;
+        self.style = None;
+    }
+
     /// A chord is written out as text and read back, and its notes are made
     /// again from what it says. Its ornaments, its marks and the root a
     /// caller fixed are Python objects the value does not carry, so they go

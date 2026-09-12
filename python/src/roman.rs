@@ -560,6 +560,23 @@ fn figure_for_degree(key: Option<&RsKey>, degree: usize, case_matters: bool) -> 
 
 #[pymethods]
 impl RomanNumeral {
+    /// The Python objects this holds, shown to the cycle collector. A note
+    /// and the pitch it hands out point at each other through Rust, and
+    /// without this neither of them is ever freed.
+    fn __traverse__(
+        &self,
+        visit: pyo3::pyclass::PyVisit<'_>,
+    ) -> Result<(), pyo3::pyclass::PyTraverseError> {
+        visit.call(&self.key_object)?;
+        visit.call(&self.pivot)?;
+        Ok(())
+    }
+
+    fn __clear__(&mut self) {
+        self.key_object = None;
+        self.pivot = None;
+    }
+
     /// A numeral is written out as text and read back, and the chord it
     /// stands on is worked out again from the figure.
     /// A numeral is written out as its figure and what it was told, and the

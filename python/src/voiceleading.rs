@@ -180,6 +180,25 @@ impl VoiceLeadingQuartet {
 
 #[pymethods]
 impl VoiceLeadingQuartet {
+    /// The Python objects this holds, shown to the cycle collector. A note
+    /// and the pitch it hands out point at each other through Rust, and
+    /// without this neither of them is ever freed.
+    fn __traverse__(
+        &self,
+        visit: pyo3::pyclass::PyVisit<'_>,
+    ) -> Result<(), pyo3::pyclass::PyTraverseError> {
+        for held in &self.notes {
+            visit.call(held)?;
+        }
+        visit.call(&self.key_object)?;
+        Ok(())
+    }
+
+    fn __clear__(&mut self) {
+        self.notes.clear();
+        self.key_object = None;
+    }
+
     /// A quartet is written out as text and read back, and its four notes
     /// are made again from what it says.
     fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<crate::Pickled> {

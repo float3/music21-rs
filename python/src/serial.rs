@@ -498,6 +498,21 @@ pub struct TwelveToneMatrix {
 
 #[pymethods]
 impl TwelveToneMatrix {
+    /// The Python objects this holds, shown to the cycle collector. A note
+    /// and the pitch it hands out point at each other through Rust, and
+    /// without this neither of them is ever freed.
+    fn __traverse__(
+        &self,
+        visit: pyo3::pyclass::PyVisit<'_>,
+    ) -> Result<(), pyo3::pyclass::PyTraverseError> {
+        visit.call(&self.source)?;
+        Ok(())
+    }
+
+    fn __clear__(&mut self) {
+        self.source = None;
+    }
+
     fn __str__(&self) -> String {
         self.inner.to_string()
     }

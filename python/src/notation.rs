@@ -73,6 +73,21 @@ pub(crate) fn tie_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsTie> {
 
 #[pymethods]
 impl Tie {
+    /// The Python objects this holds, shown to the cycle collector. A note
+    /// and the pitch it hands out point at each other through Rust, and
+    /// without this neither of them is ever freed.
+    fn __traverse__(
+        &self,
+        visit: pyo3::pyclass::PyVisit<'_>,
+    ) -> Result<(), pyo3::pyclass::PyTraverseError> {
+        visit.call(&self.identifier)?;
+        Ok(())
+    }
+
+    fn __clear__(&mut self) {
+        self.identifier = None;
+    }
+
     /// music21's `classes`: what this is, and everything it is a kind of.
     /// Its own code reads this to decide what it is looking at.
     #[getter]
@@ -269,6 +284,23 @@ impl Clone for Lyric {
 
 #[pymethods]
 impl Lyric {
+    /// The Python objects this holds, shown to the cycle collector. A note
+    /// and the pitch it hands out point at each other through Rust, and
+    /// without this neither of them is ever freed.
+    fn __traverse__(
+        &self,
+        visit: pyo3::pyclass::PyVisit<'_>,
+    ) -> Result<(), pyo3::pyclass::PyTraverseError> {
+        visit.call(&self.components)?;
+        visit.call(&self.style)?;
+        Ok(())
+    }
+
+    fn __clear__(&mut self) {
+        self.components = None;
+        self.style = None;
+    }
+
     /// music21's `classes`: what this is, and everything it is a kind of.
     /// Its own code reads this to decide what it is looking at.
     #[getter]
@@ -624,6 +656,25 @@ fn beam_direction_of(value: Option<&Bound<'_, PyAny>>) -> PyResult<Option<RsBeam
 
 #[pymethods]
 impl Beam {
+    /// The Python objects this holds, shown to the cycle collector. A note
+    /// and the pitch it hands out point at each other through Rust, and
+    /// without this neither of them is ever freed.
+    fn __traverse__(
+        &self,
+        visit: pyo3::pyclass::PyVisit<'_>,
+    ) -> Result<(), pyo3::pyclass::PyTraverseError> {
+        visit.call(&self.identifier)?;
+        visit.call(&self.independent_angle)?;
+        visit.call(&self.style)?;
+        Ok(())
+    }
+
+    fn __clear__(&mut self) {
+        self.identifier = None;
+        self.independent_angle = None;
+        self.style = None;
+    }
+
     /// music21's `classes`: what this is, and everything it is a kind of.
     /// Its own code reads this to decide what it is looking at.
     #[getter]
@@ -943,6 +994,21 @@ fn beams_list<'py>(py: Python<'py>, beams: Vec<Option<RsBeams>>) -> PyResult<Bou
 
 #[pymethods]
 impl Beams {
+    /// The Python objects this holds, shown to the cycle collector. A note
+    /// and the pitch it hands out point at each other through Rust, and
+    /// without this neither of them is ever freed.
+    fn __traverse__(
+        &self,
+        visit: pyo3::pyclass::PyVisit<'_>,
+    ) -> Result<(), pyo3::pyclass::PyTraverseError> {
+        visit.call(&self.beams)?;
+        Ok(())
+    }
+
+    fn __clear__(&mut self) {
+        self.beams = None;
+    }
+
     /// music21's `classes`: what this is, and everything it is a kind of.
     /// Its own code reads this to decide what it is looking at.
     #[getter]
@@ -1437,6 +1503,21 @@ pub(crate) fn volume_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsVolume> {
 
 #[pymethods]
 impl Volume {
+    /// The Python objects this holds, shown to the cycle collector. A note
+    /// and the pitch it hands out point at each other through Rust, and
+    /// without this neither of them is ever freed.
+    fn __traverse__(
+        &self,
+        visit: pyo3::pyclass::PyVisit<'_>,
+    ) -> Result<(), pyo3::pyclass::PyTraverseError> {
+        visit.call(&self.client)?;
+        Ok(())
+    }
+
+    fn __clear__(&mut self) {
+        self.client = None;
+    }
+
     /// music21's `classes`: what this is, and everything it is a kind of.
     /// Its own code reads this to decide what it is looking at.
     #[getter]

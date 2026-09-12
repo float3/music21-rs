@@ -1093,6 +1093,25 @@ pub(crate) fn duration_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsDuration
 
 #[pymethods]
 impl Duration {
+    /// The Python objects this holds, shown to the cycle collector. A note
+    /// and the pitch it hands out point at each other through Rust, and
+    /// without this neither of them is ever freed.
+    fn __traverse__(
+        &self,
+        visit: pyo3::pyclass::PyVisit<'_>,
+    ) -> Result<(), pyo3::pyclass::PyTraverseError> {
+        for held in self.tuplets.iter().flatten() {
+            visit.call(held)?;
+        }
+        visit.call(&self.client)?;
+        Ok(())
+    }
+
+    fn __clear__(&mut self) {
+        self.tuplets = None;
+        self.client = None;
+    }
+
     /// music21's `classes`: what this is, and everything it is a kind of.
     /// Its own code reads this to decide what it is looking at.
     #[getter]

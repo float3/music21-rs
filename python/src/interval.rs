@@ -434,6 +434,21 @@ fn generic_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsGeneric> {
 
 #[pymethods]
 impl GenericInterval {
+    /// The Python objects this holds, shown to the cycle collector. A note
+    /// and the pitch it hands out point at each other through Rust, and
+    /// without this neither of them is ever freed.
+    fn __traverse__(
+        &self,
+        visit: pyo3::pyclass::PyVisit<'_>,
+    ) -> Result<(), pyo3::pyclass::PyTraverseError> {
+        visit.call(&self.complemented)?;
+        Ok(())
+    }
+
+    fn __clear__(&mut self) {
+        self.complemented = None;
+    }
+
     /// music21 freezes a score by pickling it, and what this object is lives
     /// in Rust where a pickle cannot see it — so it is written out as text,
     /// and read back into a fresh one of these.
@@ -1304,6 +1319,23 @@ pub(crate) fn transpose_pitch_by_any(
 
 #[pymethods]
 impl Interval {
+    /// The Python objects this holds, shown to the cycle collector. A note
+    /// and the pitch it hands out point at each other through Rust, and
+    /// without this neither of them is ever freed.
+    fn __traverse__(
+        &self,
+        visit: pyo3::pyclass::PyVisit<'_>,
+    ) -> Result<(), pyo3::pyclass::PyTraverseError> {
+        visit.call(&self.pitch_start)?;
+        visit.call(&self.pitch_end)?;
+        Ok(())
+    }
+
+    fn __clear__(&mut self) {
+        self.pitch_start = None;
+        self.pitch_end = None;
+    }
+
     /// music21 freezes a score by pickling it, and what this object is lives
     /// in Rust where a pickle cannot see it — so it is written out as text,
     /// and read back into a fresh one of these.

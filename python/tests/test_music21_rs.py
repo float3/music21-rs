@@ -7,6 +7,12 @@ that the classes carry music21's reprs and module strings, and that the
 handful of behaviours a caller reaches for first are right.
 """
 
+import gc
+import math
+import subprocess
+import sys
+import weakref
+
 import pytest
 
 import music21_rs as m
@@ -283,3 +289,27 @@ def test_a_scale_tunes_a_stream():
     m.MajorScale("D").tune(_Stream(notes + [chord]))
     assert [n.pitch.nameWithOctave for n in notes] == ["G-4", "D-4", "E4", "B-3", "C5"]
     assert [p.nameWithOctave for p in chord.pitches] == ["G-4", "D-5", "A4"]
+
+
+@pytest.mark.parametrize(
+    ("cls", "argument", "linked"),
+    [
+        (m.Note, "C4", "pitch"),
+        (m.Note, "C4", "duration"),
+        (m.Note, "C4", "volume"),
+        (m.Pitch, "C#4", "accidental"),
+        (m.Chord, "C4 E4 G4", "notes"),
+    ],
+)
+def test_an_object_and_what_it_hands_out_are_freed_together(cls, argument, linked):
+    """What a note hands out points back at the note, through Rust.
+
+    A subclass, because that is what `install_into_music21` makes and because
+    a bare facade class cannot be weakly referenced.
+    """
+    held = type("Held", (cls,), {})(argument)
+    getattr(held, linked)
+    freed = weakref.ref(held)
+    del held
+    gc.collect()
+    assert freed() is None

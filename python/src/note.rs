@@ -725,6 +725,42 @@ pub(crate) fn note_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsNote> {
 
 #[pymethods]
 impl Note {
+    /// The Python objects this holds, shown to the cycle collector. A note
+    /// and the pitch it hands out point at each other through Rust, and
+    /// without this neither of them is ever freed.
+    fn __traverse__(
+        &self,
+        visit: pyo3::pyclass::PyVisit<'_>,
+    ) -> Result<(), pyo3::pyclass::PyTraverseError> {
+        visit.call(&self.pitch)?;
+        visit.call(&self.volume)?;
+        visit.call(&self.duration)?;
+        visit.call(&self.chord)?;
+        visit.call(&self.expressions)?;
+        visit.call(&self.articulations)?;
+        visit.call(&self.tie)?;
+        visit.call(&self.lyrics)?;
+        visit.call(&self.stored_instrument)?;
+        visit.call(&self.unread_pitch)?;
+        visit.call(&self.style)?;
+        visit.call(&self.beams)?;
+        Ok(())
+    }
+
+    fn __clear__(&mut self) {
+        self.volume = None;
+        self.duration = None;
+        self.chord = None;
+        self.expressions = None;
+        self.articulations = None;
+        self.tie = None;
+        self.lyrics = None;
+        self.stored_instrument = None;
+        self.unread_pitch = None;
+        self.style = None;
+        self.beams = None;
+    }
+
     /// A note is written out as text and read back, and its pitch and its
     /// duration are made again from what it says. Its ornaments and marks
     /// are Python objects the crate does not model, so they are frozen
