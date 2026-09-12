@@ -10,10 +10,10 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyTuple};
 
-use music21_rs::voiceleading::{
+use music21_rs_crate::voiceleading::{
     ParallelRequirement as RsParallel, VoiceLeadingQuartet as RsQuartet,
 };
-use music21_rs::{Interval as RsInterval, Key as RsKey, Note as RsNote, Pitch as RsPitch};
+use music21_rs_crate::{Interval as RsInterval, Key as RsKey, Note as RsNote, Pitch as RsPitch};
 
 use crate::note::Note;
 use crate::pitch::pitch_from_any;

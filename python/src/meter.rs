@@ -19,8 +19,8 @@
 use pyo3::prelude::*;
 use pyo3::types::PyTuple;
 
-use music21_rs::meter::TimeSignature as RsTimeSignature;
-use music21_rs::{
+use music21_rs_crate::meter::TimeSignature as RsTimeSignature;
+use music21_rs_crate::{
     Duration as RsDuration, FloatType, Rest as RsRest, Stream as RsStream, UnsignedIntegerType,
 };
 
@@ -465,8 +465,8 @@ fn sounding_stream(measure: &Bound<'_, PyAny>) -> PyResult<RsStream> {
 #[pyfunction]
 #[pyo3(name = "bestTimeSignature")]
 fn bestTimeSignature(meas: &Bound<'_, PyAny>) -> PyResult<TimeSignature> {
-    let inner =
-        music21_rs::meter::best_time_signature(&sounding_stream(meas)?).map_err(meter_error)?;
+    let inner = music21_rs_crate::meter::best_time_signature(&sounding_stream(meas)?)
+        .map_err(meter_error)?;
     Ok(TimeSignature {
         inner,
         symbol: String::new(),

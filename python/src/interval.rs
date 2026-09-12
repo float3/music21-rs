@@ -8,7 +8,7 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
-use music21_rs::{
+use music21_rs_crate::{
     ChromaticInterval as RsChromatic, DiatonicInterval as RsDiatonic, GenericInterval as RsGeneric,
     Interval as RsInterval, IntervalDirection, KeySignature, Pitch as RsPitch,
     Specifier as RsSpecifier, convert_diatonic_number_to_step,
@@ -55,7 +55,7 @@ pyo3::create_exception!(
     crate::Music21Exception
 );
 
-fn interval_error(error: music21_rs::Error) -> PyErr {
+fn interval_error(error: music21_rs_crate::Error) -> PyErr {
     // An accidental this crate cannot spell is music21's `AccidentalException`
     // wherever it is raised from: its own transposition raises one on the
     // fifth sharp, and callers catch that class by name.

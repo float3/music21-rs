@@ -29,7 +29,7 @@ use pyo3::exceptions::PyKeyError;
 use pyo3::prelude::*;
 use pyo3::types::PyTuple;
 
-use music21_rs::chordsymbol::ChordSymbolFigure;
+use music21_rs_crate::chordsymbol::ChordSymbolFigure;
 
 use crate::chord::Chord;
 
@@ -54,7 +54,10 @@ const UNIDENTIFIED: &str = "Chord Symbol Cannot Be Identified";
 /// music21 passes its own `Chord` here, which under the harness is one of
 /// ours. A `ChordSymbol` is a chord of music21's own class, built before the
 /// swap, so it is read by its pitches and the root its figure fixed.
-pub(crate) fn chord_of(py: Python<'_>, inChord: &Bound<'_, PyAny>) -> PyResult<music21_rs::Chord> {
+pub(crate) fn chord_of(
+    py: Python<'_>,
+    inChord: &Bound<'_, PyAny>,
+) -> PyResult<music21_rs_crate::Chord> {
     if let Ok(chord) = inChord.extract::<PyRef<'_, Chord>>() {
         return Ok(chord.synced_inner(py));
     }
@@ -62,13 +65,13 @@ pub(crate) fn chord_of(py: Python<'_>, inChord: &Bound<'_, PyAny>) -> PyResult<m
     for pitch in inChord.getattr("pitches")?.try_iter()? {
         names.push(pitch?.getattr("nameWithOctave")?.extract::<String>()?);
     }
-    let mut chord = music21_rs::Chord::new(names.as_slice())
+    let mut chord = music21_rs_crate::Chord::new(names.as_slice())
         .map_err(|error| HarmonyException::new_err(crate::pitch::message(&error)))?;
     if let Ok(overrides) = inChord.getattr("_overrides")
         && let Ok(root) = overrides.call_method1("get", ("root",))
         && !root.is_none()
         && let Ok(name) = root.getattr("nameWithOctave")?.extract::<String>()
-        && let Ok(root) = music21_rs::Pitch::from_name(name)
+        && let Ok(root) = music21_rs_crate::Pitch::from_name(name)
     {
         chord.set_root(Some(root));
     }
@@ -151,7 +154,7 @@ pub fn chordSymbolFromChord<'py>(
 #[pyfunction]
 #[pyo3(name = "getAbbreviationListGivenChordType")]
 fn getAbbreviationListGivenChordType(chordType: String) -> PyResult<Vec<String>> {
-    music21_rs::chordsymbol::abbreviations_for_kind(&chordType)
+    music21_rs_crate::chordsymbol::abbreviations_for_kind(&chordType)
         .map(|list| list.iter().map(|each| (*each).to_string()).collect())
         .ok_or_else(|| PyKeyError::new_err(chordType))
 }
@@ -161,7 +164,7 @@ fn getAbbreviationListGivenChordType(chordType: String) -> PyResult<Vec<String>>
 #[pyfunction]
 #[pyo3(name = "getCurrentAbbreviationFor")]
 fn getCurrentAbbreviationFor(chordType: String) -> PyResult<String> {
-    music21_rs::chordsymbol::current_abbreviation_for_kind(&chordType)
+    music21_rs_crate::chordsymbol::current_abbreviation_for_kind(&chordType)
         .map(str::to_string)
         .ok_or_else(|| PyKeyError::new_err(chordType))
 }
@@ -171,7 +174,7 @@ fn getCurrentAbbreviationFor(chordType: String) -> PyResult<String> {
 #[pyfunction]
 #[pyo3(name = "getNotationStringGivenChordType")]
 fn getNotationStringGivenChordType(chordType: String) -> PyResult<String> {
-    music21_rs::chordsymbol::notation_for_kind(&chordType)
+    music21_rs_crate::chordsymbol::notation_for_kind(&chordType)
         .map(str::to_string)
         .ok_or_else(|| PyKeyError::new_err(chordType))
 }

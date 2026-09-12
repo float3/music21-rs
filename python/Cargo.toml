@@ -16,7 +16,12 @@ crate-type = ["cdylib", "rlib"]
 name = "music21_rs"
 
 [dependencies]
-music21-rs = { path = "..", default-features = false, features = ["serde"] }
+# Under a name of its own: this crate's own library is also called
+# `music21_rs`, and rustdoc will not build a doctest against two externs of
+# one name — which is why `cargo test` here could never run them.
+music21_rs_crate = { package = "music21-rs", path = "..", default-features = false, features = [
+  "serde",
+] }
 pyo3 = "0.29.0"
 # A facade object is pickled by writing its musical half out as text, which
 # is what music21 does to freeze a score.

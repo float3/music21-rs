@@ -10,8 +10,8 @@
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
-use music21_rs::duration::Duration as RsDuration;
-use music21_rs::tempo::{
+use music21_rs_crate::duration::Duration as RsDuration;
+use music21_rs_crate::tempo::{
     MetronomeMark as RsMetronomeMark, convert_tempo_by_referent as rs_convert_tempo_by_referent,
 };
 

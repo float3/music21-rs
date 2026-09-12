@@ -18,7 +18,7 @@
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
-use music21_rs::{IntegerType, Sieve as RsSieve};
+use music21_rs_crate::{IntegerType, Sieve as RsSieve};
 
 /// The names the `sieve` facade replaces in `music21.sieve`.
 ///
@@ -383,7 +383,7 @@ impl Primes {
 #[pyo3(name = "eratosthenes", signature = (firstCandidate = 2))]
 fn eratosthenes(firstCandidate: u64) -> Primes {
     Primes {
-        inner: Box::new(music21_rs::sieve::eratosthenes(firstCandidate)),
+        inner: Box::new(music21_rs_crate::sieve::eratosthenes(firstCandidate)),
     }
 }
 
@@ -391,7 +391,7 @@ fn eratosthenes(firstCandidate: u64) -> Primes {
 #[pyfunction]
 #[pyo3(name = "rabinMiller")]
 fn rabinMiller(n: i64) -> bool {
-    music21_rs::sieve::rabin_miller(n)
+    music21_rs_crate::sieve::rabin_miller(n)
 }
 
 /// music21's `discreteBinaryPad`: a series of integers as one flag per
@@ -403,7 +403,7 @@ fn discreteBinaryPad(
     fixRange: Option<Vec<IntegerType>>,
 ) -> PyResult<Vec<IntegerType>> {
     Ok(
-        music21_rs::sieve::discrete_binary_pad(&series, fixRange.as_deref())
+        music21_rs_crate::sieve::discrete_binary_pad(&series, fixRange.as_deref())
             .map_err(sieve_error)?
             .into_iter()
             .map(IntegerType::from)
@@ -416,7 +416,7 @@ fn discreteBinaryPad(
 #[pyfunction]
 #[pyo3(name = "unitNormRange", signature = (series, fixRange = None))]
 fn unitNormRange(series: Vec<f64>, fixRange: Option<Vec<f64>>) -> Vec<f64> {
-    music21_rs::sieve::unit_norm_range(&series, fixRange.as_deref())
+    music21_rs_crate::sieve::unit_norm_range(&series, fixRange.as_deref())
 }
 
 /// music21's `unitNormEqual`: `parts` points spread evenly over the unit
@@ -424,7 +424,7 @@ fn unitNormRange(series: Vec<f64>, fixRange: Option<Vec<f64>>) -> Vec<f64> {
 #[pyfunction]
 #[pyo3(name = "unitNormEqual")]
 fn unitNormEqual(parts: usize) -> Vec<f64> {
-    music21_rs::sieve::unit_norm_equal(parts)
+    music21_rs_crate::sieve::unit_norm_equal(parts)
 }
 
 /// music21's `unitNormStep`: the interval from `a` to `b` walked in steps
@@ -432,7 +432,7 @@ fn unitNormEqual(parts: usize) -> Vec<f64> {
 #[pyfunction]
 #[pyo3(name = "unitNormStep", signature = (step, a = 0.0, b = 1.0, normalized = true))]
 fn unitNormStep(step: f64, a: f64, b: f64, normalized: bool) -> PyResult<Vec<f64>> {
-    music21_rs::sieve::unit_norm_step(step, a, b, normalized).map_err(sieve_error)
+    music21_rs_crate::sieve::unit_norm_step(step, a, b, normalized).map_err(sieve_error)
 }
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {

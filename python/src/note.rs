@@ -7,7 +7,7 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
 
-use music21_rs::{
+use music21_rs_crate::{
     Duration as RsDuration, KeySignature as RsKeySignature, Note as RsNote, Notehead as RsNotehead,
     Pitch as RsPitch, StemDirection as RsStemDirection,
 };
@@ -524,7 +524,7 @@ impl Note {
 
     /// Writes a volume straight in, letting go of whatever object was
     /// standing for the old one.
-    pub(crate) fn replace_volume(&mut self, volume: Option<music21_rs::Volume>) {
+    pub(crate) fn replace_volume(&mut self, volume: Option<music21_rs_crate::Volume>) {
         self.inner.set_volume(volume);
         self.volume = None;
     }
@@ -546,7 +546,7 @@ impl Note {
         let Some(lyrics) = self.lyrics.take() else {
             return;
         };
-        let verses: Vec<music21_rs::notation::Lyric> = lyrics
+        let verses: Vec<music21_rs_crate::notation::Lyric> = lyrics
             .bind(py)
             .iter()
             .filter_map(|verse| verse.extract::<PyRef<'_, Lyric>>().ok())
@@ -1183,7 +1183,7 @@ impl Note {
                 "filled" | "yes" => Some(true),
                 "notfilled" | "no" => Some(false),
                 other => {
-                    return Err(not_rest_error(music21_rs::Error::Notation(format!(
+                    return Err(not_rest_error(music21_rs_crate::Error::Notation(format!(
                         "not a valid notehead fill value: '{other}'"
                     ))));
                 }
@@ -1209,7 +1209,7 @@ impl Note {
                 "yes" => true,
                 "no" => false,
                 other => {
-                    return Err(not_rest_error(music21_rs::Error::Notation(format!(
+                    return Err(not_rest_error(music21_rs_crate::Error::Notation(format!(
                         "notehead parentheses must be True or False, not '{other}'"
                     ))));
                 }
@@ -1365,7 +1365,7 @@ impl Note {
                     list.append(item)?;
                     continue;
                 }
-                let verse = music21_rs::notation::Lyric::new(item.extract::<String>()?);
+                let verse = music21_rs_crate::notation::Lyric::new(item.extract::<String>()?);
                 list.append(crate::installed_new(
                     py,
                     "music21.note",

@@ -7,7 +7,7 @@ use pyo3::exceptions::PyIndexError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
-use music21_rs::{
+use music21_rs_crate::{
     Beam as RsBeam, BeamDirection as RsBeamDirection, BeamType as RsBeamType, Beams as RsBeams,
     DurationType as RsDurationType, Lyric as RsLyric, Placement, Syllabic, Tie as RsTie, TieStyle,
     TieType, Volume as RsVolume,
@@ -445,7 +445,7 @@ impl Lyric {
     fn get_syllabic(&self, py: Python<'_>) -> Option<&'static str> {
         self.synced(py)
             .explicit_syllabic()
-            .map(music21_rs::Syllabic::as_str)
+            .map(music21_rs_crate::Syllabic::as_str)
     }
 
     #[setter]
@@ -1275,7 +1275,7 @@ impl Beams {
         for entry in beamsList.try_iter()? {
             beams.push(beams_of(&entry?)?);
         }
-        music21_rs::notation::remove_sandwiched_unbeamables(&mut beams);
+        music21_rs_crate::notation::remove_sandwiched_unbeamables(&mut beams);
         let made = beams_list(py, beams)?;
         // music21 edits the list it was given and hands the same one back.
         let list = beamsList.cast::<PyList>()?;
@@ -1294,7 +1294,7 @@ impl Beams {
         for entry in beamsList.try_iter()? {
             beams.push(beams_of(&entry?)?);
         }
-        music21_rs::notation::sanitize_partial_beams(&mut beams);
+        music21_rs_crate::notation::sanitize_partial_beams(&mut beams);
         let made = beams_list(py, beams)?;
         let list = beamsList.cast::<PyList>()?;
         list.set_slice(0, list.len(), made.as_any())?;
@@ -1312,7 +1312,7 @@ impl Beams {
         for entry in beamsList.try_iter()? {
             beams.push(beams_of(&entry?)?);
         }
-        music21_rs::notation::merge_connecting_partial_beams(&mut beams);
+        music21_rs_crate::notation::merge_connecting_partial_beams(&mut beams);
         let made = beams_list(py, beams)?;
         let list = beamsList.cast::<PyList>()?;
         list.set_slice(0, list.len(), made.as_any())?;
@@ -1640,7 +1640,9 @@ impl Volume {
 
     #[getter]
     fn cachedRealizedStr(&mut self, py: Python<'_>) -> PyResult<String> {
-        Ok(music21_rs::volume::rounded_str(self.cachedRealized(py)?))
+        Ok(music21_rs_crate::volume::rounded_str(
+            self.cachedRealized(py)?,
+        ))
     }
 
     /// music21's `mergeAttributes`: everything the other volume says except
@@ -1726,7 +1728,7 @@ impl Volume {
             baseLevel,
             clip,
         )?;
-        Ok(music21_rs::volume::rounded_str(realized))
+        Ok(music21_rs_crate::volume::rounded_str(realized))
     }
 
     fn __eq__(&self, other: &Bound<'_, PyAny>) -> bool {

@@ -23,7 +23,7 @@ use pyo3::prelude::*;
 /// as that module's exception class.
 macro_rules! error_into {
     ($vis:vis $name:ident, $exception:ty) => {
-        $vis fn $name(error: music21_rs::Error) -> PyErr {
+        $vis fn $name(error: music21_rs_crate::Error) -> PyErr {
             <$exception>::new_err($crate::pitch::message(&error))
         }
     };
@@ -939,10 +939,25 @@ fn built_helper(py: Python<'_>) -> Option<Bound<'_, PyModule>> {
 ///
 /// It patches a live module, so it changes music21 for everything in the
 /// process. Nothing in this module calls it for you.
+///
+/// ```no_run
+/// use pyo3::prelude::*;
+///
+/// # fn main() -> PyResult<()> {
+/// Python::attach(|py| {
+///     // Before anything imports the classes: `from music21.chord import
+///     // Chord` binds whichever class the module holds at that moment.
+///     let replaced = music21_rs::install_into_music21(py)?;
+///     assert!(replaced > 0);
+///     Ok(())
+/// })
+/// # }
+/// ```
 #[pyfunction]
 pub fn install_into_music21(py: Python<'_>) -> PyResult<usize> {
     let ours = PyModule::new(py, "music21_rs")?;
     register_all(&ours)?;
+    stamp_exception_modules(py)?;
     let mut replaced = 0;
     for (module_name, names) in MUSIC21_MODULES {
         let module = py.import(module_name)?;

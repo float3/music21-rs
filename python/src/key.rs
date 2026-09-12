@@ -7,13 +7,13 @@ use pyo3::exceptions::{PyKeyError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
 
-use music21_rs::scale::{
+use music21_rs_crate::scale::{
     Scale as RsScale, ScaleType as RsScaleType, SolfegVariant as RsSolfegVariant,
 };
 
 use crate::scale::ConcreteScale;
 
-use music21_rs::{
+use music21_rs_crate::{
     Key as RsKey, KeySignature as RsKeySignature, Pitch as RsPitch,
     convert_key_string_to_music21_key_string,
     key::{pitch_to_sharps, sharps_to_pitch},
@@ -592,7 +592,7 @@ impl Key {
                 scores.push(score);
             }
         }
-        Ok(music21_rs::tonal_certainty_from_scores(&scores))
+        Ok(music21_rs_crate::tonal_certainty_from_scores(&scores))
     }
 
     #[new]

@@ -9,7 +9,7 @@ use pyo3::exceptions::{PyIndexError, PyKeyError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
 
-use music21_rs::{
+use music21_rs_crate::{
     Chord as RsChord, ChordTableAddress as RsChordTableAddress, Duration as RsDuration,
     Interval as RsInterval, Key as RsKey, Note as RsNote, Notehead as RsNotehead, Pitch as RsPitch,
     StemDirection as RsStemDirection, Volume as RsVolume,
@@ -322,7 +322,7 @@ impl Chord {
     /// standing on a chord does when the chord it stands for changes.
     /// The chord's own pitches as values, for a caller that wants to work
     /// on them and hand the whole chord back.
-    pub(crate) fn value_pitches(&self) -> Vec<music21_rs::Pitch> {
+    pub(crate) fn value_pitches(&self) -> Vec<music21_rs_crate::Pitch> {
         self.inner.pitches()
     }
 
@@ -627,7 +627,7 @@ impl Chord {
             None => self
                 .inner
                 .duration()
-                .map_or(1.0, music21_rs::Duration::quarter_length),
+                .map_or(1.0, music21_rs_crate::Duration::quarter_length),
         }
     }
 
@@ -1785,7 +1785,7 @@ impl Chord {
     #[staticmethod]
     fn formatVectorString(vectorList: Vec<u32>) -> String {
         let values: Vec<u8> = vectorList.iter().map(|value| *value as u8).collect();
-        music21_rs::format_vector_string(&values)
+        music21_rs_crate::format_vector_string(&values)
     }
 
     fn intervalFromChordStep(&self, chordStep: u8) -> Option<crate::interval::Interval> {
@@ -2644,7 +2644,7 @@ impl Chord {
         let key_context = match keyContext.filter(|value| !value.is_none()) {
             Some(value) => {
                 let sharps: i32 = value.getattr("sharps")?.extract()?;
-                Some(music21_rs::KeySignature::new(sharps))
+                Some(music21_rs_crate::KeySignature::new(sharps))
             }
             None => None,
         };

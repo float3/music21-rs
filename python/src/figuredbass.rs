@@ -11,7 +11,7 @@
 use pyo3::prelude::*;
 use pyo3::types::PyTuple;
 
-use music21_rs::figuredbass::{
+use music21_rs_crate::figuredbass::{
     EXTENDER, Figure as RsFigure, Modifier as RsModifier, Notation as RsNotation,
 };
 
@@ -109,7 +109,7 @@ impl Modifier {
     /// music21's `modifyPitchName`: the note's name, spelled as this
     /// modifier asks.
     fn modifyPitchName(&self, pitchNameToAlter: &str) -> PyResult<String> {
-        let pitch = music21_rs::Pitch::from_name(pitchNameToAlter).map_err(modifier_error)?;
+        let pitch = music21_rs_crate::Pitch::from_name(pitchNameToAlter).map_err(modifier_error)?;
         Ok(self.inner.modify(&pitch).map_err(modifier_error)?.name())
     }
 
@@ -441,7 +441,7 @@ pub fn convertToPitch(py: Python<'_>, pitchString: &Bound<'_, PyAny>) -> PyResul
             "Cannot convert {pitchString} to a music21 Pitch."
         ))
     })?;
-    let pitch = music21_rs::Pitch::from_name(&name).map_err(|_| {
+    let pitch = music21_rs_crate::Pitch::from_name(&name).map_err(|_| {
         pyo3::exceptions::PyValueError::new_err(format!(
             "Cannot convert string {name} to a music21 Pitch."
         ))

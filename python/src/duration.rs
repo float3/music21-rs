@@ -9,7 +9,9 @@ use pyo3::exceptions::{PyIndexError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyFloat, PyTuple};
 
-use music21_rs::{Duration as RsDuration, DurationType as RsDurationType, Tuplet as RsTuplet};
+use music21_rs_crate::{
+    Duration as RsDuration, DurationType as RsDurationType, Tuplet as RsTuplet,
+};
 
 use crate::note::{NoteException, deep_copied_objects, note_error, true_false_or_none};
 
@@ -2254,7 +2256,7 @@ fn nextSmallerType(durType: String) -> PyResult<String> {
 #[pyo3(name = "quarterLengthToClosestType")]
 fn quarterLengthToClosestType(qLen: f64) -> PyResult<(String, bool)> {
     let (kind, exact) =
-        music21_rs::duration::quarter_length_to_closest_type(qLen).map_err(duration_error)?;
+        music21_rs_crate::duration::quarter_length_to_closest_type(qLen).map_err(duration_error)?;
     Ok((kind.music21_name().to_string(), exact))
 }
 
@@ -2291,10 +2293,10 @@ fn dottedMatch(py: Python<'_>, qLen: f64, maxDots: u32) -> PyResult<Py<PyAny>> {
 #[pyfunction]
 #[pyo3(name = "quarterLengthToNonPowerOf2Tuplet")]
 fn quarterLengthToNonPowerOf2Tuplet(qLen: f64) -> PyResult<(Tuplet, DurationTuple)> {
-    let (tuplet, kind, dots) = music21_rs::duration::quarter_length_to_non_power_of_2_tuplet(qLen)
-        .ok_or_else(|| {
-            DurationException::new_err(format!("No such tuplet for quarterLength {qLen}"))
-        })?;
+    let (tuplet, kind, dots) =
+        music21_rs_crate::duration::quarter_length_to_non_power_of_2_tuplet(qLen).ok_or_else(
+            || DurationException::new_err(format!("No such tuplet for quarterLength {qLen}")),
+        )?;
     Ok((Tuplet::wrap(tuplet), DurationTuple::of(kind, dots)))
 }
 
@@ -2303,7 +2305,7 @@ fn quarterLengthToNonPowerOf2Tuplet(qLen: f64) -> PyResult<(Tuplet, DurationTupl
 #[pyfunction]
 #[pyo3(name = "quarterLengthToTuplet", signature = (qLen, maxToReturn = 4))]
 fn quarterLengthToTuplet(qLen: f64, maxToReturn: usize) -> Vec<Tuplet> {
-    music21_rs::duration::quarter_length_to_tuplet(qLen, maxToReturn)
+    music21_rs_crate::duration::quarter_length_to_tuplet(qLen, maxToReturn)
         .into_iter()
         .map(Tuplet::wrap)
         .collect()
@@ -2322,7 +2324,7 @@ fn quarterConversion<'py>(
         let zero = DurationTuple::of(RsDurationType::Zero, 0);
         return Ok((PyTuple::new(py, [zero])?, None));
     }
-    let (components, tuplet) = music21_rs::duration::quarter_conversion(qLen);
+    let (components, tuplet) = music21_rs_crate::duration::quarter_conversion(qLen);
     let components: Vec<DurationTuple> = components
         .into_iter()
         .map(|(kind, dots)| DurationTuple::of(kind, dots))

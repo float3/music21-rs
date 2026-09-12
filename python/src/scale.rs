@@ -3,7 +3,7 @@
 //!
 //! music21 splits a scale in two — an `AbstractScale`, which is the pattern
 //! of steps, and a `ConcreteScale`, which is that pattern standing on a
-//! tonic. The crate's [`music21_rs::scale::Scale`] is the second, and its
+//! tonic. The crate's [`music21_rs_crate::scale::Scale`] is the second, and its
 //! `ScaleType` is the first; the twenty concrete classes music21 names are
 //! built here from that one pair rather than written out twenty times.
 
@@ -13,11 +13,11 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyTuple, PyType};
 
-use music21_rs::scale::{
+use music21_rs_crate::scale::{
     DegreeComparison as RsDegreeComparison, Scale as RsScale, ScaleType as RsScaleType,
     SolfegVariant as RsSolfegVariant,
 };
-use music21_rs::{Interval as RsInterval, Pitch as RsPitch};
+use music21_rs_crate::{Interval as RsInterval, Pitch as RsPitch};
 
 use crate::interval::interval_from_any;
 use crate::pitch::{Pitch, pitch_from_any};
