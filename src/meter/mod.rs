@@ -467,20 +467,7 @@ impl TimeSignature {
     /// the denominator — except at `3`, where `3/4` is three beats but `3/8` is
     /// one.
     pub fn beat_count(&self) -> UnsignedIntegerType {
-        match self.numerator {
-            1 => 1,
-            2 => 2,
-            // music21 treats 3 as a single beat once the denominator is short
-            // enough that the bar reads as one compound unit.
-            3 if self.denominator > 4 => 1,
-            3 => 3,
-            4 => 4,
-            6 => 2,
-            9 => 3,
-            12 => 4,
-            numerator if numerator >= 15 && numerator.is_multiple_of(3) => numerator / 3,
-            numerator => numerator,
-        }
+        self.beat_sequence.len() as UnsignedIntegerType
     }
 
     /// Returns music21's name for the beat count, such as `"Duple"`.
@@ -1561,6 +1548,11 @@ mod tests {
         assert_eq!(ts("3/8").beat_count(), 1);
         assert_eq!(ts("3/16").beat_count(), 1);
         assert_eq!(ts("3/32").beat_count(), 1);
+        // The cut is at an eighth rather than at a power of two: music21
+        // counts 3/3 and 3/6 in three, and 3/12 in one.
+        assert_eq!(ts("3/3").beat_count(), 3);
+        assert_eq!(ts("3/6").beat_count(), 3);
+        assert_eq!(ts("3/12").beat_count(), 1);
         // Every other numerator ignores the denominator entirely.
         for denominator in [2, 4, 8, 16] {
             assert_eq!(TimeSignature::new(6, denominator).unwrap().beat_count(), 2);
