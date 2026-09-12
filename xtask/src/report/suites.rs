@@ -18,6 +18,31 @@ use super::*;
 pub(super) fn start_coverage(
     workspace_root: &Path,
 ) -> Result<Vec<(String, String)>, Box<dyn Error>> {
+    // `clean --workspace` throws away the profiles but leaves the objects
+    // they are mapped onto, and an object built before a module was split
+    // into a directory still names the file that used to hold it. llvm-cov
+    // then reports that file as covered by nothing -- 354 phantom lines for
+    // `src/serial.rs` alone -- and errors on the way past, which is enough
+    // to make the step that ran the suite exit non-zero and its row read as
+    // a failure. `--workspace` does not reach `python-parity` either, which
+    // keeps a target directory of its own.
+    for tree in ["target", "python-parity/target", "python/target"] {
+        let deps = workspace_root.join(tree).join("debug/deps");
+        if !deps.is_dir() {
+            continue;
+        }
+        let Ok(entries) = fs::read_dir(&deps) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            if name.starts_with("libmusic21_rs") || name.starts_with("music21_rs") {
+                let _ = fs::remove_file(entry.path());
+            }
+        }
+    }
+
     let cleaned = Command::new("cargo")
         .args(["llvm-cov", "clean", "--workspace"])
         .current_dir(workspace_root)
