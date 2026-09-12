@@ -778,15 +778,19 @@ pub(crate) fn told_sites(holder: &Bound<'_, PyAny>, length: &Bound<'_, PyAny>) -
 /// Tells a duration what holds it, the way music21's own `duration` setter
 /// does. A duration announces a change to its holder, and one that was never
 /// told who that is announces to nobody.
-pub(crate) fn adopt_duration(py: Python<'_>, duration: &Py<PyAny>, holder: &Bound<'_, PyAny>) {
+pub(crate) fn adopt_duration(
+    py: Python<'_>,
+    duration: &Py<PyAny>,
+    holder: &Bound<'_, PyAny>,
+) -> PyResult<()> {
     let duration = duration.bind(py);
     if let Ok(mut ours) = duration.extract::<PyRefMut<'_, Duration>>() {
         ours.client = Some(holder.clone().unbind());
-        return;
+        return Ok(());
     }
     // One of music21's own durations keeps the same slot, and writing it is
     // what its `GeneralNote.duration` setter does.
-    let _ = duration.setattr("client", holder);
+    duration.setattr("client", holder)
 }
 
 impl Clone for Duration {

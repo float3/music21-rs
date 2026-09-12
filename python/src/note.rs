@@ -415,7 +415,7 @@ impl Note {
         // Anything a note has worked out about itself was worked out from
         // the pitch it has just been given, so it is thrown away — music21's
         // `pitchChanged`, which is what its own pitch setters end with.
-        let _ = note.bind(py).call_method0("pitchChanged");
+        note.bind(py).call_method0("pitchChanged")?;
         Self::tell_chord(py, note, pitch)
     }
 
@@ -1049,7 +1049,7 @@ impl Note {
     fn get_duration(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
         let py = slf.py();
         let duration = slf.borrow_mut().duration_object(py)?;
-        adopt_duration(py, &duration, slf.as_any());
+        adopt_duration(py, &duration, slf.as_any())?;
         Ok(duration)
     }
 
@@ -1058,7 +1058,7 @@ impl Note {
         let py = slf.py();
         let had_one = slf.borrow().duration.is_some();
         let duration = slf.borrow_mut().attach_duration(py, value)?;
-        adopt_duration(py, &duration, slf.as_any());
+        adopt_duration(py, &duration, slf.as_any())?;
         // Replacing the duration a note already had changes how long the
         // note is, and the streams holding it keep that length; music21
         // tells them so here, and a note whose length nobody has asked for

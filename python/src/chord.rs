@@ -1457,7 +1457,7 @@ impl Chord {
     fn get_duration(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
         let py = slf.py();
         let duration = slf.borrow_mut().duration_object(py)?;
-        crate::duration::adopt_duration(py, &duration, slf.as_any());
+        crate::duration::adopt_duration(py, &duration, slf.as_any())?;
         Ok(duration)
     }
 
@@ -1478,7 +1478,7 @@ impl Chord {
             )?
             .into_any()
         };
-        crate::duration::adopt_duration(py, &duration, slf.as_any());
+        crate::duration::adopt_duration(py, &duration, slf.as_any())?;
         let had_one = slf.borrow().duration.is_some();
         {
             let mut chord = slf.borrow_mut();
