@@ -89,7 +89,17 @@ Two rules, set 2026-09-12, that most of the open work now serves:
    callbacks (`informClient`, `pitchChanged`), `groups`, `storedInstrument`
    and `getInstrument`, the `AbstractScale` layer, `Sieve`'s settable state,
    `Duration`'s component machinery — are either work to move into the crate
-   or exceptions that should say why in `data/feature_map.toml`.
+   or exceptions that should say why in `data/feature_map.toml`. The count is
+   read off the page `xtask report` writes, which is where it is made;
+   `naiveBeams`, `getDynamicContext`, `getGrace`, `isConcrete` and meter's
+   three exclusions are in it too.
+
+   **One deviation that count cannot see.** `barDuration` reads as ported,
+   because `bar_duration` exists — but its *setter* keeps music21's
+   `_overriddenBarDuration` as a Python object in the wheel, and the crate
+   has nothing of the kind. A member can be ported and still carry state
+   that lives only in the facade, so 30 is a floor rather than the whole of
+   what the rule has to answer for.
 
 4. **CI has now run all of this green**, music21's own suite and the docs
    build included. Two things it caught that no local gate did: `cargo fmt`
