@@ -80,7 +80,7 @@ impl BeatDivision {
 ///
 /// let six_eight = TimeSignature::from_ratio_string("6/8")?;
 /// assert_eq!(six_eight.beat_count(), 2);
-/// assert_eq!(six_eight.beat_quarter_length(), 1.5);
+/// assert_eq!(six_eight.beat_quarter_length()?, 1.5);
 /// assert_eq!(six_eight.classification(), "Compound Duple");
 /// # Ok::<(), music21_rs::Error>(())
 /// ```
@@ -486,26 +486,45 @@ impl TimeSignature {
     /// music21's `beatDuration` this never fails. music21 only reports a
     /// non-uniform beat for a hand-partitioned `MeterSequence`, which has no
     /// counterpart here.
-    pub fn beat_quarter_length(&self) -> FloatType {
-        self.bar_quarter_length() / FloatType::from(self.beat_count())
+    pub fn beat_quarter_length(&self) -> Result<FloatType> {
+        let spans = self.beat_spans();
+        let first = spans[0].1 - spans[0].0;
+        if spans
+            .iter()
+            .any(|(start, end)| ((end - start) - first).abs() > OFFSET_TOLERANCE)
+        {
+            let lengths: Vec<FloatType> = spans.iter().map(|(s, e)| e - s).collect();
+            return Err(Error::Meter(format!(
+                "non uniform beat division: {lengths:?}"
+            )));
+        }
+        Ok(first)
     }
 
     /// Returns the length of one beat as a [`Duration`].
-    pub fn beat_duration(&self) -> Duration {
-        Duration::new(self.beat_quarter_length())
-            .expect("a positive bar length divided by a positive beat count stays positive")
+    pub fn beat_duration(&self) -> Result<Duration> {
+        Duration::new(self.beat_quarter_length()?)
     }
 
     /// Returns how the beat subdivides.
     pub fn beat_division(&self) -> BeatDivision {
-        if self.beat_count() == 1 {
-            BeatDivision::Other
-        } else if matches!(self.numerator, 6 | 9 | 12)
-            || (self.numerator >= 15 && self.numerator.is_multiple_of(3))
-        {
-            BeatDivision::Compound
-        } else {
-            BeatDivision::Simple
+        let parts = self.beat_sequence.parts();
+        if parts.len() <= 1 {
+            return BeatDivision::Other;
+        }
+        let mut counts = parts.iter().map(MeterTerminal::len);
+        let Some(first) = counts.next() else {
+            return BeatDivision::Other;
+        };
+        if first == 0 || !counts.all(|count| count == first) {
+            // The beats of a bar written additively need not divide alike;
+            // music21 reports such a meter as Other and counts one.
+            return BeatDivision::Other;
+        }
+        match first {
+            2 => BeatDivision::Simple,
+            3 => BeatDivision::Compound,
+            _ => BeatDivision::Other,
         }
     }
 
@@ -555,34 +574,31 @@ impl TimeSignature {
     /// Returns the quarter length of each division of one beat, in order:
     /// two eighths in `4/4`, three in `6/8`, the whole dotted-quarter beat
     /// in `3/8` where the beat does not divide.
-    pub fn beat_division_quarter_lengths(&self) -> Vec<FloatType> {
+    pub fn beat_division_quarter_lengths(&self) -> Result<Vec<FloatType>> {
         let count = self.beat_division_count().max(1);
-        vec![self.beat_quarter_length() / FloatType::from(count); count as usize]
+        let beat = self.beat_quarter_length()?;
+        Ok(vec![beat / FloatType::from(count); count as usize])
     }
 
     /// Returns [`Self::beat_division_quarter_lengths`] as durations: music21's
     /// `beatDivisionDurations`.
-    pub fn beat_division_durations(&self) -> Vec<Duration> {
-        self.beat_division_quarter_lengths()
+    pub fn beat_division_durations(&self) -> Result<Vec<Duration>> {
+        self.beat_division_quarter_lengths()?
             .into_iter()
-            .map(|quarter_length| {
-                Duration::new(quarter_length)
-                    .expect("a positive beat divided by a positive count stays positive")
-            })
+            .map(Duration::new)
             .collect()
     }
 
     /// Returns each division of the beat halved: music21's
     /// `beatSubDivisionDurations`, four sixteenths in `4/4`.
-    pub fn beat_sub_division_durations(&self) -> Vec<Duration> {
-        self.beat_division_quarter_lengths()
-            .into_iter()
-            .flat_map(|quarter_length| {
-                let half = Duration::new(quarter_length / 2.0)
-                    .expect("half of a positive quarter length stays positive");
-                [half.clone(), half]
-            })
-            .collect()
+    pub fn beat_sub_division_durations(&self) -> Result<Vec<Duration>> {
+        let mut out = Vec::new();
+        for quarter_length in self.beat_division_quarter_lengths()? {
+            let half = Duration::new(quarter_length / 2.0)?;
+            out.push(half.clone());
+            out.push(half);
+        }
+        Ok(out)
     }
 
     /// Returns the quarter-length offset of a one-based, possibly fractional
@@ -1468,11 +1484,11 @@ mod tests {
             );
             assert_eq!(ts.beat_division_count_name(), division_name, "{ratio}");
             assert_eq!(
-                quarter_lengths(ts.beat_division_durations()),
+                quarter_lengths(ts.beat_division_durations().unwrap()),
                 divisions,
                 "{ratio}"
             );
-            let subs = quarter_lengths(ts.beat_sub_division_durations());
+            let subs = quarter_lengths(ts.beat_sub_division_durations().unwrap());
             assert_eq!(subs.len(), sub_divisions, "{ratio}");
             assert!(subs.iter().all(|ql| *ql == divisions[0] / 2.0), "{ratio}");
         }
@@ -1563,9 +1579,9 @@ mod tests {
         assert_eq!(ts("4/4").bar_quarter_length(), 4.0);
         assert_eq!(ts("5/16").bar_quarter_length(), 1.25);
         assert_eq!(ts("3/8").bar_quarter_length(), 1.5);
-        assert_eq!(ts("6/8").beat_quarter_length(), 1.5);
-        assert_eq!(ts("4/4").beat_quarter_length(), 1.0);
-        assert_eq!(ts("2/2").beat_duration().quarter_length(), 2.0);
+        assert_eq!(ts("6/8").beat_quarter_length().unwrap(), 1.5);
+        assert_eq!(ts("4/4").beat_quarter_length().unwrap(), 1.0);
+        assert_eq!(ts("2/2").beat_duration().unwrap().quarter_length(), 2.0);
     }
 
     #[test]
@@ -1637,6 +1653,36 @@ mod tests {
         assert_eq!(common.offset_from_beat(2.0).unwrap(), 1.0);
         assert_eq!(common.offset_from_beat(1.5).unwrap(), 0.5);
         assert_eq!(common.beat_proportion_string(2.5).unwrap(), "3 1/2");
+    }
+
+    #[test]
+    fn a_bar_whose_beats_differ_has_no_one_beat_length() {
+        use crate::meter::TimeSignature;
+
+        // music21 11.0.0b9 raises on beatDuration here and reports the
+        // division as Other, counting one.
+        let mixed = TimeSignature::from_ratio_string("2/4+3/8").unwrap();
+        assert!(mixed.beat_quarter_length().is_err());
+        assert!(mixed.beat_duration().is_err());
+        assert!(mixed.beat_division_durations().is_err());
+        assert_eq!(mixed.beat_division_count(), 1);
+        assert_eq!(mixed.beat_division_count_name(), "Other");
+        assert_eq!(mixed.classification(), "Other Duple");
+
+        let other = TimeSignature::from_ratio_string("3/8+2/8").unwrap();
+        assert!(other.beat_quarter_length().is_err());
+        assert_eq!(other.beat_division_count(), 1);
+        assert_eq!(other.classification(), "Other Duple");
+
+        // An evenly divided bar still answers, and answers as it did.
+        assert_eq!(TimeSignature::common().beat_quarter_length().unwrap(), 1.0);
+        assert_eq!(
+            TimeSignature::from_ratio_string("6/8")
+                .unwrap()
+                .beat_quarter_length()
+                .unwrap(),
+            1.5
+        );
     }
 
     #[test]

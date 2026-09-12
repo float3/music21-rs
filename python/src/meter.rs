@@ -244,8 +244,10 @@ impl TimeSignature {
     }
 
     #[getter]
-    fn beatDuration(&self) -> Duration {
-        Duration::wrap(self.inner.beat_duration())
+    fn beatDuration(&self) -> PyResult<Duration> {
+        Ok(Duration::wrap(
+            self.inner.beat_duration().map_err(meter_error)?,
+        ))
     }
 
     #[getter]
@@ -259,21 +261,25 @@ impl TimeSignature {
     }
 
     #[getter]
-    fn beatDivisionDurations(&self) -> Vec<Duration> {
-        self.inner
+    fn beatDivisionDurations(&self) -> PyResult<Vec<Duration>> {
+        Ok(self
+            .inner
             .beat_division_durations()
+            .map_err(meter_error)?
             .into_iter()
             .map(Duration::wrap)
-            .collect()
+            .collect())
     }
 
     #[getter]
-    fn beatSubDivisionDurations(&self) -> Vec<Duration> {
-        self.inner
+    fn beatSubDivisionDurations(&self) -> PyResult<Vec<Duration>> {
+        Ok(self
+            .inner
             .beat_sub_division_durations()
+            .map_err(meter_error)?
             .into_iter()
             .map(Duration::wrap)
-            .collect()
+            .collect())
     }
 
     #[getter]
@@ -291,13 +297,14 @@ impl TimeSignature {
         self.inner.quarter_length_to_beat_length_ratio()
     }
 
-    /// music21's `getBeatDuration`, which takes an offset because a
-    /// hand-partitioned meter can have beats of different lengths. Every
-    /// meter this type can express has one uniform beat, so the offset only
-    /// has to be inside the bar.
+    /// music21's `getBeatDuration`: how long the beat at an offset is. A bar
+    /// written additively has beats of different lengths, so this answers
+    /// along the bar rather than the same everywhere in it.
     fn getBeatDuration(&self, qLenPos: FloatType) -> PyResult<Duration> {
         self.checked_offset(qLenPos)?;
-        Ok(Duration::wrap(self.inner.beat_duration()))
+        Ok(Duration::wrap(
+            self.inner.beat_duration_at(qLenPos).map_err(meter_error)?,
+        ))
     }
 
     fn getBeatOffsets(&self) -> Vec<FloatType> {
