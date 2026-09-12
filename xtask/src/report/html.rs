@@ -834,6 +834,20 @@ pub(super) fn render_features(features: &[ClassReport], wheel: bool) -> String {
     }
     if wheel {
         let _ = write!(note, "<span class=\"wheel\">{in_wheel} in the wheel</span>");
+        // The two surfaces are not one: a member the wheel answers and the
+        // crate has no function for is why "the crate is a superset of the
+        // wheel" is not a thing anybody should assume from this page.
+        let wheel_only = features
+            .iter()
+            .flat_map(|class| &class.members)
+            .filter(|member| member.status != Status::Ported && member.in_wheel)
+            .count();
+        if wheel_only > 0 {
+            let _ = write!(
+                note,
+                "<span class=\"wheel\">{wheel_only} in the wheel only</span>"
+            );
+        }
     }
     note.push_str("</span>");
     let mut html = section_head("ported", "Ported from music21", &note);
@@ -955,7 +969,7 @@ pub(super) fn render_features(features: &[ClassReport], wheel: bool) -> String {
         html,
         r#"                    <p class="empty-note" data-filter-empty hidden>Nothing matches that filter.</p>
                 </div>
-                <p class="section-foot">Every public member of the music21 classes the crate ports, read from the submodule. A reason for not porting one is shown beside it but still counts against the total. The wheel is asked separately and under music21's own names: the crate may leave a member out on purpose, but one the wheel lacks is a member a program loses when it calls <code>install_into_music21()</code>.</p>
+                <p class="section-foot">Every public member of the music21 classes the crate ports, read from the submodule. A reason for not porting one is shown beside it but still counts against the total. The wheel is asked separately and under music21's own names: the crate may leave a member out on purpose, but one the wheel lacks is a member a program loses when it calls <code>install_into_music21()</code>. It runs the other way too &mdash; a member counted <em>in the wheel only</em> is one the facade answers and the crate has no function for, because what it answers is Python's rather than music theory: a cached value, a callback from the object that holds it, an instrument, or a walk through the stream a note sits in.</p>
             </section>
 "#
     );
