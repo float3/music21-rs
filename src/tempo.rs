@@ -299,10 +299,20 @@ impl MetronomeMark {
     }
 
     /// Seconds each quarter note lasts.
+    ///
+    /// A mark of nought beats a minute is refused rather than answered with
+    /// an infinity, which is what dividing by it gives and what every
+    /// arithmetic downstream of it would then carry.
     pub fn seconds_per_quarter(&self) -> Result<FloatType> {
-        self.quarter_bpm()
-            .map(|bpm| 60.0 / bpm)
-            .ok_or_else(|| Error::Tempo("cannot derive seconds without a tempo number".to_string()))
+        let quarter_bpm = self.quarter_bpm().ok_or_else(|| {
+            Error::Tempo("cannot derive seconds without a tempo number".to_string())
+        })?;
+        if quarter_bpm == 0.0 {
+            return Err(Error::Tempo(
+                "a tempo of no beats a minute lasts no seconds a beat".to_string(),
+            ));
+        }
+        Ok(60.0 / quarter_bpm)
     }
 
     /// Seconds a span of the given quarter length lasts at this tempo.
@@ -503,5 +513,15 @@ mod tests {
         assert_eq!(unknown.quarter_bpm(), None);
         assert!(unknown.seconds_per_quarter().is_err());
         assert!(quarter.seconds_to_duration(0.0).is_err());
+
+        let motionless = MetronomeMark::new(0.0);
+        assert_eq!(motionless.quarter_bpm(), Some(0.0));
+        assert!(motionless.seconds_per_quarter().is_err());
+        assert!(
+            motionless
+                .duration_to_seconds(&Duration::quarter())
+                .is_err()
+        );
+        assert!(motionless.quarter_length_to_seconds(1.0).is_err());
     }
 }

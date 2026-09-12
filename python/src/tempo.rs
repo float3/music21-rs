@@ -425,9 +425,15 @@ impl MetronomeMark {
     /// music21's `secondsPerQuarter`, which counts what the mark is played
     /// at where that differs from what it says.
     fn secondsPerQuarter(&self) -> PyResult<f64> {
-        self.getQuarterBPM(true)
-            .map(|bpm| 60.0 / bpm)
-            .ok_or_else(|| MetronomeMarkException::new_err("this mark says no tempo"))
+        let quarter_bpm = self
+            .getQuarterBPM(true)
+            .ok_or_else(|| MetronomeMarkException::new_err("this mark says no tempo"))?;
+        if quarter_bpm == 0.0 {
+            return Err(pyo3::exceptions::PyZeroDivisionError::new_err(
+                "float division by zero",
+            ));
+        }
+        Ok(60.0 / quarter_bpm)
     }
 
     /// music21's `durationToSeconds`: how long a span lasts at this tempo.

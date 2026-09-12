@@ -335,6 +335,50 @@ def test_what_a_facade_hands_out_is_built_without_an_import(monkeypatch):
     assert asked == []
 
 
+@pytest.mark.parametrize("value", [math.nan, math.inf, -math.inf])
+def test_a_pitch_space_number_that_is_not_finite_is_refused(value):
+    """music21 raises here, out of the `int()` its own conversion goes
+    through. Answering instead is worse than failing: the cast these classes
+    used read every one of these as nought, so a nonsense pitch came back as
+    a plain C with nothing to say it was nonsense."""
+    with pytest.raises(Exception):
+        m.Pitch(ps=value)
+    pitch = m.Pitch("A4")
+    with pytest.raises(Exception):
+        pitch.ps = value
+    assert pitch.nameWithOctave == "A4"
+
+
+def test_a_frequency_that_is_not_finite_is_refused():
+    pitch = m.Pitch("A4")
+    with pytest.raises(Exception):
+        pitch.frequency = math.inf
+    with pytest.raises(Exception):
+        pitch.frequency = math.nan
+    with pytest.raises(Exception):
+        pitch.frequency = 0.0
+    assert pitch.nameWithOctave == "A4"
+    pitch.frequency = 880.0
+    assert pitch.nameWithOctave == "A5"
+
+
+@pytest.mark.parametrize("value", [math.nan, math.inf])
+def test_an_interval_of_no_number_of_semitones_is_refused(value):
+    with pytest.raises(ValueError):
+        m.Interval(value)
+    with pytest.raises(ValueError):
+        m.ChromaticInterval(value)
+    assert m.Interval(7).name == "P5"
+
+
+def test_a_mark_of_no_tempo_divides_by_no_zero():
+    """music21 divides sixty by the number and raises `ZeroDivisionError`.
+    Answering an infinity instead put it into whatever arithmetic followed."""
+    with pytest.raises(ZeroDivisionError):
+        m.MetronomeMark(number=0).secondsPerQuarter()
+    assert m.MetronomeMark(number=120).secondsPerQuarter() == 0.5
+
+
 def test_importing_the_package_imports_no_music21():
     """Every exception here is built on music21's own, so building one
     imports music21 — the whole of it, half a second of it. Nothing asked for

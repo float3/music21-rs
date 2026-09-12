@@ -276,6 +276,13 @@ impl Pitch {
         let has_explicit_octave = octave.is_some();
         let has_explicit_accidental = accidental.is_some();
 
+        if let Some(PitchName::Number(number)) = &name
+            && !number.is_finite()
+        {
+            return Err(Error::Pitch(format!(
+                "a pitch-space number must be finite, got {number}"
+            )));
+        }
         let parsed = name.map(PitchParameters::from).unwrap_or_default();
         let name = parsed.name;
         let step = if name.is_some() || parsed.step.is_some() {
@@ -335,6 +342,11 @@ impl Pitch {
             pitch.midi_setter(midi);
         }
         if let Some(ps) = ps {
+            if !ps.is_finite() {
+                return Err(Error::Pitch(format!(
+                    "a pitch-space number must be finite, got {ps}"
+                )));
+            }
             pitch.ps_setter(ps);
         }
 
@@ -736,9 +748,9 @@ impl Pitch {
     /// Builds a pitch from a frequency in hertz, spelled in twelve-tone equal
     /// temperament at A4 = 440 with any remainder as a microtone.
     pub fn from_frequency(hertz: FloatType) -> Result<Self> {
-        if hertz.is_nan() || hertz <= 0.0 {
+        if !hertz.is_finite() || hertz <= 0.0 {
             return Err(Error::Pitch(format!(
-                "frequency must be greater than zero, got {hertz}"
+                "frequency must be a finite number greater than zero, got {hertz}"
             )));
         }
         let mut pitch = Pitch::default();
@@ -906,6 +918,34 @@ fn normalize_midi(midi: IntegerType) -> IntegerType {
 
 #[cfg(test)]
 mod tests {
+    /// A number that is not a number spells no pitch. Left to the conversion
+    /// it became a C, because the cast that reads a step off pitch space
+    /// answers nought for anything it cannot represent.
+    #[test]
+    fn a_pitch_space_number_that_is_not_finite_is_refused() {
+        use crate::pitch::Pitch;
+
+        for number in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert!(Pitch::from_pitch_space(number).is_err());
+            assert!(Pitch::from_number(number).is_err());
+            assert!(Pitch::builder().ps(number).build().is_err());
+        }
+        assert_eq!(Pitch::from_pitch_space(61.0).unwrap().name(), "C#");
+    }
+
+    #[test]
+    fn a_frequency_that_is_not_finite_is_refused() {
+        use crate::pitch::Pitch;
+
+        assert!(Pitch::from_frequency(f64::INFINITY).is_err());
+        assert!(Pitch::from_frequency(f64::NAN).is_err());
+        assert!(Pitch::from_frequency(0.0).is_err());
+        assert_eq!(
+            Pitch::from_frequency(440.0).unwrap().name_with_octave(),
+            "A4"
+        );
+    }
+
     #[test]
     fn a_pitch_is_built_from_a_step_a_number_or_an_owned_name() {
         use crate::pitch::{Pitch, PitchName, pitch_class_name};

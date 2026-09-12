@@ -920,7 +920,13 @@ fn semitones_from_any(value: &Bound<'_, PyAny>) -> PyResult<f64> {
     if let Ok(semitones) = value.extract::<i32>() {
         return Ok(f64::from(semitones));
     }
-    value.extract()
+    let semitones: f64 = value.extract()?;
+    if !semitones.is_finite() {
+        return Err(PyValueError::new_err(format!(
+            "cannot make an interval of {semitones} semitones"
+        )));
+    }
+    Ok(semitones)
 }
 
 /// A semitone count as music21 hands it back: an `int` when it is whole, a
