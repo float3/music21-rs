@@ -313,3 +313,23 @@ def test_an_object_and_what_it_hands_out_are_freed_together(cls, argument, linke
     del held
     gc.collect()
     assert freed() is None
+
+
+def test_what_a_facade_hands_out_is_built_without_an_import(monkeypatch):
+    """Each object a facade builds is made as the class music21 has installed
+    under its name, where there is one. Nothing is installed here, and asking
+    must not send Python searching `sys.path` for music21 on every note."""
+    m.Chord("C4 E4 G4").pitches
+    asked = []
+
+    class Watch:
+        def find_spec(self, name, path=None, target=None):
+            asked.append(name)
+
+    monkeypatch.setattr(sys, "meta_path", [Watch(), *sys.meta_path])
+    chord = m.Chord("C4 E4 G4")
+    chord.pitches
+    chord.notes
+    m.Note("D4").duration
+    m.Pitch("C#4").transpose("M3")
+    assert asked == []

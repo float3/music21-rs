@@ -167,8 +167,8 @@ pub(crate) fn derived_from(
 
 /// Whether these classes have been installed into music21 at all.
 fn anything_installed(py: Python<'_>) -> bool {
-    install_helper(py)
-        .and_then(|helper| helper.getattr("installed"))
+    built_helper(py)
+        .and_then(|helper| helper.getattr("installed").ok())
         .map(|installed| installed.len().unwrap_or(0) > 0)
         .unwrap_or(false)
 }
@@ -184,8 +184,7 @@ pub(crate) fn installed_class<'py>(
     module: &str,
     name: &str,
 ) -> Option<Bound<'py, PyAny>> {
-    let helper = install_helper(py).ok()?;
-    let installed = helper.getattr("installed").ok()?;
+    let installed = built_helper(py)?.getattr("installed").ok()?;
     installed.get_item((module, name)).ok()
 }
 
@@ -439,7 +438,7 @@ where
 /// process must not fail for the want of a half it does not have.
 pub(crate) fn blank_installed<'py>(class: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
     let py = class.py();
-    let Ok(helper) = install_helper(py) else {
+    let Some(helper) = built_helper(py) else {
         return class.getattr("__new__")?.call1((class,));
     };
     helper.getattr("blank")?.call1((class,))
@@ -885,21 +884,40 @@ pub fn rebind(
     Ok(())
 }
 
+static INSTALL_HELPER_MODULE: pyo3::sync::PyOnceLock<Py<PyModule>> = pyo3::sync::PyOnceLock::new();
+
 /// The helper module, compiled once per interpreter.
 fn install_helper<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyModule>> {
-    if let Ok(existing) = py.import("music21_rs_install") {
-        return Ok(existing);
-    }
-    let helper = PyModule::from_code(
-        py,
-        &std::ffi::CString::new(INSTALL_HELPER)?,
-        c"music21_rs_install.py",
-        c"music21_rs_install",
-    )?;
-    py.import("sys")?
-        .getattr("modules")?
-        .set_item("music21_rs_install", &helper)?;
-    Ok(helper)
+    INSTALL_HELPER_MODULE
+        .get_or_try_init(py, || {
+            if let Ok(existing) = py.import("music21_rs_install") {
+                return Ok(existing.unbind());
+            }
+            let helper = PyModule::from_code(
+                py,
+                &std::ffi::CString::new(INSTALL_HELPER)?,
+                c"music21_rs_install.py",
+                c"music21_rs_install",
+            )?;
+            py.import("sys")?
+                .getattr("modules")?
+                .set_item("music21_rs_install", &helper)?;
+            Ok::<_, PyErr>(helper.unbind())
+        })
+        .map(|helper| helper.bind(py).clone())
+}
+
+/// The helper module, where installing has already built it.
+///
+/// Building it imports music21, and only installing needs it built. Every
+/// object a facade hands out asks whether its class was installed, so a
+/// process that never installed anything must be told no without a search:
+/// the wheel on its own went looking for music21 on every note it made, and
+/// a note took a thousand times what it does.
+fn built_helper(py: Python<'_>) -> Option<Bound<'_, PyModule>> {
+    INSTALL_HELPER_MODULE
+        .get(py)
+        .map(|helper| helper.bind(py).clone())
 }
 
 /// Replaces music21's own classes with these, in the music21 that is
