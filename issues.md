@@ -43,11 +43,24 @@ Two rules, set 2026-09-12, that most of the open work now serves:
    count again (`8aa5882`). Eighteen meters are pinned against the strings
    music21 prints, and the 126-meter fixture is unmoved.
 
-   **The wheel half is largely done too, and the number moved: 21 of 34
-   docstrings and 341 of 387 examples, from 11 and 288.** The wheel hands
-   back the four sequences as music21's own two classes, `beatCount` is
-   settable, `setDisplay` and `setAccentWeight` are ported, and
-   `getAccentWeight` honours the level it is given. What is left: `beatSequence` (17 examples),
+   **The wheel half is done too, and the number moved: 33 of 34 docstrings
+   and 375 of 387 examples, from 11 and 288.** The wheel hands back the four
+   sequences as music21's own two classes, `beatCount` is settable by a
+   number or a list, `setDisplay` and `setAccentWeight` are ported,
+   `getAccentWeight` honours the level it is given, the `divisions` argument
+   partitions the beats, accents and beams alike, `getOffsetFromBeat` reads a
+   fractional beat through `addFloatPrecision` and answers through `opFrac`,
+   and a meter says how it was written — which is what makes `2/8+3/8` a
+   different meter from `3/8+2/8`.
+
+   **One docstring is left: `getBeams`, twelve examples.** It beams a run of
+   notes, so it needs the notes. Every piece it reads is already here: the
+   beam sequence, `Beams::numbers`, `by_number` and `set_by_number`, the
+   three run-walking helpers, and the `BEAMABLE` table that is music21s
+   `beamableDurationTypes`. What is missing is the walk itself -- music21
+   fixes each note at each of nine beam depths against the span its level
+   covers -- and the facade half that reads a duration and whether it sounds
+   off the Python objects, which `naiveBeams` already does. What is left: `beatSequence` (17 examples),
    `getBeams` (6), `accentSequence` (6), a settable `beatCount` (5),
    `beamSequence` (4), `displaySequence` (3), `setDisplay` (2), and one
    `getAccentWeight` modulus case. Under the rule above the facade is a
