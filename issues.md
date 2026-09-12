@@ -43,9 +43,11 @@ Two rules, set 2026-09-12, that most of the open work now serves:
    count again (`8aa5882`). Eighteen meters are pinned against the strings
    music21 prints, and the 126-meter fixture is unmoved.
 
-   **The doctest number has not moved: still 11 of 34 docstrings, 288 of 387
-   examples.** Nothing a caller can see changes until the wheel passes the
-   tree through, which is the work left: `beatSequence` (17 examples),
+   **The wheel half is largely done too, and the number moved: 21 of 34
+   docstrings and 341 of 387 examples, from 11 and 288.** The wheel hands
+   back the four sequences as music21's own two classes, `beatCount` is
+   settable, `setDisplay` and `setAccentWeight` are ported, and
+   `getAccentWeight` honours the level it is given. What is left: `beatSequence` (17 examples),
    `getBeams` (6), `accentSequence` (6), a settable `beatCount` (5),
    `beamSequence` (4), `displaySequence` (3), `setDisplay` (2), and one
    `getAccentWeight` modulus case. Under the rule above the facade is a

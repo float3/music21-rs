@@ -101,6 +101,29 @@ costs about what music21's does, because building one makes eight objects
 that each start music21's half. The bare wheel does the same chord in 8.1µs
 against music21's 30µs.
 
+**The facade shows two classes where the crate has one.** music21 calls a
+span of a bar that nothing divides a `MeterTerminal` and one that is divided a
+`MeterSequence`, and its own docstrings compare both reprs to the letter — 57
+of the first and 83 of the second. The crate models both as one type, since
+the difference is whether a list is empty. So the wheel picks the class by
+whether the span has parts.
+
+*Costs:* a caller sees a class boundary the crate does not have, and
+`isinstance` against music21's own two classes is false for ours, as it is
+for every other facade class.
+
+**A sequence read off a meter is a view of it, not a copy.** music21 divides a
+bar by reaching into the sequence it carries — `ts.beatSequence.partition(2)`
+— assigns back through it, and its *own* code asks our object
+`self.beatSequence.isUniformPartition()`. A wrapper holding a copy would take
+all of that silently. So one holds the meter it came from, which of the four
+sequences it is, and the path down to the span; reads and writes go to the
+meter itself. What `subdivide` hands back is detached instead, because
+music21's `subdivide` does not happen in place.
+
+*Costs:* a view outlives nothing — a span whose parent has been repartitioned
+under it raises rather than answering from a stale copy.
+
 **Anything not ported is blocked, never inherited.** A member the facade
 lacks raises `AttributeError` rather than falling through to music21's
 implementation. A partial port that silently answered from music21 would make
