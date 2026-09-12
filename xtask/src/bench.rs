@@ -41,7 +41,10 @@ use std::error::Error;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use music21_rs::{Chord as RsChord, Interval as RsInterval, Note as RsNote, Pitch as RsPitch};
+use music21_rs::{
+    Chord as RsChord, Interval as RsInterval, Note as RsNote, Pitch as RsPitch,
+    ToneRow as RsToneRow, Transformation as RsTransformation,
+};
 use pyo3::prelude::*;
 use pyo3::types::{PyList, PyString};
 use serde::Serialize;
@@ -241,6 +244,7 @@ pub fn run(workspace_root: &Path, json: Option<PathBuf>) -> Result<i32, Box<dyn 
 
         let mut results: Vec<Timing> = Vec::new();
         let mut disagreed: Vec<(String, String, String)> = Vec::new();
+        let mut native_disagreed: Vec<(String, String, String)> = Vec::new();
         let mut group: Option<&str> = None;
 
         for case in cases() {
@@ -264,7 +268,15 @@ pub fn run(workspace_root: &Path, json: Option<PathBuf>) -> Result<i32, Box<dyn 
             let native = case.native.and_then(|native| {
                 let answer = native();
                 let expected = left.bind(py).str().ok()?.extract::<String>().ok()?;
-                (answer == expected).then(|| measure_native(native, seconds, repeats))
+                if answer != expected {
+                    // Unmeasured either way, but a blank column that means
+                    // "nobody wrote this" and one that means "the crate
+                    // answers something else" are not the same thing, and
+                    // this said neither.
+                    native_disagreed.push((case.name.clone(), expected, answer));
+                    return None;
+                }
+                Some(measure_native(native, seconds, repeats))
             });
             if group != Some(case.group) {
                 group = Some(case.group);
@@ -307,6 +319,17 @@ pub fn run(workspace_root: &Path, json: Option<PathBuf>) -> Result<i32, Box<dyn 
                 speedups[speedups.len() - 1]
             );
         }
+        if !native_disagreed.is_empty() {
+            println!(
+                "
+{} cases timed through Python only, the crate answering something else:",
+                native_disagreed.len()
+            );
+            for (name, expected, answer) in &native_disagreed {
+                println!("  {name}: music21 {expected} vs the crate {answer}");
+            }
+        }
+
         if !disagreed.is_empty() {
             println!(
                 "\n{} cases not timed, the two sides disagreeing:",
@@ -561,7 +584,15 @@ fn cases() -> Vec<Case> {
                 }))
             }),
         )
-        .noting("one chord, three questions"),
+        .noting("one chord, three questions")
+        .natively(|| {
+            let chord = RsChord::new("D3 F#3 A3 C4").expect("a dominant seventh");
+            python_list([
+                python_str(&chord.forte_class().unwrap_or_else(|| "N/A".to_string())),
+                numbers(&chord.prime_form()),
+                numbers(&chord.interval_class_vector().unwrap_or_else(|| vec![0; 6])),
+            ])
+        }),
     );
 
     // ---- pitch and interval work -----------------------------------------
@@ -593,23 +624,31 @@ fn cases() -> Vec<Case> {
                 .unwrap_or_default()
         }),
     );
-    out.push(Case::new(
-        "Pitch.frequency",
-        "pitch",
-        Box::new(|py, side| {
-            let class = side.get(py, "Pitch")?.unbind();
-            let text = interned(py, "A4");
-            let frequency = interned(py, "frequency");
-            let round = side.round.clone_ref(py);
-            Ok(Box::new(move |py| {
-                let value = class
-                    .bind(py)
-                    .call1((text.bind(py),))?
-                    .getattr(frequency.bind(py))?;
-                Ok(round.bind(py).call1((value, 6))?.unbind())
-            }))
+    out.push(
+        Case::new(
+            "Pitch.frequency",
+            "pitch",
+            Box::new(|py, side| {
+                let class = side.get(py, "Pitch")?.unbind();
+                let text = interned(py, "A4");
+                let frequency = interned(py, "frequency");
+                let round = side.round.clone_ref(py);
+                Ok(Box::new(move |py| {
+                    let value = class
+                        .bind(py)
+                        .call1((text.bind(py),))?
+                        .getattr(frequency.bind(py))?;
+                    Ok(round.bind(py).call1((value, 6))?.unbind())
+                }))
+            }),
+        )
+        .natively(|| {
+            let hertz = RsPitch::from_name("A4")
+                .map(|pitch| pitch.frequency_hz())
+                .unwrap_or_default();
+            python_number(round_to(hertz, 6))
         }),
-    ));
+    );
     out.push(
         Case::new(
             "Pitch.getEnharmonic()",
@@ -668,45 +707,58 @@ fn cases() -> Vec<Case> {
     );
 
     // ---- twelve-tone rows -------------------------------------------------
-    out.push(Case::new(
-        "pcToToneRow(...).matrix()",
-        "serial",
-        Box::new(|py, side| {
-            let function = side.get(py, "pcToToneRow")?.unbind();
-            let row = PyList::new(py, 0..12)?.unbind();
-            let matrix = interned(py, "matrix");
-            Ok(Box::new(move |py| {
-                let answer = function
-                    .bind(py)
-                    .call1((row.bind(py),))?
-                    .call_method0(matrix.bind(py))?;
-                // music21's matrix prints as a block of text; only its head is
-                // compared and timed, as the Python this replaces did with
-                // `str(...)[:40]`. Python slices a `str` by code point.
-                let head: String = answer.str()?.to_string_lossy().chars().take(40).collect();
-                Ok(PyString::new(py, &head).into_any().unbind())
-            }))
+    out.push(
+        Case::new(
+            "pcToToneRow(...).matrix()",
+            "serial",
+            Box::new(|py, side| {
+                let function = side.get(py, "pcToToneRow")?.unbind();
+                let row = PyList::new(py, 0..12)?.unbind();
+                let matrix = interned(py, "matrix");
+                Ok(Box::new(move |py| {
+                    let answer = function
+                        .bind(py)
+                        .call1((row.bind(py),))?
+                        .call_method0(matrix.bind(py))?;
+                    // music21's matrix prints as a block of text; only its head is
+                    // compared and timed, as the Python this replaces did with
+                    // `str(...)[:40]`. Python slices a `str` by code point.
+                    let head: String = answer.str()?.to_string_lossy().chars().take(40).collect();
+                    Ok(PyString::new(py, &head).into_any().unbind())
+                }))
+            }),
+        )
+        .natively(|| {
+            let matrix = RsToneRow::new(0..12).matrix().to_string();
+            matrix.chars().take(40).collect()
         }),
-    ));
-    out.push(Case::new(
-        "ToneRow.zeroCenteredTransformation",
-        "serial",
-        Box::new(|py, side| {
-            let function = side.get(py, "pcToToneRow")?.unbind();
-            let row = PyList::new(py, 0..12)?.unbind();
-            let transform = interned(py, "zeroCenteredTransformation");
-            let inversion = interned(py, "I");
-            let classes = interned(py, "pitchClasses");
-            Ok(Box::new(move |py| {
-                Ok(function
-                    .bind(py)
-                    .call1((row.bind(py),))?
-                    .call_method1(transform.bind(py), (inversion.bind(py), 3))?
-                    .call_method0(classes.bind(py))?
-                    .unbind())
-            }))
+    );
+    out.push(
+        Case::new(
+            "ToneRow.zeroCenteredTransformation",
+            "serial",
+            Box::new(|py, side| {
+                let function = side.get(py, "pcToToneRow")?.unbind();
+                let row = PyList::new(py, 0..12)?.unbind();
+                let transform = interned(py, "zeroCenteredTransformation");
+                let inversion = interned(py, "I");
+                let classes = interned(py, "pitchClasses");
+                Ok(Box::new(move |py| {
+                    Ok(function
+                        .bind(py)
+                        .call1((row.bind(py),))?
+                        .call_method1(transform.bind(py), (inversion.bind(py), 3))?
+                        .call_method0(classes.bind(py))?
+                        .unbind())
+                }))
+            }),
+        )
+        .natively(|| {
+            let row =
+                RsToneRow::new(0..12).zero_centered_transformation(RsTransformation::Inversion, 3);
+            numbers(row.pitch_classes())
         }),
-    ));
+    );
 
     // ---- the same questions on an object that has already answered them ---
     for attribute in ["commonName", "forteClass"] {
@@ -754,6 +806,22 @@ fn attribute_of(class: &'static str, argument: &'static str, attribute: &'static
 fn python_list(items: impl IntoIterator<Item = String>) -> String {
     let joined: Vec<String> = items.into_iter().collect();
     format!("[{}]", joined.join(", "))
+}
+
+/// A number as Python prints one: a float keeps its point, so `440` is
+/// written `440.0` as `round(...)` hands it back.
+fn python_number(value: f64) -> String {
+    if value.fract() == 0.0 {
+        format!("{value:.1}")
+    } else {
+        format!("{value}")
+    }
+}
+
+/// Rounded to `digits` decimal places, as Python's `round` rounds.
+fn round_to(value: f64, digits: i32) -> f64 {
+    let factor = 10f64.powi(digits);
+    (value * factor).round() / factor
 }
 
 /// A string as Python reprs one, inside a list.
@@ -804,6 +872,12 @@ fn native_for(ask: Ask) -> Option<Native> {
         Ask::AttributeList("orderedPitchClasses") => {
             || over_chords(|c| numbers(&c.pitch_classes()))
         }
+        Ask::Method("inversion") => || {
+            over_chords(|c| {
+                c.inversion()
+                    .map_or_else(|| "None".to_string(), |inversion| inversion.to_string())
+            })
+        },
         _ => return None,
     })
 }
