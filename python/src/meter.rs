@@ -36,12 +36,17 @@ use crate::note::note_from_any;
 use crate::duration::Duration;
 
 /// The names the `meter` facade replaces in `music21.meter.base`.
-pub const NAMES: &[&str] = &["TimeSignature", "MeterException"];
+pub const NAMES: &[&str] = &["TimeSignature", "MeterException", "TimeSignatureException"];
 
 /// The names this facade replaces in `music21.meter.core`.
 pub const CORE_NAMES: &[&str] = &["MeterTerminal", "MeterSequence"];
 
 pyo3::create_exception!(music21_rs_facade, MeterException, crate::Music21Exception);
+pyo3::create_exception!(
+    music21_rs_facade,
+    TimeSignatureException,
+    crate::Music21Exception
+);
 
 error_into!(meter_error, MeterException);
 
@@ -87,12 +92,30 @@ fn checked_divisions(
     subclass,
     skip_from_py_object
 )]
-#[derive(Clone)]
 pub struct TimeSignature {
     pub(crate) inner: RsTimeSignature,
+    /// music21's `_overriddenBarDuration`: the bar length a caller wrote
+    /// over this meter's own, kept as the object it was given, since that is
+    /// what music21 hands back.
+    overridden_bar_duration: Option<Py<PyAny>>,
     /// music21's `symbol`: the name the meter was written with, where it has
     /// one. Empty for a meter written as a ratio.
     symbol: String,
+}
+
+impl Clone for TimeSignature {
+    /// A copy keeps the bar length written over this meter, since that is
+    /// part of what the meter says rather than a name for one object.
+    fn clone(&self) -> Self {
+        Python::attach(|py| Self {
+            inner: self.inner.clone(),
+            symbol: self.symbol.clone(),
+            overridden_bar_duration: self
+                .overridden_bar_duration
+                .as_ref()
+                .map(|written| written.clone_ref(py)),
+        })
+    }
 }
 
 #[pymethods]
@@ -107,7 +130,11 @@ impl TimeSignature {
         let _ = keywords;
         let (mut inner, symbol) = read_meter(&value)?;
         checked_divisions(&mut inner, divisions)?;
-        Ok(Self { inner, symbol })
+        Ok(Self {
+            inner,
+            symbol,
+            overridden_bar_duration: None,
+        })
     }
 
     /// music21 builds in `__init__`, and a Python subclass of this one hands
@@ -269,28 +296,28 @@ impl TimeSignature {
     /// music21 lets a caller write this, and keeps what it was given.
     #[setter]
     fn set_barDuration(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
-        let quarter_length: FloatType = value
-            .getattr("quarterLength")
-            .and_then(|length| length.call_method0("__float__"))
-            .and_then(|length| length.extract())
-            .or_else(|_| value.extract())?;
-        let denominator = self.inner.denominator();
-        let beat = 4.0 / FloatType::from(denominator);
-        let numerator = (quarter_length / beat).round();
-        if !(numerator.is_finite() && numerator >= 1.0) {
-            return Err(MeterException::new_err(format!(
-                "a bar cannot last {quarter_length} quarter lengths"
-            )));
-        }
-        let rebuilt = RsTimeSignature::new(numerator as UnsignedIntegerType, denominator)
-            .map_err(meter_error)?;
-        self.inner = rebuilt;
+        self.overridden_bar_duration = Some(value.clone().unbind());
         Ok(())
     }
 
+    fn __traverse__(
+        &self,
+        visit: pyo3::pyclass::PyVisit<'_>,
+    ) -> Result<(), pyo3::pyclass::PyTraverseError> {
+        visit.call(&self.overridden_bar_duration)?;
+        Ok(())
+    }
+
+    fn __clear__(&mut self) {
+        self.overridden_bar_duration = None;
+    }
+
     #[getter]
-    fn barDuration(&self) -> Duration {
-        Duration::wrap(self.inner.bar_duration())
+    fn barDuration(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        if let Some(written) = &self.overridden_bar_duration {
+            return Ok(written.clone_ref(py));
+        }
+        Ok(Py::new(py, Duration::wrap(self.inner.bar_duration()))?.into_any())
     }
 
     #[getter]
@@ -299,8 +326,29 @@ impl TimeSignature {
     }
 
     #[setter]
-    fn set_beatCount(&mut self, count: UnsignedIntegerType) -> PyResult<()> {
-        self.inner.set_beat_count(count).map_err(meter_error)
+    fn set_beatCount(&mut self, count: &Bound<'_, PyAny>) -> PyResult<()> {
+        // music21 hands this to `partition`, which reads a number or a list
+        // of numerators alike.
+        if let Ok(asked) = count.extract::<UnsignedIntegerType>() {
+            return self.inner.set_beat_count(asked).map_err(|_| {
+                TimeSignatureException::new_err(format!(
+                    "cannot partition beat with provided value: {asked}"
+                ))
+            });
+        }
+        let numerators: Vec<UnsignedIntegerType> = count.extract().map_err(|_| {
+            TimeSignatureException::new_err(
+                "a bar is counted in a number of beats, or in a list of them",
+            )
+        })?;
+        let beats = self.inner.beat_sequence_mut();
+        beats.partition_by_list(&numerators).map_err(|_| {
+            TimeSignatureException::new_err(format!(
+                "cannot partition beat with provided value: {numerators:?}"
+            ))
+        })?;
+        let _ = beats.subdivide_partitions_equal(None);
+        Ok(())
     }
 
     #[getter]
@@ -310,9 +358,9 @@ impl TimeSignature {
 
     #[getter]
     fn beatDuration(&self) -> PyResult<Duration> {
-        Ok(Duration::wrap(
-            self.inner.beat_duration().map_err(meter_error)?,
-        ))
+        Ok(Duration::wrap(self.inner.beat_duration().map_err(
+            |error| TimeSignatureException::new_err(error.to_string()),
+        )?))
     }
 
     #[getter]
@@ -1057,6 +1105,7 @@ fn bestTimeSignature(meas: &Bound<'_, PyAny>) -> PyResult<TimeSignature> {
     Ok(TimeSignature {
         inner,
         symbol: String::new(),
+        overridden_bar_duration: None,
     })
 }
 

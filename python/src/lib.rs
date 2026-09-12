@@ -1014,6 +1014,13 @@ macro_rules! exceptions {
     };
 }
 
+// Four of these carry no module on purpose. music21 keeps HarmonyException,
+// SieveException, TempoException and the two figuredBass ones in modules of
+// their own, but no docstring of theirs prints the class, so stamping them
+// would change nothing: tempo, harmony and figuredBass already pass every
+// example they have. The meter pair is stamped because music21 prints
+// `music21.exceptions21.MeterException` in a docstring, and an unstamped
+// class reads as `music21_rs_facade.MeterException` there.
 exceptions![
     (
         "AccidentalException",
@@ -1062,7 +1069,16 @@ exceptions![
         notation::LyricException,
         Some("music21.note")
     ),
-    ("MeterException", meter::MeterException, None),
+    (
+        "MeterException",
+        meter::MeterException,
+        Some("music21.exceptions21")
+    ),
+    (
+        "TimeSignatureException",
+        meter::TimeSignatureException,
+        Some("music21.exceptions21")
+    ),
     (
         "MetronomeMarkException",
         tempo::MetronomeMarkException,

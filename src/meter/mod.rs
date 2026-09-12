@@ -572,9 +572,7 @@ impl TimeSignature {
             .any(|(start, end)| ((end - start) - first).abs() > OFFSET_TOLERANCE)
         {
             let lengths: Vec<FloatType> = spans.iter().map(|(s, e)| e - s).collect();
-            return Err(Error::Meter(format!(
-                "non uniform beat division: {lengths:?}"
-            )));
+            return Err(Error::Meter(format!("non-uniform beat unit: {lengths:?}")));
         }
         Ok(first)
     }
