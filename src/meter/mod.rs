@@ -92,6 +92,11 @@ impl BeatDivision {
 pub struct TimeSignature {
     numerator: UnsignedIntegerType,
     denominator: UnsignedIntegerType,
+    favor_compound: bool,
+    display_sequence: MeterTerminal,
+    beat_sequence: MeterTerminal,
+    beam_sequence: MeterTerminal,
+    accent_sequence: MeterTerminal,
 }
 
 impl Default for TimeSignature {
@@ -117,10 +122,194 @@ impl TimeSignature {
                 "time signature denominator must be non-zero".to_string(),
             ));
         }
-        Ok(Self {
+        let mut signature = Self {
             numerator,
             denominator,
-        })
+            favor_compound: favor_compound(numerator, denominator, None),
+            display_sequence: whole_bar(numerator, denominator)?,
+            beat_sequence: whole_bar(numerator, denominator)?,
+            beam_sequence: whole_bar(numerator, denominator)?,
+            accent_sequence: whole_bar(numerator, denominator)?,
+        };
+        signature.set_default_partitions()?;
+        Ok(signature)
+    }
+
+    /// How the bar is written, before anything divides it: music21's
+    /// `displaySequence`. A meter written additively as `"3/8+2/8"` is two
+    /// parts here, and that is what makes the beats fall where they are
+    /// written rather than where the numerator alone would put them.
+    #[must_use]
+    pub fn display_sequence(&self) -> &MeterTerminal {
+        &self.display_sequence
+    }
+
+    /// How the bar is counted: music21's `beatSequence`, one part per beat,
+    /// each divided again into what the beat is felt in.
+    #[must_use]
+    pub fn beat_sequence(&self) -> &MeterTerminal {
+        &self.beat_sequence
+    }
+
+    /// How the bar is beamed: music21's `beamSequence`, the groups a run of
+    /// short notes is written in.
+    #[must_use]
+    pub fn beam_sequence(&self) -> &MeterTerminal {
+        &self.beam_sequence
+    }
+
+    /// How the bar is weighted: music21's `accentSequence`, one part per
+    /// accent partition, each carrying the weight [`Self::accent_weights`]
+    /// gives it.
+    #[must_use]
+    pub fn accent_sequence(&self) -> &MeterTerminal {
+        &self.accent_sequence
+    }
+
+    /// Whether the bar is felt in compound beats: music21's `favorCompound`,
+    /// which is what counts a `6/8` in two and a `slow 6/8` in six.
+    #[must_use]
+    pub fn favors_compound(&self) -> bool {
+        self.favor_compound
+    }
+
+    /// Counts the bar in a different number of beats: music21's settable
+    /// `beatCount`.
+    ///
+    /// The beats are repartitioned and each divided again, so a `6/8`
+    /// counted in six is six eighths rather than two dotted quarters. A
+    /// count the bar cannot be divided into is an error.
+    pub fn set_beat_count(&mut self, count: UnsignedIntegerType) -> Result<()> {
+        if count == 0 {
+            return Err(Error::Meter(
+                "a bar cannot be counted in no beats".to_string(),
+            ));
+        }
+        let mut beats = MeterTerminal::new(self.numerator, self.denominator)?;
+        beats.partition_by_count(count as usize, false)?;
+        if beats.len() > 1 {
+            let _ = beats.subdivide_partitions_equal(None);
+        }
+        self.beat_sequence = beats;
+        Ok(())
+    }
+
+    /// Builds the beam, beat and accent partitions the way music21 does when
+    /// nobody has said how: `_setDefaultBeamPartitions`,
+    /// `_setDefaultBeatPartitions` and `_setDefaultAccentWeights`.
+    fn set_default_partitions(&mut self) -> Result<()> {
+        self.set_default_beam_partitions()?;
+        self.set_default_beat_partitions()?;
+        self.set_default_accent_weights();
+        Ok(())
+    }
+
+    /// music21's `_setDefaultBeamPartitions`: a short bar of short notes is
+    /// beamed all together, and anything else in the groups its numerator is
+    /// felt in.
+    ///
+    /// A meter written additively is beamed by these rules too — music21
+    /// beams `"3/8+2/8"` as `{2/8+3/8}`, by the rule for a five, and not in
+    /// the parts it was written in.
+    fn set_default_beam_partitions(&mut self) -> Result<()> {
+        let numerator = self.numerator;
+        let denominator = self.denominator;
+        if (denominator == 8 && matches!(numerator, 1..=3))
+            || (denominator == 16 && matches!(numerator, 1..=5))
+            || (denominator == 32 && matches!(numerator, 1..=11))
+        {
+            return Ok(());
+        }
+        match numerator {
+            2..=4 => {
+                self.beam_sequence
+                    .partition_by_count(numerator as usize, true)?;
+                if denominator == 4 {
+                    for part in self.beam_sequence.parts_mut() {
+                        part.subdivide(2)?;
+                    }
+                }
+            }
+            5 => {
+                self.beam_sequence.partition_by_list(&[2, 3])?;
+                if denominator == 4 {
+                    for (part, count) in self.beam_sequence.parts_mut().iter_mut().zip([2, 3]) {
+                        part.subdivide(count)?;
+                    }
+                }
+            }
+            7 => self.beam_sequence.partition_by_count(3, true)?,
+            6 | 9 | 12 | 15 | 18 | 21 => {
+                let threes = vec![3; (numerator / 3) as usize];
+                self.beam_sequence.partition_by_list(&threes)?;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    /// music21's `_setDefaultBeatPartitions`: the top-level count of the bar,
+    /// then each beat divided into what it is felt in.
+    ///
+    /// A meter written additively is counted in the parts it was written in,
+    /// each keeping the note it was written in — `"2/4+3/8"` is counted
+    /// `{{1/4+1/4}+{1/8+1/8+1/8}}`.
+    fn set_default_beat_partitions(&mut self) -> Result<()> {
+        let numerator = self.numerator;
+        let compound = self.favor_compound;
+        if self.display_sequence.len() == 1 {
+            match numerator {
+                2 => self.beat_sequence.partition_by_count(2, true)?,
+                6 if compound => self.beat_sequence.partition_by_count(2, true)?,
+                3 if compound => self.beat_sequence.partition_by_count(1, true)?,
+                3 => self.beat_sequence.partition_by_list(&[1, 1, 1])?,
+                9 if compound => self.beat_sequence.partition_by_list(&[3, 3, 3])?,
+                4 => self.beat_sequence.partition_by_count(4, true)?,
+                12 if compound => self.beat_sequence.partition_by_count(4, true)?,
+                other if other >= 15 && other.is_multiple_of(3) && compound => {
+                    let threes = vec![3; (other / 3) as usize];
+                    self.beat_sequence.partition_by_list(&threes)?;
+                }
+                other => self
+                    .beat_sequence
+                    .partition_by_count(other as usize, true)?,
+            }
+        } else {
+            let written: Vec<String> = self
+                .display_sequence
+                .parts()
+                .iter()
+                .map(|part| format!("{}/{}", part.numerator(), part.denominator()))
+                .collect();
+            let borrowed: Vec<&str> = written.iter().map(String::as_str).collect();
+            self.beat_sequence.partition_by_parts(&borrowed)?;
+        }
+        if self.beat_sequence.len() > 1 {
+            // music21 forgives a bar written in notes shorter than a 128th
+            // for being too short to divide again, and nothing else.
+            match self.beat_sequence.subdivide_partitions_equal(None) {
+                Ok(()) => {}
+                Err(error) if self.denominator >= 128 => {
+                    let _ = error;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        Ok(())
+    }
+
+    /// music21's `_setDefaultAccentWeights`, read off the weights this meter
+    /// already gives its accent partitions rather than derived a second time
+    /// from a nested hierarchy: one part per weight, carrying that weight.
+    fn set_default_accent_weights(&mut self) {
+        let weights = self.accent_weights();
+        let ones = vec![1; weights.len()];
+        if self.accent_sequence.partition_by_list(&ones).is_err() {
+            return;
+        }
+        for (part, weight) in self.accent_sequence.parts_mut().iter_mut().zip(weights) {
+            part.set_weight(weight);
+        }
     }
 
     /// Parses a `"numerator/denominator"` string such as `"6/8"`.
@@ -133,10 +322,13 @@ impl TimeSignature {
     /// meter this returns; how they are grouped is [`Self::parts`].
     pub fn from_ratio_string(ratio: &str) -> Result<Self> {
         let parts = Self::parts(ratio)?;
+        let word = division_word(ratio);
         let denominator = parts[0].1;
         if parts.iter().all(|(_, part)| *part == denominator) {
             let numerator = parts.iter().map(|(count, _)| count).sum();
-            return Self::new(numerator, denominator);
+            let mut signature = Self::new(numerator, denominator)?;
+            signature.write_as(&parts, word)?;
+            return Ok(signature);
         }
         // Parts measured in different notes: what they come to together is
         // the meter, over the shortest note any of them is written in.
@@ -149,7 +341,32 @@ impl TimeSignature {
             .iter()
             .map(|(count, part)| count * (denominator / part))
             .sum();
-        Self::new(numerator, denominator)
+        let mut signature = Self::new(numerator, denominator)?;
+        signature.write_as(&parts, word)?;
+        Ok(signature)
+    }
+
+    /// Records how the meter was written — the parts it was written in, and
+    /// the word saying how it is counted — and rebuilds what depends on
+    /// either.
+    fn write_as(
+        &mut self,
+        parts: &[(UnsignedIntegerType, UnsignedIntegerType)],
+        word: Option<&str>,
+    ) -> Result<()> {
+        self.favor_compound = favor_compound(self.numerator, self.denominator, word);
+        if parts.len() > 1 {
+            let written: Vec<String> = parts
+                .iter()
+                .map(|(count, part)| format!("{count}/{part}"))
+                .collect();
+            let borrowed: Vec<&str> = written.iter().map(String::as_str).collect();
+            self.display_sequence.partition_by_parts(&borrowed)?;
+        }
+        self.beat_sequence = whole_bar(self.numerator, self.denominator)?;
+        self.beam_sequence = whole_bar(self.numerator, self.denominator)?;
+        self.accent_sequence = whole_bar(self.numerator, self.denominator)?;
+        self.set_default_partitions()
     }
 
     /// The `(numerator, denominator)` pairs a meter string is written in,
@@ -210,18 +427,12 @@ impl TimeSignature {
 
     /// Returns common time, `4/4`.
     pub fn common() -> Self {
-        Self {
-            numerator: 4,
-            denominator: 4,
-        }
+        Self::new(4, 4).expect("4/4 is a meter")
     }
 
     /// Returns cut time, `2/2`.
     pub fn cut() -> Self {
-        Self {
-            numerator: 2,
-            denominator: 2,
-        }
+        Self::new(2, 2).expect("2/2 is a meter")
     }
 
     /// Returns the numerator.
@@ -672,6 +883,44 @@ impl TimeSignature {
     }
 }
 
+/// A whole bar as a sequence of one part, which is what music21 starts each
+/// of a meter's four sequences as: `6/8` undivided is `{6/8}`, not a bare
+/// span, so a sequence nobody has divided still has one part.
+fn whole_bar(
+    numerator: UnsignedIntegerType,
+    denominator: UnsignedIntegerType,
+) -> Result<MeterTerminal> {
+    let mut bar = MeterTerminal::new(numerator, denominator)?;
+    let whole = format!("{numerator}/{denominator}");
+    bar.partition_by_parts(&[whole.as_str()])?;
+    Ok(bar)
+}
+
+/// The word music21 allows before a ratio, saying how the bar is counted:
+/// `"slow 6/8"` is counted in six and `"fast 6/8"` in two.
+fn division_word(ratio: &str) -> Option<&str> {
+    let first = ratio.trim().split('+').next()?.trim();
+    let word = first.split_whitespace().next()?;
+    matches!(word, "slow" | "fast").then_some(word)
+}
+
+/// Whether a bar is felt in compound beats: music21's `favorCompound`.
+///
+/// The word written before the ratio decides it where there is one. Where
+/// there is not, a bare three written in quarters or longer is felt slow,
+/// which is what counts `3/4` in three while `3/8` is counted in one.
+fn favor_compound(
+    numerator: UnsignedIntegerType,
+    denominator: UnsignedIntegerType,
+    word: Option<&str>,
+) -> bool {
+    match word {
+        Some("slow") => false,
+        Some("fast") => true,
+        _ => !(numerator == 3 && denominator < 8),
+    }
+}
+
 /// The time signature that fits what a measure holds: music21's
 /// `bestTimeSignature`.
 ///
@@ -888,9 +1137,19 @@ mod tests {
     fn a_meter_is_read_as_music21_writes_it() {
         use crate::meter::TimeSignature;
 
+        // The word before the ratio is not decoration: music21 counts a
+        // `slow 6/8` in six and a plain one in two, so the two are different
+        // meters that happen to be written over the same numbers.
         let plain = TimeSignature::from_ratio_string("6/8").unwrap();
-        assert_eq!(TimeSignature::from_ratio_string("slow 6/8").unwrap(), plain);
+        let slow = TimeSignature::from_ratio_string("slow 6/8").unwrap();
         assert_eq!(TimeSignature::from_ratio_string("fast 6/8").unwrap(), plain);
+        assert_ne!(slow, plain);
+        assert_eq!(
+            (slow.numerator(), slow.denominator()),
+            (plain.numerator(), plain.denominator())
+        );
+        assert_eq!(plain.beat_sequence().len(), 2);
+        assert_eq!(slow.beat_sequence().len(), 6);
 
         let additive = TimeSignature::from_ratio_string("3/8+2/8").unwrap();
         assert_eq!((additive.numerator(), additive.denominator()), (5, 8));
@@ -911,6 +1170,79 @@ mod tests {
         assert!(TimeSignature::parts("3+2+5").is_err());
         assert!(TimeSignature::from_ratio_string("").is_err());
         assert!(TimeSignature::from_ratio_string("3.0/4.0").is_err());
+    }
+
+    #[test]
+    fn the_sequences_are_partitioned_as_music21_partitions_them() {
+        use crate::meter::TimeSignature;
+
+        // Read off music21 11.0.0b9 directly: `str(TimeSignature(r).beatSequence)`
+        // and `.beamSequence` for each meter below.
+        let expected = [
+            ("1/4", "{1/4}", "{1/4}"),
+            ("2/4", "{{1/8+1/8}+{1/8+1/8}}", "{{1/8+1/8}+{1/8+1/8}}"),
+            (
+                "3/4",
+                "{{1/8+1/8}+{1/8+1/8}+{1/8+1/8}}",
+                "{{1/8+1/8}+{1/8+1/8}+{1/8+1/8}}",
+            ),
+            (
+                "4/4",
+                "{{1/8+1/8}+{1/8+1/8}+{1/8+1/8}+{1/8+1/8}}",
+                "{{1/8+1/8}+{1/8+1/8}+{1/8+1/8}+{1/8+1/8}}",
+            ),
+            (
+                "5/4",
+                "{{1/8+1/8}+{1/8+1/8}+{1/8+1/8}+{1/8+1/8}+{1/8+1/8}}",
+                "{{1/4+1/4}+{1/4+1/4+1/4}}",
+            ),
+            ("6/4", "{{1/4+1/4+1/4}+{1/4+1/4+1/4}}", "{3/4+3/4}"),
+            ("2/2", "{{1/4+1/4}+{1/4+1/4}}", "{1/2+1/2}"),
+            ("3/2", "{{1/4+1/4}+{1/4+1/4}+{1/4+1/4}}", "{1/2+1/2+1/2}"),
+            ("3/8", "{3/8}", "{3/8}"),
+            (
+                "5/8",
+                "{{1/16+1/16}+{1/16+1/16}+{1/16+1/16}+{1/16+1/16}+{1/16+1/16}}",
+                "{2/8+3/8}",
+            ),
+            ("6/8", "{{1/8+1/8+1/8}+{1/8+1/8+1/8}}", "{3/8+3/8}"),
+            (
+                "9/8",
+                "{{1/8+1/8+1/8}+{1/8+1/8+1/8}+{1/8+1/8+1/8}}",
+                "{3/8+3/8+3/8}",
+            ),
+            (
+                "12/8",
+                "{{1/8+1/8+1/8}+{1/8+1/8+1/8}+{1/8+1/8+1/8}+{1/8+1/8+1/8}}",
+                "{3/8+3/8+3/8+3/8}",
+            ),
+            (
+                "5/16",
+                "{{1/32+1/32}+{1/32+1/32}+{1/32+1/32}+{1/32+1/32}+{1/32+1/32}}",
+                "{5/16}",
+            ),
+            (
+                "slow 6/8",
+                "{{1/16+1/16}+{1/16+1/16}+{1/16+1/16}+{1/16+1/16}+{1/16+1/16}+{1/16+1/16}}",
+                "{3/8+3/8}",
+            ),
+            ("fast 6/8", "{{1/8+1/8+1/8}+{1/8+1/8+1/8}}", "{3/8+3/8}"),
+            ("3/8+2/8", "{{1/8+1/8+1/8}+{1/8+1/8}}", "{2/8+3/8}"),
+            ("2/4+3/8", "{{1/4+1/4}+{1/8+1/8+1/8}}", "{2/8+2/8+3/8}"),
+        ];
+        for (ratio, beats, beams) in expected {
+            let signature = TimeSignature::from_ratio_string(ratio).unwrap();
+            assert_eq!(
+                signature.beat_sequence().to_string(),
+                beats,
+                "beats of {ratio}"
+            );
+            assert_eq!(
+                signature.beam_sequence().to_string(),
+                beams,
+                "beams of {ratio}"
+            );
+        }
     }
 
     /// Read off music21's default `accentSequence` and `getBeatDepth`.

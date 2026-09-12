@@ -210,6 +210,37 @@ impl MeterTerminal {
         )))
     }
 
+    /// Divides this span into `count` parts and leaves those parts divided
+    /// as they were: music21's `MeterTerminal.subdivide`.
+    pub fn subdivide(&mut self, count: usize) -> Result<()> {
+        self.partition_by_count(count, false)
+    }
+
+    /// Divides every part of this span again, the way music21 divides it
+    /// when nobody has said how: music21's `subdividePartitionsEqual`.
+    ///
+    /// `divisions` says how many parts each part becomes; `None` asks for
+    /// the division each part conventionally takes — two for a part written
+    /// in a binary numerator, three for one written in three, and threes for
+    /// the compound numerators. A part nothing divides into is an error,
+    /// which is what music21 raises and what a meter written in notes
+    /// shorter than a 128th is forgiven.
+    pub fn subdivide_partitions_equal(&mut self, divisions: Option<usize>) -> Result<()> {
+        for part in &mut self.parts {
+            let count = match divisions {
+                Some(count) => count,
+                None => match part.numerator {
+                    1 | 2 | 4 | 8 | 16 | 32 | 64 => 2,
+                    3 => 3,
+                    6 | 9 | 12 | 15 | 18 | 21 | 24 | 27 => (part.numerator / 3) as usize,
+                    other => other as usize,
+                },
+            };
+            part.partition_by_count(count, false)?;
+        }
+        Ok(())
+    }
+
     /// The ways music21 conventionally divides this meter, in the order it
     /// prefers them: music21's `getPartitionOptions`.
     #[must_use]
