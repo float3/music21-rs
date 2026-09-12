@@ -58,20 +58,35 @@ TOML it came from.
 *Costs:* ~7k lines of generated Rust in the tree, and a regeneration step
 whenever a submodule moves.
 
-**`TimeSignature` is an immutable ratio — for now.** music21's owns four
-mutable partition trees; this one is a `Copy` pair of integers that derives
-its beats, accents and divisions from the ratio.
+**`TimeSignature` carries the tree it is divided into.** *Changed
+2026-09-12.* It used to be a `Copy` pair of integers deriving its beats,
+accents and divisions from the ratio by closed-form rules. It now owns
+music21's four `MeterSequence`s — display, beats, beams and accents — built
+by music21's own rules, and `beat_count` reads how many parts the beat
+sequence has rather than working the count out again.
 
-*Costs:* `beatSequence`, `beamSequence`, `accentSequence`, `displaySequence`,
-`getBeams` and a settable `beatCount` cannot be answered, which is 23 of
-meter's 34 docstrings.
+The earlier plan, a crate type with the mutable sequences held by the facade,
+was rejected: it put Rust-able logic in Python.
 
-*Changed 2026-09-12:* the partition tree goes in the crate rather than the
-facade, so `TimeSignature` will own its sequences and stop being `Copy`. That
-reaches 41 by-value methods, the `StreamElement` variant and
-`Stream::time_signature_at`. The earlier plan — a crate type with the mutable
-sequences held by the facade — was rejected: it put Rust-able logic in
-Python.
+*Costs:* the type gives up `Copy`, `Eq` and `Hash`, since its parts carry
+float weights. That reached 36 by-value methods, the `StreamElement` variant
+and `Stream::time_signature_at`. Building a meter now builds four trees
+rather than none.
+
+*What it bought, beyond the members it unblocks:* the closed form was wrong
+where music21 is not. It cut compound threes at a denominator over four, so
+`3/6` counted as one beat where music21 counts three; music21 cuts at an
+eighth. The tree and the old rule agree across all 126 meters of the
+fixture, which is what says the tree is built right, and they disagree only
+where the old rule was wrong.
+
+*How it is checked:* eighteen meters are pinned against the strings music21
+prints for `beatSequence` and `beamSequence`, because three of the rules are
+not guessable from the outside — a sequence nobody has divided still has one
+part, the word in `slow 6/8` makes it a different meter counted in six, and
+a meter written additively is beamed by its numerator (`3/8+2/8` beams
+`{2/8+3/8}`) but counted in the parts it was written in, each keeping its own
+note (`2/4+3/8` counts `{{1/4+1/4}+{1/8+1/8+1/8}}`).
 
 ## The Python facade
 

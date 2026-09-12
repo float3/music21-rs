@@ -36,20 +36,31 @@ Two rules, set 2026-09-12, that most of the open work now serves:
 
 ## Open
 
-1. **The meter partition tree.** `meter` passes 11 of 34 docstrings, 286 of
-   387 examples. What still fails wants music21's four `MeterSequence`s:
-   `beatSequence` (17 examples), `getBeams` (6), `accentSequence` (6), a
-   settable `beatCount` (5), `beamSequence` (4), `displaySequence` (3),
-   `setDisplay` (2), and one `getAccentWeight` modulus case.
+1. **The meter partition tree — the crate half is done, the wheel half is
+   not.** `TimeSignature` carries all four of music21's `MeterSequence`s and
+   builds them by music21's own rules (`431dcbf`), having given up `Copy`
+   first (`0e14f8b`); `beat_count` reads the tree rather than deriving the
+   count again (`8aa5882`). Eighteen meters are pinned against the strings
+   music21 prints, and the 126-meter fixture is unmoved.
 
-   Under the rule above this goes in the crate, not the facade: the sequences
-   and the partitioning are Rust, and the facade becomes a pass-through.
-   `TimeSignature` therefore stops being a `Copy` pair of integers and owns
-   its partitions, which reaches 41 by-value method signatures, the
-   `StreamElement::TimeSignature` variant, `Stream::time_signature_at` and
-   the copy in `Stream`'s transposer. The parsing it needs is done
-   (`96ea594`): `TimeSignature::parts` reads `3/8+2/8`, `3+2/8` and
-   `slow 6/8` as music21 writes them.
+   **The doctest number has not moved: still 11 of 34 docstrings, 288 of 387
+   examples.** Nothing a caller can see changes until the wheel passes the
+   tree through, which is the work left: `beatSequence` (17 examples),
+   `getBeams` (6), `accentSequence` (6), a settable `beatCount` (5),
+   `beamSequence` (4), `displaySequence` (3), `setDisplay` (2), and one
+   `getAccentWeight` modulus case. Under the rule above the facade is a
+   pass-through and nothing else — what it needs is a pyclass wrapping
+   `MeterTerminal`, since a Python caller has to be handed something.
+
+   Two of those want more than a pass-through and are honest exclusions in
+   `data/feature_map.toml` until they are written: `getBeams` beams a run of
+   notes and so needs the notes, and `setDisplay` is a setter nobody has
+   written.
+
+   One thing the tree bought already, beyond the members it unblocks: the
+   closed form it replaced was wrong where music21 is not. It cut compound
+   threes at a denominator over four, so `3/6` counted as one beat where
+   music21 counts three.
 
 2. **Streams in the crate.** Sites, contexts, derivations and
    measure-relative offsets, so that an object can belong to a crate stream
