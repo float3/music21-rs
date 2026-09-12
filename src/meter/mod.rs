@@ -529,6 +529,13 @@ impl TimeSignature {
 
     /// Returns the `"numerator/denominator"` spelling.
     pub fn ratio_string(&self) -> String {
+        // music21 reads this off the display sequence, so a bar written
+        // additively says what it was written as. The parts come back in
+        // the order they were written, which is what makes `2/8+3/8` and
+        // `3/8+2/8` different meters rather than two spellings of `5/8`.
+        if self.display_sequence.len() > 1 {
+            return self.display_sequence.partition_display();
+        }
         format!("{}/{}", self.numerator, self.denominator)
     }
 
@@ -2056,5 +2063,43 @@ mod tests {
     #[test]
     fn display_is_the_ratio_string() {
         assert_eq!(ts("7/8").to_string(), "7/8");
+    }
+
+    #[test]
+    fn a_meter_says_how_it_was_written() {
+        use crate::meter::TimeSignature;
+
+        // music21 reads `ratioString` off the display sequence.
+        let written = TimeSignature::from_ratio_string("2/4+3/8").unwrap();
+        assert_eq!(written.ratio_string(), "2/4+3/8");
+        assert_eq!(written.to_string(), "2/4+3/8");
+        // What it comes to is unchanged.
+        assert_eq!((written.numerator(), written.denominator()), (7, 8));
+
+        // The order it was written in is part of what it is, which is what
+        // stops these being two spellings of one meter.
+        let two_three = TimeSignature::from_ratio_string("2/8+3/8").unwrap();
+        let three_two = TimeSignature::from_ratio_string("3/8+2/8").unwrap();
+        assert_eq!(two_three.ratio_string(), "2/8+3/8");
+        assert_eq!(three_two.ratio_string(), "3/8+2/8");
+        assert_ne!(two_three, three_two);
+        // Though they do come to the same ratio, which is music21's
+        // `ratioEqual`.
+        assert!(two_three.ratio_equal(&three_two));
+
+        // The string re-reads as the meter it came from.
+        let again = TimeSignature::from_ratio_string(&written.ratio_string()).unwrap();
+        assert_eq!(again.ratio_string(), written.ratio_string());
+
+        // The word before the ratio is not part of the string, though it
+        // does still make a different meter.
+        let slow = TimeSignature::from_ratio_string("slow 6/8").unwrap();
+        let fast = TimeSignature::from_ratio_string("6/8").unwrap();
+        assert_eq!(slow.ratio_string(), "6/8");
+        assert_eq!(fast.ratio_string(), "6/8");
+        assert_ne!(slow, fast);
+
+        // A bar written as one ratio is unmoved.
+        assert_eq!(TimeSignature::common().ratio_string(), "4/4");
     }
 }
