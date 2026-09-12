@@ -36,56 +36,42 @@ Two rules, set 2026-09-12, that most of the open work now serves:
 
 ## Open
 
-1. **The meter partition tree — the crate half is done, the wheel half is
-   not.** `TimeSignature` carries all four of music21's `MeterSequence`s and
-   builds them by music21's own rules (`431dcbf`), having given up `Copy`
-   first (`0e14f8b`); `beat_count` reads the tree rather than deriving the
-   count again (`8aa5882`). Eighteen meters are pinned against the strings
-   music21 prints, and the 126-meter fixture is unmoved.
+1. **The meter partition tree — done bar one docstring.** `TimeSignature`
+   carries all four of music21's `MeterSequence`s and builds them by
+   music21's own rules (`431dcbf`), having given up `Copy` first
+   (`0e14f8b`); `beat_count` reads the tree rather than working the count
+   out again (`8aa5882`). The wheel hands the four sequences back as
+   music21's own two classes (`9b43d3d`), `beatCount` takes a number or a
+   list, `setDisplay` and `setAccentWeight` are ported, `getAccentWeight`
+   honours its level, the `divisions` argument partitions the beats, accents
+   and beams alike (`444fca5`), `getOffsetFromBeat` reads a fractional beat
+   through `addFloatPrecision` and answers through `opFrac`, and a meter says
+   how it was written (`4941983`) — which is what makes `2/8+3/8` a different
+   meter from `3/8+2/8`.
 
-   **The wheel half is done too, and the number moved: 33 of 34 docstrings
-   and 375 of 387 examples, from 11 and 288.** The wheel hands back the four
-   sequences as music21's own two classes, `beatCount` is settable by a
-   number or a list, `setDisplay` and `setAccentWeight` are ported,
-   `getAccentWeight` honours the level it is given, the `divisions` argument
-   partitions the beats, accents and beams alike, `getOffsetFromBeat` reads a
-   fractional beat through `addFloatPrecision` and answers through `opFrac`,
-   and a meter says how it was written — which is what makes `2/8+3/8` a
-   different meter from `3/8+2/8`.
+   **`meter` passes 33 of 34 docstrings and 375 of 387 examples, from 11 and
+   288 when this started.** Eighteen meters are pinned against the strings
+   music21 prints for their beat and beam sequences, and the 126-meter
+   fixture has not moved through any of it.
 
-   **One docstring is left: `getBeams`, twelve examples.** It beams a run of
-   notes, so it needs the notes. Every piece it reads is already here: the
-   beam sequence, `Beams::numbers`, `by_number` and `set_by_number`, the
-   three run-walking helpers, and the `BEAMABLE` table that is music21s
-   `beamableDurationTypes`. What is missing is the walk itself -- music21
-   fixes each note at each of nine beam depths against the span its level
-   covers -- and the facade half that reads a duration and whether it sounds
-   off the Python objects, which `naiveBeams` already does. What is left: `beatSequence` (17 examples),
-   `getBeams` (6), `accentSequence` (6), a settable `beatCount` (5),
-   `beamSequence` (4), `displaySequence` (3), `setDisplay` (2), and one
-   `getAccentWeight` modulus case. Under the rule above the facade is a
-   pass-through and nothing else — what it needs is a pyclass wrapping
-   `MeterTerminal`, since a Python caller has to be handed something.
+   **What is left is `getBeams`, twelve examples in one docstring.** It beams
+   a run of notes, so it needs the notes. Every piece it reads is here
+   already: the beam sequence, `Beams::numbers`, `by_number` and
+   `set_by_number`, the three run-walking helpers, and the `BEAMABLE` table
+   that is music21's `beamableDurationTypes`. What is missing is the walk —
+   music21 fixes each note at each of nine beam depths against the span its
+   level covers — and the facade half that reads a duration and whether it
+   sounds off the Python objects, which `naiveBeams` already does. It is the
+   one member still excluded in `data/feature_map.toml`.
 
-   Two of those want more than a pass-through and are honest exclusions in
-   `data/feature_map.toml` until they are written: `getBeams` beams a run of
-   notes and so needs the notes, and `setDisplay` is a setter nobody has
-   written.
-
-   One thing the tree bought already, beyond the members it unblocks: the
-   closed form it replaced was wrong where music21 is not. It cut compound
-   threes at a denominator over four, so `3/6` counted as one beat where
-   music21 counts three. Two more of the same kind went with it: every beat
-   lookup divided the bar evenly, so a bar written additively was counted
-   along a beat that was not there, and `beatDuration` answered an average
-   where music21 refuses (`861effb`, `cab6c97`, `8aa5882`).
-
-   **`ratioString` is a known divergence.** music21 reads it off the display
-   sequence, so after `setDisplay("2/8+2/8+2/8")` a `3/4` calls itself
-   `2/8+2/8+2/8`; the crate still writes it from the numerator and the
-   denominator. Found while porting `setDisplay` (`861effb`) and left alone
-   rather than changed in passing, since `ratioString` is read in a dozen
-   places and is one of the failing docstrings in its own right.
+   One thing the tree bought beyond the members it unblocks: the closed forms
+   it replaced were wrong where music21 is not, three times over. Compound
+   threes were cut at a denominator over four, so `3/6` counted as one beat
+   where music21 counts three; every beat lookup divided the bar evenly, so a
+   bar written additively was counted along a beat that was not there; and
+   `beatDuration` answered an average where music21 refuses
+   (`8aa5882`, `86c637d`, `cab6c97`). The 126-meter fixture could not catch
+   any of them, because every meter in it divides evenly.
 
 2. **Streams in the crate.** Sites, contexts, derivations and
    measure-relative offsets, so that an object can belong to a crate stream
@@ -101,10 +87,13 @@ Two rules, set 2026-09-12, that most of the open work now serves:
    `Duration`'s component machinery — are either work to move into the crate
    or exceptions that should say why in `data/feature_map.toml`.
 
-4. **CI had never run any of this** before today's push. The parts it
-   exercises first are the new clippy steps for `python` and `python-parity`,
-   the wheel crate's test step, and the mixed-layout wheel (`python/pysrc`),
-   which has only ever been built on Windows.
+4. **CI has now run all of this green**, music21's own suite and the docs
+   build included. Two things it caught that no local gate did: `cargo fmt`
+   reaches only workspace members, so a hand-widened line in `python-parity`
+   went unformatted through every local check and failed lint — formatting
+   has to be asked of all three manifests — and a run is cancelled when
+   another push supersedes it, so a green tick has to be read against the
+   commit it actually covers.
 
 5. **The version must go to 0.6.0 before a release.**
    `ChromaticInterval::new` and `notes_to_chromatic` return `Result`
