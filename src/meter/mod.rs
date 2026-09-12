@@ -233,6 +233,24 @@ impl TimeSignature {
         Ok(())
     }
 
+    /// Divides the beats into `count` parts, leaving each part undivided:
+    /// the `divisions` a meter is built with.
+    ///
+    /// This is not [`Self::set_beat_count`]: music21 partitions the beats
+    /// here and stops, so `TimeSignature("6/8", 2)` is `{3/8+3/8}` where
+    /// counting a `6/8` in two gives `{{1/8+1/8+1/8}+{1/8+1/8+1/8}}`.
+    pub fn divide_beats(&mut self, count: UnsignedIntegerType) -> Result<()> {
+        if count == 0 {
+            return Err(Error::Meter(
+                "a bar cannot be divided into no parts".to_string(),
+            ));
+        }
+        let mut beats = whole_bar(self.numerator, self.denominator)?;
+        beats.partition_by_count(count as usize, false)?;
+        self.beat_sequence = beats;
+        Ok(())
+    }
+
     /// Counts the bar in a different number of beats: music21's settable
     /// `beatCount`.
     ///
@@ -1899,6 +1917,35 @@ mod tests {
             .partition_by_count(2, true)
             .unwrap();
         assert_eq!(common.beat_count(), 2);
+    }
+
+    #[test]
+    fn the_divisions_a_meter_is_built_with_partition_its_beats() {
+        use crate::meter::TimeSignature;
+
+        // Read off music21 11.0.0b9: TimeSignature(ratio, divisions).
+        for (ratio, divisions, partitioned) in [
+            ("3/4", 1, "{3/4}"),
+            ("6/8", 2, "{3/8+3/8}"),
+            ("4/4", 2, "{1/2+1/2}"),
+            ("3/4", 3, "{1/4+1/4+1/4}"),
+        ] {
+            let mut signature = TimeSignature::from_ratio_string(ratio).unwrap();
+            signature.divide_beats(divisions).unwrap();
+            assert_eq!(
+                signature.beat_sequence().to_string(),
+                partitioned,
+                "{ratio} in {divisions}"
+            );
+        }
+
+        // Unlike counting the bar, which divides each beat again.
+        let mut counted = TimeSignature::from_ratio_string("6/8").unwrap();
+        counted.set_beat_count(2).unwrap();
+        assert_eq!(
+            counted.beat_sequence().to_string(),
+            "{{1/8+1/8+1/8}+{1/8+1/8+1/8}}"
+        );
     }
 
     #[test]

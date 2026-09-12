@@ -65,24 +65,18 @@ fn read_meter(value: &str) -> PyResult<(RsTimeSignature, String)> {
 ///
 /// A partition is exactly what this crate does not model — but asking for as
 /// many parts as the meter already has beats asks for the partition it
-/// already has, and that is not a partition at all. Anything else is refused
-/// rather than answered as though the bar had been left alone.
+/// music21 partitions the beat sequence into that many parts and stops
+/// there, without dividing each part again — which is what separates this
+/// from assigning to `beatCount`.
 fn checked_divisions(
-    meter: &RsTimeSignature,
+    meter: &mut RsTimeSignature,
     divisions: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<()> {
     let Some(divisions) = divisions.filter(|divisions| !divisions.is_none()) else {
         return Ok(());
     };
     let asked: UnsignedIntegerType = divisions.extract()?;
-    if asked == meter.beat_count() {
-        return Ok(());
-    }
-    Err(MeterException::new_err(format!(
-        "{} is partitioned into {} beats here, and a partition into {asked} is not modelled",
-        meter.ratio_string(),
-        meter.beat_count()
-    )))
+    meter.divide_beats(asked).map_err(meter_error)
 }
 
 /// music21's `TimeSignature`: a numerator over a denominator, and everything
@@ -111,8 +105,8 @@ impl TimeSignature {
         keywords: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Self> {
         let _ = keywords;
-        let (inner, symbol) = read_meter(&value)?;
-        checked_divisions(&inner, divisions)?;
+        let (mut inner, symbol) = read_meter(&value)?;
+        checked_divisions(&mut inner, divisions)?;
         Ok(Self { inner, symbol })
     }
 
@@ -185,8 +179,8 @@ impl TimeSignature {
     /// music21's `load`, which is the ratio-string setter under another name.
     #[pyo3(signature = (value, divisions = None))]
     fn load(&mut self, value: &str, divisions: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
-        let (inner, symbol) = read_meter(value)?;
-        checked_divisions(&inner, divisions)?;
+        let (mut inner, symbol) = read_meter(value)?;
+        checked_divisions(&mut inner, divisions)?;
         self.inner = inner;
         self.symbol = symbol;
         Ok(())
@@ -270,6 +264,28 @@ impl TimeSignature {
             MeterException::new_err("a display is written as a ratio, such as 2/8+2/8+2/8")
         })?;
         self.inner.set_display(&written).map_err(meter_error)
+    }
+
+    /// music21 lets a caller write this, and keeps what it was given.
+    #[setter]
+    fn set_barDuration(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        let quarter_length: FloatType = value
+            .getattr("quarterLength")
+            .and_then(|length| length.call_method0("__float__"))
+            .and_then(|length| length.extract())
+            .or_else(|_| value.extract())?;
+        let denominator = self.inner.denominator();
+        let beat = 4.0 / FloatType::from(denominator);
+        let numerator = (quarter_length / beat).round();
+        if !(numerator.is_finite() && numerator >= 1.0) {
+            return Err(MeterException::new_err(format!(
+                "a bar cannot last {quarter_length} quarter lengths"
+            )));
+        }
+        let rebuilt = RsTimeSignature::new(numerator as UnsignedIntegerType, denominator)
+            .map_err(meter_error)?;
+        self.inner = rebuilt;
+        Ok(())
     }
 
     #[getter]
@@ -685,6 +701,20 @@ fn wrap_span(py: Python<'_>, held: Held) -> PyResult<Py<PyAny>> {
 
 #[pymethods]
 impl MeterTerminal {
+    /// A copy of a span stands alone, since what it copied may have been a
+    /// view of a meter.
+    fn __copy__(&self, py: Python<'_>) -> PyResult<Self> {
+        Ok(Self {
+            held: Held::Loose(self.held.read(py)?),
+        })
+    }
+
+    #[pyo3(signature = (memo = None))]
+    fn __deepcopy__(&self, py: Python<'_>, memo: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
+        let _ = memo;
+        self.__copy__(py)
+    }
+
     #[new]
     #[pyo3(signature = (slashNotation = None, weight = 1.0))]
     fn new(slashNotation: Option<&str>, weight: FloatType) -> PyResult<Self> {
@@ -757,6 +787,20 @@ impl MeterTerminal {
 
 #[pymethods]
 impl MeterSequence {
+    /// A copy of a sequence stands alone: music21 deep-copies an accent
+    /// sequence while working out the weights of a bar.
+    fn __copy__(&self, py: Python<'_>) -> PyResult<Self> {
+        Ok(Self {
+            held: Held::Loose(self.held.read(py)?),
+        })
+    }
+
+    #[pyo3(signature = (memo = None))]
+    fn __deepcopy__(&self, py: Python<'_>, memo: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
+        let _ = memo;
+        self.__copy__(py)
+    }
+
     fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
         let span = self.held.read(py)?;
         Ok(format!("<music21.meter.core.MeterSequence {span}>"))
