@@ -245,9 +245,13 @@ impl TimeSignature {
                 "a bar cannot be divided into no parts".to_string(),
             ));
         }
-        let mut beats = whole_bar(self.numerator, self.denominator)?;
-        beats.partition_by_count(count as usize, false)?;
-        self.beat_sequence = beats;
+        let mut divided = whole_bar(self.numerator, self.denominator)?;
+        divided.partition_by_count(count as usize, false)?;
+        // music21 divides the beats, the accents and the beams alike here,
+        // and leaves the display saying what the bar was written as.
+        self.beat_sequence = divided.clone();
+        self.accent_sequence = divided.clone();
+        self.beam_sequence = divided;
         Ok(())
     }
 
@@ -690,7 +694,8 @@ impl TimeSignature {
             )));
         }
         let (start, end) = self.beat_spans()[whole as usize - 1];
-        Ok(start + (beat - whole) * (end - start))
+        let fraction = snapped_fraction(beat - whole);
+        Ok(start + fraction * (end - start))
     }
 
     /// Returns the one-based beat containing `offset` and how far into that
@@ -1073,6 +1078,24 @@ impl TimeSignature {
             .offset_to_depth(offset, crate::meter::OffsetAlign::Quantize)?;
         Ok(depth as u8)
     }
+}
+
+/// A fractional beat read as the fraction it suggests: music21's
+/// `addFloatPrecision`, which snaps a third, two thirds, a sixth or five
+/// sixths written as decimals onto the fraction itself.
+///
+/// It is what makes the offset of beat 2.33 the same as the offset of beat
+/// two and a third.
+#[must_use]
+pub fn snapped_fraction(value: FloatType) -> FloatType {
+    const GRAIN: FloatType = 1e-2;
+    let thirds = [1.0 / 3.0, 2.0 / 3.0, 1.0 / 6.0, 5.0 / 6.0];
+    for candidate in thirds {
+        if (value - candidate).abs() <= GRAIN {
+            return candidate;
+        }
+    }
+    value
 }
 
 /// A whole bar as a sequence of one part, which is what music21 starts each
@@ -1944,6 +1967,43 @@ mod tests {
             counted.beat_sequence().to_string(),
             "{{1/8+1/8+1/8}+{1/8+1/8+1/8}}"
         );
+    }
+
+    #[test]
+    fn a_fractional_beat_is_read_as_the_fraction_it_suggests() {
+        use crate::meter::TimeSignature;
+
+        // Read off music21 11.0.0b9: getOffsetFromBeat snaps through
+        // addFloatPrecision, so a third written as .33 is a third.
+        // A 6/8 beat lasts 1.5, so beat 2.33 starts a third of the way
+        // into the second beat: 1.5 + 1.5/3. music21 answers 2.0 and 2.5.
+        let compound = TimeSignature::from_ratio_string("6/8").unwrap();
+        assert!((compound.offset_from_beat(2.33).unwrap() - 2.0).abs() < 1e-9);
+        assert!((compound.offset_from_beat(2.66).unwrap() - 2.5).abs() < 1e-9);
+        assert!((compound.offset_from_beat(1.66).unwrap() - 1.0).abs() < 1e-9);
+
+        // A simple beat lasts one quarter, so the same beats land on thirds
+        // of it: music21 answers 4/3, 5/3 and 2/3 for a 4/4 bar.
+        let simple = TimeSignature::common();
+        let third = 1.0 / 3.0;
+        assert!((simple.offset_from_beat(2.33).unwrap() - (1.0 + third)).abs() < 1e-9);
+        assert!((simple.offset_from_beat(2.66).unwrap() - (1.0 + 2.0 * third)).abs() < 1e-9);
+        assert!((simple.offset_from_beat(1.66).unwrap() - (2.0 * third)).abs() < 1e-9);
+
+        // The divisions reach the accents and the beams, not the beats alone.
+        let mut divided = TimeSignature::common();
+        divided.divide_beats(4).unwrap();
+        assert_eq!(divided.beat_sequence().to_string(), "{1/4+1/4+1/4+1/4}");
+        assert_eq!(divided.accent_sequence().to_string(), "{1/4+1/4+1/4+1/4}");
+        assert_eq!(divided.beam_sequence().to_string(), "{1/4+1/4+1/4+1/4}");
+        assert_eq!(divided.display_sequence().to_string(), "{4/4}");
+
+        // Weighing them then loops over four parts, not eight.
+        divided.set_accent_weight(&[0.8, 0.2], 0).unwrap();
+        let weights = divided.accent_weights();
+        assert_eq!(weights.len(), 4);
+        assert!((weights[0] - 0.8).abs() < 1e-9);
+        assert!((weights[1] - 0.2).abs() < 1e-9);
     }
 
     #[test]

@@ -49,6 +49,7 @@ pyo3::create_exception!(
 );
 
 error_into!(meter_error, MeterException);
+error_into!(time_signature_error, TimeSignatureException);
 
 /// music21 writes `common` and `cut` for the two meters that have names, and
 /// takes a bare ratio otherwise. The name is kept beside the meter, since
@@ -358,9 +359,9 @@ impl TimeSignature {
 
     #[getter]
     fn beatDuration(&self) -> PyResult<Duration> {
-        Ok(Duration::wrap(self.inner.beat_duration().map_err(
-            |error| TimeSignatureException::new_err(error.to_string()),
-        )?))
+        Ok(Duration::wrap(
+            self.inner.beat_duration().map_err(time_signature_error)?,
+        ))
     }
 
     #[getter]
@@ -453,8 +454,15 @@ impl TimeSignature {
             .map_err(meter_error)
     }
 
-    fn getOffsetFromBeat(&self, beat: FloatType) -> PyResult<FloatType> {
-        self.inner.offset_from_beat(beat).map_err(meter_error)
+    fn getOffsetFromBeat<'py>(
+        &self,
+        py: Python<'py>,
+        beat: FloatType,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let offset = self.inner.offset_from_beat(beat).map_err(meter_error)?;
+        // music21 writes an offset through `opFrac`, so a third of a beat is
+        // a Fraction rather than a float that nearly is one.
+        crate::duration::op_frac(py, offset)
     }
 
     /// music21's `averageBeatStrength`: the mean accent weight of the
