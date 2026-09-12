@@ -60,7 +60,17 @@ Two rules, set 2026-09-12, that most of the open work now serves:
    One thing the tree bought already, beyond the members it unblocks: the
    closed form it replaced was wrong where music21 is not. It cut compound
    threes at a denominator over four, so `3/6` counted as one beat where
-   music21 counts three.
+   music21 counts three. Two more of the same kind went with it: every beat
+   lookup divided the bar evenly, so a bar written additively was counted
+   along a beat that was not there, and `beatDuration` answered an average
+   where music21 refuses (`861effb`, `cab6c97`, `8aa5882`).
+
+   **`ratioString` is a known divergence.** music21 reads it off the display
+   sequence, so after `setDisplay("2/8+2/8+2/8")` a `3/4` calls itself
+   `2/8+2/8+2/8`; the crate still writes it from the numerator and the
+   denominator. Found while porting `setDisplay` (`861effb`) and left alone
+   rather than changed in passing, since `ratioString` is read in a dozen
+   places and is one of the failing docstrings in its own right.
 
 2. **Streams in the crate.** Sites, contexts, derivations and
    measure-relative offsets, so that an object can belong to a crate stream
