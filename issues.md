@@ -24,7 +24,7 @@ Two rules, set 2026-09-12, that most of the open work now serves:
 
 - **The crate is meant to be a strict superset of the wheel**, caches aside.
   As little as possible belongs in the facade — only what genuinely cannot
-  live in Rust. 29 members answer in the wheel today with no crate function
+  live in Rust. 30 members answer in the wheel today with no crate function
   behind them; each is either work to move or a documented exception.
 - **The crate should have streams.** It has a `Stream` already
   (`src/stream.rs`, 678 lines: elements at offsets, `flatten`, `recurse`,
@@ -84,7 +84,7 @@ Two rules, set 2026-09-12, that most of the open work now serves:
    `getMeasureOffsetOrMeterModulusOffset` — added to the facade on the old
    rule (`8e455d9`) — move into the crate where it belongs.
 
-3. **The 29 wheel-only members.** Caches (`cachedRealized`,
+3. **The 30 wheel-only members.** Caches (`cachedRealized`,
    `cachedRealizedStr`) stay Python-side by design. The rest — observer
    callbacks (`informClient`, `pitchChanged`), `groups`, `storedInstrument`
    and `getInstrument`, the `AbstractScale` layer, `Sieve`'s settable state,
