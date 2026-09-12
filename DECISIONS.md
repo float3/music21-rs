@@ -9,15 +9,22 @@ they are shaped that way. `issues.md` says what is still wrong.
 
 ## The crate
 
-**The crate models music, not scores.** `Stream`, parsing, notation output
-and the corpus stay music21's. Everything here answers a question about a
-pitch, an interval, a chord, a meter or a tuning, and answers it without
-knowing where in a piece the object sits.
+**The crate models music, and is meant to model scores too.** *Changed
+2026-09-12.* It used to answer only questions about a pitch, an interval, a
+chord, a meter or a tuning, leaving `Stream`, parsing and notation to
+music21 — which is why 29 members are carried by the wheel and not the crate.
+The direction now is the opposite: the crate is meant to be a strict superset
+of the wheel, caches aside, and as little as possible belongs in the facade.
 
-*Costs:* every member needing an object's place in a stream —
-`getMeasureOffsetOrMeterModulusOffset`, `Volume.getDynamicContext`,
-`realizeVolume` — can only be answered in the Python facade, which is why 29
-members are carried by the wheel and not the crate.
+The crate already has a `Stream` (`src/stream.rs`): elements at offsets,
+`flatten`, `recurse`, parts, measures, voices, `transpose`, and lookups for
+the key, meter and tempo in force. What it does not have is what music21 uses
+to make an object a *member* of a stream — sites and contexts, derivations,
+`activeSite`, measure-relative offsets.
+
+*Costs:* until it does, a facade object that music21 may put in a stream has
+to carry music21's own half, which is what makes an installed chord cost
+eight `Music21Object.__init__` calls. See `issues.md`.
 
 **Nothing is cached.** A value that answers the same question twice does the
 arithmetic twice. music21 memoizes on the object; this does not.
@@ -51,15 +58,20 @@ TOML it came from.
 *Costs:* ~7k lines of generated Rust in the tree, and a regeneration step
 whenever a submodule moves.
 
-**`TimeSignature` is an immutable ratio.** music21's owns four mutable
-partition trees; this one is a `Copy` pair of integers that derives its
-beats, accents and divisions from the ratio.
+**`TimeSignature` is an immutable ratio — for now.** music21's owns four
+mutable partition trees; this one is a `Copy` pair of integers that derives
+its beats, accents and divisions from the ratio.
 
 *Costs:* `beatSequence`, `beamSequence`, `accentSequence`, `displaySequence`,
 `getBeams` and a settable `beatCount` cannot be answered, which is 23 of
-meter's 34 docstrings. See `issues.md`; the plan is a separate
-`MeterSequence` type with the mutable sequences owned by the facade, so the
-ratio type stays as it is.
+meter's 34 docstrings.
+
+*Changed 2026-09-12:* the partition tree goes in the crate rather than the
+facade, so `TimeSignature` will own its sequences and stop being `Copy`. That
+reaches 41 by-value methods, the `StreamElement` variant and
+`Stream::time_signature_at`. The earlier plan — a crate type with the mutable
+sequences held by the facade — was rejected: it put Rust-able logic in
+Python.
 
 ## The Python facade
 
