@@ -175,7 +175,7 @@ impl StreamElement {
             Self::Rest(rest) => Ok(Self::Rest(rest.clone())),
             Self::Stream(stream) => Ok(Self::Stream(Box::new(stream.transpose(interval)?))),
             Self::KeySignature(key) => Ok(Self::KeySignature(key.transpose(interval)?)),
-            Self::TimeSignature(meter) => Ok(Self::TimeSignature(*meter)),
+            Self::TimeSignature(meter) => Ok(Self::TimeSignature(meter.clone())),
             Self::MetronomeMark(mark) => Ok(Self::MetronomeMark(mark.clone())),
         }
     }
@@ -454,7 +454,7 @@ impl Stream {
     /// The metre in force at an offset, found the same way.
     pub fn time_signature_at(&self, offset: FloatType) -> Option<TimeSignature> {
         self.in_force_at(offset, |element| match element {
-            StreamElement::TimeSignature(meter) => Some(*meter),
+            StreamElement::TimeSignature(meter) => Some(meter.clone()),
             _ => None,
         })
     }

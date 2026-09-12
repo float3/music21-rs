@@ -59,7 +59,10 @@ fn read_meter(value: &str) -> PyResult<(RsTimeSignature, String)> {
 /// many parts as the meter already has beats asks for the partition it
 /// already has, and that is not a partition at all. Anything else is refused
 /// rather than answered as though the bar had been left alone.
-fn checked_divisions(meter: RsTimeSignature, divisions: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+fn checked_divisions(
+    meter: &RsTimeSignature,
+    divisions: Option<&Bound<'_, PyAny>>,
+) -> PyResult<()> {
     let Some(divisions) = divisions.filter(|divisions| !divisions.is_none()) else {
         return Ok(());
     };
@@ -101,7 +104,7 @@ impl TimeSignature {
     ) -> PyResult<Self> {
         let _ = keywords;
         let (inner, symbol) = read_meter(&value)?;
-        checked_divisions(inner, divisions)?;
+        checked_divisions(&inner, divisions)?;
         Ok(Self { inner, symbol })
     }
 
@@ -175,7 +178,7 @@ impl TimeSignature {
     #[pyo3(signature = (value, divisions = None))]
     fn load(&mut self, value: &str, divisions: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
         let (inner, symbol) = read_meter(value)?;
-        checked_divisions(inner, divisions)?;
+        checked_divisions(&inner, divisions)?;
         self.inner = inner;
         self.symbol = symbol;
         Ok(())
@@ -405,7 +408,7 @@ impl TimeSignature {
     fn ratioEqual(&self, other: &Bound<'_, PyAny>) -> bool {
         other
             .extract::<PyRef<'_, Self>>()
-            .is_ok_and(|other| self.inner.ratio_equal(other.inner))
+            .is_ok_and(|other| self.inner.ratio_equal(&other.inner))
     }
 
     fn __deepcopy__<'py>(

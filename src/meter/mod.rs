@@ -52,7 +52,7 @@ pub enum BeatDivision {
 
 impl BeatDivision {
     /// Returns music21's name for this division.
-    pub fn music21_name(self) -> &'static str {
+    pub fn music21_name(&self) -> &'static str {
         match self {
             Self::Other => "Other",
             Self::Simple => "Simple",
@@ -64,7 +64,7 @@ impl BeatDivision {
     ///
     /// Matches music21's `beatDivisionCount`, which reports `1` rather than
     /// raising for a single-beat meter.
-    pub fn count(self) -> UnsignedIntegerType {
+    pub fn count(&self) -> UnsignedIntegerType {
         match self {
             Self::Other => 1,
             Self::Simple => 2,
@@ -84,7 +84,9 @@ impl BeatDivision {
 /// assert_eq!(six_eight.classification(), "Compound Duple");
 /// # Ok::<(), music21_rs::Error>(())
 /// ```
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+/// Not `Copy`, `Eq` or `Hash`: a meter is about to carry the partitions it
+/// is felt in, and those weigh their parts in floats.
+#[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[must_use]
 pub struct TimeSignature {
@@ -223,27 +225,27 @@ impl TimeSignature {
     }
 
     /// Returns the numerator.
-    pub fn numerator(self) -> UnsignedIntegerType {
+    pub fn numerator(&self) -> UnsignedIntegerType {
         self.numerator
     }
 
     /// Returns the denominator.
-    pub fn denominator(self) -> UnsignedIntegerType {
+    pub fn denominator(&self) -> UnsignedIntegerType {
         self.denominator
     }
 
     /// Returns the `"numerator/denominator"` spelling.
-    pub fn ratio_string(self) -> String {
+    pub fn ratio_string(&self) -> String {
         format!("{}/{}", self.numerator, self.denominator)
     }
 
     /// Returns the length of one bar in quarter lengths.
-    pub fn bar_quarter_length(self) -> FloatType {
+    pub fn bar_quarter_length(&self) -> FloatType {
         FloatType::from(self.numerator) * 4.0 / FloatType::from(self.denominator)
     }
 
     /// Returns the length of one bar as a [`Duration`].
-    pub fn bar_duration(self) -> Duration {
+    pub fn bar_duration(&self) -> Duration {
         Duration::new(self.bar_quarter_length())
             .expect("a non-zero numerator and denominator give a positive finite bar length")
     }
@@ -253,7 +255,7 @@ impl TimeSignature {
     /// This is music21's `beatCount`, which follows the numerator rather than
     /// the denominator — except at `3`, where `3/4` is three beats but `3/8` is
     /// one.
-    pub fn beat_count(self) -> UnsignedIntegerType {
+    pub fn beat_count(&self) -> UnsignedIntegerType {
         match self.numerator {
             1 => 1,
             2 => 2,
@@ -273,7 +275,7 @@ impl TimeSignature {
     /// Returns music21's name for the beat count, such as `"Duple"`.
     ///
     /// Counts above eight are spelled as `"<n>-uple"`, as music21 does.
-    pub fn beat_count_name(self) -> String {
+    pub fn beat_count_name(&self) -> String {
         let count = self.beat_count();
         BEAT_COUNT_NAMES
             .get(count as usize)
@@ -286,18 +288,18 @@ impl TimeSignature {
     /// music21's `beatDuration` this never fails. music21 only reports a
     /// non-uniform beat for a hand-partitioned `MeterSequence`, which has no
     /// counterpart here.
-    pub fn beat_quarter_length(self) -> FloatType {
+    pub fn beat_quarter_length(&self) -> FloatType {
         self.bar_quarter_length() / FloatType::from(self.beat_count())
     }
 
     /// Returns the length of one beat as a [`Duration`].
-    pub fn beat_duration(self) -> Duration {
+    pub fn beat_duration(&self) -> Duration {
         Duration::new(self.beat_quarter_length())
             .expect("a positive bar length divided by a positive beat count stays positive")
     }
 
     /// Returns how the beat subdivides.
-    pub fn beat_division(self) -> BeatDivision {
+    pub fn beat_division(&self) -> BeatDivision {
         if self.beat_count() == 1 {
             BeatDivision::Other
         } else if matches!(self.numerator, 6 | 9 | 12)
@@ -310,17 +312,17 @@ impl TimeSignature {
     }
 
     /// Returns the number of divisions in one beat.
-    pub fn beat_division_count(self) -> UnsignedIntegerType {
+    pub fn beat_division_count(&self) -> UnsignedIntegerType {
         self.beat_division().count()
     }
 
     /// Returns `true` when beats divide in three.
-    pub fn is_compound(self) -> bool {
+    pub fn is_compound(&self) -> bool {
         self.beat_division() == BeatDivision::Compound
     }
 
     /// Returns music21's `classification`, such as `"Compound Duple"`.
-    pub fn classification(self) -> String {
+    pub fn classification(&self) -> String {
         format!(
             "{} {}",
             self.beat_division().music21_name(),
@@ -330,39 +332,39 @@ impl TimeSignature {
 
     /// Returns music21's `beatDivisionCountName`: `Simple`, `Compound` or
     /// `Other`.
-    pub fn beat_division_count_name(self) -> &'static str {
+    pub fn beat_division_count_name(&self) -> &'static str {
         self.beat_division().music21_name()
     }
 
     /// Returns whether two time signatures have the same numerator and
     /// denominator: music21's `ratioEqual`, so `4/4` and `2/2` differ.
-    pub fn ratio_equal(self, other: TimeSignature) -> bool {
+    pub fn ratio_equal(&self, other: &TimeSignature) -> bool {
         self.numerator == other.numerator && self.denominator == other.denominator
     }
 
     /// Returns how many quarter lengths one unit of the denominator lasts:
     /// `0.5` in `6/8`, `2.0` in `2/2`.
-    pub fn beat_length_to_quarter_length_ratio(self) -> FloatType {
+    pub fn beat_length_to_quarter_length_ratio(&self) -> FloatType {
         4.0 / FloatType::from(self.denominator)
     }
 
     /// Returns how many denominator units make one quarter length, the
     /// inverse of [`Self::beat_length_to_quarter_length_ratio`].
-    pub fn quarter_length_to_beat_length_ratio(self) -> FloatType {
+    pub fn quarter_length_to_beat_length_ratio(&self) -> FloatType {
         FloatType::from(self.denominator) / 4.0
     }
 
     /// Returns the quarter length of each division of one beat, in order:
     /// two eighths in `4/4`, three in `6/8`, the whole dotted-quarter beat
     /// in `3/8` where the beat does not divide.
-    pub fn beat_division_quarter_lengths(self) -> Vec<FloatType> {
+    pub fn beat_division_quarter_lengths(&self) -> Vec<FloatType> {
         let count = self.beat_division_count().max(1);
         vec![self.beat_quarter_length() / FloatType::from(count); count as usize]
     }
 
     /// Returns [`Self::beat_division_quarter_lengths`] as durations: music21's
     /// `beatDivisionDurations`.
-    pub fn beat_division_durations(self) -> Vec<Duration> {
+    pub fn beat_division_durations(&self) -> Vec<Duration> {
         self.beat_division_quarter_lengths()
             .into_iter()
             .map(|quarter_length| {
@@ -374,7 +376,7 @@ impl TimeSignature {
 
     /// Returns each division of the beat halved: music21's
     /// `beatSubDivisionDurations`, four sixteenths in `4/4`.
-    pub fn beat_sub_division_durations(self) -> Vec<Duration> {
+    pub fn beat_sub_division_durations(&self) -> Vec<Duration> {
         self.beat_division_quarter_lengths()
             .into_iter()
             .flat_map(|quarter_length| {
@@ -388,7 +390,7 @@ impl TimeSignature {
     /// Returns the quarter-length offset of a one-based, possibly fractional
     /// beat: music21's `getOffsetFromBeat`, so beat `2.5` of `4/4` is `1.5`
     /// and beat `1.5` of `6/8` is `0.75`. A beat past the bar is an error.
-    pub fn offset_from_beat(self, beat: FloatType) -> Result<FloatType> {
+    pub fn offset_from_beat(&self, beat: FloatType) -> Result<FloatType> {
         let whole = beat.floor();
         if !beat.is_finite() || whole < 1.0 || whole > FloatType::from(self.beat_count()) {
             return Err(Error::Meter(format!(
@@ -403,7 +405,7 @@ impl TimeSignature {
 
     /// Returns the one-based beat containing `offset` and how far into that
     /// beat it lies, in quarter lengths: music21's `getBeatProgress`.
-    pub fn beat_progress(self, offset: FloatType) -> Result<(UnsignedIntegerType, FloatType)> {
+    pub fn beat_progress(&self, offset: FloatType) -> Result<(UnsignedIntegerType, FloatType)> {
         let beat = self.beat_at_offset(offset)?;
         let start = FloatType::from(beat - 1) * self.beat_quarter_length();
         Ok((beat, offset - start))
@@ -412,7 +414,7 @@ impl TimeSignature {
     /// Returns the position within the bar as a fractional beat: music21's
     /// `getBeatProportion`, `2.5` for the second eighth of beat two in `4/4`
     /// and `1.333…` for the second eighth of `6/8`.
-    pub fn beat_proportion(self, offset: FloatType) -> Result<FloatType> {
+    pub fn beat_proportion(&self, offset: FloatType) -> Result<FloatType> {
         let (beat, progress) = self.beat_progress(offset)?;
         Ok(FloatType::from(beat) + progress / self.beat_quarter_length())
     }
@@ -421,7 +423,7 @@ impl TimeSignature {
     /// `getBeatProportionStr` writes it: the beat alone on the beat, otherwise
     /// the beat and the fraction of it elapsed, `2 1/2`, with the fraction's
     /// denominator limited to 16.
-    pub fn beat_proportion_string(self, offset: FloatType) -> Result<String> {
+    pub fn beat_proportion_string(&self, offset: FloatType) -> Result<String> {
         let (beat, progress) = self.beat_progress(offset)?;
         let proportion = progress / self.beat_quarter_length();
         if proportion == 0.0 {
@@ -432,7 +434,7 @@ impl TimeSignature {
     }
 
     /// Returns the quarter-length offset of each beat within one bar.
-    pub fn beat_offsets(self) -> Vec<FloatType> {
+    pub fn beat_offsets(&self) -> Vec<FloatType> {
         let beat = self.beat_quarter_length();
         (0..self.beat_count())
             .map(|index| FloatType::from(index) * beat)
@@ -443,7 +445,7 @@ impl TimeSignature {
     ///
     /// Matches music21's `getBeat`. Offsets at or beyond the end of the bar are
     /// rejected rather than wrapping.
-    pub fn beat_at_offset(self, offset: FloatType) -> Result<UnsignedIntegerType> {
+    pub fn beat_at_offset(&self, offset: FloatType) -> Result<UnsignedIntegerType> {
         if !offset.is_finite() || offset < 0.0 || offset >= self.bar_quarter_length() {
             return Err(Error::Meter(format!(
                 "offset {offset} is outside a {} bar of {} quarter lengths",
@@ -502,7 +504,7 @@ impl TimeSignature {
     /// triples into its triples, an even count of anything in two, a single
     /// unit in two, and an odd count into its units.
     fn accent_hierarchy(
-        self,
+        &self,
     ) -> (
         UnsignedIntegerType,
         UnsignedIntegerType,
@@ -532,7 +534,7 @@ impl TimeSignature {
 
     /// The length of one partition of music21's default accent hierarchy, the
     /// finest level the accent weights are given at.
-    pub fn accent_partition_quarter_length(self) -> FloatType {
+    pub fn accent_partition_quarter_length(&self) -> FloatType {
         let (top, second, third) = self.accent_hierarchy();
         self.bar_quarter_length() / FloatType::from(top * second * third)
     }
@@ -541,7 +543,7 @@ impl TimeSignature {
     /// `accentSequence`: `1.0` on the downbeat, halving with every level of
     /// the hierarchy a partition's start is not a boundary of, so `4/4` reads
     /// `1.0, 0.125, 0.25, 0.125, 0.5, 0.125, 0.25, 0.125`.
-    pub fn accent_weights(self) -> Vec<FloatType> {
+    pub fn accent_weights(&self) -> Vec<FloatType> {
         let (top, second, third) = self.accent_hierarchy();
         let count = top * second * third;
         (0..count)
@@ -558,7 +560,7 @@ impl TimeSignature {
     /// Whether an offset in quarter lengths starts an accent partition:
     /// music21's `getAccent`, which is false for any offset off the grid,
     /// beyond the bar included.
-    pub fn accent(self, offset: FloatType) -> bool {
+    pub fn accent(&self, offset: FloatType) -> bool {
         let partition = self.accent_partition_quarter_length();
         let index = (offset / partition).round();
         index >= 0.0
@@ -569,7 +571,7 @@ impl TimeSignature {
     /// The accent weight at an offset in quarter lengths: music21's
     /// `getAccentWeight`, the weight of the partition the offset falls in.
     /// An offset outside the bar is an error.
-    pub fn accent_weight(self, offset: FloatType) -> Result<FloatType> {
+    pub fn accent_weight(&self, offset: FloatType) -> Result<FloatType> {
         self.accent_weight_with(offset, false, false)
     }
 
@@ -578,7 +580,7 @@ impl TimeSignature {
     /// answers half the smallest weight rather than its partition's; with
     /// `permit_meter_modulus` an offset beyond the bar is read within it.
     pub fn accent_weight_with(
-        self,
+        &self,
         offset: FloatType,
         force_position_match: bool,
         permit_meter_modulus: bool,
@@ -617,7 +619,7 @@ impl TimeSignature {
     /// bar, with an element off the accent grid counting half the smallest
     /// weight. `notes_only` weighs the notes, chords and rests alone; an empty
     /// stream weighs nothing.
-    pub fn average_beat_strength(self, stream: &crate::Stream, notes_only: bool) -> FloatType {
+    pub fn average_beat_strength(&self, stream: &crate::Stream, notes_only: bool) -> FloatType {
         let bar = self.bar_quarter_length();
         let offsets: Vec<FloatType> = if notes_only {
             stream
@@ -651,7 +653,7 @@ impl TimeSignature {
     /// then counts the beat level and the division level. A meter of one beat
     /// has one level and answers one everywhere in the bar; an offset outside
     /// the bar is an error.
-    pub fn beat_depth(self, offset: FloatType) -> Result<u8> {
+    pub fn beat_depth(&self, offset: FloatType) -> Result<u8> {
         let bar = self.bar_quarter_length();
         if offset.is_nan() || offset < 0.0 || offset >= bar {
             return Err(Error::Meter(format!(
@@ -718,7 +720,8 @@ pub fn best_time_signature(measure: &crate::Stream) -> Result<TimeSignature> {
     let strength =
         |ratio: (UnsignedIntegerType, UnsignedIntegerType)| -> Result<(TimeSignature, FloatType)> {
             let signature = TimeSignature::new(ratio.0, ratio.1)?;
-            Ok((signature, signature.average_beat_strength(measure, true)))
+            let strength = signature.average_beat_strength(measure, true);
+            Ok((signature, strength))
         };
     match (numerator, denominator) {
         // Three-four or six-eight, whichever weighs the notes more strongly.
@@ -1110,8 +1113,8 @@ mod tests {
             assert_eq!(subs.len(), sub_divisions, "{ratio}");
             assert!(subs.iter().all(|ql| *ql == divisions[0] / 2.0), "{ratio}");
         }
-        assert!(ts("4/4").ratio_equal(ts("4/4")));
-        assert!(!ts("4/4").ratio_equal(ts("2/2")));
+        assert!(ts("4/4").ratio_equal(&ts("4/4")));
+        assert!(!ts("4/4").ratio_equal(&ts("2/2")));
     }
 
     #[test]
