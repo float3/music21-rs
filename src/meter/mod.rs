@@ -597,16 +597,16 @@ impl TimeSignature {
                 self.ratio_string()
             )));
         }
-        let beat_length = self.beat_quarter_length();
-        Ok((whole - 1.0) * beat_length + (beat - whole) * beat_length)
+        let (start, end) = self.beat_spans()[whole as usize - 1];
+        Ok(start + (beat - whole) * (end - start))
     }
 
     /// Returns the one-based beat containing `offset` and how far into that
     /// beat it lies, in quarter lengths: music21's `getBeatProgress`.
     pub fn beat_progress(&self, offset: FloatType) -> Result<(UnsignedIntegerType, FloatType)> {
-        let beat = self.beat_at_offset(offset)?;
-        let start = FloatType::from(beat - 1) * self.beat_quarter_length();
-        Ok((beat, offset - start))
+        let index = self.beat_index(offset)?;
+        let (start, _) = self.beat_spans()[index];
+        Ok((index as UnsignedIntegerType + 1, offset - start))
     }
 
     /// Returns the position within the bar as a fractional beat: music21's
@@ -614,7 +614,8 @@ impl TimeSignature {
     /// and `1.333…` for the second eighth of `6/8`.
     pub fn beat_proportion(&self, offset: FloatType) -> Result<FloatType> {
         let (beat, progress) = self.beat_progress(offset)?;
-        Ok(FloatType::from(beat) + progress / self.beat_quarter_length())
+        let (start, end) = self.beat_spans()[beat as usize - 1];
+        Ok(FloatType::from(beat) + progress / (end - start))
     }
 
     /// Returns [`Self::beat_proportion`] the way music21's
@@ -623,7 +624,8 @@ impl TimeSignature {
     /// denominator limited to 16.
     pub fn beat_proportion_string(&self, offset: FloatType) -> Result<String> {
         let (beat, progress) = self.beat_progress(offset)?;
-        let proportion = progress / self.beat_quarter_length();
+        let (start, end) = self.beat_spans()[beat as usize - 1];
+        let proportion = progress / (end - start);
         if proportion == 0.0 {
             return Ok(beat.to_string());
         }
@@ -631,11 +633,58 @@ impl TimeSignature {
         Ok(format!("{beat} {numerator}/{denominator}"))
     }
 
+    /// Where each beat starts and ends, in quarter lengths from the start of
+    /// the bar. The beats of a meter written additively are not all the same
+    /// length, so this is read off the beat sequence rather than divided out.
+    fn beat_spans(&self) -> Vec<(FloatType, FloatType)> {
+        let mut spans = Vec::new();
+        let mut position = 0.0;
+        for part in self.beat_sequence.parts() {
+            let end = position + part.quarter_length();
+            spans.push((position, end));
+            position = end;
+        }
+        if spans.is_empty() {
+            spans.push((0.0, self.bar_quarter_length()));
+        }
+        spans
+    }
+
+    /// How long the beat holding an offset is: music21's `getBeatDuration`.
+    ///
+    /// A meter written additively answers differently along the bar — the
+    /// first beat of `2/4+3/8` is two quarters long and the second is three
+    /// eighths.
+    pub fn beat_duration_at(&self, offset: FloatType) -> Result<Duration> {
+        let index = self.beat_index(offset)?;
+        let (start, end) = self.beat_spans()[index];
+        Duration::new(end - start)
+    }
+
+    /// Which beat holds an offset, counted from nought.
+    fn beat_index(&self, offset: FloatType) -> Result<usize> {
+        if !offset.is_finite() || offset < 0.0 || offset >= self.bar_quarter_length() {
+            return Err(Error::Meter(format!(
+                "offset {offset} is outside a {} bar of {} quarter lengths",
+                self.ratio_string(),
+                self.bar_quarter_length()
+            )));
+        }
+        let spans = self.beat_spans();
+        for (index, (start, end)) in spans.iter().enumerate() {
+            let _ = start;
+            if offset < end - OFFSET_TOLERANCE {
+                return Ok(index);
+            }
+        }
+        Ok(spans.len() - 1)
+    }
+
     /// Returns the quarter-length offset of each beat within one bar.
     pub fn beat_offsets(&self) -> Vec<FloatType> {
-        let beat = self.beat_quarter_length();
-        (0..self.beat_count())
-            .map(|index| FloatType::from(index) * beat)
+        self.beat_spans()
+            .into_iter()
+            .map(|(start, _)| start)
             .collect()
     }
 
@@ -651,8 +700,7 @@ impl TimeSignature {
                 self.bar_quarter_length()
             )));
         }
-        let beat = (offset / self.beat_quarter_length()).floor();
-        Ok(beat as UnsignedIntegerType + 1)
+        Ok(self.beat_index(offset)? as UnsignedIntegerType + 1)
     }
 }
 
@@ -859,14 +907,10 @@ impl TimeSignature {
                 offset_repr(offset)
             )));
         }
-        if self.beat_count() == 1 {
-            return Ok(1);
-        }
-        let division = self.beat_quarter_length() / FloatType::from(self.beat_division_count());
-        let quantized = ((offset + OFFSET_TOLERANCE) / division).floor() * division;
-        let on_beat = (quantized / self.beat_quarter_length()).fract().abs() < OFFSET_TOLERANCE
-            || (1.0 - (quantized / self.beat_quarter_length()).fract()).abs() < OFFSET_TOLERANCE;
-        Ok(if on_beat { 2 } else { 1 })
+        let depth = self
+            .beat_sequence
+            .offset_to_depth(offset, crate::meter::OffsetAlign::Quantize)?;
+        Ok(depth as u8)
     }
 }
 
@@ -1558,6 +1602,41 @@ mod tests {
             assert_eq!(TimeSignature::new(6, denominator).unwrap().beat_count(), 2);
             assert_eq!(TimeSignature::new(5, denominator).unwrap().beat_count(), 5);
         }
+    }
+
+    #[test]
+    fn a_bar_written_in_unequal_parts_is_counted_along_its_own_beats() {
+        use crate::meter::TimeSignature;
+
+        // Read off music21 11.0.0b9. `2/4+3/8` is two beats, of two quarters
+        // and of three eighths, so nothing here is the bar divided evenly.
+        let mixed = TimeSignature::from_ratio_string("2/4+3/8").unwrap();
+        assert_eq!(mixed.bar_quarter_length(), 3.5);
+        assert_eq!(mixed.beat_count(), 2);
+        assert_eq!(mixed.beat_offsets(), vec![0.0, 2.0]);
+        assert_eq!(mixed.beat_at_offset(2.5).unwrap(), 2);
+        assert_eq!(mixed.beat_duration_at(0.0).unwrap().quarter_length(), 2.0);
+        assert_eq!(mixed.beat_duration_at(2.5).unwrap().quarter_length(), 1.5);
+        assert_eq!(mixed.offset_from_beat(2.0).unwrap(), 2.0);
+        // Half way through the first beat is half of *that* beat, not half of
+        // an averaged one.
+        assert_eq!(mixed.offset_from_beat(1.5).unwrap(), 1.0);
+        assert_eq!(mixed.beat_proportion_string(2.5).unwrap(), "2 1/3");
+        assert_eq!(mixed.beat_depth(0.0).unwrap(), 2);
+
+        let other = TimeSignature::from_ratio_string("3/8+2/8").unwrap();
+        assert_eq!(other.beat_offsets(), vec![0.0, 1.5]);
+        assert_eq!(other.offset_from_beat(2.0).unwrap(), 1.5);
+        assert_eq!(other.offset_from_beat(1.5).unwrap(), 0.75);
+        // The bar is 2.5 long, so 2.5 is past the end of it.
+        assert!(other.beat_proportion_string(2.5).is_err());
+
+        // An evenly divided bar answers exactly as it did.
+        let common = TimeSignature::common();
+        assert_eq!(common.beat_offsets(), vec![0.0, 1.0, 2.0, 3.0]);
+        assert_eq!(common.offset_from_beat(2.0).unwrap(), 1.0);
+        assert_eq!(common.offset_from_beat(1.5).unwrap(), 0.5);
+        assert_eq!(common.beat_proportion_string(2.5).unwrap(), "3 1/2");
     }
 
     #[test]
