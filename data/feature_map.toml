@@ -181,8 +181,8 @@ adjustMinorVIandVIIByQuality = "adjust_minor_vi_and_vii_by_quality"
 [[class]]
 python = "meter/base.py"
 name = "TimeSignature"
-rust = ["src/meter.rs"]
-note = "Derived from numerator and denominator alone, the default accent weights included; beaming and display need a MeterSequence."
+rust = ["src/meter/mod.rs", "src/meter/sequence.rs"]
+note = "The bar, the beats, the beams and the accent partitions, as the four MeterSequences music21 hangs off a meter; the tree is modelled here rather than the numbers being derived from the ratio alone."
 
 [class.renames]
 getBeat = "beat_at_offset"
@@ -192,12 +192,12 @@ getBeatProportion = "beat_proportion"
 getBeatProportionStr = "beat_proportion_string"
 
 [class.excluded]
-summedNumerator = "display sequences are not modelled"
+summedNumerator = "whether a meter was written (3+2)/8 rather than 3/8+2/8; the parts are kept either way, and music21 refuses to read the first spelling at all"
 getMeasureOffsetOrMeterModulusOffset = "where an element sits in its stream is music21's to know; the wheel answers it there"
-resetValues = "a TimeSignature is immutable here"
-load = "a TimeSignature is immutable here"
-getBeams = "beaming needs the MeterSequence partition tree"
-setDisplay = "display sequences need the MeterSequence partition tree"
+resetValues = "rebuilding a meter in place; a new one is built instead"
+load = "rebuilding a meter in place; a new one is built instead"
+getBeams = "beams a run of notes, which needs the notes; the beam sequence they would be beamed by is modelled"
+setDisplay = "sets the display partition by hand; the display sequence is modelled, but takes only what the meter was written as"
 setAccentWeight = "the accent weights are the default hierarchy's, not a partition a caller has set"
 
 [[class]]
@@ -480,7 +480,7 @@ realizeChordSymbolDurations = "stretches chord symbols across a stream"
 
 [[class]]
 python = "meter/base.py"
-rust = ["src/meter.rs"]
+rust = ["src/meter/mod.rs", "src/meter/sequence.rs"]
 note = "Module-level helpers."
 
 
