@@ -42,7 +42,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList};
+use pyo3::types::{PyDict, PyList, PyModule};
 use serde::{Deserialize, Serialize};
 
 use crate::bench::add_dependency_venv;
@@ -302,6 +302,16 @@ fn run_one(workspace_root: &Path, out: &Path, which: Which, only: Option<&str>) 
             // never needed the wheel — it builds its module in process out of
             // `register_all` — so calling it here installs the working tree.
             Which::Music21Rs => {
+                // The virtualenv on `sys.path` is where `pip install
+                // music21-rs` puts the wheel, and freezing a score imports
+                // `music21_rs` to find the function that thaws it. On this
+                // side that import must find the classes linked into this
+                // binary: the wheel's are a second copy, and music21 would
+                // hold one where a method wants the other. The wheel side
+                // below is the one that must import the wheel.
+                let ours = PyModule::new(py, "music21_rs")?;
+                music21_rs_python::register_all(&ours)?;
+                sys.getattr("modules")?.set_item("music21_rs", &ours)?;
                 let names = music21_rs_python::install_into_music21(py)?;
                 println!("music21_rs (linked in) over {names} names");
             }
