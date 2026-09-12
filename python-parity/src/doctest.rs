@@ -85,9 +85,42 @@ pub fn repo_root() -> PathBuf {
         .to_path_buf()
 }
 
+/// Claims the name the wheel installs under, so that one process can only
+/// ever hold one copy of these classes.
+///
+/// The virtualenv [`add_dependency_venv`] puts on `sys.path` is where
+/// music21's own dependencies live, and it is also where `pip install
+/// music21-rs` puts the wheel. Importing that wheel here would load the
+/// extension's copy of every facade class beside the linked crate's, and
+/// music21 would then hold one where a method wants the other — which reads
+/// as `'Accidental' object is not an instance of 'Accidental'`, from a
+/// harness that never asked for the wheel at all. Registering the linked
+/// classes under the wheel's name first means an import of it finds these,
+/// and no `.pyd` is ever loaded.
+fn claim_the_wheels_name(py: Python<'_>) -> PyResult<()> {
+    let modules = py.import("sys")?.getattr("modules")?;
+    if let Ok(taken) = modules.get_item("music21_rs") {
+        let file: String = taken
+            .getattr("__file__")
+            .and_then(|file| file.extract())
+            .unwrap_or_default();
+        if !file.is_empty() {
+            return Err(pyo3::exceptions::PyRuntimeError::new_err(format!(
+                "the music21_rs wheel is already imported from {file}; this harness                  tests the linked crate, and two copies of these classes in one                  process do not answer each other's isinstance"
+            )));
+        }
+        return Ok(());
+    }
+    let ours = PyModule::new(py, "music21_rs")?;
+    music21_rs_python::register_all(&ours)?;
+    modules.set_item("music21_rs", &ours)?;
+    Ok(())
+}
+
 /// Puts the dependency virtualenv on `sys.path`, the way `xtask`'s fixture
 /// generator does, so the full music21 imports.
 pub fn add_dependency_venv(py: Python<'_>, root: &Path) -> PyResult<()> {
+    claim_the_wheels_name(py)?;
     let sys = py.import("sys")?;
     let path = sys.getattr("path")?;
     let path = path.cast::<PyList>()?;
