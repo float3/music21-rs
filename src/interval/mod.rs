@@ -201,7 +201,7 @@ pub fn written_lower_pitch<'a>(first: &'a Pitch, second: &'a Pitch) -> &'a Pitch
 /// The pitch that sounds higher: music21's `getAbsoluteHigherNote`. Enharmonic
 /// equals return the first.
 pub fn absolute_higher_pitch<'a>(first: &'a Pitch, second: &'a Pitch) -> &'a Pitch {
-    if notes_to_chromatic(first, second).semitones > 0.0 {
+    if second.ps() > first.ps() {
         second
     } else {
         first
@@ -211,7 +211,7 @@ pub fn absolute_higher_pitch<'a>(first: &'a Pitch, second: &'a Pitch) -> &'a Pit
 /// The pitch that sounds lower: music21's `getAbsoluteLowerNote`. Enharmonic
 /// equals return the first.
 pub fn absolute_lower_pitch<'a>(first: &'a Pitch, second: &'a Pitch) -> &'a Pitch {
-    if notes_to_chromatic(first, second).semitones < 0.0 {
+    if second.ps() < first.ps() {
         second
     } else {
         first
@@ -229,7 +229,7 @@ pub fn notes_to_generic(p1: &Pitch, p2: &Pitch) -> Result<GenericInterval> {
 
 /// The semitone distance from one pitch to another: music21's
 /// `notesToChromatic`.
-pub fn notes_to_chromatic(p1: &Pitch, p2: &Pitch) -> ChromaticInterval {
+pub fn notes_to_chromatic(p1: &Pitch, p2: &Pitch) -> Result<ChromaticInterval> {
     ChromaticInterval::new(p2.ps() - p1.ps())
 }
 
@@ -403,7 +403,7 @@ impl Interval {
         let start_pitch = extract_pitch(start);
         let end_pitch = extract_pitch(end);
         let generic = notes_to_generic(&start_pitch, &end_pitch)?;
-        let chromatic = notes_to_chromatic(&start_pitch, &end_pitch);
+        let chromatic = notes_to_chromatic(&start_pitch, &end_pitch)?;
         let diatonic = intervals_to_diatonic(&generic, &chromatic)?;
 
         Ok(Self {

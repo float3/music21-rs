@@ -5,7 +5,7 @@ use std::fmt;
 
 use crate::{
     defaults::{FloatType, IntegerType},
-    error::Result,
+    error::{Error, Result},
     pitch::Pitch,
 };
 
@@ -27,14 +27,23 @@ pub struct ChromaticInterval {
 impl ChromaticInterval {
     /// A chromatic interval of `semitones`, negative for descending and
     /// fractional for a microtonal one: a quarter tone is `0.5`.
-    pub fn new(semitones: FloatType) -> Self {
+    ///
+    /// A count that is not finite spells no interval. It used to spell a
+    /// perfect unison: what reads an interval off a count casts it first, and
+    /// a cast answers nought for anything it cannot represent.
+    pub fn new(semitones: FloatType) -> Result<Self> {
+        if !semitones.is_finite() {
+            return Err(Error::Interval(format!(
+                "a semitone count must be finite, got {semitones}"
+            )));
+        }
         let rounded = semitones.round();
         let semitones = if (semitones - rounded).abs() < WHOLE_SEMITONE_TOLERANCE {
             rounded
         } else {
             semitones
         };
-        Self { semitones }
+        Ok(Self { semitones })
     }
 
     /// A chromatic interval of a whole number of semitones.
@@ -122,7 +131,9 @@ impl ChromaticInterval {
 
     /// The same interval in the other direction.
     pub fn reverse(&self) -> Self {
-        Self::new(-self.semitones)
+        Self {
+            semitones: -self.semitones,
+        }
     }
 
     /// The simplest diatonic spelling of the semitone count, as music21's
@@ -161,6 +172,24 @@ impl fmt::Display for ChromaticInterval {
 
 #[cfg(test)]
 mod tests {
+    /// A count that is not a number is not a distance. Left to the cast that
+    /// reads an interval off it, every one of these came back a unison.
+    #[test]
+    fn a_semitone_count_that_is_not_finite_is_refused() {
+        use super::ChromaticInterval;
+        use crate::interval::notes_to_chromatic;
+        use crate::pitch::Pitch;
+
+        for count in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert!(ChromaticInterval::new(count).is_err());
+        }
+        assert_eq!(ChromaticInterval::new(7.0).unwrap().semitones(), 7.0);
+
+        let c4 = Pitch::from_name("C4").unwrap();
+        let g4 = Pitch::from_name("G4").unwrap();
+        assert_eq!(notes_to_chromatic(&c4, &g4).unwrap().semitones(), 7.0);
+    }
+
     use super::*;
 
     #[test]
@@ -181,7 +210,7 @@ mod tests {
 
     #[test]
     fn chromatic_get_diatonic_roundtrip() {
-        let chromatic = ChromaticInterval::new(6.0);
+        let chromatic = ChromaticInterval::new(6.0).unwrap();
         let diatonic = chromatic.get_diatonic();
         let roundtrip = diatonic.get_chromatic().unwrap();
         assert_eq!(roundtrip.semitones, 6.0);
@@ -190,19 +219,22 @@ mod tests {
     #[test]
     fn chromatic_transpose_pitch() {
         let c4 = pitch("C4");
-        let out = ChromaticInterval::new(7.0).transpose_pitch(&c4).unwrap();
+        let out = ChromaticInterval::new(7.0)
+            .unwrap()
+            .transpose_pitch(&c4)
+            .unwrap();
         assert_eq!(out.name_with_octave(), "G4");
     }
 
     #[test]
     fn chromatic_reverse() {
-        let reversed = ChromaticInterval::new(-4.0).reverse();
+        let reversed = ChromaticInterval::new(-4.0).unwrap().reverse();
         assert_eq!(reversed.semitones, 4.0);
     }
 
     #[test]
     fn chromatic_measures_match_music21() {
-        let descending_third = ChromaticInterval::new(-4.0);
+        let descending_third = ChromaticInterval::new(-4.0).unwrap();
         assert_eq!(descending_third.directed(), -4.0);
         assert_eq!(descending_third.undirected(), 4.0);
         assert_eq!(descending_third.direction(), Direction::Descending);
@@ -211,25 +243,34 @@ mod tests {
         assert_eq!(descending_third.simple_undirected(), 4);
         assert_eq!(descending_third.interval_class(), 4);
         assert_eq!(descending_third.cents(), -400.0);
-        assert!(ChromaticInterval::new(1.0).is_chromatic_step());
-        assert!(!ChromaticInterval::new(13.0).is_step());
-        assert_eq!(ChromaticInterval::new(0.0).direction(), Direction::Oblique);
-        assert_eq!(ChromaticInterval::new(14.0).simple_undirected(), 2);
-        assert_eq!(ChromaticInterval::new(-4.0).to_string(), "-4");
+        assert!(ChromaticInterval::new(1.0).unwrap().is_chromatic_step());
+        assert!(!ChromaticInterval::new(13.0).unwrap().is_step());
+        assert_eq!(
+            ChromaticInterval::new(0.0).unwrap().direction(),
+            Direction::Oblique
+        );
+        assert_eq!(ChromaticInterval::new(14.0).unwrap().simple_undirected(), 2);
+        assert_eq!(ChromaticInterval::new(-4.0).unwrap().to_string(), "-4");
     }
 
     #[test]
     fn chromatic_keeps_a_fractional_semitone_count() {
-        let quarter_tone = ChromaticInterval::new(0.5);
+        let quarter_tone = ChromaticInterval::new(0.5).unwrap();
         assert_eq!(quarter_tone.semitones(), 0.5);
         assert_eq!(quarter_tone.cents(), 50.0);
         assert_eq!(quarter_tone.direction(), Direction::Ascending);
         assert_eq!(quarter_tone.get_diatonic().name(), "P1");
-        assert_eq!(ChromaticInterval::new(0.1).cents(), 10.0);
-        assert_eq!(ChromaticInterval::new(0.4).get_diatonic().name(), "P1");
-        assert_eq!(ChromaticInterval::new(0.6).get_diatonic().name(), "m2");
+        assert_eq!(ChromaticInterval::new(0.1).unwrap().cents(), 10.0);
         assert_eq!(
-            ChromaticInterval::new(-0.5).direction(),
+            ChromaticInterval::new(0.4).unwrap().get_diatonic().name(),
+            "P1"
+        );
+        assert_eq!(
+            ChromaticInterval::new(0.6).unwrap().get_diatonic().name(),
+            "m2"
+        );
+        assert_eq!(
+            ChromaticInterval::new(-0.5).unwrap().direction(),
             Direction::Descending
         );
         assert_eq!(quarter_tone.to_string(), "0.5");
@@ -237,7 +278,7 @@ mod tests {
 
     #[test]
     fn chromatic_rounds_a_fractional_count_where_music21_rounds() {
-        let three_quarters = ChromaticInterval::new(2.75);
+        let three_quarters = ChromaticInterval::new(2.75).unwrap();
         assert_eq!(three_quarters.whole_semitones(), 3);
         assert_eq!(three_quarters.mod12(), 3);
         assert_eq!(three_quarters.simple_undirected(), 3);
@@ -248,6 +289,7 @@ mod tests {
     #[test]
     fn chromatic_transposes_a_pitch_by_a_quarter_tone() {
         let out = ChromaticInterval::new(0.5)
+            .unwrap()
             .transpose_pitch(&pitch("C4"))
             .unwrap();
         assert_eq!(out.ps(), 60.5);

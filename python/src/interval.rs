@@ -966,7 +966,9 @@ impl ChromaticInterval {
             Some(value) => semitones_from_any(value)?,
             None => 0.0,
         };
-        Ok(Self::wrap(RsChromatic::new(semitones)))
+        Ok(Self::wrap(
+            RsChromatic::new(semitones).map_err(interval_error)?,
+        ))
     }
 
     #[getter]
@@ -976,7 +978,7 @@ impl ChromaticInterval {
 
     #[setter]
     fn set_semitones(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
-        self.inner = RsChromatic::new(semitones_from_any(value)?);
+        self.inner = RsChromatic::new(semitones_from_any(value)?).map_err(interval_error)?;
         Ok(())
     }
 
@@ -1146,7 +1148,8 @@ impl Interval {
             if let Ok(text) = arg0.extract::<String>() {
                 name = Some(text);
             } else if arg0.extract::<i32>().is_ok() || arg0.extract::<f64>().is_ok() {
-                chromatic = Some(RsChromatic::new(semitones_from_any(arg0)?));
+                chromatic =
+                    Some(RsChromatic::new(semitones_from_any(arg0)?).map_err(interval_error)?);
             } else {
                 pitch_start = Some(extract_pitch_object(arg0)?);
             }
@@ -1288,7 +1291,8 @@ pub(crate) fn interval_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsInterval
     // A number of semitones written with a decimal point, which music21
     // reads as a microtonal interval: its own analysis transposes by one.
     if let Ok(semitones) = value.extract::<f64>() {
-        return RsInterval::from_chromatic(RsChromatic::new(semitones)).map_err(interval_error);
+        return RsInterval::from_chromatic(RsChromatic::new(semitones).map_err(interval_error)?)
+            .map_err(interval_error);
     }
     if let Ok(name) = value
         .getattr("directedName")
@@ -1866,10 +1870,9 @@ fn notes_to_chromatic_py(
     n1: &Bound<'_, PyAny>,
     n2: &Bound<'_, PyAny>,
 ) -> PyResult<ChromaticInterval> {
-    Ok(ChromaticInterval::wrap(notes_to_chromatic(
-        &pitch_from_any(n1)?,
-        &pitch_from_any(n2)?,
-    )))
+    Ok(ChromaticInterval::wrap(
+        notes_to_chromatic(&pitch_from_any(n1)?, &pitch_from_any(n2)?).map_err(interval_error)?,
+    ))
 }
 
 #[pyfunction]
@@ -1893,7 +1896,7 @@ fn interval_from_generic_and_chromatic(
     let generic = generic_from_any(gInt)?;
     let chromatic = match cInt.extract::<PyRef<ChromaticInterval>>() {
         Ok(facade) => facade.inner.clone(),
-        Err(_) => RsChromatic::new(semitones_from_any(cInt)?),
+        Err(_) => RsChromatic::new(semitones_from_any(cInt)?).map_err(interval_error)?,
     };
     let diatonic = intervals_to_diatonic(&generic, &chromatic).map_err(interval_error)?;
     let inner =

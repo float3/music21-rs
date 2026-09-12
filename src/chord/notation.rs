@@ -232,7 +232,7 @@ impl Chord {
         if touched.notehead() != Notehead::Diamond {
             return Ok(None);
         }
-        let distance = crate::interval::notes_to_chromatic(&stopped.pitch, &touched.pitch);
+        let distance = crate::interval::notes_to_chromatic(&stopped.pitch, &touched.pitch)?;
         let harmonic = match distance.interval_class() {
             0 => 2,
             7 => 3,
