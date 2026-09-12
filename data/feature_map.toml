@@ -193,7 +193,7 @@ getBeatProportionStr = "beat_proportion_string"
 
 [class.excluded]
 summedNumerator = "display sequences are not modelled"
-getMeasureOffsetOrMeterModulusOffset = "needs the element's offset within a stream"
+getMeasureOffsetOrMeterModulusOffset = "where an element sits in its stream is music21's to know; the wheel answers it there"
 resetValues = "a TimeSignature is immutable here"
 load = "a TimeSignature is immutable here"
 getBeams = "beaming needs the MeterSequence partition tree"

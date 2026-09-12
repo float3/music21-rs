@@ -17,6 +17,7 @@
 #![allow(non_snake_case)]
 
 use pyo3::prelude::*;
+use pyo3::types::PyDict;
 use pyo3::types::PyTuple;
 
 use music21_rs_crate::meter::TimeSignature as RsTimeSignature;
@@ -184,6 +185,37 @@ impl TimeSignature {
     #[pyo3(signature = (value = "4/4".to_string(), divisions = None))]
     fn resetValues(&mut self, value: String, divisions: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
         self.load(&value, divisions)
+    }
+
+    /// music21's `getMeasureOffsetOrMeterModulusOffset`: where an element
+    /// falls in the bar this meter measures.
+    ///
+    /// Within the measure the element sits in, where there is one; past the
+    /// end of the bar, the same offset read modulo the bar, which is how a
+    /// meter in a stream of no measures still says where the beat is. Both
+    /// offsets come from music21 -- the element's place in its stream is the
+    /// stream's to know, not this crate's.
+    fn getMeasureOffsetOrMeterModulusOffset<'py>(
+        slf: &Bound<'py, Self>,
+        el: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
+        let element_offset: f64 = el.call_method0("_getMeasureOffset")?.extract()?;
+        let kwargs = PyDict::new(py);
+        kwargs.set_item("includeMeasurePadding", false)?;
+        let own_offset: f64 = slf
+            .as_any()
+            .call_method("_getMeasureOffset", (), Some(&kwargs))?
+            .extract()?;
+        let bar = slf.borrow().inner.bar_quarter_length();
+        // The sum says whether the element is still inside the bar; the
+        // difference is what is left of it once the meter's own place in the
+        // stream is taken off. music21 adds in one and subtracts in the
+        // other, and the answers differ where a meter does not start the bar.
+        if element_offset + own_offset < bar {
+            return crate::duration::op_frac(py, element_offset);
+        }
+        crate::duration::op_frac(py, (element_offset - own_offset).rem_euclid(bar))
     }
 
     #[getter]
