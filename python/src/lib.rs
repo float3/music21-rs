@@ -742,7 +742,11 @@ def make_class(facade, original):
                 continue
             try:
                 setattr(copied, name, _copy.deepcopy(value, memo if memo is not None else {}))
-            except Exception:  # pragma: no cover - music21 keeps odd things here
+            except (AttributeError, TypeError, RecursionError):
+                # What music21 keeps here that a copy cannot take: a read-only
+                # attribute, something holding a lock or a module, a structure
+                # deep enough to run the stack out. Anything else is this
+                # class's own fault and is worth hearing about.
                 pass
         # music21 records where a copy came from, and a stream's own deepcopy
         # reads that back to move its spanners onto the copies. Without it a
