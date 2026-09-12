@@ -72,9 +72,16 @@ Two rules, set 2026-09-12, that most of the open work now serves:
 
 5. **The version must go to 0.6.0 before a release.**
    `ChromaticInterval::new` and `notes_to_chromatic` return `Result`
-   (`74857d1`), which `cargo semver-checks` fails without a minor bump. The
-   bump is deliberately not made — nothing is being released yet — so that
-   job is expected to be red until it is.
+   (`74857d1`). The bump is deliberately not made — nothing is being released
+   yet.
+
+   **The semver gate will not catch this.** `cargo semver-checks` runs
+   against `--baseline-rev HEAD^` (`.github/workflows/ci.yml`), so on a push
+   it compares the tip commit with its parent, not the release with the
+   branch. The push that carried the breaking change was green because the
+   tip commit was documentation only; anything breaking that lands more than
+   one commit before a push goes unnoticed. A baseline of the last released
+   tag would catch it.
 
 6. **`sieve` passes 24 of 25 docstrings.** The one that fails,
    `Sieve.segment('cmp', segmentFormat='wid')`, wants the compressed reading

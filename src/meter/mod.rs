@@ -12,6 +12,10 @@
 //! partition rule itself is music21's `_setDefaultBeatPartitions`, verified
 //! against upstream by the `meter_parity` fixture.
 
+pub mod sequence;
+
+pub use sequence::MeterTerminal;
+
 use crate::defaults::{FloatType, UnsignedIntegerType};
 use crate::duration::Duration;
 use crate::error::{Error, Result};
