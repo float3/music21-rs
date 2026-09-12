@@ -1778,6 +1778,37 @@ mod tests {
     }
 
     #[test]
+    fn a_bar_can_be_counted_in_a_different_number_of_beats() {
+        use crate::meter::TimeSignature;
+
+        // Read off music21 11.0.0b9 by assigning to `beatCount`.
+        for (ratio, count, partitioned) in [
+            (
+                "6/8",
+                6,
+                "{{1/16+1/16}+{1/16+1/16}+{1/16+1/16}+{1/16+1/16}+{1/16+1/16}+{1/16+1/16}}",
+            ),
+            ("6/8", 2, "{{1/8+1/8+1/8}+{1/8+1/8+1/8}}"),
+            ("4/4", 2, "{{1/4+1/4}+{1/4+1/4}}"),
+            ("3/4", 1, "{3/4}"),
+            (
+                "2/4",
+                4,
+                "{{1/16+1/16}+{1/16+1/16}+{1/16+1/16}+{1/16+1/16}}",
+            ),
+        ] {
+            let mut signature = TimeSignature::from_ratio_string(ratio).unwrap();
+            signature.set_beat_count(count).unwrap();
+            assert_eq!(
+                signature.beat_sequence().to_string(),
+                partitioned,
+                "{ratio} in {count}"
+            );
+            assert_eq!(signature.beat_count(), count, "{ratio} in {count}");
+        }
+    }
+
+    #[test]
     fn classification_joins_division_and_count() {
         assert_eq!(ts("4/4").classification(), "Simple Quadruple");
         assert_eq!(ts("6/8").classification(), "Compound Duple");

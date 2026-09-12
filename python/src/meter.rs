@@ -234,10 +234,8 @@ impl TimeSignature {
     }
 
     #[setter]
-    fn set_beatCount(&mut self, _count: UnsignedIntegerType) -> PyResult<()> {
-        Err(MeterException::new_err(
-            "the beat count follows from the meter here; it is not a partition to be set",
-        ))
+    fn set_beatCount(&mut self, count: UnsignedIntegerType) -> PyResult<()> {
+        self.inner.set_beat_count(count).map_err(meter_error)
     }
 
     #[getter]
