@@ -7,19 +7,11 @@ use crate::{
 };
 
 use super::Key;
-use std::sync::LazyLock;
 
-static PERFECT_FIFTH_UP: LazyLock<Interval> =
-    LazyLock::new(|| Interval::from_name("P5").expect("P5 is a valid interval"));
-static PERFECT_FOURTH_UP: LazyLock<Interval> =
-    LazyLock::new(|| Interval::from_name("P4").expect("P4 is a valid interval"));
-
-static PERFECT_FIFTH: LazyLock<Interval> =
-    LazyLock::new(|| Interval::from_name("P5").expect("P5 is a valid interval"));
-static PERFECT_FOURTH: LazyLock<Interval> =
-    LazyLock::new(|| Interval::from_name("P4").expect("P4 is a valid interval"));
-static PERFECT_FIFTH_DOWN: LazyLock<Interval> =
-    LazyLock::new(|| Interval::from_name("P-5").expect("P-5 is a valid interval"));
+use crate::interval::constants::{
+    PERFECT_FIFTH_DOWN, PERFECT_FIFTH_UP, PERFECT_FIFTH_UP as PERFECT_FIFTH, PERFECT_FOURTH_UP,
+    PERFECT_FOURTH_UP as PERFECT_FOURTH,
+};
 
 const MODE_SHARPS_ALTER: [(&str, IntegerType); 9] = [
     ("major", 0),

@@ -4,6 +4,8 @@ pub(crate) mod direction;
 pub(crate) mod genericinterval;
 pub(crate) mod specifier;
 
+pub(crate) mod constants;
+
 pub use chromaticinterval::ChromaticInterval;
 pub use diatonicinterval::DiatonicInterval;
 pub use genericinterval::{GenericInterval, convert_generic};
@@ -11,9 +13,9 @@ pub use specifier::Specifier;
 
 use direction::Direction;
 
+use std::cmp::Ordering;
 use std::fmt;
 use std::str::FromStr;
-use std::{cmp::Ordering, sync::LazyLock};
 
 use crate::common::numbertools::{MUSICAL_ORDINAL_STRINGS, MUSICAL_ORDINAL_STRINGS_LOWER};
 use crate::common::stringtools::get_num_from_str;
@@ -79,12 +81,7 @@ pub(crate) enum PitchOrNote {
     Note(Note),
 }
 
-/// The pure fifths the Pythagorean walk steps by, parsed once rather than
-/// re-parsed from "P5"/"-P5" on every call.
-static PERFECT_FIFTH_UP: LazyLock<Interval> =
-    LazyLock::new(|| Interval::from_name("P5").expect("P5 is a valid interval"));
-static PERFECT_FIFTH_DOWN: LazyLock<Interval> =
-    LazyLock::new(|| Interval::from_name("-P5").expect("-P5 is a valid interval"));
+use constants::{PERFECT_FIFTH_DOWN, PERFECT_FIFTH_UP};
 
 fn extract_pitch(arg: PitchOrNote) -> Pitch {
     match arg {

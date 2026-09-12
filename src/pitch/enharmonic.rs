@@ -245,12 +245,7 @@ impl Pitch {
     }
 }
 
-/// The two intervals enharmonic respelling can ever need: a diminished second
-/// up and the same interval down.
-pub(super) static DIMINISHED_SECOND_UP: LazyLock<Interval> =
-    LazyLock::new(|| Interval::from_name("d2").expect("d2 is a valid interval"));
-pub(super) static DIMINISHED_SECOND_DOWN: LazyLock<Interval> =
-    LazyLock::new(|| Interval::from_name("-d2").expect("-d2 is a valid interval"));
+pub(super) use crate::interval::constants::{DIMINISHED_SECOND_DOWN, DIMINISHED_SECOND_UP};
 
 /// A scoring function for [`simplify_multiple_enharmonics`]: lower is a
 /// simpler spelling.

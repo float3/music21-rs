@@ -81,10 +81,7 @@ pub struct Chord {
     bass_override: Option<Pitch>,
 }
 
-/// The perfect fifth the seventh-chord spelling check walks by, parsed once
-/// rather than re-parsed per chord.
-static PERFECT_FIFTH: LazyLock<Interval> =
-    LazyLock::new(|| Interval::from_name("P5").expect("P5 is a valid interval"));
+use crate::interval::constants::PERFECT_FIFTH_UP as PERFECT_FIFTH;
 
 impl Index<usize> for Chord {
     type Output = Note;

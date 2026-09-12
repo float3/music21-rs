@@ -13,14 +13,10 @@ use crate::{
     pitch::Pitch,
     scale::{Scale, ScaleType},
 };
-use std::sync::LazyLock;
 
-static PERFECT_UNISON: LazyLock<Interval> =
-    LazyLock::new(|| Interval::from_name("P1").expect("P1 is a valid interval"));
-static PERFECT_FIFTH: LazyLock<Interval> =
-    LazyLock::new(|| Interval::from_name("P5").expect("P5 is a valid interval"));
-static PERFECT_OCTAVE: LazyLock<Interval> =
-    LazyLock::new(|| Interval::from_name("P8").expect("P8 is a valid interval"));
+use crate::interval::constants::{
+    PERFECT_FIFTH_UP as PERFECT_FIFTH, PERFECT_OCTAVE, PERFECT_UNISON,
+};
 
 /// How two voices move relative to each other.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
