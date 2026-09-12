@@ -332,6 +332,9 @@ facade = "Note"
 rust = ["src/note/mod.rs", "src/notation.rs", "src/duration.rs"]
 note = "What every written note and chord has: a length, what is sung to it, and the marks over it. The crate has no type of its own for it -- the GeneralNote to NotRest to Note chain was mirrored here once as wrapper structs and taken out again -- so its members are matched against the types that carry them."
 
+[class.excluded]
+getGrace = "a grace note is written and does not sound, which is a duration music21 keeps unlinked; the wheel makes one by swapping that duration in"
+
 [[class]]
 python = "note.py"
 name = "NotRest"
