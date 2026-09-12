@@ -70,12 +70,21 @@ music21's `except Music21Exception` catches what these classes raise.
    The parsing this needs is done (`96ea594`): `TimeSignature::parts` reads
    `3/8+2/8`, `3+2/8` and `slow 6/8` as music21 writes them.
 
-7. **`sieve` passes 24 of 25 docstrings.** One docstring, never looked at.
+7. **`sieve` passes 24 of 25 docstrings, and the one that fails is a feature
+   this crate does not have.** `Sieve.segment('cmp', segmentFormat='wid')`
+   wants the compressed reading of a sieve, which the feature map already
+   excludes (`expand`, `compress`, `represent`). The harness records a
+   permanently failing docstring by leaving it out of
+   `python-parity/doctest/sieve.toml`, which is already the case, so nothing
+   here is mislabelled — raising the number means porting music21's
+   `Sieve.compress`.
 
-8. **`GeneralNote.getGrace` is missing with no reason recorded.** It is the
-   only one of the 52 missing members that says nothing about why; the other
-   51 carry a reason in `data/feature_map.toml`. Either port it or say why
-   not.
+8. **`GeneralNote.getGrace` is answered by the wheel and unlabelled in the
+   map.** The facade implements it (`python/src/note.rs:1474`, which swaps in
+   the unlinked duration music21 hands back); the crate has no grace concept
+   at all, exactly as its sibling `getGraceDuration` says. It was the only
+   one of the 52 missing members saying nothing about why, so it now carries
+   a reason of its own in `data/feature_map.toml`.
 
 9. Every other module passes its docstrings in full: chord 105/105, pitch
    83/83, interval 107/107, roman 34/34, scale 62/62, duration 53/53,
