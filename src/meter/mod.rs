@@ -173,6 +173,66 @@ impl TimeSignature {
         self.favor_compound
     }
 
+    /// The beats, to partition: music21 divides a meter by reaching into the
+    /// sequence it carries, as `ts.beatSequence.partition(2)`.
+    pub fn beat_sequence_mut(&mut self) -> &mut MeterTerminal {
+        &mut self.beat_sequence
+    }
+
+    /// The beams, to partition.
+    pub fn beam_sequence_mut(&mut self) -> &mut MeterTerminal {
+        &mut self.beam_sequence
+    }
+
+    /// The accent partitions, to partition or to weigh.
+    pub fn accent_sequence_mut(&mut self) -> &mut MeterTerminal {
+        &mut self.accent_sequence
+    }
+
+    /// How the bar is written, to partition.
+    pub fn display_sequence_mut(&mut self) -> &mut MeterTerminal {
+        &mut self.display_sequence
+    }
+
+    /// Writes the bar a different way without changing what it counts:
+    /// music21's `setDisplay`.
+    ///
+    /// A bar of `3/4` set to display as `"2/8+2/8+2/8"` is still three
+    /// quarters long and still counted in three; what changes is how it is
+    /// written. The value has to come to the same length as the bar, since a
+    /// bar cannot be written as something it is not.
+    pub fn set_display(&mut self, value: &str) -> Result<()> {
+        let parts = Self::parts(value)?;
+        let denominator = parts
+            .iter()
+            .map(|(_, part)| *part)
+            .max()
+            .unwrap_or(self.denominator);
+        let numerator = parts
+            .iter()
+            .map(|(count, part)| count * (denominator / part))
+            .sum();
+        let mut display = whole_bar(numerator, denominator)?;
+        if (display.quarter_length() - self.bar_quarter_length()).abs() > OFFSET_TOLERANCE {
+            return Err(Error::Meter(format!(
+                "cannot write a {} bar as {value:?}: that is {} quarter lengths, not {}",
+                self.ratio_string(),
+                display.quarter_length(),
+                self.bar_quarter_length()
+            )));
+        }
+        if parts.len() > 1 {
+            let written: Vec<String> = parts
+                .iter()
+                .map(|(count, part)| format!("{count}/{part}"))
+                .collect();
+            let borrowed: Vec<&str> = written.iter().map(String::as_str).collect();
+            display.partition_by_parts(&borrowed)?;
+        }
+        self.display_sequence = display;
+        Ok(())
+    }
+
     /// Counts the bar in a different number of beats: music21's settable
     /// `beatCount`.
     ///
@@ -1806,6 +1866,39 @@ mod tests {
             );
             assert_eq!(signature.beat_count(), count, "{ratio} in {count}");
         }
+    }
+
+    #[test]
+    fn a_bar_can_be_written_a_different_way_than_it_is_counted() {
+        use crate::meter::TimeSignature;
+
+        // music21's own `setDisplay` docstring: a 3/4 written in three
+        // groups of two eighths.
+        let mut signature = TimeSignature::from_ratio_string("3/4").unwrap();
+        let counted = signature.beat_sequence().to_string();
+        signature.set_display("2/8+2/8+2/8").unwrap();
+        assert_eq!(signature.display_sequence().to_string(), "{2/8+2/8+2/8}");
+        assert_eq!(
+            signature.display_sequence().partition_display(),
+            "2/8+2/8+2/8"
+        );
+        // What it counts is untouched; only how it is written changed.
+        assert_eq!(signature.beat_sequence().to_string(), counted);
+        assert_eq!(signature.beat_count(), 3);
+        // music21 reads `ratioString` off the display sequence, so there it
+        // becomes "2/8+2/8+2/8". The crate still writes it from the
+        // numerator and the denominator; see issues.md.
+
+        // A bar cannot be written as a length it is not.
+        assert!(signature.set_display("2/4").is_err());
+
+        // The sequences can be partitioned through.
+        let mut common = TimeSignature::common();
+        common
+            .beat_sequence_mut()
+            .partition_by_count(2, true)
+            .unwrap();
+        assert_eq!(common.beat_count(), 2);
     }
 
     #[test]
