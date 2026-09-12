@@ -634,9 +634,6 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(pc_to_tone_row, m)?)?;
     m.add_function(wrap_pyfunction!(row_to_matrix_text, m)?)?;
     m.add_function(wrap_pyfunction!(get_historical_row_by_name, m)?)?;
-    let exception = py.get_type::<SerialException>();
-    exception.setattr("__module__", "music21.serial")?;
-    m.add("SerialException", exception)?;
     let historical = PyDict::new(py);
     for row in &HISTORICAL_ROWS {
         historical.set_item(

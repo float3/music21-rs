@@ -552,11 +552,6 @@ fn interval_argument(value: &Bound<'_, PyAny>) -> PyResult<RsInterval> {
 }
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    let py = m.py();
     m.add_class::<VoiceLeadingQuartet>()?;
-    m.add(
-        "VoiceLeadingQuartetException",
-        py.get_type::<VoiceLeadingQuartetException>(),
-    )?;
     Ok(())
 }

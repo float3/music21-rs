@@ -2050,16 +2050,12 @@ fn subtract(py: Python<'_>, intervalList: &Bound<'_, PyAny>) -> PyResult<Py<PyAn
 }
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    let py = m.py();
     m.add_class::<Direction>()?;
     m.add_class::<Specifier>()?;
     m.add_class::<GenericInterval>()?;
     m.add_class::<DiatonicInterval>()?;
     m.add_class::<ChromaticInterval>()?;
     m.add_class::<Interval>()?;
-    let exception = py.get_type::<IntervalException>();
-    exception.setattr("__module__", "music21.interval")?;
-    m.add("IntervalException", exception)?;
     m.add_function(wrap_pyfunction!(convert_staff_distance_to_interval, m)?)?;
     m.add_function(wrap_pyfunction!(convert_diatonic_number_to_step_py, m)?)?;
     m.add_function(wrap_pyfunction!(parse_specifier, m)?)?;

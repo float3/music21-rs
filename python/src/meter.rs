@@ -475,8 +475,6 @@ fn bestTimeSignature(meas: &Bound<'_, PyAny>) -> PyResult<TimeSignature> {
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(bestTimeSignature, m)?)?;
-    let py = m.py();
     m.add_class::<TimeSignature>()?;
-    m.add("MeterException", py.get_type::<MeterException>())?;
     Ok(())
 }

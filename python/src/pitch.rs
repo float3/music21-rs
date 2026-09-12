@@ -1993,19 +1993,5 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(convert_pitch_class_to_str, m)?)?;
     m.add_function(wrap_pyfunction!(is_valid_accidental_name, m)?)?;
     m.add_function(wrap_pyfunction!(standardize_accidental_name, m)?)?;
-    for (name, exception) in [
-        ("PitchException", m.py().get_type::<PitchException>()),
-        (
-            "AccidentalException",
-            m.py().get_type::<AccidentalException>(),
-        ),
-        (
-            "MicrotoneException",
-            m.py().get_type::<MicrotoneException>(),
-        ),
-    ] {
-        exception.setattr("__module__", "music21.pitch")?;
-        m.add(name, exception)?;
-    }
     Ok(())
 }

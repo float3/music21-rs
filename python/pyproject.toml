@@ -26,4 +26,8 @@ dev = ["pytest>=8"]
 # Without this the extension links libpython, which is right for the embedded
 # interpreter `python-parity` uses and wrong for a wheel.
 features = ["extension-module"]
-module-name = "music21_rs"
+# A package of its own beside the extension, rather than the one maturin
+# writes: what it writes imports every name the extension has, and the
+# exceptions are the names this package hands out lazily instead.
+module-name = "music21_rs.music21_rs"
+python-source = "pysrc"

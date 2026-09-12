@@ -595,13 +595,7 @@ pub fn convertTempoByReferent(
 }
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    let py = m.py();
     m.add_class::<MetronomeMark>()?;
-    m.add("TempoException", py.get_type::<TempoException>())?;
-    m.add(
-        "MetronomeMarkException",
-        py.get_type::<MetronomeMarkException>(),
-    )?;
     m.add_function(wrap_pyfunction!(convertTempoByReferent, m)?)?;
     Ok(())
 }

@@ -1810,23 +1810,10 @@ pub(crate) fn style_colour(py: Python<'_>, style: Option<&Py<PyAny>>) -> Option<
 }
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    let py = m.py();
     m.add_class::<Tie>()?;
     m.add_class::<Lyric>()?;
     m.add_class::<Volume>()?;
     m.add_class::<Beam>()?;
     m.add_class::<Beams>()?;
-    let tie_exception = py.get_type::<TieException>();
-    tie_exception.setattr("__module__", "music21.tie")?;
-    m.add("TieException", tie_exception)?;
-    let lyric_exception = py.get_type::<LyricException>();
-    lyric_exception.setattr("__module__", "music21.note")?;
-    m.add("LyricException", lyric_exception)?;
-    let volume_exception = py.get_type::<VolumeException>();
-    volume_exception.setattr("__module__", "music21.volume")?;
-    m.add("VolumeException", volume_exception)?;
-    let beam_exception = py.get_type::<BeamException>();
-    beam_exception.setattr("__module__", "music21.beam")?;
-    m.add("BeamException", beam_exception)?;
     Ok(())
 }

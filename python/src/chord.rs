@@ -3052,11 +3052,7 @@ fn fromIntervalVector(
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(fromForteClass, m)?)?;
     m.add_function(wrap_pyfunction!(fromIntervalVector, m)?)?;
-    let py = m.py();
     m.add_class::<Chord>()?;
     m.add_class::<ChordTableAddress>()?;
-    let exception = py.get_type::<ChordException>();
-    exception.setattr("__module__", "music21.chord")?;
-    m.add("ChordException", exception)?;
     Ok(())
 }

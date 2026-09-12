@@ -443,8 +443,6 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(unitNormRange, m)?)?;
     m.add_function(wrap_pyfunction!(unitNormEqual, m)?)?;
     m.add_function(wrap_pyfunction!(unitNormStep, m)?)?;
-    let py = m.py();
     m.add_class::<Sieve>()?;
-    m.add("SieveException", py.get_type::<SieveException>())?;
     Ok(())
 }

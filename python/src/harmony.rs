@@ -180,9 +180,7 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(getAbbreviationListGivenChordType, m)?)?;
     m.add_function(wrap_pyfunction!(getCurrentAbbreviationFor, m)?)?;
     m.add_function(wrap_pyfunction!(getNotationStringGivenChordType, m)?)?;
-    let py = m.py();
     m.add_function(wrap_pyfunction!(chordSymbolFigureFromChord, m)?)?;
     m.add_function(wrap_pyfunction!(chordSymbolFromChord, m)?)?;
-    m.add("HarmonyException", py.get_type::<HarmonyException>())?;
     Ok(())
 }

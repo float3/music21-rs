@@ -1703,13 +1703,6 @@ impl Note {
 }
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    let py = m.py();
     m.add_class::<Note>()?;
-    let exception = py.get_type::<NoteException>();
-    exception.setattr("__module__", "music21.note")?;
-    m.add("NoteException", exception)?;
-    let not_rest = py.get_type::<NotRestException>();
-    not_rest.setattr("__module__", "music21.note")?;
-    m.add("NotRestException", not_rest)?;
     Ok(())
 }

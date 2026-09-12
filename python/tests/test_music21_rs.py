@@ -333,3 +333,25 @@ def test_what_a_facade_hands_out_is_built_without_an_import(monkeypatch):
     m.Note("D4").duration
     m.Pitch("C#4").transpose("M3")
     assert asked == []
+
+
+def test_importing_the_package_imports_no_music21():
+    """Every exception here is built on music21's own, so building one
+    imports music21 — the whole of it, half a second of it. Nothing asked for
+    them at import, and they were built anyway; now they are not."""
+    code = "import sys, music21_rs; print('music21' in sys.modules)"
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert done.stdout.strip() == "False"
+
+
+def test_an_exception_is_the_class_music21_keeps_under_that_name():
+    # The module string is what `install_into_music21` leaves music21 holding,
+    # and what a traceback prints.
+    assert m.PitchException.__module__ == "music21.pitch"
+    assert m.ChordException.__module__ == "music21.chord"
+    assert m.IntervalNetworkException.__module__ == "music21.scale.intervalNetwork"
+    assert m.PitchException is m.PitchException
+    with pytest.raises(AttributeError):
+        m.NoSuchException

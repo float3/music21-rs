@@ -263,8 +263,5 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(address_to_common_names, m)?)?;
     m.add_function(wrap_pyfunction!(address_to_forte_name, m)?)?;
     m.add_function(wrap_pyfunction!(seek_chord_tables_address, m)?)?;
-    let exception = m.py().get_type::<ChordTablesException>();
-    exception.setattr("__module__", "music21.chord.tables")?;
-    m.add("ChordTablesException", exception)?;
     Ok(())
 }

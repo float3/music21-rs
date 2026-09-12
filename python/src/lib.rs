@@ -840,6 +840,7 @@ pub fn class_to_install<'py>(
     name: &str,
     facade: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    stamp_exception_modules(py)?;
     let helper = install_helper(py)?;
     let built = match module.getattr(name) {
         Ok(original)
@@ -954,6 +955,183 @@ pub fn install_into_music21(py: Python<'_>) -> PyResult<usize> {
     Ok(replaced)
 }
 
+/// Every exception these classes raise, the class it is, and the module
+/// music21 keeps it in.
+///
+/// None of them is built when the module is imported. Building one builds
+/// its base, which is music21's own `Music21Exception`, and reaching for
+/// that imports music21 — half a second, and the whole of music21 in
+/// `sys.modules`, for a wheel whose point is that it needs neither. The
+/// module hands them out on first asking instead, which is the same thing to
+/// a caller: naming one resolves it, and so does installing into music21,
+/// which has imported music21 by then anyway.
+macro_rules! exceptions {
+    ($(($name:literal, $exception:path, $module:expr)),* $(,)?) => {
+        /// The names [`module_getattr`] answers to. The package the wheel
+        /// installs reads this to know what it may be asked for.
+        pub(crate) const EXCEPTION_NAMES: &[&str] = &[$($name),*];
+
+        fn exception_type<'py>(
+            py: Python<'py>,
+            name: &str,
+        ) -> PyResult<Option<Bound<'py, pyo3::types::PyType>>> {
+            $(if name == $name {
+                let exception = py.get_type::<$exception>();
+                let module: Option<&str> = $module;
+                if let Some(module) = module {
+                    exception.setattr("__module__", module)?;
+                }
+                return Ok(Some(exception));
+            })*
+            Ok(None)
+        }
+    };
+}
+
+exceptions![
+    (
+        "AccidentalException",
+        pitch::AccidentalException,
+        Some("music21.pitch")
+    ),
+    (
+        "BeamException",
+        notation::BeamException,
+        Some("music21.beam")
+    ),
+    (
+        "ChordException",
+        chord::ChordException,
+        Some("music21.chord")
+    ),
+    (
+        "ChordTablesException",
+        chordtables::ChordTablesException,
+        Some("music21.chord.tables")
+    ),
+    (
+        "DurationException",
+        duration::DurationException,
+        Some("music21.duration")
+    ),
+    ("HarmonyException", harmony::HarmonyException, None),
+    (
+        "IntervalException",
+        interval::IntervalException,
+        Some("music21.interval")
+    ),
+    (
+        "IntervalNetworkException",
+        scale::IntervalNetworkException,
+        Some("music21.scale.intervalNetwork")
+    ),
+    ("KeyException", key::KeyException, Some("music21.key")),
+    (
+        "KeySignatureException",
+        key::KeySignatureException,
+        Some("music21.key")
+    ),
+    (
+        "LyricException",
+        notation::LyricException,
+        Some("music21.note")
+    ),
+    ("MeterException", meter::MeterException, None),
+    (
+        "MetronomeMarkException",
+        tempo::MetronomeMarkException,
+        None
+    ),
+    (
+        "MicrotoneException",
+        pitch::MicrotoneException,
+        Some("music21.pitch")
+    ),
+    ("ModifierException", figuredbass::ModifierException, None),
+    (
+        "NotRestException",
+        note::NotRestException,
+        Some("music21.note")
+    ),
+    ("NotationException", figuredbass::NotationException, None),
+    ("NoteException", note::NoteException, Some("music21.note")),
+    (
+        "PitchException",
+        pitch::PitchException,
+        Some("music21.pitch")
+    ),
+    (
+        "RomanNumeralException",
+        roman::RomanNumeralException,
+        Some("music21.roman")
+    ),
+    (
+        "ScaleException",
+        scale::ScaleException,
+        Some("music21.scale")
+    ),
+    (
+        "SerialException",
+        serial::SerialException,
+        Some("music21.serial")
+    ),
+    ("SieveException", sieve::SieveException, None),
+    ("TempoException", tempo::TempoException, None),
+    ("TieException", notation::TieException, Some("music21.tie")),
+    (
+        "VoiceLeadingQuartetException",
+        voiceleading::VoiceLeadingQuartetException,
+        None
+    ),
+    (
+        "VolumeException",
+        notation::VolumeException,
+        Some("music21.volume")
+    ),
+];
+
+/// Builds every exception, so that each says where music21 keeps it before
+/// anything raises one.
+///
+/// A raised exception carries the module its class lives in, and music21's
+/// own doctests read that: the scale network's `IntervalNetworkException`
+/// has to say `music21.scale.intervalNetwork`. Nothing asks for that class
+/// by name first, so left to [`module_getattr`] it would be built by the
+/// raise itself and say this module instead. Installing is what calls this,
+/// and installing has imported music21 already -- which is the whole of what
+/// building one costs. A wheel on its own calls neither, and there the name
+/// it carries is this module's, which is where it does live.
+fn stamp_exception_modules(py: Python<'_>) -> PyResult<()> {
+    static STAMPED: pyo3::sync::PyOnceLock<()> = pyo3::sync::PyOnceLock::new();
+    STAMPED
+        .get_or_try_init(py, || {
+            for name in EXCEPTION_NAMES {
+                exception_type(py, name)?;
+            }
+            Ok::<_, PyErr>(())
+        })
+        .map(|_| ())
+}
+
+/// The module's own `__getattr__`, which Python asks for a name the module
+/// does not have. It builds the exception that was asked for, writes it into
+/// the module so that nothing asks twice, and hands it back.
+#[pyfunction]
+#[pyo3(name = "__getattr__", pass_module)]
+fn module_getattr<'py>(module: &Bound<'py, PyModule>, name: &str) -> PyResult<Bound<'py, PyAny>> {
+    let py = module.py();
+    match exception_type(py, name)? {
+        Some(exception) => {
+            module.add(name, &exception)?;
+            Ok(exception.into_any())
+        }
+        None => Err(pyo3::exceptions::PyAttributeError::new_err(format!(
+            "module {:?} has no attribute {name:?}",
+            module.name()?
+        ))),
+    }
+}
+
 /// Adds every class and function to a module. `python-parity` builds its own
 /// module around this one, so the registration is separate from the
 /// `#[pymodule]` below.
@@ -981,6 +1159,8 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // which is what `corpus.parse` does on the way back out -- names
     // `_thawed` on whichever of the two modules is present.
     m.add_function(wrap_pyfunction!(thawed, m)?)?;
+    m.add("__exception_names__", EXCEPTION_NAMES)?;
+    m.add_function(wrap_pyfunction!(module_getattr, m)?)?;
     Ok(())
 }
 
@@ -1007,4 +1187,22 @@ pub fn music21_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     names.sort();
     m.add("__all__", names)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    /// A module lists what it installs over music21's own, exceptions among
+    /// them, and installing reads each name off this module. One the table
+    /// does not carry would be missing from both.
+    #[test]
+    fn every_exception_a_module_installs_is_one_the_module_hands_out() {
+        for (module, names) in super::MUSIC21_MODULES {
+            for name in names.iter().filter(|name| name.ends_with("Exception")) {
+                assert!(
+                    super::EXCEPTION_NAMES.contains(name),
+                    "{module} installs {name}, which the exception table does not carry"
+                );
+            }
+        }
+    }
 }

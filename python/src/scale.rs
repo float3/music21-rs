@@ -1822,12 +1822,6 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<AbstractScale>()?;
     m.add_class::<ConcreteScale>()?;
     m.add_class::<DiatonicScale>()?;
-    let exception = py.get_type::<ScaleException>();
-    exception.setattr("__module__", "music21.scale")?;
-    m.add("ScaleException", exception)?;
-    let network = py.get_type::<IntervalNetworkException>();
-    network.setattr("__module__", "music21.scale.intervalNetwork")?;
-    m.add("IntervalNetworkException", network)?;
 
     let builder = PyModule::from_code(
         py,

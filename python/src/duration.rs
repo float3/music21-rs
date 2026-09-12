@@ -2379,15 +2379,11 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(quarterConversion, m)?)?;
     m.add_function(wrap_pyfunction!(convertTypeToQuarterLength, m)?)?;
     m.add_function(wrap_pyfunction!(convertTypeToNumber, m)?)?;
-    let py = m.py();
     m.add_class::<Duration>()?;
     m.add_class::<GraceDuration>()?;
     m.add_class::<AppoggiaturaDuration>()?;
     m.add_class::<DurationTuple>()?;
     m.add_class::<Tuplet>()?;
-    let exception = py.get_type::<DurationException>();
-    exception.setattr("__module__", "music21.duration")?;
-    m.add("DurationException", exception)?;
     m.add_function(wrap_pyfunction!(durationTupleFromQuarterLength, m)?)?;
     m.add_function(wrap_pyfunction!(durationTupleFromTypeDots, m)?)?;
     Ok(())

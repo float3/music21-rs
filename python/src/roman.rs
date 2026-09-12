@@ -1695,10 +1695,6 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(figureTuples, m)?)?;
     m.add_function(wrap_pyfunction!(figureTupleSolo, m)?)?;
     m.add_function(wrap_pyfunction!(correctRNAlterationForMinor, m)?)?;
-    let py = m.py();
     m.add_class::<RomanNumeral>()?;
-    let exception = py.get_type::<RomanNumeralException>();
-    exception.setattr("__module__", "music21.roman")?;
-    m.add("RomanNumeralException", exception)?;
     Ok(())
 }

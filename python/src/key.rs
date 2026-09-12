@@ -946,15 +946,5 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("_sharpsToPitchCache", PyDict::new(py))?;
     m.add_function(wrap_pyfunction!(pitch_to_sharps_facade, m)?)?;
     m.add_function(wrap_pyfunction!(convert_key_string, m)?)?;
-    for (name, exception) in [
-        (
-            "KeySignatureException",
-            py.get_type::<KeySignatureException>(),
-        ),
-        ("KeyException", py.get_type::<KeyException>()),
-    ] {
-        exception.setattr("__module__", "music21.key")?;
-        m.add(name, exception)?;
-    }
     Ok(())
 }

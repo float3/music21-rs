@@ -456,12 +456,9 @@ pub fn convertToPitch(py: Python<'_>, pitchString: &Bound<'_, PyAny>) -> PyResul
 pub const EXTENDER_SENTINEL: i32 = EXTENDER;
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    let py = m.py();
     m.add_class::<Notation>()?;
     m.add_class::<Figure>()?;
     m.add_class::<Modifier>()?;
-    m.add("NotationException", py.get_type::<NotationException>())?;
-    m.add("ModifierException", py.get_type::<ModifierException>())?;
     m.add_function(wrap_pyfunction!(convertToPitch, m)?)?;
     m.add("EXTENDER_SENTINEL", EXTENDER_SENTINEL)?;
     Ok(())
