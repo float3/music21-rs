@@ -118,21 +118,88 @@ impl TimeSignature {
     }
 
     /// Parses a `"numerator/denominator"` string such as `"6/8"`.
+    ///
+    /// music21 writes more than a bare ratio here. A word before the ratio
+    /// says how the beat is felt — `"slow 6/8"` is counted in six and
+    /// `"fast 6/8"` in two — and a meter can be written additively, as
+    /// `"3/8+2/8"` or `"3+2/8"`, where a numerator with no denominator of
+    /// its own takes the next one written. What the parts add up to is the
+    /// meter this returns; how they are grouped is [`Self::parts`].
     pub fn from_ratio_string(ratio: &str) -> Result<Self> {
-        let (numerator, denominator) = ratio.split_once('/').ok_or_else(|| {
-            Error::Meter(format!(
-                "time signature {ratio:?} is not `numerator/denominator`"
-            ))
-        })?;
-        let parse = |part: &str, label: &str| {
-            part.trim().parse::<UnsignedIntegerType>().map_err(|_| {
-                Error::Meter(format!("cannot read a {label} from {part:?} in {ratio:?}"))
-            })
-        };
-        Self::new(
-            parse(numerator, "numerator")?,
-            parse(denominator, "denominator")?,
-        )
+        let parts = Self::parts(ratio)?;
+        let denominator = parts[0].1;
+        if parts.iter().all(|(_, part)| *part == denominator) {
+            let numerator = parts.iter().map(|(count, _)| count).sum();
+            return Self::new(numerator, denominator);
+        }
+        // Parts measured in different notes: what they come to together is
+        // the meter, over the shortest note any of them is written in.
+        let denominator = parts
+            .iter()
+            .map(|(_, part)| *part)
+            .max()
+            .unwrap_or(denominator);
+        let numerator = parts
+            .iter()
+            .map(|(count, part)| count * (denominator / part))
+            .sum();
+        Self::new(numerator, denominator)
+    }
+
+    /// The `(numerator, denominator)` pairs a meter string is written in,
+    /// in the order written: music21's `slashMixedToFraction`.
+    ///
+    /// `"3/8+2/8"` is two parts and `"6/8"` is one. A part written as a bare
+    /// numerator takes the denominator of the next part that has one, which
+    /// is how `"3+2/8"` is two eighth-note parts; a string whose last part
+    /// says no denominator at all says nothing about how it is measured, and
+    /// is refused.
+    pub fn parts(ratio: &str) -> Result<Vec<(UnsignedIntegerType, UnsignedIntegerType)>> {
+        let written = ratio.trim();
+        if written.is_empty() {
+            return Err(Error::Meter("a time signature says nothing".to_string()));
+        }
+        let mut pre: Vec<(UnsignedIntegerType, Option<UnsignedIntegerType>)> = Vec::new();
+        for part in written.split('+') {
+            let part = part.trim();
+            match part.split_once('/') {
+                Some((numerator, denominator)) => pre.push((
+                    Self::count(numerator, "numerator", written)?,
+                    Some(Self::count(denominator, "denominator", written)?),
+                )),
+                None => pre.push((Self::count(part, "numerator", written)?, None)),
+            }
+        }
+        let mut out = Vec::with_capacity(pre.len());
+        for (index, (numerator, denominator)) in pre.iter().enumerate() {
+            let denominator = match denominator {
+                Some(denominator) => *denominator,
+                None => pre[index + 1..]
+                    .iter()
+                    .find_map(|(_, later)| *later)
+                    .ok_or_else(|| {
+                        Error::Meter(format!(
+                            "cannot match a denominator to every numerator in {written:?}"
+                        ))
+                    })?,
+            };
+            out.push((*numerator, denominator));
+        }
+        Ok(out)
+    }
+
+    /// One number out of a meter string, with the word music21 allows before
+    /// it — `"slow 6"` is six — taken off first.
+    fn count(part: &str, label: &str, ratio: &str) -> Result<UnsignedIntegerType> {
+        let digits = part
+            .trim()
+            .rsplit(|character: char| character.is_whitespace())
+            .next()
+            .unwrap_or("")
+            .trim();
+        digits
+            .parse::<UnsignedIntegerType>()
+            .map_err(|_| Error::Meter(format!("cannot read a {label} from {part:?} in {ratio:?}")))
     }
 
     /// Returns common time, `4/4`.
@@ -807,6 +874,37 @@ fn offset_repr(offset: FloatType) -> String {
 
 #[cfg(test)]
 mod tests {
+    /// music21 writes a word before the ratio to say how the beat is felt,
+    /// and writes an additive meter as parts that add up. Both were read as
+    /// nonsense here, which is ten of music21's own meter examples.
+    #[test]
+    fn a_meter_is_read_as_music21_writes_it() {
+        use crate::meter::TimeSignature;
+
+        let plain = TimeSignature::from_ratio_string("6/8").unwrap();
+        assert_eq!(TimeSignature::from_ratio_string("slow 6/8").unwrap(), plain);
+        assert_eq!(TimeSignature::from_ratio_string("fast 6/8").unwrap(), plain);
+
+        let additive = TimeSignature::from_ratio_string("3/8+2/8").unwrap();
+        assert_eq!((additive.numerator(), additive.denominator()), (5, 8));
+        assert_eq!(
+            TimeSignature::parts("3/8+2/8").unwrap(),
+            vec![(3, 8), (2, 8)]
+        );
+        // A numerator with no denominator of its own takes the next one.
+        assert_eq!(TimeSignature::parts("3+2/8").unwrap(), vec![(3, 8), (2, 8)]);
+        assert_eq!(
+            TimeSignature::parts("3+2+5/8+3/4").unwrap(),
+            vec![(3, 8), (2, 8), (5, 8), (3, 4)]
+        );
+        // Parts in different notes come to what they add up to.
+        let mixed = TimeSignature::from_ratio_string("3/8+1/4").unwrap();
+        assert_eq!((mixed.numerator(), mixed.denominator()), (5, 8));
+
+        assert!(TimeSignature::parts("3+2+5").is_err());
+        assert!(TimeSignature::from_ratio_string("").is_err());
+        assert!(TimeSignature::from_ratio_string("3.0/4.0").is_err());
+    }
 
     /// Read off music21's default `accentSequence` and `getBeatDepth`.
     #[test]
