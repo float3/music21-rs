@@ -114,27 +114,7 @@ const EXIT_SIDE_ABSENT: i32 = 2;
 /// under `music21_rs` is a real regression and fails the run — the same shape
 /// as `python-parity/doctest/*.toml`, where what passes is listed and a newly
 /// broken one is named.
-const EXPECTED_DIVERGENCES: &[(&str, &str)] = &[(
-    "classSet (music21.prebase.ProtoM21Object)",
-    "an installed class lists both itself and the class it replaced in \
-         classSet, so this doctest counts one more than music21 has. Dropping \
-         the replaced class to make it pass costs 250 of music21's own tests. \
-         Two ways of hiding it instead, one closed and one open. A frozenset \
-         subclass overriding __contains__ is closed: music21 asks this as \
-         `classFilterSet.intersection(e.classSet)` (stream/base.py:1497, \
-         1512, 4340, 4957, 4962), and set intersection runs in C, which never \
-         consults a container's Python-level __contains__. Putting the \
-         equality on the *elements* is not closed, because that same C code \
-         does consult it — a metaclass whose __eq__ and __hash__ stand in for \
-         the replaced class makes frozenset collapse the pair to one entry, \
-         keeps the first inserted (music21's own, so the doctest's repr \
-         matches), and still answers both directions of intersection and \
-         isdisjoint. The cost to weigh before trying it: two classes that \
-         compare equal also collide as dict keys, so every map keyed by class \
-         — music21's own _classSetCacheDict, and `installed`, `replaced`, \
-         `_facades` and `_lineages` here — has to be re-keyed by identity \
-         first. Measure the 250 again on the way; it predates `rebind`.",
-)];
+use crate::report::EXPECTED_DIVERGENCES;
 
 /// How one module in scope fared, so that the report can say so per module
 /// rather than only in one total.
@@ -920,7 +900,7 @@ fn compare(plain: &Report, ours: &Report, whole: bool) -> Result<i32, Box<dyn Er
             "{} listed divergence(s) no longer fail; drop them from",
             stale.len()
         );
-        println!("EXPECTED_DIVERGENCES in xtask/src/music21_suite.rs:");
+        println!("EXPECTED_DIVERGENCES in xtask/src/report/mod.rs:");
         for name in &stale {
             println!("  {name}");
         }

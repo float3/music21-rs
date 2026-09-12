@@ -44,6 +44,17 @@ pub(crate) use suites::python_command;
 /// not the library: the suites now run instrumented across the whole
 /// workspace and `python-parity` besides, so without this the figure would be
 /// diluted by the tooling that does the measuring.
+/// The tests that fail under `music21_rs` on purpose, and why.
+///
+/// It lives here rather than beside the suite that runs them because the
+/// report reads it too, and the report is built whether or not `xtask` has
+/// its `python` feature. A row calling a documented divergence a regression
+/// would have the page disagreeing with the command it names.
+pub(crate) const EXPECTED_DIVERGENCES: &[(&str, &str)] = &[(
+    "classSet (music21.prebase.ProtoM21Object)",
+    "an installed class lists both itself and the class it replaced in          classSet, so this doctest counts one more than music21 has. Dropping          the replaced class to make it pass costs 250 of music21's own tests.          Two ways of hiding it instead, one closed and one open. A frozenset          subclass overriding __contains__ is closed: music21 asks this as          `classFilterSet.intersection(e.classSet)` (stream/base.py:1497,          1512, 4340, 4957, 4962), and set intersection runs in C, which never          consults a container's Python-level __contains__. Putting the          equality on the *elements* is not closed, because that same C code          does consult it — a metaclass whose __eq__ and __hash__ stand in for          the replaced class makes frozenset collapse the pair to one entry,          keeps the first inserted (music21's own, so the doctest's repr          matches), and still answers both directions of intersection and          isdisjoint. The cost to weigh before trying it: two classes that          compare equal also collide as dict keys, so every map keyed by class          — music21's own _classSetCacheDict, and `installed`, `replaced`,          `_facades` and `_lineages` here — has to be re-keyed by identity          first. Measure the 250 again on the way; it predates `rebind`.",
+)];
+
 const COVERAGE_IGNORE: &str =
     r"generated\.rs|scala_bundled\.rs|[\\/](xtask|utils|examples|python-parity|python)[\\/]";
 

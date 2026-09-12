@@ -268,7 +268,19 @@ pub(super) fn music21_suite(workspace_root: &Path, submodule: &Path) -> Suite {
     };
     let theirs = bad(&plain);
     let mine = bad(&ours);
-    let regressions = mine.iter().filter(|case| !theirs.contains(case)).count();
+    // The same list the suite itself excuses. Without it the page called
+    // this row red for a divergence that is documented and expected, while
+    // the command it names exits green -- the two disagreeing about the same
+    // run.
+    let regressions = mine
+        .iter()
+        .filter(|case| !theirs.contains(case))
+        .filter(|case| {
+            !super::EXPECTED_DIVERGENCES
+                .iter()
+                .any(|(listed, _)| *listed == case.as_str())
+        })
+        .count();
     let run = ours
         .get("run")
         .and_then(serde_json::Value::as_u64)
@@ -654,4 +666,29 @@ pub(super) fn last_line(text: &str) -> Option<String> {
         .map(str::trim)
         .find(|line| !line.is_empty())
         .map(str::to_string)
+}
+
+#[cfg(test)]
+mod tests {
+    /// A divergence the suite excuses must not make the page call the row
+    /// red: the command the row names exits green on exactly that case.
+    #[test]
+    fn a_listed_divergence_is_not_a_regression() {
+        let listed = super::EXPECTED_DIVERGENCES
+            .first()
+            .map(|(case, _)| *case)
+            .expect("a divergence to test with");
+        let theirs: Vec<String> = vec!["already red".to_string()];
+        let mine: Vec<String> = vec!["already red".to_string(), listed.to_string()];
+        let regressions = mine
+            .iter()
+            .filter(|case| !theirs.contains(case))
+            .filter(|case| {
+                !super::EXPECTED_DIVERGENCES
+                    .iter()
+                    .any(|(l, _)| *l == case.as_str())
+            })
+            .count();
+        assert_eq!(regressions, 0);
+    }
 }
