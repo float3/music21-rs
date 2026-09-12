@@ -9,6 +9,8 @@
 //! are. What passes is what the crate reproduces to the letter; what fails is
 //! either a fidelity gap or a feature the crate does not have.
 
+#![forbid(unsafe_code)]
+
 use pyo3::prelude::*;
 
 pub mod doctest;
