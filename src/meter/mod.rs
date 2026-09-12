@@ -14,7 +14,7 @@
 
 pub mod sequence;
 
-pub use sequence::MeterTerminal;
+pub use sequence::{MeterTerminal, OffsetAlign};
 
 use crate::defaults::{FloatType, UnsignedIntegerType};
 use crate::duration::Duration;

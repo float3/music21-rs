@@ -21,6 +21,21 @@ const OFFSET_TOLERANCE: FloatType = 1e-9;
 /// The denominators music21 will write a meter in.
 const VALID_DENOMINATORS: [UnsignedIntegerType; 8] = [1, 2, 4, 8, 16, 32, 64, 128];
 
+/// How an offset is matched against the boundaries of a level: music21's
+/// `align` argument to `offsetToDepth`.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum OffsetAlign {
+    /// Move the offset back to the start of the finest part holding it, then
+    /// count the levels beginning there. music21's default.
+    #[default]
+    Quantize,
+    /// Count only the levels whose part begins exactly at the offset.
+    Start,
+    /// Count the levels whose part ends exactly at the offset.
+    End,
+}
+
 /// One span of a bar: a ratio, and how strongly it is felt.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -256,6 +271,139 @@ impl MeterTerminal {
             true
         });
         options
+    }
+
+    /// The terminals at one level of this sequence: music21's `getLevelList`.
+    ///
+    /// A part that is not divided is taken as it stands. A part that is gets
+    /// recursed into while there are levels left to descend, and at the level
+    /// asked for is either kept whole or, when `flat`, flattened into a
+    /// single terminal carrying that part's own weight.
+    #[must_use]
+    pub fn level_list(&self, level: usize, flat: bool) -> Vec<MeterTerminal> {
+        let mut out = Vec::new();
+        for part in &self.parts {
+            if part.parts.is_empty() {
+                out.push(part.clone());
+            } else if level > 0 {
+                out.extend(part.level_list(level - 1, flat));
+            } else if flat {
+                let mut flattened = part.clone();
+                flattened.parts.clear();
+                out.push(flattened);
+            } else {
+                out.push(part.clone());
+            }
+        }
+        out
+    }
+
+    /// One level of this sequence as a sequence of its own: music21's
+    /// `getLevel`.
+    pub fn level(&self, level: usize, flat: bool) -> Result<Self> {
+        let mut out = Self::new(self.numerator, self.denominator)?;
+        out.weight = self.weight;
+        out.parts = self.level_list(level, flat);
+        Ok(out)
+    }
+
+    /// Where each terminal of a level starts and ends, in quarter lengths
+    /// from the start of this span: music21's `getLevelSpan`.
+    #[must_use]
+    pub fn level_span(&self, level: usize) -> Vec<(FloatType, FloatType)> {
+        let mut spans = Vec::new();
+        let mut position = 0.0;
+        for part in self.level_list(level, true) {
+            let end = position + part.quarter_length();
+            spans.push((position, end));
+            position = end;
+        }
+        spans
+    }
+
+    /// How many levels of this sequence start at an offset: music21's
+    /// `offsetToDepth`.
+    ///
+    /// A level counts when one of its parts begins where the offset does.
+    /// Under [`OffsetAlign::Quantize`] the offset is first moved back to the
+    /// start of the finest part holding it, so an offset inside a part still
+    /// counts the levels that part begins.
+    pub fn offset_to_depth(&self, offset: FloatType, align: OffsetAlign) -> Result<usize> {
+        let length = self.quarter_length();
+        if offset.is_nan() || offset < 0.0 || offset >= length {
+            return Err(Error::Meter(format!(
+                "cannot access from qLenPos {offset} where total duration is {length}"
+            )));
+        }
+        let depth = self.depth();
+        if depth == 0 {
+            return Ok(0);
+        }
+        let finest = self.level(depth - 1, true)?;
+        let index = finest.offset_to_index(offset)?;
+        let spans = self.level_span(depth - 1);
+        let position = match align {
+            OffsetAlign::Quantize => spans[index].0,
+            OffsetAlign::Start | OffsetAlign::End => offset,
+        };
+        let mut score = 0;
+        for level in 0..depth {
+            for (start, end) in self.level_span(level) {
+                let boundary = match align {
+                    OffsetAlign::Start | OffsetAlign::Quantize => start,
+                    OffsetAlign::End => end,
+                };
+                if (boundary - position).abs() < OFFSET_TOLERANCE {
+                    score += 1;
+                }
+            }
+        }
+        Ok(score)
+    }
+
+    /// Whether every part of a level is the same ratio: music21's
+    /// `isUniformPartition`.
+    #[must_use]
+    pub fn is_uniform_partition(&self, depth: usize) -> bool {
+        let mut numerator = None;
+        let mut denominator = None;
+        for part in self.level_list(depth, false) {
+            if *numerator.get_or_insert(part.numerator) != part.numerator
+                || *denominator.get_or_insert(part.denominator) != part.denominator
+            {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// The parts written out without the braces around them: music21's
+    /// `partitionDisplay`, so a bar of `2/4+6/8` reads as it was written.
+    #[must_use]
+    pub fn partition_display(&self) -> String {
+        self.parts
+            .iter()
+            .map(MeterTerminal::to_string)
+            .collect::<Vec<String>>()
+            .join("+")
+    }
+
+    /// This span divided into `count` parts, as a new sequence: music21's
+    /// `subdivideByCount`. The weight of this span goes with it.
+    pub fn subdivide_by_count(&self, count: usize) -> Result<Self> {
+        let mut out = Self::new(self.numerator, self.denominator)?;
+        out.weight = self.weight;
+        out.partition_by_count(count, true)?;
+        Ok(out)
+    }
+
+    /// This span divided by a list of numerators, as a new sequence:
+    /// music21's `subdivideByList`.
+    pub fn subdivide_by_list(&self, numerators: &[UnsignedIntegerType]) -> Result<Self> {
+        let mut out = Self::new(self.numerator, self.denominator)?;
+        out.weight = self.weight;
+        out.partition_by_list(numerators)?;
+        Ok(out)
     }
 
     /// Which part an offset in quarter notes falls in: music21's
@@ -556,12 +704,77 @@ fn division_options_preset(
 #[cfg(test)]
 mod tests {
     use super::MeterTerminal;
+    use super::OffsetAlign;
 
     /// music21's own `divisionOptionsAlgo(4, 4)`, in its order.
     ///
     /// The order is what decides a partition: `partition_by_count` takes the
     /// first option of the length asked for, so `4/4` in two is `1/2+1/2`
     /// and not `2/4+2/4`, which comes later in the same list.
+    #[test]
+    fn levels_are_read_as_music21_reads_them() {
+        // Read off music21 11.0.0b9: TimeSignature("4/4").beatSequence.
+        let mut bar = MeterTerminal::new(4, 4).unwrap();
+        bar.partition_by_parts(&["4/4"]).unwrap();
+        bar.partition_by_count(4, true).unwrap();
+        bar.subdivide_partitions_equal(None).unwrap();
+        assert_eq!(bar.to_string(), "{{1/8+1/8}+{1/8+1/8}+{1/8+1/8}+{1/8+1/8}}");
+
+        // getLevelList(0, True) is four quarters; (1, True) is eight eighths.
+        let first: Vec<String> = bar
+            .level_list(0, true)
+            .iter()
+            .map(MeterTerminal::to_string)
+            .collect();
+        assert_eq!(first, ["1/4", "1/4", "1/4", "1/4"]);
+        let second: Vec<String> = bar
+            .level_list(1, true)
+            .iter()
+            .map(MeterTerminal::to_string)
+            .collect();
+        assert_eq!(second, ["1/8"; 8]);
+
+        // music21 reads this bar as two levels deep.
+        assert_eq!(bar.depth(), 2);
+        assert_eq!(bar.level_span(0).len(), 4);
+        assert_eq!(bar.level_span(0)[1], (1.0, 2.0));
+
+        // Every part of either level is the same ratio.
+        assert!(bar.is_uniform_partition(0));
+        assert!(bar.is_uniform_partition(1));
+        // music21 reads the depth at an offset as 2, 1, 2 across the first beat.
+        assert_eq!(bar.offset_to_depth(0.0, OffsetAlign::Quantize).unwrap(), 2);
+        assert_eq!(bar.offset_to_depth(0.5, OffsetAlign::Quantize).unwrap(), 1);
+        assert_eq!(bar.offset_to_depth(1.0, OffsetAlign::Quantize).unwrap(), 2);
+    }
+
+    #[test]
+    fn a_bar_written_in_unequal_parts_is_not_uniform() {
+        let mut bar = MeterTerminal::new(5, 8).unwrap();
+        bar.partition_by_parts(&["2/8", "3/8"]).unwrap();
+        assert!(!bar.is_uniform_partition(0));
+        assert_eq!(bar.partition_display(), "2/8+3/8");
+        assert_eq!(bar.depth(), 1);
+    }
+
+    #[test]
+    fn subdividing_leaves_the_span_alone_and_returns_a_new_one() {
+        let mut beat = MeterTerminal::new(1, 4).unwrap();
+        beat.set_weight(0.5);
+        let divided = beat.subdivide_by_count(2).unwrap();
+        assert_eq!(divided.to_string(), "{1/8+1/8}");
+        // music21's subdivide does not happen in place, and carries the
+        // weight of the span it divided.
+        assert!(beat.is_empty());
+        assert!((divided.weight() - 0.5).abs() < 1e-9);
+
+        let listed = MeterTerminal::new(5, 8)
+            .unwrap()
+            .subdivide_by_list(&[2, 3])
+            .unwrap();
+        assert_eq!(listed.to_string(), "{2/8+3/8}");
+    }
+
     #[test]
     fn the_options_come_in_the_order_music21_offers_them() {
         use super::division_options_algorithmic;
