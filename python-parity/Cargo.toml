@@ -13,3 +13,8 @@ pyo3 = { version = "0.29.0", features = ["auto-initialize"] }
 serde = { version = "1.0.228", features = ["derive"] }
 toml = "1.1"
 utils = { path = "../utils", features = ["python"] }
+
+# The workspace denies these for every crate in it; this crate is outside the
+# workspace, so it says so itself rather than going unlinted.
+[lints.clippy]
+all = { level = "deny", priority = -1 }

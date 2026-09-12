@@ -10,6 +10,12 @@
 //! The classes are deliberately thin. Anything music21 does that the crate
 //! does not is left to fail rather than reimplemented here in Python-shaped
 //! Rust — the point is to expose the crate, not to build a second music21.
+//!
+//! The crate itself forbids unsafe code. This one cannot: music21 catches its
+//! own exception base all over, and standing on a class that music21 imports
+//! rather than one built here is what `Music21Exception` needs an
+//! implementation by hand for. That one is the only one allowed.
+#![deny(unsafe_code)]
 
 use pyo3::prelude::*;
 
@@ -199,6 +205,7 @@ pub(crate) fn installed_class<'py>(
 pub struct Music21Exception;
 
 #[allow(deprecated)]
+#[allow(unsafe_code)]
 unsafe impl pyo3::type_object::PyTypeInfo for Music21Exception {
     const NAME: &'static str = "Music21Exception";
     const MODULE: Option<&'static str> = Some("music21.exceptions21");

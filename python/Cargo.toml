@@ -27,3 +27,8 @@ serde_json = "1"
 # maturin turns this on when it builds the wheel: an extension module must
 # not link libpython, while `python-parity` embeds an interpreter and must.
 extension-module = ["pyo3/extension-module"]
+
+# The workspace denies these for every crate in it; this crate is outside the
+# workspace, so it says so itself rather than going unlinted.
+[lints.clippy]
+all = { level = "deny", priority = -1 }

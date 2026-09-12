@@ -180,6 +180,16 @@ jobs:
           python -m pip install --no-index --find-links target/wheels music21-rs
           python -m pytest python/tests -q
 
+      # The wheel crate's own Rust tests. `maturin build` does not run them
+      # and the workspace does not hold the crate, so nothing else does.
+      - name: Test the wheel crate
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PYO3_PYTHON="$(python -c 'import sys; print(sys.executable)')"
+          cargo test --manifest-path python/Cargo.toml
+
       # Somebody else's music21 library, run twice: once on music21 and once
       # on ours. The two sets of failures have to match.
       - name: Test a downstream music21 library against it
@@ -271,6 +281,13 @@ jobs:
       - name: Install Linux audio dependencies
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev pkg-config
 
+      # pyo3's build script needs an interpreter to read a configuration off,
+      # which the two crates below are built with.
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@v2
         with:
@@ -294,6 +311,17 @@ jobs:
 
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
+
+      # `--workspace` does not reach `python` and `python-parity`, which are
+      # outside it, so the wheel went unlinted while it was the half of this
+      # repository a user actually installs.
+      - name: Clippy the crates outside the workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PYO3_PYTHON="$(python -c 'import sys; print(sys.executable)')"
+          cargo clippy --manifest-path python/Cargo.toml --all-targets -- -D warnings
+          cargo clippy --manifest-path python-parity/Cargo.toml --all-targets -- -D warnings
 
       - name: Verify generated chord tables
         run: cargo run --release -p xtask -- verify-tables
