@@ -21,8 +21,11 @@
 use pyo3::exceptions::PyIndexError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
+use pyo3::types::PyList;
 use pyo3::types::PyTuple;
 
+use music21_rs_crate::duration::DurationType as RsDurationType;
+use music21_rs_crate::meter::BeamedNote as RsBeamedNote;
 use music21_rs_crate::meter::MeterTerminal as RsMeterTerminal;
 use music21_rs_crate::meter::OffsetAlign as RsOffsetAlign;
 use music21_rs_crate::meter::TimeSignature as RsTimeSignature;
@@ -463,6 +466,71 @@ impl TimeSignature {
         // music21 writes an offset through `opFrac`, so a third of a beat is
         // a Fraction rather than a float that nearly is one.
         crate::duration::op_frac(py, offset)
+    }
+
+    /// music21's `getBeams`: how a run of notes is beamed under this meter.
+    ///
+    /// Takes a stream or a list of objects, as music21 does, and answers one
+    /// `Beams` or `None` for each.
+    #[pyo3(signature = (srcList, measureStartOffset = 0.0))]
+    fn getBeams<'py>(
+        &self,
+        py: Python<'py>,
+        srcList: &Bound<'py, PyAny>,
+        measureStartOffset: FloatType,
+    ) -> PyResult<Bound<'py, PyList>> {
+        // A run out of a Measure keeps its padding: a beam does not stop at
+        // the end of a measure that is not full.
+        let padding = srcList
+            .getattr("paddingRight")
+            .and_then(|padding| padding.call_method0("__float__"))
+            .and_then(|padding| padding.extract::<FloatType>())
+            .ok();
+        // music21 lays a bare list end to end by appending it to a fresh
+        // Measure; a stream's own offsets are read as they stand.
+        let from_stream = srcList.hasattr("elements").unwrap_or(false);
+
+        let mut notes = Vec::new();
+        let mut laid_out = 0.0;
+        for element in srcList.try_iter()? {
+            let element = element?;
+            let duration = element.getattr("duration")?;
+            let quarter_length: FloatType = duration
+                .getattr("quarterLength")?
+                .call_method0("__float__")?
+                .extract()?;
+            let offset = if from_stream {
+                element
+                    .getattr("offset")
+                    .and_then(|offset| offset.call_method0("__float__"))
+                    .and_then(|offset| offset.extract::<FloatType>())
+                    .unwrap_or(laid_out)
+            } else {
+                laid_out
+            };
+            let written: String = duration.getattr("type")?.extract()?;
+            let sounds = element
+                .getattr("classSet")
+                .and_then(|classes| classes.contains("NotRest"))
+                .unwrap_or(false);
+            // A value this crate cannot name carries no beam, but still takes
+            // its place, so its neighbours know they cannot beam to it.
+            let duration_type =
+                RsDurationType::from_music21_name(&written).unwrap_or(RsDurationType::Whole);
+            notes.push(RsBeamedNote {
+                offset,
+                quarter_length,
+                duration_type,
+                sounds: sounds && RsDurationType::from_music21_name(&written).is_some(),
+            });
+            laid_out += quarter_length;
+        }
+
+        let beamed = self
+            .inner
+            .beams_for(&notes, measureStartOffset, padding)
+            .map_err(meter_error)?;
+        crate::notation::beams_list(py, beamed)
     }
 
     /// music21's `averageBeatStrength`: the mean accent weight of the

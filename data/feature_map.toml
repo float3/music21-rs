@@ -190,13 +190,13 @@ getOffsetFromBeat = "offset_from_beat"
 getBeatProgress = "beat_progress"
 getBeatProportion = "beat_proportion"
 getBeatProportionStr = "beat_proportion_string"
+getBeams = "beams_for"
 
 [class.excluded]
 summedNumerator = "whether a meter was written (3+2)/8 rather than 3/8+2/8; the parts are kept either way, and music21 refuses to read the first spelling at all"
 getMeasureOffsetOrMeterModulusOffset = "where an element sits in its stream is music21's to know; the wheel answers it there"
 resetValues = "rebuilding a meter in place; a new one is built instead"
 load = "rebuilding a meter in place; a new one is built instead"
-getBeams = "beams a run of notes, which needs the notes; the beam sequence they would be beamed by is modelled"
 
 [[class]]
 python = "tempo.py"

@@ -4,12 +4,13 @@
 //! function of the numerator and denominator: how long a bar is, how many beats
 //! it carries, how long each beat is, and how that beat subdivides.
 //!
-//! music21 derives all of this from a `MeterSequence` partition tree that also
-//! drives beaming, display sequences and accent weighting. Only the partition
-//! *result* is ported here — the tree's other consumers have no counterpart in
-//! this crate yet, and building the tree to read one number back off it would be
-//! the transliterated machinery the repository guidance warns against. The
-//! partition rule itself is music21's `_setDefaultBeatPartitions`, verified
+//! music21 derives all of this from a `MeterSequence` partition tree, and so
+//! does this: a meter carries the four sequences music21 hangs off one — the
+//! display, the beats, the beams and the accents — and answers from them.
+//! [`TimeSignature::beams_for`] beams a run of notes against the beam
+//! sequence, and the weights come off the accent sequence, so a caller who
+//! sets them reads their own back. The partition rule is music21's
+//! `_setDefaultBeatPartitions`, verified
 //! against upstream by the `meter_parity` fixture.
 
 pub mod sequence;
@@ -18,7 +19,9 @@ pub use sequence::{MeterTerminal, OffsetAlign};
 
 use crate::defaults::{FloatType, UnsignedIntegerType};
 use crate::duration::Duration;
+use crate::duration::DurationType;
 use crate::error::{Error, Result};
+use crate::notation::{BeamType, Beams};
 
 /// Names music21 gives a partition count, indexed by the count itself.
 ///
@@ -1103,6 +1106,218 @@ pub fn snapped_fraction(value: FloatType) -> FloatType {
         }
     }
     value
+}
+
+/// One of a run of notes to be beamed: where it sits in the bar, how long it
+/// lasts, what it is written as, and whether it sounds.
+///
+/// A rest is beamed alongside the notes — music21 works its beams out and
+/// then declines to write them on it — so what matters here is the written
+/// value and whether the thing sounds, not what kind of object it is.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BeamedNote {
+    /// Where it starts, in quarter lengths from the start of its measure.
+    pub offset: FloatType,
+    /// How long it lasts, in quarter lengths.
+    pub quarter_length: FloatType,
+    /// The value it is written as, which says how many beams it can carry.
+    pub duration_type: DurationType,
+    /// Whether it sounds. A rest carries no beam however it is written.
+    pub sounds: bool,
+}
+
+impl TimeSignature {
+    /// Beams a run of notes: music21's `getBeams`.
+    ///
+    /// The notes are taken as adjoining, which is how music21 takes them —
+    /// their offsets are read only against `measure_start_offset`, for a run
+    /// that begins part way through a bar. `measure_padding` is the measure's
+    /// `paddingRight` where the run came from one, and `None` where it did
+    /// not; a run that ends an incomplete measure does not get its last beam
+    /// stopped.
+    ///
+    /// A run of one is beamed as nothing at all, as music21 does.
+    pub fn beams_for(
+        &self,
+        notes: &[BeamedNote],
+        measure_start_offset: FloatType,
+        measure_padding: Option<FloatType>,
+    ) -> Result<Vec<Option<Beams>>> {
+        if notes.len() <= 1 {
+            return Ok(notes.iter().map(|_| None).collect());
+        }
+
+        // music21's `naiveBeams`: the fullest set of beams each written value
+        // can carry, with what each one does left undecided.
+        let mut beamed: Vec<Option<Beams>> = Vec::with_capacity(notes.len());
+        for note in notes {
+            let levels = Beams::levels_for(note.duration_type).filter(|_| note.sounds);
+            beamed.push(match levels {
+                Some(levels) => {
+                    let mut made = Beams::new();
+                    made.fill_levels(levels, None)?;
+                    Some(made)
+                }
+                None => None,
+            });
+        }
+        crate::notation::remove_sandwiched_unbeamables(&mut beamed);
+
+        for depth in 0..Beams::LEVELS {
+            for index in 0..notes.len() {
+                self.fix_one_beam(
+                    &mut beamed,
+                    notes,
+                    index,
+                    depth,
+                    measure_start_offset,
+                    measure_padding,
+                )?;
+            }
+        }
+
+        crate::notation::sanitize_partial_beams(&mut beamed);
+        crate::notation::merge_connecting_partial_beams(&mut beamed);
+        Ok(beamed)
+    }
+
+    /// What one note's beam does at one depth: music21's
+    /// `fixBeamsOneElementDepth`.
+    fn fix_one_beam(
+        &self,
+        beamed: &mut [Option<Beams>],
+        notes: &[BeamedNote],
+        index: usize,
+        depth: usize,
+        measure_start_offset: FloatType,
+        measure_padding: Option<FloatType>,
+    ) -> Result<()> {
+        let beam_number = depth as u32 + 1;
+        let carries = |beams: Option<&Beams>| {
+            beams.is_some_and(|beams| {
+                beams
+                    .numbers()
+                    .into_iter()
+                    .flatten()
+                    .any(|n| n == beam_number)
+            })
+        };
+        if !carries(beamed[index].as_ref()) {
+            return Ok(());
+        }
+
+        let note = notes[index];
+        let start = note.offset + measure_start_offset;
+        let end = start + note.quarter_length;
+        let start_next = end;
+
+        let is_first = index == 0;
+        let is_last = index + 1 == notes.len();
+
+        // Everything the neighbours are asked, read before this one is
+        // written to: music21 reads them off a list it is editing.
+        let previous_is_none = is_first || beamed[index - 1].is_none();
+        let next_is_none = is_last || beamed[index + 1].is_none();
+        let previous_carries = !is_first && carries(beamed[index - 1].as_ref());
+        let next_carries = !is_last && carries(beamed[index + 1].as_ref());
+        let previous_broke = !is_first
+            && beamed[index - 1].as_ref().is_some_and(|beams| {
+                beams.by_number(beam_number).is_some_and(|beam| {
+                    matches!(beam.beam_type(), Some(BeamType::Stop))
+                        || (matches!(beam.beam_type(), Some(BeamType::PartialBeam))
+                            && beam.direction() == Some(crate::notation::BeamDirection::Left))
+                })
+            });
+
+        let archetype = self.beam_sequence.level(depth, true)?;
+        let (span_start, span_end) = archetype.offset_to_span(start, false)?;
+        let span_next_start = if next_is_none {
+            0.0
+        } else {
+            archetype.offset_to_span(start_next, false)?.0
+        };
+
+        let same = |a: FloatType, b: FloatType| (a - b).abs() < OFFSET_TOLERANCE;
+
+        // A note that fills its span exactly is not beamed at that level.
+        if same(end, span_end)
+            && (same(start, span_start) || (previous_is_none && beam_number == 1))
+        {
+            beamed[index] = None;
+            return Ok(());
+        }
+
+        let ends_the_measure = is_last && measure_padding.is_none_or(|padding| padding == 0.0);
+
+        let (beam_type, direction) = if is_first && measure_start_offset == 0.0 {
+            if next_is_none || !next_carries {
+                (
+                    BeamType::PartialBeam,
+                    Some(crate::notation::BeamDirection::Right),
+                )
+            } else {
+                (BeamType::Start, None)
+            }
+        } else if ends_the_measure {
+            if previous_is_none || !previous_carries {
+                (
+                    BeamType::PartialBeam,
+                    Some(crate::notation::BeamDirection::Left),
+                )
+            } else {
+                (BeamType::Stop, None)
+            }
+        } else if previous_is_none || !previous_carries {
+            // Neither the first nor the last, and nothing to beam back to.
+            if beam_number == 1 && next_is_none {
+                beamed[index] = None;
+                return Ok(());
+            } else if (next_is_none && beam_number > 1) || start_next >= span_end - OFFSET_TOLERANCE
+            {
+                // music21 writes these as two branches. They answer alike,
+                // and the second subsumes the first: with nothing after it,
+                // a note runs to the end of its span or past it.
+                (
+                    BeamType::PartialBeam,
+                    Some(crate::notation::BeamDirection::Left),
+                )
+            } else if next_is_none || !next_carries {
+                (
+                    BeamType::PartialBeam,
+                    Some(crate::notation::BeamDirection::Right),
+                )
+            } else {
+                (BeamType::Start, None)
+            }
+        } else if previous_broke {
+            if next_is_none {
+                (
+                    BeamType::PartialBeam,
+                    Some(crate::notation::BeamDirection::Left),
+                )
+            } else if next_carries {
+                (BeamType::Start, None)
+            } else {
+                (
+                    BeamType::PartialBeam,
+                    Some(crate::notation::BeamDirection::Right),
+                )
+            }
+        } else if next_is_none || !next_carries {
+            (BeamType::Stop, None)
+        } else if start_next < span_end - OFFSET_TOLERANCE {
+            (BeamType::Continue, None)
+        } else if start_next >= span_next_start - OFFSET_TOLERANCE {
+            (BeamType::Stop, None)
+        } else {
+            return Err(Error::Meter("cannot match beamType".to_string()));
+        };
+
+        if let Some(beams) = beamed[index].as_mut() {
+            beams.set_by_number(beam_number, beam_type, direction)?;
+        }
+        Ok(())
+    }
 }
 
 /// A whole bar as a sequence of one part, which is what music21 starts each

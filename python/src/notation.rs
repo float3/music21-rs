@@ -976,7 +976,10 @@ fn beams_of(value: &Bound<'_, PyAny>) -> PyResult<Option<RsBeams>> {
 }
 
 /// The same list, handed back to Python as `Beams` objects and `None`s.
-fn beams_list<'py>(py: Python<'py>, beams: Vec<Option<RsBeams>>) -> PyResult<Bound<'py, PyList>> {
+pub(crate) fn beams_list<'py>(
+    py: Python<'py>,
+    beams: Vec<Option<RsBeams>>,
+) -> PyResult<Bound<'py, PyList>> {
     let list = PyList::empty(py);
     for entry in beams {
         match entry {

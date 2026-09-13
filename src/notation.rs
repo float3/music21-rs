@@ -625,6 +625,11 @@ impl Beams {
     }
 
     /// How many beams a written value carries, where it carries any:
+    /// How many beams a written value can carry at the most: music21's
+    /// `beamableDurationTypes`, an eighth through a 2048th. It is how many
+    /// depths a run of notes is beamed at.
+    pub const LEVELS: usize = BEAMABLE.len();
+
     /// music21's `beamableDurationTypes` read as a count of levels.
     pub fn levels_for(duration_type: DurationType) -> Option<u32> {
         BEAMABLE
