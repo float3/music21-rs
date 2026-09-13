@@ -36,37 +36,38 @@ Two rules, set 2026-09-12, that most of the open work now serves:
 
 ## Open
 
-1. **The meter partition tree — done bar one docstring.** `TimeSignature`
-   carries all four of music21's `MeterSequence`s and builds them by
-   music21's own rules (`431dcbf`), having given up `Copy` first
-   (`0e14f8b`); `beat_count` reads the tree rather than working the count
-   out again (`8aa5882`). The wheel hands the four sequences back as
-   music21's own two classes (`9b43d3d`), `beatCount` takes a number or a
-   list, `setDisplay` and `setAccentWeight` are ported, `getAccentWeight`
-   honours its level, the `divisions` argument partitions the beats, accents
-   and beams alike (`444fca5`), `getOffsetFromBeat` reads a fractional beat
-   through `addFloatPrecision` and answers through `opFrac`, and a meter says
-   how it was written (`4941983`) — which is what makes `2/8+3/8` a different
-   meter from `3/8+2/8`.
+1. **The meter partition tree — done.** `meter` passes **34 of 34 docstrings
+   and 387 of 387 examples**, from 11 and 288 when this started.
 
-   **`meter` passes 33 of 34 docstrings and 375 of 387 examples, from 11 and
-   288 when this started.** Eighteen meters are pinned against the strings
-   music21 prints for their beat and beam sequences, and the 126-meter
-   fixture has not moved through any of it.
+   `TimeSignature` carries all four of music21's `MeterSequence`s and builds
+   them by music21's own rules (`431dcbf`), having given up `Copy` first
+   (`0e14f8b`); `beat_count` reads the tree rather than working the count out
+   again (`8aa5882`). The wheel hands the four sequences back as music21's own
+   two classes (`9b43d3d`), `beatCount` takes a number or a list, `setDisplay`
+   and `setAccentWeight` are ported, `getAccentWeight` honours its level, the
+   `divisions` argument partitions the beats, accents and beams alike
+   (`444fca5`), `getOffsetFromBeat` reads a fractional beat through
+   `addFloatPrecision` and answers through `opFrac`, a meter says how it was
+   written (`4941983`), and `getBeams` beams a run of notes against the beam
+   sequence (`189b8c9`).
 
-   **What is left is `getBeams`, twelve examples in one docstring.** It beams
-   a run of notes, so it needs the notes. Every piece it reads is here
-   already: the beam sequence, `Beams::numbers`, `by_number` and
-   `set_by_number`, the three run-walking helpers, and the `BEAMABLE` table
-   that is music21's `beamableDurationTypes`. What is missing is the walk —
-   music21 fixes each note at each of nine beam depths against the span its
-   level covers — and the facade half that reads a duration and whether it
-   sounds off the Python objects, which `naiveBeams` already does. It is the
-   only one of the five exclusions left in `data/feature_map.toml` that still
-   costs a docstring: `summedNumerator` is a written form music21 will not
-   read back, `getMeasureOffsetOrMeterModulusOffset` belongs to whichever
-   stream an element sits in, and `resetValues` and `load` rebuild a meter in
-   place where a new one is built instead.
+   The beaming walk is the crate's, at nine depths against the span each
+   level covers; the wheel reads four things off each object — where it sits,
+   how long it lasts, what it is written as, and whether it sounds — and hands
+   them over. Where it sits needed care: music21 reads `el.offset` and gets
+   away with it for a bare list because it appends that list to a fresh
+   `Measure` first, so the wheel lays a list end to end and reads a stream's
+   own offsets.
+
+   `TimeSignature` is 29 of 33 members ported, the four left being exceptions
+   with reasons in `data/feature_map.toml`: `summedNumerator` is a written
+   form music21 will not read back, `getMeasureOffsetOrMeterModulusOffset`
+   belongs to whichever stream an element sits in, and `resetValues` and
+   `load` rebuild a meter in place where a new one is built instead.
+
+   Eighteen meters are pinned against the strings music21 prints for their
+   beat and beam sequences, and the 126-meter fixture has not moved through
+   any of it.
 
    One thing the tree bought beyond the members it unblocks: the closed forms
    it replaced were wrong where music21 is not, three times over. Compound
