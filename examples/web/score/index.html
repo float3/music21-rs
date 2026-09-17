@@ -1,0 +1,862 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>music21-rs Score Editor</title>
+        <link rel="modulepreload" href="./app.js" />
+        <link rel="modulepreload" href="../pkg/music21_rs_web.js" />
+        <link rel="stylesheet" href="../theme.css" />
+        <link rel="stylesheet" href="../tools.css" />
+        <script
+            src="https://cdn.jsdelivr.net/npm/abcjs@6.7.0/dist/abcjs-basic-min.js"
+            integrity="sha384-QEx1pDqNtno80p4xYN5Cqm5JcAAtUDUCHqFLq0UBhWRFoFzzNHumh20zFGG/9XMi"
+            crossorigin="anonymous"
+        ></script>
+        <style>
+            .shell {
+                width: min(100vw - 32px, 1480px);
+            }
+
+            .toolbar {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 8px;
+                margin-bottom: 12px;
+            }
+
+            .toolbar .spacer {
+                flex: 1;
+            }
+
+            .toolbar button,
+            .toolbar select,
+            .toolbar label.button {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                height: 38px;
+                padding: 0 12px;
+                border: 1px solid var(--line);
+                border-radius: 8px;
+                background: var(--panel);
+                color: var(--accent-strong);
+                font-size: 14px;
+                font-weight: 700;
+                cursor: pointer;
+            }
+
+            .toolbar select {
+                color: var(--ink);
+                font-weight: 600;
+            }
+
+            .toolbar button:hover,
+            .toolbar label.button:hover,
+            .toolbar button.on {
+                border-color: var(--accent);
+                background: var(--accent-soft);
+            }
+
+            .toolbar button:disabled {
+                opacity: 0.5;
+                cursor: default;
+            }
+
+            .toolbar .primary {
+                height: 38px;
+                border: 0;
+                background: var(--accent);
+                color: #fff;
+            }
+
+            .toolbar .primary:hover {
+                background: var(--accent-strong);
+            }
+
+            .toolbar input[type="file"] {
+                display: none;
+            }
+
+            .menu {
+                position: relative;
+            }
+
+            .menu > summary {
+                display: inline-flex;
+                align-items: center;
+                height: 38px;
+                padding: 0 12px;
+                border: 1px solid var(--line);
+                border-radius: 8px;
+                background: var(--panel);
+                color: var(--accent-strong);
+                font-size: 14px;
+                font-weight: 700;
+                cursor: pointer;
+                list-style: none;
+            }
+
+            .menu > summary::-webkit-details-marker {
+                display: none;
+            }
+
+            .menu[open] > summary,
+            .menu > summary:hover {
+                border-color: var(--accent);
+                background: var(--accent-soft);
+            }
+
+            .menu-items {
+                position: absolute;
+                z-index: 20;
+                top: 42px;
+                right: 0;
+                display: grid;
+                min-width: 250px;
+                padding: 6px;
+                border: 1px solid var(--line);
+                border-radius: 8px;
+                background: var(--panel);
+                box-shadow: 0 12px 32px rgb(0 0 0 / 18%);
+            }
+
+            .menu-items button {
+                display: grid;
+                gap: 2px;
+                padding: 8px 10px;
+                border: 0;
+                border-radius: 6px;
+                background: transparent;
+                text-align: left;
+                cursor: pointer;
+            }
+
+            .menu-items button:hover {
+                background: var(--accent-soft);
+            }
+
+            .menu-items small {
+                color: var(--muted);
+                font-size: 12px;
+            }
+
+            .menu-items.share {
+                gap: 8px;
+                width: min(360px, calc(100vw - 32px));
+                padding: 12px;
+            }
+
+            .menu-items.share p {
+                margin: 0;
+                color: var(--muted);
+                font-size: 13px;
+            }
+
+            .menu-items.share input {
+                height: 38px;
+                font-size: 13px;
+            }
+
+            .share-actions {
+                display: flex;
+                gap: 8px;
+            }
+
+            .share-actions button {
+                display: inline-flex;
+                align-items: center;
+                height: 36px;
+                padding: 0 14px;
+                border: 1px solid var(--line);
+                border-radius: 8px;
+                background: var(--panel);
+                color: var(--accent-strong);
+                font-weight: 700;
+                cursor: pointer;
+            }
+
+            .share-actions button.primary {
+                border: 0;
+                background: var(--accent);
+                color: #fff;
+            }
+
+            .workspace {
+                display: grid;
+                grid-template-columns: minmax(320px, 0.8fr) minmax(0, 1.6fr);
+                gap: 18px;
+                align-items: start;
+                margin-bottom: 18px;
+            }
+
+            .source {
+                display: grid;
+                grid-template-rows: auto 1fr auto;
+                min-height: 560px;
+            }
+
+            .palette {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 4px;
+                padding: 8px;
+                border-bottom: 1px solid var(--line);
+            }
+
+            .palette button {
+                min-width: 34px;
+                height: 30px;
+                padding: 0 8px;
+                border: 1px solid var(--line);
+                border-radius: 6px;
+                background: var(--panel-soft);
+                font-size: 13px;
+                font-weight: 700;
+                cursor: pointer;
+            }
+
+            .palette button:hover {
+                border-color: var(--accent);
+                background: var(--accent-soft);
+            }
+
+            .palette .sep {
+                width: 1px;
+                margin: 2px 4px;
+                background: var(--line);
+            }
+
+            #abc {
+                width: 100%;
+                min-height: 460px;
+                padding: 12px 14px;
+                border: 0;
+                background: var(--panel);
+                font-family: ui-monospace, "Cascadia Code", Menlo, Consolas, monospace;
+                font-size: 14px;
+                line-height: 1.55;
+                resize: vertical;
+                white-space: pre;
+                tab-size: 4;
+            }
+
+            #abc:focus {
+                outline: none;
+            }
+
+            .status {
+                display: flex;
+                justify-content: space-between;
+                gap: 8px;
+                padding: 8px 14px;
+                border-top: 1px solid var(--line);
+                color: var(--muted);
+                font-size: 12px;
+            }
+
+            .status .bad {
+                color: var(--warn);
+                font-weight: 700;
+            }
+
+            .paper {
+                min-height: 560px;
+            }
+
+            #score {
+                max-height: calc(100vh - 150px);
+                min-height: 360px;
+                overflow: auto;
+                padding: 8px 12px 16px;
+                color: var(--ink);
+                overscroll-behavior: contain;
+            }
+
+            .paper-head {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 8px 12px;
+            }
+
+            .paper-head .aside {
+                flex: 1;
+                text-align: right;
+            }
+
+            .zoom {
+                display: inline-flex;
+                gap: 4px;
+            }
+
+            .zoom button {
+                min-width: 30px;
+                height: 28px;
+                padding: 0 8px;
+                border: 1px solid var(--line);
+                border-radius: 6px;
+                background: var(--panel-soft);
+                color: var(--accent-strong);
+                font-size: 13px;
+                font-weight: 700;
+                cursor: pointer;
+            }
+
+            .zoom button:hover,
+            .zoom button.on {
+                border-color: var(--accent);
+                background: var(--accent-soft);
+            }
+
+            .workspace.wide {
+                grid-template-columns: minmax(0, 1fr);
+            }
+
+            .workspace.wide > .source {
+                display: none;
+            }
+
+            .menu-items.parts {
+                left: 0;
+                right: auto;
+                max-height: 60vh;
+                overflow: auto;
+                gap: 2px;
+                padding: 8px;
+            }
+
+            .menu-items.parts label {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 6px 8px;
+                border-radius: 6px;
+                cursor: pointer;
+                white-space: nowrap;
+            }
+
+            .menu-items.parts label:hover {
+                background: var(--accent-soft);
+            }
+
+            .menu-items.parts .part-actions {
+                display: flex;
+                gap: 6px;
+                padding: 4px 8px 8px;
+                border-bottom: 1px solid var(--line);
+                margin-bottom: 4px;
+            }
+
+            .menu-items.parts .part-actions button {
+                display: inline-flex;
+                padding: 4px 10px;
+                border: 1px solid var(--line);
+                font-size: 12px;
+                font-weight: 700;
+                color: var(--accent-strong);
+            }
+
+            #score svg {
+                max-width: 100%;
+            }
+
+            #score [selectable="true"] {
+                cursor: grab;
+                outline: none;
+            }
+
+            #score .abcjs-dragging-in-progress [selectable="true"] {
+                cursor: grabbing;
+            }
+
+            #score .abcjs-annotation {
+                fill: var(--accent-strong);
+                font-weight: 700;
+            }
+
+            #score .m21-flag {
+                fill: var(--warn);
+            }
+
+            #score .m21-focus,
+            #score .abcjs-note_selected {
+                fill: var(--accent);
+            }
+
+            #score .m21-playing {
+                fill: #d97706;
+            }
+
+            .moment {
+                padding: 12px 16px;
+                border-top: 1px solid var(--line);
+                min-height: 64px;
+            }
+
+            .moment p {
+                margin: 0;
+                color: var(--muted);
+            }
+
+            .moment .facts {
+                margin: -12px -16px;
+                background: var(--panel);
+            }
+
+            .moment .fact {
+                box-shadow: 0 0 0 0.5px var(--line);
+            }
+
+            .issues {
+                display: grid;
+                max-height: 420px;
+                overflow: auto;
+            }
+
+            .issue {
+                display: grid;
+                grid-template-columns: auto 1fr;
+                gap: 2px 10px;
+                padding: 10px 16px;
+                border: 0;
+                border-bottom: 1px solid var(--line);
+                background: transparent;
+                text-align: left;
+                cursor: pointer;
+            }
+
+            .issue:hover,
+            tr.row:hover {
+                background: var(--row-hover);
+            }
+
+            .issue .badge {
+                grid-row: span 2;
+                align-self: start;
+                padding: 2px 8px;
+                border-radius: 999px;
+                background: var(--muted-soft);
+                color: var(--strong-muted);
+                font-size: 11px;
+                font-weight: 800;
+                text-transform: uppercase;
+            }
+
+            .issue.warning .badge {
+                background: var(--warn-soft);
+                color: var(--warn-strong);
+            }
+
+            .issue small {
+                color: var(--muted);
+            }
+
+            .empty {
+                margin: 0;
+                padding: 14px 16px;
+                color: var(--muted);
+            }
+
+            .harmony td,
+            .harmony th {
+                white-space: nowrap;
+            }
+
+            tr.row {
+                cursor: pointer;
+            }
+
+            tr.row.repeat td {
+                color: var(--muted);
+            }
+
+            .weights {
+                display: grid;
+                grid-template-columns: repeat(12, 1fr);
+                align-items: end;
+                gap: 4px;
+                height: 150px;
+                padding: 14px 16px 4px;
+            }
+
+            .weights div {
+                border-radius: 4px 4px 0 0;
+                background: var(--accent);
+                min-height: 2px;
+            }
+
+            .weights-labels {
+                display: grid;
+                grid-template-columns: repeat(12, 1fr);
+                gap: 4px;
+                padding: 0 16px 14px;
+                color: var(--muted);
+                font-size: 12px;
+                text-align: center;
+            }
+
+            kbd {
+                padding: 0 4px;
+                border: 1px solid var(--line);
+                border-radius: 4px;
+                background: var(--panel-soft);
+                font-size: 12px;
+            }
+
+            @media (max-width: 1000px) {
+                .workspace {
+                    grid-template-columns: 1fr;
+                }
+
+                .source,
+                .paper {
+                    min-height: 0;
+                }
+
+                #score {
+                    max-height: 80vh;
+                }
+
+                #abc {
+                    min-height: 280px;
+                }
+            }
+
+            @media print {
+                body > main > *:not(.workspace),
+                .workspace > .source,
+                .paper > h2,
+                .paper > .moment {
+                    display: none !important;
+                }
+
+                .workspace {
+                    display: block;
+                }
+
+                #score {
+                    max-height: none;
+                    overflow: visible;
+                }
+
+                .paper {
+                    border: 0;
+                }
+
+                #score {
+                    color: #000;
+                }
+            }
+        </style>
+    </head>
+    <body class="page-score">
+        <main class="shell">
+            <header>
+                <div class="title-row">
+                    <a class="home-link" href="../">Home</a>
+                    <h1>Score Editor</h1>
+                </div>
+                <nav class="top-links">
+                    <a href="../chord/">Chord Inspector</a>
+                    <a href="../roman/">Roman Numerals</a>
+                    <a href="../scales/">Scales</a>
+                    <a href="../harte/">Harte</a>
+                    <a href="../listen/">Chord Listener</a>
+                    <a id="docs-link" href="../docs/music21_rs/index.html"
+                        >Rust docs</a
+                    >
+                </nav>
+            </header>
+
+            <div class="examples" id="examples"></div>
+
+            <div class="toolbar">
+                <button id="play" class="primary" type="button" disabled>
+                    Play
+                </button>
+                <button id="stop" type="button" disabled>Stop</button>
+                <button id="loop" type="button" title="Play the score round and round">
+                    Loop
+                </button>
+                <select id="labels" aria-label="Labels under the score">
+                    <option value="numeral">Label: roman numerals</option>
+                    <option value="symbol">Label: chord symbols</option>
+                    <option value="name">Label: chord names</option>
+                    <option value="none">Label: none</option>
+                </select>
+                <details class="menu" id="parts-menu" hidden>
+                    <summary>Parts</summary>
+                    <div class="menu-items parts" id="parts"></div>
+                </details>
+                <select id="view" aria-label="Staff view">
+                    <option value="">View: notation</option>
+                    <option value="guitar">View: guitar tab</option>
+                    <option value="bass">View: bass tab</option>
+                    <option value="mandolin">View: mandolin tab</option>
+                    <option value="fiddle">View: fiddle tab</option>
+                </select>
+                <select id="strings" aria-label="String tuning" hidden></select>
+                <select id="temperament" aria-label="Playback tuning" title="The tuning system the score is played in">
+                    <option value="">Tuning: equal temperament</option>
+                </select>
+                <select id="temper-root" aria-label="Tuning root" title="The note the tuning system is built on" hidden>
+                    <option value="">Root: key tonic</option>
+                </select>
+                <button id="flags" class="on" type="button">
+                    Mark issues
+                </button>
+                <button id="down" type="button" title="Transpose down a semitone">
+                    Transpose −
+                </button>
+                <button id="up" type="button" title="Transpose up a semitone">
+                    Transpose +
+                </button>
+                <span class="spacer"></span>
+                <label class="button" for="open-file">Open…</label>
+                <input
+                    id="open-file"
+                    type="file"
+                    accept=".abc,.txt,.mid,.midi,text/plain,audio/midi"
+                />
+                <details class="menu" id="share-menu">
+                    <summary>Share</summary>
+                    <div class="menu-items share">
+                        <p>
+                            The whole score travels inside this link, with the
+                            view and labels you have chosen. Nothing is uploaded.
+                        </p>
+                        <input id="share-url" type="text" readonly aria-label="Share link" />
+                        <div class="share-actions">
+                            <button id="share-copy" class="primary" type="button">Copy link</button>
+                            <button id="share-send" type="button" hidden>Send…</button>
+                        </div>
+                        <small id="share-note"></small>
+                    </div>
+                </details>
+                <details class="menu" id="export-menu">
+                    <summary>Export</summary>
+                    <div class="menu-items">
+                        <button type="button" data-export="midi">
+                            MIDI <small>.mid, written by music21-rs</small>
+                        </button>
+                        <button type="button" data-export="musicxml">
+                            MusicXML
+                            <small>.musicxml, written by music21-rs</small>
+                        </button>
+                        <button type="button" data-export="abc">
+                            ABC <small>.abc, the source as typed</small>
+                        </button>
+                        <button type="button" data-export="abc-analysis">
+                            ABC with analysis
+                            <small>.abc, labels written under the notes</small>
+                        </button>
+                        <button type="button" data-export="svg">
+                            SVG <small>the engraved score</small>
+                        </button>
+                        <button type="button" data-export="png">
+                            PNG <small>the engraved score, 2× scale</small>
+                        </button>
+                        <button type="button" data-export="wav">
+                            WAV <small>audio rendered by abcjs</small>
+                        </button>
+                        <button type="button" data-export="json">
+                            Analysis <small>.json, everything below</small>
+                        </button>
+                        <button type="button" data-export="csv">
+                            Harmony <small>.csv, one row per onset</small>
+                        </button>
+                        <button type="button" data-export="print">
+                            Print or PDF <small>the score alone</small>
+                        </button>
+                    </div>
+                </details>
+            </div>
+
+            <p class="error" id="error"></p>
+
+            <div class="workspace">
+                <section class="source">
+                    <div class="palette" id="palette">
+                        <button type="button" data-insert="C" title="Note">C</button>
+                        <button type="button" data-insert="z" title="Rest">z</button>
+                        <button type="button" data-insert="[CEG]" title="Chord">[ ]</button>
+                        <button type="button" data-insert="| " title="Barline">|</button>
+                        <span class="sep"></span>
+                        <button type="button" data-insert="/" title="Half as long">/2</button>
+                        <button type="button" data-insert="2" title="Twice as long">×2</button>
+                        <button type="button" data-insert="3" title="Three times as long">×3</button>
+                        <button type="button" data-insert="4" title="Four times as long">×4</button>
+                        <button type="button" data-insert="-" title="Tie">tie</button>
+                        <button type="button" data-insert="(3" title="Triplet">(3</button>
+                        <span class="sep"></span>
+                        <button type="button" data-insert="^" title="Sharp">♯</button>
+                        <button type="button" data-insert="_" title="Flat">♭</button>
+                        <button type="button" data-insert="=" title="Natural">♮</button>
+                        <span class="sep"></span>
+                        <button type="button" data-move="1" title="Selected notes up a step (Alt+↑)">step ↑</button>
+                        <button type="button" data-move="-1" title="Selected notes down a step (Alt+↓)">step ↓</button>
+                        <button type="button" data-move="7" title="Selected notes up an octave (Alt+Shift+↑)">8va ↑</button>
+                        <button type="button" data-move="-7" title="Selected notes down an octave (Alt+Shift+↓)">8va ↓</button>
+                    </div>
+                    <textarea
+                        id="abc"
+                        spellcheck="false"
+                        autocomplete="off"
+                        autocapitalize="off"
+                        aria-label="ABC notation"
+                    ></textarea>
+                    <div class="status">
+                        <span id="status">Loading music21-rs…</span>
+                        <span id="cursor"></span>
+                    </div>
+                </section>
+
+                <section class="paper">
+                    <h2 class="paper-head">
+                        <span>Score</span>
+                        <span class="aside"
+                            >Drag a note or tab number; <kbd>↑</kbd><kbd>↓</kbd>
+                            move it, <kbd>Del</kbd> makes it a rest</span
+                        >
+                        <span class="zoom">
+                            <button id="zoom-out" type="button" title="Smaller, more bars to a line">−</button>
+                            <button id="zoom-level" type="button" title="Back to 100%">100%</button>
+                            <button id="zoom-in" type="button" title="Larger, fewer bars to a line">+</button>
+                            <button id="wide" type="button" title="Hide the source and give the score the whole width">Wide</button>
+                        </span>
+                    </h2>
+                    <div id="score"></div>
+                    <div class="moment" id="moment">
+                        <p>Click a note to see the harmony sounding there.</p>
+                    </div>
+                </section>
+            </div>
+
+            <div class="grid">
+                <section>
+                    <h2>Overview</h2>
+                    <div class="facts" id="overview"></div>
+                </section>
+                <section>
+                    <h2>
+                        Voice leading
+                        <span class="aside" id="issue-count"></span>
+                    </h2>
+                    <div class="issues" id="issues"></div>
+                </section>
+                <section>
+                    <h2>Key estimates</h2>
+                    <div class="facts" id="keys"></div>
+                    <div class="weights" id="weights"></div>
+                    <div class="weights-labels" id="weight-labels"></div>
+                </section>
+                <section>
+                    <h2>Voices</h2>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Voice</th>
+                                    <th>Notes</th>
+                                    <th>Range</th>
+                                    <th>Span</th>
+                                    <th>Widest leap</th>
+                                </tr>
+                            </thead>
+                            <tbody id="voices"></tbody>
+                        </table>
+                    </div>
+                </section>
+                <section class="wide">
+                    <h2>
+                        Harmony
+                        <span class="aside">one row per onset</span>
+                    </h2>
+                    <div class="table-wrap">
+                        <table class="harmony">
+                            <thead>
+                                <tr>
+                                    <th>Bar</th>
+                                    <th>Beat</th>
+                                    <th>Pitches</th>
+                                    <th>Chord</th>
+                                    <th>Symbol</th>
+                                    <th>Numeral</th>
+                                    <th>Inversion</th>
+                                </tr>
+                            </thead>
+                            <tbody id="harmony"></tbody>
+                        </table>
+                    </div>
+                </section>
+                <section class="wide">
+                    <h2>About</h2>
+                    <div class="about">
+                        <p>
+                            Type <a href="https://abcnotation.com/wiki/abc:standard:v2.1">ABC notation</a>
+                            on the left. <a href="https://www.abcjs.net/">abcjs</a>
+                            engraves and plays it; every analysis on this page
+                            and the MIDI and MusicXML files are produced by
+                            music21-rs compiled to WebAssembly. Write several
+                            voices with <code>V:</code> fields, highest first,
+                            for the voice-leading checks.
+                        </p>
+                        <p>
+                            A note is spelled as it is written: abcjs reports
+                            where on the staff it sits and what it sounds, and
+                            the crate works out the accidental from the two, so
+                            a written <code>_G</code> stays G-flat. The harmony
+                            at each onset is everything sounding there, named by
+                            music21's <code>commonName</code>,
+                            <code>chordSymbolFigureFromChord</code> and
+                            <code>romanNumeralFromChord</code> in the written
+                            key, or in the estimated one when the key is modal
+                            or absent. Parallel fifths and octaves are checked
+                            between every pair of voices, hidden ones between
+                            the outer voices only.
+                        </p>
+                        <p>
+                            Repeats are played out, so the analysis and the
+                            exported files follow the music as performed.
+                            Opening a MIDI file quantizes it to sixteenths and
+                            spells it in the key its notes suggest. Your work is
+                            kept in this browser between visits. Drag a note up
+                            or down the staff, or a tab number onto another
+                            string, where it keeps its fret; the arrow keys do
+                            the same to the note selected, and Delete turns it
+                            into a rest of the same length. Accidentals are
+                            rewritten where an edit would otherwise change how
+                            a later note in the bar sounds. Share packs
+                            the whole score into a link, compressed, so sending
+                            it uploads nothing. The view setting adds guitar,
+                            bass, mandolin or fiddle tablature under each staff;
+                            abcjs writes tablature for the first voice on a
+                            staff, and only on a staff whose notes the
+                            instrument can reach. A score with many parts can be
+                            narrowed to the ones you want with Parts, shrunk
+                            with the zoom buttons, which reflow the bars to the
+                            width (a tab view keeps its lines, since abcjs draws
+                            no tablature on rewrapped lines), and given the whole page with Wide; the score
+                            scrolls on its own and follows the playback.
+                        </p>
+                        <p>
+                            Tab views take a string tuning — drop D, DADGAD, open
+                            G, a five-string bass, fiddle cross-tunings — which
+                            decides both the fret numbers and what dragging a
+                            number to another string sounds. The playback tuning
+                            plays the score in any of music21-rs's tuning systems,
+                            built on the key's tonic or a root you choose, and a
+                            WAV export keeps it. Adaptive just intonation retunes
+                            every onset against the root of the chord sounding
+                            there, so a triad is just wherever it stands in the
+                            key.
+                        </p>
+                    </div>
+                </section>
+            </div>
+        </main>
+        <script type="module" src="./app.js"></script>
+    </body>
+</html>
