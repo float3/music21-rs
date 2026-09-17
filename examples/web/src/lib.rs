@@ -10,6 +10,7 @@ use std::{collections::BTreeSet, fmt};
 use wasm_bindgen::prelude::*;
 
 mod listen;
+mod score;
 
 #[derive(Serialize)]
 struct TuningFrequencyInfo {

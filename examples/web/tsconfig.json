@@ -19,6 +19,7 @@
         "./roman/app.ts",
         "./scales/app.ts",
         "./serial/app.ts",
-        "./listen/app.ts"
+        "./listen/app.ts",
+        "./score/app.ts"
     ]
 }

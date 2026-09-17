@@ -156,7 +156,10 @@ The tuning code has no counterpart in music21:
 ## Browser demos
 
 [hilll.dev/music21-rs](https://hilll.dev/music21-rs/) runs the crate in the
-browser via wasm, from [examples/web/](./examples/web/): a chord inspector, a
+browser via wasm, from [examples/web/](./examples/web/): a score editor that
+engraves ABC notation with abcjs, analyses its harmony and voice leading, shows
+guitar, bass, mandolin or fiddle tablature and plays it in any tuning system,
+and exports MIDI and MusicXML; a chord inspector, a
 chord browser, a polyrhythm lab, a Harte chord reader, a roman numeral
 realizer, a scale finder, a tone row matrix, a chord listener that names what
 a microphone hears, whether its notes sound together or one after another, and

@@ -591,7 +591,7 @@ jobs:
           cp examples/web/tuning/app.js target/pages/tuning/app.js
           cp examples/web/tools.css target/pages/tools.css
           cp examples/web/play.js target/pages/play.js
-          for page in harte roman scales serial listen; do
+          for page in harte roman scales serial listen score; do
             mkdir -p "target/pages/$page"
             cp "examples/web/$page/index.html" "target/pages/$page/index.html"
             cp "examples/web/$page/app.js" "target/pages/$page/app.js"
@@ -628,6 +628,8 @@ jobs:
               "polyrhythm/app.js",
               "tuning/index.html",
               "tuning/app.js",
+              "score/index.html",
+              "score/app.js",
               "reports/index.html",
               "reports/report.json",
           ]
@@ -642,7 +644,7 @@ jobs:
               raise SystemExit(f"missing demo build output: {', '.join(missing)}")
 
           file_checks = {
-              "index.html": ["chord/", "chords/", "polyrhythm/", "tuning/", "reports/", "./python/", "./theme.css", "./theme.js"],
+              "index.html": ["score/", "chord/", "chords/", "polyrhythm/", "tuning/", "reports/", "./python/", "./theme.css", "./theme.js"],
               "python/music21_rs.html": ["id=\"Chord\"", "id=\"Pitch\"", "id=\"Pitch.transpose\"", "install_into_music21"],
               "reports/index.html": ["../theme.css", "../theme.js"],
               "theme.css": ["--accent", ":root[data-theme=\"dark\"]", ".theme-toggle"],
@@ -654,6 +656,8 @@ jobs:
               "polyrhythm/app.js": ["../help-tooltips.js", "../theme.js"],
               "tuning/index.html": ["./app.js", "../theme.css"],
               "tuning/app.js": ["../theme.js"],
+              "score/index.html": ["./app.js", "../theme.css", "abcjs@"],
+              "score/app.js": ["../theme.js", "../pkg/music21_rs_web.js"],
           }
 
           if os.environ.get("FULL_REPORT") == "true":
