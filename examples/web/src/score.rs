@@ -672,7 +672,11 @@ fn melodic_issues(score: &Score) -> Vec<IssueInfo> {
             let semitones = interval.semitones().abs();
             let found = if semitones > 12.0 + EPSILON {
                 Some(("Leap wider than an octave", "info"))
-            } else if (name.starts_with('A') || name.starts_with('d')) && name != "d1" {
+            } else if (name.starts_with('A') || name.starts_with('d'))
+                && interval.generic_number().abs() > 1
+            {
+                // An augmented unison is a chromatic half step, F to F#,
+                // not a leap.
                 Some(("Augmented or diminished leap", "warning"))
             } else {
                 None
@@ -1821,6 +1825,30 @@ mod tests {
         assert!(xml.contains("<tie type=\"start\"/>"));
         assert!(xml.contains("<tie type=\"stop\"/>"));
         assert_eq!(xml.matches("<part id=").count(), 4);
+    }
+
+    #[test]
+    fn a_chromatic_half_step_is_not_an_augmented_leap() {
+        // E F F# G#: an augmented unison, then a major second.
+        let input = input_of(&[&[
+            (0.0, &[(52, -5)]),
+            (1.0, &[(53, -4)]),
+            (2.0, &[(54, -4)]),
+            (3.0, &[(56, -3)]),
+        ]]);
+        let analysis = analyse(&Score::from_input(input).expect("builds")).expect("analyses");
+        assert!(
+            analysis.issues.is_empty(),
+            "{:?}",
+            analysis
+                .issues
+                .iter()
+                .map(|issue| issue.kind)
+                .collect::<Vec<_>>()
+        );
+        let leap = input_of(&[&[(0.0, &[(53, -4)]), (1.0, &[(56, -3)])]]);
+        let analysis = analyse(&Score::from_input(leap).expect("builds")).expect("analyses");
+        assert_eq!(analysis.issues.len(), 1, "F to G# is an augmented second");
     }
 
     #[test]
