@@ -1588,6 +1588,40 @@ pub fn score_tuning_cents(input: JsValue, tuning: &str, tonic: &str) -> Result<J
     serde_wasm_bindgen::to_value(&tuning_cents(input, tuning, tonic)?).map_err(js_error)
 }
 
+// --------------------------------------------------------- chord symbols
+
+/// The notes a fretted instrument plays for a chord symbol: the crate's
+/// suggested fingering on the given open strings (MIDI numbers, lowest
+/// first), and the symbol's own chord where no fingering covers it.
+fn chord_symbol_voicing_notes(figure: &str, open_strings: &[i32]) -> Result<Vec<i32>, JsValue> {
+    let chord = music21_rs::ChordSymbol::parse(figure)
+        .and_then(|symbol| symbol.to_chord())
+        .map_err(js_error)?;
+    let names = open_strings
+        .iter()
+        .map(|&midi| Pitch::from_midi(midi).map(|pitch| pitch.name_with_octave()))
+        .collect::<music21_rs::Result<Vec<_>>>()
+        .map_err(js_error)?;
+    let fingering = music21_rs::GuitarTuning::new(names)
+        .ok()
+        .and_then(|tuning| chord.guitar_fingering_with_tuning(&tuning));
+    let mut notes: Vec<i32> = match fingering {
+        Some(fingering) => fingering.covered_pitch_spaces,
+        None => chord.pitches().iter().map(Pitch::midi).collect(),
+    };
+    notes.sort_unstable();
+    notes.dedup();
+    Ok(notes)
+}
+
+#[wasm_bindgen]
+/// Voices a chord symbol (`G`, `D7`, `F#m7b5`) for a fretted instrument
+/// whose open strings are the given MIDI numbers, lowest first, as the MIDI
+/// numbers to play.
+pub fn chord_symbol_voicing(figure: &str, open_strings: Vec<i32>) -> Result<Vec<i32>, JsValue> {
+    chord_symbol_voicing_notes(figure, &open_strings)
+}
+
 fn spell_midi(midi: i32, tonic: &str, mode: &str) -> Result<Pitch, JsValue> {
     let key = Key::from_tonic_mode(tonic, mode)
         .or_else(|_| Key::from_tonic_mode("C", "major"))
@@ -1665,6 +1699,23 @@ mod tests {
         assert!((e - -13.686).abs() < 0.01, "{e}");
         assert!((g - (-13.686 + 15.641)).abs() < 0.01, "{g}");
         assert!(cents.pitch_class_cents.is_none());
+    }
+
+    #[test]
+    fn a_chord_symbol_is_voiced_on_the_strings() {
+        let guitar = [40, 45, 50, 55, 59, 64];
+        let g = chord_symbol_voicing_notes("G", &guitar).expect("voices G");
+        assert!(!g.is_empty());
+        assert!(
+            g.iter()
+                .all(|midi| [7, 11, 2].contains(&midi.rem_euclid(12))),
+            "{g:?}"
+        );
+        assert!(g.iter().all(|midi| *midi >= 40), "{g:?}");
+        let d7 = chord_symbol_voicing_notes("D7", &guitar).expect("voices D7");
+        let classes: std::collections::BTreeSet<i32> =
+            d7.iter().map(|midi| midi.rem_euclid(12)).collect();
+        assert!(classes.contains(&0), "D7 has its C: {d7:?}");
     }
 
     #[test]

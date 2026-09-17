@@ -12,6 +12,7 @@ interface AbcElement {
     endChar?: number;
     pitches?: AbcPitch[];
     abselem?: { elemset: SVGElement[] };
+    chord?: { name: string; position?: string }[];
 }
 
 interface AbcStaff {
@@ -163,6 +164,7 @@ interface WasmModule {
     score_to_musicxml(input: ScoreInput): string;
     midi_to_abc(bytes: Uint8Array): string;
     spell_midi_in_key(midi: number, tonic: string, mode: string): string;
+    chord_symbol_voicing(figure: string, openStrings: Int32Array): Int32Array;
     score_tuning_cents(
         input: ScoreInput,
         tuning: string,
@@ -337,7 +339,7 @@ Q:1/4=120
 K:Bm
 %%MIDI program 24
 V:1 clef=treble-8 name="Guitar"
-F,2 [DAB]2 F, [DAB]2 F, | =F,2 [D^GB] z [DGB]4 | E,2 [DGB]2 E, [DGB]2 z | A,2 [EGc]2 A, [EGc] E,=F, |
+F,2 [DAB]2 F, [DAB]2 F, | =F,2 [D^GB] z [DGB]4 | E,2 [DGB]2 E, [DGB]2 z | A,2 [EGc]2 z [EGc] E,=F, |
 F,2 [DAB]2 F, [DAB]2 F, | =F,2 [D^GB] z [DGB]4 | E,2 [DGB]2 E, [DGB]2 z | A,2 [EGc] z [EGc]4 |]
 `,
     },
@@ -362,6 +364,8 @@ let refreshTimer = 0;
 /** The note last picked in the score, and whether it was its tab number. */
 let selected: { anchor: number; tab: boolean } | null = null;
 let refocusScore = false;
+/** Why staves of the drawn score got no tablature. */
+let tabSkipped: string[] = [];
 let zoom = 1;
 /** Voice ids left out of the drawn score. */
 const hiddenParts = new Set<string>();
@@ -715,6 +719,9 @@ interface Rendered {
     insertions: { at: number; length: number }[];
     /** Rendered elements by the anchor of their first pitch in the source. */
     byAnchor: Map<number, AbcElement[]>;
+    /** Whether an offset of the drawn text is in the generated chord part,
+     * which is not in the source. */
+    isGenerated: (position: number) => boolean;
 }
 
 function labelFor(slice: Slice, mode: string): string | null {
@@ -756,20 +763,28 @@ function render(source: string): void {
     // What is drawn is the source with text inserted and nothing taken out,
     // so every rendered offset maps back: a hidden part's lines are
     // commented out with a `%` at their start, and labels go before notes.
-    const additions: { at: number; text: string }[] = hiddenLineStarts(source).map((at) => ({ at, text: "%" }));
-    for (const [at, label] of labels) additions.push({ at, text: `"_${label.replace(/"/g, "'")}"` });
-    additions.sort((a, b) => a.at - b.at || (a.text === "%" ? -1 : 1));
+    const additions: { at: number; text: string; order: number; generated?: boolean }[] = hiddenLineStarts(
+        source,
+    ).map((at) => ({ at, text: "%", order: 0 }));
+    for (const addition of chordPart(source) ?? []) additions.push({ ...addition, order: 1, generated: true });
+    for (const [at, label] of labels) additions.push({ at, text: `"_${label.replace(/"/g, "'")}"`, order: 2 });
+    additions.sort((a, b) => a.at - b.at || a.order - b.order);
     const insertions: Rendered["insertions"] = [];
+    const generated: [number, number][] = [];
     let text = "";
     let from = 0;
     for (const addition of additions) {
-        text += source.slice(from, addition.at) + addition.text;
+        text += source.slice(from, addition.at);
+        if (addition.generated) generated.push([text.length, text.length + addition.text.length]);
+        text += addition.text;
         insertions.push({ at: addition.at, length: addition.text.length });
         from = addition.at;
     }
     text += source.slice(from);
+    const isGenerated = (position: number) => generated.some(([start, end]) => position >= start && position < end);
 
     const tablature = TABLATURES[viewSelect.value];
+    tabSkipped = [];
     const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#0f766e";
     const width = Math.max(320, scoreNode.clientWidth - 28);
     const scrollTop = scoreNode.scrollTop;
@@ -797,6 +812,7 @@ function render(source: string): void {
             for (const voice of staff.voices) {
                 for (const element of voice) {
                     if (element.el_type !== "note" || element.startChar == null || element.endChar == null) continue;
+                    if (isGenerated(element.startChar)) continue;
                     const start = toSource(insertions, element.startChar);
                     const end = toSource(insertions, element.endChar);
                     const anchor = anchorOf(source, start, end);
@@ -807,7 +823,7 @@ function render(source: string): void {
             }
         }
     }
-    rendered = tune ? { tune, text, insertions, byAnchor } : null;
+    rendered = tune ? { tune, text, insertions, byAnchor, isGenerated } : null;
     scoreNode.scrollTop = scrollTop;
     markIssues();
     if (refocusScore) {
@@ -827,6 +843,11 @@ function render(source: string): void {
             ? `${analysis.note_count} notes · ${analysis.measures} bars · ${analysis.voices.length} voice${analysis.voices.length === 1 ? "" : "s"}`
             : "No notes",
     );
+    if (tabSkipped.length > 0) {
+        const note = el("span", "bad", ` · no tab on ${tabSkipped.length} staff${tabSkipped.length === 1 ? "" : "s"}`);
+        note.title = tabSkipped.map((reason) => `No tablature: ${reason}.`).join("\n");
+        statusNode.append(note);
+    }
 }
 
 function svgOf(elements: AbcElement[] | undefined): SVGElement[] {
@@ -864,6 +885,7 @@ function revealInSource(start: number, end: number, focus = true): void {
 /** The source anchor of an element abcjs rendered from the labelled copy. */
 function anchorOfElement(element: AbcElement): number | null {
     if (!rendered || element.startChar == null || element.endChar == null) return null;
+    if (rendered.isGenerated(element.startChar)) return null;
     const start = toSource(rendered.insertions, element.startChar);
     const end = toSource(rendered.insertions, element.endChar);
     return anchorOf(textarea.value, start, end);
@@ -1226,13 +1248,24 @@ function storedStrings(): Record<string, string> {
  * soprano line is thirty-odd frets up a neck that has twenty. */
 function tablatureFor(text: string, tablature: (typeof TABLATURES)[string], tuning: string[]): object[] {
     const lines = ABCJS.parseOnly(text)[0]?.lines.filter((line) => line.staff?.length) ?? [];
-    const staves = lines[0]?.staff ?? [];
-    const open = tuning.map(tuningNoteMidi);
+    // A staff need not be on the first line: a voice that starts later, as
+    // the generated chord part does, adds one only where it starts.
+    const count = Math.max(0, ...lines.map((line) => line.staff?.length ?? 0));
+    const staves = Array.from(
+        { length: count },
+        (_, index) => lines.find((line) => line.staff?.[index])?.staff?.[index] ?? { voices: [] },
+    );
+    tabSkipped = [];
     return staves.map((staff, index) => {
         let low = Infinity;
         let high = -Infinity;
+        let voices = 0;
         for (const line of lines) {
-            for (const voice of line.staff?.[index]?.voices ?? []) {
+            const staffVoices = (line.staff?.[index]?.voices ?? []).filter((voice) =>
+                voice.some((element) => element.pitches?.length),
+            );
+            voices = Math.max(voices, staffVoices.length);
+            for (const voice of staffVoices) {
                 for (const element of voice) {
                     for (const pitch of element.pitches ?? []) {
                         low = Math.min(low, staffMidi(pitch.pitch));
@@ -1241,11 +1274,192 @@ function tablatureFor(text: string, tablature: (typeof TABLATURES)[string], tuni
                 }
             }
         }
-        const reachable = low >= open[0] - 2 && high <= open[open.length - 1] + HIGHEST_FRET + 2;
-        if (!reachable) return { instrument: "" };
+        const name = staff.title ? [staff.title].flat().find(Boolean) : undefined;
+        const which = name ? `“${name}”` : `staff ${index + 1}`;
+        // abcjs tabs the first voice on a staff and leaves the rest out, so a
+        // tab under two voices would pass off one line as the whole staff.
+        if (voices > 1) {
+            tabSkipped.push(`${which} holds ${voices} voices and tablature can show only one`);
+            return { instrument: "" };
+        }
         const clef = staff.clef?.type ?? "";
-        return { instrument: tablature.instrument, label: tablature.label, tuning: tuningFor(tuning, clef) };
+        const choice = tuningForStaff(tuning, clef, low, high);
+        if (!choice) {
+            if (low <= high) tabSkipped.push(`${which} goes where the ${tablature.label.toLowerCase()} cannot reach`);
+            return { instrument: "" };
+        }
+        return { instrument: tablature.instrument, label: tablature.label, tuning: choice };
     });
+}
+
+/** The tuning abcjs should tab a staff against, given the lowest and highest
+ * note written on it, or null when no tuning reaches them. Guitar music is
+ * written an octave above where it sounds and is tabbed that way first; a
+ * staff written at the pitch it sounds, as piano or choir music is, falls
+ * below that and is tabbed against the strings as they really sound. abcjs
+ * fingers the sounding pitch, so a clef that transposes is taken out first. */
+function tuningForStaff(tuning: string[], clef: string, low: number, high: number): string[] | null {
+    const shift = clef.endsWith("-8") ? -12 : clef.endsWith("+8") ? 12 : 0;
+    const written = tuningFor(tuning, clef);
+    for (const candidate of [written, tuningFor(written, "-8")]) {
+        const open = candidate.map(tuningNoteMidi);
+        if (low + shift >= open[0] && high + shift <= open[open.length - 1] + HIGHEST_FRET) return candidate;
+    }
+    return null;
+}
+
+/** The chord symbols of the source realized as a part of their own, for a tab
+ * view: each symbol voiced by the crate on the instrument's strings and held
+ * until the next, split at the barlines. abcjs plays chord symbols but draws
+ * no tablature for them, so without this a lead sheet's tab is its melody
+ * alone. Null when the source has no chord symbols. */
+function chordPart(source: string): { at: number; text: string }[] | null {
+    const view = viewSelect.value;
+    const tablature = TABLATURES[view];
+    if (!tablature || !wasm || !scoreInput || !analysis) return null;
+    const tune = ABCJS.parseOnly(withoutOrnaments(source))[0];
+    if (!tune) return null;
+    const notes = notesByAnchor(scoreInput);
+    const symbols = new Map<number, string>();
+    for (const line of tune.lines) {
+        for (const staff of line.staff ?? []) {
+            for (const voice of staff.voices) {
+                for (const element of voice) {
+                    if (element.startChar == null || element.endChar == null) continue;
+                    for (const chord of element.chord ?? []) {
+                        if ((chord.position ?? "default") !== "default") continue;
+                        const note = notes.get(anchorOf(source, element.startChar, element.endChar));
+                        if (note && !symbols.has(note.start)) symbols.set(note.start, chord.name);
+                    }
+                }
+            }
+        }
+    }
+    if (symbols.size === 0) return null;
+
+    // Guitar and bass are written an octave above where they sound.
+    const octaveUp = view === "guitar" || view === "bass";
+    const sounding = (octaveUp ? tuningFor(stringTuning(), "treble-8") : stringTuning()).map(tuningNoteMidi);
+    const key = scoreInput.key;
+    const alters = keyAlters(key?.sharps ?? 0);
+    const voicings = new Map<string, number[] | null>();
+    const voicing = (name: string): number[] | null => {
+        if (!voicings.has(name)) {
+            try {
+                const voiced = Array.from(wasm!.chord_symbol_voicing(name, Int32Array.from(sounding)));
+                voicings.set(name, voiced.length ? voiced : null);
+            } catch {
+                voicings.set(name, null);
+            }
+        }
+        return voicings.get(name) ?? null;
+    };
+
+    const [numerator, denominator] = scoreInput.meter ?? [4, 4];
+    const bar = (numerator * 4) / denominator;
+    const end = analysis.quarter_length;
+    const lines = [0];
+    let next = scoreInput.pickup > 1e-6 && scoreInput.pickup < bar - 1e-6 ? scoreInput.pickup : bar;
+    while (next < end - 1e-6) {
+        lines.push(next);
+        next += bar;
+    }
+    lines.push(end);
+
+    const starts = [...symbols.keys()].sort((a, b) => a - b);
+    const spans = starts.map((start, i) => ({ start, end: starts[i + 1] ?? end, name: symbols.get(start)! }));
+    const length = (quarters: number): string => {
+        const eighths = quarters * 2;
+        if (Math.abs(eighths - Math.round(eighths)) < 1e-6) return Math.round(eighths) === 1 ? "" : String(Math.round(eighths));
+        return `${Math.round(eighths * 12)}/12`;
+    };
+    const bars: string[] = [];
+    for (let b = 0; b + 1 < lines.length; b++) {
+        const [from, to] = [lines[b], lines[b + 1]];
+        const inForce = new Map<string, number>();
+        const tokens: string[] = [];
+        let cursor = from;
+        for (const span of spans) {
+            const start = Math.max(span.start, from);
+            const stop = Math.min(span.end, to);
+            if (stop <= start + 1e-6) continue;
+            if (start > cursor + 1e-6) tokens.push(`z${length(start - cursor)}`);
+            const voiced = voicing(span.name);
+            if (!voiced) {
+                tokens.push(`z${length(stop - start)}`);
+            } else {
+                const written = voiced.map((midi) => {
+                    const name = wasm!.spell_midi_in_key(midi + (octaveUp ? 12 : 0), key?.tonic ?? "C", key?.mode ?? "major");
+                    const parts = /^([A-G])([#-]*)(-?\d+)$/.exec(name);
+                    if (!parts) return "";
+                    const alter = parts[2].startsWith("#") ? parts[2].length : -parts[2].length;
+                    const place = `${parts[1]}${parts[3]}`;
+                    const current = inForce.get(place) ?? alters[parts[1]] ?? 0;
+                    inForce.set(place, alter);
+                    const accidental = current === alter ? "" : (accidentalFor(alter) ?? "");
+                    return accidental + letterFor(STEP_LETTERS.indexOf(parts[1]) + 7 * (Number(parts[3]) - 4));
+                });
+                const tie = span.end > to + 1e-6 ? "-" : "";
+                tokens.push(`[${written.join("")}]${length(stop - start)}${tie}`);
+            }
+            cursor = stop;
+        }
+        if (to > cursor + 1e-6) tokens.push(`z${length(to - cursor)}`);
+        bars.push(tokens.join(" "));
+    }
+
+    const clef = octaveUp ? (view === "bass" ? "bass-8" : "treble-8") : "treble";
+    const declaration = `V:tabchords clef=${clef} name="Chords"`;
+    // The written symbols stop sounding, since the part now plays them.
+    const keyLine = /(^|\n)\s*K:[^\n]*\n/.exec(source);
+    const additions = [{ at: keyLine ? keyLine.index + keyLine[0].length : 0, text: "%%MIDI gchordoff\n" }];
+
+    // abcjs lines voices up line by line, so the part is written a line of
+    // its own under each line of music. That needs a voice for the music to
+    // go back to, which a tune with voices of its own does not give as simply;
+    // there the part follows the music and is laid out after it.
+    const music: { start: number }[] = [];
+    let inBody = false;
+    let offset = 0;
+    for (const line of source.split("\n")) {
+        if (inBody && isMusicLine(line) && line.trim()) music.push({ start: offset });
+        if (/^\s*K:/.test(line)) inBody = true;
+        offset += line.length + 1;
+    }
+    if (voiceIds(source).length > 0 || music.length === 0) {
+        additions.push({
+            at: source.trimEnd().length,
+            text: `\n${declaration}\n[L:1/8] ${bars.join(" | ")} |]`,
+        });
+        return additions;
+    }
+    const lineEnd = (start: number) => {
+        const newline = source.indexOf("\n", start);
+        return newline === -1 ? source.length : newline;
+    };
+    const lineStarts = music.map((line) => {
+        const end = lineEnd(line.start);
+        const starts = [...notes.values()]
+            .filter((note) => note.char_start >= line.start && note.char_start < end)
+            .map((note) => note.start);
+        return starts.length ? Math.min(...starts) : Infinity;
+    });
+    lineStarts[0] = 0;
+    music.forEach((line, index) => {
+        const from = lineStarts[index];
+        const to = lineStarts.slice(index + 1).find((start) => start !== Infinity) ?? Infinity;
+        const chunk = bars.filter((_, b) => lines[b] >= from - 1e-6 && lines[b] < to - 1e-6);
+        const last = index === music.length - 1;
+        const voice = index === 0 ? `V:tabmusic\n` : `[V:tabmusic] `;
+        additions.push({ at: line.start, text: voice });
+        if (chunk.length === 0) return;
+        const head = index === 0 ? `${declaration}\n` : `[V:tabchords] `;
+        additions.push({
+            at: lineEnd(line.start),
+            text: `\n${head}[L:1/8] ${chunk.join(" | ")} ${last ? "|]" : "|"}`,
+        });
+    });
+    return additions;
 }
 
 /** Which voice each line of the source belongs to: a `V:` field line or an
@@ -1276,7 +1490,10 @@ function lineVoices(source: string): { start: number; voice: string | null; dire
 
 /** The starts of the lines to comment out so hidden parts are not drawn. */
 function hiddenLineStarts(source: string): number[] {
-    if (hiddenParts.size === 0) return [];
+    // A tab view lays every voice on a staff of its own, since abcjs tabs
+    // only the first voice of a staff: the `%%score` line that groups them
+    // goes, as it does when parts are hidden.
+    if (hiddenParts.size === 0 && !TABLATURES[viewSelect.value]) return [];
     return lineVoices(source)
         .filter((line) => line.directive || (line.voice !== null && hiddenParts.has(line.voice)))
         .map((line) => line.start);
@@ -1350,31 +1567,38 @@ function moveAcrossStrings(anchor: number, strings: number): boolean {
     if (!wasm || !rendered) return false;
     const note = notesByAnchor(scoreInput).get(anchor);
     if (!note) return false;
-    const open = openStrings(note.clef);
     const frets = (rendered.tune.getSelectableArray?.() ?? [])
         .filter((item) => item.absEl.abcelem.el_type === "tabNumber" && anchorOfElement(item.absEl.abcelem) === anchor)
         .flatMap((item) => Array.from(item.svgEl.querySelectorAll(".abcjs-tab-number")))
         .map((node) => Number(node.textContent))
         .filter((fret) => Number.isInteger(fret));
     const midis = note.pitches.map((pitch) => pitch.midi);
-    const usedPitch = new Set<number>();
-    const usedString = new Set<number>();
-    const moved = new Map<number, number>();
-    for (const fret of frets) {
-        for (let string = open.length - 1; string >= 0; string--) {
-            if (usedString.has(string)) continue;
-            const index = midis.findIndex((midi, i) => !usedPitch.has(i) && midi === open[string] + fret);
-            if (index === -1) continue;
-            usedPitch.add(index);
-            usedString.add(string);
-            const target = string + strings;
-            if (target < 0 || target >= open.length) return false;
-            moved.set(index, open[target] + fret);
-            break;
+    // The staff was tabbed against the written or the sounding strings; the
+    // tuning that accounts for every fret shown is the one it was.
+    const written = openStrings(note.clef);
+    for (const open of [written, written.map((midi) => midi - 12)]) {
+        const usedPitch = new Set<number>();
+        const usedString = new Set<number>();
+        const moved = new Map<number, number>();
+        let unreachable = false;
+        for (const fret of frets) {
+            for (let string = open.length - 1; string >= 0; string--) {
+                if (usedString.has(string)) continue;
+                const index = midis.findIndex((midi, i) => !usedPitch.has(i) && midi === open[string] + fret);
+                if (index === -1) continue;
+                usedPitch.add(index);
+                usedString.add(string);
+                const target = string + strings;
+                if (target < 0 || target >= open.length) unreachable = true;
+                else moved.set(index, open[target] + fret);
+                break;
+            }
         }
+        if (usedPitch.size !== frets.length) continue;
+        if (unreachable || moved.size === 0) return false;
+        return setPitches(anchor, note, moved);
     }
-    if (moved.size === 0) return false;
-    return setPitches(anchor, note, moved);
+    return false;
 }
 
 /** Rewrites some pitches of the note at `anchor` to sound new MIDI numbers,
