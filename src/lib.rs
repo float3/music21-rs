@@ -94,7 +94,7 @@ pub use chordsymbol::{
     chord_symbol_from_chord, known_chord_symbol_types,
 };
 pub use defaults::{FloatType, FractionType, IntegerType, Octave, UnsignedIntegerType};
-pub use duration::{Duration, DurationType, Tuplet, quarter_length_to_closest_type};
+pub use duration::{Duration, DurationTuple, DurationType, Tuplet, quarter_length_to_closest_type};
 pub use error::{Error, Result};
 pub use harte::{Harte, HarteInterval, SHORTHAND_DEGREES, convert_interval};
 pub use interval::{

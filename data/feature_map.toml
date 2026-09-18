@@ -214,14 +214,10 @@ note = "A quarter length, the note values it is written as, and the tuplets it i
 
 [class.renames]
 type = "duration_type"
+getGraceDuration = "grace_duration"
 
 [class.excluded]
-getGraceDuration = "a grace note is written but does not sound, which is the note's business and not the length's"
-consolidate = "the written values are read off the length here rather than assembled by hand"
-sliceComponentAtPosition = "the written values are read off the length here rather than assembled by hand"
 currentComponents = "the working-out is not deferred here, so there is no half-worked-out state to read"
-splitDotGroups = "dot groups are a way of writing one length twice over; the crate keeps the length"
-linked = "an unlinked duration is written as one value and sounds as another, which needs a written value the length does not decide"
 informClient = "observer callback for a containing note; there is none"
 
 [[class]]

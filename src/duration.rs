@@ -239,6 +239,89 @@ pub struct Duration {
     /// different from saying nothing, and music21 keeps the difference too.
     #[cfg_attr(feature = "serde", serde(default))]
     tuplets: Option<Vec<Tuplet>>,
+    /// The written values, once something has said what they are.
+    ///
+    /// `None` is the ordinary case: the values are read off the length by
+    /// [`Duration::components`]. `Some` is a list a caller built a value at a
+    /// time, cut, consolidated or unlinked from the length, and it is then
+    /// what the length is worked out from rather than the other way round.
+    #[cfg_attr(feature = "serde", serde(default))]
+    written: Option<Vec<DurationTuple>>,
+    /// Dots written above dots, once set: music21's `dotGroups`.
+    #[cfg_attr(feature = "serde", serde(default))]
+    dot_groups: Option<Vec<u32>>,
+    /// Whether the written values and the sounding length have been told
+    /// apart, so that neither is worked out from the other.
+    #[cfg_attr(feature = "serde", serde(default))]
+    unlinked: bool,
+}
+
+/// One written value of a duration and how long it lasts: music21's
+/// `DurationTuple`.
+///
+/// The length is kept beside the value because the two can disagree. A grace
+/// note is written as an eighth and lasts no time, and a piece cut out of a
+/// longer value may have a length no single note value reaches, which
+/// music21 calls `inexpressible` and which has no type here.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
+pub struct DurationTuple {
+    duration_type: Option<DurationType>,
+    dots: u32,
+    quarter_length: FloatType,
+}
+
+impl DurationTuple {
+    /// A note value with its dots, lasting as long as that is written.
+    pub fn new(duration_type: DurationType, dots: u32) -> Self {
+        Self {
+            duration_type: Some(duration_type),
+            dots,
+            quarter_length: duration_type.quarter_length_with_dots(dots),
+        }
+    }
+
+    /// The single written value a length comes to: music21's
+    /// `durationTupleFromQuarterLength`. Nought is the `zero` value, and a
+    /// length no dotted note value has is one with no type.
+    pub fn from_quarter_length(quarter_length: FloatType) -> Self {
+        if quarter_length == 0.0 {
+            return Self::new(DurationType::Zero, 0);
+        }
+        match exact_type_and_dots(quarter_length) {
+            Some((duration_type, dots)) => Self::new(duration_type, dots),
+            None => Self {
+                duration_type: None,
+                dots: 0,
+                quarter_length,
+            },
+        }
+    }
+
+    /// The same written value lasting no time, which is how a grace note
+    /// keeps what it is written as.
+    pub fn silenced(self) -> Self {
+        Self {
+            quarter_length: 0.0,
+            ..self
+        }
+    }
+
+    /// The note value, or `None` for music21's `inexpressible`.
+    pub fn duration_type(&self) -> Option<DurationType> {
+        self.duration_type
+    }
+
+    /// The augmentation dots on the value.
+    pub fn dots(&self) -> u32 {
+        self.dots
+    }
+
+    /// How long the value lasts, in quarter lengths.
+    pub fn quarter_length(&self) -> FloatType {
+        self.quarter_length
+    }
 }
 
 /// The numerators music21 searches when reading a length as a tuplet: its
@@ -521,10 +604,18 @@ impl Duration {
             )));
         }
 
-        Ok(Self {
+        Ok(Self::of_length(quarter_length))
+    }
+
+    /// A length with nothing said about how it is written.
+    fn of_length(quarter_length: FloatType) -> Self {
+        Self {
             quarter_length,
             tuplets: None,
-        })
+            written: None,
+            dot_groups: None,
+            unlinked: false,
+        }
     }
 
     /// Returns a quarter-note duration.
@@ -549,25 +640,29 @@ impl Duration {
 
     /// Creates a duration from a note-value type.
     pub fn from_type(duration_type: DurationType) -> Self {
-        Self {
-            quarter_length: duration_type.quarter_length(),
-            tuplets: None,
-        }
+        Self::of_length(duration_type.quarter_length())
     }
 
     /// Creates a duration from a note-value type carrying augmentation dots.
     pub fn from_type_with_dots(duration_type: DurationType, dots: u32) -> Self {
-        Self {
-            quarter_length: duration_type.quarter_length_with_dots(dots),
-            tuplets: None,
-        }
+        Self::of_length(duration_type.quarter_length_with_dots(dots))
     }
 
     /// Returns the note-value type and dot count that together make exactly
     /// this length, such as a half note with one dot for `3.0`. `None` for a
     /// length no single dotted note value has, such as a tuplet or a tie.
+    ///
+    /// Where the written values have been said, it is the one value there
+    /// is, whatever the length: an unlinked duration written as a half is a
+    /// half however long it sounds.
     pub fn type_and_dots(&self) -> Option<(DurationType, u32)> {
-        exact_type_and_dots(self.quarter_length)
+        match self.written.as_deref() {
+            Some([one]) => one
+                .duration_type
+                .map(|duration_type| (duration_type, one.dots)),
+            Some(_) => None,
+            None => exact_type_and_dots(self.quarter_length),
+        }
     }
 
     /// Returns the augmentation dots on this duration, or `0` when it is not
@@ -638,10 +733,10 @@ impl Duration {
     /// The total of the written values, before any tuplet shortens them:
     /// music21's `quarterLengthNoTuplets`.
     pub fn quarter_length_no_tuplets(&self) -> FloatType {
-        self.components()
-            .into_iter()
-            .map(|(duration_type, dots)| duration_type.quarter_length_with_dots(dots))
-            .sum()
+        // Folded from a positive nought: Rust sums floats from `-0.0`.
+        self.written_values()
+            .iter()
+            .fold(0.0, |total, value| total + value.quarter_length)
     }
 
     /// Says what tuplets this length is written inside, keeping the written
@@ -650,6 +745,9 @@ impl Duration {
     pub fn set_tuplets(&mut self, tuplets: Vec<Tuplet>) {
         let written = self.quarter_length_no_tuplets();
         self.tuplets = Some(tuplets);
+        if self.unlinked {
+            return;
+        }
         self.quarter_length = written * float_from_fraction(self.aggregate_tuplet_multiplier());
     }
 
@@ -696,8 +794,227 @@ impl Duration {
     /// This is the first half of [`quarter_conversion`], read over the
     /// written length. A length whose tuplets a caller has set is read as
     /// the tie those tuplets leave, without looking for a tuplet of its own.
+    ///
+    /// Where the written values have been said these are they, less any
+    /// with no type; [`Duration::written_values`] keeps those too.
     pub fn components(&self) -> Vec<(DurationType, u32)> {
-        convert(self.written_quarter_length(), self.tuplets.is_none()).0
+        match &self.written {
+            Some(written) => written
+                .iter()
+                .filter_map(|value| Some((value.duration_type?, value.dots)))
+                .collect(),
+            None => convert(self.written_quarter_length(), self.tuplets.is_none()).0,
+        }
+    }
+
+    /// The written values with the length of each: music21's `components`
+    /// as the `DurationTuple`s they are there.
+    ///
+    /// A length no tie of note values reaches is one value with no type,
+    /// as it is upstream, and nought is no values at all.
+    pub fn written_values(&self) -> Vec<DurationTuple> {
+        if let Some(written) = &self.written {
+            return written.clone();
+        }
+        let components = self.components();
+        if components.is_empty() && self.quarter_length != 0.0 {
+            return vec![DurationTuple::from_quarter_length(
+                self.written_quarter_length(),
+            )];
+        }
+        components
+            .into_iter()
+            .map(|(duration_type, dots)| DurationTuple::new(duration_type, dots))
+            .collect()
+    }
+
+    /// Makes these the written values, and the length what they come to
+    /// inside the tuplets and dot groups the duration already has.
+    fn set_written_values(&mut self, written: Vec<DurationTuple>) {
+        // Read the tuplets off the length while it still says them.
+        self.tuplets = Some(self.tuplets());
+        self.written = Some(written);
+        self.relength();
+    }
+
+    /// music21's `_updateQuarterLength`: the length the written values come
+    /// to. An unlinked duration keeps the length it was given.
+    fn relength(&mut self) {
+        if self.unlinked {
+            return;
+        }
+        let groups: FloatType = self
+            .dot_groups
+            .iter()
+            .flatten()
+            .filter(|dots| **dots != 0)
+            .map(|dots| 2.0 - FloatType::powi(0.5, *dots as i32))
+            .product();
+        self.quarter_length = self.quarter_length_no_tuplets()
+            * float_from_fraction(self.aggregate_tuplet_multiplier())
+            * groups;
+    }
+
+    /// One written value for the whole length, losing how it had been
+    /// written: music21's `consolidate`.
+    ///
+    /// The value is the one the written total comes to, before any tuplet,
+    /// and has no type where no single note value does. A duration already
+    /// written as one value is left alone.
+    ///
+    /// ```
+    /// use music21_rs::{Duration, DurationType};
+    ///
+    /// let mut duration = Duration::quarter();
+    /// duration.add_duration_tuple(DurationType::Half, 0);
+    /// duration.add_duration_tuple(DurationType::Quarter, 0);
+    /// assert_eq!(duration.components().len(), 3);
+    /// duration.consolidate();
+    /// assert_eq!(duration.components(), [(DurationType::Whole, 0)]);
+    /// ```
+    pub fn consolidate(&mut self) {
+        if self.written_values().len() == 1 {
+            return;
+        }
+        let total = self.quarter_length_no_tuplets();
+        self.set_written_values(vec![DurationTuple::from_quarter_length(total)]);
+    }
+
+    /// Cuts the written value sounding at a position in two, leaving the
+    /// whole length as it was: music21's `sliceComponentAtPosition`.
+    ///
+    /// The position is counted in the written values. One that falls on the
+    /// join between two values, or at either end, cuts nothing and is an
+    /// error.
+    pub fn slice_component_at_position(&mut self, position: FloatType) -> Result<()> {
+        let written = self.written_values();
+        let mut start = 0.0;
+        for (index, value) in written.iter().enumerate() {
+            let end = start + value.quarter_length;
+            if position > start && position < end {
+                let mut sliced = written[..index].to_vec();
+                sliced.push(DurationTuple::from_quarter_length(position - start));
+                sliced.push(DurationTuple::from_quarter_length(end - position));
+                sliced.extend_from_slice(&written[index + 1..]);
+                self.set_written_values(sliced);
+                return Ok(());
+            }
+            start = end;
+        }
+        Err(Error::Duration(
+            "no slice is possible at this quarter position".to_string(),
+        ))
+    }
+
+    /// Writes the duration with dots above its dots: music21's `dotGroups`
+    /// setter. Each group lengthens the value as dots do, so a half under
+    /// `[1, 1]` lasts four and a half quarters. The plain dots come off the
+    /// written values, since the groups now say how the note is dotted.
+    pub fn set_dot_groups(&mut self, groups: Vec<u32>) {
+        let undotted = self
+            .written_values()
+            .into_iter()
+            .map(|value| match value.duration_type {
+                Some(duration_type) => DurationTuple::new(duration_type, 0),
+                None => value,
+            })
+            .collect();
+        self.dot_groups = Some(groups);
+        self.set_written_values(undotted);
+    }
+
+    /// The same length written as a tie of singly dotted values, for a
+    /// reader with no dot groups: music21's `splitDotGroups`.
+    ///
+    /// Each group after the first ties on every value so far at the next
+    /// note value down, so a half under `[1, 1]` is a dotted half tied to a
+    /// dotted quarter. It is an error for a duration that is not one
+    /// written value.
+    pub fn split_dot_groups(&self) -> Result<Duration> {
+        let (duration_type, _) = self.type_and_dots().ok_or_else(|| {
+            Error::Duration("only a single written value has dot groups to split".to_string())
+        })?;
+        let groups = self.dot_groups();
+        let mut values = vec![DurationTuple::new(
+            duration_type,
+            groups.first().copied().unwrap_or(0),
+        )];
+        for _ in 1..groups.len() {
+            let smaller: Vec<DurationTuple> = values
+                .iter()
+                .map(|value| {
+                    let kind = value.duration_type.unwrap_or(duration_type);
+                    DurationTuple::new(kind.next_smaller().unwrap_or(kind), value.dots)
+                })
+                .collect();
+            values.extend(smaller);
+        }
+        let mut split = self.clone();
+        split.dot_groups = None;
+        split.set_written_values(values);
+        Ok(split)
+    }
+
+    /// Whether the written values and the sounding length move together:
+    /// music21's `linked`, true unless a caller has said otherwise.
+    pub fn linked(&self) -> bool {
+        !self.unlinked
+    }
+
+    /// Links or unlinks the written values and the length: music21's
+    /// `linked` setter.
+    ///
+    /// Unlinking keeps the values the duration is written as today, and
+    /// [`Duration::set_quarter_length`] then changes how long it sounds
+    /// without touching them. Linking again keeps the length and reads the
+    /// values off it afresh.
+    pub fn set_linked(&mut self, linked: bool) {
+        if !linked && !self.unlinked {
+            self.tuplets = Some(self.tuplets());
+            self.written = Some(self.written_values());
+        } else if linked && self.unlinked {
+            self.written = None;
+            self.tuplets = None;
+            self.dot_groups = None;
+        }
+        self.unlinked = !linked;
+    }
+
+    /// The same written values sounding for no time, unlinked from their
+    /// length: the duration of a grace note, music21's `getGraceDuration`.
+    ///
+    /// A duration with no written values is written as an eighth, since a
+    /// grace note has to be written as something. The tuplets are dropped,
+    /// as they are upstream.
+    ///
+    /// ```
+    /// use music21_rs::{Duration, DurationType};
+    ///
+    /// let grace = Duration::new(1.25)?.grace_duration();
+    /// assert_eq!(grace.quarter_length(), 0.0);
+    /// assert!(!grace.linked());
+    /// assert_eq!(
+    ///     grace.components(),
+    ///     [(DurationType::Quarter, 0), (DurationType::Sixteenth, 0)]
+    /// );
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
+    pub fn grace_duration(&self) -> Duration {
+        let mut written: Vec<DurationTuple> = self
+            .written_values()
+            .into_iter()
+            .map(DurationTuple::silenced)
+            .collect();
+        if written.is_empty() {
+            written.push(DurationTuple::new(DurationType::Eighth, 0).silenced());
+        }
+        Duration {
+            quarter_length: 0.0,
+            tuplets: Some(Vec::new()),
+            written: Some(written),
+            dot_groups: None,
+            unlinked: true,
+        }
     }
 
     /// Whether the length needs more than one written value, tied: music21's
@@ -710,23 +1027,33 @@ impl Duration {
     /// music21's `dotGroups`, which can also write one length twice over
     /// where a mensural notation asks for it.
     pub fn dot_groups(&self) -> Vec<u32> {
-        vec![self.dots()]
+        match &self.dot_groups {
+            Some(groups) => groups.clone(),
+            None => vec![self.dots()],
+        }
     }
 
     /// Takes the length away: music21's `clear`, which empties the written
     /// values so the duration sounds for no time. The tuplets it was told
     /// stay.
     pub fn clear(&mut self) {
+        self.tuplets = Some(self.tuplets());
+        self.written = Some(Vec::new());
+        self.dot_groups = None;
         self.quarter_length = 0.0;
     }
 
     /// Ties one more written value onto the end: music21's
     /// `addDurationTuple`, which lengthens the duration by that value inside
     /// whatever tuplets it is written in.
+    ///
+    /// The values are kept as they were added from then on, so a quarter
+    /// with a half and a quarter tied on is three values and not a whole
+    /// until it is [consolidated](Duration::consolidate).
     pub fn add_duration_tuple(&mut self, duration_type: DurationType, dots: u32) {
-        let written =
-            self.quarter_length_no_tuplets() + duration_type.quarter_length_with_dots(dots);
-        self.quarter_length = written * float_from_fraction(self.aggregate_tuplet_multiplier());
+        let mut written = self.written_values();
+        written.push(DurationTuple::new(duration_type, dots));
+        self.set_written_values(written);
     }
 
     /// Which written value is sounding at a position within the duration:
@@ -851,8 +1178,16 @@ impl Duration {
     }
 
     /// Updates the duration in quarter lengths.
+    ///
+    /// The written values are read off the new length, unless the duration
+    /// is [unlinked](Duration::set_linked) and keeps the ones it has.
     pub fn set_quarter_length(&mut self, quarter_length: FloatType) -> Result<()> {
-        *self = Self::new(quarter_length)?;
+        let replacement = Self::new(quarter_length)?;
+        if self.unlinked {
+            self.quarter_length = replacement.quarter_length;
+        } else {
+            *self = replacement;
+        }
         Ok(())
     }
 }
@@ -1157,6 +1492,118 @@ mod tests {
         let mut triplet = Duration::new(2.0 / 3.0).unwrap();
         triplet.add_duration_tuple(DurationType::Quarter, 0);
         assert!((triplet.quarter_length() - 4.0 / 3.0).abs() < 1e-9);
+    }
+
+    /// Every expectation here was read off music21.
+    #[test]
+    fn written_values_are_cut_consolidated_split_and_unlinked_as_music21_does() {
+        let typed = |duration: &Duration| -> Vec<(Option<DurationType>, u32, FloatType)> {
+            duration
+                .written_values()
+                .iter()
+                .map(|value| (value.duration_type(), value.dots(), value.quarter_length()))
+                .collect()
+        };
+
+        // A cut leaves the length alone, and a piece may have no type.
+        let mut tied = Duration::new(1.25).unwrap();
+        tied.slice_component_at_position(0.5).unwrap();
+        assert_eq!(
+            tied.components(),
+            [
+                (DurationType::Eighth, 0),
+                (DurationType::Eighth, 0),
+                (DurationType::Sixteenth, 0)
+            ]
+        );
+        assert_eq!(tied.quarter_length(), 1.25);
+        let mut dotted = Duration::new(3.0).unwrap();
+        dotted.slice_component_at_position(1.25).unwrap();
+        assert_eq!(
+            typed(&dotted),
+            [(None, 0, 1.25), (Some(DurationType::Quarter), 2, 1.75)]
+        );
+        assert!(
+            Duration::new(1.25)
+                .unwrap()
+                .slice_component_at_position(1.0)
+                .is_err()
+        );
+
+        // Consolidating keeps the length and may lose the type.
+        let mut long = Duration::quarter();
+        long.add_duration_tuple(DurationType::Half, 0);
+        long.add_duration_tuple(DurationType::Half, 0);
+        assert_eq!(long.components().len(), 3);
+        assert_eq!(long.duration_type(), None);
+        long.consolidate();
+        assert_eq!(typed(&long), [(None, 0, 5.0)]);
+        assert_eq!(long.quarter_length(), 5.0);
+        let mut triplets = Duration::new(1.0 / 3.0).unwrap();
+        triplets.add_duration_tuple(DurationType::Eighth, 0);
+        triplets.consolidate();
+        assert_eq!(triplets.components(), [(DurationType::Quarter, 0)]);
+        assert!((triplets.quarter_length() - 2.0 / 3.0).abs() < 1e-9);
+
+        // Dot groups multiply, and split into a tie of dotted values.
+        let mut half = Duration::half();
+        half.set_dot_groups(vec![1, 1]);
+        assert_eq!(half.quarter_length(), 4.5);
+        assert_eq!(half.components(), [(DurationType::Half, 0)]);
+        let split = half.split_dot_groups().unwrap();
+        assert_eq!(
+            split.components(),
+            [(DurationType::Half, 1), (DurationType::Quarter, 1)]
+        );
+        assert_eq!(split.quarter_length(), 4.5);
+        half.set_dot_groups(vec![1, 1, 1]);
+        assert_eq!(half.quarter_length(), 6.75);
+        assert_eq!(
+            half.split_dot_groups().unwrap().components(),
+            [
+                (DurationType::Half, 1),
+                (DurationType::Quarter, 1),
+                (DurationType::Quarter, 1),
+                (DurationType::Eighth, 1)
+            ]
+        );
+        assert_eq!(
+            Duration::new(1.5)
+                .unwrap()
+                .split_dot_groups()
+                .unwrap()
+                .components(),
+            [(DurationType::Quarter, 1)]
+        );
+
+        // Unlinked, the length and the written value go their own ways;
+        // linked again, the value is read off the length.
+        let mut unlinked = Duration::quarter();
+        assert!(unlinked.linked());
+        unlinked.set_linked(false);
+        unlinked.set_quarter_length(3.0).unwrap();
+        assert_eq!(unlinked.duration_type(), Some(DurationType::Quarter));
+        assert_eq!(unlinked.quarter_length(), 3.0);
+        unlinked.set_linked(true);
+        assert_eq!(unlinked.type_and_dots(), Some((DurationType::Half, 1)));
+        assert_eq!(unlinked.quarter_length(), 3.0);
+
+        // A grace note keeps what it is written as and sounds nothing.
+        let grace = Duration::new(1.25).unwrap().grace_duration();
+        assert_eq!(
+            typed(&grace),
+            [
+                (Some(DurationType::Quarter), 0, 0.0),
+                (Some(DurationType::Sixteenth), 0, 0.0)
+            ]
+        );
+        assert!(!grace.linked());
+        assert_eq!(grace.quarter_length(), 0.0);
+        let bare = Duration::new(0.0).unwrap().grace_duration();
+        assert_eq!(bare.duration_type(), Some(DurationType::Eighth));
+        let appoggiatura = Duration::new(1.0 / 3.0).unwrap().grace_duration();
+        assert_eq!(appoggiatura.components(), [(DurationType::Eighth, 0)]);
+        assert!(appoggiatura.tuplets().is_empty());
     }
 
     /// music21's own examples, over a tie the crate reads off the length.
