@@ -379,9 +379,19 @@ struct Suite {
     /// obvious from either. Optional so an older `report.json` still reads.
     #[serde(default)]
     note: Option<String>,
+    /// How many of `failed` are no fault of this crate: tests music21 fails
+    /// on its own, and the divergences the suite lists and excuses. Only
+    /// music21's own suite has any.
+    #[serde(default)]
+    expected_failures: usize,
 }
 
 impl Suite {
+    /// The failures that are this crate's to fix.
+    fn regressions(&self) -> usize {
+        self.failed.saturating_sub(self.expected_failures)
+    }
+
     /// Attaches the sentence saying what this suite measures.
     fn describing(mut self, note: &str) -> Self {
         self.note = Some(note.to_string());
