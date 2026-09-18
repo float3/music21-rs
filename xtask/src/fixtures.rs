@@ -170,6 +170,7 @@ pub(crate) fn regenerate(workspace_root: &Path) -> Result<Vec<PathBuf>, Box<dyn 
             write_chord_names(py, workspace_root, stamp)?,
             write_chord_symbols(py, workspace_root, stamp)?,
             write_roman_figures(py, workspace_root, stamp)?,
+            write_voice_leading(py, workspace_root, stamp)?,
         ])
     })
     .map_err(|error| -> Box<dyn Error> { Box::new(error) })
@@ -1345,6 +1346,153 @@ fn sort_parenthesised(label: &str) -> String {
     let mut degrees: Vec<&str> = inside.split(',').collect();
     degrees.sort_unstable();
     format!("{head}({}){tail}", degrees.join(","))
+}
+
+/// The corpus scores the voice-leading walk is checked over. The chorale is
+/// music21's own example; the Schoenberg has chords and rests in it, and the
+/// Haydn has notes written with a natural sign, which music21 holds unequal
+/// to the same note written without one.
+const VOICE_LEADING_SCORES: [&str; 3] = [
+    "bwv66.6",
+    "schoenberg/opus19/movement6",
+    "haydn/opus1no1/movement1",
+];
+
+/// music21's keyword arguments to `iterateAllVoiceLeadingQuartets`, in the
+/// order `includeRests`, `includeOblique`, `includeNoMotion`.
+const VOICE_LEADING_OPTIONS: [(bool, bool, bool); 4] = [
+    (true, true, false),
+    (false, true, false),
+    (true, false, false),
+    (false, true, true),
+];
+
+/// A pitch spelled so that a written natural survives: music21 keeps `Dn`
+/// apart from `D`, and `nameWithOctave` writes both as `D4`.
+fn spelled_pitch(pitch: &Bound<'_, PyAny>) -> PyResult<String> {
+    let step: String = pitch.getattr("step")?.extract()?;
+    let accidental = pitch.getattr("accidental")?;
+    let modifier: String = if accidental.is_none() {
+        String::new()
+    } else if accidental.getattr("alter")?.extract::<f64>()? == 0.0 {
+        "n".to_string()
+    } else {
+        accidental.getattr("modifier")?.extract()?
+    };
+    let octave: i32 = pitch.getattr("octave")?.extract()?;
+    Ok(format!("{step}{modifier}{octave}"))
+}
+
+/// Every quartet music21 finds in a few corpus scores, beside the notes of
+/// each part, so the crate's walk can be checked with no music21 to hand.
+fn write_voice_leading(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> PyResult<PathBuf> {
+    let corpus = py.import("music21.corpus")?;
+    let voice_leading = py.import("music21.voiceLeading")?;
+    let note_class = py.import("music21.note")?.getattr("Note")?;
+    let rest_class = py.import("music21.note")?.getattr("Rest")?;
+    let chord_class = py.import("music21.chord")?.getattr("Chord")?;
+
+    let mut out = header(
+        &[
+            "# Expected voice-leading quartets, generated from music21 by",
+            "# `cargo run --release -p xtask --features python -- regenerate-fixtures`.",
+            "#",
+            "# Each part is its flattened elements as `offset|quarterLength|kind|what`:",
+            "# `n` a note, `c` a chord, `r` a rest, and `o` anything else, with its",
+            "# classSortOrder, since a thing standing where a note starts can come",
+            "# before it. A quartet is `v1n1 v1n2|v2n1 v2n2`. music21 orders the voices",
+            "# within an offset by when each object was inserted, so both sides are",
+            "# sorted before they are compared.",
+        ],
+        stamp,
+    );
+
+    let mut total = 0;
+    for name in VOICE_LEADING_SCORES {
+        let score = corpus.call_method1("parse", (name,))?;
+        let _ = writeln!(out, "[[score]]");
+        let _ = writeln!(out, "name = {}", toml_string(name));
+        let _ = writeln!(out, "parts = [");
+        for part in score.getattr("parts")?.try_iter()? {
+            let flat = part?.call_method0("flatten")?;
+            let mut elements = Vec::new();
+            for element in flat.try_iter()? {
+                let element = element?;
+                let offset: f64 = flat
+                    .call_method1("elementOffset", (&element,))?
+                    .call_method0("__float__")?
+                    .extract()?;
+                let length: f64 = element
+                    .getattr("duration")?
+                    .getattr("quarterLength")?
+                    .call_method0("__float__")?
+                    .extract()?;
+                let (kind, what) = if element.is_instance(&note_class)? {
+                    ("n", spelled_pitch(&element.getattr("pitch")?)?)
+                } else if element.is_instance(&chord_class)? {
+                    let mut pitches = Vec::new();
+                    for pitch in element.getattr("pitches")?.try_iter()? {
+                        pitches.push(spelled_pitch(&pitch?)?);
+                    }
+                    ("c", pitches.join(" "))
+                } else if element.is_instance(&rest_class)? {
+                    ("r", String::new())
+                } else {
+                    let order: f64 = element.getattr("classSortOrder")?.extract()?;
+                    ("o", float_repr(order))
+                };
+                elements.push(toml_string(&format!(
+                    "{}|{}|{kind}|{what}",
+                    float_repr(offset),
+                    float_repr(length)
+                )));
+            }
+            let _ = writeln!(out, "    [{}],", elements.join(", "));
+        }
+        let _ = writeln!(out, "]");
+        for (rests, oblique, no_motion) in VOICE_LEADING_OPTIONS {
+            let keywords = PyDict::new(py);
+            keywords.set_item("includeRests", rests)?;
+            keywords.set_item("includeOblique", oblique)?;
+            keywords.set_item("includeNoMotion", no_motion)?;
+            let mut quartets = Vec::new();
+            for quartet in voice_leading
+                .getattr("iterateAllVoiceLeadingQuartets")?
+                .call((&score,), Some(&keywords))?
+                .try_iter()?
+            {
+                let quartet = quartet?;
+                let mut names = Vec::new();
+                for voice in ["v1n1", "v1n2", "v2n1", "v2n2"] {
+                    let name: String = quartet
+                        .getattr(voice)?
+                        .getattr("nameWithOctave")?
+                        .extract()?;
+                    names.push(name);
+                }
+                quartets.push(toml_string(&format!(
+                    "{} {}|{} {}",
+                    names[0], names[1], names[2], names[3]
+                )));
+            }
+            total += quartets.len();
+            let _ = writeln!(out, "[[score.run]]");
+            let _ = writeln!(out, "include_rests = {rests}");
+            let _ = writeln!(out, "include_oblique = {oblique}");
+            let _ = writeln!(out, "include_no_motion = {no_motion}");
+            let _ = writeln!(out, "quartets = [{}]", quartets.join(", "));
+        }
+        let _ = writeln!(out);
+    }
+
+    let path = workspace_root.join("data/voice_leading_expectations.toml");
+    fs::write(&path, out)?;
+    println!(
+        "  wrote {} ({} scores, {total} quartets)",
+        path.display(),
+        VOICE_LEADING_SCORES.len()
+    );
+    Ok(path)
 }
 
 fn write_scales(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> PyResult<PathBuf> {

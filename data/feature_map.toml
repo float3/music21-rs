@@ -423,9 +423,6 @@ python = "tempo.py"
 rust = ["src/tempo.rs"]
 note = "Module-level helpers."
 
-[class.excluded]
-interpolateElements = "interpolates tempo across the elements of a stream"
-
 [[class]]
 python = "roman.py"
 rust = ["src/roman/mod.rs", "src/roman/analysis.rs", "src/roman/figure.rs", "src/roman/realize.rs"]
@@ -485,9 +482,8 @@ python = "voiceLeading.py"
 rust = ["src/voiceleading.rs"]
 note = "Module-level helpers."
 
-[class.excluded]
-getVerticalityFromObject = "walks a stream"
-iterateAllVoiceLeadingQuartets = "walks a stream"
+[class.renames]
+getVerticalityFromObject = "verticality_at"
 
 # ---------------------------------------------------------------------------
 # What the crate has that music21 does not.

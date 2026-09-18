@@ -6,12 +6,13 @@
 //! forbids.
 
 use crate::{
-    defaults::IntegerType,
+    defaults::{FloatType, IntegerType},
     error::{Error, Result},
     interval::{Interval, IntervalDirection},
     key::Key,
     pitch::Pitch,
     scale::{Scale, ScaleType},
+    stream::{Stream, StreamElement, StreamKind},
 };
 
 use crate::interval::constants::{
@@ -476,6 +477,228 @@ impl VoiceLeadingQuartet {
     }
 }
 
+/// Which quartets [`iterate_all_voice_leading_quartets`] gives: music21's
+/// keyword arguments of the same names, with its defaults.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct QuartetOptions {
+    /// Whether a voice may come to its note out of a rest. Without it, the
+    /// note before has to stop exactly where the next one starts.
+    pub include_rests: bool,
+    /// Whether a voice that holds or repeats its note counts as moving.
+    pub include_oblique: bool,
+    /// Whether a quartet in which neither voice changes pitch is given.
+    pub include_no_motion: bool,
+}
+
+impl Default for QuartetOptions {
+    fn default() -> Self {
+        Self {
+            include_rests: true,
+            include_oblique: true,
+            include_no_motion: false,
+        }
+    }
+}
+
+/// One thing on a part's flattened timeline, as the walk sees it.
+struct Span<'a> {
+    offset: FloatType,
+    end: FloatType,
+    part: usize,
+    element: &'a StreamElement,
+}
+
+impl Span<'_> {
+    fn is_pitched(&self) -> bool {
+        self.element.is_note_or_chord()
+    }
+
+    /// music21's `classSortOrder`, which decides what comes first among the
+    /// things starting together.
+    fn class_sort_order(&self) -> u8 {
+        match self.element {
+            StreamElement::MetronomeMark(_) => 1,
+            StreamElement::KeySignature(_) => 2,
+            StreamElement::TimeSignature(_) => 4,
+            _ => 20,
+        }
+    }
+}
+
+/// Each part of a stream flattened, with the part's own offset added. A
+/// stream holding no parts is one part itself.
+fn flattened_parts(stream: &Stream) -> Vec<Stream> {
+    let parts: Vec<Stream> = stream
+        .events()
+        .iter()
+        .filter_map(|event| {
+            let part = event.element().as_stream()?;
+            (part.kind() == StreamKind::Part).then(|| {
+                let mut holder = Stream::new();
+                holder.insert(event.offset(), part.clone());
+                holder.flatten()
+            })
+        })
+        .collect();
+    if parts.is_empty() {
+        vec![stream.flatten()]
+    } else {
+        parts
+    }
+}
+
+/// Every [`VoiceLeadingQuartet`] in a stream, generally a score: music21's
+/// `iterateAllVoiceLeadingQuartets`.
+///
+/// Wherever a note starts, each voice that moves there is paired with the
+/// note it came from, each voice holding through is paired with itself, and
+/// every two such pairs make a quartet. Only notes make one; a pair with a
+/// chord in it is passed over, as it is upstream.
+///
+/// The quartets come in the order of the score: by offset, then by part,
+/// the first-named voice being the earlier part. music21 orders the voices
+/// within an offset by a counter of when each note object was put into its
+/// stream, which says nothing about the music, so its order within an offset
+/// can differ; the quartets themselves are the same.
+///
+/// A voice comes *from* the first thing in its part at the nearest earlier
+/// offset where anything in that part starts. If that is not a note or
+/// chord -- a rest, or a time signature standing where a note also starts --
+/// the voice has no pair there. That is music21's reading and is kept.
+pub fn iterate_all_voice_leading_quartets(
+    stream: &Stream,
+    options: QuartetOptions,
+) -> Result<Vec<VoiceLeadingQuartet>> {
+    let parts = flattened_parts(stream);
+    let mut spans: Vec<Span<'_>> = Vec::new();
+    for (part, flat) in parts.iter().enumerate() {
+        for event in flat.events() {
+            spans.push(Span {
+                offset: event.offset(),
+                end: event.end_offset(),
+                part,
+                element: event.element(),
+            });
+        }
+    }
+    // Stable, so things starting together stay in part order and then in
+    // the order their part holds them.
+    spans.sort_by(|left, right| {
+        left.offset
+            .total_cmp(&right.offset)
+            .then(left.class_sort_order().cmp(&right.class_sort_order()))
+    });
+
+    let mut quartets = Vec::new();
+    let mut start = 0;
+    while start < spans.len() {
+        let offset = spans[start].offset;
+        let stop = start
+            + spans[start..]
+                .iter()
+                .take_while(|span| span.offset == offset)
+                .count();
+
+        let mut motions: Vec<(&Span<'_>, &Span<'_>)> = Vec::new();
+        for starting in spans[start..stop].iter().filter(|span| span.is_pitched()) {
+            // The nearest earlier offset where this part starts anything,
+            // and the first thing it starts there.
+            let Some(nearest) = spans[..start]
+                .iter()
+                .rev()
+                .find(|span| span.part == starting.part)
+                .map(|span| span.offset)
+            else {
+                continue;
+            };
+            let previous = spans[..start]
+                .iter()
+                .find(|span| span.part == starting.part && span.offset == nearest);
+            let Some(previous) = previous.filter(|span| span.is_pitched()) else {
+                continue;
+            };
+            // A hair of latitude, since offsets here are floats where
+            // music21's are fractions.
+            if !options.include_rests && (previous.end - offset).abs() > 1e-9 {
+                continue;
+            }
+            if !options.include_oblique && previous.element.pitches() == starting.element.pitches()
+            {
+                continue;
+            }
+            motions.push((previous, starting));
+        }
+        if options.include_oblique {
+            for held in spans[..start]
+                .iter()
+                .filter(|span| span.is_pitched() && span.end - offset > 1e-9)
+            {
+                motions.push((held, held));
+            }
+        }
+
+        for (index, first) in motions.iter().enumerate() {
+            for second in &motions[index + 1..] {
+                if !options.include_no_motion
+                    && first.0.element.pitches() == first.1.element.pitches()
+                    && second.0.element.pitches() == second.1.element.pitches()
+                {
+                    continue;
+                }
+                let (
+                    StreamElement::Note(v1n1),
+                    StreamElement::Note(v1n2),
+                    StreamElement::Note(v2n1),
+                    StreamElement::Note(v2n2),
+                ) = (
+                    first.0.element,
+                    first.1.element,
+                    second.0.element,
+                    second.1.element,
+                )
+                else {
+                    continue;
+                };
+                quartets.push(VoiceLeadingQuartet::new(
+                    v1n1.pitch().clone(),
+                    v1n2.pitch().clone(),
+                    v2n1.pitch().clone(),
+                    v2n2.pitch().clone(),
+                )?);
+            }
+        }
+        start = stop;
+    }
+    Ok(quartets)
+}
+
+/// What is sounding or standing in each part at an offset, part by part:
+/// music21's `getVerticalityFromObject`, asked by offset since a stream here
+/// owns its notes and an offset is what says where one is.
+///
+/// A thing counts if it starts there or is still going, and a thing of no
+/// length counts where it stands. Parts holding nothing there are left out,
+/// so each answer carries the index of its part.
+pub fn verticality_at(stream: &Stream, offset: FloatType) -> Vec<(usize, Vec<StreamElement>)> {
+    flattened_parts(stream)
+        .iter()
+        .enumerate()
+        .filter_map(|(part, flat)| {
+            let elements: Vec<StreamElement> = flat
+                .events()
+                .iter()
+                .filter(|event| {
+                    event.offset() == offset
+                        || (event.offset() < offset && offset < event.end_offset())
+                })
+                .map(|event| event.element().clone())
+                .collect();
+            (!elements.is_empty()).then_some((part, elements))
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -815,5 +1038,63 @@ mod tests {
         assert!(!quartet.hidden_octave());
         let quartet = VoiceLeadingQuartet::from_names("E4", "C5", "C4", "C4").unwrap();
         assert!(!quartet.hidden_octave());
+    }
+
+    /// The walk over whole scores is checked against music21 by
+    /// `voice_leading_parity`; this is the shape of it on two bars.
+    #[test]
+    fn a_score_is_walked_into_its_quartets() {
+        use crate::{Duration, Note, Rest};
+
+        let line = |notes: &[(&str, FloatType)]| {
+            let mut part = Stream::with_kind(StreamKind::Part);
+            for (name, length) in notes {
+                let duration = Duration::new(*length).unwrap();
+                if name.is_empty() {
+                    part.push(Rest::new(duration));
+                } else {
+                    part.push(Note::from_name(*name).unwrap().with_duration(duration));
+                }
+            }
+            part
+        };
+        let mut score = Stream::with_kind(StreamKind::Score);
+        score.insert(
+            0.0,
+            line(&[("C5", 1.0), ("D5", 1.0), ("", 1.0), ("E5", 1.0)]),
+        );
+        score.insert(0.0, line(&[("C4", 2.0), ("G3", 2.0)]));
+
+        let names = |options| -> Vec<String> {
+            iterate_all_voice_leading_quartets(&score, options)
+                .unwrap()
+                .iter()
+                .map(|quartet| {
+                    [
+                        quartet.v1n1(),
+                        quartet.v1n2(),
+                        quartet.v2n1(),
+                        quartet.v2n2(),
+                    ]
+                    .map(Pitch::name_with_octave)
+                    .join(" ")
+                })
+                .collect()
+        };
+        // The upper voice moves while the lower holds; then the lower moves
+        // under a rest, which leaves it nothing to be paired with; and the
+        // upper voice comes back out of a rest it has no note to come from.
+        assert_eq!(names(QuartetOptions::default()), ["C5 D5 C4 C4"]);
+        let strict = QuartetOptions {
+            include_oblique: false,
+            ..QuartetOptions::default()
+        };
+        assert!(names(strict).is_empty());
+
+        let sounding = verticality_at(&score, 1.5);
+        assert_eq!(sounding.len(), 2);
+        assert_eq!(sounding[0].1[0].pitches()[0].name_with_octave(), "D5");
+        assert_eq!(sounding[1].1[0].pitches()[0].name_with_octave(), "C4");
+        assert!(verticality_at(&score, 9.0).is_empty());
     }
 }
