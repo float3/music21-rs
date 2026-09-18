@@ -174,6 +174,19 @@ def test_sieve_module_functions():
     assert m.unitNormStep(0.25) == [0.0, 0.25, 0.5, 0.75, 1.0]
 
 
+def test_sieve_compression():
+    sieve = m.Sieve("(5|2)&4&8")
+    assert sieve.segment("cmp", segmentFormat="wid") == [8] * 12
+    assert sieve.represent("cmp") == "8@0" and sieve.period() == 40
+    sieve.compress()
+    assert str(sieve) == "8@0" and sieve.period() == 8
+    sieve.expand()
+    assert str(sieve) == "{5@0|2@0}&4@0&8@0"
+    assert m.Sieve("3@0^4@0").represent("cmp") == "6@3|12@4|12@6|12@8"
+    with pytest.raises(m.SieveException):
+        m.Sieve("-3@0&5").segment("cmp")
+
+
 def test_harmony_module_functions():
     assert m.getAbbreviationListGivenChordType("dominant-seventh") == ["7", "dom7"]
     assert m.getCurrentAbbreviationFor("major") == ""

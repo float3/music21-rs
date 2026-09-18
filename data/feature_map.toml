@@ -259,11 +259,13 @@ rust = ["src/voiceleading.rs"]
 python = "sieve.py"
 name = "Sieve"
 rust = ["src/sieve.rs"]
-note = "The sieve as written: parse, membership, the segment formats and the interval widths of one period."
+note = "The sieve as written and its compressed reading: parse, membership, the segment formats and the interval widths of one period."
+
+[class.renames]
+compress = "compressed"
 
 [class.excluded]
-expand = "the compressed reading of a sieve is not modelled"
-compress = "the compressed reading of a sieve is not modelled"
+expand = "which reading answers is not state on the sieve here; `compressed` hands back the other one and the sieve as written stays as it was"
 setZ = "the range is an argument of each question here, not state on the sieve"
 setZRange = "the range is an argument of each question here, not state on the sieve"
 setSegmentFormat = "the segment format is an argument of each question here, not state on the sieve"

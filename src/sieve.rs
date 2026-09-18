@@ -10,8 +10,9 @@
 //! membership, the segment formats and the interval widths of one period —
 //! and the number helpers music21 keeps beside it: primes by
 //! [`eratosthenes`] and [`rabin_miller`], and the unit-interval spacings
-//! [`unit_norm_range`], [`unit_norm_equal`] and [`unit_norm_step`]. Sieve
-//! compression and pitch-range realization stay music21's.
+//! [`unit_norm_range`], [`unit_norm_equal`] and [`unit_norm_step`].
+//! [`Sieve::compressed`] is the compressed reading; pitch-range realization
+//! stays music21's.
 
 use std::fmt;
 
@@ -97,6 +98,71 @@ impl Node {
                 Self::Xor(Box::new(left.shifted(n)), Box::new(right.shifted(n)))
             }
         }
+    }
+
+    /// Whether the expression is more than runs of `&` joined by `|`: a
+    /// group, a `^`, or a complement of anything but a single class.
+    ///
+    /// music21 compresses such a sieve from its members over a range rather
+    /// than by intersecting its classes.
+    fn is_bound(&self) -> bool {
+        match self {
+            Self::Residual { .. } => false,
+            Self::Group(_) | Self::Xor(..) => true,
+            Self::Not(inner) => !matches!(**inner, Self::Residual { .. }),
+            Self::And(left, right) | Self::Or(left, right) => left.is_bound() || right.is_bound(),
+        }
+    }
+
+    /// The runs of `&` an unbound expression joins with `|`, in the order
+    /// written, each as the classes it intersects.
+    fn collect_or_groups<'a>(&'a self, out: &mut Vec<Vec<&'a Node>>) {
+        if let Self::Or(left, right) = self {
+            left.collect_or_groups(out);
+            right.collect_or_groups(out);
+        } else {
+            let mut group = Vec::new();
+            self.collect_and_leaves(&mut group);
+            out.push(group);
+        }
+    }
+
+    fn collect_and_leaves<'a>(&'a self, out: &mut Vec<&'a Node>) {
+        if let Self::And(left, right) = self {
+            left.collect_and_leaves(out);
+            right.collect_and_leaves(out);
+        } else {
+            out.push(self);
+        }
+    }
+
+    /// The one class a run of `&` meets in. A class standing alone is kept
+    /// as written, complemented or not; a complemented one cannot be
+    /// intersected, as it cannot upstream.
+    fn intersection_of(leaves: Vec<&Node>) -> Result<Node> {
+        if let [alone] = leaves[..] {
+            return Ok(alone.clone());
+        }
+        let mut met: Option<(i128, i128)> = None;
+        for leaf in leaves {
+            let Self::Residual { modulus, shift } = leaf else {
+                return Err(Error::Sieve(
+                    "complemented residual classes cannot be intersected".to_string(),
+                ));
+            };
+            let next = (i128::from(*modulus), i128::from(*shift));
+            met = Some(match met {
+                None => next,
+                Some(so_far) => intersect_classes(so_far, next)?,
+            });
+        }
+        let (modulus, shift) = met.expect("a run of `&` holds at least one class");
+        let modulus = UnsignedIntegerType::try_from(modulus)
+            .map_err(|_| Error::Sieve(format!("the modulus {modulus} is too large")))?;
+        Ok(Self::Residual {
+            modulus,
+            shift: shift as UnsignedIntegerType,
+        })
     }
 
     fn collect_moduli(&self, out: &mut Vec<UnsignedIntegerType>) {
@@ -256,9 +322,8 @@ impl Sieve {
     /// The members of both sieves, written the way music21 writes a combined
     /// sieve: each side in braces around the operator.
     ///
-    /// Note the order. music21's `a & b` answers `{b}&{a}`, so the facade
-    /// calls this the other way round; the crate keeps the order a reader
-    /// would expect.
+    /// `a.intersection(&b)` is written `{a}&{b}`. Note that music21's
+    /// `a & b` writes the two the other way round, `{b}&{a}`.
     pub fn intersection(&self, other: &Self) -> Self {
         self.combined(other, Node::And)
     }
@@ -273,6 +338,87 @@ impl Sieve {
     /// [`Sieve::intersection`] for the bracketing and the order.
     pub fn symmetric_difference(&self, other: &Self) -> Self {
         self.combined(other, Node::Xor)
+    }
+
+    /// The compressed reading of the sieve: a union of residual classes with
+    /// the same members, which is music21's `cmp` state.
+    ///
+    /// A sieve written with nothing but `&` and `|` is compressed by
+    /// intersection: each run of `&` becomes the one class its residuals
+    /// meet in, whatever the range. Anything written with a group, a `^` or
+    /// a complemented group is compressed from its members in `low..=high`
+    /// instead, by finding for each member in turn the smallest modulus
+    /// whose class holds nothing the sieve does not, so that reading depends
+    /// on the range it was taken over.
+    ///
+    /// It is an error where there is no such reading: a complemented class
+    /// intersected with another, classes that never meet, or fewer than two
+    /// members in the range.
+    ///
+    /// ```
+    /// use music21_rs::Sieve;
+    ///
+    /// assert_eq!(Sieve::parse("2&4&8|5")?.compressed(0, 99)?.to_string(), "8@0|5@0");
+    /// assert_eq!(Sieve::parse("(5|2)&4&8")?.compressed(0, 99)?.to_string(), "8@0");
+    /// assert_eq!(
+    ///     Sieve::parse("3@0^4@0")?.compressed(0, 99)?.to_string(),
+    ///     "6@3|12@4|12@6|12@8"
+    /// );
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
+    pub fn compressed(&self, low: IntegerType, high: IntegerType) -> Result<Self> {
+        let classes = if self.root.is_bound() {
+            self.classes_of_segment(low, high)?
+        } else {
+            let mut groups = Vec::new();
+            self.root.collect_or_groups(&mut groups);
+            groups
+                .into_iter()
+                .map(Node::intersection_of)
+                .collect::<Result<Vec<_>>>()?
+        };
+        let root = classes
+            .into_iter()
+            .reduce(|left, right| Node::Or(Box::new(left), Box::new(right)))
+            .ok_or_else(|| Error::Sieve(format!("sieve {self} has no residual classes")))?;
+        Ok(Self { root })
+    }
+
+    /// music21's `CompressionSegment` over the members in `low..=high`.
+    fn classes_of_segment(&self, low: IntegerType, high: IntegerType) -> Result<Vec<Node>> {
+        let members = self.segment(low, high);
+        if members.len() < 2 {
+            return Err(Error::Sieve(format!(
+                "sieve {self} has {} member(s) in {low}..={high}; compressing a segment takes more than one",
+                members.len()
+            )));
+        }
+        let is_member = |z: IntegerType| members.binary_search(&z).is_ok();
+        // music21 tries every modulus below the length of the range.
+        let span = high - low + 1;
+
+        let mut remaining = members.clone();
+        let mut classes: Vec<(IntegerType, IntegerType)> = Vec::new();
+        while let Some(&n) = remaining.first() {
+            let modulus = (1..span)
+                .find(|m| {
+                    let first = low + (n - low).rem_euclid(*m);
+                    (first..=high).step_by(*m as usize).all(is_member)
+                })
+                .ok_or_else(|| {
+                    Error::Sieve(format!("a mod was not found less than {span} for {n}"))
+                })?;
+            remaining.retain(|z| (z - n).rem_euclid(modulus) != 0);
+            classes.push((modulus, n.rem_euclid(modulus)));
+        }
+        classes.sort_unstable();
+        Ok(classes
+            .into_iter()
+            .map(|(modulus, shift)| Node::Residual {
+                modulus: modulus as UnsignedIntegerType,
+                shift: shift as UnsignedIntegerType,
+            })
+            .collect())
     }
 
     fn combined(&self, other: &Self, join: fn(Box<Node>, Box<Node>) -> Node) -> Self {
@@ -321,6 +467,26 @@ fn lcm(a: UnsignedIntegerType, b: UnsignedIntegerType) -> UnsignedIntegerType {
         return 0;
     }
     num::integer::lcm(a, b)
+}
+
+/// The class two residual classes meet in, each given as modulus and shift:
+/// music21's `Residual.__and__`, after Xenakis.
+///
+/// Two classes whose moduli share a factor meet only when their shifts agree
+/// modulo it, and otherwise not at all.
+fn intersect_classes((m1, n1): (i128, i128), (m2, n2): (i128, i128)) -> Result<(i128, i128)> {
+    let d = num::integer::gcd(m1, m2);
+    if (n1 - n2) % d != 0 {
+        return Err(Error::Sieve(format!(
+            "the classes {m1}@{n1} and {m2}@{n2} never meet"
+        )));
+    }
+    let (c1, c2) = (m1 / d, m2 / d);
+    let modulus = c1 * c2 * d;
+    // The g with g * c1 = 1 (mod c2), which exists because c1 and c2 share
+    // no factor.
+    let g = num::Integer::extended_gcd(&c1, &c2).x.rem_euclid(c2);
+    Ok((modulus, (n1 + g * (n2 - n1) * c1).rem_euclid(modulus)))
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -758,6 +924,44 @@ mod tests {
     /// music21 writes a sieve back out as it was given, with the residuals
     /// normalized and the groups kept. Every string here was read off
     /// music21 11.0.0b9.
+    #[test]
+    fn compression_answers_what_music21_answers() {
+        let compressed = |expression: &str, low, high| {
+            Sieve::parse(expression)
+                .unwrap()
+                .compressed(low, high)
+                .map(|sieve| sieve.to_string())
+        };
+        // By intersection, whatever the range.
+        assert_eq!(compressed("3@11", 0, 99).unwrap(), "3@2");
+        assert_eq!(compressed("2&4&8|5", 0, 99).unwrap(), "8@0|5@0");
+        assert_eq!(compressed("3@2&5@1", 0, 99).unwrap(), "15@11");
+        assert_eq!(compressed("4@1&6@3", 0, 99).unwrap(), "12@9");
+        assert_eq!(compressed("5@2&4@1&3@0|7", 0, 99).unwrap(), "60@57|7@0");
+        assert_eq!(compressed("3@1|3@1&2", 0, 99).unwrap(), "3@1|6@4");
+        assert_eq!(compressed("-3@0|5", 0, 99).unwrap(), "-3@0|5@0");
+        // From the members of a range.
+        assert_eq!(compressed("(5|2)&4&8", 0, 99).unwrap(), "8@0");
+        assert_eq!(compressed("(5|2)&4&8", 20, 49).unwrap(), "8@0");
+        assert_eq!(compressed("3@0^4@0", 0, 99).unwrap(), "6@3|12@4|12@6|12@8");
+        assert_eq!(compressed("-(3|4)", 0, 99).unwrap(), "6@1|6@5|12@2|12@10");
+        assert_eq!(compressed("-{3}", 0, 99).unwrap(), "3@1|3@2");
+        assert_eq!(compressed("7@3|{-3@0&5}", 0, 99).unwrap(), "7@3|15@5|15@10");
+        assert_eq!(compressed("{-4@1}&{3@0}", 0, 99).unwrap(), "6@0|12@3");
+        assert_eq!(compressed("{7}", 0, 7).unwrap(), "7@0");
+
+        let sieve = Sieve::parse("(5|2)&4&8").unwrap();
+        let compressed_sieve = sieve.compressed(0, 99).unwrap();
+        assert_eq!(compressed_sieve.period(), 8);
+        assert_eq!(compressed_sieve.segment_widths(0, 99), [8; 12]);
+        assert_eq!(compressed_sieve.segment(0, 99), sieve.segment(0, 99));
+
+        // No such reading.
+        assert!(compressed("-3@0&5", 0, 99).is_err());
+        assert!(compressed("4@1&6@2", 0, 99).is_err());
+        assert!(compressed("{7}", 5, 8).is_err());
+    }
+
     #[test]
     fn a_sieve_is_written_the_way_music21_writes_one() {
         for (written, expected) in [
