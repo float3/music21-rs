@@ -9,12 +9,12 @@ impl Pitch {
     /// altered pitches has this pitch's step and the same accidental. A
     /// pitch with no accidental object never matches.
     pub fn name_in_key_signature(&self, altered_pitches: &[Pitch]) -> bool {
-        if !self.has_accidental {
+        let Some(name) = self.accidental_name() else {
             return false;
-        }
-        altered_pitches.iter().any(|p| {
-            p.step == self.step && p.has_accidental && p.accidental.name() == self.accidental.name()
-        })
+        };
+        altered_pitches
+            .iter()
+            .any(|p| p.step == self.step && p.accidental_name() == Some(name))
     }
 
     /// music21's `_stepInKeySignature`: whether a key signature alters this
@@ -24,11 +24,30 @@ impl Pitch {
     }
 
     pub(super) fn set_display_status_creating(&mut self, status: bool) {
-        if !self.has_accidental {
-            self.accidental = Accidental::natural();
-            self.has_accidental = true;
+        self.accidental
+            .get_or_insert_with(Accidental::natural)
+            .set_display_status(Some(status));
+    }
+
+    /// Records whether the accidental is shown, where there is one to show.
+    fn set_display_status(&mut self, status: bool) {
+        if let Some(accidental) = &mut self.accidental {
+            accidental.set_display_status(Some(status));
         }
-        self.accidental.set_display_status(Some(status));
+    }
+
+    fn accidental_name(&self) -> Option<&str> {
+        self.accidental.as_ref().map(Accidental::name)
+    }
+
+    fn accidental_display_type(&self) -> Option<&str> {
+        self.accidental.as_ref().map(Accidental::display_type)
+    }
+
+    fn accidental_display_status(&self) -> Option<bool> {
+        self.accidental
+            .as_ref()
+            .and_then(Accidental::display_status)
     }
 
     /// Decides whether this pitch's accidental should be shown, given the
@@ -45,21 +64,16 @@ impl Pitch {
             .collect();
         let mut display_if_no_previous_accidentals = false;
 
-        if !options.override_status
-            && self.has_accidental
-            && self.accidental.display_status().is_some()
-        {
+        if !options.override_status && self.accidental_display_status().is_some() {
             return;
         }
-        if self.has_accidental && self.accidental.display_type() == "never" {
-            self.accidental.set_display_status(Some(false));
+        if self.accidental_display_type() == Some("never") {
+            self.set_display_status(false);
             return;
         }
         if options.last_note_was_tied {
-            if self.has_accidental {
-                let even_tied = self.accidental.display_type() == "even-tied";
-                self.accidental.set_display_status(Some(even_tied));
-            }
+            let even_tied = self.accidental_display_type() == Some("even-tied");
+            self.set_display_status(even_tied);
             return;
         }
         if options.cautionary_pitch_class
@@ -72,28 +86,26 @@ impl Pitch {
             return;
         }
         if options.cautionary_all
-            || (self.has_accidental
-                && matches!(self.accidental.display_type(), "even-tied" | "always"))
+            || matches!(self.accidental_display_type(), Some("even-tied" | "always"))
         {
             self.set_display_status_creating(true);
             return;
         }
         if past_all.is_empty() {
-            if self.has_accidental
-                && (options.override_status || self.accidental.display_status() != Some(true))
+            if self.accidental.is_some()
+                && (options.override_status || self.accidental_display_status() != Some(true))
             {
-                let status = if self.accidental.name() == "natural" {
+                let status = if self.accidental_name() == Some("natural") {
                     self.step_in_key_signature(altered)
                 } else {
                     !self.name_in_key_signature(altered)
                 };
-                self.accidental.set_display_status(Some(status));
-            } else if self.has_accidental
-                && self.accidental.display_status() == Some(true)
+                self.set_display_status(status);
+            } else if self.accidental_display_status() == Some(true)
                 && self.name_in_key_signature(altered)
             {
-                self.accidental.set_display_status(Some(false));
-            } else if (!self.has_accidental || self.accidental.name() == "natural")
+                self.set_display_status(false);
+            } else if matches!(self.accidental_name(), None | Some("natural"))
                 && self.step_in_key_signature(altered)
             {
                 self.set_display_status_creating(true);
@@ -116,7 +128,7 @@ impl Pitch {
         let name_in_key = self.name_in_key_signature(altered);
         let step_in_key = self.step_in_key_signature(altered);
         let if_absolutely_necessary =
-            self.has_accidental && self.accidental.display_type() == "if-absolutely-necessary";
+            self.accidental_display_type() == Some("if-absolutely-necessary");
         for i in (0..past_all.len()).rev() {
             let past_in_measure = i >= out_of_measure_length;
             let continuous_repeats_in_measure = past_in_measure
@@ -127,11 +139,11 @@ impl Pitch {
                 break;
             }
             if !past_in_measure
-                && self.has_accidental
-                && self.accidental.name() != "natural"
+                && self.accidental.is_some()
+                && self.accidental_name() != Some("natural")
                 && !name_in_key
             {
-                self.accidental.set_display_status(Some(true));
+                self.set_display_status(true);
                 return;
             }
             let past = past_all[i];
@@ -139,21 +151,14 @@ impl Pitch {
                 continue;
             }
             let octave_match = self.octave == past.octave;
-            let past_acc = past.explicit_accidental();
+            let past_acc = past.accidental();
             let past_name = past_acc.map(Accidental::name);
             let past_status = past_acc.and_then(Accidental::display_status);
-            let self_acc_name = self
-                .has_accidental
-                .then(|| self.accidental.name().to_string());
-            let self_status = self
-                .has_accidental
-                .then(|| self.accidental.display_status())
-                .flatten();
+            let self_acc_name = self.accidental_name().map(str::to_string);
+            let self_status = self.accidental_display_status();
 
             if continuous_repeats_in_measure && past_status == Some(true) {
-                if self.has_accidental {
-                    self.accidental.set_display_status(Some(false));
-                }
+                self.set_display_status(false);
                 return;
             } else if continuous_repeats_in_measure
                 && past_acc.is_some()
@@ -164,7 +169,7 @@ impl Pitch {
                     display_if_no_previous_accidentals = true;
                     continue;
                 }
-                self.accidental.set_display_status(Some(false));
+                self.set_display_status(false);
                 set_from_pitch_past = true;
                 break;
             } else if past_name == Some("natural")
@@ -173,15 +178,15 @@ impl Pitch {
                 if continuous_repeats_in_measure {
                     if step_in_key && !octave_match {
                         self.set_display_status_creating(true);
-                    } else if self.has_accidental {
-                        self.accidental.set_display_status(Some(false));
+                    } else {
+                        self.set_display_status(false);
                     }
                 } else if step_in_key
                     && (options.cautionary_not_immediate_repeat || !past_in_measure)
                 {
                     self.set_display_status_creating(true);
-                } else if self.has_accidental {
-                    self.accidental.set_display_status(Some(false));
+                } else {
+                    self.set_display_status(false);
                 }
                 set_from_pitch_past = true;
                 break;
@@ -206,7 +211,7 @@ impl Pitch {
                         && past_name != self_acc_name.as_deref()
                         && (octave_match || !if_absolutely_necessary)))
             {
-                self.accidental.set_display_status(Some(true));
+                self.set_display_status(true);
                 set_from_pitch_past = true;
                 break;
             } else if past_acc.is_none() && self_acc_name.is_some() {
@@ -215,7 +220,7 @@ impl Pitch {
                 } else {
                     true
                 };
-                self.accidental.set_display_status(Some(status));
+                self.set_display_status(status);
                 set_from_pitch_past = true;
                 break;
             } else if !continuous_repeats_in_measure
@@ -225,14 +230,14 @@ impl Pitch {
                 && octave_match
             {
                 if !options.cautionary_not_immediate_repeat && past_status != Some(false) {
-                    self.accidental.set_display_status(Some(false));
+                    self.set_display_status(false);
                     display_if_no_previous_accidentals = false;
                     set_from_pitch_past = true;
                     break;
                 } else if past_status == Some(false) {
                     display_if_no_previous_accidentals = true;
                 } else {
-                    self.accidental.set_display_status(Some(!name_in_key));
+                    self.set_display_status(!name_in_key);
                     return;
                 }
             }
@@ -240,16 +245,16 @@ impl Pitch {
         if display_if_no_previous_accidentals {
             if !name_in_key {
                 self.set_display_status_creating(true);
-            } else if self.has_accidental {
-                self.accidental.set_display_status(Some(false));
+            } else {
+                self.set_display_status(false);
             }
-        } else if !set_from_pitch_past && self.has_accidental {
-            let status = if self.accidental.name() == "natural" {
+        } else if !set_from_pitch_past && self.accidental.is_some() {
+            let status = if self.accidental_name() == Some("natural") {
                 step_in_key
             } else {
                 !name_in_key
             };
-            self.accidental.set_display_status(Some(status));
+            self.set_display_status(status);
         } else if !set_from_pitch_past && step_in_key {
             self.set_display_status_creating(true);
         }

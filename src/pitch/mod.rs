@@ -40,7 +40,7 @@ use ordered_float::OrderedFloat;
 use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -179,9 +179,9 @@ impl PitchOptions {
 pub struct Pitch {
     step: StepName,
     octave: Octave,
-    accidental: Accidental,
-    #[cfg_attr(feature = "serde", serde(default))]
-    has_accidental: bool,
+    /// The accidental written, if any: a bare `D` has none and `Dn` a
+    /// natural, as music21 keeps them.
+    accidental: Option<Accidental>,
     microtone: Option<Microtone>,
     spelling_is_inferred: bool,
     #[cfg_attr(feature = "serde", serde(skip))]
@@ -193,7 +193,6 @@ impl PartialEq for Pitch {
         self.step == other.step
             && self.octave == other.octave
             && self.accidental == other.accidental
-            && self.has_accidental == other.has_accidental
             && self.microtone == other.microtone
     }
 }
@@ -291,21 +290,19 @@ impl Pitch {
         }
         .unwrap_or(PITCH_STEP);
         let octave = octave.or(parsed.octave);
-        let parsed_has_accidental = parsed.accidental.is_some();
         let accidental = match accidental {
-            Some(accidental) => Accidental::new(accidental)?,
-            None => parsed.accidental.unwrap_or_default(),
+            Some(accidental) => Some(Accidental::new(accidental)?),
+            None => parsed.accidental,
         };
         let microtone = match microtone {
             Some(microtone) => Some(Microtone::new(microtone)?),
             None => parsed.microtone,
         };
 
-        let explicit_accidental = has_explicit_accidental.then(|| accidental.clone());
+        let explicit_accidental = accidental.clone().filter(|_| has_explicit_accidental);
         let mut pitch = Pitch {
             step,
             accidental,
-            has_accidental: has_explicit_accidental || parsed_has_accidental,
             microtone,
             octave,
             spelling_is_inferred: parsed.spelling_is_inferred,
@@ -326,7 +323,8 @@ impl Pitch {
         if let Some(accidental) = explicit_accidental {
             pitch.accidental_setter(accidental);
         } else if pitch.spelling_is_inferred {
-            pitch.has_accidental = pitch.accidental.alter() != 0.0;
+            // A spelling the crate chose writes no natural nobody asked for.
+            pitch.accidental = pitch.accidental.take().filter(|a| a.alter() != 0.0);
         }
         if let Some(microtone) = pitch.microtone.clone() {
             pitch.microtone_setter(microtone);
@@ -402,7 +400,11 @@ impl Pitch {
 
     /// Returns the pitch name without octave, such as `"F#"` or `"B-"`.
     pub fn name(&self) -> String {
-        format!("{}{}", self.step.as_char(), self.accidental.modifier())
+        format!(
+            "{}{}",
+            self.step.as_char(),
+            self.accidental_or_natural().modifier()
+        )
     }
 
     fn name_setter(&mut self, usr_str: &str) -> Result<()> {
@@ -431,8 +433,7 @@ impl Pitch {
 
         let accidental_str: String = pitch_chars.collect();
         if accidental_str.is_empty() {
-            self.accidental = Accidental::natural();
-            self.has_accidental = false;
+            self.accidental = None;
         } else {
             self.accidental_setter(Accidental::new(accidental_str)?);
         }
@@ -451,7 +452,10 @@ impl Pitch {
     pub fn alter(&self) -> FloatType {
         let mut post = 0.0;
 
-        post += self.accidental.alter;
+        post += self
+            .accidental
+            .as_ref()
+            .map_or(0.0, |accidental| accidental.alter);
 
         if let Some(microtone) = &self.microtone {
             post += microtone.alter();
@@ -460,12 +464,25 @@ impl Pitch {
         post
     }
 
-    /// Returns this pitch's accidental object.
-    ///
-    /// Unlike Python music21, this crate stores an explicit natural accidental
-    /// for natural pitches.
-    pub fn accidental(&self) -> &Accidental {
-        &self.accidental
+    /// The accidental written on the pitch, if any: music21's
+    /// `accidental`. A pitch spelled with a bare letter (`D`) has none, and
+    /// one spelled with a natural (`Dn`) has a natural, so the two are
+    /// different pitches as they are upstream. [`Self::alter`] is the
+    /// alteration either way.
+    pub fn accidental(&self) -> Option<&Accidental> {
+        self.accidental.as_ref()
+    }
+
+    /// The accidental, for editing in place, if the pitch has one.
+    pub fn accidental_mut(&mut self) -> Option<&mut Accidental> {
+        self.accidental.as_mut()
+    }
+
+    /// The accidental, or a natural where none is written: what the pitch
+    /// sounds as, for the arithmetic that does not care which.
+    pub(crate) fn accidental_or_natural(&self) -> &Accidental {
+        static NATURAL: LazyLock<Accidental> = LazyLock::new(Accidental::natural);
+        self.accidental.as_ref().unwrap_or(&NATURAL)
     }
 
     /// Returns this pitch's microtone adjustment, when present.
@@ -556,22 +573,10 @@ impl Pitch {
         Ok(())
     }
 
-    /// Replaces the accidental, a natural when `None` is given.
-    pub(crate) fn set_accidental_or_natural(&mut self, accidental: Option<Accidental>) {
-        self.set_accidental(accidental);
-    }
-
     /// Sets or removes the accidental the way music21's `accidental` setter
-    /// does: `None` leaves the pitch with no accidental object, which
-    /// [`Self::accidental`] still reports as a natural.
+    /// does: `None` leaves the pitch with no accidental at all.
     pub fn set_accidental(&mut self, accidental: Option<Accidental>) {
-        match accidental {
-            Some(accidental) => self.accidental_setter(accidental),
-            None => {
-                self.accidental = Accidental::natural();
-                self.has_accidental = false;
-            }
-        }
+        self.accidental = accidental;
     }
 
     /// Sets the accidental from a semitone alteration the way music21's
@@ -587,15 +592,6 @@ impl Pitch {
         Ok(())
     }
 
-    /// Whether the pitch carries an accidental object at all. music21 keeps
-    /// none on a pitch spelled with a bare letter (`D`) or built from a
-    /// number that needs none, and an explicit natural (`Dn`) is one, so
-    /// `D` and `Dn` differ here while [`Self::accidental`] answers a natural
-    /// for both.
-    pub fn has_accidental(&self) -> bool {
-        self.has_accidental
-    }
-
     /// music21's `spellingIsInferred`: whether the crate chose the spelling
     /// rather than being told it. A pitch built from a number, a MIDI value,
     /// a pitch class or a frequency has an inferred spelling, and only such
@@ -609,20 +605,8 @@ impl Pitch {
         self.spelling_is_inferred = inferred;
     }
 
-    /// The accidental object, if the pitch carries one; see
-    /// [`Self::has_accidental`].
-    pub fn explicit_accidental(&self) -> Option<&Accidental> {
-        self.has_accidental.then_some(&self.accidental)
-    }
-
-    /// The accidental object for editing in place, if the pitch carries one.
-    pub fn explicit_accidental_mut(&mut self) -> Option<&mut Accidental> {
-        self.has_accidental.then_some(&mut self.accidental)
-    }
-
     fn accidental_setter(&mut self, value: Accidental) {
-        self.accidental = value;
-        self.has_accidental = true;
+        self.accidental = Some(value);
     }
 
     /// Sets the microtone from a cent shift, removing it when the shift is
@@ -648,8 +632,7 @@ impl Pitch {
     fn pitch_class_value_setter(&mut self, pc: FloatType) {
         let (step, accidental, _, _) = convert_ps_to_step(pc);
         self.step = step;
-        self.has_accidental = accidental.alter() != 0.0;
-        self.accidental = accidental;
+        self.accidental = (accidental.alter() != 0.0).then_some(accidental);
         self.spelling_is_inferred = true;
     }
 
@@ -669,8 +652,7 @@ impl Pitch {
     fn ps_setter(&mut self, p: FloatType) {
         let (step, accidental, microtone, octave_shift) = convert_ps_to_step(p);
         self.step = step;
-        self.has_accidental = accidental.alter() != 0.0;
-        self.accidental = accidental;
+        self.accidental = (accidental.alter() != 0.0).then_some(accidental);
         if microtone.alter() == 0.0 {
             self.microtone = None;
         } else {
@@ -772,7 +754,7 @@ impl Pitch {
     /// Returns whether this pitch lies on the twelve-tone grid: no quarter
     /// tone accidental and no microtone.
     pub fn is_twelve_tone(&self) -> bool {
-        self.accidental.is_twelve_tone()
+        self.accidental_or_natural().is_twelve_tone()
             && self
                 .microtone
                 .as_ref()
@@ -1034,26 +1016,26 @@ mod tests {
             pitch_past: &past,
             ..AccidentalDisplayOptions::default()
         });
-        assert_eq!(repeat.accidental().display_status(), Some(false));
+        assert_eq!(repeat.accidental_or_natural().display_status(), Some(false));
 
         let mut natural = Pitch::from_name("F4").unwrap();
         natural.update_accidental_display(&AccidentalDisplayOptions {
             pitch_past: &past,
             ..AccidentalDisplayOptions::default()
         });
-        assert!(natural.has_accidental());
-        assert_eq!(natural.accidental().display_status(), Some(true));
+        assert!(natural.accidental().is_some());
+        assert_eq!(natural.accidental_or_natural().display_status(), Some(true));
 
         let mut in_key = Pitch::from_name("F#4").unwrap();
         in_key.update_accidental_display(&AccidentalDisplayOptions {
             altered_pitches: &[Pitch::from_name("F#").unwrap()],
             ..AccidentalDisplayOptions::default()
         });
-        assert_eq!(in_key.accidental().display_status(), Some(false));
+        assert_eq!(in_key.accidental_or_natural().display_status(), Some(false));
 
         let mut fresh = Pitch::from_name("B-4").unwrap();
         fresh.update_accidental_display(&AccidentalDisplayOptions::default());
-        assert_eq!(fresh.accidental().display_status(), Some(true));
+        assert_eq!(fresh.accidental_or_natural().display_status(), Some(true));
     }
 
     /// music21's `.octave` always answers a number, and `.octaveIsImplicit`
@@ -1360,7 +1342,7 @@ mod tests {
             (
                 pitch.name_with_octave(),
                 pitch.microtone().map_or(0.0, Microtone::cents),
-                pitch.accidental().name().to_string(),
+                pitch.accidental_or_natural().name().to_string(),
             )
         };
 
@@ -1892,9 +1874,9 @@ mod tests {
             .unwrap();
 
         assert_eq!(pitch.name_with_octave(), "D`4");
-        assert_eq!(pitch.accidental(), &custom_accidental);
-        assert_eq!(pitch.accidental().name(), "half-flat");
-        assert_eq!(pitch.accidental().alter(), -0.5);
+        assert_eq!(pitch.accidental_or_natural(), &custom_accidental);
+        assert_eq!(pitch.accidental_or_natural().name(), "half-flat");
+        assert_eq!(pitch.accidental_or_natural().alter(), -0.5);
     }
 
     #[test]

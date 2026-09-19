@@ -128,7 +128,14 @@ impl Modifier {
         if inPlace {
             pitchToAlter.setattr(
                 "accidental",
-                Accidental::from_inner(modified.accidental().clone()),
+                // music21 assigns an accidental here whatever the pitch comes to,
+                // a natural included.
+                Accidental::from_inner(
+                    modified
+                        .accidental()
+                        .cloned()
+                        .unwrap_or_else(music21_rs_crate::pitch::Accidental::natural),
+                ),
             )?;
             return Ok(py.None());
         }
