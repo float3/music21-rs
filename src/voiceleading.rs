@@ -159,7 +159,7 @@ impl VoiceLeadingQuartet {
         }
         let (lower_degree_before, lower_degree_after) = match &self.key {
             Some(key) => {
-                let scale = key.as_scale()?;
+                let scale = key.scale();
                 let mut before = scale.degree_of(&self.v2n1)?;
                 let after = scale.degree_of(&self.v2n2)?;
                 if key.mode() == "minor" && before.is_none() {

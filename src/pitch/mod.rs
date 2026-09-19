@@ -764,6 +764,11 @@ impl Pitch {
         self.step.step_to_dnn_offset() + 7 * octave
     }
 
+    /// The letter as a number of steps above C, nought to six.
+    pub(crate) fn step_index(&self) -> IntegerType {
+        self.step as IntegerType - 1
+    }
+
     /// Returns whether this pitch lies on the twelve-tone grid: no quarter
     /// tone accidental and no microtone.
     pub fn is_twelve_tone(&self) -> bool {

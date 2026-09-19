@@ -132,8 +132,7 @@ pub use roman::{
     analyze_chord_with_root, identify_as_tonic_or_dominant, roman_inversion_name,
 };
 pub use scale::{
-    BluesForm, DegreeComparison, DiatonicScale, Scale, ScaleType, SolfegVariant, StepScale,
-    WeightedHexatonicBlues,
+    BluesForm, DegreeComparison, Scale, ScaleType, SolfegVariant, StepScale, WeightedHexatonicBlues,
 };
 pub use serial::{
     HISTORICAL_ROWS, HistoricalRow, IndexedTransformation, LinkClassification, ToneRow,

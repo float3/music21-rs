@@ -2526,7 +2526,7 @@ mod tests {
             ),
         ];
         for (key, notes, expected) in cases {
-            let scale = Key::from_tonic(key).unwrap().as_scale().unwrap();
+            let scale = Key::from_tonic(key).unwrap().scale();
             let degrees = Chord::new(notes)
                 .unwrap()
                 .scale_degrees(&scale)
