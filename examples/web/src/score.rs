@@ -1528,7 +1528,7 @@ pub fn midi_to_abc(bytes: &[u8]) -> Result<String, JsValue> {
 /// read at the degree nearest in pitch, since the notes are twelve-tone.
 fn fixed_cents(system: TuningSystem, semitones: usize) -> f64 {
     let target = semitones as f64 * 100.0;
-    let size = system.octave_size() as usize;
+    let size = system.degrees_per_period() as usize;
     if size == 12 {
         return 1200.0 * system.ratio(semitones).log2() - target;
     }
@@ -1602,7 +1602,6 @@ fn tuning_cents(input: ScoreInput, tuning: &str, tonic: &str) -> Result<TuningCe
                                 RECURSIVE_JI.cents_at(
                                     f64::from(class_above(root, tonic)),
                                     f64::from(class_above(pitch.midi, root)),
-                                    None,
                                 )
                             })
                             .collect()
@@ -1616,7 +1615,7 @@ fn tuning_cents(input: ScoreInput, tuning: &str, tonic: &str) -> Result<TuningCe
         });
     }
     let system = crate::all_playable()
-        .find(|system| crate::tuning_id(*system) == tuning)
+        .find(|system| crate::tuning_is_named(*system, tuning))
         .ok_or_else(|| JsValue::from_str(&format!("no tuning system called {tuning:?}")))?;
     let mut by_class = [0.0; 12];
     for (class, cents) in by_class.iter_mut().enumerate() {

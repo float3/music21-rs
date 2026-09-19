@@ -24,7 +24,7 @@ struct TuningFrequencyInfo {
 struct PlayableTuningSystemInfo {
     id: String,
     name: String,
-    description: &'static str,
+    description: String,
 }
 
 /// Every built-in tuning system a page can offer: the ratio tables and
@@ -33,27 +33,49 @@ fn all_playable() -> impl Iterator<Item = TuningSystem> {
     ALL_TUNING_SYSTEMS.into_iter().chain(
         music21_rs::tuningsystem::COMMON_EQUAL_TEMPERAMENTS
             .into_iter()
-            .filter(|tuning_system| tuning_system.octave_size() != 12),
+            .filter(|tuning_system| !ALL_TUNING_SYSTEMS.contains(tuning_system)),
     )
 }
 
-/// An id that tells the equal temperaments apart: the twelve-tone one keeps
-/// the bare name, so links that named it still work.
+/// The page's own id for a system, kept as it was when the equal
+/// temperaments were separate variants so that links naming one still work:
+/// the three built in keep their bare names and the rest are
+/// `EqualTemperament19` and so on.
 fn tuning_id(tuning_system: TuningSystem) -> String {
     match tuning_system {
-        TuningSystem::EqualTemperament { octave_size } if octave_size != 12 => {
-            format!("EqualTemperament{octave_size}")
-        }
-        other => other.id().to_string(),
+        system if system == TuningSystem::EQUAL_TEMPERAMENT => "EqualTemperament".to_string(),
+        system if system == TuningSystem::WHOLE_TONE => "WholeTone".to_string(),
+        system if system == TuningSystem::QUARTER_TONE => "QuarterTone".to_string(),
+        system => equal_temperament_id(system).unwrap_or_else(|| system.id()),
     }
+}
+
+/// `EqualTemperament19` for an equal division of the octave. Every EDO had
+/// an id of this shape once, the ones built in too, so it is also accepted
+/// when a system is looked up.
+fn equal_temperament_id(tuning_system: TuningSystem) -> Option<String> {
+    match tuning_system {
+        TuningSystem::Equal(division) if division.repeats_at_the_octave() => {
+            Some(format!("EqualTemperament{}", division.divisions()))
+        }
+        _ => None,
+    }
+}
+
+/// Whether an id, current or old, names this system.
+pub(crate) fn tuning_is_named(tuning_system: TuningSystem, id: &str) -> bool {
+    tuning_id(tuning_system) == id || equal_temperament_id(tuning_system).as_deref() == Some(id)
 }
 
 fn tuning_label(tuning_system: TuningSystem) -> String {
     match tuning_system {
-        TuningSystem::EqualTemperament { octave_size } if octave_size != 12 => {
-            format!("Equal temperament, {octave_size} per octave")
+        TuningSystem::Equal(division)
+            if division.repeats_at_the_octave()
+                && !ALL_TUNING_SYSTEMS.contains(&tuning_system) =>
+        {
+            format!("Equal temperament, {} per octave", division.divisions())
         }
-        other => other.display_name().to_string(),
+        other => other.display_name(),
     }
 }
 
@@ -161,7 +183,7 @@ struct KnownChordInfo {
 struct TuningSystemInfo {
     id: String,
     name: String,
-    description: &'static str,
+    description: String,
     family: &'static str,
     octave_size: u32,
     root_frequency_hz: f64,
@@ -691,17 +713,20 @@ pub fn tuning_systems(root_frequency_hz: f64) -> Result<JsValue, JsValue> {
 
     let systems = all_playable()
         .map(|tuning_system| {
-            let octave_size = tuning_system.octave_size();
+            let octave_size = tuning_system.degrees_per_period();
             let label_base = octave_size * 5;
             let degrees = (0..=octave_size)
                 .map(|degree| {
-                    let fraction = tuning_system.fraction(degree as usize);
-                    let ratio = fraction.ratio();
+                    let ratio = tuning_system.ratio(degree as usize);
                     TuningDegreeInfo {
                         degree,
                         label: tuning_system.label(label_base + degree),
                         ratio,
-                        ratio_label: fraction.label(),
+                        // Every system the page offers is exact; a ratio
+                        // with no exact form is written as a decimal.
+                        ratio_label: tuning_system
+                            .fraction(degree as usize)
+                            .map_or_else(|| format!("{ratio:.6}"), |fraction| fraction.label()),
                         frequency_hz: root_frequency_hz * ratio,
                         cents_from_equal_temperament: tuning_system.cents(degree),
                     }
@@ -1130,7 +1155,7 @@ pub fn adaptive_frequency(
     }
     // The crate takes the root as a degree above the base and the key as an
     // interval above that root; the base is C-1, five octaves below C4.
-    let frequency = RECURSIVE_JI.frequency_at(context_degree, degree - context_degree + 60.0, None);
+    let frequency = RECURSIVE_JI.frequency_at(context_degree, degree - context_degree + 60.0);
     Ok(frequency * root_frequency_hz / C4)
 }
 
@@ -1171,7 +1196,7 @@ mod adaptive_tests {
 /// degrees is its own degree and for any other the degree nearest it in
 /// cents within the octave.
 fn frequency_in_system(tuning_system: TuningSystem, pitch_space: f64) -> f64 {
-    let octave_size = tuning_system.octave_size();
+    let octave_size = tuning_system.degrees_per_period();
     if octave_size == 12 {
         return tuning_system.frequency_at(pitch_space);
     }
@@ -1179,7 +1204,7 @@ fn frequency_in_system(tuning_system: TuningSystem, pitch_space: f64) -> f64 {
     let nearest = (0..octave_size)
         .min_by(|a, b| {
             let distance = |degree: &u32| {
-                (1200.0 * tuning_system.fraction(*degree as usize).ratio().log2() - cents).abs()
+                (1200.0 * tuning_system.ratio(*degree as usize).log2() - cents).abs()
             };
             distance(a)
                 .partial_cmp(&distance(b))
@@ -1189,7 +1214,7 @@ fn frequency_in_system(tuning_system: TuningSystem, pitch_space: f64) -> f64 {
     let octave = pitch_space.div_euclid(12.0);
     music21_rs::tuningsystem::CN1
         * (2.0_f64).powf(octave)
-        * tuning_system.fraction(nearest as usize).ratio()
+        * tuning_system.ratio(nearest as usize)
 }
 
 fn parse_midi_input(input: &str) -> Option<Vec<i32>> {

@@ -96,6 +96,17 @@ impl EqualDivision {
         Self::of_ratio(divisions, 2, 1)
     }
 
+    /// Divides the octave into a count that cannot be nought, so it cannot
+    /// fail and can build a constant: `EqualDivision::edo(NonZeroU32::MIN)`
+    /// is a single step to the octave.
+    pub const fn edo(divisions: std::num::NonZeroU32) -> Self {
+        Self {
+            divisions: divisions.get(),
+            period_cents: OCTAVE_CENTS,
+            period_ratio: Some((2, 1)),
+        }
+    }
+
     /// Divides the tritave, `3/1` — an EDT, which is Bohlen-Pierce's period.
     pub fn tritave(divisions: UnsignedIntegerType) -> Result<Self> {
         Self::of_ratio(divisions, 3, 1)
@@ -235,6 +246,11 @@ impl FromStr for EqualDivision {
         match period {
             "o" => Self::octave(divisions),
             "t" => Self::tritave(divisions),
+            // An irrational period, written in cents as `Display` writes it.
+            cents if cents.ends_with('c') => Self::new(
+                divisions,
+                cents[..cents.len() - 1].parse().map_err(|_| malformed())?,
+            ),
             _ => {
                 let (numerator, denominator) = match period.split_once('/') {
                     Some((numerator, denominator)) => (numerator, denominator),
