@@ -14,7 +14,6 @@ use std::str::FromStr;
 /// length music21 uses for grace notes.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[non_exhaustive]
 #[must_use]
 pub enum DurationType {
     /// Duplex maxima, sixteen whole notes.

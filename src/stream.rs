@@ -79,12 +79,8 @@ impl std::fmt::Display for StreamKind {
 }
 
 /// A musical object that can live on a timeline.
-///
-/// More kinds of thing will come to live on one, so a `match` over this
-/// needs a wildcard arm.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[non_exhaustive]
 pub enum StreamElement {
     /// A single pitched note.
     Note(Note),
@@ -112,22 +108,20 @@ impl StreamElement {
     /// Returns the assigned duration, if present.
     ///
     /// The marks that only say what is in force from a point — a key, a
-    /// metre, a tempo — have none, as they take no time in music21 either.
-    ///
-    /// A chord symbol answers `None` as well: how long one holds is asked of
-    /// the symbol, which hands back a value rather than a reference, and
-    /// [`StreamElement::quarter_length`] reads it.
+    /// metre, a tempo, a dynamic — have none, as they take no time in
+    /// music21 either. A chord symbol has one, of no length until it is
+    /// given the time it holds.
     pub fn duration(&self) -> Option<&Duration> {
         match self {
             Self::Note(note) => note.duration(),
             Self::Chord(chord) => chord.duration(),
             Self::Rest(rest) => Some(rest.duration()),
+            Self::ChordSymbol(symbol) => Some(symbol.duration()),
             Self::Stream(_)
             | Self::KeySignature(_)
             | Self::TimeSignature(_)
             | Self::MetronomeMark(_)
-            | Self::Dynamic(_)
-            | Self::ChordSymbol(_) => None,
+            | Self::Dynamic(_) => None,
         }
     }
 
@@ -143,7 +137,6 @@ impl StreamElement {
             | Self::TimeSignature(_)
             | Self::MetronomeMark(_)
             | Self::Dynamic(_) => 0.0,
-            Self::ChordSymbol(symbol) => symbol.duration().quarter_length(),
             _ => self
                 .duration()
                 .map(Duration::quarter_length)

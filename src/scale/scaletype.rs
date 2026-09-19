@@ -93,7 +93,6 @@ pub const HUMDRUM_SOLFEG_SYLLABLES: [[&str; 5]; 7] = [
 /// scales.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[non_exhaustive]
 #[must_use]
 pub enum ScaleType {
     /// Major (Ionian).

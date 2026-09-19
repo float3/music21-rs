@@ -102,10 +102,15 @@ pub struct ChordSymbol {
     /// is realized.
     #[cfg_attr(feature = "serde", serde(default))]
     modifications: Vec<Modification>,
-    /// How long the symbol holds, once something has said. A symbol as
-    /// written takes no time, as music21's takes none.
-    #[cfg_attr(feature = "serde", serde(default))]
-    duration: Option<Duration>,
+    /// How long the symbol holds. A symbol as written takes no time, as
+    /// music21's takes none.
+    #[cfg_attr(feature = "serde", serde(default = "no_time"))]
+    duration: Duration,
+}
+
+/// The length of a symbol nobody has given one: none at all.
+fn no_time() -> Duration {
+    Duration::from_type(DurationType::Zero)
 }
 
 /// One change music21 reads off a figure after its kind: a degree added,
@@ -373,27 +378,25 @@ impl ChordSymbol {
             additions,
             kind,
             modifications,
-            duration: None,
+            duration: no_time(),
         })
     }
 
     /// How long the symbol holds. A symbol as written takes no time, which
     /// is music21's default; [`realize_chord_symbol_durations`] gives each
     /// one in a stream the time until the next.
-    pub fn duration(&self) -> Duration {
-        self.duration
-            .clone()
-            .unwrap_or_else(|| Duration::from_type(DurationType::Zero))
+    pub fn duration(&self) -> &Duration {
+        &self.duration
     }
 
     /// Says how long the symbol holds.
     pub fn set_duration(&mut self, duration: Duration) {
-        self.duration = Some(duration);
+        self.duration = duration;
     }
 
     /// The same symbol holding for a given time.
     pub fn with_duration(mut self, duration: Duration) -> Self {
-        self.duration = Some(duration);
+        self.duration = duration;
         self
     }
 

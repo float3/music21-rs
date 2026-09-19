@@ -909,9 +909,6 @@ fn degree_name_with_octave(degree_label: &str, octave: UnsignedIntegerType) -> S
     }
 }
 
-/// Backwards-compatible alias for [`FORTY_THREE_TONE`].
-pub const FORTYTHREE_TONE: [Fraction; 43] = FORTY_THREE_TONE;
-
 /// Five-tone Javanese equal-temperament approximation.
 pub const JAVANESE: [Fraction; 5] = [
     Fraction::new_with_base(0, 5, 2),
