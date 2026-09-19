@@ -2,16 +2,48 @@
 
 The stream learns two more things to hold, and with them the last of
 music21's stream walks the crate had left out. Every one of music21's own
-examples now passes in all eighteen modules under the harness, `sieve`
+examples now passes in all nineteen modules under the harness, `sieve`
 included, and 582 of the 620 members the feature map tracks are ported, up
 from 565 of 617.
 
+It is also the release that takes the breaking changes earlier ones held
+back: a tuning system that can repeat at any period, a pitch's accidental
+kept as music21 keeps it, one scale type where there were two, and no
+`#[non_exhaustive]` where it only hid new variants from a caller's `match`.
+
 ## Breaking Changes
 
-- `StreamElement` has two new variants, `Dynamic` and `ChordSymbol`, and is
-  now `#[non_exhaustive]`, so a `match` over it needs a wildcard arm. It is
-  marked so that the next kind of thing a stream comes to hold is not a
-  breaking change again.
+- `TuningSystem::EqualTemperament { octave_size }`, `WholeTone` and
+  `QuarterTone` are one variant, `TuningSystem::Equal(EqualDivision)`, so an
+  equal temperament may divide any period: `13edt`, Bohlen-Pierce, is a
+  tuning system like the rest. `EQUAL_TEMPERAMENT`, `WHOLE_TONE` and
+  `QUARTER_TONE` are constants and `TuningSystem::edo(n)` names any other.
+  - `octave_size` is `degrees_per_period` and `octave` is `period_of`;
+    `period_cents` and `repeats_at_the_octave` are new.
+  - `fraction` returns an `Option`, `None` only for an irrational period.
+  - `id`, `display_name` and `description` return `String`, and an equal
+    system's id is its division, `19edo`. `EqualTemperament`, `WholeTone`
+    and `QuarterTone` still parse.
+  - The `size` argument is gone from `AnyTuningSystem` and
+    `AdaptiveTuningSystem`, and so are the free functions `get_ratio`,
+    `get_fraction`, `get_label`, `get_frequency`, `get_frequency_at`,
+    `get_cents` and `get_cents_at`; the methods remain.
+  - `TuningSystem`, `AdaptiveTuningSystem` and `AnyTuningSystem` are
+    `PartialEq` but no longer `Eq`.
+- `Pitch::accidental` returns `Option<&Accidental>`: `None` for a bare `D`
+  and a natural for `Dn`, as music21's `.accidental` does. It used to answer
+  a natural for both. `explicit_accidental`, `explicit_accidental_mut` and
+  `has_accidental` are gone; `accidental_mut` edits in place, and
+  `Pitch::alter` is the alteration either way. Serialized pitches drop the
+  `has_accidental` field.
+- `Key::scale` returns a `Scale`, read off the key's signature so every key
+  has one, and `Key::as_scale` is gone. `DiatonicScale` is gone.
+- `StreamElement` has two new variants, `Dynamic` and `ChordSymbol`.
+  `StreamElement`, `DurationType` and `ScaleType` are not
+  `#[non_exhaustive]`, so a new variant is a compile error in a caller's
+  `match` rather than something a wildcard arm swallows.
+- `ChordSymbol::duration` returns `&Duration`.
+- `tuningsystem::FORTYTHREE_TONE`, an alias of `FORTY_THREE_TONE`, is gone.
 - `Duration::add_duration_tuple` keeps the values it is given. A quarter with
   a half and a quarter tied on is three written values, and has no single
   type, until `consolidate` is called; it used only to lengthen the duration,
