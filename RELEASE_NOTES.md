@@ -1,3 +1,64 @@
+# music21-rs 0.6.0
+
+The stream learns two more things to hold, and with them the last of
+music21's stream walks the crate had left out. Every one of music21's own
+examples now passes in all eighteen modules under the harness, `sieve`
+included, and 582 of the 620 members the feature map tracks are ported, up
+from 565 of 617.
+
+## Breaking Changes
+
+- `StreamElement` has two new variants, `Dynamic` and `ChordSymbol`, and is
+  now `#[non_exhaustive]`, so a `match` over it needs a wildcard arm. It is
+  marked so that the next kind of thing a stream comes to hold is not a
+  breaking change again.
+- `Duration::add_duration_tuple` keeps the values it is given. A quarter with
+  a half and a quarter tied on is three written values, and has no single
+  type, until `consolidate` is called; it used only to lengthen the duration,
+  so `components` read back one whole note. This is what music21 does.
+
+## Added
+
+- `dynamics::Dynamic`: a dynamic mark and the loudness it stands for, with
+  music21's tables for the marks, their Italian and English names and their
+  scalars, and `dynamic_str_from_decimal` for the mark a loudness falls
+  under. A mark music21 has no loudness for is read without its `s` and its
+  closing `z`, so `sfz` is as loud as `f`. Checked against music21 by
+  `table_parity`.
+- `volume::realize_volume`: sets how loud every note and chord of a stream
+  sounds from the dynamics in force, each until the next, and writes the
+  answer back as an absolute velocity. `DynamicContext` is music21's
+  `useDynamicContext`: the stream's own dynamics, none, or one for
+  everything. The expectations are music21's own `testRealizeVolumeA`.
+- `realize_chord_symbol_durations`: every chord symbol in a stream holds
+  until the next one, wherever in the nesting that is, and the last to the
+  end. `ChordSymbol` has a `duration`, nought until something says.
+- `Stream::for_each_mut`: every element with its offset from the stream's
+  start, nested streams walked into, for an edit that has to land in the
+  score itself rather than in a flattened copy.
+- `voiceleading::iterate_all_voice_leading_quartets`, with `QuartetOptions`:
+  every `VoiceLeadingQuartet` in a score, as music21's walk over a timespan
+  tree finds them. Held to 4,451 quartets over three corpus scores by
+  `voice_leading_parity`. `verticality_at` is what is sounding in each part
+  at an offset.
+- `tempo::interpolate_elements`: carries what lies between two points of one
+  stream into another, keeping each thing's place between them.
+- `Sieve::compressed`: the compressed reading of a sieve, a union of residual
+  classes with the same members. A sieve of nothing but `&` and `|` is
+  compressed by intersecting its classes; one with a group, a `^` or a
+  complemented group from its members over a range.
+- `Duration` can have its written values said rather than read off its
+  length: `consolidate`, `slice_component_at_position`, `set_dot_groups`,
+  `split_dot_groups`, `linked` and `set_linked`, `grace_duration` and
+  `written_values`, with `DurationTuple` for one written value and how long
+  it lasts. The two can disagree: a grace note is an eighth lasting nothing.
+
+## Changed
+
+- The report's headline speedup is the benchmark's median, with the median
+  over music21's own suite beside it, and its tests tile no longer counts the
+  tests music21 fails on its own as failing.
+
 # music21-rs 0.5.0
 
 The release that finishes what 0.4.0 started: seventeen of music21's modules
