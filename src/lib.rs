@@ -54,6 +54,8 @@ pub mod pitch;
 /// Polyrhythm timing and pitch-set helpers.
 pub mod polyrhythm;
 /// Silent duration-bearing musical event.
+/// Dynamic marks and the loudness each stands for.
+pub mod dynamics;
 pub mod rest;
 /// Roman numeral parsing and compact harmonic analysis.
 pub mod roman;
@@ -91,7 +93,7 @@ pub use chord::{
 };
 pub use chordsymbol::{
     ChordAlteration, ChordQuality, ChordSymbol, Music21ChordType, chord_symbol_figure_from_chord,
-    chord_symbol_from_chord, known_chord_symbol_types,
+    chord_symbol_from_chord, known_chord_symbol_types, realize_chord_symbol_durations,
 };
 pub use defaults::{FloatType, FractionType, IntegerType, Octave, UnsignedIntegerType};
 pub use duration::{Duration, DurationTuple, DurationType, Tuplet, quarter_length_to_closest_type};
@@ -122,6 +124,7 @@ pub use pitch::{
     pitch_class_name, simplify_multiple_enharmonics,
 };
 pub use polyrhythm::{Polyrhythm, PolyrhythmAnalysis, PolyrhythmEvent, PolyrhythmRatioTone};
+pub use dynamics::Dynamic;
 pub use rest::Rest;
 pub use roman::roman_numeral_from_chord;
 pub use roman::{
@@ -152,4 +155,4 @@ pub use voiceleading::{
     MotionType, QuartetOptions, VoiceLeadingQuartet, iterate_all_voice_leading_quartets,
     verticality_at,
 };
-pub use volume::Volume;
+pub use volume::{DynamicContext, Volume, realize_volume};

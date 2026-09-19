@@ -521,6 +521,8 @@ impl Span<'_> {
             StreamElement::MetronomeMark(_) => 1,
             StreamElement::KeySignature(_) => 2,
             StreamElement::TimeSignature(_) => 4,
+            StreamElement::Dynamic(_) => 10,
+            StreamElement::ChordSymbol(_) => 19,
             _ => 20,
         }
     }

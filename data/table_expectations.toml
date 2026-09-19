@@ -749,6 +749,236 @@ number = 184.0
 name = "prestissimo"
 number = 208.0
 
+[[dynamic]]
+mark = "pppppp"
+volume_scalar = 0.5
+long_name = ""
+english_name = ""
+
+[[dynamic]]
+mark = "ppppp"
+volume_scalar = 0.5
+long_name = ""
+english_name = ""
+
+[[dynamic]]
+mark = "pppp"
+volume_scalar = 0.1
+long_name = ""
+english_name = ""
+
+[[dynamic]]
+mark = "ppp"
+volume_scalar = 0.15
+long_name = "pianississimo"
+english_name = "extremely soft"
+
+[[dynamic]]
+mark = "pp"
+volume_scalar = 0.25
+long_name = "pianissimo"
+english_name = "very soft"
+
+[[dynamic]]
+mark = "p"
+volume_scalar = 0.35
+long_name = "piano"
+english_name = "soft"
+
+[[dynamic]]
+mark = "mp"
+volume_scalar = 0.45
+long_name = "mezzopiano"
+english_name = "moderately soft"
+
+[[dynamic]]
+mark = "mf"
+volume_scalar = 0.55
+long_name = "mezzoforte"
+english_name = "moderately loud"
+
+[[dynamic]]
+mark = "f"
+volume_scalar = 0.7
+long_name = "forte"
+english_name = "loud"
+
+[[dynamic]]
+mark = "fp"
+volume_scalar = 0.75
+long_name = "fortepiano"
+english_name = ""
+
+[[dynamic]]
+mark = "sf"
+volume_scalar = 0.85
+long_name = "sforzando"
+english_name = ""
+
+[[dynamic]]
+mark = "ff"
+volume_scalar = 0.85
+long_name = "fortissimo"
+english_name = "very loud"
+
+[[dynamic]]
+mark = "fff"
+volume_scalar = 0.9
+long_name = "fortississimo"
+english_name = "extremely loud"
+
+[[dynamic]]
+mark = "ffff"
+volume_scalar = 0.95
+long_name = ""
+english_name = ""
+
+[[dynamic]]
+mark = "fffff"
+volume_scalar = 0.5
+long_name = ""
+english_name = ""
+
+[[dynamic]]
+mark = "ffffff"
+volume_scalar = 0.5
+long_name = ""
+english_name = ""
+
+[[dynamic]]
+mark = "n"
+volume_scalar = 0.0
+long_name = ""
+english_name = ""
+
+[[dynamic]]
+mark = "sfz"
+volume_scalar = 0.7
+long_name = ""
+english_name = ""
+
+[[dynamic]]
+mark = "fz"
+volume_scalar = 0.7
+long_name = ""
+english_name = ""
+
+[[dynamic]]
+mark = "rfz"
+volume_scalar = 0.5
+long_name = ""
+english_name = ""
+
+[[dynamic]]
+mark = "sffz"
+volume_scalar = 0.85
+long_name = ""
+english_name = ""
+
+[[dynamic]]
+mark = "sfp"
+volume_scalar = 0.75
+long_name = ""
+english_name = ""
+
+[[dynamic]]
+mark = "xyz"
+volume_scalar = 0.5
+long_name = ""
+english_name = ""
+
+[[dynamic_decimal]]
+value = -0.05
+mark = "n"
+
+[[dynamic_decimal]]
+value = 0.0
+mark = "n"
+
+[[dynamic_decimal]]
+value = 0.05
+mark = "pppp"
+
+[[dynamic_decimal]]
+value = 0.1
+mark = "pppp"
+
+[[dynamic_decimal]]
+value = 0.15
+mark = "ppp"
+
+[[dynamic_decimal]]
+value = 0.2
+mark = "pp"
+
+[[dynamic_decimal]]
+value = 0.25
+mark = "pp"
+
+[[dynamic_decimal]]
+value = 0.3
+mark = "p"
+
+[[dynamic_decimal]]
+value = 0.35
+mark = "p"
+
+[[dynamic_decimal]]
+value = 0.4
+mark = "mp"
+
+[[dynamic_decimal]]
+value = 0.45
+mark = "mp"
+
+[[dynamic_decimal]]
+value = 0.5
+mark = "mf"
+
+[[dynamic_decimal]]
+value = 0.55
+mark = "mf"
+
+[[dynamic_decimal]]
+value = 0.6
+mark = "mf"
+
+[[dynamic_decimal]]
+value = 0.65
+mark = "f"
+
+[[dynamic_decimal]]
+value = 0.7
+mark = "f"
+
+[[dynamic_decimal]]
+value = 0.75
+mark = "f"
+
+[[dynamic_decimal]]
+value = 0.8
+mark = "ff"
+
+[[dynamic_decimal]]
+value = 0.85
+mark = "ff"
+
+[[dynamic_decimal]]
+value = 0.9
+mark = "fff"
+
+[[dynamic_decimal]]
+value = 0.95
+mark = "fff"
+
+[[dynamic_decimal]]
+value = 1.0
+mark = "fff"
+
+[[dynamic_decimal]]
+value = 1.05
+mark = "fff"
+
 [[solfeg]]
 variant = "music21"
 degree = 1

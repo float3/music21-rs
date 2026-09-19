@@ -11,7 +11,9 @@ use std::fmt;
 
 use crate::{
     defaults::{FloatType, IntegerType},
+    dynamics::{Dynamic, dynamic_str_from_decimal as dynamic_name},
     error::{Error, Result},
+    stream::{Stream, StreamElement},
 };
 
 /// The velocity music21 assumes when none was set, as a scalar. It is the
@@ -193,21 +195,113 @@ pub fn rounded_str(value: FloatType) -> String {
     }
 }
 
-/// The dynamic mark a realized loudness falls under, using music21's
-/// `dynamicStrFromDecimal` thresholds.
-fn dynamic_name(value: FloatType) -> &'static str {
-    match value {
-        value if value <= 0.0 => "n",
-        value if value < 0.11 => "pppp",
-        value if value < 0.16 => "ppp",
-        value if value < 0.26 => "pp",
-        value if value < 0.36 => "p",
-        value if value < 0.5 => "mp",
-        value if value < 0.65 => "mf",
-        value if value < 0.8 => "f",
-        value if value < 0.9 => "ff",
-        _ => "fff",
-    }
+/// Where [`realize_volume`] looks for the dynamic a note sounds under:
+/// music21's `useDynamicContext`, which is `True`, `False` or a `Dynamic`.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub enum DynamicContext {
+    /// The dynamics in the stream, each in force until the next. A note
+    /// before the first of them sounds under none.
+    #[default]
+    FromStream,
+    /// No dynamic at all.
+    Ignored,
+    /// One dynamic for everything, whatever the stream holds.
+    Fixed(Dynamic),
+}
+
+/// Sets how loud every note and chord of a stream sounds, from the dynamics
+/// in force: music21's `realizeVolume` with `setAbsoluteVelocity`.
+///
+/// Each note's volume is realized against the dynamic it stands under and
+/// the answer is written back as its velocity, no longer relative, so that a
+/// stream played from its velocities alone sounds as marked. Without
+/// `use_velocity` a note's own velocity is left out of the realizing and the
+/// dynamic alone decides.
+///
+/// music21 without `setAbsoluteVelocity` only fills each volume's cache of
+/// its realized value. There is no such cache here, so this is always the
+/// call that writes. The crate carries no articulations, so none shifts a
+/// note; [`Volume::realized_with`] takes that shift as an argument for a
+/// caller that has them.
+///
+/// ```
+/// use music21_rs::{volume::{realize_volume, DynamicContext}, Dynamic, Note, Stream};
+///
+/// let mut stream = Stream::new();
+/// stream.insert(0.0, Dynamic::new("pp"));
+/// stream.insert(0.0, Note::from_name("G3")?);
+/// stream.insert(1.0, Dynamic::new("ff"));
+/// stream.insert(1.0, Note::from_name("G3")?);
+/// realize_volume(&mut stream, &DynamicContext::FromStream, true);
+/// let velocities: Vec<_> = stream
+///     .notes()
+///     .iter()
+///     .map(|(_, note)| match note {
+///         music21_rs::StreamElement::Note(note) => note.volume().velocity(),
+///         _ => None,
+///     })
+///     .collect();
+/// assert_eq!(velocities, [Some(45), Some(127)]);
+/// # Ok::<(), music21_rs::Error>(())
+/// ```
+pub fn realize_volume(stream: &mut Stream, context: &DynamicContext, use_velocity: bool) {
+    // Each dynamic with where it stops being in force: at the next one, or
+    // at the end of the stream, which is music21's `extendDuration`.
+    let flat = stream.flatten();
+    let end = flat.end_offset();
+    let starts: Vec<(FloatType, FloatType)> = flat
+        .events()
+        .iter()
+        .filter_map(|event| match event.element() {
+            StreamElement::Dynamic(dynamic) => Some((event.offset(), dynamic.volume_scalar())),
+            _ => None,
+        })
+        .collect();
+    let in_force = |offset: FloatType| -> Option<FloatType> {
+        match context {
+            DynamicContext::Ignored => None,
+            DynamicContext::Fixed(dynamic) => Some(dynamic.volume_scalar()),
+            DynamicContext::FromStream => {
+                starts
+                    .iter()
+                    .enumerate()
+                    .find_map(|(index, &(start, scalar))| {
+                        let stop = starts.get(index + 1).map_or(end, |next| next.0);
+                        (start <= offset && offset < stop).then_some(scalar)
+                    })
+            }
+        }
+    };
+
+    let realized = |volume: &Volume, offset: FloatType| -> Volume {
+        let dynamic = in_force(offset);
+        let value = if use_velocity {
+            volume.realized_with(dynamic, 0.0, BASE_LEVEL, true)
+        } else {
+            let mut value = BASE_LEVEL;
+            if let (true, Some(dynamic)) = (volume.velocity_is_relative(), dynamic) {
+                value *= dynamic * 2.0;
+            }
+            value.clamp(0.0, 1.0)
+        };
+        let mut absolute = volume.clone();
+        absolute.set_velocity_is_relative(false);
+        absolute
+            .set_velocity_scalar(Some(value))
+            .expect("a clipped loudness is within the range a velocity takes");
+        absolute
+    };
+    stream.for_each_mut(&mut |offset, element| match element {
+        StreamElement::Note(note) => {
+            let volume = realized(&note.volume(), offset);
+            note.set_volume(Some(volume));
+        }
+        StreamElement::Chord(chord) => {
+            let volume = realized(&chord.volume(), offset);
+            chord.set_volume(Some(volume));
+        }
+        _ => {}
+    });
 }
 
 impl fmt::Display for Volume {
@@ -331,5 +425,94 @@ mod tests {
         silent.set_velocity(Some(0));
         silent.set_velocity_is_relative(false);
         assert_eq!(silent.to_string(), "realized=0.0");
+    }
+
+    /// Every number here is music21's: the first run is its own
+    /// `testRealizeVolumeA`, the rest were read off it.
+    #[test]
+    fn a_stream_is_realized_against_the_dynamics_in_force() {
+        use crate::{Note, Stream, StreamElement};
+
+        let velocities = |stream: &Stream| -> Vec<Option<IntegerType>> {
+            stream
+                .notes()
+                .iter()
+                .map(|(_, element)| match element {
+                    StreamElement::Note(note) => note.volume().velocity(),
+                    _ => None,
+                })
+                .collect()
+        };
+        let notes = |count: usize| {
+            let mut stream = Stream::new();
+            for _ in 0..count {
+                stream.push(Note::from_name("G3").unwrap());
+            }
+            stream
+        };
+
+        let mut stream = notes(16);
+        for (index, mark) in ["pp", "p", "mp", "f", "mf", "ff", "ppp", "mf"]
+            .into_iter()
+            .enumerate()
+        {
+            stream.insert(index as FloatType * 2.0, Dynamic::new(mark));
+        }
+        realize_volume(&mut stream, &DynamicContext::FromStream, true);
+        assert_eq!(
+            velocities(&stream),
+            [
+                45, 45, 63, 63, 81, 81, 126, 126, 99, 99, 127, 127, 27, 27, 99, 99
+            ]
+            .map(Some)
+        );
+
+        // A note before the first dynamic sounds under none, a velocity of
+        // its own scales the answer, and an absolute one decides it.
+        let mut stream = notes(4);
+        stream.insert(1.0, Dynamic::new("p"));
+        stream.insert(3.0, Dynamic::new("ff"));
+        let mut position = 0;
+        stream.for_each_mut(&mut |_, element| {
+            if let StreamElement::Note(note) = element {
+                let mut volume = note.volume();
+                match position {
+                    2 => volume.set_velocity(Some(100)),
+                    3 => {
+                        volume.set_velocity(Some(64));
+                        volume.set_velocity_is_relative(false);
+                    }
+                    _ => {}
+                }
+                note.set_volume(Some(volume));
+                position += 1;
+            }
+        });
+        realize_volume(&mut stream, &DynamicContext::FromStream, true);
+        assert_eq!(velocities(&stream), [90, 63, 70, 64].map(Some));
+
+        let mut stream = notes(2);
+        stream.insert(0.0, Dynamic::new("p"));
+        stream.for_each_mut(&mut |offset, element| {
+            if let (true, StreamElement::Note(note)) = (offset == 1.0, element) {
+                note.set_volume(Some(Volume::from_velocity(100)));
+            }
+        });
+        realize_volume(&mut stream, &DynamicContext::FromStream, false);
+        assert_eq!(velocities(&stream), [44, 44].map(Some));
+
+        let mut stream = notes(2);
+        stream.insert(0.0, Dynamic::new("p"));
+        realize_volume(
+            &mut stream,
+            &DynamicContext::Fixed(Dynamic::new("sfz")),
+            true,
+        );
+        assert_eq!(velocities(&stream), [126, 126].map(Some));
+
+        let mut stream = notes(2);
+        stream.insert(0.0, Dynamic::new("p"));
+        realize_volume(&mut stream, &DynamicContext::Ignored, true);
+        assert_eq!(velocities(&stream), [90, 90].map(Some));
     }
 }

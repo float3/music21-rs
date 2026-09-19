@@ -25,6 +25,8 @@ struct Expectations {
     specifier: Vec<SpecifierExpectation>,
     key_profile: Vec<KeyProfileExpectation>,
     tempo: Vec<TempoExpectation>,
+    dynamic: Vec<DynamicExpectation>,
+    dynamic_decimal: Vec<DynamicDecimalExpectation>,
     solfeg: Vec<SolfegExpectation>,
     functionality: Vec<FunctionalityExpectation>,
 }
@@ -253,6 +255,74 @@ fn key_profiles_match_music21() {
     assert!(
         mismatches.is_empty(),
         "{} key profile values differ from music21:\n    {}",
+        mismatches.len(),
+        mismatches.join("\n    ")
+    );
+}
+
+#[derive(Debug, Deserialize)]
+struct DynamicExpectation {
+    mark: String,
+    volume_scalar: f64,
+    /// Empty where music21 has no word for the mark.
+    long_name: String,
+    english_name: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct DynamicDecimalExpectation {
+    value: f64,
+    mark: String,
+}
+
+#[test]
+fn dynamics_match_music21() {
+    use music21_rs::dynamics::{Dynamic, SHORT_NAMES, dynamic_str_from_decimal};
+
+    let expectations = expectations();
+    let mut mismatches = Vec::new();
+
+    // music21's own list comes first in the fixture, in its order.
+    let listed: Vec<&str> = expectations
+        .dynamic
+        .iter()
+        .take(SHORT_NAMES.len())
+        .map(|expected| expected.mark.as_str())
+        .collect();
+    if listed != SHORT_NAMES {
+        mismatches.push(format!("shortNames: music21 {listed:?}, crate {SHORT_NAMES:?}"));
+    }
+    for expected in &expectations.dynamic {
+        let dynamic = Dynamic::new(expected.mark.as_str());
+        let ours = (
+            dynamic.volume_scalar(),
+            dynamic.long_name().unwrap_or(""),
+            dynamic.english_name().unwrap_or(""),
+        );
+        let theirs = (
+            expected.volume_scalar,
+            expected.long_name.as_str(),
+            expected.english_name.as_str(),
+        );
+        if ours != theirs {
+            mismatches.push(format!("{}: music21 {theirs:?}, crate {ours:?}", expected.mark));
+        }
+    }
+    for expected in &expectations.dynamic_decimal {
+        let ours = dynamic_str_from_decimal(expected.value);
+        if ours != expected.mark {
+            mismatches.push(format!(
+                "{}: music21 {}, crate {ours}",
+                expected.value, expected.mark
+            ));
+        }
+    }
+
+    assert!(expectations.dynamic.len() > SHORT_NAMES.len());
+    assert!(!expectations.dynamic_decimal.is_empty());
+    assert!(
+        mismatches.is_empty(),
+        "{} dynamics differ from music21:\n    {}",
         mismatches.len(),
         mismatches.join("\n    ")
     );

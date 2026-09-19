@@ -294,9 +294,6 @@ cachedRealizedStr = "the crate caches nothing -- a value that answers the same q
 python = "volume.py"
 rust = ["src/volume.rs"]
 
-[class.excluded]
-realizeVolume = "walks a stream, setting each note's volume from the dynamics in force"
-
 [[class]]
 python = "figuredBass/notation.py"
 name = "Figure"
@@ -469,7 +466,6 @@ getCurrentAbbreviationFor = "current_abbreviation_for_kind"
 addNewChordSymbol = "mutates music21's global chord-type table; the table here is a constant"
 changeAbbreviationFor = "mutates music21's global chord-type table; the table here is a constant"
 removeChordSymbols = "mutates music21's global chord-type table; the table here is a constant"
-realizeChordSymbolDurations = "stretches chord symbols across a stream"
 
 [[class]]
 python = "meter/base.py"
@@ -549,3 +545,14 @@ note = "Chord labels as harte-library reads them, C:maj7/3 or Bb:(b3,5,b7,9), bu
 name = "Duplicate detection"
 rust = "src/tuningsystem/duplicates.rs"
 note = "Which of these are the same tuning under another name, compared by sound rather than spelling. It finds 44 groups of repeats among the archive's 3,994 scales."
+
+[[class]]
+python = "dynamics.py"
+name = "Dynamic"
+rust = ["src/dynamics.rs"]
+note = "A dynamic mark and the loudness it stands for. In a stream it is in force until the next, which is what `realize_volume` reads."
+
+[[class]]
+python = "dynamics.py"
+rust = ["src/dynamics.rs"]
+note = "Module-level helpers."

@@ -1808,6 +1808,50 @@ fn write_small_tables(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> P
         tempo_words += 1;
     }
 
+    // Every mark music21 lists, niente, and a few it has no loudness for,
+    // which it reads without their `s` and `z`.
+    let dynamics = py.import("music21.dynamics")?;
+    let mut marks: Vec<String> = dynamics.getattr("shortNames")?.extract()?;
+    marks.extend(
+        ["n", "sfz", "fz", "rfz", "sffz", "sfp", "xyz"]
+            .iter()
+            .map(|mark| (*mark).to_string()),
+    );
+    let mut dynamic_marks = 0;
+    for mark in &marks {
+        let dynamic = dynamics.call_method1("Dynamic", (mark,))?;
+        let scalar: f64 = dynamic.getattr("volumeScalar")?.extract()?;
+        let long_name: Option<String> = dynamic.getattr("longName")?.extract()?;
+        let english_name: Option<String> = dynamic.getattr("englishName")?.extract()?;
+        let _ = writeln!(out, "[[dynamic]]");
+        let _ = writeln!(out, "mark = {}", toml_string(mark));
+        let _ = writeln!(out, "volume_scalar = {}", float_repr(scalar));
+        let _ = writeln!(
+            out,
+            "long_name = {}",
+            toml_string(long_name.as_deref().unwrap_or(""))
+        );
+        let _ = writeln!(
+            out,
+            "english_name = {}",
+            toml_string(english_name.as_deref().unwrap_or(""))
+        );
+        let _ = writeln!(out);
+        dynamic_marks += 1;
+    }
+    // The mark each loudness falls under, a twentieth at a time and on each
+    // side of nought and one.
+    for step in -1..=21 {
+        let value = f64::from(step) / 20.0;
+        let mark: String = dynamics
+            .call_method1("dynamicStrFromDecimal", (value,))?
+            .extract()?;
+        let _ = writeln!(out, "[[dynamic_decimal]]");
+        let _ = writeln!(out, "value = {}", float_repr(value));
+        let _ = writeln!(out, "mark = {}", toml_string(&mark));
+        let _ = writeln!(out);
+    }
+
     let scale_module = py.import("music21.scale")?;
     let concrete = scale_module.getattr("ConcreteScale")?;
     let mut solfeg_rows = 0;
@@ -1858,7 +1902,7 @@ fn write_small_tables(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> P
     let path = workspace_root.join("data/table_expectations.toml");
     fs::write(&path, out)?;
     println!(
-        "  wrote {} ({accidentals} accidentals, {mode_count} modes, {specifiers} specifier combos, {profiles} key profiles, {tempo_words} tempo words, {solfeg_rows} solfeg rows, {score_rows} functionality scores)",
+        "  wrote {} ({accidentals} accidentals, {mode_count} modes, {specifiers} specifier combos, {profiles} key profiles, {tempo_words} tempo words, {dynamic_marks} dynamics, {solfeg_rows} solfeg rows, {score_rows} functionality scores)",
         path.display()
     );
     Ok(path)
