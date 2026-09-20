@@ -2,9 +2,11 @@
 
 The stream learns two more things to hold, and with them the last of
 music21's stream walks the crate had left out. Every one of music21's own
-examples now passes in all twenty modules under the harness — `sieve` and
-both halves of `meter` included — and 582 of the 620 members the feature map
-tracks are ported, up from 565 of 617.
+examples now passes in all twenty-two modules under the harness — `sieve`,
+both halves of `meter`, `dynamics` and `scale.scala` included, 787 docstrings
+and 7,315 examples — and 626 of the 669 members the feature map tracks are ported, up
+from 565 of 617. Every one of the 43 that are not has a reason written beside
+it, so the map no longer has an unexplained gap in it.
 
 It is also the release that takes the breaking changes earlier ones held
 back: a tuning system that can repeat at any period, a pitch's accidental
@@ -53,9 +55,14 @@ kept as music21 keeps it, one scale type where there were two, and no
 
 - `meter::MeterTerminal::from_partition_string` and `from_parts_given`, which
   read a span written as `2/4+2/4` or built out of the parts it holds;
-  `address_of_offset`, every index down to the terminal sounding at an
+  `offset_to_address`, every index down to the terminal sounding at an
   offset; `subdivide_nested_hierarchy`, a span nested to a depth; and
   `meter::partition_name`, what a partition of so many parts is called.
+- The rest of what music21 asks a span: `ratio_equal`, `flatten` and
+  `flat_weights`, `level_weight`, `partition_options`, `set_level_weight`,
+  `subdivide_by_other` and `partition_by_other`. A span flattens to what its
+  leaves come to, so a bar of four quarters divided into eighths flattens to
+  `8/8`.
 - A meter sequence now weighs what its parts weigh, and sharing a weight out
   among them follows how long each part is, as music21 does. A span used to
   keep one weight of its own and leave every part weighing one.
@@ -64,6 +71,16 @@ kept as music21 keeps it, one scale type where there were two, and no
   from 39 examples when the harness was first pointed at them. A
   `MeterSequence` holds its parts as the objects music21 hands back, adopts
   the spans it is built from, and carries music21's `_levelListCache`.
+- `ScalaScale` answers a Scala file the way music21's `ScalaData` does:
+  `written_cents` and `written_degrees` for the lines the file writes,
+  `adjacent_cents` and `interval_sequence` for the width of each step,
+  `from_adjacent_cents`, `from_interval_sequence` and `from_written_cents` for
+  a scale built out of those, and `file_string` for the `.scl` text.
+  `ScalaArchive::find` is the searching half of music21's `parse`: the one
+  scale a name names. A `ScalaDegree` reads and writes its own line,
+  through `FromStr` and `written`. A degree read as a
+  ratio is written back as that ratio, so a file read and written is the
+  scale it was; music21 keeps cents alone and cannot.
 - `dynamics::Dynamic`: a dynamic mark and the loudness it stands for, with
   music21's tables for the marks, their Italian and English names and their
   scalars, and `dynamic_str_from_decimal` for the mark a loudness falls
@@ -103,6 +120,16 @@ kept as music21 keeps it, one scale type where there were two, and no
 - The report's headline speedup is the benchmark's median, with the median
   over music21's own suite beside it, and its tests tile no longer counts the
   tests music21 fails on its own as failing.
+- music21's own `dynamics` and `scale.scala` docstrings run against the
+  crate, as `doctest_dynamics` and `doctest_scala`, and the harness now leaves
+  out the examples music21 itself fails rather than counting them against the
+  crate; the report says beside each module how many those were.
+- The report tracks three modules it could not see before: `meter.core`,
+  whose two classes the whole meter tree is made of; `tie`, whose entire API
+  is the names in its `__slots__`, which no scan for methods could find; and
+  `scale.scala`. A feature-map entry can now say `members = "slots"`.
+- The `music21` submodule is at 11.0.0b9 (eebac0e), and every generated
+  fixture is stamped with it.
 
 # music21-rs 0.5.0
 

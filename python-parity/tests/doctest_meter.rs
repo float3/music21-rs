@@ -15,6 +15,10 @@ music21_rs_python_parity::doctest_suite!(
         ("music21.tie", doctest::TIE_NAMES),
         ("music21.volume", doctest::VOLUME_NAMES),
         ("music21.chord", doctest::CHORD_NAMES),
+        // music21's own meter code builds a `MeterSequence` of its own --
+        // `_setDefaultAccentWeights` does -- and hands it to the meter, so the
+        // spans have to be ours too or the two kinds meet.
+        ("music21.meter.core", doctest::METER_CORE_NAMES),
         ("music21.meter.base", doctest::METER_NAMES),
     ]
 );

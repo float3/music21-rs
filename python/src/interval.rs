@@ -1906,7 +1906,7 @@ fn interval_from_generic_and_chromatic(
 
 /// An interval as the class music21 now has under that name, so a stream
 /// can hold it and its own code can write an identifier on it.
-fn interval_object(py: Python<'_>, inner: RsInterval) -> PyResult<Py<PyAny>> {
+pub(crate) fn interval_object(py: Python<'_>, inner: RsInterval) -> PyResult<Py<PyAny>> {
     Ok(crate::installed_new(py, "music21.interval", "Interval", Interval::wrap(inner))?.into_any())
 }
 

@@ -278,6 +278,35 @@ impl TimeSignature {
         Self::sequence_view(slf, Which::Accent)
     }
 
+    /// Each of the four is a plain attribute of music21's, and music21's own
+    /// private code writes whole sequences into them:
+    /// `_setDefaultBeatPartitions` and `_setDefaultAccentWeights` both do, and
+    /// both run on one of these objects, since a private member is not among
+    /// the ones an installed class blocks.
+    #[setter]
+    fn set_accentSequence(&mut self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        *self.inner.accent_sequence_mut() = span_of(py, value)?;
+        Ok(())
+    }
+
+    #[setter]
+    fn set_beatSequence(&mut self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        *self.inner.beat_sequence_mut() = span_of(py, value)?;
+        Ok(())
+    }
+
+    #[setter]
+    fn set_beamSequence(&mut self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        *self.inner.beam_sequence_mut() = span_of(py, value)?;
+        Ok(())
+    }
+
+    #[setter]
+    fn set_displaySequence(&mut self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        *self.inner.display_sequence_mut() = span_of(py, value)?;
+        Ok(())
+    }
+
     /// music21's `setDisplay`: write the bar a different way without
     /// changing what it counts.
     #[pyo3(signature = (value, partitionRequest = None))]
@@ -1837,10 +1866,39 @@ fn span_of(py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<RsMeterTerminal
     if let Ok(terminal) = value.extract::<PyRef<'_, MeterTerminal>>() {
         return terminal.held.read(py);
     }
-    let written: String = value.extract().map_err(|_| {
-        MeterException::new_err("a meter span is written as a ratio, or is one of ours")
-    })?;
-    RsMeterTerminal::from_ratio_string(&written).map_err(meter_error)
+    if let Ok(written) = value.extract::<String>() {
+        return RsMeterTerminal::from_ratio_string(&written).map_err(meter_error);
+    }
+    read_span(value).map_err(|_| {
+        MeterException::new_err("a meter span is written as a ratio, or is a span of some kind")
+    })
+}
+
+/// Reads a span music21 built itself, through the Python API.
+///
+/// music21's own meter code hands one over: `_setDefaultAccentWeights` keeps
+/// archetype sequences in a dictionary of its own and gives a meter a copy of
+/// one, and that dictionary may hold music21's `MeterSequence` rather than
+/// this facade's. What is read is what a span is -- the ratio, the weight of
+/// each leaf, and the parts under it.
+fn read_span(value: &Bound<'_, PyAny>) -> PyResult<RsMeterTerminal> {
+    let numerator: UnsignedIntegerType = value.getattr("numerator")?.extract()?;
+    let denominator: UnsignedIntegerType = value.getattr("denominator")?.extract()?;
+    let mut span = RsMeterTerminal::new(numerator, denominator).map_err(meter_error)?;
+    let parts: Vec<Bound<'_, PyAny>> = match value.try_iter() {
+        Ok(items) => items.collect::<PyResult<Vec<_>>>()?,
+        // A terminal is not a sequence and holds nothing.
+        Err(_) => Vec::new(),
+    };
+    if parts.is_empty() {
+        span.set_weight(value.getattr("weight")?.extract()?);
+        return Ok(span);
+    }
+    for part in &parts {
+        let read = read_span(part)?;
+        span.parts_mut().push(read);
+    }
+    Ok(span)
 }
 
 /// music21's `subdivide` dispatch: a count, a list of numerators, a list of

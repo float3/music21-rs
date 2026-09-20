@@ -28,6 +28,7 @@
 use super::Fraction;
 use crate::defaults::{FloatType, IntegerType, UnsignedIntegerType};
 use crate::error::{Error, Result};
+use crate::interval::{ChromaticInterval, Interval};
 
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
@@ -73,6 +74,27 @@ impl ScalaDegree {
         match self {
             Self::Ratio(fraction) => Some(fraction),
             Self::Cents(_) => None,
+        }
+    }
+
+    /// The line a Scala file writes for this degree: the other half of the
+    /// reading [`FromStr`] does.
+    ///
+    /// Scala tells the two spellings apart by the point: a value carrying one
+    /// is cents and a value without one is a ratio, so a whole number of
+    /// cents is written `1200.0` and never `1200`, which would be a ratio of
+    /// twelve hundred to one.
+    pub fn written(self) -> String {
+        match self {
+            Self::Ratio(fraction) => format!("{}/{}", fraction.numerator(), fraction.denominator()),
+            Self::Cents(cents) => {
+                let written = format!("{cents}");
+                if written.contains(['.', 'e', 'E', 'n', 'i']) {
+                    written
+                } else {
+                    format!("{written}.0")
+                }
+            }
         }
     }
 
@@ -325,6 +347,134 @@ impl ScalaScale {
         self.degrees.is_empty()
     }
 
+    /// The cents of every degree the file writes: music21's
+    /// `getCentsAboveTonic`.
+    ///
+    /// The unison is left out and the period is the last of them, which is
+    /// how a `.scl` file writes a scale — twelve lines for a twelve-tone
+    /// scale, the last of them the octave. [`cents_above_root`] is the other
+    /// reading, the cents of an index counted from the root.
+    ///
+    /// [`cents_above_root`]: Self::cents_above_root
+    pub fn written_cents(&self) -> Vec<FloatType> {
+        self.written_degrees()
+            .iter()
+            .map(|degree| degree.cents())
+            .collect()
+    }
+
+    /// The degrees a `.scl` file writes for this scale: every degree above
+    /// the unison, and the period last. A scale with no degrees writes none.
+    pub fn written_degrees(&self) -> Vec<ScalaDegree> {
+        if self.degrees.is_empty() {
+            return Vec::new();
+        }
+        self.degrees
+            .iter()
+            .skip(1)
+            .copied()
+            .chain(std::iter::once(self.period))
+            .collect()
+    }
+
+    /// The width of each step in cents: music21's `getAdjacentCents`.
+    ///
+    /// One width per degree the file writes, the first being the step off the
+    /// unison and the last the step that closes the period.
+    pub fn adjacent_cents(&self) -> Vec<FloatType> {
+        let mut widths = Vec::with_capacity(self.degrees.len());
+        let mut below = 0.0;
+        for cents in self.written_cents() {
+            widths.push(cents - below);
+            below = cents;
+        }
+        widths
+    }
+
+    /// A scale from the cents of every degree a file writes, the period last:
+    /// the reverse of [`written_cents`](Self::written_cents).
+    pub fn from_written_cents(description: impl Into<String>, cents: &[FloatType]) -> Self {
+        let written = cents.iter().copied().map(ScalaDegree::Cents).collect();
+        Self::from_written(description, written)
+    }
+
+    /// A scale from the width of each step, in cents: music21's
+    /// `setAdjacentCents`.
+    ///
+    /// The last width closes the period, so `[100.0; 12]` is twelve-tone
+    /// equal temperament.
+    pub fn from_adjacent_cents(description: impl Into<String>, widths: &[FloatType]) -> Self {
+        let mut above = 0.0;
+        let written: Vec<FloatType> = widths
+            .iter()
+            .map(|width| {
+                above += width;
+                above
+            })
+            .collect();
+        Self::from_written_cents(description, &written)
+    }
+
+    /// Each step of the scale as an interval: music21's
+    /// `getIntervalSequence`.
+    ///
+    /// A step is measured in cents and an interval counts semitones, which
+    /// [`ChromaticInterval`] counts fractionally — so a step of 137 cents is a
+    /// second a little over a third of a semitone wide, and says so.
+    pub fn interval_sequence(&self) -> Result<Vec<Interval>> {
+        self.adjacent_cents()
+            .into_iter()
+            .map(|cents| Interval::from_chromatic(ChromaticInterval::new(cents / 100.0)?))
+            .collect()
+    }
+
+    /// A scale from an interval per step: music21's `setIntervalSequence`.
+    pub fn from_interval_sequence(description: impl Into<String>, steps: &[Interval]) -> Self {
+        let widths: Vec<FloatType> = steps.iter().map(Interval::cents).collect();
+        Self::from_adjacent_cents(description, &widths)
+    }
+
+    /// A scale from the degrees a file writes, the period last.
+    fn from_written(description: impl Into<String>, mut written: Vec<ScalaDegree>) -> Self {
+        let (degrees, period) = match written.pop() {
+            Some(period) => {
+                let mut degrees = vec![ScalaDegree::Ratio(Fraction::new(1, 1))];
+                degrees.append(&mut written);
+                (degrees, period)
+            }
+            None => (Vec::new(), ScalaDegree::Ratio(Fraction::new(1, 1))),
+        };
+        Self::new(description, degrees, period)
+    }
+
+    /// The text of a `.scl` file for this scale: music21's `getFileString`.
+    ///
+    /// The name is written as the first comment where one is given, as the
+    /// archive's own files write it. A degree that was read as a ratio is
+    /// written back as that ratio — both spellings are Scala, and only this
+    /// one reads back as the scale it came from; music21 keeps cents alone
+    /// and so cannot.
+    pub fn file_string(&self, file_name: Option<&str>) -> String {
+        let mut lines = Vec::with_capacity(self.degrees.len() + 5);
+        if let Some(name) = file_name {
+            lines.push(format!("! {name}"));
+        }
+        // Conventionally a bare comment line follows the name.
+        lines.push("!".to_string());
+        lines.push(self.description.clone());
+        lines.push(self.len().to_string());
+        lines.push("!".to_string());
+        for degree in self.written_degrees() {
+            lines.push(degree.written());
+        }
+        // The file ends with a newline.
+        lines.push(String::new());
+        lines.join(
+            "
+",
+        )
+    }
+
     /// Returns the frequency ratio above the root for a degree index.
     ///
     /// Indices outside one period wrap, shifting by the [period](Self::period)
@@ -357,6 +507,18 @@ impl ScalaScale {
     /// caller.
     pub fn frequency_at(&self, root_hz: FloatType, index: IntegerType) -> FloatType {
         root_hz * self.ratio_at(index)
+    }
+}
+
+impl FromStr for ScalaDegree {
+    type Err = Error;
+
+    /// Reads one note line of a Scala file: music21's `ScalaPitch.parse`.
+    ///
+    /// A value carrying a point is cents and one without is a ratio, `n\m`
+    /// is `n` steps of `m`-EDO, and anything after the value is a comment.
+    fn from_str(token: &str) -> Result<Self> {
+        Self::parse(token)
     }
 }
 
@@ -497,6 +659,36 @@ impl ScalaArchive {
     #[cfg(feature = "scala-archive")]
     pub fn bundled_len() -> usize {
         crate::tuningsystem::scala_bundled::SCALES.len()
+    }
+
+    /// The one scale a name names, with the file name it is filed under:
+    /// the searching half of music21's `scale.scala.parse`.
+    ///
+    /// A file name is looked for first, then a name written without its
+    /// extension or its underscores and hyphens, and failing both the first
+    /// file whose name contains what was asked for. Reading a file from disk
+    /// is the caller's business; this looks in the archive.
+    pub fn find(&self, target: &str) -> Option<(&str, &ScalaScale)> {
+        let target = target.replace(' ', "").to_lowercase();
+        let named = self
+            .scales
+            .keys()
+            .find(|name| name.to_lowercase() == target);
+        let found = named.or_else(|| {
+            self.scales.keys().find(|name| {
+                let stem = name.strip_suffix(".scl").unwrap_or(name).to_lowercase();
+                stem == target || stem.replace(['_', '-'], "") == target
+            })
+        });
+        let found = found.or_else(|| {
+            self.scales.keys().find(|name| {
+                let stem = name.strip_suffix(".scl").unwrap_or(name).to_lowercase();
+                stem.contains(&target) || stem.replace(['_', '-'], "").contains(&target)
+            })
+        })?;
+        self.scales
+            .get_key_value(found.as_str())
+            .map(|(name, scale)| (name.as_str(), scale))
     }
 
     /// Finds file names matching a search string, as music21's
@@ -891,5 +1083,135 @@ Saved scale from Scala
     fn round_trips_through_from_str() {
         let scale: ScalaScale = FIFTH_AND_OCTAVE.parse().unwrap();
         assert_eq!(scale.len(), 2);
+    }
+
+    /// music21's own `balafon6.scl`, and every expectation here was read off
+    /// music21's `scale.scala`.
+    #[test]
+    fn a_scale_is_read_and_written_by_the_width_of_its_steps() {
+        use super::ScalaScale;
+
+        let text = concat!(
+            "! balafon6.scl
+!
+",
+            "Observed balafon tuning from Burma, Helmholtz/Ellis p. 518, nr.84
+",
+            " 7
+!
+",
+            " 114.00000
+ 350.00000
+ 550.00000
+ 687.00000
+",
+            " 838.00000
+ 1032.00000
+ 1196.00000
+",
+        );
+        let scale = ScalaScale::parse(text).unwrap();
+        assert_eq!(scale.len(), 7);
+        assert_eq!(
+            scale.written_cents(),
+            [114.0, 350.0, 550.0, 687.0, 838.0, 1032.0, 1196.0]
+        );
+        assert_eq!(
+            scale.adjacent_cents(),
+            [114.0, 236.0, 200.0, 137.0, 151.0, 194.0, 164.0]
+        );
+        let written: Vec<String> = scale
+            .interval_sequence()
+            .unwrap()
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+        assert_eq!(
+            written,
+            [
+                "m2 (+14c)",
+                "M2 (+36c)",
+                "M2",
+                "m2 (+37c)",
+                "M2 (-49c)",
+                "M2 (-6c)",
+                "M2 (-36c)"
+            ]
+        );
+
+        // The widths say the whole scale, so a scale built from them is the
+        // one they came from.
+        let rebuilt = ScalaScale::from_adjacent_cents(scale.description(), &scale.adjacent_cents());
+        assert_eq!(rebuilt.written_cents(), scale.written_cents());
+        let by_interval =
+            ScalaScale::from_interval_sequence("steps", &scale.interval_sequence().unwrap());
+        assert_eq!(by_interval.len(), 7);
+
+        // A file written out is read back as the scale it came from, cents
+        // and ratios alike.
+        let over = ScalaScale::parse(
+            "! ji.scl
+Just
+ 3
+ 5/4
+ 701.955
+ 2/1
+",
+        )
+        .unwrap();
+        let out = over.file_string(Some("ji.scl"));
+        assert!(out.starts_with(
+            "! ji.scl
+!
+Just
+3
+!
+5/4
+701.955
+2/1
+"
+        ));
+        assert_eq!(ScalaScale::parse(&out).unwrap(), over);
+
+        // Every name here is one music21's own `scale.scala.parse` resolves
+        // the same way, in an archive filed under the same names.
+        let mut archive = super::ScalaArchive::new();
+        for name in [
+            "mbira_banda.scl",
+            "barbour_chrom1.scl",
+            "blackj_gws.scl",
+            "fj-12tet.scl",
+        ] {
+            let _ = archive.insert_scale(name, scale.clone());
+        }
+        let found = |target| archive.find(target).map(|(name, _)| name);
+        // A name written with a space, an underscore or neither.
+        assert_eq!(found("mbira banda"), Some("mbira_banda.scl"));
+        assert_eq!(found("mbira_banda"), Some("mbira_banda.scl"));
+        assert_eq!(found("MBIRA_BANDA.SCL"), Some("mbira_banda.scl"));
+        assert_eq!(found("barbourChrom1"), Some("barbour_chrom1.scl"));
+        assert_eq!(found("blackj_gws.scl"), Some("blackj_gws.scl"));
+        assert_eq!(found("fj-12tet.scl"), Some("fj-12tet.scl"));
+        // A name that names nothing, rather than the nearest thing to it.
+        assert_eq!(found("badFileName.scl"), None);
+
+        // A scale with no degrees writes none, and music21 reads the
+        // archive's own `xxx.scl` that way.
+        let empty = ScalaScale::parse(
+            "Nothing
+ 0
+",
+        )
+        .unwrap();
+        assert!(empty.written_cents().is_empty());
+        assert!(empty.adjacent_cents().is_empty());
+        assert_eq!(
+            empty.file_string(None),
+            "!
+Nothing
+0
+!
+"
+        );
     }
 }

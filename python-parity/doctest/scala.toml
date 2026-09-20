@@ -1,0 +1,14 @@
+# Docstrings of music21.scale.scala whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_scala`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.scale.scala",
+    "music21.scale.scala.ScalaData",
+    "music21.scale.scala.ScalaFile",
+    "music21.scale.scala.ScalaPitch",
+    "music21.scale.scala.getPaths",
+    "music21.scale.scala.parse",
+    "music21.scale.scala.search",
+]
