@@ -704,10 +704,6 @@ impl Chord {
         chord
     }
 
-    pub(crate) fn unique_pitch_names(&self) -> std::collections::BTreeSet<String> {
-        self.pitch_refs().map(Pitch::name).collect()
-    }
-
     /// How many distinct pitch names the chord has, without writing any of
     /// them: two pitches share a name when they share a letter and an
     /// accidental, whatever octave each is in.

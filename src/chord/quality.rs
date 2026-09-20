@@ -56,7 +56,7 @@ impl Chord {
     /// Returns whether two pitches share a pitch class under different names,
     /// such as `C#` and `D-`.
     pub fn has_any_enharmonic_spelled_pitches(&self) -> bool {
-        self.pitch_class_set().len() != self.unique_pitch_name_count()
+        self.pitch_class_cardinality() != self.unique_pitch_name_count()
     }
 
     /// Returns whether the chord is exactly three distinct pitch names with a

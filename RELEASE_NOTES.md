@@ -131,7 +131,7 @@ kept as music21 keeps it, one scale type where there were two, and no
   | `Pitch::clone` (with an accidental) | 127ns | 18ns |
   | `Chord::root`, `inversion`, `third` | ~450ns | ~45ns |
   | `Chord::is_dominant_seventh` | 457ns | 15ns |
-  | `Chord::common_name` | 5025ns | 2123ns |
+  | `Chord::common_name` | 5025ns | 1276ns |
   | `Chord::new("C4 E4 G4")` | 1340ns | 708ns |
 
   An accidental borrows its name and its modifier from the table rather than
@@ -141,7 +141,10 @@ kept as music21 keeps it, one scale type where there were two, and no
   of a set, a map and three vectors. A chord counts its distinct pitch names
   without writing any of them. A pitch class is written as a character rather
   than through the formatting machinery. And a specifier is compared without
-  lowercasing eleven prefixes and eleven names to do it.
+  lowercasing eleven prefixes and eleven names to do it. Naming a chord keeps
+  the names a set class carries borrowed from the table until one of them is
+  the answer, reads the spellings it checks for off the notes rather than out
+  of a set of their names, and counts pitch classes in a bitmask.
 - `Pitch::from_name` and `Note::from_name` take `impl AsRef<str>` rather than
   `impl Into<String>`, so a name is read where the caller has it instead of
   being copied first. Everything that could be passed before still can.
