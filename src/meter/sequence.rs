@@ -162,6 +162,13 @@ impl MeterTerminal {
     /// music21's `offsetToAddress`. Its length is how deep that terminal
     /// lies, so a span nothing divides answers one index.
     pub fn address_of_offset(&self, offset: FloatType) -> Result<Vec<usize>> {
+        let length = self.quarter_length();
+        if offset.is_nan() || offset < 0.0 || offset >= length {
+            return Err(Error::Meter(format!(
+                "cannot access from qLenPos {}",
+                super::offset_repr(offset)
+            )));
+        }
         let index = self.offset_to_index(offset)?;
         let mut address = vec![index];
         let (start, _) = self.offset_to_span(offset, false)?;
@@ -559,9 +566,8 @@ impl MeterTerminal {
         let length = self.quarter_length();
         if offset.is_nan() || offset < 0.0 || offset >= length {
             return Err(Error::Meter(format!(
-                "cannot access from qLenPos {} where total duration is {}",
-                super::offset_repr(offset),
-                super::offset_repr(length)
+                "cannot access from qLenPos {}",
+                super::offset_repr(offset)
             )));
         }
         let depth = self.depth();
