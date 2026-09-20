@@ -308,13 +308,16 @@ pub(crate) fn address_to_forte_name(
     classification: &str,
 ) -> Result<String, Error> {
     let (card, index, inversion) = validate_address((address.0, address.1, Some(address.2)))?;
-    let inversion_suffix = match classification.to_ascii_lowercase().as_str() {
-        "tn" => match inversion {
+    // Compared without writing the classification out in lower case: a
+    // chord is named through here and there is only the one to match.
+    let inversion_suffix = if classification.eq_ignore_ascii_case("tn") {
+        match inversion {
             Sign::NegativeOne => "B",
             Sign::One => "A",
             Sign::Zero => "",
-        },
-        _ => "",
+        }
+    } else {
+        ""
     };
     Ok(format!("{card}-{index}{inversion_suffix}"))
 }

@@ -161,7 +161,7 @@ impl Chord {
 
     /// Returns the number of distinct pitch classes.
     pub fn pitch_class_cardinality(&self) -> usize {
-        self.pitch_class_set().len()
+        self.pitch_class_mask().count_ones() as usize
     }
 
     /// Returns the distinct pitch classes in ascending order in music21's
@@ -185,10 +185,12 @@ impl Chord {
         self.ordered_pitch_classes().into_iter().collect()
     }
 
+    /// The twelve pitch classes as a bit each, which is every question about
+    /// *which* classes a chord has and how many, with nothing allocated.
     pub(super) fn pitch_class_mask(&self) -> u16 {
-        self.ordered_pitch_classes()
-            .into_iter()
-            .fold(0_u16, |mask, pc| mask | (1_u16 << pc))
+        self.notes.iter().fold(0_u16, |mask, note| {
+            mask | (1_u16 << root::pitch_class(&note.pitch))
+        })
     }
 
     /// Where this chord's set class sits in the Forte tables.

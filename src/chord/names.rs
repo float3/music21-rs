@@ -131,18 +131,16 @@ impl Chord {
         if !common_name.contains("augmented sixth chord") {
             return None;
         }
-        let names = self.unique_pitch_names();
-        let root = if self.names_are(&names, &["C#", "E-", "G"])
-            || self.names_are(&names, &["C#", "E#", "G", "B"])
+        let root = if self.names_are(&["C#", "E-", "G"]) || self.names_are(&["C#", "E#", "G", "B"])
         {
             "C#"
-        } else if self.names_are(&names, &["C", "D", "F#", "A-"]) {
+        } else if self.names_are(&["C", "D", "F#", "A-"]) {
             "D"
-        } else if self.names_are(&names, &["C#", "E-", "G", "A"]) {
+        } else if self.names_are(&["C#", "E-", "G", "A"]) {
             "A"
-        } else if self.names_are(&names, &["C", "E", "F#", "A#"]) {
+        } else if self.names_are(&["C", "E", "F#", "A#"]) {
             "F#"
-        } else if self.names_are(&names, &["D", "E", "G#", "B-"])
+        } else if self.names_are(&["D", "E", "G#", "B-"])
             || (self.from_integer_pitches && self.pitch_class_mask() == 0b010100010100)
         {
             "E"
@@ -260,8 +258,12 @@ impl Chord {
             Err(_) => return "unknown chord".to_string(),
         };
 
-        let common_names: Vec<String> = match tables::address_to_common_names(address) {
-            Ok(Some(names)) => names.iter().map(|name| name.to_string()).collect(),
+        // The names stay borrowed from the table until one of them is the
+        // answer: a chord is named constantly, and writing every name a set
+        // class carries out to hand back one of them is three or four
+        // allocations for nothing.
+        let common_names: Vec<&'static str> = match tables::address_to_common_names(address) {
+            Ok(Some(names)) => names,
             _ => Vec::new(),
         };
         let forte_name = tables::address_to_forte_name(address, "tn").ok();
@@ -273,14 +275,14 @@ impl Chord {
             if let Some(first) = common_names.first() {
                 if matches!(forte_name, "4-20" | "4-26") {
                     return if self.is_seventh_with_perfect_fifths_above_root_and_third() {
-                        first.clone()
+                        (*first).to_string()
                     } else {
                         format!("enharmonic equivalent to {first}")
                     };
                 }
                 if let Some(spelled) = self.spelled_as_named(forte_name) {
                     return if spelled {
-                        first.clone()
+                        (*first).to_string()
                     } else {
                         format!("enharmonic equivalent to {first}")
                     };
@@ -289,7 +291,7 @@ impl Chord {
         }
 
         match common_names.first() {
-            Some(name) => name.clone(),
+            Some(name) => (*name).to_string(),
             None => match forte_name {
                 Some(forte_name) => format!("forte class {forte_name}"),
                 None => "unknown chord".to_string(),
@@ -303,9 +305,9 @@ impl Chord {
     pub(super) fn augmented_sixth_common_name(
         &self,
         forte_name: &str,
-        common_names: &[String],
+        common_names: &[&str],
     ) -> Option<String> {
-        let named = |index: usize| common_names.get(index).cloned();
+        let named = |index: usize| common_names.get(index).map(|name| (*name).to_string());
         let in_inversion = |index: usize| {
             named(index).map(|name| format!("{name} in {}", self.inversion_text().to_lowercase()))
         };
@@ -383,41 +385,40 @@ impl Chord {
     }
 
     pub(super) fn spelling_common_name_override(&self) -> Option<String> {
-        let names = self.unique_pitch_names();
-        let name = if self.names_are(&names, &["C#", "E-", "G"]) {
+        let name = if self.names_are(&["C#", "E-", "G"]) {
             "Italian augmented sixth chord in root position"
-        } else if self.names_are(&names, &["C", "D", "F#", "A-"])
-            || self.names_are(&names, &["D", "E", "G#", "B-"])
+        } else if self.names_are(&["C", "D", "F#", "A-"])
+            || self.names_are(&["D", "E", "G#", "B-"])
             || (self.from_integer_pitches && self.pitch_class_mask() == 0b010100010100)
         {
             "French augmented sixth chord in third inversion"
-        } else if self.names_are(&names, &["C#", "E-", "G", "A"]) {
+        } else if self.names_are(&["C#", "E-", "G", "A"]) {
             "French augmented sixth chord in first inversion"
-        } else if self.names_are(&names, &["C", "E", "F#", "A#"]) {
+        } else if self.names_are(&["C", "E", "F#", "A#"]) {
             "French augmented sixth chord"
-        } else if self.names_are(&names, &["C#", "E#", "G", "B"]) {
+        } else if self.names_are(&["C#", "E#", "G", "B"]) {
             "French augmented sixth chord in root position"
-        } else if self.names_are(&names, &["E-", "F#", "A"])
-            || self.names_are(&names, &["C#", "G", "A#"])
+        } else if self.names_are(&["E-", "F#", "A"])
+            || self.names_are(&["C#", "G", "A#"])
             || (self.from_integer_pitches && self.pitch_class_mask() == 0b001001001000)
         {
             "enharmonic equivalent to diminished triad"
         } else if self.from_integer_pitches
-            && (self.names_are(&names, &["C#", "D#", "F#", "A#"])
-                || self.names_are(&names, &["C#", "E#", "G#", "A#"])
-                || self.names_are(&names, &["E-", "G-", "A-", "C-"]))
+            && (self.names_are(&["C#", "D#", "F#", "A#"])
+                || self.names_are(&["C#", "E#", "G#", "A#"])
+                || self.names_are(&["E-", "G-", "A-", "C-"]))
         {
             // Built from integers these spellings are what music21 calls an
             // enharmonic equivalent; written out by name they are the chord
             // itself.
             "enharmonic equivalent to minor seventh chord"
         } else if self.from_integer_pitches
-            && (self.names_are(&names, &["C#", "E#", "F#", "A#"])
-                || self.names_are(&names, &["E-", "F-", "A-", "C-"])
-                || self.names_are(&names, &["E-", "G-", "B-", "C-"]))
+            && (self.names_are(&["C#", "E#", "F#", "A#"])
+                || self.names_are(&["E-", "F-", "A-", "C-"])
+                || self.names_are(&["E-", "G-", "B-", "C-"]))
         {
             "enharmonic equivalent to major seventh chord"
-        } else if self.names_are(&names, &["E-", "F#", "A", "B"]) {
+        } else if self.names_are(&["E-", "F#", "A", "B"]) {
             "enharmonic to dominant seventh chord"
         } else {
             return None;
@@ -532,12 +533,18 @@ impl Chord {
     /// here: the two spelling cascades ask this question up to fifteen times
     /// in a row, and building the set per question was most of what
     /// `common_name` cost.
-    pub(super) fn names_are(
-        &self,
-        names: &std::collections::BTreeSet<String>,
-        expected: &[&str],
-    ) -> bool {
-        self.notes.len() == expected.len() && expected.iter().all(|name| names.contains(*name))
+    /// Whether the chord is written with exactly these names, one note
+    /// each.
+    ///
+    /// Read off the notes rather than out of a set of their names: the
+    /// augmented sixths alone ask this twenty-one times, and a name is a
+    /// `String`, so the set cost an allocation a note before the first
+    /// question was asked.
+    pub(super) fn names_are(&self, expected: &[&str]) -> bool {
+        self.notes.len() == expected.len()
+            && expected
+                .iter()
+                .all(|name| self.pitch_refs().any(|pitch| written_as(pitch, name)))
     }
 
     pub(super) fn interval_nice_name(start: &Pitch, end: &Pitch) -> Option<String> {
@@ -598,4 +605,12 @@ pub struct KnownChordType {
     pub normal_form: Vec<u8>,
     /// Six-entry interval-class vector.
     pub interval_class_vector: Vec<u8>,
+}
+
+/// Whether a pitch is written with this name: the letter, then the
+/// accidental's modifier.
+fn written_as(pitch: &Pitch, name: &str) -> bool {
+    let mut characters = name.chars();
+    characters.next() == Some(pitch.step().as_char())
+        && characters.as_str() == pitch.accidental_or_natural().modifier()
 }
