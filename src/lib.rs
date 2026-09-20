@@ -28,6 +28,8 @@ pub(crate) mod defaults;
 pub(crate) mod display;
 /// Rhythmic duration primitives.
 pub mod duration;
+/// Dynamic marks and the loudness each stands for.
+pub mod dynamics;
 /// Error and result types used by the crate.
 pub mod error;
 
@@ -54,8 +56,6 @@ pub mod pitch;
 /// Polyrhythm timing and pitch-set helpers.
 pub mod polyrhythm;
 /// Silent duration-bearing musical event.
-/// Dynamic marks and the loudness each stands for.
-pub mod dynamics;
 pub mod rest;
 /// Roman numeral parsing and compact harmonic analysis.
 pub mod roman;
@@ -97,6 +97,7 @@ pub use chordsymbol::{
 };
 pub use defaults::{FloatType, FractionType, IntegerType, Octave, UnsignedIntegerType};
 pub use duration::{Duration, DurationTuple, DurationType, Tuplet, quarter_length_to_closest_type};
+pub use dynamics::Dynamic;
 pub use error::{Error, Result};
 pub use harte::{Harte, HarteInterval, SHORTHAND_DEGREES, convert_interval};
 pub use interval::{
@@ -124,7 +125,6 @@ pub use pitch::{
     pitch_class_name, simplify_multiple_enharmonics,
 };
 pub use polyrhythm::{Polyrhythm, PolyrhythmAnalysis, PolyrhythmEvent, PolyrhythmRatioTone};
-pub use dynamics::Dynamic;
 pub use rest::Rest;
 pub use roman::roman_numeral_from_chord;
 pub use roman::{
