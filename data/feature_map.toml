@@ -473,6 +473,29 @@ rust = ["src/meter/mod.rs", "src/meter/sequence.rs"]
 note = "Module-level helpers."
 
 [[class]]
+python = "scale/scala/__init__.py"
+name = "ScalaData"
+rust = ["src/tuningsystem/scala.rs"]
+note = "A Scala scale as its file writes it: a description, a degree a line and the interval it repeats at. ScalaFile is left out because it is file IO, which this library leaves to its caller."
+
+[class.renames]
+getCentsAboveTonic = "written_cents"
+getAdjacentCents = "adjacent_cents"
+setAdjacentCents = "from_adjacent_cents"
+getIntervalSequence = "interval_sequence"
+setIntervalSequence = "from_interval_sequence"
+getFileString = "file_string"
+
+[[class]]
+python = "scale/scala/__init__.py"
+rust = ["src/tuningsystem/scala.rs"]
+note = "Module-level helpers."
+
+[class.excluded]
+getPaths = "where the archive's files sit on disk; the archive here is one bundled table and has no paths"
+parse = "reading a file by name, which is file IO: a caller reads the bytes and ScalaScale::parse_bytes takes them, or ScalaArchive::get finds one in the bundle"
+
+[[class]]
 python = "tie.py"
 name = "Tie"
 rust = ["src/notation.rs"]

@@ -107,6 +107,12 @@ examples = 344
 tests = 39
 
 [[module]]
+module = "music21.scale.scala"
+docstrings = 7
+examples = 55
+tests = 44
+
+[[module]]
 module = "music21.serial"
 docstrings = 22
 examples = 149
