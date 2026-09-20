@@ -141,7 +141,7 @@ kept as music21 keeps it, one scale type where there were two, and no
   | `Pitch::clone` (with an accidental) | 127ns | 18ns |
   | `Chord::root`, `inversion`, `third` | ~450ns | ~45ns |
   | `Chord::is_dominant_seventh` | 457ns | 15ns |
-  | `Chord::common_name` | 5025ns | 1276ns |
+  | `Chord::common_name` | 5025ns | 976ns |
   | `Chord::new("C4 E4 G4")` | 1340ns | 708ns |
 
   An accidental borrows its name and its modifier from the table rather than

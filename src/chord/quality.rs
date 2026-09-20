@@ -232,9 +232,6 @@ impl Chord {
         third_semitones: u8,
         fifth_semitones: u8,
     ) -> bool {
-        if self.forte_address() != Some(address) {
-            return false;
-        }
         if !self.is_triad() || self.has_any_enharmonic_spelled_pitches() {
             return false;
         }
@@ -242,8 +239,15 @@ impl Chord {
         else {
             return false;
         };
-        semitones_above(root, third) == third_semitones
-            && semitones_above(root, fifth) == fifth_semitones
+        let spelled = semitones_above(root, third) == third_semitones
+            && semitones_above(root, fifth) == fifth_semitones;
+        // music21 asks the chord tables first. Three names with no two of
+        // them one pitch class, a third and a fifth at these distances: that
+        // *is* the set class, so the search through the tables -- the dear
+        // part of this, and one `common_name` has already made -- would only
+        // say so again. The tests hold it to that.
+        debug_assert!(!spelled || self.forte_address() == Some(address));
+        spelled
     }
 
     pub(super) fn is_incomplete_triad_of_type(
