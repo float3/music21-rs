@@ -784,15 +784,10 @@ pub(super) fn render_doctests(doctests: &[ModuleDoctests]) -> String {
                             </tr>
 "#,
             module = escape(&module.module),
-            note = if !module.harnessed {
-                "<span class=\"detail\">no harness yet</span>".to_string()
-            } else if module.music21_fails > 0 {
-                format!(
-                    "<span class=\"detail\">{} music21 fails too, left out</span>",
-                    module.music21_fails
-                )
+            note = if module.harnessed {
+                ""
             } else {
-                String::new()
+                "<span class=\"detail\">no harness yet</span>"
             },
             docstrings = cell(module.docstrings_passing, module.docstrings),
             examples = cell(module.examples_passing, module.examples),
@@ -818,7 +813,7 @@ pub(super) fn render_doctests(doctests: &[ModuleDoctests]) -> String {
         tests = cell(tests_passing, tests),
     );
     html.push_str(
-        "                <p class=\"section-foot\">music21's own docstrings and unit tests, run against the crate. A docstring passes only when every one of its examples does. An example music21 itself fails is left out rather than counted against either side, as the suite comparison leaves out a test music21 fails; the unit-test column is the <em>music21's own test suite</em> row above, attributed per module, where such a test does count as not passing.</p>\n            </section>\n",
+        "                <p class=\"section-foot\">music21's own docstrings and unit tests, run against the crate. A docstring passes only when every one of its examples does. Every docstring is read as music21's own runner reads it, which rewrites an object's address to <code>0x...</code> before comparing; the unit-test column is the <em>music21's own test suite</em> row above, attributed per module, where a test music21 itself fails counts as not passing.</p>\n            </section>\n",
     );
     html
 }

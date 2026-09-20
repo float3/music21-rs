@@ -219,10 +219,6 @@ struct DoctestSummary {
     docstrings: usize,
     examples_passing: usize,
     examples: usize,
-    /// Examples music21 itself fails, which the harness leaves out. Absent
-    /// from a summary written before the harness counted them.
-    #[serde(default)]
-    music21_fails: usize,
 }
 
 /// What the pair of runs of music21's own suite said about time, as
@@ -358,12 +354,6 @@ struct ModuleDoctests {
     docstrings: usize,
     examples_passing: usize,
     examples: usize,
-    /// How many of music21's own examples music21 itself fails. The harness
-    /// leaves those out, so they are in neither figure above; the page says
-    /// so, since a module whose total is short of music21's own count would
-    /// otherwise read as a gap here.
-    #[serde(default)]
-    music21_fails: usize,
     tests_passing: usize,
     tests: usize,
     /// False for a module in scope that no parity harness runs yet, which is
@@ -852,7 +842,6 @@ fn read_doctests(workspace_root: &Path) -> Vec<ModuleDoctests> {
             docstrings: summary.docstrings,
             examples_passing: summary.examples_passing,
             examples: summary.examples,
-            music21_fails: summary.music21_fails,
             tests_passing,
             tests,
             module,
@@ -882,7 +871,6 @@ fn read_doctests(workspace_root: &Path) -> Vec<ModuleDoctests> {
             docstrings: total.docstrings,
             examples_passing: 0,
             examples: total.examples,
-            music21_fails: 0,
             tests_passing,
             tests,
             harnessed: false,

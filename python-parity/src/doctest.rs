@@ -70,64 +70,32 @@ struct Summary {
     docstrings: usize,
     examples_passing: usize,
     examples: usize,
-    /// How many of music21's own examples music21 itself fails, which are not
-    /// run here and are not counted above. The report says so beside the
-    /// module, so that a module short of its own total is not read as a gap
-    /// in the crate.
-    music21_fails: usize,
 }
 
-/// Runs a docstring against music21 itself and drops the examples music21
-/// fails, so that what is left is a comparison of the two rather than a record
-/// of music21's own stale docstrings.
-///
-/// music21 has a few: `<music21.scale.scala.ScalaPitch object at 0x10b16fac8>`
-/// is written into its own documentation, address and all, and no run of it
-/// can print that address again. An example music21 cannot pass says nothing
-/// about this crate either way, and leaving it in would mean the docstring
-/// holding it could never be guarded against a regression.
-const TRIM_HELPER: &str = r#"
-import doctest
+/// music21's `fixDoctests`, which its own runner applies to every docstring
+/// before a word of it is compared.
+const READING_HELPER: &str = r#"
+import platform
+
+from music21.test.testRunner import stripAddresses
 
 
-class Recorder(doctest.DocTestRunner):
-    """Counts the examples that fail rather than reporting them."""
+def fix(test):
+    """music21's own `fixDoctests`, for one docstring rather than a suite.
 
-    def __init__(self, *arguments, **keywords):
-        super().__init__(*arguments, **keywords)
-        self.failing = []
-
-    def report_failure(self, out, test, example, got):
-        self.failing.append(example)
-
-    def report_unexpected_exception(self, out, test, example, exc_info):
-        self.failing.append(example)
-
-
-def trim(test, flags):
-    """Drops the examples music21 itself fails, and says how many those were.
-
-    The globs are put back as they were, so a later run of the docstring
-    starts where it would have.
+    Its runner rewrites every expectation before comparing: an address is
+    replaced by `0x...`, which `doctest.ELLIPSIS` then matches, and on Windows
+    a `PosixPath` is read as a `WindowsPath`. A docstring is written against
+    that reading, so this is what it has to be run under -- music21's own
+    `<music21.style.Style object at 0x10b0a2080>` passes on music21 and would
+    fail against anything, this crate included, without it.
     """
-    saved = dict(test.globs)
-    recorder = Recorder(optionflags=flags, verbose=False)
-    try:
-        recorder.run(test, out=lambda text: None, clear_globs=False)
-    except Exception:
-        # A docstring that cannot be run against music21 at all is left as it
-        # stands, so the run against the crate reports it as it always did.
-        return 0
-    finally:
-        test.globs.clear()
-        test.globs.update(saved)
-    if not recorder.failing:
-        return 0
-    failing = {id(example) for example in recorder.failing}
-    test.examples = [
-        example for example in test.examples if id(example) not in failing
-    ]
-    return len(failing)
+    windows = platform.system() == 'Windows'
+    for example in test.examples:
+        example.want = stripAddresses(example.want, '0x...')
+        if windows:
+            example.want = example.want.replace('PosixPath', 'WindowsPath')
+
 "#;
 
 #[derive(Debug)]
@@ -245,7 +213,7 @@ fn run_doctests(
     py: Python<'_>,
     module: &str,
     swaps: &[(&str, &[&str])],
-) -> PyResult<(Vec<Outcome>, usize)> {
+) -> PyResult<Vec<Outcome>> {
     let facade = py.import("music21_rs_facade")?;
     let music21 = py.import("music21")?;
     clear_corpus_cache(py)?;
@@ -263,29 +231,18 @@ fn run_doctests(
     let tests = finder.call_method("find", (&target,), Some(&kwargs))?;
     let collect = facade.getattr("collect_output")?;
 
-    // Before anything is swapped, while every name still means music21's own.
-    let trim = PyModule::from_code(
+    // Every docstring is read as music21's own runner reads it, before a word
+    // of it is compared.
+    let fix = PyModule::from_code(
         py,
-        &std::ffi::CString::new(TRIM_HELPER)?,
-        c"music21_rs_doctest_trim.py",
-        c"music21_rs_doctest_trim",
+        &std::ffi::CString::new(READING_HELPER)?,
+        c"music21_rs_doctest_reading.py",
+        c"music21_rs_doctest_reading",
     )?
-    .getattr("trim")?;
-    let mut music21_fails = 0usize;
+    .getattr("fix")?;
     for test in tests.try_iter()? {
-        let test: Bound<'_, PyAny> = test?;
-        if test.getattr("examples")?.len()? == 0 {
-            continue;
-        }
-        music21_fails += trim.call1((&test, flags))?.extract::<usize>()?;
+        fix.call1((&test?,))?;
     }
-    // That run read whatever corpus scores the docstrings name, and reading
-    // one writes a pickle of music21's own objects beside it. The run below
-    // would find that cache rather than parsing the score, and unpickling
-    // music21's objects into the classes standing in for them is not what
-    // these docstrings are here to measure -- so the cache goes, exactly as
-    // it went before the run above.
-    clear_corpus_cache(py)?;
 
     for (module_name, names) in swaps {
         let module = py.import(*module_name)?;
@@ -334,7 +291,7 @@ fn run_doctests(
             report: crate::take_output(),
         });
     }
-    Ok((outcomes, music21_fails))
+    Ok(outcomes)
 }
 
 /// Runs the doctests of `module` (`"music21.pitch"`) with the swapped names
@@ -349,7 +306,7 @@ pub fn run(module: &str, name: &str, swaps: &[(&str, &[&str])]) {
     std::env::set_current_dir(&root).expect("chdir to the repository root");
     prepare().expect("prepare music21 reference checkout");
 
-    let (outcomes, music21_fails) = Python::attach(|py| -> PyResult<(Vec<Outcome>, usize)> {
+    let outcomes = Python::attach(|py| -> PyResult<Vec<Outcome>> {
         init_py(py)?;
         add_dependency_venv(py, &root)?;
         run_doctests(py, module, swaps)
@@ -383,7 +340,6 @@ pub fn run(module: &str, name: &str, swaps: &[(&str, &[&str])]) {
         docstrings: outcomes.len(),
         examples_passing: examples_attempted - examples_failed,
         examples: examples_attempted,
-        music21_fails,
     };
     std::fs::write(
         root.join(format!("target/doctest_{name}.toml")),
@@ -391,12 +347,8 @@ pub fn run(module: &str, name: &str, swaps: &[(&str, &[&str])]) {
     )
     .expect("write the doctest summary");
 
-    let upstream = match music21_fails {
-        0 => String::new(),
-        count => format!(", leaving out {count} music21 fails itself"),
-    };
     println!(
-        "{module} doctests against music21-rs: {} of {} docstrings pass, {} of {} examples pass{upstream}; details in {}",
+        "{module} doctests against music21-rs: {} of {} docstrings pass, {} of {} examples pass; details in {}",
         passing.len(),
         outcomes.len(),
         examples_attempted - examples_failed,

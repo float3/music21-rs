@@ -1473,8 +1473,19 @@ impl MeterSequence {
     }
 
     /// music21's `offsetToDepth`: how many levels start at an offset.
-    #[pyo3(signature = (qLenPos, align = "quantize"))]
-    fn offsetToDepth(&self, py: Python<'_>, qLenPos: FloatType, align: &str) -> PyResult<usize> {
+    ///
+    /// `index` is music21's hint, added in its v7 for a long sequence: which
+    /// part of the finest level the offset falls in, which quantizing would
+    /// otherwise look up. Given one, the depth is read at that part's start
+    /// -- the same answer, since that is what quantizing finds.
+    #[pyo3(signature = (qLenPos, align = "quantize", index = None))]
+    fn offsetToDepth(
+        &self,
+        py: Python<'_>,
+        qLenPos: FloatType,
+        align: &str,
+        index: Option<usize>,
+    ) -> PyResult<usize> {
         let align = match align {
             "quantize" => RsOffsetAlign::Quantize,
             "start" => RsOffsetAlign::Start,
@@ -1485,10 +1496,21 @@ impl MeterSequence {
                 )));
             }
         };
-        self.held
-            .read(py)?
-            .offset_to_depth(qLenPos, align)
-            .map_err(meter_error)
+        let span = self.held.read(py)?;
+        // The offset is still the one that has to be in the bar, hint or no.
+        if let Some(index) = index.filter(|_| align == RsOffsetAlign::Quantize) {
+            span.offset_to_depth(qLenPos, align).map_err(meter_error)?;
+            let finest = span.level_span(span.depth().saturating_sub(1));
+            let (start, _) = finest.get(index).copied().ok_or_else(|| {
+                MeterException::new_err(format!(
+                    "this meter has no part {index} to read a depth at"
+                ))
+            })?;
+            return span
+                .offset_to_depth(start, RsOffsetAlign::Start)
+                .map_err(meter_error);
+        }
+        span.offset_to_depth(qLenPos, align).map_err(meter_error)
     }
 
     /// music21's `getLevel`: one level of this sequence, as a sequence.

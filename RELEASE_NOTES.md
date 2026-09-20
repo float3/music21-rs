@@ -4,7 +4,7 @@ The stream learns two more things to hold, and with them the last of
 music21's stream walks the crate had left out. Every one of music21's own
 examples now passes in all twenty-two modules under the harness — `sieve`,
 both halves of `meter`, `dynamics` and `scale.scala` included, 787 docstrings
-and 7,315 examples — and 626 of the 669 members the feature map tracks are ported, up
+and 7,317 examples — and 626 of the 669 members the feature map tracks are ported, up
 from 565 of 617. Every one of the 43 that are not has a reason written beside
 it, so the map no longer has an unexplained gap in it.
 
@@ -162,9 +162,13 @@ kept as music21 keeps it, one scale type where there were two, and no
   over music21's own suite beside it, and its tests tile no longer counts the
   tests music21 fails on its own as failing.
 - music21's own `dynamics` and `scale.scala` docstrings run against the
-  crate, as `doctest_dynamics` and `doctest_scala`, and the harness now leaves
-  out the examples music21 itself fails rather than counting them against the
-  crate; the report says beside each module how many those were.
+  crate, as `doctest_dynamics` and `doctest_scala`, and every docstring is now
+  read the way music21's own runner reads it -- its `fixDoctests` rewrites an
+  object's address to `0x...` before comparing anything, and forty-two of its
+  docstrings are written with an address in full. All 7,317 examples of the
+  twenty-two modules pass, with nothing left out.
+- `MeterSequence.offsetToDepth` takes music21's `index`, the hint its v7 added
+  for which part of the finest level an offset falls in.
 - The report tracks three modules it could not see before: `meter.core`,
   whose two classes the whole meter tree is made of; `tie`, whose entire API
   is the names in its `__slots__`, which no scan for methods could find; and
