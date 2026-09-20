@@ -619,8 +619,11 @@ fn build_suite<'py>(
 ///
 /// A cached score is a pickle carrying the classes it was parsed with, so a
 /// cache written by one of the two runs would be read by the other and the
-/// comparison would be measuring the wrong thing.
-fn clear_corpus_cache(py: Python<'_>) -> PyResult<()> {
+/// comparison would be measuring the wrong thing. A cache written by *any*
+/// run that installed these classes poisons a plain music21 read as well,
+/// since unpickling it imports `music21_rs`, so anything reading the corpus
+/// clears it first.
+pub(crate) fn clear_corpus_cache(py: Python<'_>) -> PyResult<()> {
     let root: String = py
         .import("music21.environment")?
         .getattr("Environment")?

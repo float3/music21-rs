@@ -1386,6 +1386,9 @@ fn spelled_pitch(pitch: &Bound<'_, PyAny>) -> PyResult<String> {
 /// Every quartet music21 finds in a few corpus scores, beside the notes of
 /// each part, so the crate's walk can be checked with no music21 to hand.
 fn write_voice_leading(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> PyResult<PathBuf> {
+    // A corpus score is read back from a pickle, and one written while these
+    // classes were installed names `music21_rs` in it.
+    crate::music21_suite::clear_corpus_cache(py)?;
     let corpus = py.import("music21.corpus")?;
     let voice_leading = py.import("music21.voiceLeading")?;
     let note_class = py.import("music21.note")?.getattr("Note")?;
