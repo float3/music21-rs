@@ -2,9 +2,9 @@
 
 The stream learns two more things to hold, and with them the last of
 music21's stream walks the crate had left out. Every one of music21's own
-examples now passes in all nineteen modules under the harness, `sieve`
-included, and 582 of the 620 members the feature map tracks are ported, up
-from 565 of 617.
+examples now passes in all twenty modules under the harness — `sieve` and
+both halves of `meter` included — and 582 of the 620 members the feature map
+tracks are ported, up from 565 of 617.
 
 It is also the release that takes the breaking changes earlier ones held
 back: a tuning system that can repeat at any period, a pitch's accidental
@@ -60,11 +60,10 @@ kept as music21 keeps it, one scale type where there were two, and no
   among them follows how long each part is, as music21 does. A span used to
   keep one weight of its own and leave every part weighing one.
 - music21's own `meter.core` docstrings run against the crate, as
-  `doctest_metercore`: 383 of their 386 examples pass, from 39 when the
-  harness was first pointed at them. A `MeterSequence` holds its parts as the
-  objects music21 hands back, adopts the spans it is built from, and carries
-  music21's `_levelListCache`. The three left are two weights music21 prints
-  as the numbers it was handed and one CPython type name.
+  `doctest_metercore`: all 386 of their examples and all 39 docstrings pass,
+  from 39 examples when the harness was first pointed at them. A
+  `MeterSequence` holds its parts as the objects music21 hands back, adopts
+  the spans it is built from, and carries music21's `_levelListCache`.
 - `dynamics::Dynamic`: a dynamic mark and the loudness it stands for, with
   music21's tables for the marks, their Italian and English names and their
   scalars, and `dynamic_str_from_decimal` for the mark a loudness falls
