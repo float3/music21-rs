@@ -1,0 +1,13 @@
+# Docstrings of music21.dynamics whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_dynamics`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.dynamics.Crescendo",
+    "music21.dynamics.Diminuendo",
+    "music21.dynamics.Dynamic",
+    "music21.dynamics.Dynamic.value",
+    "music21.dynamics.Dynamic.volumeScalar",
+    "music21.dynamics.dynamicStrFromDecimal",
+]

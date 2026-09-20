@@ -38,6 +38,7 @@ use utils::{init_py, prepare};
 pub use music21_rs_python::chord::NAMES as CHORD_NAMES;
 pub use music21_rs_python::chordtables::NAMES as CHORD_TABLES_NAMES;
 pub use music21_rs_python::duration::NAMES as DURATION_NAMES;
+pub use music21_rs_python::dynamics::NAMES as DYNAMICS_NAMES;
 pub use music21_rs_python::figuredbass::NAMES as FIGURED_BASS_NAMES;
 pub use music21_rs_python::harmony::NAMES as HARMONY_NAMES;
 pub use music21_rs_python::interval::NAMES as INTERVAL_NAMES;
