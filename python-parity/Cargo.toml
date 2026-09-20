@@ -8,7 +8,12 @@ version = "0.0.0"
 music21-rs = { path = "..", default-features = false }
 # Renamed because the wheel crate's lib is also called `music21_rs`,
 # which is the name the extension module has to have.
-music21_rs_python = { package = "music21-rs-python", path = "../python" }
+# The bundled Scala archive comes with it: music21's own `scale.scala`
+# examples ask for a scale by name, and the archive is where a name is
+# answered. The wheel leaves that feature off.
+music21_rs_python = { package = "music21-rs-python", path = "../python", features = [
+  "scala-archive",
+] }
 pyo3 = { version = "0.29.0", features = ["auto-initialize"] }
 serde = { version = "1.0.228", features = ["derive"] }
 toml = "1.1"

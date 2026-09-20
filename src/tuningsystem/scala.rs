@@ -77,13 +77,14 @@ impl ScalaDegree {
         }
     }
 
-    /// Writes one Scala note line.
+    /// The line a Scala file writes for this degree: the other half of the
+    /// reading [`FromStr`] does.
     ///
     /// Scala tells the two spellings apart by the point: a value carrying one
     /// is cents and a value without one is a ratio, so a whole number of
     /// cents is written `1200.0` and never `1200`, which would be a ratio of
     /// twelve hundred to one.
-    fn written(self) -> String {
+    pub fn written(self) -> String {
         match self {
             Self::Ratio(fraction) => format!("{}/{}", fraction.numerator(), fraction.denominator()),
             Self::Cents(cents) => {
@@ -390,6 +391,13 @@ impl ScalaScale {
         widths
     }
 
+    /// A scale from the cents of every degree a file writes, the period last:
+    /// the reverse of [`written_cents`](Self::written_cents).
+    pub fn from_written_cents(description: impl Into<String>, cents: &[FloatType]) -> Self {
+        let written = cents.iter().copied().map(ScalaDegree::Cents).collect();
+        Self::from_written(description, written)
+    }
+
     /// A scale from the width of each step, in cents: music21's
     /// `setAdjacentCents`.
     ///
@@ -397,14 +405,14 @@ impl ScalaScale {
     /// equal temperament.
     pub fn from_adjacent_cents(description: impl Into<String>, widths: &[FloatType]) -> Self {
         let mut above = 0.0;
-        let written: Vec<ScalaDegree> = widths
+        let written: Vec<FloatType> = widths
             .iter()
             .map(|width| {
                 above += width;
-                ScalaDegree::Cents(above)
+                above
             })
             .collect();
-        Self::from_written(description, written)
+        Self::from_written_cents(description, &written)
     }
 
     /// Each step of the scale as an interval: music21's
@@ -499,6 +507,18 @@ impl ScalaScale {
     /// caller.
     pub fn frequency_at(&self, root_hz: FloatType, index: IntegerType) -> FloatType {
         root_hz * self.ratio_at(index)
+    }
+}
+
+impl FromStr for ScalaDegree {
+    type Err = Error;
+
+    /// Reads one note line of a Scala file: music21's `ScalaPitch.parse`.
+    ///
+    /// A value carrying a point is cents and one without is a ratio, `n\m`
+    /// is `n` steps of `m`-EDO, and anything after the value is a comment.
+    fn from_str(token: &str) -> Result<Self> {
+        Self::parse(token)
     }
 }
 
@@ -639,6 +659,36 @@ impl ScalaArchive {
     #[cfg(feature = "scala-archive")]
     pub fn bundled_len() -> usize {
         crate::tuningsystem::scala_bundled::SCALES.len()
+    }
+
+    /// The one scale a name names, with the file name it is filed under:
+    /// the searching half of music21's `scale.scala.parse`.
+    ///
+    /// A file name is looked for first, then a name written without its
+    /// extension or its underscores and hyphens, and failing both the first
+    /// file whose name contains what was asked for. Reading a file from disk
+    /// is the caller's business; this looks in the archive.
+    pub fn find(&self, target: &str) -> Option<(&str, &ScalaScale)> {
+        let target = target.replace(' ', "").to_lowercase();
+        let named = self
+            .scales
+            .keys()
+            .find(|name| name.to_lowercase() == target);
+        let found = named.or_else(|| {
+            self.scales.keys().find(|name| {
+                let stem = name.strip_suffix(".scl").unwrap_or(name).to_lowercase();
+                stem == target || stem.replace(['_', '-'], "") == target
+            })
+        });
+        let found = found.or_else(|| {
+            self.scales.keys().find(|name| {
+                let stem = name.strip_suffix(".scl").unwrap_or(name).to_lowercase();
+                stem.contains(&target) || stem.replace(['_', '-'], "").contains(&target)
+            })
+        })?;
+        self.scales
+            .get_key_value(found.as_str())
+            .map(|(name, scale)| (name.as_str(), scale))
     }
 
     /// Finds file names matching a search string, as music21's
@@ -1122,6 +1172,28 @@ Just
 "
         ));
         assert_eq!(ScalaScale::parse(&out).unwrap(), over);
+
+        // Every name here is one music21's own `scale.scala.parse` resolves
+        // the same way, in an archive filed under the same names.
+        let mut archive = super::ScalaArchive::new();
+        for name in [
+            "mbira_banda.scl",
+            "barbour_chrom1.scl",
+            "blackj_gws.scl",
+            "fj-12tet.scl",
+        ] {
+            let _ = archive.insert_scale(name, scale.clone());
+        }
+        let found = |target| archive.find(target).map(|(name, _)| name);
+        // A name written with a space, an underscore or neither.
+        assert_eq!(found("mbira banda"), Some("mbira_banda.scl"));
+        assert_eq!(found("mbira_banda"), Some("mbira_banda.scl"));
+        assert_eq!(found("MBIRA_BANDA.SCL"), Some("mbira_banda.scl"));
+        assert_eq!(found("barbourChrom1"), Some("barbour_chrom1.scl"));
+        assert_eq!(found("blackj_gws.scl"), Some("blackj_gws.scl"));
+        assert_eq!(found("fj-12tet.scl"), Some("fj-12tet.scl"));
+        // A name that names nothing, rather than the nearest thing to it.
+        assert_eq!(found("badFileName.scl"), None);
 
         // A scale with no degrees writes none, and music21 reads the
         // archive's own `xxx.scl` that way.

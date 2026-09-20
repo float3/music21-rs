@@ -2,9 +2,9 @@
 
 The stream learns two more things to hold, and with them the last of
 music21's stream walks the crate had left out. Every one of music21's own
-examples now passes in all twenty-one modules under the harness — `sieve`,
-both halves of `meter` and `dynamics` included, 780 docstrings and 7,262
-examples — and 626 of the 669 members the feature map tracks are ported, up
+examples now passes in all twenty-two modules under the harness — `sieve`,
+both halves of `meter`, `dynamics` and `scale.scala` included, 787 docstrings
+and 7,315 examples — and 626 of the 669 members the feature map tracks are ported, up
 from 565 of 617. Every one of the 43 that are not has a reason written beside
 it, so the map no longer has an unexplained gap in it.
 
@@ -74,8 +74,11 @@ kept as music21 keeps it, one scale type where there were two, and no
 - `ScalaScale` answers a Scala file the way music21's `ScalaData` does:
   `written_cents` and `written_degrees` for the lines the file writes,
   `adjacent_cents` and `interval_sequence` for the width of each step,
-  `from_adjacent_cents` and `from_interval_sequence` for a scale built out of
-  those widths, and `file_string` for the `.scl` text. A degree read as a
+  `from_adjacent_cents`, `from_interval_sequence` and `from_written_cents` for
+  a scale built out of those, and `file_string` for the `.scl` text.
+  `ScalaArchive::find` is the searching half of music21's `parse`: the one
+  scale a name names. A `ScalaDegree` reads and writes its own line,
+  through `FromStr` and `written`. A degree read as a
   ratio is written back as that ratio, so a file read and written is the
   scale it was; music21 keeps cents alone and cannot.
 - `dynamics::Dynamic`: a dynamic mark and the loudness it stands for, with
@@ -117,6 +120,10 @@ kept as music21 keeps it, one scale type where there were two, and no
 - The report's headline speedup is the benchmark's median, with the median
   over music21's own suite beside it, and its tests tile no longer counts the
   tests music21 fails on its own as failing.
+- music21's own `dynamics` and `scale.scala` docstrings run against the
+  crate, as `doctest_dynamics` and `doctest_scala`, and the harness now leaves
+  out the examples music21 itself fails rather than counting them against the
+  crate; the report says beside each module how many those were.
 - The report tracks three modules it could not see before: `meter.core`,
   whose two classes the whole meter tree is made of; `tie`, whose entire API
   is the names in its `__slots__`, which no scan for methods could find; and

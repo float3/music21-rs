@@ -33,6 +33,13 @@ serde_json = "1"
 # not link libpython, while `python-parity` embeds an interpreter and must.
 extension-module = ["pyo3/extension-module"]
 
+# The bundled Scala archive, about a megabyte of scale data. `python-parity`
+# turns it on so that music21's own `scale.scala` examples -- which ask for a
+# scale by name -- can be answered; the wheel leaves it off, so what a caller
+# installs carries no scale data and no licence question, and asking for a
+# scale by name there says so.
+scala-archive = ["music21_rs_crate/scala-archive"]
+
 # The workspace denies these for every crate in it; this crate is outside the
 # workspace, so it says so itself rather than going unlinted.
 [lints.clippy]

@@ -48,6 +48,7 @@ pub use music21_rs_python::notation::{BEAM_NAMES, TIE_NAMES, VOLUME_NAMES};
 pub use music21_rs_python::note::NAMES as NOTE_NAMES;
 pub use music21_rs_python::pitch::NAMES as PITCH_NAMES;
 pub use music21_rs_python::roman::NAMES as ROMAN_NAMES;
+pub use music21_rs_python::scala::NAMES as SCALA_NAMES;
 pub use music21_rs_python::scale::NAMES as SCALE_NAMES;
 pub use music21_rs_python::serial::NAMES as SERIAL_NAMES;
 pub use music21_rs_python::sieve::NAMES as SIEVE_NAMES;
@@ -69,7 +70,65 @@ struct Summary {
     docstrings: usize,
     examples_passing: usize,
     examples: usize,
+    /// How many of music21's own examples music21 itself fails, which are not
+    /// run here and are not counted above. The report says so beside the
+    /// module, so that a module short of its own total is not read as a gap
+    /// in the crate.
+    music21_fails: usize,
 }
+
+/// Runs a docstring against music21 itself and drops the examples music21
+/// fails, so that what is left is a comparison of the two rather than a record
+/// of music21's own stale docstrings.
+///
+/// music21 has a few: `<music21.scale.scala.ScalaPitch object at 0x10b16fac8>`
+/// is written into its own documentation, address and all, and no run of it
+/// can print that address again. An example music21 cannot pass says nothing
+/// about this crate either way, and leaving it in would mean the docstring
+/// holding it could never be guarded against a regression.
+const TRIM_HELPER: &str = r#"
+import doctest
+
+
+class Recorder(doctest.DocTestRunner):
+    """Counts the examples that fail rather than reporting them."""
+
+    def __init__(self, *arguments, **keywords):
+        super().__init__(*arguments, **keywords)
+        self.failing = []
+
+    def report_failure(self, out, test, example, got):
+        self.failing.append(example)
+
+    def report_unexpected_exception(self, out, test, example, exc_info):
+        self.failing.append(example)
+
+
+def trim(test, flags):
+    """Drops the examples music21 itself fails, and says how many those were.
+
+    The globs are put back as they were, so a later run of the docstring
+    starts where it would have.
+    """
+    saved = dict(test.globs)
+    recorder = Recorder(optionflags=flags, verbose=False)
+    try:
+        recorder.run(test, out=lambda text: None, clear_globs=False)
+    except Exception:
+        # A docstring that cannot be run against music21 at all is left as it
+        # stands, so the run against the crate reports it as it always did.
+        return 0
+    finally:
+        test.globs.clear()
+        test.globs.update(saved)
+    if not recorder.failing:
+        return 0
+    failing = {id(example) for example in recorder.failing}
+    test.examples = [
+        example for example in test.examples if id(example) not in failing
+    ]
+    return len(failing)
+"#;
 
 #[derive(Debug)]
 struct Outcome {
@@ -182,7 +241,11 @@ fn clear_corpus_cache(py: Python<'_>) -> PyResult<()> {
     Ok(())
 }
 
-fn run_doctests(py: Python<'_>, module: &str, swaps: &[(&str, &[&str])]) -> PyResult<Vec<Outcome>> {
+fn run_doctests(
+    py: Python<'_>,
+    module: &str,
+    swaps: &[(&str, &[&str])],
+) -> PyResult<(Vec<Outcome>, usize)> {
     let facade = py.import("music21_rs_facade")?;
     let music21 = py.import("music21")?;
     clear_corpus_cache(py)?;
@@ -199,6 +262,30 @@ fn run_doctests(py: Python<'_>, module: &str, swaps: &[(&str, &[&str])]) -> PyRe
     kwargs.set_item("globs", &globs)?;
     let tests = finder.call_method("find", (&target,), Some(&kwargs))?;
     let collect = facade.getattr("collect_output")?;
+
+    // Before anything is swapped, while every name still means music21's own.
+    let trim = PyModule::from_code(
+        py,
+        &std::ffi::CString::new(TRIM_HELPER)?,
+        c"music21_rs_doctest_trim.py",
+        c"music21_rs_doctest_trim",
+    )?
+    .getattr("trim")?;
+    let mut music21_fails = 0usize;
+    for test in tests.try_iter()? {
+        let test: Bound<'_, PyAny> = test?;
+        if test.getattr("examples")?.len()? == 0 {
+            continue;
+        }
+        music21_fails += trim.call1((&test, flags))?.extract::<usize>()?;
+    }
+    // That run read whatever corpus scores the docstrings name, and reading
+    // one writes a pickle of music21's own objects beside it. The run below
+    // would find that cache rather than parsing the score, and unpickling
+    // music21's objects into the classes standing in for them is not what
+    // these docstrings are here to measure -- so the cache goes, exactly as
+    // it went before the run above.
+    clear_corpus_cache(py)?;
 
     for (module_name, names) in swaps {
         let module = py.import(*module_name)?;
@@ -247,7 +334,7 @@ fn run_doctests(py: Python<'_>, module: &str, swaps: &[(&str, &[&str])]) -> PyRe
             report: crate::take_output(),
         });
     }
-    Ok(outcomes)
+    Ok((outcomes, music21_fails))
 }
 
 /// Runs the doctests of `module` (`"music21.pitch"`) with the swapped names
@@ -262,7 +349,7 @@ pub fn run(module: &str, name: &str, swaps: &[(&str, &[&str])]) {
     std::env::set_current_dir(&root).expect("chdir to the repository root");
     prepare().expect("prepare music21 reference checkout");
 
-    let outcomes = Python::attach(|py| -> PyResult<Vec<Outcome>> {
+    let (outcomes, music21_fails) = Python::attach(|py| -> PyResult<(Vec<Outcome>, usize)> {
         init_py(py)?;
         add_dependency_venv(py, &root)?;
         run_doctests(py, module, swaps)
@@ -296,6 +383,7 @@ pub fn run(module: &str, name: &str, swaps: &[(&str, &[&str])]) {
         docstrings: outcomes.len(),
         examples_passing: examples_attempted - examples_failed,
         examples: examples_attempted,
+        music21_fails,
     };
     std::fs::write(
         root.join(format!("target/doctest_{name}.toml")),
@@ -303,8 +391,12 @@ pub fn run(module: &str, name: &str, swaps: &[(&str, &[&str])]) {
     )
     .expect("write the doctest summary");
 
+    let upstream = match music21_fails {
+        0 => String::new(),
+        count => format!(", leaving out {count} music21 fails itself"),
+    };
     println!(
-        "{module} doctests against music21-rs: {} of {} docstrings pass, {} of {} examples pass; details in {}",
+        "{module} doctests against music21-rs: {} of {} docstrings pass, {} of {} examples pass{upstream}; details in {}",
         passing.len(),
         outcomes.len(),
         examples_attempted - examples_failed,

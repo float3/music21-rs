@@ -491,9 +491,11 @@ python = "scale/scala/__init__.py"
 rust = ["src/tuningsystem/scala.rs"]
 note = "Module-level helpers."
 
+[class.renames]
+parse = "find"
+
 [class.excluded]
 getPaths = "where the archive's files sit on disk; the archive here is one bundled table and has no paths"
-parse = "reading a file by name, which is file IO: a caller reads the bytes and ScalaScale::parse_bytes takes them, or ScalaArchive::get finds one in the bundle"
 
 [[class]]
 python = "tie.py"

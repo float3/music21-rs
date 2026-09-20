@@ -42,6 +42,7 @@ pub mod notation;
 pub mod note;
 pub mod pitch;
 pub mod roman;
+pub mod scala;
 pub mod scale;
 pub mod serial;
 pub mod sieve;
@@ -1202,6 +1203,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     chord::register(m)?;
     chordtables::register(m)?;
     dynamics::register(m)?;
+    scala::register(m)?;
     // The other end of every pickle these classes write. It belongs here
     // rather than on the wheel's module alone: `python-parity` builds its
     // own module out of this one, and a score frozen under that harness --
