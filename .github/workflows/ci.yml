@@ -397,10 +397,28 @@ jobs:
       # `fraction` is a public dependency and the release job tags whatever
       # version reaches master, so a breaking change has to be caught before
       # the tag rather than after it.
-      - name: Compare the public API against the base commit
+      #
+      # The baseline is the last release, not the commit before this one: what
+      # a downstream holds is a published version, so that is what must not
+      # break under an unchanged version number. An item added and then renamed
+      # between two releases has broken nobody, and comparing against the
+      # previous commit failed on exactly that -- the version is bumped once
+      # per release, not once per change. Once a version is tagged, a breaking
+      # change against it fails here until the version is bumped, which is the
+      # gate this job is for. With no tag at all, the previous commit is the
+      # only baseline there is.
+      - name: Compare the public API against the last release
+        shell: bash
         env:
-          BASELINE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || 'HEAD^' }}
-        run: cargo semver-checks --package music21-rs --all-features --baseline-rev "$BASELINE"
+          FALLBACK: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || 'HEAD^' }}
+        run: |
+          set -euo pipefail
+          BASELINE=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)
+          if [[ -z "$BASELINE" ]]; then
+            BASELINE="$FALLBACK"
+          fi
+          echo "comparing against $BASELINE"
+          cargo semver-checks --package music21-rs --all-features --baseline-rev "$BASELINE"
 
   test:
     name: Test (${{ matrix.os }})
