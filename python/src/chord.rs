@@ -532,6 +532,29 @@ impl Chord {
     /// they exist, and the chord's otherwise -- which is the same answer,
     /// since what an object carries that `inner` does not is what a caller
     /// wrote through it, and there was no object to write through.
+    /// Each note as its own object says it is where there is one, and as the
+    /// chord says otherwise -- *without* folding in what that object carries
+    /// beside its value.
+    ///
+    /// `note_values` is the other reading, and the two differ exactly where
+    /// something has taken a note's `Volume` or `Beams` object: a volume
+    /// cleared off the note is still on the object until the object is read
+    /// back, which is what makes `hasComponentVolumes` false after
+    /// `chord.volume = ...`.
+    fn read_notes<T>(&self, py: Python<'_>, read: impl Fn(&RsNote) -> T) -> Vec<T> {
+        self.inner
+            .notes()
+            .iter()
+            .enumerate()
+            .map(
+                |(index, note)| match self.notes.get(index).and_then(Option::as_ref) {
+                    Some(object) => read(&object.borrow(py).inner),
+                    None => read(note),
+                },
+            )
+            .collect()
+    }
+
     fn note_values(&self, py: Python<'_>) -> Vec<RsNote> {
         self.inner
             .notes()
@@ -2889,9 +2912,9 @@ impl Chord {
     }
 
     fn hasComponentVolumes(&self, py: Python<'_>) -> bool {
-        self.note_values(py)
-            .iter()
-            .any(RsNote::has_volume_information)
+        self.read_notes(py, RsNote::has_volume_information)
+            .into_iter()
+            .any(|carried| carried)
     }
 
     fn setVolumes(&mut self, py: Python<'_>, volumes: &Bound<'_, PyAny>) -> PyResult<()> {
@@ -2921,9 +2944,9 @@ impl Chord {
         }
         let velocities: Vec<i32> = slf
             .borrow()
-            .note_values(py)
-            .iter()
-            .filter_map(|note| note.volume().velocity())
+            .read_notes(py, |note| note.volume().velocity())
+            .into_iter()
+            .flatten()
             .collect();
         let inner = if velocities.is_empty() {
             RsVolume::new()
