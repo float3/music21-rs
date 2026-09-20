@@ -1,0 +1,24 @@
+# Docstrings of music21.meter.core whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_metercore`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.meter.core.MeterSequence.__deepcopy__",
+    "music21.meter.core.MeterSequence.__getitem__",
+    "music21.meter.core.MeterSequence.__iter__",
+    "music21.meter.core.MeterSequence.__len__",
+    "music21.meter.core.MeterSequence.isUniformPartition",
+    "music21.meter.core.MeterSequence.load",
+    "music21.meter.core.MeterSequence.offsetToAddress",
+    "music21.meter.core.MeterSequence.offsetToIndex",
+    "music21.meter.core.MeterSequence.partitionByCount",
+    "music21.meter.core.MeterSequence.partitionDisplay",
+    "music21.meter.core.MeterSequence.partitionStr",
+    "music21.meter.core.MeterTerminal",
+    "music21.meter.core.MeterTerminal.duration",
+    "music21.meter.core.MeterTerminal.numerator",
+    "music21.meter.core.MeterTerminal.ratioEqual",
+    "music21.meter.core.MeterTerminal.subdivideByCount",
+    "music21.meter.core.MeterTerminal.weight",
+]

@@ -75,6 +75,71 @@ impl MeterTerminal {
         Self::new(numerator, denominator)
     }
 
+    /// A span written as parts joined by `+`, each part a ratio: music21's
+    /// `MeterSequence('2/4+2/4')`, which is a bar of four quarters divided in
+    /// two. A part written as a bare numerator takes the denominator of the
+    /// next part that gives one, so `3+2/8` is three eighths and two eighths.
+    ///
+    /// The span itself is written over the denominator its parts share, or
+    /// the least one they all divide into: `3/4+2/4+1/8` is `11/8`.
+    ///
+    /// This is not music21's `(3+2)/8`, a summed numerator, which music21
+    /// refuses to read at all.
+    pub fn from_partition_string(written: &str) -> Result<Self> {
+        let mut parts = Vec::new();
+        let tokens: Vec<&str> = written.split('+').map(str::trim).collect();
+        // Read from the right, so a bare numerator can take the denominator
+        // of the part that follows it.
+        let mut denominators: Vec<UnsignedIntegerType> = vec![0; tokens.len()];
+        let mut carried = None;
+        for (index, token) in tokens.iter().enumerate().rev() {
+            if let Some((_, denominator)) = token.split_once('/') {
+                carried = Some(parse_number(denominator)?);
+            }
+            denominators[index] = carried.ok_or_else(|| {
+                Error::Meter(format!(
+                    "cannot read a denominator from {token:?} in {written:?}"
+                ))
+            })?;
+        }
+
+        parts.reserve(tokens.len());
+        for (token, denominator) in tokens.iter().zip(denominators) {
+            let numerator = parse_number(token.split('/').next().unwrap_or(token))?;
+            parts.push(Self::new(numerator, denominator)?);
+        }
+        Self::from_parts(parts, written)
+    }
+
+    /// A span made of the parts given, which is what they come to: music21's
+    /// `MeterSequence` given a list of spans. The span is written over the
+    /// denominator its parts share, or the least one they all divide into.
+    ///
+    /// One part alone is that part, undivided, as music21 reads `'4/4'`.
+    pub fn from_parts_given(parts: Vec<Self>) -> Result<Self> {
+        Self::from_parts(parts, "a list of spans")
+    }
+
+    fn from_parts(mut parts: Vec<Self>, written: &str) -> Result<Self> {
+        if parts.len() == 1 {
+            // One part joined to nothing is just that span, as music21 reads
+            // `MeterSequence('4/4')` -- the sequence wrapping is the caller's.
+            return Ok(parts.remove(0));
+        }
+        let shared = parts
+            .iter()
+            .map(Self::denominator)
+            .reduce(num::integer::lcm)
+            .ok_or_else(|| Error::Meter(format!("{written:?} is no meter at all")))?;
+        let total = parts
+            .iter()
+            .map(|part| part.numerator() * (shared / part.denominator()))
+            .sum();
+        let mut span = Self::new(total, shared)?;
+        *span.parts_mut() = parts;
+        Ok(span)
+    }
+
     /// The numerator this span is written with.
     #[must_use]
     pub fn numerator(&self) -> UnsignedIntegerType {
@@ -91,6 +156,20 @@ impl MeterTerminal {
     #[must_use]
     pub fn quarter_length(&self) -> FloatType {
         FloatType::from(self.numerator) * (4.0 / FloatType::from(self.denominator))
+    }
+
+    /// Every index it takes to reach the terminal sounding at an offset:
+    /// music21's `offsetToAddress`. Its length is how deep that terminal
+    /// lies, so a span nothing divides answers one index.
+    pub fn address_of_offset(&self, offset: FloatType) -> Result<Vec<usize>> {
+        let index = self.offset_to_index(offset)?;
+        let mut address = vec![index];
+        let (start, _) = self.offset_to_span(offset, false)?;
+        let part = &self.parts[index];
+        if !part.is_empty() {
+            address.extend(part.address_of_offset(offset - start)?);
+        }
+        Ok(address)
     }
 
     /// How strongly this span is felt: music21's `weight`.
@@ -162,8 +241,8 @@ impl MeterTerminal {
         let total: FloatType = built.iter().map(MeterTerminal::quarter_length).sum();
         if (total - self.quarter_length()).abs() > OFFSET_TOLERANCE {
             return Err(Error::Meter(format!(
-                "cannot set partition by {parts:?}: it comes to {total} where the meter is {}",
-                self.quarter_length()
+                "Cannot set partition by {}",
+                python_list(parts)
             )));
         }
         self.parts = built;
@@ -183,7 +262,7 @@ impl MeterTerminal {
             None => {
                 if !load_default || options.is_empty() {
                     return Err(Error::Meter(format!(
-                        "cannot set partition by {count} ({}/{})",
+                        "Cannot set partition by {count} ({}/{})",
                         self.numerator, self.denominator
                     )));
                 }
@@ -220,8 +299,10 @@ impl MeterTerminal {
             return self.partition_by_parts(&borrowed);
         }
         Err(Error::Meter(format!(
-            "cannot set partition by {numerators:?} ({}/{})",
-            self.numerator, self.denominator
+            "Cannot set partition by {} ({}/{})",
+            python_list(numerators),
+            self.numerator,
+            self.denominator
         )))
     }
 
@@ -332,7 +413,9 @@ impl MeterTerminal {
         let length = self.quarter_length();
         if offset.is_nan() || offset < 0.0 || offset >= length {
             return Err(Error::Meter(format!(
-                "cannot access from qLenPos {offset} where total duration is {length}"
+                "cannot access from qLenPos {} where total duration is {}",
+                super::offset_repr(offset),
+                super::offset_repr(length)
             )));
         }
         let depth = self.depth();
@@ -445,7 +528,9 @@ impl MeterTerminal {
         let length = self.quarter_length();
         if offset.is_nan() || offset < 0.0 || offset >= length {
             return Err(Error::Meter(format!(
-                "cannot access from qLenPos {offset} where total duration is {length}"
+                "cannot access from qLenPos {} where total duration is {}",
+                super::offset_repr(offset),
+                super::offset_repr(length)
             )));
         }
         let mut start = 0.0;
@@ -513,6 +598,31 @@ impl std::fmt::Display for MeterTerminal {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str(&self.partition_string())
     }
+}
+
+/// A list of parts as Python prints it, since music21 names a partition it
+/// cannot set by printing the list it was handed: `['3/4', '1/8']` for the
+/// written parts, `[1, 1]` for their numerators.
+fn python_list<T: std::fmt::Display>(parts: &[T]) -> String {
+    let quote = |part: &T| {
+        let written = part.to_string();
+        if written.parse::<FloatType>().is_ok() {
+            written
+        } else {
+            format!("'{written}'")
+        }
+    };
+    format!(
+        "[{}]",
+        parts.iter().map(quote).collect::<Vec<String>>().join(", ")
+    )
+}
+
+/// One of the numbers a meter is written with.
+fn parse_number(text: &str) -> Result<UnsignedIntegerType> {
+    text.trim()
+        .parse()
+        .map_err(|_| Error::Meter(format!("{text:?} is not a number a meter is written with")))
 }
 
 /// `"3/8"` as the two numbers it is written with.
@@ -912,5 +1022,51 @@ mod tests {
         assert_eq!(bar.partition_string(), "{{1/4+1/4}+1/2}");
         assert_eq!(bar.flattened().len(), 3);
         assert!((bar.flattened()[0].quarter_length() - 1.0).abs() < 1e-9);
+    }
+
+    /// Read off music21's own `MeterSequence`.
+    #[test]
+    fn parts_joined_by_a_plus_are_read_as_a_partition() {
+        let joined = MeterTerminal::from_partition_string("2/4+2/4").unwrap();
+        assert_eq!(joined.to_string(), "{2/4+2/4}");
+        assert_eq!((joined.numerator(), joined.denominator()), (4, 4));
+        assert_eq!(joined.len(), 2);
+
+        // A bare numerator takes the denominator of the part after it.
+        let shared = MeterTerminal::from_partition_string("3+2/8").unwrap();
+        assert_eq!(shared.to_string(), "{3/8+2/8}");
+        assert_eq!((shared.numerator(), shared.denominator()), (5, 8));
+
+        // Mixed denominators are written over the least they all divide into.
+        let mixed = MeterTerminal::from_partition_string("3/4+2/4+1/8").unwrap();
+        assert_eq!(mixed.to_string(), "{3/4+2/4+1/8}");
+        assert_eq!((mixed.numerator(), mixed.denominator()), (11, 8));
+        assert!((mixed.quarter_length() - 5.5).abs() < 1e-9);
+
+        // One part joined to nothing is the span itself, undivided.
+        let alone = MeterTerminal::from_partition_string("4/4").unwrap();
+        assert_eq!(alone.to_string(), "4/4");
+        assert!(alone.is_empty());
+
+        assert!(MeterTerminal::from_partition_string("2+2").is_err());
+        assert!(MeterTerminal::from_partition_string("half/4").is_err());
+    }
+
+    /// music21's own example: a bar of four quarters whose second quarter is
+    /// divided into sixteenths.
+    #[test]
+    fn an_address_says_every_index_down_to_the_terminal() {
+        let mut bar = MeterTerminal::new(4, 4).unwrap();
+        bar.partition_by_count(4, true).unwrap();
+        bar.parts_mut()[1].partition_by_count(4, true).unwrap();
+        assert_eq!(bar.to_string(), "{1/4+{1/16+1/16+1/16+1/16}+1/4+1/4}");
+
+        assert_eq!(bar.address_of_offset(0.0).unwrap(), [0]);
+        assert_eq!(bar.address_of_offset(1.0).unwrap(), [1, 0]);
+        assert_eq!(bar.address_of_offset(1.5).unwrap(), [1, 2]);
+        assert_eq!(bar.address_of_offset(3.0).unwrap(), [3]);
+        // How deep the terminal lies is how long its address is.
+        assert_eq!(bar.address_of_offset(1.5).unwrap().len(), 2);
+        assert!(bar.address_of_offset(-1.0).is_err());
     }
 }
