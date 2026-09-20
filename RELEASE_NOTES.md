@@ -51,6 +51,17 @@ kept as music21 keeps it, one scale type where there were two, and no
 
 ## Added
 
+- `meter::MeterTerminal::from_partition_string` and `from_parts_given`, which
+  read a span written as `2/4+2/4` or built out of the parts it holds;
+  `address_of_offset`, every index down to the terminal sounding at an
+  offset; `subdivide_nested_hierarchy`, a span nested to a depth; and
+  `meter::partition_name`, what a partition of so many parts is called.
+- A meter sequence now weighs what its parts weigh, and sharing a weight out
+  among them follows how long each part is, as music21 does. A span used to
+  keep one weight of its own and leave every part weighing one.
+- music21's own `meter.core` docstrings run against the crate, as
+  `doctest_metercore`: 353 of their 386 examples pass, from 39 when the
+  harness was first pointed at them.
 - `dynamics::Dynamic`: a dynamic mark and the loudness it stands for, with
   music21's tables for the marks, their Italian and English names and their
   scalars, and `dynamic_str_from_decimal` for the mark a loudness falls
