@@ -472,6 +472,30 @@ python = "meter/base.py"
 rust = ["src/meter/mod.rs", "src/meter/sequence.rs"]
 note = "Module-level helpers."
 
+[[class]]
+python = "meter/core.py"
+name = "MeterTerminal"
+rust = ["src/meter/sequence.rs"]
+note = "A span of a bar written as a ratio, which is what a meter's partitions are made of."
+
+[class.renames]
+duration = "quarter_length"
+
+[[class]]
+python = "meter/core.py"
+name = "MeterSequence"
+rust = ["src/meter/sequence.rs"]
+note = "A span divided into parts, each of them a span in turn, which is the tree every meter question is read off."
+
+[class.renames]
+partitionByOtherMeterSequence = "partition_by_other"
+partitionStr = "partition_string"
+flatWeight = "flat_weights"
+
+[class.excluded]
+partition = "one setter dispatching on the type of what it is handed; the three partitions it dispatches to are each ported"
+load = "rebuilding a sequence in place; a new one is built instead"
+
 
 [[class]]
 python = "voiceLeading.py"
