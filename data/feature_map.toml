@@ -214,14 +214,10 @@ note = "A quarter length, the note values it is written as, and the tuplets it i
 
 [class.renames]
 type = "duration_type"
+getGraceDuration = "grace_duration"
 
 [class.excluded]
-getGraceDuration = "a grace note is written but does not sound, which is the note's business and not the length's"
-consolidate = "the written values are read off the length here rather than assembled by hand"
-sliceComponentAtPosition = "the written values are read off the length here rather than assembled by hand"
 currentComponents = "the working-out is not deferred here, so there is no half-worked-out state to read"
-splitDotGroups = "dot groups are a way of writing one length twice over; the crate keeps the length"
-linked = "an unlinked duration is written as one value and sounds as another, which needs a written value the length does not decide"
 informClient = "observer callback for a containing note; there is none"
 
 [[class]]
@@ -259,11 +255,13 @@ rust = ["src/voiceleading.rs"]
 python = "sieve.py"
 name = "Sieve"
 rust = ["src/sieve.rs"]
-note = "The sieve as written: parse, membership, the segment formats and the interval widths of one period."
+note = "The sieve as written and its compressed reading: parse, membership, the segment formats and the interval widths of one period."
+
+[class.renames]
+compress = "compressed"
 
 [class.excluded]
-expand = "the compressed reading of a sieve is not modelled"
-compress = "the compressed reading of a sieve is not modelled"
+expand = "which reading answers is not state on the sieve here; `compressed` hands back the other one and the sieve as written stays as it was"
 setZ = "the range is an argument of each question here, not state on the sieve"
 setZRange = "the range is an argument of each question here, not state on the sieve"
 setSegmentFormat = "the segment format is an argument of each question here, not state on the sieve"
@@ -295,9 +293,6 @@ cachedRealizedStr = "the crate caches nothing -- a value that answers the same q
 [[class]]
 python = "volume.py"
 rust = ["src/volume.rs"]
-
-[class.excluded]
-realizeVolume = "walks a stream, setting each note's volume from the dynamics in force"
 
 [[class]]
 python = "figuredBass/notation.py"
@@ -425,9 +420,6 @@ python = "tempo.py"
 rust = ["src/tempo.rs"]
 note = "Module-level helpers."
 
-[class.excluded]
-interpolateElements = "interpolates tempo across the elements of a stream"
-
 [[class]]
 python = "roman.py"
 rust = ["src/roman/mod.rs", "src/roman/analysis.rs", "src/roman/figure.rs", "src/roman/realize.rs"]
@@ -474,7 +466,6 @@ getCurrentAbbreviationFor = "current_abbreviation_for_kind"
 addNewChordSymbol = "mutates music21's global chord-type table; the table here is a constant"
 changeAbbreviationFor = "mutates music21's global chord-type table; the table here is a constant"
 removeChordSymbols = "mutates music21's global chord-type table; the table here is a constant"
-realizeChordSymbolDurations = "stretches chord symbols across a stream"
 
 [[class]]
 python = "meter/base.py"
@@ -487,9 +478,8 @@ python = "voiceLeading.py"
 rust = ["src/voiceleading.rs"]
 note = "Module-level helpers."
 
-[class.excluded]
-getVerticalityFromObject = "walks a stream"
-iterateAllVoiceLeadingQuartets = "walks a stream"
+[class.renames]
+getVerticalityFromObject = "verticality_at"
 
 # ---------------------------------------------------------------------------
 # What the crate has that music21 does not.
@@ -555,3 +545,14 @@ note = "Chord labels as harte-library reads them, C:maj7/3 or Bb:(b3,5,b7,9), bu
 name = "Duplicate detection"
 rust = "src/tuningsystem/duplicates.rs"
 note = "Which of these are the same tuning under another name, compared by sound rather than spelling. It finds 44 groups of repeats among the archive's 3,994 scales."
+
+[[class]]
+python = "dynamics.py"
+name = "Dynamic"
+rust = ["src/dynamics.rs"]
+note = "A dynamic mark and the loudness it stands for. In a stream it is in force until the next, which is what `realize_volume` reads."
+
+[[class]]
+python = "dynamics.py"
+rust = ["src/dynamics.rs"]
+note = "Module-level helpers."

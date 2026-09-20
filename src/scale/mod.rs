@@ -1,17 +1,11 @@
-use std::{cmp::Ordering, collections::HashMap};
+use crate::stepname::StepName;
 
-use crate::{defaults::IntegerType, stepname::StepName};
-
-pub(crate) mod concretescale;
-/// Diatonic scale construction and harmonization helpers.
-pub mod diatonicscale;
 pub mod hexatonicblues;
 /// The named scales music21 exposes, realized from a tonic.
 pub(crate) mod realized;
 pub mod scaletype;
 pub mod stepscale;
 
-pub use diatonicscale::DiatonicScale;
 pub use hexatonicblues::{BluesForm, WeightedHexatonicBlues};
 pub use scaletype::{
     DegreeComparison, HUMDRUM_SOLFEG_SYLLABLES, SOLFEG_SYLLABLES, Scale, ScaleType, SolfegVariant,
@@ -27,32 +21,3 @@ pub(crate) const FIFTHS_ORDER_SHARP: [StepName; 7] = [
     StepName::E,
     StepName::B,
 ];
-pub(crate) const FIFTHS_ORDER_FLAT: [StepName; 7] = [
-    StepName::B,
-    StepName::E,
-    StepName::A,
-    StepName::D,
-    StepName::G,
-    StepName::C,
-    StepName::F,
-];
-
-pub(crate) fn altered_steps_from_sharps(sharps: IntegerType) -> HashMap<StepName, IntegerType> {
-    let mut map = HashMap::new();
-    // Past seven the circle comes round again and every step takes another
-    // accidental: A double-flat major has eleven flats, four of them double.
-    match sharps.cmp(&0) {
-        Ordering::Greater => {
-            for step in FIFTHS_ORDER_SHARP.iter().cycle().take(sharps as usize) {
-                *map.entry(*step).or_insert(0) += 1;
-            }
-        }
-        Ordering::Less => {
-            for step in FIFTHS_ORDER_FLAT.iter().cycle().take((-sharps) as usize) {
-                *map.entry(*step).or_insert(0) -= 1;
-            }
-        }
-        Ordering::Equal => {}
-    }
-    map
-}

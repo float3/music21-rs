@@ -85,6 +85,7 @@ interface ScoreInput {
     key: { tonic: string; mode: string; sharps: number } | null;
     meter: [number, number] | null;
     pickup: number;
+    let_ring: boolean;
     voices: {
         name: string;
         clef: string;
@@ -192,6 +193,8 @@ const errorNode = $<HTMLParagraphElement>("#error");
 const momentNode = $<HTMLDivElement>("#moment");
 const labelsSelect = $<HTMLSelectElement>("#labels");
 const flagsButton = $<HTMLButtonElement>("#flags");
+const ringButton = $<HTMLButtonElement>("#ring");
+const chordsButton = $<HTMLButtonElement>("#chords");
 const playButton = $<HTMLButtonElement>("#play");
 const stopButton = $<HTMLButtonElement>("#stop");
 const loopButton = $<HTMLButtonElement>("#loop");
@@ -212,6 +215,8 @@ const zoomLevelButton = $<HTMLButtonElement>("#zoom-level");
 const STORAGE_KEY = "music21-rs.score-editor";
 const LABELS_KEY = "music21-rs.score-editor.labels";
 const VIEW_KEY = "music21-rs.score-editor.view";
+const RING_KEY = "music21-rs.score-editor.ring";
+const CHORDS_KEY = "music21-rs.score-editor.chords";
 const ZOOM_KEY = "music21-rs.score-editor.zoom";
 const WIDE_KEY = "music21-rs.score-editor.wide";
 const ZOOMS = [0.4, 0.5, 0.67, 0.8, 1, 1.25, 1.5];
@@ -651,6 +656,7 @@ function extract(abc: string): ScoreInput | null {
         key: keyOf(tune),
         meter: null,
         pickup: tune.getPickupLength() * 4,
+        let_ring: ringButton.classList.contains("on"),
         voices: [],
     };
     const meter = tune.getMeterFraction();
@@ -754,10 +760,16 @@ function render(source: string): void {
     // A harmony is labelled under its bass, where the bass moves, and only
     // when the label changes.
     let previous: string | null = null;
+    let labelled = -Infinity;
     for (const slice of analysis?.slices ?? []) {
         if (!slice.bass_attack) continue;
         const label = labelFor(slice, mode);
-        if (label && label !== previous) labels.set(slice.bass_attack[0], label);
+        // Labels closer together than half a beat would be drawn over each
+        // other, which onsets a fraction apart otherwise do.
+        if (label && label !== previous && slice.offset - labelled >= 0.5) {
+            labels.set(slice.bass_attack[0], label);
+            labelled = slice.offset;
+        }
         previous = label;
     }
     // What is drawn is the source with text inserted and nothing taken out,
@@ -824,6 +836,7 @@ function render(source: string): void {
         }
     }
     rendered = tune ? { tune, text, insertions, byAnchor, isGenerated } : null;
+    fitScore();
     scoreNode.scrollTop = scrollTop;
     markIssues();
     if (refocusScore) {
@@ -847,6 +860,23 @@ function render(source: string): void {
         const note = el("span", "bad", ` · no tab on ${tabSkipped.length} staff${tabSkipped.length === 1 ? "" : "s"}`);
         note.title = tabSkipped.map((reason) => `No tablature: ${reason}.`).join("\n");
         statusNode.append(note);
+    }
+}
+
+/** Grows the drawn area to everything abcjs actually drew. abcjs measures a
+ * responsive score before it adds the tablature, so the last tab staff falls
+ * outside the viewBox and is cut off at any zoom. */
+function fitScore(): void {
+    const svg = scoreNode.querySelector("svg");
+    if (!svg) return;
+    const box = svg.getBBox();
+    const view = svg.viewBox.baseVal;
+    const height = Math.ceil(box.y + box.height + 8);
+    if (!view.width || height <= view.height) return;
+    svg.setAttribute("viewBox", `${view.x} ${view.y} ${view.width} ${height}`);
+    const container = svg.parentElement;
+    if (container?.classList.contains("abcjs-container")) {
+        container.style.paddingBottom = `${(height / view.width) * 100}%`;
     }
 }
 
@@ -1315,8 +1345,7 @@ function tuningForStaff(tuning: string[], clef: string, low: number, high: numbe
  * alone. Null when the source has no chord symbols. */
 function chordPart(source: string): { at: number; text: string }[] | null {
     const view = viewSelect.value;
-    const tablature = TABLATURES[view];
-    if (!tablature || !wasm || !scoreInput || !analysis) return null;
+    if (!chordsButton.classList.contains("on") || !wasm || !scoreInput || !analysis) return null;
     const tune = ABCJS.parseOnly(withoutOrnaments(source))[0];
     if (!tune) return null;
     const notes = notesByAnchor(scoreInput);
@@ -1337,9 +1366,11 @@ function chordPart(source: string): { at: number; text: string }[] | null {
     }
     if (symbols.size === 0) return null;
 
-    // Guitar and bass are written an octave above where they sound.
-    const octaveUp = view === "guitar" || view === "bass";
-    const sounding = (octaveUp ? tuningFor(stringTuning(), "treble-8") : stringTuning()).map(tuningNoteMidi);
+    // Guitar and bass are written an octave above where they sound. Without
+    // a tab view to say otherwise, the chords are a guitar's.
+    const octaveUp = view === "" || view === "guitar" || view === "bass";
+    const strings = view === "" ? TABLATURES.guitar.tunings[0].notes : stringTuning();
+    const sounding = (octaveUp ? tuningFor(strings, "treble-8") : strings).map(tuningNoteMidi);
     const key = scoreInput.key;
     const alters = keyAlters(key?.sharps ?? 0);
     const voicings = new Map<string, number[] | null>();
@@ -2317,6 +2348,17 @@ flagsButton.addEventListener("click", () => {
     markIssues();
 });
 
+ringButton.addEventListener("click", () => {
+    storageSet(RING_KEY, ringButton.classList.toggle("on") ? "" : "off");
+    stopPlayback();
+    refresh();
+});
+
+chordsButton.addEventListener("click", () => {
+    storageSet(CHORDS_KEY, chordsButton.classList.toggle("on") ? "" : "off");
+    redraw();
+});
+
 for (const [id, steps] of [
     ["#up", 1],
     ["#down", -1],
@@ -2379,6 +2421,8 @@ async function start(): Promise<void> {
         workspace.classList.add("wide");
         wideButton.classList.add("on");
     }
+    ringButton.classList.toggle("on", storageGet(RING_KEY) !== "off");
+    chordsButton.classList.toggle("on", storageGet(CHORDS_KEY) !== "off");
     viewSelect.value = storageGet(VIEW_KEY) ?? "";
     if (!(await loadFromHash())) textarea.value = storageGet(STORAGE_KEY) ?? EXAMPLES[0].abc;
     if (!(viewSelect.value in TABLATURES)) viewSelect.value = "";

@@ -111,10 +111,14 @@ impl Pitch {
     /// Returns the name with the accidental as a Unicode symbol, such as
     /// `"C♯"` or `"G𝄫"`.
     pub fn unicode_name(&self) -> String {
-        if self.accidental.alter() == 0.0 {
+        if self.accidental_or_natural().alter() == 0.0 {
             return self.step.as_char().to_string();
         }
-        format!("{}{}", self.step.as_char(), self.accidental.unicode())
+        format!(
+            "{}{}",
+            self.step.as_char(),
+            self.accidental_or_natural().unicode()
+        )
     }
 
     /// Returns music21's `fullName`: the step, the accidental's full name, the
@@ -124,9 +128,9 @@ impl Pitch {
         // music21 asks whether the pitch carries an accidental object, not
         // whether that accidental alters anything: a written natural is
         // named, and a bare `C` — which carries none — is not.
-        if self.has_accidental {
+        if let Some(accidental) = &self.accidental {
             name.push('-');
-            name.push_str(self.accidental.full_name());
+            name.push_str(accidental.full_name());
         }
         if let Some(octave) = self.octave {
             name.push_str(&format!(" in octave {octave}"));
@@ -160,7 +164,7 @@ impl Pitch {
     }
 
     pub(super) fn whole_alteration(&self, language: &str) -> Result<IntegerType> {
-        let alter = self.accidental.alter();
+        let alter = self.accidental_or_natural().alter();
         if alter.fract() != 0.0 {
             return Err(Error::Pitch(match language {
                 "german" => {

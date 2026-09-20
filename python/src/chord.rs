@@ -2330,9 +2330,7 @@ impl Chord {
         let Some(key) = chord_key_in_force(slf)? else {
             return Ok(None);
         };
-        let Ok(scale) = key.as_scale() else {
-            return Ok(None);
-        };
+        let scale = key.scale();
         let degrees = slf
             .borrow()
             .inner

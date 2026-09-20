@@ -17,9 +17,9 @@
 //! written once, which is all a stream built here can be.
 
 use crate::{
-    chord::Chord, defaults::FloatType, duration::Duration, error::Result, interval::Interval,
-    key::KeySignature, meter::TimeSignature, note::Note, pitch::Pitch, rest::Rest,
-    tempo::MetronomeMark,
+    chord::Chord, chordsymbol::ChordSymbol, defaults::FloatType, duration::Duration,
+    dynamics::Dynamic, error::Result, interval::Interval, key::KeySignature, meter::TimeSignature,
+    note::Note, pitch::Pitch, rest::Rest, tempo::MetronomeMark,
 };
 
 /// Which of music21's `Stream` subclasses a stream stands for.
@@ -97,22 +97,31 @@ pub enum StreamElement {
     TimeSignature(TimeSignature),
     /// The tempo in force from here on.
     MetronomeMark(MetronomeMark),
+    /// The dynamic in force from here on.
+    Dynamic(Dynamic),
+    /// A chord named over the music. It holds for the time it has been
+    /// given and takes none until then.
+    ChordSymbol(ChordSymbol),
 }
 
 impl StreamElement {
     /// Returns the assigned duration, if present.
     ///
     /// The marks that only say what is in force from a point — a key, a
-    /// metre, a tempo — have none, as they take no time in music21 either.
+    /// metre, a tempo, a dynamic — have none, as they take no time in
+    /// music21 either. A chord symbol has one, of no length until it is
+    /// given the time it holds.
     pub fn duration(&self) -> Option<&Duration> {
         match self {
             Self::Note(note) => note.duration(),
             Self::Chord(chord) => chord.duration(),
             Self::Rest(rest) => Some(rest.duration()),
+            Self::ChordSymbol(symbol) => Some(symbol.duration()),
             Self::Stream(_)
             | Self::KeySignature(_)
             | Self::TimeSignature(_)
-            | Self::MetronomeMark(_) => None,
+            | Self::MetronomeMark(_)
+            | Self::Dynamic(_) => None,
         }
     }
 
@@ -124,7 +133,10 @@ impl StreamElement {
     pub fn quarter_length(&self) -> FloatType {
         match self {
             Self::Stream(stream) => stream.end_offset(),
-            Self::KeySignature(_) | Self::TimeSignature(_) | Self::MetronomeMark(_) => 0.0,
+            Self::KeySignature(_)
+            | Self::TimeSignature(_)
+            | Self::MetronomeMark(_)
+            | Self::Dynamic(_) => 0.0,
             _ => self
                 .duration()
                 .map(Duration::quarter_length)
@@ -142,7 +154,9 @@ impl StreamElement {
             Self::Rest(_)
             | Self::KeySignature(_)
             | Self::TimeSignature(_)
-            | Self::MetronomeMark(_) => Vec::new(),
+            | Self::MetronomeMark(_)
+            | Self::Dynamic(_)
+            | Self::ChordSymbol(_) => Vec::new(),
         }
     }
 
@@ -177,6 +191,8 @@ impl StreamElement {
             Self::KeySignature(key) => Ok(Self::KeySignature(key.transpose(interval)?)),
             Self::TimeSignature(meter) => Ok(Self::TimeSignature(meter.clone())),
             Self::MetronomeMark(mark) => Ok(Self::MetronomeMark(mark.clone())),
+            Self::Dynamic(dynamic) => Ok(Self::Dynamic(dynamic.clone())),
+            Self::ChordSymbol(symbol) => Ok(Self::ChordSymbol(symbol.transpose(interval)?)),
         }
     }
 }
@@ -214,6 +230,18 @@ impl From<KeySignature> for StreamElement {
 impl From<TimeSignature> for StreamElement {
     fn from(value: TimeSignature) -> Self {
         Self::TimeSignature(value)
+    }
+}
+
+impl From<Dynamic> for StreamElement {
+    fn from(value: Dynamic) -> Self {
+        Self::Dynamic(value)
+    }
+}
+
+impl From<ChordSymbol> for StreamElement {
+    fn from(value: ChordSymbol) -> Self {
+        Self::ChordSymbol(value)
     }
 }
 
@@ -380,6 +408,32 @@ impl Stream {
             out.push((offset, &event.element));
             if let StreamElement::Stream(stream) = &event.element {
                 stream.recurse_into(offset, out);
+            }
+        }
+    }
+
+    /// Hands every element to a closure with its offset from this stream's
+    /// start, nested streams' contents included, so that it may be changed
+    /// where it sits.
+    ///
+    /// [`Stream::flatten`] and [`Stream::recurse`] hand back copies and
+    /// references; this is the walk for an edit that has to land in the
+    /// score itself. Things at one offset come in the same order `flatten`
+    /// gives them. A nested stream is walked into rather than handed over.
+    pub fn for_each_mut(&mut self, visit: &mut impl FnMut(FloatType, &mut StreamElement)) {
+        self.for_each_mut_from(0.0, visit);
+    }
+
+    fn for_each_mut_from(
+        &mut self,
+        base: FloatType,
+        visit: &mut impl FnMut(FloatType, &mut StreamElement),
+    ) {
+        for event in &mut self.events {
+            let offset = base + event.offset;
+            match &mut event.element {
+                StreamElement::Stream(stream) => stream.for_each_mut_from(offset, visit),
+                element => visit(offset, element),
             }
         }
     }

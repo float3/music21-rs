@@ -34,12 +34,12 @@ jobs:
       # `src/` opens a file at all, and the tests that need the submodule live
       # in `python-parity`, which is not a workspace member.
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        uses: actions/checkout@v7
 
       # The action exports RUSTUP_TOOLCHAIN, which outranks the `stable` that
       # rust-toolchain.toml pins — without it every job would test stable.
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master
+        uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.toolchain }}
           components: clippy
@@ -49,7 +49,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev pkg-config
 
       - name: Cache cargo artifacts
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        uses: Swatinem/rust-cache@v2
 
       - name: Cargo test
         run: cargo test --workspace --all-targets

@@ -4,6 +4,7 @@ use crate::{
     defaults::FloatType,
     duration::Duration,
     error::{Error, Result},
+    stream::Stream,
 };
 
 /// The tempo words music21 knows and the beats per minute each implies,
@@ -336,6 +337,44 @@ impl MetronomeMark {
     }
 }
 
+/// Carries what lies between two points of one stream into another, keeping
+/// each thing's place between them: music21's `interpolateElements`.
+///
+/// `start` and `end` each say where one point stands in the source and where
+/// it stands in the destination -- a downbeat at offset 10 of a score and
+/// 20.5 of a recording, the next at 14 and at 25. Everything strictly
+/// between them in the source is inserted into the destination at the same
+/// proportion of the way across, so a note at 11 lands at 21.625.
+///
+/// music21 finds the two points by asking one object for its offset in each
+/// stream. A stream here owns what it holds, so there is no such object to
+/// ask and the offsets are given instead; and for the same reason this is
+/// always music21's `autoAdd`, since nothing can already be in both.
+pub fn interpolate_elements(
+    source: &Stream,
+    destination: &mut Stream,
+    start: (FloatType, FloatType),
+    end: (FloatType, FloatType),
+) -> Result<()> {
+    let ((start_source, start_destination), (end_source, end_destination)) = (start, end);
+    if end_source == start_source {
+        return Err(Error::Tempo(
+            "the two points stand at the same offset in the source, so nothing lies between them"
+                .to_string(),
+        ));
+    }
+    let scale = (end_destination - start_destination) / (end_source - start_source);
+    for event in source.events() {
+        if event.offset() > start_source && event.offset() < end_source {
+            destination.insert(
+                scale * (event.offset() - start_source) + start_destination,
+                event.element().clone(),
+            );
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -523,5 +562,37 @@ mod tests {
                 .is_err()
         );
         assert!(motionless.quarter_length_to_seconds(1.0).is_err());
+    }
+
+    /// music21's own example: a bar of a score laid against a recording.
+    #[test]
+    fn what_lies_between_two_points_keeps_its_place_between_them() {
+        use crate::{Note, Stream};
+
+        let mut source = Stream::new();
+        for (offset, name) in [
+            (10.0, "C4"),
+            (11.0, "D4"),
+            (12.0, "E4"),
+            (13.0, "F4"),
+            (14.0, "G4"),
+        ] {
+            source.insert(offset, Note::from_name(name).unwrap());
+        }
+        let offsets = |stream: &Stream| -> Vec<FloatType> {
+            stream.events().iter().map(|event| event.offset()).collect()
+        };
+
+        let mut recording = Stream::new();
+        interpolate_elements(&source, &mut recording, (10.0, 20.5), (14.0, 25.0)).unwrap();
+        assert_eq!(offsets(&recording), [21.625, 22.75, 23.875]);
+
+        let mut slower = Stream::new();
+        interpolate_elements(&source, &mut slower, (10.0, 10.1), (14.0, 50.5)).unwrap();
+        for (found, expected) in offsets(&slower).iter().zip([20.2, 30.3, 40.4]) {
+            assert!((found - expected).abs() < 1e-9);
+        }
+
+        assert!(interpolate_elements(&source, &mut slower, (10.0, 0.0), (10.0, 4.0)).is_err());
     }
 }

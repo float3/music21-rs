@@ -4,9 +4,11 @@ use crate::{
     chord::Chord,
     chord::root::{pitch_class, step_num},
     defaults::{FloatType, IntegerType},
+    duration::{Duration, DurationType},
     error::{Error, Result},
     interval::Interval,
     pitch::Pitch,
+    stream::{Stream, StreamElement},
 };
 use std::collections::BTreeSet;
 
@@ -100,6 +102,15 @@ pub struct ChordSymbol {
     /// is realized.
     #[cfg_attr(feature = "serde", serde(default))]
     modifications: Vec<Modification>,
+    /// How long the symbol holds. A symbol as written takes no time, as
+    /// music21's takes none.
+    #[cfg_attr(feature = "serde", serde(default = "no_time"))]
+    duration: Duration,
+}
+
+/// The length of a symbol nobody has given one: none at all.
+fn no_time() -> Duration {
+    Duration::from_type(DurationType::Zero)
 }
 
 /// One change music21 reads off a figure after its kind: a degree added,
@@ -367,7 +378,26 @@ impl ChordSymbol {
             additions,
             kind,
             modifications,
+            duration: no_time(),
         })
+    }
+
+    /// How long the symbol holds. A symbol as written takes no time, which
+    /// is music21's default; [`realize_chord_symbol_durations`] gives each
+    /// one in a stream the time until the next.
+    pub fn duration(&self) -> &Duration {
+        &self.duration
+    }
+
+    /// Says how long the symbol holds.
+    pub fn set_duration(&mut self, duration: Duration) {
+        self.duration = duration;
+    }
+
+    /// The same symbol holding for a given time.
+    pub fn with_duration(mut self, duration: Duration) -> Self {
+        self.duration = duration;
+        self
     }
 
     /// music21's `chordKind`: the kind the shorthand names, where it is one
@@ -809,6 +839,75 @@ impl ChordSymbol {
             .filter(|(degree, _)| !self.omissions.contains(degree))
             .collect()
     }
+}
+
+/// Gives every chord symbol in a stream the time it holds for: music21's
+/// `realizeChordSymbolDurations`.
+///
+/// A symbol holds until the next one, wherever in the nesting that is, and
+/// the last holds to the end of the stream -- so a single symbol over many
+/// notes holds for all of them. A stream with no symbols is left alone.
+///
+/// music21 hands back the flattened stream, its symbols being the same
+/// objects as the score's. A stream here owns what it holds, so the symbols
+/// are changed where they sit and [`Stream::flatten`] is there for a caller
+/// who wants the flat reading.
+///
+/// ```
+/// use music21_rs::{ChordSymbol, Note, Stream, realize_chord_symbol_durations};
+///
+/// let mut stream = Stream::new();
+/// stream.insert(0.0, ChordSymbol::parse("C")?);
+/// stream.insert(2.0, ChordSymbol::parse("G7")?);
+/// for beat in 0..8 {
+///     stream.insert(f64::from(beat), Note::from_name("C4")?);
+/// }
+/// realize_chord_symbol_durations(&mut stream);
+/// let held: Vec<f64> = stream
+///     .events()
+///     .iter()
+///     .filter(|event| matches!(event.element(), music21_rs::StreamElement::ChordSymbol(_)))
+///     .map(|event| event.element().quarter_length())
+///     .collect();
+/// assert_eq!(held, [2.0, 6.0]);
+/// # Ok::<(), music21_rs::Error>(())
+/// ```
+pub fn realize_chord_symbol_durations(stream: &mut Stream) {
+    let flat = stream.flatten();
+    let end = flat.end_offset();
+    let offsets: Vec<FloatType> = flat
+        .events()
+        .iter()
+        .filter(|event| matches!(event.element(), StreamElement::ChordSymbol(_)))
+        .map(|event| event.offset())
+        .collect();
+    // In the order `flatten` gives them, which is the order the walk below
+    // meets the symbols standing at any one offset.
+    let mut held: Vec<Option<(FloatType, FloatType)>> = offsets
+        .iter()
+        .enumerate()
+        .map(|(index, offset)| {
+            let until = offsets.get(index + 1).copied().unwrap_or(end);
+            Some((*offset, (until - offset).max(0.0)))
+        })
+        .collect();
+
+    stream.for_each_mut(&mut |offset, element| {
+        let StreamElement::ChordSymbol(symbol) = element else {
+            return;
+        };
+        let Some(length) = held
+            .iter_mut()
+            .find(|entry| entry.is_some_and(|(at, _)| at == offset))
+            .and_then(Option::take)
+            .map(|(_, length)| length)
+        else {
+            return;
+        };
+        if let Ok(duration) = Duration::new(length) {
+            symbol.set_duration(duration);
+        }
+    });
 }
 
 impl FromStr for ChordSymbol {
@@ -1299,5 +1398,55 @@ mod tests {
             chord_symbol_spellings(&chord).first().map(String::as_str),
             Some("CsusaddA,A-,D-,E,E-,F#,omitF")
         );
+    }
+
+    /// The lengths are music21's, read off `realizeChordSymbolDurations`
+    /// over the same three bars.
+    #[test]
+    fn chord_symbols_hold_until_the_next_one_across_bars() {
+        use crate::{Note, Stream, StreamElement, StreamKind};
+
+        let bar = |figure: &str, at: FloatType| {
+            let mut measure = Stream::with_kind(StreamKind::Measure);
+            measure.insert(at, ChordSymbol::parse(figure).unwrap());
+            // Appended, so the four notes start where the symbol stands, as
+            // music21's `repeatAppend` starts them.
+            for _ in 0..4 {
+                measure.push(Note::from_name("C4").unwrap());
+            }
+            measure
+        };
+        let held = |stream: &Stream| -> Vec<FloatType> {
+            stream
+                .flatten()
+                .events()
+                .iter()
+                .filter(|event| matches!(event.element(), StreamElement::ChordSymbol(_)))
+                .map(|event| event.element().quarter_length())
+                .collect()
+        };
+
+        let mut part = Stream::with_kind(StreamKind::Part);
+        part.insert(0.0, bar("C", 0.0));
+        part.insert(4.0, bar("G7", 1.5));
+        part.insert(8.0, bar("Am", 2.0));
+        assert_eq!(held(&part), [0.0, 0.0, 0.0]);
+        realize_chord_symbol_durations(&mut part);
+        assert_eq!(held(&part), [5.5, 4.5, 4.0]);
+
+        // One symbol holds to the end of everything after it.
+        let mut stream = Stream::new();
+        stream.insert(1.0, ChordSymbol::parse("C").unwrap());
+        for beat in 1..7 {
+            stream.insert(FloatType::from(beat), Note::from_name("C4").unwrap());
+        }
+        realize_chord_symbol_durations(&mut stream);
+        assert_eq!(held(&stream), [6.0]);
+
+        // And a stream with none is left as it was.
+        let mut bare = Stream::new();
+        bare.push(Note::from_name("C4").unwrap());
+        realize_chord_symbol_durations(&mut bare);
+        assert_eq!(bare.len(), 1);
     }
 }

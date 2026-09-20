@@ -727,7 +727,7 @@ impl Key {
         comparisonAttribute: &str,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Option<usize>> {
-        let scale = self.inner.as_scale().map_err(key_error)?;
+        let scale = self.inner.scale();
         let pitch = pitch_from_any(pitchTarget)?;
         scale
             .degree_of_by(&pitch, crate::scale::comparison_of(comparisonAttribute))
@@ -743,7 +743,7 @@ impl Key {
         pitchTarget: &Bound<'_, PyAny>,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Py<PyAny>> {
-        let scale = self.inner.as_scale().map_err(key_error)?;
+        let scale = self.inner.scale();
         let (degree, accidental) = scale
             .degree_and_accidental_of(&pitch_from_any(pitchTarget)?)
             .map_err(key_error)?;
@@ -769,7 +769,7 @@ impl Key {
         chromatic: bool,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<String> {
-        let scale = self.inner.as_scale().map_err(key_error)?;
+        let scale = self.inner.scale();
         let pitch = match pitchTarget.filter(|value| !value.is_none()) {
             Some(value) => pitch_from_any(value)?,
             None => self.inner.tonic(),

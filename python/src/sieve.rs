@@ -1,16 +1,16 @@
 //! music21's `sieve` module, over the crate's Xenakis sieves.
 //!
 //! Only `Sieve` itself is replaced. music21's `Residual`, `CompressionSegment`,
-//! `PrimeSegment` and `PitchSieve` stay music21's, and the module's number
-//! helpers with them — the crate carries none of the compression machinery,
-//! and a facade for a class this crate does not model would take away more
-//! than it gave. What that leaves is a harder test than a fuller facade would
-//! be: music21's own `PitchSieve` realizes its pitches through *our* sieve.
+//! `PrimeSegment` and `PitchSieve` stay music21's — a facade for a class this
+//! crate does not model would take away more than it gave. What that leaves
+//! is a harder test than a fuller facade would be: music21's own `PitchSieve`
+//! realizes its pitches through *our* sieve.
 //!
-//! The one thing a caller loses is the compressed state. music21 keeps two
-//! readings of a sieve, the expression as written (`exp`) and a compressed
-//! form (`cmp`); the crate has only the first, so asking for `cmp` raises
-//! rather than answering the wrong list.
+//! music21 keeps two readings of a sieve, the expression as written (`exp`)
+//! and a compressed form (`cmp`), and a state saying which one the object
+//! answers with. music21 compresses when the sieve is built; here the
+//! compressed reading is worked out when it is asked for, so a sieve with no
+//! such reading raises then rather than at construction.
 
 // music21's own names, kept as music21 spells them.
 #![allow(non_snake_case)]
@@ -98,6 +98,9 @@ pub struct Sieve {
     /// one of its own.
     z: (IntegerType, IntegerType),
     segment_format: Option<String>,
+    /// Whether the object answers with its compressed reading: music21's
+    /// `_state`, set by `compress` and `expand`.
+    compressed: bool,
 }
 
 /// The shift a segment is read at: music21's `n`.
@@ -122,8 +125,32 @@ fn shift_of(n: &Bound<'_, PyAny>) -> PyResult<Option<IntegerType>> {
 }
 
 impl Sieve {
+    /// The sieve a question is asked of in the state named, or in the
+    /// object's own where none is: the expression as written, or its
+    /// compressed reading over the object's range.
+    fn reading(&self, state: Option<&str>) -> PyResult<RsSieve> {
+        let compressed = match state {
+            None => self.compressed,
+            Some("exp") => false,
+            Some("cmp") => true,
+            Some(other) => {
+                return Err(PyValueError::new_err(format!(
+                    "{other} is not a sieve state"
+                )));
+            }
+        };
+        if compressed {
+            self.inner
+                .compressed(self.z.0, self.z.1)
+                .map_err(sieve_error)
+        } else {
+            Ok(self.inner.clone())
+        }
+    }
+
     fn segment_in(
         &self,
+        sieve: &RsSieve,
         n: Option<IntegerType>,
         low: IntegerType,
         high: IntegerType,
@@ -143,7 +170,7 @@ impl Sieve {
                 }
             });
         };
-        let shifted = self.inner.shifted(n);
+        let shifted = sieve.shifted(n);
         Ok(match format {
             SegmentFormat::Integer => shifted.segment(low, high).into_pyobject(py)?.unbind(),
             SegmentFormat::Binary => shifted
@@ -156,20 +183,6 @@ impl Sieve {
                 .unbind(),
             SegmentFormat::Unit => shifted.segment_unit(low, high).into_pyobject(py)?.unbind(),
         })
-    }
-
-    /// music21 reads a segment in one of two states. Only the expression as
-    /// written is modelled here.
-    fn checked_state(state: Option<&str>) -> PyResult<()> {
-        match state {
-            None | Some("exp") => Ok(()),
-            Some("cmp") => Err(SieveException::new_err(
-                "the compressed reading of a sieve is not modelled; only 'exp' is",
-            )),
-            Some(other) => Err(PyValueError::new_err(format!(
-                "{other} is not a sieve state"
-            ))),
-        }
     }
 }
 
@@ -193,29 +206,50 @@ impl Sieve {
             inner: RsSieve::parse(&expression).map_err(sieve_error)?,
             z: bounds_of(z)?,
             segment_format: None,
+            compressed: false,
         })
     }
 
-    fn __str__(&self) -> String {
-        self.inner.to_string()
+    fn __str__(&self) -> PyResult<String> {
+        Ok(self.reading(None)?.to_string())
     }
 
-    /// music21's `represent`, which `__str__` is. The `style` argument picks
-    /// the mathematical spelling of a residual, which the crate does not
-    /// write.
+    /// Set this sieve to its expanded state.
+    fn expand(&mut self) {
+        self.compressed = false;
+    }
+
+    /// Set this sieve to its compressed state, over a new range where one is
+    /// given. A sieve with no compressed reading over its range keeps the
+    /// state it had, as music21's does.
+    #[pyo3(signature = (z = None))]
+    fn compress(&mut self, z: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        if let Some(z) = z {
+            self.z = bounds_of(Some(z))?;
+        }
+        if self.inner.compressed(self.z.0, self.z.1).is_ok() {
+            self.compressed = true;
+        }
+        Ok(())
+    }
+
+    /// music21's `represent`: the sieve written as an expression, the same
+    /// text `str()` gives. Passing a `style` raises `SieveException`; only
+    /// the default spelling is supported.
     #[pyo3(signature = (state = None, style = None))]
     fn represent(&self, state: Option<&str>, style: Option<&str>) -> PyResult<String> {
-        Self::checked_state(state)?;
+        let sieve = self.reading(state)?;
         if let Some(style) = style {
             return Err(SieveException::new_err(format!(
                 "the {style} spelling of a residual is not written here"
             )));
         }
-        Ok(self.inner.to_string())
+        Ok(sieve.to_string())
     }
 
-    fn period(&self) -> u32 {
-        self.inner.period()
+    /// The period of the reading the object is in.
+    fn period(&self) -> PyResult<u32> {
+        Ok(self.reading(None)?.period())
     }
 
     #[pyo3(signature = (state = None, n = None, z = None, segmentFormat = None))]
@@ -227,7 +261,7 @@ impl Sieve {
         z: Option<&Bound<'_, PyAny>>,
         segmentFormat: Option<&str>,
     ) -> PyResult<Py<PyAny>> {
-        Self::checked_state(state)?;
+        let sieve = self.reading(state)?;
         let (low, high) = match z {
             Some(z) => bounds_of(Some(z))?,
             None => self.z,
@@ -237,7 +271,7 @@ impl Sieve {
             Some(n) => shift_of(n)?,
             None => Some(0),
         };
-        self.segment_in(shift, low, high, format, py)
+        self.segment_in(&sieve, shift, low, high, format, py)
     }
 
     /// music21's `__call__`, which is `segment` in the object's own state.
@@ -271,10 +305,8 @@ impl Sieve {
                 "desired length of sieve segment cannot be found",
             ));
         };
-        let members = self
-            .inner
-            .collect(n, zMinimum, length)
-            .map_err(sieve_error)?;
+        let sieve = self.reading(None)?;
+        let members = sieve.collect(n, zMinimum, length).map_err(sieve_error)?;
         let format = SegmentFormat::parse(segmentFormat)?;
         let (Some(low), Some(high)) = (members.first().copied(), members.last().copied()) else {
             return Ok(Vec::<IntegerType>::new().into_pyobject(py)?.unbind());
@@ -283,7 +315,7 @@ impl Sieve {
         // asked for, over a range running from the first member to the last.
         match format {
             SegmentFormat::Integer => Ok(members.into_pyobject(py)?.unbind()),
-            _ => self.segment_in(Some(n), low, high, format, py),
+            _ => self.segment_in(&sieve, Some(n), low, high, format, py),
         }
     }
 
@@ -313,6 +345,7 @@ impl Sieve {
             inner: other.inner.intersection(&self.inner),
             z: widest(self.z, other.z),
             segment_format: None,
+            compressed: false,
         }
     }
 
@@ -321,6 +354,7 @@ impl Sieve {
             inner: other.inner.union(&self.inner),
             z: widest(self.z, other.z),
             segment_format: None,
+            compressed: false,
         }
     }
 
@@ -329,6 +363,7 @@ impl Sieve {
             inner: other.inner.symmetric_difference(&self.inner),
             z: widest(self.z, other.z),
             segment_format: None,
+            compressed: false,
         }
     }
 

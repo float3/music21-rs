@@ -23,6 +23,16 @@ use crate::duration::DurationType;
 use crate::error::{Error, Result};
 use crate::notation::{BeamType, Beams};
 
+/// What a partition of `count` parts is called: music21's `partitionStr`,
+/// `"Duple"` for two and `"Triple"` for three. Counts above eight are spelled
+/// `"<n>-uple"`, as music21 spells them.
+#[must_use]
+pub fn partition_name(count: usize) -> String {
+    BEAT_COUNT_NAMES
+        .get(count)
+        .map_or_else(|| format!("{count}-uple"), |name| (*name).to_string())
+}
+
 /// Names music21 gives a partition count, indexed by the count itself.
 ///
 /// Index 0 is music21's `Empty`, which a valid time signature never reaches.
@@ -566,10 +576,7 @@ impl TimeSignature {
     ///
     /// Counts above eight are spelled as `"<n>-uple"`, as music21 does.
     pub fn beat_count_name(&self) -> String {
-        let count = self.beat_count();
-        BEAT_COUNT_NAMES
-            .get(count as usize)
-            .map_or_else(|| format!("{count}-uple"), |name| (*name).to_string())
+        partition_name(self.beat_count() as usize)
     }
 
     /// Returns the length of one beat in quarter lengths.
@@ -1557,7 +1564,7 @@ fn default_division(count: UnsignedIntegerType, unit: UnsignedIntegerType) -> Un
 
 /// An offset written the way music21 writes one in a message: a whole number
 /// as `3.0`, anything else as it is.
-fn offset_repr(offset: FloatType) -> String {
+pub(crate) fn offset_repr(offset: FloatType) -> String {
     if offset.fract() == 0.0 {
         format!("{offset:.1}")
     } else {

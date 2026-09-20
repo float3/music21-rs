@@ -355,7 +355,7 @@ impl FigureTuple {
     /// has, so it is `3`, altered by `-1`, written `b`. A minor key is read
     /// as the natural minor.
     pub fn from_pitch_and_reference(pitch: &Pitch, key: &Key, reference: &Pitch) -> Result<Self> {
-        let (_, accidental) = key.as_scale()?.degree_and_accidental_of(pitch)?;
+        let (_, accidental) = key.scale().degree_and_accidental_of(pitch)?;
         let degree = Interval::between_pitches(reference, pitch)?
             .generic()
             .mod7();

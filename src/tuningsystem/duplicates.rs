@@ -213,7 +213,7 @@ mod tests {
     /// up, so fingerprinting that made 12-tone, whole-tone, quarter-tone,
     /// Javanese and Thai equal temperament look like one tuning.
     fn system_cents(system: TuningSystem) -> Vec<FloatType> {
-        (0..system.octave_size() as usize)
+        (0..system.degrees_per_period() as usize)
             .map(|degree| 1200.0 * system.ratio(degree).log2())
             .collect()
     }

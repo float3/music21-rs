@@ -589,7 +589,7 @@ impl Scale {
         if distance == 11 {
             return Ok(seventh);
         }
-        let alter = seventh.accidental().alter() + FloatType::from(11 - distance);
+        let alter = seventh.accidental_or_natural().alter() + FloatType::from(11 - distance);
         let mut raised = seventh.clone();
         raised.set_accidental(Some(crate::pitch::Accidental::new(alter)?));
         Ok(raised)
@@ -867,7 +867,8 @@ impl Scale {
                     "cannot get any scale degree for {pitch} in {self:?}"
                 ))
             })?;
-        let difference = pitch.accidental().alter() - pitches[index].accidental().alter();
+        let difference =
+            pitch.accidental_or_natural().alter() - pitches[index].accidental_or_natural().alter();
         let accidental = if difference == 0.0 {
             None
         } else {

@@ -93,7 +93,6 @@ pub const HUMDRUM_SOLFEG_SYLLABLES: [[&str; 5]; 7] = [
 /// scales.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[non_exhaustive]
 #[must_use]
 pub enum ScaleType {
     /// Major (Ionian).
@@ -518,7 +517,7 @@ pub(super) fn advance(
         Simplification::Exact => interval.transpose_pitch_with_options(pitch, false, None),
         Simplification::MostCommon => {
             let mut transposed = interval.transpose_pitch_with_options(pitch, false, None)?;
-            if transposed.accidental().alter() != 0.0 {
+            if transposed.accidental_or_natural().alter() != 0.0 {
                 transposed.simplify_enharmonic_in_place(true)?;
             }
             Ok(transposed)
@@ -531,7 +530,7 @@ pub(super) fn advance(
 fn max_alter(pitches: &[Pitch]) -> crate::defaults::IntegerType {
     pitches
         .iter()
-        .map(|pitch| pitch.accidental().alter().abs() as crate::defaults::IntegerType)
+        .map(|pitch| pitch.accidental_or_natural().alter().abs() as crate::defaults::IntegerType)
         .max()
         .unwrap_or(0)
 }

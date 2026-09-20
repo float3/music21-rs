@@ -9,7 +9,7 @@ impl Pitch {
     /// C becomes C with `+50c` and a one-and-a-half-sharp D becomes D-sharp
     /// with `+50c`. Other accidentals are untouched.
     pub fn convert_quarter_tones_to_microtones(&self) -> Result<Pitch> {
-        let (alter, shift) = match self.accidental.name() {
+        let (alter, shift) = match self.accidental_or_natural().name() {
             "half-flat" => (0.0, -50.0),
             "half-sharp" => (0.0, 50.0),
             "one-and-a-half-sharp" => (1.0, 50.0),
@@ -31,7 +31,9 @@ impl Pitch {
         let cents = self.microtone.as_ref().map_or(0.0, Microtone::cents);
         let (shift, remainder) = cents_to_alter_and_cents(cents);
         let mut pitch = self.clone();
-        pitch.accidental_setter(Accidental::new(self.accidental.alter() + shift)?);
+        pitch.accidental_setter(Accidental::new(
+            self.accidental_or_natural().alter() + shift,
+        )?);
         pitch.microtone_setter(Microtone::new(remainder)?);
         Ok(pitch)
     }

@@ -22,6 +22,7 @@ passing = [
     "music21.sieve.Sieve.__or__",
     "music21.sieve.Sieve.collect",
     "music21.sieve.Sieve.period",
+    "music21.sieve.Sieve.segment",
     "music21.sieve.discreteBinaryPad",
     "music21.sieve.eratosthenes",
     "music21.sieve.rabinMiller",

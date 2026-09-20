@@ -924,11 +924,11 @@ impl Interval {
             }
             match (
                 inherit_accidental_display,
-                pitch2.has_accidental(),
-                p.explicit_accidental(),
+                pitch2.accidental().is_some(),
+                p.accidental(),
             ) {
                 (false, true, Some(source)) => {
-                    if let Some(target) = pitch2.explicit_accidental_mut() {
+                    if let Some(target) = pitch2.accidental_mut() {
                         target.inherit_display(source);
                         target.set_display_status(None);
                     }
@@ -939,22 +939,22 @@ impl Interval {
                     pitch2.set_accidental(Some(natural));
                 }
                 (true, true, Some(source)) => {
-                    if let Some(target) = pitch2.explicit_accidental_mut() {
+                    if let Some(target) = pitch2.accidental_mut() {
                         target.inherit_display(source);
                     }
                 }
                 (true, true, None) => {
-                    if let Some(target) = pitch2.explicit_accidental_mut() {
+                    if let Some(target) = pitch2.accidental_mut() {
                         target.set_display_status(Some(false));
                     }
                 }
                 _ => {}
             }
         } else if inherit_accidental_display
-            && p.explicit_accidental()
+            && p.accidental()
                 .is_some_and(|accidental| accidental.name() == "natural")
         {
-            pitch2.set_accidental(p.explicit_accidental().cloned());
+            pitch2.set_accidental(p.accidental().cloned());
         }
         if cents_origin != 0.0 {
             let cents = pitch2

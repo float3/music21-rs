@@ -54,6 +54,8 @@ pub mod pitch;
 /// Polyrhythm timing and pitch-set helpers.
 pub mod polyrhythm;
 /// Silent duration-bearing musical event.
+/// Dynamic marks and the loudness each stands for.
+pub mod dynamics;
 pub mod rest;
 /// Roman numeral parsing and compact harmonic analysis.
 pub mod roman;
@@ -91,10 +93,10 @@ pub use chord::{
 };
 pub use chordsymbol::{
     ChordAlteration, ChordQuality, ChordSymbol, Music21ChordType, chord_symbol_figure_from_chord,
-    chord_symbol_from_chord, known_chord_symbol_types,
+    chord_symbol_from_chord, known_chord_symbol_types, realize_chord_symbol_durations,
 };
 pub use defaults::{FloatType, FractionType, IntegerType, Octave, UnsignedIntegerType};
-pub use duration::{Duration, DurationType, Tuplet, quarter_length_to_closest_type};
+pub use duration::{Duration, DurationTuple, DurationType, Tuplet, quarter_length_to_closest_type};
 pub use error::{Error, Result};
 pub use harte::{Harte, HarteInterval, SHORTHAND_DEGREES, convert_interval};
 pub use interval::{
@@ -122,6 +124,7 @@ pub use pitch::{
     pitch_class_name, simplify_multiple_enharmonics,
 };
 pub use polyrhythm::{Polyrhythm, PolyrhythmAnalysis, PolyrhythmEvent, PolyrhythmRatioTone};
+pub use dynamics::Dynamic;
 pub use rest::Rest;
 pub use roman::roman_numeral_from_chord;
 pub use roman::{
@@ -129,8 +132,7 @@ pub use roman::{
     analyze_chord_with_root, identify_as_tonic_or_dominant, roman_inversion_name,
 };
 pub use scale::{
-    BluesForm, DegreeComparison, DiatonicScale, Scale, ScaleType, SolfegVariant, StepScale,
-    WeightedHexatonicBlues,
+    BluesForm, DegreeComparison, Scale, ScaleType, SolfegVariant, StepScale, WeightedHexatonicBlues,
 };
 pub use serial::{
     HISTORICAL_ROWS, HistoricalRow, IndexedTransformation, LinkClassification, ToneRow,
@@ -139,12 +141,17 @@ pub use serial::{
 };
 pub use sieve::Sieve;
 pub use stream::{Stream, StreamElement, StreamEvent, StreamKind};
-pub use tempo::{DEFAULT_TEMPO_VALUES, MetronomeMark, convert_tempo_by_referent};
+pub use tempo::{
+    DEFAULT_TEMPO_VALUES, MetronomeMark, convert_tempo_by_referent, interpolate_elements,
+};
 pub use tuningsystem::{
     ALL_TUNING_SYSTEMS, COMMON_EQUAL_TEMPERAMENTS, COMMON_TWELVE_TONE_TUNING_SYSTEMS,
     EqualDivision, Fraction, HISTORICAL_TEMPERAMENTS, Monzo, Mos, MosScale, OCTAVE_CENTS,
     TRITAVE_CENTS, Temperament, TuningSystem, Val, moment_of_symmetry_sizes,
     scala::{ScalaArchive, ScalaDegree, ScalaScale},
 };
-pub use voiceleading::{MotionType, VoiceLeadingQuartet};
-pub use volume::Volume;
+pub use voiceleading::{
+    MotionType, QuartetOptions, VoiceLeadingQuartet, iterate_all_voice_leading_quartets,
+    verticality_at,
+};
+pub use volume::{DynamicContext, Volume, realize_volume};

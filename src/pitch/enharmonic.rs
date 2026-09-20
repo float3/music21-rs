@@ -17,7 +17,7 @@ impl Pitch {
 
         let mut higher = self.clone();
         while let Ok(next) = higher.get_higher_enharmonic() {
-            if next.accidental.alter.abs() > alter_limit {
+            if next.accidental_or_natural().alter.abs() > alter_limit {
                 break;
             }
             if post.contains(&next) {
@@ -29,7 +29,7 @@ impl Pitch {
 
         let mut lower = self.clone();
         while let Ok(next) = lower.get_lower_enharmonic() {
-            if next.accidental.alter.abs() > alter_limit {
+            if next.accidental_or_natural().alter.abs() > alter_limit {
                 break;
             }
             if post.contains(&next) {
@@ -56,7 +56,7 @@ impl Pitch {
     /// Simplifies this pitch's enharmonic spelling in place.
     pub fn simplify_enharmonic_in_place(&mut self, most_common: bool) -> Result<()> {
         const EXCLUDED_NAMES: [&str; 4] = ["E#", "B#", "C-", "F-"];
-        if self.accidental.alter.abs().partial_cmp(&2.0) != Some(Ordering::Less)
+        if self.accidental_or_natural().alter.abs().partial_cmp(&2.0) != Some(Ordering::Less)
             || EXCLUDED_NAMES.contains(&self.name().as_str())
         {
             // by resetting the pitch space value, we get a simpler enharmonic spelling
@@ -145,12 +145,13 @@ impl Pitch {
     /// and not how to spell what it lands on. A pitch with no accidental,
     /// or one the signature does not alter, is left as it is.
     pub fn respelled_for(&self, signature: &crate::key::KeySignature) -> Result<Pitch> {
-        if !self.has_accidental() {
+        if self.accidental().is_none() {
             return Ok(self.clone());
         }
-        let alter = self.accidental().alter();
+        let alter = self.accidental_or_natural().alter();
         for altered in signature.altered_pitches()? {
-            if altered.pitch_class() == self.pitch_class() && altered.accidental().alter() != alter
+            if altered.pitch_class() == self.pitch_class()
+                && altered.accidental_or_natural().alter() != alter
             {
                 return self.get_enharmonic();
             }
@@ -164,7 +165,7 @@ impl Pitch {
     /// the letter below; a natural takes whichever direction its letter has
     /// room for, so `C` answers `B#`.
     pub fn get_enharmonic(&self) -> Result<Pitch> {
-        let alter = self.accidental.alter();
+        let alter = self.accidental_or_natural().alter();
         let downward = if alter > 0.0 {
             false
         } else if alter < 0.0 {
@@ -202,7 +203,7 @@ impl Pitch {
         for upward in [true, false] {
             let mut current = self.clone();
             while let Ok(next) = current.enharmonic_neighbour(upward) {
-                if next.accidental().alter().abs() > alter_limit as FloatType
+                if next.accidental_or_natural().alter().abs() > alter_limit as FloatType
                     || found.contains(&next)
                 {
                     break;

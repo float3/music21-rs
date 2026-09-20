@@ -1,10 +1,7 @@
-use crate::{
-    FloatType, TuningSystem, UnsignedIntegerType,
-    tuningsystem::{get_frequency_at, get_ratio_at},
-};
+use crate::{FloatType, TuningSystem};
 
 /// Adaptive tuning systems whose note frequencies depend on harmonic context.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[must_use]
 pub enum AdaptiveTuningSystem {
@@ -50,19 +47,14 @@ impl AdaptiveTuningSystem {
     /// frequency = C * 5/4 * 5/4
     ///           = C * 25/16
     /// ```
-    pub fn frequency_at(
-        self,
-        context: FloatType,
-        index: FloatType,
-        size: Option<UnsignedIntegerType>,
-    ) -> FloatType {
+    pub fn frequency_at(self, context: FloatType, index: FloatType) -> FloatType {
         match self {
             Self::Recursive {
                 root_tuning_system,
                 local_tuning_system,
             } => {
-                let root_ratio = get_ratio_at(root_tuning_system, context, size);
-                let local_frequency = get_frequency_at(local_tuning_system, index, size);
+                let root_ratio = root_tuning_system.ratio_at(context);
+                let local_frequency = local_tuning_system.frequency_at(index);
 
                 root_ratio * local_frequency
             }
@@ -73,25 +65,15 @@ impl AdaptiveTuningSystem {
     ///
     /// This assumes `index` is a local interval above `context`, so the equal-tempered
     /// comparison pitch is `context + index`.
-    pub fn cents_at(
-        self,
-        context: FloatType,
-        index: FloatType,
-        size: Option<UnsignedIntegerType>,
-    ) -> FloatType {
-        let octave_size = size.unwrap_or_else(|| match self {
+    pub fn cents_at(self, context: FloatType, index: FloatType) -> FloatType {
+        let reference_frequency = match self {
             Self::Recursive {
                 root_tuning_system, ..
-            } => root_tuning_system.octave_size(),
-        });
+            } => TuningSystem::edo(root_tuning_system.degrees_per_period())
+                .frequency_at(context + index),
+        };
 
-        let reference_frequency = get_frequency_at(
-            TuningSystem::EqualTemperament { octave_size },
-            context + index,
-            Some(octave_size),
-        );
-
-        let comparison_frequency = self.frequency_at(context, index, size);
+        let comparison_frequency = self.frequency_at(context, index);
 
         1200.0 * (comparison_frequency / reference_frequency).log2()
     }
@@ -104,10 +86,9 @@ impl AdaptiveTuningSystem {
         fixed_tuning_system: TuningSystem,
         context: FloatType,
         index: FloatType,
-        size: Option<UnsignedIntegerType>,
     ) -> FloatType {
-        let fixed_frequency = get_frequency_at(fixed_tuning_system, context + index, size);
-        let comparison_frequency = self.frequency_at(context, index, size);
+        let fixed_frequency = fixed_tuning_system.frequency_at(context + index);
+        let comparison_frequency = self.frequency_at(context, index);
 
         1200.0 * (comparison_frequency / fixed_frequency).log2()
     }
@@ -127,7 +108,7 @@ mod tests {
     #[test]
     fn a_third_above_a_third_is_two_just_thirds() {
         // Context 4 is E above C, index 4 a major third above that E.
-        let stacked = RECURSIVE_JI.frequency_at(4.0, 4.0, None);
+        let stacked = RECURSIVE_JI.frequency_at(4.0, 4.0);
         assert!(
             (stacked - CN1 * 25.0 / 16.0).abs() < CLOSE,
             "5/4 of 5/4 is 25/16, got {stacked}"
@@ -136,7 +117,7 @@ mod tests {
         // The fixed table's own eighth degree is 8/5 — a different pitch,
         // forty-one cents up. That difference is what makes the system
         // adaptive.
-        let fixed = RECURSIVE_JI.frequency_at(0.0, 8.0, None);
+        let fixed = RECURSIVE_JI.frequency_at(0.0, 8.0);
         assert!((fixed - CN1 * 8.0 / 5.0).abs() < CLOSE, "got {fixed}");
         assert!(
             (1200.0 * (fixed / stacked).log2() - 41.059).abs() < 1e-3,
@@ -152,9 +133,8 @@ mod tests {
     /// sound sour and a fourth above the bass a quarter tone sharp.
     #[test]
     fn a_triad_is_just_from_any_of_its_notes() {
-        let just = |context: FloatType, index: FloatType| {
-            RECURSIVE_JI.frequency_at(context, index, None) / CN1
-        };
+        let just =
+            |context: FloatType, index: FloatType| RECURSIVE_JI.frequency_at(context, index) / CN1;
         // C E G, then E G C above it, then G C E above that.
         assert!((just(0.0, 4.0) - 5.0 / 4.0).abs() < CLOSE);
         assert!((just(0.0, 7.0) - 3.0 / 2.0).abs() < CLOSE);
@@ -181,7 +161,7 @@ mod tests {
     #[test]
     fn a_context_of_nothing_is_the_fixed_table() {
         for index in [0.0, 4.0, 7.0, 11.0] {
-            let adaptive = RECURSIVE_JI.frequency_at(0.0, index, None);
+            let adaptive = RECURSIVE_JI.frequency_at(0.0, index);
             let fixed = TuningSystem::FiveLimit.frequency_at(index);
             assert!(
                 (adaptive - fixed).abs() < CLOSE,
@@ -190,7 +170,7 @@ mod tests {
             // And measured against the very table it came from, it is nought
             // cents away — exactly, not nearly.
             assert_eq!(
-                RECURSIVE_JI.cents_vs_fixed_at(TuningSystem::FiveLimit, 0.0, index, None),
+                RECURSIVE_JI.cents_vs_fixed_at(TuningSystem::FiveLimit, 0.0, index),
                 0.0
             );
         }
@@ -200,15 +180,15 @@ mod tests {
     #[test]
     fn cents_at_says_how_far_the_stack_lands_from_the_piano() {
         // 25/16 is 772.63 cents; the piano's minor sixth is 800.
-        let stacked = RECURSIVE_JI.cents_at(4.0, 4.0, None);
+        let stacked = RECURSIVE_JI.cents_at(4.0, 4.0);
         assert!((stacked + 27.373).abs() < 1e-3, "{stacked}");
 
         // A just fifth from the tonic is the familiar two cents sharp.
-        let fifth = RECURSIVE_JI.cents_at(0.0, 7.0, None);
+        let fifth = RECURSIVE_JI.cents_at(0.0, 7.0);
         assert!((fifth - 1.955).abs() < 1e-3, "{fifth}");
 
         // The tonic is the tonic in any tuning.
-        assert!(RECURSIVE_JI.cents_at(0.0, 0.0, None).abs() < CLOSE);
+        assert!(RECURSIVE_JI.cents_at(0.0, 0.0).abs() < CLOSE);
     }
 
     /// Against a fixed table for the same written note, which is the
@@ -217,8 +197,7 @@ mod tests {
     fn cents_vs_fixed_shows_what_recursing_costs() {
         // Two just thirds land 41 cents under five-limit's own minor sixth,
         // which is 8/5. That gap is why a fixed table cannot spell this.
-        let against_five_limit =
-            RECURSIVE_JI.cents_vs_fixed_at(TuningSystem::FiveLimit, 4.0, 4.0, None);
+        let against_five_limit = RECURSIVE_JI.cents_vs_fixed_at(TuningSystem::FiveLimit, 4.0, 4.0);
         assert!(
             (against_five_limit + 41.059).abs() < 1e-3,
             "{against_five_limit}"
@@ -226,33 +205,14 @@ mod tests {
 
         // Measured against equal temperament, `cents_vs_fixed_at` agrees with
         // `cents_at`, since that is the table `cents_at` compares against.
-        let twelve = TuningSystem::EqualTemperament { octave_size: 12 };
+        let twelve = TuningSystem::EQUAL_TEMPERAMENT;
         for (context, index) in [(4.0, 4.0), (0.0, 7.0), (7.0, 3.0)] {
             assert!(
-                (RECURSIVE_JI.cents_vs_fixed_at(twelve, context, index, None)
-                    - RECURSIVE_JI.cents_at(context, index, None))
+                (RECURSIVE_JI.cents_vs_fixed_at(twelve, context, index)
+                    - RECURSIVE_JI.cents_at(context, index))
                 .abs()
                     < 1e-9,
                 "at {context}, {index}"
-            );
-        }
-    }
-
-    /// The octave size may be given or left to the root system to supply.
-    #[test]
-    fn an_octave_size_given_matches_the_one_it_would_have_chosen() {
-        for (context, index) in [(4.0, 4.0), (0.0, 7.0), (2.0, 9.0)] {
-            assert!(
-                (RECURSIVE_JI.cents_at(context, index, Some(12))
-                    - RECURSIVE_JI.cents_at(context, index, None))
-                .abs()
-                    < 1e-9
-            );
-            assert!(
-                (RECURSIVE_JI.frequency_at(context, index, Some(12))
-                    - RECURSIVE_JI.frequency_at(context, index, None))
-                .abs()
-                    < CLOSE
             );
         }
     }
@@ -266,7 +226,7 @@ mod tests {
         };
         // A Pythagorean fifth to place the root, a harmonic-series minor
         // seventh above it, which five-limit does not hold.
-        let sounded = mixed.frequency_at(7.0, 10.0, None);
+        let sounded = mixed.frequency_at(7.0, 10.0);
         assert!(
             (sounded - CN1 * (3.0 / 2.0) * (7.0 / 4.0)).abs() < CLOSE,
             "{sounded}"
@@ -279,21 +239,14 @@ mod tests {
     fn an_adaptive_system_answers_through_the_wrapper_too() {
         let any: AnyTuningSystem = RECURSIVE_JI.into();
         assert!(any.is_adaptive());
-        assert!(
-            (any.frequency_at(4.0, 4.0, None) - RECURSIVE_JI.frequency_at(4.0, 4.0, None)).abs()
-                < CLOSE
-        );
-        assert!(
-            (any.cents_at(4.0, 4.0, None) - RECURSIVE_JI.cents_at(4.0, 4.0, None)).abs() < 1e-9
-        );
+        assert!((any.frequency_at(4.0, 4.0) - RECURSIVE_JI.frequency_at(4.0, 4.0)).abs() < CLOSE);
+        assert!((any.cents_at(4.0, 4.0) - RECURSIVE_JI.cents_at(4.0, 4.0)).abs() < 1e-9);
 
         // A fixed system ignores the context it is handed; an adaptive one
         // does not, which is the whole distinction the wrapper draws.
         let fixed: AnyTuningSystem = TuningSystem::FiveLimit.into();
         assert!(!fixed.is_adaptive());
-        assert!(
-            (fixed.frequency_at(4.0, 4.0, None) - fixed.frequency_at(0.0, 4.0, None)).abs() < CLOSE
-        );
-        assert!((any.frequency_at(4.0, 4.0, None) - any.frequency_at(0.0, 4.0, None)).abs() > 0.4);
+        assert!((fixed.frequency_at(4.0, 4.0) - fixed.frequency_at(0.0, 4.0)).abs() < CLOSE);
+        assert!((any.frequency_at(4.0, 4.0) - any.frequency_at(0.0, 4.0)).abs() > 0.4);
     }
 }

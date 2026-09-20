@@ -8,7 +8,7 @@ use crate::{
     error::{Error, Result},
     interval::Interval,
     pitch::Pitch,
-    scale::{Scale, ScaleType, diatonicscale::DiatonicScale},
+    scale::{Scale, ScaleType},
 };
 use std::str::FromStr;
 
@@ -89,23 +89,37 @@ impl Key {
             .try_as_key(Some(&self.mode), None)
     }
 
-    /// Returns the [`Scale`] for this key's mode on its tonic. Major and
-    /// minor cover ionian and aeolian; the other church modes map to their
-    /// scale types, and any other mode is an error.
-    pub fn as_scale(&self) -> Result<Scale> {
-        let scale_type = match self.mode.as_str() {
-            "major" | "ionian" => ScaleType::Major,
-            "minor" | "aeolian" => ScaleType::Minor,
-            "dorian" => ScaleType::Dorian,
-            "phrygian" => ScaleType::Phrygian,
-            "lydian" => ScaleType::Lydian,
-            "mixolydian" => ScaleType::Mixolydian,
-            "locrian" => ScaleType::Locrian,
-            other => {
-                return Err(Error::Key(format!("no scale type for mode {other}")));
-            }
-        };
-        Ok(Scale::new(scale_type, self.tonic_pitch.clone()))
+    /// The scale this key is written in: its tonic, and the diatonic mode
+    /// that tonic stands on within the key's own signature.
+    ///
+    /// The mode is read off the signature rather than the mode's name, so
+    /// every key has one. The church modes come out as themselves, D dorian
+    /// as `ScaleType::Dorian` on D, and a mode music21 keeps no signature for
+    /// takes the major signature on its tonic, as music21 gives it, and so
+    /// reads as major.
+    ///
+    /// music21's own `Key.getScale` answers the relative major for a church
+    /// mode, a C major scale for D dorian. The crate answers the mode.
+    pub fn scale(&self) -> Scale {
+        Scale::new(self.scale_type(), self.tonic_pitch.clone())
+    }
+
+    /// Which of the seven diatonic modes the tonic stands on in the key's
+    /// signature: how many letters it sits above the signature's major tonic,
+    /// which is four letters on for every sharp.
+    fn scale_type(&self) -> ScaleType {
+        const MODES: [ScaleType; 7] = [
+            ScaleType::Major,
+            ScaleType::Dorian,
+            ScaleType::Phrygian,
+            ScaleType::Lydian,
+            ScaleType::Mixolydian,
+            ScaleType::Minor,
+            ScaleType::Locrian,
+        ];
+        let major_step = (4 * self.sharps).rem_euclid(7);
+        let tonic_step = self.tonic_pitch.step_index();
+        MODES[(tonic_step - major_step).rem_euclid(7) as usize]
     }
 
     /// Returns the tonic name in music21's case convention: upper case for
@@ -129,29 +143,48 @@ impl Key {
         KeySignature::new(self.sharps)
     }
 
-    /// Returns the diatonic scale for this key.
-    pub fn scale(&self) -> DiatonicScale {
-        DiatonicScale::new(self.tonic_pitch.clone(), self.sharps, &self.mode)
-    }
-
-    /// Returns the pitch at a one-based scale degree.
+    /// The pitch on a one-based scale degree, counting on up past the
+    /// octave: in C major the ninth degree is `D5`, which is what stacking
+    /// thirds on the upper degrees needs. A tonic given with no octave is
+    /// read in octave 4.
+    ///
+    /// [`Scale::pitch_at_degree`] is music21's `pitchFromDegree`, which reads
+    /// the eighth degree as the tonic again.
     pub fn pitch_from_degree(&self, degree: usize) -> Result<Pitch> {
-        self.scale().pitch_from_degree(degree)
+        if degree == 0 {
+            return Err(Error::Key("scale degrees start at 1".to_string()));
+        }
+        let within = (degree - 1) % 7;
+        let octaves_up = IntegerType::try_from((degree - 1) / 7)
+            .map_err(|_| Error::Key(format!("degree {degree} is out of range")))?;
+        let mut pitch = self.scale().pitch_at_degree(within as IntegerType + 1)?;
+        let octave = pitch.octave().unwrap_or(4) + octaves_up;
+        pitch.set_octave(Some(octave));
+        Ok(pitch)
     }
 
-    /// Returns scale pitches from degree 1 through the octave.
+    /// The scale's pitches from the tonic up to its octave, eight in all.
     pub fn pitches(&self) -> Result<Vec<Pitch>> {
-        self.scale().pitches()
+        (1..=8)
+            .map(|degree| self.pitch_from_degree(degree))
+            .collect()
     }
 
-    /// Builds the diatonic triad on a one-based degree.
+    /// The diatonic triad on a one-based degree.
     pub fn triad_from_degree(&self, degree: usize) -> Result<Chord> {
-        self.scale().triad_from_degree(degree)
+        self.chord_of_thirds(degree, 3)
     }
 
-    /// Builds the diatonic seventh chord on a one-based degree.
+    /// The diatonic seventh chord on a one-based degree.
     pub fn seventh_chord_from_degree(&self, degree: usize) -> Result<Chord> {
-        self.scale().seventh_chord_from_degree(degree)
+        self.chord_of_thirds(degree, 4)
+    }
+
+    fn chord_of_thirds(&self, degree: usize, notes: usize) -> Result<Chord> {
+        let pitches = (0..notes)
+            .map(|third| self.pitch_from_degree(degree + 2 * third))
+            .collect::<Result<Vec<_>>>()?;
+        Chord::new(pitches.as_slice())
     }
 
     /// Returns all seven diatonic triads.
@@ -173,7 +206,7 @@ impl Key {
     /// degree: music21's `deriveByDegree`, so C major with `E` as degree 5 is
     /// A major and A minor with `C` as degree 3 is A minor again.
     pub fn derive_by_degree(&self, degree: usize, pitch: &Pitch) -> Result<Self> {
-        self.derive_by_degree_of(self.as_scale()?.scale_type(), degree, pitch)
+        self.derive_by_degree_of(self.scale_type(), degree, pitch)
     }
 
     /// The same, reading the degree off a scale pattern the caller chooses
@@ -469,18 +502,13 @@ mod tests {
             assert_eq!(moved.sharps(), sharps, "{key} {interval}");
             assert_eq!(moved.mode(), mode, "{key} {interval}");
         }
-        let dorian = Key::from_tonic_mode("D", "dorian")
-            .unwrap()
-            .as_scale()
-            .unwrap();
+        let dorian = Key::from_tonic_mode("D", "dorian").unwrap().scale();
         assert_eq!(dorian.scale_type(), ScaleType::Dorian);
-        assert!(
-            Key::from_tonic_mode("D", "hypodorian").is_err()
-                || Key::from_tonic_mode("D", "hypodorian")
-                    .unwrap()
-                    .as_scale()
-                    .is_err()
-        );
+        // music21 gives a mode it keeps no signature for the major one on
+        // its tonic, so D hypodorian is written with D major's two sharps.
+        let hypodorian = Key::from_tonic_mode("D", "hypodorian").unwrap();
+        assert_eq!(hypodorian.sharps(), 2);
+        assert_eq!(hypodorian.scale().scale_type(), ScaleType::Major);
     }
 
     #[test]

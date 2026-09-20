@@ -241,6 +241,7 @@ pub(super) fn music21_suite(workspace_root: &Path, submodule: &Path) -> Suite {
         failed: 0,
         detail: Some(detail),
         note: None,
+        expected_failures: 0,
     };
 
     if !submodule.exists() {
@@ -279,6 +280,7 @@ pub(super) fn music21_suite(workspace_root: &Path, submodule: &Path) -> Suite {
                 failed: 0,
                 detail: last_line(&text),
                 note: None,
+                expected_failures: 0,
             },
         };
     };
@@ -326,6 +328,7 @@ pub(super) fn music21_suite(workspace_root: &Path, submodule: &Path) -> Suite {
             theirs.len()
         )),
         note: None,
+        expected_failures: mine.len() - regressions,
     }
 }
 
@@ -475,6 +478,7 @@ pub(super) fn cargo_suite(
             failed: 0,
             detail: Some(reason.to_string()),
             note: None,
+            expected_failures: 0,
         };
     }
     let output = Command::new("cargo")
@@ -493,6 +497,7 @@ pub(super) fn cargo_suite(
                 failed: 0,
                 detail: Some(format!("could not run cargo ({err})")),
                 note: None,
+                expected_failures: 0,
             };
         }
     };
@@ -509,6 +514,7 @@ pub(super) fn cargo_suite(
         failed,
         detail: None,
         note: None,
+        expected_failures: 0,
     }
 }
 
@@ -536,6 +542,7 @@ pub(super) fn wheel_suites(workspace_root: &Path) -> (Suite, Suite) {
             failed: 0,
             detail: Some(format!("maturin is not installed ({err})")),
             note: None,
+            expected_failures: 0,
         },
         Ok(output) if output.status.success() => Suite {
             name: BUILD.to_string(),
@@ -545,6 +552,7 @@ pub(super) fn wheel_suites(workspace_root: &Path) -> (Suite, Suite) {
             failed: 0,
             detail: built_wheel_name(&merged(&output)),
             note: None,
+            expected_failures: 0,
         },
         Ok(output) => Suite {
             name: BUILD.to_string(),
@@ -554,6 +562,7 @@ pub(super) fn wheel_suites(workspace_root: &Path) -> (Suite, Suite) {
             failed: 0,
             detail: last_line(&merged(&output)),
             note: None,
+            expected_failures: 0,
         },
     };
 
@@ -572,6 +581,7 @@ pub(super) fn wheel_suites(workspace_root: &Path) -> (Suite, Suite) {
             failed: 0,
             detail: Some(format!("could not run {python} ({err})")),
             note: None,
+            expected_failures: 0,
         },
         Ok(output) => {
             let text = merged(&output);
@@ -584,6 +594,7 @@ pub(super) fn wheel_suites(workspace_root: &Path) -> (Suite, Suite) {
                     failed: 0,
                     detail: Some(format!("{python} has no {missing}")),
                     note: None,
+                    expected_failures: 0,
                 },
                 None => {
                     let (passed, failed) = pytest_counts(&text);
@@ -599,6 +610,7 @@ pub(super) fn wheel_suites(workspace_root: &Path) -> (Suite, Suite) {
                         failed,
                         detail: None,
                         note: None,
+                        expected_failures: 0,
                     }
                 }
             }

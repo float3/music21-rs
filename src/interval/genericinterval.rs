@@ -247,7 +247,7 @@ impl GenericInterval {
             let step_alter = key_signature
                 .accidental_by_step(pitch.step().as_char())?
                 .map_or(0.0, |accidental| accidental.alter());
-            let offset_from_key = pitch.accidental().alter() - step_alter;
+            let offset_from_key = pitch.accidental_or_natural().alter() - step_alter;
             let new_step_alter = key_signature
                 .accidental_by_step(out.step().as_char())?
                 .map_or(0.0, |accidental| accidental.alter());
@@ -257,7 +257,7 @@ impl GenericInterval {
             } else {
                 Some(Accidental::new(alter)?)
             };
-            out.set_accidental_or_natural(accidental);
+            out.set_accidental(accidental);
         }
         if !had_octave {
             out.octave_setter(None);

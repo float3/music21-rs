@@ -51,6 +51,10 @@ pub struct ScoreInput {
     meter: Option<[u32; 2]>,
     #[serde(default)]
     pickup: f64,
+    /// Whether a note keeps sounding past its written end where nothing
+    /// stops it, as a plucked or struck string does.
+    #[serde(default = "default_let_ring")]
+    let_ring: bool,
     voices: Vec<VoiceInput>,
 }
 
@@ -92,6 +96,15 @@ struct NoteInput {
 fn default_velocity() -> u8 {
     90
 }
+
+fn default_let_ring() -> bool {
+    true
+}
+
+/// How far apart two notes must be to count as clear of each other rather
+/// than struck in the same register: a major third. A guitar's thumb plays
+/// its bass a good deal further below the chord than that.
+const REGISTER_CLEARANCE: f64 = 4.0;
 
 /// A sounding MIDI number and, where it was written on a staff, the diatonic
 /// position it was written at: `0` is middle C, `1` the D above it.
@@ -192,7 +205,7 @@ impl Score {
                 events,
             });
         }
-        Ok(Self {
+        let mut score = Self {
             title: input.title,
             tempo_bpm: if input.tempo_bpm.is_finite() && input.tempo_bpm > 0.0 {
                 input.tempo_bpm
@@ -203,7 +216,60 @@ impl Score {
             meter,
             pickup: snap(input.pickup.max(0.0)),
             voices,
-        })
+        };
+        if input.let_ring {
+            score.let_ring();
+        }
+        Ok(score)
+    }
+
+    /// Lets a note go on sounding until something is struck in its own
+    /// register, which is what a guitar or a piano does: the bass under a
+    /// chord rings on, and the chord rings over the bass note after it.
+    ///
+    /// It applies only where a voice mixes single notes with chords, one
+    /// part playing bass and harmony at once. A voice of single notes is a
+    /// line, whose notes stop at the next one however far it leaps, and is
+    /// left alone. Nothing rings past the end of its bar.
+    fn let_ring(&mut self) {
+        let bar = self.bar();
+        let pickup = self.anacrusis();
+        let bar_end = |offset: f64| {
+            if offset < pickup - EPSILON {
+                pickup
+            } else {
+                pickup + ((offset - pickup) / bar + EPSILON).floor() * bar + bar
+            }
+        };
+        for voice in &mut self.voices {
+            let spans: Vec<(f64, f64, f64, usize)> = voice
+                .events
+                .iter()
+                .map(|event| {
+                    let low = event.pitches.iter().map(Pitch::ps).fold(f64::MAX, f64::min);
+                    let high = event.pitches.iter().map(Pitch::ps).fold(f64::MIN, f64::max);
+                    (event.start, low, high, event.pitches.len())
+                })
+                .collect();
+            for index in 0..spans.len() {
+                let (start, low, high, count) = spans[index];
+                let mut ends = bar_end(start);
+                for &(next_start, next_low, next_high, next_count) in &spans[index + 1..] {
+                    if next_start <= start + EPSILON {
+                        continue;
+                    }
+                    let clear = next_low > high + REGISTER_CLEARANCE
+                        || next_high < low - REGISTER_CLEARANCE;
+                    // Two single notes are a line, whatever the leap.
+                    if !clear || (count == 1 && next_count == 1) {
+                        ends = next_start;
+                        break;
+                    }
+                }
+                let event = &mut voice.events[index];
+                event.end = event.end.max(ends.min(bar_end(start)));
+            }
+        }
     }
 
     fn end(&self) -> f64 {
@@ -1462,7 +1528,7 @@ pub fn midi_to_abc(bytes: &[u8]) -> Result<String, JsValue> {
 /// read at the degree nearest in pitch, since the notes are twelve-tone.
 fn fixed_cents(system: TuningSystem, semitones: usize) -> f64 {
     let target = semitones as f64 * 100.0;
-    let size = system.octave_size() as usize;
+    let size = system.degrees_per_period() as usize;
     if size == 12 {
         return 1200.0 * system.ratio(semitones).log2() - target;
     }
@@ -1536,7 +1602,6 @@ fn tuning_cents(input: ScoreInput, tuning: &str, tonic: &str) -> Result<TuningCe
                                 RECURSIVE_JI.cents_at(
                                     f64::from(class_above(root, tonic)),
                                     f64::from(class_above(pitch.midi, root)),
-                                    None,
                                 )
                             })
                             .collect()
@@ -1550,7 +1615,7 @@ fn tuning_cents(input: ScoreInput, tuning: &str, tonic: &str) -> Result<TuningCe
         });
     }
     let system = crate::all_playable()
-        .find(|system| crate::tuning_id(*system) == tuning)
+        .find(|system| crate::tuning_is_named(*system, tuning))
         .ok_or_else(|| JsValue::from_str(&format!("no tuning system called {tuning:?}")))?;
     let mut by_class = [0.0; 12];
     for (class, cents) in by_class.iter_mut().enumerate() {
@@ -1652,6 +1717,7 @@ mod tests {
             key: None,
             meter: Some([4, 4]),
             pickup: 0.0,
+            let_ring: false,
             voices: voices
                 .iter()
                 .map(|notes| VoiceInput {
@@ -1765,6 +1831,7 @@ mod tests {
             }),
             meter: Some([4, 4]),
             pickup: 0.0,
+            let_ring: false,
             voices: voices
                 .iter()
                 .enumerate()
@@ -1876,6 +1943,44 @@ mod tests {
         assert!(xml.contains("<tie type=\"start\"/>"));
         assert!(xml.contains("<tie type=\"stop\"/>"));
         assert_eq!(xml.matches("<part id=").count(), 4);
+    }
+
+    #[test]
+    fn a_bass_note_rings_under_the_chord_struck_over_it() {
+        // A guitar's thumb and fingers in one voice: F#2, then D3 A3 B3 an
+        // eighth later. The bass is still sounding under the chord.
+        let mut input = input_of(&[&[(0.0, &[(42, -4)]), (0.5, &[(50, 1), (57, 5), (59, 6)])]]);
+        input.let_ring = true;
+        input.voices[0].notes[0].duration = 0.5;
+        let score = Score::from_input(input).expect("builds");
+        assert_eq!(
+            score.voices[0].events[0].end, 4.0,
+            "the bass rings to the end of the bar"
+        );
+        let analysis = analyse(&score).expect("analyses");
+        assert_eq!(analysis.slices[1].pitches, ["F#2", "D3", "A3", "B3"]);
+        assert_eq!(
+            analysis.slices[1].pitched_common_name,
+            "B-minor seventh chord"
+        );
+    }
+
+    #[test]
+    fn a_line_of_single_notes_does_not_ring() {
+        // A chorale bass leaping a fifth: the first note stops at the second.
+        let mut input = input_of(&[&[(0.0, &[(48, -7)]), (1.0, &[(41, -11)])]]);
+        input.let_ring = true;
+        let score = Score::from_input(input).expect("builds");
+        assert_eq!(score.voices[0].events[0].end, 1.0);
+    }
+
+    #[test]
+    fn nothing_rings_past_its_own_bar() {
+        let mut input = input_of(&[&[(3.5, &[(42, -4)]), (5.0, &[(50, 1), (57, 5), (59, 6)])]]);
+        input.let_ring = true;
+        input.voices[0].notes[0].duration = 0.5;
+        let score = Score::from_input(input).expect("builds");
+        assert_eq!(score.voices[0].events[0].end, 4.0);
     }
 
     #[test]

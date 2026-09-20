@@ -96,7 +96,9 @@ pub fn midi_notes_from_stream(stream: &Stream) -> Result<Vec<MidiNote>> {
             | StreamElement::Stream(_)
             | StreamElement::KeySignature(_)
             | StreamElement::TimeSignature(_)
-            | StreamElement::MetronomeMark(_) => {}
+            | StreamElement::MetronomeMark(_)
+            | StreamElement::Dynamic(_)
+            | StreamElement::ChordSymbol(_) => {}
         }
     }
     Ok(notes)

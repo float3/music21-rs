@@ -118,10 +118,10 @@ impl Modifier {
             return Ok(pitch.clone());
         };
         let mut modified = pitch.clone();
-        let alter = if accidental.alter() == 0.0 || !pitch.has_accidental() {
+        let alter = if accidental.alter() == 0.0 || pitch.accidental().is_none() {
             accidental.alter()
         } else {
-            pitch.accidental().alter() + accidental.alter()
+            pitch.accidental_or_natural().alter() + accidental.alter()
         };
         modified.set_accidental(Some(Accidental::new(alter)?));
         Ok(modified)
