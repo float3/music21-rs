@@ -173,14 +173,34 @@ impl MeterTerminal {
     }
 
     /// How strongly this span is felt: music21's `weight`.
+    ///
+    /// A span with parts weighs what its parts weigh together, so weight is
+    /// kept on the terminals and read back up the tree.
     #[must_use]
     pub fn weight(&self) -> FloatType {
-        self.weight
+        if self.parts.is_empty() {
+            self.weight
+        } else {
+            self.parts.iter().map(Self::weight).sum()
+        }
     }
 
     /// Sets how strongly this span is felt.
+    ///
+    /// A span with parts shares the weight out among them in proportion to
+    /// how long each is, as music21 does: the four quarters of a bar weighing
+    /// one take a quarter each, where `{3/4+1/4}` takes three quarters and a
+    /// quarter.
     pub fn set_weight(&mut self, weight: FloatType) {
         self.weight = weight;
+        let whole = self.quarter_length();
+        if self.parts.is_empty() || whole == 0.0 {
+            return;
+        }
+        for part in &mut self.parts {
+            let share = part.quarter_length() / whole;
+            part.set_weight(weight * share);
+        }
     }
 
     /// What this span is divided into. Empty where it is a leaf.
@@ -245,7 +265,9 @@ impl MeterTerminal {
                 python_list(parts)
             )));
         }
+        let held = self.weight();
         self.parts = built;
+        self.set_weight(held);
         Ok(())
     }
 
@@ -333,6 +355,110 @@ impl MeterTerminal {
                 },
             };
             part.partition_by_count(count, false)?;
+        }
+        Ok(())
+    }
+
+    /// The part a path of indices names, and the parts it holds.
+    fn part_at(&self, path: &[usize]) -> &Self {
+        path.iter().fold(self, |span, index| &span.parts[*index])
+    }
+
+    fn part_at_mut(&mut self, path: &[usize]) -> &mut Self {
+        path.iter()
+            .fold(self, |span, index| &mut span.parts[*index])
+    }
+
+    /// Divides the parts of every span named, and answers where those parts
+    /// now are: music21's `_subdivideNested`, which is one level of
+    /// [`Self::subdivide_nested_hierarchy`].
+    fn subdivide_parts_of(
+        &mut self,
+        spans: &[Vec<usize>],
+        divisions: Option<usize>,
+    ) -> Result<Vec<Vec<usize>>> {
+        let mut deeper = Vec::new();
+        for path in spans {
+            let span = self.part_at_mut(path);
+            span.subdivide_partitions_equal(divisions)?;
+            for index in 0..span.len() {
+                let mut child = path.clone();
+                child.push(index);
+                deeper.push(child);
+            }
+        }
+        Ok(deeper)
+    }
+
+    /// Nests this span down to a depth: music21's `subdivideNestedHierarchy`.
+    ///
+    /// The whole span becomes one part, that part is divided by two, by three
+    /// or by its own numerator, and every division after that is by two or
+    /// three again — so a bar of four quarters at depth two is two halves of
+    /// two quarters each. Whatever partitions the span had are gone.
+    ///
+    /// `normalize_denominators` keeps the parts of a level written over one
+    /// denominator: where they differ, the longer ones are divided again
+    /// until they agree, which is why six eighths come out as sixteenths.
+    ///
+    /// ```
+    /// use music21_rs::meter::MeterTerminal;
+    ///
+    /// let mut bar = MeterTerminal::new(4, 4)?;
+    /// bar.subdivide_nested_hierarchy(2, None, true)?;
+    /// assert_eq!(bar.to_string(), "{{{1/4+1/4}+{1/4+1/4}}}");
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
+    pub fn subdivide_nested_hierarchy(
+        &mut self,
+        depth: usize,
+        first_partition_form: Option<UnsignedIntegerType>,
+        normalize_denominators: bool,
+    ) -> Result<()> {
+        self.partition_by_count(1, false)?;
+        if depth == 0 {
+            return Ok(());
+        }
+        let form = first_partition_form.unwrap_or(self.numerator);
+        let first = match form {
+            1 | 2 | 4 | 8 | 16 | 32 => 2,
+            3 => 3,
+            other => other as usize,
+        };
+        self.subdivide_partitions_equal(Some(first))?;
+
+        let mut frontier = vec![vec![0]];
+        for _ in 1..depth {
+            frontier = self.subdivide_parts_of(&frontier, None)?;
+            if !normalize_denominators {
+                continue;
+            }
+            // Where a level is written over more than one denominator, the
+            // longer parts are divided again until it is written over one.
+            loop {
+                let denominators: Vec<UnsignedIntegerType> = frontier
+                    .iter()
+                    .map(|path| self.part_at(path).denominator())
+                    .collect();
+                let Some(shortest) = denominators.iter().min().copied() else {
+                    break;
+                };
+                if denominators
+                    .iter()
+                    .all(|denominator| *denominator == shortest)
+                {
+                    break;
+                }
+                let mut evened = Vec::new();
+                for path in &frontier {
+                    if self.part_at(path).denominator() == shortest {
+                        evened.extend(self.subdivide_parts_of(std::slice::from_ref(path), None)?);
+                    } else {
+                        evened.push(path.clone());
+                    }
+                }
+                frontier = evened;
+            }
         }
         Ok(())
     }

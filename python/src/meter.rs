@@ -724,9 +724,44 @@ enum Held {
         which: Which,
         path: Vec<usize>,
     },
+    /// A part of a sequence that belongs to nobody else, reached by walking
+    /// `path` down it. Reads and writes go to that sequence, so dividing a
+    /// part of it divides it -- music21 hands back the very parts it holds,
+    /// and its own docstrings divide one and read the whole back.
+    Part {
+        owner: Py<MeterSequence>,
+        path: Vec<usize>,
+    },
     /// A span belonging to nobody: what `subdivide` hands back, which
     /// music21 builds without touching the meter it came from.
     Loose(RsMeterTerminal),
+}
+
+/// The part a path names inside a span.
+fn part_at(span: &RsMeterTerminal, path: &[usize]) -> PyResult<RsMeterTerminal> {
+    let mut found = span;
+    for step in path {
+        found = found.parts().get(*step).ok_or_else(|| {
+            MeterException::new_err("this part of the sequence is no longer there")
+        })?;
+    }
+    Ok(found.clone())
+}
+
+/// Writes a span back into the part a path names.
+fn write_part_at(
+    span: &mut RsMeterTerminal,
+    path: &[usize],
+    value: RsMeterTerminal,
+) -> PyResult<()> {
+    let mut found = span;
+    for step in path {
+        found = found.parts_mut().get_mut(*step).ok_or_else(|| {
+            MeterException::new_err("this part of the sequence is no longer there")
+        })?;
+    }
+    *found = value;
+    Ok(())
 }
 
 impl Held {
@@ -734,6 +769,10 @@ impl Held {
     fn read(&self, py: Python<'_>) -> PyResult<RsMeterTerminal> {
         match self {
             Self::Loose(terminal) => Ok(terminal.clone()),
+            Self::Part { owner, path } => {
+                let held = owner.borrow(py).held.read(py)?;
+                part_at(&held, path)
+            }
             Self::View { owner, which, path } => {
                 let owner = owner.borrow(py);
                 let mut span = owner.sequence(*which);
@@ -754,6 +793,17 @@ impl Held {
                 *terminal = value;
                 Ok(())
             }
+            Self::Part { owner, path } => {
+                // Read the sequence, write the part into it, and put it back
+                // the way it came -- the sequence may itself be a part, or a
+                // view of a meter.
+                let mut held = owner.borrow(py).held.clone_for(py);
+                let mut span = held.read(py)?;
+                write_part_at(&mut span, path, value)?;
+                held.write(py, span)?;
+                owner.borrow_mut(py).held = held;
+                Ok(())
+            }
             Self::View { owner, which, path } => {
                 let mut owner = owner.borrow_mut(py);
                 let mut span = owner.sequence_mut(*which);
@@ -769,6 +819,23 @@ impl Held {
     }
 
     /// The same view, one step further down.
+    /// A copy of this handle, which a part needs so it can write its owner
+    /// back afterwards.
+    fn clone_for(&self, py: Python<'_>) -> Self {
+        match self {
+            Self::Loose(terminal) => Self::Loose(terminal.clone()),
+            Self::Part { owner, path } => Self::Part {
+                owner: owner.clone_ref(py),
+                path: path.clone(),
+            },
+            Self::View { owner, which, path } => Self::View {
+                owner: owner.clone_ref(py),
+                which: *which,
+                path: path.clone(),
+            },
+        }
+    }
+
     fn descend(&self, py: Python<'_>, index: usize) -> PyResult<Self> {
         match self {
             Self::Loose(terminal) => terminal
@@ -776,6 +843,14 @@ impl Held {
                 .get(index)
                 .map(|part| Self::Loose(part.clone()))
                 .ok_or_else(|| PyIndexError::new_err("list index out of range")),
+            Self::Part { owner, path } => {
+                let mut deeper = path.clone();
+                deeper.push(index);
+                Ok(Self::Part {
+                    owner: owner.clone_ref(py),
+                    path: deeper,
+                })
+            }
             Self::View { owner, which, path } => {
                 let mut deeper = path.clone();
                 deeper.push(index);
@@ -892,6 +967,18 @@ impl MeterTerminal {
         Ok(self.held.read(py)?.denominator())
     }
 
+    /// music21's `denominator` setter, over the same numerator.
+    #[setter]
+    fn set_denominator(
+        &mut self,
+        py: Python<'_>,
+        denominator: UnsignedIntegerType,
+    ) -> PyResult<()> {
+        let span = self.held.read(py)?;
+        let rewritten = RsMeterTerminal::new(span.numerator(), denominator).map_err(meter_error)?;
+        self.held.write(py, rewritten)
+    }
+
     #[getter]
     fn get_weight(&self, py: Python<'_>) -> PyResult<FloatType> {
         Ok(self.held.read(py)?.weight())
@@ -912,18 +999,6 @@ impl MeterTerminal {
         ))
     }
 
-    /// music21's `subdivide`, which hands back a new span rather than
-    /// dividing this one.
-    fn subdivide(&self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
-        let span = self.held.read(py)?;
-        let divided = subdivided(&span, value)?;
-        wrap_span(py, Held::Loose(divided))
-    }
-
-    /// music21's `subdivideByCount`.
-    #[pyo3(signature = (countRequest = None))]
-    fn subdivideByCount(&self, py: Python<'_>, countRequest: Option<usize>) -> PyResult<Py<PyAny>> {
-        let span = self.held.read(py)?;
     /// music21's `ratioEqual`: whether two spans are written the same, which
     /// is not whether they last the same time — `3/4` and `6/8` are not.
     fn ratioEqual(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<bool> {
@@ -965,6 +1040,18 @@ impl MeterTerminal {
         sequence_of(py, divided)
     }
 
+    /// music21's `subdivide`, which hands back a new span rather than
+    /// dividing this one.
+    fn subdivide(&self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
+        let span = self.held.read(py)?;
+        let divided = divided_by(py, &span, value)?;
+        sequence_of(py, divided)
+    }
+
+    /// music21's `subdivideByCount`.
+    #[pyo3(signature = (countRequest = None))]
+    fn subdivideByCount(&self, py: Python<'_>, countRequest: Option<usize>) -> PyResult<Py<PyAny>> {
+        let span = self.held.read(py)?;
         let count = countRequest.unwrap_or(1);
         let divided = span.subdivide_by_count(count).map_err(meter_error)?;
         wrap_span(py, Held::Loose(divided))
@@ -973,18 +1060,6 @@ impl MeterTerminal {
 
 #[pymethods]
 impl MeterSequence {
-    /// A copy of a sequence stands alone: music21 deep-copies an accent
-    /// sequence while working out the weights of a bar.
-    fn __copy__(&self, py: Python<'_>) -> PyResult<Self> {
-        Ok(Self {
-            held: Held::Loose(self.held.read(py)?),
-        })
-    }
-
-    #[pyo3(signature = (memo = None))]
-    fn __deepcopy__(&self, py: Python<'_>, memo: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
-        let _ = memo;
-        self.__copy__(py)
     /// music21's `MeterSequence(value, partitionRequest)`. Unpartitioned, a
     /// sequence holds the whole span as its one part, which is what makes
     /// `MeterSequence('4/4')` read `{4/4}` and answer a length of one; given
@@ -1041,8 +1116,22 @@ impl MeterSequence {
         })
     }
 
+    /// A copy of a sequence stands alone: music21 deep-copies an accent
+    /// sequence while working out the weights of a bar.
+    fn __copy__(&self, py: Python<'_>) -> PyResult<Self> {
+        Ok(Self {
+            held: Held::Loose(self.held.read(py)?),
+        })
     }
 
+    #[pyo3(signature = (memo = None))]
+    fn __deepcopy__(&self, py: Python<'_>, memo: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
+        let _ = memo;
+        self.__copy__(py)
+    }
+
+    /// A sequence always writes its parts inside braces, one part or none,
+    /// where a terminal writes the bare ratio.
     fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
         Ok(format!(
             "<music21.meter.core.MeterSequence {{{}}}>",
@@ -1058,39 +1147,50 @@ impl MeterSequence {
         Ok(self.held.read(py)?.len())
     }
 
-    fn __getitem__(&self, py: Python<'_>, index: isize) -> PyResult<Py<PyAny>> {
-        let length = self.held.read(py)?.len() as isize;
+    fn __getitem__(slf: &Bound<'_, Self>, index: isize) -> PyResult<Py<PyAny>> {
+        let py = slf.py();
+        let held = slf.borrow().held.clone_for(py);
+        let length = held.read(py)?.len() as isize;
         let resolved = if index < 0 { index + length } else { index };
         if resolved < 0 || resolved >= length {
             return Err(PyIndexError::new_err("list index out of range"));
         }
-        wrap_span(py, self.held.descend(py, resolved as usize)?)
+        let part = match held {
+            // A loose sequence hands back a part of itself, which writes back
+            // into it.
+            Held::Loose(_) => Held::Part {
+                owner: slf.clone().unbind(),
+                path: vec![resolved as usize],
+            },
+            held => held.descend(py, resolved as usize)?,
+        };
+        wrap_span(py, part)
     }
 
-    fn __setitem__(
-        &mut self,
-        py: Python<'_>,
-        index: isize,
-        value: &Bound<'_, PyAny>,
-    ) -> PyResult<()> {
-        let mut span = self.held.read(py)?;
+    fn __setitem__(slf: &Bound<'_, Self>, index: isize, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        let py = slf.py();
+        // Read both sides first: music21's own docstring assigns one part of a
+        // sequence into another, and that part is a view of this very object.
+        let replacement = span_of(py, value)?;
+        let mut held = slf.borrow().held.clone_for(py);
+        let mut span = held.read(py)?;
         let length = span.len() as isize;
         let resolved = if index < 0 { index + length } else { index };
         if resolved < 0 || resolved >= length {
             return Err(PyIndexError::new_err("list index out of range"));
         }
-        let replacement = span_of(py, value)?;
         span.parts_mut()[resolved as usize] = replacement;
-        self.held.write(py, span)
+        held.write(py, span)?;
+        slf.borrow_mut().held = held;
+        Ok(())
     }
 
     fn __iter__(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
         let py = slf.py();
-        let held = &slf.borrow().held;
-        let length = held.read(py)?.len();
+        let length = slf.borrow().held.read(py)?.len();
         let mut parts = Vec::with_capacity(length);
         for index in 0..length {
-            parts.push(wrap_span(py, held.descend(py, index)?)?);
+            parts.push(Self::__getitem__(slf, index as isize)?);
         }
         Ok(pyo3::types::PyList::new(py, parts)?
             .into_any()
@@ -1144,17 +1244,28 @@ impl MeterSequence {
 
     /// music21's `partition`, which divides this span in place — so dividing
     /// the beats of a meter divides that meter.
-    fn partition(&mut self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<()> {
-        let span = self.held.read(py)?;
-        let divided = subdivided(&span, value)?;
-        self.held.write(py, divided)
+    #[pyo3(signature = (value, loadDefault = false))]
+    fn partition(
+        &mut self,
+        py: Python<'_>,
+        value: &Bound<'_, PyAny>,
+        loadDefault: bool,
+    ) -> PyResult<()> {
+        let mut span = self.held.read(py)?;
+        if let Ok(count) = value.extract::<usize>() {
+            span.partition_by_count(count, loadDefault)
+                .map_err(meter_error)?;
+        } else {
+            span = divided_by(py, &span, value)?;
+        }
+        self.held.write(py, span)
     }
 
     /// music21's `subdivide`, which hands back a new span.
     fn subdivide(&self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
         let span = self.held.read(py)?;
-        let divided = subdivided(&span, value)?;
-        wrap_span(py, Held::Loose(divided))
+        let divided = divided_by(py, &span, value)?;
+        sequence_of(py, divided)
     }
 
     /// music21's `subdivideByCount`.
@@ -1372,6 +1483,64 @@ impl MeterSequence {
             .map_err(meter_error)
     }
 
+    /// music21's `subdivideNestedHierarchy`: this span nested down to a
+    /// depth, whatever partitions it had.
+    #[pyo3(signature = (depth, firstPartitionForm = None, normalizeDenominators = true))]
+    fn subdivideNestedHierarchy(
+        &mut self,
+        py: Python<'_>,
+        depth: usize,
+        firstPartitionForm: Option<&Bound<'_, PyAny>>,
+        normalizeDenominators: bool,
+    ) -> PyResult<()> {
+        // music21 takes either a number or a sequence to divide by first, and
+        // reads the sequence's own first level as that number of parts.
+        let first = match firstPartitionForm.filter(|form| !form.is_none()) {
+            Some(form) => match form.extract::<UnsignedIntegerType>() {
+                Ok(count) => Some(count),
+                Err(_) => Some(span_of(py, form)?.len() as UnsignedIntegerType),
+            },
+            None => None,
+        };
+        let mut span = self.held.read(py)?;
+        span.subdivide_nested_hierarchy(depth, first, normalizeDenominators)
+            .map_err(meter_error)?;
+        self.held.write(py, span)
+    }
+
+    /// music21's `_subdivideNested`: one level of the nesting above, over the
+    /// spans handed in rather than over this one's own parts. Each is divided
+    /// where it sits, and what comes back is their parts.
+    ///
+    /// The receiver is taken as an object rather than borrowed, since
+    /// music21's own docstring hands a sequence to itself.
+    #[pyo3(signature = (processObjList, divisions = None))]
+    fn _subdivideNested(
+        slf: Py<Self>,
+        py: Python<'_>,
+        processObjList: &Bound<'_, PyAny>,
+        divisions: Option<usize>,
+    ) -> PyResult<Vec<Py<PyAny>>> {
+        // music21 uses `self` only to empty a cache the crate does not keep.
+        let _ = slf;
+        let mut deeper = Vec::new();
+        for item in processObjList.try_iter()? {
+            let item = item?;
+            let mut sequence = item.extract::<PyRefMut<'_, MeterSequence>>().map_err(|_| {
+                MeterException::new_err("a level is divided over sequences, which these are not")
+            })?;
+            let mut span = sequence.held.read(py)?;
+            span.subdivide_partitions_equal(divisions)
+                .map_err(meter_error)?;
+            sequence.held.write(py, span)?;
+            let length = sequence.held.read(py)?.len();
+            for index in 0..length {
+                deeper.push(wrap_span(py, sequence.held.descend(py, index)?)?);
+            }
+        }
+        Ok(deeper)
+    }
+
     /// music21's `getPartitionOptions`: the ways it conventionally divides a
     /// span of this length, in the order it prefers them.
     fn getPartitionOptions(&self, py: Python<'_>) -> PyResult<Vec<Vec<String>>> {
@@ -1429,6 +1598,26 @@ fn span_of(py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<RsMeterTerminal
         MeterException::new_err("a meter span is written as a ratio, or is one of ours")
     })?;
     RsMeterTerminal::from_ratio_string(&written).map_err(meter_error)
+}
+
+/// music21's `subdivide` dispatch: a count, a list of numerators, a list of
+/// ratios written out, or another sequence to be divided the way it is.
+fn divided_by(
+    py: Python<'_>,
+    span: &RsMeterTerminal,
+    value: &Bound<'_, PyAny>,
+) -> PyResult<RsMeterTerminal> {
+    if let Ok(other) = span_of(py, value)
+        && !other.is_empty()
+    {
+        let numerators: Vec<UnsignedIntegerType> = other
+            .parts()
+            .iter()
+            .map(RsMeterTerminal::numerator)
+            .collect();
+        return span.subdivide_by_list(&numerators).map_err(meter_error);
+    }
+    subdivided(span, value)
 }
 
 /// music21's `subdivide` dispatch: a count, a list of numerators, or a list
