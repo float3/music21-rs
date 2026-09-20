@@ -25,6 +25,14 @@ fn main() {
     time("Pitch::from_name(\"C#4\")", n, || {
         Pitch::from_name("C#4").unwrap()
     });
+    time("Pitch::from_name(\"C4\")", n, || {
+        Pitch::from_name("C4").unwrap()
+    });
+    let sharp = Pitch::from_name("C#4").unwrap();
+    time("  Pitch::clone (with an accidental)", n, || sharp.clone());
+    let plain = Pitch::from_name("C4").unwrap();
+    time("  Pitch::clone (without one)", n, || plain.clone());
+    time("  Pitch::name()", n, || sharp.name());
     time("Interval::from_name(\"P5\")", n, || {
         Interval::from_name("P5").unwrap()
     });

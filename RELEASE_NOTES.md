@@ -117,6 +117,28 @@ kept as music21 keeps it, one scale type where there were two, and no
 
 ## Changed
 
+- **Everything that reads a name or asks a chord a question is faster**, by
+  between two and thirty times, with no change to any answer -- music21's own
+  7,315 examples pass as they did. What it cost was allocation:
+
+  | | before | after |
+  | --- | --- | --- |
+  | `Interval::from_name("P5")` | 1151ns | 88ns |
+  | `Pitch::from_name("C#4")` | 584ns | 229ns |
+  | `Pitch::clone` (with an accidental) | 127ns | 18ns |
+  | `Chord::root`, `inversion`, `third` | ~450ns | ~45ns |
+  | `Chord::is_dominant_seventh` | 457ns | 15ns |
+  | `Chord::common_name` | 5025ns | 2123ns |
+  | `Chord::new("C4 E4 G4")` | 1340ns | 1002ns |
+
+  An accidental borrows its name and its modifier from the table rather than
+  owning two strings, so copying a pitch no longer allocates. An ordinary
+  pitch name and an ordinary interval name are read where they stand. The
+  root search fits in an array of seven, there being seven letters, instead
+  of a set, a map and three vectors. A chord counts its distinct pitch names
+  without writing any of them. A pitch class is written as a character rather
+  than through the formatting machinery. And a specifier is compared without
+  lowercasing eleven prefixes and eleven names to do it.
 - The report's headline speedup is the benchmark's median, with the median
   over music21's own suite beside it, and its tests tile no longer counts the
   tests music21 fails on its own as failing.

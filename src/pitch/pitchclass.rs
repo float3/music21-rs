@@ -199,9 +199,20 @@ impl Display for PitchClass {
 /// music21's `convertPitchClassToStr`: an integer pitch class as one
 /// character, `A` for ten and `B` for eleven, reduced modulo twelve first.
 pub fn convert_pitch_class_to_str(pc: IntegerType) -> String {
-    // Mimic Python's modulo: always a non-negative remainder.
-    let pc = pc.rem_euclid(12);
-    format!("{pc:X}")
+    pitch_class_char(pc).to_string()
+}
+
+/// The single character a whole pitch class is written with: `0` to `9`, then
+/// `A` for ten and `B` for eleven.
+///
+/// The string above is what music21's function answers, and a caller writing
+/// a whole set of them wants the characters rather than a `String` each --
+/// `<047>` used to cost three allocations and three trips through the
+/// formatting machinery.
+pub(crate) fn pitch_class_char(pc: IntegerType) -> char {
+    const WRITTEN: [char; 12] = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B'];
+    // Python's modulo: always a non-negative remainder.
+    WRITTEN[pc.rem_euclid(12) as usize]
 }
 
 fn pitch_class_to_string(pc: FloatType) -> String {

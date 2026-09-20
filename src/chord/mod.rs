@@ -708,6 +708,27 @@ impl Chord {
         self.pitch_refs().map(Pitch::name).collect()
     }
 
+    /// How many distinct pitch names the chord has, without writing any of
+    /// them: two pitches share a name when they share a letter and an
+    /// accidental, whatever octave each is in.
+    ///
+    /// music21 counts these to decide whether a chord is a triad, a seventh
+    /// or a ninth, so a chord is asked constantly -- and a name is a
+    /// `String`, so building the set cost an allocation a pitch and a tree
+    /// besides. The walk is quadratic in the notes, which for a chord is a
+    /// handful of comparisons of two characters and a modifier.
+    pub(crate) fn unique_pitch_name_count(&self) -> usize {
+        self.notes
+            .iter()
+            .enumerate()
+            .filter(|(index, note)| {
+                !self.notes[..*index]
+                    .iter()
+                    .any(|earlier| same_pitch_name(&earlier.pitch, &note.pitch))
+            })
+            .count()
+    }
+
     fn bass_index(&self) -> Option<usize> {
         self.notes
             .iter()
@@ -811,6 +832,13 @@ impl Chord {
         ];
         RATIOS[offset as usize % 12]
     }
+}
+
+/// Whether two pitches are written with the same letter and accidental,
+/// which is what having the same name is.
+fn same_pitch_name(left: &Pitch, right: &Pitch) -> bool {
+    left.step() == right.step()
+        && left.accidental_or_natural().modifier() == right.accidental_or_natural().modifier()
 }
 
 /// Tries to convert a supported chord input into notes.

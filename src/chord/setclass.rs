@@ -353,7 +353,7 @@ pub(super) fn format_pitch_classes(pitch_classes: &[u8]) -> String {
     let mut out = String::with_capacity(pitch_classes.len() + 2);
     out.push('<');
     for pitch_class in pitch_classes {
-        out.push_str(&crate::pitch::pitchclass::convert_pitch_class_to_str(
+        out.push(crate::pitch::pitchclass::pitch_class_char(
             IntegerType::from(*pitch_class),
         ));
     }

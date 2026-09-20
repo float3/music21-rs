@@ -314,7 +314,7 @@ pub(super) fn inversion_name_from_root(
     // `isIncompleteMinorTriad`, read from the root given rather than the
     // chord's own.
     let has = |step: u8| chord.chord_step_from(step, root).is_some();
-    let names = chord.unique_pitch_names().len();
+    let names = chord.unique_pitch_name_count();
     let triad = names == 3 && has(3) && has(5);
     // A root and its third alone: every note is one or the other.
     let incomplete_triad = names == 2

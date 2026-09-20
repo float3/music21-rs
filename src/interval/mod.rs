@@ -1023,7 +1023,60 @@ impl TryFrom<IntegerType> for Interval {
     }
 }
 
+/// The ordinary spelling of an interval name -- a specifier and a number, as
+/// `P5`, `m3` or `M-2` -- read where it stands.
+///
+/// Anything else is left to the reading below, which writes the name out
+/// several times over to find a written-out ordinal or a directional word in
+/// it. Nearly every name a caller writes is one of these, and this is the
+/// path a transposition, a scale and a chord symbol all take.
+fn parse_plain_interval_name(value: &str) -> Option<(Specifier, IntegerType)> {
+    let mut number: IntegerType = 0;
+    let mut digits = 0;
+    let mut descending = false;
+    let mut specifier: Option<(usize, usize)> = None;
+    for (index, character) in value.char_indices() {
+        if character == '-' {
+            // Every hyphen is dropped and the direction flips once, wherever
+            // in the name it stands -- which is music21's own reading.
+            descending = true;
+        } else if let Some(digit) = character.to_digit(10) {
+            number = number * 10 + digit as IntegerType;
+            digits += 1;
+        } else if digits > 0 || !character.is_ascii_alphabetic() {
+            // A letter after the number, or anything that is not a letter at
+            // all: not a name this reads.
+            return None;
+        } else {
+            let end = index + character.len_utf8();
+            specifier = Some((specifier.map_or(index, |(start, _)| start), end));
+        }
+    }
+    let (start, end) = specifier?;
+    if digits == 0 {
+        return None;
+    }
+    let specifier = Specifier::from_name(&value[start..end]).ok()?;
+    Some((specifier, if descending { -number } else { number }))
+}
+
+/// The two halves of an interval, from the specifier and the number a name
+/// came to.
+fn interval_parts(
+    specifier: Specifier,
+    generic_number: IntegerType,
+    inferred: bool,
+) -> Result<(DiatonicInterval, ChromaticInterval, bool)> {
+    let g_interval = GenericInterval::from_int(generic_number)?;
+    let d_interval = g_interval.get_diatonic(specifier);
+    let c_interval = d_interval.get_chromatic()?;
+    Ok((d_interval, c_interval, inferred))
+}
+
 fn parse_interval_name(mut value: String) -> Result<(DiatonicInterval, ChromaticInterval, bool)> {
+    if let Some((specifier, number)) = parse_plain_interval_name(&value) {
+        return interval_parts(specifier, number, false);
+    }
     let mut inferred = false;
     let mut dir_scale = 1;
 
@@ -1081,11 +1134,7 @@ fn parse_interval_name(mut value: String) -> Result<(DiatonicInterval, Chromatic
         .map_err(|_| Error::Interval(format!("cannot read an interval number from {value:?}")))?
         * dir_scale;
     let spec = Specifier::parse(&remain)?;
-
-    let g_interval = GenericInterval::from_int(generic_number)?;
-    let d_interval = g_interval.get_diatonic(spec);
-    let c_interval = d_interval.get_chromatic()?;
-    Ok((d_interval, c_interval, inferred))
+    interval_parts(spec, generic_number, inferred)
 }
 
 impl Interval {
