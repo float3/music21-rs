@@ -407,19 +407,24 @@ impl Pitch {
 
     /// Returns the pitch name with the octave suffix when one is set.
     pub fn name_with_octave(&self) -> String {
-        match self.octave {
-            Some(octave) => format!("{}{}", self.name(), octave),
-            None => self.name(),
+        let mut name = self.name();
+        if let Some(octave) = self.octave {
+            use std::fmt::Write;
+            let _ = write!(name, "{octave}");
         }
+        name
     }
 
     /// Returns the pitch name without octave, such as `"F#"` or `"B-"`.
     pub fn name(&self) -> String {
-        format!(
-            "{}{}",
-            self.step.as_char(),
-            self.accidental_or_natural().modifier()
-        )
+        // Written out rather than formatted: a name is a letter and a
+        // modifier, and `format!` costs more than the string it builds. Every
+        // comparison of two pitches by name goes through here.
+        let modifier = self.accidental_or_natural().modifier();
+        let mut name = String::with_capacity(1 + modifier.len());
+        name.push(self.step.as_char());
+        name.push_str(modifier);
+        name
     }
 
     fn name_setter(&mut self, usr_str: &str) -> Result<()> {
