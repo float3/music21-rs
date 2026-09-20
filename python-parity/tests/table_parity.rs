@@ -290,7 +290,9 @@ fn dynamics_match_music21() {
         .map(|expected| expected.mark.as_str())
         .collect();
     if listed != SHORT_NAMES {
-        mismatches.push(format!("shortNames: music21 {listed:?}, crate {SHORT_NAMES:?}"));
+        mismatches.push(format!(
+            "shortNames: music21 {listed:?}, crate {SHORT_NAMES:?}"
+        ));
     }
     for expected in &expectations.dynamic {
         let dynamic = Dynamic::new(expected.mark.as_str());
@@ -305,7 +307,10 @@ fn dynamics_match_music21() {
             expected.english_name.as_str(),
         );
         if ours != theirs {
-            mismatches.push(format!("{}: music21 {theirs:?}, crate {ours:?}", expected.mark));
+            mismatches.push(format!(
+                "{}: music21 {theirs:?}, crate {ours:?}",
+                expected.mark
+            ));
         }
     }
     for expected in &expectations.dynamic_decimal {

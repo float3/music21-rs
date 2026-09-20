@@ -81,7 +81,7 @@ pub mod note;
 pub mod pitch;
 /// Polyrhythm timing and pitch-set helpers.
 pub mod polyrhythm;
-/// Rests.
+/// Rests: silence with a written length.
 pub mod rest;
 /// Roman numeral parsing and compact harmonic analysis.
 pub mod roman;
