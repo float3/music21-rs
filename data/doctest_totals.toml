@@ -77,6 +77,12 @@ examples = 387
 tests = 22
 
 [[module]]
+module = "music21.meter.core"
+docstrings = 39
+examples = 386
+tests = 21
+
+[[module]]
 module = "music21.note"
 docstrings = 33
 examples = 341
@@ -117,6 +123,12 @@ module = "music21.tempo"
 docstrings = 27
 examples = 196
 tests = 17
+
+[[module]]
+module = "music21.tie"
+docstrings = 2
+examples = 13
+tests = 1
 
 [[module]]
 module = "music21.voiceLeading"

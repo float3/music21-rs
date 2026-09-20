@@ -145,6 +145,10 @@ enum Members {
     #[default]
     Methods,
     Classes,
+    /// The attributes a class declares in `__slots__`, for a class whose
+    /// whole API is attributes: music21's `Tie` has no method of its own at
+    /// all, so a scan for `def` lines finds nothing to track.
+    Slots,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -1094,5 +1098,43 @@ mod tests {
         assert!(!defines(rust, "is_tria", Members::Methods));
         assert!(defines(rust, "HarmonicMinor", Members::Classes));
         assert!(!defines(rust, "Minor", Members::Classes));
+    }
+
+    /// music21's `Tie` written as music21 writes it: a class whose whole API
+    /// is the attributes it declares, and not a `def` in sight.
+    #[test]
+    fn a_slotted_class_is_read_off_its_slots() {
+        let python = concat!(
+            "class Tie(prebase.ProtoM21Object, SlottedObjectMixin):
+",
+            "    __slots__ = (
+",
+            "        'id',
+",
+            "        'placement',
+",
+            "        'style',
+",
+            "        'type',
+",
+            "    )
+",
+            "    _DOC_ATTR = {}
+",
+            "
+",
+            "class Other:
+",
+            "    __slots__ = ('elsewhere',)
+",
+        );
+        assert_eq!(
+            class_slots(python, "Tie"),
+            ["id", "placement", "style", "type"]
+        );
+        // Another class's slots are its own, and a private one is nobody's
+        // API.
+        assert_eq!(class_slots(python, "Other"), ["elsewhere"]);
+        assert!(class_slots(python, "Missing").is_empty());
     }
 }

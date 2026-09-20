@@ -473,6 +473,19 @@ rust = ["src/meter/mod.rs", "src/meter/sequence.rs"]
 note = "Module-level helpers."
 
 [[class]]
+python = "tie.py"
+name = "Tie"
+rust = ["src/notation.rs"]
+note = "Two written notes sounding as one, and how the tie between them is drawn."
+members = "slots"
+
+[class.renames]
+type = "tie_type"
+
+[class.excluded]
+id = "the id music21 gives every object so that a stream can find it again; nothing here is held by a stream of Python objects"
+
+[[class]]
 python = "meter/core.py"
 name = "MeterTerminal"
 rust = ["src/meter/sequence.rs"]
