@@ -356,8 +356,23 @@ impl Pitch {
     }
 
     /// Builds a pitch from a name such as `"C#4"` or `"E-"`.
-    pub fn from_name(name: impl Into<String>) -> Result<Self> {
-        PitchOptions::new().name(name.into()).build()
+    pub fn from_name(name: impl AsRef<str>) -> Result<Self> {
+        // A name says the whole pitch, so it is read straight in. Going
+        // through the options leaves every step after the name with nothing
+        // to do, and a pitch is built from a name everywhere.
+        let mut pitch = Self {
+            step: PITCH_STEP,
+            accidental: None,
+            microtone: None,
+            octave: None,
+            spelling_is_inferred: false,
+            fundamental: None,
+        };
+        pitch.name_setter(name.as_ref())?;
+        // A name is a spelling somebody wrote, whatever the step setter made
+        // of it on the way through.
+        pitch.spelling_is_inferred = false;
+        Ok(pitch)
     }
 
     /// Builds a pitch from a pitch-space number.
@@ -392,19 +407,24 @@ impl Pitch {
 
     /// Returns the pitch name with the octave suffix when one is set.
     pub fn name_with_octave(&self) -> String {
-        match self.octave {
-            Some(octave) => format!("{}{}", self.name(), octave),
-            None => self.name(),
+        let mut name = self.name();
+        if let Some(octave) = self.octave {
+            use std::fmt::Write;
+            let _ = write!(name, "{octave}");
         }
+        name
     }
 
     /// Returns the pitch name without octave, such as `"F#"` or `"B-"`.
     pub fn name(&self) -> String {
-        format!(
-            "{}{}",
-            self.step.as_char(),
-            self.accidental_or_natural().modifier()
-        )
+        // Written out rather than formatted: a name is a letter and a
+        // modifier, and `format!` costs more than the string it builds. Every
+        // comparison of two pitches by name goes through here.
+        let modifier = self.accidental_or_natural().modifier();
+        let mut name = String::with_capacity(1 + modifier.len());
+        name.push(self.step.as_char());
+        name.push_str(modifier);
+        name
     }
 
     fn name_setter(&mut self, usr_str: &str) -> Result<()> {

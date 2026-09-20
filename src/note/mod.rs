@@ -38,7 +38,7 @@ struct Notation {
 
 impl Note {
     /// Builds a note from a pitch name such as `"C#4"` or `"E-"`.
-    pub fn from_name(name: impl Into<String>) -> Result<Self> {
+    pub fn from_name(name: impl AsRef<str>) -> Result<Self> {
         Pitch::from_name(name).map(Self::from_pitch)
     }
 
