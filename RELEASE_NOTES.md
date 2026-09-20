@@ -120,6 +120,16 @@ kept as music21 keeps it, one scale type where there were two, and no
 
 ## Changed
 
+- **A chord builds no Python object until something asks for one.** A chord
+  holds a `Note` and a `Pitch` object per note so that an edit through one of
+  them sticks, and it built every one of them on construction whether or not
+  anything ever looked. They are built a note at a time now, when that note is
+  wanted, and `inner` is the chord meanwhile -- which is what it always was.
+  Against music21 through the wheel, the median of the benchmark's 21 cases
+  goes from 14.3x to 24.1x on one machine: `commonName` 36.9us to 18.9us,
+  `forteClass` 30.9 to 14.1, `inversion` 28.1 to 11.4, `orderedPitchClasses`
+  29.0 to 11.9. Nothing a caller can see changes -- the same object still
+  comes back every time, and music21's own 7,315 examples pass as they did.
 - **Everything that reads a name or asks a chord a question is faster**, by
   between two and thirty times, with no change to any answer -- music21's own
   7,315 examples pass as they did. What it cost was allocation:

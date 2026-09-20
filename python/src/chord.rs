@@ -90,11 +90,22 @@ pub struct Chord {
     /// The pitches and the analysis read off them. Every method that asks a
     /// musical question goes through this.
     pub(crate) inner: RsChord,
-    /// The `Note` objects music21 hands back from `chord[i]` and `.notes`.
-    /// They are the same objects every time, so notation written through one
-    /// of them sticks; their pitches mirror `inner`, and structural changes
-    /// rebuild them from it.
-    notes: Vec<Py<Note>>,
+    /// The `Note` objects music21 hands back from `chord[i]` and `.notes`,
+    /// built the first time Python needs one and the same objects after
+    /// that, so notation written through one of them sticks.
+    ///
+    /// One slot a note, each empty until that note is wanted, and all of
+    /// them emptied by anything structural. Building one is two Python
+    /// objects -- a `Note` and its `Pitch` -- and a chord asked only musical
+    /// questions never needs any of them; a chord asked for its root needs
+    /// the one note carrying it. Nothing is lost by waiting: `inner` is the
+    /// chord, and the only thing these carry that it does not is what a
+    /// caller wrote through one of them, which nobody can have done before
+    /// there was one to write through.
+    ///
+    /// The list is empty until the first is built, and is as long as the
+    /// chord has notes from then on.
+    notes: Vec<Option<Py<Note>>>,
     /// The chord's own `Duration`, kept as the Python object music21 hands
     /// back so `chord.duration is d` holds and edits through it stick. It
     /// may be one of music21's own subclasses of it — a `GraceDuration` —
@@ -250,7 +261,8 @@ impl Chord {
     /// Builds the facade around a chord, giving each of its notes a Python
     /// object of its own.
     pub(crate) fn from_inner(py: Python<'_>, inner: RsChord) -> PyResult<Self> {
-        let mut chord = Self {
+        let _ = py;
+        let chord = Self {
             inner,
             notes: Vec::new(),
             duration: None,
@@ -263,7 +275,6 @@ impl Chord {
             beams: None,
             cache: Mutex::default(),
         };
-        chord.rebuild_notes(py)?;
         Ok(chord)
     }
 
@@ -275,22 +286,49 @@ impl Chord {
         // music21 makes the chord's duration before reading the notes, and
         // hands it to every note it builds. A duration given by keyword *is*
         // that object, so `chord.Chord('A4 C#5', duration=d).duration is d`.
-        let mut quick = true;
-        let mut shared = crate::installed_new(
-            py,
-            "music21.duration",
-            "Duration",
-            Duration::wrap(RsDuration::quarter()),
-        )?
-        .into_any();
-        if let Some(given) = duration_from_keywords(py, keywords)? {
-            quick = false;
-            shared = given;
-        }
-        let adopted = adopted_notes(py, notes, &shared, quick)?;
+        let given = duration_from_keywords(py, keywords)?;
+        // A chord written as a value -- a string, a list of numbers, a chord
+        // -- holds no object a caller could already be holding, so nothing is
+        // built for it here: not a note, not a pitch, and not the duration
+        // they would share. `made_notes` builds them the first time Python
+        // asks for one, and `duration_object` likewise.
+        let Some(shared) = given else {
+            // Nothing is built for a chord written as a value: not a note,
+            // not a pitch, and not the duration they would share. They are
+            // made the first time Python asks for one.
+            let adopted = adopted_notes(py, notes, None, true)?;
+            if let Some(inner) = adopted.known {
+                return Ok(Self::around(py, inner, Vec::new(), None));
+            }
+            if adopted.notes.is_empty() {
+                // An empty chord, which makes its own duration object if
+                // something ever asks for one.
+                return Ok(Self::around(
+                    py,
+                    RsChord::empty(),
+                    Vec::new(),
+                    adopted.taken,
+                ));
+            }
+            let duration = match adopted.taken {
+                Some(duration) => duration,
+                // Notes that share no duration -- the notes of another chord,
+                // which music21 copies as they are -- still leave this chord
+                // one of its own.
+                None => crate::installed_new(
+                    py,
+                    "music21.duration",
+                    "Duration",
+                    Duration::wrap(RsDuration::quarter()),
+                )?
+                .into_any(),
+            };
+            return Self::from_notes(py, adopted.notes, duration);
+        };
+        let adopted = adopted_notes(py, notes, Some(&shared), false)?;
         let duration = adopted.taken.unwrap_or(shared);
         match adopted.known {
-            Some(inner) => Ok(Self::around(py, inner, adopted.notes, duration)),
+            Some(inner) => Ok(Self::around(py, inner, Vec::new(), Some(duration))),
             None => Self::from_notes(py, adopted.notes, duration),
         }
     }
@@ -300,16 +338,23 @@ impl Chord {
     fn around(
         py: Python<'_>,
         mut inner: RsChord,
-        notes: Vec<Py<Note>>,
-        duration: Py<PyAny>,
+        notes: Vec<Option<Py<Note>>>,
+        duration: Option<Py<PyAny>>,
     ) -> Self {
-        if let Some(value) = crate::duration::duration_value_of(py, &duration) {
-            inner.set_duration(value);
+        match &duration {
+            Some(duration) => {
+                if let Some(value) = crate::duration::duration_value_of(py, duration) {
+                    inner.set_duration(value);
+                }
+            }
+            // The length a chord has when nobody said one, which is the
+            // length the object `duration` makes on first asking will carry.
+            None => inner.set_duration(RsDuration::quarter()),
         }
         Self {
             inner,
             notes,
-            duration: Some(duration),
+            duration,
             volume: None,
             stored_instrument: None,
             expressions: None,
@@ -334,7 +379,7 @@ impl Chord {
         }
         Ok(Self {
             inner,
-            notes,
+            notes: notes.into_iter().map(Some).collect(),
             duration: Some(duration),
             volume: None,
             stored_instrument: None,
@@ -374,9 +419,11 @@ impl Chord {
     }
 
     fn replace_inner(&mut self, py: Python<'_>, inner: RsChord) -> PyResult<()> {
+        let _ = py;
         self.inner = inner;
         self.clear_cache();
-        self.rebuild_notes(py)
+        self.rebuild_notes();
+        Ok(())
     }
 
     /// Throws away what the chord had worked out. music21 does this wherever
@@ -403,10 +450,17 @@ impl Chord {
     /// note and pitch objects of the survivors come through:
     /// `c3.pitches[0] is p1` after `removeRedundantPitches(inPlace=True)`.
     fn reduce_inner(&mut self, py: Python<'_>, inner: RsChord) -> PyResult<()> {
+        if self.notes.iter().all(Option::is_none) {
+            // Nothing holds a note of this chord, so there is none to keep.
+            self.inner = inner;
+            self.clear_cache();
+            self.rebuild_notes();
+            return Ok(());
+        }
         let mut spare: Vec<Option<Py<Note>>> = self
             .notes
             .iter()
-            .map(|note| Some(note.clone_ref(py)))
+            .map(|note| note.as_ref().map(|note| note.clone_ref(py)))
             .collect();
         let mut kept: Vec<Py<Note>> = Vec::with_capacity(inner.notes().len());
         for note in inner.notes() {
@@ -420,7 +474,7 @@ impl Chord {
             }
         }
         self.inner = inner;
-        self.notes = kept;
+        self.notes = kept.into_iter().map(Some).collect();
         self.clear_cache();
         Ok(())
     }
@@ -455,7 +509,7 @@ impl Chord {
         }
         let mut me = slf.borrow_mut();
         me.inner = rebuilt;
-        me.notes = notes;
+        me.notes = notes.into_iter().map(Some).collect();
         // The notes have changed, so nothing the chord had worked out about
         // itself still describes it. This is the path `add` takes, and
         // music21 has a test for exactly it: `testCacheClearedOnAdd` asks a
@@ -463,36 +517,112 @@ impl Chord {
         // again.
         me.clear_cache();
         drop(me);
-        Chord::note_objects(slf);
+        Chord::note_objects(slf)?;
         Ok(())
     }
 
-    fn rebuild_notes(&mut self, py: Python<'_>) -> PyResult<()> {
-        self.notes = self
-            .inner
+    /// Forgets the note objects, which anything that rewrites the chord has
+    /// to do: the notes it had are no longer its notes. They are built again
+    /// when something asks for one.
+    fn rebuild_notes(&mut self) {
+        self.notes.clear();
+    }
+
+    /// The note objects as values, building none: the objects' own where
+    /// they exist, and the chord's otherwise -- which is the same answer,
+    /// since what an object carries that `inner` does not is what a caller
+    /// wrote through it, and there was no object to write through.
+    fn note_values(&self, py: Python<'_>) -> Vec<RsNote> {
+        self.inner
             .notes()
             .iter()
-            .cloned()
-            .map(|note| Note::object(py, note))
-            .collect::<PyResult<_>>()?;
-        Ok(())
+            .enumerate()
+            .map(
+                |(index, note)| match self.notes.get(index).and_then(Option::as_ref) {
+                    Some(object) => object.borrow(py).synced(py),
+                    None => note.clone(),
+                },
+            )
+            .collect()
+    }
+
+    /// The note objects, made if this is the first time one is wanted.
+    ///
+    /// They are not told which chord holds them here; handing one out to
+    /// Python is what needs that, and that goes through `note_objects`.
+    /// The object for one of the chord's notes, made if this is the first
+    /// time it is wanted.
+    ///
+    /// It is not told which chord holds it here; handing one out to Python
+    /// is what needs that, and that goes through `note_objects`.
+    fn made_note(&mut self, py: Python<'_>, index: usize) -> PyResult<Option<Py<Note>>> {
+        let Some(note) = self.inner.notes().get(index).cloned() else {
+            return Ok(None);
+        };
+        self.open_slots();
+        if let Some(built) = &self.notes[index] {
+            return Ok(Some(built.clone_ref(py)));
+        }
+        let shared = self.duration_object(py)?;
+        let object = Self::note_sharing(py, note, &shared)?;
+        self.notes[index] = Some(object.clone_ref(py));
+        Ok(Some(object))
+    }
+
+    /// Every note as an object, making the ones nothing has asked for yet.
+    fn made_notes(&mut self, py: Python<'_>) -> PyResult<Vec<Py<Note>>> {
+        self.open_slots();
+        if self.notes.iter().all(Option::is_some) {
+            return Ok(self
+                .notes
+                .iter()
+                .flatten()
+                .map(|note| note.clone_ref(py))
+                .collect());
+        }
+        let shared = self.duration_object(py)?;
+        let values = self.inner.notes().to_vec();
+        let mut notes = Vec::with_capacity(values.len());
+        for (slot, note) in self.notes.iter_mut().zip(values) {
+            let object = match slot {
+                Some(built) => built.clone_ref(py),
+                None => {
+                    let object = Self::note_sharing(py, note, &shared)?;
+                    *slot = Some(object.clone_ref(py));
+                    object
+                }
+            };
+            notes.push(object);
+        }
+        Ok(notes)
+    }
+
+    /// A slot for each of the chord's notes, empty where there is no object.
+    fn open_slots(&mut self) {
+        if self.notes.len() != self.inner.notes().len() {
+            self.notes = (0..self.inner.notes().len()).map(|_| None).collect();
+        }
+    }
+
+    /// One note object, sharing the chord's duration -- music21's
+    /// `useDuration`, which is what makes `chord[0].duration is
+    /// chord.duration`.
+    fn note_sharing(py: Python<'_>, note: RsNote, shared: &Py<PyAny>) -> PyResult<Py<Note>> {
+        let object = Note::object(py, note)?;
+        object.borrow_mut(py).share_duration(py, shared);
+        Ok(object)
     }
 
     /// The note objects, each told which chord holds it. Handing a note out
     /// without that leaves its pitch unable to find its way back here, so
     /// every accessor that gives Python a note or a pitch goes through this.
-    fn note_objects(slf: &Bound<'_, Self>) -> Vec<Py<Note>> {
+    fn note_objects(slf: &Bound<'_, Self>) -> PyResult<Vec<Py<Note>>> {
         let py = slf.py();
-        let notes: Vec<Py<Note>> = slf
-            .borrow()
-            .notes
-            .iter()
-            .map(|note| note.clone_ref(py))
-            .collect();
+        let notes: Vec<Py<Note>> = slf.borrow_mut().made_notes(py)?;
         for note in &notes {
             Note::attach_to_chord(py, note, slf.as_any());
         }
-        notes
+        Ok(notes)
     }
 
     /// Takes the pitch one of our notes now carries: music21's chord and its
@@ -504,11 +634,12 @@ impl Chord {
         pitch: &RsPitch,
     ) -> PyResult<()> {
         let mut me = slf.borrow_mut();
-        let Some(index) = me
-            .notes
-            .iter()
-            .position(|held| held.as_ptr() == note.as_ptr())
-        else {
+        // Only a note object can be calling, so there are objects to find it
+        // among.
+        let Some(index) = me.notes.iter().position(|held| {
+            held.as_ref()
+                .is_some_and(|held| held.as_ptr() == note.as_ptr())
+        }) else {
             return Ok(());
         };
         me.inner.notes_mut()[index].set_pitch(pitch.clone());
@@ -525,8 +656,12 @@ impl Chord {
     /// fixed. Anything that works on the chord as a value works on this.
     pub(crate) fn synced_inner(&self, py: Python<'_>) -> RsChord {
         let mut chord = self.inner.clone();
-        for (held, note) in chord.notes_mut().iter_mut().zip(&self.notes) {
-            *held = note.borrow(py).synced(py);
+        // Only a note something has asked for can be carrying anything the
+        // chord does not have already.
+        for (held, object) in chord.notes_mut().iter_mut().zip(&self.notes) {
+            if let Some(object) = object {
+                *held = object.borrow(py).synced(py);
+            }
         }
         chord
     }
@@ -534,11 +669,7 @@ impl Chord {
     /// The chord with the notation its note objects carry written back onto
     /// it, for the few questions that read notation rather than pitch.
     fn with_note_notation(&self, py: Python<'_>) -> PyResult<RsChord> {
-        let notes: Vec<RsNote> = self
-            .notes
-            .iter()
-            .map(|note| note.borrow(py).synced(py))
-            .collect();
+        let notes = self.note_values(py);
         let mut chord = RsChord::new(notes.as_slice()).map_err(chord_error)?;
         if let Some(duration) = self.inner.duration() {
             chord.set_duration(duration.clone());
@@ -574,26 +705,26 @@ impl Chord {
     /// The note a per-note setter writes to: the one the target names, or
     /// the first note when music21 lets the target be left out.
     fn first_or_named(
-        &self,
+        &mut self,
         py: Python<'_>,
         target: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Py<Note>> {
         match target.filter(|target| !target.is_none()) {
             Some(target) => self.note_object(py, target),
             None => self
-                .notes
+                .made_notes(py)?
                 .first()
                 .map(|note| note.clone_ref(py))
                 .ok_or_else(|| ChordException::new_err("the chord has no notes")),
         }
     }
 
-    fn note_object(&self, py: Python<'_>, target: &Bound<'_, PyAny>) -> PyResult<Py<Note>> {
+    fn note_object(&mut self, py: Python<'_>, target: &Bound<'_, PyAny>) -> PyResult<Py<Note>> {
         let wanted = if let Ok(name) = target.extract::<String>() {
             RsPitch::from_name(name).map_err(chord_error)?
         } else if let Ok(index) = target.extract::<usize>() {
             return self
-                .notes
+                .made_notes(py)?
                 .get(index)
                 .map(|note| note.clone_ref(py))
                 .ok_or_else(|| PyIndexError::new_err("list index out of range"));
@@ -602,7 +733,7 @@ impl Chord {
             // two D4s in it is asked about one of them, not about the note.
             if let Ok(given) = target.extract::<Py<Pitch>>()
                 && let Some(note) = self
-                    .notes
+                    .made_notes(py)?
                     .iter()
                     .find(|note| Note::get_pitch(note.bind(py)).is(&given))
             {
@@ -610,13 +741,14 @@ impl Chord {
             }
             pitch_from_any(target)?
         };
-        self.notes
+        let notes = self.made_notes(py)?;
+        notes
             .iter()
             .find(|note| {
                 note.borrow(py).inner.pitch().name_with_octave() == wanted.name_with_octave()
             })
             .or_else(|| {
-                self.notes
+                notes
                     .iter()
                     .find(|note| note.borrow(py).inner.pitch().name() == wanted.name())
             })
@@ -671,10 +803,20 @@ impl Chord {
             return Ok(None);
         };
         let py = slf.py();
-        for note in Self::note_objects(slf) {
-            if note.borrow(py).inner.pitch() == pitch {
-                return Ok(Some(Note::get_pitch(note.bind(py))));
-            }
+        // Which note carries it is read off the chord itself; only the one
+        // that does is handed out, and only it has to be told which chord
+        // holds it.
+        let found = slf
+            .borrow()
+            .inner
+            .notes()
+            .iter()
+            .position(|note| note.pitch() == pitch);
+        if let Some(index) = found
+            && let Some(note) = slf.borrow_mut().made_note(py, index)?
+        {
+            Note::attach_to_chord(py, &note, slf.as_any());
+            return Ok(Some(Note::get_pitch(note.bind(py))));
         }
         Ok(Some(crate::installed_new(
             py,
@@ -769,21 +911,9 @@ struct AdoptedNotes {
 fn adopted_notes(
     py: Python<'_>,
     value: Option<&Bound<'_, PyAny>>,
-    shared: &Py<PyAny>,
+    shared: Option<&Py<PyAny>>,
     mut quick: bool,
 ) -> PyResult<AdoptedNotes> {
-    let fresh = |chord: &RsChord| -> PyResult<Vec<Py<Note>>> {
-        chord
-            .notes()
-            .iter()
-            .cloned()
-            .map(|note| {
-                let object = Note::object(py, note)?;
-                object.borrow_mut(py).share_duration(py, shared);
-                Ok(object)
-            })
-            .collect()
-    };
     let loose = |notes| {
         Ok(AdoptedNotes {
             notes,
@@ -791,10 +921,12 @@ fn adopted_notes(
             known: None,
         })
     };
-    // The same, for the readings that start from a chord the crate read.
+    // The same, for a chord the crate read out of a value. No note object is
+    // built for it: a value holds none a caller could be keeping, so whoever
+    // ends up wanting them can make them when something asks.
     let read = |chord: RsChord| -> PyResult<AdoptedNotes> {
         Ok(AdoptedNotes {
-            notes: fresh(&chord)?,
+            notes: Vec::new(),
             taken: None,
             known: Some(chord),
         })
@@ -824,7 +956,11 @@ fn adopted_notes(
     }
     let mut notes: Vec<Py<Note>> = Vec::with_capacity(items.len());
     let mut taken: Option<Py<PyAny>> = None;
-    let mut use_duration = Some(shared.clone_ref(py));
+    // The duration the notes built here share. A caller who named one said
+    // which; otherwise there is one to make, and it is made only once it is
+    // known that there is a note to give it to.
+    let mut use_duration = shared.map(|shared| shared.clone_ref(py));
+    let mut made: Option<Py<PyAny>> = None;
     for item in &items {
         if let Ok(note) = item.extract::<Py<Note>>() {
             if quick {
@@ -866,14 +1002,34 @@ fn adopted_notes(
             })?;
             Note::object(py, note)?
         };
-        if let Some(duration) = &use_duration {
-            built.borrow_mut(py).share_duration(py, duration);
+        if shared.is_some() || made.is_some() || (quick && taken.is_none()) {
+            let duration = match &use_duration {
+                Some(duration) => Some(duration.clone_ref(py)),
+                None if made.is_none() && taken.is_none() => {
+                    let fresh = crate::installed_new(
+                        py,
+                        "music21.duration",
+                        "Duration",
+                        Duration::wrap(RsDuration::quarter()),
+                    )?
+                    .into_any();
+                    made = Some(fresh.clone_ref(py));
+                    use_duration = Some(fresh.clone_ref(py));
+                    Some(fresh)
+                }
+                None => None,
+            };
+            if let Some(duration) = duration {
+                built.borrow_mut(py).share_duration(py, &duration);
+            }
         }
         notes.push(built);
     }
     Ok(AdoptedNotes {
         notes,
-        taken,
+        // A duration a note handed in gave, else the one made here for the
+        // notes to share, if any was needed.
+        taken: taken.or(made),
         known: None,
     })
 }
@@ -1053,7 +1209,7 @@ fn override_with(chord: &Bound<'_, Chord>, key: &str, value: &RsPitch) -> PyResu
 /// same note in the same octave, then the same note in any octave.
 fn chord_pitch_named(chord: &Bound<'_, Chord>, value: &RsPitch) -> PyResult<Option<Py<Pitch>>> {
     let py = chord.py();
-    let notes = Chord::note_objects(chord);
+    let notes = Chord::note_objects(chord)?;
     for note in &notes {
         if note.borrow(py).inner.pitch().name_with_octave() == value.name_with_octave() {
             return Ok(Some(Note::get_pitch(note.bind(py))));
@@ -1170,7 +1326,7 @@ impl Chord {
         &self,
         visit: pyo3::pyclass::PyVisit<'_>,
     ) -> Result<(), pyo3::pyclass::PyTraverseError> {
-        for held in &self.notes {
+        for held in self.notes.iter().flatten() {
             visit.call(held)?;
         }
         visit.call(&self.duration)?;
@@ -1286,7 +1442,7 @@ impl Chord {
     #[getter]
     fn get_pitches<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyTuple>> {
         let py = slf.py();
-        let pitches: Vec<Py<Pitch>> = Self::note_objects(slf)
+        let pitches: Vec<Py<Pitch>> = Self::note_objects(slf)?
             .iter()
             .map(|note| Note::get_pitch(note.bind(py)))
             .collect();
@@ -1307,7 +1463,7 @@ impl Chord {
 
     #[getter]
     fn get_notes<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyTuple>> {
-        PyTuple::new(slf.py(), Self::note_objects(slf))
+        PyTuple::new(slf.py(), Self::note_objects(slf)?)
     }
 
     /// music21 keeps the notes in `_notes` and its own code reaches for the
@@ -1315,7 +1471,7 @@ impl Chord {
     /// answers here too, as the chord's own note objects.
     #[getter]
     fn _notes<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyList>> {
-        PyList::new(slf.py(), Self::note_objects(slf))
+        PyList::new(slf.py(), Self::note_objects(slf)?)
     }
 
     #[setter]
@@ -1382,15 +1538,20 @@ impl Chord {
 
     fn __getitem__(slf: &Bound<'_, Self>, key: &Bound<'_, PyAny>) -> PyResult<Py<Note>> {
         let py = slf.py();
-        let notes = Self::note_objects(slf);
+        // An index names one note, and only that one is built.
         if let Ok(index) = key.extract::<isize>() {
-            let length = notes.len() as isize;
+            let length = slf.borrow().inner.notes().len() as isize;
             let resolved = if index < 0 { index + length } else { index };
-            if resolved < 0 || resolved >= length {
-                return Err(PyIndexError::new_err("list index out of range"));
-            }
-            return Ok(notes[resolved as usize].clone_ref(py));
+            let note = usize::try_from(resolved)
+                .ok()
+                .map(|index| slf.borrow_mut().made_note(py, index))
+                .transpose()?
+                .flatten()
+                .ok_or_else(|| PyIndexError::new_err("list index out of range"))?;
+            Note::attach_to_chord(py, &note, slf.as_any());
+            return Ok(note);
         }
+        let notes = Self::note_objects(slf)?;
         // The very pitch object first, as music21 looks: a chord with two
         // D4s in it is asked about one of them.
         if let Ok(given) = key.extract::<Py<Pitch>>()
@@ -1479,8 +1640,21 @@ impl Chord {
         } else {
             notes
         };
-        let mut held = Chord::note_objects(slf);
-        held.extend(adopted_notes(py, Some(notes), &shared, false)?.notes);
+        let mut held = Chord::note_objects(slf)?;
+        let adopted = adopted_notes(py, Some(notes), Some(&shared), false)?;
+        match adopted.known {
+            // Notes written as a value, which the reader does not build
+            // objects for: they are being added to a chord that holds its
+            // notes as objects, so here they are built.
+            Some(added) => {
+                for note in added.notes() {
+                    let object = Note::object(py, note.clone())?;
+                    object.borrow_mut(py).share_duration(py, &shared);
+                    held.push(object);
+                }
+            }
+            None => held.extend(adopted.notes),
+        }
         Self::take_notes(slf, held, runSort)
     }
 
@@ -2509,7 +2683,11 @@ impl Chord {
 
     /// music21's `getColor`: the note's own colour when it has one, and the
     /// chord's otherwise.
-    fn getColor(&self, py: Python<'_>, pitchTarget: &Bound<'_, PyAny>) -> PyResult<Option<String>> {
+    fn getColor(
+        &mut self,
+        py: Python<'_>,
+        pitchTarget: &Bound<'_, PyAny>,
+    ) -> PyResult<Option<String>> {
         let note = self.note_object(py, pitchTarget)?;
         let color = note.borrow(py).colour(py);
         Ok(color.or_else(|| self.colour(py)))
@@ -2535,7 +2713,7 @@ impl Chord {
         }
     }
 
-    fn getNotehead(&self, py: Python<'_>, p: &Bound<'_, PyAny>) -> PyResult<&'static str> {
+    fn getNotehead(&mut self, py: Python<'_>, p: &Bound<'_, PyAny>) -> PyResult<&'static str> {
         let note = self.note_object(py, p)?;
         let notehead = note.borrow(py).inner.notehead();
         Ok(notehead.as_str())
@@ -2552,7 +2730,7 @@ impl Chord {
         target.borrow_mut(py).set_notehead(nh)
     }
 
-    fn getNoteheadFill(&self, py: Python<'_>, p: &Bound<'_, PyAny>) -> PyResult<Option<bool>> {
+    fn getNoteheadFill(&mut self, py: Python<'_>, p: &Bound<'_, PyAny>) -> PyResult<Option<bool>> {
         let note = self.note_object(py, p)?;
         let fill = note.borrow(py).inner.notehead_fill();
         Ok(fill)
@@ -2569,7 +2747,7 @@ impl Chord {
         target.borrow_mut(py).set_noteheadFill(nh)
     }
 
-    fn getStemDirection(&self, py: Python<'_>, p: &Bound<'_, PyAny>) -> PyResult<&'static str> {
+    fn getStemDirection(&mut self, py: Python<'_>, p: &Bound<'_, PyAny>) -> PyResult<&'static str> {
         let note = self.note_object(py, p)?;
         let direction = note.borrow(py).inner.stem_direction();
         Ok(direction.as_str())
@@ -2586,7 +2764,7 @@ impl Chord {
         target.borrow_mut(py).set_stemDirection(stemDirection)
     }
 
-    fn getTie(&self, py: Python<'_>, p: &Bound<'_, PyAny>) -> PyResult<Option<Tie>> {
+    fn getTie(&mut self, py: Python<'_>, p: &Bound<'_, PyAny>) -> PyResult<Option<Tie>> {
         match self.note_object(py, p) {
             Ok(note) => {
                 let tie = note.borrow(py).inner.tie().cloned().map(Tie::wrap);
@@ -2613,7 +2791,7 @@ impl Chord {
     fn get_tie(slf: &Bound<'_, Self>, py: Python<'_>) -> PyResult<Option<Py<Tie>>> {
         // The first note that carries one, as its own object: music21's own
         // note-splitting writes through the tie it reads back.
-        for note in Chord::note_objects(slf) {
+        for note in Chord::note_objects(slf)? {
             if let Some(tie) = crate::note::Note::get_tie(note.bind(py))? {
                 return Ok(Some(tie));
             }
@@ -2629,7 +2807,7 @@ impl Chord {
         py: Python<'_>,
         value: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<()> {
-        for note in Chord::note_objects(slf) {
+        for note in Chord::note_objects(slf)? {
             crate::note::Note::set_tie(note.bind(py), value)?;
         }
         Ok(())
@@ -2637,7 +2815,7 @@ impl Chord {
 
     fn getVolume(slf: &Bound<'_, Self>, p: &Bound<'_, PyAny>) -> PyResult<Py<Volume>> {
         let py = slf.py();
-        let note = slf.borrow().note_object(py, p)?;
+        let note = slf.borrow_mut().note_object(py, p)?;
         // The note's own volume object, told that the chord is what it
         // belongs to: music21's `_getVolume(forceClient=self)`.
         let volume = crate::note::Note::get_volume(note.bind(py), py)?;
@@ -2711,9 +2889,9 @@ impl Chord {
     }
 
     fn hasComponentVolumes(&self, py: Python<'_>) -> bool {
-        self.notes
+        self.note_values(py)
             .iter()
-            .any(|note| note.borrow(py).inner.has_volume_information())
+            .any(RsNote::has_volume_information)
     }
 
     fn setVolumes(&mut self, py: Python<'_>, volumes: &Bound<'_, PyAny>) -> PyResult<()> {
@@ -2727,7 +2905,7 @@ impl Chord {
             ));
         }
         self.volume = None;
-        for (index, note) in self.notes.iter().enumerate() {
+        for (index, note) in self.made_notes(py)?.iter().enumerate() {
             note.borrow_mut(py)
                 .replace_volume(Some(parsed[index % parsed.len()].clone()));
         }
@@ -2743,9 +2921,9 @@ impl Chord {
         }
         let velocities: Vec<i32> = slf
             .borrow()
-            .notes
+            .note_values(py)
             .iter()
-            .filter_map(|note| note.borrow(py).inner.volume().velocity())
+            .filter_map(|note| note.volume().velocity())
             .collect();
         let inner = if velocities.is_empty() {
             RsVolume::new()
@@ -2771,7 +2949,10 @@ impl Chord {
     // the volume is the volume of.
     #[setter]
     fn set_volume(slf: &Bound<'_, Self>, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<()> {
-        for note in &slf.borrow().notes {
+        // Only a note that has an object of its own can be carrying a
+        // volume this one replaces; a chord with none carries the volume
+        // itself.
+        for note in slf.borrow().notes.iter().flatten() {
             note.borrow_mut(py).inner.set_volume(None);
         }
         let object = match value.extract::<Py<Volume>>() {
@@ -2794,8 +2975,8 @@ impl Chord {
     /// The chord's lyrics, which are carried by its first note: one `Lyric`
     /// per verse.
     #[getter]
-    fn get_lyrics<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
-        match self.notes.first() {
+    fn get_lyrics<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
+        match self.made_notes(py)?.first() {
             Some(note) => crate::note::Note::get_lyrics(note.bind(py)),
             None => Ok(PyList::empty(py)),
         }
@@ -2804,7 +2985,7 @@ impl Chord {
     // A chord is sung to one text, which its first note carries.
     #[setter]
     fn set_lyrics(&mut self, py: Python<'_>, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
-        if let Some(note) = self.notes.first() {
+        if let Some(note) = self.made_notes(py)?.first() {
             crate::note::Note::set_lyrics(note.bind(py), value)?;
         }
         Ok(())
@@ -2850,14 +3031,16 @@ impl Chord {
 
     #[getter]
     fn get_lyric(&self, py: Python<'_>) -> Option<String> {
-        self.notes
-            .first()
-            .and_then(|note| note.borrow(py).synced(py).lyric())
+        // What the chord is sung to is what its first note is sung to.
+        match self.notes.first().and_then(Option::as_ref) {
+            Some(note) => note.borrow(py).synced(py).lyric(),
+            None => self.inner.notes().first().and_then(RsNote::lyric),
+        }
     }
 
     #[setter]
     fn set_lyric(&mut self, py: Python<'_>, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
-        match self.notes.first() {
+        match self.made_notes(py)?.first() {
             Some(note) => note.borrow_mut(py).set_lyric(py, value),
             None => Ok(()),
         }
@@ -2874,7 +3057,7 @@ impl Chord {
         applyRaw: bool,
         identifier: Option<String>,
     ) -> PyResult<()> {
-        match self.notes.first() {
+        match self.made_notes(py)?.first() {
             Some(note) => note
                 .borrow_mut(py)
                 .insertLyric(text, index, applyRaw, identifier),
@@ -2891,7 +3074,7 @@ impl Chord {
         applyRaw: bool,
         lyricIdentifier: Option<String>,
     ) -> PyResult<()> {
-        match self.notes.first() {
+        match self.made_notes(py)?.first() {
             Some(note) => {
                 note.borrow_mut(py)
                     .addLyric(text, lyricNumber, applyRaw, lyricIdentifier)
@@ -3032,14 +3215,11 @@ impl Chord {
     /// rather than shared.
     pub(crate) fn copied_value(&mut self, py: Python<'_>) -> PyResult<Self> {
         self.settle_beams(py);
-        let mut copied = Self::from_inner(py, self.inner.clone())?;
-        // Each note is copied as it stands *now*, not as the chord's own
-        // value last saw it: a lyric written on a note lives in the object
-        // until something reads the note as a value, and a copy taken from
-        // the stale value would not be sung to anything.
-        for (target, source) in copied.notes.iter().zip(&self.notes) {
-            target.borrow_mut(py).inner = source.borrow(py).synced(py);
-        }
+        // Copied as the chord stands *now*, not as its own value last saw
+        // it: a lyric written on a note lives in that note's object until
+        // something reads the note as a value, and a copy taken from the
+        // stale value would not be sung to anything.
+        let mut copied = Self::from_inner(py, self.synced_inner(py))?;
         if let Some(duration) = &self.duration {
             copied.duration = Some(crate::duration::copied_duration(py, duration)?);
         }
