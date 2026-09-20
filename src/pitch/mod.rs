@@ -410,6 +410,39 @@ impl Pitch {
     fn name_setter(&mut self, usr_str: &str) -> Result<()> {
         let usr_str = usr_str.trim();
 
+        // A name written the ordinary way -- a letter, an accidental, an
+        // octave -- is read in place. Every pitch built from a string comes
+        // through here, and the general reading below builds three of them
+        // to take one apart.
+        let digits_at = usr_str.find(|character: char| character.is_ascii_digit());
+        let written_plainly = digits_at
+            .is_none_or(|at| at > 0 && usr_str[at..].bytes().all(|byte| byte.is_ascii_digit()));
+        if written_plainly {
+            let (name_part, octave_part) = usr_str.split_at(digits_at.unwrap_or(usr_str.len()));
+            let mut characters = name_part.chars();
+            let step = characters.next().ok_or(Error::Pitch(format!(
+                "Cannot make a name out of {name_part:?}"
+            )))?;
+            self.step_setter(StepName::try_from(step)?);
+            let accidental_str = characters.as_str();
+            if accidental_str.is_empty() {
+                self.accidental = None;
+            } else if let Some(accidental) = Accidental::from_standard(accidental_str) {
+                self.accidental_setter(accidental);
+            } else {
+                // Not one music21 has a name for, which `Accidental::new`
+                // says in the words music21 says it in.
+                self.accidental_setter(Accidental::new(accidental_str.to_string())?);
+            }
+            if !octave_part.is_empty() {
+                let octave = octave_part
+                    .parse::<IntegerType>()
+                    .map_err(|_| Error::Pitch(format!("Cannot parse {octave_part:?} to octave")))?;
+                self.octave_setter(Some(octave));
+            }
+            return Ok(());
+        }
+
         let mut pitch_part = String::with_capacity(usr_str.len());
         let mut octave_part = String::new();
         for character in usr_str.chars() {

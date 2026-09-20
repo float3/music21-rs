@@ -99,14 +99,17 @@ impl Specifier {
             "m" => return Ok(Specifier::Minor),
             _ => {}
         }
-        let lower = name.to_ascii_lowercase();
+        // Compared without writing either side out: lowercasing the name and
+        // both spellings of all eleven specifiers meant up to twenty-two
+        // allocations to read `P`, and every interval built from a name
+        // comes through here.
         if let Some(found) = Self::ALL.into_iter().find(|specifier| {
-            specifier.prefix().to_ascii_lowercase() == lower
-                || specifier.nice_name().to_ascii_lowercase() == lower
+            specifier.prefix().eq_ignore_ascii_case(name)
+                || specifier.nice_name().eq_ignore_ascii_case(name)
         }) {
             return Ok(found);
         }
-        match lower.as_str() {
+        match name.to_ascii_lowercase().as_str() {
             "double augmented" => Ok(Specifier::DoubleAugmented),
             "double diminished" => Ok(Specifier::DoubleDiminished),
             "triple augmented" => Ok(Specifier::TripleAugmented),

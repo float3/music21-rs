@@ -56,19 +56,19 @@ impl Chord {
     /// Returns whether two pitches share a pitch class under different names,
     /// such as `C#` and `D-`.
     pub fn has_any_enharmonic_spelled_pitches(&self) -> bool {
-        self.pitch_class_set().len() != self.unique_pitch_names().len()
+        self.pitch_class_set().len() != self.unique_pitch_name_count()
     }
 
     /// Returns whether the chord is exactly three distinct pitch names with a
     /// third and a fifth above the root, of any quality.
     pub fn is_triad(&self) -> bool {
-        self.unique_pitch_names().len() == 3 && self.third().is_some() && self.fifth().is_some()
+        self.unique_pitch_name_count() == 3 && self.third().is_some() && self.fifth().is_some()
     }
 
     /// Returns whether the chord is exactly four distinct pitch names with a
     /// third, fifth and seventh above the root, of any quality.
     pub fn is_seventh(&self) -> bool {
-        self.unique_pitch_names().len() == 4
+        self.unique_pitch_name_count() == 4
             && self.third().is_some()
             && self.fifth().is_some()
             && self.seventh().is_some()
@@ -342,7 +342,7 @@ impl Chord {
     /// Returns whether the chord is five distinct pitch names with a third,
     /// fifth, seventh and ninth above the root.
     pub fn is_ninth(&self) -> bool {
-        self.unique_pitch_names().len() == 5
+        self.unique_pitch_name_count() == 5
             && self.third().is_some()
             && self.fifth().is_some()
             && self.seventh().is_some()
@@ -383,7 +383,7 @@ impl Chord {
             .pitch_refs()
             .map(Pitch::step)
             .collect::<std::collections::BTreeSet<_>>();
-        steps.len() != self.unique_pitch_names().len()
+        steps.len() != self.unique_pitch_name_count()
     }
 
     pub(super) fn is_augmented_sixth_of_type(

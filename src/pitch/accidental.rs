@@ -1,6 +1,7 @@
 use crate::defaults::{FloatType, IntegerType};
 use crate::display::{DisplayLocation, DisplaySize, DisplayStyle, DisplayType};
 use crate::error::{Error, Result};
+use std::borrow::Cow;
 
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
@@ -313,8 +314,12 @@ pub struct Accidental {
     display_location: DisplayLocation,
     #[cfg_attr(feature = "serde", serde(default))]
     color: Option<String>,
-    name: String,
-    modifier: String,
+    /// Borrowed from the table for every accidental music21 has a name for,
+    /// which is all but the ones a caller writes itself: a pitch is copied
+    /// constantly, and two owned strings made every copy of one carrying an
+    /// accidental cost two allocations.
+    name: Cow<'static, str>,
+    modifier: Cow<'static, str>,
     pub(crate) alter: FloatType,
 }
 
@@ -394,13 +399,32 @@ impl Accidental {
             display_size: DisplaySize::Full,
             display_location: DisplayLocation::Normal,
             color: None,
-            name: "".to_string(),
-            modifier: "".to_string(),
+            name: Cow::Borrowed(""),
+            modifier: Cow::Borrowed(""),
             alter: 0.0,
         };
 
         acci.set_specifier(specifier, false)?;
         Ok(acci)
+    }
+
+    /// The accidental a standard name, modifier or symbol names, built
+    /// without a string of any kind: everything it carries is borrowed from
+    /// the table. A name music21 does not have answers `None`, which
+    /// [`Accidental::new`] then reports.
+    pub(crate) fn from_standard(text: &str) -> Option<Self> {
+        let known = AccidentalEnum::from_string(text)?;
+        Some(Self {
+            display_type: DisplayType::Normal,
+            display_status: None,
+            display_style: DisplayStyle::Normal,
+            display_size: DisplaySize::Full,
+            display_location: DisplayLocation::Normal,
+            color: None,
+            name: Cow::Borrowed(known.to_name()),
+            modifier: Cow::Borrowed(known.to_modifier()),
+            alter: known.to_alter(),
+        })
     }
 
     /// Returns the standard accidental names known to music21.
@@ -465,9 +489,9 @@ impl Accidental {
         }
 
         if let Some(accidental) = Self::specifier_to_standard(&specifier) {
-            self.name = accidental.to_name().to_string();
+            self.name = Cow::Borrowed(accidental.to_name());
             self.alter = accidental.to_alter();
-            self.modifier = accidental.to_modifier().to_string();
+            self.modifier = Cow::Borrowed(accidental.to_modifier());
             return Ok(());
         }
 
@@ -478,7 +502,7 @@ impl Accidental {
         }
 
         match specifier {
-            AccidentalSpecifier::Name(name) => self.name = name.to_lowercase(),
+            AccidentalSpecifier::Name(name) => self.name = Cow::Owned(name.to_lowercase()),
             AccidentalSpecifier::Alter(alter) => self.alter = alter,
             AccidentalSpecifier::Accidental(_) => unreachable!(),
         }
@@ -487,7 +511,11 @@ impl Accidental {
 
     fn specifier_to_standard(specifier: &AccidentalSpecifier) -> Option<AccidentalEnum> {
         match specifier {
-            AccidentalSpecifier::Name(name) => AccidentalEnum::from_string(&name.to_lowercase()),
+            // Read as written first: a name is nearly always lowercase
+            // already, and lowercasing it to find out costs an allocation
+            // on the way to every accidental.
+            AccidentalSpecifier::Name(name) => AccidentalEnum::from_string(name)
+                .or_else(|| AccidentalEnum::from_string(&name.to_lowercase())),
             AccidentalSpecifier::Alter(alter) => AccidentalEnum::from_float(*alter),
             AccidentalSpecifier::Accidental(accidental) => {
                 AccidentalEnum::from_name(accidental.name())
@@ -527,11 +555,11 @@ impl Accidental {
     pub fn set_modifier(&mut self, modifier: impl Into<String>) {
         let modifier = modifier.into();
         if let Some(accidental) = AccidentalEnum::from_modifier(&modifier) {
-            self.name = accidental.to_name().to_string();
+            self.name = Cow::Borrowed(accidental.to_name());
             self.alter = accidental.to_alter();
-            self.modifier = accidental.to_modifier().to_string();
+            self.modifier = Cow::Borrowed(accidental.to_modifier());
         } else {
-            self.modifier = modifier;
+            self.modifier = Cow::Owned(modifier);
         }
     }
 
@@ -539,7 +567,7 @@ impl Accidental {
     pub fn unicode(&self) -> String {
         AccidentalEnum::from_modifier(&self.modifier)
             .map(|accidental| accidental.to_unicode().to_string())
-            .unwrap_or_else(|| self.modifier.clone())
+            .unwrap_or_else(|| self.modifier.to_string())
     }
 
     /// Returns the most complete accidental name. This is currently the same as
@@ -551,14 +579,14 @@ impl Accidental {
     /// Returns whether this accidental describes a twelve-tone alteration.
     pub fn is_twelve_tone(&self) -> bool {
         !matches!(
-            self.name.as_str(),
+            &*self.name,
             "half-sharp" | "one-and-a-half-sharp" | "half-flat" | "one-and-a-half-flat"
         )
     }
 
     /// Sets `name` without updating `alter` or `modifier`.
     pub fn set_name_independently(&mut self, name: impl Into<String>) {
-        self.name = name.into();
+        self.name = Cow::Owned(name.into());
     }
 
     /// Sets `alter` without updating `name` or `modifier`.
@@ -568,7 +596,7 @@ impl Accidental {
 
     /// Sets `modifier` without updating `name` or `alter`.
     pub fn set_modifier_independently(&mut self, modifier: impl Into<String>) {
-        self.modifier = modifier.into();
+        self.modifier = Cow::Owned(modifier.into());
     }
 
     /// Writes one part of the accidental without the other two following
