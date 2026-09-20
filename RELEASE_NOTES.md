@@ -45,6 +45,9 @@ kept as music21 keeps it, one scale type where there were two, and no
   `#[non_exhaustive]`, so a new variant is a compile error in a caller's
   `match` rather than something a wildcard arm swallows.
 - `ChordSymbol::duration` returns `&Duration`.
+- `Pitch::from_name` and `Note::from_name` take `impl AsRef<str>`. A `&str`,
+  a `String` or a `&String` passes as before; only a type that could be
+  turned into a `String` without being one has to say so now.
 - `tuningsystem::FORTYTHREE_TONE`, an alias of `FORTY_THREE_TONE`, is gone.
 - `Duration::add_duration_tuple` keeps the values it is given. A quarter with
   a half and a quarter tied on is three written values, and has no single
@@ -124,12 +127,12 @@ kept as music21 keeps it, one scale type where there were two, and no
   | | before | after |
   | --- | --- | --- |
   | `Interval::from_name("P5")` | 1151ns | 88ns |
-  | `Pitch::from_name("C#4")` | 584ns | 229ns |
+  | `Pitch::from_name("C#4")` | 584ns | 136ns |
   | `Pitch::clone` (with an accidental) | 127ns | 18ns |
   | `Chord::root`, `inversion`, `third` | ~450ns | ~45ns |
   | `Chord::is_dominant_seventh` | 457ns | 15ns |
   | `Chord::common_name` | 5025ns | 2123ns |
-  | `Chord::new("C4 E4 G4")` | 1340ns | 1002ns |
+  | `Chord::new("C4 E4 G4")` | 1340ns | 708ns |
 
   An accidental borrows its name and its modifier from the table rather than
   owning two strings, so copying a pitch no longer allocates. An ordinary
@@ -139,6 +142,9 @@ kept as music21 keeps it, one scale type where there were two, and no
   without writing any of them. A pitch class is written as a character rather
   than through the formatting machinery. And a specifier is compared without
   lowercasing eleven prefixes and eleven names to do it.
+- `Pitch::from_name` and `Note::from_name` take `impl AsRef<str>` rather than
+  `impl Into<String>`, so a name is read where the caller has it instead of
+  being copied first. Everything that could be passed before still can.
 - The report's headline speedup is the benchmark's median, with the median
   over music21's own suite beside it, and its tests tile no longer counts the
   tests music21 fails on its own as failing.
