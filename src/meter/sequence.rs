@@ -301,6 +301,10 @@ impl MeterTerminal {
     /// numerators come to its numerator, and against a finer one where they
     /// come to a multiple of it — `[1, 1, 1, 1]` of a `2/4` bar is four
     /// eighths, not four quarters.
+    ///
+    /// Failing both, it looks for a division of its own whose numerators are
+    /// the ones asked for, which is how `[1, 1]` of a `4/4` bar comes out as
+    /// two halves and `[1]` as a whole.
     pub fn partition_by_list(&mut self, numerators: &[UnsignedIntegerType]) -> Result<()> {
         if numerators.is_empty() {
             return Err(Error::Meter(
@@ -318,6 +322,22 @@ impl MeterTerminal {
                 .map(|numerator| format!("{numerator}/{denominator}"))
                 .collect();
             let borrowed: Vec<&str> = parts.iter().map(String::as_str).collect();
+            return self.partition_by_parts(&borrowed);
+        }
+        let asked: Vec<UnsignedIntegerType> = numerators.to_vec();
+        let matching = self.division_options().into_iter().find(|option| {
+            option
+                .iter()
+                .map(|part| {
+                    part.split('/')
+                        .next()
+                        .and_then(|numerator| numerator.parse().ok())
+                })
+                .collect::<Option<Vec<UnsignedIntegerType>>>()
+                == Some(asked.clone())
+        });
+        if let Some(option) = matching {
+            let borrowed: Vec<&str> = option.iter().map(String::as_str).collect();
             return self.partition_by_parts(&borrowed);
         }
         Err(Error::Meter(format!(

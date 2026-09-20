@@ -886,6 +886,17 @@ pub struct MeterSequence {
     held: Held,
 }
 
+/// A weight as music21 prints it: a whole one as an `int`, anything else as a
+/// `float`. music21 keeps the very number a caller handed it, so a weight set
+/// to one reads back `1` and not `1.0`. Only the weights of a level go
+/// through this -- music21's own arithmetic answers floats everywhere else.
+fn as_number(py: Python<'_>, value: FloatType) -> PyResult<Py<PyAny>> {
+    if value.fract() == 0.0 && value.abs() < 9.007_199_254_740_992e15 {
+        return Ok((value as i64).into_pyobject(py)?.into_any().unbind());
+    }
+    Ok(value.into_pyobject(py)?.into_any().unbind())
+}
+
 /// A span as music21's `MeterSequence`, whatever it holds: what a caller
 /// built, and what every method handing back a divided span answers with.
 fn sequence_of(py: Python<'_>, span: RsMeterTerminal) -> PyResult<Py<PyAny>> {
@@ -967,13 +978,20 @@ impl MeterTerminal {
         Ok(self.held.read(py)?.denominator())
     }
 
-    /// music21's `denominator` setter, over the same numerator.
+    /// music21's `denominator` setter, over the same numerator. music21 only
+    /// writes a span over the denominators it has note values for, so a
+    /// seventh is refused here even though `MeterTerminal('4/3')` is read.
     #[setter]
     fn set_denominator(
         &mut self,
         py: Python<'_>,
         denominator: UnsignedIntegerType,
     ) -> PyResult<()> {
+        if !matches!(denominator, 1 | 2 | 4 | 8 | 16 | 32 | 64 | 128) {
+            return Err(MeterException::new_err(format!(
+                "bad denominator value: {denominator}"
+            )));
+        }
         let span = self.held.read(py)?;
         let rewritten = RsMeterTerminal::new(span.numerator(), denominator).map_err(meter_error)?;
         self.held.write(py, rewritten)
@@ -1013,13 +1031,19 @@ impl MeterTerminal {
     fn subdivideByList(
         &self,
         py: Python<'_>,
-        numeratorList: Vec<UnsignedIntegerType>,
+        numeratorList: &Bound<'_, PyAny>,
     ) -> PyResult<Py<PyAny>> {
-        let divided = self
-            .held
-            .read(py)?
-            .subdivide_by_list(&numeratorList)
-            .map_err(meter_error)?;
+        let span = self.held.read(py)?;
+        let divided = if let Ok(numerators) = numeratorList.extract::<Vec<UnsignedIntegerType>>() {
+            span.subdivide_by_list(&numerators).map_err(meter_error)?
+        } else {
+            // The parts written out, as `['2/4', '1/4']`.
+            let written: Vec<String> = numeratorList.extract()?;
+            let borrowed: Vec<&str> = written.iter().map(String::as_str).collect();
+            let mut divided = span.clone();
+            divided.partition_by_parts(&borrowed).map_err(meter_error)?;
+            divided
+        };
         sequence_of(py, divided)
     }
 
@@ -1444,14 +1468,13 @@ impl MeterSequence {
 
     /// music21's `getLevelWeight`: what each part of a level weighs.
     #[pyo3(signature = (level = 0))]
-    fn getLevelWeight(&self, py: Python<'_>, level: usize) -> PyResult<Vec<FloatType>> {
-        Ok(self
-            .held
+    fn getLevelWeight(&self, py: Python<'_>, level: usize) -> PyResult<Vec<Py<PyAny>>> {
+        self.held
             .read(py)?
             .level_list(level, true)
             .iter()
-            .map(RsMeterTerminal::weight)
-            .collect())
+            .map(|part| as_number(py, part.weight()))
+            .collect()
     }
 
     /// music21's `setLevelWeight`, which weighs a level part by part.
@@ -1543,8 +1566,16 @@ impl MeterSequence {
 
     /// music21's `getPartitionOptions`: the ways it conventionally divides a
     /// span of this length, in the order it prefers them.
-    fn getPartitionOptions(&self, py: Python<'_>) -> PyResult<Vec<Vec<String>>> {
-        Ok(self.held.read(py)?.division_options())
+    fn getPartitionOptions<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
+        // music21 hands back a tuple of tuples, and its docstrings print it.
+        let options = self
+            .held
+            .read(py)?
+            .division_options()
+            .into_iter()
+            .map(|option| PyTuple::new(py, option))
+            .collect::<PyResult<Vec<_>>>()?;
+        PyTuple::new(py, options)
     }
 
     /// music21's `_getFlatList`: every terminal of this sequence, however
