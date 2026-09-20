@@ -1119,11 +1119,10 @@ impl MeterTerminal {
     /// music21's `ratioEqual`: whether two spans are written the same, which
     /// is not whether they last the same time — `3/4` and `6/8` are not.
     fn ratioEqual(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<bool> {
-        let span = self.held.read(py)?;
         let Ok(other) = span_of(py, other) else {
             return Ok(false);
         };
-        Ok(span.numerator() == other.numerator() && span.denominator() == other.denominator())
+        Ok(self.held.read(py)?.ratio_equal(&other))
     }
 
     /// music21's `subdivideByList`, the parts given as their numerators.
@@ -1149,17 +1148,11 @@ impl MeterTerminal {
     /// music21's `subdivideByOther`: this span divided into the one span
     /// another sequence is, so the other becomes its only part.
     fn subdivideByOther(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
-        let span = self.held.read(py)?;
-        let other = span_of(py, other)?;
-        if (other.quarter_length() - span.quarter_length()).abs() > 1e-9 {
-            return Err(MeterException::new_err(format!(
-                "cannot insert {other} into space of {span}"
-            )));
-        }
-        let mut divided =
-            RsMeterTerminal::new(span.numerator(), span.denominator()).map_err(meter_error)?;
-        divided.set_weight(span.weight());
-        divided.parts_mut().push(other);
+        let divided = self
+            .held
+            .read(py)?
+            .subdivide_by_other(&span_of(py, other)?)
+            .map_err(meter_error)?;
         sequence_of(py, divided)
     }
 
@@ -1435,17 +1428,11 @@ impl MeterSequence {
     /// music21's `subdivideByOther`: this span divided into the one span
     /// another sequence is, so the other becomes its only part.
     fn subdivideByOther(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
-        let span = self.held.read(py)?;
-        let other = span_of(py, other)?;
-        if (other.quarter_length() - span.quarter_length()).abs() > 1e-9 {
-            return Err(MeterException::new_err(format!(
-                "cannot insert {other} into space of {span}"
-            )));
-        }
-        let mut divided =
-            RsMeterTerminal::new(span.numerator(), span.denominator()).map_err(meter_error)?;
-        divided.set_weight(span.weight());
-        divided.parts_mut().push(other);
+        let divided = self
+            .held
+            .read(py)?
+            .subdivide_by_other(&span_of(py, other)?)
+            .map_err(meter_error)?;
         sequence_of(py, divided)
     }
 
@@ -1490,11 +1477,20 @@ impl MeterSequence {
     /// music21's `flatten`: every terminal of this sequence, however deep,
     /// as one sequence of them.
     fn flatten(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        let span = self.held.read(py)?;
-        let mut flattened =
-            RsMeterTerminal::new(span.numerator(), span.denominator()).map_err(meter_error)?;
-        *flattened.parts_mut() = span.flattened();
+        let flattened = self.held.read(py)?.flatten().map_err(meter_error)?;
         sequence_of(py, flattened)
+    }
+
+    /// music21's `flatWeight`: what each terminal of this sequence weighs,
+    /// however deep it sits.
+    #[getter]
+    fn flatWeight(&self, py: Python<'_>) -> PyResult<Vec<Py<PyAny>>> {
+        self.held
+            .read(py)?
+            .flat_weights()
+            .into_iter()
+            .map(|weight| as_number(py, weight))
+            .collect()
     }
 
     /// music21's `load`, which is its constructor over again on a sequence
@@ -1571,13 +1567,8 @@ impl MeterSequence {
         other: &Bound<'_, PyAny>,
     ) -> PyResult<()> {
         let mut span = self.held.read(py)?;
-        let other = span_of(py, other)?;
-        let numerators: Vec<UnsignedIntegerType> = other
-            .parts()
-            .iter()
-            .map(RsMeterTerminal::numerator)
-            .collect();
-        span.partition_by_list(&numerators).map_err(meter_error)?;
+        span.partition_by_other(&span_of(py, other)?)
+            .map_err(meter_error)?;
         self.partition_changed();
         self.held.write(py, span)
     }
@@ -1661,22 +1652,22 @@ impl MeterSequence {
     fn getLevelWeight(&self, py: Python<'_>, level: usize) -> PyResult<Vec<Py<PyAny>>> {
         self.held
             .read(py)?
-            .level_list(level, true)
-            .iter()
+            .level_weight(level)
+            .into_iter()
             // The same level unflattened, which says which of those weights
             // came from a span with parts: a level read flat answers a
             // terminal for one of those, and its weight tells nothing of
             // where it came from.
             .zip(self.held.read(py)?.level_list(level, false))
-            .map(|(part, unflattened)| {
+            .map(|(weight, unflattened)| {
                 // A span nothing divides answers the weight it was given, so
                 // a level weighed `[2, 3]` reads back `2` and not `2.0`. One
                 // with parts answers what they come to, which is arithmetic,
                 // and so a float however whole it lands.
                 if unflattened.is_empty() {
-                    as_number(py, part.weight())
+                    as_number(py, weight)
                 } else {
-                    Ok(part.weight().into_pyobject(py)?.into_any().unbind())
+                    Ok(weight.into_pyobject(py)?.into_any().unbind())
                 }
             })
             .collect()
@@ -1691,7 +1682,7 @@ impl MeterSequence {
         level: usize,
     ) -> PyResult<()> {
         let mut span = self.held.read(py)?;
-        span.set_weights_at_level(level, &weightList)
+        span.set_level_weight(level, &weightList)
             .map_err(meter_error)?;
         // The weights of a level are what a level list carries, so what was
         // worked out before is no longer what this sequence says.
@@ -1790,7 +1781,7 @@ impl MeterSequence {
         let options = self
             .held
             .read(py)?
-            .division_options()
+            .partition_options()
             .into_iter()
             .map(|option| PyTuple::new(py, option))
             .collect::<PyResult<Vec<_>>>()?;
@@ -1823,7 +1814,7 @@ impl MeterSequence {
         let _ = includeCoincidentBoundaries;
         self.held
             .read(py)?
-            .address_of_offset(qLenPos)
+            .offset_to_address(qLenPos)
             .map_err(meter_error)
     }
 

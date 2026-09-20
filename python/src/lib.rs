@@ -32,6 +32,7 @@ macro_rules! error_into {
 pub mod chord;
 pub mod chordtables;
 pub mod duration;
+pub mod dynamics;
 pub mod figuredbass;
 pub mod harmony;
 pub mod interval;
@@ -1117,6 +1118,11 @@ exceptions![
         serial::SerialException,
         Some("music21.serial")
     ),
+    (
+        "DynamicException",
+        dynamics::DynamicException,
+        Some("music21.dynamics")
+    ),
     ("SieveException", sieve::SieveException, None),
     ("TempoException", tempo::TempoException, None),
     ("TieException", notation::TieException, Some("music21.tie")),
@@ -1195,6 +1201,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     duration::register(m)?;
     chord::register(m)?;
     chordtables::register(m)?;
+    dynamics::register(m)?;
     // The other end of every pickle these classes write. It belongs here
     // rather than on the wheel's module alone: `python-parity` builds its
     // own module out of this one, and a score frozen under that harness --

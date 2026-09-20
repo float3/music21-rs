@@ -1001,7 +1001,7 @@ impl TimeSignature {
     /// Weighs the accent partitions of a level, looping the weights given
     /// over them: music21's `setAccentWeight`.
     pub fn set_accent_weight(&mut self, weights: &[FloatType], level: usize) -> Result<()> {
-        self.accent_sequence.set_weights_at_level(level, weights)
+        self.accent_sequence.set_level_weight(level, weights)
     }
 
     /// [`Self::accent_weight`] with music21's two options. With

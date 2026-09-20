@@ -110,6 +110,7 @@ pub(super) fn claimed_names(
                 None => module_functions(&python),
             },
             Members::Classes => module_classes(&python, class.suffix.as_deref()),
+            Members::Slots => class_slots(&python, class.name.as_deref().unwrap_or_default()),
         };
         // Every name music21 uses anywhere, whatever the crate did with it.
         // music21 reaches a member through inheritance that its own class body
@@ -157,6 +158,7 @@ pub(super) fn scan_features(
             (Some(name), _) => name.clone(),
             (None, Members::Methods) => format!("{} functions", class.python),
             (None, Members::Classes) => format!("{} classes", class.python),
+            (None, Members::Slots) => format!("{} attributes", class.python),
         };
 
         let members = match class.members {
@@ -165,6 +167,7 @@ pub(super) fn scan_features(
                 None => module_functions(&python),
             },
             Members::Classes => module_classes(&python, class.suffix.as_deref()),
+            Members::Slots => class_slots(&python, class.name.as_deref().unwrap_or_default()),
         };
         if members.is_empty() {
             problems.push(format!("{label}: nothing found in {}", class.python));
@@ -294,6 +297,46 @@ pub(super) fn class_methods(python: &str, class: &str) -> Vec<String> {
     names
 }
 
+/// The attributes a class declares in `__slots__`, which for a class with no
+/// methods of its own is the whole of its API.
+pub(super) fn class_slots(python: &str, class: &str) -> Vec<String> {
+    let header = format!("class {class}(");
+    let bare = format!("class {class}:");
+    let mut inside = false;
+    let mut reading = false;
+    let mut names = Vec::new();
+    for line in python.lines() {
+        if line.starts_with("class ") {
+            inside = line.starts_with(&header) || line.starts_with(&bare);
+            reading = false;
+            continue;
+        }
+        if !inside {
+            continue;
+        }
+        // The names may be written on the line the slots open on, on the
+        // lines after it, or both.
+        let written = if let Some(rest) = line.trim_start().strip_prefix("__slots__") {
+            reading = true;
+            rest.split_once('=').map_or("", |(_, value)| value)
+        } else if reading {
+            line
+        } else {
+            continue;
+        };
+        if written.contains(')') {
+            reading = false;
+        }
+        for token in written.split(',') {
+            let name = token.trim().trim_matches(['(', ')', '\'', '"']).trim();
+            if !name.is_empty() && !name.starts_with('_') {
+                push_unique(&mut names, name.to_string());
+            }
+        }
+    }
+    names
+}
+
 /// The public functions defined at the top of a module.
 pub(super) fn module_functions(python: &str) -> Vec<String> {
     let mut names = Vec::new();
@@ -360,7 +403,9 @@ pub(super) fn candidates(
         out.push(renamed.clone());
     }
     match members {
-        Members::Methods => {
+        // A slot is read through a method of the same name, so the two are
+        // looked for the same way.
+        Members::Methods | Members::Slots => {
             let snake = snake_case(member);
             out.push(snake.clone());
             if let Some(rest) = snake.strip_prefix("get_") {
@@ -398,7 +443,7 @@ pub(super) fn snake_case(name: &str) -> String {
 /// bare identifier — an enum variant or a type — for a class.
 pub(super) fn defines(rust: &str, name: &str, members: Members) -> bool {
     match members {
-        Members::Methods => {
+        Members::Methods | Members::Slots => {
             let plain = format!("pub fn {name}(");
             let plain_generic = format!("pub fn {name}<");
             let constant = format!("pub const fn {name}(");
