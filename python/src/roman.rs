@@ -39,12 +39,12 @@ error_into!(roman_error, RomanNumeralException);
 /// key and lower where the triad on that degree is minor or diminished.
 const NUMERALS: [&str; 7] = ["I", "II", "III", "IV", "V", "VI", "VII"];
 
-/// music21's `roman.RomanNumeral`, which *is* a chord.
+/// music21's `roman.RomanNumeral`: a chord named by its figure in a key,
+/// such as `V7` in G major.
 ///
-/// Upstream it inherits from `Harmony` and so from `Chord`, and every chord
-/// question — its pitches, its root, whether it is a seventh — is asked of
-/// it directly. So it extends the chord facade here too, and the figure is
-/// what this class adds on top.
+/// A `RomanNumeral` is a `Chord`, so everything a chord answers (its
+/// pitches, root, inversion, whether it is a seventh) works here too. What
+/// this class adds is the figure and the key it is read in.
 #[pyclass(
     name = "RomanNumeral",
     module = "music21.roman",
@@ -811,8 +811,8 @@ impl RomanNumeral {
     }
 
     /// music21's `impliedScale`: the scale a numeral with no key reads in,
-    /// which upstream is a scale rather than a key — a numeral told no key
-    /// is not in one.
+    /// which is a scale rather than a key, since a numeral given no key is
+    /// not in one.
     #[getter]
     fn impliedScale(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         if !self.implied_key {
@@ -991,11 +991,9 @@ impl RomanNumeral {
     }
 
     /// music21's `sixthMinor` and `seventhMinor`: how a `vi` or a `vii` in a
-    /// minor key decides between the natural and the raised degree.
-    ///
-    /// This crate keeps the accidental as written and never rewrites it,
-    /// which is the divergence its own notes record, so both answer
-    /// music21's `QUALITY` — decide by the quality the figure names.
+    /// minor key chooses between the natural and the raised degree. The
+    /// default, `QUALITY`, picks whichever degree gives the chord quality the
+    /// figure names, so `viio7` in A minor is built on `G#`.
     #[getter]
     fn sixthMinor(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         minor_default(py, self.inner.sixth_minor())

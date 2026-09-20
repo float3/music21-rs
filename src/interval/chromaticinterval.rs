@@ -28,9 +28,7 @@ impl ChromaticInterval {
     /// A chromatic interval of `semitones`, negative for descending and
     /// fractional for a microtonal one: a quarter tone is `0.5`.
     ///
-    /// A count that is not finite spells no interval. It used to spell a
-    /// perfect unison: what reads an interval off a count casts it first, and
-    /// a cast answers nought for anything it cannot represent.
+    /// Returns an error when `semitones` is not finite.
     pub fn new(semitones: FloatType) -> Result<Self> {
         if !semitones.is_finite() {
             return Err(Error::Interval(format!(

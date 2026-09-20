@@ -88,8 +88,8 @@ impl Tie {
         self.identifier = None;
     }
 
-    /// music21's `classes`: what this is, and everything it is a kind of.
-    /// Its own code reads this to decide what it is looking at.
+    /// The names of this object's class and every class it inherits from,
+    /// most specific first.
     #[getter]
     fn classes(&self) -> Vec<&'static str> {
         vec!["Tie", "ProtoM21Object", "SlottedObjectMixin", "object"]
@@ -301,8 +301,8 @@ impl Lyric {
         self.style = None;
     }
 
-    /// music21's `classes`: what this is, and everything it is a kind of.
-    /// Its own code reads this to decide what it is looking at.
+    /// The names of this object's class and every class it inherits from,
+    /// most specific first.
     #[getter]
     fn classes(&self) -> Vec<&'static str> {
         vec![
@@ -367,9 +367,9 @@ impl Lyric {
         Ok(Self::wrap(inner))
     }
 
-    /// music21's `style`: the object saying how this is drawn, made on
-    /// first asking and the same one after that. It is music21's own — the
-    /// page is not something this crate models.
+    /// The music21 `Style` object describing how this is drawn, created on
+    /// first access and the same object after that. Requires music21 to be
+    /// installed.
     #[getter]
     fn get_style(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
         let py = slf.py();
@@ -387,21 +387,21 @@ impl Lyric {
         Ok(())
     }
 
-    /// music21's `hasStyleInformation`: whether a style object has been made
-    /// for this yet, which is what its own code asks before making one.
+    /// Whether a `style` object has been created for this yet.
     #[getter]
     fn hasStyleInformation(&self) -> bool {
         self.style.is_some()
     }
 
+    /// The text sung, without hyphens, or `None` when there is none.
+    /// Setting it on a composite lyric replaces its parts with the one text.
     #[getter]
     fn get_text(&self, py: Python<'_>) -> Option<String> {
         self.synced(py).explicit_text()
     }
 
-    /// Setting the text of an elided lyric makes it an ordinary one, since
-    /// the syllables it was made of are what the text used to come from.
-    /// Setting it to nothing at all makes it a lyric nobody has sung to.
+    // Setting the text of an elided lyric makes it an ordinary one, since
+    // the syllables it was made of are what the text used to come from.
     #[setter]
     fn set_text(&mut self, value: Option<&str>) {
         self.components = None;
@@ -422,14 +422,16 @@ impl Lyric {
         self.inner.set_raw_text(value);
     }
 
+    /// The verse number, counting from 1. Setting anything that is not an
+    /// integer raises `LyricException`.
     #[getter]
     fn get_number(&self) -> i32 {
         self.inner.number()
     }
 
-    /// music21 refuses anything that is not a number here, `None` included,
-    /// with a `LyricException` rather than the `TypeError` a typed argument
-    /// would raise.
+    // music21 refuses anything that is not a number here, `None` included,
+    // with a `LyricException` rather than the `TypeError` a typed argument
+    // would raise.
     #[setter]
     fn set_number(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
         let Ok(number) = value.extract::<i32>() else {
@@ -475,12 +477,8 @@ impl Lyric {
         self.synced(py).is_composite()
     }
 
-    /// music21's `components`: the lyrics a composite one is made of, and
-    /// `None` when it is an ordinary syllable.
-    ///
-    /// A lyric read from a value already knows its syllables, and music21's
-    /// own writer walks them off this attribute, so they are made into
-    /// objects the first time something asks.
+    /// The lyrics a composite (elided) lyric is made of, or `None` for an
+    /// ordinary syllable.
     #[getter]
     fn get_components(&mut self, py: Python<'_>) -> PyResult<Option<Py<PyList>>> {
         if let Some(components) = &self.components {
@@ -675,8 +673,8 @@ impl Beam {
         self.style = None;
     }
 
-    /// music21's `classes`: what this is, and everything it is a kind of.
-    /// Its own code reads this to decide what it is looking at.
+    /// The names of this object's class and every class it inherits from,
+    /// most specific first.
     #[getter]
     fn classes(&self) -> Vec<&'static str> {
         vec![
@@ -738,6 +736,8 @@ impl Beam {
         })
     }
 
+    /// The beam's type: `'start'`, `'continue'`, `'stop'` or `'partial'`,
+    /// or `None` when not yet decided.
     #[getter]
     fn get_type(&self) -> Option<String> {
         if let Some(unnamed) = &self.unnamed_type {
@@ -746,9 +746,9 @@ impl Beam {
         self.inner.beam_type().map(|kind| kind.as_str().to_string())
     }
 
-    /// music21's `type` is a plain attribute and takes whatever it is given:
-    /// a beam written as something no notation knows is refused by its
-    /// MusicXML exporter, not by the beam.
+    // music21's `type` is a plain attribute and takes whatever it is given:
+    // a beam written as something no notation knows is refused by its
+    // MusicXML exporter, not by the beam.
     #[setter]
     fn set_type(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
         match beam_type_or_none(value) {
@@ -787,9 +787,9 @@ impl Beam {
         self.inner.set_number(value);
     }
 
-    /// music21's `style`: the object saying how this is drawn, made on
-    /// first asking and the same one after that. It is music21's own — the
-    /// page is not something this crate models.
+    /// The music21 `Style` object describing how this is drawn, created on
+    /// first access and the same object after that. Requires music21 to be
+    /// installed.
     #[getter]
     fn get_style(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
         let py = slf.py();
@@ -807,8 +807,7 @@ impl Beam {
         Ok(())
     }
 
-    /// music21's `hasStyleInformation`: whether a style object has been made
-    /// for this yet, which is what its own code asks before making one.
+    /// Whether a `style` object has been created for this yet.
     #[getter]
     fn hasStyleInformation(&self) -> bool {
         self.style.is_some()
@@ -835,9 +834,8 @@ impl Beam {
         self.identifier = Some(value.clone().unbind());
     }
 
-    /// music21's `independentAngle`: the angle this one beam is drawn at.
-    /// The page is not modelled here, so what a caller writes is kept and
-    /// handed back.
+    /// music21's `independentAngle`: the angle this one beam is drawn at,
+    /// for music21's exporters. It is stored as given.
     #[getter]
     fn get_independentAngle(&self, py: Python<'_>) -> Py<PyAny> {
         match &self.independent_angle {
@@ -1012,8 +1010,8 @@ impl Beams {
         self.beams = None;
     }
 
-    /// music21's `classes`: what this is, and everything it is a kind of.
-    /// Its own code reads this to decide what it is looking at.
+    /// The names of this object's class and every class it inherits from,
+    /// most specific first.
     #[getter]
     fn classes(&self) -> Vec<&'static str> {
         vec![
@@ -1521,8 +1519,8 @@ impl Volume {
         self.client = None;
     }
 
-    /// music21's `classes`: what this is, and everything it is a kind of.
-    /// Its own code reads this to decide what it is looking at.
+    /// The names of this object's class and every class it inherits from,
+    /// most specific first.
     #[getter]
     fn classes(&self) -> Vec<&'static str> {
         vec!["Volume", "ProtoM21Object", "SlottedObjectMixin", "object"]
@@ -1659,12 +1657,9 @@ impl Volume {
         Ok(())
     }
 
-    /// music21's `getDynamicContext`: the dynamic in force where the note
-    /// this volume belongs to stands.
-    ///
-    /// The crate has no streams and cannot answer this; the note does, since
-    /// it is a real `Music21Object` in a real stream, so the question is put
-    /// to it.
+    /// music21's `getDynamicContext`: the dynamic mark in force at the note
+    /// this volume belongs to, found in the stream that holds the note.
+    /// `None` when the volume belongs to no note.
     fn getDynamicContext(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         let Some(client) = &self.client else {
             return Ok(py.None());

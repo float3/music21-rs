@@ -226,11 +226,9 @@ impl TimeSignature {
     /// music21's `getMeasureOffsetOrMeterModulusOffset`: where an element
     /// falls in the bar this meter measures.
     ///
-    /// Within the measure the element sits in, where there is one; past the
-    /// end of the bar, the same offset read modulo the bar, which is how a
-    /// meter in a stream of no measures still says where the beat is. Both
-    /// offsets come from music21 -- the element's place in its stream is the
-    /// stream's to know, not this crate's.
+    /// The offset within the measure the element sits in, where there is
+    /// one. Otherwise its offset in its stream, taken modulo the bar length,
+    /// so a meter in a stream with no measures still says where the beat is.
     fn getMeasureOffsetOrMeterModulusOffset<'py>(
         slf: &Bound<'py, Self>,
         el: &Bound<'py, PyAny>,
@@ -278,11 +276,10 @@ impl TimeSignature {
         Self::sequence_view(slf, Which::Accent)
     }
 
-    /// Each of the four is a plain attribute of music21's, and music21's own
-    /// private code writes whole sequences into them:
-    /// `_setDefaultBeatPartitions` and `_setDefaultAccentWeights` both do, and
-    /// both run on one of these objects, since a private member is not among
-    /// the ones an installed class blocks.
+    /// Each of the four is a plain attribute of music21's, and its own
+    /// private code writes whole sequences into them -- `_setDefaultBeatPartitions`
+    /// and `_setDefaultAccentWeights` both do, and both run on one of these
+    /// objects, since the class replaced is a base of the class installed.
     #[setter]
     fn set_accentSequence(&mut self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<()> {
         *self.inner.accent_sequence_mut() = span_of(py, value)?;
@@ -326,7 +323,7 @@ impl TimeSignature {
         self.inner.set_display(&written).map_err(meter_error)
     }
 
-    /// music21 lets a caller write this, and keeps what it was given.
+    // music21 lets a caller write this, and keeps what it was given.
     #[setter]
     fn set_barDuration(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
         self.overridden_bar_duration = Some(value.clone().unbind());
@@ -345,6 +342,8 @@ impl TimeSignature {
         self.overridden_bar_duration = None;
     }
 
+    /// The length of one bar, as a `Duration`. It can be set to override
+    /// the length the meter implies.
     #[getter]
     fn barDuration(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         if let Some(written) = &self.overridden_bar_duration {
@@ -1411,8 +1410,8 @@ impl MeterSequence {
         Ok(self.held.read(py)?.partition_display())
     }
 
-    /// music21's `isUniformPartition`, which its own code asks of a meter
-    /// before it works out the accent weights.
+    /// music21's `isUniformPartition`: whether every part at this depth is
+    /// the same length.
     #[pyo3(signature = (*, depth = 0))]
     fn isUniformPartition(&self, py: Python<'_>, depth: usize) -> PyResult<bool> {
         Ok(self.held.read(py)?.is_uniform_partition(depth))

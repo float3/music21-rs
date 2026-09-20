@@ -107,8 +107,8 @@ pub struct Microtone {
 
 #[pymethods]
 impl Microtone {
-    /// music21's `classes`: what this is, and everything it is a kind of.
-    /// Its own code reads this to decide what it is looking at.
+    /// The names of this object's class and every class it inherits from,
+    /// most specific first.
     #[getter]
     fn classes(&self) -> Vec<&'static str> {
         vec!["Microtone", "ProtoM21Object", "object"]
@@ -328,8 +328,8 @@ impl Accidental {
         self.style = None;
     }
 
-    /// music21's `classes`: what this is, and everything it is a kind of.
-    /// Its own code reads this to decide what it is looking at.
+    /// The names of this object's class and every class it inherits from,
+    /// most specific first.
     #[getter]
     fn classes(&self) -> Vec<&'static str> {
         vec![
@@ -455,10 +455,9 @@ impl Accidental {
         self.inner.full_name().to_string()
     }
 
-    /// music21's `style`: the object saying how this is drawn, made on
-    /// first asking and the same one after that. It is music21's own — the
-    /// page is not something this crate models — with the colour, which it
-    /// does model, written into it.
+    /// The music21 `Style` object describing how this is drawn, created on
+    /// first access and the same object after that. Its `color` is kept in
+    /// step with this object's colour. Requires music21 to be installed.
     #[getter]
     fn get_style(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
         let py = slf.py();
@@ -483,8 +482,7 @@ impl Accidental {
         Ok(())
     }
 
-    /// music21's `hasStyleInformation`: whether a style object has been made
-    /// for this yet, which is what its own code asks before making one.
+    /// Whether a `style` object has been created for this yet.
     #[getter]
     fn hasStyleInformation(&self) -> bool {
         self.style.is_some()
@@ -503,7 +501,7 @@ impl Accidental {
 
     /// music21's `setAttributeIndependently`: writes `name`, `alter` or
     /// `modifier` without the other two following it. Any other attribute is
-    /// an error, as upstream.
+    /// an error, as in music21.
     fn setAttributeIndependently(
         &mut self,
         py: Python<'_>,
@@ -1801,12 +1799,8 @@ impl Pitch {
         Ok(false)
     }
 
-    /// music21's `classes`: the names of everything this object is.
-    ///
-    /// A pitch is not a `Music21Object` and so gets no music21 half from the
-    /// install, but music21's own code still asks it what it is — its
-    /// `_extractPitch` tells a pitch from a note by looking here — so the
-    /// answer is given directly.
+    /// The names of this object's class and every class it inherits from,
+    /// most specific first.
     #[getter]
     fn classes(&self) -> [&'static str; 3] {
         ["Pitch", "ProtoM21Object", "object"]
@@ -1942,8 +1936,10 @@ impl Pitch {
     }
 }
 
-/// music21's `pitch.simplifyMultipleEnharmonics`, over facades, names or
-/// numbers, with a key or key signature as context.
+/// music21's `pitch.simplifyMultipleEnharmonics`: respells a list of
+/// pitches (given as `Pitch` objects, names or numbers) so they read as
+/// simply as possible together, optionally in the context of a key or key
+/// signature.
 #[pyfunction]
 #[pyo3(name = "simplifyMultipleEnharmonics", signature = (pitches, *, criterion = None, keyContext = None))]
 #[allow(non_snake_case)]

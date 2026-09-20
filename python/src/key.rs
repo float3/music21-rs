@@ -173,8 +173,8 @@ impl KeySignature {
         Ok(Self::of(sharps))
     }
 
-    /// music21's `sharps` is always an `int`: a non-traditional signature
-    /// reports nought and says so through `isNonTraditional`.
+    /// The number of sharps, negative for flats. Always an `int`: a
+    /// non-traditional signature reports 0 (see `isNonTraditional`).
     #[getter]
     fn sharps(&self) -> i32 {
         self.signature.sharps().unwrap_or(0)
@@ -213,13 +213,14 @@ impl KeySignature {
             .collect())
     }
 
+    /// Whether this signature is a list of altered pitches rather than a
+    /// count of sharps or flats. Setting it to `True` drops the sharp count
+    /// so that `alteredPitches` can be assigned.
     #[getter]
     fn isNonTraditional(&self) -> bool {
         self.signature.is_non_traditional()
     }
 
-    /// Turning it on drops the sharp count and lets `alteredPitches` be
-    /// assigned.
     #[setter]
     fn set_isNonTraditional(&mut self, value: bool) {
         self.signature.set_non_traditional(value);
@@ -356,7 +357,7 @@ impl KeySignature {
     }
 
     /// music21's `getScale`: the major or minor scale this signature stands
-    /// for. Only those two, as upstream — a signature says nothing about the
+    /// for. Only those two, as in music21: a signature says nothing about the
     /// other modes.
     #[pyo3(signature = (mode = "major"))]
     fn getScale(&self, py: Python<'_>, mode: Option<&str>) -> PyResult<Py<PyAny>> {
@@ -621,6 +622,8 @@ impl Key {
         )
     }
 
+    /// The key's tonic `Pitch`. Assigning a `Pitch` keeps that very object,
+    /// and changes the key's signature to match.
     #[getter]
     fn tonic(slf: &Bound<'_, Self>, py: Python<'_>) -> PyResult<Py<Pitch>> {
         let wanted = slf.borrow().inner.tonic();
@@ -635,8 +638,6 @@ impl Key {
         Ok(object)
     }
 
-    /// Setting it keeps the pitch object given, which is what music21 does:
-    /// a key built on a pitch a caller holds reports that very pitch.
     #[setter]
     fn set_tonic(slf: &Bound<'_, Self>, value: &Bound<'_, PyAny>) -> PyResult<()> {
         let name = tonic_name(value)?;
@@ -718,8 +719,8 @@ impl Key {
     /// music21's `getScaleDegreeFromPitch`: which degree of this key a pitch
     /// is, or nothing when it is not in it.
     ///
-    /// A key *is* a scale upstream — music21's `Key` inherits from
-    /// `DiatonicScale` — so the questions a scale answers, it answers too.
+    /// A key is a scale (music21's `Key` inherits from
+    /// `DiatonicScale`), so it answers the same questions a scale does.
     #[pyo3(signature = (pitchTarget, comparisonAttribute = "name", **_keywords))]
     fn getScaleDegreeFromPitch(
         &self,
@@ -876,9 +877,8 @@ impl Key {
     }
 }
 
-/// music21's `key.sharpsToPitch`, memoized in `_sharpsToPitchCache` as
-/// music21 memoizes it — the cache is documented behaviour of the function,
-/// and its own doctest reads the dictionary back.
+/// music21's `key.sharpsToPitch`: the tonic of the major key with this many
+/// sharps (negative for flats), so `sharpsToPitch(-3)` is `E-`.
 #[pyfunction]
 #[pyo3(name = "sharpsToPitch", signature = (sharpCount = None))]
 fn sharps_to_pitch_facade<'py>(

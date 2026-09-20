@@ -1280,9 +1280,9 @@ impl Chord {
 
     // ---- contents --------------------------------------------------------
 
-    /// music21's `.pitches`: the very pitch objects its notes hold, so
-    /// `chord.pitches[0] is chord[0].pitch` and an edit through either lands
-    /// on the chord.
+    /// The chord's pitches, in the order of its notes. These are the same
+    /// objects the notes hold, so `chord.pitches[0] is chord[0].pitch` and
+    /// changing one changes the chord.
     #[getter]
     fn get_pitches<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyTuple>> {
         let py = slf.py();
@@ -2377,7 +2377,7 @@ impl Chord {
     /// The key comes from the chord's own `key` when it has one — a roman
     /// numeral does — and otherwise from the nearest one in the streams the
     /// chord sits in, which is where music21 looks for it. A chord in no
-    /// stream and with no key of its own has no answer, as upstream.
+    /// stream and with no key of its own has no answer, as in music21.
     #[getter]
     fn scaleDegrees(slf: &Bound<'_, Self>) -> PyResult<Option<Vec<ScaleDegree>>> {
         let Some(key) = chord_key_in_force(slf)? else {
@@ -2475,10 +2475,9 @@ impl Chord {
 
     // ---- notation --------------------------------------------------------
 
-    /// music21's `style`: the object saying how this is drawn, made on
-    /// first asking and the same one after that. It is music21's own — the
-    /// page is not something this crate models — with the colour, which it
-    /// does model, written into it.
+    /// The music21 `Style` object describing how this is drawn, created on
+    /// first access and the same object after that. Its `color` is kept in
+    /// step with this object's colour. Requires music21 to be installed.
     #[getter]
     fn get_style(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
         let py = slf.py();
@@ -2502,8 +2501,7 @@ impl Chord {
         Ok(())
     }
 
-    /// music21's `hasStyleInformation`: whether a style object has been made
-    /// for this yet, which is what its own code asks before making one.
+    /// Whether a `style` object has been created for this yet.
     #[getter]
     fn hasStyleInformation(&self) -> bool {
         self.style.is_some()
@@ -2609,6 +2607,8 @@ impl Chord {
         crate::note::Note::set_tie(target.bind(py), Some(tieObjOrStr))
     }
 
+    /// The chord's `Tie`, or `None`. Setting one ties every note of the
+    /// chord with that same object.
     #[getter]
     fn get_tie(slf: &Bound<'_, Self>, py: Python<'_>) -> PyResult<Option<Py<Tie>>> {
         // The first note that carries one, as its own object: music21's own
@@ -2621,8 +2621,8 @@ impl Chord {
         Ok(None)
     }
 
-    /// music21 gives every note the very tie object it was handed, so
-    /// `id(chord.tie) == id(chord[0].tie)` after setting one.
+    // music21 gives every note the very tie object it was handed, so
+    // `id(chord.tie) == id(chord[0].tie)` after setting one.
     #[setter]
     fn set_tie(
         slf: &Bound<'_, Self>,
@@ -2675,10 +2675,9 @@ impl Chord {
         Self::set_volume(slf, py, value)
     }
 
-    /// Whether the chord carries a volume of its own. Volumes on its
-    /// components do not count — music21 asks only whether `_volume` was
-    /// ever set, which is why `setVolumes` leaves this false until something
-    /// reads `.volume` and creates the averaged one.
+    /// Whether the chord has a `Volume` of its own. Volumes on its notes do
+    /// not count, so this stays false after `setVolumes` until something
+    /// reads `.volume`, which creates one averaged from the notes.
     fn hasVolumeInformation(&self) -> bool {
         self.volume.is_some()
     }
@@ -2735,6 +2734,8 @@ impl Chord {
         Ok(())
     }
 
+    /// The chord's `Volume`, created on first access from the average of its
+    /// notes' velocities, and the same object after that.
     #[getter]
     fn get_volume(slf: &Bound<'_, Self>, py: Python<'_>) -> PyResult<Py<Volume>> {
         if let Some(volume) = &slf.borrow().volume {
@@ -2765,9 +2766,9 @@ impl Chord {
         Ok(created)
     }
 
-    /// As on a note: the object given is kept when nothing else has claimed
-    /// it and copied when something has, and either way the chord is what
-    /// the volume is the volume of.
+    // As on a note: the object given is kept when nothing else has claimed
+    // it and copied when something has, and either way the chord is what
+    // the volume is the volume of.
     #[setter]
     fn set_volume(slf: &Bound<'_, Self>, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<()> {
         for note in &slf.borrow().notes {
@@ -2790,6 +2791,8 @@ impl Chord {
         Ok(())
     }
 
+    /// The chord's lyrics, which are carried by its first note: one `Lyric`
+    /// per verse.
     #[getter]
     fn get_lyrics<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
         match self.notes.first() {
@@ -2798,7 +2801,7 @@ impl Chord {
         }
     }
 
-    /// A chord is sung to one text, which its first note carries.
+    // A chord is sung to one text, which its first note carries.
     #[setter]
     fn set_lyrics(&mut self, py: Python<'_>, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
         if let Some(note) = self.notes.first() {

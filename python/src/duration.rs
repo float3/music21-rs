@@ -65,10 +65,9 @@ error_into!(duration_error, DurationException);
 
 /// One written note value inside a duration: music21's `DurationTuple`.
 ///
-/// music21 makes this a `NamedTuple` of a type name, a dot count and the
-/// quarter length the two come to. The name is kept rather than the crate's
-/// `DurationType` so that the two music21 uses for a length it cannot write
-/// as a note — `zero` and `inexpressible` — have somewhere to go.
+/// A named tuple of a type name (`'quarter'`, `'eighth'`, ...), a dot count
+/// and the quarter length the two come to. The type may also be `'zero'` or
+/// `'inexpressible'` for a length no single note value can write.
 #[pyclass(
     name = "DurationTuple",
     module = "music21.duration",
@@ -286,8 +285,8 @@ impl Tuplet {
 
 #[pymethods]
 impl Tuplet {
-    /// music21's `classes`: what this is, and everything it is a kind of.
-    /// Its own code reads this to decide what it is looking at.
+    /// The names of this object's class and every class it inherits from,
+    /// most specific first.
     #[getter]
     fn classes(&self) -> Vec<&'static str> {
         vec!["Tuplet", "ProtoM21Object", "object"]
@@ -715,15 +714,14 @@ fn quarter_length_from_any(value: &Bound<'_, PyAny>) -> PyResult<f64> {
         })
 }
 
-/// music21's `duration.Duration`, over the crate's quarter-length duration.
+/// music21's `duration.Duration`: how long something lasts, and how that
+/// length is written.
 ///
-/// music21's duration is not one number: it is a list of written note values
-/// tied together, a stack of tuplets those values are written inside, and a
-/// group of dots written above them, with the sounding quarter length the
-/// product of all three. The crate's is the sounding length, which reads the
-/// written values back off itself. That round-trips for a length with one
-/// spelling, so the written side is only stored once a caller has asked for
-/// it or set it — which is also when music21 stops inferring it.
+/// A duration has a sounding length in quarter notes (`quarterLength`) and a
+/// written form: one or more note values tied together (`components`), the
+/// tuplets they sit inside (`tuplets`) and their dots. Give either one and
+/// the other is worked out, so `Duration(1.5)` is a dotted quarter and
+/// `Duration('half')` lasts two quarters.
 #[pyclass(
     name = "Duration",
     module = "music21.duration",
@@ -1118,8 +1116,8 @@ impl Duration {
         self.client = None;
     }
 
-    /// music21's `classes`: what this is, and everything it is a kind of.
-    /// Its own code reads this to decide what it is looking at.
+    /// The names of this object's class and every class it inherits from,
+    /// most specific first.
     #[getter]
     fn classes(&self) -> Vec<&'static str> {
         vec!["Duration", "ProtoM21Object", "SlottedObjectMixin", "object"]
@@ -1503,12 +1501,9 @@ impl Duration {
         self.set_component_list(py, vec![DurationTuple::from_quarter_length(written)])
     }
 
-    /// music21's `tuplets`: the tuplets this length is written inside.
-    ///
-    /// Asking works them out and keeps them, so the objects handed back are
-    /// the same ones next time and an edit to one sticks — music21's own
-    /// `findTupletGroups` marks the end of a group by setting `type` on the
-    /// tuplet it read off a note.
+    /// The tuplets this length is written inside. They are the same objects
+    /// every time, so editing one (for example its `type`) edits this
+    /// duration.
     #[getter]
     fn get_tuplets<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
         self.materialize(py)?;
@@ -1891,12 +1886,9 @@ impl Duration {
         Ok(whole)
     }
 
-    /// music21's `informClient`: tells whatever owns this duration that its
-    /// length has changed, so that the streams holding it can re-sort.
-    ///
-    /// The crate has no such notification and wants none, but music21's own
-    /// code calls this on durations it has just edited, and a duration of
-    /// ours has to be able to pass the message on to a music21 client.
+    /// music21's `informClient`: tells the note or chord that owns this
+    /// duration that its length has changed, so that the streams holding it
+    /// can update. Answers `False` when the duration has no owner.
     fn informClient(&self, py: Python<'_>) -> PyResult<bool> {
         let Some(client) = &self.client else {
             return Ok(false);
@@ -2086,13 +2078,15 @@ impl GraceDuration {
         Self::copied(slf)
     }
 
+    /// Whether the grace note is drawn with a slash through its stem.
+    /// Accepts `True`, `False` or `None`; anything else is a `ValueError`.
     #[getter]
     fn get_slash(&self) -> bool {
         self.slash
     }
 
-    /// music21 takes `True`, `False` or `None` here and nothing else, and
-    /// says so as a `ValueError` — its own tests catch that class.
+    // music21 takes `True`, `False` or `None` here and nothing else, and
+    // says so as a `ValueError` — its own tests catch that class.
     #[setter]
     fn set_slash(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
         self.slash = true_false_or_none(value)?.unwrap_or(false);
@@ -2124,8 +2118,8 @@ impl GraceDuration {
     }
 
     /// music21's `makeTime`: whether the grace note takes time of its own in
-    /// performance. Nothing here plays anything, so it is kept and handed
-    /// back.
+    /// performance. It is stored for music21's playback and export; nothing
+    /// in this package reads it.
     #[getter]
     fn get_makeTime(&self) -> bool {
         self.make_time

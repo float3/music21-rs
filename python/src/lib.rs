@@ -934,31 +934,27 @@ fn built_helper(py: Python<'_>) -> Option<Bound<'_, PyModule>> {
         .map(|helper| helper.bind(py).clone())
 }
 
-/// Replaces music21's own classes with these, in the music21 that is
-/// installed, and answers how many names were replaced.
+/// Replaces music21's classes with the ones in this package, so existing
+/// music21 code runs on the Rust implementation unchanged. Returns how many
+/// names were replaced.
 ///
-/// This is a testing aid: it is how you point an existing music21 program at
-/// the Rust implementation without changing a line of it. Call it before the
-/// program imports the classes — in a `conftest.py`, or at the top of
-/// `__main__` — since `from music21.chord import Chord` binds the class it
-/// finds at import time.
+/// ```python
+/// import music21_rs
+/// music21_rs.install_into_music21()
 ///
-/// It patches a live module, so it changes music21 for everything in the
-/// process. Nothing in this module calls it for you.
-///
-/// ```no_run
-/// use pyo3::prelude::*;
-///
-/// # fn main() -> PyResult<()> {
-/// Python::attach(|py| {
-///     // Before anything imports the classes: `from music21.chord import
-///     // Chord` binds whichever class the module holds at that moment.
-///     let replaced = music21_rs::install_into_music21(py)?;
-///     assert!(replaced > 0);
-///     Ok(())
-/// })
-/// # }
+/// from music21 import chord
+/// chord.Chord("C4 E4 G4").commonName   # 'major triad'
 /// ```
+///
+/// Call it before anything runs `from music21.chord import Chord` or similar,
+/// since such an import keeps whichever class it found at the time. In a
+/// test suite, `conftest.py` is early enough. It changes music21 for the
+/// whole process, and requires music21 to be installed.
+///
+/// The installed classes are subclasses of music21's `Music21Object`, so
+/// streams can hold them, and scores containing them can be pickled and
+/// exported. Methods that are not implemented here raise `AttributeError`
+/// rather than falling back to music21's version.
 #[pyfunction]
 pub fn install_into_music21(py: Python<'_>) -> PyResult<usize> {
     let ours = PyModule::new(py, "music21_rs")?;
@@ -1215,9 +1211,36 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     Ok(())
 }
 
-/// The Python module: `import music21_rs`. One flat namespace holding every
-/// class, since music21's own module layout is what the classes carry in
-/// their `__module__` strings rather than where they are imported from.
+/// music21's analysis classes, implemented in Rust.
+///
+/// The classes here have music21's names, constructor arguments, properties
+/// and `repr`, and give music21's answers: `Pitch`, `Interval`, `Chord`,
+/// `Note`, `Duration`, `Key`, `KeySignature`, the scales, `RomanNumeral`,
+/// `TimeSignature`, `MetronomeMark`, `ToneRow` and more. The package does not
+/// need music21 to run.
+///
+/// ```python
+/// import music21_rs as m
+///
+/// chord = m.Chord("C4 E4 G4 B-4")
+/// chord.commonName            # 'dominant seventh chord'
+/// chord.root()                # <music21.pitch.Pitch C4>
+/// chord.transpose("M3")       # <music21.chord.Chord E4 G#4 B4 D5>
+///
+/// m.RomanNumeral("V7", m.Key("G")).pitches
+/// m.TimeSignature("6/8").getAccentWeight(1.5)   # 0.5
+/// ```
+///
+/// Everything lives in this one namespace. Each class reports the music21
+/// module it corresponds to (`m.Chord.__module__ == 'music21.chord'`), so its
+/// `repr` matches music21's.
+///
+/// Streams, file parsing, notation output and the corpus are not included.
+/// To use those, install music21 as well and call `install_into_music21()`:
+/// music21's own code then runs on these classes.
+///
+/// Each class documents music21's members that it implements. For the full
+/// meaning of a member, music21's own documentation applies.
 #[pymodule]
 pub fn music21_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     register_all(m)?;

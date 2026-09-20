@@ -1,7 +1,33 @@
-//! Rust helpers inspired by selected parts of Python's `music21`.
+//! Music theory analysis in Rust, ported from Python's
+//! [music21](https://github.com/cuthbertLab/music21).
 //!
-//! The crate currently focuses on pitch construction, chord naming and
-//! lightweight theory utilities such as polyrhythm and tuning-system helpers.
+//! The crate covers the analysis side of music21: pitches, intervals, chords,
+//! keys, scales, roman numerals, chord symbols, figured bass, durations,
+//! meters, tone rows, sieves, tempo marks and voice leading. It keeps
+//! music21's data model and gives music21's answers, so a chord is named, a
+//! numeral realized and a scale spelled the way music21 does it. Beyond
+//! music21, it has tuning systems, regular temperaments and polyrhythms.
+//!
+//! ```
+//! use music21_rs::Chord;
+//!
+//! let chord: Chord = "C E- G B-".parse()?;
+//! assert_eq!(chord.pitched_common_name(), "C-minor seventh chord");
+//! assert_eq!(chord.forte_class().as_deref(), Some("4-26"));
+//! assert_eq!(chord.chord_symbol().as_deref(), Some("Cm7"));
+//! # Ok::<(), music21_rs::Error>(())
+//! ```
+//!
+//! The main types are re-exported at the crate root; each module holds the
+//! rest of its area. Every fallible call returns the crate-wide [`Result`].
+//!
+//! # Features
+//!
+//! No features are on by default.
+//!
+//! - `serde` derives `Serialize` and `Deserialize` for the public types.
+//! - `scala-archive` bundles the Scala scale archive (about 4,000 `.scl`
+//!   files, roughly 1 MB) and enables `ScalaArchive::bundled()`.
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![deny(missing_docs)]
 #![deny(missing_debug_implementations)]
@@ -28,6 +54,8 @@ pub(crate) mod defaults;
 pub(crate) mod display;
 /// Rhythmic duration primitives.
 pub mod duration;
+/// Dynamic marks and the loudness each stands for.
+pub mod dynamics;
 /// Error and result types used by the crate.
 pub mod error;
 
@@ -53,9 +81,7 @@ pub mod note;
 pub mod pitch;
 /// Polyrhythm timing and pitch-set helpers.
 pub mod polyrhythm;
-/// Silent duration-bearing musical event.
-/// Dynamic marks and the loudness each stands for.
-pub mod dynamics;
+/// Rests.
 pub mod rest;
 /// Roman numeral parsing and compact harmonic analysis.
 pub mod roman;
@@ -65,7 +91,8 @@ pub mod scale;
 pub mod serial;
 pub mod sieve;
 pub(crate) mod stepname;
-/// Small ordered timeline container.
+/// Streams: notes, chords and other events placed on a timeline, nested as
+/// scores, parts and measures.
 pub mod stream;
 /// Metronome marks and tempo-word conventions.
 pub mod tempo;
@@ -97,6 +124,7 @@ pub use chordsymbol::{
 };
 pub use defaults::{FloatType, FractionType, IntegerType, Octave, UnsignedIntegerType};
 pub use duration::{Duration, DurationTuple, DurationType, Tuplet, quarter_length_to_closest_type};
+pub use dynamics::Dynamic;
 pub use error::{Error, Result};
 pub use harte::{Harte, HarteInterval, SHORTHAND_DEGREES, convert_interval};
 pub use interval::{
@@ -124,7 +152,6 @@ pub use pitch::{
     pitch_class_name, simplify_multiple_enharmonics,
 };
 pub use polyrhythm::{Polyrhythm, PolyrhythmAnalysis, PolyrhythmEvent, PolyrhythmRatioTone};
-pub use dynamics::Dynamic;
 pub use rest::Rest;
 pub use roman::roman_numeral_from_chord;
 pub use roman::{

@@ -694,6 +694,15 @@ impl Note {
         }
         Ok(copy)
     }
+
+    /// The note's own `Pitch` object, the same one every time: an edit
+    /// through it is an edit to the note, and to the chord holding the note.
+    pub(crate) fn get_pitch(slf: &Bound<'_, Self>) -> Py<Pitch> {
+        let py = slf.py();
+        let pitch = slf.borrow().pitch.clone_ref(py);
+        pitch.borrow_mut(py).owner = Some(slf.clone().unbind());
+        pitch
+    }
 }
 
 /// A list copied the way `copy.deepcopy` would copy it, which is what a
@@ -853,18 +862,9 @@ impl Note {
         Ok(note)
     }
 
-    /// The note's own `Pitch` object, the same one every time: an edit
-    /// through it is an edit to the note, and to the chord holding the note.
-    pub(crate) fn get_pitch(slf: &Bound<'_, Self>) -> Py<Pitch> {
-        let py = slf.py();
-        let pitch = slf.borrow().pitch.clone_ref(py);
-        pitch.borrow_mut(py).owner = Some(slf.clone().unbind());
-        pitch
-    }
-
-    /// Setting it keeps the pitch object given, as music21 does: its own
-    /// `Verticality.makeElement` gives a copied note the very pitch of the
-    /// note it was copied from, and renaming it there renames both.
+    // Setting it keeps the pitch object given, as music21 does: its own
+    // `Verticality.makeElement` gives a copied note the very pitch of the
+    // note it was copied from, and renaming it there renames both.
     #[setter]
     fn set_pitch(slf: &Bound<'_, Self>, value: &Bound<'_, PyAny>) -> PyResult<()> {
         let py = slf.py();
@@ -889,8 +889,9 @@ impl Note {
         Self::broadcast_pitch(py, &slf.clone().unbind())
     }
 
-    /// music21's `.pitch`, which is whatever is stored there — a `Pitch`
-    /// unless something put a bare value in through `pitches`.
+    /// The note's `Pitch`. It is the same object every time, so changing it
+    /// (`n.pitch.octave = 5`) changes the note, and assigning a `Pitch`
+    /// keeps that very object rather than a copy.
     #[getter(pitch)]
     fn pitch_attribute(slf: &Bound<'_, Self>) -> Py<PyAny> {
         let py = slf.py();
@@ -900,6 +901,8 @@ impl Note {
         Self::get_pitch(slf).into_any()
     }
 
+    /// The pitch's name without its octave, such as `'C#'`. Setting it
+    /// renames the pitch and keeps its octave.
     #[getter]
     fn get_name(&self, py: Python<'_>) -> String {
         self.pitch_value(py).name()
@@ -921,12 +924,13 @@ impl Note {
         Self::broadcast_pitch(slf.py(), &slf.clone().unbind())
     }
 
+    /// The pitch's name with its octave, such as `'C#4'`. Setting it
+    /// renames the pitch.
     #[getter]
     fn get_nameWithOctave(&self, py: Python<'_>) -> String {
         self.pitch_value(py).name_with_octave()
     }
 
-    /// Setting it renames the note's pitch, which is what music21 does.
     #[setter]
     fn set_nameWithOctave(slf: &Bound<'_, Self>, py: Python<'_>, value: &str) -> PyResult<()> {
         let pitch = slf.borrow().pitch.clone_ref(py);
@@ -936,6 +940,9 @@ impl Note {
         Ok(())
     }
 
+    /// The letter name of the pitch, `'C'` through `'B'`. Setting it keeps
+    /// the accidental and the octave, so `n.step = 'D'` on a `C#4` gives
+    /// `D#4`.
     #[getter]
     fn get_step(&self, py: Python<'_>) -> String {
         self.pitch_value(py)
@@ -946,8 +953,6 @@ impl Note {
             .to_string()
     }
 
-    /// music21's `step` setter, which writes through to the pitch and keeps
-    /// the accidental and the octave: `n.step = 'D'` on a `C#4` gives `D#4`.
     #[setter]
     fn set_step(slf: &Bound<'_, Self>, value: &str) -> PyResult<()> {
         // Through the note's own pitch object, so the change lands where a
@@ -956,7 +961,8 @@ impl Note {
         Self::get_pitch(slf).setattr(slf.py(), "step", value)
     }
 
-    /// Always an `int`, as music21's `Pitch.octave` is.
+    /// The pitch's octave, always an `int`. A note given no octave reports
+    /// the default, 4; `octaveIsImplicit` tells the two apart.
     #[getter]
     fn get_octave(&self, py: Python<'_>) -> i32 {
         self.pitch_value(py)
@@ -964,8 +970,8 @@ impl Note {
             .unwrap_or_else(crate::pitch::default_octave)
     }
 
-    /// music21's `octaveIsImplicit`, read and written through the note's own
-    /// pitch object so a caller holding that pitch sees the change.
+    /// Whether the note was given no octave, so that `octave` is only the
+    /// default.
     #[getter]
     fn get_octaveIsImplicit(&self, py: Python<'_>) -> bool {
         self.pitch_value(py).octave_is_implicit()
@@ -1043,8 +1049,8 @@ impl Note {
         ))
     }
 
-    /// music21's `.duration`, the same object every time: `n.duration.type =
-    /// 'half'` is how music21's own doctests lengthen a note.
+    /// The note's `Duration`. It is the same object every time, so
+    /// `n.duration.type = 'half'` lengthens the note.
     #[getter]
     fn get_duration(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
         let py = slf.py();
@@ -1115,6 +1121,8 @@ impl Note {
 
     // ---- notation --------------------------------------------------------
 
+    /// The `Tie` joining this note to the next, or `None`. Assigning a `Tie`
+    /// keeps that very object.
     #[getter]
     pub(crate) fn get_tie(slf: &Bound<'_, Self>) -> PyResult<Option<Py<Tie>>> {
         let py = slf.py();
@@ -1129,8 +1137,8 @@ impl Note {
         Ok(Some(tie))
     }
 
-    /// A tie object handed over is kept, as music21 keeps it: its own
-    /// `splitAtQuarterLength` writes through the object it reads back.
+    // A tie object handed over is kept, as music21 keeps it: its own
+    // `splitAtQuarterLength` writes through the object it reads back.
     #[setter]
     pub(crate) fn set_tie(slf: &Bound<'_, Self>, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
         let py = slf.py();
@@ -1234,10 +1242,9 @@ impl Note {
         Ok(())
     }
 
-    /// music21's `style`: the object saying how this is drawn, made on
-    /// first asking and the same one after that. It is music21's own — the
-    /// page is not something this crate models — with the colour, which it
-    /// does model, written into it.
+    /// The music21 `Style` object describing how this is drawn, created on
+    /// first access and the same object after that. Its `color` is kept in
+    /// step with this object's colour. Requires music21 to be installed.
     #[getter]
     fn get_style(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
         let py = slf.py();
@@ -1261,15 +1268,14 @@ impl Note {
         Ok(())
     }
 
-    /// music21's `hasStyleInformation`: whether a style object has been made
-    /// for this yet, which is what its own code asks before making one.
+    /// Whether a `style` object has been created for this yet.
     #[getter]
     fn hasStyleInformation(&self) -> bool {
         self.style.is_some()
     }
 
-    /// music21's `.volume`, made on first asking and the same object after
-    /// that, so `n.volume.velocity = 20` sticks.
+    /// The note's `Volume`, created on first access and the same object
+    /// after that, so `n.volume.velocity = 20` changes the note.
     #[getter]
     pub(crate) fn get_volume(slf: &Bound<'_, Self>, py: Python<'_>) -> PyResult<Py<Volume>> {
         if let Some(volume) = &slf.borrow().volume {
@@ -1320,15 +1326,14 @@ impl Note {
         Ok(())
     }
 
-    /// Whether this note carries a volume at all. music21 asks only whether
-    /// the object is there, which is why reading `.volume` once makes this
-    /// true.
+    /// Whether this note has a `Volume`. Reading `.volume` creates one, so
+    /// this is true from then on.
     fn hasVolumeInformation(&self) -> bool {
         self.volume.is_some()
     }
 
-    /// music21's `lyrics`: the list itself, the same one every time. Its
-    /// own MusicXML reader appends each verse to what this hands back.
+    /// The note's lyrics, one `Lyric` per verse. It is the same list every
+    /// time, so appending to it adds a verse.
     #[getter]
     pub(crate) fn get_lyrics<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyList>> {
         let py = slf.py();
@@ -1380,6 +1385,9 @@ impl Note {
         Ok(())
     }
 
+    /// The text of every verse, one per line, or `None` when there is none.
+    /// Assigning a string sets one verse per line, a `Lyric` sets the one
+    /// verse, and `None` clears them.
     #[getter]
     fn get_lyric(&self, py: Python<'_>) -> Option<String> {
         // Through the value as it stands: a verse appended to the list the
@@ -1387,8 +1395,8 @@ impl Note {
         self.synced(py).lyric()
     }
 
-    /// music21 takes a string here, splitting it into a verse per line, or a
-    /// `Lyric` to hold as the one verse, or `None` to clear them.
+    // Takes a string, split into a verse per line, a `Lyric` to hold as the
+    // one verse, or `None` to clear them.
     #[setter]
     pub(crate) fn set_lyric(
         &mut self,
@@ -1607,9 +1615,8 @@ impl Note {
         instrument_for_note(slf.as_any(), returnDefault)
     }
 
-    /// music21's `beams`: the beams joining this note's flags to its
-    /// neighbours'. The object knows the note it came off, so an edit
-    /// through it is an edit to the note.
+    /// The beams joining this note's flags to its neighbours'. It is the
+    /// same `Beams` object every time, so editing it edits the note.
     #[getter]
     fn get_beams(slf: &Bound<'_, Self>) -> PyResult<Py<Beams>> {
         let py = slf.py();

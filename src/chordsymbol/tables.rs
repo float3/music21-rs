@@ -20,8 +20,8 @@ pub struct Music21ChordType {
 
 /// Returns every chord type this crate knows from music21's harmony tables.
 ///
-/// The table mirrors music21's `harmony.CHORD_TYPES` and is verified against it
-/// by `python-parity`'s `chord_type_parity` test.
+/// The table matches music21's `harmony.CHORD_TYPES`, and is checked
+/// against it rather than transcribed and hoped for.
 pub fn known_chord_symbol_types() -> &'static [Music21ChordType] {
     MUSIC21_CHORD_TYPES
 }

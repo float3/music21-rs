@@ -594,11 +594,9 @@ impl GenericInterval {
         self.inner.mod7()
     }
 
-    /// music21's `complement`, which hands back the same object every time
-    /// it is asked — `fourth.complement() is fourth.complement()` is one of
-    /// its own examples. The answer only depends on the interval, and the
-    /// interval can change, so the one that was worked out is thrown away
-    /// when it does.
+    /// music21's `complement`: the interval that adds up to an octave with
+    /// this one, so a fourth's complement is a fifth. Repeated calls return
+    /// the same object until this interval changes.
     fn complement(&mut self, py: Python<'_>) -> PyResult<Py<Self>> {
         if self.complemented.is_none() {
             self.complemented = Some(crate::installed_new(

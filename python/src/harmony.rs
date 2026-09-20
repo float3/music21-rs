@@ -129,9 +129,7 @@ pub fn chordSymbolFigureFromChord<'py>(
 /// music21's `chordSymbolFromChord`: the same figure, read back as a chord
 /// symbol.
 ///
-/// The object handed back is music21's own `ChordSymbol`, since that class is
-/// not replaced — which is exactly what music21's own function does with the
-/// figure it works out.
+/// Returns a music21 `harmony.ChordSymbol`, so music21 must be installed.
 #[pyfunction]
 pub fn chordSymbolFromChord<'py>(
     py: Python<'py>,

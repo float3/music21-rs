@@ -234,14 +234,9 @@ fn arbitrary_network<'py>(
     Ok((PyTuple::new(py, nodes)?, PyTuple::new(py, edges)?))
 }
 
-/// music21's `scale.AbstractScale`: a pattern of steps with no note to
-/// stand on.
-///
-/// music21 keeps the pattern and the tonic in separate objects, and a
-/// concrete scale hands its pattern out under `abstract`. Here the pattern
-/// is a [`RsScaleType`], so this is a thin thing over one — but it has to be
-/// an object rather than a name, because music21's own docstrings ask it how
-/// many degrees it has and whether it repeats at the octave.
+/// music21's `scale.AbstractScale`: a pattern of steps with no tonic, such
+/// as "major" or "dorian". A `ConcreteScale` hands its pattern out as
+/// `abstract`.
 #[pyclass(
     name = "AbstractScale",
     module = "music21.scale",
@@ -314,10 +309,8 @@ impl AbstractScale {
         }))
     }
 
-    /// music21's `buildNetwork`: says which pattern this abstract scale
-    /// stands for. Upstream it builds the interval network the scale is
-    /// realized through; here the pattern is the whole of it, so naming the
-    /// pattern is all there is to do.
+    /// music21's `buildNetwork`: sets the pattern this abstract scale stands
+    /// for from a mode name. With no mode it leaves the pattern unchanged.
     #[pyo3(signature = (mode = None))]
     fn buildNetwork(&mut self, mode: Option<&Bound<'_, PyAny>>) {
         if let Some(mode) = mode.filter(|mode| !mode.is_none())
@@ -437,10 +430,8 @@ fn tonic_pitch(value: &Bound<'_, PyAny>) -> PyResult<RsPitch> {
 
 /// music21's `scale.ConcreteScale`: a pattern of steps standing on a tonic.
 ///
-/// Every one of music21's twenty named scales is this with the pattern fixed,
-/// which is how they are built at registration — a Python subclass carrying
-/// the crate's `ScaleType` under `scaleTypeName`, exactly as music21's own
-/// subclasses carry an `AbstractScale`.
+/// The named scales (`MajorScale`, `DorianScale`, `OctatonicScale`, ...) are
+/// subclasses of this with the pattern fixed.
 #[pyclass(
     name = "ConcreteScale",
     module = "music21.scale",
@@ -799,6 +790,8 @@ impl ConcreteScale {
         format!("{} {}", self.inner.tonic().name(), self.r#type())
     }
 
+    /// The scale's tonic `Pitch`, or `None` for a scale with no tonic.
+    /// Assigning a `Pitch` keeps that very object.
     #[getter]
     fn get_tonic(slf: &Bound<'_, Self>, py: Python<'_>) -> PyResult<Option<Py<Pitch>>> {
         if !slf.borrow().has_tonic {
@@ -816,9 +809,6 @@ impl ConcreteScale {
         Ok(Some(object))
     }
 
-    /// Setting it keeps the pitch object given, which is what music21 does:
-    /// a scale built on a pitch a caller holds reports that very pitch, and
-    /// its own key tests turn on it.
     #[setter]
     fn set_tonic(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
         match value.filter(|value| !value.is_none()) {
@@ -1017,9 +1007,7 @@ impl ConcreteScale {
     /// music21's `getScalaData`: this scale written out as a Scala file
     /// would write it, one interval per degree.
     ///
-    /// The object handed back is music21's own `ScalaData` — it is what
-    /// music21's writer takes, and nothing about it is musical — filled with
-    /// the intervals between this scale's degrees.
+    /// Returns a music21 `ScalaData` object, so music21 must be installed.
     #[pyo3(signature = (direction = None))]
     fn getScalaData(
         slf: &Bound<'_, Self>,
@@ -1103,7 +1091,7 @@ impl ConcreteScale {
     /// music21's `deriveRanked`: the scales of this pattern containing the
     /// most of the given pitches, best first, each with how many it matched.
     ///
-    /// Only the first four by default, as upstream, and matched by sounding
+    /// Only the first four by default, as in music21, and matched by sounding
     /// note unless asked for written ones.
     #[pyo3(signature = (other, *, resultsReturned = 4, comparisonAttribute = "pitchClass", removeDuplicates = false, **_keywords))]
     fn deriveRanked(
@@ -1131,7 +1119,8 @@ impl ConcreteScale {
             .collect()
     }
 
-    /// music21's `derive`: the best-ranked of those.
+    /// music21's `derive`: the scale of this pattern that contains the most
+    /// of the given pitches.
     #[pyo3(signature = (other, *, comparisonAttribute = "pitchClass", **_keywords))]
     fn derive(
         slf: &Bound<'_, Self>,
@@ -1290,10 +1279,10 @@ impl ConcreteScale {
     /// music21's `pitchFromDegree`: the pitch at a scale degree, counting the
     /// tonic as one.
     ///
-    /// The range is music21's and is ignored here: the scale is realized
-    /// from its tonic either way, and the crate has no bounded realization
-    /// to narrow. The direction is read, since a scale that falls
-    /// differently names its degrees differently coming down.
+    /// `minPitch` and `maxPitch` are accepted for compatibility and ignored:
+    /// the pitch is always taken from the octave above the tonic.
+    /// `direction` matters for scales that descend differently from how
+    /// they ascend.
     #[pyo3(signature = (
         degree,
         minPitch = None,
