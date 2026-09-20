@@ -60,8 +60,9 @@ kept as music21 keeps it, one scale type where there were two, and no
   among them follows how long each part is, as music21 does. A span used to
   keep one weight of its own and leave every part weighing one.
 - music21's own `meter.core` docstrings run against the crate, as
-  `doctest_metercore`: 353 of their 386 examples pass, from 39 when the
-  harness was first pointed at them.
+  `doctest_metercore`: 369 of their 386 examples pass, from 39 when the
+  harness was first pointed at them. What is left is Python object identity
+  and music21's own cache.
 - `dynamics::Dynamic`: a dynamic mark and the loudness it stands for, with
   music21's tables for the marks, their Italian and English names and their
   scalars, and `dynamic_str_from_decimal` for the mark a loudness falls
