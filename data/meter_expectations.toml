@@ -4,10 +4,10 @@
 # music21 derives them from a MeterSequence partition tree, so this
 # file is what proves the shortcut agrees with the tree.
 #
-# music21 11.0.0b9 at ac6cf27258cbbda118f55470f41adb7a84a6f41d
+# music21 11.0.0b9 at eebac0e695e59e3e7af4db0ae0d1623f41837fa6
 
 music21_version = "11.0.0b9"
-music21_commit = "ac6cf27258cbbda118f55470f41adb7a84a6f41d"
+music21_commit = "eebac0e695e59e3e7af4db0ae0d1623f41837fa6"
 
 [[meter]]
 ratio = "1/1"
