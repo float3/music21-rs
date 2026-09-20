@@ -984,7 +984,13 @@ fn as_number(py: Python<'_>, value: FloatType) -> PyResult<Py<PyAny>> {
 /// A span as music21's `MeterSequence`, whatever it holds: what a caller
 /// built, and what every method handing back a divided span answers with.
 fn sequence_of(py: Python<'_>, span: RsMeterTerminal) -> PyResult<Py<PyAny>> {
-    Ok(Py::new(py, MeterSequence::holding(Held::Loose(span)))?.into_any())
+    Ok(crate::installed_new(
+        py,
+        "music21.meter.core",
+        "MeterSequence",
+        MeterSequence::holding(Held::Loose(span)),
+    )?
+    .into_any())
 }
 
 /// Hands back whichever of the two classes a span is: music21 calls a span
@@ -992,10 +998,25 @@ fn sequence_of(py: Python<'_>, span: RsMeterTerminal) -> PyResult<Py<PyAny>> {
 /// compare both reprs exactly.
 fn wrap_span(py: Python<'_>, held: Held) -> PyResult<Py<PyAny>> {
     let span = held.read(py)?;
+    // A span this facade builds has to be the class standing in for music21's,
+    // or `isinstance` reads it as something else and CPython names the wrong
+    // type in its own errors -- `installed_new`, as the chord facade does it.
     if span.is_empty() {
-        Ok(Py::new(py, MeterTerminal { held })?.into_any())
+        Ok(crate::installed_new(
+            py,
+            "music21.meter.core",
+            "MeterTerminal",
+            MeterTerminal { held },
+        )?
+        .into_any())
     } else {
-        Ok(Py::new(py, MeterSequence::holding(held))?.into_any())
+        Ok(crate::installed_new(
+            py,
+            "music21.meter.core",
+            "MeterSequence",
+            MeterSequence::holding(held),
+        )?
+        .into_any())
     }
 }
 
@@ -1642,7 +1663,22 @@ impl MeterSequence {
             .read(py)?
             .level_list(level, true)
             .iter()
-            .map(|part| as_number(py, part.weight()))
+            // The same level unflattened, which says which of those weights
+            // came from a span with parts: a level read flat answers a
+            // terminal for one of those, and its weight tells nothing of
+            // where it came from.
+            .zip(self.held.read(py)?.level_list(level, false))
+            .map(|(part, unflattened)| {
+                // A span nothing divides answers the weight it was given, so
+                // a level weighed `[2, 3]` reads back `2` and not `2.0`. One
+                // with parts answers what they come to, which is arithmetic,
+                // and so a float however whole it lands.
+                if unflattened.is_empty() {
+                    as_number(py, part.weight())
+                } else {
+                    Ok(part.weight().into_pyobject(py)?.into_any().unbind())
+                }
+            })
             .collect()
     }
 
