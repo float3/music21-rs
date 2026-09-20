@@ -8,10 +8,10 @@
 # within an offset by when each object was inserted, so both sides are
 # sorted before they are compared.
 #
-# music21 11.0.0b9 at ac6cf27258cbbda118f55470f41adb7a84a6f41d
+# music21 11.0.0b9 at eebac0e695e59e3e7af4db0ae0d1623f41837fa6
 
 music21_version = "11.0.0b9"
-music21_commit = "ac6cf27258cbbda118f55470f41adb7a84a6f41d"
+music21_commit = "eebac0e695e59e3e7af4db0ae0d1623f41837fa6"
 
 [[score]]
 name = "bwv66.6"

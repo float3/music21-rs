@@ -2,10 +2,10 @@
 # `cargo run --release -p xtask --features python -- regenerate-fixtures`.
 # Checked in so the library can be verified without importing music21.
 #
-# music21 11.0.0b9 at ac6cf27258cbbda118f55470f41adb7a84a6f41d
+# music21 11.0.0b9 at eebac0e695e59e3e7af4db0ae0d1623f41837fa6
 
 music21_version = "11.0.0b9"
-music21_commit = "ac6cf27258cbbda118f55470f41adb7a84a6f41d"
+music21_commit = "eebac0e695e59e3e7af4db0ae0d1623f41837fa6"
 
 [[scale]]
 scale_type = "Major"
