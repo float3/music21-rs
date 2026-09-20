@@ -246,11 +246,19 @@ jobs:
           path: target/wheels
 
       # music21's own dependencies, plus what its *test* suite needs on top:
-      # scipy and python-Levenshtein.
+      # scipy and python-Levenshtein to run at all, and matplotlib, LilyPond
+      # and a `~/Desktop` for the tests that draw a graph, engrave a score or
+      # add a local corpus path. Without those three, 109 of music21's tests
+      # failed on music21 itself -- 71 for matplotlib, 36 for LilyPond, 2 for
+      # the directory -- and a test music21 cannot pass is a test that says
+      # nothing about this crate either. Every one of them was environment.
       - name: Install music21's dependencies and its test dependencies
         run: |
           python -m pip install chardet joblib jsonpickle more_itertools numpy requests webcolors
-          python -m pip install scipy python-Levenshtein
+          python -m pip install scipy python-Levenshtein matplotlib
+          sudo apt-get update
+          sudo apt-get install -y lilypond
+          mkdir -p ~/Desktop
 
       - name: Install the wheel
         run: python -m pip install --no-index --find-links target/wheels music21-rs
@@ -518,6 +526,13 @@ jobs:
         run: |
           python -m pip install chardet joblib jsonpickle more_itertools numpy requests webcolors
           python -m pip install "maturin>=1.7,<2" pytest pdoc
+          # What music21's own suite needs to pass on music21, as the
+          # `music21-suite` job installs it: the report runs that suite too,
+          # and the two should be measuring in one environment.
+          python -m pip install scipy python-Levenshtein matplotlib
+          sudo apt-get update
+          sudo apt-get install -y lilypond
+          mkdir -p ~/Desktop
 
       # The wheel's own tests import music21_rs, so the wheel has to be
       # installed before the report runs them; the report rebuilds it, which
