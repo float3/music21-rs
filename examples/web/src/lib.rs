@@ -70,8 +70,7 @@ pub(crate) fn tuning_is_named(tuning_system: TuningSystem, id: &str) -> bool {
 fn tuning_label(tuning_system: TuningSystem) -> String {
     match tuning_system {
         TuningSystem::Equal(division)
-            if division.repeats_at_the_octave()
-                && !ALL_TUNING_SYSTEMS.contains(&tuning_system) =>
+            if division.repeats_at_the_octave() && !ALL_TUNING_SYSTEMS.contains(&tuning_system) =>
         {
             format!("Equal temperament, {} per octave", division.divisions())
         }
@@ -1212,9 +1211,7 @@ fn frequency_in_system(tuning_system: TuningSystem, pitch_space: f64) -> f64 {
         })
         .unwrap_or(0);
     let octave = pitch_space.div_euclid(12.0);
-    music21_rs::tuningsystem::CN1
-        * (2.0_f64).powf(octave)
-        * tuning_system.ratio(nearest as usize)
+    music21_rs::tuningsystem::CN1 * (2.0_f64).powf(octave) * tuning_system.ratio(nearest as usize)
 }
 
 fn parse_midi_input(input: &str) -> Option<Vec<i32>> {
