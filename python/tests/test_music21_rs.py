@@ -25,6 +25,10 @@ def test_every_public_name_is_exported():
         assert name in exported
     for name in exported:
         assert hasattr(m, name)
+    assert not [name for name in exported if name.startswith("_")]
+    # Private helpers stay reachable: pickles written by these classes name
+    # `_thawed`.
+    assert hasattr(m, "_thawed")
 
 
 @pytest.mark.parametrize(

@@ -18,6 +18,12 @@ __pycache__/
 /examples/web/listen/*.js
 /examples/web/score/*.js
 
+# What `maturin develop` builds into the wheel's own package directory.
+/python/pysrc/music21_rs/*.pyd
+/python/pysrc/music21_rs/*.so
+/python/pysrc/music21_rs/*.dylib
+/python/pysrc/music21_rs/*.pdb
+
 # OS/editor noise
 .DS_Store
 Thumbs.db

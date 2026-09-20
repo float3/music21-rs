@@ -13,7 +13,12 @@ from .music21_rs import __doc__ as _extension_doc
 from .music21_rs import __exception_names__ as _exception_names
 
 __doc__ = _extension_doc
-__all__ = sorted([*_extension_all, *_exception_names])
+# The extension lists its private helpers too (`_thawed`, which pickles call,
+# and music21's `_sharpsToPitchCache`), so that the star import above brings
+# them in. They stay importable but are not part of the public API.
+__all__ = sorted(
+    name for name in [*_extension_all, *_exception_names] if not name.startswith("_")
+)
 
 
 def __getattr__(name):
