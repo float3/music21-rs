@@ -209,11 +209,7 @@ fn clear_corpus_cache(py: Python<'_>) -> PyResult<()> {
     Ok(())
 }
 
-fn run_doctests(
-    py: Python<'_>,
-    module: &str,
-    swaps: &[(&str, &[&str])],
-) -> PyResult<Vec<Outcome>> {
+fn run_doctests(py: Python<'_>, module: &str, swaps: &[(&str, &[&str])]) -> PyResult<Vec<Outcome>> {
     let facade = py.import("music21_rs_facade")?;
     let music21 = py.import("music21")?;
     clear_corpus_cache(py)?;
