@@ -54,7 +54,7 @@ pub use pitch::{Accidental, Microtone, Pitch};
 /// The names each music21 module has a counterpart for here, which is what
 /// [`install_into_music21`] replaces and what `python-parity`'s doctest
 /// harness swaps one module at a time.
-const MUSIC21_MODULES: [(&str, &[&str]); 17] = [
+const MUSIC21_MODULES: [(&str, &[&str]); 18] = [
     ("music21.pitch", pitch::NAMES),
     ("music21.interval", interval::NAMES),
     ("music21.note", note::NAMES),
@@ -72,6 +72,7 @@ const MUSIC21_MODULES: [(&str, &[&str]); 17] = [
     ("music21.tempo", tempo::NAMES),
     ("music21.voiceLeading", voiceleading::NAMES),
     ("music21.harmony", harmony::INSTALLED_NAMES),
+    ("music21.dynamics", dynamics::NAMES),
 ];
 
 /// An argument that may not have been given at all, which is not the same
