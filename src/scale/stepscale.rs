@@ -13,9 +13,11 @@
 //!   reach the octave above the tonic, so `["m3", "M3"]` from C becomes
 //!   `C E- G C`.
 
+use crate::defaults::{FloatType, IntegerType};
 use crate::error::Result;
 use crate::interval::Interval;
 use crate::pitch::Pitch;
+use crate::scale::Scale;
 use crate::sieve::Sieve;
 
 use std::sync::LazyLock;
@@ -53,10 +55,16 @@ impl StepScale {
     ///
     /// An empty list defaults to a single `m2`, as music21 does.
     pub fn cyclical(tonic: Pitch, steps: &[&str]) -> Result<Self> {
-        Ok(Self {
+        Ok(Self::cyclical_of(tonic, parse_steps(steps)?))
+    }
+
+    /// The same from intervals already in hand, which is the only way to
+    /// give a step that has no name: one measured in cents.
+    pub fn cyclical_of(tonic: Pitch, steps: Vec<Interval>) -> Self {
+        Self {
             tonic,
-            steps: parse_steps(steps)?,
-        })
+            steps: or_default(steps),
+        }
     }
 
     /// Builds music21's `OctaveRepeatingScale`: the intervals plus a closing
@@ -78,8 +86,24 @@ impl StepScale {
     /// reproduced here: the cycle is closed at the octave above the last pitch
     /// and the input is left alone.
     pub fn octave_repeating(tonic: Pitch, steps: &[&str]) -> Result<Self> {
-        let mut steps = parse_steps(steps)?;
-        steps.push(interval_sum(&tonic, &steps)?.inversion()?);
+        Self::octave_repeating_of(tonic, parse_steps(steps)?)
+    }
+
+    /// The same from intervals already in hand.
+    pub fn octave_repeating_of(tonic: Pitch, steps: Vec<Interval>) -> Result<Self> {
+        let mut steps = or_default(steps);
+        let closing = match interval_sum(&tonic, &steps).and_then(|sum| sum.inversion()) {
+            Ok(closing) => closing,
+            // A sum no accidental can spell -- eleven minor seconds come to a
+            // twelfth diminished ten times over -- still has a size, and the
+            // cycle closes by what is left of the octave above it.
+            Err(_) => {
+                let risen: FloatType = steps.iter().map(Interval::semitones).sum();
+                let octaves = (risen / 12.0).floor() + 1.0;
+                Interval::from_semitones((octaves * 12.0 - risen).round() as IntegerType)?
+            }
+        };
+        steps.push(closing);
         Ok(Self { tonic, steps })
     }
 
@@ -117,6 +141,13 @@ impl StepScale {
         self.steps.len()
     }
 
+    /// The same cycle as a [`Scale`], which is what answers everything a
+    /// scale is asked past its own notes: a range of them, the degree a note
+    /// stands on, the note beside another.
+    pub fn scale(&self) -> Result<Scale> {
+        Scale::from_steps(self.tonic.clone(), self.steps.clone())
+    }
+
     /// Returns the pitches of one pass through the cycle, starting at the tonic.
     pub fn pitches(&self) -> Result<Vec<Pitch>> {
         let mut pitches = Vec::with_capacity(self.steps.len() + 1);
@@ -147,10 +178,16 @@ fn interval_sum(reference: &Pitch, steps: &[Interval]) -> Result<Interval> {
     Interval::between_pitches(reference, &current)
 }
 
-fn parse_steps(steps: &[&str]) -> Result<Vec<Interval>> {
+/// music21 reads no steps at all as a single minor second.
+fn or_default(steps: Vec<Interval>) -> Vec<Interval> {
     if steps.is_empty() {
-        return Ok(vec![DEFAULT_STEP.clone()]);
+        vec![DEFAULT_STEP.clone()]
+    } else {
+        steps
     }
+}
+
+fn parse_steps(steps: &[&str]) -> Result<Vec<Interval>> {
     steps
         .iter()
         .map(|name| Interval::from_name(*name))
@@ -181,6 +218,80 @@ mod tests {
 
     fn tonic(name: &str) -> Pitch {
         Pitch::from_name(name).expect("valid tonic")
+    }
+
+    #[test]
+    fn a_step_scale_answers_as_a_scale() {
+        // Read off music21 11.0.0b9: `OctaveRepeatingScale('c4', ['m3', 'M3'])`
+        // asked for `getPitches('g2', 'g4')`, the degree of three notes, and
+        // `nextPitch` from `c4`, down from `e-5`, and two steps up from `g3`.
+        let scale = StepScale::octave_repeating(tonic("C4"), &["m3", "M3"])
+            .unwrap()
+            .scale()
+            .unwrap();
+        let spelled = |pitches: Vec<Pitch>| -> Vec<String> {
+            pitches.iter().map(Pitch::name_with_octave).collect()
+        };
+        assert_eq!(
+            spelled(scale.pitches_between(&tonic("G2"), &tonic("G4")).unwrap()),
+            ["G2", "C3", "E-3", "G3", "C4", "E-4", "G4"]
+        );
+        // The closing octave is the tonic again, not a fourth degree.
+        assert_eq!(scale.degree_count(), 3);
+        assert_eq!(scale.degree_of(&tonic("C4")).unwrap(), Some(1));
+        assert_eq!(scale.degree_of(&tonic("E-")).unwrap(), Some(2));
+        assert_eq!(scale.degree_of(&tonic("G5")).unwrap(), Some(3));
+        assert_eq!(scale.degree_of(&tonic("D4")).unwrap(), None);
+        let next = |origin: &str, steps: usize| {
+            scale
+                .next_pitch_above(&tonic(origin), steps)
+                .unwrap()
+                .name_with_octave()
+        };
+        assert_eq!(next("C4", 1), "E-4");
+        assert_eq!(next("G3", 2), "E-4");
+        assert_eq!(
+            scale
+                .next_pitch_below(&tonic("E-5"), 1)
+                .unwrap()
+                .name_with_octave(),
+            "C5"
+        );
+    }
+
+    #[test]
+    fn a_respelling_scale_comes_down_by_its_own_walk() {
+        // music21: `OctaveRepeatingScale('d', ['m2', 'm2', 'm2'])`, going up
+        // and coming down. Going up the second step is an `F-`; coming down
+        // from `F` the same sound is an `E`, and the one below it a `D#`.
+        let scale = StepScale::octave_repeating(tonic("D"), &["m2", "m2", "m2"])
+            .unwrap()
+            .scale()
+            .unwrap();
+        let spelled = |pitches: Vec<Pitch>| -> Vec<String> {
+            pitches.iter().map(Pitch::name_with_octave).collect()
+        };
+        assert_eq!(
+            spelled(scale.pitches_between(&tonic("D4"), &tonic("D5")).unwrap()),
+            ["D4", "E-4", "F-4", "F4", "D5"]
+        );
+        assert_eq!(
+            spelled(
+                scale
+                    .pitches_between_descending(&tonic("D4"), &tonic("D5"))
+                    .unwrap()
+            ),
+            ["D5", "F4", "E4", "D#4", "D4"]
+        );
+    }
+
+    #[test]
+    fn a_cycle_whose_sum_cannot_be_spelled_still_closes() {
+        let steps = ["m2"; 11];
+        let scale = StepScale::octave_repeating(tonic("C4"), &steps).unwrap();
+        let pitches = scale.pitches().unwrap();
+        assert_eq!(pitches.len(), 13);
+        assert_eq!(pitches.last().unwrap().ps(), 72.0);
     }
 
     #[test]

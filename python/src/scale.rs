@@ -17,7 +17,7 @@ use music21_rs_crate::scale::{
     DegreeComparison as RsDegreeComparison, Scale as RsScale, ScaleType as RsScaleType,
     SolfegVariant as RsSolfegVariant,
 };
-use music21_rs_crate::{Interval as RsInterval, Pitch as RsPitch};
+use music21_rs_crate::{Interval as RsInterval, Pitch as RsPitch, StepScale as RsStepScale};
 
 use crate::interval::interval_from_any;
 use crate::pitch::{Pitch, pitch_from_any};
@@ -58,6 +58,7 @@ pub const NAMES: &[&str] = &[
     "OctatonicScale",
     "RagAsawari",
     "RagMarwa",
+    "OctaveRepeatingScale",
 ];
 
 pyo3::create_exception!(music21_rs_facade, ScaleException, crate::Music21Exception);
@@ -748,6 +749,30 @@ impl ConcreteScale {
         me.family = family;
         me.named_pattern = named;
         me.has_tonic = given.is_some();
+        Ok(())
+    }
+
+    /// Stands the scale on a cycle of steps in place of a named pattern,
+    /// which is what music21's `OctaveRepeatingScale` and `CyclicalScale` do
+    /// by building an abstract scale of their own. `closes` says whether the
+    /// cycle is carried on to the octave.
+    fn _standOnSteps(
+        slf: &Bound<'_, Self>,
+        intervalList: &Bound<'_, PyAny>,
+        closes: bool,
+    ) -> PyResult<()> {
+        let mut steps = Vec::new();
+        for step in intervalList.try_iter()? {
+            steps.push(interval_from_any(&step?)?);
+        }
+        let mut me = slf.borrow_mut();
+        let tonic = me.inner.tonic().clone();
+        let stepped = if closes {
+            RsStepScale::octave_repeating_of(tonic, steps).map_err(scale_error)?
+        } else {
+            RsStepScale::cyclical_of(tonic, steps)
+        };
+        me.inner = stepped.scale().map_err(scale_error)?;
         Ok(())
     }
 
@@ -1803,6 +1828,20 @@ def build(base, diatonic_base, names):
             'scaleTypeName': class_name,
         })
     return built
+
+
+def build_stepped(base):
+    class OctaveRepeatingScale(base):
+        def __init__(self, tonic=None, intervalList=None, **keywords):
+            super().__init__(tonic=tonic, **keywords)
+            self._standOnSteps(intervalList if intervalList else ['m2'], True)
+            self.type = 'Octave Repeating'
+
+    built = {'OctaveRepeatingScale': OctaveRepeatingScale}
+    for name, made in built.items():
+        made.__module__ = 'music21.scale'
+        made.__qualname__ = name
+    return built
 "#;
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -1833,6 +1872,15 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
         ))?
         .cast_into::<PyDict>()?;
     for (name, class) in built.iter() {
+        m.add(name.extract::<String>()?.as_str(), class)?;
+    }
+    // The scales that take their steps as an argument, which a name alone
+    // cannot build.
+    let stepped = builder
+        .getattr("build_stepped")?
+        .call1((m.getattr("ConcreteScale")?,))?
+        .cast_into::<PyDict>()?;
+    for (name, class) in stepped.iter() {
         m.add(name.extract::<String>()?.as_str(), class)?;
     }
     Ok(())

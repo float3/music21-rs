@@ -21,6 +21,7 @@ pub use super::realized::Scale;
 ///
 /// Mirrors music21's `IntervalNetwork.pitchSimplification`.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(super) enum Simplification {
     /// Spell literally, however many accidentals that takes.
     Exact,

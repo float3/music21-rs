@@ -4,7 +4,7 @@
 
 use super::scaletype::{
     DegreeComparison, HUMDRUM_SOLFEG_SYLLABLES, MAX_RANGE_OCTAVES, SCALE_STARTS, SOLFEG_SYLLABLES,
-    ScaleType, SolfegVariant, advance, step_interval,
+    ScaleType, Simplification, SolfegVariant, advance, step_interval,
 };
 use crate::chord::{Chord, root};
 use crate::defaults::{FloatType, IntegerType};
@@ -43,6 +43,10 @@ pub struct Scale {
     /// has no name to be written and read back through.
     #[cfg_attr(feature = "serde", serde(default))]
     custom_steps: Option<Vec<Interval>>,
+    /// How a scale given by its steps spells what it realizes, where that is
+    /// not how the named type would. `None` leaves it to the type.
+    #[cfg_attr(feature = "serde", serde(default))]
+    custom_simplification: Option<Simplification>,
 }
 
 impl Scale {
@@ -143,6 +147,7 @@ impl Scale {
             scale_type,
             tonic,
             custom_steps: None,
+            custom_simplification: None,
         }
     }
 
@@ -181,6 +186,31 @@ impl Scale {
             scale_type: ScaleType::Major,
             tonic: tonic.clone(),
             custom_steps: Some(steps),
+            custom_simplification: None,
+        })
+    }
+
+    /// A scale given by the steps between its notes rather than by a name or
+    /// by the notes themselves: the pattern music21's `OctaveRepeatingScale`
+    /// and `CyclicalScale` hand their interval network.
+    ///
+    /// The steps are walked in order from the tonic and then again from
+    /// wherever they leave off, so they are one period of the scale. A
+    /// pattern with no steps in it is no scale at all.
+    pub fn from_steps(tonic: Pitch, steps: Vec<Interval>) -> Result<Self> {
+        if steps.is_empty() {
+            return Err(crate::error::Error::Scale(
+                "a scale needs at least one step".to_string(),
+            ));
+        }
+        Ok(Self {
+            scale_type: ScaleType::Major,
+            tonic,
+            custom_steps: Some(steps),
+            // music21's interval network spells with at most one accidental
+            // unless it is told otherwise, which is what turns the third
+            // minor second above C from E double flat into D.
+            custom_simplification: Some(Simplification::MaxAccidental),
         })
     }
 
@@ -202,6 +232,7 @@ impl Scale {
                     scale_type: self.scale_type,
                     tonic: self.tonic.clone(),
                     custom_steps: Some(walked),
+                    custom_simplification: None,
                 };
             }
         }
@@ -222,8 +253,49 @@ impl Scale {
         minimum: &Pitch,
         maximum: &Pitch,
     ) -> Result<Vec<Pitch>> {
+        if self.custom_simplification.is_some() {
+            return self.walked_down_between(minimum, maximum);
+        }
         let mut pitches = self.descending().pitches_between(minimum, maximum)?;
         pitches.reverse();
+        Ok(pitches)
+    }
+
+    /// A range of a scale given by its steps, walked downward from the tonic
+    /// above it.
+    ///
+    /// Which way a scale is walked only matters where it respells as it
+    /// goes, and then it matters: three minor seconds up from D are `E-`,
+    /// `F-` and `F`, and the same three coming down from F are `E`, `D#` and
+    /// `D`. music21 walks its network in the direction it is asked for, so
+    /// the notes coming down are not the notes going up read backwards.
+    fn walked_down_between(&self, minimum: &Pitch, maximum: &Pitch) -> Result<Vec<Pitch>> {
+        let (lowest, highest) = (
+            minimum.ps().min(maximum.ps()),
+            minimum.ps().max(maximum.ps()),
+        );
+        let simplification = self.simplification();
+        let steps = self.walk()?;
+        let period = self.period_in_octaves(&steps);
+        let mut current = self.realization_start()?;
+        while current.ps() < highest {
+            let octave = current.octave().unwrap_or(0);
+            current.octave_setter(Some(octave + period));
+        }
+        let mut pitches = Vec::new();
+        let limit = steps.len() * (MAX_RANGE_OCTAVES + 2) + 1;
+        let clear_of = lowest - 12.0 * FloatType::from(period);
+        for index in 0..limit {
+            let sounding = current.ps();
+            if sounding < clear_of {
+                break;
+            }
+            if (lowest..=highest).contains(&sounding) {
+                pitches.push(current.clone());
+            }
+            let step = &steps[steps.len() - 1 - index % steps.len()];
+            current = advance(&current, &step.reversed()?, simplification)?;
+        }
         Ok(pitches)
     }
 
@@ -277,6 +349,12 @@ impl Scale {
         Ok(ranked)
     }
 
+    /// How the scale spells what it realizes.
+    fn simplification(&self) -> Simplification {
+        self.custom_simplification
+            .unwrap_or_else(|| self.scale_type.simplification())
+    }
+
     /// The steps walked from where the scale is realized.
     fn walk(&self) -> Result<Vec<Interval>> {
         match &self.custom_steps {
@@ -319,7 +397,7 @@ impl Scale {
     /// keeps its own spelling — `Scale::tonic` still has no octave — because
     /// the octave belongs to the realization and not to the scale.
     pub fn pitches(&self) -> Result<Vec<Pitch>> {
-        let simplification = self.scale_type.simplification();
+        let simplification = self.simplification();
         let start = self.realization_start()?;
         let mut pitches = Vec::with_capacity(self.scale_type.degree_count() + 1);
         pitches.push(start.clone());
@@ -465,7 +543,7 @@ impl Scale {
                 (degree - 1).rem_euclid(count) as usize
             }
         };
-        let simplification = self.scale_type.simplification();
+        let simplification = self.simplification();
         let steps = self.walk()?;
         let mut current = self.realization_start()?;
         for index in 0..position {
@@ -502,7 +580,7 @@ impl Scale {
         }
         let lowest = minimum.ps();
         let highest = maximum.ps();
-        let simplification = self.scale_type.simplification();
+        let simplification = self.simplification();
         let steps = self.walk()?;
         // Down whole periods until the start is at or below the range. A
         // period is usually the octave, but a scale given by its notes may
@@ -879,7 +957,7 @@ impl Scale {
 
     fn scale_pitches(&self) -> Result<Vec<Pitch>> {
         let mut pitches = self.pitches()?;
-        pitches.truncate(self.scale_type.degree_count());
+        pitches.truncate(self.degree_count());
         Ok(pitches)
     }
 
