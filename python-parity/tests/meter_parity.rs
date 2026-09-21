@@ -10,6 +10,7 @@
 //! needs neither Python nor the submodule.
 
 use music21_rs::TimeSignature;
+use music21_rs::meter::MeterTerminal;
 use serde::Deserialize;
 
 use std::path::Path;
@@ -17,6 +18,23 @@ use std::path::Path;
 #[derive(Debug, Deserialize)]
 struct Expectations {
     meter: Vec<MeterExpectation>,
+    written: Vec<WrittenExpectation>,
+}
+
+/// A meter written in parts: its four sequences as music21 writes them, and
+/// what every terminal of each weighs.
+#[derive(Debug, Deserialize)]
+struct WrittenExpectation {
+    ratio: String,
+    summed_numerator: bool,
+    display: String,
+    display_weights: Vec<f64>,
+    beat: String,
+    beat_weights: Vec<f64>,
+    beam: String,
+    beam_weights: Vec<f64>,
+    accent: String,
+    accent_weights: Vec<f64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -187,4 +205,92 @@ fn the_fixture_covers_both_simple_and_compound_meters() {
             "fixture is missing every {wanted} meter"
         );
     }
+}
+
+/// A meter written in parts is read into its sequences as music21 reads it:
+/// the same partitions, the same weights, and the same word on whether its
+/// numerators were summed.
+#[test]
+fn a_meter_written_in_parts_matches_music21() {
+    let expectations = expectations();
+    assert!(
+        expectations
+            .written
+            .iter()
+            .any(|meter| meter.summed_numerator)
+            && expectations
+                .written
+                .iter()
+                .any(|meter| !meter.summed_numerator),
+        "the fixture should hold meters written both ways"
+    );
+
+    let mut mismatches = Vec::new();
+    for expected in &expectations.written {
+        let actual = TimeSignature::from_ratio_string(&expected.ratio)
+            .unwrap_or_else(|err| panic!("{} should parse: {err}", expected.ratio));
+        if actual.summed_numerator() != expected.summed_numerator {
+            mismatches.push(format!(
+                "{}: summed_numerator is {}, music21 says {}",
+                expected.ratio,
+                actual.summed_numerator(),
+                expected.summed_numerator
+            ));
+        }
+        let sequences: [(&str, &MeterTerminal, &str, &[f64]); 4] = [
+            (
+                "display",
+                actual.display_sequence(),
+                &expected.display,
+                &expected.display_weights,
+            ),
+            (
+                "beat",
+                actual.beat_sequence(),
+                &expected.beat,
+                &expected.beat_weights,
+            ),
+            (
+                "beam",
+                actual.beam_sequence(),
+                &expected.beam,
+                &expected.beam_weights,
+            ),
+            (
+                "accent",
+                actual.accent_sequence(),
+                &expected.accent,
+                &expected.accent_weights,
+            ),
+        ];
+        for (name, sequence, written, weights) in sequences {
+            if sequence.to_string() != written {
+                mismatches.push(format!(
+                    "{} {name}: {sequence}, music21 says {written}",
+                    expected.ratio
+                ));
+            }
+            let weighed: Vec<f64> = sequence
+                .flattened()
+                .iter()
+                .map(MeterTerminal::weight)
+                .collect();
+            let agree = weighed.len() == weights.len()
+                && weighed.iter().zip(weights).all(|(a, b)| close(*a, *b));
+            if !agree {
+                mismatches.push(format!(
+                    "{} {name} weights: {weighed:?}, music21 says {weights:?}",
+                    expected.ratio
+                ));
+            }
+        }
+    }
+    assert!(
+        mismatches.is_empty(),
+        "{}",
+        mismatches.join(
+            "
+"
+        )
+    );
 }

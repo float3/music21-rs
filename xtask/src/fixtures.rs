@@ -20,6 +20,32 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+/// Meters written in parts, part by part and with their numerators summed,
+/// over one denominator and over several: the spellings a numerator and a
+/// denominator alone cannot tell apart.
+const METERS_WRITTEN_IN_PARTS: &[&str] = &[
+    "3+2/8",
+    "3/8+2/8",
+    "2+3/8",
+    "2/8+3/8",
+    "3+2+2/8",
+    "3/8+2/8+2/8",
+    "2+2+3/8",
+    "3+3+2/8",
+    "3+2+3/8",
+    "2+2+2+3/8",
+    "2+2+3/16",
+    "3/16+2/16",
+    "2+2+3/4",
+    "2/4+3/8",
+    "2/4+1/8",
+    "3/4+3/8",
+    "4/4+3/8",
+    "1/4+2/8",
+    "2/8+3/16",
+    "3+2+5/8+3/4",
+];
+
 /// Numerators the meter fixture sweeps, matching music21's own coverage.
 const METER_NUMERATORS: [u32; 21] = [
     1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 20, 21, 24, 27,
@@ -1694,9 +1720,42 @@ fn write_meters(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> PyResul
         }
     }
 
+    // A meter written in parts has beats of more than one length, so the
+    // questions above -- which all assume one -- have no answer for it, and
+    // music21 raises. What it does have is its four sequences, and those are
+    // where writing a meter one way rather than another shows.
+    for written in METERS_WRITTEN_IN_PARTS {
+        let time_signature = meter.call_method1("TimeSignature", (*written,))?;
+        let summed: bool = time_signature.getattr("summedNumerator")?.extract()?;
+        let _ = writeln!(out, "[[written]]");
+        let _ = writeln!(out, "ratio = {}", toml_string(written));
+        let _ = writeln!(out, "summed_numerator = {summed}");
+        for (key, attribute) in [
+            ("display", "displaySequence"),
+            ("beat", "beatSequence"),
+            ("beam", "beamSequence"),
+            ("accent", "accentSequence"),
+        ] {
+            let sequence = time_signature.getattr(attribute)?;
+            let text: String = sequence.str()?.extract()?;
+            let mut weights = Vec::new();
+            for terminal in sequence.call_method0("flatten")?.try_iter()? {
+                let weight: f64 = terminal?.getattr("weight")?.extract()?;
+                weights.push(float_repr(weight));
+            }
+            let _ = writeln!(out, "{key} = {}", toml_string(&text));
+            let _ = writeln!(out, "{key}_weights = [{}]", weights.join(", "));
+        }
+        let _ = writeln!(out);
+    }
+
     let path = workspace_root.join("data/meter_expectations.toml");
     fs::write(&path, out)?;
-    println!("  wrote {} ({count} time signatures)", path.display());
+    println!(
+        "  wrote {} ({count} time signatures, {} written in parts)",
+        path.display(),
+        METERS_WRITTEN_IN_PARTS.len()
+    );
     Ok(path)
 }
 

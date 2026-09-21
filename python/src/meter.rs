@@ -298,6 +298,18 @@ impl TimeSignature {
         Ok(())
     }
 
+    /// music21's `summedNumerator`, which it reads off how the bar is
+    /// displayed.
+    #[getter]
+    fn get_summedNumerator(&self) -> bool {
+        self.inner.summed_numerator()
+    }
+
+    #[setter]
+    fn set_summedNumerator(&mut self, value: bool) {
+        self.inner.set_summed_numerator(value);
+    }
+
     #[setter]
     fn set_displaySequence(&mut self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<()> {
         *self.inner.display_sequence_mut() = span_of(py, value)?;
@@ -1050,6 +1062,13 @@ fn wrap_span(py: Python<'_>, held: Held) -> PyResult<Py<PyAny>> {
 
 #[pymethods]
 impl MeterTerminal {
+    /// music21's `depth`: how many levels deep this part is, which for a
+    /// span nothing divides is always one.
+    #[getter]
+    fn depth(&self) -> usize {
+        1
+    }
+
     /// A copy of a span stands alone, since what it copied may have been a
     /// view of a meter.
     fn __copy__(&self, py: Python<'_>) -> PyResult<Self> {
@@ -1404,10 +1423,32 @@ impl MeterSequence {
         ))
     }
 
+    /// music21's `summedNumerator`: whether this was written `3+2/8` rather
+    /// than `3/8+2/8`.
+    #[getter]
+    fn get_summedNumerator(&self, py: Python<'_>) -> PyResult<bool> {
+        Ok(self.held.read(py)?.summed_numerator())
+    }
+
+    #[setter]
+    fn set_summedNumerator(&mut self, py: Python<'_>, value: bool) -> PyResult<()> {
+        let mut span = self.held.read(py)?;
+        span.set_summed_numerator(value);
+        self.held.write(py, span)
+    }
+
     /// music21's `partitionDisplay`: the parts written without the braces.
     #[getter]
     fn partitionDisplay(&self, py: Python<'_>) -> PyResult<String> {
         Ok(self.held.read(py)?.partition_display())
+    }
+
+    /// music21's `depth`: how many distinct levels this sequence has. music21
+    /// counts the sequence's own level as the first, so one holding nothing
+    /// but terminals is one deep.
+    #[getter]
+    fn depth(&self, py: Python<'_>) -> PyResult<usize> {
+        Ok(self.held.read(py)?.depth().max(1))
     }
 
     /// music21's `isUniformPartition`: whether every part at this depth is

@@ -46,6 +46,11 @@ pub struct MeterTerminal {
     /// What this span is itself divided into, if anything. A terminal with
     /// parts is music21's `MeterSequence`; one without is a leaf.
     parts: Vec<MeterTerminal>,
+    /// Whether this was written with its numerators summed over one
+    /// denominator, `3+2/8`, rather than part by part, `3/8+2/8`: music21's
+    /// `summedNumerator`.
+    #[cfg_attr(feature = "serde", serde(default))]
+    summed_numerator: bool,
 }
 
 impl MeterTerminal {
@@ -66,6 +71,7 @@ impl MeterTerminal {
             denominator,
             weight: 1.0,
             parts: Vec::new(),
+            summed_numerator: false,
         })
     }
 
@@ -83,8 +89,8 @@ impl MeterTerminal {
     /// The span itself is written over the denominator its parts share, or
     /// the least one they all divide into: `3/4+2/4+1/8` is `11/8`.
     ///
-    /// This is not music21's `(3+2)/8`, a summed numerator, which music21
-    /// refuses to read at all.
+    /// A span written with a bare numerator is one whose numerators were
+    /// summed, and says so: [`Self::summed_numerator`].
     pub fn from_partition_string(written: &str) -> Result<Self> {
         let mut parts = Vec::new();
         let tokens: Vec<&str> = written.split('+').map(str::trim).collect();
@@ -108,7 +114,24 @@ impl MeterTerminal {
             let numerator = parse_number(token.split('/').next().unwrap_or(token))?;
             parts.push(Self::new(numerator, denominator)?);
         }
-        Self::from_parts(parts, written)
+        let mut span = Self::from_parts(parts, written)?;
+        span.summed_numerator = tokens.iter().any(|token| !token.contains('/'));
+        Ok(span)
+    }
+
+    /// Whether this span was written with its numerators summed over one
+    /// denominator, as `3+2/8` is and `3/8+2/8` is not: music21's
+    /// `summedNumerator`. The two are the same parts; what differs is how
+    /// the meter is printed, and that a bar written this way is beamed in the
+    /// parts it was written in.
+    #[must_use]
+    pub fn summed_numerator(&self) -> bool {
+        self.summed_numerator
+    }
+
+    /// Says whether the numerators are written summed.
+    pub fn set_summed_numerator(&mut self, summed: bool) {
+        self.summed_numerator = summed;
     }
 
     /// A span made of the parts given, which is what they come to: music21's
@@ -483,7 +506,54 @@ impl MeterTerminal {
             other => other as usize,
         };
         self.subdivide_partitions_equal(Some(first))?;
+        self.subdivide_nested_below_the_first(depth, normalize_denominators)
+    }
 
+    /// The same, with the first division taken from another sequence rather
+    /// than from a count: music21's `subdivideNestedHierarchy` handed a
+    /// `MeterSequence` as its `firstPartitionForm`.
+    ///
+    /// This is how a bar whose beats are not all one length is nested — the
+    /// five eighths of `3+2/8` divide first into a three and a two, which no
+    /// count can say. The form has to come to the same length as this span.
+    ///
+    /// ```
+    /// use music21_rs::meter::MeterTerminal;
+    ///
+    /// let beats = MeterTerminal::from_partition_string("3/8+2/8")?;
+    /// let mut bar = MeterTerminal::new(5, 8)?;
+    /// bar.subdivide_nested_hierarchy_by(2, &beats, true)?;
+    /// assert_eq!(bar.to_string(), "{{{1/8+1/8+1/8}+{1/8+1/8}}}");
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
+    pub fn subdivide_nested_hierarchy_by(
+        &mut self,
+        depth: usize,
+        first_partition_form: &Self,
+        normalize_denominators: bool,
+    ) -> Result<()> {
+        self.partition_by_count(1, false)?;
+        if depth == 0 {
+            return Ok(());
+        }
+        let ratio = |span: &Self| format!("{}/{}", span.numerator, span.denominator);
+        let written: Vec<String> = if first_partition_form.parts.is_empty() {
+            vec![ratio(first_partition_form)]
+        } else {
+            first_partition_form.parts.iter().map(ratio).collect()
+        };
+        let borrowed: Vec<&str> = written.iter().map(String::as_str).collect();
+        self.parts[0].partition_by_parts(&borrowed)?;
+        self.subdivide_nested_below_the_first(depth, normalize_denominators)
+    }
+
+    /// Every level of a nested hierarchy below the first division, which is
+    /// by two or three however the first was made.
+    fn subdivide_nested_below_the_first(
+        &mut self,
+        depth: usize,
+        normalize_denominators: bool,
+    ) -> Result<()> {
         let mut frontier = vec![vec![0]];
         for _ in 1..depth {
             frontier = self.subdivide_parts_of(&frontier, None)?;

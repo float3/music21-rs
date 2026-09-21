@@ -305,10 +305,14 @@ impl TimeSignature {
     ///
     /// A meter written additively is beamed by these rules too — music21
     /// beams `"3/8+2/8"` as `{2/8+3/8}`, by the rule for a five, and not in
-    /// the parts it was written in.
+    /// the parts it was written in. One written with its numerators summed,
+    /// `"3+2/8"`, is the exception: it is left in the parts it was written in.
     fn set_default_beam_partitions(&mut self) -> Result<()> {
         let numerator = self.numerator;
         let denominator = self.denominator;
+        if self.beam_sequence.summed_numerator() {
+            return Ok(());
+        }
         if (denominator == 8 && matches!(numerator, 1..=3))
             || (denominator == 16 && matches!(numerator, 1..=5))
             || (denominator == 32 && matches!(numerator, 1..=11))
@@ -418,11 +422,12 @@ impl TimeSignature {
     pub fn from_ratio_string(ratio: &str) -> Result<Self> {
         let parts = Self::parts(ratio)?;
         let word = division_word(ratio);
+        let summed = ratio.split('+').any(|part| !part.contains('/'));
         let denominator = parts[0].1;
         if parts.iter().all(|(_, part)| *part == denominator) {
             let numerator = parts.iter().map(|(count, _)| count).sum();
             let mut signature = Self::new(numerator, denominator)?;
-            signature.write_as(&parts, word)?;
+            signature.write_as(&parts, word, summed)?;
             return Ok(signature);
         }
         // Parts measured in different notes: what they come to together is
@@ -437,7 +442,7 @@ impl TimeSignature {
             .map(|(count, part)| count * (denominator / part))
             .sum();
         let mut signature = Self::new(numerator, denominator)?;
-        signature.write_as(&parts, word)?;
+        signature.write_as(&parts, word, summed)?;
         Ok(signature)
     }
 
@@ -448,20 +453,54 @@ impl TimeSignature {
         &mut self,
         parts: &[(UnsignedIntegerType, UnsignedIntegerType)],
         word: Option<&str>,
+        summed: bool,
     ) -> Result<()> {
         self.favor_compound = favor_compound(self.numerator, self.denominator, word);
-        if parts.len() > 1 {
-            let written: Vec<String> = parts
-                .iter()
-                .map(|(count, part)| format!("{count}/{part}"))
-                .collect();
-            let borrowed: Vec<&str> = written.iter().map(String::as_str).collect();
-            self.display_sequence.partition_by_parts(&borrowed)?;
-        }
         self.beat_sequence = whole_bar(self.numerator, self.denominator)?;
         self.beam_sequence = whole_bar(self.numerator, self.denominator)?;
         self.accent_sequence = whole_bar(self.numerator, self.denominator)?;
+        if parts.len() > 1 {
+            // music21 reads every sequence out of the one string, and a
+            // sequence read from its parts weighs one for each of them --
+            // which is not what partitioning a bar into the same parts
+            // gives, since that shares out the one the bar weighed. The
+            // beams and the beats begin as written; the rules by numerator
+            // then either replace those parts or leave them standing.
+            let written = parts
+                .iter()
+                .map(|(count, part)| format!("{count}/{part}"))
+                .collect::<Vec<_>>()
+                .join("+");
+            let loaded = MeterTerminal::from_partition_string(&written)?;
+            self.display_sequence = loaded.clone();
+            self.beat_sequence = loaded.clone();
+            self.beam_sequence = loaded;
+        }
+        // Every sequence is read from the one string, so each says how that
+        // string was written.
+        for sequence in [
+            &mut self.display_sequence,
+            &mut self.beat_sequence,
+            &mut self.beam_sequence,
+            &mut self.accent_sequence,
+        ] {
+            sequence.set_summed_numerator(summed);
+        }
         self.set_default_partitions()
+    }
+
+    /// Whether the meter was written with its numerators summed over one
+    /// denominator, `3+2/8`, rather than part by part: music21's
+    /// `summedNumerator`, which it reads off how the bar is displayed.
+    #[must_use]
+    pub fn summed_numerator(&self) -> bool {
+        self.display_sequence.summed_numerator()
+    }
+
+    /// Says whether the numerators are written summed, which changes how the
+    /// meter is printed and nothing about how it is counted.
+    pub fn set_summed_numerator(&mut self, summed: bool) {
+        self.display_sequence.set_summed_numerator(summed);
     }
 
     /// The `(numerator, denominator)` pairs a meter string is written in,
@@ -925,6 +964,11 @@ impl TimeSignature {
     /// [`Self::accent_weights`], which reads the sequence, so that weights a
     /// caller has set are the ones read back.
     fn default_accent_weights(&self) -> Vec<FloatType> {
+        if !self.beat_sequence.is_uniform_partition(0)
+            && let Some(weights) = self.accent_weights_from_the_beats()
+        {
+            return weights;
+        }
         let (top, second, third) = self.accent_hierarchy();
         let count = top * second * third;
         (0..count)
@@ -936,6 +980,41 @@ impl TimeSignature {
                 FloatType::from(2u32.pow(depth - 1)) / 8.0
             })
             .collect()
+    }
+
+    /// The default weights of a bar whose beats are not all one length,
+    /// `3+2/8` say, which no rule over the numerator can give: the bar is
+    /// nested three levels deep beginning from the beats as they are, and
+    /// each partition weighs by how many of those levels begin where it does.
+    /// This is the branch of music21's `_setDefaultAccentWeights` that is
+    /// handed the beat sequence itself.
+    ///
+    /// `None` where the bar cannot be nested that far, which music21 also
+    /// gives up on; the rule for a uniform bar answers then.
+    fn accent_weights_from_the_beats(&self) -> Option<Vec<FloatType>> {
+        let mut nested = MeterTerminal::new(self.numerator, self.denominator).ok()?;
+        nested
+            .subdivide_nested_hierarchy_by(3, &self.beat_sequence, true)
+            .ok()?;
+        let count = nested.flattened().len();
+        let step = self.bar_quarter_length() / FloatType::from(u32::try_from(count).ok()?);
+        let depths: Vec<usize> = (0..count)
+            .map(|index| {
+                let offset = step * FloatType::from(index as u32);
+                nested.offset_to_depth(offset, sequence::OffsetAlign::Quantize)
+            })
+            .collect::<Result<_>>()
+            .ok()?;
+        let deepest = depths.iter().copied().max()?;
+        Some(
+            depths
+                .into_iter()
+                .map(|depth| {
+                    FloatType::from(2u32.pow(depth as u32 - 1))
+                        / FloatType::from(2u32.pow(deepest as u32 - 1))
+                })
+                .collect(),
+        )
     }
 
     /// Whether an offset in quarter lengths starts an accent partition:
@@ -1614,6 +1693,36 @@ mod tests {
         assert!(TimeSignature::parts("3+2+5").is_err());
         assert!(TimeSignature::from_ratio_string("").is_err());
         assert!(TimeSignature::from_ratio_string("3.0/4.0").is_err());
+    }
+
+    #[test]
+    fn a_summed_numerator_is_beamed_as_it_was_written() {
+        use crate::meter::TimeSignature;
+
+        // Read off music21 11.0.0b9: `summedNumerator` and the parts of
+        // `beamSequence`. A bar written part by part is beamed by the rule
+        // for its numerator where there is one, and as written where there
+        // is not; one written with its numerators summed is left alone.
+        let expected = [
+            ("3+2/8", true, "{3/8+2/8}"),
+            ("3/8+2/8", false, "{2/8+3/8}"),
+            ("2+3/8", true, "{2/8+3/8}"),
+            ("3+2+2/8", true, "{3/8+2/8+2/8}"),
+            ("3/8+2/8+2/8", false, "{2/8+2/8+3/8}"),
+            ("2+2+3/16", true, "{2/16+2/16+3/16}"),
+            ("3/16+2/16", false, "{3/16+2/16}"),
+            ("6/8", false, "{3/8+3/8}"),
+        ];
+        for (written, summed, beams) in expected {
+            let signature = TimeSignature::from_ratio_string(written).unwrap();
+            assert_eq!(signature.summed_numerator(), summed, "{written}");
+            assert_eq!(signature.beam_sequence().to_string(), beams, "{written}");
+        }
+
+        let mut signature = TimeSignature::from_ratio_string("3/8+2/8").unwrap();
+        signature.set_summed_numerator(true);
+        assert!(signature.summed_numerator());
+        assert!(signature.display_sequence().summed_numerator());
     }
 
     #[test]
