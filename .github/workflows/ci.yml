@@ -664,6 +664,8 @@ jobs:
               "score/index.html",
               "score/app.js",
               "reports/index.html",
+              "reports/crate/index.html",
+              "reports/wheel/index.html",
               "reports/report.json",
           ]
 
@@ -679,7 +681,9 @@ jobs:
           file_checks = {
               "index.html": ["score/", "chord/", "chords/", "polyrhythm/", "tuning/", "reports/", "./python/", "./theme.css", "./theme.js"],
               "python/music21_rs.html": ["id=\"Chord\"", "id=\"Pitch\"", "id=\"Pitch.transpose\"", "install_into_music21"],
-              "reports/index.html": ["../theme.css", "../theme.js"],
+              "reports/index.html": ["../theme.css", "../theme.js", "crate/index.html", "wheel/index.html"],
+              "reports/crate/index.html": ["../../theme.css", "../../theme.js", "../index.html"],
+              "reports/wheel/index.html": ["../../theme.css", "../../theme.js", "../index.html"],
               "theme.css": ["--accent", ":root[data-theme=\"dark\"]", ".theme-toggle"],
               "chord/index.html": ["./app.js", "../theme.css", "../chords/", "../polyrhythm/"],
               "chord/app.js": ["../help-tooltips.js", "../theme.js", "../pkg/music21_rs_web.js"],

@@ -271,20 +271,6 @@ impl Timings {
             |side| side.name.as_str(),
         )
     }
-
-    /// The column a headline speedup should be read off, and its name.
-    ///
-    /// The wheel where there is one: it is what a caller installs, so it is
-    /// what a caller gets. The crate compiled here is the fallback, and is
-    /// what the number means on a machine with no wheel built.
-    fn headline(&self) -> Option<(&SideTotal, usize)> {
-        let wheel = self
-            .sides
-            .iter()
-            .enumerate()
-            .rfind(|(_, side)| side.median_speedup.is_some())?;
-        Some((wheel.1, wheel.0))
-    }
 }
 
 /// One column of the comparison.
@@ -388,6 +374,37 @@ struct Suite {
     /// music21's own suite has any.
     #[serde(default)]
     expected_failures: usize,
+    /// Which of the two things this repository ships the suite says something
+    /// about, which is how the crate's page and the wheel's each take theirs.
+    #[serde(default)]
+    subject: Subject,
+    /// True where the result is a diff against music21 rather than a pass
+    /// mark, so its count is kept out of any total of tests passing.
+    #[serde(default)]
+    comparison: bool,
+}
+
+/// The two things this repository ships, and the suites that exercise both.
+#[derive(Debug, Default, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+enum Subject {
+    /// The Rust library, `music21-rs`.
+    #[default]
+    Crate,
+    /// The Python package, `music21_rs`.
+    Wheel,
+    /// A suite that drives the crate through the wheel's own classes.
+    Both,
+}
+
+impl Subject {
+    fn covers_crate(self) -> bool {
+        self != Self::Wheel
+    }
+
+    fn covers_wheel(self) -> bool {
+        self != Self::Crate
+    }
 }
 
 impl Suite {
@@ -399,6 +416,12 @@ impl Suite {
     /// Attaches the sentence saying what this suite measures.
     fn describing(mut self, note: &str) -> Self {
         self.note = Some(note.to_string());
+        self
+    }
+
+    /// Says which of the crate and the wheel this suite is a test of.
+    fn of(mut self, subject: Subject) -> Self {
+        self.subject = subject;
         self
     }
 }
@@ -528,13 +551,20 @@ pub(crate) fn parse_options(workspace_root: &Path, args: &[String]) -> Result<Op
     Ok(options)
 }
 
-/// Writes the report and whatever pages hang off it.
+/// Writes the report's three pages — the overview, the crate's and the
+/// wheel's — and whatever hangs off them.
 ///
 /// The timings page is written only where there are timings, and removed
 /// where there are not: a stale copy left beside a report that no longer
 /// links to it would be a page describing a run nobody made.
 fn write_pages(out: &Path, report: &Report) -> Result<(), Box<dyn Error>> {
-    fs::write(out.join("index.html"), render_html(report))?;
+    for view in [View::Overview, View::Crate, View::Wheel] {
+        let page = out.join(view.file());
+        if let Some(parent) = page.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(&page, render_html(report, view))?;
+    }
     for (file, label, part, whole) in badges(report) {
         fs::write(out.join(file), badge(&label, part, whole))?;
     }

@@ -198,7 +198,10 @@ pub(super) fn run_suites(workspace_root: &Path, env: &[(String, String)]) -> Vec
             ],
             (!submodule.exists()).then_some("the music21 submodule is not checked out"),
             env,
-        ),
+        )
+        // music21's docstrings are run over the wheel's classes, which answer
+        // out of the crate: one run says something about each.
+        .of(Subject::Both),
     ];
     // The wheel is deliberately built uninstrumented. Its Rust half lives in
     // a `.pyd` inside the installed package rather than under the target
@@ -206,10 +209,12 @@ pub(super) fn run_suites(workspace_root: &Path, env: &[(String, String)]) -> Vec
     // profiles onto; and an instrumented wheel is not the artifact CI ships.
     // What it tests of the crate, the parity suite covers far more of anyway.
     let (build, tests) = wheel_suites(workspace_root);
-    suites.push(build);
-    suites.push(tests);
+    suites.push(build.of(Subject::Wheel));
+    suites.push(tests.of(Subject::Wheel));
     // The one row whose result is not a pass mark, which the title cannot say.
-    suites.push(music21_suite(workspace_root, &submodule).describing(
+    let mut comparison = music21_suite(workspace_root, &submodule).of(Subject::Both);
+    comparison.comparison = true;
+    suites.push(comparison.describing(
         "Run twice, once on music21 and once on the crate, and diffed: music21's own suite fails a number of its own tests in any environment, so what counts is that the two sets match.",
     ));
     suites
@@ -242,6 +247,8 @@ pub(super) fn music21_suite(workspace_root: &Path, submodule: &Path) -> Suite {
         detail: Some(detail),
         note: None,
         expected_failures: 0,
+        subject: Subject::Crate,
+        comparison: false,
     };
 
     if !submodule.exists() {
@@ -281,6 +288,8 @@ pub(super) fn music21_suite(workspace_root: &Path, submodule: &Path) -> Suite {
                 detail: last_line(&text),
                 note: None,
                 expected_failures: 0,
+                subject: Subject::Crate,
+                comparison: false,
             },
         };
     };
@@ -329,6 +338,8 @@ pub(super) fn music21_suite(workspace_root: &Path, submodule: &Path) -> Suite {
         )),
         note: None,
         expected_failures: mine.len() - regressions,
+        subject: Subject::Crate,
+        comparison: false,
     }
 }
 
@@ -479,6 +490,8 @@ pub(super) fn cargo_suite(
             detail: Some(reason.to_string()),
             note: None,
             expected_failures: 0,
+            subject: Subject::Crate,
+            comparison: false,
         };
     }
     let output = Command::new("cargo")
@@ -498,6 +511,8 @@ pub(super) fn cargo_suite(
                 detail: Some(format!("could not run cargo ({err})")),
                 note: None,
                 expected_failures: 0,
+                subject: Subject::Crate,
+                comparison: false,
             };
         }
     };
@@ -515,6 +530,8 @@ pub(super) fn cargo_suite(
         detail: None,
         note: None,
         expected_failures: 0,
+        subject: Subject::Crate,
+        comparison: false,
     }
 }
 
@@ -543,6 +560,8 @@ pub(super) fn wheel_suites(workspace_root: &Path) -> (Suite, Suite) {
             detail: Some(format!("maturin is not installed ({err})")),
             note: None,
             expected_failures: 0,
+            subject: Subject::Crate,
+            comparison: false,
         },
         Ok(output) if output.status.success() => Suite {
             name: BUILD.to_string(),
@@ -553,6 +572,8 @@ pub(super) fn wheel_suites(workspace_root: &Path) -> (Suite, Suite) {
             detail: built_wheel_name(&merged(&output)),
             note: None,
             expected_failures: 0,
+            subject: Subject::Crate,
+            comparison: false,
         },
         Ok(output) => Suite {
             name: BUILD.to_string(),
@@ -563,6 +584,8 @@ pub(super) fn wheel_suites(workspace_root: &Path) -> (Suite, Suite) {
             detail: last_line(&merged(&output)),
             note: None,
             expected_failures: 0,
+            subject: Subject::Crate,
+            comparison: false,
         },
     };
 
@@ -582,6 +605,8 @@ pub(super) fn wheel_suites(workspace_root: &Path) -> (Suite, Suite) {
             detail: Some(format!("could not run {python} ({err})")),
             note: None,
             expected_failures: 0,
+            subject: Subject::Crate,
+            comparison: false,
         },
         Ok(output) => {
             let text = merged(&output);
@@ -595,6 +620,8 @@ pub(super) fn wheel_suites(workspace_root: &Path) -> (Suite, Suite) {
                     detail: Some(format!("{python} has no {missing}")),
                     note: None,
                     expected_failures: 0,
+                    subject: Subject::Crate,
+                    comparison: false,
                 },
                 None => {
                     let (passed, failed) = pytest_counts(&text);
@@ -611,6 +638,8 @@ pub(super) fn wheel_suites(workspace_root: &Path) -> (Suite, Suite) {
                         detail: None,
                         note: None,
                         expected_failures: 0,
+                        subject: Subject::Crate,
+                        comparison: false,
                     }
                 }
             }

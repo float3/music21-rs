@@ -1,5 +1,5 @@
 // The reports page is static; this only adds what a static page cannot do —
-// filtering the ported list and saying which section the reader is in. The
+// filtering the member list and saying which section the reader is in. The
 // page is complete without it, so everything here degrades to nothing.
 //
 // This is the source. `report.js` beside it is what the page carries, emitted
@@ -19,6 +19,24 @@
         const items = Array.from(list.querySelectorAll<HTMLDetailsElement>(".class-item"));
         const empty = list.querySelector<HTMLElement>("[data-filter-empty]");
 
+        // A needle that names a class or its file shows the whole class; one
+        // that only names members opens the class on just those members, so
+        // a search for one method does not end in a page of closed rows.
+        const opened = new Set<HTMLDetailsElement>();
+        const showMembers = (item: HTMLDetailsElement, needle: string): void => {
+            const head = item.querySelector(".class-name")?.textContent?.toLowerCase() ?? "";
+            const narrow = needle !== "" && !head.includes(needle);
+            for (const row of Array.from(item.querySelectorAll<HTMLElement>("[data-member]"))) {
+                row.hidden = narrow && !(row.dataset.member ?? "").includes(needle);
+            }
+            if (narrow && !item.open) {
+                item.open = true;
+                opened.add(item);
+            } else if (!narrow && opened.delete(item)) {
+                item.open = false;
+            }
+        };
+
         const apply = (): void => {
             const needle = (search ? search.value : "").trim().toLowerCase();
             const onlyIncomplete = incomplete ? incomplete.checked : false;
@@ -28,7 +46,10 @@
                     (!needle || (item.dataset.search ?? "").includes(needle)) &&
                     (!onlyIncomplete || item.dataset.missing !== "0");
                 item.hidden = !hit;
-                if (hit) shown += 1;
+                if (hit) {
+                    shown += 1;
+                    showMembers(item, needle);
+                }
             }
             if (empty) empty.hidden = shown !== 0;
             if (tally) {
