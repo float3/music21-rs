@@ -501,8 +501,8 @@ impl Interval {
     }
 
     /// Parses an interval name such as `"M3"`, `"P5"`, or `"-m6"`.
-    pub fn from_name(name: impl Into<String>) -> Result<Self> {
-        let (diatonic, chromatic, inferred) = parse_interval_name(name.into())?;
+    pub fn from_name(name: impl AsRef<str>) -> Result<Self> {
+        let (diatonic, chromatic, inferred) = parse_interval_name(name.as_ref())?;
         Ok(Self {
             implicit_diatonic: inferred,
             diatonic,
@@ -1073,10 +1073,12 @@ fn interval_parts(
     Ok((d_interval, c_interval, inferred))
 }
 
-fn parse_interval_name(mut value: String) -> Result<(DiatonicInterval, ChromaticInterval, bool)> {
-    if let Some((specifier, number)) = parse_plain_interval_name(&value) {
+fn parse_interval_name(name: &str) -> Result<(DiatonicInterval, ChromaticInterval, bool)> {
+    if let Some((specifier, number)) = parse_plain_interval_name(name) {
         return interval_parts(specifier, number, false);
     }
+    // Only the unusual spellings are taken apart, so only they are copied.
+    let mut value = name.to_string();
     let mut inferred = false;
     let mut dir_scale = 1;
 

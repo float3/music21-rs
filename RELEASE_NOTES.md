@@ -45,7 +45,8 @@ kept as music21 keeps it, one scale type where there were two, and no
   `#[non_exhaustive]`, so a new variant is a compile error in a caller's
   `match` rather than something a wildcard arm swallows.
 - `ChordSymbol::duration` returns `&Duration`.
-- `Pitch::from_name` and `Note::from_name` take `impl AsRef<str>`. A `&str`,
+- `Pitch::from_name`, `Note::from_name` and `Interval::from_name` take
+  `impl AsRef<str>`. A `&str`,
   a `String` or a `&String` passes as before; only a type that could be
   turned into a `String` without being one has to say so now.
 - `tuningsystem::FORTYTHREE_TONE`, an alias of `FORTY_THREE_TONE`, is gone.
@@ -136,7 +137,7 @@ kept as music21 keeps it, one scale type where there were two, and no
 
   | | before | after |
   | --- | --- | --- |
-  | `Interval::from_name("P5")` | 1151ns | 88ns |
+  | `Interval::from_name("P5")` | 1151ns | 33ns |
   | `Pitch::from_name("C#4")` | 584ns | 136ns |
   | `Pitch::clone` (with an accidental) | 127ns | 18ns |
   | `Chord::root`, `inversion`, `third` | ~450ns | ~45ns |
@@ -169,6 +170,14 @@ kept as music21 keeps it, one scale type where there were two, and no
   twenty-two modules pass, with nothing left out.
 - `MeterSequence.offsetToDepth` takes music21's `index`, the hint its v7 added
   for which part of the finest level an offset falls in.
+- music21's own suite runs in the environment its tests need. 109 of them
+  failed on music21 itself in CI -- 71 for want of matplotlib, 36 of
+  LilyPond, 2 of a `~/Desktop` -- and the last one failed because the runner
+  here ignored every warning, including the one music21's `deprecated`
+  doctest exists to show. With all of that provided, music21 fails none of its
+  own tests, so every test in the comparison now measures something. The
+  `dynamics` classes are installed by `install_into_music21` on the strength
+  of it.
 - The report tracks three modules it could not see before: `meter.core`,
   whose two classes the whole meter tree is made of; `tie`, whose entire API
   is the names in its `__slots__`, which no scan for methods could find; and

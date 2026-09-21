@@ -72,7 +72,7 @@ impl DiatonicInterval {
     /// Parses a diatonic interval from a name such as `M3`, `-P5` or
     /// `Major Third`.
     pub fn from_name(name: &str) -> Result<Self> {
-        let (diatonic, _, _) = super::parse_interval_name(name.to_string())?;
+        let (diatonic, _, _) = super::parse_interval_name(name)?;
         Self::try_new(diatonic.specifier, diatonic.generic)
     }
 
