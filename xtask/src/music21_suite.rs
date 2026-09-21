@@ -373,10 +373,22 @@ fn run_one(workspace_root: &Path, out: &Path, which: Which, only: Option<&str>) 
             },
         }
 
-        // A one-shot process, so the filter is simply set rather than set and
-        // put back the way music21's own `catch_warnings` block does it.
-        py.import("warnings")?
-            .call_method1("simplefilter", ("ignore",))?;
+        // The two filters music21's own `testSingleCoreAll` sets, and no
+        // more. Ignoring every warning -- which this did -- swallows the one
+        // music21's `deprecated` doctest is there to show, and that was the
+        // last test music21 failed on itself here. A one-shot process, so the
+        // filters are simply set rather than set and put back the way
+        // music21's `catch_warnings` block does it.
+        let warnings = py.import("warnings")?;
+        let builtins = py.import("builtins")?;
+        warnings.call_method1(
+            "simplefilter",
+            ("once", builtins.getattr("RuntimeWarning")?),
+        )?;
+        warnings.call_method1(
+            "simplefilter",
+            ("ignore", builtins.getattr("FutureWarning")?),
+        )?;
 
         let unittest = py.import("unittest")?;
         let kwargs = PyDict::new(py);
