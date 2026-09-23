@@ -463,11 +463,14 @@ impl Instrument {
     /// Every name a score may call this kind of instrument in one language,
     /// or in each of them: music21's `getAllNamesForInstrument`.
     ///
-    /// The names are found by the instrument's kind. music21 finds them by
-    /// its display name, which only finds any where the two are spelled
-    /// alike -- `Flute` -- and none for an acoustic bass or a violin part
-    /// renamed "Violin I".
+    /// The names are those of the nearest kind in the instrument's family
+    /// that the tables name at all -- its own, or for a guitar, which they do
+    /// not name, a string instrument's -- whatever the instrument itself is
+    /// called.
     pub fn all_names(&self, language: SearchLanguage) -> Vec<(SearchLanguage, Vec<&'static str>)> {
+        let named = std::iter::once(self.kind.as_str())
+            .chain(self.families().iter().copied())
+            .find(|class| tables::ALL.iter().any(|(_, named)| named == class));
         let languages: &[SearchLanguage] = match language {
             SearchLanguage::All => &SearchLanguage::EACH,
             _ => std::slice::from_ref(&language),
@@ -478,7 +481,7 @@ impl Instrument {
                 let names = language
                     .table()
                     .iter()
-                    .filter(|(_, class)| *class == self.kind)
+                    .filter(|(_, class)| Some(*class) == named)
                     .map(|(name, _)| *name)
                     .collect();
                 (*language, names)

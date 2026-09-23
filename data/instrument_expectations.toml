@@ -3,10 +3,10 @@
 # The instruments and the name tables are transcribed into
 # src/instrument/tables.rs; the lookups are checked behaviourally.
 #
-# music21 11.0.0b9 at eebac0e695e59e3e7af4db0ae0d1623f41837fa6
+# music21 11.0.0b9 at e2ba700a434a66baf73d5d05a70c2063dcf8eab9
 
 music21_version = "11.0.0b9"
-music21_commit = "eebac0e695e59e3e7af4db0ae0d1623f41837fa6"
+music21_commit = "e2ba700a434a66baf73d5d05a70c2063dcf8eab9"
 
 ensemble_names = ["no performers", "solo", "duet", "trio", "quartet", "quintet", "sextet", "septet", "octet", "nonet", "dectet", "undectet", "duodectet", "tredectet", "quattuordectet", "quindectet", "sexdectet", "septendectet", "octodectet", "novemdectet", "vigetet", "unvigetet", "duovigetet", "trevigetet", "quattuorvigetet", "quinvigetet", "sexvigetet", "septenvigetet", "octovigetet", "novemvigetet", "trigetet", "untrigetet", "duotrigetet", "tretrigetet", "quottuortrigetet", "quintrigetet", "sextrigetet", "septentrigetet", "octotrigetet", "novemtrigetet", "quadragetet", "unquadragetet", "duoquadragetet", "trequadragetet", "quattuorquadragetet", "quinquadragetet", "sexquadragetet", "octoquadragetet", "octoquadragetet", "novemquadragetet", "quinquagetet", "unquinquagetet", "duoquinquagetet", "trequinguagetet", "quattuorquinquagetet", "quinquinquagetet", "sexquinquagetet", "septenquinquagetet", "octoquinquagetet", "novemquinquagetet", "sexagetet", "undexagetet", "duosexagetet", "tresexagetet", "quoattuorsexagetet", "quinsexagetet", "sexsexagetet", "septensexagetet", "octosexagetet", "novemsexagetet", "septuagetet", "unseptuagetet", "duoseptuagetet", "treseptuagetet", "quattuorseptuagetet", "quinseptuagetet", "sexseptuagetet", "septenseptuagetet", "octoseptuagetet", "novemseptuagetet", "octogetet", "unoctogetet", "duooctogetet", "treoctogetet", "quattuoroctogetet", "quinoctogetet", "sexoctogetet", "septoctogetet", "octooctogetet", "novemoctogetet", "nonagetet", "unnonagetet", "duononagetet", "trenonagetet", "quattuornonagetet", "quinnonagetet", "sexnonagetet", "septennonagetet", "octononagetet", "novemnonagetet", "centet"]
 
@@ -32,12 +32,12 @@ best_name = "Brass"
 midi_program = 61
 percussion_map = false
 [instrument.all_names]
-"english" = []
-"french" = []
-"german" = []
+"english" = ["brass instrument"]
+"french" = ["cuivres", "instrument à vent de cuivres"]
+"german" = ["blechblasinstrument"]
 "italian" = []
 "russian" = []
-"spanish" = []
+"spanish" = ["instrumento de viento-metal"]
 "abbreviation" = []
 
 [[instrument]]
@@ -84,7 +84,7 @@ sound = "keyboard.piano"
 best_name = "Keyboard"
 percussion_map = false
 [instrument.all_names]
-"english" = []
+"english" = ["keyboard instrument"]
 "french" = []
 "german" = []
 "italian" = []
@@ -151,13 +151,13 @@ best_name = "Voice"
 midi_program = 53
 percussion_map = false
 [instrument.all_names]
-"english" = []
-"french" = []
-"german" = []
-"italian" = []
-"russian" = []
-"spanish" = []
-"abbreviation" = []
+"english" = ["voice"]
+"french" = ["chant", "chanteur", "chanteuse", "voix"]
+"german" = ["singstimme", "stimme"]
+"italian" = ["canto", "voca", "voce"]
+"russian" = ["golos"]
+"spanish" = ["voz"]
+"abbreviation" = ["v", "voc"]
 
 [[instrument]]
 class = "WoodwindInstrument"
@@ -167,12 +167,12 @@ abbreviation = "Ww"
 best_name = "Woodwind"
 percussion_map = false
 [instrument.all_names]
-"english" = []
-"french" = []
-"german" = []
-"italian" = []
+"english" = ["wind instrument", "woodwind instrument"]
+"french" = ["instrument à vent", "instrument à vent en bois"]
+"german" = ["blasinstrument", "holzblasinstrument"]
+"italian" = ["legni", "stromento a fiato", "strumento a fiato"]
 "russian" = []
-"spanish" = []
+"spanish" = ["instrumento de madera", "instrumento de viento"]
 "abbreviation" = []
 
 [[instrument]]
@@ -412,13 +412,13 @@ lowest = "C2"
 highest = "C6"
 percussion_map = false
 [instrument.all_names]
-"english" = []
-"french" = []
-"german" = []
-"italian" = []
+"english" = ["electric organ"]
+"french" = ["orgue électrique"]
+"german" = ["elektrische orgel"]
+"italian" = ["organo elettrico"]
 "russian" = []
-"spanish" = []
-"abbreviation" = []
+"spanish" = ["órgano eléctrico"]
+"abbreviation" = ["elec org"]
 
 [[instrument]]
 class = "EnglishHorn"
@@ -432,13 +432,13 @@ lowest = "B3"
 transposition = "P-5"
 percussion_map = false
 [instrument.all_names]
-"english" = []
-"french" = []
-"german" = []
-"italian" = []
-"russian" = []
-"spanish" = []
-"abbreviation" = []
+"english" = ["cor anglais", "english horn", "english horns"]
+"french" = ["cor anglais"]
+"german" = ["englisch-horn", "englischhorn"]
+"italian" = ["corno inglese"]
+"russian" = ["angliiskii rozhok"]
+"spanish" = ["corneta inglesa", "corno", "corno inglés", "cuerno inglés"]
+"abbreviation" = ["cor ang", "e h", "e hn", "eng hn"]
 
 [[instrument]]
 class = "Flute"
@@ -470,12 +470,12 @@ midi_program = 24
 lowest = "E2"
 percussion_map = false
 [instrument.all_names]
-"english" = []
-"french" = []
-"german" = []
-"italian" = []
+"english" = ["string instrument", "strings"]
+"french" = ["cordes", "instrument à cordes"]
+"german" = ["saiteninstrument", "streicher"]
+"italian" = ["archi", "stromento archi", "strumento archi"]
 "russian" = []
-"spanish" = []
+"spanish" = ["cuerdas", "instrumento de cuerda"]
 "abbreviation" = []
 
 [[instrument]]
@@ -644,13 +644,13 @@ lowest = "C2"
 highest = "C6"
 percussion_map = false
 [instrument.all_names]
-"english" = []
-"french" = []
-"german" = []
-"italian" = []
+"english" = ["pipe organ"]
+"french" = ["orgue à tuyaux"]
+"german" = ["pfeifenorgel"]
+"italian" = ["organo", "organo a canne"]
 "russian" = []
-"spanish" = []
-"abbreviation" = []
+"spanish" = ["órgano de tubos"]
+"abbreviation" = ["p org"]
 
 [[instrument]]
 class = "PitchedPercussion"
@@ -660,12 +660,12 @@ abbreviation = "Perc"
 best_name = "Percussion"
 percussion_map = false
 [instrument.all_names]
-"english" = ["percussion", "percussion instrument"]
-"french" = ["batterie", "instrument à percussion"]
-"german" = ["perkussionsinstrument", "schlaginstrument", "schlagzeug"]
-"italian" = ["batteria", "percussione", "stromento a percossa", "stromento a percussione", "strumento a percossa", "strumento a percussione"]
+"english" = ["pitched percussion"]
+"french" = []
+"german" = []
+"italian" = []
 "russian" = []
-"spanish" = ["batería", "instrumento de percusión", "percusión"]
+"spanish" = []
 "abbreviation" = []
 
 [[instrument]]
@@ -680,12 +680,12 @@ lowest = "C2"
 highest = "C6"
 percussion_map = false
 [instrument.all_names]
-"english" = []
-"french" = []
-"german" = []
-"italian" = []
+"english" = ["reed organ"]
+"french" = ["roseau organe"]
+"german" = ["harmonium"]
+"italian" = ["canna d'organo"]
 "russian" = []
-"spanish" = []
+"spanish" = ["caña de órganos"]
 "abbreviation" = []
 
 [[instrument]]
@@ -901,12 +901,12 @@ best_name = "Percussion"
 midi_channel = 9
 percussion_map = false
 [instrument.all_names]
-"english" = ["percussion", "percussion instrument"]
-"french" = ["batterie", "instrument à percussion"]
-"german" = ["perkussionsinstrument", "schlaginstrument", "schlagzeug"]
-"italian" = ["batteria", "percussione", "stromento a percossa", "stromento a percussione", "strumento a percossa", "strumento a percussione"]
+"english" = ["unpitched percussion"]
+"french" = []
+"german" = []
+"italian" = []
 "russian" = []
-"spanish" = ["batería", "instrumento de percusión", "percusión"]
+"spanish" = []
 "abbreviation" = []
 
 [[instrument]]
@@ -977,13 +977,13 @@ midi_program = 32
 lowest = "E1"
 percussion_map = false
 [instrument.all_names]
-"english" = []
-"french" = []
-"german" = []
+"english" = ["acoustic bass"]
+"french" = ["basse acoustique"]
+"german" = ["akustik-bass"]
 "italian" = []
 "russian" = []
-"spanish" = []
-"abbreviation" = []
+"spanish" = ["bajo acústico"]
+"abbreviation" = ["ac b"]
 
 [[instrument]]
 class = "AcousticGuitar"
@@ -996,13 +996,13 @@ midi_program = 24
 lowest = "E2"
 percussion_map = false
 [instrument.all_names]
-"english" = []
-"french" = []
-"german" = []
-"italian" = []
+"english" = ["acoustic guitar", "guitar"]
+"french" = ["guitare", "guitare acoustique", "guitarre"]
+"german" = ["akustikgitarre", "gitarre", "guitarre"]
+"italian" = ["chitarra", "chitarra acustica"]
 "russian" = []
-"spanish" = []
-"abbreviation" = []
+"spanish" = ["guitarra", "guitarra acústica"]
+"abbreviation" = ["ac gtr"]
 
 [[instrument]]
 class = "Agogo"
@@ -1036,13 +1036,13 @@ lowest = "B-3"
 transposition = "M-6"
 percussion_map = false
 [instrument.all_names]
-"english" = []
-"french" = []
-"german" = []
-"italian" = []
+"english" = ["alto saxophone"]
+"french" = ["saxophon alto", "saxophone alto"]
+"german" = ["alt-saxophon", "altsaxophon"]
+"italian" = ["sassofono alto", "sassofono contralto", "saxofono alto", "saxofono contralto"]
 "russian" = []
-"spanish" = []
-"abbreviation" = []
+"spanish" = ["saxofón alto", "saxofóno alto"]
+"abbreviation" = ["a sax", "sax a"]
 
 [[instrument]]
 class = "BaritoneSaxophone"
@@ -1056,13 +1056,13 @@ lowest = "B-3"
 transposition = "M-13"
 percussion_map = false
 [instrument.all_names]
-"english" = []
-"french" = []
-"german" = []
-"italian" = []
+"english" = ["baritone saxophone"]
+"french" = ["saxophone baryton"]
+"german" = ["baritonsaxophon"]
+"italian" = ["sassofono baritono", "saxofono baritono"]
 "russian" = []
-"spanish" = []
-"abbreviation" = []
+"spanish" = ["saxofón del barítono", "saxofóno barítono"]
+"abbreviation" = ["bar sax"]
 
 [[instrument]]
 class = "BassClarinet"
@@ -1076,13 +1076,13 @@ lowest = "E-3"
 transposition = "M-9"
 percussion_map = false
 [instrument.all_names]
-"english" = []
-"french" = []
-"german" = []
-"italian" = []
-"russian" = []
-"spanish" = []
-"abbreviation" = []
+"english" = ["bass clarinet"]
+"french" = ["clarinette basse"]
+"german" = ["bass-klarinette", "bassklarinette"]
+"italian" = ["clarinetto basso"]
+"russian" = ["bass-klarnet"]
+"spanish" = ["clarinete bajo"]
+"abbreviation" = ["b cl", "bcl", "bkl", "bs cl"]
 
 [[instrument]]
 class = "BassDrum"
@@ -1095,13 +1095,13 @@ midi_channel = 9
 percussion_pitch = 35
 percussion_map = true
 [instrument.all_names]
-"english" = []
-"french" = []
-"german" = []
-"italian" = []
-"russian" = []
-"spanish" = []
-"abbreviation" = []
+"english" = ["bass drum", "turkish drum"]
+"french" = ["grosse caisse", "tambour bata"]
+"german" = ["bass-drum", "grosse trommel"]
+"italian" = ["cassa", "gran cassa", "grancassa", "tamborone", "tamburo grande", "tamburo grosso"]
+"russian" = ["bol'shoi baraban"]
+"spanish" = ["bombo", "gran caja"]
+"abbreviation" = ["b dr", "cr tr", "g c", "gr cassa"]
 
 [[instrument]]
 class = "BassTrombone"
@@ -1114,12 +1114,12 @@ midi_program = 57
 lowest = "B-1"
 percussion_map = false
 [instrument.all_names]
-"english" = []
-"french" = []
-"german" = []
-"italian" = []
+"english" = ["bass trombone"]
+"french" = ["basse-trombone", "trombone basse"]
+"german" = ["bass posaune", "bass-posaune", "bassposaune"]
+"italian" = ["trombone basso"]
 "russian" = []
-"spanish" = []
+"spanish" = ["trombón bajo"]
 "abbreviation" = []
 
 [[instrument]]
@@ -1133,13 +1133,13 @@ midi_channel = 9
 percussion_pitch = 60
 percussion_map = true
 [instrument.all_names]
-"english" = []
-"french" = []
-"german" = []
-"italian" = []
+"english" = ["bongo drums"]
+"french" = ["bongos", "tambours bongo"]
+"german" = ["bongo-trommeln", "bongos"]
+"italian" = ["bonghi", "bongos", "tamburi bongo"]
 "russian" = []
-"spanish" = []
-"abbreviation" = []
+"spanish" = ["bongo tambores", "bongos"]
+"abbreviation" = ["bgo dr"]
 
 [[instrument]]
 class = "Castanets"
@@ -1169,7 +1169,7 @@ best_name = "Church Bells"
 midi_program = 14
 percussion_map = false
 [instrument.all_names]
-"english" = []
+"english" = ["church bells"]
 "french" = []
 "german" = []
 "italian" = []
@@ -1188,13 +1188,13 @@ midi_channel = 9
 percussion_pitch = 64
 percussion_map = true
 [instrument.all_names]
-"english" = []
-"french" = []
-"german" = []
-"italian" = []
+"english" = ["conga drum", "tumbadora"]
+"french" = ["conga", "tambour congo", "tumbadora"]
+"german" = ["conga", "conga-trommel", "tumba"]
+"italian" = ["conga", "tumba"]
 "russian" = []
-"spanish" = []
-"abbreviation" = []
+"spanish" = ["conga", "congas", "tumbadora"]
+"abbreviation" = ["cga dr"]
 
 [[instrument]]
 class = "Contrabassoon"
@@ -1280,13 +1280,13 @@ midi_program = 33
 lowest = "E1"
 percussion_map = false
 [instrument.all_names]
-"english" = []
-"french" = []
-"german" = []
-"italian" = []
+"english" = ["electric bass"]
+"french" = ["basse électrique"]
+"german" = ["e-bass"]
+"italian" = ["basso elettrico"]
 "russian" = []
-"spanish" = []
-"abbreviation" = []
+"spanish" = ["bajo eléctrico"]
+"abbreviation" = ["elec b"]
 
 [[instrument]]
 class = "ElectricGuitar"
@@ -1299,13 +1299,13 @@ midi_program = 26
 lowest = "E2"
 percussion_map = false
 [instrument.all_names]
-"english" = []
-"french" = []
-"german" = []
-"italian" = []
+"english" = ["electric guitar"]
+"french" = ["guitare électrique", "guitarre électrique"]
+"german" = ["e-gitarre", "elektrische gitarre", "elektro-gitarre", "stromgitarre"]
+"italian" = ["chitarra elettrica"]
 "russian" = []
-"spanish" = []
-"abbreviation" = []
+"spanish" = ["guitarra eléctrica"]
+"abbreviation" = ["e gtr", "elec gtr"]
 
 [[instrument]]
 class = "ElectricPiano"
@@ -1319,7 +1319,7 @@ lowest = "A0"
 highest = "C8"
 percussion_map = false
 [instrument.all_names]
-"english" = []
+"english" = ["electric piano"]
 "french" = []
 "german" = []
 "italian" = []
@@ -1338,12 +1338,12 @@ midi_program = 35
 lowest = "E1"
 percussion_map = false
 [instrument.all_names]
-"english" = []
-"french" = []
+"english" = ["fretless bass"]
+"french" = ["basse fretless"]
 "german" = []
 "italian" = []
 "russian" = []
-"spanish" = []
+"spanish" = ["fretless"]
 "abbreviation" = []
 
 [[instrument]]
@@ -1463,13 +1463,13 @@ best_name = "Mezzo-Soprano"
 midi_program = 53
 percussion_map = false
 [instrument.all_names]
-"english" = []
+"english" = ["mezzo-soprano"]
 "french" = []
-"german" = []
-"italian" = []
+"german" = ["mezzosopran"]
+"italian" = ["mezzosoprano"]
 "russian" = []
-"spanish" = []
-"abbreviation" = []
+"spanish" = ["mezzosoprano"]
+"abbreviation" = ["mez", "mezz", "mz"]
 
 [[instrument]]
 class = "Ocarina"
@@ -1501,13 +1501,13 @@ midi_program = 75
 lowest = "C4"
 percussion_map = false
 [instrument.all_names]
-"english" = []
-"french" = []
-"german" = []
-"italian" = []
+"english" = ["pan flute", "pan pipe", "panflute", "panpipes"]
+"french" = ["flûte de pan", "syrinx"]
+"german" = ["hirtenflöte", "panflöte", "papagenopfeife", "syrinx"]
+"italian" = ["flauto di pan", "siringa"]
 "russian" = []
-"spanish" = []
-"abbreviation" = []
+"spanish" = ["flauta de pan", "flautas de pan", "siringa", "zampoñas"]
+"abbreviation" = ["p fl"]
 
 [[instrument]]
 class = "Piccolo"
@@ -1576,13 +1576,13 @@ best_name = "Sandpaper Blocks"
 midi_channel = 9
 percussion_map = false
 [instrument.all_names]
-"english" = []
-"french" = []
-"german" = []
-"italian" = []
+"english" = ["sandpaper blocks"]
+"french" = ["blocs de papier de verre", "papier de verre"]
+"german" = ["sandblöcke", "sandpapier", "sandpapier blöcke"]
+"italian" = ["blocchi di carta vetrata", "carta vetrata", "ceppi di carta vetro"]
 "russian" = []
-"spanish" = []
-"abbreviation" = []
+"spanish" = ["bloques de papel de lija", "papel de lija"]
+"abbreviation" = ["sand bl"]
 
 [[instrument]]
 class = "Shakuhachi"
@@ -1631,12 +1631,12 @@ best_name = "Sleigh Bells"
 midi_channel = 9
 percussion_map = false
 [instrument.all_names]
-"english" = []
-"french" = []
-"german" = []
-"italian" = []
+"english" = ["jingle bells", "sleigh bells"]
+"french" = ["grelots"]
+"german" = ["pferdeschlittenglocken", "rollschellen", "schellen"]
+"italian" = ["sonagli", "sonagliera"]
 "russian" = []
-"spanish" = []
+"spanish" = ["cascabels"]
 "abbreviation" = []
 
 [[instrument]]
@@ -1650,13 +1650,13 @@ midi_channel = 9
 percussion_pitch = 38
 percussion_map = true
 [instrument.all_names]
-"english" = []
-"french" = []
-"german" = []
-"italian" = []
-"russian" = []
-"spanish" = []
-"abbreviation" = []
+"english" = ["snare drum"]
+"french" = ["caisse claire", "tambour"]
+"german" = ["kleine trommel", "leinentrommel", "marschtrommel", "schnarrtrommel", "snare-drum"]
+"italian" = ["cassa chiara", "rullante", "tamburo militare"]
+"russian" = ["frantsuzskii baraban"]
+"spanish" = ["caja clara", "con tensores", "redoblante", "tambor afinable", "tambor militar pequeño"]
+"abbreviation" = ["c c", "sn dr"]
 
 [[instrument]]
 class = "SopranoSaxophone"
@@ -1670,13 +1670,13 @@ lowest = "B-3"
 transposition = "M-2"
 percussion_map = false
 [instrument.all_names]
-"english" = []
-"french" = []
-"german" = []
-"italian" = []
+"english" = ["soprano saxophone"]
+"french" = ["saxophone soprano"]
+"german" = ["sopran-saxophon", "sopransaxophon"]
+"italian" = ["sassofono soprano", "saxofono soprano"]
 "russian" = []
-"spanish" = []
-"abbreviation" = []
+"spanish" = ["saxo soprano", "saxofóno soprano"]
+"abbreviation" = ["s sax"]
 
 [[instrument]]
 class = "SteelDrum"
@@ -1688,13 +1688,13 @@ best_name = "Steel Drum"
 midi_program = 114
 percussion_map = false
 [instrument.all_names]
-"english" = []
-"french" = []
-"german" = []
-"italian" = []
+"english" = ["pan", "steel drum", "steel drums", "steel pan", "steel pans"]
+"french" = ["tambour d'acier", "tambour en acier"]
+"german" = ["stahltrommel", "steeldrum"]
+"italian" = ["cestello in acciaio", "tamburo d'acciaio"]
 "russian" = []
-"spanish" = []
-"abbreviation" = []
+"spanish" = ["tambor de acero", "tambor metálico de trinidad y tobago"]
+"abbreviation" = ["st dr"]
 
 [[instrument]]
 class = "Taiko"
@@ -1725,10 +1725,10 @@ best_name = "Tam-Tam"
 midi_channel = 9
 percussion_map = false
 [instrument.all_names]
-"english" = []
+"english" = ["bullseye gong", "chau gong", "tam-tam"]
 "french" = []
-"german" = []
-"italian" = []
+"german" = ["tamtam"]
+"italian" = ["tamtam"]
 "russian" = []
 "spanish" = []
 "abbreviation" = []
@@ -1762,13 +1762,13 @@ best_name = "Temple Block"
 midi_channel = 9
 percussion_map = false
 [instrument.all_names]
-"english" = []
-"french" = []
-"german" = []
-"italian" = []
+"english" = ["temple block"]
+"french" = ["temple bloc"]
+"german" = ["tempel-block"]
+"italian" = ["tempio di blocco"]
 "russian" = []
-"spanish" = []
-"abbreviation" = []
+"spanish" = ["templo de bloque"]
+"abbreviation" = ["temp bl"]
 
 [[instrument]]
 class = "TenorDrum"
@@ -1780,13 +1780,13 @@ best_name = "Tenor Drum"
 midi_channel = 9
 percussion_map = false
 [instrument.all_names]
-"english" = []
-"french" = []
-"german" = []
-"italian" = []
-"russian" = []
-"spanish" = []
-"abbreviation" = []
+"english" = ["tenor drum"]
+"french" = ["caisse roulante", "tambourin", "ténor tambour"]
+"german" = ["rührtrommel", "tenortrommel", "wirbeltrommel"]
+"italian" = ["cassa rullante", "tamburo rullante"]
+"russian" = ["tsilindricheskii baraban"]
+"spanish" = ["caja redoblante", "caja rodante", "el tenor del tambor", "tambor mayor"]
+"abbreviation" = ["ten dr"]
 
 [[instrument]]
 class = "TenorSaxophone"
@@ -1800,13 +1800,13 @@ lowest = "B-3"
 transposition = "M-9"
 percussion_map = false
 [instrument.all_names]
-"english" = []
-"french" = []
-"german" = []
-"italian" = []
+"english" = ["tenor saxophone"]
+"french" = ["saxophone ténor"]
+"german" = ["tenor-saxophon", "tenorsaxophon"]
+"italian" = ["sassofono tenore", "saxofono tenore"]
 "russian" = []
-"spanish" = []
-"abbreviation" = []
+"spanish" = ["saxo tenor", "saxofóno tenor"]
+"abbreviation" = ["t sax"]
 
 [[instrument]]
 class = "Timbales"
@@ -1856,12 +1856,12 @@ midi_channel = 9
 percussion_pitch = 41
 percussion_map = true
 [instrument.all_names]
-"english" = []
-"french" = []
-"german" = []
+"english" = ["tom-tom"]
+"french" = ["tom"]
+"german" = ["tom", "tom tom"]
 "italian" = []
 "russian" = []
-"spanish" = []
+"spanish" = ["tomtom"]
 "abbreviation" = []
 
 [[instrument]]
@@ -1893,12 +1893,12 @@ best_name = "Tubular Bells"
 midi_program = 14
 percussion_map = false
 [instrument.all_names]
-"english" = []
-"french" = []
-"german" = []
-"italian" = []
+"english" = ["tubular bells"]
+"french" = ["cloches", "cloches tubolaires", "cloches tubulaires"]
+"german" = ["glocken", "rohrenglocke", "röhrenglocke", "röhrenglocken"]
+"italian" = ["campane", "campane tubolari", "campane tubulari"]
 "russian" = []
-"spanish" = []
+"spanish" = ["campanas", "campanas tubulares"]
 "abbreviation" = []
 
 [[instrument]]
@@ -1986,13 +1986,13 @@ best_name = "Wind Machine"
 midi_channel = 9
 percussion_map = false
 [instrument.all_names]
-"english" = []
-"french" = []
-"german" = []
-"italian" = []
+"english" = ["wind machine"]
+"french" = ["eoliphone", "machine à vent", "éoliphone"]
+"german" = ["aeolophon", "windmaschine"]
+"italian" = ["eolifono", "macchina del vento", "machina a venti"]
 "russian" = []
-"spanish" = []
-"abbreviation" = []
+"spanish" = ["el viento de la máquina", "máquina de viento"]
+"abbreviation" = ["windmachine"]
 
 [[instrument]]
 class = "Woodblock"
@@ -2043,13 +2043,13 @@ midi_channel = 9
 percussion_pitch = 49
 percussion_map = true
 [instrument.all_names]
-"english" = []
-"french" = []
-"german" = []
-"italian" = []
+"english" = ["crash cymbals"]
+"french" = ["crash", "cymbales"]
+"german" = ["becken gewönlich", "becken-paar", "crash-becken", "crashbecken"]
+"italian" = ["cinelli", "piatti", "piatti di crash"]
 "russian" = []
-"spanish" = []
-"abbreviation" = []
+"spanish" = ["platillos crash", "platillos de choque"]
+"abbreviation" = ["cym"]
 
 [[instrument]]
 class = "FingerCymbals"
@@ -2061,13 +2061,13 @@ best_name = "Finger Cymbals"
 midi_channel = 9
 percussion_map = false
 [instrument.all_names]
-"english" = []
-"french" = []
-"german" = []
-"italian" = []
+"english" = ["finger cymbals", "zills", "zils"]
+"french" = ["cymbales digitales", "sagates", "sagattes", "zill", "zills"]
+"german" = ["fingerzimbeln"]
+"italian" = ["cimbalini", "dita piatti"]
 "russian" = []
-"spanish" = []
-"abbreviation" = []
+"spanish" = ["chinchines", "crótalos"]
+"abbreviation" = ["fing cym"]
 
 [[instrument]]
 class = "HiHatCymbal"
@@ -2080,12 +2080,12 @@ midi_channel = 9
 percussion_pitch = 44
 percussion_map = true
 [instrument.all_names]
-"english" = []
-"french" = []
-"german" = []
-"italian" = []
+"english" = ["hi-hat", "hi-hat cymbal", "sock cymbal"]
+"french" = ["charleston", "cymbale à pédale", "hi-hat", "salut-chapeau cymbale"]
+"german" = ["fussbecken", "h-hat becken", "hallo-hat-becken", "ständerbecken"]
+"italian" = ["charleston", "hi-hat", "hi-hat piatto", "piatti a pedale"]
 "russian" = []
-"spanish" = []
+"spanish" = ["charles", "charleston", "hi hat", "hi-hat", "platillo hi-hat"]
 "abbreviation" = []
 
 [[instrument]]
@@ -2098,7 +2098,7 @@ best_name = "Ride Cymbals"
 midi_channel = 9
 percussion_map = false
 [instrument.all_names]
-"english" = []
+"english" = ["ride cymbals"]
 "french" = []
 "german" = []
 "italian" = []
@@ -2116,12 +2116,12 @@ best_name = "Sizzle Cymbal"
 midi_channel = 9
 percussion_map = false
 [instrument.all_names]
-"english" = []
-"french" = []
-"german" = []
-"italian" = []
+"english" = ["sizzle cymbal"]
+"french" = ["cymbale sur tiges", "grésillement cymbale"]
+"german" = ["nietenbecken"]
+"italian" = ["piatto chiodati", "sfrigolio piatto"]
 "russian" = []
-"spanish" = []
+"spanish" = ["chisporroteo de platillos", "platillo sizzle"]
 "abbreviation" = []
 
 [[instrument]]
@@ -2134,7 +2134,7 @@ best_name = "Splash Cymbals"
 midi_channel = 9
 percussion_map = false
 [instrument.all_names]
-"english" = []
+"english" = ["splash cymbals"]
 "french" = []
 "german" = []
 "italian" = []
@@ -2152,12 +2152,12 @@ best_name = "Suspended Cymbal"
 midi_channel = 9
 percussion_map = false
 [instrument.all_names]
-"english" = []
-"french" = []
-"german" = []
-"italian" = []
+"english" = ["suspended cymbal"]
+"french" = ["cymbale suspendue"]
+"german" = ["becken freihängend", "hängebecken", "hängendes becken", "türkisches hängebecken"]
+"italian" = ["piatto sospeso"]
 "russian" = []
-"spanish" = []
+"spanish" = ["platillo suspendido", "platillos suspendidos"]
 "abbreviation" = []
 
 [midi_program]

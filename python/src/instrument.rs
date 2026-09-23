@@ -377,9 +377,8 @@ fn instrumentFromMidiProgram(py: Python<'_>, number: u8) -> PyResult<Py<PyAny>> 
 }
 
 /// music21's `getAllNamesForInstrument`: every name a score may call this
-/// kind of instrument, by language. Found by the instrument's kind, where
-/// music21 looks by its display name and so finds none for an instrument
-/// whose name is not its class's.
+/// kind of instrument, by language, found by the nearest kind in its family
+/// that the name tables know.
 #[pyfunction]
 #[pyo3(signature = (instrumentClass, language = None))]
 fn getAllNamesForInstrument<'py>(

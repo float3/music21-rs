@@ -1,6 +1,7 @@
 [submodule "music21"]
 	path = music21
-	url = https://github.com/cuthbertLab/music21.git
+	url = https://github.com/float3/music21.git
+	branch = master
 [submodule "hexatone"]
 	path = hexatone
 	url = https://github.com/float3/hexatone.git

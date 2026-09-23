@@ -1,5 +1,5 @@
 music21_version = "11.0.0b9"
-music21_commit = "eebac0e695e59e3e7af4db0ae0d1623f41837fa6"
+music21_commit = "e2ba700a434a66baf73d5d05a70c2063dcf8eab9"
 maximum_index_number_without_inversion_equivalence = [
     1,
     1,

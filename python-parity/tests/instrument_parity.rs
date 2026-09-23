@@ -18,7 +18,6 @@ use std::path::Path;
 struct Expectations {
     instrument: Vec<Kind>,
     midi_program: BTreeMap<String, String>,
-    names: BTreeMap<String, BTreeMap<String, String>>,
     ensemble_names: Vec<String>,
     lookup: Vec<Lookup>,
 }
@@ -146,35 +145,20 @@ fn every_name_is_found_as_fromstring_finds_it() {
     assert!(wrong.is_empty(), "{} lookups differ:\n  {}", wrong.len(), wrong.join("\n  "));
 }
 
-/// music21's `getAllNamesForInstrument` finds names by the instrument's
-/// display name where the tables name its class, so it only finds any where
-/// the two are spelled alike. The crate finds them by class; where the two
-/// are spelled alike the answers must agree, and everywhere the crate's must
-/// be the names the tables give the class.
 #[test]
-fn every_kind_s_names_are_the_ones_the_tables_give_it() {
+fn every_kind_s_names_are_the_ones_music21_gives_it() {
     let expected = expectations();
     for kind in &expected.instrument {
         let made = Instrument::of_kind(&kind.class).expect("a kind the crate has");
         for (language, names) in made.all_names(SearchLanguage::All) {
-            let table = &expected.names[language.as_str()];
-            let mut from_tables: Vec<&str> = table
-                .iter()
-                .filter(|(_, class)| **class == kind.class)
-                .map(|(name, _)| name.as_str())
-                .collect();
-            from_tables.sort_unstable();
             let mut ours = names.clone();
             ours.sort_unstable();
-            assert_eq!(ours, from_tables, "{} in {}", kind.class, language.as_str());
-            if kind.name.as_deref() == Some(kind.class.as_str()) {
-                let mut music21: Vec<&str> = kind.all_names[language.as_str()]
-                    .iter()
-                    .map(String::as_str)
-                    .collect();
-                music21.sort_unstable();
-                assert_eq!(ours, music21, "{} in {}, against music21", kind.class, language.as_str());
-            }
+            let mut music21: Vec<&str> = kind.all_names[language.as_str()]
+                .iter()
+                .map(String::as_str)
+                .collect();
+            music21.sort_unstable();
+            assert_eq!(ours, music21, "{} in {}", kind.class, language.as_str());
         }
     }
 }

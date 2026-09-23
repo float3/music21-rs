@@ -77,7 +77,7 @@ mod module {
                 "clone",
                 "--depth",
                 "1",
-                "https://github.com/cuthbertLab/music21.git",
+                "https://github.com/float3/music21.git",
                 "./music21",
             ],
             "git clone",

@@ -91,15 +91,6 @@ fn build(score: &Score) -> Stream {
     built
 }
 
-/// Quartets music21 gives that are not in the music, by score.
-///
-/// The Schoenberg has a triplet F#3 running from 27 2/3 to 28 1/3, followed
-/// by an E-3. music21 adds the offset and the length as floats, the sum comes
-/// out a hair past the E-3's own offset, and so it reads the F#3 as still
-/// sounding when the E-3 starts and pairs the voice with itself. The crate
-/// allows offsets that hair of latitude and does not.
-const FLOAT_ARTIFACTS: [(&str, &str); 1] = [("schoenberg/opus19/movement6", "F#3 E-3|F#3 F#3")];
-
 /// A quartet with its voices in a fixed order, since which voice is named
 /// first is part of the ordering this test leaves out.
 fn normalized(quartet: &str) -> String {
@@ -115,7 +106,6 @@ fn the_quartets_of_a_score_are_the_ones_music21_finds() {
     assert!(!expectations.score.is_empty());
 
     let mut compared = 0;
-    let mut artifacts_met = 0;
     for score in &expectations.score {
         let built = build(score);
         for run in &score.run {
@@ -140,13 +130,6 @@ fn the_quartets_of_a_score_are_the_ones_music21_finds() {
             let mut theirs: Vec<String> = run
                 .quartets
                 .iter()
-                .filter(|quartet| {
-                    let artifact = FLOAT_ARTIFACTS
-                        .iter()
-                        .any(|(name, listed)| *name == score.name && listed == quartet);
-                    artifacts_met += usize::from(artifact);
-                    !artifact
-                })
                 .map(|quartet| normalized(quartet))
                 .collect();
             ours.sort_unstable();
@@ -164,6 +147,4 @@ fn the_quartets_of_a_score_are_the_ones_music21_finds() {
     // The chorale alone has some hundreds; a fixture that lost its quartets
     // would otherwise pass by comparing nothing.
     assert!(compared > 4000, "only {compared} quartets were compared");
-    // A listed artifact music21 no longer gives should come off the list.
-    assert!(artifacts_met > 0, "no listed float artifact was met");
 }

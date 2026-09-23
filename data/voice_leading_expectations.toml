@@ -8,10 +8,10 @@
 # within an offset by when each object was inserted, so both sides are
 # sorted before they are compared.
 #
-# music21 11.0.0b9 at eebac0e695e59e3e7af4db0ae0d1623f41837fa6
+# music21 11.0.0b9 at e2ba700a434a66baf73d5d05a70c2063dcf8eab9
 
 music21_version = "11.0.0b9"
-music21_commit = "eebac0e695e59e3e7af4db0ae0d1623f41837fa6"
+music21_commit = "e2ba700a434a66baf73d5d05a70c2063dcf8eab9"
 
 [[score]]
 name = "bwv66.6"
@@ -52,7 +52,7 @@ parts = [
 include_rests = true
 include_oblique = true
 include_no_motion = false
-quartets = ["D#6 E6|D#5 D#5", "F#3 E-3|F#3 F#3", "E-4 E-4|F#3 G3"]
+quartets = ["D#6 E6|D#5 D#5", "E-4 E-4|F#3 G3"]
 [[score.run]]
 include_rests = false
 include_oblique = true
