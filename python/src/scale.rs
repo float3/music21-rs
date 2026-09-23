@@ -1079,6 +1079,11 @@ impl ConcreteScale {
             return self.pitches(py);
         };
         let (low, high) = (pitch_from_any(low)?, pitch_from_any(high)?);
+        // Told which way to go, music21 does not turn a range given top first
+        // round, and nothing lies between.
+        if descending && low.ps() > high.ps() {
+            return Ok(wrap_pitches(Vec::new()));
+        }
         // A scale nobody gave a tonic to still has a pattern, and music21
         // sounds it from middle C rather than refusing: "could raise an
         // error here, but instead will use a pseudo-tonic".

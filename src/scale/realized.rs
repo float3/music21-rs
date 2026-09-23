@@ -154,7 +154,7 @@ impl Scale {
             tonic,
             custom_steps: None,
             custom_simplification: None,
-            cyclic: false,
+            cyclic: scale_type.is_cycle(),
         }
     }
 
@@ -264,7 +264,14 @@ impl Scale {
             return self.clone();
         }
         if let Some(scale_type) = self.scale_type.descending_form() {
-            return Scale::new(scale_type, self.tonic.clone());
+            // Rag Asawari comes down through the minor scale's steps but
+            // still spells them its own way.
+            let descending = Scale::new(scale_type, self.tonic.clone());
+            return if scale_type.simplification() == self.simplification() {
+                descending
+            } else {
+                descending.with_simplification(self.simplification())
+            };
         }
         // A pattern no other named scale spells, walked as its own list of
         // steps: Rag Marwa comes down through the flat second above its
@@ -287,9 +294,19 @@ impl Scale {
     /// The scale coming down: highest note first, through the collection it
     /// uses descending.
     pub fn pitches_descending(&self) -> Result<Vec<Pitch>> {
-        let mut pitches = self.descending().pitches()?;
-        pitches.reverse();
-        Ok(pitches)
+        // Walked down from the top, as music21 walks it: a scale that
+        // respells as it goes spells its notes coming down differently from
+        // going up.
+        // Over the span the scale sounds going up, which for Rag Marwa
+        // reaches the flat second above its octave that its descent turns
+        // through.
+        let ascending = self.pitches()?;
+        let bottom = ascending.iter().min_by(|a, b| a.ps().total_cmp(&b.ps()));
+        let top = ascending.iter().max_by(|a, b| a.ps().total_cmp(&b.ps()));
+        let (Some(bottom), Some(top)) = (bottom, top) else {
+            return Ok(ascending);
+        };
+        self.pitches_between_descending(bottom, top)
     }
 
     /// A range of the scale coming down, highest note first.
@@ -298,12 +315,7 @@ impl Scale {
         minimum: &Pitch,
         maximum: &Pitch,
     ) -> Result<Vec<Pitch>> {
-        if self.custom_simplification.is_some() {
-            return self.walked_down_between(minimum, maximum);
-        }
-        let mut pitches = self.descending().pitches_between(minimum, maximum)?;
-        pitches.reverse();
-        Ok(pitches)
+        self.descending().walked_down_between(minimum, maximum)
     }
 
     /// A range of a scale given by its steps, walked downward from the tonic
@@ -332,20 +344,16 @@ impl Scale {
         let steps = self.walk()?;
         let period = self.period_in_octaves(&steps);
         let mut current = self.realization_start()?;
-        while current.ps() < highest {
-            let octave = current.octave().unwrap_or(0);
-            current.octave_setter(Some(octave + period));
-        }
+        shift_by_periods(&mut current, period, highest, false);
         let mut pitches = Vec::new();
         let limit = steps.len() * (MAX_RANGE_OCTAVES + 2) + 1;
-        let clear_of = lowest - 12.0 * FloatType::from(period);
         for index in 0..limit {
             let sounding = current.ps();
-            if sounding < clear_of {
-                break;
-            }
             if within(sounding, lowest, highest) {
                 pitches.push(current.clone());
+            }
+            if sounding < lowest + SLACK {
+                break;
             }
             let step = &steps[steps.len() - 1 - index % steps.len()];
             current = advance(&current, &step.reversed()?, simplification)?;
@@ -389,12 +397,15 @@ impl Scale {
             return self.scale_type.derive_ranked_by(pitches, limit, comparison);
         }
         let targets: Vec<String> = pitches.iter().map(|p| comparison.key(p)).collect();
+        let Some((lowest, highest)) = super::scaletype::target_range(pitches) else {
+            return Ok(Vec::new());
+        };
         let mut ranked = Vec::with_capacity(SCALE_STARTS.len());
         for start in SCALE_STARTS {
             let mut candidate = self.clone();
             candidate.set_tonic(Pitch::from_name(start)?);
             let degrees: Vec<String> = candidate
-                .pitches()?
+                .pitches_between(lowest, highest)?
                 .iter()
                 .map(|p| comparison.key(p))
                 .collect();
@@ -696,26 +707,18 @@ impl Scale {
         // start the pattern halfway through itself.
         let period = self.period_in_octaves(&steps);
         let mut current = self.realization_start()?;
-        while current.ps() > lowest {
-            let octave = current.octave().unwrap_or(0);
-            current.octave_setter(Some(octave - period));
-        }
+        shift_by_periods(&mut current, period, lowest, true);
         let mut pitches = Vec::new();
         // Two octaves of headroom past the range, so a scale whose degrees
         // are not evenly spaced still reaches the top of it.
         let limit = steps.len() * (MAX_RANGE_OCTAVES + 2) + 1;
-        // A pattern may rise above the range and fall back into it — Rag
-        // Marwa's descending form goes up to the flat second above its
-        // octave and closes on the octave below that — so the walk carries
-        // on until it is clear of the range by a whole period.
-        let clear_of = highest + 12.0 * FloatType::from(period);
         for index in 0..limit {
             let sounding = current.ps();
-            if sounding > clear_of {
-                break;
-            }
             if within(sounding, lowest, highest) {
                 pitches.push((current.clone(), index % steps.len()));
+            }
+            if sounding > highest - SLACK {
+                break;
             }
             current = advance(&current, &steps[index % steps.len()], simplification)?;
         }
@@ -1403,6 +1406,42 @@ fn within(sounding: FloatType, lowest: FloatType, highest: FloatType) -> bool {
 
 /// The slack [`within`] allows at either end of a range, in semitones.
 const SLACK: FloatType = 1e-5;
+
+/// Moves a pitch by whole periods to where music21 starts walking a range:
+/// as close to `target` as it can be while at or below it, or at or above it,
+/// which is `transposeBelowTarget` and `transposeAboveTarget` with
+/// `minimize`. A period is usually the octave, but a scale given by its notes
+/// may take two to come back to where it began, and moving by one would start
+/// the pattern halfway through itself.
+fn shift_by_periods(pitch: &mut Pitch, period: IntegerType, target: FloatType, below: bool) {
+    let semitones = 12.0 * FloatType::from(period);
+    let shift = |pitch: &mut Pitch, by: IntegerType| {
+        let octave = pitch.octave().unwrap_or(0);
+        pitch.octave_setter(Some(octave + by));
+    };
+    // Pitch space runs to a few hundred semitones either way, so no walk
+    // here needs more than a few dozen periods.
+    for _ in 0..64 {
+        let ps = pitch.ps();
+        let too_high = if below {
+            ps > target + SLACK
+        } else {
+            ps - semitones >= target - SLACK
+        };
+        let too_low = if below {
+            ps + semitones <= target + SLACK
+        } else {
+            ps < target - SLACK
+        };
+        if too_high {
+            shift(pitch, -period);
+        } else if too_low {
+            shift(pitch, period);
+        } else {
+            break;
+        }
+    }
+}
 
 /// A collection's notes with the octaves a caller left out filled in so that
 /// the collection rises: music21's `fixDefaultOctaveForPitchList`.

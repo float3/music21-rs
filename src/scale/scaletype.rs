@@ -400,6 +400,15 @@ impl ScaleType {
         }
     }
 
+    /// Whether this scale is a cycle walked from its tonic both ways rather
+    /// than a pattern repeated at the octave, as music21 builds its whole-tone
+    /// and chromatic scales. The two spell differently wherever the steps
+    /// respell as they go: the whole-tone scale on B- comes down through `A-`,
+    /// `G-` and `F-`, not up to them through `G#`.
+    pub fn is_cycle(self) -> bool {
+        matches!(self, Self::WholeTone | Self::Chromatic)
+    }
+
     /// Returns how this scale respells pitches, matching music21's network.
     pub(super) fn simplification(self) -> Simplification {
         match self {
@@ -425,6 +434,11 @@ impl ScaleType {
     /// Ranks every candidate tonic by how many of `pitches` fall in this
     /// scale type built on it, best first, as music21's `deriveRanked` does.
     /// Pitches are compared by pitch class and duplicates count separately.
+    ///
+    /// Each candidate is realized between the lowest and the highest of
+    /// `pitches`, so what is compared is the scale where the pitches are: a
+    /// scale that comes down differently from how it goes up, or changes from
+    /// one octave to the next, is compared as it stands there.
     pub fn derive_ranked(
         self,
         pitches: &[Pitch],
@@ -448,11 +462,14 @@ impl ScaleType {
             .iter()
             .map(|pitch| comparison.key(pitch))
             .collect::<Vec<_>>();
+        let Some((lowest, highest)) = target_range(pitches) else {
+            return Ok(Vec::new());
+        };
         let mut ranked = Vec::with_capacity(SCALE_STARTS.len());
         for start in SCALE_STARTS {
             let scale = Scale::new(self, Pitch::from_name(start)?);
             let degrees = scale
-                .pitches()?
+                .pitches_between(lowest, highest)?
                 .iter()
                 .map(|pitch| comparison.key(pitch))
                 .collect::<Vec<_>>();
@@ -492,6 +509,14 @@ impl ScaleType {
             .map(|(_, scale)| scale)
             .collect())
     }
+}
+
+/// The lowest and the highest of some pitches, which is the range music21's
+/// `filterPitchList` realizes a candidate scale over; `None` for no pitches.
+pub(super) fn target_range(pitches: &[Pitch]) -> Option<(&Pitch, &Pitch)> {
+    let lowest = pitches.iter().min_by(|a, b| a.ps().total_cmp(&b.ps()))?;
+    let highest = pitches.iter().max_by(|a, b| a.ps().total_cmp(&b.ps()))?;
+    Some((lowest, highest))
 }
 
 /// How many octaves of a scale [`Scale::pitches_between`] will walk, which
@@ -686,6 +711,79 @@ Observed Javanese Slendro scale, Helmholtz/Ellis p. 518, nr.94
             Some(ScaleType::Major)
         );
         assert_eq!(ScaleType::from_music21_name("NoSuchScale"), None);
+    }
+
+    #[test]
+    fn a_range_is_walked_from_where_music21_starts_it() {
+        // Every answer read off music21 11.0.0b9.
+        use super::Scale;
+        use crate::Pitch;
+        let pitch = |name: &str| Pitch::from_name(name).unwrap();
+        let named = |pitches: Vec<Pitch>| -> Vec<String> {
+            pitches.iter().map(Pitch::name_with_octave).collect()
+        };
+        let between = |scale_type: ScaleType, tonic: &str, low: &str, high: &str| {
+            named(
+                Scale::new(scale_type, pitch(tonic))
+                    .pitches_between(&pitch(low), &pitch(high))
+                    .unwrap(),
+            )
+        };
+        let coming_down = |scale_type: ScaleType, tonic: &str| {
+            named(
+                Scale::new(scale_type, pitch(tonic))
+                    .pitches_descending()
+                    .unwrap(),
+            )
+        };
+
+        // A whole-tone scale is a cycle, walked down to the range from its
+        // tonic above it.
+        assert_eq!(
+            between(ScaleType::WholeTone, "B-4", "C#4", "G#4"),
+            ["D4", "F-4", "G-4", "A-4"]
+        );
+        // An octave-repeating scale starts from the octave of its tonic just
+        // below the range, however far below the range the tonic is.
+        assert_eq!(
+            between(ScaleType::Octatonic, "G#2", "C#4", "G#4"),
+            ["C#4", "D4", "E4", "F4", "G4", "A-4"]
+        );
+        // And stops at the first note at or past the top, so Rag Marwa's
+        // turn back down to G4 is not counted twice.
+        assert_eq!(
+            between(ScaleType::RagMarwa, "B-3", "C#4", "G#4"),
+            ["D4", "E4", "G4"]
+        );
+        // Coming down, a scale is walked down, and spells as it goes.
+        assert_eq!(
+            coming_down(ScaleType::RagAsawari, "B-3"),
+            ["B-4", "A-4", "F#4", "F4", "E-4", "C#4", "C4", "B-3"]
+        );
+        assert_eq!(
+            coming_down(ScaleType::RagMarwa, "C4"),
+            ["D-5", "C5", "D-5", "B4", "A4", "F#4", "E4", "D-4", "C4"]
+        );
+    }
+
+    #[test]
+    fn a_scale_is_derived_from_where_the_pitches_are() {
+        use super::DegreeComparison;
+        use crate::Pitch;
+        // music21 realizes each candidate between the lowest and highest
+        // pitch it is given, so a spelling the scale only has elsewhere does
+        // not count. Read off music21 11.0.0b9.
+        let pitches: Vec<Pitch> = ["F#", "A", "C#", "E#"]
+            .iter()
+            .map(|name| Pitch::from_name(*name).unwrap())
+            .collect();
+        let ranked: Vec<(usize, String)> = ScaleType::WholeTone
+            .derive_ranked_by(&pitches, Some(2), DegreeComparison::Name)
+            .unwrap()
+            .into_iter()
+            .map(|(matched, scale)| (matched, scale.tonic().name()))
+            .collect();
+        assert_eq!(ranked, [(3, "D#".to_string()), (3, "C#".to_string())]);
     }
 
     #[test]
