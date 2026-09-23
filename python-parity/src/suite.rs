@@ -92,7 +92,6 @@ pub fn run(modules: &[&str]) -> Outcome {
         // it: `install_into_music21` rebinds the classes wherever they were
         // already bound, and there is nothing to rebind until then.
         let _ = py.import("music21")?;
-        let installed = music21_rs_python::install_into_music21(py)?;
 
         let unittest = py.import("unittest")?;
         let common_test = py.import("music21.test.commonTest")?;
@@ -114,6 +113,11 @@ pub fn run(modules: &[&str]) -> Outcome {
             }
         }
         test_runner.call_method1("fixDoctests", (&suite,))?;
+        // Installed only once the tests are gathered: a docstring lives on the
+        // class it documents, and music21's own are no longer reachable from
+        // the module once a class of ours stands there. Gathered first, they
+        // run against the classes installed now.
+        let installed = music21_rs_python::install_into_music21(py)?;
 
         py.import("warnings")?
             .call_method1("simplefilter", ("ignore",))?;

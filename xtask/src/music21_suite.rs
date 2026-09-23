@@ -335,6 +335,13 @@ fn run_one(workspace_root: &Path, out: &Path, which: Which, only: Option<&str>) 
             music21.getattr("__file__")?.extract::<String>()?
         );
         clear_corpus_cache(py)?;
+        // Gathered before anything is installed, as the parity harness
+        // gathers: a docstring lives on the class it documents, and once a
+        // class of ours is installed in its place music21's own docstrings are
+        // no longer reachable from the module. Gathered here, they run
+        // against whatever the module then holds, and every side runs the
+        // same tests under the same names.
+        let suite = build_suite(py, &music21, only)?;
         match which {
             Which::Music21 => {}
             // The crate compiled into this binary. `install_into_music21`
@@ -408,7 +415,7 @@ fn run_one(workspace_root: &Path, out: &Path, which: Which, only: Option<&str>) 
         let result = unittest
             .getattr("TextTestRunner")?
             .call((), Some(&kwargs))?
-            .call_method1("run", (build_suite(py, &music21, only)?,))?;
+            .call_method1("run", (&suite,))?;
 
         let mut report = Report {
             run: result.getattr("testsRun")?.extract()?,
