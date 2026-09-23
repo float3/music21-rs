@@ -578,3 +578,24 @@ def test_an_exception_is_the_class_music21_keeps_under_that_name():
     assert m.PitchException is m.PitchException
     with pytest.raises(AttributeError):
         m.NoSuchException
+
+
+def test_a_note_is_drawn_with_a_style_of_the_wheels_own():
+    # Where there is no music21 to lend its own, as in this suite.
+    note = m.Note("C4")
+    note.style.color = "blue"
+    assert type(note.style).__name__ == "NoteStyle" and note.hasStyleInformation
+    style = m.Style()
+    assert (style.units, style.hideObjectOnPrint, style.absoluteY) == ("tenths", False, None)
+    style.absoluteY = "below"
+    assert style.absoluteY == -70
+    with pytest.raises(m.TextFormatException):
+        style.enclosure = "parabola"
+
+
+def test_the_wheels_objects_pickle_without_music21():
+    import pickle
+
+    for thing in (m.Note("C4"), m.Chord("C4 E4 G4"), m.Key("a"), m.Rest(1.5), m.Style()):
+        assert type(pickle.loads(pickle.dumps(thing))) is type(thing)
+    assert pickle.loads(pickle.dumps(m.Chord("C4 E4 G4"))) == m.Chord("C4 E4 G4")

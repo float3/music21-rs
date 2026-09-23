@@ -1760,31 +1760,286 @@ impl Volume {
     }
 }
 
-/// The music21 style object something is drawn with, made the way music21
-/// makes it.
+/// The style object something is drawn with, made the way music21 makes it.
 ///
-/// This crate models the colour and nothing else of a style; music21's own
-/// `Style` carries the page — where the object sits, how large it is drawn,
-/// what encloses it, what an editor wrote about it — and a class of ours
-/// standing in its place would take all of that away. So the object handed
-/// back is music21's, of whatever `_styleClass` the thing being drawn asks
-/// for, and the colour the crate does model is written into it and read
-/// back out of it.
+/// Where music21 is there to ask, the object is music21's own, of whatever
+/// `_styleClass` the thing being drawn asks for: its exporters read the page
+/// off it -- where the object sits, how large it is drawn, what encloses it --
+/// and its subclasses carry more than any one class of ours would. Where there
+/// is no music21, it is this wheel's [`Style`] or [`NoteStyle`], which carry
+/// the same attributes. Either way the colour the crate models is written into
+/// it.
 pub(crate) fn new_style<'py>(
     owner: &Bound<'py, PyAny>,
     colour: Option<&str>,
 ) -> PyResult<Py<PyAny>> {
     let py = owner.py();
-    let module = py.import("music21.style")?;
-    let class = match owner.get_type().getattr("_styleClass") {
-        Ok(class) => class,
-        Err(_) => module.getattr("Style")?,
+    let class = match py.import("music21.style") {
+        Ok(module) => match owner.get_type().getattr("_styleClass") {
+            Ok(class) => class,
+            Err(_) => module.getattr("Style")?,
+        },
+        Err(_) => {
+            let drawn_as_a_note = owner.is_instance_of::<crate::note::Note>()
+                || owner.is_instance_of::<crate::chord::Chord>()
+                || owner.is_instance_of::<crate::rest::Rest>();
+            if drawn_as_a_note {
+                py.get_type::<NoteStyle>().into_any()
+            } else {
+                py.get_type::<Style>().into_any()
+            }
+        }
     };
     let style = class.call0()?;
     if let Some(colour) = colour {
         style.setattr("color", colour)?;
     }
     Ok(style.unbind())
+}
+
+pyo3::create_exception!(
+    music21_rs_facade,
+    TextFormatException,
+    crate::Music21Exception
+);
+
+/// The enclosures music21's `style.Enclosure` names.
+const ENCLOSURES: [&str; 15] = [
+    "rectangle",
+    "square",
+    "oval",
+    "circle",
+    "bracket",
+    "triangle",
+    "diamond",
+    "pentagon",
+    "hexagon",
+    "heptagon",
+    "octagon",
+    "nonagon",
+    "decagon",
+    "inverted-bracket",
+    "none",
+];
+
+/// music21's `style.Style`, for the wheel on its own: how something is drawn
+/// on the page, which the crate does not model beyond its colour.
+///
+/// Every attribute is music21's, with music21's default, and an instance keeps
+/// what it is given in its own dictionary as music21's plain Python object
+/// does. `absoluteY` and `enclosure` check what they are given, as music21's
+/// do. Where music21 is present its own class is used instead, so none of
+/// this is installed over it.
+#[pyclass(name = "Style", module = "music21.style", subclass, dict)]
+pub struct Style;
+
+impl Style {
+    fn stored<'py>(slf: &Bound<'py, PyAny>, name: &str) -> PyResult<Bound<'py, PyAny>> {
+        let dict = slf.getattr("__dict__")?;
+        Ok(dict
+            .call_method1("get", (name,))
+            .unwrap_or_else(|_| slf.py().None().into_bound(slf.py())))
+    }
+
+    fn store(slf: &Bound<'_, PyAny>, name: &str, value: Bound<'_, PyAny>) -> PyResult<()> {
+        slf.getattr("__dict__")?.set_item(name, value)
+    }
+}
+
+#[pymethods]
+impl Style {
+    #[new]
+    #[pyo3(signature = (*_arguments, **_keywords))]
+    fn new(
+        _arguments: &Bound<'_, pyo3::types::PyTuple>,
+        _keywords: Option<&Bound<'_, PyDict>>,
+    ) -> Self {
+        Self
+    }
+
+    #[classattr]
+    fn size(py: Python<'_>) -> Py<PyAny> {
+        py.None()
+    }
+
+    #[classattr]
+    #[pyo3(name = "relativeX")]
+    fn relative_x(py: Python<'_>) -> Py<PyAny> {
+        py.None()
+    }
+
+    #[classattr]
+    #[pyo3(name = "relativeY")]
+    fn relative_y(py: Python<'_>) -> Py<PyAny> {
+        py.None()
+    }
+
+    #[classattr]
+    #[pyo3(name = "absoluteX")]
+    fn absolute_x(py: Python<'_>) -> Py<PyAny> {
+        py.None()
+    }
+
+    #[classattr]
+    #[pyo3(name = "fontRepresentation")]
+    fn font_representation(py: Python<'_>) -> Py<PyAny> {
+        py.None()
+    }
+
+    #[classattr]
+    fn color(py: Python<'_>) -> Py<PyAny> {
+        py.None()
+    }
+
+    /// What distances are measured in: tenths of the space between two staff
+    /// lines, borrowed from MusicXML.
+    #[classattr]
+    fn units() -> &'static str {
+        "tenths"
+    }
+
+    /// Whether the object is left out when the score is written.
+    #[classattr]
+    #[pyo3(name = "hideObjectOnPrint")]
+    fn hide_object_on_print() -> bool {
+        false
+    }
+
+    #[classattr]
+    #[pyo3(name = "dashLength")]
+    fn dash_length(py: Python<'_>) -> Py<PyAny> {
+        py.None()
+    }
+
+    #[classattr]
+    #[pyo3(name = "spaceLength")]
+    fn space_length(py: Python<'_>) -> Py<PyAny> {
+        py.None()
+    }
+
+    /// The vertical position, 0 being the top line of the staff; `'above'`
+    /// and `'below'` stand for 10 and -70.
+    #[getter(absoluteY)]
+    fn get_absolute_y<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        Self::stored(slf.as_any(), "_absoluteY")
+    }
+
+    #[setter(absoluteY)]
+    fn set_absolute_y(slf: &Bound<'_, Self>, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        let py = slf.py();
+        let stored = match value.filter(|value| !value.is_none()) {
+            None => py.None().into_bound(py),
+            Some(value) if value.extract::<String>().is_ok_and(|text| text == "above") => {
+                10_i64.into_pyobject(py)?.into_any()
+            }
+            Some(value) if value.extract::<String>().is_ok_and(|text| text == "below") => {
+                (-70_i64).into_pyobject(py)?.into_any()
+            }
+            Some(value) => match value.extract::<f64>() {
+                Ok(number) if number.fract() == 0.0 => {
+                    (number as i64).into_pyobject(py)?.into_any()
+                }
+                Ok(number) => number.into_pyobject(py)?.into_any(),
+                Err(_) => {
+                    return Err(TextFormatException::new_err(format!(
+                        "Not a supported absoluteY position: {}",
+                        value.repr()?
+                    )));
+                }
+            },
+        };
+        Self::store(slf.as_any(), "_absoluteY", stored)
+    }
+
+    /// What the object is drawn inside, by music21's name for the shape;
+    /// `None` leaves it unsaid and `'none'` says there is nothing.
+    #[getter]
+    fn get_enclosure<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        Self::stored(slf.as_any(), "_enclosure")
+    }
+
+    #[setter]
+    fn set_enclosure(slf: &Bound<'_, Self>, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        let py = slf.py();
+        let stored = match value.filter(|value| !value.is_none()) {
+            None => py.None().into_bound(py),
+            Some(value) => {
+                let named = value
+                    .extract::<String>()
+                    .ok()
+                    .map(|text| text.to_lowercase())
+                    .filter(|text| ENCLOSURES.contains(&text.as_str()));
+                match named {
+                    Some(name) => name.into_pyobject(py)?.into_any(),
+                    None => {
+                        return Err(TextFormatException::new_err(format!(
+                            "Not a supported enclosure: {}",
+                            value.repr()?
+                        )));
+                    }
+                }
+            }
+        };
+        Self::store(slf.as_any(), "_enclosure", stored)
+    }
+
+    /// Pickled as its class's name and what it keeps in its dictionary, read
+    /// back through `_thawed` as every class of this wheel is, since the
+    /// module it names is music21's and there may be no music21 to import.
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<crate::Pickled> {
+        let py = slf.py();
+        let class = slf.get_type();
+        let thaw = py
+            .import("music21_rs")
+            .or_else(|_| py.import("music21_rs_facade"))?
+            .getattr("_thawed")?;
+        let state = slf.getattr("__dict__")?.call_method0("copy")?;
+        Ok((
+            thaw.unbind(),
+            (
+                class.getattr("__module__")?.extract()?,
+                class.getattr("__qualname__")?.extract()?,
+            ),
+            state.unbind(),
+        ))
+    }
+}
+
+/// music21's `style.NoteStyle`: a style that can also say how the stem and
+/// the accidental are drawn, and at what size the note is written.
+#[pyclass(name = "NoteStyle", module = "music21.style", extends = Style, subclass)]
+pub struct NoteStyle;
+
+#[pymethods]
+impl NoteStyle {
+    #[new]
+    #[pyo3(signature = (*_arguments, **_keywords))]
+    fn new(
+        _arguments: &Bound<'_, pyo3::types::PyTuple>,
+        _keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyClassInitializer<Self> {
+        PyClassInitializer::from(Style).add_subclass(NoteStyle)
+    }
+
+    #[classattr]
+    #[pyo3(name = "stemStyle")]
+    fn stem_style(py: Python<'_>) -> Py<PyAny> {
+        py.None()
+    }
+
+    #[classattr]
+    #[pyo3(name = "accidentalStyle")]
+    fn accidental_style(py: Python<'_>) -> Py<PyAny> {
+        py.None()
+    }
+
+    /// The size the note is written at: `None` for normal, or `'cue'`,
+    /// `'grace'`, `'graceCue'` or `'large'`.
+    #[classattr]
+    #[pyo3(name = "noteSize")]
+    fn note_size(py: Python<'_>) -> Py<PyAny> {
+        py.None()
+    }
 }
 
 /// A copy of a style object, as music21's own deepcopy makes one: a copy of
@@ -1813,5 +2068,7 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Volume>()?;
     m.add_class::<Beam>()?;
     m.add_class::<Beams>()?;
+    m.add_class::<Style>()?;
+    m.add_class::<NoteStyle>()?;
     Ok(())
 }

@@ -355,6 +355,15 @@ fn thawed(py: Python<'_>, module: &str, name: &str) -> PyResult<Py<PyAny>> {
     // are already in place would build every class a second time, and every
     // object made before that would stop being of the class its module now
     // names, which is a far worse thing than a name this cannot resolve.
+    // With no music21 to import the module from, the class is this wheel's
+    // own, under the name it was written with.
+    if py.import(module).is_err() {
+        let wheel = py
+            .import("music21_rs")
+            .or_else(|_| py.import("music21_rs_facade"))?;
+        let class = wheel.getattr(name)?;
+        return Ok(blank_installed(&class)?.unbind());
+    }
     if !anything_installed(py) {
         install_into_music21(py)?;
     }
@@ -1065,6 +1074,11 @@ exceptions![
         "HarmonyException",
         harmony::HarmonyException,
         Some("music21.harmony")
+    ),
+    (
+        "TextFormatException",
+        notation::TextFormatException,
+        Some("music21.style")
     ),
     (
         "ChordStepModificationException",
