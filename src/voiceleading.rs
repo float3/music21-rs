@@ -506,6 +506,8 @@ struct Span<'a> {
     offset: FloatType,
     end: FloatType,
     part: usize,
+    /// Where the element stands in [`Stream::leaves`].
+    position: usize,
     element: &'a StreamElement,
 }
 
@@ -528,26 +530,49 @@ impl Span<'_> {
     }
 }
 
-/// Each part of a stream flattened, with the part's own offset added. A
-/// stream holding no parts is one part itself.
-fn flattened_parts(stream: &Stream) -> Vec<Stream> {
-    let parts: Vec<Stream> = stream
+/// Each part of a stream as a flat timeline: every element of the part with
+/// its offset from the stream's start and its position in
+/// [`Stream::leaves`], in the order `flatten` would give them. A stream
+/// holding no parts is one part itself.
+fn parts_by_position(stream: &Stream) -> Vec<Vec<(usize, FloatType, &StreamElement)>> {
+    let tops: Vec<usize> = stream
         .events()
         .iter()
-        .filter_map(|event| {
-            let part = event.element().as_stream()?;
-            (part.kind() == StreamKind::Part).then(|| {
-                let mut holder = Stream::new();
-                holder.insert(event.offset(), part.clone());
-                holder.flatten()
-            })
+        .enumerate()
+        .filter(|(_, event)| {
+            event
+                .element()
+                .as_stream()
+                .is_some_and(|part| part.kind() == StreamKind::Part)
         })
+        .map(|(top, _)| top)
         .collect();
-    if parts.is_empty() {
-        vec![stream.flatten()]
+    let leaves = stream.leaves_under_top();
+    let mut parts: Vec<Vec<(usize, FloatType, &StreamElement)>> = if tops.is_empty() {
+        vec![
+            leaves
+                .iter()
+                .enumerate()
+                .map(|(position, &(_, offset, element))| (position, offset, element))
+                .collect(),
+        ]
     } else {
-        parts
+        tops.iter()
+            .map(|&top| {
+                leaves
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, (under, _, _))| *under == top)
+                    .map(|(position, &(_, offset, element))| (position, offset, element))
+                    .collect()
+            })
+            .collect()
+    };
+    // Stable, as `flatten` is.
+    for part in &mut parts {
+        part.sort_by(|left, right| left.1.total_cmp(&right.1));
     }
+    parts
 }
 
 /// Every [`VoiceLeadingQuartet`] in a stream, generally a score: music21's
@@ -572,15 +597,56 @@ pub fn iterate_all_voice_leading_quartets(
     stream: &Stream,
     options: QuartetOptions,
 ) -> Result<Vec<VoiceLeadingQuartet>> {
-    let parts = flattened_parts(stream);
+    let leaves = stream.leaves();
+    let pitch = |position: usize| match leaves[position].1 {
+        StreamElement::Note(note) => note.pitch().clone(),
+        _ => unreachable!("a quartet is made of notes alone"),
+    };
+    voice_leading_quartet_positions(stream, options)
+        .into_iter()
+        .map(|(_, [v1n1, v1n2, v2n1, v2n2])| {
+            VoiceLeadingQuartet::new(pitch(v1n1), pitch(v1n2), pitch(v2n1), pitch(v2n2))
+        })
+        .collect()
+}
+
+/// Where the four notes of every quartet [`iterate_all_voice_leading_quartets`]
+/// finds stand in the stream: each quartet as the offset it is found at and
+/// the positions in [`Stream::leaves`] of its `v1n1`, `v1n2`, `v2n1` and
+/// `v2n2`, in that order. This is the walk itself, for a caller that keeps
+/// something of its own beside each note and wants that back rather than a
+/// copy of the pitch; the offset is what music21's `reverse` walks backwards
+/// by, since a voice held through has its notes start earlier.
+///
+/// ```
+/// use music21_rs::{voiceleading::{voice_leading_quartet_positions, QuartetOptions}, Note, Stream, StreamKind};
+///
+/// let mut upper = Stream::with_kind(StreamKind::Part);
+/// upper.insert(0.0, Note::from_name("C5")?);
+/// upper.insert(1.0, Note::from_name("D5")?);
+/// let mut lower = Stream::with_kind(StreamKind::Part);
+/// lower.insert(0.0, Note::from_name("C4")?);
+/// lower.insert(1.0, Note::from_name("B3")?);
+/// let mut score = Stream::with_kind(StreamKind::Score);
+/// score.insert(0.0, upper);
+/// score.insert(0.0, lower);
+/// assert_eq!(voice_leading_quartet_positions(&score, QuartetOptions::default()), [(1.0, [0, 1, 2, 3])]);
+/// # Ok::<(), music21_rs::Error>(())
+/// ```
+pub fn voice_leading_quartet_positions(
+    stream: &Stream,
+    options: QuartetOptions,
+) -> Vec<(FloatType, [usize; 4])> {
+    let parts = parts_by_position(stream);
     let mut spans: Vec<Span<'_>> = Vec::new();
     for (part, flat) in parts.iter().enumerate() {
-        for event in flat.events() {
+        for &(position, offset, element) in flat {
             spans.push(Span {
-                offset: event.offset(),
-                end: event.end_offset(),
+                offset,
+                end: offset + element.quarter_length(),
                 part,
-                element: event.element(),
+                position,
+                element,
             });
         }
     }
@@ -648,31 +714,18 @@ pub fn iterate_all_voice_leading_quartets(
                 {
                     continue;
                 }
-                let (
-                    StreamElement::Note(v1n1),
-                    StreamElement::Note(v1n2),
-                    StreamElement::Note(v2n1),
-                    StreamElement::Note(v2n2),
-                ) = (
-                    first.0.element,
-                    first.1.element,
-                    second.0.element,
-                    second.1.element,
-                )
-                else {
-                    continue;
-                };
-                quartets.push(VoiceLeadingQuartet::new(
-                    v1n1.pitch().clone(),
-                    v1n2.pitch().clone(),
-                    v2n1.pitch().clone(),
-                    v2n2.pitch().clone(),
-                )?);
+                let four = [first.0, first.1, second.0, second.1];
+                if four
+                    .iter()
+                    .all(|span| matches!(span.element, StreamElement::Note(_)))
+                {
+                    quartets.push((offset, four.map(|span| span.position)));
+                }
             }
         }
         start = stop;
     }
-    Ok(quartets)
+    quartets
 }
 
 /// What is sounding or standing in each part at an offset, part by part:
@@ -683,20 +736,49 @@ pub fn iterate_all_voice_leading_quartets(
 /// length counts where it stands. Parts holding nothing there are left out,
 /// so each answer carries the index of its part.
 pub fn verticality_at(stream: &Stream, offset: FloatType) -> Vec<(usize, Vec<StreamElement>)> {
-    flattened_parts(stream)
+    let leaves = stream.leaves();
+    verticality_positions_at(stream, offset)
+        .into_iter()
+        .map(|(part, positions)| {
+            (
+                part,
+                positions
+                    .into_iter()
+                    .map(|position| leaves[position].1.clone())
+                    .collect(),
+            )
+        })
+        .collect()
+}
+
+/// [`verticality_at`] by position: for each part holding anything at the
+/// offset, the part's index and the positions in [`Stream::leaves`] of what
+/// it holds there, for a caller that keeps something of its own beside each
+/// element.
+///
+/// ```
+/// use music21_rs::{voiceleading::verticality_positions_at, Note, Stream};
+///
+/// let mut stream = Stream::new();
+/// stream.insert(0.0, Note::from_name("C4")?);
+/// stream.insert(1.0, Note::from_name("D4")?);
+/// assert_eq!(verticality_positions_at(&stream, 0.5), [(0, vec![0])]);
+/// # Ok::<(), music21_rs::Error>(())
+/// ```
+pub fn verticality_positions_at(stream: &Stream, offset: FloatType) -> Vec<(usize, Vec<usize>)> {
+    parts_by_position(stream)
         .iter()
         .enumerate()
         .filter_map(|(part, flat)| {
-            let elements: Vec<StreamElement> = flat
-                .events()
+            let positions: Vec<usize> = flat
                 .iter()
-                .filter(|event| {
-                    event.offset() == offset
-                        || (event.offset() < offset && offset < event.end_offset())
+                .filter(|(_, start, element)| {
+                    *start == offset
+                        || (*start < offset && offset < *start + element.quarter_length())
                 })
-                .map(|event| event.element().clone())
+                .map(|(position, _, _)| *position)
                 .collect();
-            (!elements.is_empty()).then_some((part, elements))
+            (!positions.is_empty()).then_some((part, positions))
         })
         .collect()
 }

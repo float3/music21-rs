@@ -1686,16 +1686,14 @@ impl Volume {
         baseLevel: f64,
         clip: bool,
     ) -> PyResult<f64> {
-        let mut volume = self.inner.clone();
-        if !useVelocity {
-            volume.set_velocity(None);
-        }
-        let realized = volume.realized_with(
-            self.dynamic_scalar(py, useDynamicContext)?,
-            self.articulation_shift(py, useArticulations)?,
-            baseLevel,
-            clip,
-        );
+        let dynamic = self.dynamic_scalar(py, useDynamicContext)?;
+        let shift = self.articulation_shift(py, useArticulations)?;
+        let realized = if useVelocity {
+            self.inner.realized_with(dynamic, shift, baseLevel, clip)
+        } else {
+            self.inner
+                .realized_without_velocity(dynamic, shift, baseLevel, clip)
+        };
         // music21 keeps every answer, which is what `realizeVolume` walks a
         // score to fill in.
         self.cached = Some(realized);

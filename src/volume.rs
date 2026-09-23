@@ -152,11 +152,38 @@ impl Volume {
         base_level: FloatType,
         clip: bool,
     ) -> FloatType {
+        self.realize(true, dynamic_scalar, articulation_shift, base_level, clip)
+    }
+
+    /// [`Volume::realized_with`] leaving this volume's velocity out: music21's
+    /// `getRealized(useVelocity=False)`. The base level stands in for the
+    /// velocity, with no shift for its being unset, and the dynamic and the
+    /// articulations then act on it as they would.
+    pub fn realized_without_velocity(
+        &self,
+        dynamic_scalar: Option<FloatType>,
+        articulation_shift: FloatType,
+        base_level: FloatType,
+        clip: bool,
+    ) -> FloatType {
+        self.realize(false, dynamic_scalar, articulation_shift, base_level, clip)
+    }
+
+    fn realize(
+        &self,
+        use_velocity: bool,
+        dynamic_scalar: Option<FloatType>,
+        articulation_shift: FloatType,
+        base_level: FloatType,
+        clip: bool,
+    ) -> FloatType {
         let mut value = base_level;
-        match self.velocity_scalar {
-            Some(scalar) if !self.velocity_is_relative => value = scalar,
-            Some(scalar) => value *= scalar * 2.0,
-            None => value += UNSET_VELOCITY_SHIFT,
+        if use_velocity {
+            match self.velocity_scalar {
+                Some(scalar) if !self.velocity_is_relative => value = scalar,
+                Some(scalar) => value *= scalar * 2.0,
+                None => value += UNSET_VELOCITY_SHIFT,
+            }
         }
         if self.velocity_is_relative {
             if let Some(dynamic_scalar) = dynamic_scalar {
@@ -245,44 +272,28 @@ pub enum DynamicContext {
 /// # Ok::<(), music21_rs::Error>(())
 /// ```
 pub fn realize_volume(stream: &mut Stream, context: &DynamicContext, use_velocity: bool) {
-    // Each dynamic with where it stops being in force: at the next one, or
-    // at the end of the stream, which is music21's `extendDuration`.
-    let flat = stream.flatten();
-    let end = flat.end_offset();
-    let starts: Vec<(FloatType, FloatType)> = flat
-        .events()
-        .iter()
-        .filter_map(|event| match event.element() {
-            StreamElement::Dynamic(dynamic) => Some((event.offset(), dynamic.volume_scalar())),
-            _ => None,
-        })
-        .collect();
-    let in_force = |offset: FloatType| -> Option<FloatType> {
-        match context {
-            DynamicContext::Ignored => None,
-            DynamicContext::Fixed(dynamic) => Some(dynamic.volume_scalar()),
-            DynamicContext::FromStream => {
-                starts
-                    .iter()
-                    .enumerate()
-                    .find_map(|(index, &(start, scalar))| {
-                        let stop = starts.get(index + 1).map_or(end, |next| next.0);
-                        (start <= offset && offset < stop).then_some(scalar)
-                    })
-            }
+    let in_force: Vec<Option<FloatType>> = match context {
+        DynamicContext::Ignored => vec![None; stream.leaves().len()],
+        DynamicContext::Fixed(dynamic) => {
+            vec![Some(dynamic.volume_scalar()); stream.leaves().len()]
+        }
+        DynamicContext::FromStream => {
+            let leaves = stream.leaves();
+            dynamics_in_force(stream)
+                .into_iter()
+                .map(|found| match found.map(|position| leaves[position].1) {
+                    Some(StreamElement::Dynamic(dynamic)) => Some(dynamic.volume_scalar()),
+                    _ => None,
+                })
+                .collect()
         }
     };
 
-    let realized = |volume: &Volume, offset: FloatType| -> Volume {
-        let dynamic = in_force(offset);
+    let realized = |volume: &Volume, dynamic: Option<FloatType>| -> Volume {
         let value = if use_velocity {
             volume.realized_with(dynamic, 0.0, BASE_LEVEL, true)
         } else {
-            let mut value = BASE_LEVEL;
-            if let (true, Some(dynamic)) = (volume.velocity_is_relative(), dynamic) {
-                value *= dynamic * 2.0;
-            }
-            value.clamp(0.0, 1.0)
+            volume.realized_without_velocity(dynamic, 0.0, BASE_LEVEL, true)
         };
         let mut absolute = volume.clone();
         absolute.set_velocity_is_relative(false);
@@ -291,17 +302,68 @@ pub fn realize_volume(stream: &mut Stream, context: &DynamicContext, use_velocit
             .expect("a clipped loudness is within the range a velocity takes");
         absolute
     };
-    stream.for_each_mut(&mut |offset, element| match element {
-        StreamElement::Note(note) => {
-            let volume = realized(&note.volume(), offset);
-            note.set_volume(Some(volume));
+    let mut position = 0;
+    stream.for_each_mut(&mut |_, element| {
+        let dynamic = in_force[position];
+        position += 1;
+        match element {
+            StreamElement::Note(note) => {
+                let volume = realized(&note.volume(), dynamic);
+                note.set_volume(Some(volume));
+            }
+            StreamElement::Chord(chord) => {
+                let volume = realized(&chord.volume(), dynamic);
+                chord.set_volume(Some(volume));
+            }
+            _ => {}
         }
-        StreamElement::Chord(chord) => {
-            let volume = realized(&chord.volume(), offset);
-            chord.set_volume(Some(volume));
-        }
-        _ => {}
     });
+}
+
+/// The dynamic each element of a stream stands under: for every element
+/// [`Stream::leaves`] lists, the position in that list of the dynamic in
+/// force where it stands, or `None` where no dynamic is.
+///
+/// A dynamic is in force from where it stands until the next, the last until
+/// the end of the stream, which is music21's `extendDuration`; a note before
+/// the first dynamic stands under none, and of two dynamics at one offset the
+/// later-listed is the one in force. This is the search [`realize_volume`]
+/// realizes against, for a caller that keeps something of its own beside
+/// each element.
+///
+/// ```
+/// use music21_rs::{volume::dynamics_in_force, Dynamic, Note, Stream};
+///
+/// let mut stream = Stream::new();
+/// stream.insert(0.0, Note::from_name("G3")?);
+/// stream.insert(1.0, Dynamic::new("ff"));
+/// stream.insert(1.0, Note::from_name("G3")?);
+/// assert_eq!(dynamics_in_force(&stream), [None, Some(1), Some(1)]);
+/// # Ok::<(), music21_rs::Error>(())
+/// ```
+pub fn dynamics_in_force(stream: &Stream) -> Vec<Option<usize>> {
+    let leaves = stream.leaves();
+    let end = stream.end_offset();
+    let mut starts: Vec<(FloatType, usize)> = leaves
+        .iter()
+        .enumerate()
+        .filter(|(_, (_, element))| matches!(element, StreamElement::Dynamic(_)))
+        .map(|(position, (offset, _))| (*offset, position))
+        .collect();
+    // Stable, so dynamics at one offset keep the order the stream gives them.
+    starts.sort_by(|left, right| left.0.total_cmp(&right.0));
+    leaves
+        .iter()
+        .map(|(offset, _)| {
+            starts
+                .iter()
+                .enumerate()
+                .find_map(|(index, &(start, position))| {
+                    let stop = starts.get(index + 1).map_or(end, |next| next.0);
+                    (start <= *offset && *offset < stop).then_some(position)
+                })
+        })
+        .collect()
 }
 
 impl fmt::Display for Volume {
@@ -405,6 +467,14 @@ mod tests {
         // nobody has marked lifts it a little.
         let unmarked = Volume::new();
         assert!((unmarked.realized_with(None, 0.1, 0.5, true) - 0.80866).abs() < 1e-9);
+        // Read off music21: a note nobody has marked, realized under pp and
+        // ff with its velocity left out, is the base level scaled and no more.
+        assert!(
+            (unmarked.realized_without_velocity(Some(0.25), 0.0, 0.5, true) - 0.25).abs() < 1e-9
+        );
+        assert!(
+            (unmarked.realized_without_velocity(Some(0.85), 0.0, 0.5, true) - 0.85).abs() < 1e-9
+        );
     }
 
     #[test]

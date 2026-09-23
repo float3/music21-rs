@@ -971,41 +971,55 @@ impl ChordSymbol {
 /// # Ok::<(), music21_rs::Error>(())
 /// ```
 pub fn realize_chord_symbol_durations(stream: &mut Stream) {
-    let flat = stream.flatten();
-    let end = flat.end_offset();
-    let offsets: Vec<FloatType> = flat
-        .events()
-        .iter()
-        .filter(|event| matches!(event.element(), StreamElement::ChordSymbol(_)))
-        .map(|event| event.offset())
-        .collect();
-    // In the order `flatten` gives them, which is the order the walk below
-    // meets the symbols standing at any one offset.
-    let mut held: Vec<Option<(FloatType, FloatType)>> = offsets
-        .iter()
-        .enumerate()
-        .map(|(index, offset)| {
-            let until = offsets.get(index + 1).copied().unwrap_or(end);
-            Some((*offset, (until - offset).max(0.0)))
-        })
-        .collect();
-
-    stream.for_each_mut(&mut |offset, element| {
-        let StreamElement::ChordSymbol(symbol) = element else {
-            return;
-        };
-        let Some(length) = held
-            .iter_mut()
-            .find(|entry| entry.is_some_and(|(at, _)| at == offset))
-            .and_then(Option::take)
-            .map(|(_, length)| length)
-        else {
-            return;
-        };
-        if let Ok(duration) = Duration::new(length) {
+    let lengths = chord_symbol_durations(stream);
+    let mut position = 0;
+    stream.for_each_mut(&mut |_, element| {
+        if let StreamElement::ChordSymbol(symbol) = element
+            && let Some((_, length)) = lengths.iter().find(|(at, _)| *at == position)
+            && let Ok(duration) = Duration::new(*length)
+        {
             symbol.set_duration(duration);
         }
+        position += 1;
     });
+}
+
+/// How long each chord symbol of a stream is held: its position in
+/// [`Stream::leaves`] and the quarter length from it to the next symbol, the
+/// last to the end of the stream. This is the reading
+/// [`realize_chord_symbol_durations`] writes, for a caller that keeps
+/// something of its own beside each element.
+///
+/// ```
+/// use music21_rs::{chordsymbol::chord_symbol_durations, ChordSymbol, Note, Stream};
+///
+/// let mut stream = Stream::new();
+/// stream.insert(0.0, ChordSymbol::parse("C")?);
+/// stream.insert(0.0, Note::from_name("C4")?);
+/// stream.insert(3.0, ChordSymbol::parse("G7")?);
+/// stream.insert(3.0, Note::from_name("B3")?);
+/// assert_eq!(chord_symbol_durations(&stream), [(0, 3.0), (2, 1.0)]);
+/// # Ok::<(), music21_rs::Error>(())
+/// ```
+pub fn chord_symbol_durations(stream: &Stream) -> Vec<(usize, FloatType)> {
+    let end = stream.end_offset();
+    let mut symbols: Vec<(FloatType, usize)> = stream
+        .leaves()
+        .iter()
+        .enumerate()
+        .filter(|(_, (_, element))| matches!(element, StreamElement::ChordSymbol(_)))
+        .map(|(position, (offset, _))| (*offset, position))
+        .collect();
+    // Stable, so symbols at one offset keep the order the stream gives them.
+    symbols.sort_by(|left, right| left.0.total_cmp(&right.0));
+    symbols
+        .iter()
+        .enumerate()
+        .map(|(index, &(offset, position))| {
+            let until = symbols.get(index + 1).map_or(end, |next| next.0);
+            (position, (until - offset).max(0.0))
+        })
+        .collect()
 }
 
 impl FromStr for ChordSymbol {

@@ -365,6 +365,81 @@ def test_a_chord_symbol_sounds_its_figure():
         m.ChordSymbol("Cjunk")
 
 
+def a_three_part_score():
+    upper = m.Part([m.Note(name) for name in ["C5", "D5", "E5", "E5", "G5"]], id="upper")
+    middle = m.Part([m.Note(name) for name in ["E4", "G4", "G4", "C5", "B4"]], id="middle")
+    lower = m.Part(id="lower")
+    for name, length in [("C3", 1), ("B2", 2), ("A2", 1), ("G2", 1)]:
+        lower.append(m.Note(name, quarterLength=length))
+    return m.Score([upper, middle, lower])
+
+
+def test_a_stream_holds_the_objects_it_is_given():
+    # Each answer read off music21 11.0.0b9.
+    c, d = m.Note("C"), m.Note("D", quarterLength=2)
+    melody = m.Stream([c, d])
+    assert [melody.elementOffset(each) for each in melody] == [0.0, 1.0]
+    assert melody[0] is c and melody.highestTime == 3.0
+    score = a_three_part_score()
+    assert [score.elementOffset(part) for part in score] == [0.0, 0.0, 0.0]
+    assert len(score.parts) == 3 and len(score.flatten()) == 14
+    assert repr(score.parts[0]) == "<music21.stream.Part upper>"
+
+
+def test_the_stream_walks_answer_with_the_objects_held():
+    # Each answer read off music21 11.0.0b9, which finds the same quartets,
+    # the same verticality, the same lengths and the same loudness.
+    score = a_three_part_score()
+    quartets = m.iterateAllVoiceLeadingQuartets(score)
+    assert len(quartets) == 11
+    assert repr(quartets[0]) == (
+        "<music21.voiceLeading.VoiceLeadingQuartet v1n1=C5, v1n2=D5, v2n1=E4, v2n2=G4>"
+    )
+    assert quartets[0].v1n1 is score.parts[0][0]
+    third = score.parts[0][3]
+    heard = m.getVerticalityFromObject(third, score).contentDict
+    assert {part: [each.nameWithOctave for each in notes] for part, notes in heard.items()} == {
+        0: ["E5"],
+        1: ["C5"],
+        2: ["A2"],
+    }
+
+    lead = m.Score()
+    for figure in ["C", "G7", "Am"]:
+        lead.append(m.ChordSymbol(figure))
+        for _ in range(3):
+            lead.append(m.Note("C"))
+    lead.append(m.ChordSymbol("C"))
+    lead.append(m.Note("D", quarterLength=2))
+    flat = m.realizeChordSymbolDurations(lead)
+    held = [
+        (flat.elementOffset(each), each.quarterLength)
+        for each in flat
+        if isinstance(each, m.ChordSymbol)
+    ]
+    assert held == [(0.0, 3.0), (3.0, 3.0), (6.0, 3.0), (9.0, 2.0)]
+
+    loud = m.Stream()
+    loud.insert(0, m.Note("C4"))
+    loud.insert(0, m.Dynamic("pp"))
+    loud.insert(2, m.Dynamic("ff"))
+    loud.insert(2, m.Note("D4"))
+    m.realizeVolume(loud, setAbsoluteVelocity=True)
+    assert [each.volume.velocity for each in loud.notes] == [45, 127]
+
+    first, last = m.Note("C"), m.Note("C")
+    between = [m.Note(name) for name in "DEF"]
+    source, destination = m.Stream(), m.Stream()
+    source.insert(10, first)
+    for offset, each in zip([11, 12, 13], between):
+        source.insert(offset, each)
+    source.insert(14, last)
+    destination.insert(20.5, first)
+    destination.insert(25.0, last)
+    m.interpolateElements(first, last, source, destination)
+    assert [destination.elementOffset(each) for each in between] == [21.625, 22.75, 23.875]
+
+
 def test_scales_stand_on_steps_a_caller_gives():
     # Each answer read off music21 11.0.0b9.
     triad = m.OctaveRepeatingScale("c4", ["m3", "M3"])

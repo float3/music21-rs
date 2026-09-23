@@ -412,6 +412,56 @@ impl Stream {
         }
     }
 
+    /// Every element that is not itself a stream, at its offset from this
+    /// stream's start, in the order [`Stream::for_each_mut`] hands them over.
+    ///
+    /// An element's index in this list is its *position*, which is how the
+    /// walks answering about particular elements say which they mean:
+    /// [`crate::volume::dynamics_in_force`],
+    /// [`crate::chordsymbol::chord_symbol_durations`],
+    /// [`crate::voiceleading::voice_leading_quartet_positions`] and
+    /// [`crate::voiceleading::verticality_positions_at`]. A caller keeping
+    /// something of its own beside each element, as a binding keeps the
+    /// object it was handed, finds it again by the same index.
+    pub fn leaves(&self) -> Vec<(FloatType, &StreamElement)> {
+        self.leaves_under_top()
+            .into_iter()
+            .map(|(_, offset, element)| (offset, element))
+            .collect()
+    }
+
+    /// [`Stream::leaves`], each with the index of the event of this stream it
+    /// came out of: itself for an element held directly, the nested stream
+    /// holding it otherwise.
+    pub(crate) fn leaves_under_top(&self) -> Vec<(usize, FloatType, &StreamElement)> {
+        let mut out = Vec::new();
+        for (top, event) in self.events.iter().enumerate() {
+            match &event.element {
+                StreamElement::Stream(stream) => {
+                    let mut inner = Vec::new();
+                    stream.leaves_into(event.offset, &mut inner);
+                    out.extend(
+                        inner
+                            .into_iter()
+                            .map(|(offset, element)| (top, offset, element)),
+                    );
+                }
+                element => out.push((top, event.offset, element)),
+            }
+        }
+        out
+    }
+
+    fn leaves_into<'a>(&'a self, base: FloatType, out: &mut Vec<(FloatType, &'a StreamElement)>) {
+        for event in &self.events {
+            let offset = base + event.offset;
+            match &event.element {
+                StreamElement::Stream(stream) => stream.leaves_into(offset, out),
+                element => out.push((offset, element)),
+            }
+        }
+    }
+
     /// Hands every element to a closure with its offset from this stream's
     /// start, nested streams' contents included, so that it may be changed
     /// where it sits.

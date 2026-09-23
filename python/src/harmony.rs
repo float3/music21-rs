@@ -1240,6 +1240,50 @@ impl ChordSymbol {
     }
 }
 
+/// The crate's value of a chord symbol, which a stream is read into: its
+/// root, kind and bass, and the time it holds.
+///
+/// A symbol with no root -- `NoChord` -- sounds nothing, and the crate has no
+/// value for that; it is held by a C major triad, which nothing a stream is
+/// read for asks the sound of. Only its place and its length are read.
+pub(crate) fn crate_value(slf: &Bound<'_, ChordSymbol>) -> PyResult<RsChordSymbol> {
+    let root = slf.call_method0("root")?;
+    let mut symbol = if root.is_none() {
+        RsChordSymbol::from_kind(
+            RsPitch::from_name("C").map_err(harmony_error)?,
+            "major",
+            None,
+        )
+        .map_err(harmony_error)?
+    } else {
+        let root = pitch_from_any(&root)?;
+        let bass = slf.call_method0("bass")?;
+        let bass = if bass.is_none() {
+            None
+        } else {
+            Some(pitch_from_any(&bass)?)
+        };
+        let kind = slf.borrow().chord_kind.clone().unwrap_or_default();
+        match RsChordSymbol::from_kind(root.clone(), &kind, bass.clone()) {
+            Ok(symbol) => symbol,
+            // A kind music21's live table has and the crate's has not.
+            Err(_) => {
+                let mut symbol =
+                    RsChordSymbol::parse_music21(root.name()).map_err(harmony_error)?;
+                symbol.set_root(root);
+                symbol.set_bass(bass);
+                symbol.with_kind(&kind)
+            }
+        }
+    };
+    let length: f64 = slf
+        .getattr("duration")?
+        .getattr("quarterLength")?
+        .extract()?;
+    symbol.set_duration(music21_rs_crate::Duration::new(length).map_err(harmony_error)?);
+    Ok(symbol)
+}
+
 /// A figure read against music21's live table of kinds, which a program may
 /// have added to with `addNewChordSymbol`: a root and exactly one of the
 /// abbreviations music21 now holds for a kind the crate's table has not got.

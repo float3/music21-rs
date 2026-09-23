@@ -356,6 +356,40 @@ pub fn interpolate_elements(
     start: (FloatType, FloatType),
     end: (FloatType, FloatType),
 ) -> Result<()> {
+    let (start_source, end_source) = (start.0, end.0);
+    // Checked before the walk, so two points at one offset are refused even
+    // with nothing between them.
+    interpolated_offset(start_source, start, end)?;
+    for event in source.events() {
+        if event.offset() > start_source && event.offset() < end_source {
+            destination.insert(
+                interpolated_offset(event.offset(), start, end)?,
+                event.element().clone(),
+            );
+        }
+    }
+    Ok(())
+}
+
+/// Where a thing standing at `offset` in the source lands in the destination,
+/// the same proportion of the way between the two points: the arithmetic of
+/// [`interpolate_elements`], for a caller that moves things of its own.
+///
+/// `start` and `end` are each a point's offset in the source and in the
+/// destination. It is an error for the two to stand at one offset in the
+/// source, since then nothing lies between them to scale.
+///
+/// ```
+/// use music21_rs::tempo::interpolated_offset;
+///
+/// assert_eq!(interpolated_offset(11.0, (10.0, 20.5), (14.0, 25.0))?, 21.625);
+/// # Ok::<(), music21_rs::Error>(())
+/// ```
+pub fn interpolated_offset(
+    offset: FloatType,
+    start: (FloatType, FloatType),
+    end: (FloatType, FloatType),
+) -> Result<FloatType> {
     let ((start_source, start_destination), (end_source, end_destination)) = (start, end);
     if end_source == start_source {
         return Err(Error::Tempo(
@@ -364,15 +398,7 @@ pub fn interpolate_elements(
         ));
     }
     let scale = (end_destination - start_destination) / (end_source - start_source);
-    for event in source.events() {
-        if event.offset() > start_source && event.offset() < end_source {
-            destination.insert(
-                scale * (event.offset() - start_source) + start_destination,
-                event.element().clone(),
-            );
-        }
-    }
-    Ok(())
+    Ok(scale * (offset - start_source) + start_destination)
 }
 
 #[cfg(test)]
