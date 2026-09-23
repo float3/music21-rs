@@ -8,7 +8,8 @@ pub mod stepscale;
 
 pub use hexatonicblues::{BluesForm, WeightedHexatonicBlues};
 pub use scaletype::{
-    DegreeComparison, HUMDRUM_SOLFEG_SYLLABLES, SOLFEG_SYLLABLES, Scale, ScaleType, SolfegVariant,
+    DegreeComparison, HUMDRUM_SOLFEG_SYLLABLES, SOLFEG_SYLLABLES, Scale, ScaleType, Simplification,
+    SolfegVariant,
 };
 pub use stepscale::StepScale;
 

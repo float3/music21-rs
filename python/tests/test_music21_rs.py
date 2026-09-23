@@ -308,6 +308,49 @@ def test_a_scale_tunes_a_stream():
     assert [p.nameWithOctave for p in chord.pitches] == ["G-4", "D-5", "A4"]
 
 
+SLENDRO = """! slendro.scl
+!
+Observed Javanese Slendro scale, Helmholtz/Ellis p. 518, nr.94
+ 5
+!
+ 228.00000
+ 484.00000
+ 728.00000
+ 960.00000
+ 2/1
+"""
+
+
+def test_scales_stand_on_steps_a_caller_gives():
+    # Each answer read off music21 11.0.0b9.
+    triad = m.OctaveRepeatingScale("c4", ["m3", "M3"])
+    assert [str(p) for p in triad.pitches] == ["C4", "E-4", "G4", "C5"]
+    assert triad.getScaleDegreeFromPitch("e-") == 2
+    assert triad.type == "Octave Repeating"
+
+    fifths = m.CyclicalScale("c4", ["P5"])
+    assert [str(p) for p in fifths.getPitches("g2", "g6")] == [
+        "B-2", "F3", "C4", "G4", "D5", "A5", "E6"
+    ]
+    seconds = m.CyclicalScale("c4", ["m2", "m2"])
+    assert seconds.abstract.getDegreeMaxUnique() == 2
+    assert str(seconds.pitchFromDegree(1, "c2", "c3")) == "B#1"
+
+    whole = m.SieveScale("d4", "1@0", eld=2)
+    assert [str(p) for p in whole.getPitches("c2", "c3")] == [
+        "C2", "D2", "F-2", "G-2", "A-2", "B-2", "C3"
+    ]
+
+
+def test_a_scala_scale_is_read_from_the_text_of_its_file():
+    slendro = m.ScalaScale("c4", SLENDRO)
+    assert [str(p) for p in slendro.getPitches("c3", "c5")] == [
+        "C3", "D~3(-22c)", "F3(-16c)", "G~3(-22c)", "B-3(-40c)",
+        "C4", "D~4(-22c)", "F4(-16c)", "G~4(-22c)", "A~4(+10c)", "C5",
+    ]
+    assert slendro.type == "Scala: slendro.scl"
+
+
 @pytest.mark.parametrize(
     ("cls", "argument", "linked"),
     [

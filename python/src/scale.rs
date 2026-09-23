@@ -15,7 +15,7 @@ use pyo3::types::{PyDict, PyTuple, PyType};
 
 use music21_rs_crate::scale::{
     DegreeComparison as RsDegreeComparison, Scale as RsScale, ScaleType as RsScaleType,
-    SolfegVariant as RsSolfegVariant,
+    Simplification as RsSimplification, SolfegVariant as RsSolfegVariant,
 };
 use music21_rs_crate::{Interval as RsInterval, Pitch as RsPitch, StepScale as RsStepScale};
 
@@ -61,6 +61,7 @@ pub const NAMES: &[&str] = &[
     "OctaveRepeatingScale",
     "CyclicalScale",
     "SieveScale",
+    "ScalaScale",
 ];
 
 pyo3::create_exception!(music21_rs_facade, ScaleException, crate::Music21Exception);
@@ -257,6 +258,10 @@ pub struct AbstractScale {
     /// cycle a caller gave, or a collection given by its notes. A named
     /// pattern answers from its type.
     unnamed_degrees: usize,
+    /// The steps of a pattern with no name, and how it spells what it
+    /// realizes, which is what its network is built from.
+    unnamed_steps: Vec<RsInterval>,
+    unnamed_simplification: Option<&'static str>,
 }
 
 impl AbstractScale {
@@ -264,14 +269,20 @@ impl AbstractScale {
         py: Python<'_>,
         scale_type: Option<RsScaleType>,
         octave_duplicating: bool,
-        unnamed_degrees: usize,
+        unnamed: Option<&RsScale>,
     ) -> PyResult<Py<PyAny>> {
         Ok(Py::new(
             py,
             PyClassInitializer::from(Scale).add_subclass(Self {
                 scale_type,
                 octave_duplicating,
-                unnamed_degrees,
+                unnamed_degrees: unnamed.map_or(0, RsScale::degree_count),
+                unnamed_steps: unnamed
+                    .and_then(RsScale::custom_steps)
+                    .map(<[RsInterval]>::to_vec)
+                    .unwrap_or_default(),
+                unnamed_simplification: unnamed
+                    .and_then(|scale| scale.simplification().music21_name()),
             }),
         )?
         .into_any())
@@ -316,6 +327,8 @@ impl AbstractScale {
             // A pattern named by mode alone repeats at the octave.
             octave_duplicating: true,
             unnamed_degrees: 0,
+            unnamed_steps: Vec::new(),
+            unnamed_simplification: None,
         }))
     }
 
@@ -354,12 +367,29 @@ impl AbstractScale {
     /// network to give.
     #[getter]
     fn _net(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        let Some(scale_type) = self.scale_type else {
-            return Err(pyo3::exceptions::PyAttributeError::new_err(
-                "'music21.scale.AbstractScale' object has no attribute '_net'",
-            ));
-        };
         let module = py.import("music21.scale.intervalNetwork")?;
+        let Some(scale_type) = self.scale_type else {
+            // A pattern with no name is the network music21's own
+            // `AbstractCyclicalScale` and `AbstractOctaveRepeatingScale`
+            // build: the steps in order, and the spelling they are told.
+            if self.unnamed_steps.is_empty() {
+                return Err(pyo3::exceptions::PyAttributeError::new_err(
+                    "'music21.scale.AbstractScale' object has no attribute '_net'",
+                ));
+            }
+            let steps = self
+                .unnamed_steps
+                .iter()
+                .map(|step| crate::interval::interval_object(py, step.clone()))
+                .collect::<PyResult<Vec<_>>>()?;
+            let keywords = PyDict::new(py);
+            keywords.set_item("octaveDuplicating", self.octave_duplicating)?;
+            keywords.set_item("pitchSimplification", self.unnamed_simplification)?;
+            let network = module
+                .getattr("IntervalNetwork")?
+                .call((steps,), Some(&keywords))?;
+            return Ok(network.unbind());
+        };
         let network = module.getattr("IntervalNetwork")?.call0()?;
         network.setattr("octaveDuplicating", self.octave_duplicating)?;
         match scale_type.descending_steps() {
@@ -422,6 +452,17 @@ fn named_scale_type(name: &str) -> Option<RsScaleType> {
                     .eq_ignore_ascii_case(bare)
             })
         })
+}
+
+/// Gives a pitch object the microtone of a crate pitch, which its name does
+/// not carry. A pitch with none is left with none.
+fn write_cents(written: &Bound<'_, PyAny>, tuned: &RsPitch) -> PyResult<()> {
+    if let Some(microtone) = tuned.microtone()
+        && microtone.cents() != 0.0
+    {
+        written.setattr("microtone", microtone.cents())?;
+    }
+    Ok(())
 }
 
 /// The note a scale stands on.
@@ -710,8 +751,15 @@ impl ConcreteScale {
         );
         built.named_pattern = false;
         match tonic.filter(|value| !value.is_none()) {
+            // A subclass hands this its own first argument, which need not be
+            // a tonic at all -- `ScalaScale('mbira banda')` names a file -- so
+            // one that does not read as a note is left for `__init__`, which
+            // is handed the same argument by a direct caller and refuses it
+            // there.
             Some(value) => {
-                built.inner = RsScale::new(RsScaleType::Major, tonic_pitch(value)?);
+                if let Ok(pitch) = tonic_pitch(value) {
+                    built.inner = RsScale::new(RsScaleType::Major, pitch);
+                }
             }
             None => built.has_tonic = false,
         }
@@ -766,10 +814,12 @@ impl ConcreteScale {
     /// which is what music21's `OctaveRepeatingScale` and `CyclicalScale` do
     /// by building an abstract scale of their own. `closes` says whether the
     /// cycle is carried on to the octave.
+    #[pyo3(signature = (intervalList, closes, pitchSimplification = None))]
     fn _standOnSteps(
         slf: &Bound<'_, Self>,
         intervalList: &Bound<'_, PyAny>,
         closes: bool,
+        pitchSimplification: Option<&str>,
     ) -> PyResult<()> {
         let mut steps = Vec::new();
         for step in intervalList.try_iter()? {
@@ -782,7 +832,20 @@ impl ConcreteScale {
         } else {
             RsStepScale::cyclical_of(tonic, steps)
         };
-        me.inner = stepped.scale().map_err(scale_error)?;
+        let mut scale = stepped.scale().map_err(scale_error)?;
+        if let Some(named) = pitchSimplification {
+            scale = scale.with_simplification(match named {
+                "mostCommon" => RsSimplification::MostCommon,
+                "maxAccidental" => RsSimplification::MaxAccidental,
+                "none" => RsSimplification::Exact,
+                other => {
+                    return Err(ScaleException::new_err(format!(
+                        "no such pitch simplification: {other}"
+                    )));
+                }
+            });
+        }
+        me.inner = scale;
         Ok(())
     }
 
@@ -932,20 +995,27 @@ impl ConcreteScale {
                     .try_iter()?
                     .collect::<PyResult<_>>()?;
                 // The retuned pitches go in by name, so a music21 note takes
-                // them as readily as one of ours.
+                // them as readily as one of ours, and then take the cents a
+                // name does not say -- a scale read from a Scala file is
+                // mostly cents.
                 let mut retuned = Vec::with_capacity(pitches.len());
                 for pitch in &pitches {
                     if let Some(tuned) = tuned(&pitch_from_any(pitch)?) {
-                        retuned.push(tuned.name_with_octave());
+                        retuned.push(tuned);
                     }
                 }
                 if !retuned.is_empty() {
-                    element.setattr("pitches", PyTuple::new(py, retuned)?)?;
+                    let names: Vec<String> =
+                        retuned.iter().map(RsPitch::name_with_octave).collect();
+                    element.setattr("pitches", PyTuple::new(py, names)?)?;
+                    for (written, tuned) in element.getattr("pitches")?.try_iter()?.zip(&retuned) {
+                        write_cents(&written?, tuned)?;
+                    }
                 }
             } else if let Some(tuned) = tuned(&pitch_from_any(&element.getattr("pitch")?)?) {
-                element
-                    .getattr("pitch")?
-                    .setattr("nameWithOctave", tuned.name_with_octave())?;
+                let written = element.getattr("pitch")?;
+                written.setattr("nameWithOctave", tuned.name_with_octave())?;
+                write_cents(&written, &tuned)?;
             }
         }
         Ok(())
@@ -1096,11 +1166,7 @@ impl ConcreteScale {
             py,
             self.named_pattern.then(|| self.inner.scale_type()),
             self.inner.octave_duplicating(),
-            if self.inner.is_custom() {
-                self.inner.degree_count()
-            } else {
-                0
-            },
+            self.inner.is_custom().then_some(&self.inner),
         )
     }
 
@@ -1868,7 +1934,49 @@ def build(base, diatonic_base, names):
     return built
 
 
-def build_stepped(base):
+def build_stepped(base, module):
+    def read_named(name):
+        # This build's own archive where it carries one, and otherwise the
+        # archive of the music21 this is installed over.
+        parse = getattr(module, 'parse', None)
+        if parse is None:
+            try:
+                from music21.scale import scala
+            except ImportError:
+                raise module.ScaleException(
+                    f'there is no Scala archive in this build to find {name} in; '
+                    'hand ScalaScale the text of the .scl file instead')
+            parse = scala.parse
+        return parse(name)
+
+    class ScalaScale(base):
+        def __init__(self, tonic=None, scalaString=None, **keywords):
+            if (tonic is not None
+                    and scalaString is None
+                    and isinstance(tonic, str)
+                    and (len(tonic) >= 4 or tonic.endswith('scl'))):
+                scalaString = tonic
+                tonic = 'C4'
+            super().__init__(tonic=tonic, **keywords)
+            self._scalaData = None
+            self.description = None
+            if scalaString is not None and scalaString.count('\n') > 3:
+                data = module.ScalaData(scalaString)
+                data.parse()
+            elif scalaString is not None:
+                data = read_named(scalaString)
+                if data is None:
+                    raise module.ScaleException(
+                        f'Could not find a file named {scalaString} in the scala database')
+            else:
+                data = read_named('fj-12tet.scl')
+                if data is None:
+                    raise module.ScaleException(
+                        'Could not find the default scala file fj-12tet.scl in the scala database')
+            self._scalaData = data
+            self._standOnSteps(data.getIntervalSequence(), False, 'mostCommon')
+            self.type = f'Scala: {data.fileName}'
+
     class OctaveRepeatingScale(base):
         def __init__(self, tonic=None, intervalList=None, **keywords):
             super().__init__(tonic=tonic, **keywords)
@@ -1891,6 +1999,7 @@ def build_stepped(base):
         'OctaveRepeatingScale': OctaveRepeatingScale,
         'CyclicalScale': CyclicalScale,
         'SieveScale': SieveScale,
+        'ScalaScale': ScalaScale,
     }
     for name, made in built.items():
         made.__module__ = 'music21.scale'
@@ -1932,7 +2041,7 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // cannot build.
     let stepped = builder
         .getattr("build_stepped")?
-        .call1((m.getattr("ConcreteScale")?,))?
+        .call1((m.getattr("ConcreteScale")?, m))?
         .cast_into::<PyDict>()?;
     for (name, class) in stepped.iter() {
         m.add(name.extract::<String>()?.as_str(), class)?;

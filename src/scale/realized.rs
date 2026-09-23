@@ -47,6 +47,12 @@ pub struct Scale {
     /// not how the named type would. `None` leaves it to the type.
     #[cfg_attr(feature = "serde", serde(default))]
     custom_simplification: Option<Simplification>,
+    /// Whether the scale is a cycle, realized by walking out from its tonic
+    /// both ways rather than once and moved by octaves: music21's
+    /// `AbstractCyclicalScale`, whose network does not duplicate at the
+    /// octave even where its steps happen to add up to one.
+    #[cfg_attr(feature = "serde", serde(default))]
+    cyclic: bool,
 }
 
 impl Scale {
@@ -148,6 +154,7 @@ impl Scale {
             tonic,
             custom_steps: None,
             custom_simplification: None,
+            cyclic: false,
         }
     }
 
@@ -187,6 +194,7 @@ impl Scale {
             tonic: tonic.clone(),
             custom_steps: Some(steps),
             custom_simplification: None,
+            cyclic: false,
         })
     }
 
@@ -211,7 +219,43 @@ impl Scale {
             // unless it is told otherwise, which is what turns the third
             // minor second above C from E double flat into D.
             custom_simplification: Some(Simplification::MaxAccidental),
+            cyclic: false,
         })
+    }
+
+    /// A scale that is a cycle of steps from its tonic: music21's
+    /// `CyclicalScale`, `SieveScale` and `ScalaScale`, all of which stand on
+    /// an `AbstractCyclicalScale`.
+    ///
+    /// It sounds the same notes [`Self::from_steps`] would where the steps
+    /// add up to an octave, but it reaches each one by walking to it from
+    /// the tonic, so a note below the tonic is spelled for the step it was
+    /// reached by coming down. With microtones that is a different spelling
+    /// -- slendro on C has `B-3(-40c)` below its tonic and `A~4(+10c)` above.
+    pub fn from_cycle(tonic: Pitch, steps: Vec<Interval>) -> Result<Self> {
+        let mut scale = Self::from_steps(tonic, steps)?;
+        scale.cyclic = true;
+        Ok(scale)
+    }
+
+    /// The same scale spelling what it realizes another way: music21's
+    /// `pitchSimplification` set on the network underneath. It changes how
+    /// the notes are written and nothing about where they sound.
+    pub fn with_simplification(mut self, simplification: Simplification) -> Self {
+        self.custom_simplification = Some(simplification);
+        self
+    }
+
+    /// A scale read out of a Scala file: music21's `ScalaScale`, the file's
+    /// steps walked from a tonic, each note written in its most common
+    /// spelling as music21 writes them.
+    ///
+    /// The steps are the file's own, in cents, and the cycle closes on the
+    /// file's last degree, so a scale that does not repeat at the octave does
+    /// not here either.
+    pub fn from_scala(tonic: Pitch, scala: &ScalaScale) -> Result<Self> {
+        Ok(Self::from_cycle(tonic, scala.interval_sequence()?)?
+            .with_simplification(Simplification::MostCommon))
     }
 
     /// This scale as it sounds coming down, which for most is itself.
@@ -233,6 +277,7 @@ impl Scale {
                     tonic: self.tonic.clone(),
                     custom_steps: Some(walked),
                     custom_simplification: None,
+                    cyclic: false,
                 };
             }
         }
@@ -274,7 +319,7 @@ impl Scale {
             minimum.ps().min(maximum.ps()),
             minimum.ps().max(maximum.ps()),
         );
-        if !self.repeats_at_the_octave() {
+        if !self.repeats_at_the_octave() || self.cyclic {
             let mut pitches: Vec<Pitch> = self
                 .cycle_between(lowest, highest)?
                 .into_iter()
@@ -299,13 +344,26 @@ impl Scale {
             if sounding < clear_of {
                 break;
             }
-            if (lowest..=highest).contains(&sounding) {
+            if within(sounding, lowest, highest) {
                 pitches.push(current.clone());
             }
             let step = &steps[steps.len() - 1 - index % steps.len()];
             current = advance(&current, &step.reversed()?, simplification)?;
         }
         Ok(pitches)
+    }
+
+    /// The steps of a scale with no name, in the order they are walked: a
+    /// cycle a caller gave, or the steps between the notes a caller gave.
+    /// `None` for a named scale, whose steps are its type's.
+    pub fn custom_steps(&self) -> Option<&[Interval]> {
+        self.custom_steps.as_deref()
+    }
+
+    /// Whether this scale is a cycle walked from its tonic: see
+    /// [`Self::from_cycle`].
+    pub fn is_cyclic(&self) -> bool {
+        self.cyclic
     }
 
     /// Whether this scale was given by its notes rather than by a name.
@@ -358,8 +416,9 @@ impl Scale {
         Ok(ranked)
     }
 
-    /// How the scale spells what it realizes.
-    fn simplification(&self) -> Simplification {
+    /// How the scale spells what it realizes: music21's
+    /// `pitchSimplification` on the network underneath.
+    pub fn simplification(&self) -> Simplification {
         self.custom_simplification
             .unwrap_or_else(|| self.scale_type.simplification())
     }
@@ -626,7 +685,7 @@ impl Scale {
     /// Every note of the scale sounding between two pitch-space values, in
     /// the order the walk comes to them, each with its place in the pattern.
     fn placed_between(&self, lowest: FloatType, highest: FloatType) -> Result<Vec<(Pitch, usize)>> {
-        if !self.repeats_at_the_octave() {
+        if !self.repeats_at_the_octave() || self.cyclic {
             return self.cycle_between(lowest, highest);
         }
         let simplification = self.simplification();
@@ -655,7 +714,7 @@ impl Scale {
             if sounding > clear_of {
                 break;
             }
-            if (lowest..=highest).contains(&sounding) {
+            if within(sounding, lowest, highest) {
                 pitches.push((current.clone(), index % steps.len()));
             }
             current = advance(&current, &steps[index % steps.len()], simplification)?;
@@ -697,14 +756,18 @@ impl Scale {
         let limit = steps.len() * 512;
         let mut found = Vec::new();
 
+        // Each walk stops at the first note past its end of the range, as
+        // music21's does. Going further is not only wasted: a Scala file's
+        // steps respell as they go, and a walk carried a cycle too far can
+        // land on a note no accidental spells, which music21 never reaches.
         let mut current = start.clone();
         for index in 0..limit {
             let sounding = current.ps();
-            if sounding > highest + period {
-                break;
-            }
-            if (lowest..=highest).contains(&sounding) {
+            if within(sounding, lowest, highest) {
                 found.push((current.clone(), index % steps.len()));
+            }
+            if sounding > highest - SLACK {
+                break;
             }
             current = advance(&current, &steps[index % steps.len()], simplification)?;
         }
@@ -714,11 +777,11 @@ impl Scale {
             let place = (steps.len() - back % steps.len()) % steps.len();
             current = advance(&current, &steps[place].reversed()?, simplification)?;
             let sounding = current.ps();
-            if sounding < lowest - period {
-                break;
-            }
-            if (lowest..=highest).contains(&sounding) {
+            if within(sounding, lowest, highest) {
                 found.push((current.clone(), place));
+            }
+            if sounding < lowest + SLACK {
+                break;
             }
         }
         found.sort_by(|left, right| left.0.ps().total_cmp(&right.0.ps()));
@@ -841,6 +904,9 @@ impl Scale {
     /// notes need not — a collection spanning two octaves before it comes
     /// back to its tonic is a pattern two octaves long.
     pub fn octave_duplicating(&self) -> bool {
+        if self.cyclic {
+            return false;
+        }
         match &self.custom_steps {
             Some(steps) => self.period_in_octaves(steps) == 1,
             None => true,
@@ -1327,6 +1393,16 @@ impl Scale {
         Ok(pitch)
     }
 }
+
+/// Whether a note sounds inside a range, allowing it the hundred-thousandth
+/// of a semitone music21 allows: a scale read from a file in cents lands its
+/// octave a hair past where the range ends, and still closes on it.
+fn within(sounding: FloatType, lowest: FloatType, highest: FloatType) -> bool {
+    sounding > lowest - SLACK && sounding < highest + SLACK
+}
+
+/// The slack [`within`] allows at either end of a range, in semitones.
+const SLACK: FloatType = 1e-5;
 
 /// A collection's notes with the octaves a caller left out filled in so that
 /// the collection rises: music21's `fixDefaultOctaveForPitchList`.

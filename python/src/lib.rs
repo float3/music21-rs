@@ -24,7 +24,11 @@ use pyo3::prelude::*;
 macro_rules! error_into {
     ($vis:vis $name:ident, $exception:ty) => {
         $vis fn $name(error: music21_rs_crate::Error) -> PyErr {
-            <$exception>::new_err($crate::pitch::message(&error))
+            // An accidental no name spells, a microtone that cannot be read
+            // and an argument that was never a value raise music21's class
+            // for them whichever module they came out of.
+            $crate::pitch::specific_error(&error)
+                .unwrap_or_else(|| <$exception>::new_err($crate::pitch::message(&error)))
         }
     };
 }

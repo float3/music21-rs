@@ -17,18 +17,35 @@ use std::sync::LazyLock;
 
 pub use super::realized::Scale;
 
-/// How a scale respells pitches that would otherwise pile up accidentals.
+/// How a scale respells pitches that would otherwise pile up accidentals:
+/// music21's `IntervalNetwork.pitchSimplification`.
 ///
-/// Mirrors music21's `IntervalNetwork.pitchSimplification`.
+/// Every named scale says which it uses. A scale given by its steps spells
+/// with at most one accidental unless it is told otherwise, which is what
+/// music21's interval network does; a Scala scale is told to take the most
+/// common spelling of each note.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub(super) enum Simplification {
+pub enum Simplification {
     /// Spell literally, however many accidentals that takes.
     Exact,
     /// Cap at one accidental, respelling anything beyond it.
     MaxAccidental,
     /// Respell to the most common spelling of the pitch class.
     MostCommon,
+}
+
+impl Simplification {
+    /// The name music21 gives this rule on a network, or `None` for spelling
+    /// exactly, which music21 writes as `None`.
+    #[must_use]
+    pub fn music21_name(self) -> Option<&'static str> {
+        match self {
+            Self::Exact => None,
+            Self::MaxAccidental => Some("maxAccidental"),
+            Self::MostCommon => Some("mostCommon"),
+        }
+    }
 }
 
 /// The step intervals the scale tables use, parsed once.
@@ -515,9 +532,11 @@ pub(super) fn advance(
         Simplification::MaxAccidental => {
             interval.transpose_pitch_with_options(pitch, false, Some(1))
         }
-        Simplification::Exact => interval.transpose_pitch_with_options(pitch, false, None),
+        // music21 transposes with its default cap of four accidentals when it
+        // is not told to spell with one, and respells past that.
+        Simplification::Exact => interval.transpose_pitch_with_options(pitch, false, Some(4)),
         Simplification::MostCommon => {
-            let mut transposed = interval.transpose_pitch_with_options(pitch, false, None)?;
+            let mut transposed = interval.transpose_pitch_with_options(pitch, false, Some(4))?;
             if transposed.accidental_or_natural().alter() != 0.0 {
                 transposed.simplify_enharmonic_in_place(true)?;
             }
@@ -539,6 +558,64 @@ fn max_alter(pitches: &[Pitch]) -> crate::defaults::IntegerType {
 #[cfg(test)]
 mod tests {
     use crate::defaults::{FloatType, IntegerType};
+    #[test]
+    fn a_scala_scale_is_a_cycle_walked_from_its_tonic() {
+        use super::Scale;
+        use crate::Pitch;
+        use crate::tuningsystem::scala::ScalaScale;
+
+        // music21: `scale.ScalaScale('c4', 'slendro').getPitches('c3', 'c5')`.
+        // Below the tonic the notes are reached coming down and spelled for
+        // it, so the fifth degree is B-3 forty cents flat under the tonic
+        // and A~4 ten cents sharp over it.
+        let slendro = ScalaScale::parse(
+            "! slendro.scl
+!
+Observed Javanese Slendro scale, Helmholtz/Ellis p. 518, nr.94
+ 5
+!
+ 228.00000
+ 484.00000
+ 728.00000
+ 960.00000
+ 2/1
+",
+        )
+        .unwrap();
+        let scale = Scale::from_scala(Pitch::from_name("C4").unwrap(), &slendro).unwrap();
+        let spelled: Vec<String> = scale
+            .pitches_between(
+                &Pitch::from_name("C3").unwrap(),
+                &Pitch::from_name("C5").unwrap(),
+            )
+            .unwrap()
+            .iter()
+            .map(|pitch| match pitch.microtone() {
+                Some(microtone) if microtone.cents() != 0.0 => {
+                    format!("{}{microtone}", pitch.name_with_octave())
+                }
+                _ => pitch.name_with_octave(),
+            })
+            .collect();
+        assert_eq!(
+            spelled,
+            [
+                "C3",
+                "D~3(-22c)",
+                "F3(-16c)",
+                "G~3(-22c)",
+                "B-3(-40c)",
+                "C4",
+                "D~4(-22c)",
+                "F4(-16c)",
+                "G~4(-22c)",
+                "A~4(+10c)",
+                "C5"
+            ]
+        );
+        assert!(!scale.octave_duplicating());
+    }
+
     #[test]
     fn degrees_are_found_by_pitch_class_name_or_step() {
         use super::{DegreeComparison, Scale, ScaleType};

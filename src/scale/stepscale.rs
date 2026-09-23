@@ -48,6 +48,9 @@ static DEFAULT_STEP: LazyLock<Interval> =
 pub struct StepScale {
     tonic: Pitch,
     steps: Vec<Interval>,
+    /// Whether the cycle was closed at the octave, which makes it a scale
+    /// that repeats there rather than a cycle walked from its tonic.
+    closed: bool,
 }
 
 impl StepScale {
@@ -64,6 +67,7 @@ impl StepScale {
         Self {
             tonic,
             steps: or_default(steps),
+            closed: false,
         }
     }
 
@@ -104,7 +108,11 @@ impl StepScale {
             }
         };
         steps.push(closing);
-        Ok(Self { tonic, steps })
+        Ok(Self {
+            tonic,
+            steps,
+            closed: true,
+        })
     }
 
     /// Builds music21's `SieveScale` from a Xenakis sieve expression.
@@ -131,7 +139,11 @@ impl StepScale {
                 Interval::from_chromatic(ChromaticInterval::new(FloatType::from(width) * eld)?)
             })
             .collect::<Result<Vec<_>>>()?;
-        Ok(Self { tonic, steps })
+        Ok(Self {
+            tonic,
+            steps,
+            closed: false,
+        })
     }
 
     /// Returns the tonic pitch.
@@ -153,7 +165,11 @@ impl StepScale {
     /// scale is asked past its own notes: a range of them, the degree a note
     /// stands on, the note beside another.
     pub fn scale(&self) -> Result<Scale> {
-        Scale::from_steps(self.tonic.clone(), self.steps.clone())
+        if self.closed {
+            Scale::from_steps(self.tonic.clone(), self.steps.clone())
+        } else {
+            Scale::from_cycle(self.tonic.clone(), self.steps.clone())
+        }
     }
 
     /// Returns the pitches of one pass through the cycle, starting at the tonic.
