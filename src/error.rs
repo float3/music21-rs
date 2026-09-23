@@ -69,6 +69,9 @@ pub enum Error {
     /// Error associated with tempo marks.
     #[error("Tempo error: {0}")]
     Tempo(String),
+    /// Error associated with instruments and the names scores give them.
+    #[error("Instrument error: {0}")]
+    Instrument(String),
     /// Error associated with tone rows and serial transformations.
     #[error("Serial error: {0}")]
     Serial(String),

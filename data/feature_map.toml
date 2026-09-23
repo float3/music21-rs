@@ -206,6 +206,41 @@ rust = ["src/tempo.rs"]
 setQuarterBPM = "quarter_bpm"
 
 [[class]]
+python = "tempo.py"
+name = "MetricModulation"
+rust = ["src/tempo.rs"]
+note = "A change of tempo written as an equation between two metronome marks."
+
+[class.renames]
+updateByContext = "update_from"
+
+[[class]]
+python = "instrument.py"
+name = "Instrument"
+rust = ["src/instrument/mod.rs"]
+note = "One of music21's instrument classes, with what an instrument of it starts out as."
+
+[class.excluded]
+partIdRandomize = "a part id is what a score writer assigns; the crate keeps no ids, and the wheel gives a random one as music21 does"
+instrumentIdRandomize = "an instrument id is what a score writer assigns; the crate keeps no ids, and the wheel gives a random one as music21 does"
+
+[[class]]
+python = "instrument.py"
+rust = ["src/instrument/mod.rs"]
+note = "Module-level helpers."
+
+[class.renames]
+fromString = "from_name"
+instrumentFromMidiProgram = "from_midi_program"
+getAllNamesForInstrument = "all_names"
+
+[class.excluded]
+deduplicate = "rearranges a stream by the instruments in it, and a stream here holds none"
+partitionByInstrument = "rearranges a stream by the instruments in it, and a stream here holds none"
+unbundleInstruments = "rearranges a stream by the instruments in it, and a stream here holds none"
+bundleInstruments = "rearranges a stream by the instruments in it, and a stream here holds none"
+
+[[class]]
 python = "duration.py"
 name = "Duration"
 rust = ["src/duration.rs"]

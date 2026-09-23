@@ -63,6 +63,8 @@ pub mod error;
 pub mod figuredbass;
 /// Harte chord notation: `C:maj7/3`, `Bb:(b3,5,b7,9)`, `N`.
 pub mod harte;
+/// Instruments: music21's `instrument` module.
+pub mod instrument;
 
 pub(crate) mod fraction_pow;
 /// Public interval parsing, naming and transposition helpers.

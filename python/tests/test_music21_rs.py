@@ -614,3 +614,21 @@ def test_a_metric_modulation_moves_a_number_to_another_note_value():
     assert equal.oldMetronome.number == 30
     with pytest.raises(m.MetricModulationException):
         equal.oldMetronome = "sixty"
+
+
+def test_an_instrument_starts_out_as_music21s_class_does():
+    # Each answer read off music21 11.0.0b9.
+    piano = m.Piano()
+    assert repr(piano) == "<music21.instrument.Piano 'Piano'>"
+    assert piano.midiProgram == 0 and piano.lowestNote.nameWithOctave == "A0"
+    assert isinstance(piano, m.KeyboardInstrument) and isinstance(piano, m.Instrument)
+    clarinet = m.fromString("Clarinet in A")
+    assert isinstance(clarinet, m.Clarinet) and isinstance(clarinet, m.WoodwindInstrument)
+    assert clarinet.instrumentName == "Clarinet in A"
+    assert clarinet.transposition.directedName == "m-3"
+    assert type(m.instrumentFromMidiProgram(56)).__name__ == "Trumpet"
+    assert m.Triangle().percMapPitch == 81
+    assert m.Violin().autoAssignMidiChannel([0, 1]) == 2
+    assert m.ensembleNameBySize(3) == "trio"
+    with pytest.raises(m.InstrumentException):
+        m.fromString("kazoo concerto")

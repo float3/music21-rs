@@ -39,6 +39,8 @@ pub mod duration;
 pub mod dynamics;
 pub mod figuredbass;
 pub mod harmony;
+pub mod instrument;
+mod instrument_kinds;
 pub mod interval;
 pub mod key;
 pub mod meter;
@@ -370,7 +372,19 @@ fn thawed(py: Python<'_>, module: &str, name: &str) -> PyResult<Py<PyAny>> {
     // A class of ours that was registered but never installed — music21
     // does something with it that this does not — is still the class the
     // module has under that name, and still what was written out.
-    let Some(class) = installed_class(py, module, name).or_else(|| {
+    // Then a class of this wheel's own under that module and name, which
+    // music21 has one of too but which was never installed over it -- an
+    // instrument -- and only then music21's.
+    let wheel = py
+        .import("music21_rs")
+        .or_else(|_| py.import("music21_rs_facade"))?;
+    let ours = wheel.getattr(name).ok().filter(|class| {
+        class
+            .getattr("__module__")
+            .and_then(|written| written.extract::<String>())
+            .is_ok_and(|written| written == module)
+    });
+    let Some(class) = installed_class(py, module, name).or(ours).or_else(|| {
         py.import(module)
             .and_then(|module| module.getattr(name))
             .ok()
@@ -1180,6 +1194,11 @@ exceptions![
     ("SieveException", sieve::SieveException, None),
     ("TempoException", tempo::TempoException, None),
     (
+        "InstrumentException",
+        instrument::InstrumentException,
+        Some("music21.exceptions21")
+    ),
+    (
         "MetricModulationException",
         tempo::MetricModulationException,
         Some("music21.tempo")
@@ -1263,6 +1282,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     chordtables::register(m)?;
     dynamics::register(m)?;
     scala::register(m)?;
+    instrument::register(m)?;
     stream::register(m)?;
     // The other end of every pickle these classes write. It belongs here
     // rather than on the wheel's module alone: `python-parity` builds its

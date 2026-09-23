@@ -197,6 +197,7 @@ pub(crate) fn regenerate(workspace_root: &Path) -> Result<Vec<PathBuf>, Box<dyn 
             write_chord_symbols(py, workspace_root, stamp)?,
             write_roman_figures(py, workspace_root, stamp)?,
             write_voice_leading(py, workspace_root, stamp)?,
+            write_instruments(py, workspace_root, stamp)?,
         ])
     })
     .map_err(|error| -> Box<dyn Error> { Box::new(error) })
@@ -1407,6 +1408,289 @@ fn spelled_pitch(pitch: &Bound<'_, PyAny>) -> PyResult<String> {
     };
     let octave: i32 = pitch.getattr("octave")?.extract()?;
     Ok(format!("{step}{modifier}{octave}"))
+}
+
+/// Strings `fromString` is asked beyond the names in its tables: the ones its
+/// own docstring and tests read, and a few that exercise the choosing between
+/// several matches and the transposition that follows.
+const INSTRUMENT_LOOKUPS: [&str; 22] = [
+    "Contrabassoon",
+    "Clarinet in B-flat",
+    "Clarinetto in Si b",
+    "Klarinette in B.",
+    "Clarinet in A",
+    "Horn in F",
+    "Horn",
+    "Trumpet in Bb",
+    "Bb Piccolo Trumpet",
+    "Trumpet in D",
+    "Cl.",
+    "Cl",
+    "Vln. I",
+    "Violino I",
+    "Violoncello",
+    "Voice",
+    "Flûte",
+    "Electric Piano",
+    "Acoustic Grand Piano",
+    "Soprano Saxophone in B-flat",
+    "Bass Clarinet in H",
+    "kazoo concerto",
+];
+
+/// Every instrument music21 has a class for, its MIDI programs, the tables
+/// `fromString` reads names out of and what it makes of them.
+fn write_instruments(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> PyResult<PathBuf> {
+    let instrument = py.import("music21.instrument")?;
+    let lookup = py.import("music21.languageExcerpts.instrumentLookup")?;
+    let inspect = py.import("inspect")?;
+    let base_class = instrument.getattr("Instrument")?;
+
+    let mut out = header(
+        &[
+            "# Expected instruments, generated from music21 by",
+            "# `cargo run --release -p xtask --features python -- regenerate-fixtures`.",
+            "# The instruments and the name tables are transcribed into",
+            "# src/instrument/tables.rs; the lookups are checked behaviourally.",
+        ],
+        stamp,
+    );
+
+    // A top-level key, so written before the first table.
+    let ensembles: Vec<String> = instrument.getattr("ensembleNamesBySize")?.extract()?;
+    let _ = writeln!(out, "ensemble_names = {}", toml_list(&ensembles));
+    let _ = writeln!(out);
+
+    // Every class, parents before children, so a transcription can read them
+    // in order.
+    let mut classes: Vec<(usize, String, Bound<'_, PyAny>)> = Vec::new();
+    for member in inspect
+        .call_method1("getmembers", (&instrument, inspect.getattr("isclass")?))?
+        .try_iter()?
+    {
+        let (name, class): (String, Bound<'_, PyAny>) = member?.extract()?;
+        if !class.is_instance_of::<pyo3::types::PyType>()
+            || !class
+                .cast::<pyo3::types::PyType>()?
+                .is_subclass(&base_class)?
+        {
+            continue;
+        }
+        let depth = class.getattr("__mro__")?.len()?;
+        classes.push((depth, name, class));
+    }
+    classes.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
+
+    for (_, name, class) in &classes {
+        let made = class.call0()?;
+        let mut parents = Vec::new();
+        for ancestor in class.getattr("__mro__")?.try_iter()?.skip(1) {
+            let ancestor = ancestor?;
+            let ancestor_name: String = ancestor.getattr("__name__")?.extract()?;
+            if ancestor_name == "Music21Object" {
+                break;
+            }
+            parents.push(ancestor_name);
+        }
+        let text = |attribute: &str| -> PyResult<Option<String>> {
+            let value = made.getattr(attribute)?;
+            if value.is_none() {
+                Ok(None)
+            } else {
+                Ok(Some(value.str()?.extract()?))
+            }
+        };
+        let pitch = |attribute: &str| -> PyResult<Option<String>> {
+            let value = made.getattr(attribute)?;
+            if value.is_none() {
+                Ok(None)
+            } else {
+                Ok(Some(value.getattr("nameWithOctave")?.extract()?))
+            }
+        };
+        let _ = writeln!(out, "[[instrument]]");
+        let _ = writeln!(out, "class = {}", toml_string(name));
+        let _ = writeln!(out, "parents = {}", toml_list(&parents));
+        for (key, attribute) in [
+            ("name", "instrumentName"),
+            ("abbreviation", "instrumentAbbreviation"),
+            ("sound", "instrumentSound"),
+            ("best_name", "bestName"),
+        ] {
+            let value = if attribute == "bestName" {
+                let best = made.call_method0("bestName")?;
+                if best.is_none() {
+                    None
+                } else {
+                    Some(best.extract::<String>()?)
+                }
+            } else {
+                text(attribute)?
+            };
+            if let Some(value) = value {
+                let _ = writeln!(out, "{key} = {}", toml_string(&value));
+            }
+        }
+        for (key, attribute) in [
+            ("midi_program", "midiProgram"),
+            ("midi_channel", "midiChannel"),
+            ("percussion_pitch", "percMapPitch"),
+        ] {
+            // `percMapPitch` exists only on percussion.
+            let Ok(value) = made.getattr(attribute) else {
+                continue;
+            };
+            if !value.is_none() {
+                let _ = writeln!(out, "{key} = {}", value.extract::<i64>()?);
+            }
+        }
+        for (key, attribute) in [("lowest", "lowestNote"), ("highest", "highestNote")] {
+            if let Some(value) = pitch(attribute)? {
+                let _ = writeln!(out, "{key} = {}", toml_string(&value));
+            }
+        }
+        let transposition = made.getattr("transposition")?;
+        if !transposition.is_none() {
+            let _ = writeln!(
+                out,
+                "transposition = {}",
+                toml_string(&transposition.getattr("directedName")?.extract::<String>()?)
+            );
+        }
+        let _ = writeln!(
+            out,
+            "percussion_map = {}",
+            made.getattr("inGMPercMap")?.extract::<bool>()?
+        );
+        // What `getAllNamesForInstrument` answers, language by language.
+        let all_names = instrument.call_method1("getAllNamesForInstrument", (&made,))?;
+        let _ = writeln!(out, "[instrument.all_names]");
+        for item in all_names.call_method0("items")?.try_iter()? {
+            let (language, names): (String, Vec<String>) = item?.extract()?;
+            let _ = writeln!(out, "{} = {}", toml_string(&language), toml_list(&names));
+        }
+        let _ = writeln!(out);
+    }
+
+    let _ = writeln!(out, "[midi_program]");
+    for program in 0..128_i64 {
+        match instrument.call_method1("instrumentFromMidiProgram", (program,)) {
+            Ok(made) => {
+                let class: String = made.get_type().getattr("__name__")?.extract()?;
+                let _ = writeln!(
+                    out,
+                    "{} = {}",
+                    toml_string(&program.to_string()),
+                    toml_string(&class)
+                );
+            }
+            Err(_) => continue,
+        }
+    }
+    let _ = writeln!(out);
+
+    let languages = [
+        "english",
+        "french",
+        "german",
+        "italian",
+        "russian",
+        "spanish",
+        "abbreviation",
+    ];
+    for language in languages {
+        let table = lookup
+            .getattr(format!("{language}ToClassName"))?
+            .cast_into::<PyDict>()?;
+        let _ = writeln!(out, "[names.{language}]");
+        let mut rows: Vec<(String, String)> = table
+            .iter()
+            .map(|(k, v)| Ok((k.extract()?, v.extract()?)))
+            .collect::<PyResult<_>>()?;
+        rows.sort();
+        for (key, class) in rows {
+            let _ = writeln!(out, "{} = {}", toml_string(&key), toml_string(&class));
+        }
+        let _ = writeln!(out);
+    }
+    let _ = writeln!(out, "[pitch_names]");
+    let pitch_names = lookup
+        .getattr("pitchFullNameToName")?
+        .cast_into::<PyDict>()?;
+    let mut rows: Vec<(String, String)> = pitch_names
+        .iter()
+        .map(|(k, v)| Ok((k.extract()?, v.extract()?)))
+        .collect::<PyResult<_>>()?;
+    rows.sort();
+    for (key, value) in rows {
+        let _ = writeln!(out, "{} = {}", toml_string(&key), toml_string(&value));
+    }
+    let _ = writeln!(out);
+    let transpositions = lookup.getattr("transposition")?.cast_into::<PyDict>()?;
+    let mut rows: Vec<(String, Bound<'_, PyAny>)> = transpositions
+        .iter()
+        .map(|(k, v)| Ok((k.extract()?, v)))
+        .collect::<PyResult<_>>()?;
+    rows.sort_by(|a, b| a.0.cmp(&b.0));
+    for (instrument_name, table) in rows {
+        let _ = writeln!(out, "[transpositions.{}]", toml_string(&instrument_name));
+        let mut entries: Vec<(String, String)> = table
+            .cast_into::<PyDict>()?
+            .iter()
+            .map(|(k, v)| Ok((k.extract()?, v.extract()?)))
+            .collect::<PyResult<_>>()?;
+        entries.sort();
+        for (pitch, interval) in entries {
+            let _ = writeln!(out, "{} = {}", toml_string(&pitch), toml_string(&interval));
+        }
+        let _ = writeln!(out);
+    }
+
+    // What `fromString` makes of every name in every table, in that table's
+    // language and across all of them, and of the strings above.
+    let mut asked: Vec<(String, String)> = Vec::new();
+    for language in languages {
+        let table = lookup
+            .getattr(format!("{language}ToClassName"))?
+            .cast_into::<PyDict>()?;
+        for (key, _) in table.iter() {
+            let key: String = key.extract()?;
+            asked.push((key.clone(), language.to_string()));
+            asked.push((key, "all".to_string()));
+        }
+    }
+    for text in INSTRUMENT_LOOKUPS {
+        asked.push((text.to_string(), "all".to_string()));
+    }
+    asked.sort();
+    asked.dedup();
+    for (text, language) in asked {
+        let _ = writeln!(out, "[[lookup]]");
+        let _ = writeln!(out, "text = {}", toml_string(&text));
+        let _ = writeln!(out, "language = {}", toml_string(&language));
+        match instrument.call_method1("fromString", (text.as_str(), language.as_str())) {
+            Ok(made) => {
+                let class: String = made.get_type().getattr("__name__")?.extract()?;
+                let _ = writeln!(out, "class = {}", toml_string(&class));
+                let transposition = made.getattr("transposition")?;
+                if !transposition.is_none() {
+                    let _ = writeln!(
+                        out,
+                        "transposition = {}",
+                        toml_string(&transposition.getattr("directedName")?.extract::<String>()?)
+                    );
+                }
+            }
+            Err(error) => {
+                let _ = writeln!(out, "error = {}", toml_string(&exception_name(py, &error)));
+            }
+        }
+        let _ = writeln!(out);
+    }
+
+    let path = workspace_root.join("data/instrument_expectations.toml");
+    fs::write(&path, out)?;
+    Ok(path)
 }
 
 /// Every quartet music21 finds in a few corpus scores, beside the notes of
