@@ -15,7 +15,7 @@
 
 use crate::defaults::{FloatType, IntegerType};
 use crate::error::Result;
-use crate::interval::Interval;
+use crate::interval::{ChromaticInterval, Interval};
 use crate::pitch::Pitch;
 use crate::scale::Scale;
 use crate::sieve::Sieve;
@@ -113,15 +113,23 @@ impl StepScale {
     /// as a `CyclicalScale` — so `"3@0"` from C is `C E-`, and the major-scale
     /// sieve gives a major scale.
     ///
-    /// music21's `SieveScale` also takes an `eld` (elementary displacement) to
-    /// scale the widths for non-semitone steps. Only the default of one
-    /// semitone is supported here, since the crate has no microtonal step type
-    /// to widen to.
+    /// The widths are counted in semitones; [`Self::sieve_by`] counts them in
+    /// anything else.
     pub fn sieve(tonic: Pitch, expression: &str) -> Result<Self> {
+        Self::sieve_by(tonic, expression, 1.0)
+    }
+
+    /// The same with the sieve's unit said: music21's `eld`, the elementary
+    /// displacement, in semitones. A sieve of every integer counted in twos
+    /// is a whole-tone scale, and counted in halves is a scale of quarter
+    /// tones.
+    pub fn sieve_by(tonic: Pitch, expression: &str, eld: FloatType) -> Result<Self> {
         let widths = Sieve::parse(expression)?.interval_widths()?;
         let steps = widths
             .into_iter()
-            .map(Interval::from_semitones)
+            .map(|width| {
+                Interval::from_chromatic(ChromaticInterval::new(FloatType::from(width) * eld)?)
+            })
             .collect::<Result<Vec<_>>>()?;
         Ok(Self { tonic, steps })
     }
@@ -282,6 +290,80 @@ mod tests {
                     .unwrap()
             ),
             ["D5", "F4", "E4", "D#4", "D4"]
+        );
+    }
+
+    #[test]
+    fn a_cycle_that_does_not_close_at_the_octave_is_walked_both_ways() {
+        // music21's own `testCyclicalScales` and `testSieveScaleA`.
+        let spelled = |pitches: Vec<Pitch>| -> Vec<String> {
+            pitches.iter().map(ToString::to_string).collect()
+        };
+        let fifths = StepScale::cyclical(tonic("C4"), &["P5"])
+            .unwrap()
+            .scale()
+            .unwrap();
+        assert_eq!(spelled(fifths.pitches().unwrap()), ["C4", "G4"]);
+        assert_eq!(
+            spelled(fifths.pitches_between(&tonic("G2"), &tonic("G6")).unwrap()),
+            ["B-2", "F3", "C4", "G4", "D5", "A5", "E6"]
+        );
+        // A cycle of one step has one degree, and every note of it is that.
+        assert_eq!(fifths.degree_of(&tonic("G4")).unwrap(), Some(1));
+        assert_eq!(fifths.degree_of(&tonic("B-2")).unwrap(), Some(1));
+        // A degree is looked for an octave either side of the note, which is
+        // where music21 looks: the cycle's F# is six fifths up, far past F#3.
+        assert_eq!(fifths.degree_of(&tonic("F#3")).unwrap(), None);
+        assert_eq!(fifths.degree_of(&tonic("F3")).unwrap(), Some(1));
+
+        // A cycle of two steps may stand one name on both of them: G3 is its
+        // first degree and G4 its second, and both lie within an octave of G4.
+        let mixed = StepScale::cyclical(tonic("C4"), &["M2", "m3"])
+            .unwrap()
+            .scale()
+            .unwrap();
+        assert_eq!(
+            mixed
+                .degrees_of_by(&tonic("G4"), crate::scale::DegreeComparison::Name)
+                .unwrap(),
+            [1, 2]
+        );
+        assert_eq!(
+            fifths
+                .next_pitch_above(&tonic("G4"), 2)
+                .unwrap()
+                .to_string(),
+            "A5"
+        );
+
+        let seconds = StepScale::cyclical(tonic("C4"), &["m2", "m2"])
+            .unwrap()
+            .scale()
+            .unwrap();
+        assert_eq!(
+            spelled(seconds.pitches_between(&tonic("G4"), &tonic("G5")).unwrap()),
+            [
+                "G4", "A-4", "A4", "B-4", "C-5", "C5", "D-5", "D5", "E-5", "F-5", "F5", "G-5", "G5"
+            ]
+        );
+
+        // A sieve of every integer, counted in whole tones and then in
+        // quarter tones, each walked down from D4.
+        let whole = StepScale::sieve_by(tonic("D4"), "1@0", 2.0)
+            .unwrap()
+            .scale()
+            .unwrap();
+        assert_eq!(
+            spelled(whole.pitches_between(&tonic("C2"), &tonic("C3")).unwrap()),
+            ["C2", "D2", "F-2", "G-2", "A-2", "B-2", "C3"]
+        );
+        let quarter = StepScale::sieve_by(tonic("D4"), "1@0", 0.5)
+            .unwrap()
+            .scale()
+            .unwrap();
+        assert_eq!(
+            spelled(quarter.pitches_between(&tonic("C2"), &tonic("D2")).unwrap()),
+            ["C2", "C~2", "D-2", "D`2", "D2"]
         );
     }
 

@@ -274,6 +274,15 @@ impl Scale {
             minimum.ps().min(maximum.ps()),
             minimum.ps().max(maximum.ps()),
         );
+        if !self.repeats_at_the_octave() {
+            let mut pitches: Vec<Pitch> = self
+                .cycle_between(lowest, highest)?
+                .into_iter()
+                .map(|(pitch, _)| pitch)
+                .collect();
+            pitches.reverse();
+            return Ok(pitches);
+        }
         let simplification = self.simplification();
         let steps = self.walk()?;
         let period = self.period_in_octaves(&steps);
@@ -578,8 +587,48 @@ impl Scale {
             descending.reverse();
             return Ok(descending);
         }
-        let lowest = minimum.ps();
-        let highest = maximum.ps();
+        Ok(self
+            .placed_between(minimum.ps(), maximum.ps())?
+            .into_iter()
+            .map(|(pitch, _)| pitch)
+            .collect())
+    }
+
+    /// The pitch standing on a degree within a range: the first one the
+    /// scale comes to walking up from the bottom of it, or nothing where no
+    /// note of that degree falls inside. music21's `pitchFromDegree` given a
+    /// `minPitch` and a `maxPitch`, which realizes the range and reads the
+    /// degree off it — so a cycle of minor seconds on C4 asked for its first
+    /// degree between C2 and C3 answers the `B#1` it spells there.
+    pub fn pitch_on_degree_between(
+        &self,
+        degree: IntegerType,
+        minimum: &Pitch,
+        maximum: &Pitch,
+    ) -> Result<Option<Pitch>> {
+        let (low, high) = if maximum.ps() < minimum.ps() {
+            (maximum, minimum)
+        } else {
+            (minimum, maximum)
+        };
+        let count = self.degree_count().max(1);
+        let wanted = |place: usize| match self.named_degrees() {
+            Some(_) => self.degree_at_position(place) as IntegerType == degree,
+            None => place % count == (degree - 1).rem_euclid(count as IntegerType) as usize,
+        };
+        Ok(self
+            .placed_between(low.ps(), high.ps())?
+            .into_iter()
+            .find(|(_, place)| wanted(*place))
+            .map(|(pitch, _)| pitch))
+    }
+
+    /// Every note of the scale sounding between two pitch-space values, in
+    /// the order the walk comes to them, each with its place in the pattern.
+    fn placed_between(&self, lowest: FloatType, highest: FloatType) -> Result<Vec<(Pitch, usize)>> {
+        if !self.repeats_at_the_octave() {
+            return self.cycle_between(lowest, highest);
+        }
         let simplification = self.simplification();
         let steps = self.walk()?;
         // Down whole periods until the start is at or below the range. A
@@ -607,11 +656,171 @@ impl Scale {
                 break;
             }
             if (lowest..=highest).contains(&sounding) {
-                pitches.push(current.clone());
+                pitches.push((current.clone(), index % steps.len()));
             }
             current = advance(&current, &steps[index % steps.len()], simplification)?;
         }
         Ok(pitches)
+    }
+
+    /// Whether the pattern comes back to its tonic a whole number of octaves
+    /// up, as every named scale does. A cycle of fifths does not: it comes
+    /// back a fifth up, and again a fifth above that, and never on an octave
+    /// of where it began until it has been all the way round.
+    fn repeats_at_the_octave(&self) -> bool {
+        match &self.custom_steps {
+            Some(steps) => {
+                let risen: FloatType = steps.iter().map(Interval::semitones).sum();
+                (risen / 12.0 - (risen / 12.0).round()).abs() < 1e-9
+            }
+            None => true,
+        }
+    }
+
+    /// The notes of a cycle sounding between two pitch-space values, lowest
+    /// first, each with its place in the cycle.
+    ///
+    /// A scale that repeats at the octave can be realized once and moved by
+    /// octaves; one that does not has to be walked, up from the tonic for
+    /// what lies above it and down from the tonic for what lies below, which
+    /// is also how each note comes by its spelling.
+    fn cycle_between(&self, lowest: FloatType, highest: FloatType) -> Result<Vec<(Pitch, usize)>> {
+        let steps = self.walk()?;
+        let period: FloatType = steps.iter().map(Interval::semitones).sum();
+        if period <= 0.0 {
+            return Err(Error::Scale(
+                "a cycle that does not rise cannot be walked over a range".to_string(),
+            ));
+        }
+        let simplification = self.simplification();
+        let start = self.realization_start()?;
+        let limit = steps.len() * 512;
+        let mut found = Vec::new();
+
+        let mut current = start.clone();
+        for index in 0..limit {
+            let sounding = current.ps();
+            if sounding > highest + period {
+                break;
+            }
+            if (lowest..=highest).contains(&sounding) {
+                found.push((current.clone(), index % steps.len()));
+            }
+            current = advance(&current, &steps[index % steps.len()], simplification)?;
+        }
+
+        let mut current = start;
+        for back in 1..=limit {
+            let place = (steps.len() - back % steps.len()) % steps.len();
+            current = advance(&current, &steps[place].reversed()?, simplification)?;
+            let sounding = current.ps();
+            if sounding < lowest - period {
+                break;
+            }
+            if (lowest..=highest).contains(&sounding) {
+                found.push((current.clone(), place));
+            }
+        }
+        found.sort_by(|left, right| left.0.ps().total_cmp(&right.0.ps()));
+        Ok(found)
+    }
+
+    /// Every place a pitch stands on in a cycle that does not repeat at the
+    /// octave, lowest first.
+    ///
+    /// Such a cycle need not have a note in every register — a cycle of
+    /// fifths on C has an F#, but not the one below middle C — so music21
+    /// realizes the cycle an octave either side of the pitch and takes every
+    /// note there that matches it. A pitch with no octave is heard in the
+    /// fourth. Two matches may stand on different places, and music21
+    /// chooses between them at random; which there are is answered here.
+    fn cycle_places_of(&self, pitch: &Pitch, comparison: DegreeComparison) -> Result<Vec<usize>> {
+        let sounding = Self::sounding(pitch).ps();
+        let wanted = comparison.key(pitch);
+        let mut places = Vec::new();
+        for (candidate, place) in self.cycle_between(sounding - 12.0, sounding + 12.0)? {
+            if comparison.key(&candidate) == wanted && !places.contains(&place) {
+                places.push(place);
+            }
+        }
+        Ok(places)
+    }
+
+    /// The note of the cycle sounding exactly where a pitch does, which is
+    /// what it takes for the pitch to be on the cycle and not merely named
+    /// by it somewhere.
+    fn cycle_place_sounding(
+        &self,
+        pitch: &Pitch,
+        comparison: DegreeComparison,
+    ) -> Result<Option<(Pitch, usize)>> {
+        let sounding = Self::sounding(pitch).ps();
+        let wanted = comparison.key(pitch);
+        Ok(self
+            .cycle_between(sounding - 1e-9, sounding + 1e-9)?
+            .into_iter()
+            .find(|(candidate, _)| comparison.key(candidate) == wanted))
+    }
+
+    /// A pitch as a scale hears it, in octave four where it names none.
+    fn sounding(pitch: &Pitch) -> Pitch {
+        let mut heard = pitch.clone();
+        if heard.octave().is_none() {
+            heard.octave_setter(Some(crate::defaults::PITCH_OCTAVE as IntegerType));
+        }
+        heard
+    }
+
+    /// `steps` notes along a cycle from a pitch, which need not be on it: a
+    /// pitch beside the cycle first comes onto it, on the side the move is
+    /// going or the one named, and that counts as a step unless a side was
+    /// named.
+    fn cycle_steps_from(
+        &self,
+        origin: &Pitch,
+        steps: IntegerType,
+        neighbour_below: Option<bool>,
+    ) -> Result<Pitch> {
+        let walk = self.walk()?;
+        let period: FloatType = walk.iter().map(Interval::semitones).sum();
+        let simplification = self.simplification();
+        let at = Self::sounding(origin).ps();
+        let ascending = steps > 0;
+        let (mut current, mut place, mut remaining) =
+            match self.cycle_place_sounding(origin, DegreeComparison::Name)? {
+                Some((pitch, place)) => (pitch, place, steps),
+                None => {
+                    let take_below = neighbour_below.unwrap_or(!ascending);
+                    let beside = self.cycle_between(at - period, at + period)?;
+                    let neighbour = if take_below {
+                        beside.into_iter().rfind(|(pitch, _)| pitch.ps() < at)
+                    } else {
+                        beside.into_iter().find(|(pitch, _)| pitch.ps() > at)
+                    };
+                    let (pitch, place) = neighbour
+                        .ok_or_else(|| Error::Scale(format!("no scale pitch beside {origin}")))?;
+                    let remaining = if neighbour_below.is_some() {
+                        steps
+                    } else {
+                        steps - steps.signum()
+                    };
+                    (pitch, place, remaining)
+                }
+            };
+        while remaining > 0 {
+            current = advance(&current, &walk[place], simplification)?;
+            place = (place + 1) % walk.len();
+            remaining -= 1;
+        }
+        while remaining < 0 {
+            place = (place + walk.len() - 1) % walk.len();
+            current = advance(&current, &walk[place].reversed()?, simplification)?;
+            remaining += 1;
+        }
+        if origin.octave().is_none() {
+            current.octave_setter(None);
+        }
+        Ok(current)
     }
 
     /// Whether the pattern can be walked at all.
@@ -853,6 +1062,12 @@ impl Scale {
         pitch: &Pitch,
         comparison: DegreeComparison,
     ) -> Result<Option<usize>> {
+        if !self.repeats_at_the_octave() {
+            return Ok(self
+                .cycle_places_of(pitch, comparison)?
+                .first()
+                .map(|place| self.degree_at_position(*place)));
+        }
         let wanted = comparison.key(pitch);
         Ok(self
             .scale_pitches()?
@@ -868,6 +1083,13 @@ impl Scale {
     /// — and music21 chooses between them at random. The choosing is left to
     /// the caller; this says what there is to choose from.
     pub fn degrees_of_by(&self, pitch: &Pitch, comparison: DegreeComparison) -> Result<Vec<usize>> {
+        if !self.repeats_at_the_octave() {
+            return Ok(self
+                .cycle_places_of(pitch, comparison)?
+                .into_iter()
+                .map(|place| self.degree_at_position(place))
+                .collect());
+        }
         let wanted = comparison.key(pitch);
         Ok(self
             .scale_pitches()?
@@ -881,6 +1103,9 @@ impl Scale {
     /// Returns the one-based degree whose pitch name matches, ignoring octave,
     /// or `None` when the pitch is not in the scale.
     pub fn degree_of(&self, pitch: &Pitch) -> Result<Option<usize>> {
+        if !self.repeats_at_the_octave() {
+            return self.degree_of_by(pitch, DegreeComparison::Name);
+        }
         let name = pitch.name();
         Ok(self
             .scale_pitches()?
@@ -892,6 +1117,9 @@ impl Scale {
     /// Returns the one-based degree whose pitch class matches, so `F-` finds
     /// the `E` of C major.
     pub fn degree_of_pitch_class(&self, pitch: &Pitch) -> Result<Option<usize>> {
+        if !self.repeats_at_the_octave() {
+            return self.degree_of_by(pitch, DegreeComparison::PitchClass);
+        }
         let pitch_class = pitch.pitch_class().number();
         Ok(self
             .scale_pitches()?
@@ -984,6 +1212,13 @@ impl Scale {
     /// The places of the realization, and the octave shift each stands at,
     /// that sound `origin`.
     fn places_on(&self, origin: &Pitch) -> Result<Vec<(usize, IntegerType)>> {
+        if !self.repeats_at_the_octave() {
+            return Ok(self
+                .cycle_place_sounding(origin, DegreeComparison::Name)?
+                .map(|(_, place)| (place, 0))
+                .into_iter()
+                .collect());
+        }
         let pitches = self.scale_pitches()?;
         let origin_ps = origin.ps();
         let name = origin.name();
@@ -1033,6 +1268,9 @@ impl Scale {
             return Err(crate::error::Error::Scale(
                 "step size must be at least 1".to_string(),
             ));
+        }
+        if !self.repeats_at_the_octave() {
+            return self.cycle_steps_from(origin, steps, neighbour_below);
         }
         let pitches = self.scale_pitches()?;
         let count = pitches.len() as IntegerType;

@@ -59,6 +59,8 @@ pub const NAMES: &[&str] = &[
     "RagAsawari",
     "RagMarwa",
     "OctaveRepeatingScale",
+    "CyclicalScale",
+    "SieveScale",
 ];
 
 pyo3::create_exception!(music21_rs_facade, ScaleException, crate::Music21Exception);
@@ -251,6 +253,10 @@ pub struct AbstractScale {
     /// collection given by its notes may take two octaves to do that, and
     /// music21 says so.
     octave_duplicating: bool,
+    /// How many degrees a pattern with no name has before it repeats: a
+    /// cycle a caller gave, or a collection given by its notes. A named
+    /// pattern answers from its type.
+    unnamed_degrees: usize,
 }
 
 impl AbstractScale {
@@ -258,12 +264,14 @@ impl AbstractScale {
         py: Python<'_>,
         scale_type: Option<RsScaleType>,
         octave_duplicating: bool,
+        unnamed_degrees: usize,
     ) -> PyResult<Py<PyAny>> {
         Ok(Py::new(
             py,
             PyClassInitializer::from(Scale).add_subclass(Self {
                 scale_type,
                 octave_duplicating,
+                unnamed_degrees,
             }),
         )?
         .into_any())
@@ -307,6 +315,7 @@ impl AbstractScale {
             scale_type,
             // A pattern named by mode alone repeats at the octave.
             octave_duplicating: true,
+            unnamed_degrees: 0,
         }))
     }
 
@@ -324,7 +333,8 @@ impl AbstractScale {
     /// music21's `getDegreeMaxUnique`: how many degrees the pattern has
     /// before it repeats.
     fn getDegreeMaxUnique(&self) -> usize {
-        self.scale_type.map_or(0, RsScaleType::degree_count)
+        self.scale_type
+            .map_or(self.unnamed_degrees, RsScaleType::degree_count)
     }
 
     /// music21's `octaveDuplicating`: whether the pattern repeats at the
@@ -776,6 +786,17 @@ impl ConcreteScale {
         Ok(())
     }
 
+    /// Stands the scale on the cycle a Xenakis sieve makes, counted in `eld`
+    /// semitones: what music21's `SieveScale` builds out of a `PitchSieve`.
+    fn _standOnSieve(slf: &Bound<'_, Self>, sieveString: &str, eld: f64) -> PyResult<()> {
+        let mut me = slf.borrow_mut();
+        let tonic = me.inner.tonic().clone();
+        me.inner = RsStepScale::sieve_by(tonic, sieveString, eld)
+            .and_then(|stepped| stepped.scale())
+            .map_err(scale_error)?;
+        Ok(())
+    }
+
     /// music21's `isConcrete`: whether the scale has a note to stand on.
     #[getter]
     fn isConcrete(&self) -> bool {
@@ -1075,6 +1096,11 @@ impl ConcreteScale {
             py,
             self.named_pattern.then(|| self.inner.scale_type()),
             self.inner.octave_duplicating(),
+            if self.inner.is_custom() {
+                self.inner.degree_count()
+            } else {
+                0
+            },
         )
     }
 
@@ -1323,7 +1349,19 @@ impl ConcreteScale {
         direction: Option<&Bound<'_, PyAny>>,
         equateTermini: bool,
     ) -> PyResult<Option<Pitch>> {
-        let _ = (minPitch, maxPitch, equateTermini);
+        let _ = equateTermini;
+        // Given a range, the degree is read off the range realized, which is
+        // where a scale that respells as it goes spells it.
+        if let (Some(low), Some(high)) = (
+            minPitch.filter(|value| !value.is_none()),
+            maxPitch.filter(|value| !value.is_none()),
+        ) {
+            return Ok(self
+                .heard(direction)?
+                .pitch_on_degree_between(degree, &pitch_from_any(low)?, &pitch_from_any(high)?)
+                .map_err(scale_error)?
+                .map(|pitch| Pitch::wrap(pitch, false)));
+        }
         // A scale need not have the degree asked for: Rag Asawari's ascent
         // leaves out the third and the seventh, and music21 answers nothing
         // rather than the note that would be third in line.
@@ -1837,7 +1875,23 @@ def build_stepped(base):
             self._standOnSteps(intervalList if intervalList else ['m2'], True)
             self.type = 'Octave Repeating'
 
-    built = {'OctaveRepeatingScale': OctaveRepeatingScale}
+    class CyclicalScale(base):
+        def __init__(self, tonic=None, intervalList=None, **keywords):
+            super().__init__(tonic=tonic, **keywords)
+            self._standOnSteps(intervalList if intervalList else ['m2'], False)
+            self.type = 'Cyclical'
+
+    class SieveScale(base):
+        def __init__(self, tonic=None, sieveString='2@0', eld=1, **keywords):
+            super().__init__(tonic=tonic, **keywords)
+            self._standOnSieve(sieveString, eld)
+            self.type = 'Sieve'
+
+    built = {
+        'OctaveRepeatingScale': OctaveRepeatingScale,
+        'CyclicalScale': CyclicalScale,
+        'SieveScale': SieveScale,
+    }
     for name, made in built.items():
         made.__module__ = 'music21.scale'
         made.__qualname__ = name
