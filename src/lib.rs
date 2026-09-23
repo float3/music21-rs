@@ -119,8 +119,9 @@ pub use chord::{
     format_vector_string,
 };
 pub use chordsymbol::{
-    ChordAlteration, ChordQuality, ChordSymbol, Music21ChordType, chord_symbol_figure_from_chord,
-    chord_symbol_from_chord, known_chord_symbol_types, realize_chord_symbol_durations,
+    ChordAlteration, ChordQuality, ChordStepModification, ChordStepModificationType, ChordSymbol,
+    Music21ChordType, chord_symbol_figure_from_chord, chord_symbol_from_chord,
+    known_chord_symbol_types, realize_chord_symbol_durations,
 };
 pub use defaults::{FloatType, FractionType, IntegerType, Octave, UnsignedIntegerType};
 pub use duration::{Duration, DurationTuple, DurationType, Tuplet, quarter_length_to_closest_type};

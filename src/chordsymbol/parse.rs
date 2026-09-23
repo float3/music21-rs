@@ -387,15 +387,18 @@ pub(super) fn parse_alterations(suffix: &str) -> Vec<ChordAlteration> {
     alterations
 }
 
-pub(super) fn parse_pitch_only(value: &str) -> Result<Pitch> {
-    let (name, rest) = parse_pitch_prefix(value)?;
+pub(super) fn parse_pitch_only(value: &str, music21: bool) -> Result<Pitch> {
+    let (name, rest) = parse_pitch_prefix(value, music21)?;
     if !rest.is_empty() {
         return Err(Error::Chord(format!("invalid slash bass {value:?}")));
     }
     Pitch::from_name(name)
 }
 
-pub(super) fn parse_pitch_prefix(value: &str) -> Result<(String, &str)> {
+/// A pitch name off the front of a figure, and what follows it. With
+/// `music21`, only `#` and `-` follow the letter, as music21's
+/// `[A-Ga-g][#-]*` reads a root; otherwise a `b` is a flat too.
+pub(super) fn parse_pitch_prefix(value: &str, music21: bool) -> Result<(String, &str)> {
     let mut chars = value.char_indices();
     let Some((_, first)) = chars.next() else {
         return Err(Error::Chord("missing pitch name".to_string()));
@@ -413,6 +416,7 @@ pub(super) fn parse_pitch_prefix(value: &str) -> Result<(String, &str)> {
                 name.push('#');
                 end = idx + ch.len_utf8();
             }
+            'b' if music21 => break,
             'b' | '-' => {
                 name.push('-');
                 end = idx + ch.len_utf8();

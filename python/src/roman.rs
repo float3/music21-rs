@@ -1580,7 +1580,7 @@ fn identifyAsTonicOrDominant(
 /// secondary dominant, is not carried and is refused rather than ignored.
 #[pyfunction]
 #[pyo3(name = "romanNumeralFromChord", signature = (chordObj, keyObj = None, preferSecondaryDominants = false))]
-fn romanNumeralFromChord(
+pub(crate) fn romanNumeralFromChord(
     py: Python<'_>,
     chordObj: &Bound<'_, PyAny>,
     keyObj: Option<&Bound<'_, PyAny>>,

@@ -278,7 +278,7 @@ impl Chord {
         Ok(chord)
     }
 
-    fn build(
+    pub(crate) fn build(
         py: Python<'_>,
         notes: Option<&Bound<'_, PyAny>>,
         keywords: Option<&Bound<'_, PyDict>>,
@@ -1260,6 +1260,32 @@ fn clear_override(chord: &Bound<'_, Chord>, key: &str) -> PyResult<()> {
     Ok(())
 }
 
+/// Points a fixed pitch at the chord's own note of the same name, where the
+/// chord has one: after the notes are rebuilt the pitch fixed before is a
+/// note the chord no longer holds.
+fn repoint_override(chord: &Bound<'_, Chord>, key: &str) -> PyResult<()> {
+    let py = chord.py();
+    let Some(fixed) = overridden(chord, key)?.filter(|value| !value.is_none()) else {
+        return Ok(());
+    };
+    let Ok(name) = fixed
+        .getattr("name")
+        .and_then(|name| name.extract::<String>())
+    else {
+        return Ok(());
+    };
+    for note in Chord::note_objects(chord)? {
+        let pitch = Note::get_pitch(note.bind(py));
+        if pitch.borrow(py).inner.name() == name {
+            if let Some(overrides) = chord.borrow().overrides.as_ref() {
+                overrides.bind(py).set_item(key, pitch)?;
+            }
+            break;
+        }
+    }
+    Ok(())
+}
+
 /// A chord's fixed answers moved by an interval: music21 transposes every
 /// pitch in `_overrides` along with the chord, so a chord symbol whose root
 /// was fixed is, once transposed, a chord on the note that root moved to.
@@ -2107,10 +2133,17 @@ impl Chord {
             })?;
             clear_override(slf, "inversion")?;
             clear_override(slf, "bass")?;
-            slf.borrow_mut()
-                .inner
-                .set_inversion(inversion)
-                .map_err(chord_error)?;
+            // Through the notes as they stand and back into them: the note
+            // objects may already be built, and a chord whose notes did not
+            // move would not have been inverted at all.
+            let py = slf.py();
+            let mut moved = slf.borrow().synced_inner(py);
+            moved.set_inversion(inversion).map_err(chord_error)?;
+            slf.borrow_mut().replace_inner(py, moved)?;
+            // music21 moves its notes in place, so a root fixed on one of
+            // them is still that note, an octave up; here it is the note of
+            // that name in the chord the notes were rebuilt into.
+            repoint_override(slf, "root")?;
             return Ok(None);
         }
         if let Some(testRoot) = testRoot.filter(|value| !value.is_none()) {

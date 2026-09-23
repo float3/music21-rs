@@ -63,20 +63,9 @@ fn every_chord_symbol_figure_realizes_as_music21_realizes_it() {
             }
             (Ok(built), None) => built,
         };
-        // music21 realizes a symbol in octaves and the crate does not, so the
-        // names are compared, and the bass only where the figure names one.
-        let mut got_names: Vec<String> = chord.pitches().iter().map(Pitch::name).collect();
-        got_names.sort();
-        let mut want_names: Vec<String> = case
-            .pitches
-            .iter()
-            .map(|pitch| {
-                pitch
-                    .trim_end_matches(|c: char| c.is_ascii_digit())
-                    .to_string()
-            })
-            .collect();
-        want_names.sort();
+        // The pitches in the order music21 sounds them, octaves and all.
+        let got_names: Vec<String> = chord.pitches().iter().map(Pitch::name_with_octave).collect();
+        let want_names: Vec<String> = case.pitches.clone();
         // The kind is left out: music21 reads `m7b5` as a minor seventh with
         // a lowered fifth and the crate as a half-diminished seventh, and the
         // two sound the same.

@@ -99,11 +99,14 @@ fn chord_kinds_are_unique() {
 
 #[test]
 fn every_alias_target_is_a_known_kind() {
-    // music21's CHORD_ALIASES map input spellings onto real kinds. The crate
-    // does not accept chord kinds by name yet, so it carries no aliases - but
-    // every target must still exist here, or adding them later would be broken
-    // from the start.
+    // music21's CHORD_ALIASES map the spellings MusicXML uses onto real
+    // kinds. The crate carries the same table, and every target is a kind.
     let expectations = expectations();
+    let carried: BTreeMap<String, String> = music21_rs::chordsymbol::CHORD_KIND_ALIASES
+        .iter()
+        .map(|(alias, target)| ((*alias).to_string(), (*target).to_string()))
+        .collect();
+    assert_eq!(carried, expectations.aliases);
     let kinds: Vec<&str> = known_chord_symbol_types()
         .iter()
         .map(|chord_type| chord_type.kind)

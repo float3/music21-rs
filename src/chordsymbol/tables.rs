@@ -32,6 +32,22 @@ pub(super) fn chord_type_named(kind: &str) -> Option<&'static Music21ChordType> 
         .find(|chord_type| chord_type.kind == kind)
 }
 
+/// The other names music21 takes for three of its kinds, as MusicXML writes
+/// them: music21's `CHORD_ALIASES`.
+pub const CHORD_KIND_ALIASES: [(&str, &str); 3] = [
+    ("dominant", "dominant-seventh"),
+    ("major-minor", "minor-major-seventh"),
+    ("half-diminished", "half-diminished-seventh"),
+];
+
+/// The kind an alias stands for, or the kind itself where it is none.
+pub fn resolve_kind_alias(kind: &str) -> &str {
+    CHORD_KIND_ALIASES
+        .iter()
+        .find(|(alias, _)| *alias == kind)
+        .map_or(kind, |(_, target)| target)
+}
+
 /// Every abbreviation music21 accepts for a chord kind: music21's
 /// `getAbbreviationListGivenChordType`, so `dominant-seventh` gives `7` and
 /// `dom7`. `None` for an unknown kind.

@@ -340,6 +340,31 @@ def test_a_rest_is_a_length_with_words_under_it():
     assert rest.fullMeasure == "auto" and m.Rest(fullMeasure=True).fullMeasure is True
 
 
+def names_of(pitches):
+    return [str(each) for each in pitches]
+
+
+def test_a_chord_symbol_sounds_its_figure():
+    # Each answer read off music21 11.0.0b9.
+    symbol = m.ChordSymbol("C7/B-")
+    assert names_of(symbol.pitches) == ["B-2", "C3", "E3", "G3"]
+    assert symbol.chordKind == "dominant-seventh"
+    assert symbol.inversion() == 3
+    assert repr(symbol) == "<music21.harmony.ChordSymbol C7/B->"
+    written = m.ChordSymbol(root="D", bass="F", kind="minor-seventh")
+    assert names_of(written.pitches) == ["F3", "A3", "C4", "D4"]
+    assert written.figure == "Dm7/F"
+    added = m.ChordSymbol("Cm7")
+    added.addChordStepModification(m.ChordStepModification("add", 9))
+    assert names_of(added.pitches) == ["C3", "E-3", "G3", "B-3", "D4"]
+    assert added.findFigure() == "Cm7 add 9"
+    assert names_of(m.ChordSymbol("Am").transpose("M2").pitches) == ["B2", "D3", "F#3"]
+    assert repr(m.NoChord()) == "<music21.harmony.NoChord N.C.>"
+    assert m.NoChord().root() is None
+    with pytest.raises(ValueError, match="Invalid chord abbreviation 'junk'"):
+        m.ChordSymbol("Cjunk")
+
+
 def test_scales_stand_on_steps_a_caller_gives():
     # Each answer read off music21 11.0.0b9.
     triad = m.OctaveRepeatingScale("c4", ["m3", "M3"])

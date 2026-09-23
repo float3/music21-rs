@@ -715,6 +715,14 @@ def unported_members(facade, original):
 
 def make_class(facade, original):
     def __init__(self, *arguments, **keywords):
+        # A class music21 derived from the one replaced, before it was
+        # replaced, may still call it by name to build itself:
+        # `tablature.ChordWithFretBoard` writes `harmony.ChordSymbol.__init__
+        # (self, ...)`. Such an object is music21's own all the way down, and
+        # music21's own constructor is the one that can build it.
+        if not isinstance(self, facade):
+            original.__init__(self, *arguments, **keywords)
+            return
         if issubclass(original, _base.Music21Object):
             _base.Music21Object.__init__(self)
         elif hasattr(type(self), 'editorial'):
@@ -1018,11 +1026,12 @@ macro_rules! exceptions {
     };
 }
 
-// Four of these carry no module on purpose. music21 keeps HarmonyException,
-// SieveException, TempoException and the two figuredBass ones in modules of
-// their own, but no docstring of theirs prints the class, so stamping them
-// would change nothing: tempo, harmony and figuredBass already pass every
-// example they have. The meter pair is stamped because music21 prints
+// Three of these carry no module on purpose. music21 keeps SieveException,
+// TempoException and the two figuredBass ones in modules of their own, but no
+// docstring of theirs prints the class, so stamping them would change
+// nothing: tempo and figuredBass already pass every example they have. The
+// harmony pair is stamped since its own class is swapped in and its
+// docstrings print both. The meter pair is stamped because music21 prints
 // `music21.exceptions21.MeterException` in a docstring, and an unstamped
 // class reads as `music21_rs_facade.MeterException` there.
 exceptions![
@@ -1051,7 +1060,16 @@ exceptions![
         duration::DurationException,
         Some("music21.duration")
     ),
-    ("HarmonyException", harmony::HarmonyException, None),
+    (
+        "HarmonyException",
+        harmony::HarmonyException,
+        Some("music21.harmony")
+    ),
+    (
+        "ChordStepModificationException",
+        harmony::ChordStepModificationException,
+        Some("music21.harmony")
+    ),
     (
         "IntervalException",
         interval::IntervalException,

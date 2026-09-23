@@ -14,6 +14,7 @@ use std::collections::BTreeSet;
 
 mod figure;
 mod parse;
+mod realize;
 mod tables;
 
 pub use figure::{
@@ -22,11 +23,15 @@ pub use figure::{
 };
 pub(crate) use figure::{chord_symbol_spellings, chord_symbol_spellings_with_root};
 pub use tables::{
-    Music21ChordType, abbreviations_for_kind, current_abbreviation_for_kind,
-    known_chord_symbol_types, notation_for_kind,
+    CHORD_KIND_ALIASES, Music21ChordType, abbreviations_for_kind, current_abbreviation_for_kind,
+    known_chord_symbol_types, notation_for_kind, resolve_kind_alias,
 };
 
 use parse::*;
+pub use realize::{
+    ChordStepModification, ChordStepModificationType, inversion_is_valid_for_kind,
+    sound_chord_kind, sound_chord_notation,
+};
 use tables::*;
 
 /// Tertian quality parsed from a chord symbol.
@@ -101,7 +106,7 @@ pub struct ChordSymbol {
     /// What music21 reads after the kind, applied in order when the symbol
     /// is realized.
     #[cfg_attr(feature = "serde", serde(default))]
-    modifications: Vec<Modification>,
+    modifications: Vec<ChordStepModification>,
     /// How long the symbol holds. A symbol as written takes no time, as
     /// music21's takes none.
     #[cfg_attr(feature = "serde", serde(default = "no_time"))]
@@ -111,26 +116,6 @@ pub struct ChordSymbol {
 /// The length of a symbol nobody has given one: none at all.
 fn no_time() -> Duration {
     Duration::from_type(DurationType::Zero)
-}
-
-/// One change music21 reads off a figure after its kind: a degree added,
-/// taken away or altered, with the semitones it is altered by.
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-struct Modification {
-    kind: ModificationKind,
-    degree: u8,
-    alter: IntegerType,
-}
-
-/// What a [`Modification`] does: music21's `add`, `subtract` (written
-/// `omit`) and `alter`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-enum ModificationKind {
-    Add,
-    Subtract,
-    Alter,
 }
 
 /// The kind a shorthand names outright, music21's `_getKindFromShortHand`:
@@ -168,12 +153,12 @@ fn music21_kind(shorthand: &str) -> Option<(&'static Music21ChordType, usize)> {
 /// the `add`, `alter`, `omit` and `subtract` tokens in the order written,
 /// then every sharpened or flattened degree left over, each as an addition.
 /// `None` where the leftover is not degrees at all, which music21 refuses.
-fn music21_modifications(remaining: &str) -> Option<Vec<Modification>> {
-    const MARKERS: [(&str, ModificationKind); 4] = [
-        ("add", ModificationKind::Add),
-        ("alter", ModificationKind::Alter),
-        ("omit", ModificationKind::Subtract),
-        ("subtract", ModificationKind::Subtract),
+fn music21_modifications(remaining: &str) -> Option<Vec<ChordStepModification>> {
+    const MARKERS: [(&str, ChordStepModificationType); 4] = [
+        ("add", ChordStepModificationType::Add),
+        ("alter", ChordStepModificationType::Alter),
+        ("omit", ChordStepModificationType::Subtract),
+        ("subtract", ChordStepModificationType::Subtract),
     ];
     let mut out = Vec::new();
     let first_marker = MARKERS
@@ -199,11 +184,7 @@ fn music21_modifications(remaining: &str) -> Option<Vec<Modification>> {
             let digits = rest.chars().take_while(char::is_ascii_digit).count().min(2);
             let degree_text = &rest[..digits];
             if let Ok(degree) = degree_text.parse::<u8>() {
-                out.push(Modification {
-                    kind,
-                    degree,
-                    alter,
-                });
+                out.push(ChordStepModification::new(kind, degree, alter).ok()?);
             }
             text = &rest[digits..];
         }
@@ -244,6 +225,16 @@ fn music21_modifications(remaining: &str) -> Option<Vec<Modification>> {
         items.push(before);
     }
 
+    // What is left is degrees and nothing else: music21 reads each as a
+    // number once its sharps and flats are off, and refuses anything that
+    // is not one.
+    if items.iter().any(|item| {
+        !item
+            .chars()
+            .all(|c| c.is_ascii_digit() || matches!(c, 'b' | '#'))
+    }) {
+        return None;
+    }
     let mut tokens: Vec<String> = Vec::new();
     for item in items {
         let digits: String = item.chars().filter(char::is_ascii_digit).collect();
@@ -289,11 +280,9 @@ fn music21_modifications(remaining: &str) -> Option<Vec<Modification>> {
             .take_while(char::is_ascii_digit)
             .collect();
         if let Ok(degree) = digits.parse::<u8>() {
-            out.push(Modification {
-                kind: ModificationKind::Add,
-                degree,
-                alter,
-            });
+            out.push(
+                ChordStepModification::new(ChordStepModificationType::Add, degree, alter).ok()?,
+            );
         }
     }
     Some(out)
@@ -301,8 +290,112 @@ fn music21_modifications(remaining: &str) -> Option<Vec<Modification>> {
 
 impl ChordSymbol {
     /// Parses a chord symbol such as `"Cmaj7"`, `"F#m7b5"`, or `"Bb7#11"`.
+    ///
+    /// A `b` after the root's letter is read as a flat, as a lead sheet
+    /// writes one; [`Self::parse_music21`] reads a figure as music21 does.
     pub fn parse(figure: impl Into<String>) -> Result<Self> {
+        Self::parse_with(figure.into(), false)
+    }
+
+    /// Parses a figure exactly as music21's `ChordSymbol` reads one, where
+    /// a root or a bass is a letter with only `#` and `-` after it. A `b`
+    /// is not a flat there: `Bb7` is a B major triad with a flattened
+    /// seventh added, and `Ebmaj7` is no figure at all, since `bmaj7` names
+    /// no kind.
+    ///
+    /// The root is the letter at the front, or everything before a comma;
+    /// the bass is a `/` and a letter wherever it stands, so `C/B- add 2`
+    /// adds a second to a C triad over B flat; and what is left names one
+    /// of music21's kinds and its modifications, or is a list of degrees
+    /// over no kind at all — `C35b7` is a root with a third, a fifth and a
+    /// flat seventh added to it. Anything else is refused with music21's
+    /// words.
+    pub fn parse_music21(figure: impl Into<String>) -> Result<Self> {
         let figure = figure.into();
+        let compact: String = figure.chars().filter(|c| !c.is_whitespace()).collect();
+        let refused_root = || {
+            Error::Chord(format!(
+                "Chord {compact} does not begin with a valid root note."
+            ))
+        };
+        let (root_text, rest) = match compact.find(',') {
+            Some(at) => {
+                let root = compact[..at].to_string();
+                let rest = compact.replace(',', "").replace(root.as_str(), "");
+                (root, rest)
+            }
+            None => {
+                let mut letters = compact.char_indices();
+                match letters.next() {
+                    Some((_, first)) if "ABCDEFGabcdefg".contains(first) => {}
+                    _ => return Err(refused_root()),
+                }
+                let end = letters
+                    .find(|(_, c)| !matches!(c, '#' | '-'))
+                    .map_or(compact.len(), |(at, _)| at);
+                let root = compact[..end].to_string();
+                let rest = compact.replacen(root.as_str(), "", 1);
+                (root, rest)
+            }
+        };
+        let root = Pitch::from_name(&root_text).map_err(|_| refused_root())?;
+        // The bass is `/` and a root-shaped name wherever it stands, and it
+        // is taken out of what is left wherever it appears there.
+        let mut bass = None;
+        let mut remaining = rest.clone();
+        if let Some(slash) = compact.find('/') {
+            let after = &compact[slash + 1..];
+            let mut letters = after.char_indices();
+            if let Some((_, first)) = letters.next()
+                && "ABCDEFGabcdefg".contains(first)
+            {
+                let end = letters
+                    .find(|(_, c)| !matches!(c, '#' | '-'))
+                    .map_or(after.len(), |(at, _)| at);
+                let written = &after[..end];
+                bass = Some(Pitch::from_name(written)?);
+                remaining = rest.replace(&format!("/{written}"), "");
+            }
+        }
+        let (kind, taken) = match music21_kind(&remaining) {
+            Some((chord_type, taken)) => (chord_type.kind.to_string(), taken),
+            None => (String::new(), 0),
+        };
+        let refused = || {
+            let mut said = remaining[taken..].replace(',', "");
+            for marker in ["add", "alter", "omit", "subtract"] {
+                if let Some(at) = said.find(marker) {
+                    said.truncate(at);
+                }
+            }
+            Error::Chord(format!(
+                "Invalid chord abbreviation '{said}'; see music21.harmony.CHORD_TYPES for valid abbreviations or specify all alterations."
+            ))
+        };
+        let modifications = music21_modifications(&remaining[taken..]).ok_or_else(refused)?;
+        // The crate's own reading of the letters, which says nothing about
+        // the root and so is read over C; music21 carries no such reading
+        // and sounds only what the kind and its modifications say.
+        let own = Self::parse_with(format!("C{remaining}"), false).ok();
+        Ok(Self {
+            figure: figure.trim().to_string(),
+            root,
+            bass,
+            quality: own.as_ref().map_or(ChordQuality::Major, |own| own.quality),
+            extensions: own
+                .as_ref()
+                .map(|own| own.extensions.clone())
+                .unwrap_or_default(),
+            alterations: own.map(|own| own.alterations).unwrap_or_default(),
+            omissions: Vec::new(),
+            additions: Vec::new(),
+            kind: Some(kind),
+            modifications,
+            duration: no_time(),
+        })
+    }
+
+    fn parse_with(figure: String, music21: bool) -> Result<Self> {
         let trimmed = figure.trim();
         if trimmed.is_empty() {
             return Err(Error::Chord("chord symbol cannot be empty".to_string()));
@@ -319,10 +412,10 @@ impl ChordSymbol {
         let bass_parts = bass_segment.map(split_music21_pitch_modifiers);
         let bass = bass_parts
             .as_ref()
-            .map(|parts| parse_pitch_only(&parts.base))
+            .map(|parts| parse_pitch_only(&parts.base, music21))
             .transpose()?;
 
-        let (root_name, suffix) = parse_pitch_prefix(&body_parts.base)?;
+        let (root_name, suffix) = parse_pitch_prefix(&body_parts.base, music21)?;
         let root = Pitch::from_name(root_name)?;
         let suffix_without_additions = strip_addition_groups(suffix);
         let mut additions = parse_additions(suffix);
@@ -490,11 +583,17 @@ impl ChordSymbol {
         Ok(transposed)
     }
 
-    /// Whether the chord has enough members for the given inversion:
-    /// music21's `inversionIsValid`, so first and second inversions always
-    /// are, a third needs a seventh, a fourth a ninth and a fifth an
-    /// eleventh or thirteenth. Root position is not an inversion.
+    /// Whether the chord can stand in the given inversion: music21's
+    /// `inversionIsValid`, which reads the kind — first and second
+    /// inversions for anything but a pedal, a third for the sevenths and
+    /// the stacked kinds above them, a fourth for the ninths and up, a fifth
+    /// for the elevenths and thirteenths. A shorthand naming no kind of
+    /// music21's is read by the extensions the crate found in it. Root
+    /// position is not an inversion.
     pub fn inversion_is_valid(&self, inversion: u8) -> bool {
+        if let Some(kind) = &self.kind {
+            return realize::inversion_is_valid_for_kind(kind, inversion);
+        }
         let highest = self
             .extensions
             .iter()
@@ -509,6 +608,66 @@ impl ChordSymbol {
             5 => highest >= 11,
             _ => false,
         }
+    }
+
+    /// The degrees added to, taken from or altered in the kind: music21's
+    /// `chordStepModifications`, read off the figure or handed over.
+    pub fn chord_step_modifications(&self) -> &[ChordStepModification] {
+        &self.modifications
+    }
+
+    /// Adds a chord-step modification, which the next realization applies:
+    /// music21's `addChordStepModification`. One already there is not added
+    /// twice.
+    pub fn add_chord_step_modification(&mut self, modification: ChordStepModification) {
+        if !self.modifications.contains(&modification) {
+            self.modifications.push(modification);
+        }
+    }
+
+    /// Replaces every chord-step modification at once.
+    pub fn set_chord_step_modifications(&mut self, modifications: Vec<ChordStepModification>) {
+        self.modifications = modifications;
+    }
+
+    /// A symbol given as MusicXML gives one: a root, one of music21's chord
+    /// kinds, and a bass where it is not the root, rather than a figure.
+    /// The figure is written as music21 would write that kind.
+    pub fn from_kind(root: Pitch, kind: &str, bass: Option<Pitch>) -> Result<Self> {
+        let abbreviation = current_abbreviation_for_kind(kind)
+            .ok_or_else(|| Error::Chord(format!("no such chord kind: {kind}")))?;
+        let mut figure = format!("{}{abbreviation}", root.name());
+        if let Some(bass) = bass.as_ref().filter(|bass| bass.name() != root.name()) {
+            figure.push('/');
+            figure.push_str(&bass.name());
+        }
+        let mut symbol = Self::parse(&figure)?;
+        symbol.kind = Some(kind.to_string());
+        symbol.modifications.clear();
+        symbol.root = root;
+        if bass.is_some() {
+            symbol.bass = bass;
+        }
+        Ok(symbol)
+    }
+
+    /// The same symbol as a chord of another kind, with no modifications:
+    /// a kind music21's table has been given while a program runs, which
+    /// the crate's own table has not got.
+    pub fn with_kind(mut self, kind: &str) -> Self {
+        self.kind = Some(kind.to_string());
+        self.modifications.clear();
+        self
+    }
+
+    /// Sets the root the symbol is sounded on.
+    pub fn set_root(&mut self, root: Pitch) {
+        self.root = root;
+    }
+
+    /// Sets the bass, or takes it away with `None`.
+    pub fn set_bass(&mut self, bass: Option<Pitch>) {
+        self.bass = bass;
     }
 
     fn fifth_is_implied(&self) -> bool {
@@ -571,33 +730,103 @@ impl ChordSymbol {
         }
     }
 
-    /// Realizes the symbol as a chord. An eleventh implies the ninth and a
-    /// thirteenth implies the ninth and eleventh, as music21's chord kinds
-    /// spell them, unless the figure omits them.
+    /// Realizes the symbol as a chord: [`Self::pitches`], sounding
+    /// together.
     pub fn to_chord(&self) -> Result<Chord> {
-        let mut pitches = match self.kind_notation() {
-            Some(notation) => self.music21_pitches(notation)?,
+        Chord::new(self.pitches()?.as_slice())
+    }
+
+    /// The pitches the symbol sounds, with their octaves, lowest first:
+    /// music21's `ChordSymbol._updatePitches`.
+    ///
+    /// The root is taken from octave three and the kind laid out above it; a
+    /// ninth, eleventh or thirteenth has its upper notes lifted an octave; a
+    /// bass the kind can invert onto is put under the chord by raising the
+    /// notes below it, and one it cannot is added an octave under the root;
+    /// the chord-step modifications are applied; and the whole is moved down
+    /// until nothing is above the D over middle C, or up until nothing is
+    /// below the piano's lowest A. So `C/E` is `E3 G3 C4`, `C11` is `C2 E2 G2
+    /// B-2 D3 F3`, and `Gm/F#` is `F#2 G3 B-3 D4`.
+    ///
+    /// A shorthand naming none of music21's kinds is laid out the same way
+    /// from the crate's own reading of it.
+    pub fn pitches(&self) -> Result<Vec<Pitch>> {
+        if self.kind.as_deref() == Some("") {
+            return realize::sound_chord_kind(
+                &self.root,
+                "",
+                self.bass.as_ref(),
+                &self.modifications,
+            );
+        }
+        match self.kind_notation() {
+            Some(notation) => {
+                let mut realized = realize::realize(
+                    &self.root,
+                    self.bass.as_ref(),
+                    self.kind.as_deref(),
+                    Some(notation),
+                    None,
+                    &self.modifications,
+                )?;
+                self.apply_own_reading(&mut realized.pitches, notation)?;
+                Ok(realized.pitches)
+            }
             None => {
                 let mut intervals = self.spelled_intervals()?;
                 intervals.sort_unstable_by_key(|(degree, _)| *degree);
                 intervals.dedup();
-                intervals
+                let names = intervals
                     .into_iter()
-                    .map(|(_, name)| Interval::from_name(&name)?.transpose_pitch(&self.root))
-                    .collect::<Result<Vec<_>>>()?
-            }
-        };
-
-        if let Some(bass) = &self.bass {
-            if let Some(index) = pitches.iter().position(|pitch| pitch.name() == bass.name()) {
-                let bass = pitches.remove(index);
-                pitches.insert(0, bass);
-            } else {
-                pitches.insert(0, bass.clone());
+                    .map(|(_, name)| {
+                        Ok(Interval::from_name(&name)?
+                            .transpose_pitch(&self.root)?
+                            .name())
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                Ok(
+                    realize::realize(&self.root, self.bass.as_ref(), None, None, Some(names), &[])?
+                        .pitches,
+                )
             }
         }
+    }
 
-        Chord::new(pitches.as_slice())
+    /// What the crate reads beyond music21 over a kind: degrees omitted with
+    /// `no`, and degrees added in `add(...)` groups or by naming a pitch,
+    /// which its own figure writer produces.
+    fn apply_own_reading(&self, pitches: &mut Vec<Pitch>, notation: &str) -> Result<()> {
+        if !self.omissions.is_empty() {
+            for (degree, name) in notation_intervals(notation)? {
+                if !self.omissions.contains(&degree) {
+                    continue;
+                }
+                let omitted = Interval::from_name(&name)?
+                    .transpose_pitch(&self.root)?
+                    .name();
+                pitches.retain(|pitch| pitch.name() != omitted);
+            }
+        }
+        for addition in &self.additions {
+            let (_, name) = added_interval(addition)?;
+            let pitch = Interval::from_name(name)?.transpose_pitch(&self.root)?;
+            if pitches
+                .iter()
+                .any(|existing| existing.name() == pitch.name())
+            {
+                continue;
+            }
+            // Over the chord, where an added tone is written.
+            let mut placed = pitch;
+            let top = pitches.last().map_or(0.0, Pitch::ps);
+            placed.set_octave(pitches.last().and_then(Pitch::octave));
+            while placed.ps() <= top {
+                let octave = placed.octave().unwrap_or(3);
+                placed.set_octave(Some(octave + 1));
+            }
+            pitches.push(placed);
+        }
+        Ok(())
     }
 
     /// The notation the symbol is realized from when its shorthand names one
@@ -605,137 +834,6 @@ impl ChordSymbol {
     /// crate's own reading of the letters would be.
     fn kind_notation(&self) -> Option<&'static str> {
         notation_for_kind(self.kind.as_deref()?)
-    }
-
-    /// The pitches music21 realizes a kind's notation as, with the
-    /// modifications read off the figure applied in order the way its
-    /// `_adjustPitchesForChordStepModifications` applies them, then the
-    /// degrees the crate read out of `add(...)` groups and pitch names.
-    fn music21_pitches(&self, notation: &'static str) -> Result<Vec<Pitch>> {
-        let mut degrees: Vec<String> = notation.split(',').map(str::to_string).collect();
-        let mut pitches = notation_intervals(notation)?
-            .into_iter()
-            .map(|(_, name)| Interval::from_name(&name)?.transpose_pitch(&self.root))
-            .collect::<Result<Vec<_>>>()?;
-        let scale = crate::scale::Scale::new(crate::scale::ScaleType::Major, self.root.clone());
-        let degree_number =
-            |written: &str| -> Option<u8> { written.trim_matches(['-', '#', 'A']).parse().ok() };
-        let semitone = |pitch: &Pitch, alter: IntegerType| -> Result<Pitch> {
-            let step = Interval::from_name(if alter > 0 { "A1" } else { "A-1" })?;
-            let mut moved = pitch.clone();
-            for _ in 0..alter.unsigned_abs() {
-                moved = moved.transpose(&step)?;
-            }
-            Ok(moved)
-        };
-
-        for modification in &self.modifications {
-            match modification.kind {
-                ModificationKind::Add => {
-                    let folded = IntegerType::from((modification.degree - 1) % 7 + 1);
-                    let mut to_add = scale.pitch_at_degree(folded)?;
-                    if modification.alter != 0 {
-                        // A raised seventh is raised from the minor seventh
-                        // every kind but the major ones carries, which
-                        // music21 reaches by dropping a semitone first; the
-                        // pitch that gives is spelled from its number, so the
-                        // raised one is too.
-                        if modification.degree == 7 && modification.alter > 0 {
-                            to_add = Pitch::from_number(to_add.ps() - 1.0)?;
-                        }
-                        to_add = semitone(&to_add, modification.alter)?;
-                    }
-                    if degrees
-                        .iter()
-                        .any(|written| *written == modification.degree.to_string())
-                    {
-                        // A degree the kind has is replaced, found among the
-                        // pitches by its scale degree, which only the first
-                        // seven can be; an added ninth over a kind that has
-                        // one is lost, as it is upstream.
-                        let mut replaced = Vec::new();
-                        for (index, pitch) in pitches.iter().enumerate() {
-                            if scale.degree_of(pitch)? == Some(usize::from(modification.degree)) {
-                                replaced.push(index);
-                            }
-                        }
-                        for index in replaced {
-                            pitches[index] = to_add.clone();
-                        }
-                    } else {
-                        pitches.push(to_add);
-                    }
-                }
-                ModificationKind::Subtract => {
-                    let found: Vec<usize> = degrees
-                        .iter()
-                        .enumerate()
-                        .filter(|(index, written)| {
-                            *index < pitches.len()
-                                && degree_number(written) == Some(modification.degree)
-                        })
-                        .map(|(index, _)| index)
-                        .collect();
-                    if found.is_empty() {
-                        return Err(Error::Chord(format!(
-                            "Degree not in specified chord: {}",
-                            modification.degree
-                        )));
-                    }
-                    for index in found.into_iter().rev() {
-                        let _ = pitches.remove(index);
-                        let _ = degrees.remove(index);
-                    }
-                }
-                ModificationKind::Alter => {
-                    let mut found = false;
-                    for (index, written) in degrees.iter().enumerate() {
-                        if index < pitches.len()
-                            && degree_number(written) == Some(modification.degree)
-                        {
-                            pitches[index] = semitone(&pitches[index], modification.alter)?;
-                            found = true;
-                        }
-                    }
-                    if !found {
-                        let folded = IntegerType::from((modification.degree - 1) % 7 + 1);
-                        let mut to_add = scale.pitch_at_degree(folded)?;
-                        if modification.alter != 0 {
-                            to_add = semitone(&to_add, modification.alter)?;
-                        }
-                        pitches.push(to_add);
-                    }
-                }
-            }
-        }
-
-        // What the crate reads beyond music21: `add(...)` groups and pitches
-        // named outright, which its own figure writer produces.
-        if !self.omissions.is_empty() {
-            let kept: Vec<bool> = degrees
-                .iter()
-                .map(|written| {
-                    degree_number(written).is_none_or(|degree| !self.omissions.contains(&degree))
-                })
-                .collect();
-            let mut index = 0;
-            pitches.retain(|_| {
-                let keep = kept.get(index).copied().unwrap_or(true);
-                index += 1;
-                keep
-            });
-        }
-        for addition in &self.additions {
-            let (_, name) = added_interval(addition)?;
-            let pitch = Interval::from_name(name)?.transpose_pitch(&self.root)?;
-            if !pitches
-                .iter()
-                .any(|existing| existing.name() == pitch.name())
-            {
-                pitches.push(pitch);
-            }
-        }
-        Ok(pitches)
     }
 
     /// The intervals the symbol's quality, extensions, alterations and
@@ -992,7 +1090,7 @@ mod tests {
                 .to_chord()
                 .unwrap()
                 .pitch_names(),
-            ["E", "C", "D-", "G-"]
+            ["E", "G-", "C", "D-"]
         );
         let _ = Pitch::from_name("C").unwrap();
     }
@@ -1214,9 +1312,13 @@ mod tests {
         assert_eq!(valid("C6"), [1, 2]);
         assert_eq!(valid("Cm7"), [1, 2, 3]);
         assert_eq!(valid("C9"), [1, 2, 3, 4]);
-        assert_eq!(valid("Cmaj11"), [1, 2, 3, 4, 5]);
         assert_eq!(valid("C13"), [1, 2, 3, 4, 5]);
-        assert_eq!(valid("E7#9"), [1, 2, 3, 4]);
+        // music21 reads the kind, and `E7#9` is a dominant seventh with a
+        // raised ninth added: it inverts as a seventh does.
+        assert_eq!(valid("E7#9"), [1, 2, 3]);
+        // A figure music21 refuses is read by the extensions the crate
+        // found in it.
+        assert_eq!(valid("Cmaj11"), [1, 2, 3, 4, 5]);
     }
     use super::*;
 

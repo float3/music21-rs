@@ -382,7 +382,7 @@ pitchChanged = "observer callback; there is none"
 [[class]]
 python = "harmony.py"
 name = "ChordSymbol"
-rust = ["src/chordsymbol/mod.rs", "src/chordsymbol/figure.rs", "src/chordsymbol/tables.rs"]
+rust = ["src/chordsymbol/mod.rs", "src/chordsymbol/figure.rs", "src/chordsymbol/tables.rs", "src/chordsymbol/realize.rs"]
 
 [[class]]
 python = "pitch.py"
@@ -453,7 +453,7 @@ seekChordTablesAddress = "address_of_pitch_classes"
 
 [[class]]
 python = "harmony.py"
-rust = ["src/chordsymbol/mod.rs", "src/chordsymbol/figure.rs", "src/chordsymbol/tables.rs"]
+rust = ["src/chordsymbol/mod.rs", "src/chordsymbol/figure.rs", "src/chordsymbol/tables.rs", "src/chordsymbol/realize.rs"]
 note = "Module-level helpers."
 
 [class.renames]
@@ -462,9 +462,9 @@ getNotationStringGivenChordType = "notation_for_kind"
 getCurrentAbbreviationFor = "current_abbreviation_for_kind"
 
 [class.excluded]
-addNewChordSymbol = "mutates music21's global chord-type table; the table here is a constant"
-changeAbbreviationFor = "mutates music21's global chord-type table; the table here is a constant"
-removeChordSymbols = "mutates music21's global chord-type table; the table here is a constant"
+addNewChordSymbol = "mutates music21's global chord-type table; the crate's is a constant, and the wheel's chord symbols read music21's live table wherever music21 is there to edit it"
+changeAbbreviationFor = "mutates music21's global chord-type table; the crate's is a constant, and the wheel's chord symbols read music21's live table wherever music21 is there to edit it"
+removeChordSymbols = "mutates music21's global chord-type table; the crate's is a constant, and the wheel's chord symbols read music21's live table wherever music21 is there to edit it"
 
 [[class]]
 python = "meter/base.py"
