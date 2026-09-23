@@ -4,9 +4,16 @@ The stream learns two more things to hold, and with them the last of
 music21's stream walks the crate had left out. Every one of music21's own
 examples now passes in all twenty-two modules under the harness — `sieve`,
 both halves of `meter`, `dynamics` and `scale.scala` included, 787 docstrings
-and 7,317 examples — and 626 of the 669 members the feature map tracks are ported, up
-from 565 of 617. Every one of the 43 that are not has a reason written beside
-it, so the map no longer has an unexplained gap in it.
+and 7,317 examples — and 642 of the 689 members the feature map tracks are
+ported, up from 565 of 617. Every one of the 47 that are not has a reason
+written beside it, so the map no longer has an unexplained gap in it.
+
+music21's instruments and metric modulations are ported, and the wheel
+installs nine more classes over music21's own, with the exceptions they
+raise: `ChordSymbol`, `NoChord`, `ChordStepModification`, `Rest`,
+`MetricModulation`, `Sieve`, `TimeSignature`, `MeterTerminal` and
+`MeterSequence`. With every one of them installed, music21's own suite of
+5,038 tests fails the same fourteen as it does on its own.
 
 It is also the release that takes the breaking changes earlier ones held
 back: a tuning system that can repeat at any period, a pitch's accidental
@@ -45,6 +52,8 @@ kept as music21 keeps it, one scale type where there were two, and no
   `#[non_exhaustive]`, so a new variant is a compile error in a caller's
   `match` rather than something a wildcard arm swallows.
 - `ChordSymbol::duration` returns `&Duration`.
+- `MeterTerminal::division_options` is `partition_options` and
+  `set_weights_at_level` is `set_level_weight`, music21's names for them.
 - `Pitch::from_name`, `Note::from_name` and `Interval::from_name` take
   `impl AsRef<str>`. A `&str`,
   a `String` or a `&String` passes as before; only a type that could be
@@ -113,6 +122,47 @@ kept as music21 keeps it, one scale type where there were two, and no
   classes with the same members. A sieve of nothing but `&` and `|` is
   compressed by intersecting its classes; one with a group, a `^` or a
   complemented group from its members over a range.
+- `instrument`: music21's 116 instrument classes as `Instrument::of_kind`,
+  each with the families above it (`is_a`), its name and abbreviation, its
+  General MIDI program and sound, its range and its transposition.
+  `Instrument::from_name` is music21's `fromString`, reading a part name in
+  six languages and their abbreviations along with the key a transposing
+  instrument is in; `from_midi_program`, `all_names`,
+  `auto_assign_midi_channel` and `ensemble_name_by_size` are the rest. Every
+  kind, all 128 programs and 2,054 lookups are checked against music21 by
+  `instrument_parity`.
+- `tempo::MetricModulation`: a change of tempo written as an equation
+  between two metronome marks, with music21's ways of setting one side from
+  the other. `update_from` fills in what the marks leave unsaid from the mark
+  in force before it.
+- `Sieve::parse` reads every spelling music21 reads: `[...]` groups, `M,N`
+  and `MsubN` residuals, `and` and `*`, `or` and `+`, and `not`.
+  `Sieve::from_segment` builds a sieve from integers as music21's
+  `CompressionSegment` does.
+- Scales that take their steps as an argument: `Scale::from_steps`, an
+  octave-repeating scale given by the steps between its notes;
+  `Scale::from_cycle`, a cycle walked from its tonic both ways, for a cycle
+  that does not come back at the octave; `Scale::from_scala`, a Scala file's
+  steps walked the same way; and `StepScale::sieve_by`, a sieve counted in
+  any unit. `pitch_on_degree_between` reads a degree off a range realized,
+  and `Simplification` with `with_simplification` says how a scale spells.
+- `ChordSymbol::parse_music21` reads a figure as music21's `_parseFigure`
+  does, and `chordsymbol::sound_chord_notation` sounds it as `_updatePitches`
+  does, octaves, inversion and modifications included. All 524 figures of
+  the parity fixture agree note for note.
+- Every stream walk has a twin answering in positions in `Stream::leaves`:
+  `volume::dynamics_in_force`, `chordsymbol::chord_symbol_durations`,
+  `voiceleading::voice_leading_quartet_positions`,
+  `voiceleading::verticality_positions_at` and `tempo::interpolated_offset`.
+- A `Rest` carries the words sung under it; the verse rules a note and a
+  rest share are `notation::verses`.
+- `TimeSignature::summed_numerator` and `MeterTerminal::summed_numerator`:
+  whether a meter was written `3+2/8`, which beams in the parts it was
+  written in.
+- A score editor at `/score/` on the site: ABC typed on the left is engraved
+  and played by abcjs, and everything musical about it — keys, harmony at
+  every onset, parallel and hidden fifths and octaves, MIDI and MusicXML
+  export, cents in any tuning system — is answered by the crate.
 - `Duration` can have its written values said rather than read off its
   length: `consolidate`, `slice_component_at_position`, `set_dot_groups`,
   `split_dot_groups`, `linked` and `set_linked`, `grace_duration` and
@@ -182,8 +232,37 @@ kept as music21 keeps it, one scale type where there were two, and no
   whose two classes the whole meter tree is made of; `tie`, whose entire API
   is the names in its `__slots__`, which no scan for methods could find; and
   `scale.scala`. A feature-map entry can now say `members = "slots"`.
-- The `music21` submodule is at 11.0.0b9 (eebac0e), and every generated
-  fixture is stamped with it.
+- **A scale is realized over a range as music21 walks it.** Going up, from
+  the tonic moved by whole periods to the closest at or below the range;
+  coming down, down the descending pattern from the closest at or above it,
+  each walk stopping at the first note past its end. A scale that respells
+  as it goes spells its descent differently, so Rag Asawari on B- comes down
+  through F#4 and C#4. The whole-tone and chromatic scales are cycles, as
+  music21 builds them. `derive_ranked` realizes each candidate between the
+  lowest and highest pitch it is given, as music21 does; the divergence this
+  file used to record there was never shown by any input. 630 realizations
+  over ten scale types, nine tonics and seven ranges agree with music21.
+- A time signature's counting word is read anywhere and in any case, so
+  `"6/8 fast"` is fast 6/8, and `subdivide_nested_hierarchy_by` loads a
+  sequence's own uneven parts first, as music21 does for 11/8.
+- The wheel carries `Stream`, `Score`, `Part`, `PartStaff`, `Measure`,
+  `Voice` and `Opus`, with music21's five stream walks over them;
+  `OctaveRepeatingScale`, `CyclicalScale`, `SieveScale` and `ScalaScale`;
+  a class for every instrument kind; and a `Style` and `NoteStyle` of its
+  own where music21 cannot be imported, so a wheel pickle reads back without
+  music21.
+- An installed class compares and hashes equal to the class it replaces, so
+  `classSet` holds one where it held two, and an exception is installed as
+  the facade's own class, so music21's `except` clauses catch what the
+  facade raises. music21's tests are gathered before anything is installed,
+  and every side runs the same 5,038 under the same names.
+- Coverage is measured on nightly with cargo-llvm-cov's `--doctests`, so the
+  rustdoc examples count; the report also clears the profiles earlier runs
+  left, which it had been merging in.
+- The `music21` submodule points at `float3/music21` master, upstream with
+  the fixes sent from here merged in, until they land upstream; every
+  generated fixture is stamped with its commit. rustls is at 0.23.45 for
+  RUSTSEC-2026-0285, and every GitHub Action is pinned to a commit.
 
 # music21-rs 0.5.0
 
