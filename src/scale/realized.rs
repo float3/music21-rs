@@ -1,5 +1,5 @@
 //! A scale realized from a tonic: music21's `ConcreteScale`, the pitches
-//! a pattern of steps gives on a note, and every question asked of them â€”
+//! a pattern of steps gives on a note, and every question asked of them —
 //! degrees, neighbours, matching, derivation and tuning.
 
 use super::scaletype::{
