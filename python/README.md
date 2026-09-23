@@ -71,8 +71,8 @@ MusicXML.
   chord parser built on music21, gives identical results for its 8,116 tests
   on both.
 
-`Tuplet`, `AbstractScale`, `Sieve` and `style.Style` are provided but not
-installed over music21's, whose versions do more. Missing behaviour raises
+`Tuplet`, `AbstractScale` and `style.Style` are provided but not installed
+over music21's, whose versions do more. Missing behaviour raises
 rather than falling back to music21.
 
 ## Speed and size

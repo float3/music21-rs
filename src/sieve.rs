@@ -393,32 +393,89 @@ impl Sieve {
                 members.len()
             )));
         }
-        let is_member = |z: IntegerType| members.binary_search(&z).is_ok();
-        // music21 tries every modulus below the length of the range.
-        let span = high - low + 1;
+        classes_of_members(&members, low, high)
+    }
+}
 
-        let mut remaining = members.clone();
-        let mut classes: Vec<(IntegerType, IntegerType)> = Vec::new();
-        while let Some(&n) = remaining.first() {
-            let modulus = (1..span)
-                .find(|m| {
-                    let first = low + (n - low).rem_euclid(*m);
-                    (first..=high).step_by(*m as usize).all(is_member)
-                })
-                .ok_or_else(|| {
-                    Error::Sieve(format!("a mod was not found less than {span} for {n}"))
-                })?;
-            remaining.retain(|z| (z - n).rem_euclid(modulus) != 0);
-            classes.push((modulus, n.rem_euclid(modulus)));
-        }
-        classes.sort_unstable();
-        Ok(classes
-            .into_iter()
-            .map(|(modulus, shift)| Node::Residual {
-                modulus: modulus as UnsignedIntegerType,
-                shift: shift as UnsignedIntegerType,
+/// music21's `CompressionSegment`: sorted, distinct `members` of `low..=high`
+/// written as residual classes, each run taken with the smallest modulus that
+/// stays inside them.
+fn classes_of_members(
+    members: &[IntegerType],
+    low: IntegerType,
+    high: IntegerType,
+) -> Result<Vec<Node>> {
+    let is_member = |z: IntegerType| members.binary_search(&z).is_ok();
+    // music21 tries every modulus below the length of the range.
+    let span = high - low + 1;
+
+    let mut remaining = members.to_vec();
+    let mut classes: Vec<(IntegerType, IntegerType)> = Vec::new();
+    while let Some(&n) = remaining.first() {
+        let modulus = (1..span)
+            .find(|m| {
+                let first = low + (n - low).rem_euclid(*m);
+                (first..=high).step_by(*m as usize).all(is_member)
             })
-            .collect())
+            .ok_or_else(|| Error::Sieve(format!("a mod was not found less than {span} for {n}")))?;
+        remaining.retain(|z| (z - n).rem_euclid(modulus) != 0);
+        classes.push((modulus, n.rem_euclid(modulus)));
+    }
+    classes.sort_unstable();
+    Ok(classes
+        .into_iter()
+        .map(|(modulus, shift)| Node::Residual {
+            modulus: modulus as UnsignedIntegerType,
+            shift: shift as UnsignedIntegerType,
+        })
+        .collect())
+}
+
+impl Sieve {
+    /// The sieve that is these integers, as music21 builds one from a list:
+    /// each run of them a residual class, found smallest modulus first, over
+    /// `range` or else from the least of them to the greatest.
+    ///
+    /// ```
+    /// use music21_rs::Sieve;
+    ///
+    /// assert_eq!(Sieve::from_segment(&[2, 4, 6, 8], None)?.to_string(), "2@0");
+    /// assert_eq!(
+    ///     Sieve::from_segment(&[2, 4, 6, 8], Some((0, 19)))?.to_string(),
+    ///     "12@8|14@6|16@4|18@2"
+    /// );
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Fewer than two distinct integers, or one outside `range`.
+    pub fn from_segment(
+        members: &[IntegerType],
+        range: Option<(IntegerType, IntegerType)>,
+    ) -> Result<Self> {
+        let mut members = members.to_vec();
+        members.sort_unstable();
+        members.dedup();
+        let (&least, &greatest) = match (members.first(), members.last()) {
+            (Some(least), Some(greatest)) if members.len() > 1 => (least, greatest),
+            _ => {
+                return Err(Error::Sieve(
+                    "segment must have more than one element".to_string(),
+                ));
+            }
+        };
+        let (low, high) = range.unwrap_or((least, greatest));
+        if least < low || greatest > high {
+            return Err(Error::Sieve(
+                "z range must be a superset of desired segment".to_string(),
+            ));
+        }
+        let root = classes_of_members(&members, low, high)?
+            .into_iter()
+            .reduce(|left, right| Node::Or(Box::new(left), Box::new(right)))
+            .ok_or_else(|| Error::Sieve("segment has no residual classes".to_string()))?;
+        Ok(Self { root })
     }
 
     fn combined(&self, other: &Self, join: fn(Box<Node>, Box<Node>) -> Node) -> Self {
@@ -526,9 +583,42 @@ fn tokenize(expression: &str) -> Result<Vec<Token>> {
                 }
                 tokens.push(Token::Number(value));
             }
-            '@' => {
+            // music21 writes a residual as `M@N`, `M,N` or `MsubN`.
+            '@' | ',' => {
                 chars.next();
                 tokens.push(Token::At);
+            }
+            // music21's other spellings: `and` and Xenakis's `*` intersect,
+            // `or` and `+` unite, `not` complements, and `sub` joins a
+            // modulus to its shift.
+            'a'..='z' => {
+                let mut word = String::new();
+                while let Some(&letter) = chars.peek() {
+                    if !letter.is_ascii_lowercase() {
+                        break;
+                    }
+                    word.push(letter);
+                    chars.next();
+                }
+                tokens.push(match word.as_str() {
+                    "sub" => Token::At,
+                    "and" => Token::And,
+                    "or" => Token::Or,
+                    "not" => Token::Not,
+                    _ => {
+                        return Err(Error::Sieve(format!(
+                            "unexpected word {word:?} in sieve {expression:?}"
+                        )));
+                    }
+                });
+            }
+            '*' => {
+                chars.next();
+                tokens.push(Token::And);
+            }
+            '+' => {
+                chars.next();
+                tokens.push(Token::Or);
             }
             '-' => {
                 chars.next();
@@ -546,11 +636,11 @@ fn tokenize(expression: &str) -> Result<Vec<Token>> {
                 chars.next();
                 tokens.push(Token::Xor);
             }
-            '{' | '(' => {
+            '{' | '(' | '[' => {
                 chars.next();
                 tokens.push(Token::Open);
             }
-            '}' | ')' => {
+            '}' | ')' | ']' => {
                 chars.next();
                 tokens.push(Token::Close);
             }
@@ -1092,6 +1182,62 @@ mod tests {
             let parsed = Sieve::parse(bad);
             assert!(parsed.is_err(), "{bad:?} should be rejected");
         }
+    }
+
+    /// music21 reads brackets as a group, and a residual written `M,N` or
+    /// `MsubN` as `M@N`; the answers and the written forms are music21's.
+    #[test]
+    fn every_spelling_music21_reads_is_read() {
+        let bracketed = Sieve::parse("[(8@0 | 8@1 | 8@7) & (5@1 | 5@3)] | [8@3 & 5@0]").unwrap();
+        assert_eq!(bracketed.segment(0, 39), [1, 8, 16, 23, 31, 33, 35]);
+        assert_eq!(bracketed.to_string(), "{{8@0|8@1|8@7}&{5@1|5@3}}|{8@3&5@0}");
+
+        let sub = Sieve::parse("-5 | 4 & 4sub3 & 6").unwrap();
+        assert_eq!(
+            sub.segment(0, 29),
+            [
+                1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 16, 17, 18, 19, 21, 22, 23, 24, 26, 27, 28,
+                29
+            ]
+        );
+        assert_eq!(sub.to_string(), "-5@0|4@0&4@3&6@0");
+
+        let comma = Sieve::parse("3,1 | 4").unwrap();
+        assert_eq!(comma.segment(0, 19), [0, 1, 4, 7, 8, 10, 12, 13, 16, 19]);
+        assert_eq!(comma.to_string(), "3@1|4@0");
+
+        assert!(Sieve::parse("4su3").is_err());
+
+        let words = Sieve::parse("2 or 4 and 4 & 6 or 4 & 4").unwrap();
+        assert_eq!(words.to_string(), "2@0|4@0&4@0&6@0|4@0&4@0");
+        assert_eq!(words.segment(0, 9), [0, 2, 4, 6, 8]);
+        let xenakis = Sieve::parse("3 * 1 + not 4").unwrap();
+        assert_eq!(xenakis.to_string(), "3@0&1@0|-4@0");
+        assert_eq!(xenakis.segment(0, 9), [0, 1, 2, 3, 5, 6, 7, 9]);
+        assert!(Sieve::parse("3 xor 4").is_err());
+    }
+
+    /// music21's `Sieve` given a list of integers, with and without a range.
+    #[test]
+    fn a_segment_is_written_as_music21_writes_it() {
+        let written = |members: &[IntegerType], range| {
+            Sieve::from_segment(members, range).map(|sieve| sieve.to_string())
+        };
+        assert_eq!(written(&[2, 4, 6, 8], None).unwrap(), "2@0");
+        assert_eq!(written(&[1, 6, 11, 16, 17], None).unwrap(), "5@1|11@6");
+        assert_eq!(written(&[0, 3, 4, 9], None).unwrap(), "5@4|6@3|9@0");
+        assert_eq!(
+            written(&[2, 4, 6, 8], Some((0, 19))).unwrap(),
+            "12@8|14@6|16@4|18@2"
+        );
+        assert_eq!(
+            Sieve::from_segment(&[1, 6, 11, 16, 17], None)
+                .unwrap()
+                .segment(0, 29),
+            [1, 6, 11, 16, 17, 21, 26, 28]
+        );
+        assert!(written(&[5], None).is_err());
+        assert!(written(&[2, 40], Some((0, 19))).is_err());
     }
 
     #[test]

@@ -6,6 +6,10 @@
 //! is a harder test than a fuller facade would be: music21's own `PitchSieve`
 //! realizes its pitches through *our* sieve.
 //!
+//! It is installed over music21's. A sieve is read the way music21 reads
+//! one: every spelling of its logic, a number as a modulus and a list of
+//! integers as the segment they make.
+//!
 //! music21 keeps two readings of a sieve, the expression as written (`exp`)
 //! and a compressed form (`cmp`), and a state saying which one the object
 //! answers with. music21 compresses when the sieve is built; here the
@@ -191,20 +195,33 @@ impl Sieve {
     #[new]
     #[pyo3(signature = (usrStr, z = None))]
     fn new(usrStr: &Bound<'_, PyAny>, z: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
-        // music21 takes a list of expressions as well as one string, and
-        // joins them with `|`.
-        let expression = if let Ok(text) = usrStr.extract::<String>() {
-            text
+        let given = z.is_some();
+        let mut z = bounds_of(z)?;
+        // music21 reads a number as a modulus, a list of integers as the
+        // segment they make, and a list of expressions joined with `|`.
+        let inner = if let Ok(text) = usrStr.extract::<String>() {
+            RsSieve::parse(&text)
+        } else if let Ok(modulus) = usrStr.extract::<i64>() {
+            RsSieve::parse(&modulus.to_string())
+        } else if let Ok(members) = usrStr.extract::<Vec<IntegerType>>() {
+            // With no range given, the segment's own span is the range.
+            if !given
+                && let (Some(least), Some(greatest)) = (members.iter().min(), members.iter().max())
+            {
+                z = (*least, *greatest);
+            }
+            RsSieve::from_segment(&members, given.then_some(z))
         } else {
             let mut parts: Vec<String> = Vec::new();
             for item in usrStr.try_iter()? {
                 parts.push(item?.extract()?);
             }
-            parts.join("|")
-        };
+            RsSieve::parse(&parts.join("|"))
+        }
+        .map_err(sieve_error)?;
         Ok(Self {
-            inner: RsSieve::parse(&expression).map_err(sieve_error)?,
-            z: bounds_of(z)?,
+            inner,
+            z,
             segment_format: None,
             compressed: false,
         })
