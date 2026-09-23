@@ -45,6 +45,7 @@ pub mod meter;
 pub mod notation;
 pub mod note;
 pub mod pitch;
+pub mod rest;
 pub mod roman;
 pub mod scala;
 pub mod scale;
@@ -1200,6 +1201,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     roman::register(m)?;
     notation::register(m)?;
     note::register(m)?;
+    rest::register(m)?;
     duration::register(m)?;
     chord::register(m)?;
     chordtables::register(m)?;

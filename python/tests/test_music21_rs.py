@@ -321,6 +321,25 @@ Observed Javanese Slendro scale, Helmholtz/Ellis p. 518, nr.94
 """
 
 
+def test_a_rest_is_a_length_with_words_under_it():
+    # Each answer read off music21 11.0.0b9.
+    rest = m.Rest(1.5)
+    assert rest.fullName == "Dotted Quarter Rest"
+    assert repr(rest) == "<music21.note.Rest dotted-quarter>"
+    assert repr(m.Rest(5.0)) == "<music21.note.Rest 5ql>"
+    assert m.Rest("half") == m.Rest(2.0)
+    assert m.Rest("half") != m.Note("C4", quarterLength=2.0)
+    assert rest.isRest and not rest.isNote and rest.name == "rest"
+    assert rest.pitches == ()
+    rest.addLyric("hel-")
+    rest.addLyric("lo")
+    assert rest.lyric == "hel\nlo"
+    # Through the duration object, which keeps its dot: a dotted whole.
+    rest.duration.type = "whole"
+    assert rest.quarterLength == 6.0
+    assert rest.fullMeasure == "auto" and m.Rest(fullMeasure=True).fullMeasure is True
+
+
 def test_scales_stand_on_steps_a_caller_gives():
     # Each answer read off music21 11.0.0b9.
     triad = m.OctaveRepeatingScale("c4", ["m3", "M3"])

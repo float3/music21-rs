@@ -1272,6 +1272,92 @@ impl fmt::Display for Lyric {
     }
 }
 
+/// The verses sung on anything that can be sung to — a note, a chord, a
+/// rest — and the rules music21 writes once on `GeneralNote` for editing them.
+pub(crate) mod verses {
+    use super::{Lyric, Syllabic};
+    use crate::defaults::IntegerType;
+
+    /// The text of every verse, one per line: music21's `lyric`.
+    pub(crate) fn joined(lyrics: &[Lyric]) -> Option<String> {
+        if lyrics.is_empty() {
+            return None;
+        }
+        Some(
+            lyrics
+                .iter()
+                .map(Lyric::text)
+                .collect::<Vec<_>>()
+                .join("\n"),
+        )
+    }
+
+    /// Replaces every verse with one per line of the text, or clears them
+    /// with `None`; hyphens say where each syllable falls in its word:
+    /// music21's `lyric` setter.
+    pub(crate) fn set(lyrics: &mut Vec<Lyric>, text: Option<&str>) {
+        lyrics.clear();
+        let Some(text) = text else {
+            return;
+        };
+        for (index, line) in text.split('\n').enumerate() {
+            let mut parsed = Lyric::from_raw_text(line);
+            parsed.set_number(index as IntegerType + 1);
+            lyrics.push(parsed);
+        }
+    }
+
+    /// Adds a syllable as a verse: music21's `addLyric`. With no `number`
+    /// it becomes the next verse; with one it replaces the text of the verse
+    /// already carrying that number, leaving where that syllable falls in its
+    /// word alone, and only becomes a new verse when no verse has it.
+    pub(crate) fn add(
+        lyrics: &mut Vec<Lyric>,
+        text: &str,
+        number: Option<IntegerType>,
+        apply_raw: bool,
+    ) {
+        let Some(number) = number else {
+            let mut lyric = built(text, apply_raw);
+            lyric.set_number(lyrics.len() as IntegerType + 1);
+            lyrics.push(lyric);
+            return;
+        };
+        if let Some(existing) = lyrics.iter_mut().find(|lyric| lyric.number() == number) {
+            existing.set_text(text);
+            return;
+        }
+        let mut lyric = built(text, apply_raw);
+        lyric.set_number(number);
+        lyrics.push(lyric);
+    }
+
+    /// Puts a syllable in front of the verse at `index`, moving the verses
+    /// from there on down a line: music21's `insertLyric`. An index past the
+    /// end appends, as inserting into a list does.
+    pub(crate) fn insert(lyrics: &mut Vec<Lyric>, text: &str, index: usize, apply_raw: bool) {
+        let index = index.min(lyrics.len());
+        for (offset, lyric) in lyrics[index..].iter_mut().enumerate() {
+            lyric.set_number(index as IntegerType + offset as IntegerType + 2);
+        }
+        let mut lyric = built(text, apply_raw);
+        lyric.set_number(index as IntegerType + 1);
+        lyrics.insert(index, lyric);
+    }
+
+    /// A syllable read from text, whose hyphens say where it falls in its
+    /// word unless `apply_raw` takes the text as written.
+    fn built(text: &str, apply_raw: bool) -> Lyric {
+        if apply_raw {
+            let mut lyric = Lyric::new(text);
+            lyric.set_syllabic(Syllabic::Single);
+            lyric
+        } else {
+            Lyric::from_raw_text(text)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[test]

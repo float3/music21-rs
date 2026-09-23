@@ -361,7 +361,15 @@ impl TimeSignature {
         if let Some(written) = &self.overridden_bar_duration {
             return Ok(written.clone_ref(py));
         }
-        Ok(Py::new(py, Duration::wrap(self.inner.bar_duration()))?.into_any())
+        // The class installed over music21's where there is one, since a
+        // duration is compared by its class as well as its length.
+        Ok(crate::installed_new(
+            py,
+            "music21.duration",
+            "Duration",
+            Duration::wrap(self.inner.bar_duration()),
+        )?
+        .into_any())
     }
 
     #[getter]

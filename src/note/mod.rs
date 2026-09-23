@@ -2,7 +2,7 @@ use crate::defaults::{FloatType, IntegerType};
 use crate::duration::Duration;
 use crate::error::Result;
 use crate::interval::Interval;
-use crate::notation::{Beams, Lyric, Notehead, StemDirection, Syllabic, Tie};
+use crate::notation::{Beams, Lyric, Notehead, StemDirection, Tie, verses};
 use crate::pitch::Pitch;
 use crate::volume::Volume;
 
@@ -241,68 +241,32 @@ impl Note {
     /// The text of the first verse, with the hyphens of every further verse
     /// joined by newlines: music21's `lyric`.
     pub fn lyric(&self) -> Option<String> {
-        if self.notation.lyrics.is_empty() {
-            return None;
-        }
-        Some(
-            self.notation
-                .lyrics
-                .iter()
-                .map(Lyric::text)
-                .collect::<Vec<_>>()
-                .join("\n"),
-        )
+        verses::joined(&self.notation.lyrics)
     }
 
     /// Replaces every lyric with one verse of text, or clears them with
     /// `None`. Newlines start further verses, and hyphens say where each
     /// syllable falls in its word: music21's `lyric` setter.
     pub fn set_lyric(&mut self, lyric: Option<&str>) -> Result<()> {
-        self.notation.lyrics.clear();
-        let Some(lyric) = lyric else {
-            return Ok(());
-        };
-        for (index, line) in lyric.split('\n').enumerate() {
-            let mut parsed = Lyric::from_raw_text(line);
-            parsed.set_number(index as IntegerType + 1);
-            self.notation.lyrics.push(parsed);
-        }
+        verses::set(&mut self.notation.lyrics, lyric);
         Ok(())
     }
 
-    /// Adds a syllable as the next verse: music21's `addLyric`. Hyphens in
-    /// the text say where the syllable falls in its word unless `apply_raw`
-    /// is set, which takes the text as written.
     /// Adds a syllable as a verse: music21's `addLyric`.
     ///
     /// With no `number` it becomes the next verse. With one, it *replaces*
     /// the text of the verse already carrying that number — leaving where
     /// that syllable falls in its word alone, as music21's plain text
     /// assignment does — and only becomes a new verse when no verse has it.
+    /// Hyphens in the text say where the syllable falls in its word unless
+    /// `apply_raw` is set, which takes the text as written.
     pub fn add_lyric(
         &mut self,
         text: &str,
         number: Option<IntegerType>,
         apply_raw: bool,
     ) -> Result<()> {
-        let Some(number) = number else {
-            let mut lyric = Self::build_lyric(text, apply_raw);
-            lyric.set_number(self.notation.lyrics.len() as IntegerType + 1);
-            self.notation.lyrics.push(lyric);
-            return Ok(());
-        };
-        if let Some(existing) = self
-            .notation
-            .lyrics
-            .iter_mut()
-            .find(|lyric| lyric.number() == number)
-        {
-            existing.set_text(text);
-            return Ok(());
-        }
-        let mut lyric = Self::build_lyric(text, apply_raw);
-        lyric.set_number(number);
-        self.notation.lyrics.push(lyric);
+        verses::add(&mut self.notation.lyrics, text, number, apply_raw);
         Ok(())
     }
 
@@ -311,26 +275,8 @@ impl Note {
     ///
     /// An index past the end appends, as inserting into a list does.
     pub fn insert_lyric(&mut self, text: &str, index: usize, apply_raw: bool) -> Result<()> {
-        let index = index.min(self.notation.lyrics.len());
-        for (offset, lyric) in self.notation.lyrics[index..].iter_mut().enumerate() {
-            lyric.set_number(index as IntegerType + offset as IntegerType + 2);
-        }
-        let mut lyric = Self::build_lyric(text, apply_raw);
-        lyric.set_number(index as IntegerType + 1);
-        self.notation.lyrics.insert(index, lyric);
+        verses::insert(&mut self.notation.lyrics, text, index, apply_raw);
         Ok(())
-    }
-
-    /// A syllable read from text, whose hyphens say where it falls in its
-    /// word unless `apply_raw` takes the text as written.
-    fn build_lyric(text: &str, apply_raw: bool) -> Lyric {
-        if apply_raw {
-            let mut lyric = Lyric::new(text);
-            lyric.set_syllabic(Syllabic::Single);
-            lyric
-        } else {
-            Lyric::from_raw_text(text)
-        }
     }
 }
 

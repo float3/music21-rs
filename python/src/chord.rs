@@ -1391,6 +1391,7 @@ impl Chord {
             // As on a note: the tuplets a chord is written inside live on
             // the duration object rather than in the value.
             extra.set_item("duration", chord.duration.as_ref())?;
+            extra.set_item("style", chord.style.as_ref())?;
         }
         slf.borrow_mut().settle_beams(py);
         crate::pickled_extra(slf, &slf.borrow().inner, Some(&extra))
@@ -1420,6 +1421,14 @@ impl Chord {
                 .map(pyo3::Bound::unbind);
             chord.stored_instrument = Some(extra.get_item("storedInstrument")?.unbind())
                 .filter(|value| !value.is_none(py));
+            // How it is drawn goes with it too: a rest a score hides on
+            // print is hidden only while its style says so, and a score is
+            // frozen to a file and read back.
+            chord.style = extra
+                .get_item("style")
+                .ok()
+                .filter(|style| !style.is_none())
+                .map(pyo3::Bound::unbind);
         }
         Ok(())
     }

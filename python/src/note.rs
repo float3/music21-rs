@@ -24,6 +24,7 @@ use crate::duration::{
 /// The names the `note` facade replaces in `music21.note`.
 pub const NAMES: &[&str] = &[
     "Note",
+    "Rest",
     "NoteException",
     "NotRestException",
     "Lyric",
@@ -788,6 +789,7 @@ impl Note {
             // it is a grace note are the object's, and a score is frozen to
             // a file and read back.
             extra.set_item("duration", note.duration.as_ref())?;
+            extra.set_item("style", note.style.as_ref())?;
         }
         crate::pickled_extra(slf, &slf.borrow().synced(py), Some(&extra))
     }
@@ -817,6 +819,14 @@ impl Note {
                 .map(pyo3::Bound::unbind);
             note.stored_instrument = Some(extra.get_item("storedInstrument")?.unbind())
                 .filter(|value| !value.is_none(py));
+            // How it is drawn goes with it too: a rest a score hides on
+            // print is hidden only while its style says so, and a score is
+            // frozen to a file and read back.
+            note.style = extra
+                .get_item("style")
+                .ok()
+                .filter(|style| !style.is_none())
+                .map(pyo3::Bound::unbind);
         }
         Ok(())
     }
@@ -853,9 +863,14 @@ impl Note {
         if Duration::keywords_say_duration(keywords)? {
             let duration = match keywords.and_then(|keywords| keywords.get_item("duration").ok()?) {
                 Some(value) => value,
-                None => Py::new(py, Duration::new(None, keywords)?)?
-                    .into_bound(py)
-                    .into_any(),
+                None => crate::installed_new(
+                    py,
+                    "music21.duration",
+                    "Duration",
+                    Duration::new(None, keywords)?,
+                )?
+                .into_bound(py)
+                .into_any(),
             };
             note.attach_duration(py, &duration)?;
         }
