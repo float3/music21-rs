@@ -130,6 +130,7 @@ pub use duration::{Duration, DurationTuple, DurationType, Tuplet, quarter_length
 pub use dynamics::Dynamic;
 pub use error::{Error, Result};
 pub use harte::{Harte, HarteInterval, SHORTHAND_DEGREES, convert_interval};
+pub use instrument::{Instrument, SearchLanguage, ensemble_name_by_size};
 pub use interval::{
     ChromaticInterval, DiatonicInterval, GenericInterval, Interval, IntervalDirection, Specifier,
     absolute_higher_pitch, absolute_lower_pitch, convert_diatonic_number_to_step, convert_generic,
@@ -162,7 +163,8 @@ pub use roman::{
     analyze_chord_with_root, identify_as_tonic_or_dominant, roman_inversion_name,
 };
 pub use scale::{
-    BluesForm, DegreeComparison, Scale, ScaleType, SolfegVariant, StepScale, WeightedHexatonicBlues,
+    BluesForm, DegreeComparison, Scale, ScaleType, Simplification, SolfegVariant, StepScale,
+    WeightedHexatonicBlues,
 };
 pub use serial::{
     HISTORICAL_ROWS, HistoricalRow, IndexedTransformation, LinkClassification, ToneRow,

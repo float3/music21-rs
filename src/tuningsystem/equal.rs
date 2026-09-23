@@ -1,11 +1,10 @@
 //! Equal divisions of any interval, not only of the octave.
 //!
-//! [`crate::tuningsystem::TuningSystem::EqualTemperament`] divides an octave,
-//! and is octave-repeating all the way down — its degree count *is* a count
-//! per octave, and its ratios double from one octave to the next. Plenty of
-//! tunings do not repeat at the octave at all: Bohlen-Pierce divides a twelfth
-//! into thirteen and never sounds an octave, and Carlos's Alpha, Beta and
-//! Gamma repeat at nothing in particular. This is the type for those.
+//! Plenty of tunings do not repeat at the octave: Bohlen-Pierce divides a
+//! twelfth into thirteen and never sounds an octave, and Carlos's Alpha, Beta
+//! and Gamma repeat at nothing in particular. An [`EqualDivision`] divides
+//! whatever period it is given, the octave included, and it is what
+//! [`crate::tuningsystem::TuningSystem::Equal`] holds.
 //!
 //! The period is kept as cents so that any interval can be one, and the ratio
 //! it came from is kept beside it so the division can still name itself the
