@@ -226,6 +226,18 @@ instrumentIdRandomize = "an instrument id is what a score writer assigns; the cr
 
 [[class]]
 python = "instrument.py"
+name = "StringInstrument"
+rust = ["src/instrument/mod.rs"]
+note = "A string instrument's open strings, the only member music21 gives its string family."
+
+[[class]]
+python = "instrument.py"
+name = "UnpitchedPercussion"
+rust = ["src/instrument/mod.rs"]
+note = "How an unpitched percussion instrument is played, and the drum that plays."
+
+[[class]]
+python = "instrument.py"
 rust = ["src/instrument/mod.rs"]
 note = "Module-level helpers."
 

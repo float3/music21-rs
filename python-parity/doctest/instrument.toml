@@ -1,0 +1,22 @@
+# Docstrings of music21.instrument whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_instrument`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.instrument.BassClarinet",
+    "music21.instrument.ElectricPiano",
+    "music21.instrument.Horn",
+    "music21.instrument.Instrument.autoAssignMidiChannel",
+    "music21.instrument.Piano",
+    "music21.instrument.StringInstrument.stringPitches",
+    "music21.instrument.UnpitchedPercussion.modifier",
+    "music21.instrument.bundleInstruments",
+    "music21.instrument.deduplicate",
+    "music21.instrument.ensembleNameBySize",
+    "music21.instrument.fromString",
+    "music21.instrument.getAllNamesForInstrument",
+    "music21.instrument.instrumentFromMidiProgram",
+    "music21.instrument.partitionByInstrument",
+    "music21.instrument.unbundleInstruments",
+]

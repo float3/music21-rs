@@ -242,6 +242,7 @@ midi_program = 105
 lowest = "C3"
 transposition = "P-8"
 percussion_map = false
+string_pitches = ["C3", "G3", "D4", "A4"]
 [instrument.all_names]
 "english" = ["banjo"]
 "french" = []
@@ -391,6 +392,7 @@ midi_program = 43
 lowest = "E2"
 transposition = "P-8"
 percussion_map = false
+string_pitches = ["E1", "A1", "D2", "G2"]
 [instrument.all_names]
 "english" = ["contrabass", "contrabasses", "double bass", "double basses"]
 "french" = ["contrebasse", "contrebasses"]
@@ -469,6 +471,7 @@ best_name = "Guitar"
 midi_program = 24
 lowest = "E2"
 percussion_map = false
+string_pitches = ["E2", "A2", "D3", "G3", "B3", "E4"]
 [instrument.all_names]
 "english" = ["string instrument", "strings"]
 "french" = ["cordes", "instrument à cordes"]
@@ -584,6 +587,7 @@ best_name = "Mandolin"
 midi_program = 48
 lowest = "G3"
 percussion_map = false
+string_pitches = ["G3", "D4", "A4", "E5"]
 [instrument.all_names]
 "english" = ["mandolin"]
 "french" = ["mandoline"]
@@ -883,6 +887,7 @@ best_name = "Ukulele"
 midi_program = 48
 lowest = "C4"
 percussion_map = false
+string_pitches = ["G4", "C4", "E4", "A4"]
 [instrument.all_names]
 "english" = ["ukelele", "ukulele"]
 "french" = ["ukulélé"]
@@ -900,6 +905,7 @@ abbreviation = "Perc"
 best_name = "Percussion"
 midi_channel = 9
 percussion_map = false
+modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 [instrument.all_names]
 "english" = ["unpitched percussion"]
 "french" = []
@@ -919,6 +925,7 @@ best_name = "Viola"
 midi_program = 41
 lowest = "C3"
 percussion_map = false
+string_pitches = ["C3", "G3", "D4", "A4"]
 [instrument.all_names]
 "english" = ["viola", "violas"]
 "french" = ["alto", "altos"]
@@ -938,6 +945,7 @@ best_name = "Violin"
 midi_program = 40
 lowest = "G3"
 percussion_map = false
+string_pitches = ["G3", "D4", "A4", "E5"]
 [instrument.all_names]
 "english" = ["violin", "violins"]
 "french" = ["violon", "violons"]
@@ -957,6 +965,7 @@ best_name = "Violoncello"
 midi_program = 42
 lowest = "C2"
 percussion_map = false
+string_pitches = ["C2", "G2", "D3", "A3"]
 [instrument.all_names]
 "english" = ["cello", "cellos", "violoncello", "violoncellos"]
 "french" = ["violoncelle", "violoncelles"]
@@ -976,6 +985,7 @@ best_name = "Acoustic Bass"
 midi_program = 32
 lowest = "E1"
 percussion_map = false
+string_pitches = ["E1", "A1", "D2", "G2"]
 [instrument.all_names]
 "english" = ["acoustic bass"]
 "french" = ["basse acoustique"]
@@ -995,6 +1005,7 @@ best_name = "Acoustic Guitar"
 midi_program = 24
 lowest = "E2"
 percussion_map = false
+string_pitches = ["E2", "A2", "D3", "G3", "B3", "E4"]
 [instrument.all_names]
 "english" = ["acoustic guitar", "guitar"]
 "french" = ["guitare", "guitare acoustique", "guitarre"]
@@ -1015,6 +1026,7 @@ midi_program = 113
 midi_channel = 9
 percussion_pitch = 67
 percussion_map = true
+modifiers = [{ given = "unheard of", modifier = "unheard of", drum = 67 }]
 [instrument.all_names]
 "english" = ["agogo"]
 "french" = []
@@ -1094,6 +1106,8 @@ best_name = "Bass Drum"
 midi_channel = 9
 percussion_pitch = 35
 percussion_map = true
+modifier = "acoustic"
+modifiers = [{ given = "acoustic", modifier = "acoustic", drum = 35 }, { given = "ACOUSTIC", modifier = "acoustic", drum = 35 }, { given = " acoustic ", modifier = "acoustic", drum = 35 }, { given = "1", modifier = "1", drum = 36 }, { given = "1", modifier = "1", drum = 36 }, { given = " 1 ", modifier = "1", drum = 36 }, { given = "unheard of", modifier = "unheard of", drum = 35 }]
 [instrument.all_names]
 "english" = ["bass drum", "turkish drum"]
 "french" = ["grosse caisse", "tambour bata"]
@@ -1132,6 +1146,8 @@ best_name = "Bongo Drums"
 midi_channel = 9
 percussion_pitch = 60
 percussion_map = true
+modifier = "high"
+modifiers = [{ given = "high", modifier = "high", drum = 60 }, { given = "HIGH", modifier = "high", drum = 60 }, { given = " high ", modifier = "high", drum = 60 }, { given = "low", modifier = "low", drum = 61 }, { given = "LOW", modifier = "low", drum = 61 }, { given = " low ", modifier = "low", drum = 61 }, { given = "unheard of", modifier = "unheard of", drum = 60 }]
 [instrument.all_names]
 "english" = ["bongo drums"]
 "french" = ["bongos", "tambours bongo"]
@@ -1150,6 +1166,7 @@ sound = "wood.castanets"
 best_name = "Castanets"
 midi_channel = 9
 percussion_map = false
+modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 [instrument.all_names]
 "english" = ["castanets"]
 "french" = ["castagnettes"]
@@ -1187,6 +1204,8 @@ best_name = "Conga Drum"
 midi_channel = 9
 percussion_pitch = 64
 percussion_map = true
+modifier = "low"
+modifiers = [{ given = "low", modifier = "low", drum = 64 }, { given = "LOW", modifier = "low", drum = 64 }, { given = " low ", modifier = "low", drum = 64 }, { given = "mute high", modifier = "mute high", drum = 62 }, { given = "MUTE HIGH", modifier = "mute high", drum = 62 }, { given = " mute high ", modifier = "mute high", drum = 62 }, { given = "open high", modifier = "open high", drum = 63 }, { given = "OPEN HIGH", modifier = "open high", drum = 63 }, { given = " open high ", modifier = "open high", drum = 63 }, { given = "unheard of", modifier = "unheard of", drum = 64 }]
 [instrument.all_names]
 "english" = ["conga drum", "tumbadora"]
 "french" = ["conga", "tambour congo", "tumbadora"]
@@ -1225,6 +1244,7 @@ best_name = "Cowbell"
 midi_channel = 9
 percussion_pitch = 56
 percussion_map = true
+modifiers = [{ given = "unheard of", modifier = "unheard of", drum = 56 }]
 [instrument.all_names]
 "english" = ["cowbells"]
 "french" = ["cloches de vache", "cloches à vache", "gencerros", "sonnailles"]
@@ -1242,6 +1262,7 @@ abbreviation = "Cym"
 best_name = "Cymbals"
 midi_channel = 9
 percussion_map = false
+modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 [instrument.all_names]
 "english" = ["cymbals"]
 "french" = []
@@ -1279,6 +1300,7 @@ best_name = "Electric Bass"
 midi_program = 33
 lowest = "E1"
 percussion_map = false
+string_pitches = ["E1", "A1", "D2", "G2"]
 [instrument.all_names]
 "english" = ["electric bass"]
 "french" = ["basse électrique"]
@@ -1298,6 +1320,7 @@ best_name = "Electric Guitar"
 midi_program = 26
 lowest = "E2"
 percussion_map = false
+string_pitches = ["E2", "A2", "D3", "G3", "B3", "E4"]
 [instrument.all_names]
 "english" = ["electric guitar"]
 "french" = ["guitare électrique", "guitarre électrique"]
@@ -1337,6 +1360,7 @@ best_name = "Fretless Bass"
 midi_program = 35
 lowest = "E1"
 percussion_map = false
+string_pitches = ["E1", "A1", "D2", "G2"]
 [instrument.all_names]
 "english" = ["fretless bass"]
 "french" = ["basse fretless"]
@@ -1426,6 +1450,7 @@ best_name = "Maracas"
 midi_channel = 9
 percussion_pitch = 70
 percussion_map = true
+modifiers = [{ given = "unheard of", modifier = "unheard of", drum = 70 }]
 [instrument.all_names]
 "english" = ["maracas"]
 "french" = []
@@ -1538,6 +1563,7 @@ sound = "rattle.ratchet"
 best_name = "Ratchet"
 midi_channel = 9
 percussion_map = false
+modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 [instrument.all_names]
 "english" = ["ratchet", "rattle"]
 "french" = ["crécelle", "rochet"]
@@ -1575,6 +1601,7 @@ sound = "wood.sand-block"
 best_name = "Sandpaper Blocks"
 midi_channel = 9
 percussion_map = false
+modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 [instrument.all_names]
 "english" = ["sandpaper blocks"]
 "french" = ["blocs de papier de verre", "papier de verre"]
@@ -1612,6 +1639,7 @@ sound = "effect.siren"
 best_name = "Siren"
 midi_channel = 9
 percussion_map = false
+modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 [instrument.all_names]
 "english" = ["siren"]
 "french" = ["sirène"]
@@ -1630,6 +1658,7 @@ sound = "metal.bells.sleigh-bells"
 best_name = "Sleigh Bells"
 midi_channel = 9
 percussion_map = false
+modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 [instrument.all_names]
 "english" = ["jingle bells", "sleigh bells"]
 "french" = ["grelots"]
@@ -1649,6 +1678,8 @@ best_name = "Snare Drum"
 midi_channel = 9
 percussion_pitch = 38
 percussion_map = true
+modifier = "acoustic"
+modifiers = [{ given = "acoustic", modifier = "acoustic", drum = 38 }, { given = "ACOUSTIC", modifier = "acoustic", drum = 38 }, { given = " acoustic ", modifier = "acoustic", drum = 38 }, { given = "side", modifier = "side", drum = 37 }, { given = "SIDE", modifier = "side", drum = 37 }, { given = " side ", modifier = "side", drum = 37 }, { given = "electric", modifier = "electric", drum = 40 }, { given = "ELECTRIC", modifier = "electric", drum = 40 }, { given = " electric ", modifier = "electric", drum = 40 }, { given = "unheard of", modifier = "unheard of", drum = 38 }]
 [instrument.all_names]
 "english" = ["snare drum"]
 "french" = ["caisse claire", "tambour"]
@@ -1706,6 +1737,7 @@ best_name = "Taiko"
 midi_program = 116
 midi_channel = 9
 percussion_map = false
+modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 [instrument.all_names]
 "english" = ["taiko"]
 "french" = []
@@ -1724,6 +1756,7 @@ sound = "metal.tamtam"
 best_name = "Tam-Tam"
 midi_channel = 9
 percussion_map = false
+modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 [instrument.all_names]
 "english" = ["bullseye gong", "chau gong", "tam-tam"]
 "french" = []
@@ -1743,6 +1776,7 @@ best_name = "Tambourine"
 midi_channel = 9
 percussion_pitch = 54
 percussion_map = true
+modifiers = [{ given = "unheard of", modifier = "unheard of", drum = 54 }]
 [instrument.all_names]
 "english" = ["marine", "tambourine"]
 "french" = ["tambour de basque"]
@@ -1761,6 +1795,7 @@ sound = "wood.temple-block"
 best_name = "Temple Block"
 midi_channel = 9
 percussion_map = false
+modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 [instrument.all_names]
 "english" = ["temple block"]
 "french" = ["temple bloc"]
@@ -1779,6 +1814,7 @@ sound = "drum.tenor-drum"
 best_name = "Tenor Drum"
 midi_channel = 9
 percussion_map = false
+modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 [instrument.all_names]
 "english" = ["tenor drum"]
 "french" = ["caisse roulante", "tambourin", "ténor tambour"]
@@ -1818,6 +1854,8 @@ best_name = "Timbales"
 midi_channel = 9
 percussion_pitch = 65
 percussion_map = true
+modifier = "high"
+modifiers = [{ given = "high", modifier = "high", drum = 65 }, { given = "HIGH", modifier = "high", drum = 65 }, { given = " high ", modifier = "high", drum = 65 }, { given = "low", modifier = "low", drum = 66 }, { given = "LOW", modifier = "low", drum = 66 }, { given = " low ", modifier = "low", drum = 66 }, { given = "unheard of", modifier = "unheard of", drum = 65 }]
 [instrument.all_names]
 "english" = ["pailas criollas", "timbales"]
 "french" = ["timbales créoles", "timbales cubaines", "timbales latines"]
@@ -1855,6 +1893,8 @@ best_name = "Tom-Tom"
 midi_channel = 9
 percussion_pitch = 41
 percussion_map = true
+modifier = "low floor"
+modifiers = [{ given = "low floor", modifier = "low floor", drum = 41 }, { given = "LOW FLOOR", modifier = "low floor", drum = 41 }, { given = " low floor ", modifier = "low floor", drum = 41 }, { given = "high floor", modifier = "high floor", drum = 43 }, { given = "HIGH FLOOR", modifier = "high floor", drum = 43 }, { given = " high floor ", modifier = "high floor", drum = 43 }, { given = "low", modifier = "low", drum = 45 }, { given = "LOW", modifier = "low", drum = 45 }, { given = " low ", modifier = "low", drum = 45 }, { given = "low-mid", modifier = "low-mid", drum = 47 }, { given = "LOW-MID", modifier = "low-mid", drum = 47 }, { given = " low-mid ", modifier = "low-mid", drum = 47 }, { given = "high-mid", modifier = "high-mid", drum = 48 }, { given = "HIGH-MID", modifier = "high-mid", drum = 48 }, { given = " high-mid ", modifier = "high-mid", drum = 48 }, { given = "high", modifier = "high", drum = 50 }, { given = "HIGH", modifier = "high", drum = 50 }, { given = " high ", modifier = "high", drum = 50 }, { given = "unheard of", modifier = "unheard of", drum = 41 }]
 [instrument.all_names]
 "english" = ["tom-tom"]
 "french" = ["tom"]
@@ -1874,6 +1914,8 @@ best_name = "Triangle"
 midi_channel = 9
 percussion_pitch = 81
 percussion_map = true
+modifier = "open"
+modifiers = [{ given = "open", modifier = "open", drum = 81 }, { given = "OPEN", modifier = "open", drum = 81 }, { given = " open ", modifier = "open", drum = 81 }, { given = "mute", modifier = "mute", drum = 80 }, { given = "MUTE", modifier = "mute", drum = 80 }, { given = " mute ", modifier = "mute", drum = 80 }, { given = "unheard of", modifier = "unheard of", drum = 81 }]
 [instrument.all_names]
 "english" = ["triangle"]
 "french" = []
@@ -1929,6 +1971,7 @@ best_name = "Vibraslap"
 midi_channel = 9
 percussion_pitch = 58
 percussion_map = true
+modifiers = [{ given = "unheard of", modifier = "unheard of", drum = 58 }]
 [instrument.all_names]
 "english" = ["vibraslap"]
 "french" = []
@@ -1947,6 +1990,7 @@ sound = "effect.whip"
 best_name = "Whip"
 midi_channel = 9
 percussion_map = false
+modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 [instrument.all_names]
 "english" = ["slapstick", "whip"]
 "french" = ["fouet"]
@@ -1985,6 +2029,7 @@ sound = "effect.wind"
 best_name = "Wind Machine"
 midi_channel = 9
 percussion_map = false
+modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 [instrument.all_names]
 "english" = ["wind machine"]
 "french" = ["eoliphone", "machine à vent", "éoliphone"]
@@ -2005,6 +2050,8 @@ midi_program = 115
 midi_channel = 9
 percussion_pitch = 76
 percussion_map = true
+modifier = "high"
+modifiers = [{ given = "high", modifier = "high", drum = 76 }, { given = "HIGH", modifier = "high", drum = 76 }, { given = " high ", modifier = "high", drum = 76 }, { given = "low", modifier = "low", drum = 77 }, { given = "LOW", modifier = "low", drum = 77 }, { given = " low ", modifier = "low", drum = 77 }, { given = "hi", modifier = "high", drum = 76 }, { given = "HI", modifier = "high", drum = 76 }, { given = " hi ", modifier = "high", drum = 76 }, { given = "lo", modifier = "low", drum = 77 }, { given = "LO", modifier = "low", drum = 77 }, { given = " lo ", modifier = "low", drum = 77 }, { given = "unheard of", modifier = "unheard of", drum = 76 }]
 [instrument.all_names]
 "english" = ["woodblock"]
 "french" = ["bloc de bois", "wood-bloc"]
@@ -2042,6 +2089,8 @@ best_name = "Crash Cymbals"
 midi_channel = 9
 percussion_pitch = 49
 percussion_map = true
+modifier = "1"
+modifiers = [{ given = "1", modifier = "1", drum = 49 }, { given = "1", modifier = "1", drum = 49 }, { given = " 1 ", modifier = "1", drum = 49 }, { given = "2", modifier = "2", drum = 57 }, { given = "2", modifier = "2", drum = 57 }, { given = " 2 ", modifier = "2", drum = 57 }, { given = "unheard of", modifier = "unheard of", drum = 49 }]
 [instrument.all_names]
 "english" = ["crash cymbals"]
 "french" = ["crash", "cymbales"]
@@ -2060,6 +2109,7 @@ sound = "metal.cymbal.finger"
 best_name = "Finger Cymbals"
 midi_channel = 9
 percussion_map = false
+modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 [instrument.all_names]
 "english" = ["finger cymbals", "zills", "zils"]
 "french" = ["cymbales digitales", "sagates", "sagattes", "zill", "zills"]
@@ -2079,6 +2129,8 @@ best_name = "Hi-Hat Cymbal"
 midi_channel = 9
 percussion_pitch = 44
 percussion_map = true
+modifier = "pedal"
+modifiers = [{ given = "pedal", modifier = "pedal", drum = 44 }, { given = "PEDAL", modifier = "pedal", drum = 44 }, { given = " pedal ", modifier = "pedal", drum = 44 }, { given = "open", modifier = "open", drum = 46 }, { given = "OPEN", modifier = "open", drum = 46 }, { given = " open ", modifier = "open", drum = 46 }, { given = "closed", modifier = "closed", drum = 42 }, { given = "CLOSED", modifier = "closed", drum = 42 }, { given = " closed ", modifier = "closed", drum = 42 }, { given = "unheard of", modifier = "unheard of", drum = 44 }]
 [instrument.all_names]
 "english" = ["hi-hat", "hi-hat cymbal", "sock cymbal"]
 "french" = ["charleston", "cymbale à pédale", "hi-hat", "salut-chapeau cymbale"]
@@ -2097,6 +2149,7 @@ sound = "metal.cymbal.ride"
 best_name = "Ride Cymbals"
 midi_channel = 9
 percussion_map = false
+modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 [instrument.all_names]
 "english" = ["ride cymbals"]
 "french" = []
@@ -2115,6 +2168,7 @@ sound = "metal.cymbal.sizzle"
 best_name = "Sizzle Cymbal"
 midi_channel = 9
 percussion_map = false
+modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 [instrument.all_names]
 "english" = ["sizzle cymbal"]
 "french" = ["cymbale sur tiges", "grésillement cymbale"]
@@ -2133,6 +2187,7 @@ sound = "metal.cymbal.splash"
 best_name = "Splash Cymbals"
 midi_channel = 9
 percussion_map = false
+modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 [instrument.all_names]
 "english" = ["splash cymbals"]
 "french" = []
@@ -2151,6 +2206,7 @@ sound = "metal.cymbal.suspended"
 best_name = "Suspended Cymbal"
 midi_channel = 9
 percussion_map = false
+modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 [instrument.all_names]
 "english" = ["suspended cymbal"]
 "french" = ["cymbale suspendue"]

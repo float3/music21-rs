@@ -136,6 +136,8 @@ pub struct Instrument {
     transposition: Option<Interval>,
     percussion_map: bool,
     percussion_pitch: Option<u8>,
+    string_pitches: Option<Vec<Pitch>>,
+    modifier: Option<String>,
 }
 
 impl Default for Instrument {
@@ -175,6 +177,15 @@ impl Instrument {
             transposition: kind.transposition.map(Interval::from_name).transpose()?,
             percussion_map: kind.percussion_map,
             percussion_pitch: kind.percussion_pitch,
+            string_pitches: tables::STRING_PITCHES
+                .iter()
+                .find(|(named, _)| *named == kind.class)
+                .map(|(_, names)| names.iter().map(Pitch::from_name).collect())
+                .transpose()?,
+            modifier: tables::MODIFIERS
+                .iter()
+                .find(|(named, ..)| *named == kind.class)
+                .map(|(_, modifier, ..)| modifier.to_string()),
         })
     }
 
@@ -426,6 +437,68 @@ impl Instrument {
     /// music21's `percMapPitch`.
     pub fn percussion_pitch(&self) -> Option<u8> {
         self.percussion_pitch
+    }
+
+    /// The open strings, lowest first unless the tuning is reentrant, for a
+    /// string instrument music21 tunes: music21's `stringPitches`.
+    ///
+    /// ```
+    /// use music21_rs::Instrument;
+    ///
+    /// let violin = Instrument::of_kind("Violin")?;
+    /// let open: Vec<String> = violin
+    ///     .string_pitches()
+    ///     .unwrap()
+    ///     .iter()
+    ///     .map(|pitch| pitch.name_with_octave())
+    ///     .collect();
+    /// assert_eq!(open, ["G3", "D4", "A4", "E5"]);
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
+    pub fn string_pitches(&self) -> Option<&[Pitch]> {
+        self.string_pitches.as_deref()
+    }
+
+    /// Retunes the open strings, a scordatura.
+    pub fn set_string_pitches(&mut self, pitches: Vec<Pitch>) {
+        self.string_pitches = Some(pitches);
+    }
+
+    /// How an unpitched percussion instrument is played, such as `"low"` for
+    /// a bongo or `"rimshot"` for a snare: music21's `modifier`.
+    pub fn modifier(&self) -> Option<&str> {
+        self.modifier.as_deref()
+    }
+
+    /// Sets how the instrument is played. A modifier its drum map knows
+    /// changes the drum it plays, and is written back as that drum's own name
+    /// for it, so a woodblock set to `"LO"` plays the low block and says
+    /// `"low"`.
+    ///
+    /// ```
+    /// use music21_rs::Instrument;
+    ///
+    /// let mut woodblock = Instrument::of_kind("Woodblock")?;
+    /// woodblock.set_modifier("LO");
+    /// assert_eq!(woodblock.modifier(), Some("low"));
+    /// assert_eq!(woodblock.percussion_pitch(), Some(77));
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
+    pub fn set_modifier(&mut self, modifier: &str) {
+        let mut modifier = modifier.trim().to_lowercase();
+        let table = std::iter::once(self.kind.as_str())
+            .chain(self.families().iter().copied())
+            .find_map(|class| tables::MODIFIERS.iter().find(|(named, ..)| *named == class));
+        if self.percussion_map
+            && let Some((_, _, to_pitch, to_name)) = table
+            && let Some((_, pitch)) = to_pitch.iter().find(|(named, _)| *named == modifier)
+        {
+            self.percussion_pitch = Some(*pitch);
+            if let Some((_, named)) = to_name.iter().find(|(drum, _)| drum == pitch) {
+                modifier = (*named).to_string();
+            }
+        }
+        self.modifier = Some(modifier);
     }
 
     /// Takes a MIDI channel no instrument in `used` has, and returns it:

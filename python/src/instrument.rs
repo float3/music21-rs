@@ -24,6 +24,8 @@ use music21_rs_crate::instrument::{
 use crate::interval::{interval_from_any, interval_object};
 use crate::pitch::{Pitch, pitch_from_any};
 
+pub use crate::instrument_kinds::NAMES;
+
 pyo3::create_exception!(
     music21_rs_facade,
     InstrumentException,
@@ -55,6 +57,18 @@ pub struct Instrument {
 }
 
 impl Instrument {
+    /// music21 defines some members on one family alone, so an instrument
+    /// outside it has no such attribute at all.
+    fn member_of(&self, family: &str, member: &str) -> PyResult<()> {
+        if self.inner.is_a(family) {
+            return Ok(());
+        }
+        Err(pyo3::exceptions::PyAttributeError::new_err(format!(
+            "'{}' object has no attribute '{member}'",
+            self.inner.kind()
+        )))
+    }
+
     /// The initializer every instrument class builds on: an instrument of
     /// `kind`, named `name` where one is given.
     pub(crate) fn initializer(
@@ -255,6 +269,45 @@ impl Instrument {
         self.inner.percussion_pitch()
     }
 
+    /// music21's `stringPitches`, which only its string instruments have.
+    #[getter]
+    fn get_stringPitches(&self) -> PyResult<Vec<Pitch>> {
+        self.member_of("StringInstrument", "stringPitches")?;
+        let pitches = self.inner.string_pitches().ok_or_else(|| {
+            InstrumentException::new_err("cannot get stringPitches for these instruments")
+        })?;
+        Ok(pitches
+            .iter()
+            .map(|pitch| Pitch::wrap(pitch.clone(), false))
+            .collect())
+    }
+
+    /// Takes pitches or their names, as music21's setter does.
+    #[setter]
+    fn set_stringPitches(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        self.member_of("StringInstrument", "stringPitches")?;
+        let mut pitches = Vec::new();
+        for item in value.try_iter()? {
+            pitches.push(pitch_from_any(&item?)?);
+        }
+        self.inner.set_string_pitches(pitches);
+        Ok(())
+    }
+
+    /// music21's `modifier`, which only its unpitched percussion has.
+    #[getter]
+    fn get_modifier(&self) -> PyResult<Option<&str>> {
+        self.member_of("UnpitchedPercussion", "modifier")?;
+        Ok(self.inner.modifier())
+    }
+
+    #[setter]
+    fn set_modifier(&mut self, modifier: &str) -> PyResult<()> {
+        self.member_of("UnpitchedPercussion", "modifier")?;
+        self.inner.set_modifier(modifier);
+        Ok(())
+    }
+
     /// music21's `bestName`: the part's name, the part's abbreviation, the
     /// instrument's name or its abbreviation, the first given.
     fn bestName(&self) -> Option<&str> {
@@ -371,8 +424,19 @@ fn fromString(
 
 /// music21's `instrumentFromMidiProgram`.
 #[pyfunction]
-fn instrumentFromMidiProgram(py: Python<'_>, number: u8) -> PyResult<Py<PyAny>> {
-    let found = RsInstrument::from_midi_program(number).map_err(instrument_error)?;
+fn instrumentFromMidiProgram(py: Python<'_>, number: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
+    // music21 looks the number up and only then asks what it was, so any
+    // integer gets as far as not being found.
+    let Ok(whole) = number.extract::<i64>() else {
+        return Err(pyo3::exceptions::PyTypeError::new_err(format!(
+            "Expected int, got {}",
+            number.get_type().repr()?
+        )));
+    };
+    let program = u8::try_from(whole).map_err(|_| {
+        InstrumentException::new_err(format!("No instrument found for MIDI program {whole}"))
+    })?;
+    let found = RsInstrument::from_midi_program(program).map_err(instrument_error)?;
     Instrument::object(py, found)
 }
 

@@ -6,7 +6,8 @@
 //! recorded in `data/instrument_expectations.toml` by
 //! `cargo run --release -p xtask --features python -- regenerate-fixtures`.
 //! `fromString` is checked behaviourally, on every name in every table and on
-//! the strings its own documentation reads.
+//! the strings its own documentation reads, and so is setting every modifier
+//! a percussion instrument's drum map knows.
 
 use music21_rs::instrument::{Instrument, SearchLanguage};
 use serde::Deserialize;
@@ -37,7 +38,18 @@ struct Kind {
     highest: Option<String>,
     transposition: Option<String>,
     percussion_map: bool,
+    string_pitches: Option<Vec<String>>,
+    modifier: Option<String>,
+    modifiers: Option<Vec<ModifierSet>>,
     all_names: BTreeMap<String, Vec<String>>,
+}
+
+/// A modifier set on a fresh instrument, and what music21 made of it.
+#[derive(Debug, Deserialize)]
+struct ModifierSet {
+    given: String,
+    modifier: String,
+    drum: Option<u8>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -124,6 +136,43 @@ fn every_kind_starts_out_as_music21_s_class_does() {
             "{label}: transposition"
         );
     }
+}
+
+#[test]
+fn every_tuning_and_modifier_is_music21_s() {
+    let expected = expectations();
+    let mut tuned = 0;
+    let mut set = 0;
+    for kind in &expected.instrument {
+        let made = Instrument::of_kind(&kind.class).expect("a kind the crate has");
+        let label = &kind.class;
+        let strings = made.string_pitches().map(|pitches| {
+            pitches
+                .iter()
+                .map(|pitch| pitch.name_with_octave())
+                .collect::<Vec<_>>()
+        });
+        assert_eq!(strings, kind.string_pitches, "{label}: open strings");
+        tuned += usize::from(strings.is_some());
+        assert_eq!(
+            made.modifier(),
+            kind.modifier.as_deref(),
+            "{label}: modifier"
+        );
+        for case in kind.modifiers.iter().flatten() {
+            let mut fresh = made.clone();
+            fresh.set_modifier(&case.given);
+            assert_eq!(
+                (fresh.modifier(), fresh.percussion_pitch()),
+                (Some(case.modifier.as_str()), case.drum),
+                "{label}: modifier {:?}",
+                case.given
+            );
+            set += 1;
+        }
+    }
+    assert_eq!(tuned, 13, "the string instruments music21 tunes");
+    assert!(set > 60, "every modifier every drum map knows is set");
 }
 
 #[test]

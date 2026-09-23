@@ -2,11 +2,11 @@
 
 The stream learns two more things to hold, and with them the last of
 music21's stream walks the crate had left out. Every one of music21's own
-examples now passes in all twenty-two modules under the harness — `sieve`,
-both halves of `meter`, `dynamics` and `scale.scala` included, 787 docstrings
-and 7,317 examples — and 642 of the 689 members the feature map tracks are
-ported, up from 565 of 617. Every one of the 47 that are not has a reason
-written beside it, so the map no longer has an unexplained gap in it.
+examples now passes in all twenty-three modules under the harness — `sieve`,
+both halves of `meter`, `dynamics`, `scale.scala` and `instrument` included,
+802 docstrings and 7,467 examples — and 644 of the 691 members the feature map
+tracks are ported, up from 565 of 617. Every one of the 47 that are not has a
+reason written beside it, so the map no longer has an unexplained gap in it.
 
 music21's instruments and metric modulations are ported, and the wheel
 installs nine more classes over music21's own, with the exceptions they
@@ -130,7 +130,10 @@ kept as music21 keeps it, one scale type where there were two, and no
   instrument is in; `from_midi_program`, `all_names`,
   `auto_assign_midi_channel` and `ensemble_name_by_size` are the rest. Every
   kind, all 128 programs and 2,054 lookups are checked against music21 by
-  `instrument_parity`.
+  `instrument_parity`. `string_pitches` is a string instrument's open strings
+  and `set_modifier` says how unpitched percussion is played, choosing the
+  drum it plays. music21's own `instrument` docstrings run against the crate,
+  as `doctest_instrument`, and all 150 of their examples pass.
 - `tempo::MetricModulation`: a change of tempo written as an equation
   between two metronome marks, with music21's ways of setting one side from
   the other. `update_from` fills in what the marks leave unsaid from the mark

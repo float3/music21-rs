@@ -1562,6 +1562,61 @@ fn write_instruments(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> Py
             "percussion_map = {}",
             made.getattr("inGMPercMap")?.extract::<bool>()?
         );
+        // The open strings a string instrument starts with. The private
+        // attribute, since music21's own property raises for a string
+        // instrument it gives no tuning.
+        if let Ok(tuning) = made.getattr("_stringPitches")
+            && !tuning.is_none()
+        {
+            let mut names = Vec::new();
+            for item in tuning.try_iter()? {
+                names.push(item?.str()?.extract::<String>()?);
+            }
+            let _ = writeln!(out, "string_pitches = {}", toml_list(&names));
+        }
+        // The modifier unpitched percussion starts with, and what setting
+        // each one its drum map knows does -- as written, in capitals and
+        // padded, and one no map knows -- to a fresh instrument of the kind.
+        if let Ok(modifier) = made.getattr("_modifier") {
+            if !modifier.is_none() {
+                let _ = writeln!(
+                    out,
+                    "modifier = {}",
+                    toml_string(&modifier.extract::<String>()?)
+                );
+            }
+            let known: Vec<String> = made
+                .getattr("_modifierToPercMapPitch")?
+                .call_method0("keys")?
+                .try_iter()?
+                .map(|key| key?.extract::<String>())
+                .collect::<PyResult<_>>()?;
+            let mut given: Vec<String> = Vec::new();
+            for key in &known {
+                given.push(key.clone());
+                given.push(key.to_uppercase());
+                given.push(format!(" {key} "));
+            }
+            given.push("unheard of".to_string());
+            let mut set = Vec::new();
+            for written in given {
+                let fresh = class.call0()?;
+                fresh.setattr("modifier", &written)?;
+                let modifier: String = fresh.getattr("modifier")?.extract()?;
+                let drum = fresh.getattr("percMapPitch")?;
+                let drum = if drum.is_none() {
+                    String::new()
+                } else {
+                    format!(", drum = {}", drum.extract::<i64>()?)
+                };
+                set.push(format!(
+                    "{{ given = {}, modifier = {}{drum} }}",
+                    toml_string(&written),
+                    toml_string(&modifier)
+                ));
+            }
+            let _ = writeln!(out, "modifiers = [{}]", set.join(", "));
+        }
         // What `getAllNamesForInstrument` answers, language by language.
         let all_names = instrument.call_method1("getAllNamesForInstrument", (&made,))?;
         let _ = writeln!(out, "[instrument.all_names]");

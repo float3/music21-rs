@@ -4138,3 +4138,103 @@ pub(super) static ENSEMBLE_NAMES: [&str; 101] = [
     "novemnonagetet",
     "centet",
 ];
+
+/// The open strings of each string instrument music21 tunes, lowest first
+/// except where a reentrant tuning says otherwise: music21's `_stringPitches`.
+pub(super) static STRING_PITCHES: [(&str, &[&str]); 13] = [
+    ("AcousticBass", &["E1", "A1", "D2", "G2"]),
+    ("AcousticGuitar", &["E2", "A2", "D3", "G3", "B3", "E4"]),
+    ("Banjo", &["C3", "G3", "D4", "A4"]),
+    ("Contrabass", &["E1", "A1", "D2", "G2"]),
+    ("ElectricBass", &["E1", "A1", "D2", "G2"]),
+    ("ElectricGuitar", &["E2", "A2", "D3", "G3", "B3", "E4"]),
+    ("FretlessBass", &["E1", "A1", "D2", "G2"]),
+    ("Guitar", &["E2", "A2", "D3", "G3", "B3", "E4"]),
+    ("Mandolin", &["G3", "D4", "A4", "E5"]),
+    ("Ukulele", &["G4", "C4", "E4", "A4"]),
+    ("Viola", &["C3", "G3", "D4", "A4"]),
+    ("Violin", &["G3", "D4", "A4", "E5"]),
+    ("Violoncello", &["C2", "G2", "D3", "A3"]),
+];
+
+/// Each unpitched percussion instrument with modifiers: the one it starts
+/// with, the drum each modifier plays, and the name each drum is written
+/// back as. music21's `_modifier`, `_modifierToPercMapPitch` and
+/// `_percMapPitchToModifier`.
+#[allow(clippy::type_complexity)]
+pub(super) static MODIFIERS: [(&str, &str, &[(&str, u8)], &[(u8, &str)]); 10] = [
+    (
+        "BassDrum",
+        "acoustic",
+        &[("1", 36), ("acoustic", 35)],
+        &[(35, "acoustic"), (36, "1")],
+    ),
+    (
+        "BongoDrums",
+        "high",
+        &[("high", 60), ("low", 61)],
+        &[(60, "high"), (61, "low")],
+    ),
+    (
+        "CongaDrum",
+        "low",
+        &[("low", 64), ("mute high", 62), ("open high", 63)],
+        &[(62, "mute high"), (63, "open high"), (64, "low")],
+    ),
+    (
+        "CrashCymbals",
+        "1",
+        &[("1", 49), ("2", 57)],
+        &[(49, "1"), (57, "2")],
+    ),
+    (
+        "HiHatCymbal",
+        "pedal",
+        &[("closed", 42), ("open", 46), ("pedal", 44)],
+        &[(42, "closed"), (44, "pedal"), (46, "open")],
+    ),
+    (
+        "SnareDrum",
+        "acoustic",
+        &[("acoustic", 38), ("electric", 40), ("side", 37)],
+        &[(37, "side"), (38, "acoustic"), (40, "electric")],
+    ),
+    (
+        "Timbales",
+        "high",
+        &[("high", 65), ("low", 66)],
+        &[(65, "high"), (66, "low")],
+    ),
+    (
+        "TomTom",
+        "low floor",
+        &[
+            ("high", 50),
+            ("high floor", 43),
+            ("high-mid", 48),
+            ("low", 45),
+            ("low floor", 41),
+            ("low-mid", 47),
+        ],
+        &[
+            (41, "low floor"),
+            (43, "high floor"),
+            (45, "low"),
+            (47, "low-mid"),
+            (48, "high-mid"),
+            (50, "high"),
+        ],
+    ),
+    (
+        "Triangle",
+        "open",
+        &[("mute", 80), ("open", 81)],
+        &[(80, "mute"), (81, "open")],
+    ),
+    (
+        "Woodblock",
+        "high",
+        &[("hi", 76), ("high", 76), ("lo", 77), ("low", 77)],
+        &[(76, "high"), (77, "low")],
+    ),
+];

@@ -41,6 +41,18 @@ macro_rules! kinds {
             $(m.add_class::<$class>()?;)*
             Ok(())
         }
+
+        /// The names this facade replaces in `music21.instrument`: the
+        /// base class, its exception, the four functions and every kind.
+        pub const NAMES: &[&str] = &[
+            "Instrument",
+            "InstrumentException",
+            "fromString",
+            "instrumentFromMidiProgram",
+            "getAllNamesForInstrument",
+            "ensembleNameBySize",
+            $($name),*
+        ];
     };
 }
 
