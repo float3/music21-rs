@@ -60,13 +60,13 @@ MusicXML.
 
 - 95% of the public methods of the ported music21 classes are reachable from
   this wheel.
-- 17 of the 19 music21 modules whose doctests run against the port pass all
-  of them: `pitch`, `interval`, `chord`, `chord.tables`, `note`, `duration`,
-  `key`, `scale`, `roman`, `harmony`, `serial`, `beam`, `tie`, `volume`,
-  `figuredBass.notation`, `tempo` and `voiceLeading`. `sieve` and
-  `meter.base` are partial and are not installed over music21's.
+- All 22 music21 modules whose doctests run against the port pass every
+  example, 7,317 of them: `pitch`, `interval`, `chord`, `chord.tables`,
+  `note`, `duration`, `key`, `scale`, `scale.scala`, `roman`, `harmony`,
+  `serial`, `sieve`, `meter.base`, `meter.core`, `beam`, `tie`, `volume`,
+  `dynamics`, `figuredBass.notation`, `tempo` and `voiceLeading`.
 - music21's own test suite gives the same results with this wheel installed
-  over music21 as with music21 alone, apart from two documented differences.
+  over music21 as with music21 alone.
 - [harte-library](https://github.com/andreamust/harte-library), a third-party
   chord parser built on music21, gives identical results for its 8,116 tests
   on both.
