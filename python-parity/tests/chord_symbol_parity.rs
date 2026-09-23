@@ -64,7 +64,11 @@ fn every_chord_symbol_figure_realizes_as_music21_realizes_it() {
             (Ok(built), None) => built,
         };
         // The pitches in the order music21 sounds them, octaves and all.
-        let got_names: Vec<String> = chord.pitches().iter().map(Pitch::name_with_octave).collect();
+        let got_names: Vec<String> = chord
+            .pitches()
+            .iter()
+            .map(Pitch::name_with_octave)
+            .collect();
         let want_names: Vec<String> = case.pitches.clone();
         // The kind is left out: music21 reads `m7b5` as a minor seventh with
         // a lowered fifth and the crate as a half-diminished seventh, and the

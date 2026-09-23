@@ -293,7 +293,12 @@ pub fn run(
     for (which, report) in &sides {
         println!();
         println!("== {} against music21 ==", which.label());
-        code = code.max(compare(&plain, report, only.is_none())?);
+        code = code.max(compare(
+            &plain,
+            report,
+            only.is_none(),
+            EXPECTED_DIVERGENCES,
+        )?);
     }
     if sides.is_empty() {
         eprintln!("nothing to compare music21 against: no side but music21 ran");
@@ -867,16 +872,18 @@ fn report_timings(timings: &Timings) {
     }
 }
 
-/// What fails under `music21_rs` and not under music21.
-fn compare(plain: &Report, ours: &Report, whole: bool) -> Result<i32, Box<dyn Error>> {
+/// What fails under `music21_rs` and not under music21, with the
+/// divergences `listed` as expected excused.
+fn compare(
+    plain: &Report,
+    ours: &Report,
+    whole: bool,
+    listed: &[(&str, &str)],
+) -> Result<i32, Box<dyn Error>> {
     let theirs = plain.bad();
     let mine = ours.bad();
     let divergent: Vec<&str> = mine.difference(&theirs).copied().collect();
-    let excused = |name: &str| {
-        EXPECTED_DIVERGENCES
-            .iter()
-            .find(|(listed, _)| *listed == name)
-    };
+    let excused = |name: &str| listed.iter().find(|(listed, _)| *listed == name);
     let new: Vec<&str> = divergent
         .iter()
         .copied()
@@ -911,7 +918,7 @@ fn compare(plain: &Report, ours: &Report, whole: bool) -> Result<i32, Box<dyn Er
     // quietly grows stale and starts hiding real regressions. Only a whole run
     // can say that: a run filtered by `--only` never reaches most of these, so
     // asking it would report every divergence outside the filter as fixed.
-    let stale: Vec<&str> = EXPECTED_DIVERGENCES
+    let stale: Vec<&str> = listed
         .iter()
         .map(|(name, _)| *name)
         .filter(|name| !mine.contains(name))
@@ -961,37 +968,35 @@ mod tests {
         }
     }
 
+    /// A divergence listed as expected, for the tests to excuse.
+    const LISTED: &[(&str, &str)] = &[("listed", "why it is expected")];
+
     #[test]
     fn a_side_that_matches_music21_passes() {
         let plain = report(10, &["a"], &["b"]);
         let ours = report(10, &["a"], &["b"]);
-        // Nothing new is red, but both listed divergences have stopped
-        // failing, which is itself reported.
-        assert_eq!(compare(&plain, &ours, true).expect("compared"), 1);
+        assert_eq!(compare(&plain, &ours, true, &[]).expect("compared"), 0);
+        // Nothing new is red, but the listed divergence has stopped failing,
+        // which is itself reported.
+        assert_eq!(compare(&plain, &ours, true, LISTED).expect("compared"), 1);
         // A filtered run cannot see the listed divergences, so it is not
         // asked whether they have gone.
-        assert_eq!(compare(&plain, &ours, false).expect("compared"), 0);
+        assert_eq!(compare(&plain, &ours, false, LISTED).expect("compared"), 0);
     }
 
     #[test]
     fn a_new_failure_is_a_regression() {
-        let mut ours = report(10, &["a", "brand new"], &[]);
-        // The listed divergences are present, so only the new one counts.
-        for (name, _) in EXPECTED_DIVERGENCES {
-            ours.failures.push((*name).to_string());
-        }
+        let ours = report(10, &["a", "brand new", "listed"], &[]);
         let plain = report(10, &["a"], &[]);
-        assert_eq!(compare(&plain, &ours, true).expect("compared"), 1);
+        // The listed divergence is present, so only the new one counts.
+        assert_eq!(compare(&plain, &ours, true, LISTED).expect("compared"), 1);
     }
 
     #[test]
     fn the_known_divergences_are_excused() {
-        let mut ours = report(10, &["a"], &[]);
-        for (name, _) in EXPECTED_DIVERGENCES {
-            ours.failures.push((*name).to_string());
-        }
+        let ours = report(10, &["a", "listed"], &[]);
         let plain = report(10, &["a"], &[]);
-        assert_eq!(compare(&plain, &ours, true).expect("compared"), 0);
+        assert_eq!(compare(&plain, &ours, true, LISTED).expect("compared"), 0);
     }
 
     #[test]

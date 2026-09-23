@@ -63,7 +63,11 @@ fn expectations() -> Expectations {
 fn every_kind_starts_out_as_music21_s_class_does() {
     let expected = expectations();
     let ours: Vec<&str> = Instrument::kinds().collect();
-    let theirs: Vec<&str> = expected.instrument.iter().map(|kind| kind.class.as_str()).collect();
+    let theirs: Vec<&str> = expected
+        .instrument
+        .iter()
+        .map(|kind| kind.class.as_str())
+        .collect();
     assert_eq!(ours, theirs, "the kinds, in order");
 
     for kind in &expected.instrument {
@@ -72,13 +76,37 @@ fn every_kind_starts_out_as_music21_s_class_does() {
         let families: Vec<&str> = made.families().to_vec();
         assert_eq!(families, kind.parents, "{label}: families");
         assert_eq!(made.name(), kind.name.as_deref(), "{label}: name");
-        assert_eq!(made.abbreviation(), kind.abbreviation.as_deref(), "{label}: abbreviation");
+        assert_eq!(
+            made.abbreviation(),
+            kind.abbreviation.as_deref(),
+            "{label}: abbreviation"
+        );
         assert_eq!(made.sound(), kind.sound.as_deref(), "{label}: sound");
-        assert_eq!(made.best_name(), kind.best_name.as_deref(), "{label}: best name");
-        assert_eq!(made.midi_program(), kind.midi_program, "{label}: MIDI program");
-        assert_eq!(made.midi_channel(), kind.midi_channel, "{label}: MIDI channel");
-        assert_eq!(made.percussion_pitch(), kind.percussion_pitch, "{label}: drum");
-        assert_eq!(made.in_percussion_map(), kind.percussion_map, "{label}: percussion map");
+        assert_eq!(
+            made.best_name(),
+            kind.best_name.as_deref(),
+            "{label}: best name"
+        );
+        assert_eq!(
+            made.midi_program(),
+            kind.midi_program,
+            "{label}: MIDI program"
+        );
+        assert_eq!(
+            made.midi_channel(),
+            kind.midi_channel,
+            "{label}: MIDI channel"
+        );
+        assert_eq!(
+            made.percussion_pitch(),
+            kind.percussion_pitch,
+            "{label}: drum"
+        );
+        assert_eq!(
+            made.in_percussion_map(),
+            kind.percussion_map,
+            "{label}: percussion map"
+        );
         assert_eq!(
             made.lowest().map(|pitch| pitch.name_with_octave()),
             kind.lowest,
@@ -90,7 +118,8 @@ fn every_kind_starts_out_as_music21_s_class_does() {
             "{label}: highest"
         );
         assert_eq!(
-            made.transposition().map(|interval| interval.directed_name()),
+            made.transposition()
+                .map(|interval| interval.directed_name()),
             kind.transposition,
             "{label}: transposition"
         );
@@ -113,7 +142,10 @@ fn every_midi_program_makes_music21_s_instrument() {
 #[test]
 fn every_name_is_found_as_fromstring_finds_it() {
     let expected = expectations();
-    assert!(expected.lookup.len() > 1000, "every name in every table is asked");
+    assert!(
+        expected.lookup.len() > 1000,
+        "every name in every table is asked"
+    );
     let mut wrong = Vec::new();
     for lookup in &expected.lookup {
         let language = SearchLanguage::from_name(&lookup.language).expect("a language");
@@ -121,7 +153,8 @@ fn every_name_is_found_as_fromstring_finds_it() {
         let (class, transposition) = match &ours {
             Ok(made) => (
                 Some(made.kind().to_string()),
-                made.transposition().map(|interval| interval.directed_name()),
+                made.transposition()
+                    .map(|interval| interval.directed_name()),
             ),
             Err(_) => (None, None),
         };
@@ -142,7 +175,12 @@ fn every_name_is_found_as_fromstring_finds_it() {
             ));
         }
     }
-    assert!(wrong.is_empty(), "{} lookups differ:\n  {}", wrong.len(), wrong.join("\n  "));
+    assert!(
+        wrong.is_empty(),
+        "{} lookups differ:\n  {}",
+        wrong.len(),
+        wrong.join("\n  ")
+    );
 }
 
 #[test]
