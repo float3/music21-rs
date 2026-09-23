@@ -895,9 +895,15 @@ def wants_installing(facade, original):
     """Whether this pair is one to build an installed class for.
 
     Everything music21 has a class for is, except a Stream: a stream is a
-    container rather than an element, and none of these are one.
+    container rather than an element, and none of these are one -- and an
+    exception, which is installed as the facade's own class. The facade
+    raises that class, and music21 catches whatever its names now hold, so
+    the two have to be one class: a subclass built over both would be what
+    `except meter.MeterException` looked for, and never what was raised.
     """
     if not isinstance(facade, type) or not isinstance(original, type):
+        return False
+    if issubclass(original, BaseException):
         return False
     return not getattr(original, 'isStream', False)
 "#;
