@@ -52,6 +52,12 @@ pub(crate) use suites::python_command;
 /// would have the page disagreeing with the command it names.
 pub(crate) const EXPECTED_DIVERGENCES: &[(&str, &str)] = &[];
 
+/// The toolchain every suite is built with when coverage is measured.
+/// cargo-llvm-cov's `--doctests` is what lets the rustdoc examples write
+/// profiles at all, and it needs nightly rustdoc; the rest of the repository
+/// stays on the stable `rust-toolchain.toml` pins.
+const COVERAGE_TOOLCHAIN: &str = "nightly";
+
 const COVERAGE_IGNORE: &str =
     r"generated\.rs|scala_bundled\.rs|[\\/](xtask|utils|examples|python-parity|python)[\\/]";
 

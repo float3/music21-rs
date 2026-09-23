@@ -15,6 +15,11 @@ use super::*;
 /// `CARGO_TARGET_DIR` is added to it: `python-parity` is outside the
 /// workspace and would otherwise build into its own target directory, where
 /// the report step could not find its binaries to map the profiles onto.
+///
+/// So is `RUSTUP_TOOLCHAIN`, naming [`COVERAGE_TOOLCHAIN`]: the rustdoc
+/// examples only write profiles under cargo-llvm-cov's `--doctests`, which
+/// needs nightly rustdoc, and every suite has to be built by the compiler
+/// whose instrumentation the report step reads back.
 pub(super) fn start_coverage(
     workspace_root: &Path,
 ) -> Result<Vec<(String, String)>, Box<dyn Error>> {
@@ -43,8 +48,9 @@ pub(super) fn start_coverage(
         }
     }
 
+    let toolchain = format!("+{COVERAGE_TOOLCHAIN}");
     let cleaned = Command::new("cargo")
-        .args(["llvm-cov", "clean", "--workspace"])
+        .args([toolchain.as_str(), "llvm-cov", "clean", "--workspace"])
         .current_dir(workspace_root)
         .status()
         .map_err(|err| {
@@ -55,14 +61,17 @@ pub(super) fn start_coverage(
     }
 
     let output = Command::new("cargo")
-        .args(["llvm-cov", "show-env"])
+        .args([toolchain.as_str(), "llvm-cov", "show-env", "--doctests"])
         .current_dir(workspace_root)
         .output()
         .map_err(|err| {
             format!("could not run cargo llvm-cov ({err}); is cargo-llvm-cov installed?")
         })?;
     if !output.status.success() {
-        return Err("cargo llvm-cov show-env failed".into());
+        return Err(format!(
+            "cargo llvm-cov show-env failed; is the {COVERAGE_TOOLCHAIN} toolchain installed, with llvm-tools?"
+        )
+        .into());
     }
 
     let mut env: Vec<(String, String)> = String::from_utf8_lossy(&output.stdout)
@@ -82,9 +91,38 @@ pub(super) fn start_coverage(
         .iter()
         .find(|(key, _)| key == "CARGO_LLVM_COV_BUILD_DIR" || key == "CARGO_LLVM_COV_TARGET_DIR")
         .map(|(_, value)| value.clone());
-    if let Some(dir) = build_dir {
-        env.push(("CARGO_TARGET_DIR".to_string(), dir));
+    if let Some(dir) = &build_dir {
+        env.push(("CARGO_TARGET_DIR".to_string(), dir.clone()));
     }
+
+    // `clean` leaves the profiles themselves where `show-env` points them, so
+    // a run would merge whatever every earlier run wrote -- and a profile
+    // written by another toolchain's LLVM stops the merge outright. They are
+    // cleared here, with the doctest binaries `--doctests` keeps beside them.
+    let profiles = env
+        .iter()
+        .find(|(key, _)| key == "LLVM_PROFILE_FILE")
+        .and_then(|(_, value)| Path::new(value).parent().map(Path::to_path_buf));
+    if let Some(dir) = profiles
+        && let Ok(entries) = fs::read_dir(&dir)
+    {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path
+                .extension()
+                .is_some_and(|ext| ext == "profraw" || ext == "profdata")
+            {
+                let _ = fs::remove_file(path);
+            }
+        }
+    }
+    if let Some(dir) = &build_dir {
+        let _ = fs::remove_dir_all(Path::new(dir).join("doctestbins"));
+    }
+    env.push((
+        "RUSTUP_TOOLCHAIN".to_string(),
+        COVERAGE_TOOLCHAIN.to_string(),
+    ));
     Ok(env)
 }
 
@@ -99,6 +137,7 @@ pub(super) fn collect_coverage(
     let common = [
         "llvm-cov",
         "report",
+        "--doctests",
         "--ignore-filename-regex",
         COVERAGE_IGNORE,
     ];
@@ -161,24 +200,11 @@ pub(super) fn run_suites(workspace_root: &Path, env: &[(String, String)]) -> Vec
             env,
         ),
         // `--all-targets` does not include doctests, so without this the
-        // crate's own rustdoc examples are never run here at all. They do
-        // not reach the *coverage* figure even so: rustdoc compiles a
-        // doctest itself and never sees `RUSTC_WRAPPER`, and folding them in
-        // properly needs cargo-llvm-cov's `--doctests`.
-        //
-        // **Turn that on the day it lands on stable**, and drop this note.
-        // The whole of `start_coverage` would move to nightly otherwise, for
-        // a flag its own help calls unstable, and that is the only reason it
-        // is not on already.
-        //
-        // It is worth having but not worth chasing, which was measured rather
-        // than assumed. `cargo +nightly llvm-cov --doctests -p music21-rs
-        // --all-features` runs clean today and does move the figure, by
-        // 8 lines and 3 functions out of 41,221 and 3,150 — 89.81% to 89.83%.
-        // Small because 521 unit tests already cover what 16 rustdoc examples
-        // illustrate. Re-measure before deciding it is worth a toolchain
-        // change; if the example count ever catches up with the test count,
-        // the answer changes.
+        // crate's own rustdoc examples are never run here at all. They reach
+        // the coverage figure through `--doctests` (see `start_coverage`).
+        // Measured on top of the workspace and parity suites, they add 7
+        // lines, 1 function and 8 regions -- 96.054% of lines to 96.075% --
+        // since the parity suite already drives most of what they show.
         cargo_suite(
             workspace_root,
             "Workspace doctests",

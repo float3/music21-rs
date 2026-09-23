@@ -475,11 +475,16 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      # `doc_cfg` is a nightly rustdoc feature, so the documentation build --
-      # and only that -- runs on nightly. rust-toolchain.toml pins every other
-      # command in this job to stable.
+      # Two things in this job run on nightly, and only these two: the
+      # documentation build, since `doc_cfg` is a nightly rustdoc feature, and
+      # the report's coverage run, since cargo-llvm-cov's `--doctests` is what
+      # lets the rustdoc examples write profiles and it needs nightly rustdoc.
+      # The coverage run reads its profiles with nightly's llvm-tools.
+      # rust-toolchain.toml pins every other command in this job to stable.
       - name: Install nightly rustdoc
         uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: llvm-tools-preview
 
       - name: Install Linux audio dependencies
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev pkg-config
