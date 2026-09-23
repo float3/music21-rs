@@ -381,10 +381,6 @@ facade = "Note"
 rust = ["src/note/mod.rs", "src/notation.rs", "src/volume.rs"]
 note = "A note or chord as distinct from a rest: what it is written as, which way its stem goes, and how loud it sounds."
 
-[class.excluded]
-storedInstrument = "the crate models no instruments"
-getInstrument = "the crate models no instruments"
-
 [[class]]
 python = "note.py"
 name = "Lyric"

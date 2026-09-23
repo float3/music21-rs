@@ -455,10 +455,7 @@ impl Chord {
             return "unknown chord".to_string();
         };
 
-        let relevant_interval = Interval::between(
-            PitchOrNote::Pitch(p0.clone()),
-            PitchOrNote::Pitch(p1.clone()),
-        );
+        let relevant_interval = Interval::between(p0.clone(), p1.clone());
 
         if pitch_names.len() > 2 {
             let Ok(interval) = relevant_interval else {
@@ -548,12 +545,9 @@ impl Chord {
     }
 
     pub(super) fn interval_nice_name(start: &Pitch, end: &Pitch) -> Option<String> {
-        Interval::between(
-            PitchOrNote::Pitch(start.clone()),
-            PitchOrNote::Pitch(end.clone()),
-        )
-        .ok()
-        .map(|interval| interval.nice_name())
+        Interval::between(start.clone(), end.clone())
+            .ok()
+            .map(|interval| interval.nice_name())
     }
 
     pub(super) fn display_pitch_name(pitch: &Pitch) -> String {

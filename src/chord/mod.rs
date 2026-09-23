@@ -8,7 +8,7 @@ use crate::defaults::{FloatType, IntegerType, UnsignedIntegerType};
 use crate::duration::Duration;
 use crate::error::Error;
 use crate::error::Result;
-use crate::interval::{Interval, PitchOrNote};
+use crate::interval::Interval;
 use crate::key::Key;
 use crate::key::keysignature::KeySignature;
 use crate::notation::{Beams, Lyric, Notehead, StemDirection, Tie};
@@ -69,6 +69,10 @@ pub struct Chord {
     /// The beams joining the chord's flags to its neighbours'.
     #[cfg_attr(feature = "serde", serde(default))]
     beams: Beams,
+    /// The instrument the chord is played on, over whichever is in force;
+    /// boxed, since an instrument is large and most chords carry none.
+    #[cfg_attr(feature = "serde", serde(default))]
+    stored_instrument: Option<Box<crate::instrument::Instrument>>,
     #[cfg_attr(feature = "serde", serde(skip))]
     from_integer_pitches: bool,
     /// A root the caller decided on, which wins over the one the pitches
@@ -208,6 +212,7 @@ impl Chord {
             notehead_parenthesis: false,
             stem_direction: StemDirection::default(),
             beams: Beams::default(),
+            stored_instrument: None,
             root_override: None,
             bass_override: None,
         })
@@ -226,6 +231,7 @@ impl Chord {
             notehead_parenthesis: false,
             stem_direction: StemDirection::default(),
             beams: Beams::default(),
+            stored_instrument: None,
             root_override: None,
             bass_override: None,
         }

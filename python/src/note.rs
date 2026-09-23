@@ -1615,10 +1615,11 @@ impl Note {
     }
 
     #[setter]
-    fn set_storedInstrument(&mut self, value: Option<&Bound<'_, PyAny>>) {
-        self.stored_instrument = value
-            .filter(|value| !value.is_none())
-            .map(|value| value.clone().unbind());
+    fn set_storedInstrument(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        let (object, value) = crate::instrument::stored_instrument(value)?;
+        self.stored_instrument = object;
+        self.inner.set_stored_instrument(value);
+        Ok(())
     }
 
     /// music21's `NotRest.getInstrument`.

@@ -1,6 +1,7 @@
 use crate::defaults::{FloatType, IntegerType};
 use crate::duration::Duration;
 use crate::error::Result;
+use crate::instrument::Instrument;
 use crate::interval::Interval;
 use crate::notation::{Beams, Lyric, Notehead, StemDirection, Tie, verses};
 use crate::pitch::Pitch;
@@ -34,6 +35,8 @@ struct Notation {
     volume: Option<Volume>,
     lyrics: Vec<Lyric>,
     beams: Beams,
+    /// Boxed: an instrument is large and most notes carry none.
+    stored_instrument: Option<Box<Instrument>>,
 }
 
 impl Note {
@@ -220,6 +223,24 @@ impl Note {
         self.notation.volume = volume;
     }
 
+    /// The instrument this one note is played on, over whichever is in force
+    /// where it stands: music21's `storedInstrument`.
+    pub fn stored_instrument(&self) -> Option<&Instrument> {
+        self.notation.stored_instrument.as_deref()
+    }
+
+    /// Sets the instrument this one note is played on, or clears it.
+    pub fn set_stored_instrument(&mut self, instrument: Option<Instrument>) {
+        self.notation.stored_instrument = instrument.map(Box::new);
+    }
+
+    /// The instrument that plays this note, as far as the note itself can
+    /// say: music21's `getInstrument`, whose search of the streams around a
+    /// note is a question for whoever holds the stream.
+    pub fn instrument(&self) -> Option<&Instrument> {
+        self.stored_instrument()
+    }
+
     /// Whether a volume was ever set on this note: music21's
     /// `hasVolumeInformation`, which asks only whether the object is there
     /// and not whether a velocity was written on it, so a bare
@@ -394,6 +415,18 @@ impl IntoNote for IntegerType {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_note_keeps_the_instrument_it_is_played_on() {
+        let mut note = super::Note::from_name("C4").unwrap();
+        assert!(note.instrument().is_none());
+        let piccolo = crate::Instrument::of_kind("Piccolo").unwrap();
+        note.set_stored_instrument(Some(piccolo.clone()));
+        assert_eq!(note.stored_instrument(), Some(&piccolo));
+        assert_eq!(note.instrument(), Some(&piccolo));
+        note.set_stored_instrument(None);
+        assert!(note.instrument().is_none());
+    }
+
     #[test]
     fn a_note_is_built_from_a_name_or_a_pitch_and_carries_beams_and_lyrics() {
         use super::Note;

@@ -39,6 +39,24 @@ impl Chord {
         Volume::from_velocity(mean.round_ties_even() as IntegerType)
     }
 
+    /// The instrument this chord is played on, over whichever is in force
+    /// where it stands: music21's `storedInstrument`.
+    pub fn stored_instrument(&self) -> Option<&crate::instrument::Instrument> {
+        self.stored_instrument.as_deref()
+    }
+
+    /// Sets the instrument this chord is played on, or clears it.
+    pub fn set_stored_instrument(&mut self, instrument: Option<crate::instrument::Instrument>) {
+        self.stored_instrument = instrument.map(Box::new);
+    }
+
+    /// The instrument that plays this chord, as far as the chord itself can
+    /// say: music21's `getInstrument`, whose search of the streams around it
+    /// is a question for whoever holds the stream.
+    pub fn instrument(&self) -> Option<&crate::instrument::Instrument> {
+        self.stored_instrument()
+    }
+
     /// Sets the chord's own volume, which drops any the notes carried.
     pub fn set_volume(&mut self, volume: Option<Volume>) {
         for note in &mut self.notes {

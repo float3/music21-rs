@@ -413,10 +413,7 @@ pub(super) fn weighted_dissonance_score(
             for p2 in pitches.iter().skip(index + 1) {
                 let mut p2 = (*p2).clone();
                 p2.octave_setter(None);
-                let Ok(interval) = Interval::between(
-                    PitchOrNote::Pitch(p1.clone()),
-                    PitchOrNote::Pitch(p2.clone()),
-                ) else {
+                let Ok(interval) = Interval::between(p1.clone(), p2.clone()) else {
                     return Ok(FloatType::INFINITY);
                 };
                 intervals.push(interval);

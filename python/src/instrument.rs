@@ -422,6 +422,31 @@ fn fromString(
     Instrument::object(py, found)
 }
 
+/// What a note's `storedInstrument` setter takes: nothing, or an instrument,
+/// kept as the object it is, with the crate's value where the object is one
+/// of ours. Anything else is music21's `TypeError`.
+pub(crate) fn stored_instrument(
+    value: Option<&Bound<'_, PyAny>>,
+) -> PyResult<(Option<Py<PyAny>>, Option<RsInstrument>)> {
+    let Some(value) = value.filter(|value| !value.is_none()) else {
+        return Ok((None, None));
+    };
+    if let Ok(ours) = value.extract::<PyRef<'_, Instrument>>() {
+        return Ok((Some(value.clone().unbind()), Some(ours.inner.clone())));
+    }
+    let named = value
+        .getattr("classSet")
+        .and_then(|classes| classes.contains("music21.instrument.Instrument"))
+        .unwrap_or(false);
+    if !named {
+        return Err(pyo3::exceptions::PyTypeError::new_err(format!(
+            "Expected Instrument; got {}",
+            value.get_type().repr()?
+        )));
+    }
+    Ok((Some(value.clone().unbind()), None))
+}
+
 /// music21's `instrumentFromMidiProgram`.
 #[pyfunction]
 fn instrumentFromMidiProgram(py: Python<'_>, number: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {

@@ -76,19 +76,7 @@ impl PartialEq for Interval {
     }
 }
 
-pub(crate) enum PitchOrNote {
-    Pitch(Pitch),
-    Note(Note),
-}
-
 use constants::{PERFECT_FIFTH_DOWN, PERFECT_FIFTH_UP};
-
-fn extract_pitch(arg: PitchOrNote) -> Pitch {
-    match arg {
-        PitchOrNote::Pitch(pitch) => pitch,
-        PitchOrNote::Note(note) => note.pitch,
-    }
-}
 
 fn strip_direction_word(value: &str, word: &str) -> (String, bool) {
     replace_case_insensitive(value, word, "", false, true)
@@ -396,9 +384,7 @@ pub fn parse_specifier(value: &str) -> Result<Specifier> {
 }
 
 impl Interval {
-    pub(crate) fn between(start: PitchOrNote, end: PitchOrNote) -> Result<Self> {
-        let start_pitch = extract_pitch(start);
-        let end_pitch = extract_pitch(end);
+    pub(crate) fn between(start_pitch: Pitch, end_pitch: Pitch) -> Result<Self> {
         let generic = notes_to_generic(&start_pitch, &end_pitch)?;
         let chromatic = notes_to_chromatic(&start_pitch, &end_pitch)?;
         let diatonic = intervals_to_diatonic(&generic, &chromatic)?;
@@ -527,18 +513,12 @@ impl Interval {
 
     /// Returns the directed interval from `start` to `end`.
     pub fn between_pitches(start: &Pitch, end: &Pitch) -> Result<Self> {
-        Self::between(
-            PitchOrNote::Pitch(start.clone()),
-            PitchOrNote::Pitch(end.clone()),
-        )
+        Self::between(start.clone(), end.clone())
     }
 
     /// Returns the directed interval from `start` to `end`.
     pub fn between_notes(start: &Note, end: &Note) -> Result<Self> {
-        Self::between(
-            PitchOrNote::Note(start.clone()),
-            PitchOrNote::Note(end.clone()),
-        )
+        Self::between(start.pitch.clone(), end.pitch.clone())
     }
 
     /// Returns the directed chromatic size in semitones, fractional for a
@@ -1142,10 +1122,7 @@ fn parse_interval_name(name: &str) -> Result<(DiatonicInterval, ChromaticInterva
 impl Interval {
     fn reverse(&self) -> Result<Self> {
         if let (Some(start), Some(end)) = (&self.pitch_start, &self.pitch_end) {
-            Interval::between(
-                PitchOrNote::Pitch(end.clone()),
-                PitchOrNote::Pitch(start.clone()),
-            )
+            Interval::between(end.clone(), start.clone())
         } else {
             Interval::from_diatonic_and_chromatic(self.diatonic.reverse(), self.chromatic.reverse())
         }
@@ -1674,7 +1651,7 @@ mod tests {
     fn interval_between_pitches() {
         let c4 = pitch("C4");
         let g4 = pitch("G4");
-        let interval = Interval::between(PitchOrNote::Pitch(c4), PitchOrNote::Pitch(g4)).unwrap();
+        let interval = Interval::between(c4, g4).unwrap();
         assert_eq!(interval.chromatic.semitones, 7.0);
         assert_eq!(interval.generic().staff_distance(), 4);
     }

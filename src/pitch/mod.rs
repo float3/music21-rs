@@ -23,7 +23,6 @@ use crate::defaults::UnsignedIntegerType;
 use crate::error::Error;
 use crate::error::Result;
 use crate::interval::Interval;
-use crate::interval::PitchOrNote;
 use crate::key::keysignature::KeySignature;
 use crate::stepname::StepName;
 use crate::tuningsystem::TuningSystem;
