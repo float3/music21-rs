@@ -175,8 +175,21 @@ Fixes found while porting went upstream:
 - [cuthbertLab/music21#2027](https://github.com/cuthbertLab/music21/pull/2027):
   `removeRedundantPitches` confusing a flat with a negative octave.
 - [cuthbertLab/music21#2028](https://github.com/cuthbertLab/music21/pull/2028):
-  `getPitchFromNodeDegree` handing back a pitch owned by the scale's cache
+  `getPitchFromNodeDegree` handing back a pitch owned by the scale's cache.
+- [cuthbertLab/music21#2038](https://github.com/cuthbertLab/music21/pull/2038):
+  `OctaveRepeatingScale` appending to the list of steps it was given (open).
+- [cuthbertLab/music21#2043](https://github.com/cuthbertLab/music21/pull/2043):
+  a descending realization checking its range against the unaltered pitch
   (open).
+- [cuthbertLab/music21#2044](https://github.com/cuthbertLab/music21/pull/2044):
+  `derive` leaving out a scale's altered degrees, so a harmonic minor derived
+  as a natural minor (open).
+- [cuthbertLab/music21#2045](https://github.com/cuthbertLab/music21/pull/2045):
+  an octave-repeating scale wider than an octave starting an octave off its
+  tonic (open).
+- [cuthbertLab/music21#2046](https://github.com/cuthbertLab/music21/pull/2046):
+  timespan offsets added as floats, which gave a voice-leading quartet that is
+  not in the music (open).
 - [PLAINSOUND/hexatone#3](https://github.com/PLAINSOUND/hexatone/pull/3):
   Scala headers in five Hexatone scale files (open).
 - Corrections to the Xenharmonic Wiki's temperament pages, found while
