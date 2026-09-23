@@ -834,6 +834,24 @@ def make_class(facade, original):
             return (type.__subclasscheck__(cls, subclass)
                     or issubclass(subclass, (original, facade)))
 
+        # Equal to the class it replaces, and hashed as it is, so that a set
+        # holding both -- a `classSet`, a filter music21 built before this was
+        # installed -- holds one, and either finds the other. Python asks the
+        # right-hand side first when its type is the more derived, so
+        # `original == installed` answers here too.
+        # Only the installed class itself: a subclass shares this metaclass
+        # and is a kind of thing of its own.
+        def __eq__(cls, other):
+            return other is cls or ('_replaces' in cls.__dict__ and other is original)
+
+        def __ne__(cls, other):
+            return not cls.__eq__(other)
+
+        def __hash__(cls):
+            if '_replaces' in cls.__dict__:
+                return hash(original)
+            return type.__hash__(cls)
+
     if issubclass(original, _base.Music21Object):
         bases = (facade, original)
         fallback = (facade, _base.Music21Object)
