@@ -105,6 +105,10 @@ pub struct TimeSignature {
     /// music21's `symbol`: the name the meter was written with, where it has
     /// one. Empty for a meter written as a ratio.
     symbol: String,
+    /// music21's `symbolizeDenominator`: whether a score writes the
+    /// denominator as a note rather than a number. Display only; nothing in
+    /// the crate reads it.
+    symbolize_denominator: bool,
 }
 
 impl Clone for TimeSignature {
@@ -114,6 +118,7 @@ impl Clone for TimeSignature {
         Python::attach(|py| Self {
             inner: self.inner.clone(),
             symbol: self.symbol.clone(),
+            symbolize_denominator: self.symbolize_denominator,
             overridden_bar_duration: self
                 .overridden_bar_duration
                 .as_ref()
@@ -137,6 +142,7 @@ impl TimeSignature {
         Ok(Self {
             inner,
             symbol,
+            symbolize_denominator: false,
             overridden_bar_duration: None,
         })
     }
@@ -164,6 +170,16 @@ impl TimeSignature {
     #[setter]
     fn set_symbol(&mut self, symbol: String) {
         self.symbol = symbol;
+    }
+
+    #[getter]
+    fn get_symbolizeDenominator(&self) -> bool {
+        self.symbolize_denominator
+    }
+
+    #[setter]
+    fn set_symbolizeDenominator(&mut self, symbolize: bool) {
+        self.symbolize_denominator = symbolize;
     }
 
     /// music21's `_reprInternal`, which its `__repr__` writes after the class
@@ -495,8 +511,15 @@ impl TimeSignature {
         )
     }
 
-    fn getBeatProportion(&self, qLenPos: FloatType) -> PyResult<FloatType> {
-        self.inner.beat_proportion(qLenPos).map_err(meter_error)
+    /// Through `opFrac`, as music21's is: a beat a third of the way in is
+    /// `Fraction(4, 3)`, not a float that only nearly says it.
+    fn getBeatProportion<'py>(
+        &self,
+        py: Python<'py>,
+        qLenPos: FloatType,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let proportion = self.inner.beat_proportion(qLenPos).map_err(meter_error)?;
+        crate::duration::op_frac(py, proportion)
     }
 
     fn getBeatProportionStr(&self, qLenPos: FloatType) -> PyResult<String> {
@@ -687,15 +710,41 @@ impl TimeSignature {
 
     /// music21 freezes a score by pickling it, and what this object is lives
     /// in Rust where a pickle cannot see it.
+    /// The name, the display flag and a bar length written over the meter's
+    /// own go with it, since the crate's value carries none of them.
     fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<crate::Pickled> {
-        crate::pickled(slf, &slf.borrow().inner)
+        let py = slf.py();
+        let me = slf.borrow();
+        let extra = pyo3::types::PyDict::new(py);
+        extra.set_item("symbol", &me.symbol)?;
+        extra.set_item("symbolizeDenominator", me.symbolize_denominator)?;
+        extra.set_item("barDuration", me.overridden_bar_duration.as_ref())?;
+        crate::pickled_extra(slf, &me.inner, Some(&extra))
     }
 
     fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
-        let Some(inner) = crate::unpickled::<_, RsTimeSignature>(slf, state)? else {
+        let py = slf.py();
+        let (inner, extra) = crate::unpickled_extra::<_, RsTimeSignature>(slf, state)?;
+        let Some(inner) = inner else {
             return Ok(());
         };
-        slf.borrow_mut().inner = inner;
+        let mut me = slf.borrow_mut();
+        me.inner = inner;
+        if let Some(extra) = extra
+            && let Ok(extra) = extra.bind(py).cast::<pyo3::types::PyDict>()
+        {
+            if let Some(symbol) = extra.get_item("symbol")? {
+                me.symbol = symbol.extract()?;
+            }
+            if let Some(symbolize) = extra.get_item("symbolizeDenominator")? {
+                me.symbolize_denominator = symbolize.extract()?;
+            }
+            if let Some(bar) = extra.get_item("barDuration")?
+                && !bar.is_none()
+            {
+                me.overridden_bar_duration = Some(bar.unbind());
+            }
+        }
         Ok(())
     }
 }
@@ -1821,18 +1870,24 @@ impl MeterSequence {
         firstPartitionForm: Option<&Bound<'_, PyAny>>,
         normalizeDenominators: bool,
     ) -> PyResult<()> {
-        // music21 takes either a number or a sequence to divide by first, and
-        // reads the sequence's own first level as that number of parts.
-        let first = match firstPartitionForm.filter(|form| !form.is_none()) {
-            Some(form) => match form.extract::<UnsignedIntegerType>() {
-                Ok(count) => Some(count),
-                Err(_) => Some(span_of(py, form)?.len() as UnsignedIntegerType),
-            },
-            None => None,
-        };
+        // music21 takes either a number to divide by first or a sequence
+        // whose first level is loaded as the first partition, parts of
+        // unequal length and all.
         let mut span = self.held.read(py)?;
-        span.subdivide_nested_hierarchy(depth, first, normalizeDenominators)
-            .map_err(meter_error)?;
+        match firstPartitionForm.filter(|form| !form.is_none()) {
+            Some(form) => match form.extract::<UnsignedIntegerType>() {
+                Ok(count) => {
+                    span.subdivide_nested_hierarchy(depth, Some(count), normalizeDenominators)
+                }
+                Err(_) => span.subdivide_nested_hierarchy_by(
+                    depth,
+                    &span_of(py, form)?,
+                    normalizeDenominators,
+                ),
+            },
+            None => span.subdivide_nested_hierarchy(depth, None, normalizeDenominators),
+        }
+        .map_err(meter_error)?;
         self.partition_changed();
         self.held.write(py, span)
     }
@@ -2057,14 +2112,20 @@ fn sounding_stream(measure: &Bound<'_, PyAny>) -> PyResult<RsStream> {
 /// rests fill most naturally.
 #[pyfunction]
 #[pyo3(name = "bestTimeSignature")]
-fn bestTimeSignature(meas: &Bound<'_, PyAny>) -> PyResult<TimeSignature> {
+fn bestTimeSignature(meas: &Bound<'_, PyAny>) -> PyResult<Py<TimeSignature>> {
     let inner = music21_rs_crate::meter::best_time_signature(&sounding_stream(meas)?)
         .map_err(meter_error)?;
-    Ok(TimeSignature {
-        inner,
-        symbol: String::new(),
-        overridden_bar_duration: None,
-    })
+    crate::installed_new(
+        meas.py(),
+        "music21.meter.base",
+        "TimeSignature",
+        TimeSignature {
+            inner,
+            symbol: String::new(),
+            symbolize_denominator: false,
+            overridden_bar_duration: None,
+        },
+    )
 }
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {

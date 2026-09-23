@@ -512,7 +512,8 @@ impl TimeSignature {
     /// says no denominator at all says nothing about how it is measured, and
     /// is refused.
     pub fn parts(ratio: &str) -> Result<Vec<(UnsignedIntegerType, UnsignedIntegerType)>> {
-        let written = ratio.trim();
+        let unworded = without_division_word(ratio);
+        let written = unworded.trim();
         if written.is_empty() {
             return Err(Error::Meter("a time signature says nothing".to_string()));
         }
@@ -1419,12 +1420,29 @@ fn whole_bar(
     Ok(bar)
 }
 
-/// The word music21 allows before a ratio, saying how the bar is counted:
-/// `"slow 6/8"` is counted in six and `"fast 6/8"` in two.
-fn division_word(ratio: &str) -> Option<&str> {
-    let first = ratio.trim().split('+').next()?.trim();
-    let word = first.split_whitespace().next()?;
-    matches!(word, "slow" | "fast").then_some(word)
+/// The word music21 allows beside a ratio, saying how the bar is counted:
+/// `"slow 6/8"` is counted in six and `"fast 6/8"` in two. music21 looks for
+/// it anywhere in the string and in any case, so `"6/8 Fast"` says it too.
+fn division_word(ratio: &str) -> Option<&'static str> {
+    let lower = ratio.to_ascii_lowercase();
+    if lower.contains("slow") {
+        Some("slow")
+    } else if lower.contains("fast") {
+        Some("fast")
+    } else {
+        None
+    }
+}
+
+/// The ratio with the word saying how it is counted taken out.
+fn without_division_word(ratio: &str) -> String {
+    let mut out = ratio.to_string();
+    for word in ["slow", "fast"] {
+        while let Some(at) = out.to_ascii_lowercase().find(word) {
+            out.replace_range(at..at + word.len(), " ");
+        }
+    }
+    out
 }
 
 /// Whether a bar is felt in compound beats: music21's `favorCompound`.
@@ -1780,6 +1798,12 @@ mod tests {
                 "{3/8+3/8}",
             ),
             ("fast 6/8", "{{1/8+1/8+1/8}+{1/8+1/8+1/8}}", "{3/8+3/8}"),
+            ("6/8 fast", "{{1/8+1/8+1/8}+{1/8+1/8+1/8}}", "{3/8+3/8}"),
+            (
+                "6/8 Slow",
+                "{{1/16+1/16}+{1/16+1/16}+{1/16+1/16}+{1/16+1/16}+{1/16+1/16}+{1/16+1/16}}",
+                "{3/8+3/8}",
+            ),
             ("3/8+2/8", "{{1/8+1/8+1/8}+{1/8+1/8}}", "{2/8+3/8}"),
             ("2/4+3/8", "{{1/4+1/4}+{1/8+1/8+1/8}}", "{2/8+2/8+3/8}"),
         ];
