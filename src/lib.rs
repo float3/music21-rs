@@ -170,7 +170,8 @@ pub use serial::{
 pub use sieve::Sieve;
 pub use stream::{Stream, StreamElement, StreamEvent, StreamKind};
 pub use tempo::{
-    DEFAULT_TEMPO_VALUES, MetronomeMark, convert_tempo_by_referent, interpolate_elements,
+    DEFAULT_TEMPO_VALUES, MetricModulation, MetronomeMark, ModulationSide,
+    convert_tempo_by_referent, interpolate_elements,
 };
 pub use tuningsystem::{
     ALL_TUNING_SYSTEMS, COMMON_EQUAL_TEMPERAMENTS, COMMON_TWELVE_TONE_TUNING_SYSTEMS,

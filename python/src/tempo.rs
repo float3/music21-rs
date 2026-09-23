@@ -12,7 +12,8 @@ use pyo3::types::PyDict;
 
 use music21_rs_crate::duration::Duration as RsDuration;
 use music21_rs_crate::tempo::{
-    MetronomeMark as RsMetronomeMark, convert_tempo_by_referent as rs_convert_tempo_by_referent,
+    MetricModulation as RsMetricModulation, MetronomeMark as RsMetronomeMark, ModulationSide,
+    convert_tempo_by_referent as rs_convert_tempo_by_referent,
 };
 
 use crate::duration::{Duration, duration_from_any};
@@ -21,11 +22,14 @@ use crate::duration::{Duration, duration_from_any};
 pub const NAMES: &[&str] = &[
     "MetronomeMark",
     "MetronomeMarkException",
+    "MetricModulation",
+    "MetricModulationException",
     "convertTempoByReferent",
 ];
 
 pyo3::create_exception!(music21_rs_facade, TempoException, crate::Music21Exception);
 pyo3::create_exception!(music21_rs_facade, MetronomeMarkException, TempoException);
+pyo3::create_exception!(music21_rs_facade, MetricModulationException, TempoException);
 
 error_into!(tempo_error, MetronomeMarkException);
 
@@ -588,6 +592,508 @@ impl MetronomeMark {
     }
 }
 
+/// A metronome mark of the class a new one is made as: the installed one
+/// where music21 is there, this wheel's where not.
+fn new_mark(py: Python<'_>, inner: RsMetronomeMark) -> PyResult<Py<PyAny>> {
+    Ok(crate::installed_new(
+        py,
+        "music21.tempo",
+        "MetronomeMark",
+        MetronomeMark::wrap(inner),
+    )?
+    .into_any())
+}
+
+/// The crate's value of a metronome mark, whichever class holds it.
+fn mark_value(mark: &Bound<'_, PyAny>) -> PyResult<RsMetronomeMark> {
+    match mark.extract::<PyRef<'_, MetronomeMark>>() {
+        Ok(ours) => Ok(ours.inner.clone()),
+        Err(_) => {
+            let number: Option<f64> = mark.getattr("number")?.extract()?;
+            let mut value = RsMetronomeMark::default()
+                .with_referent(referent_duration(Some(&mark.getattr("referent")?))?);
+            value.set_number(number);
+            Ok(value)
+        }
+    }
+}
+
+/// music21's `tempo.MetricModulation`: a change of tempo written as an
+/// equation between two metronome marks.
+///
+/// It keeps the mark objects it is given, as music21 does, and works out the
+/// sides it computes with the crate's `MetricModulation`. Where the marks
+/// leave a number unsaid it asks the stream it sits in for the mark in force
+/// before it, which only an object music21 holds in a stream can answer.
+#[pyclass(
+    name = "MetricModulation",
+    module = "music21.tempo",
+    subclass,
+    skip_from_py_object
+)]
+pub struct MetricModulation {
+    old: Option<Py<PyAny>>,
+    new: Option<Py<PyAny>>,
+    #[pyo3(get, set)]
+    classicalStyle: bool,
+    #[pyo3(get, set)]
+    maintainBeat: bool,
+    #[pyo3(get, set)]
+    transitionSymbol: String,
+    #[pyo3(get, set)]
+    arrowDirection: Option<Py<PyAny>>,
+    #[pyo3(get, set)]
+    parentheses: bool,
+}
+
+impl MetricModulation {
+    fn blank() -> Self {
+        Self {
+            old: None,
+            new: None,
+            classicalStyle: false,
+            maintainBeat: false,
+            transitionSymbol: "=".to_string(),
+            arrowDirection: None,
+            parentheses: false,
+        }
+    }
+
+    /// The crate's modulation over the marks this one holds.
+    fn value(&self, py: Python<'_>) -> PyResult<RsMetricModulation> {
+        let mut value = RsMetricModulation::new();
+        if let Some(old) = &self.old {
+            value.set_old_metronome(Some(mark_value(old.bind(py))?));
+        }
+        if let Some(new) = &self.new {
+            value.set_new_metronome(Some(mark_value(new.bind(py))?));
+        }
+        Ok(value)
+    }
+
+    /// Takes the sides the crate changed, as new mark objects; a side it did
+    /// not change keeps the object it was.
+    fn adopt(
+        &mut self,
+        py: Python<'_>,
+        before: &RsMetricModulation,
+        after: RsMetricModulation,
+    ) -> PyResult<()> {
+        if before.old_metronome() != after.old_metronome() {
+            self.old = after
+                .old_metronome()
+                .cloned()
+                .map(|mark| new_mark(py, mark))
+                .transpose()?;
+        }
+        if before.new_metronome() != after.new_metronome() {
+            self.new = after
+                .new_metronome()
+                .cloned()
+                .map(|mark| new_mark(py, mark))
+                .transpose()?;
+        }
+        Ok(())
+    }
+
+    fn check_mark(value: Option<&Bound<'_, PyAny>>, which: &str) -> PyResult<Option<Py<PyAny>>> {
+        let Some(value) = value.filter(|value| !value.is_none()) else {
+            return Ok(None);
+        };
+        let is_mark = value.is_instance_of::<MetronomeMark>()
+            || value
+                .getattr("classes")
+                .and_then(|classes| classes.extract::<Vec<String>>())
+                .is_ok_and(|classes| classes.iter().any(|name| name == "MetronomeMark"));
+        if !is_mark {
+            return Err(MetricModulationException::new_err(format!(
+                "{which} property must be set with a MetronomeMark instance"
+            )));
+        }
+        Ok(Some(value.clone().unbind()))
+    }
+
+    fn side(side: Option<&str>) -> PyResult<Option<ModulationSide>> {
+        match side {
+            None => Ok(None),
+            Some("left") => Ok(Some(ModulationSide::Old)),
+            Some("right") => Ok(Some(ModulationSide::New)),
+            Some(other) => Err(TempoException::new_err(format!(
+                "cannot set equality for a side of {other}"
+            ))),
+        }
+    }
+
+    /// The mark in force before this one in the stream it sits in, as the
+    /// crate's value.
+    fn previous(slf: &Bound<'_, Self>) -> PyResult<Option<RsMetronomeMark>> {
+        let previous = Self::getPreviousMetronomeMark(slf)?;
+        let previous = previous.bind(slf.py());
+        if previous.is_none() {
+            return Ok(None);
+        }
+        mark_value(previous).map(Some)
+    }
+
+    /// Asks the context for what a side leaves unsaid, as music21's getters
+    /// do before handing a side back.
+    fn settle(slf: &Bound<'_, Self>, which_new: bool) -> PyResult<()> {
+        let py = slf.py();
+        let unsaid = {
+            let me = slf.borrow();
+            let side = if which_new { &me.new } else { &me.old };
+            match side {
+                Some(mark) => mark.bind(py).getattr("number")?.is_none(),
+                None => false,
+            }
+        };
+        if unsaid {
+            Self::updateByContext(slf)?;
+        }
+        Ok(())
+    }
+
+    fn apply(
+        slf: &Bound<'_, Self>,
+        change: impl FnOnce(&mut RsMetricModulation) -> music21_rs_crate::Result<()>,
+    ) -> PyResult<()> {
+        let py = slf.py();
+        let before = slf.borrow().value(py)?;
+        let mut after = before.clone();
+        change(&mut after)
+            .map_err(|error| TempoException::new_err(crate::pitch::message(&error)))?;
+        slf.borrow_mut().adopt(py, &before, after)
+    }
+}
+
+#[pymethods]
+impl MetricModulation {
+    #[new]
+    #[pyo3(signature = (*_arguments, **_keywords))]
+    fn new(
+        _arguments: &Bound<'_, pyo3::types::PyTuple>,
+        _keywords: Option<&Bound<'_, PyDict>>,
+    ) -> Self {
+        Self::blank()
+    }
+
+    fn __traverse__(
+        &self,
+        visit: pyo3::pyclass::PyVisit<'_>,
+    ) -> Result<(), pyo3::pyclass::PyTraverseError> {
+        visit.call(&self.old)?;
+        visit.call(&self.new)?;
+        visit.call(&self.arrowDirection)
+    }
+
+    fn __clear__(&mut self) {
+        self.old = None;
+        self.new = None;
+        self.arrowDirection = None;
+    }
+
+    /// music21's sort order for a tempo indication among things at one
+    /// offset: before the notes it governs.
+    #[classattr]
+    fn classSortOrder() -> i32 {
+        1
+    }
+
+    /// The mark in force before the modulation, its number filled in from the
+    /// context where it has none.
+    #[getter]
+    fn get_oldMetronome(slf: &Bound<'_, Self>) -> PyResult<Option<Py<PyAny>>> {
+        Self::settle(slf, false)?;
+        let py = slf.py();
+        Ok(slf.borrow().old.as_ref().map(|mark| mark.clone_ref(py)))
+    }
+
+    #[setter]
+    fn set_oldMetronome(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        self.old = Self::check_mark(value, "oldMetronome")?;
+        Ok(())
+    }
+
+    /// The mark in force after it, its number filled in from the context
+    /// where it has none.
+    #[getter]
+    fn get_newMetronome(slf: &Bound<'_, Self>) -> PyResult<Option<Py<PyAny>>> {
+        Self::settle(slf, true)?;
+        let py = slf.py();
+        Ok(slf.borrow().new.as_ref().map(|mark| mark.clone_ref(py)))
+    }
+
+    #[setter]
+    fn set_newMetronome(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        self.new = Self::check_mark(value, "newMetronome")?;
+        Ok(())
+    }
+
+    /// The note value the old mark counts.
+    #[getter]
+    fn get_oldReferent(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
+        self.old
+            .as_ref()
+            .map(|mark| Ok(mark.bind(py).getattr("referent")?.unbind()))
+            .transpose()
+    }
+
+    #[setter]
+    fn set_oldReferent(slf: &Bound<'_, Self>, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        let Some(value) = value.filter(|value| !value.is_none()) else {
+            return Err(MetricModulationException::new_err(
+                "cannot set old referent to None",
+            ));
+        };
+        let referent = referent_duration(Some(value))?;
+        let previous = if slf.borrow().old.is_none() {
+            Self::previous(slf)?
+        } else {
+            None
+        };
+        Self::apply(slf, |modulation| {
+            modulation.set_old_referent(referent, previous.as_ref());
+            Ok(())
+        })
+    }
+
+    /// The note value the new mark counts.
+    #[getter]
+    fn get_newReferent(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
+        self.new
+            .as_ref()
+            .map(|mark| Ok(mark.bind(py).getattr("referent")?.unbind()))
+            .transpose()
+    }
+
+    #[setter]
+    fn set_newReferent(slf: &Bound<'_, Self>, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        let Some(value) = value.filter(|value| !value.is_none()) else {
+            return Err(MetricModulationException::new_err(
+                "cannot set new referent to None",
+            ));
+        };
+        let referent = referent_duration(Some(value))?;
+        Self::apply(slf, |modulation| {
+            modulation.set_new_referent(referent);
+            Ok(())
+        })
+    }
+
+    /// The number of the new mark, which is what the modulation sets.
+    #[getter]
+    fn number(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        match &self.new {
+            Some(mark) => Ok(mark.bind(py).getattr("number")?.unbind()),
+            None => Ok(py.None()),
+        }
+    }
+
+    /// music21's `updateByContext`: fills in what the marks leave unsaid from
+    /// the mark in force before this one.
+    fn updateByContext(slf: &Bound<'_, Self>) -> PyResult<()> {
+        let previous = Self::previous(slf)?;
+        let py = slf.py();
+        let before = slf.borrow().value(py)?;
+        let mut after = before.clone();
+        after.update_from(previous.as_ref());
+        // The new mark is changed where it stands, as music21 writes its
+        // number into the object it holds.
+        let number = after.new_metronome().and_then(RsMetronomeMark::number);
+        let new = slf.borrow().new.as_ref().map(|mark| mark.clone_ref(py));
+        if let (Some(new), Some(number)) = (new, number)
+            && before.new_metronome().and_then(RsMetronomeMark::number) != Some(number)
+        {
+            new.bind(py).setattr("number", number)?;
+        }
+        let mut me = slf.borrow_mut();
+        if before.old_metronome() != after.old_metronome() {
+            me.old = after
+                .old_metronome()
+                .cloned()
+                .map(|mark| new_mark(py, mark))
+                .transpose()?;
+        }
+        Ok(())
+    }
+
+    /// music21's `setEqualityByReferent`: one side the same tempo as the
+    /// other, counted in `referent`.
+    #[pyo3(signature = (side = None, referent = None))]
+    fn setEqualityByReferent(
+        slf: &Bound<'_, Self>,
+        side: Option<&str>,
+        referent: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<()> {
+        let side = Self::side(side)?;
+        let referent = referent_duration(referent)?;
+        Self::apply(slf, |modulation| {
+            modulation.set_equality_by_referent(side, referent)
+        })
+    }
+
+    /// music21's `setOtherByReferent`: one side the other's number, counted in
+    /// `referent`.
+    #[pyo3(signature = (side = None, referent = None))]
+    fn setOtherByReferent(
+        slf: &Bound<'_, Self>,
+        side: Option<&str>,
+        referent: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<()> {
+        let side = Self::side(side)?;
+        let referent = referent_duration(referent)?;
+        Self::apply(slf, |modulation| {
+            modulation.set_other_by_referent(side, referent)
+        })
+    }
+
+    /// music21's `getSoundingMetronomeMark`: the mark a tempo indication
+    /// comes to, which for a modulation is its new mark.
+    #[pyo3(signature = (found = None))]
+    fn getSoundingMetronomeMark(
+        slf: &Bound<'_, Self>,
+        found: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<Py<PyAny>> {
+        match found.filter(|value| !value.is_none()) {
+            None => Ok(Self::get_newMetronome(slf)?.unwrap_or_else(|| slf.py().None())),
+            Some(found) if found.is(slf) => {
+                Ok(Self::get_newMetronome(slf)?.unwrap_or_else(|| slf.py().None()))
+            }
+            Some(found) => {
+                let classes: Vec<String> = found.getattr("classes")?.extract()?;
+                if classes.iter().any(|name| name == "MetricModulation") {
+                    return Ok(found.getattr("newMetronome")?.unbind());
+                }
+                if classes.iter().any(|name| name == "MetronomeMark") {
+                    return Ok(found.clone().unbind());
+                }
+                if classes.iter().any(|name| name == "TempoText") {
+                    return Ok(found.call_method0("getMetronomeMark")?.unbind());
+                }
+                Err(TempoException::new_err(format!(
+                    "cannot derive a MetronomeMark from this TempoIndication: {found}"
+                )))
+            }
+        }
+    }
+
+    /// music21's `getPreviousMetronomeMark`: the last mark in force before
+    /// this one, found by asking the stream it sits in; `None` where it sits
+    /// in none.
+    fn getPreviousMetronomeMark(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
+        let py = slf.py();
+        if !slf.hasattr("getContextByClass")? {
+            return Ok(py.None());
+        }
+        let search = py
+            .import("music21.common.enums")?
+            .getattr("ElementSearch")?
+            .getattr("BEFORE_OFFSET")?;
+        let arguments = PyDict::new(py);
+        arguments.set_item("getElementMethod", search)?;
+        let found = slf.as_any().call_method(
+            "getContextByClass",
+            ("TempoIndication",),
+            Some(&arguments),
+        )?;
+        if found.is_none() {
+            return Ok(py.None());
+        }
+        Self::getSoundingMetronomeMark(slf, Some(&found))
+    }
+
+    fn _reprInternal(slf: &Bound<'_, Self>) -> PyResult<String> {
+        let py = slf.py();
+        let old = Self::get_oldMetronome(slf)?;
+        let new = Self::get_newMetronome(slf)?;
+        let written = |mark: Option<Py<PyAny>>| -> PyResult<String> {
+            match mark {
+                Some(mark) => Ok(mark.bind(py).str()?.to_string()),
+                None => Ok("None".to_string()),
+            }
+        };
+        Ok(format!("{}={}", written(old)?, written(new)?))
+    }
+
+    fn __repr__(slf: &Bound<'_, Self>) -> PyResult<String> {
+        Ok(format!(
+            "<music21.tempo.MetricModulation {}>",
+            Self::_reprInternal(slf)?
+        ))
+    }
+
+    #[pyo3(signature = (memo = None))]
+    fn __deepcopy__<'py>(
+        slf: &Bound<'py, Self>,
+        memo: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
+        let deepcopy = py.import("copy")?.getattr("deepcopy")?;
+        let copied = crate::blank_installed(&slf.get_type().into_any())?;
+        let copy_of = |mark: &Option<Py<PyAny>>| -> PyResult<Option<Py<PyAny>>> {
+            mark.as_ref()
+                .map(|mark| Ok(deepcopy.call1((mark, memo))?.unbind()))
+                .transpose()
+        };
+        let me = slf.borrow();
+        let fresh = Self {
+            old: copy_of(&me.old)?,
+            new: copy_of(&me.new)?,
+            classicalStyle: me.classicalStyle,
+            maintainBeat: me.maintainBeat,
+            transitionSymbol: me.transitionSymbol.clone(),
+            arrowDirection: me.arrowDirection.as_ref().map(|value| value.clone_ref(py)),
+            parentheses: me.parentheses,
+        };
+        drop(me);
+        *copied.extract::<PyRefMut<'_, Self>>()? = fresh;
+        Ok(copied)
+    }
+
+    /// Pickled as the marks it holds and its flags.
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<crate::Pickled> {
+        let py = slf.py();
+        let extra = PyDict::new(py);
+        {
+            let me = slf.borrow();
+            extra.set_item("old", me.old.as_ref())?;
+            extra.set_item("new", me.new.as_ref())?;
+            extra.set_item("classicalStyle", me.classicalStyle)?;
+            extra.set_item("maintainBeat", me.maintainBeat)?;
+            extra.set_item("transitionSymbol", &me.transitionSymbol)?;
+            extra.set_item("arrowDirection", me.arrowDirection.as_ref())?;
+            extra.set_item("parentheses", me.parentheses)?;
+        }
+        crate::pickled_extra(slf, &(), Some(&extra))
+    }
+
+    fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
+        let py = slf.py();
+        let (_, extra) = crate::unpickled_extra::<_, ()>(slf, state)?;
+        let Some(extra) = extra else {
+            return Ok(());
+        };
+        let extra = extra.bind(py);
+        let present = |name: &str| -> Option<Bound<'_, PyAny>> {
+            extra.get_item(name).ok().filter(|value| !value.is_none())
+        };
+        let mut me = slf.borrow_mut();
+        me.old = present("old").map(Bound::unbind);
+        me.new = present("new").map(Bound::unbind);
+        me.classicalStyle =
+            present("classicalStyle").is_some_and(|value| value.is_truthy().unwrap_or(false));
+        me.maintainBeat =
+            present("maintainBeat").is_some_and(|value| value.is_truthy().unwrap_or(false));
+        if let Some(symbol) = present("transitionSymbol") {
+            me.transitionSymbol = symbol.extract()?;
+        }
+        me.arrowDirection = present("arrowDirection").map(Bound::unbind);
+        me.parentheses =
+            present("parentheses").is_some_and(|value| value.is_truthy().unwrap_or(false));
+        Ok(())
+    }
+}
+
 /// music21's `convertTempoByReferent`: the same tempo counted in another
 /// note value.
 #[pyfunction]
@@ -602,6 +1108,7 @@ pub fn convertTempoByReferent(
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<MetronomeMark>()?;
+    m.add_class::<MetricModulation>()?;
     m.add_function(wrap_pyfunction!(convertTempoByReferent, m)?)?;
     Ok(())
 }

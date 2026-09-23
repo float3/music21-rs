@@ -599,3 +599,18 @@ def test_the_wheels_objects_pickle_without_music21():
     for thing in (m.Note("C4"), m.Chord("C4 E4 G4"), m.Key("a"), m.Rest(1.5), m.Style()):
         assert type(pickle.loads(pickle.dumps(thing))) is type(thing)
     assert pickle.loads(pickle.dumps(m.Chord("C4 E4 G4"))) == m.Chord("C4 E4 G4")
+
+
+def test_a_metric_modulation_moves_a_number_to_another_note_value():
+    # Each answer read off music21 11.0.0b9.
+    modulation = m.MetricModulation()
+    modulation.oldMetronome = m.MetronomeMark(number=60, referent="quarter")
+    modulation.newReferent = "half"
+    assert modulation.number == 60
+    assert modulation.newMetronome.getQuarterBPM() == 120
+    equal = m.MetricModulation()
+    equal.newMetronome = m.MetronomeMark(number=60)
+    equal.setEqualityByReferent(None, "half")
+    assert equal.oldMetronome.number == 30
+    with pytest.raises(m.MetricModulationException):
+        equal.oldMetronome = "sixty"

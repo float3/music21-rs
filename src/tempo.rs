@@ -401,6 +401,260 @@ pub fn interpolated_offset(
     Ok(scale * (offset - start_source) + start_destination)
 }
 
+/// Which side of a [`MetricModulation`] something is on: the mark in force
+/// before it, or the mark after. music21 calls them `'left'` and `'right'`.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum ModulationSide {
+    /// The mark in force before the modulation: music21's `'left'`.
+    Old,
+    /// The mark in force after it: music21's `'right'`.
+    New,
+}
+
+/// A change of tempo written as an equation between two metronome marks:
+/// music21's `MetricModulation`.
+///
+/// The usual one keeps a number and moves it to another note value --
+/// quarter = 60 becoming dotted quarter = 60 -- so the old mark and the new
+/// are what the equation is written with. Either side may be given by its
+/// note value alone and take its number from the other, and the old side may
+/// take it from the mark in force before the modulation, which a score knows
+/// and this type is handed ([`MetricModulation::update_from`]).
+///
+/// ```
+/// use music21_rs::{tempo::{MetricModulation, MetronomeMark}, Duration};
+///
+/// let mut modulation = MetricModulation::new();
+/// modulation.set_old_metronome(Some(MetronomeMark::new(60.0)));
+/// modulation.set_new_referent(Duration::half());
+/// assert_eq!(modulation.number(), Some(60.0));
+/// assert_eq!(modulation.new_metronome().unwrap().quarter_bpm(), Some(120.0));
+/// ```
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
+pub struct MetricModulation {
+    old: Option<MetronomeMark>,
+    new: Option<MetronomeMark>,
+    classical_style: bool,
+    maintain_beat: bool,
+    transition_symbol: String,
+    arrow_direction: Option<String>,
+    parentheses: bool,
+}
+
+impl Default for MetricModulation {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl MetricModulation {
+    /// A modulation between two marks not yet given, written with `=`.
+    pub fn new() -> Self {
+        Self {
+            old: None,
+            new: None,
+            classical_style: false,
+            maintain_beat: false,
+            transition_symbol: "=".to_string(),
+            arrow_direction: None,
+            parentheses: false,
+        }
+    }
+
+    /// The mark in force before the modulation, if one is given.
+    pub fn old_metronome(&self) -> Option<&MetronomeMark> {
+        self.old.as_ref()
+    }
+
+    /// The mark in force after it, if one is given.
+    pub fn new_metronome(&self) -> Option<&MetronomeMark> {
+        self.new.as_ref()
+    }
+
+    /// Sets the mark in force before the modulation, or takes it away.
+    pub fn set_old_metronome(&mut self, mark: Option<MetronomeMark>) {
+        self.old = mark;
+    }
+
+    /// Sets the mark in force after the modulation, or takes it away.
+    pub fn set_new_metronome(&mut self, mark: Option<MetronomeMark>) {
+        self.new = mark;
+    }
+
+    /// The note value the old mark counts.
+    pub fn old_referent(&self) -> Option<&Duration> {
+        self.old.as_ref().map(MetronomeMark::referent)
+    }
+
+    /// The note value the new mark counts.
+    pub fn new_referent(&self) -> Option<&Duration> {
+        self.new.as_ref().map(MetronomeMark::referent)
+    }
+
+    /// Counts the old side in `referent`: the old mark's own tempo counted
+    /// that way, or where there is none the tempo of `previous` -- the mark
+    /// in force before the modulation -- counted that way, or failing both a
+    /// mark with no number yet. music21's `oldReferent` setter.
+    pub fn set_old_referent(&mut self, referent: Duration, previous: Option<&MetronomeMark>) {
+        self.old = Some(match (&self.old, previous) {
+            (Some(old), _) => old.equivalent_by_referent(referent),
+            (None, Some(previous)) => previous.equivalent_by_referent(referent),
+            (None, None) => MetronomeMark::default().with_referent(referent),
+        });
+    }
+
+    /// Counts the new side in `referent`: the new mark's own tempo counted
+    /// that way, or where there is none the old mark's *number* moved to
+    /// that note value -- the modulation proper -- or failing both a mark
+    /// with no number yet. music21's `newReferent` setter.
+    pub fn set_new_referent(&mut self, referent: Duration) {
+        self.new = Some(match (&self.new, &self.old) {
+            (Some(new), _) => new.equivalent_by_referent(referent),
+            (None, Some(old)) => old.maintained_number_with_referent(referent),
+            (None, None) => MetronomeMark::default().with_referent(referent),
+        });
+    }
+
+    /// The number of the new mark, which is what the modulation sets.
+    pub fn number(&self) -> Option<FloatType> {
+        self.new.as_ref().and_then(MetronomeMark::number)
+    }
+
+    /// Fills in what the marks leave unsaid from `previous`, the mark in
+    /// force before the modulation: music21's `updateByContext`, with the
+    /// context search done by whoever knows the score.
+    ///
+    /// The old side becomes `previous` counted in the old side's note value,
+    /// or `previous` itself where there is no old side; and a new side with
+    /// a note value takes the old side's number, since the number is what a
+    /// modulation keeps.
+    pub fn update_from(&mut self, previous: Option<&MetronomeMark>) {
+        if let Some(previous) = previous {
+            self.old = Some(match &self.old {
+                Some(old) => previous.equivalent_by_referent(old.referent().clone()),
+                None => previous.maintained_number_with_referent(previous.referent().clone()),
+            });
+        }
+        let number = self.old.as_ref().and_then(MetronomeMark::number);
+        if let (Some(new), Some(number)) = (self.new.as_mut(), number) {
+            new.set_number(Some(number));
+        }
+    }
+
+    /// Sets one side to the same tempo as the other counted in `referent`:
+    /// music21's `setEqualityByReferent`. With no side named, the side not
+    /// yet given is the one set; it is an error when both are given or when
+    /// the other side is missing.
+    pub fn set_equality_by_referent(
+        &mut self,
+        side: Option<ModulationSide>,
+        referent: Duration,
+    ) -> Result<()> {
+        match self.side_to_set(side)? {
+            ModulationSide::New => {
+                let old = self.old.as_ref().ok_or_else(Self::no_other_side)?;
+                self.new = Some(old.equivalent_by_referent(referent));
+            }
+            ModulationSide::Old => {
+                let new = self.new.as_ref().ok_or_else(Self::no_other_side)?;
+                self.old = Some(new.equivalent_by_referent(referent));
+            }
+        }
+        Ok(())
+    }
+
+    /// Sets one side to the other's number counted in `referent`, which is a
+    /// different tempo: music21's `setOtherByReferent`. The side is chosen
+    /// as [`MetricModulation::set_equality_by_referent`] chooses it.
+    pub fn set_other_by_referent(
+        &mut self,
+        side: Option<ModulationSide>,
+        referent: Duration,
+    ) -> Result<()> {
+        match self.side_to_set(side)? {
+            ModulationSide::New => {
+                let old = self.old.as_ref().ok_or_else(Self::no_other_side)?;
+                self.new = Some(old.maintained_number_with_referent(referent));
+            }
+            ModulationSide::Old => {
+                let new = self.new.as_ref().ok_or_else(Self::no_other_side)?;
+                self.old = Some(new.maintained_number_with_referent(referent));
+            }
+        }
+        Ok(())
+    }
+
+    fn side_to_set(&self, side: Option<ModulationSide>) -> Result<ModulationSide> {
+        side.or(match (&self.old, &self.new) {
+            (None, _) => Some(ModulationSide::Old),
+            (_, None) => Some(ModulationSide::New),
+            _ => None,
+        })
+        .ok_or_else(|| Error::Tempo("cannot set equality for a side of None".to_string()))
+    }
+
+    fn no_other_side() -> Error {
+        Error::Tempo("there is no mark on the other side to take the tempo from".to_string())
+    }
+
+    /// Whether the first mark written is the new tempo rather than the old,
+    /// the reverse of the usual order: music21's `classicalStyle`.
+    pub fn classical_style(&self) -> bool {
+        self.classical_style
+    }
+
+    /// Sets whether the first mark written is the new tempo.
+    pub fn set_classical_style(&mut self, classical: bool) {
+        self.classical_style = classical;
+    }
+
+    /// Whether the beat is kept after the equation, as it is going from 3/4
+    /// to 6/8: music21's `maintainBeat`.
+    pub fn maintain_beat(&self) -> bool {
+        self.maintain_beat
+    }
+
+    /// Sets whether the beat is kept after the equation.
+    pub fn set_maintain_beat(&mut self, maintain: bool) {
+        self.maintain_beat = maintain;
+    }
+
+    /// What the equation is written with, `=` unless an edition says
+    /// otherwise.
+    pub fn transition_symbol(&self) -> &str {
+        &self.transition_symbol
+    }
+
+    /// Sets what the equation is written with.
+    pub fn set_transition_symbol(&mut self, symbol: impl Into<String>) {
+        self.transition_symbol = symbol.into();
+    }
+
+    /// Which way an arrow drawn for the equation points, where older
+    /// editions draw one: `"left"`, `"right"`, or none.
+    pub fn arrow_direction(&self) -> Option<&str> {
+        self.arrow_direction.as_deref()
+    }
+
+    /// Sets which way the arrow points, or takes it away.
+    pub fn set_arrow_direction(&mut self, direction: Option<String>) {
+        self.arrow_direction = direction;
+    }
+
+    /// Whether the equation is written in parentheses.
+    pub fn parentheses(&self) -> bool {
+        self.parentheses
+    }
+
+    /// Sets whether the equation is written in parentheses.
+    pub fn set_parentheses(&mut self, parentheses: bool) {
+        self.parentheses = parentheses;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -620,5 +874,63 @@ mod tests {
         }
 
         assert!(interpolate_elements(&source, &mut slower, (10.0, 0.0), (10.0, 4.0)).is_err());
+    }
+
+    #[test]
+    fn a_metric_modulation_moves_a_number_to_another_note_value() {
+        // Each answer read off music21 11.0.0b9's MetricModulation.
+        use super::{MetricModulation, MetronomeMark, ModulationSide};
+        use crate::Duration;
+
+        // Setting both referents first leaves both numbers unsaid.
+        let mut modulation = MetricModulation::new();
+        modulation.set_old_referent(Duration::half(), None);
+        modulation.set_new_referent(Duration::new(0.25).unwrap());
+        assert_eq!(modulation.number(), None);
+
+        // Then an old mark with a number: the new side takes the number.
+        let mut modulation = MetricModulation::new();
+        modulation.set_old_referent(Duration::quarter(), None);
+        modulation.set_new_referent(Duration::eighth());
+        modulation.set_old_metronome(Some(MetronomeMark::new(60.0)));
+        modulation.update_from(None);
+        assert_eq!(modulation.number(), Some(60.0));
+        assert_eq!(
+            modulation.new_metronome().unwrap().text(),
+            Some("larghetto")
+        );
+
+        // Equality keeps the tempo and recounts it: half = 30 is quarter = 60.
+        let mut modulation = MetricModulation::new();
+        modulation.set_new_metronome(Some(MetronomeMark::new(60.0)));
+        modulation
+            .set_equality_by_referent(None, Duration::half())
+            .unwrap();
+        assert_eq!(modulation.old_metronome().unwrap().number(), Some(30.0));
+
+        // The other translation keeps the number and changes the tempo.
+        let mut modulation = MetricModulation::new();
+        modulation.set_old_metronome(Some(MetronomeMark::new(60.0)));
+        modulation
+            .set_other_by_referent(Some(ModulationSide::New), Duration::half())
+            .unwrap();
+        assert_eq!(modulation.number(), Some(60.0));
+        assert_eq!(
+            modulation.new_metronome().unwrap().quarter_bpm(),
+            Some(120.0)
+        );
+
+        // With both sides given there is no side to choose.
+        assert!(
+            modulation
+                .set_equality_by_referent(None, Duration::quarter())
+                .is_err()
+        );
+
+        // The mark in force before fills in an old side counted in eighths.
+        let mut modulation = MetricModulation::new();
+        modulation.set_old_referent(Duration::eighth(), None);
+        modulation.update_from(Some(&MetronomeMark::new(90.0)));
+        assert_eq!(modulation.old_metronome().unwrap().number(), Some(180.0));
     }
 }

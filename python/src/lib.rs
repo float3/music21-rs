@@ -1179,6 +1179,11 @@ exceptions![
     ),
     ("SieveException", sieve::SieveException, None),
     ("TempoException", tempo::TempoException, None),
+    (
+        "MetricModulationException",
+        tempo::MetricModulationException,
+        Some("music21.tempo")
+    ),
     ("TieException", notation::TieException, Some("music21.tie")),
     (
         "VoiceLeadingQuartetException",
