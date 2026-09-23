@@ -786,41 +786,34 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Detect package version bump
+      # A version is released when it has no tag yet, rather than only by the
+      # push that changed it, so a run cancelled by the next push does not
+      # lose the release: the next green run on master makes it.
+      - name: Detect an unreleased package version
         id: version
         shell: bash
         run: |
           set -euo pipefail
 
-          read_version() {
-            python3 - "$1" <<'PY'
+          current_version="$(python3 - <<'PY'
           import pathlib
-          import sys
           import tomllib
 
-          print(tomllib.loads(pathlib.Path(sys.argv[1]).read_text())["package"]["version"])
+          print(tomllib.loads(pathlib.Path("Cargo.toml").read_text())["package"]["version"])
           PY
-          }
+          )"
+          tag="v$current_version"
 
-          current_version="$(read_version Cargo.toml)"
-          previous_version=""
-          base="${{ github.event.before }}"
-
-          if [[ ! "$base" =~ ^0+$ ]] && git cat-file -e "$base:Cargo.toml" 2>/dev/null; then
-            git show "$base:Cargo.toml" > /tmp/previous-Cargo.toml
-            previous_version="$(read_version /tmp/previous-Cargo.toml)"
-          fi
-
+          git fetch --tags --force
           changed=true
-          if [[ -n "$previous_version" && "$current_version" == "$previous_version" ]]; then
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
             changed=false
           fi
 
           {
             echo "changed=$changed"
             echo "current_version=$current_version"
-            echo "previous_version=$previous_version"
-            echo "tag=v$current_version"
+            echo "tag=$tag"
           } >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub release
