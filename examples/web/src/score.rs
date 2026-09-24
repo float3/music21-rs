@@ -1801,6 +1801,21 @@ fn spell_midi(midi: i32, tonic: &str, mode: &str) -> Result<Pitch, JsValue> {
     spell_in_key(midi, &key, &scale)
 }
 
+/// Spells a MIDI number sounding in a chord symbol: as the chord spells it
+/// when the chord has that pitch class (`B-` in `Gm7`), otherwise as
+/// [`spell_midi`] does.
+fn spell_midi_in_chord(midi: i32, figure: &str, tonic: &str, mode: &str) -> Result<Pitch, JsValue> {
+    let key = Key::from_tonic_mode(tonic, mode)
+        .or_else(|_| Key::from_tonic_mode("C", "major"))
+        .map_err(js_error)?;
+    let mut spellings = music21_rs::ChordSymbol::parse(figure)
+        .and_then(|symbol| symbol.to_chord())
+        .map(|chord| chord.pitches())
+        .unwrap_or_default();
+    spellings.extend(key.pitches().map_err(js_error)?);
+    spell_in_key(midi, &key, &spellings)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1919,6 +1934,21 @@ mod tests {
         assert_eq!(name(60, "C#", "major"), "B#3");
         assert_eq!(name(59, "G-", "major"), "C-4");
         assert_eq!(name(61, "nonsense", "major"), "C#4");
+    }
+
+    #[test]
+    fn a_midi_number_is_spelled_as_its_chord_spells_it() {
+        let name = |midi, figure| {
+            spell_midi_in_chord(midi, figure, "C", "major")
+                .expect("spells")
+                .name_with_octave()
+        };
+        assert_eq!(name(58, "Gm7"), "B-3");
+        assert_eq!(name(56, "Fm6"), "A-3");
+        assert_eq!(name(61, "A7"), "C#4");
+        assert_eq!(name(58, "C9"), "B-3");
+        // Not in the chord: as the key spells it.
+        assert_eq!(name(61, "Gm7"), "C#4");
     }
 
     fn note(start: f64, duration: f64, midi: &[(i32, i32)]) -> NoteInput {
