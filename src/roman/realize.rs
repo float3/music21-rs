@@ -77,6 +77,11 @@ impl RomanNumeral {
         self.match_accidentals_to_quality(&mut pitches, root.as_ref())?;
         self.correct_bracketed_pitches(&mut pitches, root.as_ref())?;
 
+        // music21's root is the bass note itself, so it follows the bass
+        // through the respelling: `It53` roots on F#, not the F it was
+        // read as.
+        let root = root.map(|_| pitches[0].clone());
+
         // A note left out or put in must not move the root, so the root is
         // read while the chord is still whole and recorded from there.
         let altered = !self.figures.omitted.is_empty() || !self.figures.added.is_empty();

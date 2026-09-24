@@ -59,6 +59,17 @@ times faster than it did in 0.7.0.
   denominator, and a tolerance for ties then hid a difference music21's
   `min` keeps. Pitch classes 3, 6 and 9 are `E- G- A` now, as in music21;
   every set of pitch classes and 6,000 respellings of named pitches agree.
+- An augmented sixth is named by its root and inversion, as music21 names
+  it, for every voicing: a table of spellings had pinned `A- C D F#` and
+  six others to one inversion whatever note was in the bass, so nine of
+  ten voicings tried were misnamed. And a seventh built from pitch-class
+  numbers is an enharmonic equivalent where music21 says so, since the
+  fifth above its inferred root is respelled on the way.
+- `RomanNumeral`: `frontAlterationString` is what was written, so `It6`
+  has none and `-VI` keeps its `-`; `It53`, `Ger7` and `Sw7` root on their
+  raised bass; `functionalityScore` looks `V+` up as written; and a
+  numeral that is neither a triad nor a seventh is never mixture. 1,185
+  numerals now answer eighteen questions as music21's do.
 - `Chord::closed_position` measured from the note sounding lowest where
   music21 measures from the note written lowest, so `E#4 F-4` closed to
   `F-4 E#5` where music21 keeps `E#4 F-4`. 31 of 4,000 random chords

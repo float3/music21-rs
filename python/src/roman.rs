@@ -116,6 +116,9 @@ struct ParseState {
     /// The alteration in front of the numeral, in semitones. Zero is an
     /// alteration a step deliberately cleared.
     alteration: Option<i8>,
+    /// The flats or sharps a parsing step found written, apart from the
+    /// alteration: music21 keeps the two separately.
+    alteration_string: Option<String>,
     numeral_alone: Option<String>,
     bracketed: Option<Vec<(i8, u8)>>,
     omitted: Option<Vec<u8>>,
@@ -772,9 +775,13 @@ impl RomanNumeral {
     /// numeral reports, since `vi` in a minor key roots on a raised sixth.
     #[getter]
     fn frontAlterationString(&self) -> String {
-        let alteration = self.front_alteration();
-        let mark = if alteration < 0 { "b" } else { "#" };
-        mark.repeat(alteration.unsigned_abs() as usize)
+        if let Some(written) = &self.state.alteration_string {
+            return written.clone();
+        }
+        if self.blank {
+            return String::new();
+        }
+        self.inner.front_alteration_string()
     }
 
     /// music21's `frontAlterationAccidental`: that alteration as an
@@ -1118,6 +1125,8 @@ impl RomanNumeral {
     fn _parseFrontAlterations(&mut self, workingFigure: &str) -> String {
         let (alteration, rest) = rs_roman::split_roman_accidental_prefix(workingFigure);
         self.state.alteration = Some(alteration);
+        self.state.alteration_string =
+            Some(workingFigure[..workingFigure.len() - rest.len()].to_string());
         rest.to_string()
     }
 
