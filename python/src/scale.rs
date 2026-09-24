@@ -1551,9 +1551,26 @@ impl ConcreteScale {
             .iter()
             .map(|pitch| pitch.name_with_octave())
             .collect();
+        // The wheel's own chord where music21's is not installed: the wheel
+        // needs no music21 to answer.
         let class = crate::installed_class(py, "music21.chord", "Chord")
-            .map_or_else(|| py.import("music21.chord")?.getattr("Chord"), Ok)?;
+            .unwrap_or_else(|| py.get_type::<crate::chord::Chord>().into_any());
         Ok(class.call((names.join(" "),), keywords)?.unbind())
+    }
+
+    /// music21's `chord`: the chord of the scale's pitches over its default
+    /// range, as `getChord()` with nothing asked makes it.
+    #[getter]
+    fn chord<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        slf.call_method0("getChord")
+    }
+
+    /// music21's `usePitchDegreeCache`: whether pitches are cached by
+    /// degree. A concrete scale does not; the diatonic, octatonic and
+    /// chromatic ones say they do.
+    #[classattr]
+    fn usePitchDegreeCache() -> bool {
+        false
     }
 
     /// music21's `getScaleDegreeFromPitch`: which degree a pitch is, or
@@ -1830,6 +1847,12 @@ impl DiatonicScale {
     #[allow(non_upper_case_globals)]
     const scaleFamilyName: &'static str = "diatonic";
 
+    /// music21's diatonic scales cache their pitches by degree.
+    #[classattr]
+    fn usePitchDegreeCache() -> bool {
+        true
+    }
+
     #[new]
     #[pyo3(signature = (tonic = None, *_arguments, **keywords))]
     fn new(
@@ -2012,11 +2035,16 @@ def build(base, diatonic_base, names):
     built = {}
     for class_name, is_diatonic in names:
         parent = diatonic_base if is_diatonic else base
-        built[class_name] = type(class_name, (parent,), {
+        namespace = {
             '__module__': 'music21.scale',
             '__qualname__': class_name,
             'scaleTypeName': class_name,
-        })
+        }
+        # music21 caches pitches by degree for the diatonic scales, which
+        # inherit the flag, and for these two.
+        if class_name in ('OctatonicScale', 'ChromaticScale'):
+            namespace['usePitchDegreeCache'] = True
+        built[class_name] = type(class_name, (parent,), namespace)
     return built
 
 
