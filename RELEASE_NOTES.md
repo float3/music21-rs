@@ -29,6 +29,12 @@ places where they answered differently; they agree now.
 
 ## Fixed
 
+- `ChordSymbol::parse_music21` reads a degree as music21 does, through
+  what Python's `int` accepts once sharps and flats are off, so `Cb-7`
+  adds a flat seventh where it was refused, and takes the first run of the
+  digits one to nine, so `C10` adds a one. A root no pitch spells, `C#-7`,
+  raises music21's `AccidentalException`, where the wheel raised
+  `ValueError`.
 - The report counted a wheel class that inherits its members, such as
   `Trill` from `Ornament`, as lacking them. The wheel figure reads 94%
   where it read 89%.

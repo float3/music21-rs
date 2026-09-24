@@ -771,3 +771,15 @@ def test_additive_meters_divide_their_beats_as_music21_does():
         m.TimeSignature("2/4+3/8").beatDivisionDurations
     with pytest.raises(m.TimeSignatureException):
         m.TimeSignature("2/4+3/8").beatSubDivisionDurations
+
+
+@pytest.mark.parametrize("figure", ["C#-7", "A-#9", "F#-7/E"])
+def test_a_chord_symbol_root_no_pitch_spells_is_an_accidental_error(figure):
+    with pytest.raises(m.AccidentalException):
+        m.ChordSymbol(figure)
+
+
+def test_a_chord_symbol_reads_degrees_as_python_reads_numbers():
+    # music21 hands `-7` to Python's int, which takes the sign: a flat seventh.
+    added = m.ChordSymbol("Cb-7").chordStepModifications
+    assert [(mod.degree, mod.interval.semitones) for mod in added] == [(7, -1)]

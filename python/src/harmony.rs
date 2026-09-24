@@ -562,7 +562,12 @@ impl ChordSymbol {
             Ok(symbol) => symbol,
             Err(error) => match live_kind(py, figure)? {
                 Some(symbol) => symbol,
-                None => return Err(PyValueError::new_err(crate::pitch::message(&error))),
+                // A root no pitch spells is music21's accidental error, let
+                // through; anything else a figure it cannot read.
+                None => {
+                    return Err(crate::pitch::specific_error(&error)
+                        .unwrap_or_else(|| PyValueError::new_err(crate::pitch::message(&error))));
+                }
             },
         };
         let kind = symbol.kind().unwrap_or_default().to_string();
