@@ -349,6 +349,41 @@ F,2 [DAB]2 F, [DAB]2 F, | =F,2 [D^GB] z [DGB]4 | E,2 [DGB]2 E, [DGB]2 z | A,2 [E
 `,
     },
     {
+        name: "Un bossa +",
+        view: "guitar",
+        abc: `X:5
+T:Un bossa +
+M:4/4
+L:1/8
+Q:1/4=130
+K:C
+%%MIDI program 24
+P:A
+D E F G | "Dm7" A4 A2 z2 | "G" B4 c B A G | "Cmaj7" e2 d c B2 z2 | z4 z D E F |
+w: hoy que no a-guan-to más quie-ro em-pe-zar de ce-ro y con un
+"Dm7" A4 F4 | "G" G4 B c d d | "Cmaj7" e4 c2 z2 | z4 D E F G |
+w: bos-sa más quie-ro que bai-le-mos por-que en la
+P:B
+"Fmaj7" A4 F2 E F | "Fm6" c3 _A G =A B c | "Cmaj7" e3 d c z2 B | "A7" ^c4 A2 z E |
+w: no-che que te fuis-te no fue el fi-nal que vos qui-si-ste bai-
+"Dm7" A4 F2 z E | "G" d4 B4 | "Cmaj7" c8 | z6 G A |
+w: le-mos un bos-sa más por-que
+P:C
+"Dm7" A4 F2 z D | "G" B4 z3 d | "Cmaj7" e8 | z8 |
+w: cuan-do es-toy con vos
+"Dm7" A4 A4 | "G" B4 G2 z A | "Gm7" _B8 | "C9" z4 D E F G |
+w: to-do nues-tro a-mor y no ha-ce
+"Fmaj7" A4 F G A G | "Fm6" _A2 F2 G =A B c | "Cmaj7" e4 d c z B | "A7" ^c4 A2 z E |
+w: fal-ta que me ex-pli-ques bas-ta que es-tés pa-ra de-cir-te bai-
+"Dm7" A4 F2 z E | "G" d4 B4 | "Gm7" _B8 | "C9" z7 E |
+w: le-mos un bos-sa más bai-
+"Fmaj7" A4 F G A z | "Fm6" _A4 z3 F | "Cmaj7" G4 E F G z | "A7" A4 z3 E |
+w: le-mos o-tro más bai-le-mos o-tro más bai-
+"Dm7" A4 F2 z E | "G" d4 B4 | "Cmaj7" c8 | z8 |]
+w: le-mos un bos-sa más
+`,
+    },
+    {
         name: "Blank",
         abc: `X:1
 T:Untitled
