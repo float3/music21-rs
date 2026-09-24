@@ -5,10 +5,11 @@ on:
     branches:
       - main
       - master
+  # Every pull request, whatever it targets: the checks say whether the
+  # change is sound, and a PR into another branch needs that as much.
+  # GitHub makes no run for a PR it cannot merge, so a conflict has to be
+  # resolved before its checks come back.
   pull_request:
-    branches:
-      - main
-      - master
   workflow_dispatch:
 
 permissions:
