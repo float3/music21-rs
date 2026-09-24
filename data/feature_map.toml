@@ -847,3 +847,32 @@ getSolution = "melodic_interval_counts"
 
 [class.excluded]
 solutionToColor = "the colour a count is drawn in; presentation"
+
+[[class]]
+python = "analysis/enharmonics.py"
+name = "EnharmonicSimplifier"
+rust = ["src/analysis/enharmonics.rs"]
+note = "The best spelling of a run of pitches, scored on augmented and diminished steps, accidentals and their mixture."
+
+[class.renames]
+bestPitches = "best_spelling"
+getMixSharpFlatsScore = "mixture_score"
+
+[class.excluded]
+getRepresentations = "fills the spellings each pitch may take; best_spelling lists them as it goes"
+getProduct = "fills every combination of those spellings; best_spelling walks them as it goes"
+
+[[class]]
+python = "analysis/neoRiemannian.py"
+rust = ["src/analysis/neoriemannian.rs"]
+note = "L, P and R, their chains, the hexatonic cycle and systems, and the chromatic and disjunct mediants."
+
+[class.renames]
+L = "apply"
+P = "apply"
+R = "apply"
+S = "slide"
+N = "nebenverwandt"
+LRP_combinations = "lrp_combination"
+chromaticMediants = "chromatic_mediant"
+disjunctMediants = "disjunct_mediant"

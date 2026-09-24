@@ -141,10 +141,9 @@ Two rules, set 2026-09-12, that most of the open work now serves:
    was true of 0.5.0 and is not true of master; a 0.6.0 section has to say
    otherwise.
 
-6. **`sieve` passes 24 of 25 docstrings.** The one that fails,
-   `Sieve.segment('cmp', segmentFormat='wid')`, wants the compressed reading
-   of a sieve, which the feature map already excludes. Raising the number
-   means porting music21's `Sieve.compress`.
+6. **`sieve` — done.** It passes 25 of 25 docstrings and 107 of 107
+   examples, `Sieve.compressed` having brought in the compressed reading the
+   last one wanted.
 
 7. **An installed chord costs what music21's does.** `Chord('C4 E4 G4')`
    through `install_into_music21` is ~30µs against music21's ~30µs, while the

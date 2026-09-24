@@ -1,0 +1,20 @@
+# Docstrings of music21.analysis.neoRiemannian whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_neoriemannian`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.analysis.neoRiemannian.L",
+    "music21.analysis.neoRiemannian.LRP_combinations",
+    "music21.analysis.neoRiemannian.N",
+    "music21.analysis.neoRiemannian.P",
+    "music21.analysis.neoRiemannian.R",
+    "music21.analysis.neoRiemannian.S",
+    "music21.analysis.neoRiemannian._simplerEnharmonics",
+    "music21.analysis.neoRiemannian.chromaticMediants",
+    "music21.analysis.neoRiemannian.completeHexatonic",
+    "music21.analysis.neoRiemannian.disjunctMediants",
+    "music21.analysis.neoRiemannian.hexatonicSystem",
+    "music21.analysis.neoRiemannian.isChromaticMediant",
+    "music21.analysis.neoRiemannian.isNeoR",
+]

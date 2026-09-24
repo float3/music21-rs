@@ -49,6 +49,7 @@ pub use music21_rs_python::instrument::NAMES as INSTRUMENT_NAMES;
 pub use music21_rs_python::interval::NAMES as INTERVAL_NAMES;
 pub use music21_rs_python::key::NAMES as KEY_NAMES;
 pub use music21_rs_python::meter::{CORE_NAMES as METER_CORE_NAMES, NAMES as METER_NAMES};
+pub use music21_rs_python::neoriemannian::NAMES as NEO_RIEMANNIAN_NAMES;
 pub use music21_rs_python::notation::{BEAM_NAMES, TIE_NAMES, VOLUME_NAMES};
 pub use music21_rs_python::note::NAMES as NOTE_NAMES;
 pub use music21_rs_python::pitch::NAMES as PITCH_NAMES;

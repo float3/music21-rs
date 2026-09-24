@@ -3,8 +3,9 @@
 music21's key analysis is in the crate, weighted by duration and ranked,
 spelled and scored as music21 ranks, spells and scores it, and music21's own
 `analysis.discrete`, `figuredBass.checker` and `figuredBass.harmony` pass
-every example with the crate beneath them: 36 modules, 1,004 docstrings and
-9,008 examples. A figured-bass segment finds its voicings about eighteen
+every example with the crate beneath them. So do `analysis.enharmonics` and
+`analysis.neoRiemannian`, whose transformations are the crate's: 38
+modules, 1,018 docstrings and 9,121 examples. A figured-bass segment finds its voicings about eighteen
 times faster than it did in 0.7.0.
 
 ## Added
@@ -17,6 +18,14 @@ times faster than it did in 0.7.0.
 - `analysis::pitch_span`, music21's `Ambitus.getPitchSpan`, and
   `analysis::melodic_interval_counts`, its
   `MelodicIntervalDiversity.countMelodicIntervals`.
+- `analysis::enharmonics::best_spelling`, music21's
+  `EnharmonicSimplifier.bestPitches`, with its three scores on
+  `EnharmonicRules`.
+- `analysis::neoriemannian`: `Transform` (L, P, R), `lrp_chain` and
+  `lrp_combination`, `complete_hexatonic`, `hexatonic_system`,
+  `chromatic_mediant`, `disjunct_mediant`, `slide`, `nebenverwandt`,
+  `is_neo_r` and `is_chromatic_mediant`. The wheel installs them over
+  music21's `analysis.neoRiemannian`.
 
 ## Changed
 
