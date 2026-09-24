@@ -116,36 +116,13 @@ Two rules, set 2026-09-12, that most of the open work now serves:
    another push supersedes it, so a green tick has to be read against the
    commit it actually covers.
 
-5. **The version must go to 0.6.0 before a release, and the list is longer
-   than it was.** The bump is deliberately not made — nothing is being
-   released yet. What a caller would find changed, all of it on master:
-
-   - `ChromaticInterval::new` and `notes_to_chromatic` return `Result`
-     (`74857d1`).
-   - `TimeSignature` is no longer `Copy`, `Eq` or `Hash` (`0e14f8b`). It
-     carries four partition sequences now, and those weigh their parts in
-     floats.
-   - `TimeSignature::ratio_equal` takes its argument by reference rather
-     than by value (`0e14f8b`).
-   - `beat_quarter_length`, `beat_duration`, `beat_division_quarter_lengths`,
-     `beat_division_durations` and `beat_sub_division_durations` return
-     `Result` (`cab6c97`): a bar whose beats differ has no one beat length,
-     and music21 raises there rather than answering an average.
-
-   The thirty-six methods that went from taking `self` to `&self` are not on
-   that list — a caller writes the same thing either way.
-
-   **The semver gate will not catch any of it.** `cargo semver-checks` runs
-   against `--baseline-rev HEAD^` (`.github/workflows/ci.yml`), so on a push
-   it compares the tip commit with its parent rather than the release with
-   the branch. Run 34703705787 passed it for exactly that reason: its tip and
-   its parent are both documentation-only commits, while the breaking changes
-   sit several commits behind them. A baseline of the last released tag would
-   catch it.
-
-   `RELEASE_NOTES.md` opens with "Nothing a caller had changes shape", which
-   was true of 0.5.0 and is not true of master; a 0.6.0 section has to say
-   otherwise.
+5. **Releases and the semver gate — done.** The breaking changes this entry
+   listed shipped in 0.6.0, whose notes say so under "Breaking Changes",
+   and the crate is at 0.7.1. `cargo semver-checks` now takes the last
+   release tag as its baseline (`.github/workflows/ci.yml`), falling back to
+   the previous commit only where no tag exists, so a breaking change fails
+   there until the version is bumped rather than slipping past a
+   documentation-only tip.
 
 6. **`sieve` — done.** It passes 25 of 25 docstrings and 107 of 107
    examples, `Sieve.compressed` having brought in the compressed reading the

@@ -286,7 +286,8 @@ pub(super) fn degree_pitch(key: &Key, degree: IntegerType) -> Result<Pitch> {
     key.pitch_from_degree(wrapped as usize)
 }
 
-/// The natural note at a diatonic note number, where 22 is middle C.
+/// The natural note at a diatonic note number, where 22 is C3 and 29
+/// middle C.
 pub(super) fn natural_at_diatonic_number(number: IntegerType) -> Result<Pitch> {
     let (letter, octave) = crate::interval::convert_diatonic_number_to_step(number);
     Pitch::builder().step(letter).octave(octave).build()

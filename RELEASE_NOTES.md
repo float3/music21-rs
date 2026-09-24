@@ -29,6 +29,10 @@ places where they answered differently; they agree now.
 - `analysis::transposition::TranspositionChecker`, a set of pitches in all
   twelve transpositions and how many differ. The wheel installs it over
   music21's.
+- `TimeSignature::offset_in_bar`, the arithmetic of music21's
+  `getMeasureOffsetOrMeterModulusOffset`: where an element falls in the
+  bar, given its offset and the meter's. The wheel's member reads the two
+  offsets off music21's stream and hands them over.
 
 ## Fixed
 
