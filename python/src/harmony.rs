@@ -32,7 +32,7 @@ use pyo3::types::{PyDict, PyList, PyTuple};
 use music21_rs_crate::chordsymbol::{
     ChordStepModification as RsChordStepModification,
     ChordStepModificationType as RsChordStepModificationType, ChordSymbolFigure,
-    inversion_is_valid_for_kind, sound_chord_notation,
+    inversion_is_valid_for_kind, voice_chord_notation,
 };
 use music21_rs_crate::{ChordSymbol as RsChordSymbol, Interval as RsInterval, Pitch as RsPitch};
 
@@ -763,7 +763,7 @@ impl ChordSymbol {
             .map(|each| modification_value(&each))
             .collect::<PyResult<_>>()?;
         let notation = live_notation(py, &kind);
-        let pitches = sound_chord_notation(
+        let voicing = voice_chord_notation(
             &root,
             &kind,
             notation.as_deref(),
@@ -778,7 +778,8 @@ impl ChordSymbol {
                 harmony_error(error)
             }
         })?;
-        let objects = pitches
+        let objects = voicing
+            .pitches()
             .iter()
             .map(|pitch| {
                 crate::installed_new(
@@ -790,24 +791,34 @@ impl ChordSymbol {
             })
             .collect::<PyResult<Vec<_>>>()?;
         slf.setattr("pitches", PyTuple::new(py, &objects)?)?;
-        // The root and bass are the notes of the chord that carry their
-        // names, found by name as music21's own setters find them.
-        let held = |name: &str| -> PyResult<Option<Py<Pitch>>> {
-            for object in &objects {
-                if object.borrow(py).inner.name() == name {
-                    return Ok(Some(object.clone_ref(py)));
-                }
+        // The root and bass are where music21's own objects end up, looked
+        // up in the chord as its setters look: the note that is that pitch,
+        // else the first of its name, else the pitch on its own. So `A10/C`
+        // roots on the A3 it holds, `C7/B-` stands on its B-2, and
+        // `Ab10/F#` roots on an A3 it does not sound.
+        let held = |wanted: &RsPitch| -> PyResult<Py<Pitch>> {
+            let same = |object: &&Py<Pitch>| {
+                object.borrow(py).inner.name_with_octave() == wanted.name_with_octave()
+            };
+            let named = |object: &&Py<Pitch>| object.borrow(py).inner.name() == wanted.name();
+            if let Some(found) = objects
+                .iter()
+                .find(same)
+                .or_else(|| objects.iter().find(named))
+            {
+                return Ok(found.clone_ref(py));
             }
-            Ok(None)
+            crate::installed_new(
+                py,
+                "music21.pitch",
+                "Pitch",
+                Pitch::wrap(wanted.clone(), false),
+            )
         };
-        if let Some(found) = held(&bass.name())? {
-            let keywords = PyDict::new(py);
-            keywords.set_item("allow_add", true)?;
-            slf.call_method("bass", (found,), Some(&keywords))?;
-        }
-        if let Some(found) = held(&root.name())? {
-            slf.call_method1("root", (found,))?;
-        }
+        let keywords = PyDict::new(py);
+        keywords.set_item("allow_add", true)?;
+        slf.call_method("bass", (held(voicing.bass())?,), Some(&keywords))?;
+        slf.call_method1("root", (held(voicing.root())?,))?;
         Ok(())
     }
 

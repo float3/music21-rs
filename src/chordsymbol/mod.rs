@@ -29,8 +29,8 @@ pub use tables::{
 
 use parse::*;
 pub use realize::{
-    ChordStepModification, ChordStepModificationType, inversion_is_valid_for_kind,
-    sound_chord_kind, sound_chord_notation,
+    ChordStepModification, ChordStepModificationType, ChordVoicing, inversion_is_valid_for_kind,
+    sound_chord_kind, sound_chord_notation, voice_chord_notation,
 };
 use tables::*;
 
@@ -1056,6 +1056,74 @@ impl TryFrom<String> for ChordSymbol {
 
 #[cfg(test)]
 mod tests {
+
+    /// music21 puts its root and bass objects themselves in the list it
+    /// voices, so an octave pass over the list moves them too, once for
+    /// every place they hold: a bass added twice is one note, twice. Its
+    /// voicings, as it prints them.
+    #[test]
+    fn the_voicing_keeps_music21s_root_and_bass() {
+        let voiced = |figure: &str| {
+            let symbol = ChordSymbol::parse_music21(figure).unwrap();
+            let kind = symbol.kind().unwrap_or_default();
+            voice_chord_notation(
+                symbol.root(),
+                kind,
+                notation_for_kind(resolve_kind_alias(kind)),
+                symbol.bass(),
+                symbol.chord_step_modifications(),
+            )
+            .unwrap()
+        };
+        let a = voiced("A10/C");
+        assert_eq!(a.root().name_with_octave(), "A3");
+        assert_eq!(a.bass().name_with_octave(), "C2");
+        let names: Vec<String> = a.pitches().iter().map(Pitch::name_with_octave).collect();
+        assert_eq!(names, ["C2", "A2", "A3"]);
+        assert_eq!(voiced("Ab10/F#").root().name_with_octave(), "A3");
+
+        // An added flat one takes the root out and puts a new note in; the
+        // bass, added before, keeps its place and moves with the chord.
+        let flat_one = voiced("Bb10/B-");
+        assert_eq!(flat_one.bass().name_with_octave(), "B-1");
+        assert_eq!(voiced("Ab10/A-").bass().name_with_octave(), "A-1");
+    }
+
+    #[test]
+    fn a_slash_bass_is_voiced_as_music21_voices_it() {
+        let cases: [(&str, &[&str]); 20] = [
+            ("B-5/E", &["E2", "E2", "B-3", "F4"]),
+            ("B-69/E", &["E2", "E2", "B-3", "G4", "C5"]),
+            ("C5/G", &["G3", "G3", "C4"]),
+            ("C5/D", &["D2", "D2", "C3", "G3"]),
+            ("C69/D", &["D2", "D2", "C3", "A3", "D4"]),
+            ("C5/C#", &["C#2", "C#2", "C3", "G3"]),
+            ("F5/E", &["E2", "E2", "F3", "C4"]),
+            ("A-10/E", &["E3", "A-3", "A-3"]),
+            ("A#10/E", &["E3", "A#3", "A#3"]),
+            ("C10/G", &["C3", "G3", "C4"]),
+            ("C35/B", &["B2", "B2", "C3", "E3", "G3"]),
+            ("C/B-", &["B-2", "C3", "E3", "G3"]),
+            ("C7/D", &["D2", "C3", "E3", "G3", "B-3"]),
+            ("Cm/E-", &["E-3", "G3", "C4"]),
+            ("C9/E", &["E3", "G3", "B-3", "C4", "D4"]),
+            ("C13/B-", &["B-2", "C3", "D3", "E3", "F3", "G3", "A3"]),
+            ("Cadd9/D", &["D2", "C3", "E3", "G3", "D4"]),
+            ("C6/D", &["D2", "C3", "E3", "G3", "A3"]),
+            ("C69/E", &["E3", "A3", "C4", "D4"]),
+            ("C5/E", &["E3", "G3", "C4"]),
+        ];
+        for (figure, voiced) in cases {
+            let symbol = ChordSymbol::parse_music21(figure).unwrap();
+            let names: Vec<String> = symbol
+                .pitches()
+                .unwrap()
+                .iter()
+                .map(Pitch::name_with_octave)
+                .collect();
+            assert_eq!(names, voiced, "{figure}");
+        }
+    }
 
     /// music21 strips a degree's sharps and flats and hands what is left to
     /// Python's `int`, which takes a sign; the degree is then the first run

@@ -783,3 +783,22 @@ def test_a_chord_symbol_reads_degrees_as_python_reads_numbers():
     # music21 hands `-7` to Python's int, which takes the sign: a flat seventh.
     added = m.ChordSymbol("Cb-7").chordStepModifications
     assert [(mod.degree, mod.interval.semitones) for mod in added] == [(7, -1)]
+
+
+@pytest.mark.parametrize(
+    ("figure", "root", "bass", "inversion"),
+    [
+        ("A10/C", "A3", "C2", 1),
+        ("B-10/D", "B-3", "D2", 1),
+        ("Ab10/F#", "A3", "F#2", 6),
+        ("C5/G", "C4", "G3", 2),
+        ("B-5/E", "B-3", "E2", 5),
+    ],
+)
+def test_a_chord_symbol_keeps_the_root_and_bass_music21_voices(figure, root, bass, inversion):
+    # music21's root and bass are its own objects, moved with the chord, and
+    # need not be the first note of their name.
+    symbol = m.ChordSymbol(figure)
+    assert symbol.root().nameWithOctave == root
+    assert symbol.bass().nameWithOctave == bass
+    assert symbol.inversion() == inversion
