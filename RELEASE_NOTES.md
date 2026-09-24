@@ -54,8 +54,10 @@ the next release is a minor bump.
   `OrnamentKind` -- mordents, trills, turns, appoggiaturas and tremolos, with
   their ornamental pitches in a key and the notes each is played as, a
   nachschlag, a turn's delay and a tremolo's tied repeats included -- and
-  `realize_ornaments`. Checked against music21 by `ornament_parity`, 1,176
-  cases over notes, lengths, keys and accidentals.
+  `realize_ornaments`, and `Ornament::update_accidental_display`, which
+  decides whether each ornamental pitch shows its accidental. Checked against
+  music21 by `ornament_parity`, 1,368 cases over notes, lengths, keys and
+  accidentals.
 
 ## Changed
 

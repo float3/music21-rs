@@ -7,7 +7,7 @@
 //! over a grid of notes, lengths, keys, accidentals, delays and nachschlags.
 
 use music21_rs::expressions::{Ornament, OrnamentDelay, OrnamentKind};
-use music21_rs::{Accidental, Duration, KeySignature, Note};
+use music21_rs::{Accidental, AccidentalDisplayOptions, Duration, KeySignature, Note, Pitch};
 use serde::Deserialize;
 
 use std::path::Path;
@@ -39,6 +39,7 @@ struct Played {
     name: String,
     ornamental: Option<Vec<String>>,
     ornamental_error: Option<String>,
+    displayed: Option<Vec<String>>,
     before: Option<Vec<String>>,
     main: Option<String>,
     after: Option<Vec<String>>,
@@ -118,7 +119,14 @@ fn every_ornament_plays_what_music21_s_plays() {
         );
         let mut ornament = Ornament::of_kind(kind(&played.class));
         if let Some(accidental) = &played.accidental {
-            let accidental: Accidental = accidental.parse().expect("an accidental name");
+            let (name, shown) = match accidental.strip_suffix(" shown") {
+                Some(name) => (name, true),
+                None => (accidental.as_str(), false),
+            };
+            let mut accidental: Accidental = name.parse().expect("an accidental name");
+            if shown {
+                accidental.set_display_status(Some(true));
+            }
             if ornament.is_a("Turn") {
                 ornament.set_upper_accidental(Some(accidental));
             } else {
@@ -153,6 +161,34 @@ fn every_ornament_plays_what_music21_s_plays() {
                     .map(|pitch| pitch.name_with_octave())
                     .collect::<Vec<_>>()
             });
+        if let Some(theirs) = &played.displayed {
+            let past: Vec<Pitch> = ["F#4", "B-3", "C#5"]
+                .iter()
+                .map(|name| Pitch::from_name(name).expect("a pitch name"))
+                .collect();
+            let options = AccidentalDisplayOptions {
+                pitch_past: &past,
+                ..AccidentalDisplayOptions::default()
+            };
+            let mut pitches = ornament
+                .ornamental_pitches(note.pitch(), &key)
+                .expect("music21 resolved them");
+            ornament.update_accidental_display(&mut pitches, &options);
+            let ours: Vec<String> = pitches
+                .iter()
+                .map(|pitch| match pitch.accidental() {
+                    None => "no accidental".to_string(),
+                    Some(accidental) => match accidental.display_status() {
+                        None => "undecided".to_string(),
+                        Some(true) => "shown".to_string(),
+                        Some(false) => "hidden".to_string(),
+                    },
+                })
+                .collect();
+            if &ours != theirs {
+                failures.push(format!("{label}: displayed {ours:?} not {theirs:?}"));
+            }
+        }
         match (&ornamental, &played.ornamental, &played.ornamental_error) {
             (Ok(ours), Some(theirs), _) if ours != theirs => {
                 failures.push(format!("{label}: ornamental {ours:?} not {theirs:?}"));

@@ -2855,7 +2855,10 @@ fn write_ornaments(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> PyRe
         ("G4", 3.0),
     ];
     let keys: [i64; 4] = [0, 2, -3, 6];
-    let accidentals: [Option<&str>; 3] = [None, Some("sharp"), Some("flat")];
+    // "natural shown" is a natural the caller has already said is shown.
+    let accidentals: [Option<&str>; 4] = [None, Some("sharp"), Some("flat"), Some("natural shown")];
+    // What the ornamental pitches' accidentals are decided against.
+    let past_names = ["F#4", "B-3", "C#5"];
     let describe = |played: &Bound<'_, PyAny>| -> PyResult<String> {
         let name: String = played
             .getattr("pitch")?
@@ -2895,7 +2898,14 @@ fn write_ornaments(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> PyRe
                             None => Some(class.call0()?),
                             Some(which) => {
                                 let made = class.call0()?;
-                                let given = pitch.getattr("Accidental")?.call1((which,))?;
+                                let (name, shown) = match which.strip_suffix(" shown") {
+                                    Some(name) => (name, true),
+                                    None => (which, false),
+                                };
+                                let given = pitch.getattr("Accidental")?.call1((name,))?;
+                                if shown {
+                                    given.setattr("displayStatus", true)?;
+                                }
                                 let set = if made.hasattr("upperAccidental")? {
                                     made.setattr("upperAccidental", &given)
                                 } else {
@@ -2962,6 +2972,34 @@ fn write_ornaments(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> PyRe
                                         );
                                     }
                                     let _ = writeln!(out, "ornamental = {}", toml_list(&names));
+                                    let past = pyo3::types::PyList::empty(py);
+                                    for name in past_names {
+                                        past.append(pitch.getattr("Pitch")?.call1((name,))?)?;
+                                    }
+                                    let options = pyo3::types::PyDict::new(py);
+                                    options.set_item("pitchPast", past)?;
+                                    ornament.call_method(
+                                        "updateAccidentalDisplay",
+                                        (),
+                                        Some(&options),
+                                    )?;
+                                    let mut shown = Vec::new();
+                                    for one in ornament.getattr("ornamentalPitches")?.try_iter()? {
+                                        let accidental = one?.getattr("accidental")?;
+                                        shown.push(if accidental.is_none() {
+                                            "no accidental".to_string()
+                                        } else {
+                                            let status = accidental.getattr("displayStatus")?;
+                                            if status.is_none() {
+                                                "undecided".to_string()
+                                            } else if status.extract::<bool>()? {
+                                                "shown".to_string()
+                                            } else {
+                                                "hidden".to_string()
+                                            }
+                                        });
+                                    }
+                                    let _ = writeln!(out, "displayed = {}", toml_list(&shown));
                                 }
                                 Err(error) => {
                                     let _ = writeln!(

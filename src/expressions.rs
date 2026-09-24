@@ -15,7 +15,7 @@ use crate::interval::{GenericInterval, Interval, IntervalDirection};
 use crate::key::keysignature::KeySignature;
 use crate::notation::{Tie, TieType};
 use crate::note::Note;
-use crate::pitch::{Accidental, Pitch};
+use crate::pitch::{Accidental, AccidentalDisplayOptions, Pitch};
 
 /// Which ornament a class is, as far as how it is played goes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -906,6 +906,55 @@ impl Ornament {
                 ])
             }
             _ => Ok(Vec::new()),
+        }
+    }
+
+    /// Decides whether each of this ornament's ornamental pitches shows its
+    /// accidental: music21's `updateAccidentalDisplay` on an ornament.
+    ///
+    /// `ornamental` is what [`Ornament::ornamental_pitches`] gave, in its
+    /// order. An accidental the ornament was given with a display status of
+    /// its own says so outright, adding a natural where the pitch has no
+    /// accidental -- and a trill's accidental says so even while its own
+    /// status is undecided, which leaves the pitch undecided too; otherwise each pitch is decided as
+    /// [`Pitch::update_accidental_display`] decides one, against `options`,
+    /// but never as simultaneous with anything and never tied, since an
+    /// ornamental note is neither. An ornament with no ornamental pitches
+    /// leaves them alone.
+    pub fn update_accidental_display(
+        &self,
+        ornamental: &mut [Pitch],
+        options: &AccidentalDisplayOptions<'_>,
+    ) {
+        let governing = match self.family() {
+            Family::Mordent | Family::Trill => vec![self.accidental.as_ref()],
+            Family::Turn => vec![
+                self.upper_accidental.as_ref(),
+                self.lower_accidental.as_ref(),
+            ],
+            _ => return,
+        };
+        let untied = AccidentalDisplayOptions {
+            other_simultaneous_pitches: &[],
+            last_note_was_tied: false,
+            ..*options
+        };
+        // A trill takes whatever its accidental says, decided or not; a
+        // mordent and a turn only an accidental whose showing is decided.
+        let trill = self.family() == Family::Trill;
+        for (pitch, accidental) in ornamental.iter_mut().zip(governing) {
+            let says =
+                accidental.filter(|accidental| trill || accidental.display_status().is_some());
+            match says {
+                Some(accidental) => {
+                    let mut shown = pitch.accidental().cloned().unwrap_or_else(|| {
+                        Accidental::new("natural").expect("natural is an accidental name")
+                    });
+                    shown.set_display_status(accidental.display_status());
+                    pitch.set_accidental(Some(shown));
+                }
+                None => pitch.update_accidental_display(&untied),
+            }
         }
     }
 

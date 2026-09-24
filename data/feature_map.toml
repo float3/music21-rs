@@ -51,8 +51,6 @@ python = "pitch.py"
 name = "Accidental"
 rust = ["src/pitch/accidental.rs"]
 
-[class.excluded]
-
 [[class]]
 python = "pitch.py"
 name = "Microtone"
@@ -84,7 +82,6 @@ rust = ["src/interval/diatonicinterval.rs"]
 [class.renames]
 perfectable = "is_perfectable"
 mod7inversion = "mod7_inversion"
-
 
 [[class]]
 python = "interval.py"
@@ -118,8 +115,6 @@ python = "key.py"
 name = "KeySignature"
 rust = ["src/key/keysignature.rs"]
 
-[class.excluded]
-
 [[class]]
 python = "key.py"
 name = "Key"
@@ -141,8 +136,8 @@ getDegreeMaxUnique = "degree_count"
 match = "match_pitches"
 
 [class.excluded]
-abstract = "the AbstractScale layer is not modelled"
-isConcrete = "the AbstractScale layer is not modelled"
+abstract = "a scale's pattern is its ScaleType or the steps it was given, read with scale_type and custom_steps; there is no abstract scale object beside it, and the wheel hands music21 one built from those"
+isConcrete = "every Scale here has a tonic, so the question has one answer; the wheel answers it for a scale built without one"
 show = "notation output"
 write = "notation output"
 
@@ -160,7 +155,7 @@ SieveScale = "sieve"
 
 [class.excluded]
 Scale = "the abstract base"
-AbstractScale = "the IntervalNetwork layer; the steps are read off it into ScaleType"
+AbstractScale = "a pattern with no tonic is a ScaleType or a list of steps; the wheel's AbstractScale stands on those and builds music21's IntervalNetwork from them"
 AbstractDiatonicScale = "the IntervalNetwork layer"
 AbstractOctatonicScale = "the IntervalNetwork layer"
 AbstractHarmonicMinorScale = "the IntervalNetwork layer"
@@ -271,7 +266,6 @@ python = "serial.py"
 name = "ToneRow"
 rust = ["src/serial/mod.rs"]
 
-
 [[class]]
 python = "serial.py"
 name = "TwelveToneRow"
@@ -294,8 +288,6 @@ pcToToneRow = "new"
 python = "voiceLeading.py"
 name = "VoiceLeadingQuartet"
 rust = ["src/voiceleading.rs"]
-
-
 
 [[class]]
 python = "sieve.py"
@@ -576,7 +568,6 @@ flatWeight = "flat_weights"
 partition = "one setter dispatching on the type of what it is handed; the three partitions it dispatches to are each ported"
 load = "rebuilding a sequence in place; a new one is built instead"
 
-
 [[class]]
 python = "voiceLeading.py"
 rust = ["src/voiceleading.rs"]
@@ -702,7 +693,6 @@ resolveOrnamentalPitches = "ornamental_pitches"
 
 [class.excluded]
 fillListOfRealizedNotes = "a helper realize fills its lists with; realize is ported"
-updateAccidentalDisplay = "whether an ornamental accidental is printed, which depends on the notes written before it in a stream"
 
 [[class]]
 python = "expressions.py"
@@ -712,9 +702,6 @@ rust = ["src/expressions.rs"]
 [class.renames]
 resolveOrnamentalPitches = "ornamental_pitches"
 ornamentalPitch = "ornamental_pitches"
-
-[class.excluded]
-updateAccidentalDisplay = "whether an ornamental accidental is printed, which depends on the notes written before it in a stream"
 
 [[class]]
 python = "expressions.py"
@@ -726,7 +713,6 @@ resolveOrnamentalPitches = "ornamental_pitches"
 ornamentalPitch = "ornamental_pitches"
 
 [class.excluded]
-updateAccidentalDisplay = "whether an ornamental accidental is printed, which depends on the notes written before it in a stream"
 splitClient = "joins the notes a trilled note is split into with a TrillExtension spanner; there are no spanners here"
 
 [[class]]
@@ -739,9 +725,6 @@ getSize = "turn_size"
 resolveOrnamentalPitches = "ornamental_pitches"
 upperOrnamentalPitch = "ornamental_pitches"
 lowerOrnamentalPitch = "ornamental_pitches"
-
-[class.excluded]
-updateAccidentalDisplay = "whether an ornamental accidental is printed, which depends on the notes written before it in a stream"
 
 [[class]]
 python = "expressions.py"
