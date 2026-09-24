@@ -358,32 +358,45 @@ F,2 [DAB]2 F, [DAB]2 F, | =F,2 [D^GB] z [DGB]4 | E,2 [DGB]2 E, [DGB]2 z | A,2 [E
 T:Un bossa +
 M:4/4
 L:1/8
-Q:1/4=130
+Q:1/4=106
 K:C
+V:voice clef=treble-8 name="Voice"
+%%MIDI program 53
+V:guitar clef=treble-8 name="Guitar"
 %%MIDI program 24
 P:A
-D E F G | "Dm7" A4 A2 z2 | "G" B4 c B A G | "Cmaj7" e2 d c B2 z2 | z4 z D E F |
-w: hoy que no a-guan-to más quie-ro em-pe-zar de ce-ro y con un
-"Dm7" A4 F4 | "G" G4 B c d d | "Cmaj7" e4 c2 z2 | z4 D E F G |
-w: bos-sa más quie-ro que bai-le-mos por-que en la
+[V:voice] E F2 E | "Dm7" D2 C D E3 D- | "G" D F A A E2 E2 | "Cmaj7" D E F D C B, D2 | "Cmaj7" z4 E F2 E |
+w: hoy que no a- guan- to más _ _ _ _ _ quie- ro em- pe- zar de ce- ro _ y con un
+[V:guitar] z4 | A,2 [Acf]2 D [Acf]3 | G, [GBg]2 [GBg] D4 | C2 [GBe]2 G, [GBe]3 | C [GBe]2 [GBe] G,4 |
+[V:voice] "Dm7" D2 C D E3 D- | "G" D z3 E2 D D | "Cmaj7" E C3 C B,2 z | "Cmaj7" z4 E F2 G |
+w: bos- sa _ más _ _ quie- ro que bai- le- mos _ por- que~en la
+[V:guitar] A,2 [Acf]2 D [Acf]3 | G, [GBg]2 [GBg] D4 | C2 [GBe]2 G, [GBe]3 | C [GBe]2 [GBe] G,4 |
 P:B
-"Fmaj7" A4 F2 E F | "Fm6" c3 _A G =A B c | "Cmaj7" e3 d c z2 B | "A7" ^c4 A2 z E |
-w: no-che que te fuis-te no fue el fi-nal que vos qui-si-ste bai-
-"Dm7" A4 F2 z E | "G" d4 B4 | "Cmaj7" c8 | z6 G A |
-w: le-mos un bos-sa más por-que
+[V:voice] "Fmaj7" G G E E2 F E2 | "Fm6" E D2 z C D2 E | "Cmaj7" E2 D C2 A,2 B, | "A7" z A,2 A, z2 G, G, |
+w: no- che _ que te fuis- te _ no fue el fi- nal que vos qui- si- ste bai- le-
+[V:guitar] F,2 [Ace]2 C [Ace]3 | F, [D_Ac]2 [D_Ac] C4 | C2 [GBe]2 G, [GBe]3 | A, [G^ce]2 [G^ce] E,4 |
+[V:voice] "Dm7" G, ^F, z4 C2 | "G" D4 z C2 C- | "Cmaj7" C3 z5 | "Cmaj7" z4 G, ^G, A,2 |
+w: mos _ un bos- sa más _ por- _ que
+[V:guitar] A,2 [Acf]2 D [Acf]3 | G, [GBg]2 [GBg] D4 | C2 [GBe]2 G, [GBe]3 | C [GBe]2 [GBe] G,4 |
 P:C
-"Dm7" A4 F2 z D | "G" B4 z3 d | "Cmaj7" e8 | z8 |
-w: cuan-do es-toy con vos
-"Dm7" A4 A4 | "G" B4 G2 z A | "Gm7" _B8 | "C9" z4 D E F G |
-w: to-do nues-tro a-mor y no ha-ce
-"Fmaj7" A4 F G A G | "Fm6" _A2 F2 G =A B c | "Cmaj7" e4 d c z B | "A7" ^c4 A2 z E |
-w: fal-ta que me ex-pli-ques bas-ta que es-tés pa-ra de-cir-te bai-
-"Dm7" A4 F2 z E | "G" d4 B4 | "Gm7" _B8 | "C9" z7 E |
-w: le-mos un bos-sa más bai-
-"Fmaj7" A4 F G A z | "Fm6" _A4 z3 F | "Cmaj7" G4 E F G z | "A7" A4 z3 E |
-w: le-mos o-tro más bai-le-mos o-tro más bai-
-"Dm7" A4 F2 z E | "G" d4 B4 | "Cmaj7" c8 | z8 |]
-w: le-mos un bos-sa más
+[V:voice] "Dm7" C5 A,2 G,- | "G" G,3 G, z G, ^F, G,- | "Cmaj7" G,2 z6 | "Cmaj7" z8 |
+w: cuan- do es- _ toy con vos _ _
+[V:guitar] A,2 [Acf]2 D [Acf]3 | G, [GBg]2 [GBg] D4 | C2 [GBe]2 G, [GBe]3 | C [GBe]2 [GBe] G,4 |
+[V:voice] "Dm7" C2 C3 _B,2 G,- | "G" G, G3 z4 | "Gm7" z2 _B2 z _B2 z | "C9" C2 z2 B,3 ^C |
+w: to- do nues- tro _ a- mor _ y no ha-
+[V:guitar] A,2 [Acf]2 D [Acf]3 | G, [GBg]2 [GBg] D4 | G,2 [F_Bd]2 D [F_Bd]3 | C [E_Bd]2 [E_Bd] G,4 |
+[V:voice] "Fmaj7" D2 E D2 C C A,- | "Fm6" A, G,3 G, A, A, _B, | "Cmaj7" D D E D2 C2 _B,- | "A7" _B, A,3 z A, G,2 |
+w: ce fal- ta que me ex- _ pli- ques bas- ta que es- tés pa- ra de- cir- _ te bai- le-
+[V:guitar] F,2 [Ace]2 C [Ace]3 | F, [D_Ac]2 [D_Ac] C4 | C2 [GBe]2 G, [GBe]3 | A, [G^ce]2 [G^ce] E,4 |
+[V:voice] "Dm7" z2 D2 z3 B, | "G" D3 D2 E2 D | "Gm7" E4 z D E D | "C9" D3 D z3 _A, |
+w: mos un bos- sa _ _ más _ _ _ _ _ bai-
+[V:guitar] A,2 [Acf]2 D [Acf]3 | G, [GBg]2 [GBg] D4 | G,2 [F_Bd]2 D [F_Bd]3 | C [E_Bd]2 [E_Bd] G,4 |
+[V:voice] "Fmaj7" D E2 _B,2 C2 C- | "Fm6" C z5 E D | "Cmaj7" D E2 A,2 C2 B,- | "A7" B, A,3 A, A, G,2 |
+w: le- mos o- tro más _ bai- _ le- mos o- tro más _ _ bai- le- mos
+[V:guitar] F,2 [Ace]2 C [Ace]3 | F, [D_Ac]2 [D_Ac] C4 | C2 [GBe]2 G, [GBe]3 | A, [G^ce]2 [G^ce] E,4 |
+[V:voice] "Dm7" z6 G, D- | "G" D3 D z B, C C- | "Cmaj7" C4 z4 |]
+w: un bos- _ sa _ _ más _
+[V:guitar] A,2 [Acf]2 D [Acf]3 | G, [GBg]2 [GBg] D4 | [CGBe]4 z4 |]
 `,
     },
     {
