@@ -29,6 +29,12 @@ examples = 6
 tests = 4
 
 [[module]]
+module = "music21.analysis.harmonicFunction"
+docstrings = 2
+examples = 22
+tests = 4
+
+[[module]]
 module = "music21.analysis.neoRiemannian"
 docstrings = 13
 examples = 107

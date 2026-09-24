@@ -876,3 +876,12 @@ N = "nebenverwandt"
 LRP_combinations = "lrp_combination"
 chromaticMediants = "chromatic_mediant"
 disjunctMediants = "disjunct_mediant"
+
+[[class]]
+python = "analysis/harmonicFunction.py"
+rust = ["src/analysis/harmonic_function.rs"]
+note = "The eighteen harmonic function labels and the Roman numerals they stand for, in either mode."
+
+[class.renames]
+functionToRoman = "to_roman"
+romanToFunction = "from_roman"
