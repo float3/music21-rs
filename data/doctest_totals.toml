@@ -71,6 +71,36 @@ examples = 129
 tests = 3
 
 [[module]]
+module = "music21.figuredBass.possibility"
+docstrings = 16
+examples = 211
+tests = 0
+
+[[module]]
+module = "music21.figuredBass.realizer"
+docstrings = 8
+examples = 80
+tests = 1
+
+[[module]]
+module = "music21.figuredBass.realizerScale"
+docstrings = 4
+examples = 26
+tests = 0
+
+[[module]]
+module = "music21.figuredBass.resolution"
+docstrings = 13
+examples = 172
+tests = 0
+
+[[module]]
+module = "music21.figuredBass.segment"
+docstrings = 12
+examples = 122
+tests = 0
+
+[[module]]
 module = "music21.harmony"
 docstrings = 25
 examples = 361

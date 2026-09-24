@@ -335,13 +335,13 @@ rust = ["src/volume.rs"]
 [[class]]
 python = "figuredBass/notation.py"
 name = "Figure"
-rust = ["src/figuredbass.rs"]
+rust = ["src/figuredbass/mod.rs"]
 note = "One number of that column, with the accidental written against it."
 
 [[class]]
 python = "figuredBass/notation.py"
 name = "Modifier"
-rust = ["src/figuredbass.rs"]
+rust = ["src/figuredbass/mod.rs"]
 note = "The mark as written beside the accidental it means: figured bass has marks no accidental name covers, a `+` that raises and a `/` that lowers."
 
 [class.renames]
@@ -349,7 +349,7 @@ modifyPitch = "modify"
 
 [[class]]
 python = "figuredBass/notation.py"
-rust = ["src/figuredbass.rs"]
+rust = ["src/figuredbass/mod.rs"]
 
 [[class]]
 python = "sieve.py"
@@ -735,3 +735,71 @@ rust = ["src/expressions.rs"]
 python = "expressions.py"
 name = "Tremolo"
 rust = ["src/expressions.rs"]
+
+[[class]]
+python = "figuredBass/possibility.py"
+rust = ["src/figuredbass/possibility.rs"]
+note = "The rules a voicing of a figured bass is held to, alone and moving to the next."
+
+[[class]]
+python = "figuredBass/resolution.py"
+rust = ["src/figuredbass/resolution.rs"]
+note = "How a dominant seventh, a diminished seventh or an augmented sixth resolves, voiced part for part."
+
+[class.excluded]
+showResolutions = "notation output"
+
+[[class]]
+python = "figuredBass/realizerScale.py"
+name = "FiguredBassScale"
+rust = ["src/figuredbass/scale.rs"]
+note = "The key a figured bass is counted in, and the notes a bass and its figures stand for."
+
+[[class]]
+python = "figuredBass/segment.py"
+name = "Segment"
+rust = ["src/figuredbass/segment.rs"]
+note = "A bass note and its figures, every voicing of them, and the moves to the next."
+
+[class.excluded]
+singlePossibilityRules = "music21's table of its own Python functions for printing; the rules are Rules and the segment runs them"
+consecutivePossibilityRules = "music21's table of its own Python functions for printing; the rules are Rules and the segment runs them"
+specialResolutionRules = "music21's table of its own Python functions for printing; the rules are Rules and the segment runs them"
+
+[[class]]
+python = "figuredBass/segment.py"
+rust = ["src/figuredbass/segment.rs"]
+note = "Module-level helpers."
+
+[class.renames]
+getPitches = "pitches"
+
+[class.excluded]
+printRules = "prints music21's rule tables, which hold its Python functions"
+
+[[class]]
+python = "figuredBass/realizer.py"
+name = "FiguredBassLine"
+rust = ["src/figuredbass/realizer.rs"]
+note = "A bass line and its figures in a key, realized into every voicing that keeps the rules."
+
+[class.renames]
+retrieveSegments = "segments"
+
+[class.excluded]
+generateBassLine = "builds the bass line as a stream Part with notation; a line here is its notes and figures"
+overlayPart = "pairs the line with written upper parts through a stream; there are no streams here"
+
+[[class]]
+python = "figuredBass/realizer.py"
+name = "Realization"
+rust = ["src/figuredbass/realizer.rs"]
+
+[class.renames]
+getRandomPossibilityProgression = "possibility_progression_by"
+
+[class.excluded]
+generateAllRealizations = "builds a score; the realization answers the voicings themselves"
+generateRandomRealization = "builds a score; the realization answers the voicings themselves"
+generateRandomRealizations = "builds a score; the realization answers the voicings themselves"
+generateRealizationFromPossibilityProgression = "builds a score; the realization answers the voicings themselves"

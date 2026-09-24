@@ -41,7 +41,7 @@ pyo3::create_exception!(
 
 error_into!(modifier_error, ModifierException);
 
-error_into!(notation_error, NotationException);
+error_into!(pub(crate) notation_error, NotationException);
 
 /// music21's `Modifier`: the accidental written beside a figure.
 #[pyclass(

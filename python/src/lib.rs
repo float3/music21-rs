@@ -40,6 +40,7 @@ pub mod clef;
 pub mod duration;
 pub mod dynamics;
 pub mod expressions;
+pub mod fbrules;
 pub mod figuredbass;
 pub mod harmony;
 pub mod instrument;
@@ -50,10 +51,14 @@ pub mod meter;
 pub mod notation;
 pub mod note;
 pub mod pitch;
+pub mod possibility;
+pub mod realizerscale;
+pub mod resolution;
 pub mod rest;
 pub mod roman;
 pub mod scala;
 pub mod scale;
+pub mod segment;
 pub mod serial;
 pub mod sieve;
 pub mod stream;
@@ -65,7 +70,7 @@ pub use pitch::{Accidental, Microtone, Pitch};
 /// The names each music21 module has a counterpart for here, which is what
 /// [`install_into_music21`] replaces and what `python-parity`'s doctest
 /// harness swaps one module at a time.
-const MUSIC21_MODULES: [(&str, &[&str]); 25] = [
+const MUSIC21_MODULES: [(&str, &[&str]); 30] = [
     ("music21.pitch", pitch::NAMES),
     ("music21.interval", interval::NAMES),
     ("music21.note", note::NAMES),
@@ -80,6 +85,11 @@ const MUSIC21_MODULES: [(&str, &[&str]); 25] = [
     ("music21.scale", scale::NAMES),
     ("music21.roman", roman::NAMES),
     ("music21.figuredBass.notation", figuredbass::NAMES),
+    ("music21.figuredBass.possibility", possibility::NAMES),
+    ("music21.figuredBass.realizerScale", realizerscale::NAMES),
+    ("music21.figuredBass.rules", fbrules::NAMES),
+    ("music21.figuredBass.resolution", resolution::NAMES),
+    ("music21.figuredBass.segment", segment::NAMES),
     ("music21.tempo", tempo::NAMES),
     ("music21.voiceLeading", voiceleading::NAMES),
     ("music21.harmony", harmony::INSTALLED_NAMES),
@@ -1210,6 +1220,26 @@ exceptions![
         Some("music21.note")
     ),
     ("NotationException", figuredbass::NotationException, None),
+    (
+        "FiguredBassScaleException",
+        realizerscale::FiguredBassScaleException,
+        Some("music21.figuredBass.realizerScale")
+    ),
+    (
+        "ResolutionException",
+        resolution::ResolutionException,
+        Some("music21.figuredBass.resolution")
+    ),
+    (
+        "SegmentException",
+        segment::SegmentException,
+        Some("music21.figuredBass.segment")
+    ),
+    (
+        "PossibilityException",
+        possibility::PossibilityException,
+        Some("music21.figuredBass.possibility")
+    ),
     ("NoteException", note::NoteException, Some("music21.note")),
     (
         "PitchException",
@@ -1309,6 +1339,11 @@ fn module_getattr<'py>(module: &Bound<'py, PyModule>, name: &str) -> PyResult<Bo
 pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     pitch::register(m)?;
     figuredbass::register(m)?;
+    possibility::register(m)?;
+    realizerscale::register(m)?;
+    fbrules::register(m)?;
+    resolution::register(m)?;
+    segment::register(m)?;
     tempo::register(m)?;
     voiceleading::register(m)?;
     serial::register(m)?;

@@ -1,0 +1,11 @@
+# Docstrings of music21.figuredBass.realizerScale whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_realizerscale`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.figuredBass.realizerScale.FiguredBassScale",
+    "music21.figuredBass.realizerScale.FiguredBassScale.getPitchNames",
+    "music21.figuredBass.realizerScale.FiguredBassScale.getPitches",
+    "music21.figuredBass.realizerScale.FiguredBassScale.getSamplePitches",
+]

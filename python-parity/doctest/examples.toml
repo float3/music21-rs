@@ -1,0 +1,18 @@
+# Docstrings of music21.figuredBass.examples whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_examples`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.figuredBass.examples.V43ResolutionExample",
+    "music21.figuredBass.examples.augmentedSixthResolutionExample",
+    "music21.figuredBass.examples.exampleA",
+    "music21.figuredBass.examples.exampleB",
+    "music21.figuredBass.examples.exampleC",
+    "music21.figuredBass.examples.exampleD",
+    "music21.figuredBass.examples.generateBoogieVamp",
+    "music21.figuredBass.examples.generateTripletBlues",
+    "music21.figuredBass.examples.italianA6ResolutionExample",
+    "music21.figuredBass.examples.twelveBarBlues",
+    "music21.figuredBass.examples.viio65ResolutionExample",
+]

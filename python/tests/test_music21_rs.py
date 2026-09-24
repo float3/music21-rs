@@ -632,3 +632,23 @@ def test_an_instrument_starts_out_as_music21s_class_does():
     assert m.ensembleNameBySize(3) == "trio"
     with pytest.raises(m.InstrumentException):
         m.fromString("kazoo concerto")
+
+
+def test_a_figured_bass_segment_voices_as_music21s_does():
+    # Each answer read off music21 11.0.0b9.
+    dominant = m.Segment(m.Note("G2"), "7")
+    assert dominant.pitchNamesInChord == ["G", "B", "D", "F"]
+    voicings = dominant.allCorrectSinglePossibilities()
+    assert len(voicings) == 8
+    assert [p.nameWithOctave for p in voicings[7]] == ["B5", "F5", "D5", "G2"]
+    tonic = m.Segment(m.Note("C3"), "")
+    pairs = list(dominant.resolveDominantSeventhSegment(tonic))
+    assert len(pairs) == 7
+    assert [p.nameWithOctave for p in pairs[0][1]] == ["E3", "C3", "C3", "C3"]
+    scale = m.FiguredBassScale("d", "minor")
+    assert scale.getPitchNames("C#3", "-7") == ["C#", "E", "G", "B--"]
+    crossing = tuple(m.Pitch(name) for name in ("C5", "G5", "E4", "C4"))
+    assert m.voiceCrossing(crossing)
+    rules = m.Rules()
+    rules.partMovementLimits.append((1, 2))
+    assert m.Segment(fbRules=rules).fbRules.partMovementLimits == [(1, 2)]

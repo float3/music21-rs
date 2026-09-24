@@ -1,12 +1,13 @@
 # Unreleased
 
 `Tuplet` is music21's now in full, and installed over music21's own, and so
-are the instruments. `clef`, `articulations`, `TempoText` and music21's
-ornaments are ported and installed, and music21's own doctests pass every
-example of `clef`, `articulations` and `expressions`: 26 modules, 898
-docstrings and 8,073 examples in all. A note and a chord know
-the instrument they are played on. The `Tuplet` changes break its API, so
-the next release is a minor bump.
+are the instruments and `AbstractScale`. `clef`, `articulations`,
+`TempoText` and music21's ornaments are ported and installed, and so is
+figured-bass realization: a bass line and its figures voiced in every way the
+rules allow. music21's own doctests pass every example of the modules that
+came with it: 33 modules, 963 docstrings and 8,760 examples in all. A note
+and a chord know the instrument they are played on. The `Tuplet` changes
+break its API, so the next release is a minor bump.
 
 ## Breaking Changes
 
@@ -45,6 +46,14 @@ the next release is a minor bump.
 - `tempo::TempoText`, a tempo said in words, with the metronome mark it
   implies and `is_common_tempo_text`.
 - `Instrument::set_percussion_pitch` and `set_in_percussion_map`.
+- Figured-bass realization, music21's `figuredBass` realizer:
+  `figuredbass::scale::FiguredBassScale` (`realizerScale`), the voicing rules
+  in `figuredbass::possibility`, the resolutions of dominant sevenths,
+  diminished sevenths and augmented sixths in `figuredbass::resolution`,
+  `figuredbass::rules::Rules`, `figuredbass::segment::Segment` and
+  `figuredbass::realizer::{FiguredBassLine, Realization}`, which counts,
+  lists and picks from every way of voicing a line. music21's orders are
+  kept, so the n-th voicing is music21's n-th.
 - `scale::fix_default_octave_for_pitch_list`, music21's
   `fixDefaultOctaveForPitchList`: the octaves a collection's notes leave out,
   filled in so that it rises.
@@ -70,7 +79,9 @@ the next release is a minor bump.
   instrument with music21's `TypeError`.
 - The wheel installs its instruments, clefs, articulations, ornaments,
   `AbstractScale` and `TempoText` over music21's, with `ExpressionException`
-  and `TremoloException`. `AbstractScale` builds its pattern from pitches
+  and `TremoloException`, and figured bass's `possibility`, `resolution`,
+  `realizerScale`, `rules` and `segment`, which music21's own realizer then
+  drives. `AbstractScale` builds its pattern from pitches
   (`buildNetworkFromPitches`) and fixes their octaves in place
   (`fixDefaultOctaveForPitchList`), which is all it lacked: music21's `scale`
   doctests pass all 344 examples with it installed.

@@ -1,0 +1,20 @@
+# Docstrings of music21.figuredBass.resolution whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_resolution`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.figuredBass.resolution.augmentedSixthToDominant",
+    "music21.figuredBass.resolution.augmentedSixthToMajorTonic",
+    "music21.figuredBass.resolution.augmentedSixthToMinorTonic",
+    "music21.figuredBass.resolution.diminishedSeventhToMajorSubdominant",
+    "music21.figuredBass.resolution.diminishedSeventhToMajorTonic",
+    "music21.figuredBass.resolution.diminishedSeventhToMinorSubdominant",
+    "music21.figuredBass.resolution.diminishedSeventhToMinorTonic",
+    "music21.figuredBass.resolution.dominantSeventhToMajorSubdominant",
+    "music21.figuredBass.resolution.dominantSeventhToMajorSubmediant",
+    "music21.figuredBass.resolution.dominantSeventhToMajorTonic",
+    "music21.figuredBass.resolution.dominantSeventhToMinorSubdominant",
+    "music21.figuredBass.resolution.dominantSeventhToMinorSubmediant",
+    "music21.figuredBass.resolution.dominantSeventhToMinorTonic",
+]

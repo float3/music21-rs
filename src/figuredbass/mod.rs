@@ -11,6 +11,13 @@
 
 use std::fmt;
 
+pub mod possibility;
+pub mod realizer;
+pub mod resolution;
+pub mod rules;
+pub mod scale;
+pub mod segment;
+
 use crate::{
     defaults::IntegerType,
     error::{Error, Result},

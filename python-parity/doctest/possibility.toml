@@ -1,0 +1,23 @@
+# Docstrings of music21.figuredBass.possibility whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_possibility`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.figuredBass.possibility",
+    "music21.figuredBass.possibility.couldBeItalianA6Resolution",
+    "music21.figuredBass.possibility.hiddenFifths",
+    "music21.figuredBass.possibility.hiddenOctaves",
+    "music21.figuredBass.possibility.isIncomplete",
+    "music21.figuredBass.possibility.limitPartToPitch",
+    "music21.figuredBass.possibility.parallelFifths",
+    "music21.figuredBass.possibility.parallelOctaves",
+    "music21.figuredBass.possibility.partMovementsWithinLimits",
+    "music21.figuredBass.possibility.partPairs",
+    "music21.figuredBass.possibility.partsSame",
+    "music21.figuredBass.possibility.pitchesWithinLimit",
+    "music21.figuredBass.possibility.upperPartsSame",
+    "music21.figuredBass.possibility.upperPartsWithinLimit",
+    "music21.figuredBass.possibility.voiceCrossing",
+    "music21.figuredBass.possibility.voiceOverlap",
+]

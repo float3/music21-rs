@@ -1,0 +1,15 @@
+# Docstrings of music21.figuredBass.realizer whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_realizer`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.figuredBass.realizer",
+    "music21.figuredBass.realizer.FiguredBassLine",
+    "music21.figuredBass.realizer.FiguredBassLine.addElement",
+    "music21.figuredBass.realizer.FiguredBassLine.generateBassLine",
+    "music21.figuredBass.realizer.FiguredBassLine.realize",
+    "music21.figuredBass.realizer.Realization.getNumSolutions",
+    "music21.figuredBass.realizer.addLyricsToBassNote",
+    "music21.figuredBass.realizer.figuredBassFromStream",
+]

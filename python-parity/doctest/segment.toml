@@ -1,0 +1,19 @@
+# Docstrings of music21.figuredBass.segment whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_segment`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.figuredBass.segment.Segment.__init__",
+    "music21.figuredBass.segment.Segment._resolveOrdinarySegment",
+    "music21.figuredBass.segment.Segment.allCorrectConsecutivePossibilities",
+    "music21.figuredBass.segment.Segment.allCorrectSinglePossibilities",
+    "music21.figuredBass.segment.Segment.allSinglePossibilities",
+    "music21.figuredBass.segment.Segment.consecutivePossibilityRules",
+    "music21.figuredBass.segment.Segment.resolveAugmentedSixthSegment",
+    "music21.figuredBass.segment.Segment.resolveDiminishedSeventhSegment",
+    "music21.figuredBass.segment.Segment.resolveDominantSeventhSegment",
+    "music21.figuredBass.segment.Segment.singlePossibilityRules",
+    "music21.figuredBass.segment.Segment.specialResolutionRules",
+    "music21.figuredBass.segment.getPitches",
+]
