@@ -1,0 +1,34 @@
+# Docstrings of music21.articulations whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_articulations`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.articulations",
+    "music21.articulations.Accent",
+    "music21.articulations.Articulation",
+    "music21.articulations.Articulation.name",
+    "music21.articulations.Articulation.volumeShift",
+    "music21.articulations.Bowing",
+    "music21.articulations.BreathMark",
+    "music21.articulations.Caesura",
+    "music21.articulations.DetachedLegato",
+    "music21.articulations.Doit",
+    "music21.articulations.DownBow",
+    "music21.articulations.Falloff",
+    "music21.articulations.Fingering",
+    "music21.articulations.FretBend",
+    "music21.articulations.FretIndication",
+    "music21.articulations.Plop",
+    "music21.articulations.Scoop",
+    "music21.articulations.Spiccato",
+    "music21.articulations.Staccatissimo",
+    "music21.articulations.Staccato",
+    "music21.articulations.Stress",
+    "music21.articulations.StringHarmonic",
+    "music21.articulations.StringIndication",
+    "music21.articulations.StrongAccent",
+    "music21.articulations.Tenuto",
+    "music21.articulations.Unstress",
+    "music21.articulations.UpBow",
+]

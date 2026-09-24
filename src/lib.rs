@@ -45,10 +45,14 @@ mod readme {}
 pub mod abc;
 /// Key-finding and compact analysis helpers.
 pub mod analysis;
+/// Articulations: how a note is played.
+pub mod articulations;
 /// Chord construction, common-name analysis and chord input conversion traits.
 pub mod chord;
 /// Lead-sheet chord-symbol parsing.
 pub mod chordsymbol;
+/// Clefs: which line a note is written on.
+pub mod clef;
 pub(crate) mod common;
 pub(crate) mod defaults;
 pub(crate) mod display;
@@ -115,6 +119,7 @@ pub use analysis::{
     estimate_key_from_pitches, estimate_key_from_pitches_with,
 };
 pub use analysis::{tonal_certainty, tonal_certainty_from_scores};
+pub use articulations::{Articulation, ArticulationKind};
 pub use chord::{
     Chord, ChordResolutionSuggestion, ChordTableAddress, GuitarFingering, GuitarStringFingering,
     GuitarTuning, GuitarTuningString, IntoNotes, KnownChordType, TriadQuality,
@@ -125,6 +130,7 @@ pub use chordsymbol::{
     Music21ChordType, chord_symbol_figure_from_chord, chord_symbol_from_chord,
     known_chord_symbol_types, realize_chord_symbol_durations,
 };
+pub use clef::{Clef, ClefKind};
 pub use defaults::{FloatType, FractionType, IntegerType, Octave, UnsignedIntegerType};
 pub use duration::{Duration, DurationTuple, DurationType, Tuplet, quarter_length_to_closest_type};
 pub use dynamics::Dynamic;
@@ -174,7 +180,7 @@ pub use serial::{
 pub use sieve::Sieve;
 pub use stream::{Stream, StreamElement, StreamEvent, StreamKind};
 pub use tempo::{
-    DEFAULT_TEMPO_VALUES, MetricModulation, MetronomeMark, ModulationSide,
+    DEFAULT_TEMPO_VALUES, MetricModulation, MetronomeMark, ModulationSide, TempoText,
     convert_tempo_by_referent, interpolate_elements,
 };
 pub use tuningsystem::{

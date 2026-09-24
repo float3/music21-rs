@@ -660,3 +660,33 @@ note = "A dynamic mark and the loudness it stands for. In a stream it is in forc
 python = "dynamics.py"
 rust = ["src/dynamics.rs"]
 note = "Module-level helpers."
+
+[[class]]
+python = "clef.py"
+name = "Clef"
+rust = ["src/clef.rs"]
+note = "A clef: its sign, the line it sits on, the octaves it transposes and the note on its lowest line."
+
+[class.renames]
+getStemDirectionForPitches = "stem_direction_for_pitches"
+
+[[class]]
+python = "clef.py"
+name = "PitchClef"
+rust = ["src/clef.rs"]
+note = "A clef that places pitches, whose lowest line moves with its octave change."
+
+[[class]]
+python = "clef.py"
+rust = ["src/clef.rs"]
+note = "Module-level helpers."
+
+[class.renames]
+clefFromString = "from_string"
+bestClef = "best_for"
+
+[[class]]
+python = "articulations.py"
+name = "Articulation"
+rust = ["src/articulations.rs"]
+note = "A mark on a note saying how it is played: how much louder, how much shorter, and which part of a tied note keeps it."

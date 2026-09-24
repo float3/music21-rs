@@ -1,8 +1,11 @@
 # Unreleased
 
-`Tuplet` is music21's now in full, and installed over music21's own. A note
-and a chord know the instrument they are played on. The `Tuplet` changes
-break its API, so the next release is a minor bump.
+`Tuplet` is music21's now in full, and installed over music21's own, and so
+are the instruments. `clef`, `articulations` and `TempoText` are ported, the
+first and last installed too, and music21's own doctests for the first two pass every example:
+25 modules, 858 docstrings and 7,723 examples in all. A note and a chord know
+the instrument they are played on. The `Tuplet` changes break its API, so
+the next release is a minor bump.
 
 ## Breaking Changes
 
@@ -28,6 +31,19 @@ break its API, so the next release is a minor bump.
   a note can answer without the stream around it.
 - `Instrument`, `SearchLanguage`, `ensemble_name_by_size` and
   `Simplification` are named at the crate root.
+- `clef`: music21's clefs as `Clef` and `ClefKind` -- sign, line, octave
+  change and the note on the lowest line for each of its 24 classes;
+  `stem_direction_for_pitches`, `from_string` (`clefFromString`) and
+  `best_for` (`bestClef`). Checked against music21 by `clef_parity`, 796
+  cases.
+- `articulations`: music21's 52 articulation classes as `Articulation` and
+  `ArticulationKind`, each with its volume shift, length shift, where it
+  attaches after a tie split and the fields its class carries -- a
+  fingering's finger, a string or fret number, a bend. Checked by
+  `articulation_parity`.
+- `tempo::TempoText`, a tempo said in words, with the metronome mark it
+  implies and `is_common_tempo_text`.
+- `Instrument::set_percussion_pitch` and `set_in_percussion_map`.
 
 ## Changed
 
@@ -38,6 +54,10 @@ break its API, so the next release is a minor bump.
   it swapped in, where they lost 44 when it was last tried.
 - A note's or chord's `storedInstrument` refuses anything that is not an
   instrument with music21's `TypeError`.
+- The wheel installs its instruments, clefs and `TempoText` over music21's.
+  An instrument or a clef the wheel builds is the installed class, as music21 holds nothing else in a stream. With
+  every one of them installed, music21's suite fails the same fourteen tests
+  as without.
 - A tuplet frozen into a pickle keeps its bracket, its placement, how its
   numbers are shown, its nesting and whether it is frozen. music21 reads its
   corpus back out of pickles, so a score read from the cache had lost every

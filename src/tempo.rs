@@ -412,6 +412,70 @@ pub enum ModulationSide {
     New,
 }
 
+/// A tempo said in words and not in numbers: music21's `TempoText`.
+///
+/// ```
+/// use music21_rs::tempo::TempoText;
+///
+/// let slow = TempoText::new("slow");
+/// assert_eq!(slow.metronome_mark().number(), Some(56.0));
+/// assert!(TempoText::new("Largo e piano").is_common_tempo_text());
+/// assert!(!TempoText::new("undulating").is_common_tempo_text());
+/// ```
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
+pub struct TempoText {
+    text: String,
+}
+
+impl TempoText {
+    /// A tempo said as `text`.
+    pub fn new(text: impl Into<String>) -> Self {
+        Self { text: text.into() }
+    }
+
+    /// The words the tempo is said in.
+    pub fn text(&self) -> &str {
+        &self.text
+    }
+
+    /// Says the tempo in other words.
+    pub fn set_text(&mut self, text: impl Into<String>) {
+        self.text = text.into();
+    }
+
+    /// The metronome mark the words imply: music21's `getMetronomeMark`.
+    pub fn metronome_mark(&self) -> MetronomeMark {
+        MetronomeMark::from_text(self.text.clone())
+    }
+
+    /// Whether the words read as a tempo: music21's `isCommonTempoText`,
+    /// which looks for one of its tempo words inside them, or them inside
+    /// one, ignoring case, spaces and full stops.
+    pub fn is_common_tempo_text(&self) -> bool {
+        is_common_tempo_text(&self.text)
+    }
+}
+
+/// Whether `text` reads as a tempo, as [`TempoText::is_common_tempo_text`]
+/// asks it.
+pub fn is_common_tempo_text(text: &str) -> bool {
+    let stripped = |value: &str| {
+        value
+            .trim()
+            .chars()
+            .filter(|character| *character != ' ' && *character != '.')
+            .collect::<String>()
+            .to_lowercase()
+    };
+    let text = stripped(text);
+    DEFAULT_TEMPO_VALUES.iter().any(|(candidate, _)| {
+        let candidate = stripped(candidate);
+        text.contains(&candidate) || candidate.contains(&text)
+    })
+}
+
 /// A change of tempo written as an equation between two metronome marks:
 /// music21's `MetricModulation`.
 ///

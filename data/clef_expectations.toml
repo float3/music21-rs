@@ -1,0 +1,5225 @@
+# Expected clefs, generated from music21 by
+# `cargo run --release -p xtask --features python -- regenerate-fixtures`.
+# The classes are transcribed into src/clef.rs; the rest is checked
+# behaviourally.
+#
+# music21 11.0.0b9 at e2ba700a434a66baf73d5d05a70c2063dcf8eab9
+
+music21_version = "11.0.0b9"
+music21_commit = "e2ba700a434a66baf73d5d05a70c2063dcf8eab9"
+
+[[clef]]
+class = "Clef"
+octave_change = 0
+name = ""
+parents = []
+
+[[clef]]
+class = "NoClef"
+sign = "none"
+octave_change = 0
+name = "no"
+parents = ["Clef"]
+
+[[clef]]
+class = "PercussionClef"
+sign = "percussion"
+octave_change = 0
+lowest_line = 31
+name = "percussion"
+parents = ["Clef"]
+
+[[clef]]
+class = "PitchClef"
+octave_change = 0
+lowest_line = 31
+name = "pitch"
+parents = ["Clef"]
+
+[[clef]]
+class = "CClef"
+sign = "C"
+octave_change = 0
+lowest_line = 31
+name = "c"
+parents = ["PitchClef", "Clef"]
+
+[[clef]]
+class = "FClef"
+sign = "F"
+octave_change = 0
+lowest_line = 31
+name = "f"
+parents = ["PitchClef", "Clef"]
+
+[[clef]]
+class = "GClef"
+sign = "G"
+octave_change = 0
+lowest_line = 31
+name = "g"
+parents = ["PitchClef", "Clef"]
+
+[[clef]]
+class = "JianpuClef"
+sign = "jianpu"
+octave_change = 0
+name = "jianpu"
+parents = ["NoClef", "Clef"]
+
+[[clef]]
+class = "TabClef"
+sign = "TAB"
+line = 5
+octave_change = 0
+lowest_line = 31
+name = "tab"
+parents = ["PitchClef", "Clef"]
+
+[[clef]]
+class = "AltoClef"
+sign = "C"
+line = 3
+octave_change = 0
+lowest_line = 25
+name = "alto"
+parents = ["CClef", "PitchClef", "Clef"]
+
+[[clef]]
+class = "Bass8vaClef"
+sign = "F"
+line = 4
+octave_change = 1
+lowest_line = 19
+name = "bass8va"
+parents = ["FClef", "PitchClef", "Clef"]
+
+[[clef]]
+class = "Bass8vbClef"
+sign = "F"
+line = 4
+octave_change = -1
+lowest_line = 19
+name = "bass8vb"
+parents = ["FClef", "PitchClef", "Clef"]
+
+[[clef]]
+class = "BassClef"
+sign = "F"
+line = 4
+octave_change = 0
+lowest_line = 19
+name = "bass"
+parents = ["FClef", "PitchClef", "Clef"]
+
+[[clef]]
+class = "CBaritoneClef"
+sign = "C"
+line = 5
+octave_change = 0
+lowest_line = 21
+name = "cBaritone"
+parents = ["CClef", "PitchClef", "Clef"]
+
+[[clef]]
+class = "FBaritoneClef"
+sign = "F"
+line = 3
+octave_change = 0
+lowest_line = 21
+name = "fBaritone"
+parents = ["FClef", "PitchClef", "Clef"]
+
+[[clef]]
+class = "FrenchViolinClef"
+sign = "G"
+line = 1
+octave_change = 0
+lowest_line = 33
+name = "frenchViolin"
+parents = ["GClef", "PitchClef", "Clef"]
+
+[[clef]]
+class = "GSopranoClef"
+sign = "G"
+line = 3
+octave_change = 0
+lowest_line = 29
+name = "gSoprano"
+parents = ["GClef", "PitchClef", "Clef"]
+
+[[clef]]
+class = "MezzoSopranoClef"
+sign = "C"
+line = 2
+octave_change = 0
+lowest_line = 27
+name = "mezzoSoprano"
+parents = ["CClef", "PitchClef", "Clef"]
+
+[[clef]]
+class = "SopranoClef"
+sign = "C"
+line = 1
+octave_change = 0
+lowest_line = 29
+name = "soprano"
+parents = ["CClef", "PitchClef", "Clef"]
+
+[[clef]]
+class = "SubBassClef"
+sign = "F"
+line = 5
+octave_change = 0
+lowest_line = 17
+name = "subBass"
+parents = ["FClef", "PitchClef", "Clef"]
+
+[[clef]]
+class = "TenorClef"
+sign = "C"
+line = 4
+octave_change = 0
+lowest_line = 23
+name = "tenor"
+parents = ["CClef", "PitchClef", "Clef"]
+
+[[clef]]
+class = "TrebleClef"
+sign = "G"
+line = 2
+octave_change = 0
+lowest_line = 31
+name = "treble"
+parents = ["GClef", "PitchClef", "Clef"]
+
+[[clef]]
+class = "Treble8vaClef"
+sign = "G"
+line = 2
+octave_change = 1
+lowest_line = 24
+name = "treble8va"
+parents = ["TrebleClef", "GClef", "PitchClef", "Clef"]
+
+[[clef]]
+class = "Treble8vbClef"
+sign = "G"
+line = 2
+octave_change = -1
+lowest_line = 24
+name = "treble8vb"
+parents = ["TrebleClef", "GClef", "PitchClef", "Clef"]
+
+[[from_string]]
+text = "tab"
+octave_shift = 0
+clef = { class = "TabClef", sign = "TAB", line = 5, octave_change = 0, lowest_line = 31, name = "tab" }
+
+[[from_string]]
+text = "tab"
+octave_shift = -1
+clef = { class = "TabClef", sign = "TAB", line = 5, octave_change = 0, lowest_line = 31, name = "tab" }
+
+[[from_string]]
+text = "tab"
+octave_shift = 1
+clef = { class = "TabClef", sign = "TAB", line = 5, octave_change = 0, lowest_line = 31, name = "tab" }
+
+[[from_string]]
+text = "tab"
+octave_shift = 2
+clef = { class = "TabClef", sign = "TAB", line = 5, octave_change = 0, lowest_line = 31, name = "tab" }
+
+[[from_string]]
+text = "TAB"
+octave_shift = 0
+clef = { class = "TabClef", sign = "TAB", line = 5, octave_change = 0, lowest_line = 31, name = "tab" }
+
+[[from_string]]
+text = "TAB"
+octave_shift = -1
+clef = { class = "TabClef", sign = "TAB", line = 5, octave_change = 0, lowest_line = 31, name = "tab" }
+
+[[from_string]]
+text = "TAB"
+octave_shift = 1
+clef = { class = "TabClef", sign = "TAB", line = 5, octave_change = 0, lowest_line = 31, name = "tab" }
+
+[[from_string]]
+text = "TAB"
+octave_shift = 2
+clef = { class = "TabClef", sign = "TAB", line = 5, octave_change = 0, lowest_line = 31, name = "tab" }
+
+[[from_string]]
+text = "percussion"
+octave_shift = 0
+clef = { class = "PercussionClef", sign = "percussion", octave_change = 0, lowest_line = 31, name = "percussion" }
+
+[[from_string]]
+text = "percussion"
+octave_shift = -1
+clef = { class = "PercussionClef", sign = "percussion", octave_change = 0, lowest_line = 31, name = "percussion" }
+
+[[from_string]]
+text = "percussion"
+octave_shift = 1
+clef = { class = "PercussionClef", sign = "percussion", octave_change = 0, lowest_line = 31, name = "percussion" }
+
+[[from_string]]
+text = "percussion"
+octave_shift = 2
+clef = { class = "PercussionClef", sign = "percussion", octave_change = 0, lowest_line = 31, name = "percussion" }
+
+[[from_string]]
+text = "none"
+octave_shift = 0
+clef = { class = "NoClef", sign = "none", octave_change = 0, name = "no" }
+
+[[from_string]]
+text = "none"
+octave_shift = -1
+clef = { class = "NoClef", sign = "none", octave_change = 0, name = "no" }
+
+[[from_string]]
+text = "none"
+octave_shift = 1
+clef = { class = "NoClef", sign = "none", octave_change = 0, name = "no" }
+
+[[from_string]]
+text = "none"
+octave_shift = 2
+clef = { class = "NoClef", sign = "none", octave_change = 0, name = "no" }
+
+[[from_string]]
+text = "jianpu"
+octave_shift = 0
+clef = { class = "JianpuClef", sign = "jianpu", octave_change = 0, name = "jianpu" }
+
+[[from_string]]
+text = "jianpu"
+octave_shift = -1
+clef = { class = "JianpuClef", sign = "jianpu", octave_change = 0, name = "jianpu" }
+
+[[from_string]]
+text = "jianpu"
+octave_shift = 1
+clef = { class = "JianpuClef", sign = "jianpu", octave_change = 0, name = "jianpu" }
+
+[[from_string]]
+text = "jianpu"
+octave_shift = 2
+clef = { class = "JianpuClef", sign = "jianpu", octave_change = 0, name = "jianpu" }
+
+[[from_string]]
+text = "G"
+octave_shift = 0
+clef = { class = "TrebleClef", sign = "G", line = 2, octave_change = 0, lowest_line = 31, name = "treble" }
+
+[[from_string]]
+text = "G"
+octave_shift = -1
+clef = { class = "Treble8vbClef", sign = "G", line = 2, octave_change = -1, lowest_line = 24, name = "treble8vb" }
+
+[[from_string]]
+text = "G"
+octave_shift = 1
+clef = { class = "Treble8vaClef", sign = "G", line = 2, octave_change = 1, lowest_line = 24, name = "treble8va" }
+
+[[from_string]]
+text = "G"
+octave_shift = 2
+clef = { class = "TrebleClef", sign = "G", line = 2, octave_change = 2, lowest_line = 45, name = "treble" }
+
+[[from_string]]
+text = "F"
+octave_shift = 0
+clef = { class = "BassClef", sign = "F", line = 4, octave_change = 0, lowest_line = 19, name = "bass" }
+
+[[from_string]]
+text = "F"
+octave_shift = -1
+clef = { class = "Bass8vbClef", sign = "F", line = 4, octave_change = -1, lowest_line = 19, name = "bass8vb" }
+
+[[from_string]]
+text = "F"
+octave_shift = 1
+clef = { class = "Bass8vaClef", sign = "F", line = 4, octave_change = 1, lowest_line = 19, name = "bass8va" }
+
+[[from_string]]
+text = "F"
+octave_shift = 2
+clef = { class = "BassClef", sign = "F", line = 4, octave_change = 2, lowest_line = 33, name = "bass" }
+
+[[from_string]]
+text = "C"
+octave_shift = 0
+clef = { class = "AltoClef", sign = "C", line = 3, octave_change = 0, lowest_line = 25, name = "alto" }
+
+[[from_string]]
+text = "C"
+octave_shift = -1
+clef = { class = "AltoClef", sign = "C", line = 3, octave_change = -1, lowest_line = 18, name = "alto" }
+
+[[from_string]]
+text = "C"
+octave_shift = 1
+clef = { class = "AltoClef", sign = "C", line = 3, octave_change = 1, lowest_line = 32, name = "alto" }
+
+[[from_string]]
+text = "C"
+octave_shift = 2
+clef = { class = "AltoClef", sign = "C", line = 3, octave_change = 2, lowest_line = 39, name = "alto" }
+
+[[from_string]]
+text = "X"
+octave_shift = 0
+error = "ClefException"
+
+[[from_string]]
+text = "X"
+octave_shift = -1
+error = "ClefException"
+
+[[from_string]]
+text = "X"
+octave_shift = 1
+error = "ClefException"
+
+[[from_string]]
+text = "X"
+octave_shift = 2
+error = "ClefException"
+
+[[from_string]]
+text = ""
+octave_shift = 0
+error = "ClefException"
+
+[[from_string]]
+text = ""
+octave_shift = -1
+error = "ClefException"
+
+[[from_string]]
+text = ""
+octave_shift = 1
+error = "ClefException"
+
+[[from_string]]
+text = ""
+octave_shift = 2
+error = "ClefException"
+
+[[from_string]]
+text = " G2 "
+octave_shift = 0
+clef = { class = "TrebleClef", sign = "G", line = 2, octave_change = 0, lowest_line = 31, name = "treble" }
+
+[[from_string]]
+text = " G2 "
+octave_shift = -1
+clef = { class = "Treble8vbClef", sign = "G", line = 2, octave_change = -1, lowest_line = 24, name = "treble8vb" }
+
+[[from_string]]
+text = " G2 "
+octave_shift = 1
+clef = { class = "Treble8vaClef", sign = "G", line = 2, octave_change = 1, lowest_line = 24, name = "treble8va" }
+
+[[from_string]]
+text = " G2 "
+octave_shift = 2
+clef = { class = "TrebleClef", sign = "G", line = 2, octave_change = 2, lowest_line = 45, name = "treble" }
+
+[[from_string]]
+text = "treble"
+octave_shift = 0
+clef = { class = "TrebleClef", sign = "G", line = 2, octave_change = 0, lowest_line = 31, name = "treble" }
+
+[[from_string]]
+text = "treble"
+octave_shift = -1
+clef = { class = "TrebleClef", sign = "G", line = 2, octave_change = 0, lowest_line = 31, name = "treble" }
+
+[[from_string]]
+text = "treble"
+octave_shift = 1
+clef = { class = "TrebleClef", sign = "G", line = 2, octave_change = 0, lowest_line = 31, name = "treble" }
+
+[[from_string]]
+text = "treble"
+octave_shift = 2
+clef = { class = "TrebleClef", sign = "G", line = 2, octave_change = 0, lowest_line = 31, name = "treble" }
+
+[[from_string]]
+text = "trebleClef"
+octave_shift = 0
+clef = { class = "TrebleClef", sign = "G", line = 2, octave_change = 0, lowest_line = 31, name = "treble" }
+
+[[from_string]]
+text = "trebleClef"
+octave_shift = -1
+clef = { class = "TrebleClef", sign = "G", line = 2, octave_change = 0, lowest_line = 31, name = "treble" }
+
+[[from_string]]
+text = "trebleClef"
+octave_shift = 1
+clef = { class = "TrebleClef", sign = "G", line = 2, octave_change = 0, lowest_line = 31, name = "treble" }
+
+[[from_string]]
+text = "trebleClef"
+octave_shift = 2
+clef = { class = "TrebleClef", sign = "G", line = 2, octave_change = 0, lowest_line = 31, name = "treble" }
+
+[[from_string]]
+text = "Treble8vb"
+octave_shift = 0
+clef = { class = "Treble8vbClef", sign = "G", line = 2, octave_change = -1, lowest_line = 24, name = "treble8vb" }
+
+[[from_string]]
+text = "Treble8vb"
+octave_shift = -1
+clef = { class = "Treble8vbClef", sign = "G", line = 2, octave_change = -1, lowest_line = 24, name = "treble8vb" }
+
+[[from_string]]
+text = "Treble8vb"
+octave_shift = 1
+clef = { class = "Treble8vbClef", sign = "G", line = 2, octave_change = -1, lowest_line = 24, name = "treble8vb" }
+
+[[from_string]]
+text = "Treble8vb"
+octave_shift = 2
+clef = { class = "Treble8vbClef", sign = "G", line = 2, octave_change = -1, lowest_line = 24, name = "treble8vb" }
+
+[[from_string]]
+text = "mezzoSoprano"
+octave_shift = 0
+clef = { class = "MezzoSopranoClef", sign = "C", line = 2, octave_change = 0, lowest_line = 27, name = "mezzoSoprano" }
+
+[[from_string]]
+text = "mezzoSoprano"
+octave_shift = -1
+clef = { class = "MezzoSopranoClef", sign = "C", line = 2, octave_change = 0, lowest_line = 27, name = "mezzoSoprano" }
+
+[[from_string]]
+text = "mezzoSoprano"
+octave_shift = 1
+clef = { class = "MezzoSopranoClef", sign = "C", line = 2, octave_change = 0, lowest_line = 27, name = "mezzoSoprano" }
+
+[[from_string]]
+text = "mezzoSoprano"
+octave_shift = 2
+clef = { class = "MezzoSopranoClef", sign = "C", line = 2, octave_change = 0, lowest_line = 27, name = "mezzoSoprano" }
+
+[[from_string]]
+text = "nonsense"
+octave_shift = 0
+error = "ClefException"
+
+[[from_string]]
+text = "nonsense"
+octave_shift = -1
+error = "ClefException"
+
+[[from_string]]
+text = "nonsense"
+octave_shift = 1
+error = "ClefException"
+
+[[from_string]]
+text = "nonsense"
+octave_shift = 2
+error = "ClefException"
+
+[[from_string]]
+text = "F6"
+octave_shift = 0
+error = "ClefException"
+
+[[from_string]]
+text = "F6"
+octave_shift = -1
+error = "ClefException"
+
+[[from_string]]
+text = "F6"
+octave_shift = 1
+error = "ClefException"
+
+[[from_string]]
+text = "F6"
+octave_shift = 2
+error = "ClefException"
+
+[[from_string]]
+text = "G0"
+octave_shift = 0
+error = "ClefException"
+
+[[from_string]]
+text = "G0"
+octave_shift = -1
+error = "ClefException"
+
+[[from_string]]
+text = "G0"
+octave_shift = 1
+error = "ClefException"
+
+[[from_string]]
+text = "G0"
+octave_shift = 2
+error = "ClefException"
+
+[[from_string]]
+text = "G1"
+octave_shift = 0
+clef = { class = "FrenchViolinClef", sign = "G", line = 1, octave_change = 0, lowest_line = 33, name = "frenchViolin" }
+
+[[from_string]]
+text = "G1"
+octave_shift = -1
+clef = { class = "FrenchViolinClef", sign = "G", line = 1, octave_change = -1, lowest_line = 26, name = "frenchViolin" }
+
+[[from_string]]
+text = "G1"
+octave_shift = 1
+clef = { class = "FrenchViolinClef", sign = "G", line = 1, octave_change = 1, lowest_line = 40, name = "frenchViolin" }
+
+[[from_string]]
+text = "G1"
+octave_shift = 2
+clef = { class = "FrenchViolinClef", sign = "G", line = 1, octave_change = 2, lowest_line = 47, name = "frenchViolin" }
+
+[[from_string]]
+text = "G2"
+octave_shift = 0
+clef = { class = "TrebleClef", sign = "G", line = 2, octave_change = 0, lowest_line = 31, name = "treble" }
+
+[[from_string]]
+text = "G2"
+octave_shift = -1
+clef = { class = "Treble8vbClef", sign = "G", line = 2, octave_change = -1, lowest_line = 24, name = "treble8vb" }
+
+[[from_string]]
+text = "G2"
+octave_shift = 1
+clef = { class = "Treble8vaClef", sign = "G", line = 2, octave_change = 1, lowest_line = 24, name = "treble8va" }
+
+[[from_string]]
+text = "G2"
+octave_shift = 2
+clef = { class = "TrebleClef", sign = "G", line = 2, octave_change = 2, lowest_line = 45, name = "treble" }
+
+[[from_string]]
+text = "G3"
+octave_shift = 0
+clef = { class = "GSopranoClef", sign = "G", line = 3, octave_change = 0, lowest_line = 29, name = "gSoprano" }
+
+[[from_string]]
+text = "G3"
+octave_shift = -1
+clef = { class = "GSopranoClef", sign = "G", line = 3, octave_change = -1, lowest_line = 22, name = "gSoprano" }
+
+[[from_string]]
+text = "G3"
+octave_shift = 1
+clef = { class = "GSopranoClef", sign = "G", line = 3, octave_change = 1, lowest_line = 36, name = "gSoprano" }
+
+[[from_string]]
+text = "G3"
+octave_shift = 2
+clef = { class = "GSopranoClef", sign = "G", line = 3, octave_change = 2, lowest_line = 43, name = "gSoprano" }
+
+[[from_string]]
+text = "G4"
+octave_shift = 0
+clef = { class = "GClef", sign = "G", line = 4, octave_change = 0, lowest_line = 31, name = "g" }
+
+[[from_string]]
+text = "G4"
+octave_shift = -1
+clef = { class = "GClef", sign = "G", line = 4, octave_change = -1, lowest_line = 24, name = "g" }
+
+[[from_string]]
+text = "G4"
+octave_shift = 1
+clef = { class = "GClef", sign = "G", line = 4, octave_change = 1, lowest_line = 38, name = "g" }
+
+[[from_string]]
+text = "G4"
+octave_shift = 2
+clef = { class = "GClef", sign = "G", line = 4, octave_change = 2, lowest_line = 45, name = "g" }
+
+[[from_string]]
+text = "G5"
+octave_shift = 0
+clef = { class = "GClef", sign = "G", line = 5, octave_change = 0, lowest_line = 31, name = "g" }
+
+[[from_string]]
+text = "G5"
+octave_shift = -1
+clef = { class = "GClef", sign = "G", line = 5, octave_change = -1, lowest_line = 24, name = "g" }
+
+[[from_string]]
+text = "G5"
+octave_shift = 1
+clef = { class = "GClef", sign = "G", line = 5, octave_change = 1, lowest_line = 38, name = "g" }
+
+[[from_string]]
+text = "G5"
+octave_shift = 2
+clef = { class = "GClef", sign = "G", line = 5, octave_change = 2, lowest_line = 45, name = "g" }
+
+[[from_string]]
+text = "F1"
+octave_shift = 0
+clef = { class = "FClef", sign = "F", line = 1, octave_change = 0, lowest_line = 31, name = "f" }
+
+[[from_string]]
+text = "F1"
+octave_shift = -1
+clef = { class = "FClef", sign = "F", line = 1, octave_change = -1, lowest_line = 24, name = "f" }
+
+[[from_string]]
+text = "F1"
+octave_shift = 1
+clef = { class = "FClef", sign = "F", line = 1, octave_change = 1, lowest_line = 38, name = "f" }
+
+[[from_string]]
+text = "F1"
+octave_shift = 2
+clef = { class = "FClef", sign = "F", line = 1, octave_change = 2, lowest_line = 45, name = "f" }
+
+[[from_string]]
+text = "F2"
+octave_shift = 0
+clef = { class = "FClef", sign = "F", line = 2, octave_change = 0, lowest_line = 31, name = "f" }
+
+[[from_string]]
+text = "F2"
+octave_shift = -1
+clef = { class = "FClef", sign = "F", line = 2, octave_change = -1, lowest_line = 24, name = "f" }
+
+[[from_string]]
+text = "F2"
+octave_shift = 1
+clef = { class = "FClef", sign = "F", line = 2, octave_change = 1, lowest_line = 38, name = "f" }
+
+[[from_string]]
+text = "F2"
+octave_shift = 2
+clef = { class = "FClef", sign = "F", line = 2, octave_change = 2, lowest_line = 45, name = "f" }
+
+[[from_string]]
+text = "F3"
+octave_shift = 0
+clef = { class = "FBaritoneClef", sign = "F", line = 3, octave_change = 0, lowest_line = 21, name = "fBaritone" }
+
+[[from_string]]
+text = "F3"
+octave_shift = -1
+clef = { class = "FBaritoneClef", sign = "F", line = 3, octave_change = -1, lowest_line = 14, name = "fBaritone" }
+
+[[from_string]]
+text = "F3"
+octave_shift = 1
+clef = { class = "FBaritoneClef", sign = "F", line = 3, octave_change = 1, lowest_line = 28, name = "fBaritone" }
+
+[[from_string]]
+text = "F3"
+octave_shift = 2
+clef = { class = "FBaritoneClef", sign = "F", line = 3, octave_change = 2, lowest_line = 35, name = "fBaritone" }
+
+[[from_string]]
+text = "F4"
+octave_shift = 0
+clef = { class = "BassClef", sign = "F", line = 4, octave_change = 0, lowest_line = 19, name = "bass" }
+
+[[from_string]]
+text = "F4"
+octave_shift = -1
+clef = { class = "Bass8vbClef", sign = "F", line = 4, octave_change = -1, lowest_line = 19, name = "bass8vb" }
+
+[[from_string]]
+text = "F4"
+octave_shift = 1
+clef = { class = "Bass8vaClef", sign = "F", line = 4, octave_change = 1, lowest_line = 19, name = "bass8va" }
+
+[[from_string]]
+text = "F4"
+octave_shift = 2
+clef = { class = "BassClef", sign = "F", line = 4, octave_change = 2, lowest_line = 33, name = "bass" }
+
+[[from_string]]
+text = "F5"
+octave_shift = 0
+clef = { class = "SubBassClef", sign = "F", line = 5, octave_change = 0, lowest_line = 17, name = "subBass" }
+
+[[from_string]]
+text = "F5"
+octave_shift = -1
+clef = { class = "SubBassClef", sign = "F", line = 5, octave_change = -1, lowest_line = 10, name = "subBass" }
+
+[[from_string]]
+text = "F5"
+octave_shift = 1
+clef = { class = "SubBassClef", sign = "F", line = 5, octave_change = 1, lowest_line = 24, name = "subBass" }
+
+[[from_string]]
+text = "F5"
+octave_shift = 2
+clef = { class = "SubBassClef", sign = "F", line = 5, octave_change = 2, lowest_line = 31, name = "subBass" }
+
+[[from_string]]
+text = "C1"
+octave_shift = 0
+clef = { class = "SopranoClef", sign = "C", line = 1, octave_change = 0, lowest_line = 29, name = "soprano" }
+
+[[from_string]]
+text = "C1"
+octave_shift = -1
+clef = { class = "SopranoClef", sign = "C", line = 1, octave_change = -1, lowest_line = 22, name = "soprano" }
+
+[[from_string]]
+text = "C1"
+octave_shift = 1
+clef = { class = "SopranoClef", sign = "C", line = 1, octave_change = 1, lowest_line = 36, name = "soprano" }
+
+[[from_string]]
+text = "C1"
+octave_shift = 2
+clef = { class = "SopranoClef", sign = "C", line = 1, octave_change = 2, lowest_line = 43, name = "soprano" }
+
+[[from_string]]
+text = "C2"
+octave_shift = 0
+clef = { class = "MezzoSopranoClef", sign = "C", line = 2, octave_change = 0, lowest_line = 27, name = "mezzoSoprano" }
+
+[[from_string]]
+text = "C2"
+octave_shift = -1
+clef = { class = "MezzoSopranoClef", sign = "C", line = 2, octave_change = -1, lowest_line = 20, name = "mezzoSoprano" }
+
+[[from_string]]
+text = "C2"
+octave_shift = 1
+clef = { class = "MezzoSopranoClef", sign = "C", line = 2, octave_change = 1, lowest_line = 34, name = "mezzoSoprano" }
+
+[[from_string]]
+text = "C2"
+octave_shift = 2
+clef = { class = "MezzoSopranoClef", sign = "C", line = 2, octave_change = 2, lowest_line = 41, name = "mezzoSoprano" }
+
+[[from_string]]
+text = "C3"
+octave_shift = 0
+clef = { class = "AltoClef", sign = "C", line = 3, octave_change = 0, lowest_line = 25, name = "alto" }
+
+[[from_string]]
+text = "C3"
+octave_shift = -1
+clef = { class = "AltoClef", sign = "C", line = 3, octave_change = -1, lowest_line = 18, name = "alto" }
+
+[[from_string]]
+text = "C3"
+octave_shift = 1
+clef = { class = "AltoClef", sign = "C", line = 3, octave_change = 1, lowest_line = 32, name = "alto" }
+
+[[from_string]]
+text = "C3"
+octave_shift = 2
+clef = { class = "AltoClef", sign = "C", line = 3, octave_change = 2, lowest_line = 39, name = "alto" }
+
+[[from_string]]
+text = "C4"
+octave_shift = 0
+clef = { class = "TenorClef", sign = "C", line = 4, octave_change = 0, lowest_line = 23, name = "tenor" }
+
+[[from_string]]
+text = "C4"
+octave_shift = -1
+clef = { class = "TenorClef", sign = "C", line = 4, octave_change = -1, lowest_line = 16, name = "tenor" }
+
+[[from_string]]
+text = "C4"
+octave_shift = 1
+clef = { class = "TenorClef", sign = "C", line = 4, octave_change = 1, lowest_line = 30, name = "tenor" }
+
+[[from_string]]
+text = "C4"
+octave_shift = 2
+clef = { class = "TenorClef", sign = "C", line = 4, octave_change = 2, lowest_line = 37, name = "tenor" }
+
+[[from_string]]
+text = "C5"
+octave_shift = 0
+clef = { class = "CBaritoneClef", sign = "C", line = 5, octave_change = 0, lowest_line = 21, name = "cBaritone" }
+
+[[from_string]]
+text = "C5"
+octave_shift = -1
+clef = { class = "CBaritoneClef", sign = "C", line = 5, octave_change = -1, lowest_line = 14, name = "cBaritone" }
+
+[[from_string]]
+text = "C5"
+octave_shift = 1
+clef = { class = "CBaritoneClef", sign = "C", line = 5, octave_change = 1, lowest_line = 28, name = "cBaritone" }
+
+[[from_string]]
+text = "C5"
+octave_shift = 2
+clef = { class = "CBaritoneClef", sign = "C", line = 5, octave_change = 2, lowest_line = 35, name = "cBaritone" }
+
+[[from_string]]
+text = "g1"
+octave_shift = 0
+clef = { class = "FrenchViolinClef", sign = "G", line = 1, octave_change = 0, lowest_line = 33, name = "frenchViolin" }
+
+[[from_string]]
+text = "g1"
+octave_shift = -1
+clef = { class = "FrenchViolinClef", sign = "G", line = 1, octave_change = -1, lowest_line = 26, name = "frenchViolin" }
+
+[[from_string]]
+text = "g1"
+octave_shift = 1
+clef = { class = "FrenchViolinClef", sign = "G", line = 1, octave_change = 1, lowest_line = 40, name = "frenchViolin" }
+
+[[from_string]]
+text = "g1"
+octave_shift = 2
+clef = { class = "FrenchViolinClef", sign = "G", line = 1, octave_change = 2, lowest_line = 47, name = "frenchViolin" }
+
+[[from_string]]
+text = "g2"
+octave_shift = 0
+clef = { class = "TrebleClef", sign = "G", line = 2, octave_change = 0, lowest_line = 31, name = "treble" }
+
+[[from_string]]
+text = "g2"
+octave_shift = -1
+clef = { class = "Treble8vbClef", sign = "G", line = 2, octave_change = -1, lowest_line = 24, name = "treble8vb" }
+
+[[from_string]]
+text = "g2"
+octave_shift = 1
+clef = { class = "Treble8vaClef", sign = "G", line = 2, octave_change = 1, lowest_line = 24, name = "treble8va" }
+
+[[from_string]]
+text = "g2"
+octave_shift = 2
+clef = { class = "TrebleClef", sign = "G", line = 2, octave_change = 2, lowest_line = 45, name = "treble" }
+
+[[from_string]]
+text = "g3"
+octave_shift = 0
+clef = { class = "GSopranoClef", sign = "G", line = 3, octave_change = 0, lowest_line = 29, name = "gSoprano" }
+
+[[from_string]]
+text = "g3"
+octave_shift = -1
+clef = { class = "GSopranoClef", sign = "G", line = 3, octave_change = -1, lowest_line = 22, name = "gSoprano" }
+
+[[from_string]]
+text = "g3"
+octave_shift = 1
+clef = { class = "GSopranoClef", sign = "G", line = 3, octave_change = 1, lowest_line = 36, name = "gSoprano" }
+
+[[from_string]]
+text = "g3"
+octave_shift = 2
+clef = { class = "GSopranoClef", sign = "G", line = 3, octave_change = 2, lowest_line = 43, name = "gSoprano" }
+
+[[from_string]]
+text = "g4"
+octave_shift = 0
+clef = { class = "GClef", sign = "G", line = 4, octave_change = 0, lowest_line = 31, name = "g" }
+
+[[from_string]]
+text = "g4"
+octave_shift = -1
+clef = { class = "GClef", sign = "G", line = 4, octave_change = -1, lowest_line = 24, name = "g" }
+
+[[from_string]]
+text = "g4"
+octave_shift = 1
+clef = { class = "GClef", sign = "G", line = 4, octave_change = 1, lowest_line = 38, name = "g" }
+
+[[from_string]]
+text = "g4"
+octave_shift = 2
+clef = { class = "GClef", sign = "G", line = 4, octave_change = 2, lowest_line = 45, name = "g" }
+
+[[from_string]]
+text = "g5"
+octave_shift = 0
+clef = { class = "GClef", sign = "G", line = 5, octave_change = 0, lowest_line = 31, name = "g" }
+
+[[from_string]]
+text = "g5"
+octave_shift = -1
+clef = { class = "GClef", sign = "G", line = 5, octave_change = -1, lowest_line = 24, name = "g" }
+
+[[from_string]]
+text = "g5"
+octave_shift = 1
+clef = { class = "GClef", sign = "G", line = 5, octave_change = 1, lowest_line = 38, name = "g" }
+
+[[from_string]]
+text = "g5"
+octave_shift = 2
+clef = { class = "GClef", sign = "G", line = 5, octave_change = 2, lowest_line = 45, name = "g" }
+
+[[from_string]]
+text = "X1"
+octave_shift = 0
+clef = { class = "PitchClef", sign = "X", line = 1, octave_change = 0, lowest_line = 31, name = "pitch" }
+
+[[from_string]]
+text = "X1"
+octave_shift = -1
+clef = { class = "PitchClef", sign = "X", line = 1, octave_change = -1, lowest_line = 24, name = "pitch" }
+
+[[from_string]]
+text = "X1"
+octave_shift = 1
+clef = { class = "PitchClef", sign = "X", line = 1, octave_change = 1, lowest_line = 38, name = "pitch" }
+
+[[from_string]]
+text = "X1"
+octave_shift = 2
+clef = { class = "PitchClef", sign = "X", line = 1, octave_change = 2, lowest_line = 45, name = "pitch" }
+
+[[from_string]]
+text = "X2"
+octave_shift = 0
+clef = { class = "PitchClef", sign = "X", line = 2, octave_change = 0, lowest_line = 31, name = "pitch" }
+
+[[from_string]]
+text = "X2"
+octave_shift = -1
+clef = { class = "PitchClef", sign = "X", line = 2, octave_change = -1, lowest_line = 24, name = "pitch" }
+
+[[from_string]]
+text = "X2"
+octave_shift = 1
+clef = { class = "PitchClef", sign = "X", line = 2, octave_change = 1, lowest_line = 38, name = "pitch" }
+
+[[from_string]]
+text = "X2"
+octave_shift = 2
+clef = { class = "PitchClef", sign = "X", line = 2, octave_change = 2, lowest_line = 45, name = "pitch" }
+
+[[from_string]]
+text = "X3"
+octave_shift = 0
+clef = { class = "PitchClef", sign = "X", line = 3, octave_change = 0, lowest_line = 31, name = "pitch" }
+
+[[from_string]]
+text = "X3"
+octave_shift = -1
+clef = { class = "PitchClef", sign = "X", line = 3, octave_change = -1, lowest_line = 24, name = "pitch" }
+
+[[from_string]]
+text = "X3"
+octave_shift = 1
+clef = { class = "PitchClef", sign = "X", line = 3, octave_change = 1, lowest_line = 38, name = "pitch" }
+
+[[from_string]]
+text = "X3"
+octave_shift = 2
+clef = { class = "PitchClef", sign = "X", line = 3, octave_change = 2, lowest_line = 45, name = "pitch" }
+
+[[from_string]]
+text = "X4"
+octave_shift = 0
+clef = { class = "PitchClef", sign = "X", line = 4, octave_change = 0, lowest_line = 31, name = "pitch" }
+
+[[from_string]]
+text = "X4"
+octave_shift = -1
+clef = { class = "PitchClef", sign = "X", line = 4, octave_change = -1, lowest_line = 24, name = "pitch" }
+
+[[from_string]]
+text = "X4"
+octave_shift = 1
+clef = { class = "PitchClef", sign = "X", line = 4, octave_change = 1, lowest_line = 38, name = "pitch" }
+
+[[from_string]]
+text = "X4"
+octave_shift = 2
+clef = { class = "PitchClef", sign = "X", line = 4, octave_change = 2, lowest_line = 45, name = "pitch" }
+
+[[from_string]]
+text = "X5"
+octave_shift = 0
+clef = { class = "PitchClef", sign = "X", line = 5, octave_change = 0, lowest_line = 31, name = "pitch" }
+
+[[from_string]]
+text = "X5"
+octave_shift = -1
+clef = { class = "PitchClef", sign = "X", line = 5, octave_change = -1, lowest_line = 24, name = "pitch" }
+
+[[from_string]]
+text = "X5"
+octave_shift = 1
+clef = { class = "PitchClef", sign = "X", line = 5, octave_change = 1, lowest_line = 38, name = "pitch" }
+
+[[from_string]]
+text = "X5"
+octave_shift = 2
+clef = { class = "PitchClef", sign = "X", line = 5, octave_change = 2, lowest_line = 45, name = "pitch" }
+
+[[stem]]
+class = "Clef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "Clef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "Clef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "Clef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Clef"
+pitches = ["C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Clef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "Clef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Clef"
+pitches = ["B4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Clef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "Clef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Clef"
+pitches = ["A4", "C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Clef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "Clef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "Clef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "Clef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "Clef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "Clef"
+pitches = ["C6", "C2"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "Clef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "Clef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "Clef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "Clef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "Clef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "Clef"
+pitches = ["B3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "Clef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "NoClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "NoClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "NoClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "NoClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "NoClef"
+pitches = ["C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "NoClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "NoClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "NoClef"
+pitches = ["B4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "NoClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "NoClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "NoClef"
+pitches = ["A4", "C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "NoClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "NoClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "NoClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "NoClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "NoClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "NoClef"
+pitches = ["C6", "C2"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "NoClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "NoClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "NoClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "NoClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "NoClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "NoClef"
+pitches = ["B3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "NoClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "PercussionClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "PercussionClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "PercussionClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "PercussionClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "PercussionClef"
+pitches = ["C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "PercussionClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "PercussionClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "PercussionClef"
+pitches = ["B4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "PercussionClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "PercussionClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "PercussionClef"
+pitches = ["A4", "C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "PercussionClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "PercussionClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "PercussionClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "PercussionClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "PercussionClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "PercussionClef"
+pitches = ["C6", "C2"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "PercussionClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "PercussionClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "PercussionClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "PercussionClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "PercussionClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "PercussionClef"
+pitches = ["B3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "PercussionClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "PitchClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "PitchClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "PitchClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "PitchClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "PitchClef"
+pitches = ["C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "PitchClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "PitchClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "PitchClef"
+pitches = ["B4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "PitchClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "PitchClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "PitchClef"
+pitches = ["A4", "C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "PitchClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "PitchClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "PitchClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "PitchClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "PitchClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "PitchClef"
+pitches = ["C6", "C2"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "PitchClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "PitchClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "PitchClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "PitchClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "PitchClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "PitchClef"
+pitches = ["B3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "PitchClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "CClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "CClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "CClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "CClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "CClef"
+pitches = ["C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "CClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "CClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "CClef"
+pitches = ["B4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "CClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "CClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "CClef"
+pitches = ["A4", "C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "CClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "CClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "CClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "CClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "CClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "CClef"
+pitches = ["C6", "C2"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "CClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "CClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "CClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "CClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "CClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "CClef"
+pitches = ["B3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "CClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "FClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "FClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "FClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "FClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "FClef"
+pitches = ["C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "FClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "FClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "FClef"
+pitches = ["B4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "FClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "FClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "FClef"
+pitches = ["A4", "C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "FClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "FClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "FClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "FClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "FClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "FClef"
+pitches = ["C6", "C2"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "FClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "FClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "FClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "FClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "FClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "FClef"
+pitches = ["B3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "FClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "GClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "GClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "GClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "GClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "GClef"
+pitches = ["C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "GClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "GClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "GClef"
+pitches = ["B4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "GClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "GClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "GClef"
+pitches = ["A4", "C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "GClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "GClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "GClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "GClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "GClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "GClef"
+pitches = ["C6", "C2"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "GClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "GClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "GClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "GClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "GClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "GClef"
+pitches = ["B3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "GClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "JianpuClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "JianpuClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "JianpuClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "JianpuClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "JianpuClef"
+pitches = ["C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "JianpuClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "JianpuClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "JianpuClef"
+pitches = ["B4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "JianpuClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "JianpuClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "JianpuClef"
+pitches = ["A4", "C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "JianpuClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "JianpuClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "JianpuClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "JianpuClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "JianpuClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "JianpuClef"
+pitches = ["C6", "C2"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "JianpuClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "JianpuClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "JianpuClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "JianpuClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "JianpuClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "JianpuClef"
+pitches = ["B3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "JianpuClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "TabClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TabClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TabClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "TabClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TabClef"
+pitches = ["C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TabClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "TabClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TabClef"
+pitches = ["B4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TabClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "TabClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TabClef"
+pitches = ["A4", "C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TabClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "TabClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TabClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TabClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "TabClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TabClef"
+pitches = ["C6", "C2"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TabClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "TabClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TabClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TabClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "TabClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TabClef"
+pitches = ["B3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TabClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "AltoClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "AltoClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "AltoClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "AltoClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "AltoClef"
+pitches = ["C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "AltoClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "AltoClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "AltoClef"
+pitches = ["B4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "AltoClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "AltoClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "AltoClef"
+pitches = ["A4", "C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "AltoClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "AltoClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "AltoClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "AltoClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "AltoClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "AltoClef"
+pitches = ["C6", "C2"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "AltoClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "AltoClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "AltoClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "AltoClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "AltoClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "AltoClef"
+pitches = ["B3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "AltoClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "Bass8vaClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "Bass8vaClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Bass8vaClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "Bass8vaClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Bass8vaClef"
+pitches = ["C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Bass8vaClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "Bass8vaClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Bass8vaClef"
+pitches = ["B4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Bass8vaClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "Bass8vaClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Bass8vaClef"
+pitches = ["A4", "C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Bass8vaClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "Bass8vaClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Bass8vaClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Bass8vaClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "Bass8vaClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Bass8vaClef"
+pitches = ["C6", "C2"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Bass8vaClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "Bass8vaClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Bass8vaClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Bass8vaClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "Bass8vaClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Bass8vaClef"
+pitches = ["B3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Bass8vaClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "Bass8vbClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "Bass8vbClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Bass8vbClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "Bass8vbClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Bass8vbClef"
+pitches = ["C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Bass8vbClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "Bass8vbClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Bass8vbClef"
+pitches = ["B4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Bass8vbClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "Bass8vbClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Bass8vbClef"
+pitches = ["A4", "C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Bass8vbClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "Bass8vbClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Bass8vbClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Bass8vbClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "Bass8vbClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Bass8vbClef"
+pitches = ["C6", "C2"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Bass8vbClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "Bass8vbClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Bass8vbClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Bass8vbClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "Bass8vbClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Bass8vbClef"
+pitches = ["B3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Bass8vbClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "BassClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "BassClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "BassClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "BassClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "BassClef"
+pitches = ["C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "BassClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "BassClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "BassClef"
+pitches = ["B4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "BassClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "BassClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "BassClef"
+pitches = ["A4", "C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "BassClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "BassClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "BassClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "BassClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "BassClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "BassClef"
+pitches = ["C6", "C2"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "BassClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "BassClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "BassClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "BassClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "BassClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "BassClef"
+pitches = ["B3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "BassClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "CBaritoneClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "CBaritoneClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "CBaritoneClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "CBaritoneClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "CBaritoneClef"
+pitches = ["C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "CBaritoneClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "CBaritoneClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "CBaritoneClef"
+pitches = ["B4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "CBaritoneClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "CBaritoneClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "CBaritoneClef"
+pitches = ["A4", "C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "CBaritoneClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "CBaritoneClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "CBaritoneClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "CBaritoneClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "CBaritoneClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "CBaritoneClef"
+pitches = ["C6", "C2"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "CBaritoneClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "CBaritoneClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "CBaritoneClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "CBaritoneClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "CBaritoneClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "CBaritoneClef"
+pitches = ["B3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "CBaritoneClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "FBaritoneClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "FBaritoneClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "FBaritoneClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "FBaritoneClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "FBaritoneClef"
+pitches = ["C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "FBaritoneClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "FBaritoneClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "FBaritoneClef"
+pitches = ["B4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "FBaritoneClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "FBaritoneClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "FBaritoneClef"
+pitches = ["A4", "C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "FBaritoneClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "FBaritoneClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "FBaritoneClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "FBaritoneClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "FBaritoneClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "FBaritoneClef"
+pitches = ["C6", "C2"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "FBaritoneClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "FBaritoneClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "FBaritoneClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "FBaritoneClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "FBaritoneClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "FBaritoneClef"
+pitches = ["B3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "FBaritoneClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "FrenchViolinClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "FrenchViolinClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "FrenchViolinClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "FrenchViolinClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "FrenchViolinClef"
+pitches = ["C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "FrenchViolinClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "FrenchViolinClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "FrenchViolinClef"
+pitches = ["B4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "FrenchViolinClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "FrenchViolinClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "FrenchViolinClef"
+pitches = ["A4", "C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "FrenchViolinClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "FrenchViolinClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "FrenchViolinClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "FrenchViolinClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "FrenchViolinClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "FrenchViolinClef"
+pitches = ["C6", "C2"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "FrenchViolinClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "FrenchViolinClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "FrenchViolinClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "FrenchViolinClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "FrenchViolinClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "FrenchViolinClef"
+pitches = ["B3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "FrenchViolinClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "GSopranoClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "GSopranoClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "GSopranoClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "GSopranoClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "GSopranoClef"
+pitches = ["C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "GSopranoClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "GSopranoClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "GSopranoClef"
+pitches = ["B4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "GSopranoClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "GSopranoClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "GSopranoClef"
+pitches = ["A4", "C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "GSopranoClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "GSopranoClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "GSopranoClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "GSopranoClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "GSopranoClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "GSopranoClef"
+pitches = ["C6", "C2"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "GSopranoClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "GSopranoClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "GSopranoClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "GSopranoClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "GSopranoClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "GSopranoClef"
+pitches = ["B3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "GSopranoClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "MezzoSopranoClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "MezzoSopranoClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "MezzoSopranoClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "MezzoSopranoClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "MezzoSopranoClef"
+pitches = ["C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "MezzoSopranoClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "MezzoSopranoClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "MezzoSopranoClef"
+pitches = ["B4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "MezzoSopranoClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "MezzoSopranoClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "MezzoSopranoClef"
+pitches = ["A4", "C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "MezzoSopranoClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "MezzoSopranoClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "MezzoSopranoClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "MezzoSopranoClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "MezzoSopranoClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "MezzoSopranoClef"
+pitches = ["C6", "C2"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "MezzoSopranoClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "MezzoSopranoClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "MezzoSopranoClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "MezzoSopranoClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "MezzoSopranoClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "MezzoSopranoClef"
+pitches = ["B3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "MezzoSopranoClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "SopranoClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "SopranoClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "SopranoClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "SopranoClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "SopranoClef"
+pitches = ["C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "SopranoClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "SopranoClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "SopranoClef"
+pitches = ["B4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "SopranoClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "SopranoClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "SopranoClef"
+pitches = ["A4", "C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "SopranoClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "SopranoClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "SopranoClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "SopranoClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "SopranoClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "SopranoClef"
+pitches = ["C6", "C2"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "SopranoClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "SopranoClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "SopranoClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "SopranoClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "SopranoClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "SopranoClef"
+pitches = ["B3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "SopranoClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "SubBassClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "SubBassClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "SubBassClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "SubBassClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "SubBassClef"
+pitches = ["C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "SubBassClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "SubBassClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "SubBassClef"
+pitches = ["B4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "SubBassClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "SubBassClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "SubBassClef"
+pitches = ["A4", "C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "SubBassClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "SubBassClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "SubBassClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "SubBassClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "SubBassClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "SubBassClef"
+pitches = ["C6", "C2"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "SubBassClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "SubBassClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "SubBassClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "SubBassClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "SubBassClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "SubBassClef"
+pitches = ["B3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "SubBassClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "TenorClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "TenorClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "TenorClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "TenorClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TenorClef"
+pitches = ["C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TenorClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "TenorClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TenorClef"
+pitches = ["B4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TenorClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "TenorClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TenorClef"
+pitches = ["A4", "C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TenorClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "TenorClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TenorClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TenorClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "TenorClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TenorClef"
+pitches = ["C6", "C2"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TenorClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "TenorClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TenorClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TenorClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "TenorClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TenorClef"
+pitches = ["B3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TenorClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["B4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["A4", "C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["C6", "C2"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["B3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "Treble8vaClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "Treble8vaClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "Treble8vaClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "Treble8vaClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Treble8vaClef"
+pitches = ["C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Treble8vaClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "Treble8vaClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Treble8vaClef"
+pitches = ["B4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Treble8vaClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "Treble8vaClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Treble8vaClef"
+pitches = ["A4", "C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Treble8vaClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "Treble8vaClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Treble8vaClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "Treble8vaClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "Treble8vaClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Treble8vaClef"
+pitches = ["C6", "C2"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Treble8vaClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "Treble8vaClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Treble8vaClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Treble8vaClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "Treble8vaClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Treble8vaClef"
+pitches = ["B3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Treble8vaClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "Treble8vbClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "Treble8vbClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "Treble8vbClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "Treble8vbClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Treble8vbClef"
+pitches = ["C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Treble8vbClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "Treble8vbClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Treble8vbClef"
+pitches = ["B4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Treble8vbClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "Treble8vbClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Treble8vbClef"
+pitches = ["A4", "C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Treble8vbClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "Treble8vbClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Treble8vbClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "Treble8vbClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "Treble8vbClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Treble8vbClef"
+pitches = ["C6", "C2"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Treble8vbClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "Treble8vbClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Treble8vbClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Treble8vbClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "Treble8vbClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Treble8vbClef"
+pitches = ["B3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "Treble8vbClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[best]]
+pitches = []
+allow_treble_8vb = false
+class = "TrebleClef"
+
+[[best]]
+pitches = []
+allow_treble_8vb = true
+class = "Treble8vbClef"
+
+[[best]]
+pitches = ["D4"]
+allow_treble_8vb = false
+class = "TrebleClef"
+
+[[best]]
+pitches = ["D4"]
+allow_treble_8vb = true
+class = "Treble8vbClef"
+
+[[best]]
+pitches = ["D7"]
+allow_treble_8vb = false
+class = "Treble8vaClef"
+
+[[best]]
+pitches = ["D7"]
+allow_treble_8vb = true
+class = "Treble8vaClef"
+
+[[best]]
+pitches = ["C0"]
+allow_treble_8vb = false
+class = "Bass8vbClef"
+
+[[best]]
+pitches = ["C0"]
+allow_treble_8vb = true
+class = "Bass8vbClef"
+
+[[best]]
+pitches = ["C4"]
+allow_treble_8vb = false
+class = "TrebleClef"
+
+[[best]]
+pitches = ["C4"]
+allow_treble_8vb = true
+class = "Treble8vbClef"
+
+[[best]]
+pitches = ["B3", "D4"]
+allow_treble_8vb = false
+class = "TrebleClef"
+
+[[best]]
+pitches = ["B3", "D4"]
+allow_treble_8vb = true
+class = "Treble8vbClef"
+
+[[best]]
+pitches = ["A2", "C3"]
+allow_treble_8vb = false
+class = "BassClef"
+
+[[best]]
+pitches = ["A2", "C3"]
+allow_treble_8vb = true
+class = "BassClef"
+
+[[best]]
+pitches = ["E5", "G5", "C6"]
+allow_treble_8vb = false
+class = "TrebleClef"
+
+[[best]]
+pitches = ["E5", "G5", "C6"]
+allow_treble_8vb = true
+class = "TrebleClef"
+
+[[best]]
+pitches = ["F3"]
+allow_treble_8vb = false
+class = "BassClef"
+
+[[best]]
+pitches = ["F3"]
+allow_treble_8vb = true
+class = "BassClef"
+
+[[best]]
+pitches = ["G3", "A3"]
+allow_treble_8vb = false
+class = "BassClef"
+
+[[best]]
+pitches = ["G3", "A3"]
+allow_treble_8vb = true
+class = "Treble8vbClef"
+
+[[best]]
+pitches = ["C1", "D1"]
+allow_treble_8vb = false
+class = "Bass8vbClef"
+
+[[best]]
+pitches = ["C1", "D1"]
+allow_treble_8vb = true
+class = "Bass8vbClef"
+
+[[best]]
+pitches = ["A4", "B4", "C5", "D5", "E6"]
+allow_treble_8vb = false
+class = "TrebleClef"
+
+[[best]]
+pitches = ["A4", "B4", "C5", "D5", "E6"]
+allow_treble_8vb = true
+class = "TrebleClef"
+

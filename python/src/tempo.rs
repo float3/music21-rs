@@ -13,7 +13,7 @@ use pyo3::types::PyDict;
 use music21_rs_crate::duration::Duration as RsDuration;
 use music21_rs_crate::tempo::{
     MetricModulation as RsMetricModulation, MetronomeMark as RsMetronomeMark, ModulationSide,
-    convert_tempo_by_referent as rs_convert_tempo_by_referent,
+    TempoText as RsTempoText, convert_tempo_by_referent as rs_convert_tempo_by_referent,
 };
 
 use crate::duration::{Duration, duration_from_any};
@@ -24,6 +24,7 @@ pub const NAMES: &[&str] = &[
     "MetronomeMarkException",
     "MetricModulation",
     "MetricModulationException",
+    "TempoText",
     "convertTempoByReferent",
 ];
 
@@ -592,6 +593,314 @@ impl MetronomeMark {
     }
 }
 
+/// music21's `tempo.TempoText`: a tempo said in words.
+///
+/// The words are the crate's value. Where music21 is there they are also
+/// carried in music21's own `TextExpression`, as music21 keeps them, whose
+/// style this object shares -- which is how a score writes them, in bold and
+/// four and a half staff lines up.
+#[pyclass(
+    name = "TempoText",
+    module = "music21.tempo",
+    subclass,
+    skip_from_py_object
+)]
+pub struct TempoText {
+    inner: RsTempoText,
+    /// Whether any words were given: music21's `TempoText()` has none.
+    said: bool,
+    /// music21's `_textExpression`, where music21 is there to build one.
+    text_expression: Option<Py<PyAny>>,
+}
+
+impl TempoText {
+    /// Whether the music21 half of this object has been told how it is
+    /// written; false where there is no music21 half.
+    fn has_style(slf: &Bound<'_, Self>) -> bool {
+        slf.getattr("hasStyleInformation")
+            .and_then(|said| said.extract::<bool>())
+            .unwrap_or(false)
+    }
+
+    /// music21's `text` setter.
+    fn say(slf: &Bound<'_, Self>, text: String) -> PyResult<()> {
+        let py = slf.py();
+        {
+            let mut me = slf.borrow_mut();
+            me.inner.set_text(text.clone());
+            me.said = true;
+        }
+        let existing = slf
+            .borrow()
+            .text_expression
+            .as_ref()
+            .map(|expression| expression.clone_ref(py));
+        if let Some(expression) = existing {
+            return expression.bind(py).setattr("content", text);
+        }
+        let Ok(class) = py
+            .import("music21.expressions")
+            .and_then(|module| module.getattr("TextExpression"))
+        else {
+            return Ok(());
+        };
+        let expression = class.call1((text,))?;
+        if Self::has_style(slf) {
+            expression.setattr("style", slf.getattr("style")?)?;
+        } else {
+            if let Ok(style) = expression.getattr("style") {
+                let _ = slf.setattr("style", style);
+            }
+            Self::format(&expression, false)?;
+        }
+        slf.borrow_mut().text_expression = Some(expression.unbind());
+        Ok(())
+    }
+
+    /// music21's `applyTextFormatting` on one expression.
+    fn format(expression: &Bound<'_, PyAny>, number_implicit: bool) -> PyResult<()> {
+        let style = expression.getattr("style")?;
+        style.setattr("fontStyle", "bold")?;
+        style.setattr("absoluteY", if number_implicit { 20 } else { 45 })
+    }
+}
+
+#[pymethods]
+impl TempoText {
+    #[new]
+    #[pyo3(signature = (text = None, **_keywords))]
+    fn new(
+        text: Option<&Bound<'_, PyAny>>,
+        _keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Self> {
+        let written = match text.filter(|text| !text.is_none()) {
+            Some(text) => Some(text.str()?.extract::<String>()?),
+            None => None,
+        };
+        Ok(Self {
+            said: written.is_some(),
+            inner: RsTempoText::new(written.unwrap_or_default()),
+            text_expression: None,
+        })
+    }
+
+    /// Built again here, where the music21 half exists to share a style
+    /// with, since a Python subclass hands `__new__` its own arguments.
+    #[pyo3(signature = (text = None, **_keywords))]
+    fn __init__(
+        slf: &Bound<'_, Self>,
+        text: Option<&Bound<'_, PyAny>>,
+        _keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<()> {
+        {
+            let mut me = slf.borrow_mut();
+            me.text_expression = None;
+            me.said = false;
+        }
+        if let Some(text) = text.filter(|text| !text.is_none()) {
+            Self::say(slf, text.str()?.extract()?)?;
+        }
+        Ok(())
+    }
+
+    fn _reprInternal(&self) -> PyResult<String> {
+        Python::attach(|py| self.inner.text().into_pyobject(py)?.repr()?.extract())
+    }
+
+    fn __repr__(slf: &Bound<'_, Self>) -> PyResult<String> {
+        Ok(format!(
+            "<music21.tempo.TempoText {}>",
+            slf.borrow()._reprInternal()?
+        ))
+    }
+
+    /// The words, as the text expression holding them now says them.
+    #[getter]
+    fn get_text(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
+        let py = slf.py();
+        let me = slf.borrow();
+        if let Some(expression) = &me.text_expression {
+            return Ok(expression.bind(py).getattr("content")?.unbind());
+        }
+        if !me.said {
+            return Err(pyo3::exceptions::PyAttributeError::new_err(
+                "'NoneType' object has no attribute 'content'",
+            ));
+        }
+        Ok(me.inner.text().into_pyobject(py)?.into_any().unbind())
+    }
+
+    #[setter]
+    fn set_text(slf: &Bound<'_, Self>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        Self::say(slf, value.str()?.extract()?)
+    }
+
+    /// music21's `_textExpression`, which its own code reads directly.
+    #[getter]
+    fn get__textExpression(&self, py: Python<'_>) -> Py<PyAny> {
+        self.text_expression
+            .as_ref()
+            .map_or_else(|| py.None(), |expression| expression.clone_ref(py))
+    }
+
+    #[setter]
+    fn set__textExpression(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        if value.is_none() {
+            self.text_expression = None;
+            return Ok(());
+        }
+        if let Ok(content) = value
+            .getattr("content")
+            .and_then(|content| content.extract::<String>())
+        {
+            self.inner.set_text(content);
+            self.said = true;
+        }
+        self.text_expression = Some(value.clone().unbind());
+        Ok(())
+    }
+
+    /// music21's `getMetronomeMark`: the mark the words imply, sharing this
+    /// object's style.
+    fn getMetronomeMark(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
+        let py = slf.py();
+        let text = Self::get_text(slf)?.bind(py).extract::<String>()?;
+        let mark = new_mark(py, RsTempoText::new(text).metronome_mark())?;
+        let mark = mark.bind(py);
+        if Self::has_style(slf) {
+            mark.setattr("style", slf.getattr("style")?)?;
+        } else if let Ok(style) = mark.getattr("style") {
+            let _ = slf.setattr("style", style);
+        }
+        Ok(mark.clone().unbind())
+    }
+
+    /// music21's `getTextExpression`: a copy of the text expression, or
+    /// nothing where there is none.
+    #[pyo3(signature = (numberImplicit = false))]
+    fn getTextExpression(&self, py: Python<'_>, numberImplicit: bool) -> PyResult<Py<PyAny>> {
+        let _ = numberImplicit;
+        match &self.text_expression {
+            Some(expression) => Ok(py
+                .import("copy")?
+                .getattr("deepcopy")?
+                .call1((expression.bind(py),))?
+                .unbind()),
+            None => Ok(py.None()),
+        }
+    }
+
+    /// music21's `setTextExpression`: holds `value`, linking styles as
+    /// music21 does.
+    fn setTextExpression(slf: &Bound<'_, Self>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        slf.borrow_mut().set__textExpression(value)?;
+        let expression_styled = value
+            .getattr("hasStyleInformation")
+            .and_then(|said| said.extract::<bool>())
+            .unwrap_or(false);
+        if expression_styled {
+            slf.setattr("style", value.getattr("style")?)?;
+        } else if Self::has_style(slf) {
+            value.setattr("style", slf.getattr("style")?)?;
+        } else {
+            slf.setattr("style", value.getattr("style")?)?;
+            Self::format(value, false)?;
+        }
+        Ok(())
+    }
+
+    /// music21's `applyTextFormatting`: a tempo word in bold, four and a half
+    /// staff lines up, or two where no number is written beside it.
+    #[pyo3(signature = (te = None, numberImplicit = false))]
+    fn applyTextFormatting(
+        &self,
+        py: Python<'_>,
+        te: Option<&Bound<'_, PyAny>>,
+        numberImplicit: bool,
+    ) -> PyResult<Py<PyAny>> {
+        let expression = match te.filter(|te| !te.is_none()) {
+            Some(te) => te.clone(),
+            None => match &self.text_expression {
+                Some(expression) => expression.bind(py).clone(),
+                None => return Ok(py.None()),
+            },
+        };
+        Self::format(&expression, numberImplicit)?;
+        Ok(expression.unbind())
+    }
+
+    /// music21's `isCommonTempoText`: whether the words, or `value`, read as
+    /// a tempo.
+    #[pyo3(signature = (value = None))]
+    fn isCommonTempoText(slf: &Bound<'_, Self>, value: Option<String>) -> PyResult<bool> {
+        let text = match value {
+            Some(value) => value,
+            None => Self::get_text(slf)?.bind(slf.py()).extract()?,
+        };
+        Ok(music21_rs_crate::tempo::is_common_tempo_text(&text))
+    }
+
+    /// music21 freezes a score by pickling it; the words go as the crate's
+    /// value and the text expression beside it.
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<crate::Pickled> {
+        let py = slf.py();
+        let me = slf.borrow();
+        let extra = PyDict::new(py);
+        extra.set_item("said", me.said)?;
+        extra.set_item("textExpression", me.text_expression.as_ref())?;
+        crate::pickled_extra(slf, &me.inner, Some(&extra))
+    }
+
+    fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
+        let py = slf.py();
+        let (inner, extra) = crate::unpickled_extra::<_, RsTempoText>(slf, state)?;
+        let Some(inner) = inner else {
+            return Ok(());
+        };
+        let mut me = slf.borrow_mut();
+        me.inner = inner;
+        if let Some(extra) = extra
+            && let Ok(extra) = extra.bind(py).cast::<PyDict>()
+        {
+            if let Some(said) = extra.get_item("said")? {
+                me.said = said.extract()?;
+            }
+            if let Some(expression) = extra.get_item("textExpression")?
+                && !expression.is_none()
+            {
+                me.text_expression = Some(expression.unbind());
+            }
+        }
+        Ok(())
+    }
+
+    /// A copy carries its own text expression, copied through the copier's
+    /// memo, so the copy's words can change without the original's.
+    fn __deepcopy__<'py>(
+        slf: &Bound<'py, Self>,
+        memo: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
+        let me = slf.borrow();
+        let expression = match &me.text_expression {
+            Some(expression) => Some(
+                py.import("copy")?
+                    .getattr("deepcopy")?
+                    .call1((expression.bind(py), memo))?
+                    .unbind(),
+            ),
+            None => None,
+        };
+        let copied = Self {
+            inner: me.inner.clone(),
+            said: me.said,
+            text_expression: expression,
+        };
+        drop(me);
+        crate::copy_as_same_type(slf, copied)
+    }
+}
+
 /// A metronome mark of the class a new one is made as: the installed one
 /// where music21 is there, this wheel's where not.
 fn new_mark(py: Python<'_>, inner: RsMetronomeMark) -> PyResult<Py<PyAny>> {
@@ -1109,6 +1418,7 @@ pub fn convertTempoByReferent(
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<MetronomeMark>()?;
     m.add_class::<MetricModulation>()?;
+    m.add_class::<TempoText>()?;
     m.add_function(wrap_pyfunction!(convertTempoByReferent, m)?)?;
     Ok(())
 }

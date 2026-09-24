@@ -94,10 +94,15 @@ impl Instrument {
 
     /// An instrument of the wheel's class for its kind.
     fn object(py: Python<'_>, inner: RsInstrument) -> PyResult<Py<PyAny>> {
-        let class = py
-            .import("music21_rs")
-            .or_else(|_| py.import("music21_rs_facade"))?
-            .getattr(inner.kind())?;
+        // The class installed over music21's where there is one, since
+        // music21 holds nothing else in a stream; this wheel's own where not.
+        let class = match crate::installed_class(py, "music21.instrument", inner.kind()) {
+            Some(class) => class,
+            None => py
+                .import("music21_rs")
+                .or_else(|_| py.import("music21_rs_facade"))?
+                .getattr(inner.kind())?,
+        };
         let made = class.call0()?;
         made.extract::<PyRefMut<'_, Self>>()?.inner = inner;
         Ok(made.unbind())
@@ -260,13 +265,23 @@ impl Instrument {
     }
 
     #[getter]
-    fn inGMPercMap(&self) -> bool {
+    fn get_inGMPercMap(&self) -> bool {
         self.inner.in_percussion_map()
     }
 
+    #[setter]
+    fn set_inGMPercMap(&mut self, value: bool) {
+        self.inner.set_in_percussion_map(value);
+    }
+
     #[getter]
-    fn percMapPitch(&self) -> Option<u8> {
+    fn get_percMapPitch(&self) -> Option<u8> {
         self.inner.percussion_pitch()
+    }
+
+    #[setter]
+    fn set_percMapPitch(&mut self, value: Option<u8>) {
+        self.inner.set_percussion_pitch(value);
     }
 
     /// music21's `stringPitches`, which only its string instruments have.

@@ -198,6 +198,8 @@ pub(crate) fn regenerate(workspace_root: &Path) -> Result<Vec<PathBuf>, Box<dyn 
             write_roman_figures(py, workspace_root, stamp)?,
             write_voice_leading(py, workspace_root, stamp)?,
             write_instruments(py, workspace_root, stamp)?,
+            write_clefs(py, workspace_root, stamp)?,
+            write_articulations(py, workspace_root, stamp)?,
         ])
     })
     .map_err(|error| -> Box<dyn Error> { Box::new(error) })
@@ -2437,5 +2439,320 @@ fn write_serial(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> PyResul
         "  wrote {} ({historical_count} historical rows, {link_count} link chords)",
         path.display()
     );
+    Ok(path)
+}
+
+/// Every clef class's starting values, `clefFromString` over a grid of
+/// strings and octave shifts, stem directions and best clefs.
+fn write_clefs(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> PyResult<PathBuf> {
+    let clef = py.import("music21.clef")?;
+    let pitch = py.import("music21.pitch")?;
+    let stream = py.import("music21.stream")?;
+    let note = py.import("music21.note")?;
+    let inspect = py.import("inspect")?;
+    let base_class = clef.getattr("Clef")?;
+
+    let mut out = header(
+        &[
+            "# Expected clefs, generated from music21 by",
+            "# `cargo run --release -p xtask --features python -- regenerate-fixtures`.",
+            "# The classes are transcribed into src/clef.rs; the rest is checked",
+            "# behaviourally.",
+        ],
+        stamp,
+    );
+
+    // What a clef says about itself, as the fields of one table.
+    let describe = |made: &Bound<'_, PyAny>| -> PyResult<Vec<String>> {
+        let class: String = made.get_type().getattr("__name__")?.extract()?;
+        let mut fields = vec![format!("class = {}", toml_string(&class))];
+        if let Ok(sign) = made.getattr("sign")?.extract::<String>() {
+            fields.push(format!("sign = {}", toml_string(&sign)));
+        }
+        if let Ok(line) = made.getattr("line")?.extract::<i64>() {
+            fields.push(format!("line = {line}"));
+        }
+        fields.push(format!(
+            "octave_change = {}",
+            made.getattr("octaveChange")?.extract::<i64>()?
+        ));
+        if let Ok(lowest) = made
+            .getattr("lowestLine")
+            .and_then(|lowest| lowest.extract::<i64>())
+        {
+            fields.push(format!("lowest_line = {lowest}"));
+        }
+        fields.push(format!(
+            "name = {}",
+            toml_string(&made.getattr("name")?.extract::<String>()?)
+        ));
+        Ok(fields)
+    };
+
+    let mut classes: Vec<(usize, String, Bound<'_, PyAny>)> = Vec::new();
+    for member in inspect
+        .call_method1("getmembers", (&clef, inspect.getattr("isclass")?))?
+        .try_iter()?
+    {
+        let (name, class): (String, Bound<'_, PyAny>) = member?.extract()?;
+        if !class.is_instance_of::<pyo3::types::PyType>()
+            || !class
+                .cast::<pyo3::types::PyType>()?
+                .is_subclass(&base_class)?
+        {
+            continue;
+        }
+        let depth = class.getattr("__mro__")?.len()?;
+        classes.push((depth, name, class));
+    }
+    classes.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
+    for (_, _, class) in &classes {
+        let made = class.call0()?;
+        let mut parents: Vec<String> = Vec::new();
+        for ancestor in class.getattr("__mro__")?.try_iter()?.skip(1) {
+            let ancestor = ancestor?;
+            if !ancestor
+                .cast::<pyo3::types::PyType>()?
+                .is_subclass(&base_class)?
+            {
+                break;
+            }
+            parents.push(ancestor.getattr("__name__")?.extract()?);
+        }
+        let _ = writeln!(out, "[[clef]]");
+        for field in describe(&made)? {
+            let _ = writeln!(out, "{field}");
+        }
+        let _ = writeln!(out, "parents = {}", toml_list(&parents));
+        let _ = writeln!(out);
+    }
+
+    let mut texts: Vec<String> = [
+        "tab",
+        "TAB",
+        "percussion",
+        "none",
+        "jianpu",
+        "G",
+        "F",
+        "C",
+        "X",
+        "",
+        " G2 ",
+        "treble",
+        "trebleClef",
+        "Treble8vb",
+        "mezzoSoprano",
+        "nonsense",
+        "F6",
+        "G0",
+    ]
+    .iter()
+    .map(|text| text.to_string())
+    .collect();
+    for sign in ["G", "F", "C", "g", "X"] {
+        for line in 1..=5 {
+            texts.push(format!("{sign}{line}"));
+        }
+    }
+    for text in &texts {
+        for shift in [0_i64, -1, 1, 2] {
+            let _ = writeln!(out, "[[from_string]]");
+            let _ = writeln!(out, "text = {}", toml_string(text));
+            let _ = writeln!(out, "octave_shift = {shift}");
+            match clef.call_method1("clefFromString", (text, shift)) {
+                Ok(made) => {
+                    let _ = writeln!(out, "clef = {{ {} }}", describe(&made)?.join(", "));
+                }
+                Err(error) => {
+                    let _ = writeln!(out, "error = {}", toml_string(&exception_name(py, &error)));
+                }
+            }
+            let _ = writeln!(out);
+        }
+    }
+
+    let groups: [&[&str]; 8] = [
+        &["C3", "B3", "C3"],
+        &["C5"],
+        &["B4"],
+        &["A4", "C5"],
+        &["G2", "C4", "E3", "D5"],
+        &["C6", "C2"],
+        &["F#4", "E-5", "D4"],
+        &["B3"],
+    ];
+    for (_, name, class) in &classes {
+        for group in groups {
+            for (first_last, extreme) in [(true, false), (false, false), (true, true)] {
+                let made = class.call0()?;
+                let pitches = pyo3::types::PyList::empty(py);
+                for written in group {
+                    pitches.append(pitch.getattr("Pitch")?.call1((*written,))?)?;
+                }
+                let keywords = pyo3::types::PyDict::new(py);
+                keywords.set_item("firstLastOnly", first_last)?;
+                keywords.set_item("extremePitchOnly", extreme)?;
+                let direction: String = made
+                    .call_method("getStemDirectionForPitches", (pitches,), Some(&keywords))?
+                    .extract()?;
+                let written: Vec<String> = group.iter().map(|name| name.to_string()).collect();
+                let _ = writeln!(out, "[[stem]]");
+                let _ = writeln!(out, "class = {}", toml_string(name));
+                let _ = writeln!(out, "pitches = {}", toml_list(&written));
+                let _ = writeln!(out, "first_last_only = {first_last}");
+                let _ = writeln!(out, "extreme_pitch_only = {extreme}");
+                let _ = writeln!(out, "direction = {}", toml_string(&direction));
+                let _ = writeln!(out);
+            }
+        }
+    }
+
+    let fits: [&[&str]; 12] = [
+        &[],
+        &["D4"],
+        &["D7"],
+        &["C0"],
+        &["C4"],
+        &["B3", "D4"],
+        &["A2", "C3"],
+        &["E5", "G5", "C6"],
+        &["F3"],
+        &["G3", "A3"],
+        &["C1", "D1"],
+        &["A4", "B4", "C5", "D5", "E6"],
+    ];
+    for group in fits {
+        for allow in [false, true] {
+            let holding = stream.getattr("Stream")?.call0()?;
+            for written in group {
+                holding.call_method1("append", (note.getattr("Note")?.call1((*written,))?,))?;
+            }
+            let keywords = pyo3::types::PyDict::new(py);
+            keywords.set_item("allowTreble8vb", allow)?;
+            let best = clef.call_method("bestClef", (&holding,), Some(&keywords))?;
+            let class: String = best.get_type().getattr("__name__")?.extract()?;
+            let written: Vec<String> = group.iter().map(|name| name.to_string()).collect();
+            let _ = writeln!(out, "[[best]]");
+            let _ = writeln!(out, "pitches = {}", toml_list(&written));
+            let _ = writeln!(out, "allow_treble_8vb = {allow}");
+            let _ = writeln!(out, "class = {}", toml_string(&class));
+            let _ = writeln!(out);
+        }
+    }
+
+    let path = workspace_root.join("data/clef_expectations.toml");
+    fs::write(&path, out)?;
+    Ok(path)
+}
+
+/// Every articulation class's starting values, its ancestors and the fields
+/// it carries past the base ones.
+fn write_articulations(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> PyResult<PathBuf> {
+    let articulations = py.import("music21.articulations")?;
+    let spanner = py.import("music21.spanner")?.getattr("Spanner")?;
+    let inspect = py.import("inspect")?;
+    let base_class = articulations.getattr("Articulation")?;
+    let base_fields: Vec<String> = base_class
+        .call0()?
+        .getattr("__dict__")?
+        .call_method0("keys")?
+        .try_iter()?
+        .map(|key| key?.extract::<String>())
+        .collect::<PyResult<_>>()?;
+
+    let mut out = header(
+        &[
+            "# Expected articulations, generated from music21 by",
+            "# `cargo run --release -p xtask --features python -- regenerate-fixtures`.",
+            "# The classes are transcribed into src/articulations.rs.",
+        ],
+        stamp,
+    );
+
+    let mut classes: Vec<(usize, String, Bound<'_, PyAny>)> = Vec::new();
+    for member in inspect
+        .call_method1("getmembers", (&articulations, inspect.getattr("isclass")?))?
+        .try_iter()?
+    {
+        let (name, class): (String, Bound<'_, PyAny>) = member?.extract()?;
+        let Ok(class_type) = class.cast::<pyo3::types::PyType>() else {
+            continue;
+        };
+        if !class_type.is_subclass(&base_class)? || class_type.is_subclass(&spanner)? {
+            continue;
+        }
+        let depth = class.getattr("__mro__")?.len()?;
+        classes.push((depth, name, class));
+    }
+    classes.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
+    for (_, name, class) in &classes {
+        let made = class.call0()?;
+        let mut parents: Vec<String> = Vec::new();
+        for ancestor in class.getattr("__mro__")?.try_iter()?.skip(1) {
+            let ancestor = ancestor?;
+            if ancestor
+                .cast::<pyo3::types::PyType>()?
+                .is_subclass(&base_class)?
+            {
+                parents.push(ancestor.getattr("__name__")?.extract()?);
+            }
+        }
+        let mut fields: Vec<String> = made
+            .getattr("__dict__")?
+            .call_method0("keys")?
+            .try_iter()?
+            .map(|key| key?.extract::<String>())
+            .collect::<PyResult<Vec<_>>>()?
+            .into_iter()
+            .filter(|field| !base_fields.contains(field))
+            .collect();
+        fields.sort();
+        let _ = writeln!(out, "[[articulation]]");
+        let _ = writeln!(out, "class = {}", toml_string(name));
+        let _ = writeln!(out, "parents = {}", toml_list(&parents));
+        let _ = writeln!(
+            out,
+            "volume_shift = {:?}",
+            made.getattr("volumeShift")?.extract::<f64>()?
+        );
+        let _ = writeln!(
+            out,
+            "length_shift = {:?}",
+            made.getattr("lengthShift")?.extract::<f64>()?
+        );
+        let _ = writeln!(
+            out,
+            "tie_attach = {}",
+            toml_string(&made.getattr("tieAttach")?.extract::<String>()?)
+        );
+        let _ = writeln!(
+            out,
+            "name = {}",
+            toml_string(&made.getattr("name")?.extract::<String>()?)
+        );
+        let _ = writeln!(out, "fields = {}", toml_list(&fields));
+        for (key, attribute) in [
+            ("point_direction", "pointDirection"),
+            ("harmonic_type", "harmonicType"),
+        ] {
+            if let Ok(value) = made
+                .getattr(attribute)
+                .and_then(|value| value.extract::<String>())
+            {
+                let _ = writeln!(out, "{key} = {}", toml_string(&value));
+            }
+        }
+        if let Ok(number) = made
+            .getattr("number")
+            .and_then(|number| number.extract::<i64>())
+        {
+            let _ = writeln!(out, "number = {number}");
+        }
+        let _ = writeln!(out);
+    }
+
+    let path = workspace_root.join("data/articulation_expectations.toml");
+    fs::write(&path, out)?;
     Ok(path)
 }

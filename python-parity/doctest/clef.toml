@@ -1,0 +1,36 @@
+# Docstrings of music21.clef whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_clef`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.clef.AltoClef",
+    "music21.clef.Bass8vaClef",
+    "music21.clef.Bass8vbClef",
+    "music21.clef.BassClef",
+    "music21.clef.CBaritoneClef",
+    "music21.clef.CClef",
+    "music21.clef.Clef",
+    "music21.clef.Clef.getStemDirectionForPitches",
+    "music21.clef.Clef.name",
+    "music21.clef.Clef.octaveChange",
+    "music21.clef.FBaritoneClef",
+    "music21.clef.FClef",
+    "music21.clef.FrenchViolinClef",
+    "music21.clef.GClef",
+    "music21.clef.GSopranoClef",
+    "music21.clef.JianpuClef",
+    "music21.clef.MezzoSopranoClef",
+    "music21.clef.NoClef",
+    "music21.clef.PercussionClef",
+    "music21.clef.PitchClef.octaveChange",
+    "music21.clef.SopranoClef",
+    "music21.clef.SubBassClef",
+    "music21.clef.TabClef",
+    "music21.clef.TenorClef",
+    "music21.clef.Treble8vaClef",
+    "music21.clef.Treble8vbClef",
+    "music21.clef.TrebleClef",
+    "music21.clef.bestClef",
+    "music21.clef.clefFromString",
+]

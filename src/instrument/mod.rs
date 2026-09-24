@@ -439,6 +439,16 @@ impl Instrument {
         self.percussion_pitch
     }
 
+    /// Sets the General MIDI drum the instrument plays.
+    pub fn set_percussion_pitch(&mut self, pitch: Option<u8>) {
+        self.percussion_pitch = pitch;
+    }
+
+    /// Says whether the instrument is in the General MIDI percussion map.
+    pub fn set_in_percussion_map(&mut self, in_map: bool) {
+        self.percussion_map = in_map;
+    }
+
     /// The open strings, lowest first unless the tuning is reentrant, for a
     /// string instrument music21 tunes: music21's `stringPitches`.
     ///

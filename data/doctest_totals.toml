@@ -17,6 +17,12 @@ music21_version = "11.0.0b9"
 music21_commit = "e2ba700a434a66baf73d5d05a70c2063dcf8eab9"
 
 [[module]]
+module = "music21.articulations"
+docstrings = 27
+examples = 105
+tests = 2
+
+[[module]]
 module = "music21.beam"
 docstrings = 13
 examples = 112
@@ -33,6 +39,12 @@ module = "music21.chord.tables"
 docstrings = 10
 examples = 65
 tests = 32
+
+[[module]]
+module = "music21.clef"
+docstrings = 29
+examples = 151
+tests = 4
 
 [[module]]
 module = "music21.duration"

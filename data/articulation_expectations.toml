@@ -1,0 +1,485 @@
+# Expected articulations, generated from music21 by
+# `cargo run --release -p xtask --features python -- regenerate-fixtures`.
+# The classes are transcribed into src/articulations.rs.
+#
+# music21 11.0.0b9 at e2ba700a434a66baf73d5d05a70c2063dcf8eab9
+
+music21_version = "11.0.0b9"
+music21_commit = "e2ba700a434a66baf73d5d05a70c2063dcf8eab9"
+
+[[articulation]]
+class = "Articulation"
+parents = []
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "first"
+name = "articulation"
+fields = []
+
+[[articulation]]
+class = "Caesura"
+parents = ["Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "first"
+name = "caesura"
+fields = []
+
+[[articulation]]
+class = "DynamicArticulation"
+parents = ["Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "first"
+name = "dynamic articulation"
+fields = []
+
+[[articulation]]
+class = "LengthArticulation"
+parents = ["Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "last"
+name = "length articulation"
+fields = []
+
+[[articulation]]
+class = "PitchArticulation"
+parents = ["Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "first"
+name = "pitch articulation"
+fields = []
+
+[[articulation]]
+class = "TechnicalIndication"
+parents = ["Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "first"
+name = "technical indication"
+fields = []
+
+[[articulation]]
+class = "TimbreArticulation"
+parents = ["Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "first"
+name = "timbre articulation"
+fields = []
+
+[[articulation]]
+class = "Accent"
+parents = ["DynamicArticulation", "Articulation"]
+volume_shift = 0.1
+length_shift = 1.0
+tie_attach = "first"
+name = "accent"
+fields = []
+
+[[articulation]]
+class = "Bowing"
+parents = ["TechnicalIndication", "Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "first"
+name = "bowing"
+fields = []
+
+[[articulation]]
+class = "BreathMark"
+parents = ["LengthArticulation", "Articulation"]
+volume_shift = 0.0
+length_shift = 0.7
+tie_attach = "last"
+name = "breath mark"
+fields = ["symbol"]
+
+[[articulation]]
+class = "DetachedLegato"
+parents = ["LengthArticulation", "Articulation"]
+volume_shift = 0.0
+length_shift = 0.9
+tie_attach = "last"
+name = "detached legato"
+fields = []
+
+[[articulation]]
+class = "Fingering"
+parents = ["TechnicalIndication", "Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "first"
+name = "fingering"
+fields = ["alternate", "fingerNumber", "substitution"]
+
+[[articulation]]
+class = "FretIndication"
+parents = ["TechnicalIndication", "Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "first"
+name = "fret indication"
+fields = ["number"]
+number = 0
+
+[[articulation]]
+class = "HandbellIndication"
+parents = ["TechnicalIndication", "Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "first"
+name = "handbell indication"
+fields = []
+
+[[articulation]]
+class = "Harmonic"
+parents = ["TechnicalIndication", "Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "first"
+name = "harmonic"
+fields = []
+
+[[articulation]]
+class = "HarpIndication"
+parents = ["TechnicalIndication", "Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "first"
+name = "harp indication"
+fields = []
+
+[[articulation]]
+class = "IndeterminateSlide"
+parents = ["PitchArticulation", "Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "first"
+name = "indeterminate slide"
+fields = []
+
+[[articulation]]
+class = "OrganIndication"
+parents = ["TechnicalIndication", "Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "first"
+name = "organ indication"
+fields = ["substitution"]
+
+[[articulation]]
+class = "Staccato"
+parents = ["LengthArticulation", "Articulation"]
+volume_shift = 0.05
+length_shift = 0.7
+tie_attach = "last"
+name = "staccato"
+fields = []
+
+[[articulation]]
+class = "Tenuto"
+parents = ["LengthArticulation", "Articulation"]
+volume_shift = -0.05
+length_shift = 1.1
+tie_attach = "last"
+name = "tenuto"
+fields = []
+
+[[articulation]]
+class = "Unstress"
+parents = ["DynamicArticulation", "Articulation"]
+volume_shift = -0.05
+length_shift = 1.0
+tie_attach = "first"
+name = "unstress"
+fields = []
+
+[[articulation]]
+class = "WindIndication"
+parents = ["TechnicalIndication", "Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "first"
+name = "wind indication"
+fields = []
+
+[[articulation]]
+class = "BrassIndication"
+parents = ["WindIndication", "TechnicalIndication", "Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "first"
+name = "brass indication"
+fields = []
+
+[[articulation]]
+class = "Doit"
+parents = ["IndeterminateSlide", "PitchArticulation", "Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "last"
+name = "doit"
+fields = []
+
+[[articulation]]
+class = "DownBow"
+parents = ["Bowing", "TechnicalIndication", "Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "first"
+name = "down bow"
+fields = []
+
+[[articulation]]
+class = "Falloff"
+parents = ["IndeterminateSlide", "PitchArticulation", "Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "last"
+name = "falloff"
+fields = []
+
+[[articulation]]
+class = "FretBend"
+parents = ["FretIndication", "TechnicalIndication", "Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "first"
+name = "fret bend"
+fields = ["bendAlter", "number", "preBend", "release", "withBar"]
+number = 0
+
+[[articulation]]
+class = "FretTap"
+parents = ["FretIndication", "TechnicalIndication", "Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "first"
+name = "fret tap"
+fields = ["number"]
+number = 0
+
+[[articulation]]
+class = "HarpFingerNails"
+parents = ["HarpIndication", "TechnicalIndication", "Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "first"
+name = "harp finger nails"
+fields = []
+
+[[articulation]]
+class = "OpenString"
+parents = ["Bowing", "TechnicalIndication", "Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "first"
+name = "open string"
+fields = []
+
+[[articulation]]
+class = "OrganHeel"
+parents = ["OrganIndication", "TechnicalIndication", "Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "first"
+name = "organ heel"
+fields = ["substitution"]
+
+[[articulation]]
+class = "OrganToe"
+parents = ["OrganIndication", "TechnicalIndication", "Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "first"
+name = "organ toe"
+fields = ["substitution"]
+
+[[articulation]]
+class = "Pizzicato"
+parents = ["Bowing", "TechnicalIndication", "Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "first"
+name = "pizzicato"
+fields = []
+
+[[articulation]]
+class = "Plop"
+parents = ["IndeterminateSlide", "PitchArticulation", "Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "first"
+name = "plop"
+fields = []
+
+[[articulation]]
+class = "Scoop"
+parents = ["IndeterminateSlide", "PitchArticulation", "Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "first"
+name = "scoop"
+fields = []
+
+[[articulation]]
+class = "Staccatissimo"
+parents = ["Staccato", "LengthArticulation", "Articulation"]
+volume_shift = 0.05
+length_shift = 0.5
+tie_attach = "last"
+name = "staccatissimo"
+fields = []
+
+[[articulation]]
+class = "Stopped"
+parents = ["WindIndication", "TechnicalIndication", "Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "first"
+name = "stopped"
+fields = []
+
+[[articulation]]
+class = "Stress"
+parents = ["DynamicArticulation", "LengthArticulation", "Articulation"]
+volume_shift = 0.05
+length_shift = 1.1
+tie_attach = "last"
+name = "stress"
+fields = []
+
+[[articulation]]
+class = "StringIndication"
+parents = ["Bowing", "TechnicalIndication", "Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "first"
+name = "string indication"
+fields = ["number"]
+number = 0
+
+[[articulation]]
+class = "StringThumbPosition"
+parents = ["Bowing", "TechnicalIndication", "Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "first"
+name = "string thumb position"
+fields = []
+
+[[articulation]]
+class = "StrongAccent"
+parents = ["Accent", "DynamicArticulation", "Articulation"]
+volume_shift = 0.15
+length_shift = 1.0
+tie_attach = "first"
+name = "strong accent"
+fields = ["pointDirection"]
+point_direction = "up"
+
+[[articulation]]
+class = "TonguingIndication"
+parents = ["WindIndication", "TechnicalIndication", "Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "first"
+name = "tonguing indication"
+fields = []
+
+[[articulation]]
+class = "UpBow"
+parents = ["Bowing", "TechnicalIndication", "Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "first"
+name = "up bow"
+fields = []
+
+[[articulation]]
+class = "WoodwindIndication"
+parents = ["WindIndication", "TechnicalIndication", "Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "first"
+name = "woodwind indication"
+fields = []
+
+[[articulation]]
+class = "DoubleTongue"
+parents = ["TonguingIndication", "WindIndication", "TechnicalIndication", "Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "first"
+name = "double tongue"
+fields = []
+
+[[articulation]]
+class = "FrettedPluck"
+parents = ["FretIndication", "Fingering", "TechnicalIndication", "Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "first"
+name = "fretted pluck"
+fields = ["alternate", "fingerNumber", "number", "substitution"]
+number = 0
+
+[[articulation]]
+class = "NailPizzicato"
+parents = ["Pizzicato", "Bowing", "TechnicalIndication", "Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "first"
+name = "nail pizzicato"
+fields = []
+
+[[articulation]]
+class = "SnapPizzicato"
+parents = ["Pizzicato", "Bowing", "TechnicalIndication", "Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "first"
+name = "snap pizzicato"
+fields = []
+
+[[articulation]]
+class = "StringHarmonic"
+parents = ["Bowing", "Harmonic", "TechnicalIndication", "Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "first"
+name = "string harmonic"
+fields = ["harmonicType", "pitchType"]
+harmonic_type = "natural"
+
+[[articulation]]
+class = "TripleTongue"
+parents = ["TonguingIndication", "WindIndication", "TechnicalIndication", "Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "first"
+name = "triple tongue"
+fields = []
+
+[[articulation]]
+class = "Spiccato"
+parents = ["Staccato", "LengthArticulation", "Accent", "DynamicArticulation", "Articulation"]
+volume_shift = 0.1
+length_shift = 0.7
+tie_attach = "first"
+name = "spiccato"
+fields = []
+
+[[articulation]]
+class = "StringFingering"
+parents = ["StringIndication", "Bowing", "Fingering", "TechnicalIndication", "Articulation"]
+volume_shift = 0.0
+length_shift = 1.0
+tie_attach = "first"
+name = "string fingering"
+fields = ["alternate", "fingerNumber", "number", "substitution"]
+number = 0
+
