@@ -48,6 +48,13 @@ times faster than it did in 0.7.0.
 - The report counted a wheel class that inherits its members, such as
   `Trill` from `Ornament`, as lacking them. The wheel figure reads 94%
   where it read 89%.
+- A chord respelled by dissonance, as one built from pitch-class numbers
+  is, could be spelled otherwise than music21 spells it. The Pythagorean
+  penalty gave a twelfth down 1/6 where music21 gives 1/3, and took the
+  log of each prime apart where music21 takes one of the whole
+  denominator, and a tolerance for ties then hid a difference music21's
+  `min` keeps. Pitch classes 3, 6 and 9 are `E- G- A` now, as in music21;
+  every set of pitch classes and 6,000 respellings of named pitches agree.
 - The report's coverage run instrumented only the workspace since
   cargo-llvm-cov 0.9, whose default wrapper skips `python-parity`: its
   suites ran and wrote no profile. It passes `--no-rustc-wrapper` now, and

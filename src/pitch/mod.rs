@@ -1336,6 +1336,36 @@ mod tests {
     }
 
     #[test]
+    fn dissonance_rounds_as_music21_rounds() {
+        // Two spellings that tie in exact arithmetic and differ by one ulp
+        // in music21's, which takes one log of each whole denominator.
+        let score = |spelled: &[&str]| {
+            let pitches: Vec<Pitch> = spelled.iter().map(|name| name.parse().unwrap()).collect();
+            super::dissonance_score(&pitches).unwrap()
+        };
+        let flat = score(&["E-", "G-", "A"]);
+        let sharp = score(&["E-", "F#", "A"]);
+        assert_eq!(flat, 0.051_031_336_396_830_44);
+        assert_eq!(sharp, 0.051_031_336_396_830_475);
+
+        // So pitch classes 3, 6 and 9 spell with G-, as music21 spells them.
+        let chord = crate::Chord::new([3, 6, 9].as_slice()).unwrap();
+        assert_eq!(chord.pitch_names(), ["E-", "G-", "A"]);
+
+        // A twelfth down is 1/3: its fifth's 2 cancels the octave's.
+        assert_eq!(score(&["D#6", "B#5", "E#5", "D5"]), 0.235_696_022_824_957_3);
+        assert_eq!(score(&["D#6", "C6", "F5", "D5"]), 0.235_696_022_824_957_36);
+        let respelled = simplify_multiple_enharmonics(
+            &["D#6", "C6", "F5", "C##5"].map(|name| name.parse().unwrap()),
+            None,
+            None,
+        )
+        .unwrap();
+        let respelled: Vec<String> = respelled.iter().map(Pitch::name_with_octave).collect();
+        assert_eq!(respelled, ["D#6", "B#5", "E#5", "D5"]);
+    }
+
+    #[test]
     fn get_enharmonic_picks_the_direction_music21_does() {
         let cases = [
             ("C#4", "D-4"),
