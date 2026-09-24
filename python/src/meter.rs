@@ -448,7 +448,7 @@ impl TimeSignature {
         Ok(self
             .inner
             .beat_division_durations()
-            .map_err(meter_error)?
+            .map_err(time_signature_error)?
             .into_iter()
             .map(Duration::wrap)
             .collect())
@@ -459,7 +459,7 @@ impl TimeSignature {
         Ok(self
             .inner
             .beat_sub_division_durations()
-            .map_err(meter_error)?
+            .map_err(time_signature_error)?
             .into_iter()
             .map(Duration::wrap)
             .collect())

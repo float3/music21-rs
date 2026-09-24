@@ -82,6 +82,12 @@ times faster than it did in 0.7.0.
 - A Roman numeral made from a degree is written in capitals in a modal
   key, as music21 writes it: 2 in C dorian is `II`, a major triad, where
   it was `ii`.
+- `TimeSignature::beat_division_durations` and its subdivisions are read
+  off the beat sequence as music21 reads them: the divisions of every beat
+  must agree, not the beats, so `2+3/8` divides into eighths where it was
+  refused. The wheel raises music21's `TimeSignatureException` where the
+  divisions do differ. 110 meters agree with music21 on fifteen
+  properties.
 - `Chord::closed_position` measured from the note sounding lowest where
   music21 measures from the note written lowest, so `E#4 F-4` closed to
   `F-4 E#5` where music21 keeps `E#4 F-4`. 31 of 4,000 random chords

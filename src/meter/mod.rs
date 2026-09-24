@@ -711,10 +711,38 @@ impl TimeSignature {
     /// Returns the quarter length of each division of one beat, in order:
     /// two eighths in `4/4`, three in `6/8`, the whole dotted-quarter beat
     /// in `3/8` where the beat does not divide.
+    ///
+    /// Read off the beat sequence as music21 reads it: the divisions of
+    /// every beat must agree, but the beats need not, so `2+3/8` divides
+    /// into eighths though its beats are a quarter and a dotted quarter.
+    ///
+    /// # Errors
+    ///
+    /// Beats that divide differently, as the quarters and eighths of
+    /// `2/4+3/8` do, which music21 refuses too.
     pub fn beat_division_quarter_lengths(&self) -> Result<Vec<FloatType>> {
-        let count = self.beat_division_count().max(1);
-        let beat = self.beat_quarter_length()?;
-        Ok(vec![beat / FloatType::from(count); count as usize])
+        let beat_sequence = self.beat_sequence();
+        let beats = match beat_sequence.parts() {
+            [] => std::slice::from_ref(beat_sequence),
+            beats => beats,
+        };
+
+        // A beat with parts divides into them; one without is its own
+        // division.
+        let divisions = |beat: &MeterTerminal| -> Vec<FloatType> {
+            match beat.parts() {
+                [] => vec![beat.quarter_length()],
+                parts => parts.iter().map(MeterTerminal::quarter_length).collect(),
+            }
+        };
+
+        let every: Vec<FloatType> = beats.iter().flat_map(divisions).collect();
+        if every.windows(2).any(|pair| pair[0] != pair[1]) {
+            return Err(Error::Meter(format!(
+                "non uniform beat division: {every:?}"
+            )));
+        }
+        Ok(beats.first().map(divisions).unwrap_or_default())
     }
 
     /// Returns [`Self::beat_division_quarter_lengths`] as durations: music21's
@@ -1671,6 +1699,45 @@ pub(crate) fn offset_repr(offset: FloatType) -> String {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn beat_divisions_are_read_off_the_beats_as_music21_reads_them() {
+        // music21 asks only that the divisions agree: every beat of 2+3/8
+        // divides into eighths, though the beats themselves differ.
+        let cases: [(&str, &[FloatType], &[FloatType]); 9] = [
+            ("2+3/8", &[0.5, 0.5], &[0.25; 4]),
+            ("3+3+2/8", &[0.5; 3], &[0.25; 6]),
+            ("5/8", &[0.25, 0.25], &[0.125; 4]),
+            ("7/8", &[0.25, 0.25], &[0.125; 4]),
+            ("4/4", &[0.5, 0.5], &[0.25; 4]),
+            ("6/8", &[0.5; 3], &[0.25; 6]),
+            ("5/4", &[0.5, 0.5], &[0.25; 4]),
+            ("9/8", &[0.5; 3], &[0.25; 6]),
+            ("3/2", &[1.0, 1.0], &[0.5; 4]),
+        ];
+        for (ratio, divisions, subdivisions) in cases {
+            let meter = TimeSignature::from_ratio_string(ratio).unwrap();
+            let lengths = |durations: Vec<Duration>| -> Vec<FloatType> {
+                durations.iter().map(Duration::quarter_length).collect()
+            };
+            assert_eq!(
+                lengths(meter.beat_division_durations().unwrap()),
+                divisions,
+                "{ratio}"
+            );
+            assert_eq!(
+                lengths(meter.beat_sub_division_durations().unwrap()),
+                subdivisions,
+                "{ratio}"
+            );
+        }
+
+        // Divisions that differ are refused, as music21 refuses them.
+        for ratio in ["3/4+3/8", "2/4+3/8", "1/4+1/8"] {
+            let meter = TimeSignature::from_ratio_string(ratio).unwrap();
+            assert!(meter.beat_division_durations().is_err(), "{ratio}");
+        }
+    }
     /// music21 writes a word before the ratio to say how the beat is felt,
     /// and writes an additive meter as parts that add up. Both were read as
     /// nonsense here, which is ten of music21's own meter examples.

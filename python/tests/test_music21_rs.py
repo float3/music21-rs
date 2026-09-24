@@ -761,3 +761,13 @@ def test_an_interval_hands_back_notes_without_music21():
     assert repr(interval.noteStart) == "<music21.note.Note C>"
     assert repr(interval.noteEnd) == "<music21.note.Note E>"
     assert interval.noteStart.pitch is interval.pitchStart
+
+
+def test_additive_meters_divide_their_beats_as_music21_does():
+    meter = m.TimeSignature("2+3/8")
+    assert [d.quarterLength for d in meter.beatDivisionDurations] == [0.5, 0.5]
+    assert [d.quarterLength for d in meter.beatSubDivisionDurations] == [0.25] * 4
+    with pytest.raises(m.TimeSignatureException):
+        m.TimeSignature("2/4+3/8").beatDivisionDurations
+    with pytest.raises(m.TimeSignatureException):
+        m.TimeSignature("2/4+3/8").beatSubDivisionDurations
