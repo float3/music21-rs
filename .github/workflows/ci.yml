@@ -14,9 +14,14 @@ on:
 permissions:
   contents: read
 
+# A pull request's run is replaced by its next push. A push to master is not:
+# cancelling it meant a burst of pushes published nothing until the last one
+# had finished every job, and each push restarted the clock. Master's runs
+# finish instead, and `pages` and `pages-report` publish only a run that is
+# still the branch's head.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_TERM_COLOR: always
@@ -463,8 +468,15 @@ jobs:
       - name: Cargo test (doctests)
         run: cargo test --workspace --doc
 
-  docs:
-    name: Build Docs
+  # The site is published in two steps, because its two halves take very
+  # different times to build. `site` is the documentation and the demos --
+  # a few minutes -- and `pages` publishes it at once, carrying the last full
+  # report there was. `report` measures coverage and runs every suite, which
+  # takes a quarter of an hour, and `pages-report` then publishes the same
+  # site again with that report in it. A small fix to a demo therefore goes
+  # live without waiting for the report, and the report follows on its own.
+  site:
+    name: Build Site
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -475,16 +487,11 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      # Two things in this job run on nightly, and only these two: the
-      # documentation build, since `doc_cfg` is a nightly rustdoc feature, and
-      # the report's coverage run, since cargo-llvm-cov's `--doctests` is what
-      # lets the rustdoc examples write profiles and it needs nightly rustdoc.
-      # The coverage run reads its profiles with nightly's llvm-tools.
-      # rust-toolchain.toml pins every other command in this job to stable.
+      # The documentation build is the one thing in this job on nightly,
+      # since `doc_cfg` is a nightly rustdoc feature. rust-toolchain.toml pins
+      # every other command in the job to stable.
       - name: Install nightly rustdoc
         uses: dtolnay/rust-toolchain@nightly
-        with:
-          components: llvm-tools-preview
 
       - name: Install Linux audio dependencies
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev pkg-config
@@ -514,36 +521,19 @@ jobs:
         env:
           RUSTDOCFLAGS: --cfg docsrs
 
-      - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-llvm-cov
-
       - name: Setup Python
         uses: actions/setup-python@v7
         with:
           python-version: "3.13"
 
-      # The report runs every suite, so this job needs what those suites need:
-      # music21's own dependencies for the doctest harness, and maturin and
-      # pytest for the wheel.
-      - name: Install the suites' dependencies
+      - name: Install the Python tooling
         run: |
           python -m pip install chardet joblib jsonpickle more_itertools numpy requests webcolors
-          python -m pip install "maturin>=1.7,<2" pytest pdoc
-          # What music21's own suite needs to pass on music21, as the
-          # `music21-suite` job installs it: the report runs that suite too,
-          # and the two should be measuring in one environment.
-          python -m pip install scipy python-Levenshtein matplotlib
-          sudo apt-get update
-          sudo apt-get install -y lilypond
-          mkdir -p ~/Desktop
+          python -m pip install "maturin>=1.7,<2" pdoc
 
-      # The wheel's own tests import music21_rs, so the wheel has to be
-      # installed before the report runs them; the report rebuilds it, which
-      # is cheap once cargo has cached the artifacts. The Python API docs are
-      # read off the installed module, so they need it too.
-      - name: Install the wheel the report tests
+      # The Python API docs are read off the installed module, and the
+      # feature report asks the wheel which members it carries.
+      - name: Install the wheel
         run: |
           maturin build --release --manifest-path python/Cargo.toml --out target/wheels
           python -m pip install --no-index --find-links target/wheels music21-rs
@@ -553,36 +543,41 @@ jobs:
       - name: Build Python API docs
         run: pdoc -o target/pythondocs music21_rs
 
-      # Coverage, every test suite, and the ported feature set, published
-      # beside the docs. The feature half also fails when data/feature_map.toml
-      # has gone stale.
-      # The benchmark and music21's suite are subcommands of this same
-      # program now, and the report drives them by running itself, so the
-      # binary it builds has to be the one with pyo3 in it.
-      #
-      # On a pull request only the feature half runs. The other half re-runs
-      # the workspace tests, the doctests, the parity suite, the wheel and
-      # music21's own suite -- all of which this workflow has just run in
-      # parallel as jobs of their own -- and then re-runs them serially and
-      # under coverage instrumentation, which took thirteen of this job's
-      # fifteen minutes and set the whole workflow's wall clock. The page it
-      # measures is never uploaded from a pull request either: `Configure
-      # Pages` and `Upload docs artifact` below are both push-only. What is
-      # worth keeping on a pull request is the feature-map staleness check,
-      # which is the one part of this job that can fail on a code change, and
-      # `--features-only` is exactly that part.
-      - name: Build reports
+      # The feature half of the report, which is the one part of the site
+      # that can fail on a code change: it fails when data/feature_map.toml
+      # has gone stale. It is fast, so it gates every run here; the full
+      # report is `report`'s.
+      - name: Check the feature map
+        run: cargo run --release -p xtask --features python -- report --features-only --out target/features-report
+        env:
+          PYO3_PYTHON: python
+
+      # The last full report `report` finished, whichever commit it was for,
+      # so the site this job publishes keeps its report until `pages-report`
+      # replaces it with this commit's. Where there is none yet -- a pull
+      # request, or an evicted cache -- the feature report stands in.
+      - name: Restore the last full report
+        id: last-report
+        if: github.event_name == 'push'
+        uses: actions/cache/restore@v6
+        with:
+          path: published-report
+          key: report-${{ github.sha }}
+          restore-keys: report-
+
+      - name: Choose the report to publish
         shell: bash
         run: |
           set -euo pipefail
 
-          if [[ "${{ github.event_name }}" == "push" ]]; then
-            cargo run --release -p xtask --features python -- report --out target/reports
+          rm -rf target/reports
+          if [[ -n "${{ steps.last-report.outputs.cache-matched-key }}" ]]; then
+            echo "publishing ${{ steps.last-report.outputs.cache-matched-key }}"
+            cp -R published-report target/reports
           else
-            cargo run --release -p xtask --features python -- report --features-only --out target/reports
+            echo "no full report cached; publishing the feature report"
+            cp -R target/features-report target/reports
           fi
-        env:
-          PYO3_PYTHON: python
 
       - name: Install wasm-pack
         run: cargo install wasm-pack --locked
@@ -638,13 +633,10 @@ jobs:
 
       - name: Smoke check demo site
         shell: bash
-        env:
-          FULL_REPORT: ${{ github.event_name == 'push' }}
         run: |
           set -euo pipefail
 
           python3 - <<'PY'
-          import os
           from pathlib import Path
 
           root = Path("target/pages")
@@ -674,11 +666,6 @@ jobs:
               "reports/report.json",
           ]
 
-          # Only a push measures coverage; a pull request builds the feature
-          # half alone, which writes no coverage page to check for.
-          if os.environ.get("FULL_REPORT") == "true":
-              required_files.append("reports/coverage/html/index.html")
-
           missing = [name for name in required_files if not (root / name).is_file()]
           if missing:
               raise SystemExit(f"missing demo build output: {', '.join(missing)}")
@@ -702,9 +689,6 @@ jobs:
               "score/app.js": ["../theme.js", "../pkg/music21_rs_web.js"],
           }
 
-          if os.environ.get("FULL_REPORT") == "true":
-              file_checks["reports/index.html"].append("./coverage/html/index.html")
-
           for name, needles in file_checks.items():
               text = (root / name).read_text(encoding="utf-8")
               missing_needles = [needle for needle in needles if needle not in text]
@@ -712,12 +696,17 @@ jobs:
                   joined = ", ".join(missing_needles)
                   raise SystemExit(f"{name} is missing expected demo references: {joined}")
 
-          # The timings page exists only where music21's own suite was timed,
-          # so it cannot simply be required. What can be required is that the
-          # report and the page agree: a report that links to it must ship it.
+          # The report here may be the feature half alone, which has no
+          # coverage and no timings, so neither page can simply be required.
+          # What can be required is that the report and its pages agree: a
+          # report that links to one must ship it.
           report = (root / "reports/index.html").read_text(encoding="utf-8")
-          if "./timings.html" in report and not (root / "reports/timings.html").is_file():
-              raise SystemExit("reports/index.html links to timings.html, which was not built")
+          for link, page in [
+              ("./coverage/html/index.html", "reports/coverage/html/index.html"),
+              ("./timings.html", "reports/timings.html"),
+          ]:
+              if link in report and not (root / page).is_file():
+                  raise SystemExit(f"reports/index.html links to {link}, which was not built")
           PY
 
       - name: Configure Pages
@@ -731,7 +720,7 @@ jobs:
           path: target/pages
 
   pages:
-    name: Publish Docs
+    name: Publish Site
     runs-on: ubuntu-latest
     # Only what the site is made of. Documentation that builds should reach
     # the reader whether or not some other suite is red: gating the deploy on
@@ -741,7 +730,7 @@ jobs:
     # for every job.
     needs:
       - lint
-      - docs
+      - site
     if: github.event_name == 'push'
     permissions:
       contents: read
@@ -751,9 +740,212 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      # Runs on master are not cancelled by the next push (see `concurrency`
+      # above), so an older run can reach this point after a newer one has
+      # published. It must not put the older site back.
+      - name: Is this commit still the branch's head?
+        id: head
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          head=$(gh api "repos/${{ github.repository }}/commits/${{ github.ref_name }}" -q .sha)
+          if [[ "$head" == "$GITHUB_SHA" ]]; then
+            echo "current=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "current=false" >> "$GITHUB_OUTPUT"
+            echo "the branch has moved on to $head; leaving the site to its run"
+          fi
+
       - name: Deploy docs to GitHub Pages
         id: deployment
+        if: steps.head.outputs.current == 'true'
         uses: actions/deploy-pages@v5
+
+  report:
+    name: Build Report
+    runs-on: ubuntu-latest
+    # Only a push measures the report: a pull request's `site` job already
+    # runs the feature half, which is the part that can fail on a code change,
+    # and the rest re-runs every suite this workflow has just run as jobs of
+    # its own. It is never published from a pull request either.
+    if: github.event_name == 'push'
+    # A quarter of an hour, so a burst of pushes must not start one each.
+    # Not cancelled once running, so a report always finishes; while one runs,
+    # GitHub keeps only the newest waiting, and that is the one run next.
+    concurrency:
+      group: report-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      # The coverage run is on nightly, since cargo-llvm-cov's `--doctests`
+      # is what lets the rustdoc examples write profiles and it needs nightly
+      # rustdoc. It reads its profiles with nightly's llvm-tools.
+      - name: Install nightly
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: llvm-tools-preview
+
+      - name: Install Linux audio dependencies
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev pkg-config
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: xtask-report
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      # The report runs every suite, so this job needs what those suites need:
+      # music21's own dependencies for the doctest harness, and maturin and
+      # pytest for the wheel.
+      - name: Install the suites' dependencies
+        run: |
+          python -m pip install chardet joblib jsonpickle more_itertools numpy requests webcolors
+          python -m pip install "maturin>=1.7,<2" pytest
+          # What music21's own suite needs to pass on music21, as the
+          # `music21-suite` job installs it: the report runs that suite too,
+          # and the two should be measuring in one environment.
+          python -m pip install scipy python-Levenshtein matplotlib
+          sudo apt-get update
+          sudo apt-get install -y lilypond
+          mkdir -p ~/Desktop
+
+      # The wheel's own tests import music21_rs, so the wheel has to be
+      # installed before the report runs them; the report rebuilds it, which
+      # is cheap once cargo has cached the artifacts.
+      - name: Install the wheel the report tests
+        run: |
+          maturin build --release --manifest-path python/Cargo.toml --out target/wheels
+          python -m pip install --no-index --find-links target/wheels music21-rs
+
+      # Coverage, every test suite, and the ported feature set. The benchmark
+      # and music21's suite are subcommands of this same program, and the
+      # report drives them by running itself, so the binary it builds has to
+      # be the one with pyo3 in it.
+      - name: Build reports
+        run: cargo run --release -p xtask --features python -- report --out target/reports
+        env:
+          PYO3_PYTHON: python
+
+      - name: Check the report
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for page in index.html crate/index.html wheel/index.html report.json coverage/html/index.html; do
+            [[ -f "target/reports/$page" ]] || { echo "missing report output: $page"; exit 1; }
+          done
+          grep -q './coverage/html/index.html' target/reports/index.html \
+            || { echo "reports/index.html does not link the coverage page"; exit 1; }
+          if grep -q './timings.html' target/reports/index.html; then
+            [[ -f target/reports/timings.html ]] \
+              || { echo "reports/index.html links to timings.html, which was not built"; exit 1; }
+          fi
+
+      # For `pages-report` to publish now, and for every later `site` job to
+      # publish until the next report replaces it.
+      - name: Upload the report
+        uses: actions/upload-artifact@v7
+        with:
+          name: report
+          path: target/reports
+
+      - name: Stage the report for later sites
+        run: cp -R target/reports published-report
+
+      - name: Save the report for later sites
+        uses: actions/cache/save@v6
+        with:
+          path: published-report
+          key: report-${{ github.sha }}
+
+  pages-report:
+    name: Publish Site With Report
+    runs-on: ubuntu-latest
+    needs:
+      - lint
+      - site
+      - report
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      # A report that finishes after the branch has moved on is not published:
+      # it would put this commit's demos back over the newer ones. The newer
+      # run's own report follows, and `site` carries this one until then.
+      - name: Is this commit still the branch's head?
+        id: head
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          head=$(gh api "repos/${{ github.repository }}/commits/${{ github.ref_name }}" -q .sha)
+          if [[ "$head" == "$GITHUB_SHA" ]]; then
+            echo "current=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "current=false" >> "$GITHUB_OUTPUT"
+            echo "the branch has moved on to $head; leaving the site to its run"
+          fi
+
+      - name: Download the site
+        if: steps.head.outputs.current == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: github-pages
+          path: site-archive
+
+      - name: Download the report
+        if: steps.head.outputs.current == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: report
+          path: report
+
+      - name: Put this commit's report into the site
+        if: steps.head.outputs.current == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir site
+          tar -xf site-archive/artifact.tar -C site
+          rm -rf site/reports
+          cp -R report site/reports
+
+      - name: Upload the site with its report
+        if: steps.head.outputs.current == 'true'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          name: github-pages-report
+          path: site
+
+      - name: Deploy docs to GitHub Pages
+        id: deployment
+        if: steps.head.outputs.current == 'true'
+        uses: actions/deploy-pages@v5
+        with:
+          artifact_name: github-pages-report
 
   release:
     name: GitHub Release
@@ -771,7 +963,8 @@ jobs:
       - msrv
       - semver
       - test
-      - docs
+      - site
+      - report
       - pages
     if: github.event_name == 'push'
     permissions:

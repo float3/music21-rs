@@ -211,7 +211,7 @@ cargo test --manifest-path python-parity/Cargo.toml -- --test-threads=1
 # music21's own test suite, on music21 and on the crate
 cargo run --release -p xtask --features python -- music21-suite
 
-# the docs job; `report` fails when the feature map is stale
+# CI's site job; `report` fails when the feature map is stale
 cargo doc --workspace --no-deps
 cargo run --release -p xtask --features python -- report --features-only
 ```
