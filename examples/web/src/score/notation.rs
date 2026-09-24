@@ -12,16 +12,14 @@
 //! ```
 
 use super::{
-    EPSILON, STEPS, Score, ScoreInput, WrittenKey, abc_pitch, chord_symbol_voicing_notes, js_error,
-    key_alters, spell_midi,
+    EPSILON, MIDDLE_C_DNN, Score, ScoreInput, WrittenKey, abc_pitch, chord_symbol_voicing_notes,
+    js_error, key_alters, natural_at, spell_midi,
 };
 use music21_rs::{Pitch, abc_duration, abc_note, pitch_name_from_abc_note};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use wasm_bindgen::prelude::*;
 
-/// music21's diatonic note number of middle C, staff position 0.
-const MIDDLE_C: i32 = 29;
 const OCTAVE_STEPS: i32 = 7;
 const OCTAVE_SEMITONES: i32 = 12;
 /// The highest fret counted as within an instrument's reach when deciding
@@ -58,15 +56,8 @@ impl Octaves {
     }
 }
 
-/// The natural pitch at a staff position.
-fn natural(staff: i32) -> Result<Pitch, JsValue> {
-    let step = STEPS[staff.rem_euclid(OCTAVE_STEPS) as usize];
-    let octave = 4 + staff.div_euclid(OCTAVE_STEPS);
-    Pitch::from_name(format!("{step}{octave}")).map_err(js_error)
-}
-
 fn staff_of(pitch: &Pitch) -> i32 {
-    pitch.diatonic_note_number() - MIDDLE_C
+    pitch.diatonic_note_number() - MIDDLE_C_DNN
 }
 
 /// Reads an ABC pitch token (`^F,`, `c'`), accidental and all.
@@ -88,7 +79,7 @@ fn accidental_of(token: &str) -> &str {
 /// Semitones between `midi` and the natural at `staff`, whole octaves
 /// taken out: `-1` where a flat makes the staff position sound it.
 fn alter_at(staff: i32, midi: i32) -> Result<i32, JsValue> {
-    let offset = midi - natural(staff)?.midi();
+    let offset = midi - natural_at(staff)?.midi();
     Ok(offset - OCTAVE_SEMITONES * octaves_in(offset))
 }
 
@@ -109,7 +100,7 @@ fn abc_accidental_text(alter: i32) -> Option<&'static str> {
 
 fn shift(token: &str, steps: i32) -> Result<String, JsValue> {
     let staff = staff_of(&parse_abc(token)?) + steps;
-    let letter = abc_note(&natural(staff)?).map_err(js_error)?;
+    let letter = abc_note(&natural_at(staff)?).map_err(js_error)?;
 
     // A step lets the note follow the key; an octave keeps its accidental.
     let accidental = if steps % OCTAVE_STEPS == 0 {
@@ -141,7 +132,7 @@ fn to_js<T: Serialize>(value: &T) -> Result<JsValue, JsValue> {
 #[wasm_bindgen]
 /// The MIDI number of the natural at a staff position: `0` is 60.
 pub fn staff_midi(staff: i32) -> Result<i32, JsValue> {
-    Ok(natural(staff)?.midi())
+    Ok(natural_at(staff)?.midi())
 }
 
 #[wasm_bindgen]
@@ -174,7 +165,7 @@ pub fn abc_accidental(staff: i32, midi: i32) -> Result<Option<String>, JsValue> 
 /// Whole octaves `midi` sounds from the natural at a staff position: `-1`
 /// on a staff that sounds an octave below where it is written.
 pub fn written_octaves(staff: i32, midi: i32) -> Result<i32, JsValue> {
-    Ok(octaves_in(midi - natural(staff)?.midi()))
+    Ok(octaves_in(midi - natural_at(staff)?.midi()))
 }
 
 #[wasm_bindgen]
@@ -253,8 +244,8 @@ fn staff_tuning(
     let (Some(&low), Some(&high)) = (positions.iter().min(), positions.iter().max()) else {
         return tuning_for(strings, clef).map(Some);
     };
-    let low = natural(low)?.midi() + shift;
-    let high = natural(high)?.midi() + shift;
+    let low = natural_at(low)?.midi() + shift;
+    let high = natural_at(high)?.midi() + shift;
 
     let written = tuning_for(strings, clef)?;
     let sounding = tuning_for(&written, "-8")?;
@@ -471,9 +462,9 @@ mod tests {
 
     #[test]
     fn staff_positions_count_from_middle_c() {
-        assert_eq!(natural(0).unwrap().midi(), 60);
-        assert_eq!(natural(-1).unwrap().midi(), 59);
-        assert_eq!(natural(7).unwrap().midi(), 72);
+        assert_eq!(natural_at(0).unwrap().midi(), 60);
+        assert_eq!(natural_at(-1).unwrap().midi(), 59);
+        assert_eq!(natural_at(7).unwrap().midi(), 72);
         assert_eq!(staff_of(&parse_abc("c").unwrap()), 7);
         assert_eq!(staff_of(&parse_abc("^F,").unwrap()), -4);
         assert_eq!(parse_abc("_B,,").unwrap().midi(), 46);
