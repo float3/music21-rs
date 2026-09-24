@@ -176,8 +176,11 @@ Two rules, set 2026-09-12, that most of the open work now serves:
   bit, augmented-sixth names in every voicing, four `RomanNumeral`
   properties, a key's scale members, a degree's case in modal keys,
   additive meters' divisions, and three wheel members that needed music21
-  installed. One difference stays, deliberately: a scale's `nextPitch`
-  takes `direction` as a string where music21 insists on its enum.
+  installed. Then `ChordSymbol`: degrees read through Python's `int`, the
+  voicing's root and bass objects moving with the chord, and
+  `pitchedCommonName` asking the root a chord answers; 9,972 figures agree.
+  One difference stays, deliberately: a scale's `nextPitch` takes
+  `direction` as a string where music21 insists on its enum.
 
 - **music21's own suite ran on all three sides** and behaves the same on the
   crate: 5,030 tests on music21, 4,526 on each Rust side, one known
