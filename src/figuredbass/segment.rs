@@ -309,7 +309,7 @@ impl Segment {
         let rules = &self.rules;
         Ok(
             possibility::parts_same(from, to, Some(&rules.parts_to_check))?
-                && !(rules.upper_parts_remain_same && !possibility::upper_parts_same(from, to)?)
+                && (!rules.upper_parts_remain_same || possibility::upper_parts_same(from, to)?)
                 && !(rules.forbid_voice_overlap && possibility::voice_overlap(from, to)?)
                 && possibility::part_movements_within_limits(
                     from,
