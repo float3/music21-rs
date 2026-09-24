@@ -349,6 +349,41 @@ F,2 [DAB]2 F, [DAB]2 F, | =F,2 [D^GB] z [DGB]4 | E,2 [DGB]2 E, [DGB]2 z | A,2 [E
 `,
     },
     {
+        name: "Un bossa +",
+        view: "guitar",
+        abc: `X:5
+T:Un bossa +
+M:4/4
+L:1/8
+Q:1/4=130
+K:C
+%%MIDI program 24
+P:A
+D E F G | "Dm7" A4 A2 z2 | "G" B4 c B A G | "Cmaj7" e2 d c B2 z2 | z4 z D E F |
+w: hoy que no a-guan-to más quie-ro em-pe-zar de ce-ro y con un
+"Dm7" A4 F4 | "G" G4 B c d d | "Cmaj7" e4 c2 z2 | z4 D E F G |
+w: bos-sa más quie-ro que bai-le-mos por-que en la
+P:B
+"Fmaj7" A4 F2 E F | "Fm6" c3 _A G =A B c | "Cmaj7" e3 d c z2 B | "A7" ^c4 A2 z E |
+w: no-che que te fuis-te no fue el fi-nal que vos qui-si-ste bai-
+"Dm7" A4 F2 z E | "G" d4 B4 | "Cmaj7" c8 | z6 G A |
+w: le-mos un bos-sa más por-que
+P:C
+"Dm7" A4 F2 z D | "G" B4 z3 d | "Cmaj7" e8 | z8 |
+w: cuan-do es-toy con vos
+"Dm7" A4 A4 | "G" B4 G2 z A | "Gm7" _B8 | "C9" z4 D E F G |
+w: to-do nues-tro a-mor y no ha-ce
+"Fmaj7" A4 F G A G | "Fm6" _A2 F2 G =A B c | "Cmaj7" e4 d c z B | "A7" ^c4 A2 z E |
+w: fal-ta que me ex-pli-ques bas-ta que es-tés pa-ra de-cir-te bai-
+"Dm7" A4 F2 z E | "G" d4 B4 | "Gm7" _B8 | "C9" z7 E |
+w: le-mos un bos-sa más bai-
+"Fmaj7" A4 F G A z | "Fm6" _A4 z3 F | "Cmaj7" G4 E F G z | "A7" A4 z3 E |
+w: le-mos o-tro más bai-le-mos o-tro más bai-
+"Dm7" A4 F2 z E | "G" d4 B4 | "Cmaj7" c8 | z8 |]
+w: le-mos un bos-sa más
+`,
+    },
+    {
         name: "Blank",
         abc: `X:1
 T:Untitled
@@ -728,6 +763,9 @@ interface Rendered {
     /** Whether an offset of the drawn text is in the generated chord part,
      * which is not in the source. */
     isGenerated: (position: number) => boolean;
+    /** Whether the chord symbols are drawn as a part of their own, which then
+     * plays them in place of abcjs's accompaniment. */
+    chordPart: boolean;
 }
 
 function labelFor(slice: Slice, mode: string): string | null {
@@ -778,7 +816,8 @@ function render(source: string): void {
     const additions: { at: number; text: string; order: number; generated?: boolean }[] = hiddenLineStarts(
         source,
     ).map((at) => ({ at, text: "%", order: 0 }));
-    for (const addition of chordPart(source) ?? []) additions.push({ ...addition, order: 1, generated: true });
+    const chords = chordPart(source);
+    for (const addition of chords ?? []) additions.push({ ...addition, order: 1, generated: true });
     for (const [at, label] of labels) additions.push({ at, text: `"_${label.replace(/"/g, "'")}"`, order: 2 });
     additions.sort((a, b) => a.at - b.at || a.order - b.order);
     const insertions: Rendered["insertions"] = [];
@@ -835,7 +874,7 @@ function render(source: string): void {
             }
         }
     }
-    rendered = tune ? { tune, text, insertions, byAnchor, isGenerated } : null;
+    rendered = tune ? { tune, text, insertions, byAnchor, isGenerated, chordPart: chords !== null } : null;
     fitScore();
     scoreNode.scrollTop = scrollTop;
     markIssues();
@@ -1441,9 +1480,7 @@ function chordPart(source: string): { at: number; text: string }[] | null {
 
     const clef = octaveUp ? (view === "bass" ? "bass-8" : "treble-8") : "treble";
     const declaration = `V:tabchords clef=${clef} name="Chords"`;
-    // The written symbols stop sounding, since the part now plays them.
-    const keyLine = /(^|\n)\s*K:[^\n]*\n/.exec(source);
-    const additions = [{ at: keyLine ? keyLine.index + keyLine[0].length : 0, text: "%%MIDI gchordoff\n" }];
+    const additions: { at: number; text: string }[] = [];
 
     // abcjs lines voices up line by line, so the part is written a line of
     // its own under each line of music. That needs a voice for the music to
@@ -1468,6 +1505,15 @@ function chordPart(source: string): { at: number; text: string }[] | null {
         const newline = source.indexOf("\n", start);
         return newline === -1 ? source.length : newline;
     };
+    // A line's lyrics are the `w:` lines under it, so the part goes below
+    // them; above them, abcjs would sing the words to the chords.
+    const lyricsEnd = (start: number) => {
+        let end = lineEnd(start);
+        while (end < source.length && /^\s*(w:|\+:)/.test(source.slice(end + 1, lineEnd(end + 1)))) {
+            end = lineEnd(end + 1);
+        }
+        return end;
+    };
     const lineStarts = music.map((line) => {
         const end = lineEnd(line.start);
         const starts = [...notes.values()]
@@ -1486,7 +1532,7 @@ function chordPart(source: string): { at: number; text: string }[] | null {
         if (chunk.length === 0) return;
         const head = index === 0 ? `${declaration}\n` : `[V:tabchords] `;
         additions.push({
-            at: lineEnd(line.start),
+            at: lyricsEnd(line.start),
             text: `\n${head}[L:1/8] ${chunk.join(" | ")} ${last ? "|]" : "|"}`,
         });
     });
@@ -1871,11 +1917,14 @@ function followPlayback(node: SVGElement | undefined): void {
     }
 }
 
-/** A synth primed to play `tune` in the chosen playback tuning. */
-async function makeSynth(tune: AbcTune): Promise<InstanceType<AbcjsGlobal["synth"]["CreateSynth"]>> {
+/** A synth primed to play what is drawn in the chosen playback tuning. Where
+ * a chord part plays the chord symbols, abcjs's own accompaniment of them is
+ * switched off; `%%MIDI gchordoff` would have to be written inside a voice. */
+async function makeSynth(drawn: Rendered): Promise<InstanceType<AbcjsGlobal["synth"]["CreateSynth"]>> {
     const synth = new ABCJS.synth.CreateSynth();
     const retune = tuningCallback();
-    await synth.init({ visualObj: tune, ...(retune ? { options: { sequenceCallback: retune } } : {}) });
+    const options = { ...(retune ? { sequenceCallback: retune } : {}), ...(drawn.chordPart ? { chordsOff: true } : {}) };
+    await synth.init({ visualObj: drawn.tune, options });
     await synth.prime();
     return synth;
 }
@@ -1966,7 +2015,7 @@ async function play(): Promise<void> {
     playButton.disabled = true;
     playButton.textContent = "Loading…";
     try {
-        const synth = await makeSynth(rendered.tune);
+        const synth = await makeSynth(rendered);
         const timer = new ABCJS.TimingCallbacks(rendered.tune, {
             eventCallback: (event) => {
                 scoreNode.querySelectorAll(".m21-playing").forEach((node) => node.classList.remove("m21-playing"));
@@ -2070,7 +2119,7 @@ async function exportAs(kind: string): Promise<void> {
             }
             case "wav": {
                 if (!rendered) throw new Error("There is no score to export.");
-                const synth = await makeSynth(rendered.tune);
+                const synth = await makeSynth(rendered);
                 const link = el("a");
                 link.href = synth.download();
                 link.download = `${stem}.wav`;
