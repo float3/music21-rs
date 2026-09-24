@@ -754,3 +754,10 @@ def test_a_degree_is_written_in_the_case_music21_writes_it(degree, key_or_scale,
     # music21 lowers a degree's numeral in a major or minor key alone; a
     # modal key keeps it upper case, and so a major triad.
     assert m.RomanNumeral(degree, key_or_scale()).figure == figure
+
+
+def test_an_interval_hands_back_notes_without_music21():
+    interval = m.Interval(m.Pitch("C4"), m.Pitch("E4"))
+    assert repr(interval.noteStart) == "<music21.note.Note C>"
+    assert repr(interval.noteEnd) == "<music21.note.Note E>"
+    assert interval.noteStart.pitch is interval.pitchStart

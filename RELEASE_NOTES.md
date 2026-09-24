@@ -75,8 +75,9 @@ times faster than it did in 0.7.0.
   `derive`, `romanNumeral` and the rest — as the scale of its mode does,
   where it raised `AttributeError`, installed or not. `derive` hands back
   keys, as music21's does.
-- A scale's `getChord` built its chord from music21's class even with no
-  music21 installed, and failed there; it uses the wheel's own. Scales
+- A scale's `getChord` and an interval's `noteStart` and `noteEnd` built
+  their objects from music21's classes even with no music21 installed,
+  and failed there; they use the wheel's own. Scales
   have music21's `chord` and `usePitchDegreeCache`.
 - A Roman numeral made from a degree is written in capitals in a modal
   key, as music21 writes it: 2 in C dorian is `II`, a major triad, where

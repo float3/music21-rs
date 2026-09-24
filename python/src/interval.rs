@@ -1766,7 +1766,10 @@ fn note_around(pitch: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
     {
         return Ok(client.unbind());
     }
-    let note = py.import("music21.note")?.getattr("Note")?.call0()?;
+    // music21's note where it is installed, the wheel's own where it is not.
+    let note_class = crate::installed_class(py, "music21.note", "Note")
+        .unwrap_or_else(|| py.get_type::<crate::note::Note>().into_any());
+    let note = note_class.call0()?;
     note.setattr("pitch", pitch)?;
     Ok(note.unbind())
 }
