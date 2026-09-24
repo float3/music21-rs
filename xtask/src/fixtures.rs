@@ -200,6 +200,7 @@ pub(crate) fn regenerate(workspace_root: &Path) -> Result<Vec<PathBuf>, Box<dyn 
             write_instruments(py, workspace_root, stamp)?,
             write_clefs(py, workspace_root, stamp)?,
             write_articulations(py, workspace_root, stamp)?,
+            write_ornaments(py, workspace_root, stamp)?,
         ])
     })
     .map_err(|error| -> Box<dyn Error> { Box::new(error) })
@@ -2753,6 +2754,252 @@ fn write_articulations(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> 
     }
 
     let path = workspace_root.join("data/articulation_expectations.toml");
+    fs::write(&path, out)?;
+    Ok(path)
+}
+
+/// Every ornament class's starting values, and what each plays -- its size,
+/// its ornamental pitches and its realization -- over a grid of notes,
+/// lengths, keys, accidentals, delays and nachschlags.
+fn write_ornaments(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> PyResult<PathBuf> {
+    let expressions = py.import("music21.expressions")?;
+    let note = py.import("music21.note")?;
+    let key = py.import("music21.key")?;
+    let pitch = py.import("music21.pitch")?;
+    let inspect = py.import("inspect")?;
+    let base_class = expressions.getattr("Ornament")?;
+
+    let mut out = header(
+        &[
+            "# Expected ornaments, generated from music21 by",
+            "# `cargo run --release -p xtask --features python -- regenerate-fixtures`.",
+            "# The classes are transcribed into src/expressions.rs; what they play is",
+            "# checked behaviourally.",
+        ],
+        stamp,
+    );
+
+    let mut classes: Vec<(usize, String, Bound<'_, PyAny>)> = Vec::new();
+    for member in inspect
+        .call_method1("getmembers", (&expressions, inspect.getattr("isclass")?))?
+        .try_iter()?
+    {
+        let (name, class): (String, Bound<'_, PyAny>) = member?.extract()?;
+        let Ok(class_type) = class.cast::<pyo3::types::PyType>() else {
+            continue;
+        };
+        if !class_type.is_subclass(&base_class)? {
+            continue;
+        }
+        let depth = class.getattr("__mro__")?.len()?;
+        classes.push((depth, name, class));
+    }
+    classes.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
+
+    let optional = |value: Bound<'_, PyAny>| -> PyResult<Option<String>> {
+        if value.is_none() {
+            Ok(None)
+        } else {
+            Ok(Some(value.extract()?))
+        }
+    };
+
+    for (_, name, class) in &classes {
+        let made = class.call0()?;
+        let mut parents: Vec<String> = Vec::new();
+        for ancestor in class.getattr("__mro__")?.try_iter()?.skip(1) {
+            let ancestor = ancestor?;
+            if ancestor
+                .cast::<pyo3::types::PyType>()?
+                .is_subclass(&base_class)?
+            {
+                parents.push(ancestor.getattr("__name__")?.extract()?);
+            }
+        }
+        let _ = writeln!(out, "[[ornament]]");
+        let _ = writeln!(out, "class = {}", toml_string(name));
+        let _ = writeln!(out, "parents = {}", toml_list(&parents));
+        let _ = writeln!(
+            out,
+            "quarter_length = {:?}",
+            made.getattr("quarterLength")?.extract::<f64>()?
+        );
+        // music21's bare `Ornament` has no placement at all.
+        let placement = match made.getattr("placement") {
+            Ok(placement) => optional(placement)?,
+            Err(_) => None,
+        };
+        if let Some(placement) = placement {
+            let _ = writeln!(out, "placement = {}", toml_string(&placement));
+        }
+        let _ = writeln!(
+            out,
+            "tie_attach = {}",
+            toml_string(&made.getattr("tieAttach")?.extract::<String>()?)
+        );
+        let _ = writeln!(
+            out,
+            "name = {}",
+            toml_string(&made.getattr("name")?.extract::<String>()?)
+        );
+        let _ = writeln!(out);
+    }
+
+    // What each ornament plays over the grid.
+    let notes: [(&str, f64); 6] = [
+        ("C4", 1.0),
+        ("D4", 0.0),
+        ("F#4", 0.5),
+        ("B-3", 2.0),
+        ("E5", 0.25),
+        ("G4", 3.0),
+    ];
+    let keys: [i64; 4] = [0, 2, -3, 6];
+    let accidentals: [Option<&str>; 3] = [None, Some("sharp"), Some("flat")];
+    let describe = |played: &Bound<'_, PyAny>| -> PyResult<String> {
+        let name: String = played
+            .getattr("pitch")?
+            .getattr("nameWithOctave")?
+            .extract()?;
+        let length: f64 = played.getattr("quarterLength")?.extract()?;
+        let tie = played.getattr("tie")?;
+        if tie.is_none() {
+            Ok(format!("{name} {length:?}"))
+        } else {
+            let tie: String = tie.getattr("type")?.extract()?;
+            Ok(format!("{name} {length:?} {tie}"))
+        }
+    };
+    let describe_all = |played: &Bound<'_, PyAny>| -> PyResult<Vec<String>> {
+        let mut written = Vec::new();
+        for one in played.try_iter()? {
+            written.push(describe(&one?)?);
+        }
+        Ok(written)
+    };
+    for (_, name, class) in &classes {
+        for (written, length) in notes {
+            for sharps in keys {
+                for accidental in accidentals {
+                    // Only a mordent, trill or turn takes an accidental, and a
+                    // half-step or whole-step one refuses it.
+                    let variants: Vec<(&str, Bound<'_, PyAny>)> = {
+                        let mut variants = Vec::new();
+                        let plain = class.call0()?;
+                        let takes =
+                            plain.hasattr("accidental")? || plain.hasattr("upperAccidental")?;
+                        if accidental.is_some() && !takes {
+                            continue;
+                        }
+                        let built = match accidental {
+                            None => Some(class.call0()?),
+                            Some(which) => {
+                                let made = class.call0()?;
+                                let given = pitch.getattr("Accidental")?.call1((which,))?;
+                                let set = if made.hasattr("upperAccidental")? {
+                                    made.setattr("upperAccidental", &given)
+                                } else {
+                                    made.setattr("accidental", &given)
+                                };
+                                set.ok().map(|_| made)
+                            }
+                        };
+                        if let Some(built) = built {
+                            variants.push(("plain", built));
+                        }
+                        if accidental.is_none() {
+                            if plain.hasattr("nachschlag")? {
+                                let made = class.call0()?;
+                                made.setattr("nachschlag", true)?;
+                                variants.push(("nachschlag", made));
+                            }
+                            if plain.hasattr("delay")? {
+                                let enums = py.import("music21.common.enums")?;
+                                let made = class.call0()?;
+                                made.setattr(
+                                    "delay",
+                                    enums.getattr("OrnamentDelay")?.getattr("DEFAULT_DELAY")?,
+                                )?;
+                                variants.push(("default delay", made));
+                                let made = class.call0()?;
+                                made.setattr("delay", 0.25)?;
+                                variants.push(("delay 0.25", made));
+                            }
+                        }
+                        variants
+                    };
+                    for (variant, ornament) in variants {
+                        let source = note.getattr("Note")?.call1((written,))?;
+                        source.setattr("quarterLength", length)?;
+                        let key_signature = key.getattr("KeySignature")?.call1((sharps,))?;
+                        let keywords = pyo3::types::PyDict::new(py);
+                        keywords.set_item("keySig", &key_signature)?;
+                        let _ = writeln!(out, "[[played]]");
+                        let _ = writeln!(out, "class = {}", toml_string(name));
+                        let _ = writeln!(out, "variant = {}", toml_string(variant));
+                        let _ = writeln!(out, "note = {}", toml_string(written));
+                        let _ = writeln!(out, "quarter_length = {length:?}");
+                        let _ = writeln!(out, "sharps = {sharps}");
+                        if let Some(accidental) = accidental {
+                            let _ = writeln!(out, "accidental = {}", toml_string(accidental));
+                        }
+                        let _ = writeln!(
+                            out,
+                            "name = {}",
+                            toml_string(&ornament.getattr("name")?.extract::<String>()?)
+                        );
+                        if ornament.hasattr("resolveOrnamentalPitches")? {
+                            match ornament.call_method(
+                                "resolveOrnamentalPitches",
+                                (&source,),
+                                Some(&keywords),
+                            ) {
+                                Ok(_) => {
+                                    let mut names = Vec::new();
+                                    for one in ornament.getattr("ornamentalPitches")?.try_iter()? {
+                                        names.push(
+                                            one?.getattr("nameWithOctave")?.extract::<String>()?,
+                                        );
+                                    }
+                                    let _ = writeln!(out, "ornamental = {}", toml_list(&names));
+                                }
+                                Err(error) => {
+                                    let _ = writeln!(
+                                        out,
+                                        "ornamental_error = {}",
+                                        toml_string(&exception_name(py, &error))
+                                    );
+                                }
+                            }
+                        }
+                        match ornament.call_method("realize", (&source,), Some(&keywords)) {
+                            Ok(played) => {
+                                let before = describe_all(&played.get_item(0)?)?;
+                                let main = played.get_item(1)?;
+                                let after = describe_all(&played.get_item(2)?)?;
+                                let _ = writeln!(out, "before = {}", toml_list(&before));
+                                if !main.is_none() {
+                                    let _ =
+                                        writeln!(out, "main = {}", toml_string(&describe(&main)?));
+                                }
+                                let _ = writeln!(out, "after = {}", toml_list(&after));
+                            }
+                            Err(error) => {
+                                let _ = writeln!(
+                                    out,
+                                    "error = {}",
+                                    toml_string(&exception_name(py, &error))
+                                );
+                            }
+                        }
+                        let _ = writeln!(out);
+                    }
+                }
+            }
+        }
+    }
+
+    let path = workspace_root.join("data/ornament_expectations.toml");
     fs::write(&path, out)?;
     Ok(path)
 }

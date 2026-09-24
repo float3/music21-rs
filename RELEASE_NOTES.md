@@ -1,8 +1,9 @@
 # Unreleased
 
 `Tuplet` is music21's now in full, and installed over music21's own, and so
-are the instruments. `clef`, `articulations` and `TempoText` are ported and
-installed, and music21's own doctests for the first two pass every example:
+are the instruments. `clef`, `articulations`, `TempoText` and music21's
+ornaments are ported, the first three installed too, and music21's own
+doctests for the first two pass every example:
 25 modules, 858 docstrings and 7,723 examples in all. A note and a chord know
 the instrument they are played on. The `Tuplet` changes break its API, so
 the next release is a minor bump.
@@ -46,6 +47,12 @@ the next release is a minor bump.
 - `Instrument::set_percussion_pitch` and `set_in_percussion_map`.
 - `Articulation::finger` answers a `Finger`, a number or the text written for
   it, since a MusicXML fingering may be a word.
+- `expressions`: music21's 24 ornament classes as `Ornament` and
+  `OrnamentKind` -- mordents, trills, turns, appoggiaturas and tremolos, with
+  their ornamental pitches in a key and the notes each is played as, a
+  nachschlag, a turn's delay and a tremolo's tied repeats included -- and
+  `realize_ornaments`. Checked against music21 by `ornament_parity`, 1,176
+  cases over notes, lengths, keys and accidentals.
 
 ## Changed
 

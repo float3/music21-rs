@@ -690,3 +690,65 @@ python = "articulations.py"
 name = "Articulation"
 rust = ["src/articulations.rs"]
 note = "A mark on a note saying how it is played: how much louder, how much shorter, and which part of a tied note keeps it."
+
+[[class]]
+python = "expressions.py"
+name = "Ornament"
+rust = ["src/expressions.rs"]
+note = "An ornament and the notes it is played as: its ornamental pitches and its realization over a note in a key."
+
+[class.renames]
+resolveOrnamentalPitches = "ornamental_pitches"
+
+[class.excluded]
+fillListOfRealizedNotes = "a helper realize fills its lists with; realize is ported"
+updateAccidentalDisplay = "whether an ornamental accidental is printed, which depends on the notes written before it in a stream"
+
+[[class]]
+python = "expressions.py"
+name = "GeneralMordent"
+rust = ["src/expressions.rs"]
+
+[class.renames]
+resolveOrnamentalPitches = "ornamental_pitches"
+ornamentalPitch = "ornamental_pitches"
+
+[class.excluded]
+updateAccidentalDisplay = "whether an ornamental accidental is printed, which depends on the notes written before it in a stream"
+
+[[class]]
+python = "expressions.py"
+name = "Trill"
+rust = ["src/expressions.rs"]
+
+[class.renames]
+resolveOrnamentalPitches = "ornamental_pitches"
+ornamentalPitch = "ornamental_pitches"
+
+[class.excluded]
+updateAccidentalDisplay = "whether an ornamental accidental is printed, which depends on the notes written before it in a stream"
+splitClient = "joins the notes a trilled note is split into with a TrillExtension spanner; there are no spanners here"
+
+[[class]]
+python = "expressions.py"
+name = "Turn"
+rust = ["src/expressions.rs"]
+
+[class.renames]
+getSize = "turn_size"
+resolveOrnamentalPitches = "ornamental_pitches"
+upperOrnamentalPitch = "ornamental_pitches"
+lowerOrnamentalPitch = "ornamental_pitches"
+
+[class.excluded]
+updateAccidentalDisplay = "whether an ornamental accidental is printed, which depends on the notes written before it in a stream"
+
+[[class]]
+python = "expressions.py"
+name = "GeneralAppoggiatura"
+rust = ["src/expressions.rs"]
+
+[[class]]
+python = "expressions.py"
+name = "Tremolo"
+rust = ["src/expressions.rs"]
