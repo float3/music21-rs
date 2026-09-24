@@ -50,6 +50,10 @@ places where they answered differently; they agree now.
   `Ambitus`; and `melodic_lines`, the lines `MelodicIntervalDiversity`
   counts, one per part with ties struck once. `Stream::has_part_like_streams`
   is music21's `hasPartLikeStreams`, which `melodic_lines` reads.
+- `Stream::placed`: every element with its offset, its offset in its
+  measure, and the key signature, metre and tempo in force, each part
+  reading its own. music21 stores sites on each object to answer this;
+  the crate answers with a composite `Placed` value instead.
 - `Pitch`, `Accidental`, `Microtone` and `Duration` are `Eq` and `Hash`,
   hashing what their equality compares, so they key maps and fill sets.
   music21's are mutable and cannot; its author lists that first among

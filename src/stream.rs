@@ -15,6 +15,16 @@
 //! an offset is then a backwards look through the flattened timeline rather
 //! than a search through a graph. That is the same answer for music that is
 //! written once, which is all a stream built here can be.
+//!
+//! Where an element sits is asked for, not stored: [`Stream::placed`]
+//! answers each element with its offset, its measure offset and the key,
+//! metre and tempo in force, as one [`Placed`](crate::stream::Placed) value. music21's author
+//! names keeping objects and sites apart this way as what he would do
+//! again.
+
+mod placed;
+
+pub use placed::Placed;
 
 use crate::{
     chord::Chord, chordsymbol::ChordSymbol, defaults::FloatType, duration::Duration,

@@ -76,9 +76,12 @@ Two rules, set 2026-09-12, that most of the open work now serves:
    (`8aa5882`, `86c637d`, `cab6c97`). The 126-meter fixture could not catch
    any of them, because every meter in it divides evenly.
 
-2. **Streams in the crate.** Sites, contexts, derivations and
-   measure-relative offsets, so that an object can belong to a crate stream
-   without music21's half. This is what would let the facade stop building
+2. **Streams in the crate.** Contexts, derivations and measure-relative
+   offsets, so that an object can belong to a crate stream without
+   music21's half. Not sites: the crate keeps its stream a tree of plain
+   values and answers where an element sits with `Stream::placed`, the
+   composite "Music21's Mistakes" (point 2) recommends over storing sites
+   on objects. The wheel still keeps music21's sites for compatibility. This is what would let the facade stop building
    `Music21Object`s. `getMeasureOffsetOrMeterModulusOffset` has moved as far
    as it can without them: the arithmetic is the crate's
    `TimeSignature::offset_in_bar`, and the wheel only asks music21 where the
