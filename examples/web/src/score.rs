@@ -10,12 +10,16 @@
 use music21_rs::{
     Chord, DurationType, Interval, Key, MidiNote, Minor67Default, Pitch, RomanNumeral,
     TimeSignature, TuningSystem, VoiceLeadingQuartet, abc_duration, abc_note,
-    chord_symbol_figure_from_chord, estimate_key_from_pitches, read_midi_bytes_with_tempo,
+    chord_symbol_figure_from_chord, estimate_key_from_pitches,
+    interval::convert_diatonic_number_to_step, read_midi_bytes_with_tempo,
     roman_numeral_from_chord, tonal_certainty, write_midi_bytes,
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt::Write as _};
 use wasm_bindgen::prelude::*;
+
+mod labels;
+mod notation;
 
 /// Positions are snapped to this many parts of a quarter note, which holds
 /// every binary value and triplets, quintuplets and septuplets of them, and
@@ -25,8 +29,10 @@ const GRID: f64 = 5040.0;
 /// number of these.
 const DIVISIONS: f64 = 3360.0;
 const EPSILON: f64 = 1e-6;
-const STEPS: [char; 7] = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
-const STEP_SEMITONES: [i32; 7] = [0, 2, 4, 5, 7, 9, 11];
+/// music21's diatonic note number of middle C, staff position 0.
+const MIDDLE_C_DNN: i32 = 29;
+/// The octave an octave-less pitch name sounds in.
+const IMPLIED_OCTAVE: i32 = 4;
 
 fn snap(quarters: f64) -> f64 {
     (quarters * GRID).round() / GRID
@@ -148,9 +154,8 @@ struct Score {
 /// crate's own spelling.
 fn spell(input: &PitchInput) -> Result<Pitch, JsValue> {
     if let Some(staff) = input.staff {
-        let index = staff.rem_euclid(7) as usize;
-        let written_octave = 4 + staff.div_euclid(7);
-        let natural = 12 * (written_octave + 1) + STEP_SEMITONES[index];
+        let (step, written_octave) = convert_diatonic_number_to_step(staff + MIDDLE_C_DNN);
+        let natural = natural_at(staff)?.midi();
         let octaves = ((input.midi - natural) as f64 / 12.0).round() as i32;
         let alter = input.midi - natural - 12 * octaves;
         let octave = written_octave + octaves;
@@ -160,11 +165,16 @@ fn spell(input: &PitchInput) -> Result<Pitch, JsValue> {
             } else {
                 "#".repeat(alter as usize)
             };
-            return Pitch::from_name(format!("{}{accidental}{octave}", STEPS[index]))
-                .map_err(js_error);
+            return Pitch::from_name(format!("{step}{accidental}{octave}")).map_err(js_error);
         }
     }
     Pitch::from_midi(input.midi).map_err(js_error)
+}
+
+/// The natural pitch at a staff position: `0` is middle C, `-1` the B below.
+fn natural_at(staff: i32) -> Result<Pitch, JsValue> {
+    let (step, octave) = convert_diatonic_number_to_step(staff + MIDDLE_C_DNN);
+    Pitch::from_name(format!("{step}{octave}")).map_err(js_error)
 }
 
 impl Score {
@@ -270,6 +280,18 @@ impl Score {
                 event.end = event.end.max(ends.min(bar_end(start)));
             }
         }
+    }
+
+    /// Every offset a note starts at, in order and each once.
+    fn onsets(&self) -> Vec<f64> {
+        let mut onsets: Vec<f64> = self
+            .voices
+            .iter()
+            .flat_map(|voice| voice.events.iter().map(|event| event.start))
+            .collect();
+        onsets.sort_by(f64::total_cmp);
+        onsets.dedup_by(|left, right| (*left - *right).abs() < EPSILON);
+        onsets
     }
 
     fn end(&self) -> f64 {
@@ -412,6 +434,8 @@ struct ScoreAnalysis {
     pitch_class_weights: [f64; 12],
     voices: Vec<VoiceInfo>,
     slices: Vec<SliceInfo>,
+    /// The harmony labels to draw under the music, by label kind.
+    labels: labels::Labels,
     issues: Vec<IssueInfo>,
 }
 
@@ -442,13 +466,7 @@ fn sounding_at(voice: &Voice, offset: f64) -> Option<Sounding<'_>> {
 
 fn analyse(score: &Score) -> Result<ScoreAnalysis, JsValue> {
     let end = score.end();
-    let mut onsets: Vec<f64> = score
-        .voices
-        .iter()
-        .flat_map(|voice| voice.events.iter().map(|event| event.start))
-        .collect();
-    onsets.sort_by(f64::total_cmp);
-    onsets.dedup_by(|left, right| (*left - *right).abs() < EPSILON);
+    let onsets = score.onsets();
 
     // Key: the pitches weighted by how long they sound, in sixteenths.
     let mut weighted = Vec::new();
@@ -511,6 +529,7 @@ fn analyse(score: &Score) -> Result<ScoreAnalysis, JsValue> {
         note_count,
         pitch_class_weights,
         voices,
+        labels: labels::placed(&slices),
         slices,
         issues,
     })
@@ -1371,20 +1390,9 @@ fn spell_in_key(midi: i32, key: &Key, scale: &[Pitch]) -> Result<Pitch, JsValue>
         ][class as usize]
             .to_string(),
     };
-    let step = name.chars().next().unwrap_or('C');
-    let index = STEPS
-        .iter()
-        .position(|candidate| *candidate == step)
-        .unwrap_or(0);
-    let alter = name
-        .chars()
-        .skip(1)
-        .fold(0, |alter, modifier| match modifier {
-            '#' => alter + 1,
-            '-' => alter - 1,
-            _ => alter,
-        });
-    let octave = (midi - alter - STEP_SEMITONES[index]).div_euclid(12) - 1;
+    // The name sounds in the implied octave; move it to the one `midi` is in.
+    let unplaced = Pitch::from_name(&name).map_err(js_error)?;
+    let octave = IMPLIED_OCTAVE + (midi - unplaced.midi()).div_euclid(12);
     Pitch::from_name(format!("{name}{octave}")).map_err(js_error)
 }
 
@@ -1615,13 +1623,7 @@ struct TuningCents {
 
 /// The pitch class of each onset's harmonic root, keyed by grid position.
 fn roots_by_onset(score: &Score) -> BTreeMap<i64, i32> {
-    let mut onsets: Vec<f64> = score
-        .voices
-        .iter()
-        .flat_map(|voice| voice.events.iter().map(|event| event.start))
-        .collect();
-    onsets.sort_by(f64::total_cmp);
-    onsets.dedup_by(|left, right| (*left - *right).abs() < EPSILON);
+    let onsets = score.onsets();
     let mut roots = BTreeMap::new();
     for offset in onsets {
         let pitches: Vec<Pitch> = score
@@ -1788,41 +1790,15 @@ fn voicing_notes(chord: &music21_rs::Chord, open_strings: &[i32]) -> Result<Vec<
     Ok(notes)
 }
 
-#[wasm_bindgen]
-/// Voices a chord symbol (`G`, `D7`, `F#m7b5`) for a fretted instrument
-/// whose open strings are the given MIDI numbers, lowest first, as the MIDI
-/// numbers to play.
-pub fn chord_symbol_voicing(figure: &str, open_strings: Vec<i32>) -> Result<Vec<i32>, JsValue> {
-    chord_symbol_voicing_notes(figure, &open_strings)
-}
-
-#[wasm_bindgen]
-/// Voices a chord symbol for the fingers on the strings above a thumb that
-/// plays the pitch classes `thumb`, its bass first: the chord without the
-/// thumb's bass, and without its other notes as well when more notes are left
-/// than there are strings.
-pub fn chord_symbol_voicing_above(
-    figure: &str,
-    open_strings: Vec<i32>,
-    thumb: Vec<i32>,
-) -> Result<Vec<i32>, JsValue> {
-    chord_symbol_voicing_above_notes(figure, &open_strings, &thumb)
-}
-
+/// Spells a MIDI number in a key: as the scale spells it when the key has
+/// that pitch class, otherwise with sharps in a sharp key and flats in a
+/// flat one. A key the crate cannot read is C major.
 fn spell_midi(midi: i32, tonic: &str, mode: &str) -> Result<Pitch, JsValue> {
     let key = Key::from_tonic_mode(tonic, mode)
         .or_else(|_| Key::from_tonic_mode("C", "major"))
         .map_err(js_error)?;
     let scale = key.pitches().map_err(js_error)?;
     spell_in_key(midi, &key, &scale)
-}
-
-#[wasm_bindgen]
-/// Spells a MIDI number in a key, as a name with octave (`F#4`): as the scale
-/// spells it when the key has that pitch class, otherwise with sharps in a
-/// sharp key and flats in a flat one. A key the crate cannot read is C major.
-pub fn spell_midi_in_key(midi: i32, tonic: &str, mode: &str) -> Result<String, JsValue> {
-    Ok(spell_midi(midi, tonic, mode)?.name_with_octave())
 }
 
 #[cfg(test)]
@@ -1941,6 +1917,7 @@ mod tests {
         assert_eq!(name(63, "B-", "major"), "E-4");
         assert_eq!(name(60, "B", "major"), "C4");
         assert_eq!(name(60, "C#", "major"), "B#3");
+        assert_eq!(name(59, "G-", "major"), "C-4");
         assert_eq!(name(61, "nonsense", "major"), "C#4");
     }
 

@@ -374,13 +374,7 @@ impl Lyric {
     /// installed.
     #[getter]
     fn get_style(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
-        let py = slf.py();
-        if let Some(style) = &slf.borrow().style {
-            return Ok(style.clone_ref(py));
-        }
-        let style = new_style(slf.as_any(), None)?;
-        slf.borrow_mut().style = Some(style.clone_ref(py));
-        Ok(style)
+        style_of(slf, |me| &mut me.style, None)
     }
 
     #[setter]
@@ -794,13 +788,7 @@ impl Beam {
     /// installed.
     #[getter]
     fn get_style(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
-        let py = slf.py();
-        if let Some(style) = &slf.borrow().style {
-            return Ok(style.clone_ref(py));
-        }
-        let style = new_style(slf.as_any(), None)?;
-        slf.borrow_mut().style = Some(style.clone_ref(py));
-        Ok(style)
+        style_of(slf, |me| &mut me.style, None)
     }
 
     #[setter]
@@ -1760,6 +1748,25 @@ impl Volume {
         let copied = slf.borrow().clone();
         crate::copy_as_same_type(slf, copied)
     }
+}
+
+/// The style object kept in `slot`, made on first asking and the same object
+/// after that, its `color` set to `colour` when it is made.
+pub(crate) fn style_of<T>(
+    slf: &Bound<'_, T>,
+    slot: fn(&mut T) -> &mut Option<Py<PyAny>>,
+    colour: Option<String>,
+) -> PyResult<Py<PyAny>>
+where
+    T: pyo3::PyClass<Frozen = pyo3::pyclass::boolean_struct::False>,
+{
+    let py = slf.py();
+    if let Some(style) = slot(&mut slf.borrow_mut()) {
+        return Ok(style.clone_ref(py));
+    }
+    let style = new_style(slf.as_any(), colour.as_deref())?;
+    *slot(&mut slf.borrow_mut()) = Some(style.clone_ref(py));
+    Ok(style)
 }
 
 /// The style object something is drawn with, made the way music21 makes it.

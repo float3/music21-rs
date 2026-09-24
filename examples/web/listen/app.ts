@@ -1,7 +1,9 @@
 import "../theme.js";
+import { el as make, errorLine, fact } from "../dom.js";
 
 type HeardNote = {
     midi: number;
+    pitch_class: number;
     name: string;
     frequency_hz: number;
     cents: number;
@@ -13,6 +15,8 @@ type HeardChord = {
     midi: number[];
     pitch_names: string[];
     pitch_classes: number[];
+    pitch_class_names: string[];
+    title: string;
     common_name: string;
     pitched_common_name: string;
     chord_symbol: string | null;
@@ -35,9 +39,22 @@ type Listener = {
     listen(samples: Float32Array, timeMs: number): Frame;
 };
 
+/** A key as the crate names it. */
+type Key = {
+    midi: number;
+    name: string;
+    display: string;
+    pitch_class: number;
+    octave: number;
+    black: boolean;
+    frequency_hz: number;
+};
+
 type WasmModule = {
     default: () => Promise<unknown>;
     ChordListener: new (sampleRate: number) => Listener;
+    keyboard(low: number, high: number): Key[];
+    display_pitch_class_names(): string[];
 };
 
 type Mode = "off" | "mic" | "demo" | "file";
@@ -50,8 +67,9 @@ type DemoStep = {
 
 const lowestMidi = 36;
 const highestMidi = 96;
-const pitchClassNames = ["C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"];
-const blackPitchClasses = new Set([1, 3, 6, 8, 10]);
+/** The octaves the spectrum marks, from C1 to C8. */
+const spectrumLowestMidi = 24;
+const spectrumHighestMidi = 108;
 const demoSteps: DemoStep[] = [
     { label: "C major, together", midi: [48, 55, 60, 64], arpeggio: false },
     { label: "A minor, arpeggiated", midi: [45, 52, 57, 60, 64], arpeggio: true },
@@ -88,6 +106,7 @@ const gateInput = element<HTMLInputElement>("#gate");
 const gateValue = element<HTMLOutputElement>("#gate-value");
 const sizeSelect = element<HTMLSelectElement>("#size");
 const errorNode = element<HTMLParagraphElement>("#error");
+const { fail, clearError } = errorLine(errorNode);
 const player = element<HTMLAudioElement>("#player");
 const stage = element<HTMLElement>("#stage");
 const statusNode = element<HTMLDivElement>("#status");
@@ -126,6 +145,8 @@ let demo: {
 } | null = null;
 
 const keys = new Map<number, HTMLDivElement>();
+/** Every key of the keyboard and of the spectrum's range, by MIDI number. */
+const keyInfo = new Map<number, Key>();
 const hotCells: HTMLSpanElement[] = [];
 let shownNotes = "";
 let shownChord = "";
@@ -135,38 +156,6 @@ let history: HeardChord[] = [];
 let rememberedAt = 0;
 let colours = readColours();
 let coloursReadAt = 0;
-
-function fail(message: string): void {
-    errorNode.textContent = message;
-    errorNode.style.display = "block";
-}
-
-function clearError(): void {
-    errorNode.style.display = "none";
-}
-
-function make<K extends keyof HTMLElementTagNameMap>(
-    tag: K,
-    className = "",
-    text?: string,
-): HTMLElementTagNameMap[K] {
-    const node = document.createElement(tag);
-    if (className) node.className = className;
-    if (text !== undefined) node.textContent = text;
-    return node;
-}
-
-function midiToHz(midi: number): number {
-    return 440 * Math.pow(2, (midi - 69) / 12);
-}
-
-function noteName(midi: number): string {
-    return `${pitchClassNames[((midi % 12) + 12) % 12]}${Math.floor(midi / 12) - 1}`;
-}
-
-function displayFlats(text: string): string {
-    return text.replace(/([A-G])-/g, "$1b").replace(/([A-G]b)-/g, "$1b");
-}
 
 function readColours() {
     const style = getComputedStyle(document.documentElement);
@@ -181,17 +170,19 @@ function readColours() {
     };
 }
 
-function buildKeyboard(): void {
-    const whites: number[] = [];
-    for (let midi = lowestMidi; midi <= highestMidi; midi += 1) {
-        if (!blackPitchClasses.has(midi % 12)) whites.push(midi);
-    }
-    const whiteWidth = 100 / whites.length;
+function keyName(info: Key): string {
+    return `${info.display}${info.octave}`;
+}
+
+function buildKeyboard(module: WasmModule): void {
+    for (const info of module.keyboard(spectrumLowestMidi, spectrumHighestMidi)) keyInfo.set(info.midi, info);
+    const range = module.keyboard(lowestMidi, highestMidi);
+    const whiteWidth = 100 / range.filter((info) => !info.black).length;
     let whiteIndex = 0;
-    for (let midi = lowestMidi; midi <= highestMidi; midi += 1) {
-        const black = blackPitchClasses.has(midi % 12);
+    for (const info of range) {
+        const { midi, black } = info;
         const key = make("div", `key ${black ? "black" : "white"}`);
-        key.title = noteName(midi);
+        key.title = keyName(info);
         if (black) {
             const width = whiteWidth * 0.62;
             key.style.left = `${whiteIndex * whiteWidth - width / 2}%`;
@@ -200,22 +191,16 @@ function buildKeyboard(): void {
             key.style.left = `${whiteIndex * whiteWidth}%`;
             key.style.width = `${whiteWidth}%`;
             whiteIndex += 1;
-            if (midi % 12 === 0) key.appendChild(make("small", "", noteName(midi)));
+            if (info.pitch_class === 0) key.appendChild(make("small", "", keyName(info)));
         }
         keys.set(midi, key);
         keyboard.appendChild(key);
     }
-    for (const name of pitchClassNames) {
+    for (const name of module.display_pitch_class_names()) {
         const cell = make("span", "", name);
         hotCells.push(cell);
         hot.appendChild(cell);
     }
-}
-
-function fact(label: string, value: string): HTMLDivElement {
-    const node = make("div", "fact");
-    node.append(make("span", "", label), make("strong", "", value));
-    return node;
 }
 
 function renderNotes(notes: HeardNote[]): void {
@@ -225,7 +210,7 @@ function renderNotes(notes: HeardNote[]): void {
         const key = keys.get(note.midi);
         key?.classList.add(note.sounding ? "sounding" : "held");
         if (key) key.title = `${note.name}, ${formatCents(note.cents)}`;
-        const cell = hotCells[((note.midi % 12) + 12) % 12];
+        const cell = hotCells[note.pitch_class];
         cell.classList.add("on");
         if (note.sounding) cell.classList.add("sounding");
     }
@@ -257,7 +242,7 @@ function inspectorLink(chord: HeardChord): string {
 }
 
 function chordTitle(chord: HeardChord): string {
-    return displayFlats(chord.chord_symbol || chord.pitched_common_name);
+    return chord.title;
 }
 
 function renderChord(chord: HeardChord | null): void {
@@ -268,12 +253,12 @@ function renderChord(chord: HeardChord | null): void {
         .filter(Boolean)
         .join(", ");
     facts.replaceChildren(
-        fact("Symbol", chord.chord_symbol ? displayFlats(chord.chord_symbol) : "none"),
+        fact("Symbol", chord.chord_symbol ?? "none"),
         fact("Common name", chord.common_name),
         fact("Root", chord.root ?? "none"),
         fact("Bass", chord.bass ?? "none"),
         fact("Inversion", chord.inversion_name ?? "none"),
-        fact("Pitch classes", chord.pitch_classes.map((pc) => pitchClassNames[pc]).join(" ")),
+        fact("Pitch classes", chord.pitch_class_names.join(" ")),
     );
     pitches.replaceChildren(
         ...chord.midi.map((midi, index) => {
@@ -356,15 +341,16 @@ function drawSpectrum(frame: Frame, now: number): void {
     context.font = `${11 * ratio}px system-ui, sans-serif`;
     context.lineWidth = ratio;
 
-    for (let midi = 24; midi <= 108; midi += 12) {
-        const x = frequencyX(midiToHz(midi), width);
+    for (const info of keyInfo.values()) {
+        if (info.pitch_class !== 0) continue;
+        const x = frequencyX(info.frequency_hz, width);
         context.strokeStyle = colours.line;
         context.beginPath();
         context.moveTo(x, 0);
         context.lineTo(x, height);
         context.stroke();
         context.fillStyle = colours.muted;
-        context.fillText(noteName(midi), x + 3 * ratio, height - 5 * ratio);
+        context.fillText(keyName(info), x + 3 * ratio, height - 5 * ratio);
     }
 
     for (const note of frame.notes) {
@@ -631,7 +617,7 @@ function scheduleDemoStep(
         const start = at + (step.arpeggio ? index * demoArpeggioSeconds : 0);
         const oscillator = context.createOscillator();
         oscillator.setPeriodicWave(wave);
-        oscillator.frequency.value = midiToHz(midi);
+        oscillator.frequency.value = keyInfo.get(midi)?.frequency_hz ?? 0;
         oscillator.detune.value = Math.random() * 8 - 4;
         const envelope = context.createGain();
         envelope.gain.setValueAtTime(0.0001, start);
@@ -770,7 +756,6 @@ sizeSelect.addEventListener("change", () => {
 });
 
 async function start(): Promise<void> {
-    buildKeyboard();
     restoreSettings();
     applySettings();
     try {
@@ -779,6 +764,7 @@ async function start(): Promise<void> {
         )) as WasmModule;
         await module.default();
         wasm = module;
+        buildKeyboard(module);
         micButton.disabled = false;
         demoButton.disabled = false;
         statusNode.textContent = "Not listening";

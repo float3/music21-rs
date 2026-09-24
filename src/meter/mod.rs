@@ -603,6 +603,30 @@ impl TimeSignature {
             .expect("a non-zero numerator and denominator give a positive finite bar length")
     }
 
+    /// Where an element falls in the bar this meter measures: music21's
+    /// `getMeasureOffsetOrMeterModulusOffset`, given the two offsets music21
+    /// reads off the stream.
+    ///
+    /// `element_offset` is the element's offset in its measure, or in its
+    /// stream where it has no measure; `meter_offset` is the meter's own.
+    /// Still inside the bar, the element's offset is the answer. Past it,
+    /// the meter's place is taken off and the rest wraps at the bar:
+    ///
+    /// ```text
+    ///   3/4 at 0:  element at 4.0  ->  (4.0 - 0.0) % 3.0 = 1.0
+    ///   3/4 at 1:  element at 2.5  ->  (2.5 - 1.0) % 3.0 = 1.5
+    /// ```
+    pub fn offset_in_bar(&self, element_offset: FloatType, meter_offset: FloatType) -> FloatType {
+        let bar = self.bar_quarter_length();
+
+        // music21 adds to test and subtracts to wrap; the two differ where
+        // the meter does not start the bar.
+        if element_offset + meter_offset < bar {
+            return element_offset;
+        }
+        (element_offset - meter_offset).rem_euclid(bar)
+    }
+
     /// Returns how many beats one bar carries.
     ///
     /// This is music21's `beatCount`, which follows the numerator rather than
@@ -1079,13 +1103,7 @@ impl TimeSignature {
         } else {
             offset
         };
-        if offset.is_nan() || offset < 0.0 || offset >= bar {
-            return Err(Error::Meter(format!(
-                "cannot access from qLenPos {} where total duration is {}",
-                offset_repr(offset),
-                offset_repr(bar)
-            )));
-        }
+        let offset = offset_within(offset, bar)?;
         let terminals = self.accent_sequence.level_list(level, true);
         if terminals.len() <= 1 {
             return self.accent_weight_with(offset, force_position_match, permit_meter_modulus);
@@ -1128,13 +1146,7 @@ impl TimeSignature {
         } else {
             offset
         };
-        if offset.is_nan() || offset < 0.0 || offset >= bar {
-            return Err(Error::Meter(format!(
-                "cannot access from qLenPos {} where total duration is {}",
-                offset_repr(offset),
-                offset_repr(bar)
-            )));
-        }
+        let offset = offset_within(offset, bar)?;
         let weights = self.accent_weights();
         let partition = self.accent_partition_quarter_length();
         let index = ((offset + OFFSET_TOLERANCE) / partition).floor() as usize;
@@ -1697,8 +1709,36 @@ pub(crate) fn offset_repr(offset: FloatType) -> String {
     }
 }
 
+/// The offset back when it lies within `0..length`, or music21's error for
+/// one that does not.
+fn offset_within(offset: FloatType, length: FloatType) -> Result<FloatType> {
+    if offset.is_nan() || offset < 0.0 || offset >= length {
+        return Err(Error::Meter(format!(
+            "cannot access from qLenPos {} where total duration is {}",
+            offset_repr(offset),
+            offset_repr(length)
+        )));
+    }
+    Ok(offset)
+}
+
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn an_offset_past_the_bar_wraps_from_where_the_meter_stands() {
+        // music21's own examples: a 3/4 bar and a 5/4 stream, the meter at 0.
+        let three = TimeSignature::from_ratio_string("3/4").unwrap();
+        assert_eq!(three.offset_in_bar(2.0, 0.0), 2.0);
+        assert_eq!(three.offset_in_bar(4.0, 0.0), 1.0);
+        let five = TimeSignature::from_ratio_string("5/4").unwrap();
+        assert_eq!(five.offset_in_bar(3.0, 0.0), 3.0);
+        assert_eq!(five.offset_in_bar(5.0, 0.0), 0.0);
+
+        // A meter a beat into the bar: the sum decides, the difference wraps.
+        assert_eq!(three.offset_in_bar(1.5, 1.0), 1.5);
+        assert_eq!(three.offset_in_bar(2.5, 1.0), 1.5);
+    }
 
     #[test]
     fn beat_divisions_are_read_off_the_beats_as_music21_reads_them() {

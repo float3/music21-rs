@@ -25,6 +25,7 @@ use crate::{
     fraction_pow::FractionPow,
     note::Note,
     pitch::Pitch,
+    stepname::StepName,
 };
 
 /// Direction of a directed interval.
@@ -222,8 +223,7 @@ fn specifier_from_generic_chromatic(
     g_int: &GenericInterval,
     c_int: &ChromaticInterval,
 ) -> Result<Specifier> {
-    let note_vals: [IntegerType; 7] = [0, 2, 4, 5, 7, 9, 11];
-    let normal_semis = note_vals[(g_int.simple_undirected() - 1) as usize]
+    let normal_semis = StepName::ALL[(g_int.simple_undirected() - 1) as usize].step_ref()
         + 12 * g_int.simple_steps_and_octaves().1;
 
     let c_direction = c_int.direction();
@@ -369,10 +369,9 @@ pub fn convert_semitone_to_specifier_generic_microtone(
 /// `1`: music21's `convertDiatonicNumberToStep`, so `15` is `C` in octave
 /// `2`, `0` is `B` in octave `-1`, and `-19` is `D` in octave `-3`.
 pub fn convert_diatonic_number_to_step(dn: IntegerType) -> (char, IntegerType) {
-    const STEPS: [char; 7] = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
     let zero_based = dn - 1;
     let octave = zero_based.div_euclid(7);
-    let step = STEPS[zero_based.rem_euclid(7) as usize];
+    let step = StepName::ALL[zero_based.rem_euclid(7) as usize].as_char();
     (step, octave)
 }
 

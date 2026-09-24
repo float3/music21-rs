@@ -1,6 +1,7 @@
 // @ts-nocheck
 import "../help-tooltips.js";
 import "../theme.js";
+import { writeClipboard } from "../dom.js";
 
 const rhythmInput = document.querySelector("#rhythm-input");
 const baseInput = document.querySelector("#base-input");
@@ -34,20 +35,9 @@ const docsLink = document.querySelector("#docs-link");
 const cycleGrid = document.querySelector("#cycle-grid");
 const eventsBody = document.querySelector("#events");
 
-const pitchNames = [
-    "C",
-    "C#",
-    "D",
-    "E-",
-    "E",
-    "F",
-    "F#",
-    "G",
-    "A-",
-    "A",
-    "B-",
-    "B",
-];
+/** The roots offered, C2 up to B5, as MIDI numbers. */
+const lowestRootMidi = 36;
+const highestRootMidi = 83;
 const voiceFrequencies = [176, 220, 264, 330, 396, 495, 594, 704];
 const examplesList = ["2:3", "3:4", "4:5:6", "4:5:6:7", "5:6:7", "7:11:13"];
 const historyStorageKey = "music21-rs.polyrhythmLab.history";
@@ -62,8 +52,6 @@ let timers = [];
 let shareResetTimer = null;
 let polyrhythmHistory = loadPolyrhythmHistory();
 let mutedTracks = new Set();
-
-populateRootSelector();
 
 const isFileExample = window.location.protocol === "file:";
 const chordBaseHref = isFileExample ? "../chord/index.html" : "../chord/";
@@ -90,16 +78,15 @@ randomPolyrhythm.addEventListener("click", () => {
     update({ remember: true });
 });
 
-function populateRootSelector() {
+/** Fills the root menu with the keys the crate names. */
+function populateRootSelector(module) {
     rootInput.replaceChildren();
-    for (const octave of [2, 3, 4, 5]) {
-        for (const name of pitchNames) {
-            const option = document.createElement("option");
-            option.value = `${name}${octave}`;
-            option.textContent = `${displayPitchName(name)}${octave}`;
-            option.selected = option.value === "C4";
-            rootInput.appendChild(option);
-        }
+    for (const key of module.keyboard(lowestRootMidi, highestRootMidi)) {
+        const option = document.createElement("option");
+        option.value = key.name;
+        option.textContent = `${key.display}${key.octave}`;
+        option.selected = option.value === "C4";
+        rootInput.appendChild(option);
     }
 }
 
@@ -339,10 +326,6 @@ function pruneMutedTracks(trackCount) {
     mutedTracks = new Set(
         [...mutedTracks].filter((index) => index < trackCount),
     );
-}
-
-function displayPitchName(name) {
-    return String(name).replaceAll("-", "b");
 }
 
 function buildAnalysis() {
@@ -620,6 +603,7 @@ async function loadAnalyzer() {
                 new URL(candidate, window.location.href).href
             );
             await module.default();
+            populateRootSelector(module);
             analyzeChord = module.analyze_chord;
             analyzePolyrhythm = module.analyze_polyrhythm;
             return;
@@ -681,28 +665,6 @@ function markShareCopied() {
     share.classList.add("copied");
     if (shareResetTimer) clearTimeout(shareResetTimer);
     shareResetTimer = setTimeout(resetShareButton, 1600);
-}
-
-async function writeClipboard(value) {
-    if (navigator.clipboard?.writeText && window.isSecureContext) {
-        await navigator.clipboard.writeText(value);
-        return;
-    }
-
-    const textarea = document.createElement("textarea");
-    textarea.value = value;
-    textarea.setAttribute("readonly", "");
-    textarea.style.position = "fixed";
-    textarea.style.top = "-1000px";
-    document.body.appendChild(textarea);
-    textarea.select();
-    try {
-        if (!document.execCommand("copy")) {
-            throw new Error("Copy command failed");
-        }
-    } finally {
-        textarea.remove();
-    }
 }
 
 function setActiveTick(tickIndex) {

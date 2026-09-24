@@ -24,7 +24,7 @@ Two rules, set 2026-09-12, that most of the open work now serves:
 
 - **The crate is meant to be a strict superset of the wheel**, caches aside.
   As little as possible belongs in the facade — only what genuinely cannot
-  live in Rust. 30 members answer in the wheel today with no crate function
+  live in Rust. 29 members answer in the wheel today with no crate function
   behind them; each is either work to move or a documented exception.
 - **The crate should have streams.** It has a `Stream` already
   (`src/stream.rs`, 678 lines: elements at offsets, `flatten`, `recurse`,
@@ -59,11 +59,9 @@ Two rules, set 2026-09-12, that most of the open work now serves:
    `Measure` first, so the wheel lays a list end to end and reads a stream's
    own offsets.
 
-   `TimeSignature` is 29 of 33 members ported, the four left being exceptions
-   with reasons in `data/feature_map.toml`: `summedNumerator` is a written
-   form music21 will not read back, `getMeasureOffsetOrMeterModulusOffset`
-   belongs to whichever stream an element sits in, and `resetValues` and
-   `load` rebuild a meter in place where a new one is built instead.
+   `TimeSignature` is 31 of 33 members ported, the two left being exceptions
+   with reasons in `data/feature_map.toml`: `resetValues` and `load` rebuild
+   a meter in place where a new one is built instead.
 
    Eighteen meters are pinned against the strings music21 prints for their
    beat and beam sequences, and the 126-meter fixture has not moved through
@@ -81,9 +79,10 @@ Two rules, set 2026-09-12, that most of the open work now serves:
 2. **Streams in the crate.** Sites, contexts, derivations and
    measure-relative offsets, so that an object can belong to a crate stream
    without music21's half. This is what would let the facade stop building
-   `Music21Object`s, and it is also what would let
-   `getMeasureOffsetOrMeterModulusOffset` — added to the facade on the old
-   rule (`8e455d9`) — move into the crate where it belongs.
+   `Music21Object`s. `getMeasureOffsetOrMeterModulusOffset` has moved as far
+   as it can without them: the arithmetic is the crate's
+   `TimeSignature::offset_in_bar`, and the wheel only asks music21 where the
+   element and the meter sit.
 
    It is also what the wheel waits on to carry the last 15 members the
    crate has and it does not: `FiguredBassLine` and `Realization`, which
@@ -92,7 +91,7 @@ Two rules, set 2026-09-12, that most of the open work now serves:
    read a stream. music21's own classes run on the crate's objects there
    meanwhile.
 
-3. **The 30 wheel-only members.** Caches (`cachedRealized`,
+3. **The 29 wheel-only members.** Caches (`cachedRealized`,
    `cachedRealizedStr`) stay Python-side by design. The rest — observer
    callbacks (`informClient`, `pitchChanged`), `groups`, `storedInstrument`
    and `getInstrument`, the `AbstractScale` layer, `Sieve`'s settable state,
@@ -100,7 +99,7 @@ Two rules, set 2026-09-12, that most of the open work now serves:
    or exceptions that should say why in `data/feature_map.toml`. The count is
    read off the page `xtask report` writes, which is where it is made;
    `naiveBeams`, `getDynamicContext`, `getGrace`, `isConcrete` and meter's
-   three exclusions are in it too.
+   two exclusions are in it too.
 
    **One deviation that count cannot see.** `barDuration` reads as ported,
    because `bar_duration` exists — but its *setter* keeps music21's

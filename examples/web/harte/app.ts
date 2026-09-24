@@ -1,6 +1,7 @@
 // @ts-nocheck
 import "../theme.js";
-import { midiToHz, play, stop } from "../play.js";
+import { play, stop } from "../play.js";
+import { el, errorLine, fact } from "../dom.js";
 
 const $ = (selector) => document.querySelector(selector);
 const form = $("#form");
@@ -8,6 +9,7 @@ const labelInput = $("#label");
 const playButton = $("#play");
 const examples = $("#examples");
 const errorNode = $("#error");
+const { fail, clearError } = errorLine(errorNode);
 const title = $("#title");
 const facts = $("#facts");
 const pitches = $("#pitches");
@@ -18,7 +20,6 @@ const shorthands = $("#shorthands");
 
 $("#docs-link").href = "../docs/music21_rs/index.html";
 
-const pitchClassNames = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"];
 const exampleLabels = [
     "C:maj",
     "A:min",
@@ -36,32 +37,11 @@ const exampleLabels = [
 let wasm = null;
 let current = null;
 
-function fail(message) {
-    errorNode.textContent = message;
-    errorNode.style.display = "block";
-}
-
-function clearError() {
-    errorNode.style.display = "none";
-}
-
-function el(tag, className, text) {
-    const node = document.createElement(tag);
-    if (className) node.className = className;
-    if (text !== undefined) node.textContent = text;
-    return node;
-}
-
-function fact(label, value) {
-    const node = el("div", "fact");
-    node.append(el("span", "", label), el("strong", "", value));
-    return node;
-}
-
 function bits(target, values, from) {
     target.replaceChildren();
+    const names = from === "C" ? wasm.display_pitch_class_names() : null;
     values.forEach((value, index) => {
-        const cell = el("span", value ? "on" : "", from === "C" ? pitchClassNames[index] : String(index));
+        const cell = el("span", value ? "on" : "", names ? names[index] : String(index));
         target.appendChild(cell);
     });
 }
@@ -85,7 +65,7 @@ function render(info) {
     );
     pitches.replaceChildren();
     info.pitches.forEach((pitch, index) => {
-        const node = el("div", `pitch${index === info.pitches.length - 1 && info.bass && info.bass !== "1" ? " bass" : ""}`);
+        const node = el("div", `pitch${index === info.bass_index ? " bass" : ""}`);
         node.append(el("strong", "", pitch), el("small", "", `MIDI ${info.midi[index] ?? ""}`));
         pitches.appendChild(node);
     });
@@ -153,7 +133,7 @@ form.addEventListener("submit", (event) => {
 playButton.addEventListener("click", async () => {
     if (!current || !current.midi.length) return;
     stop();
-    if (!(await play(current.midi.map(midiToHz)))) fail("Audio is not available in this browser.");
+    if (!(await play(current.frequencies_hz))) fail("Audio is not available in this browser.");
 });
 
 start();

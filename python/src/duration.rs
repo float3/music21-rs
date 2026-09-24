@@ -927,7 +927,27 @@ fn reduce_ratio(numerator: i64, denominator: i64) -> (i64, i64) {
     (numerator / left, denominator / left)
 }
 
+/// The object a caller's duration becomes: kept as it stands when it is a
+/// duration object, ours or one of music21's own kinds, and a new one of
+/// ours holding `inner` when it is a length or a note-value name.
+pub(crate) fn duration_object_for(
+    py: Python<'_>,
+    value: &Bound<'_, PyAny>,
+    inner: &RsDuration,
+) -> PyResult<Py<PyAny>> {
+    if value.hasattr("quarterLength")? {
+        return Ok(value.clone().unbind());
+    }
+    Duration::object(py, inner.clone())
+}
+
 impl Duration {
+    /// A `Duration` object holding `inner`, of the class installed over
+    /// music21's where there is one.
+    pub(crate) fn object(py: Python<'_>, inner: RsDuration) -> PyResult<Py<PyAny>> {
+        Ok(crate::installed_new(py, "music21.duration", "Duration", Self::wrap(inner))?.into_any())
+    }
+
     pub(crate) fn wrap(inner: RsDuration) -> Self {
         Self {
             inner,

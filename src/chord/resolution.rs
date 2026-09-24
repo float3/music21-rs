@@ -2,6 +2,7 @@
 //! sonorities and augmented sixths, in a key and out of one.
 
 use super::*;
+use crate::pitch::{CHROMATIC_PITCH_CLASS_NAMES, display_flats, pitch_class_name};
 
 impl Chord {
     /// Returns the first likely tonal resolution chord in the given key.
@@ -119,7 +120,7 @@ impl Chord {
             for (tonic, mode) in augmented_contexts {
                 let context = format!(
                     "augmented-sixth resolution in {} {mode}",
-                    Self::display_tonic_name(tonic)
+                    display_flats(tonic)
                 );
                 self.add_resolution_suggestions_for_key(
                     tonic,
@@ -134,12 +135,9 @@ impl Chord {
 
         if let Some(root_pc) = self.find_root_pitch().map(root::pitch_class) {
             if self.is_dominant_function_sonority() {
-                let tonic = Self::pitch_class_name((root_pc + 5) % 12);
+                let tonic = pitch_class_name((root_pc + 5) % 12);
                 for mode in ["major", "minor"] {
-                    let context = format!(
-                        "dominant resolution to {} {mode}",
-                        Self::display_tonic_name(tonic)
-                    );
+                    let context = format!("dominant resolution to {} {mode}", display_flats(tonic));
                     self.add_resolution_suggestions_for_key(
                         tonic,
                         mode,
@@ -151,12 +149,10 @@ impl Chord {
             }
 
             if self.is_leading_tone_function_sonority() {
-                let tonic = Self::pitch_class_name((root_pc + 1) % 12);
+                let tonic = pitch_class_name((root_pc + 1) % 12);
                 for mode in ["major", "minor"] {
-                    let context = format!(
-                        "leading-tone resolution to {} {mode}",
-                        Self::display_tonic_name(tonic)
-                    );
+                    let context =
+                        format!("leading-tone resolution to {} {mode}", display_flats(tonic));
                     self.add_resolution_suggestions_for_key(
                         tonic,
                         mode,
@@ -257,7 +253,7 @@ impl Chord {
         }
 
         let mut contexts = Vec::new();
-        for tonic in CANDIDATE_TONICS {
+        for tonic in CHROMATIC_PITCH_CLASS_NAMES {
             for mode in ["major", "minor"] {
                 let key = Key::from_tonic_mode(tonic, Some(mode))?;
                 if self.is_contextual_augmented_sixth(&key)? {
@@ -411,7 +407,3 @@ pub struct ChordResolutionSuggestion {
     /// Human-readable harmonic context for the suggestion.
     pub key_context: String,
 }
-
-pub(super) const CANDIDATE_TONICS: [&str; 12] = [
-    "C", "D-", "D", "E-", "E", "F", "F#", "G", "A-", "A", "B-", "B",
-];

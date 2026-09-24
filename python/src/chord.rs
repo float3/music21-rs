@@ -17,7 +17,7 @@ use music21_rs_crate::{
     StemDirection as RsStemDirection, Volume as RsVolume,
 };
 
-use crate::duration::{Duration, duration_from_any};
+use crate::duration::{Duration, duration_from_any, duration_object_for};
 use crate::interval::interval_from_any;
 use crate::notation::{Beams, Tie, Volume, volume_from_any};
 use crate::note::{Note, augment_or_diminish_note, grace_note, instrument_for_note, note_from_any};
@@ -48,22 +48,11 @@ pub(crate) fn duration_from_keywords(
         if value.hasattr("quarterLength")? {
             return Ok(Some(value.clone().unbind()));
         }
-        return Ok(Some(
-            crate::installed_new(
-                py,
-                "music21.duration",
-                "Duration",
-                Duration::wrap(duration_from_any(&value)?),
-            )?
-            .into_any(),
-        ));
+        return Ok(Some(Duration::object(py, duration_from_any(&value)?)?));
     }
     if let Some(value) = keywords.get_item("quarterLength")? {
         let length = RsDuration::new(value.extract::<f64>()?).map_err(chord_error)?;
-        return Ok(Some(
-            crate::installed_new(py, "music21.duration", "Duration", Duration::wrap(length))?
-                .into_any(),
-        ));
+        return Ok(Some(Duration::object(py, length)?));
     }
     if keywords.contains("type")? || keywords.contains("dots")? {
         return Ok(Some(
@@ -317,13 +306,7 @@ impl Chord {
                 // Notes that share no duration -- the notes of another chord,
                 // which music21 copies as they are -- still leave this chord
                 // one of its own.
-                None => crate::installed_new(
-                    py,
-                    "music21.duration",
-                    "Duration",
-                    Duration::wrap(RsDuration::quarter()),
-                )?
-                .into_any(),
+                None => Duration::object(py, RsDuration::quarter())?,
             };
             return Self::from_notes(py, adopted.notes, duration);
         };
@@ -790,18 +773,13 @@ impl Chord {
         if let Some(duration) = &self.duration {
             return Ok(duration.clone_ref(py));
         }
-        let created = crate::installed_new(
+        let created = Duration::object(
             py,
-            "music21.duration",
-            "Duration",
-            Duration::wrap(
-                self.inner
-                    .duration()
-                    .cloned()
-                    .unwrap_or_else(RsDuration::quarter),
-            ),
-        )?
-        .into_any();
+            self.inner
+                .duration()
+                .cloned()
+                .unwrap_or_else(RsDuration::quarter),
+        )?;
         self.duration = Some(created.clone_ref(py));
         Ok(created)
     }
@@ -1031,13 +1009,7 @@ fn adopted_notes(
             let duration = match &use_duration {
                 Some(duration) => Some(duration.clone_ref(py)),
                 None if made.is_none() && taken.is_none() => {
-                    let fresh = crate::installed_new(
-                        py,
-                        "music21.duration",
-                        "Duration",
-                        Duration::wrap(RsDuration::quarter()),
-                    )?
-                    .into_any();
+                    let fresh = Duration::object(py, RsDuration::quarter())?;
                     made = Some(fresh.clone_ref(py));
                     use_duration = Some(fresh.clone_ref(py));
                     Some(fresh)
@@ -1752,19 +1724,7 @@ impl Chord {
     fn set_duration(slf: &Bound<'_, Self>, value: &Bound<'_, PyAny>) -> PyResult<()> {
         let py = slf.py();
         let inner = duration_from_any(value)?;
-        // A duration object is kept as it stands, whether it is one of ours
-        // or one of music21's own kinds of duration.
-        let duration = if value.hasattr("quarterLength")? {
-            value.clone().unbind()
-        } else {
-            crate::installed_new(
-                py,
-                "music21.duration",
-                "Duration",
-                Duration::wrap(inner.clone()),
-            )?
-            .into_any()
-        };
+        let duration = duration_object_for(py, value, &inner)?;
         crate::duration::adopt_duration(py, &duration, slf.as_any())?;
         let had_one = slf.borrow().duration.is_some();
         {
@@ -1798,15 +1758,7 @@ impl Chord {
             // four and three quarters is written as two notes tied.
             Some(duration) => duration.bind(py).setattr("quarterLength", value)?,
             None => {
-                self.duration = Some(
-                    crate::installed_new(
-                        py,
-                        "music21.duration",
-                        "Duration",
-                        Duration::wrap(inner),
-                    )?
-                    .into_any(),
-                );
+                self.duration = Some(Duration::object(py, inner)?);
             }
         }
         Ok(())
@@ -2722,14 +2674,8 @@ impl Chord {
     /// step with this object's colour. Requires music21 to be installed.
     #[getter]
     fn get_style(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
-        let py = slf.py();
-        if let Some(style) = &slf.borrow().style {
-            return Ok(style.clone_ref(py));
-        }
         let colour = slf.borrow().inner.color().map(str::to_string);
-        let style = crate::notation::new_style(slf.as_any(), colour.as_deref())?;
-        slf.borrow_mut().style = Some(style.clone_ref(py));
-        Ok(style)
+        crate::notation::style_of(slf, |me| &mut me.style, colour)
     }
 
     #[setter]

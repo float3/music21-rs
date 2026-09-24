@@ -1,6 +1,7 @@
 // @ts-nocheck
 import "../theme.js";
-import { midiToHz, play, stop } from "../play.js";
+import { play, stop } from "../play.js";
+import { el, errorLine, fact } from "../dom.js";
 
 const $ = (selector) => document.querySelector(selector);
 const form = $("#form");
@@ -8,6 +9,7 @@ const rowInput = $("#row");
 const historicalSelect = $("#historical");
 const playButton = $("#play");
 const errorNode = $("#error");
+const { fail, clearError } = errorLine(errorNode);
 const title = $("#title");
 const facts = $("#facts");
 const pitches = $("#pitches");
@@ -21,32 +23,10 @@ let wasm = null;
 let current = null;
 let historical = [];
 
-function fail(message) {
-    errorNode.textContent = message;
-    errorNode.style.display = "block";
-}
-
-function clearError() {
-    errorNode.style.display = "none";
-}
-
-function el(tag, className, text) {
-    const node = document.createElement(tag);
-    if (className) node.className = className;
-    if (text !== undefined) node.textContent = text;
-    return node;
-}
-
-function fact(label, value) {
-    const node = el("div", "fact");
-    node.append(el("span", "", label), el("strong", "", value));
-    return node;
-}
-
-function playClasses(classes) {
+/** Plays a row as the crate sounds it: up from middle C. */
+function playRow(form) {
     stop();
-    // Up from C4, each pitch class in the octave above middle C.
-    return play(classes.map((pc) => midiToHz(60 + pc)), { arpeggio: true, step: 0.28 });
+    return play(form.frequencies_hz, { arpeggio: true, step: 0.28 });
 }
 
 function render(info) {
@@ -99,7 +79,7 @@ function render(info) {
         button.type = "button";
         button.style.height = "30px";
         button.style.padding = "0 10px";
-        button.addEventListener("click", () => playClasses(row.pitch_classes));
+        button.addEventListener("click", () => playRow(row));
         cell.appendChild(button);
         tr.appendChild(cell);
         forms.appendChild(tr);
@@ -134,7 +114,7 @@ historicalSelect.addEventListener("change", () => {
 
 playButton.addEventListener("click", async () => {
     if (!current) return;
-    if (!(await playClasses(current.pitch_classes))) fail("Audio is not available in this browser.");
+    if (!(await playRow(current))) fail("Audio is not available in this browser.");
 });
 
 async function start() {

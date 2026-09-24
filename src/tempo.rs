@@ -617,17 +617,7 @@ impl MetricModulation {
         side: Option<ModulationSide>,
         referent: Duration,
     ) -> Result<()> {
-        match self.side_to_set(side)? {
-            ModulationSide::New => {
-                let old = self.old.as_ref().ok_or_else(Self::no_other_side)?;
-                self.new = Some(old.equivalent_by_referent(referent));
-            }
-            ModulationSide::Old => {
-                let new = self.new.as_ref().ok_or_else(Self::no_other_side)?;
-                self.old = Some(new.equivalent_by_referent(referent));
-            }
-        }
-        Ok(())
+        self.set_from_other(side, |other| other.equivalent_by_referent(referent))
     }
 
     /// Sets one side to the other's number counted in `referent`, which is a
@@ -638,17 +628,9 @@ impl MetricModulation {
         side: Option<ModulationSide>,
         referent: Duration,
     ) -> Result<()> {
-        match self.side_to_set(side)? {
-            ModulationSide::New => {
-                let old = self.old.as_ref().ok_or_else(Self::no_other_side)?;
-                self.new = Some(old.maintained_number_with_referent(referent));
-            }
-            ModulationSide::Old => {
-                let new = self.new.as_ref().ok_or_else(Self::no_other_side)?;
-                self.old = Some(new.maintained_number_with_referent(referent));
-            }
-        }
-        Ok(())
+        self.set_from_other(side, |other| {
+            other.maintained_number_with_referent(referent)
+        })
     }
 
     fn side_to_set(&self, side: Option<ModulationSide>) -> Result<ModulationSide> {
@@ -662,6 +644,21 @@ impl MetricModulation {
 
     fn no_other_side() -> Error {
         Error::Tempo("there is no mark on the other side to take the tempo from".to_string())
+    }
+
+    /// Sets the side `side_to_set` chooses to a mark derived from the other.
+    fn set_from_other(
+        &mut self,
+        side: Option<ModulationSide>,
+        derive: impl FnOnce(&MetronomeMark) -> MetronomeMark,
+    ) -> Result<()> {
+        let (target, other) = match self.side_to_set(side)? {
+            ModulationSide::New => (&mut self.new, &self.old),
+            ModulationSide::Old => (&mut self.old, &self.new),
+        };
+        let other = other.as_ref().ok_or_else(Self::no_other_side)?;
+        *target = Some(derive(other));
+        Ok(())
     }
 
     /// Whether the first mark written is the new tempo rather than the old,

@@ -458,37 +458,7 @@ impl ScaleType {
         limit: Option<usize>,
         comparison: DegreeComparison,
     ) -> Result<Vec<(usize, Scale)>> {
-        let targets = pitches
-            .iter()
-            .map(|pitch| comparison.key(pitch))
-            .collect::<Vec<_>>();
-        let Some((lowest, highest)) = target_range(pitches) else {
-            return Ok(Vec::new());
-        };
-        let mut ranked = Vec::with_capacity(SCALE_STARTS.len());
-        for start in SCALE_STARTS {
-            let scale = Scale::new(self, Pitch::from_name(start)?);
-            let degrees = scale
-                .pitches_between(lowest, highest)?
-                .iter()
-                .map(|pitch| comparison.key(pitch))
-                .collect::<Vec<_>>();
-            let matched = targets
-                .iter()
-                .filter(|target| degrees.contains(target))
-                .count();
-            ranked.push((matched, scale));
-        }
-        ranked.sort_by(|left, right| {
-            left.0
-                .cmp(&right.0)
-                .then_with(|| left.1.tonic().ps().total_cmp(&right.1.tonic().ps()))
-        });
-        ranked.reverse();
-        if let Some(limit) = limit {
-            ranked.truncate(limit);
-        }
-        Ok(ranked)
+        rank_on_every_start(pitches, limit, comparison, |tonic| Scale::new(self, tonic))
     }
 
     /// Returns this scale type on the tonic that fits `pitches` best.
@@ -509,6 +479,48 @@ impl ScaleType {
             .map(|(_, scale)| scale)
             .collect())
     }
+}
+
+/// `place` put on every tonic `SCALE_STARTS` names, each counted by how many
+/// of `pitches` it holds between their lowest and highest, best first:
+/// music21's `deriveRanked`, ties going to the higher tonic.
+pub(super) fn rank_on_every_start(
+    pitches: &[Pitch],
+    limit: Option<usize>,
+    comparison: DegreeComparison,
+    place: impl Fn(Pitch) -> Scale,
+) -> Result<Vec<(usize, Scale)>> {
+    let targets = pitches
+        .iter()
+        .map(|pitch| comparison.key(pitch))
+        .collect::<Vec<_>>();
+    let Some((lowest, highest)) = target_range(pitches) else {
+        return Ok(Vec::new());
+    };
+    let mut ranked = Vec::with_capacity(SCALE_STARTS.len());
+    for start in SCALE_STARTS {
+        let scale = place(Pitch::from_name(start)?);
+        let degrees = scale
+            .pitches_between(lowest, highest)?
+            .iter()
+            .map(|pitch| comparison.key(pitch))
+            .collect::<Vec<_>>();
+        let matched = targets
+            .iter()
+            .filter(|target| degrees.contains(target))
+            .count();
+        ranked.push((matched, scale));
+    }
+    ranked.sort_by(|left, right| {
+        left.0
+            .cmp(&right.0)
+            .then_with(|| left.1.tonic().ps().total_cmp(&right.1.tonic().ps()))
+    });
+    ranked.reverse();
+    if let Some(limit) = limit {
+        ranked.truncate(limit);
+    }
+    Ok(ranked)
 }
 
 /// The lowest and the highest of some pitches, which is the range music21's

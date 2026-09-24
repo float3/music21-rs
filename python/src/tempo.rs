@@ -510,39 +510,16 @@ impl MetronomeMark {
         let Some(found) = found.filter(|value| !value.is_none()) else {
             return Ok(slf.clone().into_any().unbind());
         };
-        let classes: Vec<String> = found.getattr("classes")?.extract()?;
-        if classes.iter().any(|name| name == "MetricModulation") {
-            return Ok(found.getattr("newMetronome")?.unbind());
-        }
-        if classes.iter().any(|name| name == "MetronomeMark") {
-            return Ok(found.clone().unbind());
-        }
-        if classes.iter().any(|name| name == "TempoText") {
-            return Ok(found.call_method0("getMetronomeMark")?.unbind());
-        }
         let _ = py;
-        Err(TempoException::new_err(format!(
-            "cannot derive a MetronomeMark from this TempoIndication: {found}"
-        )))
+        sounding_mark(found)
     }
 
     /// music21's `getPreviousMetronomeMark`: the last one in force before
     /// this one, found by asking the stream this mark sits in.
     fn getPreviousMetronomeMark(slf: &Bound<'_, Self>, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        let search = py
-            .import("music21.common.enums")?
-            .getattr("ElementSearch")?
-            .getattr("BEFORE_OFFSET")?;
-        let arguments = PyDict::new(py);
-        arguments.set_item("getElementMethod", search)?;
-        let found = slf.as_any().call_method(
-            "getContextByClass",
-            ("TempoIndication",),
-            Some(&arguments),
-        )?;
-        if found.is_none() {
+        let Some(found) = previous_indication(slf.as_any())? else {
             return Ok(py.None());
-        }
+        };
         Self::getSoundingMetronomeMark(slf, py, Some(&found))
     }
 
@@ -1268,21 +1245,7 @@ impl MetricModulation {
             Some(found) if found.is(slf) => {
                 Ok(Self::get_newMetronome(slf)?.unwrap_or_else(|| slf.py().None()))
             }
-            Some(found) => {
-                let classes: Vec<String> = found.getattr("classes")?.extract()?;
-                if classes.iter().any(|name| name == "MetricModulation") {
-                    return Ok(found.getattr("newMetronome")?.unbind());
-                }
-                if classes.iter().any(|name| name == "MetronomeMark") {
-                    return Ok(found.clone().unbind());
-                }
-                if classes.iter().any(|name| name == "TempoText") {
-                    return Ok(found.call_method0("getMetronomeMark")?.unbind());
-                }
-                Err(TempoException::new_err(format!(
-                    "cannot derive a MetronomeMark from this TempoIndication: {found}"
-                )))
-            }
+            Some(found) => sounding_mark(found),
         }
     }
 
@@ -1294,20 +1257,9 @@ impl MetricModulation {
         if !slf.hasattr("getContextByClass")? {
             return Ok(py.None());
         }
-        let search = py
-            .import("music21.common.enums")?
-            .getattr("ElementSearch")?
-            .getattr("BEFORE_OFFSET")?;
-        let arguments = PyDict::new(py);
-        arguments.set_item("getElementMethod", search)?;
-        let found = slf.as_any().call_method(
-            "getContextByClass",
-            ("TempoIndication",),
-            Some(&arguments),
-        )?;
-        if found.is_none() {
+        let Some(found) = previous_indication(slf.as_any())? else {
             return Ok(py.None());
-        }
+        };
         Self::getSoundingMetronomeMark(slf, Some(&found))
     }
 
@@ -1413,6 +1365,38 @@ pub fn convertTempoByReferent(
     quarterLengthBeatDst: f64,
 ) -> f64 {
     rs_convert_tempo_by_referent(numberSrc, quarterLengthBeatSrc, quarterLengthBeatDst)
+}
+
+/// The mark a tempo indication comes to: a modulation's new mark, a mark
+/// itself, or the mark a tempo text implies.
+fn sounding_mark(found: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
+    let classes: Vec<String> = found.getattr("classes")?.extract()?;
+    if classes.iter().any(|name| name == "MetricModulation") {
+        return Ok(found.getattr("newMetronome")?.unbind());
+    }
+    if classes.iter().any(|name| name == "MetronomeMark") {
+        return Ok(found.clone().unbind());
+    }
+    if classes.iter().any(|name| name == "TempoText") {
+        return Ok(found.call_method0("getMetronomeMark")?.unbind());
+    }
+    Err(TempoException::new_err(format!(
+        "cannot derive a MetronomeMark from this TempoIndication: {found}"
+    )))
+}
+
+/// The tempo indication in force before `holder`, asked of the stream it
+/// sits in, or `None` where there is none.
+fn previous_indication<'py>(holder: &Bound<'py, PyAny>) -> PyResult<Option<Bound<'py, PyAny>>> {
+    let py = holder.py();
+    let search = py
+        .import("music21.common.enums")?
+        .getattr("ElementSearch")?
+        .getattr("BEFORE_OFFSET")?;
+    let arguments = PyDict::new(py);
+    arguments.set_item("getElementMethod", search)?;
+    let found = holder.call_method("getContextByClass", ("TempoIndication",), Some(&arguments))?;
+    Ok((!found.is_none()).then_some(found))
 }
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {

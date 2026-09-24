@@ -1,4 +1,5 @@
 import "../theme.js";
+import { el, errorLine, fact } from "../dom.js";
 
 // abcjs is loaded as a classic script and puts itself on `window.ABCJS`.
 // Only the corners of its API this page touches are typed.
@@ -160,6 +161,8 @@ interface Analysis {
         largest_leap: string | null;
     }[];
     slices: Slice[];
+    /** `[text offset, label]` pairs to draw, by label kind. */
+    labels: Record<string, [number, string][]>;
     issues: Issue[];
 }
 
@@ -169,9 +172,24 @@ interface WasmModule {
     score_to_midi(input: ScoreInput): Uint8Array;
     score_to_musicxml(input: ScoreInput): string;
     midi_to_abc(bytes: Uint8Array): string;
-    spell_midi_in_key(midi: number, tonic: string, mode: string): string;
-    chord_symbol_voicing(figure: string, openStrings: Int32Array): Int32Array;
-    chord_symbol_voicing_above(figure: string, openStrings: Int32Array, thumb: Int32Array): Int32Array;
+    pitch_class_names(): string[];
+    staff_midi(staff: number): number;
+    abc_staff(token: string): number;
+    abc_shift(token: string, steps: number): string;
+    abc_accidental(staff: number, midi: number): string | undefined;
+    written_octaves(staff: number, midi: number): number;
+    abc_in_key(midi: number, key: ScoreInput["key"]): string;
+    abc_key(root: string, acc: string, mode: string): { tonic: string; mode: string } | null;
+    tab_strings(strings: string[], clef: string): Int32Array;
+    tab_tuning(strings: string[], clef: string, positions: Int32Array): string[] | null;
+    move_frets(strings: string[], clef: string, midis: Int32Array, frets: Int32Array, moved: number): [number, number][] | null;
+    chord_part(
+        input: ScoreInput,
+        symbols: { start: number; name: string }[],
+        strings: string[],
+        clef: string,
+        comping: string,
+    ): { start: number; abc: string }[];
     score_tuning_cents(
         input: ScoreInput,
         tuning: string,
@@ -196,6 +214,7 @@ const scoreNode = $<HTMLDivElement>("#score");
 const statusNode = $<HTMLSpanElement>("#status");
 const cursorNode = $<HTMLSpanElement>("#cursor");
 const errorNode = $<HTMLParagraphElement>("#error");
+const { fail, clearError } = errorLine(errorNode);
 const momentNode = $<HTMLDivElement>("#moment");
 const labelsSelect = $<HTMLSelectElement>("#labels");
 const numeralsSelect = $<HTMLSelectElement>("#numerals");
@@ -230,34 +249,6 @@ const COMPING_KEY = "music21-rs.score-editor.comping";
 const ZOOM_KEY = "music21-rs.score-editor.zoom";
 const WIDE_KEY = "music21-rs.score-editor.wide";
 const ZOOMS = [0.4, 0.5, 0.67, 0.8, 1, 1.25, 1.5];
-/** Ways of playing the chords part other than holding each chord: a bar
- * length in quarters and the figure of each bar in turn, as the quarter each
- * stroke falls on and whether the thumb plays the chord's root, its fifth or
- * the fingers the rest. A bar of any other length is held. */
-const COMPING: Record<string, { bar: number; bars: [number, "root" | "fifth" | "chord"][][] }> = {
-    // The thumb on one and three; the fingers on one, two and the and of
-    // three, then on the and of one and of two.
-    bossa: {
-        bar: 4,
-        bars: [
-            [
-                [0, "root"],
-                [1, "chord"],
-                [2, "fifth"],
-                [2.5, "chord"],
-            ],
-            [
-                [0, "root"],
-                [0.5, "chord"],
-                [1.5, "chord"],
-                [2, "fifth"],
-            ],
-        ],
-    },
-};
-/** The highest fret counted as within an instrument's reach when deciding
- * whether a staff gets tablature at all. */
-const HIGHEST_FRET = 15;
 /** Tablature drawn under every staff, by the view's name, with its open
  * strings lowest first as abcjs writes them. Guitar and bass are tuned where
  * their music is written, an octave above where they sound; a staff whose
@@ -316,9 +307,6 @@ const ROOT_KEY = "music21-rs.score-editor.tuning-root";
 const ADAPTIVE_TUNING = "RecursiveJustIntonation";
 /** How many of abcjs's drag steps separate two tab strings. */
 const DRAG_STEPS_PER_STRING = 3;
-const PITCH_CLASS_NAMES = ["C", "C#", "D", "E-", "E", "F", "F#", "G", "A-", "A", "B-", "B"];
-const STEP_LETTERS = "CDEFGAB";
-const STEP_SEMITONES = [0, 2, 4, 5, 7, 9, 11];
 
 /** Example scores; `view` is the staff view one opens in. */
 const EXAMPLES: { name: string; abc: string; view?: string; comping?: string }[] = [
@@ -448,32 +436,6 @@ const hiddenParts = new Set<string>();
 let player: { synth: InstanceType<AbcjsGlobal["synth"]["CreateSynth"]>; timer: { stop(): void } } | null = null;
 
 // ---------------------------------------------------------------- helpers
-
-function fail(message: string): void {
-    errorNode.textContent = message;
-    errorNode.style.display = "block";
-}
-
-function clearError(): void {
-    errorNode.style.display = "none";
-}
-
-function el<K extends keyof HTMLElementTagNameMap>(
-    tag: K,
-    className?: string,
-    text?: string,
-): HTMLElementTagNameMap[K] {
-    const node = document.createElement(tag);
-    if (className) node.className = className;
-    if (text !== undefined) node.textContent = text;
-    return node;
-}
-
-function fact(label: string, value: string): HTMLDivElement {
-    const node = el("div", "fact");
-    node.append(el("span", "", label), el("strong", "", value));
-    return node;
-}
 
 function formatBeat(beat: number): string {
     return Number.isInteger(beat) ? String(beat) : String(Math.round(beat * 100) / 100);
@@ -636,35 +598,15 @@ function tokenEnd(abc: string, anchor: number): number {
 
 // --------------------------------------------------------- abcjs → crate
 
-function staffMidi(staff: number): number {
-    const step = ((staff % 7) + 7) % 7;
-    const octave = 4 + Math.floor(staff / 7);
-    return 12 * (octave + 1) + STEP_SEMITONES[step];
-}
-
-function keyOf(tune: AbcTune): ScoreInput["key"] {
+function keyOf(tune: AbcTune, module: WasmModule): ScoreInput["key"] {
     const signature = tune.getKeySignature();
-    if (!signature || !/^[A-G]$/.test(signature.root)) return null;
-    const tonic = signature.root + (signature.acc === "#" ? "#" : signature.acc === "b" ? "-" : "");
-    const modes: Record<string, string> = {
-        "": "major",
-        maj: "major",
-        ion: "major",
-        m: "minor",
-        min: "minor",
-        aeo: "minor",
-        dor: "dorian",
-        phr: "phrygian",
-        lyd: "lydian",
-        mix: "mixolydian",
-        loc: "locrian",
-    };
-    const mode = modes[(signature.mode ?? "").toLowerCase().slice(0, 3)] ?? "major";
+    const key = signature ? module.abc_key(signature.root, signature.acc, signature.mode ?? "") : null;
+    if (!key) return null;
     const sharps = (signature.accidentals ?? []).reduce(
         (sum, accidental) => sum + (accidental.acc === "sharp" ? 1 : accidental.acc === "flat" ? -1 : 0),
         0,
     );
-    return { tonic, mode, sharps };
+    return { ...key, sharps };
 }
 
 function quarterTempo(tune: AbcTune): number {
@@ -694,6 +636,8 @@ function voiceIds(abc: string): string[] {
 
 /** Reads what abcjs made of the source into the crate's score shape. */
 function extract(abc: string): ScoreInput | null {
+    if (!wasm) return null;
+    const module = wasm;
     const clean = withoutOrnaments(abc);
     const tune = ABCJS.parseOnly(clean)[0];
     if (!tune) return null;
@@ -724,7 +668,7 @@ function extract(abc: string): ScoreInput | null {
     const input: ScoreInput = {
         title: tune.metaText.title ?? "",
         tempo_bpm: quarterTempo(tune),
-        key: keyOf(tune),
+        key: keyOf(tune, module),
         meter: null,
         pickup: tune.getPickupLength() * 4,
         let_ring: ringButton.classList.contains("on"),
@@ -765,8 +709,8 @@ function extract(abc: string): ScoreInput | null {
                 if (written.length === sounding.length) return { midi: event.pitch, staff: written[index] };
                 let best = -1;
                 unused.forEach((staff, i) => {
-                    const distance = Math.abs(staffMidi(staff) - event.pitch);
-                    if (best === -1 || distance < Math.abs(staffMidi(unused[best]) - event.pitch)) best = i;
+                    const distance = Math.abs(module.staff_midi(staff) - event.pitch);
+                    if (best === -1 || distance < Math.abs(module.staff_midi(unused[best]) - event.pitch)) best = i;
                 });
                 return { midi: event.pitch, staff: best === -1 ? null : unused.splice(best, 1)[0] };
             });
@@ -810,19 +754,6 @@ function numeralOf(slice: Slice): string | null {
     return numeralsSelect.value === "music21" ? slice.numeral : slice.textbook_numeral;
 }
 
-function labelFor(slice: Slice, mode: string): string | null {
-    switch (mode) {
-        case "numeral":
-            return numeralOf(slice);
-        case "symbol":
-            return slice.chord_symbol;
-        case "name":
-            return slice.pitch_classes.length >= 3 ? slice.pitched_common_name : null;
-        default:
-            return null;
-    }
-}
-
 function toSource(insertions: Rendered["insertions"], position: number): number {
     let shift = 0;
     for (const insertion of insertions) {
@@ -834,42 +765,13 @@ function toSource(insertions: Rendered["insertions"], position: number): number 
     return position - shift;
 }
 
+/** The label kind the crate places labels for, from the labels menu. */
+function labelKind(): string {
+    return labelsSelect.value === "numeral" ? numeralsSelect.value : labelsSelect.value;
+}
+
 function render(source: string): void {
-    const labels = new Map<number, string>();
-    const mode = labelsSelect.value;
-    // A harmony is labelled under the bass it stands on, and only when the
-    // label changes. A bass struck alone and then held under the chord, as a
-    // guitar plays it, takes the label of the chord that comes in over it.
-    let previous: string | null = null;
-    let labelled = -Infinity;
-    let bass: { anchor: number; offset: number; free: boolean } | null = null;
-    let before: Slice | null = null;
-    for (const slice of analysis?.slices ?? []) {
-        const label = labelFor(slice, mode);
-        // A bass moving for less than a beat under notes that stay is passing
-        // on to the next harmony, not a harmony of its own.
-        const upper = (s: Slice) => s.pitches.slice(1).join(" ");
-        if (slice.bass_attack && before && previous && slice.duration < 1 && upper(slice) === upper(before)) {
-            bass = null;
-            continue;
-        }
-        // Only a bass sounding with no harmony over it yet waits for one, and
-        // what it waits for is a chord, several notes coming in together, not
-        // a melody note.
-        const entering = slice.pitches.filter((pitch) => !before?.pitches.includes(pitch)).length;
-        before = slice;
-        if (slice.bass_attack) bass = { anchor: slice.bass_attack[0], offset: slice.offset, free: !label };
-        const waiting = !slice.bass_attack && bass?.free && label && entering >= 2;
-        if (!slice.bass_attack && !waiting) continue;
-        // Labels closer together than half a beat would be drawn over each
-        // other, which onsets a fraction apart otherwise do.
-        if (bass && label && label !== previous && bass.offset - labelled >= 0.5) {
-            labels.set(bass.anchor, label);
-            labelled = bass.offset;
-        }
-        if (bass && label) bass.free = false;
-        previous = label;
-    }
+    const labels = analysis?.labels[labelKind()] ?? [];
     // What is drawn is the source with text inserted and nothing taken out,
     // so every rendered offset maps back: a hidden part's lines are
     // commented out with a `%` at their start, and labels go before notes.
@@ -903,7 +805,7 @@ function render(source: string): void {
     // checking for a staff it was told to leave untabbed, and throws. One at
     // the end can go; one before a tabbed staff cannot, so a score that still
     // throws is drawn with no tablature at all.
-    const tabs = tablature ? tablatureFor(text, tablature, stringTuning()) : null;
+    const tabs = tablature && wasm ? tablatureFor(text, tablature, stringTuning()) : null;
     while (tabs?.length && (tabs[tabs.length - 1] as { instrument: string }).instrument === "") tabs.pop();
     const params = {
         add_classes: true,
@@ -1145,32 +1047,10 @@ type Expected = Map<number, { midi: number; staff: number | null }[]>;
 
 const PITCH_TOKEN = /(\^\^|\^|__|_|=)?([A-Ga-g])([,']*)/g;
 
-/** The staff position of a written letter and its octave marks: `C` is 0. */
-function staffOf(letter: string, marks: string): number {
-    let position = STEP_LETTERS.indexOf(letter.toUpperCase()) + (letter === letter.toLowerCase() ? 7 : 0);
-    for (const mark of marks) position += mark === "'" ? 7 : -7;
-    return position;
-}
-
-function letterFor(position: number): string {
-    const octave = Math.floor(position / 7);
-    const step = STEP_LETTERS[((position % 7) + 7) % 7];
-    return octave >= 1 ? step.toLowerCase() + "'".repeat(octave - 1) : step + ",".repeat(-octave);
-}
-
-function accidentalFor(alter: number): string | null {
-    return ({ [-2]: "__", [-1]: "_", 0: "=", 1: "^", 2: "^^" } as Record<number, string>)[alter] ?? null;
-}
-
-/** How the written key signature alters each letter. */
-function keyAlters(sharps: number): Record<string, number> {
-    const order = "FCGDAEB";
-    const alters: Record<string, number> = {};
-    for (let i = 0; i < Math.abs(sharps) && i < 7; i++) {
-        if (sharps > 0) alters[order[i]] = 1;
-        else alters[order[6 - i]] = -1;
-    }
-    return alters;
+/** The loaded crate: every pitch an edit reads or writes is its to decide. */
+function crate(): WasmModule {
+    if (!wasm) throw new Error("music21-rs has not loaded yet.");
+    return wasm;
 }
 
 /** The first time each note is heard, by its anchor: repeats play it again. */
@@ -1193,7 +1073,7 @@ function pitchTokens(text: string, anchor: number): { start: number; letter: num
         const start = anchor + (match.index ?? 0);
         if (close === -1 && start !== anchor) break;
         const letter = start + (match[1]?.length ?? 0);
-        tokens.push({ start, letter, end: start + match[0].length, staff: staffOf(match[2], match[3]) });
+        tokens.push({ start, letter, end: start + match[0].length, staff: crate().abc_staff(match[2] + match[3]) });
         if (close === -1) break;
     }
     return tokens;
@@ -1216,19 +1096,17 @@ function keepSounding(text: string, expected: Expected): string {
             if (have.length === need.length && have.every((midi, i) => midi === need[i])) continue;
             const used = new Set<number>();
             for (const token of pitchTokens(text, anchor)) {
-                const natural = staffMidi(token.staff);
                 let pick = want.findIndex((pitch, i) => !used.has(i) && pitch.staff === token.staff);
                 if (pick === -1) {
-                    pick = want.findIndex((pitch, i) => {
-                        const offset = pitch.midi - natural;
-                        return !used.has(i) && pitch.staff === null && Math.abs(offset - 12 * Math.round(offset / 12)) <= 2;
-                    });
+                    pick = want.findIndex(
+                        (pitch, i) =>
+                            !used.has(i) && pitch.staff === null && crate().abc_accidental(token.staff, pitch.midi) !== undefined,
+                    );
                 }
                 if (pick === -1) continue;
                 used.add(pick);
-                const offset = want[pick].midi - natural;
-                const accidental = accidentalFor(offset - 12 * Math.round(offset / 12));
-                if (accidental !== null && text.slice(token.start, token.letter) !== accidental) {
+                const accidental = crate().abc_accidental(token.staff, want[pick].midi);
+                if (accidental !== undefined && text.slice(token.start, token.letter) !== accidental) {
                     edits.push({ start: token.start, end: token.letter, text: accidental });
                 }
             }
@@ -1296,9 +1174,7 @@ function shiftedPitches(value: string, start: number, end: number, steps: number
     for (const match of segment.matchAll(PITCH_TOKEN)) {
         const at = start + (match.index ?? 0) + (match[1]?.length ?? 0);
         if (!inMusic.has(at)) continue;
-        const [, accidental = "", letter, marks] = match;
-        const keep = Math.abs(steps) % 7 === 0 ? accidental : "";
-        out += segment.slice(last, match.index) + keep + letterFor(staffOf(letter, marks) + steps);
+        out += segment.slice(last, match.index) + crate().abc_shift(match[0], steps);
         last = (match.index ?? 0) + match[0].length;
     }
     return out + segment.slice(last);
@@ -1307,6 +1183,7 @@ function shiftedPitches(value: string, start: number, end: number, steps: number
 /** Moves every written pitch in the selection (or the note at the caret)
  * by `steps` staff positions. */
 function movePitches(steps: number): void {
+    if (!wasm) return;
     const value = textarea.value;
     let start = textarea.selectionStart;
     let end = textarea.selectionEnd;
@@ -1324,6 +1201,7 @@ function movePitches(steps: number): void {
 
 /** Moves the note at `anchor` by `steps` staff positions. */
 function shiftNote(anchor: number, steps: number): void {
+    if (!wasm) return;
     const value = textarea.value;
     const end = tokenEnd(value, anchor);
     applyEdit(anchor, end, shiftedPitches(value, anchor, end, steps));
@@ -1338,26 +1216,11 @@ function restAt(anchor: number): void {
     applyEdit(anchor, anchor + match[0].length, `z${match[2]}`);
 }
 
-/** The open strings of the view's tablature, lowest first, as MIDI numbers
- * for a staff with the given clef. */
-function openStrings(clef: string): number[] {
-    if (!TABLATURES[viewSelect.value]) return [];
-    return tuningFor(stringTuning(), clef).map(tuningNoteMidi);
-}
-
 /** The string tuning chosen for the current tab view, lowest string first. */
 function stringTuning(): string[] {
     const tablature = TABLATURES[viewSelect.value];
     if (!tablature) return [];
     return (tablature.tunings.find((tuning) => tuning.id === stringsSelect.value) ?? tablature.tunings[0]).notes;
-}
-
-/** The MIDI number of an open string written in ABC, accidental and all. */
-function tuningNoteMidi(note: string): number {
-    const match = /^(\^\^|\^|__|_|=)?([A-Ga-g])([,']*)$/.exec(note);
-    if (!match) return 0;
-    const alter = { "^^": 2, "^": 1, __: -2, _: -1 }[match[1] ?? ""] ?? 0;
-    return staffMidi(staffOf(match[2], match[3])) + alter;
 }
 
 /** Fills the string tuning menu for the current view and remembers the
@@ -1385,9 +1248,9 @@ function storedStrings(): Record<string, string> {
     }
 }
 
-/** One tablature per staff of the drawn text: the instrument's, where every
- * note written on the staff lies between its lowest open string and
- * `HIGHEST_FRET` on its highest, and none elsewhere. A bass tab under a
+/** One tablature per staff of the drawn text: the instrument's, where the
+ * crate finds every note written on the staff within its reach, and none
+ * elsewhere. A bass tab under a
  * soprano line is thirty-odd frets up a neck that has twenty. */
 function tablatureFor(text: string, tablature: (typeof TABLATURES)[string], tuning: string[]): object[] {
     const lines = ABCJS.parseOnly(text)[0]?.lines.filter((line) => line.staff?.length) ?? [];
@@ -1400,8 +1263,7 @@ function tablatureFor(text: string, tablature: (typeof TABLATURES)[string], tuni
     );
     tabSkipped = [];
     return staves.map((staff, index) => {
-        let low = Infinity;
-        let high = -Infinity;
+        const positions: number[] = [];
         let voices = 0;
         for (const line of lines) {
             const staffVoices = (line.staff?.[index]?.voices ?? []).filter((voice) =>
@@ -1410,10 +1272,7 @@ function tablatureFor(text: string, tablature: (typeof TABLATURES)[string], tuni
             voices = Math.max(voices, staffVoices.length);
             for (const voice of staffVoices) {
                 for (const element of voice) {
-                    for (const pitch of element.pitches ?? []) {
-                        low = Math.min(low, staffMidi(pitch.pitch));
-                        high = Math.max(high, staffMidi(pitch.pitch));
-                    }
+                    for (const pitch of element.pitches ?? []) positions.push(pitch.pitch);
                 }
             }
         }
@@ -1426,40 +1285,13 @@ function tablatureFor(text: string, tablature: (typeof TABLATURES)[string], tuni
             return { instrument: "" };
         }
         const clef = staff.clef?.type ?? "";
-        const choice = tuningForStaff(tuning, clef, low, high);
+        const choice = crate().tab_tuning(tuning, clef, Int32Array.from(positions));
         if (!choice) {
-            if (low <= high) tabSkipped.push(`${which} goes where the ${tablature.label.toLowerCase()} cannot reach`);
+            if (positions.length) tabSkipped.push(`${which} goes where the ${tablature.label.toLowerCase()} cannot reach`);
             return { instrument: "" };
         }
         return { instrument: tablature.instrument, label: tablature.label, tuning: choice };
     });
-}
-
-/** The tuning abcjs should tab a staff against, given the lowest and highest
- * note written on it, or null when no tuning reaches them. Guitar music is
- * written an octave above where it sounds and is tabbed that way first; a
- * staff written at the pitch it sounds, as piano or choir music is, falls
- * below that and is tabbed against the strings as they really sound. abcjs
- * fingers the sounding pitch, so a clef that transposes is taken out first. */
-function tuningForStaff(tuning: string[], clef: string, low: number, high: number): string[] | null {
-    const shift = clef.endsWith("-8") ? -12 : clef.endsWith("+8") ? 12 : 0;
-    const written = tuningFor(tuning, clef);
-    for (const candidate of [written, tuningFor(written, "-8")]) {
-        const open = candidate.map(tuningNoteMidi);
-        if (low + shift >= open[0] && high + shift <= open[open.length - 1] + HIGHEST_FRET) return candidate;
-    }
-    return null;
-}
-
-/** The lowest MIDI note at or above `floor` of the pitch a chord symbol's
- * letter and accidentals name, or null when it names none. */
-function lowestOf(symbol: string, floor: number): number | null {
-    const parts = /^([A-G])([#b]*)/.exec(symbol.trim());
-    if (!parts) return null;
-    let alter = 0;
-    for (const sign of parts[2]) alter += sign === "#" ? 1 : -1;
-    const pitchClass = (((STEP_SEMITONES[STEP_LETTERS.indexOf(parts[1])] + alter) % 12) + 12) % 12;
-    return floor + ((pitchClass - (floor % 12) + 12) % 12);
 }
 
 /** The chord symbols of the source realized as a part of their own, for a tab
@@ -1504,133 +1336,10 @@ function chordPart(source: string): { at: number; text: string }[] | null {
     // a tab view to say otherwise, the chords are a guitar's.
     const octaveUp = view === "" || view === "guitar" || view === "bass";
     const strings = view === "" ? TABLATURES.guitar.tunings[0].notes : stringTuning();
-    const sounding = (octaveUp ? tuningFor(strings, "treble-8") : strings).map(tuningNoteMidi);
-    const key = scoreInput.key;
-    const alters = keyAlters(key?.sharps ?? 0);
-    const voicings = new Map<string, number[] | null>();
-    const voicing = (name: string): number[] | null => {
-        if (!voicings.has(name)) {
-            try {
-                const voiced = Array.from(wasm!.chord_symbol_voicing(name, Int32Array.from(sounding)));
-                voicings.set(name, voiced.length ? voiced : null);
-            } catch {
-                voicings.set(name, null);
-            }
-        }
-        return voicings.get(name) ?? null;
-    };
-
-    const [numerator, denominator] = scoreInput.meter ?? [4, 4];
-    const bar = (numerator * 4) / denominator;
-    const end = analysis.quarter_length;
-    const lines = [0];
-    let next = scoreInput.pickup > 1e-6 && scoreInput.pickup < bar - 1e-6 ? scoreInput.pickup : bar;
-    while (next < end - 1e-6) {
-        lines.push(next);
-        next += bar;
-    }
-    lines.push(end);
-
-    const starts = [...symbols.keys()].sort((a, b) => a - b);
-    const spans = starts.map((start, i) => ({ start, end: starts[i + 1] ?? end, name: symbols.get(start)! }));
-    const length = (quarters: number): string => {
-        const eighths = quarters * 2;
-        if (Math.abs(eighths - Math.round(eighths)) < 1e-6) return Math.round(eighths) === 1 ? "" : String(Math.round(eighths));
-        return `${Math.round(eighths * 12)}/12`;
-    };
-    const write = (midis: number[], inForce: Map<string, number>): string =>
-        midis
-            .map((midi) => {
-                const name = wasm!.spell_midi_in_key(midi + (octaveUp ? 12 : 0), key?.tonic ?? "C", key?.mode ?? "major");
-                const parts = /^([A-G])([#-]*)(-?\d+)$/.exec(name);
-                if (!parts) return "";
-                const alter = parts[2].startsWith("#") ? parts[2].length : -parts[2].length;
-                const place = `${parts[1]}${parts[3]}`;
-                const current = inForce.get(place) ?? alters[parts[1]] ?? 0;
-                inForce.set(place, alter);
-                const accidental = current === alter ? "" : (accidentalFor(alter) ?? "");
-                return accidental + letterFor(STEP_LETTERS.indexOf(parts[1]) + 7 * (Number(parts[3]) - 4));
-            })
-            .join("");
-    const pattern = COMPING[compingSelect.value];
-    const fingerings = new Map<string, number[]>();
-    const fingers = (name: string, root: number, fifth: number, slash: boolean): number[] => {
-        const key = `${name}|${root}|${fifth}`;
-        if (!fingerings.has(key)) {
-            const strings = sounding.filter((open) => open > Math.max(root, fifth));
-            const thumb = slash ? [root % 12] : [root % 12, fifth % 12];
-            let notes: number[] = [];
-            try {
-                notes = Array.from(wasm!.chord_symbol_voicing_above(name, Int32Array.from(strings), Int32Array.from(thumb)));
-            } catch {
-                notes = [];
-            }
-            fingerings.set(key, notes.length ? notes : (voicing(name) ?? []));
-        }
-        return fingerings.get(key)!;
-    };
-    const bars: string[] = [];
-    let patterned = 0;
-    for (let b = 0; b + 1 < lines.length; b++) {
-        const [from, to] = [lines[b], lines[b + 1]];
-        const inForce = new Map<string, number>();
-        const tokens: string[] = [];
-        const figure = pattern && Math.abs(to - from - pattern.bar) < 1e-6 ? pattern.bars[patterned++ % pattern.bars.length] : null;
-        if (figure) {
-            figure.forEach(([at, part], i) => {
-                const start = from + at;
-                const stop = from + (figure[i + 1]?.[0] ?? pattern.bar);
-                const span = spans.find((span) => span.start <= start + 1e-6 && start < span.end - 1e-6);
-                const voiced = span ? voicing(span.name) : null;
-                if (!voiced) {
-                    tokens.push(`z${length(stop - start)}`);
-                    return;
-                }
-                // The thumb plays the symbol's root, or its named bass, where
-                // it first comes on the strings, and on three the fifth below
-                // it, or above where the strings do not reach; a named bass it
-                // plays twice. A root that first comes on the third string
-                // from the bottom leaves the fifth below it on a bass string,
-                // and the thumb starts there. The fingers play the chord on
-                // the strings above the thumb's, without the thumb's notes.
-                const [name, bassName] = span!.name.split("/");
-                const root = lowestOf(bassName ?? name, sounding[0]);
-                if (root === null) {
-                    tokens.push(`z${length(stop - start)}`);
-                    return;
-                }
-                const below = root - 5 >= sounding[0];
-                const fifth = bassName ? root : below ? root - 5 : root + 7;
-                const fifthFirst = !bassName && below && sounding.length > 2 && root >= sounding[2];
-                const first = fifthFirst ? fifth : root;
-                const second = fifthFirst ? root : fifth;
-                const notes = part === "root" ? [first] : part === "fifth" ? [second] : fingers(span!.name, root, fifth, !!bassName);
-                const written = write(notes, inForce);
-                tokens.push(`${notes.length > 1 ? `[${written}]` : written}${length(stop - start)}`);
-            });
-            bars.push(tokens.join(" "));
-            continue;
-        }
-        let cursor = from;
-        for (const span of spans) {
-            const start = Math.max(span.start, from);
-            const stop = Math.min(span.end, to);
-            if (stop <= start + 1e-6) continue;
-            if (start > cursor + 1e-6) tokens.push(`z${length(start - cursor)}`);
-            const voiced = voicing(span.name);
-            if (!voiced) {
-                tokens.push(`z${length(stop - start)}`);
-            } else {
-                const tie = span.end > to + 1e-6 && !pattern ? "-" : "";
-                tokens.push(`[${write(voiced, inForce)}]${length(stop - start)}${tie}`);
-            }
-            cursor = stop;
-        }
-        if (to > cursor + 1e-6) tokens.push(`z${length(to - cursor)}`);
-        bars.push(tokens.join(" "));
-    }
-
     const clef = octaveUp ? (view === "bass" ? "bass-8" : "treble-8") : "treble";
+    const symbolList = [...symbols].map(([start, name]) => ({ start, name }));
+    const bars = wasm.chord_part(scoreInput, symbolList, strings, clef, compingSelect.value);
+
     const declaration = `V:tabchords clef=${clef} name="Chords"`;
     const additions: { at: number; text: string }[] = [];
 
@@ -1649,7 +1358,7 @@ function chordPart(source: string): { at: number; text: string }[] | null {
     if (voiceIds(source).length > 0 || music.length === 0) {
         additions.push({
             at: source.trimEnd().length,
-            text: `\n${declaration}\n[L:1/8] ${bars.join(" | ")} |]`,
+            text: `\n${declaration}\n[L:1/8] ${bars.map((bar) => bar.abc).join(" | ")} |]`,
         });
         return additions;
     }
@@ -1675,7 +1384,7 @@ function chordPart(source: string): { at: number; text: string }[] | null {
     music.forEach((line, index) => {
         const from = lineStarts[index];
         const to = lineStarts.slice(index + 1).find((start) => start !== Infinity) ?? Infinity;
-        const chunk = bars.filter((_, b) => lines[b] >= from - 1e-6 && lines[b] < to - 1e-6);
+        const chunk = bars.filter((bar) => bar.start >= from - 1e-6 && bar.start < to - 1e-6).map((bar) => bar.abc);
         const last = index === music.length - 1;
         const voice = index === 0 ? `V:tabmusic\n` : `[V:tabmusic] `;
         additions.push({ at: line.start, text: voice });
@@ -1777,16 +1486,6 @@ function redraw(): void {
     syncSelection();
 }
 
-/** The tuning a staff is tabbed against: an octave down for a clef that
- * sounds an octave below where it is written. */
-function tuningFor(tuning: string[], clef: string): string[] {
-    if (!clef.endsWith("-8")) return tuning;
-    return tuning.map((note) => {
-        const match = /^(\^\^|\^|__|_|=)?([A-Ga-g])([,']*)$/.exec(note);
-        return match ? (match[1] ?? "") + letterFor(staffOf(match[2], match[3]) - 7) : note;
-    });
-}
-
 /** Moves the fret numbers of the note at `anchor` across `strings` strings,
  * each keeping its fret: dropping a 3 from the A string onto the D string
  * makes the D string's third fret sound. */
@@ -1799,33 +1498,11 @@ function moveAcrossStrings(anchor: number, strings: number): boolean {
         .flatMap((item) => Array.from(item.svgEl.querySelectorAll(".abcjs-tab-number")))
         .map((node) => Number(node.textContent))
         .filter((fret) => Number.isInteger(fret));
-    const midis = note.pitches.map((pitch) => pitch.midi);
-    // The staff was tabbed against the written or the sounding strings; the
-    // tuning that accounts for every fret shown is the one it was.
-    const written = openStrings(note.clef);
-    for (const open of [written, written.map((midi) => midi - 12)]) {
-        const usedPitch = new Set<number>();
-        const usedString = new Set<number>();
-        const moved = new Map<number, number>();
-        let unreachable = false;
-        for (const fret of frets) {
-            for (let string = open.length - 1; string >= 0; string--) {
-                if (usedString.has(string)) continue;
-                const index = midis.findIndex((midi, i) => !usedPitch.has(i) && midi === open[string] + fret);
-                if (index === -1) continue;
-                usedPitch.add(index);
-                usedString.add(string);
-                const target = string + strings;
-                if (target < 0 || target >= open.length) unreachable = true;
-                else moved.set(index, open[target] + fret);
-                break;
-            }
-        }
-        if (usedPitch.size !== frets.length) continue;
-        if (unreachable || moved.size === 0) return false;
-        return setPitches(anchor, note, moved);
-    }
-    return false;
+    if (!TABLATURES[viewSelect.value]) return false;
+    const midis = Int32Array.from(note.pitches.map((pitch) => pitch.midi));
+    const moved = wasm.move_frets(stringTuning(), note.clef, midis, Int32Array.from(frets), strings);
+    if (!moved) return false;
+    return setPitches(anchor, note, new Map(moved));
 }
 
 /** Rewrites some pitches of the note at `anchor` to sound new MIDI numbers,
@@ -1833,8 +1510,7 @@ function moveAcrossStrings(anchor: number, strings: number): boolean {
 function setPitches(anchor: number, note: NoteInput, moved: Map<number, number>): boolean {
     if (!wasm) return false;
     const value = textarea.value;
-    const key = scoreInput?.key;
-    const alters = keyAlters(key?.sharps ?? 0);
+    const key = scoreInput?.key ?? null;
     const tokens = pitchTokens(value, anchor);
     const usedPitch = new Set<number>();
     const replacements: { start: number; end: number; text: string }[] = [];
@@ -1846,15 +1522,8 @@ function setPitches(anchor: number, note: NoteInput, moved: Map<number, number>)
         if (midi === undefined) continue;
         // Spell where it is written: a staff sounding an octave down is
         // written an octave up.
-        const offset = note.pitches[index].midi - staffMidi(token.staff);
-        const octaves = Math.round(offset / 12);
-        const name = wasm.spell_midi_in_key(midi - 12 * octaves, key?.tonic ?? "C", key?.mode ?? "major");
-        const parts = /^([A-G])([#-]*)(-?\d+)$/.exec(name);
-        if (!parts) continue;
-        const alter = parts[2].startsWith("#") ? parts[2].length : -parts[2].length;
-        const staff = STEP_LETTERS.indexOf(parts[1]) + 7 * (Number(parts[3]) - 4);
-        const accidental = (alters[parts[1]] ?? 0) === alter ? "" : (accidentalFor(alter) ?? "");
-        replacements.push({ start: token.start, end: token.end, text: accidental + letterFor(staff) });
+        const octaves = wasm.written_octaves(token.staff, note.pitches[index].midi);
+        replacements.push({ start: token.start, end: token.end, text: wasm.abc_in_key(midi - 12 * octaves, key) });
     }
     if (replacements.length === 0) return false;
     const regionEnd = Math.max(...replacements.map((change) => change.end));
@@ -1919,15 +1588,16 @@ function renderPanels(): void {
         fact("Tonal certainty", a.tonal_certainty.toFixed(3)),
     );
     const top = Math.max(...a.pitch_class_weights, 1e-9);
+    const classNames = crate().pitch_class_names();
     weights.replaceChildren(
         ...a.pitch_class_weights.map((weight, index) => {
             const bar = el("div");
             bar.style.height = `${(weight / top) * 100}%`;
-            bar.title = `${PITCH_CLASS_NAMES[index]}: ${Math.round(weight * 100) / 100} quarters`;
+            bar.title = `${classNames[index]}: ${Math.round(weight * 100) / 100} quarters`;
             return bar;
         }),
     );
-    weightLabels.replaceChildren(...PITCH_CLASS_NAMES.map((name) => el("span", "", name)));
+    weightLabels.replaceChildren(...classNames.map((name) => el("span", "", name)));
 
     $("#issue-count").textContent = a.issues.length ? `${a.issues.length} found` : "";
     if (a.issues.length === 0) {
@@ -2145,7 +1815,7 @@ function renderTemperaments(): void {
     );
     temperamentSelect.value = Array.from(temperamentSelect.options).some((option) => option.value === stored) ? stored : "";
     rootSelect.replaceChildren(
-        ...["", ...PITCH_CLASS_NAMES].map((name) => {
+        ...["", ...wasm.pitch_class_names()].map((name) => {
             const option = el("option", "", name ? `Root: ${name.replace("-", "♭").replace("#", "♯")}` : "Root: key tonic");
             option.value = name;
             return option;
@@ -2649,7 +2319,7 @@ async function start(): Promise<void> {
     ringButton.classList.toggle("on", storageGet(RING_KEY) !== "off");
     chordsButton.classList.toggle("on", storageGet(CHORDS_KEY) !== "off");
     compingSelect.value = storageGet(COMPING_KEY) ?? "";
-    if (!(compingSelect.value in COMPING)) compingSelect.value = "";
+    if (!Array.from(compingSelect.options).some((option) => option.value === compingSelect.value)) compingSelect.value = "";
     compingSelect.hidden = !chordsButton.classList.contains("on");
     viewSelect.value = storageGet(VIEW_KEY) ?? "";
     if (!(await loadFromHash())) textarea.value = storageGet(STORAGE_KEY) ?? EXAMPLES[0].abc;

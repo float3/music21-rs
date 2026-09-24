@@ -15,11 +15,6 @@ async function ensureContext(): Promise<AudioContext | null> {
     return context;
 }
 
-/// The frequency of a MIDI note in twelve-tone equal temperament at A440.
-export function midiToHz(midi: number): number {
-    return 440 * Math.pow(2, (midi - 69) / 12);
-}
-
 function tone(
     audio: AudioContext,
     frequency: number,

@@ -1,5 +1,6 @@
 // @ts-nocheck
 import "../theme.js";
+import { el, errorLine } from "../dom.js";
 
 // ---------------------------------------------------------------- elements
 
@@ -24,6 +25,7 @@ const degreesBody = $("#degrees");
 const aboutNode = $("#about");
 const shareButton = $("#share");
 const errorNode = $("#error");
+const { fail, clearError } = errorLine(errorNode);
 
 $("#docs-link").href = "../docs/music21_rs/index.html";
 
@@ -31,8 +33,10 @@ $("#docs-link").href = "../docs/music21_rs/index.html";
 
 const defaultRootFrequency = 261.6256;
 const adaptiveId = "adaptive:recursive";
-const flatNames = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
-const majorScaleSemitones = [0, 2, 4, 5, 7, 9, 11, 12];
+/** The MIDI number of middle C, which a twelve-tone scale's root is. */
+const middleCMidi = 60;
+/** The scale a twelve-tone tuning is demonstrated with. */
+const demoScale = "MajorScale";
 
 // Physical key positions, so the layout is the same on QWERTZ and AZERTY
 // keyboards: what matters is where a key sits, not what it prints.
@@ -74,15 +78,6 @@ let shareTimer = null;
 
 // ---------------------------------------------------------------- helpers
 
-function fail(message) {
-    errorNode.textContent = message;
-    errorNode.style.display = "block";
-}
-
-function clearError() {
-    errorNode.style.display = "none";
-}
-
 function clamp(value, min, max, fallback) {
     const parsed = Number.parseFloat(value);
     if (!Number.isFinite(parsed)) return fallback;
@@ -110,20 +105,11 @@ function twelveTone(system = current) {
     return steps(system) === 12 && octaveRepeating(system);
 }
 
-function el(tag, className, text) {
-    const node = document.createElement(tag);
-    if (className) node.className = className;
-    if (text !== undefined) node.textContent = text;
-    return node;
-}
-
 // ---------------------------------------------------------------- shaping
 
 /// Every scale the page shows has this shape: `degrees` runs from the root
 /// to the period, and `period_ratio` says how the scale repeats.
 function fromScala(info, family, id, name) {
-    const count = Math.max(1, info.degree_count);
-    const equalStep = info.period_cents / count;
     return {
         id,
         name,
@@ -140,7 +126,7 @@ function fromScala(info, family, id, name) {
             ratio_label: degree.is_exact_ratio ? degree.label : `${degree.cents.toFixed(3)}¢`,
             cents: degree.cents,
             frequency_hz: degree.frequency_hz,
-            from_equal: degree.cents - degree.degree * equalStep,
+            from_equal: degree.cents_from_equal,
         })),
     };
 }
@@ -148,31 +134,15 @@ function fromScala(info, family, id, name) {
 function fromBuiltIn(system) {
     return {
         ...system,
-        period_ratio: 2,
-        period_cents: 1200,
         degrees: system.degrees.map((degree) => ({
             ...degree,
-            cents: 1200 * Math.log2(degree.ratio),
             from_equal: degree.cents_from_equal_temperament,
         })),
     };
 }
 
 function adaptiveSystem(frequency) {
-    const degrees = [];
-    for (let degree = 0; degree <= 12; degree += 1) {
-        const value = wasm.adaptive_frequency(0, degree, frequency);
-        const cents = 1200 * Math.log2(value / frequency);
-        degrees.push({
-            degree,
-            label: `${flatNames[degree % 12]}${4 + Math.floor(degree / 12)}`,
-            ratio: value / frequency,
-            ratio_label: `${cents.toFixed(3)}¢`,
-            cents,
-            frequency_hz: value,
-            from_equal: cents - degree * 100,
-        });
-    }
+    const degrees = wasm.adaptive_degrees(frequency);
     return {
         id: adaptiveId,
         name: "Recursive just intonation",
@@ -582,7 +552,7 @@ function nameOf(degree) {
     const periods = Math.floor(degree / count);
     const step = degree - periods * count;
     const octave = periods + octaves();
-    if (twelveTone(system)) return `${flatNames[step]}${4 + octave}`;
+    if (twelveTone(system)) return wasm.note_label(middleCMidi + degree + count * octaves());
     const entry = system.degrees[step];
     const label = entry ? entry.label : String(step);
     return octave === 0 ? label : `${label} ${octave > 0 ? "+" : ""}${octave}`;
@@ -651,9 +621,8 @@ function frequencyOf(degree) {
         const context = held === null ? shifted : Math.min(shifted, held + octaves() * count);
         return wasm.adaptive_frequency(context, shifted, rootHz);
     }
-    const periods = Math.floor(shifted / count);
-    const step = shifted - periods * count;
-    return rootHz * Math.pow(system.period_ratio, periods) * (system.degrees[step]?.ratio ?? 1);
+    const ratios = system.degrees.slice(0, count).map((entry) => entry.ratio);
+    return wasm.scale_frequency(Float64Array.from(ratios), system.period_ratio, rootHz, shifted);
 }
 
 function renderKeys() {
@@ -666,10 +635,11 @@ function renderKeys() {
         if (!hints.has(degree)) hints.set(degree, caption(code));
     }
     const shown = Math.min(count * 3 + 1, Math.max(count * 2 + 1, 25));
+    const pianoKeys = twelveTone(system) ? wasm.keyboard(middleCMidi, middleCMidi + count - 1) : [];
     const fragment = document.createDocumentFragment();
     for (let degree = 0; degree < shown; degree += 1) {
         const step = degree % count;
-        const dark = twelveTone(system) && [1, 3, 6, 8, 10].includes(step);
+        const dark = pianoKeys[step]?.black ?? false;
         const key = el("button", `key${step === 0 ? " first" : ""}${dark ? " dark" : ""}`);
         key.type = "button";
         key.dataset.degree = String(degree);
@@ -797,7 +767,7 @@ async function playScale() {
     if (!current || !(await ensureAudio())) return;
     stopSequence();
     const count = steps();
-    const degrees = twelveTone() ? majorScaleSemitones : [...Array(count + 1).keys()];
+    const degrees = twelveTone() ? wasm.realize_scale(demoScale, "C4").semitones : [...Array(count + 1).keys()];
     const step = 0.36;
     const start = audio.currentTime + 0.03;
     degrees.forEach((degree, index) => playAt(degree, start + index * step, step * 0.9));

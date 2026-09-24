@@ -5,10 +5,11 @@ on:
     branches:
       - main
       - master
+  # Every pull request, whatever it targets: the checks say whether the
+  # change is sound, and a PR into another branch needs that as much.
+  # GitHub makes no run for a PR it cannot merge, so a conflict has to be
+  # resolved before its checks come back.
   pull_request:
-    branches:
-      - main
-      - master
   workflow_dispatch:
 
 permissions:
@@ -622,6 +623,7 @@ jobs:
           cp examples/web/tuning/app.js target/pages/tuning/app.js
           cp examples/web/tools.css target/pages/tools.css
           cp examples/web/play.js target/pages/play.js
+          cp examples/web/dom.js target/pages/dom.js
           for page in harte roman scales serial listen score; do
             mkdir -p "target/pages/$page"
             cp "examples/web/$page/index.html" "target/pages/$page/index.html"
@@ -645,6 +647,7 @@ jobs:
               "pkg/music21_rs_web.js",
               "pkg/music21_rs_web_bg.wasm",
               "help-tooltips.js",
+              "dom.js",
               "theme.css",
               "theme.js",
               "docs/music21_rs/index.html",

@@ -1,6 +1,7 @@
 // @ts-nocheck
 import "../theme.js";
-import { midiToHz, play, stop } from "../play.js";
+import { play, stop } from "../play.js";
+import { el, errorLine, fact } from "../dom.js";
 
 const $ = (selector) => document.querySelector(selector);
 const modes = $("#modes");
@@ -11,6 +12,7 @@ const keyInput = $("#key");
 const playButton = $("#play");
 const examples = $("#examples");
 const errorNode = $("#error");
+const { fail, clearError } = errorLine(errorNode);
 const title = $("#title");
 const facts = $("#facts");
 const pitches = $("#pitches");
@@ -47,28 +49,6 @@ const nameExamples = [
 let wasm = null;
 let mode = "realize";
 let current = null;
-
-function fail(message) {
-    errorNode.textContent = message;
-    errorNode.style.display = "block";
-}
-
-function clearError() {
-    errorNode.style.display = "none";
-}
-
-function el(tag, className, text) {
-    const node = document.createElement(tag);
-    if (className) node.className = className;
-    if (text !== undefined) node.textContent = text;
-    return node;
-}
-
-function fact(label, value) {
-    const node = el("div", "fact");
-    node.append(el("span", "", label), el("strong", "", value));
-    return node;
-}
 
 function renderExamples() {
     examples.replaceChildren();
@@ -109,7 +89,7 @@ function render(info) {
     });
     actions.replaceChildren();
     const inspector = el("a", "", "Open in Chord Inspector");
-    inspector.href = `../chord/?chord=${encodeURIComponent(info.pitches.join(" "))}&key=${encodeURIComponent(info.key.split(" ")[0])}`;
+    inspector.href = `../chord/?chord=${encodeURIComponent(info.pitches.join(" "))}&key=${encodeURIComponent(info.key_tonic)}`;
     actions.appendChild(inspector);
 }
 
@@ -157,8 +137,7 @@ form.addEventListener("submit", (event) => {
 playButton.addEventListener("click", async () => {
     if (!current) return;
     stop();
-    const midi = current.pitches.map((name) => wasm.pitch_midi_number(name));
-    if (!(await play(midi.map(midiToHz)))) fail("Audio is not available in this browser.");
+    if (!(await play(current.frequencies_hz))) fail("Audio is not available in this browser.");
 });
 
 async function start() {

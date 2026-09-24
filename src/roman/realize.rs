@@ -288,12 +288,8 @@ pub(super) fn degree_pitch(key: &Key, degree: IntegerType) -> Result<Pitch> {
 
 /// The natural note at a diatonic note number, where 22 is middle C.
 pub(super) fn natural_at_diatonic_number(number: IntegerType) -> Result<Pitch> {
-    const LETTERS: [char; 7] = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
-    let letter = LETTERS[((number - 1).rem_euclid(7)) as usize];
-    Pitch::builder()
-        .step(letter)
-        .octave((number - 1).div_euclid(7))
-        .build()
+    let (letter, octave) = crate::interval::convert_diatonic_number_to_step(number);
+    Pitch::builder().step(letter).octave(octave).build()
 }
 
 /// Which of a chord's notes are the seventh and the extensions above it.

@@ -19,8 +19,8 @@ use crate::notation::{Beams, Lyric, Tie, Volume, tie_from_any, volume_from_any};
 use crate::pitch::{Pitch, pitch_from_any};
 
 use crate::duration::{
-    Duration, adopt_duration, copied_duration, duration_from_any, duration_value_of, op_frac,
-    told_sites,
+    Duration, adopt_duration, copied_duration, duration_from_any, duration_object_for,
+    duration_value_of, op_frac, told_sites,
 };
 
 /// The names the `note` facade replaces in `music21.note`.
@@ -146,6 +146,88 @@ pub(crate) fn instrument_for_note<'py>(
         return Ok(Some(instrument.getattr("Instrument")?.call0()?));
     }
     Ok(None)
+}
+
+/// Writes the verse objects a general note handed out into its verses, so
+/// what Python has appended or edited reaches the value.
+pub(crate) fn fold_lyric_objects(
+    py: Python<'_>,
+    objects: &Py<PyList>,
+    verses: &mut Vec<music21_rs_crate::notation::Lyric>,
+) {
+    let held: Vec<_> = objects
+        .bind(py)
+        .iter()
+        .filter_map(|verse| verse.extract::<PyRef<'_, Lyric>>().ok())
+        .map(|verse| verse.synced(py))
+        .collect();
+    verses.clear();
+    verses.extend(held);
+}
+
+/// Folds a general note's verse objects into its verses and lets them go,
+/// so a method that works on the value works on what Python has got and
+/// the next reader builds the objects again.
+pub(crate) fn settle_lyric_objects(
+    py: Python<'_>,
+    objects: &mut Option<Py<PyList>>,
+    verses: &mut Vec<music21_rs_crate::notation::Lyric>,
+) {
+    if let Some(objects) = objects.take() {
+        fold_lyric_objects(py, &objects, verses);
+    }
+}
+
+/// A Python list of `Lyric` objects, one for each verse.
+pub(crate) fn lyric_objects<'py>(
+    py: Python<'py>,
+    verses: Vec<music21_rs_crate::notation::Lyric>,
+) -> PyResult<Bound<'py, PyList>> {
+    let list = PyList::empty(py);
+    for verse in verses {
+        list.append(crate::installed_new(
+            py,
+            "music21.note",
+            "Lyric",
+            Lyric::wrap(verse),
+        )?)?;
+    }
+    Ok(list)
+}
+
+/// What a general note's `lyrics` is set to, as a list of `Lyric` objects:
+/// each one given kept, and each string made into a verse.
+pub(crate) fn lyric_objects_from<'py>(
+    py: Python<'py>,
+    value: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyList>> {
+    let list = PyList::empty(py);
+    let Some(value) = value.filter(|value| !value.is_none()) else {
+        return Ok(list);
+    };
+    for item in value.walk()? {
+        let item = item?;
+        if item.extract::<PyRef<'_, Lyric>>().is_ok() {
+            list.append(item)?;
+            continue;
+        }
+        let verse = music21_rs_crate::notation::Lyric::new(item.extract::<String>()?);
+        list.append(crate::installed_new(
+            py,
+            "music21.note",
+            "Lyric",
+            Lyric::wrap(verse),
+        )?)?;
+    }
+    Ok(list)
+}
+
+/// The text `addLyric` and `insertLyric` are given, `None` being empty.
+pub(crate) fn lyric_text(text: &Bound<'_, PyAny>) -> PyResult<String> {
+    if text.is_none() {
+        return Ok(String::new());
+    }
+    Ok(text.str()?.to_string())
 }
 
 /// music21's `GeneralNote.augmentOrDiminish`: the same note with its length
@@ -491,9 +573,7 @@ impl Note {
             .duration()
             .cloned()
             .unwrap_or_else(RsDuration::quarter);
-        let created =
-            crate::installed_new(py, "music21.duration", "Duration", Duration::wrap(inner))?
-                .into_any();
+        let created = Duration::object(py, inner)?;
         self.duration = Some(created.clone_ref(py));
         Ok(created)
     }
@@ -506,20 +586,7 @@ impl Note {
         value: &Bound<'_, PyAny>,
     ) -> PyResult<Py<PyAny>> {
         let inner = duration_from_any(value)?;
-        // A duration object is kept as it stands, whether it is one of ours
-        // or one of music21's own kinds of duration; anything else — a
-        // length, a note-value name — becomes one of ours.
-        let duration = if value.hasattr("quarterLength")? {
-            value.clone().unbind()
-        } else {
-            crate::installed_new(
-                py,
-                "music21.duration",
-                "Duration",
-                Duration::wrap(inner.clone()),
-            )?
-            .into_any()
-        };
+        let duration = duration_object_for(py, value, &inner)?;
         self.inner.set_duration(inner);
         self.duration = Some(duration.clone_ref(py));
         Ok(duration)
@@ -546,18 +613,7 @@ impl Note {
     /// that works on the value works on what Python has actually got and the
     /// next reader builds the objects again from the answer.
     fn settle_lyrics(&mut self, py: Python<'_>) {
-        let Some(lyrics) = self.lyrics.take() else {
-            return;
-        };
-        let verses: Vec<music21_rs_crate::notation::Lyric> = lyrics
-            .bind(py)
-            .iter()
-            .filter_map(|verse| verse.extract::<PyRef<'_, Lyric>>().ok())
-            .map(|verse| verse.synced(py))
-            .collect();
-        let held = self.inner.lyrics_mut();
-        held.clear();
-        held.extend(verses);
+        settle_lyric_objects(py, &mut self.lyrics, self.inner.lyrics_mut());
     }
 
     /// Hands this note a `Duration` object to share, the way a chord shares
@@ -615,15 +671,7 @@ impl Note {
             note.set_duration(RsDuration::quarter());
         }
         if let Some(lyrics) = &self.lyrics {
-            let verses = note.lyrics_mut();
-            verses.clear();
-            verses.extend(
-                lyrics
-                    .bind(py)
-                    .iter()
-                    .filter_map(|verse| verse.extract::<PyRef<'_, Lyric>>().ok())
-                    .map(|verse| verse.synced(py)),
-            );
+            fold_lyric_objects(py, lyrics, note.lyrics_mut());
         }
         note
     }
@@ -1107,15 +1155,7 @@ impl Note {
             // four and three quarters is written as two notes tied.
             Some(duration) => duration.bind(py).setattr("quarterLength", value)?,
             None => {
-                self.duration = Some(
-                    crate::installed_new(
-                        py,
-                        "music21.duration",
-                        "Duration",
-                        Duration::wrap(inner),
-                    )?
-                    .into_any(),
-                );
+                self.duration = Some(Duration::object(py, inner)?);
             }
         }
         Ok(())
@@ -1264,14 +1304,8 @@ impl Note {
     /// step with this object's colour. Requires music21 to be installed.
     #[getter]
     fn get_style(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
-        let py = slf.py();
-        if let Some(style) = &slf.borrow().style {
-            return Ok(style.clone_ref(py));
-        }
         let colour = slf.borrow().inner.color().map(str::to_string);
-        let style = crate::notation::new_style(slf.as_any(), colour.as_deref())?;
-        slf.borrow_mut().style = Some(style.clone_ref(py));
-        Ok(style)
+        crate::notation::style_of(slf, |me| &mut me.style, colour)
     }
 
     #[setter]
@@ -1357,16 +1391,7 @@ impl Note {
         if let Some(lyrics) = &slf.borrow().lyrics {
             return Ok(lyrics.bind(py).clone());
         }
-        let verses = slf.borrow().inner.lyrics().to_vec();
-        let list = PyList::empty(py);
-        for verse in verses {
-            list.append(crate::installed_new(
-                py,
-                "music21.note",
-                "Lyric",
-                Lyric::wrap(verse),
-            )?)?;
-        }
+        let list = lyric_objects(py, slf.borrow().inner.lyrics().to_vec())?;
         slf.borrow_mut().lyrics = Some(list.clone().unbind());
         Ok(list)
     }
@@ -1378,24 +1403,7 @@ impl Note {
         slf: &Bound<'_, Self>,
         value: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<()> {
-        let py = slf.py();
-        let list = PyList::empty(py);
-        if let Some(value) = value.filter(|value| !value.is_none()) {
-            for item in value.walk()? {
-                let item = item?;
-                if item.extract::<PyRef<'_, Lyric>>().is_ok() {
-                    list.append(item)?;
-                    continue;
-                }
-                let verse = music21_rs_crate::notation::Lyric::new(item.extract::<String>()?);
-                list.append(crate::installed_new(
-                    py,
-                    "music21.note",
-                    "Lyric",
-                    Lyric::wrap(verse),
-                )?)?;
-            }
-        }
+        let list = lyric_objects_from(slf.py(), value)?;
         let mut note = slf.borrow_mut();
         note.inner.lyrics_mut().clear();
         note.lyrics = Some(list.unbind());
@@ -1444,11 +1452,7 @@ impl Note {
         identifier: Option<String>,
     ) -> PyResult<()> {
         self.settle_lyrics(text.py());
-        let text = if text.is_none() {
-            String::new()
-        } else {
-            text.str()?.to_string()
-        };
+        let text = lyric_text(text)?;
         self.inner
             .insert_lyric(&text, index, applyRaw)
             .map_err(note_error)?;
@@ -1469,11 +1473,7 @@ impl Note {
         lyricIdentifier: Option<String>,
     ) -> PyResult<()> {
         self.settle_lyrics(text.py());
-        let text = if text.is_none() {
-            String::new()
-        } else {
-            text.str()?.to_string()
-        };
+        let text = lyric_text(text)?;
         self.inner
             .add_lyric(&text, lyricNumber, applyRaw)
             .map_err(note_error)?;

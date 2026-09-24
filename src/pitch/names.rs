@@ -190,6 +190,12 @@ pub const CHROMATIC_PITCH_CLASS_NAMES: [&str; 12] = [
     "C", "D-", "D", "E-", "E", "F", "F#", "G", "A-", "A", "B-", "B",
 ];
 
+/// A pitch name with its flats written `b`, as chord and key names show
+/// them: `B-` is `Bb`.
+pub(crate) fn display_flats(name: &str) -> String {
+    name.replace('-', "b")
+}
+
 /// Returns a canonical pitch name for a chromatic pitch class.
 pub fn pitch_class_name(pitch_class: u8) -> &'static str {
     CHROMATIC_PITCH_CLASS_NAMES[pitch_class as usize % 12]
