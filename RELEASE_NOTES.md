@@ -61,6 +61,11 @@ places where they answered differently; they agree now.
 
 ## Fixed
 
+- `Accidental`'s ordering agrees with its equality. Equality compares
+  names and ordering alterations, so a renamed natural ordered `Equal` to
+  `natural` while `!=` it, which `PartialOrd` forbids. Two accidentals of
+  one alteration and different names are now unordered. The wheel keeps
+  music21's `<`, which compares alterations alone.
 - A chord symbol is voiced as music21 voices it, root and bass included.
   music21 puts its own root and bass objects in the list it voices, so an
   octave pass moves them with the chord, a bass held twice moves twice,

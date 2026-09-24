@@ -339,9 +339,17 @@ impl Hash for Accidental {
     }
 }
 
+/// Orders by alteration. Equality compares names, so two accidentals of one
+/// alteration but different names are unordered rather than `Equal`: the
+/// trait's contract, which music21's `__lt__` and `__eq__` break.
 impl PartialOrd for Accidental {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.alter.partial_cmp(&other.alter)
+        if self == other {
+            return Some(std::cmp::Ordering::Equal);
+        }
+        self.alter
+            .partial_cmp(&other.alter)
+            .filter(|ordering| ordering.is_ne())
     }
 }
 
@@ -1119,5 +1127,18 @@ mod tests {
     fn accidental_ordering_follows_alter() {
         assert!(Accidental::flat() < Accidental::natural());
         assert!(Accidental::sharp() > Accidental::natural());
+    }
+
+    /// Ordering agrees with equality: two accidentals of one alteration but
+    /// different names are not equal, so neither is ordered before the other.
+    #[test]
+    fn unequal_accidentals_never_order_equal() {
+        let mut custom = Accidental::natural();
+        custom.set_name_independently("custom");
+        assert_ne!(custom, Accidental::natural());
+        assert_ne!(
+            custom.partial_cmp(&Accidental::natural()),
+            Some(std::cmp::Ordering::Equal)
+        );
     }
 }
