@@ -866,8 +866,13 @@ function render(source: string): void {
     const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#0f766e";
     const width = Math.max(320, scoreNode.clientWidth - 28);
     const scrollTop = scoreNode.scrollTop;
-    const tune = ABCJS.renderAbc(scoreNode, text, {
-        ...(tablature ? { tablature: tablatureFor(text, tablature, stringTuning()) } : {}),
+    // abcjs reads every tab entry past the first line of music without
+    // checking for a staff it was told to leave untabbed, and throws. One at
+    // the end can go; one before a tabbed staff cannot, so a score that still
+    // throws is drawn with no tablature at all.
+    const tabs = tablature ? tablatureFor(text, tablature, stringTuning()) : null;
+    while (tabs?.length && (tabs[tabs.length - 1] as { instrument: string }).instrument === "") tabs.pop();
+    const params = {
         add_classes: true,
         responsive: "resize",
         staffwidth: Math.round(width / zoom),
@@ -882,7 +887,15 @@ function render(source: string): void {
         dragColor: accent,
         clickListener: (element: AbcElement, _tune: number, _classes: string, _analysis: unknown, drag?: AbcDrag) =>
             onScoreClick(element, drag),
-    })[0];
+    };
+    let tune: AbcTune | undefined;
+    try {
+        tune = ABCJS.renderAbc(scoreNode, text, { ...params, ...(tabs?.length ? { tablature: tabs } : {}) })[0];
+    } catch (err) {
+        if (!tabs?.some((tab) => (tab as { instrument: string }).instrument === "")) throw err;
+        tabSkipped = ["abcjs cannot tab a staff below one it leaves untabbed once the score runs past one line"];
+        tune = ABCJS.renderAbc(scoreNode, text, params)[0];
+    }
 
     const byAnchor = new Map<number, AbcElement[]>();
     for (const line of tune?.lines ?? []) {
