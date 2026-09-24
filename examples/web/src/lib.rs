@@ -12,6 +12,8 @@ use wasm_bindgen::prelude::*;
 mod listen;
 mod score;
 
+const PITCH_CLASSES: u8 = 12;
+
 #[derive(Serialize)]
 struct TuningFrequencyInfo {
     id: String,
@@ -448,6 +450,15 @@ fn analyze_chord_inner(
 /// Returns the MIDI number represented by a pitch name or integer token.
 pub fn pitch_midi_number(input: &str) -> Result<i32, JsValue> {
     parse_pitch_midi_number(input).map_err(|err| JsValue::from_str(&err.to_string()))
+}
+
+#[wasm_bindgen]
+/// The twelve pitch classes as the crate names them, `C` up to `B`, with
+/// flats written `-`: `D-`, `E-`.
+pub fn pitch_class_names() -> Vec<String> {
+    (0..PITCH_CLASSES)
+        .map(|pitch_class| pitch_class_name(pitch_class).to_string())
+        .collect()
 }
 
 #[wasm_bindgen]

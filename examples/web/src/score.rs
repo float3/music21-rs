@@ -17,6 +17,9 @@ use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt::Write as _};
 use wasm_bindgen::prelude::*;
 
+mod labels;
+mod notation;
+
 /// Positions are snapped to this many parts of a quarter note, which holds
 /// every binary value and triplets, quintuplets and septuplets of them, and
 /// absorbs the six-decimal rounding abcjs gives tuplet timings.
@@ -412,6 +415,8 @@ struct ScoreAnalysis {
     pitch_class_weights: [f64; 12],
     voices: Vec<VoiceInfo>,
     slices: Vec<SliceInfo>,
+    /// The harmony labels to draw under the music, by label kind.
+    labels: labels::Labels,
     issues: Vec<IssueInfo>,
 }
 
@@ -511,6 +516,7 @@ fn analyse(score: &Score) -> Result<ScoreAnalysis, JsValue> {
         note_count,
         pitch_class_weights,
         voices,
+        labels: labels::placed(&slices),
         slices,
         issues,
     })
@@ -1745,28 +1751,15 @@ fn chord_symbol_voicing_notes(figure: &str, open_strings: &[i32]) -> Result<Vec<
     Ok(notes)
 }
 
-#[wasm_bindgen]
-/// Voices a chord symbol (`G`, `D7`, `F#m7b5`) for a fretted instrument
-/// whose open strings are the given MIDI numbers, lowest first, as the MIDI
-/// numbers to play.
-pub fn chord_symbol_voicing(figure: &str, open_strings: Vec<i32>) -> Result<Vec<i32>, JsValue> {
-    chord_symbol_voicing_notes(figure, &open_strings)
-}
-
+/// Spells a MIDI number in a key: as the scale spells it when the key has
+/// that pitch class, otherwise with sharps in a sharp key and flats in a
+/// flat one. A key the crate cannot read is C major.
 fn spell_midi(midi: i32, tonic: &str, mode: &str) -> Result<Pitch, JsValue> {
     let key = Key::from_tonic_mode(tonic, mode)
         .or_else(|_| Key::from_tonic_mode("C", "major"))
         .map_err(js_error)?;
     let scale = key.pitches().map_err(js_error)?;
     spell_in_key(midi, &key, &scale)
-}
-
-#[wasm_bindgen]
-/// Spells a MIDI number in a key, as a name with octave (`F#4`): as the scale
-/// spells it when the key has that pitch class, otherwise with sharps in a
-/// sharp key and flats in a flat one. A key the crate cannot read is C major.
-pub fn spell_midi_in_key(midi: i32, tonic: &str, mode: &str) -> Result<String, JsValue> {
-    Ok(spell_midi(midi, tonic, mode)?.name_with_octave())
 }
 
 #[cfg(test)]
