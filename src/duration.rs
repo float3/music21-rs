@@ -417,29 +417,34 @@ pub(crate) fn limited_fraction(value: FloatType, max_denominator: i128) -> Optio
 /// same latitude for a crate that keeps the length as a float.
 const TUPLET_TOLERANCE: FloatType = 1e-5;
 
-/// A length written as a tuplet: `actual` notes of one written value in the
-/// time of `normal` of them.
+/// A length written as a tuplet: `actual` notes in the time of `normal`,
+/// each side optionally counted in a written value.
 ///
 /// This is the naming half of music21's `Tuplet`. A [`Duration`] here is a
 /// quarter length, so a tuplet is something a length is *read as* rather
 /// than something a duration carries — what it is for is being able to say
 /// that two thirds of a quarter is a quarter triplet.
+///
+/// Either written value may be unsaid, as music21's may: a bare triplet is
+/// three in the time of two of nothing in particular, and wherever a length
+/// is needed an eighth is assumed, which is music21's basic triplet.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[must_use]
 pub struct Tuplet {
     actual: u32,
     normal: u32,
-    duration_type: DurationType,
-    dots: u32,
+    /// The written value the `actual` notes are written as, with its dots.
+    duration_actual: Option<(DurationType, u32)>,
     /// The written value the `normal` count is counted in, which is not
-    /// always the one the `actual` count is written as: three eighths in the
-    /// time of one quarter is the same ratio as three in the time of two
-    /// eighths, and music21 keeps both spellings.
-    normal_type: DurationType,
-    /// The dots on that value.
-    normal_dots: u32,
+    /// always the one the `actual` count is written as: three quarters in the
+    /// time of one half is the same ratio as three in the time of two
+    /// quarters, and music21 keeps both spellings.
+    duration_normal: Option<(DurationType, u32)>,
 }
+
+/// The value music21 counts a side in when nothing says: an eighth.
+const ASSUMED_VALUE: (DurationType, u32) = (DurationType::Eighth, 0);
 
 impl Tuplet {
     /// A tuplet of `actual` notes of a written value in the time of
@@ -448,58 +453,76 @@ impl Tuplet {
         Self {
             actual,
             normal,
-            duration_type,
-            dots,
-            normal_type: duration_type,
-            normal_dots: dots,
+            duration_actual: Some((duration_type, dots)),
+            duration_normal: Some((duration_type, dots)),
+        }
+    }
+
+    /// `actual` notes in the time of `normal`, with neither side counted in
+    /// a written value: music21's `Tuplet(actual, normal)`.
+    ///
+    /// ```
+    /// use music21_rs::Tuplet;
+    ///
+    /// let triplet = Tuplet::ratio(3, 2);
+    /// assert_eq!(triplet.duration_actual(), None);
+    /// assert_eq!(triplet.total_tuplet_length(), 1.0);
+    /// ```
+    pub fn ratio(actual: u32, normal: u32) -> Self {
+        Self {
+            actual,
+            normal,
+            duration_actual: None,
+            duration_normal: None,
         }
     }
 
     /// The same tuplet counting the `normal` side in a different written
     /// value: music21's `durationNormal` apart from its `durationActual`.
     pub fn with_normal(mut self, duration_type: DurationType, dots: u32) -> Self {
-        self.normal_type = duration_type;
-        self.normal_dots = dots;
+        self.duration_normal = Some((duration_type, dots));
         self
     }
 
-    /// The written value the `normal` count is counted in.
-    pub fn normal_duration_type(&self) -> DurationType {
-        self.normal_type
+    /// The written value the `actual` notes are written as, with its dots,
+    /// where one is said: music21's `durationActual`.
+    pub fn duration_actual(&self) -> Option<(DurationType, u32)> {
+        self.duration_actual
     }
 
-    /// The written value the `actual` notes are written as, with its dots:
-    /// music21's `durationActual`, in the pair [`Duration::components`]
-    /// writes a value as.
-    pub fn duration_actual(&self) -> (DurationType, u32) {
-        (self.duration_type, self.dots)
+    /// The written value the `normal` count is counted in, with its dots,
+    /// where one is said: music21's `durationNormal`.
+    pub fn duration_normal(&self) -> Option<(DurationType, u32)> {
+        self.duration_normal
     }
 
-    /// The written value the `normal` count is counted in, with its dots:
-    /// music21's `durationNormal`.
-    pub fn duration_normal(&self) -> (DurationType, u32) {
-        (self.normal_type, self.normal_dots)
+    /// Says, or unsays, the value the `actual` notes are written as.
+    pub fn set_duration_actual(&mut self, value: Option<(DurationType, u32)>) {
+        self.duration_actual = value;
+    }
+
+    /// Says, or unsays, the value the `normal` count is counted in.
+    pub fn set_duration_normal(&mut self, value: Option<(DurationType, u32)>) {
+        self.duration_normal = value;
     }
 
     /// The `actual` count beside the value it is written in: music21's
     /// `tupletActual`.
-    pub fn tuplet_actual(&self) -> (u32, (DurationType, u32)) {
-        (self.actual, self.duration_actual())
+    pub fn tuplet_actual(&self) -> (u32, Option<(DurationType, u32)>) {
+        (self.actual, self.duration_actual)
     }
 
     /// The `normal` count beside the value it is counted in: music21's
     /// `tupletNormal`.
-    pub fn tuplet_normal(&self) -> (u32, (DurationType, u32)) {
-        (self.normal, self.duration_normal())
+    pub fn tuplet_normal(&self) -> (u32, Option<(DurationType, u32)>) {
+        (self.normal, self.duration_normal)
     }
 
     /// Writes both sides of the tuplet in one value: music21's
     /// `setDurationType`.
     pub fn set_duration_type(&mut self, duration_type: DurationType, dots: u32) {
-        self.duration_type = duration_type;
-        self.dots = dots;
-        self.normal_type = duration_type;
-        self.normal_dots = dots;
+        self.duration_actual = Some((duration_type, dots));
+        self.duration_normal = Some((duration_type, dots));
     }
 
     /// Changes how many notes are played in the time of how many: music21's
@@ -509,15 +532,51 @@ impl Tuplet {
         self.normal = normal;
     }
 
-    /// The dots on that value.
-    pub fn normal_dots(&self) -> u32 {
-        self.normal_dots
+    /// The same tuplet with both its written values scaled by `amount`:
+    /// music21's `augmentOrDiminish`. The ratio stays as it is.
+    ///
+    /// ```
+    /// use music21_rs::{DurationType, Tuplet};
+    ///
+    /// let mut sextuplet = Tuplet::ratio(6, 2);
+    /// sextuplet.set_duration_type(DurationType::Eighth, 0);
+    /// let halved = sextuplet.augmented(0.5)?;
+    /// assert_eq!(halved.duration_actual(), Some((DurationType::Sixteenth, 0)));
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// An `amount` that is not greater than nought, or a scaled value no
+    /// dotted note value writes.
+    pub fn augmented(&self, amount: FloatType) -> Result<Self> {
+        if amount.is_nan() || amount <= 0.0 {
+            return Err(Error::Value(
+                "amountToScale must be greater than zero".to_string(),
+            ));
+        }
+        let scaled = |value: Option<(DurationType, u32)>| -> Result<Option<(DurationType, u32)>> {
+            value
+                .map(|(duration_type, dots)| {
+                    let length = duration_type.quarter_length_with_dots(dots) * amount;
+                    exact_type_and_dots(length).ok_or_else(|| {
+                        Error::Duration(format!("no written value lasts {length} quarter lengths"))
+                    })
+                })
+                .transpose()
+        };
+        Ok(Self {
+            duration_actual: scaled(self.duration_actual)?,
+            duration_normal: scaled(self.duration_normal)?,
+            ..*self
+        })
     }
 
     /// How long the whole tuplet lasts: music21's `totalTupletLength`, the
     /// `normal` count of the value it is counted in.
     pub fn total_tuplet_length(&self) -> FloatType {
-        FloatType::from(self.normal) * self.normal_type.quarter_length_with_dots(self.normal_dots)
+        let (duration_type, dots) = self.duration_normal.unwrap_or(ASSUMED_VALUE);
+        FloatType::from(self.normal) * duration_type.quarter_length_with_dots(dots)
     }
 
     /// How many notes are played: music21's `numberNotesActual`.
@@ -530,22 +589,49 @@ impl Tuplet {
         self.normal
     }
 
-    /// The note value each one is written as.
+    /// The note value each one is written as, an eighth where none is said.
     pub fn duration_type(&self) -> DurationType {
-        self.duration_type
+        self.duration_actual.unwrap_or(ASSUMED_VALUE).0
     }
 
     /// How many augmentation dots that written value carries.
     pub fn dots(&self) -> u32 {
-        self.dots
+        self.duration_actual.unwrap_or(ASSUMED_VALUE).1
+    }
+
+    /// The written value the `normal` count is counted in, an eighth where
+    /// none is said.
+    pub fn normal_duration_type(&self) -> DurationType {
+        self.duration_normal.unwrap_or(ASSUMED_VALUE).0
+    }
+
+    /// The dots on that value.
+    pub fn normal_dots(&self) -> u32 {
+        self.duration_normal.unwrap_or(ASSUMED_VALUE).1
     }
 
     /// What the written length is multiplied by inside the tuplet:
-    /// music21's `tupletMultiplier`, `normal / actual`.
+    /// music21's `tupletMultiplier`, how long the `normal` side lasts over
+    /// how long the `actual` notes would last unaltered.
+    ///
+    /// ```
+    /// use music21_rs::{DurationType, FractionType, Tuplet};
+    ///
+    /// assert_eq!(Tuplet::ratio(3, 2).multiplier(), FractionType::new(2, 3));
+    /// // Three quarters in the time of one half.
+    /// let written =
+    ///     Tuplet::new(3, 1, DurationType::Quarter, 0).with_normal(DurationType::Half, 0);
+    /// assert_eq!(written.multiplier(), FractionType::new(2, 3));
+    /// ```
     pub fn multiplier(&self) -> FractionType {
+        let (actual_type, actual_dots) = self.duration_actual.unwrap_or(ASSUMED_VALUE);
+        let unaltered =
+            FloatType::from(self.actual) * actual_type.quarter_length_with_dots(actual_dots);
+        let (numerator, denominator) =
+            limited_fraction(self.total_tuplet_length() / unaltered, 65535).unwrap_or((0, 1));
         FractionType::new(
-            IntegerType::try_from(self.normal).unwrap_or(IntegerType::MAX),
-            IntegerType::try_from(self.actual).unwrap_or(IntegerType::MAX),
+            IntegerType::try_from(numerator).unwrap_or(IntegerType::MAX),
+            IntegerType::try_from(denominator).unwrap_or(IntegerType::MAX),
         )
     }
 
@@ -1630,17 +1716,47 @@ mod tests {
     #[test]
     fn a_tuplet_reads_and_writes_both_of_its_sides() {
         let mut tuplet = Tuplet::new(3, 2, DurationType::Eighth, 0);
-        assert_eq!(tuplet.duration_actual(), (DurationType::Eighth, 0));
-        assert_eq!(tuplet.duration_normal(), (DurationType::Eighth, 0));
-        assert_eq!(tuplet.tuplet_actual(), (3, (DurationType::Eighth, 0)));
-        assert_eq!(tuplet.tuplet_normal(), (2, (DurationType::Eighth, 0)));
+        assert_eq!(tuplet.duration_actual(), Some((DurationType::Eighth, 0)));
+        assert_eq!(tuplet.duration_normal(), Some((DurationType::Eighth, 0)));
+        assert_eq!(tuplet.tuplet_actual(), (3, Some((DurationType::Eighth, 0))));
+        assert_eq!(tuplet.tuplet_normal(), (2, Some((DurationType::Eighth, 0))));
         tuplet.set_duration_type(DurationType::Quarter, 1);
-        assert_eq!(tuplet.duration_actual(), (DurationType::Quarter, 1));
+        assert_eq!(tuplet.duration_actual(), Some((DurationType::Quarter, 1)));
         assert_eq!(tuplet.normal_duration_type(), DurationType::Quarter);
         assert_eq!(tuplet.normal_dots(), 1);
         tuplet.set_ratio(5, 4);
         assert_eq!((tuplet.actual(), tuplet.normal()), (5, 4));
         assert_eq!(tuplet.multiplier(), FractionType::new(4, 5));
+    }
+
+    /// Every answer here is music21's, for a tuplet saying no written value
+    /// and for ones whose two sides are counted in different values.
+    #[test]
+    fn a_tuplet_may_leave_its_written_values_unsaid() {
+        let mut triplet = Tuplet::ratio(3, 2);
+        assert_eq!(triplet.duration_actual(), None);
+        assert_eq!(triplet.total_tuplet_length(), 1.0);
+        assert_eq!(triplet.multiplier(), FractionType::new(2, 3));
+        triplet.set_duration_type(DurationType::Half, 1);
+        assert_eq!(triplet.total_tuplet_length(), 6.0);
+
+        let mut three_in_one = Tuplet::ratio(3, 1);
+        three_in_one.set_duration_actual(Some((DurationType::Quarter, 0)));
+        three_in_one.set_duration_normal(Some((DurationType::Half, 0)));
+        assert_eq!(three_in_one.multiplier(), FractionType::new(2, 3));
+        assert_eq!(three_in_one.total_tuplet_length(), 2.0);
+
+        let mut six = Tuplet::ratio(6, 2);
+        six.set_duration_type(DurationType::Eighth, 0);
+        let halved = six.augmented(0.5).unwrap();
+        assert_eq!(halved.duration_actual(), Some((DurationType::Sixteenth, 0)));
+        assert_eq!(halved.multiplier(), FractionType::new(1, 3));
+        assert!(six.augmented(-1.0).is_err());
+
+        let mut five = Tuplet::ratio(5, 2);
+        five.set_duration_type(DurationType::Half, 0);
+        five.set_duration_normal(Some((DurationType::Whole, 0)));
+        assert_eq!(five.total_tuplet_length(), 8.0);
     }
 
     /// music21's own examples for `quarterLengthToTuplet`,
@@ -2013,7 +2129,9 @@ mod tests {
         let across =
             Tuplet::new(3, 1, DurationType::Eighth, 0).with_normal(DurationType::Quarter, 0);
         assert_eq!(across.total_tuplet_length(), 1.0);
-        assert_eq!(across.multiplier(), FractionType::new(1i32, 3i32));
+        // A quarter over three eighths, as music21 reads it: the multiplier
+        // is what each eighth is scaled by, not the ratio of the counts.
+        assert_eq!(across.multiplier(), FractionType::new(2i32, 3i32));
         assert_eq!(Duration::new(3.75).unwrap().dots(), 3);
         assert_eq!(
             quarter_length_to_closest_type(200.0).unwrap(),

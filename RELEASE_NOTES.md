@@ -1,3 +1,51 @@
+# Unreleased
+
+`Tuplet` is music21's now in full, and installed over music21's own. A note
+and a chord know the instrument they are played on. The `Tuplet` changes
+break its API, so the next release is a minor bump.
+
+## Breaking Changes
+
+- A `Tuplet`'s written values may be unsaid, as music21's may:
+  `duration_actual`, `duration_normal`, `tuplet_actual` and `tuplet_normal`
+  answer an `Option`, and `Tuplet::ratio` is music21's `Tuplet(3, 2)`, with
+  neither side counted in a note value. `duration_type`, `dots`,
+  `normal_duration_type` and `normal_dots` still answer, with the eighth
+  music21 assumes where nothing is said.
+- `Tuplet::multiplier` is music21's `tupletMultiplier`: how long the normal
+  side lasts over how long the actual notes would last unaltered. It used to
+  be the ratio of the counts alone, which is wrong wherever the two sides are
+  counted in different values: three eighths in the time of one quarter
+  multiplies each eighth by 2/3, not 1/3.
+
+## Added
+
+- `Tuplet::set_duration_actual`, `set_duration_normal`, and `augmented`,
+  music21's `augmentOrDiminish`, which scales both written values and keeps
+  the ratio.
+- `Note::stored_instrument`, `set_stored_instrument` and `instrument`, and the
+  same on `Chord`: music21's `storedInstrument` and `getInstrument`, as far as
+  a note can answer without the stream around it.
+- `Instrument`, `SearchLanguage`, `ensemble_name_by_size` and
+  `Simplification` are named at the crate root.
+
+## Changed
+
+- The wheel's `Tuplet` takes music21's keyword-only arguments, leaves a
+  written value unset until something says it, refuses a change once frozen
+  with music21's `TupletException`, and is installed over music21's, with
+  that exception. music21's `duration` docstrings pass all 588 examples with
+  it swapped in, where they lost 44 when it was last tried.
+- A note's or chord's `storedInstrument` refuses anything that is not an
+  instrument with music21's `TypeError`.
+- A tuplet frozen into a pickle keeps its bracket, its placement, how its
+  numbers are shown, its nesting and whether it is frozen. music21 reads its
+  corpus back out of pickles, so a score read from the cache had lost every
+  tuplet bracket.
+- A tuplet's `bracket` takes `'slur'` as music21's does, and its written
+  values are music21's own `DurationTuple` wherever music21 is there, since
+  music21's code asks for that class.
+
 # music21-rs 0.6.0
 
 The stream learns two more things to hold, and with them the last of

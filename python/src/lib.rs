@@ -1112,6 +1112,11 @@ exceptions![
         Some("music21.duration")
     ),
     (
+        "TupletException",
+        duration::TupletException,
+        Some("music21.duration")
+    ),
+    (
         "HarmonyException",
         harmony::HarmonyException,
         Some("music21.harmony")

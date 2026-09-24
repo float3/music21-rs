@@ -7,7 +7,7 @@
 use pyo3::IntoPyObjectExt;
 use pyo3::exceptions::{PyIndexError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyFloat, PyTuple};
+use pyo3::types::{PyDict, PyFloat, PyList, PyTuple};
 
 use music21_rs_crate::{
     Duration as RsDuration, DurationType as RsDurationType, Tuplet as RsTuplet,
@@ -21,7 +21,13 @@ use crate::note::{NoteException, deep_copied_objects, note_error, true_false_or_
 /// swapped into music21's: music21's own are richer than these and already
 /// pass their docstrings, and replacing a working implementation with a
 /// thinner one costs more than it gains.
-pub const NAMES: &[&str] = &["Duration", "GraceDuration", "AppoggiaturaDuration"];
+pub const NAMES: &[&str] = &[
+    "Duration",
+    "GraceDuration",
+    "AppoggiaturaDuration",
+    "Tuplet",
+    "TupletException",
+];
 
 pyo3::create_exception!(
     music21_rs_facade,
@@ -62,6 +68,8 @@ fn title_case(name: &str) -> String {
 }
 
 error_into!(duration_error, DurationException);
+
+pyo3::create_exception!(music21_rs_facade, TupletException, crate::Music21Exception);
 
 /// One written note value inside a duration: music21's `DurationTuple`.
 ///
@@ -215,8 +223,9 @@ pub struct Tuplet {
     /// lives here and not in the crate — but music21's own `makeTupletBrackets`
     /// writes it on whatever tuplets it finds, ours included.
     bracket_type: Option<String>,
-    /// Whether a bracket is drawn at all.
-    bracket: bool,
+    /// Whether a bracket is drawn, and as what: music21's `True`, `False`
+    /// or `'slur'`.
+    bracket: Bracket,
     /// Which side of the notes the number goes.
     placement: Option<String>,
     /// Whether the two counts are shown, and how.
@@ -237,7 +246,7 @@ impl Tuplet {
         Self {
             inner,
             bracket_type: None,
-            bracket: true,
+            bracket: Bracket::Drawn,
             placement: Some("above".to_string()),
             tuplet_actual_show: Some("number".to_string()),
             // music21 shows the actual number and says nothing about the
@@ -249,34 +258,55 @@ impl Tuplet {
         }
     }
 
-    /// The written value each of the `actual` notes carries.
-    fn set_actual_tuple(&mut self, written: &DurationTuple) {
-        let Some(kind) = RsDurationType::from_music21_name(&written.r#type()) else {
-            return;
+    /// A written value as music21's tuplet setters take one: `None`, a
+    /// `DurationTuple`, a `Duration`, a type name, or a `(type, dots)` pair.
+    fn written_value(value: Option<&Bound<'_, PyAny>>) -> PyResult<Option<(RsDurationType, u32)>> {
+        let Some(value) = value.filter(|value| !value.is_none()) else {
+            return Ok(None);
         };
-        self.inner = RsTuplet::new(
-            self.inner.actual(),
-            self.inner.normal(),
-            kind,
-            written.dots(),
-        )
-        .with_normal(self.inner.normal_duration_type(), self.inner.normal_dots());
+        let (name, dots) = if let Ok(name) = value.extract::<String>() {
+            (name, 0)
+        } else if let Ok((name, dots)) = value.extract::<(String, u32)>() {
+            (name, dots)
+        } else {
+            let written = duration_tuple_from_any(value)?;
+            (written.r#type(), written.dots())
+        };
+        let kind = RsDurationType::from_music21_name(&name)
+            .ok_or_else(|| DurationException::new_err(format!("no such duration type: {name}")))?;
+        Ok(Some((kind, dots)))
     }
 
-    /// The written value the `normal` count is counted in.
-    fn set_normal_tuple(&mut self, written: &DurationTuple) {
-        let Some(kind) = RsDurationType::from_music21_name(&written.r#type()) else {
-            return;
+    /// A written value as music21 hands one back: music21's own
+    /// `DurationTuple` where music21 is there, since its code asks for that
+    /// class by name, and this module's where it is not.
+    fn written_tuple(
+        py: Python<'_>,
+        value: Option<(RsDurationType, u32)>,
+    ) -> PyResult<Option<Py<PyAny>>> {
+        let Some((kind, dots)) = value else {
+            return Ok(None);
         };
-        self.inner = self.inner.with_normal(kind, written.dots());
+        let ours = DurationTuple::of(kind, dots);
+        let theirs = py
+            .import("music21.duration")
+            .and_then(|module| module.getattr("DurationTuple"))
+            .ok()
+            .filter(|class| !class.is(py.get_type::<DurationTuple>()));
+        Ok(Some(match theirs {
+            Some(class) => class
+                .call1((ours.kind.as_str(), ours.dots, ours.quarter_length))?
+                .unbind(),
+            None => ours.into_pyobject(py)?.into_any().unbind(),
+        }))
     }
 
     /// Refuses a change to a tuplet that is already on a duration, as
     /// music21 refuses one: the duration's length was worked out from it.
     fn thaw(&self) -> PyResult<()> {
         if self.frozen {
-            return Err(DurationException::new_err(
-                "A frozen tuplet (or one attached to a duration) is immutable",
+            return Err(TupletException::new_err(
+                "A frozen tuplet (or one attached to a duration) has immutable length.",
             ));
         }
         Ok(())
@@ -302,44 +332,115 @@ impl Tuplet {
 
     /// music21 freezes a score by pickling it, and what this object is lives
     /// in Rust where a pickle cannot see it — so it is written out as text,
-    /// and read back into a fresh one of these.
+    /// with everything kept beside it, and read back into a fresh one of
+    /// these. A score is read out of music21's corpus cache that way, so a
+    /// bracket lost here is lost from every cached score.
     fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<crate::Pickled> {
-        crate::pickled(slf, &slf.borrow().inner)
+        let py = slf.py();
+        let me = slf.borrow();
+        let extra = PyDict::new(py);
+        extra.set_item("type", me.bracket_type.as_deref())?;
+        extra.set_item("bracket", me.get_bracket(py)?)?;
+        extra.set_item("placement", me.placement.as_deref())?;
+        extra.set_item("tupletActualShow", me.tuplet_actual_show.as_deref())?;
+        extra.set_item("tupletNormalShow", me.tuplet_normal_show.as_deref())?;
+        extra.set_item("nestedLevel", me.nested_level)?;
+        extra.set_item("tupletId", me.tuplet_id)?;
+        extra.set_item("frozen", me.frozen)?;
+        crate::pickled_extra(slf, &me.inner, Some(&extra))
     }
 
     fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
-        let Some(inner) = crate::unpickled::<_, RsTuplet>(slf, state)? else {
+        let py = slf.py();
+        let (inner, extra) = crate::unpickled_extra::<_, RsTuplet>(slf, state)?;
+        let Some(inner) = inner else {
             return Ok(());
         };
-        slf.borrow_mut().inner = inner;
+        let mut me = slf.borrow_mut();
+        me.inner = inner;
+        let Some(extra) = extra else {
+            return Ok(());
+        };
+        let Ok(extra) = extra.bind(py).cast::<PyDict>() else {
+            return Ok(());
+        };
+        if let Some(value) = extra.get_item("type")? {
+            me.bracket_type = value.extract()?;
+        }
+        if let Some(value) = extra.get_item("bracket")? {
+            me.bracket = Bracket::from_any(&value)?;
+        }
+        if let Some(value) = extra.get_item("placement")? {
+            me.placement = value.extract()?;
+        }
+        if let Some(value) = extra.get_item("tupletActualShow")? {
+            me.tuplet_actual_show = value.extract()?;
+        }
+        if let Some(value) = extra.get_item("tupletNormalShow")? {
+            me.tuplet_normal_show = value.extract()?;
+        }
+        if let Some(value) = extra.get_item("nestedLevel")? {
+            me.nested_level = value.extract()?;
+        }
+        if let Some(value) = extra.get_item("tupletId")? {
+            me.tuplet_id = value.extract()?;
+        }
+        if let Some(value) = extra.get_item("frozen")? {
+            me.frozen = value.extract()?;
+        }
         Ok(())
     }
 
     #[new]
-    #[pyo3(signature = (numberNotesActual = 3, numberNotesNormal = 2, durationActual = None, durationNormal = None, **_keywords))]
+    #[pyo3(signature = (
+        numberNotesActual = 3,
+        numberNotesNormal = 2,
+        durationActual = None,
+        durationNormal = None,
+        *,
+        tupletId = 0,
+        nestedLevel = 1,
+        r#type = None,
+        bracket = None,
+        placement = Some("above".to_string()),
+        tupletActualShow = Some("number".to_string()),
+        tupletNormalShow = None,
+        frozen = false,
+        **_keywords
+    ))]
+    #[allow(clippy::too_many_arguments)]
     fn new(
         numberNotesActual: u32,
         numberNotesNormal: u32,
         durationActual: Option<&Bound<'_, PyAny>>,
         durationNormal: Option<&Bound<'_, PyAny>>,
+        tupletId: i64,
+        nestedLevel: u32,
+        r#type: Option<String>,
+        bracket: Option<&Bound<'_, PyAny>>,
+        placement: Option<String>,
+        tupletActualShow: Option<String>,
+        tupletNormalShow: Option<String>,
+        frozen: bool,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Self> {
-        let actual = match durationActual {
-            Some(value) => duration_tuple_from_any(value)?,
-            None => DurationTuple::of(RsDurationType::Eighth, 0),
-        };
-        let normal = match durationNormal {
-            Some(value) => duration_tuple_from_any(value)?,
-            None => actual.clone(),
-        };
-        let mut tuplet = Self::wrap(RsTuplet::new(
-            numberNotesActual,
-            numberNotesNormal,
-            RsDurationType::Eighth,
-            0,
-        ));
-        tuplet.set_actual_tuple(&actual);
-        tuplet.set_normal_tuple(&normal);
+        // music21 fills whichever side was left out from the one given.
+        let actual = Self::written_value(durationActual)?;
+        let normal = Self::written_value(durationNormal)?;
+        let mut inner = RsTuplet::ratio(numberNotesActual, numberNotesNormal);
+        inner.set_duration_actual(actual.or(normal));
+        inner.set_duration_normal(normal.or(actual));
+        let mut tuplet = Self::wrap(inner);
+        tuplet.set_type(r#type)?;
+        tuplet.tuplet_id = tupletId;
+        tuplet.nested_level = nestedLevel;
+        if let Some(bracket) = bracket {
+            tuplet.bracket = Bracket::from_any(bracket)?;
+        }
+        tuplet.placement = placement;
+        tuplet.tuplet_actual_show = tupletActualShow;
+        tuplet.tuplet_normal_show = tupletNormalShow;
+        tuplet.frozen = frozen;
         Ok(tuplet)
     }
 
@@ -350,14 +451,8 @@ impl Tuplet {
 
     #[setter]
     fn set_numberNotesActual(&mut self, value: u32) -> PyResult<()> {
-        self.thaw()?;
-        self.inner = RsTuplet::new(
-            value,
-            self.inner.normal(),
-            self.inner.duration_type(),
-            self.inner.dots(),
-        )
-        .with_normal(self.inner.normal_duration_type(), self.inner.normal_dots());
+        let normal = self.inner.normal();
+        self.inner.set_ratio(value, normal);
         Ok(())
     }
 
@@ -368,61 +463,43 @@ impl Tuplet {
 
     #[setter]
     fn set_numberNotesNormal(&mut self, value: u32) -> PyResult<()> {
-        self.thaw()?;
-        self.inner = RsTuplet::new(
-            self.inner.actual(),
-            value,
-            self.inner.duration_type(),
-            self.inner.dots(),
-        )
-        .with_normal(self.inner.normal_duration_type(), self.inner.normal_dots());
+        let actual = self.inner.actual();
+        self.inner.set_ratio(actual, value);
         Ok(())
     }
 
     /// music21's `durationActual`: the written value each of the `actual`
-    /// notes carries.
+    /// notes carries, `None` until something says.
     #[getter]
-    fn get_durationActual(&self) -> DurationTuple {
-        DurationTuple::of(self.inner.duration_type(), self.inner.dots())
+    fn get_durationActual(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
+        Self::written_tuple(py, self.inner.duration_actual())
     }
 
     #[setter]
     fn set_durationActual(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
         self.thaw()?;
-        let Some(value) = value.filter(|value| !value.is_none()) else {
-            return Ok(());
-        };
-        self.set_actual_tuple(&duration_tuple_from_any(value)?);
+        self.inner.set_duration_actual(Self::written_value(value)?);
         Ok(())
     }
 
     /// music21's `durationNormal`: the written value the `normal` count is
     /// counted in, which need not be the same one.
     #[getter]
-    fn get_durationNormal(&self) -> DurationTuple {
-        DurationTuple::of(self.inner.normal_duration_type(), self.inner.normal_dots())
+    fn get_durationNormal(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
+        Self::written_tuple(py, self.inner.duration_normal())
     }
 
     #[setter]
     fn set_durationNormal(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
         self.thaw()?;
-        let Some(value) = value.filter(|value| !value.is_none()) else {
-            return Ok(());
-        };
-        self.set_normal_tuple(&duration_tuple_from_any(value)?);
+        self.inner.set_duration_normal(Self::written_value(value)?);
         Ok(())
     }
 
     /// music21's `setRatio`: both counts at once.
     fn setRatio(&mut self, actual: u32, normal: u32) -> PyResult<()> {
         self.thaw()?;
-        self.inner = RsTuplet::new(
-            actual,
-            normal,
-            self.inner.duration_type(),
-            self.inner.dots(),
-        )
-        .with_normal(self.inner.normal_duration_type(), self.inner.normal_dots());
+        self.inner.set_ratio(actual, normal);
         Ok(())
     }
 
@@ -439,8 +516,7 @@ impl Tuplet {
         };
         let kind = RsDurationType::from_music21_name(&name)
             .ok_or_else(|| DurationException::new_err(format!("no such duration type: {name}")))?;
-        self.inner = RsTuplet::new(self.inner.actual(), self.inner.normal(), kind, dots)
-            .with_normal(kind, dots);
+        self.inner.set_duration_type(kind, dots);
         Ok(())
     }
 
@@ -449,42 +525,31 @@ impl Tuplet {
         op_frac(py, self.inner.total_tuplet_length())
     }
 
-    /// music21's `tupletMultiplier`, `normal / actual`, as a `Fraction`.
+    /// music21's `tupletMultiplier`: what each written length is scaled by,
+    /// a float where one says it exactly and a `Fraction` where none does.
     fn tupletMultiplier<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        let normal = self
-            .inner
-            .normal_duration_type()
-            .quarter_length_with_dots(self.inner.normal_dots());
-        let actual = self
-            .inner
-            .duration_type()
-            .quarter_length_with_dots(self.inner.dots());
-        // The ratio of the counts, scaled by the ratio of the two written
-        // values when they are not the same one.
-        let scale = if actual == 0.0 { 1.0 } else { normal / actual };
-        if scale == 1.0 {
-            return op_frac_ratio(py, self.inner.normal() as i64, self.inner.actual() as i64);
-        }
-        op_frac(
-            py,
-            f64::from(self.inner.normal()) * scale / f64::from(self.inner.actual()),
-        )
+        let multiplier = self.inner.multiplier();
+        let numerator = multiplier.numer().copied().unwrap_or(0);
+        let denominator = multiplier.denom().copied().unwrap_or(1);
+        op_frac_ratio(py, i64::from(numerator), i64::from(denominator))
     }
 
-    /// music21's `augmentOrDiminish`: the same ratio over longer or shorter
-    /// written values.
-    fn augmentOrDiminish(&mut self, amountToScale: f64) -> PyResult<()> {
-        self.thaw()?;
-        if amountToScale <= 0.0 || amountToScale.is_nan() {
-            return Err(PyValueError::new_err(
-                "amountToScale must be greater than zero",
-            ));
-        }
-        let actual = self.get_durationActual().augmentOrDiminish(amountToScale);
-        let normal = self.get_durationNormal().augmentOrDiminish(amountToScale);
-        self.set_actual_tuple(&actual);
-        self.set_normal_tuple(&normal);
-        Ok(())
+    /// music21's `augmentOrDiminish`: a new tuplet, not frozen, with the same
+    /// ratio over written values scaled by `amountToScale`.
+    fn augmentOrDiminish<'py>(
+        slf: &Bound<'py, Self>,
+        amountToScale: f64,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let mut scaled = slf.borrow().clone();
+        scaled.inner = scaled
+            .inner
+            .augmented(amountToScale)
+            .map_err(|error| match error {
+                music21_rs_crate::Error::Value(message) => PyValueError::new_err(message),
+                other => duration_error(other),
+            })?;
+        scaled.frozen = false;
+        crate::copy_as_same_type(slf, scaled)
     }
 
     /// music21's `type`: where this tuplet's bracket sits over the notes.
@@ -507,13 +572,18 @@ impl Tuplet {
     }
 
     #[getter]
-    fn get_bracket(&self) -> bool {
-        self.bracket
+    fn get_bracket<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        match self.bracket {
+            Bracket::Drawn => true.into_bound_py_any(py),
+            Bracket::None => false.into_bound_py_any(py),
+            Bracket::Slur => "slur".into_bound_py_any(py),
+        }
     }
 
     #[setter]
-    fn set_bracket(&mut self, value: bool) {
-        self.bracket = value;
+    fn set_bracket(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        self.bracket = Bracket::from_any(value)?;
+        Ok(())
     }
 
     #[getter]
@@ -566,27 +636,41 @@ impl Tuplet {
         self.tuplet_id = value;
     }
 
-    /// music21's `tupletActual`: the count and the written value together.
+    /// music21's `tupletActual`: the count and the written value together,
+    /// as a list.
     #[getter]
-    fn get_tupletActual(&self) -> (u32, DurationTuple) {
-        (self.inner.actual(), self.get_durationActual())
+    fn get_tupletActual<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
+        PyList::new(
+            py,
+            [
+                self.inner.actual().into_pyobject(py)?.into_any(),
+                self.get_durationActual(py)?.into_pyobject(py)?.into_any(),
+            ],
+        )
     }
 
+    /// Takes any two-item sequence, as music21's unpacking does.
     #[setter]
-    fn set_tupletActual(&mut self, value: (u32, Bound<'_, PyAny>)) -> PyResult<()> {
-        self.set_numberNotesActual(value.0)?;
-        self.set_durationActual(Some(&value.1))
+    fn set_tupletActual(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        self.thaw()?;
+        let (count, written) = count_and_value(value)?;
+        self.set_numberNotesActual(count)?;
+        self.set_durationActual(Some(&written))
     }
 
+    /// music21's `tupletNormal`, as a tuple.
     #[getter]
-    fn get_tupletNormal(&self) -> (u32, DurationTuple) {
-        (self.inner.normal(), self.get_durationNormal())
+    fn get_tupletNormal(&self, py: Python<'_>) -> PyResult<(u32, Option<Py<PyAny>>)> {
+        Ok((self.inner.normal(), self.get_durationNormal(py)?))
     }
 
+    /// Takes any two-item sequence, as music21's unpacking does.
     #[setter]
-    fn set_tupletNormal(&mut self, value: (u32, Bound<'_, PyAny>)) -> PyResult<()> {
-        self.set_numberNotesNormal(value.0)?;
-        self.set_durationNormal(Some(&value.1))
+    fn set_tupletNormal(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        self.thaw()?;
+        let (count, written) = count_and_value(value)?;
+        self.set_numberNotesNormal(count)?;
+        self.set_durationNormal(Some(&written))
     }
 
     #[getter]
@@ -616,13 +700,19 @@ impl Tuplet {
         slf.as_ptr() as isize >> 4
     }
 
+    /// music21's `_reprInternal`, the counts and the value the normal side
+    /// is counted in where one is said.
+    fn _reprInternal(&self) -> String {
+        let mut written = format!("{}/{}", self.inner.actual(), self.inner.normal());
+        if let Some((kind, _)) = self.inner.duration_normal() {
+            written.push('/');
+            written.push_str(kind.music21_name());
+        }
+        written
+    }
+
     fn __repr__(&self) -> String {
-        format!(
-            "<music21.duration.Tuplet {}/{}/{}>",
-            self.inner.actual(),
-            self.inner.normal(),
-            self.inner.duration_type().music21_name()
-        )
+        format!("<music21.duration.Tuplet {}>", self._reprInternal())
     }
 
     /// A copy as an object of the class it was asked on: music21 compares
@@ -2200,6 +2290,43 @@ fn duration_tuple_from_any(value: &Bound<'_, PyAny>) -> PyResult<DurationTuple> 
     let dots: u32 = value.getattr("dots")?.extract()?;
     let quarter_length: f64 = value.getattr("quarterLength")?.extract()?;
     Ok(DurationTuple::new(kind, dots, quarter_length))
+}
+
+/// How a tuplet's bracket is drawn: music21's `bracket`, which is `True`,
+/// `False` or `'slur'`.
+#[derive(Clone, Copy, PartialEq)]
+enum Bracket {
+    Drawn,
+    None,
+    Slur,
+}
+
+impl Bracket {
+    fn from_any(value: &Bound<'_, PyAny>) -> PyResult<Self> {
+        if let Ok(text) = value.extract::<String>() {
+            if text == "slur" {
+                return Ok(Self::Slur);
+            }
+            return Err(PyValueError::new_err(format!(
+                "bracket must be True, False or 'slur', not {text:?}"
+            )));
+        }
+        Ok(if value.is_truthy()? {
+            Self::Drawn
+        } else {
+            Self::None
+        })
+    }
+}
+
+/// A tuplet side written as a count and a written value, in a list or a
+/// tuple: what music21's `tupletActual` and `tupletNormal` setters unpack.
+fn count_and_value<'py>(value: &Bound<'py, PyAny>) -> PyResult<(u32, Bound<'py, PyAny>)> {
+    let items: Vec<Bound<'py, PyAny>> = value.try_iter()?.collect::<PyResult<_>>()?;
+    let [count, written] = <[Bound<'py, PyAny>; 2]>::try_from(items).map_err(|items| {
+        PyValueError::new_err(format!("expected 2 values to unpack, got {}", items.len()))
+    })?;
+    Ok((count.extract()?, written))
 }
 
 /// music21's `durationTupleFromQuarterLength`.
