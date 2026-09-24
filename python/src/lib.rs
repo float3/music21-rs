@@ -39,6 +39,7 @@ pub mod chordtables;
 pub mod clef;
 pub mod duration;
 pub mod dynamics;
+pub mod expressions;
 pub mod figuredbass;
 pub mod harmony;
 pub mod instrument;
@@ -64,7 +65,7 @@ pub use pitch::{Accidental, Microtone, Pitch};
 /// The names each music21 module has a counterpart for here, which is what
 /// [`install_into_music21`] replaces and what `python-parity`'s doctest
 /// harness swaps one module at a time.
-const MUSIC21_MODULES: [(&str, &[&str]); 24] = [
+const MUSIC21_MODULES: [(&str, &[&str]); 25] = [
     ("music21.pitch", pitch::NAMES),
     ("music21.interval", interval::NAMES),
     ("music21.note", note::NAMES),
@@ -89,6 +90,7 @@ const MUSIC21_MODULES: [(&str, &[&str]); 24] = [
     ("music21.instrument", instrument::NAMES),
     ("music21.clef", clef::NAMES),
     ("music21.articulations", articulations::NAMES),
+    ("music21.expressions", expressions::NAMES),
 ];
 
 /// An argument that may not have been given at all, which is not the same
@@ -1126,6 +1128,16 @@ exceptions![
     ),
     ("ClefException", clef::ClefException, Some("music21.clef")),
     (
+        "ExpressionException",
+        expressions::ExpressionException,
+        Some("music21.expressions")
+    ),
+    (
+        "TremoloException",
+        expressions::TremoloException,
+        Some("music21.expressions")
+    ),
+    (
         "DurationException",
         duration::DurationException,
         Some("music21.duration")
@@ -1318,6 +1330,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     instrument::register(m)?;
     clef::register(m)?;
     articulations::register(m)?;
+    expressions::register(m)?;
     stream::register(m)?;
     // The other end of every pickle these classes write. It belongs here
     // rather than on the wheel's module alone: `python-parity` builds its

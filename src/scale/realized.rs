@@ -165,7 +165,7 @@ impl Scale {
     /// neighbours, and the scale closes back on the octave, so the notes
     /// repeat an octave higher as any scale's do.
     pub fn from_pitches(pitches: &[Pitch]) -> Result<Self> {
-        let pitches = rising_octaves(pitches);
+        let pitches = fix_default_octave_for_pitch_list(pitches);
         let pitches = pitches.as_slice();
         let Some(tonic) = pitches.first() else {
             return Err(crate::error::Error::Scale(
@@ -177,16 +177,29 @@ impl Scale {
             steps.push(Interval::between_pitches(&pair[0], &pair[1])?);
         }
         // The closing step back to the tonic, so the collection repeats.
-        // Notes that already close on it need none — and they may close two
-        // octaves up rather than one, which is a pattern two octaves long and
-        // not a scale that folds back on itself.
+        // Notes that already end on the tonic's name need none -- and they
+        // may end two octaves up rather than one, which is a pattern two
+        // octaves long and not a scale that folds back on itself. Otherwise
+        // the tonic is carried the way the notes went, up or down, to the
+        // first octave of it at or past the last note.
         let last = pitches.last().unwrap_or(tonic);
-        let span = last.ps() - tonic.ps();
-        if span.rem_euclid(12.0) != 0.0 {
-            let octaves = (span / 12.0).floor() + 1.0;
-            let closing = tonic.transpose(&Interval::from_semitones(
-                (octaves * 12.0) as crate::defaults::IntegerType,
-            )?)?;
+        if last.name() != tonic.name() {
+            let mut closing = tonic.clone();
+            let mut octave = tonic
+                .octave()
+                .unwrap_or(crate::defaults::PITCH_OCTAVE as IntegerType);
+            closing.octave_setter(Some(octave));
+            if last.ps() > tonic.ps() {
+                while closing.ps() < last.ps() {
+                    octave += 1;
+                    closing.octave_setter(Some(octave));
+                }
+            } else {
+                while closing.ps() > last.ps() {
+                    octave -= 1;
+                    closing.octave_setter(Some(octave));
+                }
+            }
             steps.push(Interval::between_pitches(last, &closing)?);
         }
         Ok(Self {
@@ -1449,7 +1462,7 @@ fn shift_by_periods(pitch: &mut Pitch, period: IntegerType, target: FloatType, b
 /// `A B C D E F G# A` is a scale on A, not a collection that climbs a tone
 /// and then falls a seventh, and a caller who names no octaves means the
 /// first. Notes that carry an octave are left exactly as they are.
-pub(super) fn rising_octaves(pitches: &[Pitch]) -> Vec<Pitch> {
+pub fn fix_default_octave_for_pitch_list(pitches: &[Pitch]) -> Vec<Pitch> {
     let mut risen: Vec<Pitch> = Vec::with_capacity(pitches.len());
     let mut last_ps = 0.0;
     let mut last_octave =
@@ -1472,7 +1485,38 @@ pub(super) fn rising_octaves(pitches: &[Pitch]) -> Vec<Pitch> {
             }
         }
         last_ps = pitch.ps();
+        last_octave = pitch
+            .octave()
+            .unwrap_or(crate::defaults::PITCH_OCTAVE as IntegerType);
         risen.push(pitch);
     }
     risen
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Each answer is music21's `fixDefaultOctaveForPitchList`.
+    #[test]
+    fn octaves_left_out_are_filled_in_as_music21_fills_them() {
+        let cases = [
+            ("C5 A F3 G B", "C5 A5 F3 G B"),
+            ("C3 D6 E", "C3 D6 E6"),
+            ("A B C D E F G A", "A B C5 D5 E5 F5 G5 A5"),
+            ("C6 B A", "C6 B6 A7"),
+            ("B#3 C D", "B#3 C D"),
+        ];
+        for (given, expected) in cases {
+            let pitches: Vec<Pitch> = given
+                .split(' ')
+                .map(|name| Pitch::from_name(name).unwrap())
+                .collect();
+            let risen: Vec<String> = fix_default_octave_for_pitch_list(&pitches)
+                .iter()
+                .map(Pitch::name_with_octave)
+                .collect();
+            assert_eq!(risen.join(" "), expected, "{given}");
+        }
+    }
 }

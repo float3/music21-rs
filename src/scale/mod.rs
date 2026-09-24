@@ -7,6 +7,7 @@ pub mod scaletype;
 pub mod stepscale;
 
 pub use hexatonicblues::{BluesForm, WeightedHexatonicBlues};
+pub use realized::fix_default_octave_for_pitch_list;
 pub use scaletype::{
     DegreeComparison, HUMDRUM_SOLFEG_SYLLABLES, SOLFEG_SYLLABLES, Scale, ScaleType, Simplification,
     SolfegVariant,

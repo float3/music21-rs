@@ -2,9 +2,9 @@
 
 `Tuplet` is music21's now in full, and installed over music21's own, and so
 are the instruments. `clef`, `articulations`, `TempoText` and music21's
-ornaments are ported, the first three installed too, and music21's own
-doctests for the first two pass every example:
-25 modules, 858 docstrings and 7,723 examples in all. A note and a chord know
+ornaments are ported and installed, and music21's own doctests pass every
+example of `clef`, `articulations` and `expressions`: 26 modules, 898
+docstrings and 8,073 examples in all. A note and a chord know
 the instrument they are played on. The `Tuplet` changes break its API, so
 the next release is a minor bump.
 
@@ -45,6 +45,9 @@ the next release is a minor bump.
 - `tempo::TempoText`, a tempo said in words, with the metronome mark it
   implies and `is_common_tempo_text`.
 - `Instrument::set_percussion_pitch` and `set_in_percussion_map`.
+- `scale::fix_default_octave_for_pitch_list`, music21's
+  `fixDefaultOctaveForPitchList`: the octaves a collection's notes leave out,
+  filled in so that it rises.
 - `Articulation::finger` answers a `Finger`, a number or the text written for
   it, since a MusicXML fingering may be a word.
 - `expressions`: music21's 24 ornament classes as `Ornament` and
@@ -63,8 +66,18 @@ the next release is a minor bump.
   it swapped in, where they lost 44 when it was last tried.
 - A note's or chord's `storedInstrument` refuses anything that is not an
   instrument with music21's `TypeError`.
-- The wheel installs its instruments, clefs, articulations and `TempoText`
-  over music21's.
+- The wheel installs its instruments, clefs, articulations, ornaments,
+  `AbstractScale` and `TempoText` over music21's, with `ExpressionException`
+  and `TremoloException`. `AbstractScale` builds its pattern from pitches
+  (`buildNetworkFromPitches`) and fixes their octaves in place
+  (`fixDefaultOctaveForPitchList`), which is all it lacked: music21's `scale`
+  doctests pass all 344 examples with it installed.
+- `Scale::from_pitches` closes a collection as music21 does: not at all when
+  the last note already carries the tonic's name, and otherwise on the first
+  octave of the tonic past the last note in whichever direction the notes
+  went. It used to close only upward, and only by pitch space, so a
+  collection falling to its last note, or ending on `B#` above a `C`, closed
+  somewhere music21 does not.
   An instrument or a clef the wheel builds is the installed class, as music21 holds nothing else in a stream. With
   every one of them installed, music21's suite fails the same fourteen tests
   as without.
@@ -78,6 +91,8 @@ the next release is a minor bump.
 - Installing a class replaces it in the tables music21 keeps of its classes,
   not only where a module names it, so music21 pickles and looks up the
   installed class wherever it goes by the table.
+- An accidental of music21's own handed to the wheel keeps whether it is
+  shown, where the wheel used to read its name alone.
 - A quarter length whose float is written over more than 64 bits -- anything
   as small as 1/10080 -- comes back as the `Fraction` music21's `opFrac`
   makes of it rather than as a float. A fret bend's `release` read from

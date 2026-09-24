@@ -254,7 +254,7 @@ impl Clone for Accidental {
     }
 }
 
-fn accidental_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsAccidental> {
+pub(crate) fn accidental_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsAccidental> {
     if let Ok(facade) = value.extract::<PyRef<Accidental>>() {
         return Ok(facade.inner.clone());
     }
@@ -265,7 +265,15 @@ fn accidental_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsAccidental> {
         .getattr("name")
         .and_then(|name| name.extract::<String>())
     {
-        return RsAccidental::new(name.as_str()).map_err(accidental_error);
+        // music21's own accidental, which says whether it is shown as well.
+        let mut read = RsAccidental::new(name.as_str()).map_err(accidental_error)?;
+        if let Ok(status) = value
+            .getattr("displayStatus")
+            .and_then(|status| status.extract::<Option<bool>>())
+        {
+            read.set_display_status(status);
+        }
+        return Ok(read);
     }
     RsAccidental::new(value.extract::<f64>()?).map_err(accidental_error)
 }
