@@ -1468,6 +1468,15 @@ function chordPart(source: string): { at: number; text: string }[] | null {
         const newline = source.indexOf("\n", start);
         return newline === -1 ? source.length : newline;
     };
+    // A line's lyrics are the `w:` lines under it, so the part goes below
+    // them; above them, abcjs would sing the words to the chords.
+    const lyricsEnd = (start: number) => {
+        let end = lineEnd(start);
+        while (end < source.length && /^\s*(w:|\+:)/.test(source.slice(end + 1, lineEnd(end + 1)))) {
+            end = lineEnd(end + 1);
+        }
+        return end;
+    };
     const lineStarts = music.map((line) => {
         const end = lineEnd(line.start);
         const starts = [...notes.values()]
@@ -1486,7 +1495,7 @@ function chordPart(source: string): { at: number; text: string }[] | null {
         if (chunk.length === 0) return;
         const head = index === 0 ? `${declaration}\n` : `[V:tabchords] `;
         additions.push({
-            at: lineEnd(line.start),
+            at: lyricsEnd(line.start),
             text: `\n${head}[L:1/8] ${chunk.join(" | ")} ${last ? "|]" : "|"}`,
         });
     });
