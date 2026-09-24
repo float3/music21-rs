@@ -12,8 +12,9 @@
 //! ```
 
 use super::{
-    EPSILON, MIDDLE_C_DNN, Score, ScoreInput, WrittenKey, abc_pitch, chord_symbol_voicing_notes,
-    js_error, key_alters, natural_at, spell_midi,
+    EPSILON, MIDDLE_C_DNN, Score, ScoreInput, WrittenKey, abc_pitch,
+    chord_symbol_voicing_above_notes, chord_symbol_voicing_notes, js_error, key_alters, natural_at,
+    spell_midi,
 };
 use music21_rs::{Pitch, abc_duration, abc_note, pitch_name_from_abc_note};
 use serde::{Deserialize, Serialize};
@@ -408,6 +409,28 @@ fn comping_named(name: &str) -> Option<&'static Comping> {
     }
 }
 
+/// The lowest MIDI number at or above `floor` of the pitch class a chord
+/// symbol's letter and accidentals name (`Bb7` names B-flat), or `None`
+/// when it names none.
+fn lowest_at_or_above(symbol: &str, floor: i32) -> Option<i32> {
+    let symbol = symbol.trim();
+    let step = symbol
+        .chars()
+        .next()
+        .filter(|step| ('A'..='G').contains(step))?;
+    let accidentals: String = symbol
+        .chars()
+        .skip(1)
+        .take_while(|sign| matches!(sign, '#' | 'b'))
+        .map(|sign| if sign == 'b' { '-' } else { sign })
+        .collect();
+    let class = Pitch::from_name(format!("{step}{accidentals}"))
+        .ok()?
+        .midi()
+        .rem_euclid(OCTAVE_SEMITONES);
+    Some(floor + (class - floor.rem_euclid(OCTAVE_SEMITONES)).rem_euclid(OCTAVE_SEMITONES))
+}
+
 /// A chord symbol and where it holds, in quarters.
 struct Span<'a> {
     start: f64,
@@ -476,6 +499,29 @@ fn chord_bars(
         Ok::<_, JsValue>(written)
     };
 
+    // The fingers' notes on the strings above the thumb's, which play
+    // `root` and `fifth`, or the root alone under a named bass.
+    let fingers = |name: &str, root: i32, fifth: i32, slash: bool| {
+        let above: Vec<i32> = open
+            .iter()
+            .copied()
+            .filter(|string| *string > root.max(fifth))
+            .collect();
+        let thumb = if slash {
+            vec![root.rem_euclid(OCTAVE_SEMITONES)]
+        } else {
+            vec![
+                root.rem_euclid(OCTAVE_SEMITONES),
+                fifth.rem_euclid(OCTAVE_SEMITONES),
+            ]
+        };
+        chord_symbol_voicing_above_notes(name, &above, &thumb)
+            .ok()
+            .filter(|notes| !notes.is_empty())
+            .or_else(|| voicing(name).cloned())
+            .unwrap_or_default()
+    };
+
     let mut bars = Vec::new();
     let mut patterned = 0;
     for pair in lines.windows(2) {
@@ -494,23 +540,42 @@ fn chord_bars(
                 let span = spans
                     .iter()
                     .find(|span| span.start <= start + EPSILON && start < span.end - EPSILON);
-                let Some((span, voiced)) = span.and_then(|span| Some((span, voicing(span.name)?)))
-                else {
+                let Some(span) = span.filter(|span| voicing(span.name).is_some()) else {
                     tokens.push(format!("z{length}"));
                     continue;
                 };
-                let (low, upper) = (voiced[0], &voiced[1..]);
-                let fifth = if span.name.contains('/') {
-                    low
-                } else if low - 5 >= lowest_string {
-                    low - 5
+                // The thumb plays the symbol's root, or its named bass, where
+                // it first comes on the strings, and on three the fifth below
+                // it, or above where the strings do not reach; a named bass
+                // it plays twice. A root that first comes on the third string
+                // from the bottom leaves the fifth below it on a bass string,
+                // and the thumb starts there. The fingers play the chord on
+                // the strings above the thumb's, without the thumb's notes.
+                let (name, bass) = match span.name.split_once('/') {
+                    Some((name, bass)) => (name, Some(bass)),
+                    None => (span.name, None),
+                };
+                let Some(root) = lowest_at_or_above(bass.unwrap_or(name), lowest_string) else {
+                    tokens.push(format!("z{length}"));
+                    continue;
+                };
+                let below = root - 5 >= lowest_string;
+                let fifth = match (bass, below) {
+                    (Some(_), _) => root,
+                    (None, true) => root - 5,
+                    (None, false) => root + 7,
+                };
+                let fifth_first =
+                    bass.is_none() && below && open.get(2).is_some_and(|third| root >= *third);
+                let (first, second) = if fifth_first {
+                    (fifth, root)
                 } else {
-                    low + 7
+                    (root, fifth)
                 };
                 let notes = match stroke {
-                    Stroke::Root => vec![low],
-                    Stroke::Fifth => vec![fifth],
-                    Stroke::Chord => upper.to_vec(),
+                    Stroke::Root => vec![first],
+                    Stroke::Fifth => vec![second],
+                    Stroke::Chord => fingers(span.name, root, fifth, bass.is_some()),
                 };
                 if notes.is_empty() {
                     tokens.push(format!("z{length}"));

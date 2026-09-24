@@ -14,6 +14,10 @@ interface AbcElement {
     pitches?: AbcPitch[];
     abselem?: { elemset: SVGElement[] };
     chord?: { name: string; position?: string }[];
+    /** The written length in whole notes; a tuplet's factor is on its first note. */
+    duration?: number;
+    tripletMultiplier?: number;
+    endTriplet?: boolean;
 }
 
 interface AbcStaff {
@@ -1300,21 +1304,31 @@ function chordPart(source: string): { at: number; text: string }[] | null {
     if (!chordsButton.classList.contains("on") || !wasm || !scoreInput || !analysis) return null;
     const tune = ABCJS.parseOnly(withoutOrnaments(source))[0];
     if (!tune) return null;
-    const notes = notesByAnchor(scoreInput);
+    // Each symbol and each line of music is placed by counting durations
+    // along its voice, since a symbol may stand on a rest or on the far end
+    // of a tie, where no note of the score begins.
     const symbols = new Map<number, string>();
+    const lineTimes: { char: number; time: number }[] = [];
+    const clocks = new Map<string, { time: number; tuplet: number }>();
     for (const line of tune.lines) {
-        for (const staff of line.staff ?? []) {
-            for (const voice of staff.voices) {
+        (line.staff ?? []).forEach((staff, s) => {
+            staff.voices.forEach((voice, v) => {
+                const clock = clocks.get(`${s}:${v}`) ?? { time: 0, tuplet: 1 };
+                clocks.set(`${s}:${v}`, clock);
                 for (const element of voice) {
-                    if (element.startChar == null || element.endChar == null) continue;
+                    if (element.el_type !== "note") continue;
+                    if (element.tripletMultiplier) clock.tuplet = element.tripletMultiplier;
+                    if (element.startChar != null) lineTimes.push({ char: element.startChar, time: clock.time });
                     for (const chord of element.chord ?? []) {
                         if ((chord.position ?? "default") !== "default") continue;
-                        const note = notes.get(anchorOf(source, element.startChar, element.endChar));
-                        if (note && !symbols.has(note.start)) symbols.set(note.start, chord.name);
+                        const at = Math.round(clock.time * 1e6) / 1e6;
+                        if (!symbols.has(at)) symbols.set(at, chord.name);
                     }
+                    clock.time += (element.duration ?? 0) * 4 * clock.tuplet;
+                    if (element.endTriplet) clock.tuplet = 1;
                 }
-            }
-        }
+            });
+        });
     }
     if (symbols.size === 0) return null;
 
@@ -1363,9 +1377,7 @@ function chordPart(source: string): { at: number; text: string }[] | null {
     };
     const lineStarts = music.map((line) => {
         const end = lineEnd(line.start);
-        const starts = [...notes.values()]
-            .filter((note) => note.char_start >= line.start && note.char_start < end)
-            .map((note) => note.start);
+        const starts = lineTimes.filter(({ char }) => char >= line.start && char < end).map(({ time }) => time);
         return starts.length ? Math.min(...starts) : Infinity;
     });
     lineStarts[0] = 0;
