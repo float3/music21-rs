@@ -14,6 +14,28 @@ use crate::common::stringtools::camel_case_to_hyphen;
 use crate::defaults::{FloatType, IntegerType};
 use crate::interval::ChromaticInterval;
 
+/// The finger a fingering names: a number, or the letter a guitarist's right
+/// hand is written with (`p`, `i`, `m`, `a`) or anything else a score writes.
+/// music21 keeps whichever the score gave, as a number where it reads as one.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum Finger {
+    /// A finger by number.
+    Number(IntegerType),
+    /// A finger written some other way.
+    Written(String),
+}
+
+impl Finger {
+    /// A finger as a score writes it: a number where the text reads as one,
+    /// as music21's MusicXML reader has it.
+    pub fn from_written(text: &str) -> Self {
+        text.trim()
+            .parse()
+            .map_or_else(|_| Self::Written(text.to_string()), Self::Number)
+    }
+}
+
 /// What an articulation of one kind starts out as.
 struct KindRow {
     kind: ArticulationKind,
@@ -754,7 +776,7 @@ pub struct Articulation {
     length_shift: FloatType,
     tie_attach: String,
     display_text: Option<String>,
-    finger_number: Option<IntegerType>,
+    finger: Option<Finger>,
     substitution: bool,
     alternate: bool,
     number: IntegerType,
@@ -792,7 +814,7 @@ impl Articulation {
             length_shift: row.length_shift,
             tie_attach: row.tie_attach.to_string(),
             display_text: None,
-            finger_number: None,
+            finger: None,
             substitution: false,
             alternate: false,
             number: 0,
@@ -881,13 +903,13 @@ impl Articulation {
     }
 
     /// A fingering's finger: music21's `fingerNumber`.
-    pub fn finger_number(&self) -> Option<IntegerType> {
-        self.finger_number
+    pub fn finger(&self) -> Option<&Finger> {
+        self.finger.as_ref()
     }
 
     /// Changes the finger.
-    pub fn set_finger_number(&mut self, finger: Option<IntegerType>) {
-        self.finger_number = finger;
+    pub fn set_finger(&mut self, finger: Option<Finger>) {
+        self.finger = finger;
     }
 
     /// Whether a fingering or organ mark is a substitution.

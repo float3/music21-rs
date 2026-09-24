@@ -747,10 +747,12 @@ pub(crate) fn op_frac<'py>(py: Python<'py>, value: f64) -> PyResult<Bound<'py, P
     let ratio = float.call_method0("as_integer_ratio")?;
     let numerator = ratio.get_item(0)?;
     let denominator = ratio.get_item(1)?;
-    let Ok(exact) = denominator.extract::<u64>() else {
-        return Ok(float);
-    };
-    if exact <= OFFSET_DENOMINATOR_LIMIT {
+    // A denominator too wide for a `u64` is far past the limit: a value as
+    // small as 1/10080 is written over 2^65.
+    if denominator
+        .extract::<u64>()
+        .is_ok_and(|exact| exact <= OFFSET_DENOMINATOR_LIMIT)
+    {
         return Ok(float);
     }
     let limited = py

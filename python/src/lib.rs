@@ -64,7 +64,7 @@ pub use pitch::{Accidental, Microtone, Pitch};
 /// The names each music21 module has a counterpart for here, which is what
 /// [`install_into_music21`] replaces and what `python-parity`'s doctest
 /// harness swaps one module at a time.
-const MUSIC21_MODULES: [(&str, &[&str]); 23] = [
+const MUSIC21_MODULES: [(&str, &[&str]); 24] = [
     ("music21.pitch", pitch::NAMES),
     ("music21.interval", interval::NAMES),
     ("music21.note", note::NAMES),
@@ -88,6 +88,7 @@ const MUSIC21_MODULES: [(&str, &[&str]); 23] = [
     ("music21.meter.base", meter::NAMES),
     ("music21.instrument", instrument::NAMES),
     ("music21.clef", clef::NAMES),
+    ("music21.articulations", articulations::NAMES),
 ];
 
 /// An argument that may not have been given at all, which is not the same
@@ -575,6 +576,19 @@ def rebind(original, installed):
         for name, value in list(vars(module).items()):
             if value is original:
                 setattr(module, name, installed)
+            # A table built at import holds the class as a value --
+            # musicxml.xmlObjects.ARTICULATION_MARKS names each mark's class --
+            # and what it builds from there has to be the installed class too.
+            # A class used as a key needs nothing: the installed one hashes
+            # and compares equal to it.
+            elif isinstance(value, dict):
+                for key, held in list(value.items()):
+                    if held is original:
+                        value[key] = installed
+            elif isinstance(value, list):
+                for index, held in enumerate(value):
+                    if held is original:
+                        value[index] = installed
 
 
 # The classes installed over music21's, by module and name. A facade that

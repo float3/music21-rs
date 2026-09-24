@@ -13,7 +13,7 @@
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
-use music21_rs_crate::articulations::{Articulation as RsArticulation, ArticulationKind};
+use music21_rs_crate::articulations::{Articulation as RsArticulation, ArticulationKind, Finger};
 use music21_rs_crate::interval::ChromaticInterval as RsChromaticInterval;
 
 /// music21's `articulations.Articulation`.
@@ -49,7 +49,7 @@ impl Articulation {
             if kind.has_field("number") {
                 made.inner.set_number(first.extract()?);
             } else if kind.has_field("fingerNumber") {
-                made.inner.set_finger_number(first.extract()?);
+                made.inner.set_finger(finger_from_any(first)?);
             }
         }
         // The fields a subclass's own constructor takes, where given by
@@ -59,7 +59,7 @@ impl Articulation {
             if let Some(value) = keywords.get_item("fingerNumber")?
                 && kind.has_field("fingerNumber")
             {
-                made.inner.set_finger_number(value.extract()?);
+                made.inner.set_finger(finger_from_any(&value)?);
             }
             if let Some(value) = keywords.get_item("number")?
                 && kind.has_field("number")
@@ -180,15 +180,22 @@ impl Articulation {
         self.inner.name()
     }
 
+    /// music21's `fingerNumber`: a number, or the text a score wrote.
     #[getter]
-    fn get_fingerNumber(slf: &Bound<'_, Self>) -> PyResult<Option<i32>> {
+    fn get_fingerNumber(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
         Self::field(slf, "fingerNumber")?;
-        Ok(slf.borrow().inner.finger_number())
+        let py = slf.py();
+        Ok(match slf.borrow().inner.finger() {
+            Some(Finger::Number(number)) => number.into_pyobject(py)?.into_any().unbind(),
+            Some(Finger::Written(text)) => text.into_pyobject(py)?.into_any().unbind(),
+            None => py.None(),
+        })
     }
 
     #[setter]
-    fn set_fingerNumber(&mut self, value: Option<i32>) {
-        self.inner.set_finger_number(value);
+    fn set_fingerNumber(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        self.inner.set_finger(finger_from_any(value)?);
+        Ok(())
     }
 
     #[getter]
@@ -301,10 +308,15 @@ impl Articulation {
         self.inner.set_pre_bend(value);
     }
 
+    /// Through `opFrac`, as music21 writes it when it reads a bend: a
+    /// release one division into a quarter of 10,080 is `Fraction(1, 10080)`.
     #[getter]
-    fn get_release(slf: &Bound<'_, Self>) -> PyResult<Option<f64>> {
+    fn get_release<'py>(slf: &Bound<'py, Self>) -> PyResult<Option<Bound<'py, PyAny>>> {
         Self::field(slf, "release")?;
-        Ok(slf.borrow().inner.release())
+        let release = slf.borrow().inner.release();
+        release
+            .map(|release| crate::duration::op_frac(slf.py(), release))
+            .transpose()
     }
 
     #[setter]
@@ -331,8 +343,9 @@ impl Articulation {
             return self.inner.number().to_string();
         }
         if kind.has_field("fingerNumber") {
-            return match self.inner.finger_number() {
-                Some(finger) => finger.to_string(),
+            return match self.inner.finger() {
+                Some(Finger::Number(number)) => number.to_string(),
+                Some(Finger::Written(text)) => text.clone(),
                 None => "None".to_string(),
             };
         }
@@ -415,6 +428,18 @@ impl Articulation {
         }
         Ok(())
     }
+}
+
+/// A finger as music21 keeps one: a whole number as itself, and anything
+/// else as the text it writes.
+fn finger_from_any(value: &Bound<'_, PyAny>) -> PyResult<Option<Finger>> {
+    if value.is_none() {
+        return Ok(None);
+    }
+    if let Ok(number) = value.extract::<i32>() {
+        return Ok(Some(Finger::Number(number)));
+    }
+    Ok(Some(Finger::Written(value.str()?.extract()?)))
 }
 
 macro_rules! articulation_kinds {

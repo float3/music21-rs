@@ -1,8 +1,8 @@
 # Unreleased
 
 `Tuplet` is music21's now in full, and installed over music21's own, and so
-are the instruments. `clef`, `articulations` and `TempoText` are ported, the
-first and last installed too, and music21's own doctests for the first two pass every example:
+are the instruments. `clef`, `articulations` and `TempoText` are ported and
+installed, and music21's own doctests for the first two pass every example:
 25 modules, 858 docstrings and 7,723 examples in all. A note and a chord know
 the instrument they are played on. The `Tuplet` changes break its API, so
 the next release is a minor bump.
@@ -44,6 +44,8 @@ the next release is a minor bump.
 - `tempo::TempoText`, a tempo said in words, with the metronome mark it
   implies and `is_common_tempo_text`.
 - `Instrument::set_percussion_pitch` and `set_in_percussion_map`.
+- `Articulation::finger` answers a `Finger`, a number or the text written for
+  it, since a MusicXML fingering may be a word.
 
 ## Changed
 
@@ -54,7 +56,8 @@ the next release is a minor bump.
   it swapped in, where they lost 44 when it was last tried.
 - A note's or chord's `storedInstrument` refuses anything that is not an
   instrument with music21's `TypeError`.
-- The wheel installs its instruments, clefs and `TempoText` over music21's.
+- The wheel installs its instruments, clefs, articulations and `TempoText`
+  over music21's.
   An instrument or a clef the wheel builds is the installed class, as music21 holds nothing else in a stream. With
   every one of them installed, music21's suite fails the same fourteen tests
   as without.
@@ -65,6 +68,13 @@ the next release is a minor bump.
 - A tuplet's `bracket` takes `'slur'` as music21's does, and its written
   values are music21's own `DurationTuple` wherever music21 is there, since
   music21's code asks for that class.
+- Installing a class replaces it in the tables music21 keeps of its classes,
+  not only where a module names it, so music21 pickles and looks up the
+  installed class wherever it goes by the table.
+- A quarter length whose float is written over more than 64 bits -- anything
+  as small as 1/10080 -- comes back as the `Fraction` music21's `opFrac`
+  makes of it rather than as a float. A fret bend's `release` read from
+  MusicXML is one.
 
 # music21-rs 0.6.0
 
