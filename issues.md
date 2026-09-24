@@ -168,6 +168,17 @@ Two rules, set 2026-09-12, that most of the open work now serves:
 
 ## Closed
 
+- **Random comparison with music21 found what the fixtures could not.**
+  Chords, pitches, intervals, keys, Roman numerals, meters and the
+  analysis modules were asked the same questions as music21 over thousands
+  of random inputs. Eleven differences came out and are fixed: dissonance
+  respelling (`[3, 6, 9]`), `closedPosition`'s bass, pitch frequency to the
+  bit, augmented-sixth names in every voicing, four `RomanNumeral`
+  properties, a key's scale members, a degree's case in modal keys,
+  additive meters' divisions, and three wheel members that needed music21
+  installed. One difference stays, deliberately: a scale's `nextPitch`
+  takes `direction` as a string where music21 insists on its enum.
+
 - **music21's own suite ran on all three sides** and behaves the same on the
   crate: 5,030 tests on music21, 4,526 on each Rust side, one known
   divergence allowed. It also proved the timing rewrite in situ.
