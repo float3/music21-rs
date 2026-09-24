@@ -60,20 +60,20 @@ MusicXML.
 
 - 95% of the public methods of the ported music21 classes are reachable from
   this wheel.
-- All 25 music21 modules whose doctests run against the port pass every
-  example, 7,723 of them: `articulations`, `clef`, `pitch`, `interval`, `chord`, `chord.tables`,
+- All 26 music21 modules whose doctests run against the port pass every
+  example, 8,073 of them: `pitch`, `interval`, `chord`, `chord.tables`,
   `note`, `duration`, `key`, `scale`, `scale.scala`, `roman`, `harmony`,
   `serial`, `sieve`, `meter.base`, `meter.core`, `beam`, `tie`, `volume`,
-  `dynamics`, `instrument`, `figuredBass.notation`, `tempo` and
-  `voiceLeading`.
+  `dynamics`, `instrument`, `clef`, `articulations`, `expressions`,
+  `figuredBass.notation`, `tempo` and `voiceLeading`.
 - music21's own test suite gives the same results with this wheel installed
   over music21 as with music21 alone.
 - [harte-library](https://github.com/andreamust/harte-library), a third-party
   chord parser built on music21, gives identical results for its 8,116 tests
   on both.
 
-`AbstractScale` and `style.Style` are provided but not installed over
-music21's, whose versions do more. Missing behaviour raises
+`style.Style` is provided but not installed over music21's, whose
+version does more. Missing behaviour raises
 rather than falling back to music21.
 
 ## Speed and size

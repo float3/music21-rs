@@ -35,6 +35,7 @@ use crate::pitch::{Pitch, pitch_from_any};
 /// untrue.
 pub const NAMES: &[&str] = &[
     "Scale",
+    "AbstractScale",
     "ConcreteScale",
     "DiatonicScale",
     "ScaleException",
@@ -341,6 +342,84 @@ impl AbstractScale {
         {
             self.scale_type = Some(scale_type);
         }
+    }
+
+    /// music21's `buildNetworkFromPitches`: sets the pattern to the steps
+    /// between `pitchList`'s notes, closed back onto the first where the
+    /// last does not already carry its name. The notes may be pitches, notes
+    /// or names, and those given with no octave are given one so that the
+    /// collection rises, in place.
+    fn buildNetworkFromPitches(
+        slf: &Bound<'_, Self>,
+        pitchList: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
+        let py = slf.py();
+        let music21_note = py
+            .import("music21.note")
+            .and_then(|module| module.getattr("Note"))
+            .ok();
+        let real = pyo3::types::PyList::empty(py);
+        for item in pitchList.try_iter()? {
+            let item = item?;
+            if let Ok(name) = item.extract::<String>() {
+                let pitch = RsPitch::from_name(name).map_err(crate::pitch::pitch_error)?;
+                real.append(crate::installed_new(
+                    py,
+                    "music21.pitch",
+                    "Pitch",
+                    Pitch::wrap(pitch, false),
+                )?)?;
+            } else if item.extract::<PyRef<'_, crate::note::Note>>().is_ok()
+                || music21_note
+                    .as_ref()
+                    .is_some_and(|class| item.is_instance(class).unwrap_or(false))
+            {
+                real.append(item.getattr("pitch")?)?;
+            } else {
+                real.append(item)?;
+            }
+        }
+        Self::fixDefaultOctaveForPitchList(real.as_any())?;
+        if real.is_empty() {
+            return Err(ScaleException::new_err(format!(
+                "Cannot build a network from this pitch list: {}",
+                real.repr()?
+            )));
+        }
+        let scale = RsScale::from_pitches(&pitch_list(real.as_any())?).map_err(scale_error)?;
+        let mut me = slf.borrow_mut();
+        me.scale_type = None;
+        me.octave_duplicating = scale.octave_duplicating();
+        me.unnamed_degrees = scale.degree_count();
+        me.unnamed_steps = scale
+            .custom_steps()
+            .map(<[RsInterval]>::to_vec)
+            .unwrap_or_default();
+        me.unnamed_simplification = scale.simplification().music21_name();
+        Ok(())
+    }
+
+    /// music21's `fixDefaultOctaveForPitchList`: gives each pitch in
+    /// `pitchList` written with no octave the lowest one that keeps the
+    /// collection rising, in place, and hands the same list back.
+    #[staticmethod]
+    fn fixDefaultOctaveForPitchList<'py>(
+        pitchList: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let objects = pitchList.try_iter()?.collect::<PyResult<Vec<_>>>()?;
+        let values = objects
+            .iter()
+            .map(pitch_from_any)
+            .collect::<PyResult<Vec<_>>>()?;
+        let risen = music21_rs_crate::scale::fix_default_octave_for_pitch_list(&values);
+        for (object, (given, filled)) in objects.iter().zip(values.iter().zip(&risen)) {
+            if given.octave().is_none()
+                && let Some(octave) = filled.octave()
+            {
+                object.setattr("octave", octave)?;
+            }
+        }
+        Ok(pitchList.clone())
     }
 
     /// music21's `getDegreeMaxUnique`: how many degrees the pattern has

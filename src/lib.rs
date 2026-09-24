@@ -62,6 +62,8 @@ pub mod duration;
 pub mod dynamics;
 /// Error and result types used by the crate.
 pub mod error;
+/// Ornaments and what they play.
+pub mod expressions;
 
 /// Figured bass: the numbers written under a bass note.
 pub mod figuredbass;

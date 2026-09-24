@@ -72,6 +72,9 @@ pub enum Error {
     /// Error associated with instruments and the names scores give them.
     #[error("Instrument error: {0}")]
     Instrument(String),
+    /// Error associated with ornaments and other expressions.
+    #[error("Expression error: {0}")]
+    Expression(String),
     /// Error associated with clefs.
     #[error("Clef error: {0}")]
     Clef(String),
