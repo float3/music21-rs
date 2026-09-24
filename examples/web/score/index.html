@@ -631,6 +631,10 @@
                 >
                     Chords
                 </button>
+                <select id="comping" aria-label="Chord rhythm" title="How the chords part is played">
+                    <option value="">Chords: held</option>
+                    <option value="bossa">Chords: bossa nova</option>
+                </select>
                 <button id="down" type="button" title="Transpose down a semitone">
                     Transpose −
                 </button>
@@ -887,7 +891,12 @@
                             line and is left as written. <strong>Chords</strong>
                             draws the chord symbols as a part of their own,
                             voiced by the crate's guitar fingering, which is what
-                            gives a lead sheet any tablature at all. That part is
+                            gives a lead sheet any tablature at all. Each chord is
+                            held until the next, or, in bossa nova, played in the
+                            bossa's two-bar figure: the thumb on one and three,
+                            the bass and then its fifth, and the fingers on one,
+                            two and the and of three, then on the and of one and
+                            of two. A bar not in 4/4 is held. That part is
                             drawn and played but is not in your text, so it is
                             not in the exports and cannot be selected.
                         </p>

@@ -197,6 +197,7 @@ const numeralsSelect = $<HTMLSelectElement>("#numerals");
 const flagsButton = $<HTMLButtonElement>("#flags");
 const ringButton = $<HTMLButtonElement>("#ring");
 const chordsButton = $<HTMLButtonElement>("#chords");
+const compingSelect = $<HTMLSelectElement>("#comping");
 const playButton = $<HTMLButtonElement>("#play");
 const stopButton = $<HTMLButtonElement>("#stop");
 const loopButton = $<HTMLButtonElement>("#loop");
@@ -220,9 +221,35 @@ const NUMERALS_KEY = "music21-rs.score-editor.numerals";
 const VIEW_KEY = "music21-rs.score-editor.view";
 const RING_KEY = "music21-rs.score-editor.ring";
 const CHORDS_KEY = "music21-rs.score-editor.chords";
+const COMPING_KEY = "music21-rs.score-editor.comping";
 const ZOOM_KEY = "music21-rs.score-editor.zoom";
 const WIDE_KEY = "music21-rs.score-editor.wide";
 const ZOOMS = [0.4, 0.5, 0.67, 0.8, 1, 1.25, 1.5];
+/** Ways of playing the chords part other than holding each chord: a bar
+ * length in quarters and the figure of each bar in turn, as the quarter each
+ * stroke falls on and whether the thumb plays the chord's bass, its fifth or
+ * the fingers the rest. A bar of any other length is held. */
+const COMPING: Record<string, { bar: number; bars: [number, "root" | "fifth" | "chord"][][] }> = {
+    // The thumb on one and three; the fingers on one, two and the and of
+    // three, then on the and of one and of two.
+    bossa: {
+        bar: 4,
+        bars: [
+            [
+                [0, "root"],
+                [1, "chord"],
+                [2, "fifth"],
+                [2.5, "chord"],
+            ],
+            [
+                [0, "root"],
+                [0.5, "chord"],
+                [1.5, "chord"],
+                [2, "fifth"],
+            ],
+        ],
+    },
+};
 /** The highest fret counted as within an instrument's reach when deciding
  * whether a staff gets tablature at all. */
 const HIGHEST_FRET = 15;
@@ -289,7 +316,7 @@ const STEP_LETTERS = "CDEFGAB";
 const STEP_SEMITONES = [0, 2, 4, 5, 7, 9, 11];
 
 /** Example scores; `view` is the staff view one opens in. */
-const EXAMPLES: { name: string; abc: string; view?: string }[] = [
+const EXAMPLES: { name: string; abc: string; view?: string; comping?: string }[] = [
     {
         name: "Four-part chorale",
         abc: `X:1
@@ -354,6 +381,7 @@ F,2 [DAB]2 F, [DAB]2 F, | =F,2 [D^GB] z [DGB]4 | E,2 [DGB]2 E, [DGB]2 z | A, [EG
     {
         name: "Un bossa +",
         view: "guitar",
+        comping: "bossa",
         abc: `X:5
 T:Un bossa +
 M:4/4
@@ -1484,11 +1512,50 @@ function chordPart(source: string): { at: number; text: string }[] | null {
         if (Math.abs(eighths - Math.round(eighths)) < 1e-6) return Math.round(eighths) === 1 ? "" : String(Math.round(eighths));
         return `${Math.round(eighths * 12)}/12`;
     };
+    const write = (midis: number[], inForce: Map<string, number>): string =>
+        midis
+            .map((midi) => {
+                const name = wasm!.spell_midi_in_key(midi + (octaveUp ? 12 : 0), key?.tonic ?? "C", key?.mode ?? "major");
+                const parts = /^([A-G])([#-]*)(-?\d+)$/.exec(name);
+                if (!parts) return "";
+                const alter = parts[2].startsWith("#") ? parts[2].length : -parts[2].length;
+                const place = `${parts[1]}${parts[3]}`;
+                const current = inForce.get(place) ?? alters[parts[1]] ?? 0;
+                inForce.set(place, alter);
+                const accidental = current === alter ? "" : (accidentalFor(alter) ?? "");
+                return accidental + letterFor(STEP_LETTERS.indexOf(parts[1]) + 7 * (Number(parts[3]) - 4));
+            })
+            .join("");
+    const pattern = COMPING[compingSelect.value];
     const bars: string[] = [];
+    let patterned = 0;
     for (let b = 0; b + 1 < lines.length; b++) {
         const [from, to] = [lines[b], lines[b + 1]];
         const inForce = new Map<string, number>();
         const tokens: string[] = [];
+        const figure = pattern && Math.abs(to - from - pattern.bar) < 1e-6 ? pattern.bars[patterned++ % pattern.bars.length] : null;
+        if (figure) {
+            figure.forEach(([at, part], i) => {
+                const start = from + at;
+                const stop = from + (figure[i + 1]?.[0] ?? pattern.bar);
+                const span = spans.find((span) => span.start <= start + 1e-6 && start < span.end - 1e-6);
+                const voiced = span ? voicing(span.name) : null;
+                if (!voiced) {
+                    tokens.push(`z${length(stop - start)}`);
+                    return;
+                }
+                // The thumb takes the lowest note, and on three the fifth
+                // below it where the strings reach, or else above; over a
+                // named bass the bass again. The fingers take the rest.
+                const [low, ...upper] = voiced;
+                const fifth = span!.name.includes("/") ? low : low - 5 >= sounding[0] ? low - 5 : low + 7;
+                const notes = part === "root" ? [low] : part === "fifth" ? [fifth] : upper;
+                const written = write(notes, inForce);
+                tokens.push(`${notes.length > 1 ? `[${written}]` : written}${length(stop - start)}`);
+            });
+            bars.push(tokens.join(" "));
+            continue;
+        }
         let cursor = from;
         for (const span of spans) {
             const start = Math.max(span.start, from);
@@ -1499,19 +1566,8 @@ function chordPart(source: string): { at: number; text: string }[] | null {
             if (!voiced) {
                 tokens.push(`z${length(stop - start)}`);
             } else {
-                const written = voiced.map((midi) => {
-                    const name = wasm!.spell_midi_in_key(midi + (octaveUp ? 12 : 0), key?.tonic ?? "C", key?.mode ?? "major");
-                    const parts = /^([A-G])([#-]*)(-?\d+)$/.exec(name);
-                    if (!parts) return "";
-                    const alter = parts[2].startsWith("#") ? parts[2].length : -parts[2].length;
-                    const place = `${parts[1]}${parts[3]}`;
-                    const current = inForce.get(place) ?? alters[parts[1]] ?? 0;
-                    inForce.set(place, alter);
-                    const accidental = current === alter ? "" : (accidentalFor(alter) ?? "");
-                    return accidental + letterFor(STEP_LETTERS.indexOf(parts[1]) + 7 * (Number(parts[3]) - 4));
-                });
-                const tie = span.end > to + 1e-6 ? "-" : "";
-                tokens.push(`[${written.join("")}]${length(stop - start)}${tie}`);
+                const tie = span.end > to + 1e-6 && !pattern ? "-" : "";
+                tokens.push(`[${write(voiced, inForce)}]${length(stop - start)}${tie}`);
             }
             cursor = stop;
         }
@@ -2305,6 +2361,8 @@ function renderExamples(): void {
                 storageSet(VIEW_KEY, viewSelect.value);
                 renderStringTunings();
             }
+            compingSelect.value = example.comping ?? "";
+            storageSet(COMPING_KEY, compingSelect.value);
             loadText(example.abc);
         });
         container.append(chip);
@@ -2461,6 +2519,12 @@ ringButton.addEventListener("click", () => {
 
 chordsButton.addEventListener("click", () => {
     storageSet(CHORDS_KEY, chordsButton.classList.toggle("on") ? "" : "off");
+    compingSelect.hidden = !chordsButton.classList.contains("on");
+    redraw();
+});
+
+compingSelect.addEventListener("change", () => {
+    storageSet(COMPING_KEY, compingSelect.value);
     redraw();
 });
 
@@ -2531,6 +2595,9 @@ async function start(): Promise<void> {
     }
     ringButton.classList.toggle("on", storageGet(RING_KEY) !== "off");
     chordsButton.classList.toggle("on", storageGet(CHORDS_KEY) !== "off");
+    compingSelect.value = storageGet(COMPING_KEY) ?? "";
+    if (!(compingSelect.value in COMPING)) compingSelect.value = "";
+    compingSelect.hidden = !chordsButton.classList.contains("on");
     viewSelect.value = storageGet(VIEW_KEY) ?? "";
     if (!(await loadFromHash())) textarea.value = storageGet(STORAGE_KEY) ?? EXAMPLES[0].abc;
     if (!(viewSelect.value in TABLATURES)) viewSelect.value = "";
