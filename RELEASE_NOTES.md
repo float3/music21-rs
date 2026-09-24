@@ -59,6 +59,14 @@ times faster than it did in 0.7.0.
   denominator, and a tolerance for ties then hid a difference music21's
   `min` keeps. Pitch classes 3, 6 and 9 are `E- G- A` now, as in music21;
   every set of pitch classes and 6,000 respellings of named pitches agree.
+- `Chord::closed_position` measured from the note sounding lowest where
+  music21 measures from the note written lowest, so `E#4 F-4` closed to
+  `F-4 E#5` where music21 keeps `E#4 F-4`. 31 of 4,000 random chords
+  differed; none do now.
+- `Pitch::frequency_hz` rounds as music21 rounds: it raises the twelfth
+  root of two to the distance from A4, where it took two to the distance
+  over twelve, and so differed from music21 in the last bits of nearly
+  every pitch.
 - The report's coverage run instrumented only the workspace since
   cargo-llvm-cov 0.9, whose default wrapper skips `python-parity`: its
   suites ran and wrote no profile. It passes `--no-rustc-wrapper` now, and
