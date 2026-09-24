@@ -85,6 +85,13 @@ Two rules, set 2026-09-12, that most of the open work now serves:
    `getMeasureOffsetOrMeterModulusOffset` — added to the facade on the old
    rule (`8e455d9`) — move into the crate where it belongs.
 
+   It is also what the wheel waits on to carry the last 15 members the
+   crate has and it does not: `FiguredBassLine` and `Realization`, which
+   build their bass line and realizations as music21 parts, and
+   `KeyWeightKeyAnalysis`, `Ambitus` and `MelodicIntervalDiversity`, which
+   read a stream. music21's own classes run on the crate's objects there
+   meanwhile.
+
 3. **The 30 wheel-only members.** Caches (`cachedRealized`,
    `cachedRealizedStr`) stay Python-side by design. The rest — observer
    callbacks (`informClient`, `pitchChanged`), `groups`, `storedInstrument`
@@ -141,10 +148,9 @@ Two rules, set 2026-09-12, that most of the open work now serves:
    was true of 0.5.0 and is not true of master; a 0.6.0 section has to say
    otherwise.
 
-6. **`sieve` passes 24 of 25 docstrings.** The one that fails,
-   `Sieve.segment('cmp', segmentFormat='wid')`, wants the compressed reading
-   of a sieve, which the feature map already excludes. Raising the number
-   means porting music21's `Sieve.compress`.
+6. **`sieve` — done.** It passes 25 of 25 docstrings and 107 of 107
+   examples, `Sieve.compressed` having brought in the compressed reading the
+   last one wanted.
 
 7. **An installed chord costs what music21's does.** `Chord('C4 E4 G4')`
    through `install_into_music21` is ~30µs against music21's ~30µs, while the
@@ -161,6 +167,17 @@ Two rules, set 2026-09-12, that most of the open work now serves:
    once per class rather than per object, 30.05µs against 29.45µs, reverted.
 
 ## Closed
+
+- **Random comparison with music21 found what the fixtures could not.**
+  Chords, pitches, intervals, keys, Roman numerals, meters and the
+  analysis modules were asked the same questions as music21 over thousands
+  of random inputs. Eleven differences came out and are fixed: dissonance
+  respelling (`[3, 6, 9]`), `closedPosition`'s bass, pitch frequency to the
+  bit, augmented-sixth names in every voicing, four `RomanNumeral`
+  properties, a key's scale members, a degree's case in modal keys,
+  additive meters' divisions, and three wheel members that needed music21
+  installed. One difference stays, deliberately: a scale's `nextPitch`
+  takes `direction` as a string where music21 insists on its enum.
 
 - **music21's own suite ran on all three sides** and behaves the same on the
   crate: 5,030 tests on music21, 4,526 on each Rust side, one known

@@ -23,6 +23,30 @@ examples = 122
 tests = 7
 
 [[module]]
+module = "music21.analysis.enharmonics"
+docstrings = 1
+examples = 6
+tests = 4
+
+[[module]]
+module = "music21.analysis.harmonicFunction"
+docstrings = 2
+examples = 22
+tests = 4
+
+[[module]]
+module = "music21.analysis.neoRiemannian"
+docstrings = 13
+examples = 107
+tests = 6
+
+[[module]]
+module = "music21.analysis.transposition"
+docstrings = 7
+examples = 28
+tests = 7
+
+[[module]]
 module = "music21.articulations"
 docstrings = 27
 examples = 105

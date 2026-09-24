@@ -497,6 +497,36 @@ impl Key {
         RsScaleType::from_music21_name(name.strip_prefix("Abstract")?)
     }
 
+    /// The scale of the key's mode, as the object music21 would hand back
+    /// for it: a key is that scale, and answers what it answers.
+    fn scale_object<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        Ok(ConcreteScale::object(py, self.inner.scale())?.into_bound(py))
+    }
+
+    /// Asks the key's scale a question a key inherits from it.
+    fn ask_scale(
+        &self,
+        py: Python<'_>,
+        name: &str,
+        args: &Bound<'_, PyTuple>,
+        kwargs: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Py<PyAny>> {
+        Ok(self
+            .scale_object(py)?
+            .call_method(name, args, kwargs)?
+            .unbind())
+    }
+
+    /// A scale the key's scale derived, as a key of the same class on its
+    /// tonic: music21 builds `self.__class__(tonic=...)`, which for a key is
+    /// a major key whatever the mode it was derived in.
+    fn as_key<'py>(
+        slf: &Bound<'py, Self>,
+        scale: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        slf.get_type().call1((scale.getattr("tonic")?,))
+    }
+
     fn same_key(&self, other: &Key) -> bool {
         self.inner.tonic().name() == other.inner.tonic().name()
             && self.inner.mode() == other.inner.mode()
@@ -716,6 +746,281 @@ impl Key {
     #[getter]
     fn parallel(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         Key::object(py, self.inner.parallel().map_err(key_error)?)
+    }
+
+    // music21's Key is a DiatonicScale, and every scale question below is
+    // answered by the scale of the key's mode: `Key('c').getPitches()` is
+    // `MinorScale('c').getPitches()`.
+
+    #[pyo3(signature = (*args, **kwargs))]
+    fn getPitches(
+        &self,
+        py: Python<'_>,
+        args: &Bound<'_, PyTuple>,
+        kwargs: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Py<PyAny>> {
+        self.ask_scale(py, "getPitches", args, kwargs)
+    }
+
+    #[pyo3(signature = (*args, **kwargs))]
+    fn getTonic(
+        &self,
+        py: Python<'_>,
+        args: &Bound<'_, PyTuple>,
+        kwargs: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Py<PyAny>> {
+        self.ask_scale(py, "getTonic", args, kwargs)
+    }
+
+    #[pyo3(signature = (*args, **kwargs))]
+    fn getDominant(
+        &self,
+        py: Python<'_>,
+        args: &Bound<'_, PyTuple>,
+        kwargs: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Py<PyAny>> {
+        self.ask_scale(py, "getDominant", args, kwargs)
+    }
+
+    #[pyo3(signature = (*args, **kwargs))]
+    fn getLeadingTone(
+        &self,
+        py: Python<'_>,
+        args: &Bound<'_, PyTuple>,
+        kwargs: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Py<PyAny>> {
+        self.ask_scale(py, "getLeadingTone", args, kwargs)
+    }
+
+    #[pyo3(signature = (*args, **kwargs))]
+    fn nextPitch(
+        &self,
+        py: Python<'_>,
+        args: &Bound<'_, PyTuple>,
+        kwargs: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Py<PyAny>> {
+        self.ask_scale(py, "nextPitch", args, kwargs)
+    }
+
+    #[pyo3(signature = (*args, **kwargs))]
+    fn pitchesFromScaleDegrees(
+        &self,
+        py: Python<'_>,
+        args: &Bound<'_, PyTuple>,
+        kwargs: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Py<PyAny>> {
+        self.ask_scale(py, "pitchesFromScaleDegrees", args, kwargs)
+    }
+
+    #[pyo3(signature = (*args, **kwargs))]
+    fn intervalBetweenDegrees(
+        &self,
+        py: Python<'_>,
+        args: &Bound<'_, PyTuple>,
+        kwargs: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Py<PyAny>> {
+        self.ask_scale(py, "intervalBetweenDegrees", args, kwargs)
+    }
+
+    #[pyo3(signature = (*args, **kwargs))]
+    fn getDegreeMaxUnique(
+        &self,
+        py: Python<'_>,
+        args: &Bound<'_, PyTuple>,
+        kwargs: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Py<PyAny>> {
+        self.ask_scale(py, "getDegreeMaxUnique", args, kwargs)
+    }
+
+    #[pyo3(signature = (*args, **kwargs))]
+    fn isNext(
+        &self,
+        py: Python<'_>,
+        args: &Bound<'_, PyTuple>,
+        kwargs: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Py<PyAny>> {
+        self.ask_scale(py, "isNext", args, kwargs)
+    }
+
+    #[pyo3(signature = (*args, **kwargs))]
+    fn getChord(
+        &self,
+        py: Python<'_>,
+        args: &Bound<'_, PyTuple>,
+        kwargs: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Py<PyAny>> {
+        self.ask_scale(py, "getChord", args, kwargs)
+    }
+
+    #[pyo3(name = "match", signature = (*args, **kwargs))]
+    fn match_pitches(
+        &self,
+        py: Python<'_>,
+        args: &Bound<'_, PyTuple>,
+        kwargs: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Py<PyAny>> {
+        self.ask_scale(py, "match", args, kwargs)
+    }
+
+    #[pyo3(signature = (*args, **kwargs))]
+    fn findMissing(
+        &self,
+        py: Python<'_>,
+        args: &Bound<'_, PyTuple>,
+        kwargs: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Py<PyAny>> {
+        self.ask_scale(py, "findMissing", args, kwargs)
+    }
+
+    #[pyo3(signature = (*args, **kwargs))]
+    fn extractPitchList(
+        &self,
+        py: Python<'_>,
+        args: &Bound<'_, PyTuple>,
+        kwargs: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Py<PyAny>> {
+        self.ask_scale(py, "extractPitchList", args, kwargs)
+    }
+
+    #[pyo3(signature = (*args, **kwargs))]
+    fn getRelativeMinor(
+        &self,
+        py: Python<'_>,
+        args: &Bound<'_, PyTuple>,
+        kwargs: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Py<PyAny>> {
+        self.ask_scale(py, "getRelativeMinor", args, kwargs)
+    }
+
+    #[pyo3(signature = (*args, **kwargs))]
+    fn getRelativeMajor(
+        &self,
+        py: Python<'_>,
+        args: &Bound<'_, PyTuple>,
+        kwargs: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Py<PyAny>> {
+        self.ask_scale(py, "getRelativeMajor", args, kwargs)
+    }
+
+    #[pyo3(signature = (*args, **kwargs))]
+    fn getParallelMinor(
+        &self,
+        py: Python<'_>,
+        args: &Bound<'_, PyTuple>,
+        kwargs: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Py<PyAny>> {
+        self.ask_scale(py, "getParallelMinor", args, kwargs)
+    }
+
+    #[pyo3(signature = (*args, **kwargs))]
+    fn getParallelMajor(
+        &self,
+        py: Python<'_>,
+        args: &Bound<'_, PyTuple>,
+        kwargs: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Py<PyAny>> {
+        self.ask_scale(py, "getParallelMajor", args, kwargs)
+    }
+
+    #[pyo3(signature = (*args, **kwargs))]
+    fn getScalaData(
+        &self,
+        py: Python<'_>,
+        args: &Bound<'_, PyTuple>,
+        kwargs: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Py<PyAny>> {
+        self.ask_scale(py, "getScalaData", args, kwargs)
+    }
+
+    #[pyo3(signature = (*args, **kwargs))]
+    fn tune(
+        &self,
+        py: Python<'_>,
+        args: &Bound<'_, PyTuple>,
+        kwargs: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Py<PyAny>> {
+        self.ask_scale(py, "tune", args, kwargs)
+    }
+
+    #[getter]
+    fn chord(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        Ok(self.scale_object(py)?.getattr("chord")?.unbind())
+    }
+
+    #[getter]
+    fn isConcrete(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        Ok(self.scale_object(py)?.getattr("isConcrete")?.unbind())
+    }
+
+    #[getter]
+    fn usePitchDegreeCache(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        Ok(self
+            .scale_object(py)?
+            .getattr("usePitchDegreeCache")?
+            .unbind())
+    }
+
+    /// music21's `romanNumeral`: the numeral on a degree, read in this key.
+    fn romanNumeral<'py>(
+        slf: &Bound<'py, Self>,
+        degree: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
+        let numeral_class = crate::installed_class(py, "music21.roman", "RomanNumeral")
+            .unwrap_or_else(|| py.get_type::<crate::roman::RomanNumeral>().into_any());
+        numeral_class.call1((degree, slf))
+    }
+
+    /// music21's `derive`: the key of this class whose scale best holds
+    /// `other`.
+    #[pyo3(signature = (*args, **kwargs))]
+    fn derive<'py>(
+        slf: &Bound<'py, Self>,
+        args: &Bound<'py, PyTuple>,
+        kwargs: Option<&Bound<'py, PyDict>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let derived = slf.borrow().ask_scale(slf.py(), "derive", args, kwargs)?;
+        Self::as_key(slf, derived.bind(slf.py()))
+    }
+
+    /// music21's `deriveAll`: every such key, in order.
+    #[pyo3(signature = (*args, **kwargs))]
+    fn deriveAll<'py>(
+        slf: &Bound<'py, Self>,
+        args: &Bound<'py, PyTuple>,
+        kwargs: Option<&Bound<'py, PyDict>>,
+    ) -> PyResult<Bound<'py, PyList>> {
+        let py = slf.py();
+        let derived = slf.borrow().ask_scale(py, "deriveAll", args, kwargs)?;
+        let keys = derived
+            .bind(py)
+            .try_iter()?
+            .map(|scale| Self::as_key(slf, &scale?))
+            .collect::<PyResult<Vec<_>>>()?;
+        PyList::new(py, keys)
+    }
+
+    /// music21's `deriveRanked`: each key with how many pitches it holds.
+    #[pyo3(signature = (*args, **kwargs))]
+    fn deriveRanked<'py>(
+        slf: &Bound<'py, Self>,
+        args: &Bound<'py, PyTuple>,
+        kwargs: Option<&Bound<'py, PyDict>>,
+    ) -> PyResult<Bound<'py, PyList>> {
+        let py = slf.py();
+        let derived = slf.borrow().ask_scale(py, "deriveRanked", args, kwargs)?;
+        let ranked = derived
+            .bind(py)
+            .try_iter()?
+            .map(|pair| {
+                let pair = pair?;
+                PyTuple::new(
+                    py,
+                    [pair.get_item(0)?, Self::as_key(slf, &pair.get_item(1)?)?],
+                )
+            })
+            .collect::<PyResult<Vec<_>>>()?;
+        PyList::new(py, ranked)
     }
 
     /// music21's `getScaleDegreeFromPitch`: which degree of this key a pitch

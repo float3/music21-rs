@@ -249,10 +249,6 @@ impl Chord {
             return self.dyad_common_name();
         }
 
-        if let Some(common_name) = self.spelling_common_name_override() {
-            return common_name;
-        }
-
         let address = match tables::seek_chord_tables_address(&ordered_pcs) {
             Ok(address) => address,
             Err(_) => return "unknown chord".to_string(),
@@ -373,58 +369,18 @@ impl Chord {
             return false;
         }
         let names = self.pitch_names();
+        // Through the pitch's own transpose, as music21 does: a pitch whose
+        // spelling was inferred is respelled on the way, so the fifth above
+        // an integer-built D# is B-, which the chord does not hold.
         let has_fifth_above = |pitch: &Pitch| {
-            PERFECT_FIFTH
-                .transpose_pitch(pitch)
+            pitch
+                .transpose(&PERFECT_FIFTH)
                 .is_ok_and(|above| names.contains(&above.name()))
         };
         let (Some(root), Some(third)) = (self.root(), self.third()) else {
             return false;
         };
         has_fifth_above(root) && has_fifth_above(third)
-    }
-
-    pub(super) fn spelling_common_name_override(&self) -> Option<String> {
-        let name = if self.names_are(&["C#", "E-", "G"]) {
-            "Italian augmented sixth chord in root position"
-        } else if self.names_are(&["C", "D", "F#", "A-"])
-            || self.names_are(&["D", "E", "G#", "B-"])
-            || (self.from_integer_pitches && self.pitch_class_mask() == 0b010100010100)
-        {
-            "French augmented sixth chord in third inversion"
-        } else if self.names_are(&["C#", "E-", "G", "A"]) {
-            "French augmented sixth chord in first inversion"
-        } else if self.names_are(&["C", "E", "F#", "A#"]) {
-            "French augmented sixth chord"
-        } else if self.names_are(&["C#", "E#", "G", "B"]) {
-            "French augmented sixth chord in root position"
-        } else if self.names_are(&["E-", "F#", "A"])
-            || self.names_are(&["C#", "G", "A#"])
-            || (self.from_integer_pitches && self.pitch_class_mask() == 0b001001001000)
-        {
-            "enharmonic equivalent to diminished triad"
-        } else if self.from_integer_pitches
-            && (self.names_are(&["C#", "D#", "F#", "A#"])
-                || self.names_are(&["C#", "E#", "G#", "A#"])
-                || self.names_are(&["E-", "G-", "A-", "C-"]))
-        {
-            // Built from integers these spellings are what music21 calls an
-            // enharmonic equivalent; written out by name they are the chord
-            // itself.
-            "enharmonic equivalent to minor seventh chord"
-        } else if self.from_integer_pitches
-            && (self.names_are(&["C#", "E#", "F#", "A#"])
-                || self.names_are(&["E-", "F-", "A-", "C-"])
-                || self.names_are(&["E-", "G-", "B-", "C-"]))
-        {
-            "enharmonic equivalent to major seventh chord"
-        } else if self.names_are(&["E-", "F#", "A", "B"]) {
-            "enharmonic to dominant seventh chord"
-        } else {
-            return None;
-        };
-
-        Some(name.to_string())
     }
 
     pub(super) fn dyad_common_name(&self) -> String {
@@ -607,4 +563,136 @@ fn written_as(pitch: &Pitch, name: &str) -> bool {
     let mut characters = name.chars();
     characters.next() == Some(pitch.step().as_char())
         && characters.as_str() == pitch.accidental_or_natural().modifier()
+}
+
+#[cfg(test)]
+mod augmented_sixth_voicings {
+    use crate::{Chord, defaults::IntegerType};
+
+    /// music21's `commonName` for every voicing of the augmented-sixth
+    /// spellings and their enharmonic neighbours, bass by bass, and for the
+    /// same sets built from pitch-class numbers. Generated from music21.
+    const EXPECTED: &str = "\
+A#3 C#4 D#4 F#4	minor seventh chord
+A#3 C#4 E#4 F#4	major seventh chord
+A#3 C#4 E#4 G#4	minor seventh chord
+A#3 C#4 G4	enharmonic equivalent to diminished triad
+A#3 C4 E4 F#4	French augmented sixth chord in first inversion
+A- C D F#	French augmented sixth chord in third inversion
+A- C E- F#	German augmented sixth chord in second inversion
+A- C F#	Italian augmented sixth chord in second inversion
+A-3 C-4 E-4 F-4	major seventh chord
+A-3 C-4 E-4 G-4	minor seventh chord
+A-3 C4 D4 F#4	French augmented sixth chord
+A-3 C4 E-4 F#4	German augmented sixth chord
+A-3 C4 F#4	Italian augmented sixth chord
+A3 B3 E-4 F#4	enharmonic to dominant seventh chord
+A3 C#4 E-4 G4	French augmented sixth chord in root position
+A3 E-4 F#4	enharmonic equivalent to diminished triad
+B-3 C-4 E-4 G-4	major seventh chord
+B-3 D4 E4 G#4	French augmented sixth chord
+B3 C#4 E#4 G4	French augmented sixth chord in third inversion
+B3 E-4 F#4 A4	enharmonic to dominant seventh chord
+C D F# A-	French augmented sixth chord in third inversion
+C E F# A#	French augmented sixth chord
+C# D# F# A#	minor seventh chord
+C# E# F# A#	major seventh chord
+C# E# G B	French augmented sixth chord in root position
+C# E# G# A#	minor seventh chord
+C# E- G	Italian augmented sixth chord in root position
+C# E- G A	French augmented sixth chord in first inversion
+C# G A#	enharmonic equivalent to diminished triad
+C#3 D#3 F#3 A#3	minor seventh chord
+C#3 E#3 F#3 A#3	major seventh chord
+C#3 E#3 G#3 A#3	minor seventh chord
+C#3 E#3 G3 B3	French augmented sixth chord in root position
+C#3 E-3 G3	Italian augmented sixth chord in root position
+C#3 E-3 G3 A3	French augmented sixth chord in first inversion
+C#3 G3 A#3	enharmonic equivalent to diminished triad
+C-3 E-3 F-3 A-3	major seventh chord
+C-3 E-3 G-3 A-3	minor seventh chord
+C-3 E-3 G-3 B-3	major seventh chord
+C3 D3 F#3 A-3	French augmented sixth chord in third inversion
+C3 E-3 F#3 A-3	German augmented sixth chord in second inversion
+C3 E3 F#3 A#3	French augmented sixth chord
+C3 F#3 A-3	Italian augmented sixth chord in second inversion
+D E G# B-	French augmented sixth chord in third inversion
+D#3 F#3 A#3 C#4	minor seventh chord
+D3 E3 G#3 B-3	French augmented sixth chord in third inversion
+D3 F#3 A-3 C4	French augmented sixth chord in root position
+E#3 F#3 A#3 C#4	major seventh chord
+E#3 G#3 A#3 C#4	minor seventh chord
+E#3 G3 B3 C#4	French augmented sixth chord in first inversion
+E- F# A	enharmonic equivalent to diminished triad
+E- F# A B	enharmonic to dominant seventh chord
+E- F- A- C-	major seventh chord
+E- G- A- C-	minor seventh chord
+E- G- B- C-	major seventh chord
+E-3 F#3 A-3 C4	German augmented sixth chord in third inversion
+E-3 F#3 A3	enharmonic equivalent to diminished triad
+E-3 F#3 A3 B3	enharmonic to dominant seventh chord
+E-3 F-3 A-3 C-4	major seventh chord
+E-3 G-3 A-3 C-4	minor seventh chord
+E-3 G-3 B-3 C-4	major seventh chord
+E-3 G3 A3 C#4	French augmented sixth chord
+E-3 G3 C#4	Italian augmented sixth chord
+E3 F#3 A#3 C4	French augmented sixth chord in third inversion
+E3 G#3 B-3 D4	French augmented sixth chord in root position
+F#3 A#3 C#4 D#4	minor seventh chord
+F#3 A#3 C#4 E#4	major seventh chord
+F#3 A#3 C4 E4	French augmented sixth chord in root position
+F#3 A-3 C4	Italian augmented sixth chord in root position
+F#3 A-3 C4 D4	French augmented sixth chord in first inversion
+F#3 A-3 C4 E-4	German augmented sixth chord in root position
+F#3 A3 B3 E-4	enharmonic to dominant seventh chord
+F#3 A3 E-4	enharmonic equivalent to diminished triad
+F-3 A-3 C-4 E-4	major seventh chord
+G#3 A#3 C#4 E#4	minor seventh chord
+G#3 B-3 D4 E4	French augmented sixth chord in first inversion
+G-3 A-3 C-4 E-4	minor seventh chord
+G-3 B-3 C-4 E-4	major seventh chord
+G3 A#3 C#4	enharmonic equivalent to diminished triad
+G3 A3 C#4 E-4	French augmented sixth chord in third inversion
+G3 B3 C#4 E#4	French augmented sixth chord
+G3 C#4 E-4	Italian augmented sixth chord in second inversion
+[0, 2, 6, 8]	French augmented sixth chord in third inversion
+[1, 3, 6, 10]	enharmonic equivalent to minor seventh chord
+[1, 3, 7]	Italian augmented sixth chord in root position
+[1, 5, 6, 10]	enharmonic equivalent to major seventh chord
+[1, 5, 8, 10]	enharmonic equivalent to minor seventh chord
+[1, 7, 10]	enharmonic equivalent to diminished triad
+[3, 4, 8, 11]	enharmonic equivalent to major seventh chord
+[3, 6, 10, 11]	enharmonic equivalent to major seventh chord
+[3, 6, 8, 11]	enharmonic equivalent to minor seventh chord
+[3, 6, 9]	enharmonic equivalent to diminished triad
+";
+
+    #[test]
+    fn every_voicing_is_named_as_music21_names_it() {
+        let mut wrong = Vec::new();
+        for line in EXPECTED.lines() {
+            let (notes, expected) = line.split_once('\t').unwrap();
+            let chord = if let Some(numbers) = notes.strip_prefix('[') {
+                let classes: Vec<IntegerType> = numbers
+                    .trim_end_matches(']')
+                    .split(", ")
+                    .map(|number| number.parse().unwrap())
+                    .collect();
+                Chord::new(classes.as_slice()).unwrap()
+            } else {
+                Chord::new(notes).unwrap()
+            };
+            let named = chord.common_name();
+            if named != expected {
+                wrong.push(format!("{notes}: {named}, music21 {expected}"));
+            }
+        }
+        assert!(
+            wrong.is_empty(),
+            "{} of {}:\n{}",
+            wrong.len(),
+            EXPECTED.lines().count(),
+            wrong.join("\n")
+        );
+    }
 }

@@ -41,14 +41,17 @@ pub use music21_rs_python::chordtables::NAMES as CHORD_TABLES_NAMES;
 pub use music21_rs_python::clef::NAMES as CLEF_NAMES;
 pub use music21_rs_python::duration::NAMES as DURATION_NAMES;
 pub use music21_rs_python::dynamics::NAMES as DYNAMICS_NAMES;
+pub use music21_rs_python::enharmonics::NAMES as ENHARMONICS_NAMES;
 pub use music21_rs_python::expressions::NAMES as EXPRESSION_NAMES;
 pub use music21_rs_python::fbrules::NAMES as RULES_NAMES;
 pub use music21_rs_python::figuredbass::NAMES as FIGURED_BASS_NAMES;
+pub use music21_rs_python::harmonicfunction::NAMES as HARMONIC_FUNCTION_NAMES;
 pub use music21_rs_python::harmony::NAMES as HARMONY_NAMES;
 pub use music21_rs_python::instrument::NAMES as INSTRUMENT_NAMES;
 pub use music21_rs_python::interval::NAMES as INTERVAL_NAMES;
 pub use music21_rs_python::key::NAMES as KEY_NAMES;
 pub use music21_rs_python::meter::{CORE_NAMES as METER_CORE_NAMES, NAMES as METER_NAMES};
+pub use music21_rs_python::neoriemannian::NAMES as NEO_RIEMANNIAN_NAMES;
 pub use music21_rs_python::notation::{BEAM_NAMES, TIE_NAMES, VOLUME_NAMES};
 pub use music21_rs_python::note::NAMES as NOTE_NAMES;
 pub use music21_rs_python::pitch::NAMES as PITCH_NAMES;
@@ -62,6 +65,7 @@ pub use music21_rs_python::segment::NAMES as SEGMENT_NAMES;
 pub use music21_rs_python::serial::NAMES as SERIAL_NAMES;
 pub use music21_rs_python::sieve::NAMES as SIEVE_NAMES;
 pub use music21_rs_python::tempo::NAMES as TEMPO_NAMES;
+pub use music21_rs_python::transposition::NAMES as TRANSPOSITION_NAMES;
 pub use music21_rs_python::voiceleading::NAMES as VOICE_LEADING_NAMES;
 
 #[derive(Debug, Default, Serialize, Deserialize)]

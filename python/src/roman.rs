@@ -116,6 +116,9 @@ struct ParseState {
     /// The alteration in front of the numeral, in semitones. Zero is an
     /// alteration a step deliberately cleared.
     alteration: Option<i8>,
+    /// The flats or sharps a parsing step found written, apart from the
+    /// alteration: music21 keeps the two separately.
+    alteration_string: Option<String>,
     numeral_alone: Option<String>,
     bracketed: Option<Vec<(i8, u8)>>,
     omitted: Option<Vec<u8>>,
@@ -226,7 +229,9 @@ impl RomanNumeral {
         let figure = match figure.filter(|value| !value.is_none()) {
             None => "I".to_string(),
             Some(value) => match value.extract::<usize>() {
-                Ok(degree) => figure_for_degree(given.then_some(&key), degree, case_matters)?,
+                Ok(degree) => {
+                    figure_for_degree(degree_mode(keyOrScale)?.as_deref(), degree, case_matters)?
+                }
                 Err(_) => value.extract::<String>()?,
             },
         };
@@ -534,7 +539,34 @@ fn mark_alteration(mark: &str) -> i8 {
 /// It is the numeral alone, lower-cased on the degrees whose ordinary triad
 /// is minor or diminished in that mode — and left upper-case throughout when
 /// no key was given, since then there is no mode to read it against.
-fn figure_for_degree(key: Option<&RsKey>, degree: usize, case_matters: bool) -> PyResult<String> {
+/// The mode music21 reads a degree's case against: a key's mode, a
+/// diatonic scale's type, or a key named in capitals (major) or not
+/// (minor). Nothing for anything else.
+fn degree_mode(key_or_scale: Option<&Bound<'_, PyAny>>) -> PyResult<Option<String>> {
+    let Some(value) = key_or_scale.filter(|value| !value.is_none()) else {
+        return Ok(None);
+    };
+    if let Ok(name) = value.extract::<String>() {
+        let first = name.chars().next();
+        return Ok(first.map(|first| {
+            let mode = if first.is_uppercase() {
+                "major"
+            } else {
+                "minor"
+            };
+            mode.to_string()
+        }));
+    }
+    if let Ok(key) = value.extract::<PyRef<'_, crate::key::Key>>() {
+        return Ok(Some(key.inner.mode().to_string()));
+    }
+    if value.is_instance_of::<crate::scale::DiatonicScale>() {
+        return value.getattr("type")?.extract().map(Some);
+    }
+    Ok(None)
+}
+
+fn figure_for_degree(mode: Option<&str>, degree: usize, case_matters: bool) -> PyResult<String> {
     if degree == 0 || degree > 7 {
         return Err(RomanNumeralException::new_err(format!(
             "cannot make a roman numeral on degree {degree}"
@@ -546,10 +578,12 @@ fn figure_for_degree(key: Option<&RsKey>, degree: usize, case_matters: bool) -> 
         // and the key alone says what the chord is.
         return Ok(numeral.to_string());
     }
-    let lower = match key.map(RsKey::mode) {
+    // Only a major or a minor key lowers a numeral; a mode keeps it upper
+    // case, and so a major triad, as music21 writes it.
+    let lower = match mode {
         Some("minor") => matches!(degree, 1 | 2 | 4 | 5),
-        Some(_) => matches!(degree, 2 | 3 | 6 | 7),
-        None => false,
+        Some("major") => matches!(degree, 2 | 3 | 6 | 7),
+        _ => false,
     };
     Ok(if lower {
         numeral.to_ascii_lowercase()
@@ -772,9 +806,13 @@ impl RomanNumeral {
     /// numeral reports, since `vi` in a minor key roots on a raised sixth.
     #[getter]
     fn frontAlterationString(&self) -> String {
-        let alteration = self.front_alteration();
-        let mark = if alteration < 0 { "b" } else { "#" };
-        mark.repeat(alteration.unsigned_abs() as usize)
+        if let Some(written) = &self.state.alteration_string {
+            return written.clone();
+        }
+        if self.blank {
+            return String::new();
+        }
+        self.inner.front_alteration_string()
     }
 
     /// music21's `frontAlterationAccidental`: that alteration as an
@@ -1118,6 +1156,8 @@ impl RomanNumeral {
     fn _parseFrontAlterations(&mut self, workingFigure: &str) -> String {
         let (alteration, rest) = rs_roman::split_roman_accidental_prefix(workingFigure);
         self.state.alteration = Some(alteration);
+        self.state.alteration_string =
+            Some(workingFigure[..workingFigure.len() - rest.len()].to_string());
         rest.to_string()
     }
 

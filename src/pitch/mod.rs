@@ -608,7 +608,10 @@ impl Pitch {
 
     /// Returns this pitch's twelve-tone equal-temperament frequency in hertz.
     pub fn frequency_hz(&self) -> FloatType {
-        440.0 * (2.0 as FloatType).powf((self.pitch_space() - 69.0) / 12.0)
+        // music21 raises its stored twelfth root of two to the distance
+        // from A4, which rounds otherwise than 2^(distance / 12).
+        let twelfth_root_of_two = (2.0 as FloatType).powf(1.0 / 12.0);
+        440.0 * twelfth_root_of_two.powf(self.pitch_space() - 69.0)
     }
 
     /// Returns this pitch's frequency in hertz for a supported tuning system.
@@ -1333,6 +1336,52 @@ mod tests {
             super::dissonance_score(&names(&["C", "E", "G"])).unwrap()
                 < super::dissonance_score(&names(&["C", "F-", "G"])).unwrap()
         );
+    }
+
+    #[test]
+    fn frequency_rounds_as_music21_rounds() {
+        let cases = [
+            ("F#6", 1_479.977_690_846_539),
+            ("D3", 146.832_383_958_703_64),
+            ("F1", 43.653_528_929_125_41),
+            ("C4", 261.625_565_300_598_5),
+            ("A~4", 452.892_984_123_136_5),
+            ("B-7", 3_729.310_092_144_725),
+        ];
+        for (name, hertz) in cases {
+            let pitch: Pitch = name.parse().unwrap();
+            assert_eq!(pitch.frequency_hz(), hertz, "{name}");
+        }
+    }
+
+    #[test]
+    fn dissonance_rounds_as_music21_rounds() {
+        // Two spellings that tie in exact arithmetic and differ by one ulp
+        // in music21's, which takes one log of each whole denominator.
+        let score = |spelled: &[&str]| {
+            let pitches: Vec<Pitch> = spelled.iter().map(|name| name.parse().unwrap()).collect();
+            super::dissonance_score(&pitches).unwrap()
+        };
+        let flat = score(&["E-", "G-", "A"]);
+        let sharp = score(&["E-", "F#", "A"]);
+        assert_eq!(flat, 0.051_031_336_396_830_44);
+        assert_eq!(sharp, 0.051_031_336_396_830_475);
+
+        // So pitch classes 3, 6 and 9 spell with G-, as music21 spells them.
+        let chord = crate::Chord::new([3, 6, 9].as_slice()).unwrap();
+        assert_eq!(chord.pitch_names(), ["E-", "G-", "A"]);
+
+        // A twelfth down is 1/3: its fifth's 2 cancels the octave's.
+        assert_eq!(score(&["D#6", "B#5", "E#5", "D5"]), 0.235_696_022_824_957_3);
+        assert_eq!(score(&["D#6", "C6", "F5", "D5"]), 0.235_696_022_824_957_36);
+        let respelled = simplify_multiple_enharmonics(
+            &["D#6", "C6", "F5", "C##5"].map(|name| name.parse().unwrap()),
+            None,
+            None,
+        )
+        .unwrap();
+        let respelled: Vec<String> = respelled.iter().map(Pitch::name_with_octave).collect();
+        assert_eq!(respelled, ["D#6", "B#5", "E#5", "D5"]);
     }
 
     #[test]

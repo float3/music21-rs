@@ -7,6 +7,11 @@ use crate::{
     pitch::Pitch,
 };
 
+pub mod enharmonics;
+pub mod harmonic_function;
+pub mod neoriemannian;
+pub mod transposition;
+
 /// A set of key-finding weights for the Krumhansl-Schmuckler algorithm.
 ///
 /// These are the profiles music21's `analysis.discrete` ships, with the

@@ -60,8 +60,18 @@ pub(super) fn start_coverage(
         return Err("cargo llvm-cov clean failed".into());
     }
 
+    // `--no-rustc-wrapper` instruments through RUSTFLAGS, so every crate is
+    // instrumented. cargo-llvm-cov's default wrapper instruments workspace
+    // members alone, which leaves `python-parity`'s test binaries without
+    // the profiler runtime: they run, and write no profile at all.
     let output = Command::new("cargo")
-        .args([toolchain.as_str(), "llvm-cov", "show-env", "--doctests"])
+        .args([
+            toolchain.as_str(),
+            "llvm-cov",
+            "show-env",
+            "--doctests",
+            "--no-rustc-wrapper",
+        ])
         .current_dir(workspace_root)
         .output()
         .map_err(|err| {
@@ -183,6 +193,7 @@ pub(super) fn collect_coverage(
         lines: percent("lines")?,
         functions: percent("functions")?,
         regions: percent("regions")?,
+        short_of: Vec::new(),
     })
 }
 

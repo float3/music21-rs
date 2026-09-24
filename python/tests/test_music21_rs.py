@@ -681,3 +681,93 @@ def test_an_iterator_that_restarts_is_read_once():
     notes = [m.Note(name) for name in ("C4", "E4", "G4")]
     chord = m.Chord(_Restarting(notes))
     assert [p.nameWithOctave for p in chord.pitches] == ["C4", "E4", "G4"]
+
+
+@pytest.mark.parametrize(
+    ("tonic", "mode", "scale"),
+    [("E-", "major", "MajorScale"), ("c", "minor", "MinorScale"), ("d", "dorian", "DorianScale")],
+)
+def test_a_key_answers_as_the_scale_of_its_mode(tonic, mode, scale):
+    # music21's Key is a DiatonicScale, and answers every scale question
+    # as the scale of its mode does.
+    key = m.Key(tonic, mode)
+    same = getattr(m, scale)(tonic.upper())
+    asks = [
+        lambda s: s.getPitches(),
+        lambda s: s.getPitches("C4", "C6"),
+        lambda s: s.getTonic(),
+        lambda s: s.getDominant(),
+        lambda s: s.getLeadingTone(),
+        lambda s: s.nextPitch("F4"),
+        lambda s: s.nextPitch("F4", direction="descending"),
+        lambda s: s.pitchesFromScaleDegrees([1, 3, 5]),
+        lambda s: s.intervalBetweenDegrees(1, 5),
+        lambda s: s.getDegreeMaxUnique(),
+        lambda s: s.isNext("F4", "E-4"),
+        lambda s: s.getChord("C4", "C5"),
+        lambda s: s.match(["C", "D", "E-"]),
+        lambda s: s.findMissing(["C", "D"]),
+        lambda s: s.extractPitchList(["C", "D"]),
+        lambda s: s.getRelativeMinor(),
+        lambda s: s.getRelativeMajor(),
+        lambda s: s.getParallelMinor(),
+        lambda s: s.getParallelMajor(),
+        lambda s: s.chord,
+        lambda s: s.isConcrete,
+    ]
+    for ask in asks:
+        assert repr(ask(key)) == repr(ask(same))
+
+
+def test_a_key_derives_keys_and_numerals_in_itself():
+    minor = m.Key("c")
+    assert repr(minor.derive(["C", "D", "E-"])) == "<music21.key.Key of G major>"
+    assert [repr(k) for k in minor.deriveAll(["C", "D", "E-"])] == [
+        "<music21.key.Key of G major>",
+        "<music21.key.Key of C major>",
+    ]
+    assert repr(minor.deriveRanked(["C", "D", "E-"])[0][1]).startswith("<music21.key.Key of")
+    assert repr(m.Key("E-").romanNumeral(5)) == "<music21.roman.RomanNumeral V in E- major>"
+
+
+def test_a_scale_builds_its_chord_without_music21():
+    chord = m.MajorScale("E-").getChord("E-4", "B-4")
+    assert repr(chord) == "<music21.chord.Chord E-4 F4 G4 A-4 B-4>"
+
+
+@pytest.mark.parametrize(
+    ("degree", "key_or_scale", "figure"),
+    [
+        (2, lambda: m.Key("C", "dorian"), "II"),
+        (3, lambda: m.Key("C", "lydian"), "III"),
+        (2, lambda: m.Key("C"), "ii"),
+        (2, lambda: m.Key("c"), "ii"),
+        (4, lambda: m.Key("c"), "iv"),
+        (2, lambda: m.MajorScale("C"), "ii"),
+        (2, lambda: m.MinorScale("C"), "ii"),
+        (2, lambda: "C", "ii"),
+        (6, lambda: "E-", "vi"),
+        (5, lambda: None, "V"),
+    ],
+)
+def test_a_degree_is_written_in_the_case_music21_writes_it(degree, key_or_scale, figure):
+    # music21 lowers a degree's numeral in a major or minor key alone; a
+    # modal key keeps it upper case, and so a major triad.
+    assert m.RomanNumeral(degree, key_or_scale()).figure == figure
+
+
+def test_an_interval_hands_back_notes_without_music21():
+    interval = m.Interval(m.Pitch("C4"), m.Pitch("E4"))
+    assert repr(interval.noteStart) == "<music21.note.Note C>"
+    assert repr(interval.noteEnd) == "<music21.note.Note E>"
+    assert interval.noteStart.pitch is interval.pitchStart
+
+
+def test_additive_meters_divide_their_beats_as_music21_does():
+    meter = m.TimeSignature("2+3/8")
+    assert [d.quarterLength for d in meter.beatDivisionDurations] == [0.5, 0.5]
+    assert [d.quarterLength for d in meter.beatSubDivisionDurations] == [0.25] * 4
+    with pytest.raises(m.TimeSignatureException):
+        m.TimeSignature("2/4+3/8").beatDivisionDurations
+    with pytest.raises(m.TimeSignatureException):
+        m.TimeSignature("2/4+3/8").beatSubDivisionDurations

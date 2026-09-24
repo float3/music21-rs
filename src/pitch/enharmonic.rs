@@ -252,10 +252,6 @@ pub(super) use crate::interval::constants::{DIMINISHED_SECOND_DOWN, DIMINISHED_S
 /// simpler spelling.
 pub type CriterionFunction = fn(&[Pitch]) -> Result<FloatType>;
 
-/// How far apart two dissonance scores must be to count as different: a
-/// spelling within this of the best so far is a tie, and the first wins.
-const SCORE_TOLERANCE: FloatType = 1e-9;
-
 /// Respells a set of pitches so that they read as simply as possible
 /// together: music21's `simplifyMultipleEnharmonics`. The first pitch is kept
 /// as written and each of the others may be swapped for a common enharmonic;
@@ -323,9 +319,10 @@ pub(super) fn brute_force_enharmonics_search(
         pitches.extend(combination);
         let score = score_func(&pitches)?;
         // Two spellings that score the same keep the first, as music21's
-        // `min` does; a difference in the last bits of a logarithm is not a
-        // difference in dissonance.
-        if score < min_score - SCORE_TOLERANCE {
+        // `min` does. The scores are music21's to the last bit, so a
+        // spelling one ulp lower wins here as it wins there: pitch classes
+        // 3, 6 and 9 spell `E- G- A`.
+        if score < min_score {
             min_score = score;
             best_combination = pitches;
         }
@@ -359,7 +356,7 @@ pub(super) fn greedy_enharmonics_search(
             candidate_list.push(candidate.clone());
             let score = score_func(&candidate_list)?;
             let score = OrderedFloat(score);
-            if best_score.is_none_or(|best| score < best - SCORE_TOLERANCE) {
+            if best_score.is_none_or(|best| score < best) {
                 best_score = Some(score);
                 best_candidate = Some(candidate);
             }
@@ -465,10 +462,26 @@ pub(super) fn pythagorean_denominator_log(interval: &Interval) -> Result<FloatTy
     let found_pitch_space = start_pitch.ps() + (7 * fifth_count) as FloatType;
     let octave_adjust = ((end_pitch.ps() - found_pitch_space) / 12.0).round() as IntegerType;
 
-    let mut denominator_twos = if fifth_count > 0 { fifth_count } else { 0 };
-    let denominator_threes = if fifth_count < 0 { -fifth_count } else { 0 };
-    denominator_twos = (denominator_twos - octave_adjust).max(0);
+    // The ratio is 3^f * 2^(octaves - f) for f fifths, down or up: a fifth
+    // down is 2/3, whose 2 an octave's 1/2 cancels. So a twelfth down is
+    // 1/3, not 1/6.
+    let denominator_twos = (fifth_count - octave_adjust).max(0);
+    let denominator_threes = (-fifth_count).max(0);
 
-    Ok(denominator_twos as FloatType * (2.0 as FloatType).ln()
-        + denominator_threes as FloatType * (3.0 as FloatType).ln())
+    // One log of the whole denominator, as music21 takes it: the sum of the
+    // two logs rounds differently, and a tie between spellings falls on
+    // those last bits.
+    // Past u128 the denominator is rounded to a float first, as Python
+    // rounds an int too large to be exact.
+    let twos = denominator_twos as u32;
+    let threes = denominator_threes as u32;
+    let denominator = 2_u128
+        .checked_pow(twos)
+        .zip(3_u128.checked_pow(threes))
+        .and_then(|(twos, threes)| twos.checked_mul(threes))
+        .map_or_else(
+            || (2.0 as FloatType).powi(twos as i32) * (3.0 as FloatType).powi(threes as i32),
+            |exact| exact as FloatType,
+        );
+    Ok(denominator.ln())
 }

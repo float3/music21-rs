@@ -429,6 +429,24 @@ impl Suite {
     }
 }
 
+/// The instrumented suites that did not pass, and so left the coverage
+/// figure short of what they reach: a suite that failed to build, stopped
+/// at its first failing binary or never ran wrote no profile, or only part
+/// of one. The wheel is built uninstrumented and never counts. A comparison
+/// against music21 that ran measured what it reached, whatever it found.
+fn unmeasured(suites: &[Suite]) -> Vec<&str> {
+    suites
+        .iter()
+        .filter(|suite| suite.subject != Subject::Wheel)
+        .filter(|suite| match suite.status {
+            SuiteStatus::Passed => false,
+            SuiteStatus::Skipped => true,
+            SuiteStatus::Failed => !suite.comparison,
+        })
+        .map(|suite| suite.name.as_str())
+        .collect()
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 enum SuiteStatus {
@@ -447,11 +465,15 @@ impl SuiteStatus {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 struct Coverage {
     lines: Percent,
     functions: Percent,
     regions: Percent,
+    /// The suites that did not pass, and so wrote less than they reach.
+    /// Empty when the figure is whole.
+    #[serde(default)]
+    short_of: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
@@ -681,7 +703,14 @@ pub(crate) fn report(workspace_root: &Path, options: &Options) -> Result<(), Box
     };
 
     let coverage = match &coverage_env {
-        Some(env) => Some(collect_coverage(workspace_root, &options.out, env)?),
+        Some(env) => {
+            let mut coverage = collect_coverage(workspace_root, &options.out, env)?;
+            coverage.short_of = unmeasured(&measured)
+                .into_iter()
+                .map(str::to_string)
+                .collect();
+            Some(coverage)
+        }
         None => None,
     };
 
@@ -732,6 +761,12 @@ pub(crate) fn report(workspace_root: &Path, options: &Options) -> Result<(), Box
             "  coverage: {:.2}% of lines, {:.2}% of functions, {:.2}% of regions",
             coverage.lines.percent, coverage.functions.percent, coverage.regions.percent
         );
+        if !coverage.short_of.is_empty() {
+            eprintln!(
+                "  warning: coverage is short; these did not pass: {}",
+                coverage.short_of.join(", ")
+            );
+        }
     }
     for suite in &report.suites {
         match suite.status {
@@ -1021,6 +1056,44 @@ mod tests {
     }
 
     use super::*;
+
+    fn suite(name: &str, status: SuiteStatus, subject: Subject) -> Suite {
+        Suite {
+            name: name.to_string(),
+            command: String::new(),
+            status,
+            passed: 0,
+            failed: 0,
+            detail: None,
+            note: None,
+            expected_failures: 0,
+            subject,
+            comparison: false,
+        }
+    }
+
+    #[test]
+    fn a_suite_that_did_not_pass_leaves_coverage_short() {
+        let suites = [
+            suite("Workspace", SuiteStatus::Failed, Subject::Crate),
+            suite("Doctests", SuiteStatus::Passed, Subject::Crate),
+            suite("Parity", SuiteStatus::Skipped, Subject::Both),
+            // The wheel is built uninstrumented, so it never counted.
+            suite("Wheel", SuiteStatus::Failed, Subject::Wheel),
+        ];
+        assert_eq!(unmeasured(&suites), ["Workspace", "Parity"]);
+    }
+
+    #[test]
+    fn a_comparison_that_ran_measured_whatever_it_found() {
+        let mut differs = suite("music21", SuiteStatus::Failed, Subject::Both);
+        differs.comparison = true;
+        assert!(unmeasured(&[differs]).is_empty());
+
+        let mut skipped = suite("music21", SuiteStatus::Skipped, Subject::Both);
+        skipped.comparison = true;
+        assert_eq!(unmeasured(&[skipped]), ["music21"]);
+    }
 
     #[test]
     fn snake_case_follows_the_crate_convention() {

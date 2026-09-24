@@ -731,17 +731,14 @@ impl Chord {
             .count()
     }
 
+    /// Which note carries the bass [`Self::found_bass`] finds: the one
+    /// written lowest, as music21's `bass()` reads it, so `E#4` is under
+    /// `F-4` though it sounds above.
     fn bass_index(&self) -> Option<usize> {
+        let bass = self.bass_pitch()?;
         self.notes
             .iter()
-            .enumerate()
-            .min_by(|(_, left), (_, right)| {
-                left.pitch
-                    .ps()
-                    .partial_cmp(&right.pitch.ps())
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            })
-            .map(|(index, _)| index)
+            .position(|note| std::ptr::eq(&note.pitch, bass))
     }
 
     fn retain_first_by<K: PartialEq>(&mut self, key: impl Fn(&Pitch) -> K) {
@@ -2138,6 +2135,15 @@ mod tests {
             ("G4 C4 E4", Some(5), vec!["C5", "E5", "G5"]),
             ("C4 E4 G4 C5 E5", None, vec!["C4", "E4", "G4"]),
             ("C#4 D-4 E4", None, vec!["C#4", "D-4", "E4"]),
+            // The bass is the note written lowest, not the one sounding
+            // lowest: E#4 sits under F-4 on the staff.
+            ("E#4 F-4", None, vec!["E#4", "F-4"]),
+            ("C6 B#5", None, vec!["B#5", "C6"]),
+            (
+                "A-6 E-2 D#2 E#3 A#5",
+                None,
+                vec!["D#2", "E-2", "E#2", "A-2", "A#2"],
+            ),
         ];
         for (notes, force_octave, expected) in cases {
             let chord = Chord::new(notes).unwrap();

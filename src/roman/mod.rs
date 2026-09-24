@@ -250,6 +250,20 @@ impl AugmentedSixthKind {
     }
 }
 
+/// The figure before any secondary numeral: `V7` of `V7/ii`. music21 splits
+/// at the first slash followed by a numeral or a sharp, so `viiø/7` is not
+/// split.
+fn primary_figure(figure: &str) -> &str {
+    let secondary_start =
+        |next: char| next == '#' || (next.is_ascii_alphabetic() && next != 'o' && next != 'O');
+    figure
+        .char_indices()
+        .find(|(at, slash)| {
+            *slash == '/' && figure[at + 1..].chars().next().is_some_and(secondary_start)
+        })
+        .map_or(figure, |(at, _)| &figure[..at])
+}
+
 impl RomanNumeral {
     /// Parses a Roman numeral figure in a key.
     ///
@@ -536,6 +550,26 @@ impl RomanNumeral {
         format!("{prefix}{numeral}")
     }
 
+    /// The flats or sharps written in front of the numeral, exactly as
+    /// written: music21's `frontAlterationString`. `-VI` is `-` and `N6`
+    /// is `b`, since it reads as `bII6`; an augmented sixth has none,
+    /// though `It6` roots on a raised fourth, and neither does `vii` in a
+    /// minor key. See [`Self::written_accidental`] for the alteration.
+    pub fn front_alteration_string(&self) -> String {
+        let figure = figure::named_figure(primary_figure(&self.figure), &self.key);
+        let Some(mark) = figure
+            .chars()
+            .next()
+            .filter(|mark| matches!(mark, 'b' | '-' | '#'))
+        else {
+            return String::new();
+        };
+        figure
+            .chars()
+            .take_while(|written| *written == mark)
+            .collect()
+    }
+
     /// The numeral with nothing written in front of it: music21's
     /// `romanNumeralAlone`, so `bVII65/V` is `VII`.
     pub fn roman_numeral_alone(&self) -> String {
@@ -584,7 +618,12 @@ impl RomanNumeral {
             });
             return score as u8;
         }
-        functionality_score_of(&self.figure.replace('+', "")).unwrap_or(0)
+        // Only the crate's own `It+6` spelling loses its `+`; a `V+` is
+        // looked up as written, and music21's table has none.
+        if matches!(self.kind, RomanKind::AugmentedSixth(_)) {
+            return functionality_score_of(&self.figure.replace('+', "")).unwrap_or(0);
+        }
+        functionality_score_of(&self.figure).unwrap_or(0)
     }
 
     /// Whether this is a Neapolitan chord: a major triad on the flattened
@@ -606,6 +645,11 @@ impl RomanNumeral {
             return RomanNumeral::new(secondary.clone(), self.key.clone())?.is_mixture(true);
         }
         if self.kind != RomanKind::Diatonic || !(1..=7).contains(&self.degree) {
+            return Ok(false);
+        }
+        // Only a triad or a seventh can be mixture: `I[add6]` is neither.
+        let chord = self.to_chord()?;
+        if !chord.is_triad() && !chord.is_seventh() {
             return Ok(false);
         }
         // music21 asks the *chord* for its quality here, and a chord answers
@@ -950,6 +994,104 @@ pub struct NumeralAlone {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_front_alteration_is_what_was_written() {
+        use super::RomanNumeral;
+        use crate::Key;
+
+        let cases = [
+            ("It6", "C", ""),
+            ("Ger65", "a", ""),
+            ("Sw42", "C", ""),
+            ("bVI", "C", "b"),
+            ("-VI", "C", "-"),
+            ("##iv", "C", "##"),
+            ("N6", "C", "b"),
+            ("N", "a", "b"),
+            ("Cad64", "C", ""),
+            ("V/bVI", "C", ""),
+            ("bVII7/V", "C", "b"),
+            ("vii", "a", ""),
+            ("#viio7", "a", "#"),
+            ("I", "C", ""),
+        ];
+        for (figure, tonic, written) in cases {
+            let key = Key::from_tonic(tonic).unwrap();
+            let numeral = RomanNumeral::new(figure, key).unwrap();
+            assert_eq!(numeral.front_alteration_string(), written, "{figure}");
+        }
+    }
+
+    #[test]
+    fn functionality_and_mixture_read_as_music21_reads_them() {
+        use super::RomanNumeral;
+        use crate::Key;
+
+        let numeral = |figure: &str, tonic: &str| {
+            RomanNumeral::new(figure, Key::from_tonic(tonic).unwrap()).unwrap()
+        };
+
+        // A `+` is part of the figure music21 looks up; only the crate's own
+        // `It+6` spelling drops it.
+        for (figure, score) in [
+            ("V+", 0),
+            ("V+7", 0),
+            ("It6", 34),
+            ("Ger65", 33),
+            ("V", 70),
+            ("V7/V", 56),
+        ] {
+            assert_eq!(
+                numeral(figure, "C").functionality_score(),
+                score,
+                "{figure}"
+            );
+        }
+        assert_eq!(numeral("III+", "a").functionality_score(), 0);
+
+        // Neither a triad nor a seventh is never mixture.
+        for (figure, tonic, mixture) in [
+            ("I[add6]", "a", false),
+            ("ii7[no5]", "a", false),
+            ("I", "a", true),
+            ("i[add6]", "C", false),
+            ("iv7[no5]", "C", false),
+            ("iv", "C", true),
+        ] {
+            assert_eq!(
+                numeral(figure, tonic).is_mixture(false).unwrap(),
+                mixture,
+                "{figure} in {tonic}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_root_position_augmented_sixth_roots_on_its_raised_bass() {
+        use super::RomanNumeral;
+        use crate::Key;
+
+        // The bass is respelled after it is recorded as the root; the root
+        // must follow it, as music21's root is the bass note itself.
+        let cases = [
+            ("It53", "C", "F#4"),
+            ("It53", "a", "D#5"),
+            ("Ger7", "C", "F#4"),
+            ("Ger7", "a", "D#5"),
+            ("Sw7", "C", "D#4"),
+            ("Sw7", "a", "B#4"),
+        ];
+        for (figure, tonic, root) in cases {
+            let numeral = RomanNumeral::new(figure, Key::from_tonic(tonic).unwrap()).unwrap();
+            let chord = numeral.to_chord().unwrap();
+            assert_eq!(
+                chord.root().unwrap().name_with_octave(),
+                root,
+                "{figure} in {tonic}"
+            );
+        }
+    }
+
     #[test]
     fn a_numeral_reports_how_it_was_read() {
         use super::{

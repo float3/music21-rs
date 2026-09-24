@@ -1,3 +1,87 @@
+# Unreleased
+
+Four more of music21's analysis modules are the crate's—
+`analysis.enharmonics`, `analysis.harmonicFunction`,
+`analysis.neoRiemannian` and `analysis.transposition`—and pass every
+example: 40 modules, 1,027 docstrings and 9,171 examples. Asking music21 and
+the crate the same questions over thousands of random inputs found eleven
+places where they answered differently; they agree now.
+
+## Added
+
+- `analysis::enharmonics::best_spelling`, music21's
+  `EnharmonicSimplifier.bestPitches`, built on `spelling_options` and
+  `best_choice`, with its three penalties and scores on `EnharmonicRules`.
+  The wheel installs `EnharmonicSimplifier` and both rule classes over
+  music21's.
+- `analysis::neoriemannian`: `Transform` (L, P, R), `lrp_chain` and
+  `lrp_combination`, `complete_hexatonic`, `hexatonic_system`,
+  `chromatic_mediant`, `disjunct_mediant`, `slide`, `nebenverwandt`,
+  `is_neo_r` and `is_chromatic_mediant`. The wheel installs them over
+  music21's `analysis.neoRiemannian`.
+- `analysis::harmonic_function::HarmonicFunction`, the eighteen function
+  labels, with `to_roman` and `from_roman`: music21's `functionToRoman`
+  and `romanToFunction`. The wheel installs them and the enum over
+  music21's `analysis.harmonicFunction`.
+- `analysis::transposition::TranspositionChecker`, a set of pitches in all
+  twelve transpositions and how many differ. The wheel installs it over
+  music21's.
+
+## Fixed
+
+- The report counted a wheel class that inherits its members, such as
+  `Trill` from `Ornament`, as lacking them. The wheel figure reads 94%
+  where it read 89%.
+- A chord respelled by dissonance, as one built from pitch-class numbers
+  is, could be spelled otherwise than music21 spells it. The Pythagorean
+  penalty gave a twelfth down 1/6 where music21 gives 1/3, and took the
+  log of each prime apart where music21 takes one of the whole
+  denominator, and a tolerance for ties then hid a difference music21's
+  `min` keeps. Pitch classes 3, 6 and 9 are `E- G- A` now, as in music21;
+  every set of pitch classes and 6,000 respellings of named pitches agree.
+- An augmented sixth is named by its root and inversion, as music21 names
+  it, for every voicing: a table of spellings had pinned `A- C D F#` and
+  six others to one inversion whatever note was in the bass, so nine of
+  ten voicings tried were misnamed. And a seventh built from pitch-class
+  numbers is an enharmonic equivalent where music21 says so, since the
+  fifth above its inferred root is respelled on the way.
+- `RomanNumeral`: `frontAlterationString` is what was written, so `It6`
+  has none and `-VI` keeps its `-`; `It53`, `Ger7` and `Sw7` root on their
+  raised bass; `functionalityScore` looks `V+` up as written; and a
+  numeral that is neither a triad nor a seventh is never mixture. 1,185
+  numerals now answer eighteen questions as music21's do.
+- The wheel's `Key` answers the scale questions music21's `Key` inherits
+  from `DiatonicScale`—`getPitches`, `getDominant`, `nextPitch`,
+  `derive`, `romanNumeral` and the rest—as the scale of its mode does,
+  where it raised `AttributeError`, installed or not. `derive` hands back
+  keys, as music21's does.
+- A scale's `getChord` and an interval's `noteStart` and `noteEnd` built
+  their objects from music21's classes even with no music21 installed,
+  and failed there; they use the wheel's own. Scales
+  have music21's `chord` and `usePitchDegreeCache`.
+- A Roman numeral made from a degree is written in capitals in a modal
+  key, as music21 writes it: 2 in C dorian is `II`, a major triad, where
+  it was `ii`.
+- `TimeSignature::beat_division_durations` and its subdivisions are read
+  off the beat sequence as music21 reads them: the divisions of every beat
+  must agree, not the beats, so `2+3/8` divides into eighths where it was
+  refused. The wheel raises music21's `TimeSignatureException` where the
+  divisions do differ. 110 meters agree with music21 on fifteen
+  properties.
+- `Chord::closed_position` measured from the note sounding lowest where
+  music21 measures from the note written lowest, so `E#4 F-4` closed to
+  `F-4 E#5` where music21 keeps `E#4 F-4`. 31 of 4,000 random chords
+  differed; none do now.
+- `Pitch::frequency_hz` rounds as music21 rounds: it raises the twelfth
+  root of two to the distance from A4, where it took two to the distance
+  over twelve, and so differed from music21 in the last bits of nearly
+  every pitch.
+- The report's coverage run instrumented only the workspace since
+  cargo-llvm-cov 0.9, whose default wrapper skips `python-parity`: its
+  suites ran and wrote no profile. It passes `--no-rustc-wrapper` now, and
+  reads 95.2% of lines where it read 90.6%. A suite that did not pass is
+  named beside the figure, since it leaves the figure short.
+
 # music21-rs 0.7.1
 
 The wheel read the first item of a music21 stream iterator twice, so with it
