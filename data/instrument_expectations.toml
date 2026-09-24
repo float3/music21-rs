@@ -3,10 +3,10 @@
 # The instruments and the name tables are transcribed into
 # src/instrument/tables.rs; the lookups are checked behaviourally.
 #
-# music21 11.0.0b9 at e2ba700a434a66baf73d5d05a70c2063dcf8eab9
+# music21 11.0.0b9 at 929a8866da788322d9453334db0f54e7193203de
 
 music21_version = "11.0.0b9"
-music21_commit = "e2ba700a434a66baf73d5d05a70c2063dcf8eab9"
+music21_commit = "929a8866da788322d9453334db0f54e7193203de"
 
 ensemble_names = ["no performers", "solo", "duet", "trio", "quartet", "quintet", "sextet", "septet", "octet", "nonet", "dectet", "undectet", "duodectet", "tredectet", "quattuordectet", "quindectet", "sexdectet", "septendectet", "octodectet", "novemdectet", "vigetet", "unvigetet", "duovigetet", "trevigetet", "quattuorvigetet", "quinvigetet", "sexvigetet", "septenvigetet", "octovigetet", "novemvigetet", "trigetet", "untrigetet", "duotrigetet", "tretrigetet", "quottuortrigetet", "quintrigetet", "sextrigetet", "septentrigetet", "octotrigetet", "novemtrigetet", "quadragetet", "unquadragetet", "duoquadragetet", "trequadragetet", "quattuorquadragetet", "quinquadragetet", "sexquadragetet", "octoquadragetet", "octoquadragetet", "novemquadragetet", "quinquagetet", "unquinquagetet", "duoquinquagetet", "trequinguagetet", "quattuorquinquagetet", "quinquinquagetet", "sexquinquagetet", "septenquinquagetet", "octoquinquagetet", "novemquinquagetet", "sexagetet", "undexagetet", "duosexagetet", "tresexagetet", "quoattuorsexagetet", "quinsexagetet", "sexsexagetet", "septensexagetet", "octosexagetet", "novemsexagetet", "septuagetet", "unseptuagetet", "duoseptuagetet", "treseptuagetet", "quattuorseptuagetet", "quinseptuagetet", "sexseptuagetet", "septenseptuagetet", "octoseptuagetet", "novemseptuagetet", "octogetet", "unoctogetet", "duooctogetet", "treoctogetet", "quattuoroctogetet", "quinoctogetet", "sexoctogetet", "septoctogetet", "octooctogetet", "novemoctogetet", "nonagetet", "unnonagetet", "duononagetet", "trenonagetet", "quattuornonagetet", "quinnonagetet", "sexnonagetet", "septennonagetet", "octononagetet", "novemnonagetet", "centet"]
 

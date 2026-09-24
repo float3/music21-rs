@@ -10,7 +10,7 @@
 # is held apart as `period`, which is this crate's convention rather
 # than Scala's.
 music21_version = "11.0.0b9"
-music21_commit = "e2ba700a434a66baf73d5d05a70c2063dcf8eab9"
+music21_commit = "929a8866da788322d9453334db0f54e7193203de"
 hexatone_commit = "aee6afdfabd7ac68323be62a7bdef08fae0007dc"
 
 [[scale]]
