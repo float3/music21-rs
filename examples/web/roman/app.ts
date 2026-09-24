@@ -1,6 +1,6 @@
 // @ts-nocheck
 import "../theme.js";
-import { midiToHz, play, stop } from "../play.js";
+import { play, stop } from "../play.js";
 
 const $ = (selector) => document.querySelector(selector);
 const modes = $("#modes");
@@ -109,7 +109,7 @@ function render(info) {
     });
     actions.replaceChildren();
     const inspector = el("a", "", "Open in Chord Inspector");
-    inspector.href = `../chord/?chord=${encodeURIComponent(info.pitches.join(" "))}&key=${encodeURIComponent(info.key.split(" ")[0])}`;
+    inspector.href = `../chord/?chord=${encodeURIComponent(info.pitches.join(" "))}&key=${encodeURIComponent(info.key_tonic)}`;
     actions.appendChild(inspector);
 }
 
@@ -157,8 +157,7 @@ form.addEventListener("submit", (event) => {
 playButton.addEventListener("click", async () => {
     if (!current) return;
     stop();
-    const midi = current.pitches.map((name) => wasm.pitch_midi_number(name));
-    if (!(await play(midi.map(midiToHz)))) fail("Audio is not available in this browser.");
+    if (!(await play(current.frequencies_hz))) fail("Audio is not available in this browser.");
 });
 
 async function start() {

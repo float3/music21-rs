@@ -1,6 +1,6 @@
 // @ts-nocheck
 import "../theme.js";
-import { midiToHz, play, stop } from "../play.js";
+import { play, stop } from "../play.js";
 
 const $ = (selector) => document.querySelector(selector);
 const form = $("#form");
@@ -45,7 +45,7 @@ function fact(label, value) {
 
 function render(info) {
     current = info;
-    title.textContent = `${info.tonic.replace(/\d+$/, "")} ${info.name}`;
+    title.textContent = `${info.tonic_name} ${info.name}`;
     facts.replaceChildren(
         fact("music21 class", info.id),
         fact("Tonic", info.tonic),
@@ -56,8 +56,7 @@ function render(info) {
     pitches.replaceChildren();
     info.pitches.forEach((pitch, index) => {
         const node = el("div", `pitch${index === 0 || index === info.pitches.length - 1 ? " tonic" : ""}`);
-        const degree = info.degrees.length ? info.degrees[index % info.degrees.length] : index + 1;
-        node.append(el("strong", "", pitch), el("small", "", `degree ${index === info.pitches.length - 1 ? info.degrees[0] ?? 1 : degree}`));
+        node.append(el("strong", "", pitch), el("small", "", `degree ${info.pitch_degrees[index]}`));
         pitches.appendChild(node);
     });
     actions.replaceChildren();
@@ -92,7 +91,7 @@ function derive() {
             const row = el("tr", "clickable");
             row.append(
                 el("td", "", `${entry.matched} of ${entry.total}`),
-                el("td", "", `${entry.scale.tonic.replace(/\d+$/, "")} ${entry.scale.name}`),
+                el("td", "", `${entry.scale.tonic_name} ${entry.scale.name}`),
                 el("td", "", entry.scale.pitch_names.slice(0, -1).join(" ")),
             );
             row.addEventListener("click", () => {
@@ -123,8 +122,7 @@ deriveForm.addEventListener("submit", (event) => {
 playButton.addEventListener("click", async () => {
     if (!current) return;
     stop();
-    const midi = current.pitches.map((name) => wasm.pitch_midi_number(name));
-    if (!(await play(midi.map(midiToHz), { arpeggio: true, step: 0.32 }))) {
+    if (!(await play(current.frequencies_hz, { arpeggio: true, step: 0.32 }))) {
         fail("Audio is not available in this browser.");
     }
 });

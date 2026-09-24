@@ -1,6 +1,6 @@
 // @ts-nocheck
 import "../theme.js";
-import { midiToHz, play, stop } from "../play.js";
+import { play, stop } from "../play.js";
 
 const $ = (selector) => document.querySelector(selector);
 const form = $("#form");
@@ -18,7 +18,6 @@ const shorthands = $("#shorthands");
 
 $("#docs-link").href = "../docs/music21_rs/index.html";
 
-const pitchClassNames = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"];
 const exampleLabels = [
     "C:maj",
     "A:min",
@@ -60,8 +59,9 @@ function fact(label, value) {
 
 function bits(target, values, from) {
     target.replaceChildren();
+    const names = from === "C" ? wasm.display_pitch_class_names() : null;
     values.forEach((value, index) => {
-        const cell = el("span", value ? "on" : "", from === "C" ? pitchClassNames[index] : String(index));
+        const cell = el("span", value ? "on" : "", names ? names[index] : String(index));
         target.appendChild(cell);
     });
 }
@@ -85,7 +85,7 @@ function render(info) {
     );
     pitches.replaceChildren();
     info.pitches.forEach((pitch, index) => {
-        const node = el("div", `pitch${index === info.pitches.length - 1 && info.bass && info.bass !== "1" ? " bass" : ""}`);
+        const node = el("div", `pitch${index === info.bass_index ? " bass" : ""}`);
         node.append(el("strong", "", pitch), el("small", "", `MIDI ${info.midi[index] ?? ""}`));
         pitches.appendChild(node);
     });
@@ -153,7 +153,7 @@ form.addEventListener("submit", (event) => {
 playButton.addEventListener("click", async () => {
     if (!current || !current.midi.length) return;
     stop();
-    if (!(await play(current.midi.map(midiToHz)))) fail("Audio is not available in this browser.");
+    if (!(await play(current.frequencies_hz))) fail("Audio is not available in this browser.");
 });
 
 start();

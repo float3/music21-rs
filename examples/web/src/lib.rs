@@ -1,9 +1,9 @@
 //! WebAssembly bindings for the browser examples.
 
 use music21_rs::{
-    ALL_TUNING_SYSTEMS, Chord, ChordResolutionSuggestion, Error, GuitarTuning, Key, KnownChordType,
-    Pitch, Polyrhythm, Result, ScalaArchive, ScalaScale, TuningSystem, abc_chord, abc_duration,
-    pitch_class_name,
+    ALL_TUNING_SYSTEMS, Chord, ChordResolutionSuggestion, Error, GuitarTuning, Interval, Key,
+    KnownChordType, Pitch, Polyrhythm, Result, ScalaArchive, ScalaScale, TuningSystem, abc_chord,
+    abc_duration, pitch_class_name,
 };
 use serde::Serialize;
 use std::{collections::BTreeSet, fmt};
@@ -13,6 +13,9 @@ mod listen;
 mod score;
 
 const PITCH_CLASSES: u8 = 12;
+const MIDDLE_C: i32 = 60;
+const OCTAVE_RATIO: f64 = 2.0;
+const OCTAVE_CENTS: f64 = 1200.0;
 
 #[derive(Serialize)]
 struct TuningFrequencyInfo {
@@ -85,6 +88,8 @@ struct PitchInfo {
     index: usize,
     name: String,
     name_with_octave: String,
+    /// `name_with_octave` with flats written `b`: `Bb4`.
+    display_name: String,
     midi: i32,
     octave: Option<i32>,
     pitch_space: f64,
@@ -145,6 +150,8 @@ struct GuitarFingeringInfo {
     omitted_pitch_spaces: Vec<i32>,
     covered_pitch_classes: Vec<u8>,
     omitted_pitch_classes: Vec<u8>,
+    covered_names: Vec<String>,
+    omitted_names: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -178,6 +185,11 @@ struct KnownChordInfo {
     pitch_names: Vec<String>,
     display_pitch_names: Vec<String>,
     chord_input: String,
+    /// The chord from the root up in octave four, then each inversion, as
+    /// chord inspector input.
+    voicings: Vec<String>,
+    /// The root position voicing, flats written `b`: `Eb4 G4 Bb4`.
+    display_voicing: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -187,6 +199,9 @@ struct TuningSystemInfo {
     description: String,
     family: &'static str,
     octave_size: u32,
+    /// Every built-in system repeats at the octave.
+    period_ratio: f64,
+    period_cents: f64,
     root_frequency_hz: f64,
     degrees: Vec<TuningDegreeInfo>,
 }
@@ -198,6 +213,8 @@ struct TuningDegreeInfo {
     ratio: f64,
     ratio_label: String,
     frequency_hz: f64,
+    /// Cents above the root.
+    cents: f64,
     cents_from_equal_temperament: f64,
 }
 
@@ -462,6 +479,104 @@ pub fn pitch_class_names() -> Vec<String> {
 }
 
 #[wasm_bindgen]
+/// The twelve pitch classes as `pitch_class_names` has them, flats written
+/// `b`: `Db`, `Eb`.
+pub fn display_pitch_class_names() -> Vec<String> {
+    display_class_names(&(0..PITCH_CLASSES).collect::<Vec<_>>())
+}
+
+fn display_class_names(pitch_classes: &[u8]) -> Vec<String> {
+    pitch_classes
+        .iter()
+        .map(|&pitch_class| display_pitch_name(pitch_class_name(pitch_class)))
+        .collect()
+}
+
+#[derive(Serialize)]
+struct KeyInfo {
+    midi: i32,
+    /// As chord input, with its octave: `D-4`.
+    name: String,
+    /// For a label, without its octave: `Db`.
+    display: String,
+    /// Its other spelling with a single accidental, `C#` for `Db` and `B#`
+    /// for `C`; none where that takes a double one, as `D`'s does.
+    alternate: Option<String>,
+    pitch_class: u8,
+    octave: i32,
+    black: bool,
+    frequency_hz: f64,
+}
+
+fn key_info(midi: i32) -> Result<KeyInfo> {
+    let pitch_class = u8::try_from(midi.rem_euclid(i32::from(PITCH_CLASSES)))
+        .map_err(|err| Error::Pitch(err.to_string()))?;
+    let octave = midi.div_euclid(i32::from(PITCH_CLASSES)) - 1;
+    let pitch = Pitch::from_name(format!("{}{octave}", pitch_class_name(pitch_class)))?;
+    let black = pitch.alter() != 0.0;
+    let alternate = pitch
+        .get_enharmonic()
+        .ok()
+        .filter(|other| other.alter().abs() < 2.0)
+        .map(|other| display_pitch_name(&other.name()));
+    Ok(KeyInfo {
+        midi,
+        name: pitch.name_with_octave(),
+        display: display_pitch_name(&pitch.name()),
+        alternate,
+        pitch_class,
+        octave,
+        black,
+        frequency_hz: pitch.frequency_hz(),
+    })
+}
+
+#[wasm_bindgen]
+/// The keys of a keyboard from MIDI `low` to `high`, each named as the
+/// crate names its pitch class, with its octave, colour and frequency.
+pub fn keyboard(low: i32, high: i32) -> Result<JsValue, JsValue> {
+    let keys = (low..=high)
+        .map(key_info)
+        .collect::<Result<Vec<_>>>()
+        .map_err(|err| JsValue::from_str(&err.to_string()))?;
+    serde_wasm_bindgen::to_value(&keys).map_err(|err| JsValue::from_str(&err.to_string()))
+}
+
+#[wasm_bindgen]
+/// A key's label with its octave, flats written `b`: `Db4` for 61.
+pub fn note_label(midi: i32) -> Result<String, JsValue> {
+    let key = key_info(midi).map_err(|err| JsValue::from_str(&err.to_string()))?;
+    Ok(format!("{}{}", key.display, key.octave))
+}
+
+#[wasm_bindgen]
+/// Chord input naming the pitch classes `intervals` semitones above
+/// `root`, lowest interval first: `D- F A-` for root 1 and 0, 4, 7.
+pub fn pitch_class_chord(root: u8, intervals: Vec<u8>) -> String {
+    let mut intervals = intervals;
+    intervals.sort_unstable();
+    intervals.dedup();
+    intervals
+        .iter()
+        .map(|interval| pitch_class_name((root + interval) % PITCH_CLASSES))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+#[wasm_bindgen]
+/// The pitch class of a pitch name, flats written `-` or `b` and in either
+/// case (`Db`, `d-`, `C#`), or `undefined` for anything else.
+pub fn pitch_class_of(name: &str) -> Option<u8> {
+    let mut chars = name.trim().chars();
+    let step = chars.next()?.to_ascii_uppercase();
+    let modifiers: String = chars
+        .map(|modifier| if modifier == 'b' { '-' } else { modifier })
+        .collect();
+    let pitch = Pitch::from_name(format!("{step}{modifiers}")).ok()?;
+    u8::try_from(pitch.midi().rem_euclid(i32::from(PITCH_CLASSES))).ok()
+}
+
+#[wasm_bindgen]
 /// Returns a two-bar ABC excerpt showing one chord followed by another.
 pub fn chord_resolution_abc(source: &str, target: &str) -> Result<String, JsValue> {
     let source = chord_from_input(source).map_err(|err| JsValue::from_str(&err.to_string()))?;
@@ -476,19 +591,85 @@ pub fn chord_resolution_abc(source: &str, target: &str) -> Result<String, JsValu
 }
 
 #[wasm_bindgen]
-/// Returns the precomputed known-chord browser data.
-pub fn known_chords() -> Result<JsValue, JsValue> {
-    let chords = Chord::known_chord_types()
+/// Returns the known-chord browser data with every chord built on `root`,
+/// a pitch class: smallest first, and dyads by the span of their interval.
+pub fn known_chords(root: u8) -> Result<JsValue, JsValue> {
+    let mut chords = Chord::known_chord_types()
         .into_iter()
         .flat_map(|chord| {
-            dyad_browser_variants(&chord).unwrap_or_else(|| vec![known_chord_info_for_type(&chord)])
+            dyad_browser_variants(&chord, root)
+                .unwrap_or_else(|| vec![known_chord_info_for_type(&chord, root)])
         })
         .collect::<Vec<_>>();
+    chords.sort_by_key(|chord| (chord.cardinality, dyad_span(&chord.pitch_classes)));
 
     serde_wasm_bindgen::to_value(&chords).map_err(|err| JsValue::from_str(&err.to_string()))
 }
 
-fn known_chord_info_for_type(chord: &KnownChordType) -> KnownChordInfo {
+/// Semitones up from a dyad's first pitch class to its second; `0` for any
+/// other chord, which keeps its order.
+fn dyad_span(pitch_classes: &[u8]) -> u8 {
+    match pitch_classes {
+        [low, high] => (high + PITCH_CLASSES - low) % PITCH_CLASSES,
+        _ => 0,
+    }
+}
+
+/// The interval from C up to `root`, a pitch class, spelled as the crate
+/// names it: up to E- is a minor third.
+fn root_interval(root: u8) -> Result<Interval> {
+    let from = Pitch::from_name("C")?;
+    let to = Pitch::from_name(pitch_class_name(root))?;
+    Interval::between_pitches(&from, &to)
+}
+
+/// Moves pitch names, with or without octaves, up `interval`.
+fn transposed_names(names: &[String], interval: &Interval) -> Result<Vec<String>> {
+    names
+        .iter()
+        .map(|name| {
+            let pitch = interval.transpose_pitch(&Pitch::from_name(name)?)?;
+            Ok(match pitch.octave() {
+                Some(_) => pitch.name_with_octave(),
+                None => pitch.name(),
+            })
+        })
+        .collect()
+}
+
+/// A resolution suggested on C moved up `interval`, the key it names
+/// (`dominant resolution in C major`) with it.
+fn moved_suggestion(
+    suggestion: ChordResolutionSuggestion,
+    interval: &Interval,
+) -> ChordResolutionSuggestion {
+    let key_context = suggestion
+        .key_context
+        .rsplit_once(" in ")
+        .and_then(|(head, key)| {
+            let key = displayed_key(key)?.transpose(interval).ok()?;
+            Some(format!("{head} in {}", display_key_context(&key)))
+        })
+        .unwrap_or(suggestion.key_context);
+    let chord = suggestion
+        .chord
+        .transpose(interval)
+        .unwrap_or(suggestion.chord);
+    ChordResolutionSuggestion { chord, key_context }
+}
+
+/// A key as `display_key_context` writes it, `Bb minor`.
+fn displayed_key(text: &str) -> Option<Key> {
+    let (tonic, mode) = text.split_once(' ')?;
+    let mut chars = tonic.chars();
+    let step = chars.next()?;
+    let modifiers: String = chars
+        .map(|modifier| if modifier == 'b' { '-' } else { modifier })
+        .collect();
+    Key::from_tonic_mode(&format!("{step}{modifiers}"), mode).ok()
+}
+
+fn known_chord_info_for_type(chord: &KnownChordType, root: u8) -> KnownChordInfo {
     let primary_common_name = chord
         .common_names
         .first()
@@ -500,6 +681,7 @@ fn known_chord_info_for_type(chord: &KnownChordType) -> KnownChordInfo {
         chord.common_names.clone(),
         chord.normal_form.clone(),
         "normal",
+        root,
     )
 }
 
@@ -509,35 +691,73 @@ fn known_chord_info(
     common_names: Vec<String>,
     pitch_classes: Vec<u8>,
     id_suffix: &str,
+    root: u8,
 ) -> KnownChordInfo {
-    let pitch_names = pitch_classes
+    let on_c = pitch_classes
         .iter()
         .map(|pitch_class| pitch_class_name(*pitch_class).to_string())
         .collect::<Vec<_>>();
+    let interval = root_interval(root).ok();
+    let to_root = |names: Vec<String>| match &interval {
+        Some(interval) => transposed_names(&names, interval).unwrap_or(names),
+        None => names,
+    };
+    let pitch_names = to_root(on_c.clone());
+    let voicings = (0..pitch_classes.len())
+        .map(|inversion| to_root(browser_input_names(&pitch_classes, inversion)))
+        .collect::<Vec<_>>();
+    let display_voicing = voicings
+        .first()
+        .map(|names| names.iter().map(|name| display_pitch_name(name)).collect())
+        .unwrap_or_default();
     let display_pitch_names = pitch_names
         .iter()
         .map(|name| display_pitch_name(name))
         .collect::<Vec<_>>();
-    let realized_chord = Chord::new(pitch_names.as_slice()).ok();
-    let chord_symbol = realized_chord
-        .as_ref()
-        .and_then(|chord| chord.chord_symbol_with_root(0).ok().flatten());
+
+    // The symbol is read off the chord in root position on its root.
+    let chord_symbol = voicings
+        .first()
+        .and_then(|names| Chord::new(names.as_slice()).ok())
+        .and_then(|chord| chord.chord_symbol_with_root(i32::from(root)).ok().flatten())
+        .map(|symbol| display_chord_symbol(&symbol));
+
+    // Key, numeral and resolutions are read off the pitch-class set on C,
+    // as the crate reads one, and moved to the root: octave-less names on
+    // another root would wrap into an inversion, B- over D and F.
+    let to_root_key = |key: &Key| {
+        interval
+            .as_ref()
+            .and_then(|interval| key.transpose(interval).ok())
+            .unwrap_or_else(|| key.clone())
+    };
+    let realized_chord = Chord::new(on_c.as_slice()).ok();
     let estimated_key = realized_chord.as_ref().and_then(estimated_key_for_chord);
-    let key_estimate = estimated_key.as_ref().map(display_key_context);
+    let key_estimate = estimated_key
+        .as_ref()
+        .map(|key| display_key_context(&to_root_key(key)));
     let roman_numeral_estimate = realized_chord
         .as_ref()
         .zip(estimated_key.as_ref())
         .and_then(|(chord, key)| {
-            pitch_names
-                .first()
-                .and_then(|name| Pitch::from_name(name).ok())
-                .and_then(|root| roman_numeral_for_chord_with_root(chord, key, &root))
+            let root = Pitch::from_name(on_c.first()?).ok()?;
+            music21_rs::analyze_chord_with_root(chord, key.clone(), &root)
+                .ok()
+                .flatten()
+        })
+        .map(|numeral| RomanNumeralInfo {
+            figure: numeral.figure().to_string(),
+            key_context: display_key_context(&to_root_key(numeral.key())),
         });
     let resolution_chords = realized_chord
         .as_ref()
         .and_then(|chord| chord.resolution_suggestions().ok())
         .unwrap_or_default()
         .into_iter()
+        .map(|suggestion| match &interval {
+            Some(interval) => moved_suggestion(suggestion, interval),
+            None => suggestion,
+        })
         .map(resolution_chord_info)
         .collect();
     let inversion_labels =
@@ -559,10 +779,12 @@ fn known_chord_info(
         chord_input: pitch_names.join(" "),
         pitch_names,
         display_pitch_names,
+        voicings: voicings.iter().map(|names| names.join(" ")).collect(),
+        display_voicing,
     }
 }
 
-fn dyad_browser_variants(chord: &KnownChordType) -> Option<Vec<KnownChordInfo>> {
+fn dyad_browser_variants(chord: &KnownChordType, root: u8) -> Option<Vec<KnownChordInfo>> {
     if chord.cardinality != 2 || chord.normal_form.len() != 2 {
         return None;
     }
@@ -620,7 +842,14 @@ fn dyad_browser_variants(chord: &KnownChordType) -> Option<Vec<KnownChordInfo>> 
                     std::iter::once(primary.to_string())
                         .chain(aliases.into_iter().map(str::to_string)),
                 );
-                known_chord_info(chord, primary.to_string(), names, pitch_classes, primary)
+                known_chord_info(
+                    chord,
+                    primary.to_string(),
+                    names,
+                    pitch_classes,
+                    primary,
+                    root,
+                )
             })
             .collect(),
     )
@@ -738,6 +967,7 @@ pub fn tuning_systems(root_frequency_hz: f64) -> Result<JsValue, JsValue> {
                             .fraction(degree as usize)
                             .map_or_else(|| format!("{ratio:.6}"), |fraction| fraction.label()),
                         frequency_hz: root_frequency_hz * ratio,
+                        cents: ratio_cents(ratio),
                         cents_from_equal_temperament: tuning_system.cents(degree),
                     }
                 })
@@ -749,6 +979,8 @@ pub fn tuning_systems(root_frequency_hz: f64) -> Result<JsValue, JsValue> {
                 description: tuning_system.description(),
                 family: tuning_family(tuning_system),
                 octave_size,
+                period_ratio: OCTAVE_RATIO,
+                period_cents: OCTAVE_CENTS,
                 root_frequency_hz,
                 degrees,
             }
@@ -873,6 +1105,7 @@ fn pitch_infos(pitches: &[Pitch]) -> Vec<PitchInfo> {
                 index,
                 name: display_pitch.name(),
                 name_with_octave: display_pitch.name_with_octave(),
+                display_name: display_pitch_name(&display_pitch.name_with_octave()),
                 midi: pitch_space.round() as i32,
                 octave: display_pitch.octave(),
                 pitch_space,
@@ -984,6 +1217,7 @@ fn scale_from_cents(
     root_frequency_hz: f64,
     label: impl Fn(usize, f64) -> String,
 ) -> ScalaScaleInfo {
+    let equal_step = period_cents / cents.len().saturating_sub(1).max(1) as f64;
     let degrees = cents
         .iter()
         .enumerate()
@@ -993,6 +1227,7 @@ fn scale_from_cents(
             is_exact_ratio: false,
             ratio: (2.0_f64).powf(cents / 1200.0),
             cents: *cents,
+            cents_from_equal: cents - degree as f64 * equal_step,
             frequency_hz: root_frequency_hz * (2.0_f64).powf(cents / 1200.0),
         })
         .collect::<Vec<_>>();
@@ -1169,6 +1404,68 @@ pub fn adaptive_frequency(
     Ok(frequency * root_frequency_hz / C4)
 }
 
+#[derive(Serialize)]
+struct AdaptiveDegreeInfo {
+    degree: u32,
+    label: String,
+    ratio: f64,
+    ratio_label: String,
+    cents: f64,
+    frequency_hz: f64,
+    from_equal: f64,
+}
+
+#[wasm_bindgen]
+/// Recursive just intonation over C, an octave of it from `root_frequency_hz`
+/// (C4's frequency): each key's name, ratio, cents and cents from equal
+/// temperament.
+pub fn adaptive_degrees(root_frequency_hz: f64) -> Result<JsValue, JsValue> {
+    const SEMITONE_CENTS: f64 = 100.0;
+    let degrees = (0..=u32::from(PITCH_CLASSES))
+        .map(|degree| {
+            let frequency_hz = adaptive_frequency(0.0, f64::from(degree), root_frequency_hz)?;
+            let ratio = frequency_hz / root_frequency_hz;
+            let cents = ratio_cents(ratio);
+            Ok(AdaptiveDegreeInfo {
+                degree,
+                label: note_label(MIDDLE_C + degree as i32)?,
+                ratio,
+                ratio_label: format!("{cents:.3}¢"),
+                cents,
+                frequency_hz,
+                from_equal: cents - f64::from(degree) * SEMITONE_CENTS,
+            })
+        })
+        .collect::<Result<Vec<_>, JsValue>>()?;
+    serde_wasm_bindgen::to_value(&degrees).map_err(|err| JsValue::from_str(&err.to_string()))
+}
+
+#[wasm_bindgen]
+/// The frequency of `degree` steps above the root of a scale whose degrees
+/// stand at `ratios` from the root, repeating every `period_ratio`: degree
+/// 12 of a twelve-note octave scale is the root's octave.
+pub fn scale_frequency(
+    ratios: Vec<f64>,
+    period_ratio: f64,
+    root_frequency_hz: f64,
+    degree: i32,
+) -> f64 {
+    let count = ratios.len().max(1) as i32;
+    let periods = degree.div_euclid(count);
+    let step = degree.rem_euclid(count) as usize;
+    root_frequency_hz * period_ratio.powi(periods) * ratios.get(step).copied().unwrap_or(1.0)
+}
+
+#[wasm_bindgen]
+/// The frequency of middle C in equal temperament at A440.
+pub fn middle_c_hz() -> f64 {
+    music21_rs::tuningsystem::C4
+}
+
+fn ratio_cents(ratio: f64) -> f64 {
+    OCTAVE_CENTS * ratio.log2()
+}
+
 #[cfg(test)]
 mod adaptive_tests {
     use super::adaptive_frequency;
@@ -1319,17 +1616,6 @@ fn roman_numeral_for_chord(chord: &Chord, key: &Key) -> Option<RomanNumeralInfo>
         .map(roman_numeral_info)
 }
 
-fn roman_numeral_for_chord_with_root(
-    chord: &Chord,
-    key: &Key,
-    root: &Pitch,
-) -> Option<RomanNumeralInfo> {
-    music21_rs::analyze_chord_with_root(chord, key.clone(), root)
-        .ok()
-        .flatten()
-        .map(roman_numeral_info)
-}
-
 fn roman_numeral_info(roman_numeral: music21_rs::RomanNumeral) -> RomanNumeralInfo {
     RomanNumeralInfo {
         figure: roman_numeral.figure().to_string(),
@@ -1379,6 +1665,8 @@ fn guitar_fingering_info(fingering: music21_rs::GuitarFingering) -> GuitarFinger
         fret_span: fingering.fret_span,
         covered_pitch_spaces: fingering.covered_pitch_spaces,
         omitted_pitch_spaces: fingering.omitted_pitch_spaces,
+        covered_names: display_class_names(&fingering.covered_pitch_classes),
+        omitted_names: display_class_names(&fingering.omitted_pitch_classes),
         covered_pitch_classes: fingering.covered_pitch_classes,
         omitted_pitch_classes: fingering.omitted_pitch_classes,
     }
@@ -1400,6 +1688,20 @@ fn resolution_chord_info(suggestion: ChordResolutionSuggestion) -> ResolutionCho
 
 fn display_pitch_name(name: &str) -> String {
     name.replace('-', "b")
+}
+
+/// A chord symbol with the flats of its root and bass written `b`:
+/// `B-7/A-` is `Bb7/Ab`. A `-` after anything but a letter name is kept.
+fn display_chord_symbol(symbol: &str) -> String {
+    let mut out = String::with_capacity(symbol.len());
+    for ch in symbol.chars() {
+        let after_step = out
+            .chars()
+            .last()
+            .is_some_and(|step| matches!(step, 'A'..='G' | 'b'));
+        out.push(if ch == '-' && after_step { 'b' } else { ch });
+    }
+    out
 }
 
 fn display_pitch_for_sequence(pitch: Pitch, last_pitch_space: &mut Option<i32>) -> Result<Pitch> {
@@ -1426,6 +1728,44 @@ mod tests {
         parse_pitch_midi_number, pitch_infos,
     };
     use music21_rs::{Chord, KnownChordType, Pitch};
+
+    #[test]
+    fn keys_are_named_as_the_crate_names_pitch_classes() {
+        let d_flat = super::key_info(61).unwrap();
+        assert_eq!(d_flat.name, "D-4");
+        assert_eq!(d_flat.display, "Db");
+        assert_eq!(d_flat.alternate.as_deref(), Some("C#"));
+        assert!(d_flat.black);
+        let c = super::key_info(60).unwrap();
+        assert_eq!(c.alternate.as_deref(), Some("B#"));
+        assert!(!c.black);
+        assert!((c.frequency_hz - 261.6256).abs() < 1e-3);
+        assert_eq!(super::key_info(62).unwrap().alternate, None);
+    }
+
+    #[test]
+    fn pitch_classes_read_in_either_flat_spelling() {
+        assert_eq!(super::pitch_class_of("Db"), Some(1));
+        assert_eq!(super::pitch_class_of("d-"), Some(1));
+        assert_eq!(super::pitch_class_of("C#"), Some(1));
+        assert_eq!(super::pitch_class_of("H"), None);
+        assert_eq!(super::pitch_class_chord(2, vec![7, 0, 4]), "D F# A");
+    }
+
+    #[test]
+    fn scale_degrees_wrap_at_the_period() {
+        let ratios = [1.0, 1.25, 1.5];
+        assert_eq!(
+            super::scale_frequency(ratios.to_vec(), 2.0, 100.0, 4),
+            250.0
+        );
+        assert_eq!(
+            super::scale_frequency(ratios.to_vec(), 2.0, 100.0, -1),
+            75.0
+        );
+        assert_eq!(super::pitch_degrees(&[1, 2, 3], 4), [1, 2, 3, 1]);
+        assert_eq!(super::pitch_degrees(&[], 3), [1, 2, 1]);
+    }
 
     #[test]
     fn parse_midi_input_accepts_plain_prefixed_and_csv_values() {
@@ -1509,6 +1849,7 @@ mod tests {
             chord.common_names.clone(),
             vec![0, 4, 7],
             "normal",
+            0,
         );
 
         assert_eq!(info.chord_symbol.as_deref(), Some("C"));
@@ -1521,6 +1862,53 @@ mod tests {
         );
         assert_eq!(info.inversion_labels.len(), 3);
         assert!(info.resolution_chords.is_empty());
+    }
+
+    #[test]
+    fn known_chord_info_spells_the_chord_on_its_root() {
+        let chord = KnownChordType {
+            cardinality: 3,
+            forte_class: "3-11".to_string(),
+            normal_form: vec![0, 4, 7],
+            interval_class_vector: vec![0, 0, 1, 1, 1, 0],
+            common_names: vec!["major triad".to_string()],
+        };
+        let info = known_chord_info(
+            &chord,
+            "major triad".to_string(),
+            chord.common_names.clone(),
+            vec![0, 4, 7],
+            "normal",
+            4,
+        );
+
+        assert_eq!(info.pitch_names, ["E", "G#", "B"]);
+        assert_eq!(info.chord_symbol.as_deref(), Some("E"));
+        assert_eq!(info.key_estimate.as_deref(), Some("E major"));
+        assert_eq!(info.voicings[1], "G#4 B4 E5");
+        assert_eq!(info.display_voicing, ["E4", "G#4", "B4"]);
+    }
+
+    #[test]
+    fn a_transposed_chord_is_read_in_root_position() {
+        let chord = KnownChordType {
+            cardinality: 2,
+            forte_class: "2-5".to_string(),
+            normal_form: vec![0, 5],
+            interval_class_vector: vec![0, 0, 0, 0, 1, 0],
+            common_names: vec!["perfect fifth".to_string()],
+        };
+        let info = known_chord_info(
+            &chord,
+            "perfect fifth".to_string(),
+            chord.common_names.clone(),
+            vec![0, 7],
+            "normal",
+            10,
+        );
+
+        assert_eq!(info.chord_symbol.as_deref(), Some("Bbpower"));
+        assert_eq!(super::display_chord_symbol("B--7/A-"), "Bbb7/Ab");
     }
 
     #[test]
@@ -1546,6 +1934,7 @@ mod tests {
                 chord.common_names.clone(),
                 pitch_classes,
                 "normal",
+                0,
             );
 
             assert_eq!(info.chord_symbol.as_deref(), expected_symbol);
@@ -1578,6 +1967,7 @@ mod tests {
             chord.common_names.clone(),
             chord.normal_form.clone(),
             "normal",
+            0,
         );
 
         assert_eq!(info.key_estimate.as_deref(), Some("C minor"));
@@ -1636,6 +2026,8 @@ struct ScalaDegreeInfo {
     is_exact_ratio: bool,
     ratio: f64,
     cents: f64,
+    /// Cents from the same degree of the period divided equally.
+    cents_from_equal: f64,
     frequency_hz: f64,
 }
 
@@ -1646,6 +2038,7 @@ fn archive() -> &'static ScalaArchive {
 }
 
 fn describe_scale(file: &str, scale: &ScalaScale, root_frequency_hz: f64) -> ScalaScaleInfo {
+    let equal_step = scale.period().cents() / scale.len().max(1) as f64;
     let degrees = scale
         .degrees()
         .iter()
@@ -1656,6 +2049,7 @@ fn describe_scale(file: &str, scale: &ScalaScale, root_frequency_hz: f64) -> Sca
             is_exact_ratio: entry.as_fraction().is_some(),
             ratio: entry.ratio(),
             cents: entry.cents(),
+            cents_from_equal: entry.cents() - degree as f64 * equal_step,
             frequency_hz: root_frequency_hz * entry.ratio(),
         })
         .collect();
@@ -1759,6 +2153,9 @@ struct HarteInfo {
     sounding_degrees: Vec<String>,
     pitches: Vec<String>,
     midi: Vec<i32>,
+    frequencies_hz: Vec<f64>,
+    /// Which of `pitches` is the bass, where the chord is inverted.
+    bass_index: Option<usize>,
     multi_hot: Vec<u8>,
     multi_hot_from_root: Vec<u8>,
     common_name: String,
@@ -1788,6 +2185,17 @@ pub fn harte_chord(label: &str) -> Result<JsValue, JsValue> {
             .map(Pitch::name_with_octave)
             .collect(),
         midi: harte.midi_pitches(),
+        frequencies_hz: chord.pitches().iter().map(Pitch::frequency_hz).collect(),
+        bass_index: harte
+            .bass_degree()
+            .filter(|degree| *degree != "1")
+            .and(chord.bass())
+            .and_then(|bass| {
+                chord
+                    .pitches()
+                    .iter()
+                    .position(|pitch| pitch.name_with_octave() == bass.name_with_octave())
+            }),
         multi_hot: harte.multi_hot_encoding(false).to_vec(),
         multi_hot_from_root: harte.multi_hot_encoding(true).to_vec(),
         common_name: chord.common_name(),
@@ -1828,7 +2236,10 @@ struct RomanInfo {
     inversion: u8,
     quality: String,
     key: String,
+    /// The key's tonic as a key context for the chord inspector: `g`.
+    key_tonic: String,
     pitches: Vec<String>,
+    frequencies_hz: Vec<f64>,
     pitch_names: Vec<String>,
     common_name: String,
     pitched_common_name: String,
@@ -1855,11 +2266,13 @@ fn describe_numeral(numeral: &music21_rs::RomanNumeral) -> Result<RomanInfo, JsV
         inversion: numeral.inversion(),
         quality: format!("{:?}", numeral.implied_quality()).to_lowercase(),
         key: format!("{} {}", key.tonic_pitch_name_with_case(), key.mode()),
+        key_tonic: key.tonic_pitch_name_with_case(),
         pitches: chord
             .pitches()
             .iter()
             .map(Pitch::name_with_octave)
             .collect(),
+        frequencies_hz: chord.pitches().iter().map(Pitch::frequency_hz).collect(),
         pitch_names: chord.pitch_names(),
         common_name: chord.common_name(),
         pitched_common_name: chord.pitched_common_name(),
@@ -1927,7 +2340,14 @@ struct ScaleInfo {
     id: &'static str,
     name: &'static str,
     tonic: String,
+    /// The tonic without its octave: `B-`.
+    tonic_name: String,
     pitches: Vec<String>,
+    frequencies_hz: Vec<f64>,
+    /// Semitones from the tonic up to each pitch.
+    semitones: Vec<i32>,
+    /// Each pitch's scale degree, the octave above the tonic as the tonic's.
+    pitch_degrees: Vec<u8>,
     pitch_names: Vec<String>,
     degrees: Vec<u8>,
     steps: Vec<String>,
@@ -1952,20 +2372,42 @@ fn describe_realized(scale: &music21_rs::scale::Scale) -> Result<ScaleInfo, JsVa
                 .unwrap_or_default()
         })
         .collect();
+    let degrees: Vec<u8> = scale
+        .named_degrees()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|degree| degree as u8)
+        .collect();
     Ok(ScaleInfo {
         id: scale.scale_type().music21_name(),
         name: scale.scale_type().music21_descriptive_name(),
         tonic: scale.tonic().name_with_octave(),
+        tonic_name: scale.tonic().name(),
         pitch_names: pitches.iter().map(Pitch::name).collect(),
         pitches: pitches.iter().map(Pitch::name_with_octave).collect(),
-        degrees: scale
-            .named_degrees()
-            .unwrap_or_default()
-            .into_iter()
-            .map(|degree| degree as u8)
+        frequencies_hz: pitches.iter().map(Pitch::frequency_hz).collect(),
+        semitones: pitches
+            .iter()
+            .map(|pitch| pitch.midi() - scale.tonic().midi())
             .collect(),
+        pitch_degrees: pitch_degrees(&degrees, pitches.len()),
+        degrees,
         steps,
     })
+}
+
+/// The degree of each of `count` pitches running up a scale with `degrees`:
+/// they repeat, and the last pitch, the octave, is the tonic's degree.
+fn pitch_degrees(degrees: &[u8], count: usize) -> Vec<u8> {
+    (0..count)
+        .map(|index| {
+            let wrapped = if index + 1 == count { 0 } else { index };
+            match degrees {
+                [] => wrapped as u8 + 1,
+                _ => degrees[wrapped % degrees.len()],
+            }
+        })
+        .collect()
 }
 
 #[wasm_bindgen]
@@ -2030,6 +2472,7 @@ pub fn derive_scales(pitches: &str, limit: usize) -> Result<JsValue, JsValue> {
 #[derive(Serialize)]
 struct RowFormInfo {
     label: String,
+    frequencies_hz: Vec<f64>,
     pitch_classes: Vec<u8>,
     names: Vec<String>,
 }
@@ -2052,6 +2495,9 @@ struct HistoricalMatch {
 struct ToneRowInfo {
     pitch_classes: Vec<u8>,
     names: Vec<String>,
+    /// The row sounded up from middle C, each pitch class in the octave
+    /// above it.
+    frequencies_hz: Vec<f64>,
     is_twelve_tone_row: bool,
     intervals: String,
     matrix: Vec<Vec<u8>>,
@@ -2085,6 +2531,15 @@ fn parse_row(input: &str) -> Result<music21_rs::serial::ToneRow, JsValue> {
     Ok(ToneRow::from_pitches(pitches.iter()))
 }
 
+/// Pitch classes sounded up from middle C, each in the octave above it.
+fn row_frequencies(pitch_classes: &[u8]) -> Vec<f64> {
+    pitch_classes
+        .iter()
+        .filter_map(|&pitch_class| Pitch::from_midi(MIDDLE_C + i32::from(pitch_class)).ok())
+        .map(|pitch| pitch.frequency_hz())
+        .collect()
+}
+
 #[wasm_bindgen]
 /// Describes a tone row: its matrix, its forty-eight forms, whether it is
 /// all-interval or a Link chord, and which historical row it is.
@@ -2116,6 +2571,7 @@ pub fn tone_row(input: &str) -> Result<JsValue, JsValue> {
                         "{}{index}",
                         transformation.label(TransformationConvention::ZeroCentered)
                     ),
+                    frequencies_hz: row_frequencies(form.pitch_classes()),
                     pitch_classes: form.pitch_classes().to_vec(),
                     names: form.note_names(),
                 });
@@ -2123,6 +2579,7 @@ pub fn tone_row(input: &str) -> Result<JsValue, JsValue> {
         }
     }
     let info = ToneRowInfo {
+        frequencies_hz: row_frequencies(row.pitch_classes()),
         pitch_classes: row.pitch_classes().to_vec(),
         names: row.note_names(),
         is_twelve_tone_row: twelve,

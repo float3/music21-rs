@@ -1,6 +1,6 @@
 import "../help-tooltips.js";
 import "../theme.js";
-import init, { known_chords } from "../pkg/music21_rs_web.js";
+import init, { known_chords, pitch_class_of } from "../pkg/music21_rs_web.js";
 
 type KnownChord = {
     id: string;
@@ -17,18 +17,14 @@ type KnownChord = {
     interval_class_vector: number[];
     pitch_classes?: number[];
     display_pitch_names: string[];
+    voicings: string[];
+    display_voicing: string[];
     searchText?: string;
 };
 
 type RomanNumeral = {
     figure: string;
     key_context: string;
-};
-
-type RealizedChord = {
-    midi: number[];
-    inputNames: string[];
-    displayNames: string[];
 };
 
 type CardinalityRange = {
@@ -54,40 +50,13 @@ const rows = mustQuery<HTMLTableSectionElement>("#rows");
 const error = mustQuery<HTMLElement>("#error");
 
 let allChords: KnownChord[] = [];
+const chordsByRoot = new Map<number, KnownChord[]>();
 let showNamedOnly = false;
 let shareResetTimer: number | null = null;
 
 const chordBaseHref =
     window.location.protocol === "file:" ? "../chord/index.html" : "../chord/";
 const filterParamNames = ["q", "min", "max", "root", "named"];
-const pitchInputNames = [
-    "C",
-    "D-",
-    "D",
-    "E-",
-    "E",
-    "F",
-    "F#",
-    "G",
-    "A-",
-    "A",
-    "B-",
-    "B",
-];
-const pitchDisplayNames = [
-    "C",
-    "Db",
-    "D",
-    "Eb",
-    "E",
-    "F",
-    "F#",
-    "G",
-    "Ab",
-    "A",
-    "Bb",
-    "B",
-];
 
 function mustQuery<T extends Element>(selector: string): T {
     const element = document.querySelector<T>(selector);
@@ -102,11 +71,7 @@ function selectedRootPitchClass(): number {
 }
 
 function selectedRootName(): string {
-    return pitchDisplayNames[selectedRootPitchClass()] ?? "C";
-}
-
-function selectedRootShift(): number {
-    return selectedRootPitchClass();
+    return root.selectedOptions[0]?.textContent ?? "C";
 }
 
 function selectHasValue(select: HTMLSelectElement, value: string): boolean {
@@ -122,11 +87,8 @@ function rootValueFromParam(value: string | null): string | null {
         return String(numeric);
     }
 
-    const normalized = trimmed.replaceAll("-", "b").toLocaleLowerCase();
-    const index = pitchDisplayNames.findIndex(
-        (name) => name.toLocaleLowerCase() === normalized,
-    );
-    return index >= 0 ? String(index) : null;
+    const pitchClass = pitch_class_of(trimmed);
+    return pitchClass === undefined ? null : String(pitchClass);
 }
 
 function setNamedOnly(value: boolean): void {
@@ -202,108 +164,8 @@ function renderAndSyncFilters(): void {
     resetShareButton();
 }
 
-function wrapPitchClass(pitchClass: number): number {
-    return ((pitchClass % 12) + 12) % 12;
-}
-
-function pitchNameAt(
-    midi: number,
-    names: string[],
-    withOctave: boolean,
-): string {
-    const pitchClass = wrapPitchClass(midi);
-    if (!withOctave) return names[pitchClass];
-    const octave = Math.floor(midi / 12) - 1;
-    return `${names[pitchClass]}${octave}`;
-}
-
-function pitchClassForName(name: string): number | null {
-    const normalized = name.replaceAll("-", "b");
-    const base = normalized[0];
-    const basePitchClasses: Record<string, number> = {
-        C: 0,
-        D: 2,
-        E: 4,
-        F: 5,
-        G: 7,
-        A: 9,
-        B: 11,
-    };
-    const basePitchClass = basePitchClasses[base];
-    if (basePitchClass === undefined) return null;
-
-    let pitchClass = basePitchClass;
-    for (const accidental of normalized.slice(1)) {
-        if (accidental === "#") pitchClass += 1;
-        else if (accidental === "b") pitchClass -= 1;
-        else return null;
-    }
-
-    return wrapPitchClass(pitchClass);
-}
-
-function transposePitchName(
-    value: string,
-    shift = selectedRootShift(),
-    names = pitchDisplayNames,
-): string {
-    const match = value.match(/^([A-G](?:[#b-]*))(-?\d+)?$/);
-    if (!match) return value;
-
-    const pitchClass = pitchClassForName(match[1]);
-    if (pitchClass === null) return value;
-
-    const octaveText = match[2];
-    if (octaveText === undefined) {
-        return names[wrapPitchClass(pitchClass + shift)];
-    }
-
-    const octave = Number(octaveText);
-    const midi = (octave + 1) * 12 + pitchClass + shift;
-    return `${names[wrapPitchClass(midi)]}${Math.floor(midi / 12) - 1}`;
-}
-
-function transposeLeadingPitchName(value: string): string {
-    return value.replace(/^([A-G](?:[#b-]*))(?=-|\b)/, (name) =>
-        transposePitchName(name),
-    );
-}
-
-function transposeKeyText(value: string | null | undefined): string {
-    if (!value) return "Not available";
-    return value.replace(
-        /\b([A-G](?:[#b-]*))(?=\s+(?:major|minor)\b)/g,
-        (name) => transposePitchName(name),
-    );
-}
-
-function transposeCChordSymbol(value: string | null | undefined): string {
-    if (!value) return "Not available";
-    return value.replace(/^C/, pitchDisplayNames[selectedRootPitchClass()]);
-}
-
-function realizedChord(chord: KnownChord, inversion = 0): RealizedChord {
-    const pitchClasses = chord.pitch_classes ?? chord.normal_form ?? [];
-    if (pitchClasses.length === 0) {
-        return { midi: [], inputNames: [], displayNames: [] };
-    }
-
-    const rootMidi = 60 + selectedRootPitchClass();
-    const rootPosition = pitchClasses.map((offset) => rootMidi + offset);
-    const rotation = inversion % rootPosition.length;
-    const midi = rootPosition
-        .slice(rotation)
-        .concat(rootPosition.slice(0, rotation).map((value) => value + 12));
-
-    return {
-        midi,
-        inputNames: midi.map((value) =>
-            pitchNameAt(value, pitchInputNames, true),
-        ),
-        displayNames: midi.map((value) =>
-            pitchNameAt(value, pitchDisplayNames, true),
-        ),
-    };
+function orMissing(value: string | null | undefined): string {
+    return value || "Not available";
 }
 
 function inversionLabel(index: number): string {
@@ -332,31 +194,15 @@ function textSearch(chord: KnownChord): string {
         ...(chord.common_names ?? []),
         chord.chord_symbol ?? "",
         chord.key_estimate ?? "",
-        chord.roman_numeral_estimate?.figure ?? "",
-        chord.roman_numeral_estimate?.key_context ?? "",
+        romanNumeralFor(chord),
         chord.forte_class,
         `[${(chord.normal_form ?? []).join(", ")}]`,
         `[${(chord.interval_class_vector ?? []).join(", ")}]`,
         ...(chord.display_pitch_names ?? []),
+        ...chord.display_voicing,
     ]
         .join(" ")
         .toLocaleLowerCase();
-}
-
-function directedIntervalSpan(chord: KnownChord): number {
-    const pitchClasses = chord.pitch_classes ?? chord.normal_form ?? [];
-    if (pitchClasses.length < 2) return 0;
-    return (pitchClasses[1] - pitchClasses[0] + 12) % 12;
-}
-
-function compareChordsForBrowser(a: KnownChord, b: KnownChord): number {
-    if (a.cardinality !== b.cardinality) {
-        return a.cardinality - b.cardinality;
-    }
-    if (a.cardinality === 2 && b.cardinality === 2) {
-        return directedIntervalSpan(a) - directedIntervalSpan(b);
-    }
-    return 0;
 }
 
 function renderCardinalityOptions(chords: KnownChord[]): void {
@@ -391,8 +237,7 @@ function syncCardinalityRange(changed: "min" | "max"): void {
 
 function openUrl(chord: KnownChord, inversion = 0): string {
     const url = new URL(chordBaseHref, window.location.href);
-    const realized = realizedChord(chord, inversion);
-    url.searchParams.set("chord", realized.inputNames.join(" "));
+    url.searchParams.set("chord", chord.voicings[inversion] ?? "");
     return url.href;
 }
 
@@ -402,43 +247,10 @@ function resolutionUrl(resolution: ResolutionChord): string {
     return url.href;
 }
 
-function transposeResolutionChord(
-    resolution: ResolutionChord,
-): ResolutionChord {
-    return {
-        ...resolution,
-        pitched_common_name: transposeLeadingPitchName(
-            resolution.pitched_common_name,
-        ),
-        key_context: transposeKeyText(resolution.key_context),
-        pitch_names: resolution.pitch_names.map((name) =>
-            transposePitchName(name, selectedRootShift(), pitchInputNames),
-        ),
-        pitch_classes: resolution.pitch_classes.map((pitchClass) =>
-            wrapPitchClass(pitchClass + selectedRootShift()),
-        ),
-    };
-}
-
-function chordSymbolFor(chord: KnownChord): string {
-    return transposeCChordSymbol(chord.chord_symbol);
-}
-
-function keyEstimateFor(chord: KnownChord): string {
-    return transposeKeyText(chord.key_estimate);
-}
-
 function romanNumeralFor(chord: KnownChord): string {
     const roman = chord.roman_numeral_estimate;
     if (!roman?.figure) return "Not available";
-    const keyContext = transposeKeyText(roman.key_context);
-    return keyContext === "Not available"
-        ? roman.figure
-        : `${roman.figure} in ${keyContext}`;
-}
-
-function resolutionChords(chord: KnownChord): ResolutionChord[] {
-    return (chord.resolution_chords ?? []).map(transposeResolutionChord);
+    return roman.key_context ? `${roman.figure} in ${roman.key_context}` : roman.figure;
 }
 
 function renderChips(values: string[]): HTMLDivElement {
@@ -456,7 +268,7 @@ function renderChips(values: string[]): HTMLDivElement {
 function renderResolutions(chord: KnownChord): HTMLDivElement {
     const wrap = document.createElement("div");
     wrap.className = "resolution-links";
-    for (const resolution of resolutionChords(chord)) {
+    for (const resolution of chord.resolution_chords ?? []) {
         const link = document.createElement("a");
         link.className = "mini-button";
         link.href = resolutionUrl(resolution);
@@ -515,21 +327,7 @@ function renderRows(): void {
         if (chord.cardinality > maximum) return false;
         if (showNamedOnly && !chord.common_names.length) return false;
         if (!query) return true;
-        const realized = realizedChord(chord, 0);
-        const realizedWithoutOctaves = realized.displayNames.map((name) =>
-            name.replace(/\d+$/, ""),
-        );
-        const dynamicSearchText = [
-            chord.searchText,
-            chordSymbolFor(chord),
-            keyEstimateFor(chord),
-            romanNumeralFor(chord),
-            realized.displayNames.join(" "),
-            realizedWithoutOctaves.join(" "),
-        ]
-            .join(" ")
-            .toLocaleLowerCase();
-        return dynamicSearchText.includes(query);
+        return chord.searchText?.includes(query) ?? false;
     });
 
     rows.replaceChildren();
@@ -547,12 +345,12 @@ function renderRows(): void {
 
         const symbol = document.createElement("td");
         symbol.className = "symbol mono";
-        symbol.textContent = chordSymbolFor(chord);
+        symbol.textContent = orMissing(chord.chord_symbol);
         tr.appendChild(symbol);
 
         const keyEstimate = document.createElement("td");
         keyEstimate.className = "key-estimate";
-        keyEstimate.textContent = keyEstimateFor(chord);
+        keyEstimate.textContent = orMissing(chord.key_estimate);
         tr.appendChild(keyEstimate);
 
         const roman = document.createElement("td");
@@ -569,10 +367,9 @@ function renderRows(): void {
         forte.textContent = chord.forte_class;
         tr.appendChild(forte);
 
-        const realized = realizedChord(chord, 0);
         const pitches = document.createElement("td");
         pitches.className = "pitch-list";
-        pitches.textContent = realized.displayNames.join(" ");
+        pitches.textContent = chord.display_voicing.join(" ");
         tr.appendChild(pitches);
 
         const inversions = document.createElement("td");
@@ -619,18 +416,31 @@ function renderRows(): void {
     }`;
 }
 
+/** Loads every chord built on the chosen root, spelled by the crate, once
+ * per root: building them all takes the crate most of a second. */
+function loadChords(): void {
+    const pitchClass = selectedRootPitchClass();
+    const cached = chordsByRoot.get(pitchClass);
+    if (cached) {
+        allChords = cached;
+        return;
+    }
+    allChords = (known_chords(pitchClass) as KnownChord[]).map((chord) => ({
+        ...chord,
+        searchText: textSearch(chord),
+    }));
+    chordsByRoot.set(pitchClass, allChords);
+}
+
 async function main(): Promise<void> {
     try {
         await init();
-        allChords = (known_chords() as KnownChord[]).map((chord) => ({
-            ...chord,
-            searchText: textSearch(chord),
-        }));
-        allChords.sort(compareChordsForBrowser);
+        loadChords();
         renderCardinalityOptions(allChords);
         minCardinality.value = "1";
         maxCardinality.value = "12";
         applyFiltersFromUrl();
+        loadChords();
         syncFilterUrl();
         renderRows();
     } catch (err) {
@@ -649,7 +459,10 @@ maxCardinality.addEventListener("change", () => {
     syncCardinalityRange("max");
     renderAndSyncFilters();
 });
-root.addEventListener("change", renderAndSyncFilters);
+root.addEventListener("change", () => {
+    loadChords();
+    renderAndSyncFilters();
+});
 namedOnly.addEventListener("click", () => {
     setNamedOnly(!showNamedOnly);
     renderAndSyncFilters();
@@ -668,6 +481,7 @@ shareFilters.addEventListener("click", async () => {
 });
 window.addEventListener("popstate", () => {
     applyFiltersFromUrl();
+    loadChords();
     renderRows();
 });
 

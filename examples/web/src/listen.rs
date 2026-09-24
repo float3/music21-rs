@@ -11,7 +11,7 @@
 //! fundamental is still there, which keeps the upper partials of one note
 //! from being heard as notes of their own.
 
-use crate::display_pitch_name;
+use crate::{display_chord_symbol, display_class_names, display_pitch_name};
 use music21_rs::{Chord, pitch_class_name};
 use serde::Serialize;
 use std::{collections::BTreeMap, f64::consts::PI};
@@ -590,6 +590,7 @@ fn note_name(midi: i32) -> String {
 #[derive(Serialize)]
 struct ListenedNote {
     midi: i32,
+    pitch_class: u8,
     name: String,
     frequency_hz: f64,
     cents: f64,
@@ -602,6 +603,10 @@ struct ListenedChord {
     midi: Vec<i32>,
     pitch_names: Vec<String>,
     pitch_classes: Vec<u8>,
+    /// The pitch classes named, flats written `b`.
+    pitch_class_names: Vec<String>,
+    /// What to call the chord at a glance: its symbol, else its name.
+    title: String,
     common_name: String,
     pitched_common_name: String,
     chord_symbol: Option<String>,
@@ -619,13 +624,23 @@ struct ListenFrame<'a> {
 
 fn name_chord(midi: &[i32]) -> Option<ListenedChord> {
     let chord = Chord::new(midi).ok()?;
+    let chord_symbol = chord
+        .chord_symbols()
+        .into_iter()
+        .next()
+        .map(|symbol| display_chord_symbol(&symbol));
+    let pitched_common_name = chord.pitched_common_name();
     Some(ListenedChord {
         midi: midi.to_vec(),
         pitch_names: midi.iter().map(|&note| note_name(note)).collect(),
+        pitch_class_names: display_class_names(&chord.pitch_classes()),
         pitch_classes: chord.pitch_classes(),
         common_name: chord.common_name(),
-        pitched_common_name: chord.pitched_common_name(),
-        chord_symbol: chord.chord_symbols().into_iter().next(),
+        title: chord_symbol
+            .clone()
+            .unwrap_or_else(|| pitched_common_name.clone()),
+        pitched_common_name,
+        chord_symbol,
         root: chord
             .root_pitch_name()
             .map(|name| display_pitch_name(&name)),
@@ -714,6 +729,7 @@ impl ChordListener {
                 .into_iter()
                 .map(|note| ListenedNote {
                     midi: note.midi,
+                    pitch_class: note.midi.rem_euclid(12) as u8,
                     name: note_name(note.midi),
                     frequency_hz: note.frequency_hz,
                     cents: note.cents,

@@ -4,6 +4,8 @@ import init, {
     analyze_chord,
     analyze_chord_with_options,
     chord_resolution_abc,
+    keyboard as keyboardKeys,
+    pitch_class_chord,
     pitch_midi_number,
     playable_tuning_systems,
 } from "../pkg/music21_rs_web.js";
@@ -25,6 +27,7 @@ type PitchInfo = {
     index: number;
     name: string;
     name_with_octave: string;
+    display_name: string;
     midi: number;
     octave: number | null;
     pitch_space: number;
@@ -65,6 +68,8 @@ type GuitarFingeringInfo = {
     covered_pitch_spaces: number[];
     omitted_pitch_spaces: number[];
     covered_pitch_classes: number[];
+    covered_names: string[];
+    omitted_names: string[];
     omitted_pitch_classes: number[];
 };
 
@@ -189,49 +194,16 @@ const randomMaxNotes = mustQuery<HTMLInputElement>("#random-max-notes");
 const examples = mustQuery<HTMLElement>("#examples");
 const history = mustQuery<HTMLElement>("#history");
 const clearHistory = mustQuery<HTMLButtonElement>("#clear-history");
-const pcNames = [
-    "C",
-    "C#",
-    "D",
-    "Eb",
-    "E",
-    "F",
-    "F#",
-    "G",
-    "Ab",
-    "A",
-    "Bb",
-    "B",
-];
-const pcAltNames = [
-    "B#",
-    "Db",
-    "D",
-    "D#",
-    "Fb",
-    "E#",
-    "Gb",
-    "G",
-    "G#",
-    "Bbb",
-    "A#",
-    "Cb",
-];
-const inputPitchNames = [
-    "C",
-    "C#",
-    "D",
-    "E-",
-    "E",
-    "F",
-    "F#",
-    "G",
-    "A-",
-    "A",
-    "B-",
-    "B",
-];
-const blackKeys = new Set([1, 3, 6, 8, 10]);
+/** A key as the crate names it. */
+type KeyInfo = {
+    midi: number;
+    name: string;
+    display: string;
+    alternate: string | null | undefined;
+    octave: number;
+    black: boolean;
+};
+
 const keyboardStartMidi = 60;
 const keyboardKeyCount = 24;
 const chordParam = "chord";
@@ -464,7 +436,7 @@ function renderPitches(data: ChordAnalysis): void {
         const tr = document.createElement("tr");
         const cells = [
             pitch.index + 1,
-            displayPitchName(pitch.name_with_octave || pitch.name),
+            pitch.display_name,
             pitch.midi,
             pitch.octave ?? "None",
             pitch.pitch_space.toFixed(3),
@@ -484,12 +456,6 @@ function renderPitches(data: ChordAnalysis): void {
     }
 }
 
-function displayPitchName(value: unknown): string {
-    const match = String(value ?? "").match(/^([A-G])([#-]*)(-?\d+)?$/);
-    if (!match) return String(value ?? "");
-    return `${match[1]}${match[2].replaceAll("-", "b")}${match[3] ?? ""}`;
-}
-
 function cssVar(name: string, fallback: string): string {
     return (
         getComputedStyle(document.documentElement)
@@ -501,38 +467,26 @@ function cssVar(name: string, fallback: string): string {
 function renderKeyboard(pitchData: PitchInfo[]): void {
     const active = new Set(pitchData.map((pitch) => pitch.midi));
     keyboard.replaceChildren();
-    for (let index = 0; index < keyboardKeyCount; index += 1) {
-        const midi = keyboardStartMidi + index;
-        const pitchClass = ((midi % 12) + 12) % 12;
-        const octaveNumber = Math.floor(midi / 12) - 1;
-        const name = pcNames[pitchClass];
-        const pitchName = keyboardPitchName(midi);
-        const isActive = active.has(midi);
+    for (const info of keyboardKeys(keyboardStartMidi, keyboardStartMidi + keyboardKeyCount - 1) as KeyInfo[]) {
+        const isActive = active.has(info.midi);
         const key = document.createElement("button");
         key.type = "button";
-        key.className = `key${blackKeys.has(pitchClass) ? " black" : ""}${isActive ? " active" : ""}`;
+        key.className = `key${info.black ? " black" : ""}${isActive ? " active" : ""}`;
         const primary = document.createElement("span");
         primary.className = "key-name";
-        primary.textContent = name;
+        primary.textContent = info.display;
         const alternate = document.createElement("span");
         alternate.className = "key-alt";
-        alternate.textContent =
-            pcAltNames[pitchClass] === name ? "" : pcAltNames[pitchClass];
+        alternate.textContent = info.alternate ?? "";
         const octave = document.createElement("span");
         octave.className = "key-octave";
-        octave.textContent = String(octaveNumber);
+        octave.textContent = String(info.octave);
         key.append(primary, alternate, octave);
-        key.title = isActive
-            ? `Remove ${displayPitchName(pitchName)}`
-            : `Add ${displayPitchName(pitchName)}`;
-        key.setAttribute(
-            "aria-label",
-            isActive
-                ? `Remove ${displayPitchName(pitchName)}`
-                : `Add ${displayPitchName(pitchName)}`,
-        );
+        const label = `${isActive ? "Remove" : "Add"} ${info.display}${info.octave}`;
+        key.title = label;
+        key.setAttribute("aria-label", label);
         key.addEventListener("click", () => {
-            toggleKeyboardPitch(midi);
+            toggleKeyboardPitch(info.midi, info.name);
         });
         keyboard.appendChild(key);
     }
@@ -570,24 +524,24 @@ async function renderGuitarFingering(
 
     const covered = document.createElement("div");
     covered.className = "guitar-note-list";
-    for (const pitchClass of fingering.covered_pitch_classes || []) {
+    for (const name of fingering.covered_names || []) {
         const note = document.createElement("span");
         note.className = "guitar-note";
-        note.textContent = displayPitchClassName(pitchClass);
+        note.textContent = name;
         covered.appendChild(note);
     }
     guitarFingering.appendChild(covered);
 
-    if (fingering.omitted_pitch_classes?.length) {
+    if (fingering.omitted_names?.length) {
         const omitted = document.createElement("div");
         omitted.className = "guitar-note-list guitar-omitted";
         const label = document.createElement("span");
         label.textContent = "Omitted";
         omitted.appendChild(label);
-        for (const pitchClass of fingering.omitted_pitch_classes) {
+        for (const name of fingering.omitted_names) {
             const note = document.createElement("span");
             note.className = "guitar-note";
-            note.textContent = displayPitchClassName(pitchClass);
+            note.textContent = name;
             omitted.appendChild(note);
         }
         guitarFingering.appendChild(omitted);
@@ -799,17 +753,8 @@ function vexBarresForFingering(
     return barres;
 }
 
-function displayPitchClassName(pitchClass: number): string {
-    return pcNames[((pitchClass % 12) + 12) % 12];
-}
-
-function keyboardPitchName(midi: number): string {
-    const pitchClass = ((midi % 12) + 12) % 12;
-    const octave = Math.floor(midi / 12) - 1;
-    return `${inputPitchNames[pitchClass]}${octave}`;
-}
-
-function toggleKeyboardPitch(midi: number): void {
+/** Adds the key `midi`, named `pitchName`, to the chord or takes it out. */
+function toggleKeyboardPitch(midi: number, pitchName: string): void {
     if (isMidiChordInput(input.value)) {
         const tokens = midiInputTokens(input.value);
         const hasPitch = tokens.some(
@@ -829,7 +774,6 @@ function toggleKeyboardPitch(midi: number): void {
                 .filter((token) => midiNumberForInputToken(token) !== midi)
                 .join(" ");
         } else {
-            const pitchName = keyboardPitchName(midi);
             input.value = tokens.length
                 ? `${tokens.join(" ")} ${pitchName}`
                 : pitchName;
@@ -861,13 +805,6 @@ function midiNumberForInputToken(value: string): number | null {
 
 function chordInputTokens(value: string): string[] {
     return normalizeChordInput(value).split(/\s+/).filter(Boolean);
-}
-
-function addPitchToChord(pitchName: string): void {
-    const current = normalizeChordInput(input.value);
-    input.value = current ? `${current} ${pitchName}` : pitchName;
-    resetShareButton();
-    analyze({ remember: true });
 }
 
 function renderNotation(
@@ -1624,22 +1561,17 @@ function randomNoteCount(): number {
     return min + Math.floor(Math.random() * (max - min + 1));
 }
 
+/** Pitch classes in an octave, for picking a random root and intervals. */
+const OCTAVE_PITCH_CLASSES = 12;
+
 function generateRandomChord(): string {
-    const rootIndex = Math.floor(Math.random() * inputPitchNames.length);
+    const root = Math.floor(Math.random() * OCTAVE_PITCH_CLASSES);
     const noteCount = randomNoteCount();
     const intervals = new Set([0]);
     while (intervals.size < noteCount) {
-        intervals.add(Math.floor(Math.random() * 12));
+        intervals.add(Math.floor(Math.random() * OCTAVE_PITCH_CLASSES));
     }
-    return [...intervals]
-        .sort((a, b) => a - b)
-        .map(
-            (interval) =>
-                inputPitchNames[
-                    (rootIndex + interval) % inputPitchNames.length
-                ],
-        )
-        .join(" ");
+    return pitch_class_chord(root, Uint8Array.from(intervals));
 }
 
 for (const value of [
