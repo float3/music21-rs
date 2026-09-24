@@ -73,8 +73,6 @@ pub struct Chord {
     /// boxed, since an instrument is large and most chords carry none.
     #[cfg_attr(feature = "serde", serde(default))]
     stored_instrument: Option<Box<crate::instrument::Instrument>>,
-    #[cfg_attr(feature = "serde", serde(skip))]
-    from_integer_pitches: bool,
     /// A root the caller decided on, which wins over the one the pitches
     /// imply: music21's overridden root, for chords spelled oddly or with
     /// added notes.
@@ -204,7 +202,6 @@ impl Chord {
         Ok(Self {
             notes: notes.try_into_notes()?.into_iter().collect(),
             duration: None,
-            from_integer_pitches: T::FROM_INTEGER_PITCHES,
             volume: None,
             color: None,
             notehead: Notehead::default(),
@@ -223,7 +220,6 @@ impl Chord {
         Self {
             notes: Vec::new(),
             duration: None,
-            from_integer_pitches: false,
             volume: None,
             color: None,
             notehead: Notehead::default(),

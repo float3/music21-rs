@@ -9,6 +9,9 @@ places where they answered differently; they agree now.
 
 ## Added
 
+- `chordsymbol::voice_chord_notation` and `ChordVoicing`: a chord of one
+  of music21's kinds as music21 voices it, with the root and bass music21
+  is left holding.
 - `analysis::enharmonics::best_spelling`, music21's
   `EnharmonicSimplifier.bestPitches`, built on `spelling_options` and
   `best_choice`, with its three penalties and scores on `EnharmonicRules`.
@@ -29,6 +32,17 @@ places where they answered differently; they agree now.
 
 ## Fixed
 
+- A chord symbol is voiced as music21 voices it, root and bass included.
+  music21 puts its own root and bass objects in the list it voices, so an
+  octave pass moves them with the chord, a bass held twice moves twice,
+  and the inversion reads a bass already moved: `C5/G` is `G3 G3 C4`,
+  `B-5/E` `E2 E2 B-3 F4`, and `Ab10/F#` roots on an A3 it does not sound.
+  `voice_chord_notation` hands back that voicing with its root and bass.
+  9,972 figures agree with music21 on eight properties.
+- `Chord::pitched_common_name` names the root `root()` gives and the bass
+  `bass()` gives, a root or bass set by hand included, where it read the
+  ones it found; a table of spellings pinned seven augmented sixths to one
+  root and is gone.
 - `ChordSymbol::parse_music21` reads a degree as music21 does, through
   what Python's `int` accepts once sharps and flats are off, so `Cb-7`
   adds a flat seventh where it was refused, and takes the first run of the

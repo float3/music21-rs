@@ -105,50 +105,24 @@ impl Chord {
             || name_str.contains("forte class")
             || name_str.contains(" semitone")
         {
-            if let Some(bass_name) = self.bass_pitch_name() {
-                return format!("{name_str} above {bass_name}");
+            // music21's `bass()`, which a bass set by hand answers.
+            if let Some(bass) = self.bass() {
+                return format!("{name_str} above {}", Self::display_pitch_name(bass));
             }
             return name_str.to_string();
         }
 
-        if let Some(root_name) = self.spelling_root_name_override(name_str) {
-            return format!("{root_name}-{name_str}");
-        }
-
-        let root_name = self.root_pitch_name_from_tables().or_else(|| {
-            self.notes
-                .first()
-                .map(|n| Self::display_pitch_name(&n.pitch))
-        });
+        // music21's `root()`, which a root set by hand answers, or the first
+        // note where no root is found.
+        let root_name = self
+            .root()
+            .or_else(|| self.notes.first().map(|n| &n.pitch))
+            .map(Self::display_pitch_name);
 
         match root_name {
             Some(root_name) => format!("{root_name}-{name_str}"),
             None => name_str.to_string(),
         }
-    }
-
-    pub(super) fn spelling_root_name_override(&self, common_name: &str) -> Option<String> {
-        if !common_name.contains("augmented sixth chord") {
-            return None;
-        }
-        let root = if self.names_are(&["C#", "E-", "G"]) || self.names_are(&["C#", "E#", "G", "B"])
-        {
-            "C#"
-        } else if self.names_are(&["C", "D", "F#", "A-"]) {
-            "D"
-        } else if self.names_are(&["C#", "E-", "G", "A"]) {
-            "A"
-        } else if self.names_are(&["C", "E", "F#", "A#"]) {
-            "F#"
-        } else if self.names_are(&["D", "E", "G#", "B-"])
-            || (self.from_integer_pitches && self.pitch_class_mask() == 0b010100010100)
-        {
-            "E"
-        } else {
-            return None;
-        };
-
-        Some(root.to_string())
     }
 
     pub(super) fn chord_symbol_root_pitch_class(root: PitchClassSpecifier) -> Result<u8> {
@@ -480,26 +454,6 @@ impl Chord {
         CANDIDATE_TONICS[pc as usize % 12]
     }
 
-    /// Whether the chord is spelled with exactly these pitch names.
-    ///
-    /// The set of names it compares against is passed in rather than built
-    /// here: the two spelling cascades ask this question up to fifteen times
-    /// in a row, and building the set per question was most of what
-    /// `common_name` cost.
-    /// Whether the chord is written with exactly these names, one note
-    /// each.
-    ///
-    /// Read off the notes rather than out of a set of their names: the
-    /// augmented sixths alone ask this twenty-one times, and a name is a
-    /// `String`, so the set cost an allocation a note before the first
-    /// question was asked.
-    pub(super) fn names_are(&self, expected: &[&str]) -> bool {
-        self.notes.len() == expected.len()
-            && expected
-                .iter()
-                .all(|name| self.pitch_refs().any(|pitch| written_as(pitch, name)))
-    }
-
     pub(super) fn interval_nice_name(start: &Pitch, end: &Pitch) -> Option<String> {
         Interval::between(start.clone(), end.clone())
             .ok()
@@ -555,14 +509,6 @@ pub struct KnownChordType {
     pub normal_form: Vec<u8>,
     /// Six-entry interval-class vector.
     pub interval_class_vector: Vec<u8>,
-}
-
-/// Whether a pitch is written with this name: the letter, then the
-/// accidental's modifier.
-fn written_as(pitch: &Pitch, name: &str) -> bool {
-    let mut characters = name.chars();
-    characters.next() == Some(pitch.step().as_char())
-        && characters.as_str() == pitch.accidental_or_natural().modifier()
 }
 
 #[cfg(test)]
@@ -666,6 +612,80 @@ G3 C#4 E-4	Italian augmented sixth chord in second inversion
 [3, 6, 8, 11]	enharmonic equivalent to minor seventh chord
 [3, 6, 9]	enharmonic equivalent to diminished triad
 ";
+
+    /// music21 puts the root it asks `root()` for in front of the name, and
+    /// the bass `bass()` gives after `above`: overrides included, and for
+    /// every voicing.
+    #[test]
+    fn pitched_names_read_the_root_music21_reads() {
+        let cases = [
+            (
+                "C# E- G",
+                "C#-Italian augmented sixth chord in root position",
+            ),
+            (
+                "G4 C#5 E-5",
+                "C#-Italian augmented sixth chord in second inversion",
+            ),
+            ("E-4 G4 C#5", "C#-Italian augmented sixth chord"),
+            (
+                "C D F# A-",
+                "D-French augmented sixth chord in third inversion",
+            ),
+            ("A-4 C5 D5 F#5", "D-French augmented sixth chord"),
+            (
+                "F#4 A-4 C5 D5",
+                "D-French augmented sixth chord in first inversion",
+            ),
+            (
+                "D4 F#4 A-4 C5",
+                "D-French augmented sixth chord in root position",
+            ),
+            (
+                "C# E- G A",
+                "A-French augmented sixth chord in first inversion",
+            ),
+            (
+                "A4 C#5 E-5 G5",
+                "A-French augmented sixth chord in root position",
+            ),
+            ("C E F# A#", "F#-French augmented sixth chord"),
+            (
+                "A#3 C4 E4 F#4",
+                "F#-French augmented sixth chord in first inversion",
+            ),
+            (
+                "C# E# G B",
+                "C#-French augmented sixth chord in root position",
+            ),
+            (
+                "B4 C#5 E#5 G5",
+                "C#-French augmented sixth chord in third inversion",
+            ),
+            (
+                "D E G# B-",
+                "E-French augmented sixth chord in third inversion",
+            ),
+        ];
+        for (notes, expected) in cases {
+            assert_eq!(
+                Chord::new(notes).unwrap().pitched_common_name(),
+                expected,
+                "{notes}"
+            );
+        }
+
+        let mut rooted = Chord::new("F# A C# E#").unwrap();
+        rooted.set_root(Some("A".parse().unwrap()));
+        assert_eq!(rooted.pitched_common_name(), "A-minor-augmented tetrachord");
+
+        let mut added = Chord::new("C E G B#").unwrap();
+        added.set_bass(Some("E".parse().unwrap()));
+        assert_eq!(
+            added.pitched_common_name(),
+            "enharmonic equivalent to major triad above E"
+        );
+    }
 
     #[test]
     fn every_voicing_is_named_as_music21_names_it() {
