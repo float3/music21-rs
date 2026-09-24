@@ -85,6 +85,13 @@ Two rules, set 2026-09-12, that most of the open work now serves:
    `getMeasureOffsetOrMeterModulusOffset` — added to the facade on the old
    rule (`8e455d9`) — move into the crate where it belongs.
 
+   It is also what the wheel waits on to carry the last 15 members the
+   crate has and it does not: `FiguredBassLine` and `Realization`, which
+   build their bass line and realizations as music21 parts, and
+   `KeyWeightKeyAnalysis`, `Ambitus` and `MelodicIntervalDiversity`, which
+   read a stream. music21's own classes run on the crate's objects there
+   meanwhile.
+
 3. **The 30 wheel-only members.** Caches (`cachedRealized`,
    `cachedRealizedStr`) stay Python-side by design. The rest — observer
    callbacks (`informClient`, `pitchChanged`), `groups`, `storedInstrument`
