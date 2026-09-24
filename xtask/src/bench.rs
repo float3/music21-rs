@@ -1073,7 +1073,7 @@ mod tests {
     #[test]
     fn every_case_is_named_once() {
         let cases = cases();
-        assert_eq!(cases.len(), 21, "the report quotes a case count");
+        assert_eq!(cases.len(), 24, "the report quotes a case count");
         let mut names: Vec<&str> = cases.iter().map(|case| case.name.as_str()).collect();
         names.sort_unstable();
         let count = names.len();

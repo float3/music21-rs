@@ -227,7 +227,7 @@ struct DoctestSummary {
 /// What the pair of runs of music21's own suite said about time, as
 /// `xtask music21-suite` writes it into `target/music21-suite/timings.json`.
 ///
-/// The benchmark above is twenty-one cases written for the purpose; this is
+/// The benchmark above is twenty-four cases written for the purpose; this is
 /// every test music21 has, timed on both sides of a run that was happening
 /// anyway.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
