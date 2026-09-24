@@ -259,15 +259,8 @@ impl TimeSignature {
             .as_any()
             .call_method("_getMeasureOffset", (), Some(&kwargs))?
             .extract()?;
-        let bar = slf.borrow().inner.bar_quarter_length();
-        // The sum says whether the element is still inside the bar; the
-        // difference is what is left of it once the meter's own place in the
-        // stream is taken off. music21 adds in one and subtracts in the
-        // other, and the answers differ where a meter does not start the bar.
-        if element_offset + own_offset < bar {
-            return crate::duration::op_frac(py, element_offset);
-        }
-        crate::duration::op_frac(py, (element_offset - own_offset).rem_euclid(bar))
+        let offset = slf.borrow().inner.offset_in_bar(element_offset, own_offset);
+        crate::duration::op_frac(py, offset)
     }
 
     /// music21's `displaySequence`: how the bar is written.

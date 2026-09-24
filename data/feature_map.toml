@@ -186,9 +186,9 @@ getBeatProgress = "beat_progress"
 getBeatProportion = "beat_proportion"
 getBeatProportionStr = "beat_proportion_string"
 getBeams = "beams_for"
+getMeasureOffsetOrMeterModulusOffset = "offset_in_bar"
 
 [class.excluded]
-getMeasureOffsetOrMeterModulusOffset = "where an element sits in its stream is music21's to know; the wheel answers it there"
 resetValues = "rebuilding a meter in place; a new one is built instead"
 load = "rebuilding a meter in place; a new one is built instead"
 
