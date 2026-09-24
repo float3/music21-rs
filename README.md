@@ -23,14 +23,15 @@ suite results, coverage, benchmarks and sizes, refreshed on every push.
 
 - 92% of the public methods of the ported music21 classes are in the crate.
 - The crate's own tests cover 96% of its lines and of its functions.
-- All 33 music21 modules whose doctests run against the port pass every
-  example, 8,760 of them: `pitch`, `interval`, `chord`, `chord.tables`,
+- All 36 music21 modules whose doctests run against the port pass every
+  example, 9,008 of them: `pitch`, `interval`, `chord`, `chord.tables`,
   `note`, `duration`, `key`, `scale`, `scale.scala`, `roman`, `harmony`,
   `serial`, `sieve`, `meter.base`, `meter.core`, `beam`, `tie`, `volume`,
   `dynamics`, `instrument`, `clef`, `articulations`, `expressions`, `tempo`,
-  `voiceLeading`, and eight of `figuredBass`: `notation`, `possibility`,
-  `realizerScale`, `rules`, `resolution`, `segment`, and the `realizer` and
-  `examples` that realize whole lines over them.
+  `voiceLeading`, `analysis.discrete`, and ten of `figuredBass`: `notation`,
+  `possibility`, `realizerScale`, `rules`, `resolution`, `segment`,
+  `harmony`, `checker`, and the `realizer` and `examples` that realize whole
+  lines over them.
 - music21's own test suite gives the same results with the crate's classes
   standing in for music21's as with music21 alone.
 

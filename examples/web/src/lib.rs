@@ -1270,9 +1270,22 @@ fn parse_guitar_tuning(input: Option<&str>) -> Result<Option<GuitarTuning>> {
 }
 
 fn estimated_key_for_chord(chord: &Chord) -> Option<Key> {
-    let estimated_key = music21_rs::estimate_key_from_chords(std::slice::from_ref(chord))
-        .ok()?
-        .first()
+    // A chord symmetric enough to fit two keys as well as each other -- a
+    // French sixth fits C minor and F# minor alike, their scores differing
+    // only by rounding -- is read in the one with the lower tonic, so the
+    // label a chord gets does not depend on which way the rounding fell.
+    let estimates = music21_rs::estimate_key_from_chords(std::slice::from_ref(chord)).ok()?;
+    let best = estimates.first()?.score();
+    let estimated_key = estimates
+        .iter()
+        .take_while(|estimate| (best - estimate.score()).abs() <= 1e-9)
+        .min_by(|a, b| {
+            let class =
+                |estimate: &music21_rs::KeyEstimate| estimate.key().tonic().ps().rem_euclid(12.0);
+            class(a)
+                .total_cmp(&class(b))
+                .then_with(|| a.key().mode().cmp(b.key().mode()))
+        })
         .map(|estimate| estimate.key().clone())?;
     let estimated_tonic = estimated_key.tonic();
     let mode = estimated_key.mode().to_string();

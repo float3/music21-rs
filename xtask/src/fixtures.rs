@@ -201,6 +201,7 @@ pub(crate) fn regenerate(workspace_root: &Path) -> Result<Vec<PathBuf>, Box<dyn 
             write_clefs(py, workspace_root, stamp)?,
             write_articulations(py, workspace_root, stamp)?,
             write_ornaments(py, workspace_root, stamp)?,
+            write_key_analysis(py, workspace_root, stamp)?,
         ])
     })
     .map_err(|error| -> Box<dyn Error> { Box::new(error) })
@@ -3038,6 +3039,174 @@ fn write_ornaments(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> PyRe
     }
 
     let path = workspace_root.join("data/ornament_expectations.toml");
+    fs::write(&path, out)?;
+    Ok(path)
+}
+
+/// music21's discrete analyses of a few pieces: the notes each is read
+/// from, every key ranked under each of the five profiles with its
+/// coefficient, the pitch span, and the melodic intervals of each line.
+fn write_key_analysis(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> PyResult<PathBuf> {
+    let corpus = py.import("music21.corpus")?;
+    let converter = py.import("music21.converter")?;
+    let discrete = py.import("music21.analysis.discrete")?;
+    let note_module = py.import("music21.note")?;
+    let stream_module = py.import("music21.stream")?;
+    let unpitched = note_module.getattr("Unpitched")?;
+    let note_class = note_module.getattr("Note")?;
+
+    let mut out = header(
+        &[
+            "# music21's discrete analyses, generated from music21 by",
+            "# `cargo run --release -p xtask --features python -- regenerate-fixtures`.",
+            "# `key_analysis_parity` reads the notes back and asks the crate.",
+        ],
+        stamp,
+    );
+
+    let mut pieces: Vec<(String, Bound<'_, PyAny>)> = Vec::new();
+    for name in ["bach/bwv66.6", "bach/bwv7.7", "bach/bwv40.8"] {
+        pieces.push((name.to_string(), corpus.call_method1("parse", (name,))?));
+    }
+    // A line whose lengths decide the key.
+    pieces.push((
+        "weighted".to_string(),
+        converter.call_method1(
+            "parse",
+            ("tinynotation: 4/4 f#2 a4 b4 c#'1 d'8 e'8 f#'4 a2",),
+        )?,
+    ));
+    // Quarter tones, which count toward the even class, and a tied pair,
+    // which the interval count reads as one note.
+    let quarter_tones = stream_module.getattr("Part")?.call0()?;
+    let tie_class = py.import("music21.tie")?.getattr("Tie")?;
+    for (name, length, tie) in [
+        ("C4", 1.0, None),
+        ("D~4", 1.0, None),
+        ("E`4", 1.0, None),
+        ("F#4", 0.5, None),
+        ("G4", 2.0, Some("start")),
+        ("G4", 1.0, Some("stop")),
+        ("A~4", 0.5, None),
+        ("C5", 1.0, None),
+    ] {
+        let keywords = pyo3::types::PyDict::new(py);
+        keywords.set_item("quarterLength", length)?;
+        let made = note_class.call((name,), Some(&keywords))?;
+        if let Some(tie) = tie {
+            made.setattr("tie", tie_class.call1((tie,))?)?;
+        }
+        quarter_tones.call_method1("append", (made,))?;
+    }
+    pieces.push(("quarter tones".to_string(), quarter_tones));
+
+    let profiles = [
+        "KrumhanslSchmuckler",
+        "AardenEssen",
+        "SimpleWeights",
+        "BellmanBudge",
+        "TemperleyKostkaPayne",
+    ];
+    for (name, piece) in &pieces {
+        let _ = writeln!(out, "[[piece]]");
+        let _ = writeln!(out, "name = {}", toml_string(name));
+        let flat = piece
+            .call_method0("flatten")?
+            .getattr("notesAndRests")?
+            .call_method1("getElementsNotOfClass", (&unpitched,))?;
+        let mut notes = Vec::new();
+        for element in flat.getattr("notes")?.try_iter()? {
+            let element = element?;
+            let mut names = Vec::new();
+            for pitch in element.getattr("pitches")?.try_iter()? {
+                names.push(pitch?.getattr("nameWithOctave")?.extract::<String>()?);
+            }
+            let length: f64 = element.getattr("quarterLength")?.extract()?;
+            notes.push(format!("{} {length:?}", names.join(" ")));
+        }
+        let _ = writeln!(out, "notes = {}", toml_list(&notes));
+
+        for profile in profiles {
+            let analysis = discrete.getattr(profile)?.call0()?;
+            let found = analysis.call_method1("getSolution", (piece,))?;
+            let mut ranked = vec![found.clone()];
+            for alternative in found.getattr("alternateInterpretations")?.try_iter()? {
+                ranked.push(alternative?);
+            }
+            let mut keys = Vec::new();
+            for key in &ranked {
+                let tonic: String = key.getattr("tonic")?.getattr("name")?.extract()?;
+                let mode: String = key.getattr("mode")?.extract()?;
+                let coefficient: f64 = key.getattr("correlationCoefficient")?.extract()?;
+                keys.push(format!("{tonic} {mode} {coefficient:?}"));
+            }
+            let _ = writeln!(out, "{} = {}", profile, toml_list(&keys));
+        }
+
+        let span = discrete
+            .getattr("Ambitus")?
+            .call0()?
+            .call_method1("getPitchSpan", (piece,))?;
+        if !span.is_none() {
+            let low: String = span.get_item(0)?.getattr("nameWithOctave")?.extract()?;
+            let high: String = span.get_item(1)?.getattr("nameWithOctave")?.extract()?;
+            let _ = writeln!(
+                out,
+                "span = [{}, {}]",
+                toml_string(&low),
+                toml_string(&high)
+            );
+        }
+
+        // The lines the interval count walks: each part, ties struck, notes
+        // alone -- which is what `countMelodicIntervals` reads.
+        // Walked one at a time: collecting a music21 stream iterator asks it
+        // for its length first, which walks it, and the first part then
+        // comes out twice.
+        let mut parts: Vec<Bound<'_, PyAny>> = Vec::new();
+        if piece.call_method0("hasPartLikeStreams")?.extract()? {
+            for part in piece
+                .call_method1("getElementsByClass", (stream_module.getattr("Stream")?,))?
+                .try_iter()?
+            {
+                parts.push(part?);
+            }
+        } else {
+            parts.push(piece.clone());
+        }
+        let mut lines = Vec::new();
+        for part in &parts {
+            let keywords = pyo3::types::PyDict::new(py);
+            keywords.set_item("inPlace", false)?;
+            let notes = part
+                .call_method0("flatten")?
+                .call_method("stripTies", (), Some(&keywords))?
+                .call_method1("getElementsByClass", (&note_class,))?;
+            let mut names = Vec::new();
+            for note in notes.try_iter()? {
+                names.push(
+                    note?
+                        .getattr("pitch")?
+                        .getattr("nameWithOctave")?
+                        .extract::<String>()?,
+                );
+            }
+            lines.push(names.join(" "));
+        }
+        let _ = writeln!(out, "lines = {}", toml_list(&lines));
+        let diversity = discrete.getattr("MelodicIntervalDiversity")?.call0()?;
+        let counted = diversity.call_method1("countMelodicIntervals", (piece,))?;
+        let mut counts = Vec::new();
+        for item in counted.call_method0("items")?.try_iter()? {
+            let (name, found): (String, Bound<'_, PyAny>) = item?.extract()?;
+            let count: i64 = found.get_item(1)?.extract()?;
+            counts.push(format!("{name} {count}"));
+        }
+        let _ = writeln!(out, "intervals = {}", toml_list(&counts));
+        let _ = writeln!(out);
+    }
+
+    let path = workspace_root.join("data/key_analysis_expectations.toml");
     fs::write(&path, out)?;
     Ok(path)
 }

@@ -803,3 +803,47 @@ generateAllRealizations = "builds a score; the realization answers the voicings 
 generateRandomRealization = "builds a score; the realization answers the voicings themselves"
 generateRandomRealizations = "builds a score; the realization answers the voicings themselves"
 generateRealizationFromPossibilityProgression = "builds a score; the realization answers the voicings themselves"
+
+[[class]]
+python = "analysis/discrete.py"
+name = "KeyWeightKeyAnalysis"
+rust = ["src/analysis.rs"]
+note = "Key finding by correlating a duration-weighted pitch-class distribution with one of five key profiles."
+
+[class.renames]
+getWeights = "major_weights"
+process = "estimate_key_from_distribution"
+getSolution = "estimate_key_from_distribution"
+
+[class.excluded]
+solutionLegend = "the colour legend of a keyscape graph; presentation"
+solutionToColor = "the colour a key is drawn in; presentation"
+solutionUnitString = "the unit a graph's legend is labelled with; presentation"
+
+[[class]]
+python = "analysis/discrete.py"
+name = "Ambitus"
+rust = ["src/analysis.rs"]
+
+[class.renames]
+getPitchSpan = "pitch_span"
+process = "pitch_span"
+getSolution = "pitch_span"
+
+[class.excluded]
+solutionLegend = "the colour legend of a graph; presentation"
+solutionToColor = "the colour a span is drawn in; presentation"
+solutionUnitString = "the unit a graph's legend is labelled with; presentation"
+
+[[class]]
+python = "analysis/discrete.py"
+name = "MelodicIntervalDiversity"
+rust = ["src/analysis.rs"]
+
+[class.renames]
+countMelodicIntervals = "melodic_interval_counts"
+process = "melodic_interval_counts"
+getSolution = "melodic_interval_counts"
+
+[class.excluded]
+solutionToColor = "the colour a count is drawn in; presentation"

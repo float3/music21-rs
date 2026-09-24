@@ -1,0 +1,19 @@
+# Docstrings of music21.figuredBass.checker whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_checker`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.figuredBass.checker.checkConsecutivePossibilities",
+    "music21.figuredBass.checker.checkSinglePossibilities",
+    "music21.figuredBass.checker.correlateHarmonies",
+    "music21.figuredBass.checker.createOffsetMapping",
+    "music21.figuredBass.checker.extractHarmonies",
+    "music21.figuredBass.checker.generalNoteToPitch",
+    "music21.figuredBass.checker.getVoiceLeadingMoments",
+    "music21.figuredBass.checker.hiddenFifths",
+    "music21.figuredBass.checker.hiddenOctaves",
+    "music21.figuredBass.checker.parallelFifths",
+    "music21.figuredBass.checker.parallelOctaves",
+    "music21.figuredBass.checker.voiceCrossing",
+]

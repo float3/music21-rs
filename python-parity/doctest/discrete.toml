@@ -1,0 +1,32 @@
+# Docstrings of music21.analysis.discrete whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_discrete`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.analysis.discrete.AardenEssen.getWeights",
+    "music21.analysis.discrete.Ambitus",
+    "music21.analysis.discrete.Ambitus._generateColors",
+    "music21.analysis.discrete.Ambitus.getPitchSpan",
+    "music21.analysis.discrete.Ambitus.getSolution",
+    "music21.analysis.discrete.Ambitus.process",
+    "music21.analysis.discrete.Ambitus.solutionLegend",
+    "music21.analysis.discrete.Ambitus.solutionToColor",
+    "music21.analysis.discrete.BellmanBudge.getWeights",
+    "music21.analysis.discrete.DiscreteAnalysis._hexToRgb",
+    "music21.analysis.discrete.DiscreteAnalysis._rgbLimit",
+    "music21.analysis.discrete.DiscreteAnalysis._rgbToHex",
+    "music21.analysis.discrete.KeyWeightKeyAnalysis._bestKeyEnharmonic",
+    "music21.analysis.discrete.KeyWeightKeyAnalysis._fillColorDictionaries",
+    "music21.analysis.discrete.KeyWeightKeyAnalysis._getPitchClassDistribution",
+    "music21.analysis.discrete.KeyWeightKeyAnalysis._getSharpFlatCount",
+    "music21.analysis.discrete.KeyWeightKeyAnalysis.getSolution",
+    "music21.analysis.discrete.KeyWeightKeyAnalysis.getWeights",
+    "music21.analysis.discrete.KeyWeightKeyAnalysis.solutionLegend",
+    "music21.analysis.discrete.KeyWeightKeyAnalysis.solutionToColor",
+    "music21.analysis.discrete.KrumhanslSchmuckler.getWeights",
+    "music21.analysis.discrete.SimpleWeights.getWeights",
+    "music21.analysis.discrete.TemperleyKostkaPayne.getWeights",
+    "music21.analysis.discrete.analysisClassFromMethodName",
+    "music21.analysis.discrete.analyzeStream",
+]

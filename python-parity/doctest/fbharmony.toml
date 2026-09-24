@@ -1,0 +1,11 @@
+# Docstrings of music21.figuredBass.harmony whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_fbharmony`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.figuredBass.harmony.FiguredBass",
+    "music21.figuredBass.harmony.FiguredBass.figureString",
+    "music21.figuredBass.harmony.FiguredBass.figureStrings",
+    "music21.figuredBass.harmony.FiguredBass.notation",
+]

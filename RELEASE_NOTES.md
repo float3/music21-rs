@@ -1,3 +1,44 @@
+# Unreleased
+
+music21's key analysis is in the crate, weighted by duration and ranked,
+spelled and scored as music21 ranks, spells and scores it, and music21's own
+`analysis.discrete`, `figuredBass.checker` and `figuredBass.harmony` pass
+every example with the crate beneath them: 36 modules, 1,004 docstrings and
+9,008 examples. A figured-bass segment finds its voicings about eighteen
+times faster than it did in 0.7.0.
+
+## Added
+
+- `analysis::pitch_class_distribution`, how long each pitch class sounds,
+  and `analysis::estimate_key_from_distribution`, every key ranked against
+  it: music21's key-weight analysis, checked against music21's rankings and
+  coefficients on three chorales and two made-up lines by
+  `key_analysis_parity`.
+- `analysis::pitch_span`, music21's `Ambitus.getPitchSpan`, and
+  `analysis::melodic_interval_counts`, its
+  `MelodicIntervalDiversity.countMelodicIntervals`.
+
+## Changed
+
+- `estimate_key_from_pitches` and the rest rank keys as music21 does, ties
+  and all, and spell them as music21 does: a minor key on the eighth pitch
+  class is G-sharp minor, where it was A-flat minor.
+- A figured-bass segment walks its voicings as indices over each pitch's
+  place and name, worked out once, and builds only the voicings it keeps: a
+  seventh chord's 2,744 voicings are looked at in about 75 microseconds,
+  where they took 1.3 milliseconds.
+
+## Fixed
+
+- The wheel read a music21 stream iterator's first item twice wherever it
+  took a whole iterator at once, so `chord.Chord(stream.notes)` with the
+  wheel installed held its first note twice. Collecting asks an iterator for
+  its length, and music21's answers by walking itself from the start; the
+  wheel no longer asks.
+- A figured-bass segment the wheel builds is made of the wheel's own rules,
+  scale, notes and chords wherever music21's are not replaced, not of
+  music21's.
+
 # music21-rs 0.7.0
 
 `Tuplet` is music21's now in full, and installed over music21's own, and so

@@ -426,6 +426,14 @@ impl Pitch {
         name
     }
 
+    /// Whether this pitch is spelled `name` -- the letter and the modifier
+    /// [`Pitch::name`] writes -- without writing it out.
+    pub(crate) fn is_named(&self, name: &str) -> bool {
+        let mut letters = name.chars();
+        letters.next() == Some(self.step.as_char())
+            && letters.as_str() == self.accidental_or_natural().modifier()
+    }
+
     fn name_setter(&mut self, usr_str: &str) -> Result<()> {
         let usr_str = usr_str.trim();
 

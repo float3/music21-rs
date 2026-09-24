@@ -41,6 +41,10 @@ use std::error::Error;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
+use music21_rs::figuredbass::Notation as RsNotation;
+use music21_rs::figuredbass::rules::Rules as RsRules;
+use music21_rs::figuredbass::scale::FiguredBassScale as RsFiguredBassScale;
+use music21_rs::figuredbass::segment::Segment as RsSegment;
 use music21_rs::{
     Chord as RsChord, Interval as RsInterval, Note as RsNote, Pitch as RsPitch,
     ToneRow as RsToneRow, Transformation as RsTransformation,
@@ -381,6 +385,10 @@ pub(crate) fn add_dependency_venv(py: Python<'_>, workspace_root: &Path) -> PyRe
         ] {
             if site.is_dir() {
                 path.insert(0, site.to_string_lossy().to_string())?;
+                // Its `.pth` files too: `maturin develop` installs the wheel
+                // as one, and without reading it the wheel is not there.
+                py.import("site")?
+                    .call_method1("addsitedir", (site.to_string_lossy().to_string(),))?;
             }
         }
         if let Ok(entries) = std::fs::read_dir(venv.join("lib")) {
@@ -432,6 +440,7 @@ fn music21_side(py: Python<'_>) -> PyResult<Side> {
         ("Interval", "music21.interval"),
         ("Chord", "music21.chord"),
         ("pcToToneRow", "music21.serial"),
+        ("Segment", "music21.figuredBass.segment"),
     ] {
         classes.insert(name, py.import(module)?.getattr(name)?.unbind());
     }
@@ -441,7 +450,14 @@ fn music21_side(py: Python<'_>) -> PyResult<Side> {
 /// The wheel's, all on the one module.
 fn our_side(py: Python<'_>, module: &Bound<'_, PyModule>) -> PyResult<Side> {
     let mut classes = HashMap::new();
-    for name in ["Pitch", "Note", "Interval", "Chord", "pcToToneRow"] {
+    for name in [
+        "Pitch",
+        "Note",
+        "Interval",
+        "Chord",
+        "pcToToneRow",
+        "Segment",
+    ] {
         classes.insert(name, module.getattr(name)?.unbind());
     }
     side(py, "music21_rs", classes)
@@ -760,6 +776,32 @@ fn cases() -> Vec<Case> {
         }),
     );
 
+    // ---- figured bass ------------------------------------------------------
+    out.push(
+        Case::new(
+            "Segment(G2, '7').allCorrectSinglePossibilities()",
+            "figured bass",
+            segment_question("G2", "7", None),
+        )
+        .natively(|| figured_count("G2", "7", None)),
+    );
+    out.push(
+        Case::new(
+            "Segment(G2, '7') to Segment(C3), a dominant seventh resolving",
+            "figured bass",
+            segment_question("G2", "7", Some(("C3", ""))),
+        )
+        .natively(|| figured_count("G2", "7", Some(("C3", "")))),
+    );
+    out.push(
+        Case::new(
+            "Segment(C3) to Segment(D3, '4,3'), every pair of voicings",
+            "figured bass",
+            segment_question("C3", "", Some(("D3", "4,3"))),
+        )
+        .natively(|| figured_count("C3", "", Some(("D3", "4,3")))),
+    );
+
     // ---- the same questions on an object that has already answered them ---
     for attribute in ["commonName", "forteClass"] {
         out.push(
@@ -783,6 +825,73 @@ fn cases() -> Vec<Case> {
     }
 
     out
+}
+
+/// How many voicings a segment of `bass` under `figures` has, or, given the
+/// segment after it, how many pairs of voicings may move from one to the
+/// next -- asked of a segment built afresh each time.
+fn segment_question(
+    bass: &'static str,
+    figures: &'static str,
+    next: Option<(&'static str, &'static str)>,
+) -> Build {
+    Box::new(move |py, side| {
+        let segment = side.get(py, "Segment")?.unbind();
+        let note = side.get(py, "Note")?.unbind();
+        let list = side.list.clone_ref(py);
+        let single = interned(py, "allCorrectSinglePossibilities");
+        let consecutive = interned(py, "allCorrectConsecutivePossibilities");
+        Ok(Box::new(move |py| {
+            let build = |bass: &str, figures: &str| {
+                segment
+                    .bind(py)
+                    .call1((note.bind(py).call1((bass,))?, figures))
+            };
+            let first = build(bass, figures)?;
+            let found = match next {
+                None => first.call_method0(single.bind(py))?,
+                Some((bass, figures)) => {
+                    let second = build(bass, figures)?;
+                    list.bind(py)
+                        .call1((first.call_method1(consecutive.bind(py), (second,))?,))?
+                }
+            };
+            Ok(found.len()?.into_pyobject(py)?.into_any().unbind())
+        }))
+    })
+}
+
+/// The same, asked of the crate.
+fn figured_count(bass: &str, figures: &str, next: Option<(&str, &str)>) -> String {
+    let segment = |bass: &str, figures: &str| -> Option<RsSegment> {
+        RsSegment::new(
+            RsPitch::from_name(bass).ok()?,
+            1.0,
+            &RsNotation::parse(figures).ok()?,
+            &RsFiguredBassScale::default(),
+            RsRules::default(),
+            4,
+            RsPitch::from_name("B5").ok()?,
+        )
+        .ok()
+    };
+    let Some(first) = segment(bass, figures) else {
+        return String::new();
+    };
+    let count = match next {
+        None => first
+            .all_correct_single_possibilities()
+            .map(|found| found.len()),
+        Some((bass, figures)) => {
+            let Some(mut second) = segment(bass, figures) else {
+                return String::new();
+            };
+            first
+                .all_correct_consecutive_possibilities(&mut second)
+                .map(|found| found.pairs.len())
+        }
+    };
+    count.map(|count| count.to_string()).unwrap_or_default()
 }
 
 /// `Class('argument').attribute`, the shape most construction cases take.

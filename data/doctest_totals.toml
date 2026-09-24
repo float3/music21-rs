@@ -17,6 +17,12 @@ music21_version = "11.0.0b9"
 music21_commit = "929a8866da788322d9453334db0f54e7193203de"
 
 [[module]]
+module = "music21.analysis.discrete"
+docstrings = 25
+examples = 122
+tests = 7
+
+[[module]]
 module = "music21.articulations"
 docstrings = 27
 examples = 105

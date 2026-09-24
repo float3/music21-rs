@@ -45,10 +45,11 @@ pub fn voice_crossing(possibility: &[Pitch]) -> bool {
 /// Whether the possibility leaves out any of `pitch_names`, the names of
 /// the notes its chord has to sound.
 pub fn is_incomplete<S: AsRef<str>>(possibility: &[Pitch], pitch_names: &[S]) -> bool {
-    let contained: Vec<String> = possibility.iter().map(Pitch::name).collect();
-    pitch_names
-        .iter()
-        .any(|name| !contained.iter().any(|held| held == name.as_ref()))
+    pitch_names.iter().any(|name| {
+        !possibility
+            .iter()
+            .any(|pitch| pitch.is_named(name.as_ref()))
+    })
 }
 
 /// Whether every two of the upper parts -- all but the bass -- lie within

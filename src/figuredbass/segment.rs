@@ -158,9 +158,10 @@ impl Segment {
         &self.chord
     }
 
-    /// Every voicing, acceptable or not, in music21's order: the highest
-    /// part changes slowest. music21's `allSinglePossibilities`.
-    pub fn all_single_possibilities(&self) -> Result<Vec<Possibility>> {
+    /// The pitches each part may sing, highest part first: the pitches
+    /// above the bass for each upper part, and the bass for the lowest, with
+    /// the parts an overlaid segment holds to a pitch held to it.
+    fn choices(&self) -> Result<Vec<Vec<Pitch>>> {
         let upper = self.num_parts.saturating_sub(1);
         let mut choices: Vec<Vec<Pitch>> = vec![self.pitches_above_bass.clone(); upper];
         choices.push(vec![Pitch::from_name(self.bass.name_with_octave())?]);
@@ -176,17 +177,113 @@ impl Segment {
                 *slot = vec![Pitch::from_name(pitch.name_with_octave())?];
             }
         }
-        Ok(product(&choices))
+        Ok(choices)
+    }
+
+    /// Every voicing, acceptable or not, in music21's order: the highest
+    /// part changes slowest. music21's `allSinglePossibilities`.
+    pub fn all_single_possibilities(&self) -> Result<Vec<Possibility>> {
+        Ok(product(&self.choices()?))
     }
 
     /// The voicings its rules accept: music21's
     /// `allCorrectSinglePossibilities`.
+    ///
+    /// The voicings are walked as indices into what each part may sing, and
+    /// held to the rules over each pitch's place and name worked out once, so
+    /// only the voicings kept are ever built: a seventh chord has thousands
+    /// to look at and a handful to keep.
     pub fn all_correct_single_possibilities(&self) -> Result<Vec<Possibility>> {
-        Ok(self
-            .all_single_possibilities()?
-            .into_iter()
-            .filter(|voicing| self.is_correct_single(voicing))
-            .collect())
+        let choices = self.choices()?;
+        if choices.iter().any(Vec::is_empty) {
+            return Ok(Vec::new());
+        }
+        let rules = &self.rules;
+        // Which of the chord's notes each pitch spells, as bits: a voicing is
+        // complete when its pitches' bits cover every note.
+        let wanted: Option<u64> = if rules.forbid_incomplete_possibilities {
+            if self.pitch_names.len() > 64 {
+                return Ok(product(&choices)
+                    .into_iter()
+                    .filter(|voicing| self.is_correct_single(voicing))
+                    .collect());
+            }
+            Some(
+                self.pitch_names
+                    .iter()
+                    .enumerate()
+                    .fold(0, |bits, (index, _)| bits | 1 << index),
+            )
+        } else {
+            None
+        };
+        let spaces: Vec<Vec<FloatType>> = choices
+            .iter()
+            .map(|part| part.iter().map(Pitch::ps).collect())
+            .collect();
+        let spelled: Vec<Vec<u64>> = choices
+            .iter()
+            .map(|part| {
+                part.iter()
+                    .map(|pitch| {
+                        self.pitch_names
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, name)| pitch.is_named(name))
+                            .fold(0, |bits, (index, _)| bits | 1 << index)
+                    })
+                    .collect()
+            })
+            .collect();
+        let limit = rules
+            .upper_parts_max_semitone_separation
+            .map(FloatType::from);
+        let upper = choices.len() - 1;
+        let mut indices = vec![0; choices.len()];
+        let mut places = vec![0.0; choices.len()];
+        let mut kept = Vec::new();
+        loop {
+            for (part, &index) in indices.iter().enumerate() {
+                places[part] = spaces[part][index];
+            }
+            let complete = wanted.is_none_or(|wanted| {
+                indices
+                    .iter()
+                    .enumerate()
+                    .fold(0, |bits, (part, &index)| bits | spelled[part][index])
+                    & wanted
+                    == wanted
+            });
+            let within = limit.is_none_or(|limit| {
+                (0..upper).all(|high| {
+                    (high + 1..upper).all(|low| (places[high] - places[low]).abs() <= limit)
+                })
+            });
+            let crossing = rules.forbid_voice_crossing
+                && (0..places.len())
+                    .any(|high| (high + 1..places.len()).any(|low| places[high] < places[low]));
+            if complete && within && !crossing {
+                kept.push(
+                    indices
+                        .iter()
+                        .enumerate()
+                        .map(|(part, &index)| choices[part][index].clone())
+                        .collect(),
+                );
+            }
+            let mut position = choices.len();
+            loop {
+                if position == 0 {
+                    return Ok(kept);
+                }
+                position -= 1;
+                indices[position] += 1;
+                if indices[position] < choices[position].len() {
+                    break;
+                }
+                indices[position] = 0;
+            }
+        }
     }
 
     /// Whether the rules accept `voicing` on its own.
