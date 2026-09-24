@@ -795,19 +795,37 @@ function toSource(insertions: Rendered["insertions"], position: number): number 
 function render(source: string): void {
     const labels = new Map<number, string>();
     const mode = labelsSelect.value;
-    // A harmony is labelled under its bass, where the bass moves, and only
-    // when the label changes.
+    // A harmony is labelled under the bass it stands on, and only when the
+    // label changes. A bass struck alone and then held under the chord, as a
+    // guitar plays it, takes the label of the chord that comes in over it.
     let previous: string | null = null;
     let labelled = -Infinity;
+    let bass: { anchor: number; offset: number; free: boolean } | null = null;
+    let before: Slice | null = null;
     for (const slice of analysis?.slices ?? []) {
-        if (!slice.bass_attack) continue;
         const label = labelFor(slice, mode);
+        // A bass moving for less than a beat under notes that stay is passing
+        // on to the next harmony, not a harmony of its own.
+        const upper = (s: Slice) => s.pitches.slice(1).join(" ");
+        if (slice.bass_attack && before && previous && slice.duration < 1 && upper(slice) === upper(before)) {
+            bass = null;
+            continue;
+        }
+        // Only a bass sounding with no harmony over it yet waits for one, and
+        // what it waits for is a chord, several notes coming in together, not
+        // a melody note.
+        const entering = slice.pitches.filter((pitch) => !before?.pitches.includes(pitch)).length;
+        before = slice;
+        if (slice.bass_attack) bass = { anchor: slice.bass_attack[0], offset: slice.offset, free: !label };
+        const waiting = !slice.bass_attack && bass?.free && label && entering >= 2;
+        if (!slice.bass_attack && !waiting) continue;
         // Labels closer together than half a beat would be drawn over each
         // other, which onsets a fraction apart otherwise do.
-        if (label && label !== previous && slice.offset - labelled >= 0.5) {
-            labels.set(slice.bass_attack[0], label);
-            labelled = slice.offset;
+        if (bass && label && label !== previous && bass.offset - labelled >= 0.5) {
+            labels.set(bass.anchor, label);
+            labelled = bass.offset;
         }
+        if (bass && label) bass.free = false;
         previous = label;
     }
     // What is drawn is the source with text inserted and nothing taken out,
