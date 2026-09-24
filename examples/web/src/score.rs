@@ -1728,6 +1728,49 @@ fn chord_symbol_voicing_notes(figure: &str, open_strings: &[i32]) -> Result<Vec<
     let chord = music21_rs::ChordSymbol::parse(figure)
         .and_then(|symbol| symbol.to_chord())
         .map_err(js_error)?;
+    voicing_notes(&chord, open_strings)
+}
+
+/// The notes the fingers play for a chord symbol on the strings above a
+/// thumb that plays the pitch classes in `thumb`, the bass first: every note
+/// of the chord but the thumb's bass, and not the thumb's other notes either
+/// when there are more notes left than strings to play them on.
+fn chord_symbol_voicing_above_notes(
+    figure: &str,
+    open_strings: &[i32],
+    thumb: &[i32],
+) -> Result<Vec<i32>, JsValue> {
+    let chord = music21_rs::ChordSymbol::parse(figure)
+        .and_then(|symbol| symbol.to_chord())
+        .map_err(js_error)?;
+    let pitches = chord.pitches();
+    let class = |pitch: &Pitch| pitch.midi().rem_euclid(12);
+    let classes = pitches
+        .iter()
+        .map(class)
+        .collect::<std::collections::BTreeSet<_>>();
+    let mut left_out = thumb
+        .iter()
+        .take(1)
+        .map(|pc| pc.rem_euclid(12))
+        .collect::<Vec<_>>();
+    if classes.iter().filter(|pc| !left_out.contains(pc)).count() > open_strings.len() {
+        left_out.extend(thumb.iter().skip(1).map(|pc| pc.rem_euclid(12)));
+    }
+    let kept = pitches
+        .into_iter()
+        .filter(|pitch| !left_out.contains(&class(pitch)))
+        .collect::<Vec<_>>();
+    if kept.is_empty() || open_strings.is_empty() {
+        return voicing_notes(&chord, open_strings);
+    }
+    let upper = music21_rs::Chord::new(kept.as_slice()).map_err(js_error)?;
+    voicing_notes(&upper, open_strings)
+}
+
+/// The crate's suggested fingering of a chord on the given open strings, as
+/// the notes it sounds, or the chord's own notes where no fingering covers it.
+fn voicing_notes(chord: &music21_rs::Chord, open_strings: &[i32]) -> Result<Vec<i32>, JsValue> {
     let names = open_strings
         .iter()
         .map(|&midi| Pitch::from_midi(midi).map(|pitch| pitch.name_with_octave()))
@@ -1751,6 +1794,19 @@ fn chord_symbol_voicing_notes(figure: &str, open_strings: &[i32]) -> Result<Vec<
 /// numbers to play.
 pub fn chord_symbol_voicing(figure: &str, open_strings: Vec<i32>) -> Result<Vec<i32>, JsValue> {
     chord_symbol_voicing_notes(figure, &open_strings)
+}
+
+#[wasm_bindgen]
+/// Voices a chord symbol for the fingers on the strings above a thumb that
+/// plays the pitch classes `thumb`, its bass first: the chord without the
+/// thumb's bass, and without its other notes as well when more notes are left
+/// than there are strings.
+pub fn chord_symbol_voicing_above(
+    figure: &str,
+    open_strings: Vec<i32>,
+    thumb: Vec<i32>,
+) -> Result<Vec<i32>, JsValue> {
+    chord_symbol_voicing_above_notes(figure, &open_strings, &thumb)
 }
 
 fn spell_midi(midi: i32, tonic: &str, mode: &str) -> Result<Pitch, JsValue> {
@@ -1848,6 +1904,29 @@ mod tests {
         let classes: std::collections::BTreeSet<i32> =
             d7.iter().map(|midi| midi.rem_euclid(12)).collect();
         assert!(classes.contains(&0), "D7 has its C: {d7:?}");
+    }
+
+    #[test]
+    fn the_fingers_play_what_the_thumb_does_not() {
+        let classes = |notes: &[i32]| {
+            notes
+                .iter()
+                .map(|midi| midi.rem_euclid(12))
+                .collect::<std::collections::BTreeSet<i32>>()
+        };
+        // Gm7 over a thumb on G and D: its third and seventh on the top strings.
+        let gm7 =
+            chord_symbol_voicing_above_notes("Gm7", &[55, 59, 64], &[7, 2]).expect("voices Gm7");
+        assert_eq!(classes(&gm7), [10, 2, 5].into(), "{gm7:?}");
+        assert!(gm7.iter().all(|midi| *midi >= 55), "{gm7:?}");
+        // C9 over a thumb on C and G, on four strings: E, B-flat and D, and
+        // no C.
+        let c9 =
+            chord_symbol_voicing_above_notes("C9", &[50, 55, 59, 64], &[0, 7]).expect("voices C9");
+        for pc in [4, 10, 2] {
+            assert!(classes(&c9).contains(&pc), "{c9:?}");
+        }
+        assert!(!classes(&c9).contains(&0), "{c9:?}");
     }
 
     #[test]

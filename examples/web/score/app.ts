@@ -171,6 +171,7 @@ interface WasmModule {
     midi_to_abc(bytes: Uint8Array): string;
     spell_midi_in_key(midi: number, tonic: string, mode: string): string;
     chord_symbol_voicing(figure: string, openStrings: Int32Array): Int32Array;
+    chord_symbol_voicing_above(figure: string, openStrings: Int32Array, thumb: Int32Array): Int32Array;
     score_tuning_cents(
         input: ScoreInput,
         tuning: string,
@@ -1552,6 +1553,22 @@ function chordPart(source: string): { at: number; text: string }[] | null {
             })
             .join("");
     const pattern = COMPING[compingSelect.value];
+    const fingerings = new Map<string, number[]>();
+    const fingers = (name: string, root: number, fifth: number, slash: boolean): number[] => {
+        const key = `${name}|${root}|${fifth}`;
+        if (!fingerings.has(key)) {
+            const strings = sounding.filter((open) => open > Math.max(root, fifth));
+            const thumb = slash ? [root % 12] : [root % 12, fifth % 12];
+            let notes: number[] = [];
+            try {
+                notes = Array.from(wasm!.chord_symbol_voicing_above(name, Int32Array.from(strings), Int32Array.from(thumb)));
+            } catch {
+                notes = [];
+            }
+            fingerings.set(key, notes.length ? notes : (voicing(name) ?? []));
+        }
+        return fingerings.get(key)!;
+    };
     const bars: string[] = [];
     let patterned = 0;
     for (let b = 0; b + 1 < lines.length; b++) {
@@ -1574,8 +1591,8 @@ function chordPart(source: string): { at: number; text: string }[] | null {
                 // it, or above where the strings do not reach; a named bass it
                 // plays twice. A root that first comes on the third string
                 // from the bottom leaves the fifth below it on a bass string,
-                // and the thumb starts there. The fingers take the notes of
-                // the voicing above the thumb's.
+                // and the thumb starts there. The fingers play the chord on
+                // the strings above the thumb's, without the thumb's notes.
                 const [name, bassName] = span!.name.split("/");
                 const root = lowestOf(bassName ?? name, sounding[0]);
                 if (root === null) {
@@ -1587,8 +1604,7 @@ function chordPart(source: string): { at: number; text: string }[] | null {
                 const fifthFirst = !bassName && below && sounding.length > 2 && root >= sounding[2];
                 const first = fifthFirst ? fifth : root;
                 const second = fifthFirst ? root : fifth;
-                const above = voiced.filter((midi) => midi > Math.max(first, second));
-                const notes = part === "root" ? [first] : part === "fifth" ? [second] : above.length ? above : voiced;
+                const notes = part === "root" ? [first] : part === "fifth" ? [second] : fingers(span!.name, root, fifth, !!bassName);
                 const written = write(notes, inForce);
                 tokens.push(`${notes.length > 1 ? `[${written}]` : written}${length(stop - start)}`);
             });
