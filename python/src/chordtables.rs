@@ -10,6 +10,8 @@
 #![allow(non_snake_case)]
 
 use pyo3::prelude::*;
+
+use crate::Walkable;
 use pyo3::types::PyTuple;
 
 use music21_rs_crate::chord::tables;
@@ -44,7 +46,7 @@ error_into!(tables_error, ChordTablesException);
 /// the `ChordTableAddress` namedtuple an earlier call handed back.
 fn address_of(value: &Bound<'_, PyAny>) -> PyResult<(u8, u8, Option<i8>)> {
     let mut parts: Vec<Option<i32>> = Vec::new();
-    for item in value.try_iter()? {
+    for item in value.walk()? {
         let item = item?;
         parts.push(if item.is_none() {
             None
@@ -169,7 +171,7 @@ fn interval_vector_to_address(
     vector: &Bound<'_, PyAny>,
 ) -> PyResult<Vec<Py<PyAny>>> {
     let mut counts = Vec::new();
-    for item in vector.try_iter()? {
+    for item in vector.walk()? {
         // A count no set class could have is not an error, just nothing.
         let Ok(count) = item?.extract::<i32>() else {
             return Ok(Vec::new());
@@ -238,7 +240,7 @@ fn seek_chord_tables_address(py: Python<'_>, c: &Bound<'_, PyAny>) -> PyResult<P
     // The chord's own pitch classes, in order and without repeats, however
     // the chord answers for them: one of ours, or one of music21's.
     let mut pitch_classes: Vec<u8> = Vec::new();
-    for item in c.getattr("orderedPitchClasses")?.try_iter()? {
+    for item in c.getattr("orderedPitchClasses")?.walk()? {
         let value: i32 = item?.extract()?;
         pitch_classes.push(value.rem_euclid(12) as u8);
     }

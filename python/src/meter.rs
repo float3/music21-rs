@@ -20,6 +20,8 @@
 
 use pyo3::exceptions::PyIndexError;
 use pyo3::prelude::*;
+
+use crate::Walkable;
 use pyo3::types::PyDict;
 use pyo3::types::PyList;
 use pyo3::types::PyTuple;
@@ -563,7 +565,7 @@ impl TimeSignature {
 
         let mut notes = Vec::new();
         let mut laid_out = 0.0;
-        for element in srcList.try_iter()? {
+        for element in srcList.walk()? {
             let element = element?;
             let duration = element.getattr("duration")?;
             let quarter_length: FloatType = duration
@@ -621,7 +623,7 @@ impl TimeSignature {
         let bar = self.inner.bar_quarter_length();
         let mut total = 0.0;
         let mut count = 0_usize;
-        for element in elements.try_iter()? {
+        for element in elements.walk()? {
             let offset: FloatType = element?
                 .getattr("offset")?
                 .call_method0("__float__")?
@@ -1045,7 +1047,7 @@ impl MeterSequence {
     /// spans it was given.
     fn adopt(slf: &Bound<'_, Self>, given: &Bound<'_, PyAny>) -> PyResult<()> {
         let mut parts = Vec::new();
-        for (index, item) in given.try_iter()?.enumerate() {
+        for (index, item) in given.walk()?.enumerate() {
             let item = item?;
             let anchored = Held::Part {
                 owner: slf.clone().unbind(),
@@ -1301,7 +1303,7 @@ impl MeterSequence {
         };
         let whole = match value.extract::<String>() {
             Ok(written) => RsMeterTerminal::from_partition_string(&written).map_err(meter_error)?,
-            Err(_) => match value.try_iter() {
+            Err(_) => match value.walk() {
                 // A list of spans, which become the parts: music21 builds an
                 // accent sequence out of the two spans a downbeat and an
                 // upbeat are.
@@ -1348,7 +1350,7 @@ impl MeterSequence {
             return Ok(());
         }
         // Only a list of spans is adopted; a ratio names no object.
-        if value.extract::<String>().is_ok() || value.try_iter().is_err() {
+        if value.extract::<String>().is_ok() || value.walk().is_err() {
             return Ok(());
         }
         Self::adopt(slf, value)
@@ -1767,7 +1769,7 @@ impl MeterSequence {
             // music21 hands back a new list of the same parts, so a caller
             // appending to one answer does not change the next.
             return Ok(
-                PyList::new(py, found.try_iter()?.collect::<PyResult<Vec<_>>>()?)?
+                PyList::new(py, found.walk()?.collect::<PyResult<Vec<_>>>()?)?
                     .into_any()
                     .unbind(),
             );
@@ -1908,7 +1910,7 @@ impl MeterSequence {
         // music21 uses `self` only to empty a cache the crate does not keep.
         let _ = slf;
         let mut deeper = Vec::new();
-        for item in processObjList.try_iter()? {
+        for item in processObjList.walk()? {
             let item = item?;
             let mut sequence = item.extract::<PyRefMut<'_, MeterSequence>>().map_err(|_| {
                 MeterException::new_err("a level is divided over sequences, which these are not")
@@ -2010,7 +2012,7 @@ fn read_span(value: &Bound<'_, PyAny>) -> PyResult<RsMeterTerminal> {
     let numerator: UnsignedIntegerType = value.getattr("numerator")?.extract()?;
     let denominator: UnsignedIntegerType = value.getattr("denominator")?.extract()?;
     let mut span = RsMeterTerminal::new(numerator, denominator).map_err(meter_error)?;
-    let parts: Vec<Bound<'_, PyAny>> = match value.try_iter() {
+    let parts: Vec<Bound<'_, PyAny>> = match value.walk() {
         Ok(items) => items.collect::<PyResult<Vec<_>>>()?,
         // A terminal is not a sequence and holds nothing.
         Err(_) => Vec::new(),
@@ -2071,7 +2073,7 @@ fn subdivided(span: &RsMeterTerminal, value: &Bound<'_, PyAny>) -> PyResult<RsMe
 fn sounding_stream(measure: &Bound<'_, PyAny>) -> PyResult<RsStream> {
     let mut stream = RsStream::new();
     let flat = measure.call_method0("flatten")?.getattr("notesAndRests")?;
-    for element in flat.try_iter()? {
+    for element in flat.walk()? {
         let element = element?;
         let offset: FloatType = element
             .getattr("offset")?

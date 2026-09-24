@@ -7,6 +7,8 @@
 use pyo3::IntoPyObjectExt;
 use pyo3::exceptions::{PyIndexError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
+
+use crate::Walkable;
 use pyo3::types::{PyDict, PyFloat, PyList, PyTuple};
 
 use music21_rs_crate::{
@@ -1419,7 +1421,7 @@ impl Duration {
     #[setter]
     fn set_components(&mut self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<()> {
         let mut components = Vec::new();
-        for item in value.try_iter()? {
+        for item in value.walk()? {
             components.push(duration_tuple_from_any(&item?)?);
         }
         self.set_component_list(py, components)
@@ -1472,7 +1474,7 @@ impl Duration {
         if let Ok(mut duration) = dur.extract::<PyRefMut<'_, Duration>>() {
             let added = duration.get_components(py)?;
             let added: Vec<DurationTuple> = added
-                .try_iter()?
+                .walk()?
                 .map(|item| duration_tuple_from_any(&item?))
                 .collect::<PyResult<_>>()?;
             components.extend(added);
@@ -1606,7 +1608,7 @@ impl Duration {
     fn set_tuplets(&mut self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<()> {
         self.materialize(py)?;
         let mut tuplets = Vec::new();
-        for item in value.try_iter()? {
+        for item in value.walk()? {
             tuplets.push(item?.unbind());
         }
         self.tuplets = Some(tuplets);
@@ -2324,7 +2326,7 @@ impl Bracket {
 /// A tuplet side written as a count and a written value, in a list or a
 /// tuple: what music21's `tupletActual` and `tupletNormal` setters unpack.
 fn count_and_value<'py>(value: &Bound<'py, PyAny>) -> PyResult<(u32, Bound<'py, PyAny>)> {
-    let items: Vec<Bound<'py, PyAny>> = value.try_iter()?.collect::<PyResult<_>>()?;
+    let items: Vec<Bound<'py, PyAny>> = value.walk()?.collect::<PyResult<_>>()?;
     let [count, written] = <[Bound<'py, PyAny>; 2]>::try_from(items).map_err(|items| {
         PyValueError::new_err(format!("expected 2 values to unpack, got {}", items.len()))
     })?;

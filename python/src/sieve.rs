@@ -22,6 +22,8 @@
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
+use crate::Walkable;
+
 use music21_rs_crate::{IntegerType, Sieve as RsSieve};
 
 /// The names the `sieve` facade replaces in `music21.sieve`.
@@ -47,7 +49,7 @@ fn bounds_of(z: Option<&Bound<'_, PyAny>>) -> PyResult<(IntegerType, IntegerType
         return Ok((0, 99));
     };
     let mut values: Vec<IntegerType> = Vec::new();
-    for item in z.try_iter()? {
+    for item in z.walk()? {
         values.push(item?.extract()?);
     }
     let (Some(low), Some(high)) = (values.iter().min().copied(), values.iter().max().copied())
@@ -213,7 +215,7 @@ impl Sieve {
             RsSieve::from_segment(&members, given.then_some(z))
         } else {
             let mut parts: Vec<String> = Vec::new();
-            for item in usrStr.try_iter()? {
+            for item in usrStr.walk()? {
                 parts.push(item?.extract()?);
             }
             RsSieve::parse(&parts.join("|"))

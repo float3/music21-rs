@@ -7,6 +7,8 @@ use std::sync::Mutex;
 
 use pyo3::exceptions::{PyIndexError, PyKeyError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
+
+use crate::Walkable;
 use pyo3::types::{PyDict, PyList, PyTuple};
 
 use music21_rs_crate::{
@@ -874,7 +876,7 @@ pub(crate) fn chord_from_any(value: Option<&Bound<'_, PyAny>>) -> PyResult<RsCho
         return RsChord::new(text).map_err(chord_error);
     }
     let items: Vec<Bound<'_, PyAny>> = value
-        .try_iter()
+        .walk()
         .map_err(|_| ChordException::new_err("Chord needs a string or a sequence"))?
         .collect::<PyResult<_>>()?;
     let all_integers = !items.is_empty()
@@ -961,7 +963,7 @@ fn adopted_notes(
         return read(chord_from_any(Some(value))?);
     }
     let Ok(items) = value
-        .try_iter()
+        .walk()
         .and_then(|items| items.collect::<PyResult<Vec<Bound<'_, PyAny>>>>())
     else {
         return read(chord_from_any(Some(value))?);
@@ -1067,7 +1069,7 @@ fn into_numbers(values: Vec<u8>) -> Vec<u32> {
 /// wanted, since a string is itself iterable and would come apart letter by
 /// letter.
 fn require_iterable(value: &Bound<'_, PyAny>, field: &str) -> PyResult<()> {
-    if value.extract::<String>().is_ok() || value.try_iter().is_err() {
+    if value.extract::<String>().is_ok() || value.walk().is_err() {
         return Err(PyTypeError::new_err(format!(
             "{field} must be set with an iterable"
         )));
@@ -1541,7 +1543,7 @@ impl Chord {
     fn set_notes(&mut self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<()> {
         require_iterable(value, "notes")?;
         let mut notes: Vec<RsNote> = Vec::new();
-        for item in value.try_iter()? {
+        for item in value.walk()? {
             let item = item?;
             let note = item.extract::<PyRef<Note>>().map_err(|_| {
                 PyTypeError::new_err("every element of notes must be a note.Note object")
@@ -1692,7 +1694,7 @@ impl Chord {
         // One note is a list of one: the reader below takes a sequence, and
         // a single note handed in has to come through as the object it is.
         let one;
-        let notes = if notes.extract::<String>().is_err() && notes.try_iter().is_err() {
+        let notes = if notes.extract::<String>().is_err() && notes.walk().is_err() {
             one = PyList::new(py, [notes])?.into_any();
             &one
         } else {
@@ -2962,7 +2964,7 @@ impl Chord {
 
     fn setVolumes(&mut self, py: Python<'_>, volumes: &Bound<'_, PyAny>) -> PyResult<()> {
         let mut parsed: Vec<RsVolume> = Vec::new();
-        for item in volumes.try_iter()? {
+        for item in volumes.walk()? {
             parsed.push(volume_from_any(&item?)?);
         }
         if parsed.is_empty() {
@@ -3069,7 +3071,7 @@ impl Chord {
     #[setter]
     fn set_expressions(&mut self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<()> {
         let list = PyList::empty(py);
-        for item in value.try_iter()? {
+        for item in value.walk()? {
             list.append(item?)?;
         }
         self.expressions = Some(list.unbind());
@@ -3088,7 +3090,7 @@ impl Chord {
     #[setter]
     fn set_articulations(&mut self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<()> {
         let list = PyList::empty(py);
-        for item in value.try_iter()? {
+        for item in value.walk()? {
             list.append(item?)?;
         }
         self.articulations = Some(list.unbind());

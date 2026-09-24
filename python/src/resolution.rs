@@ -8,6 +8,8 @@
 #![allow(non_snake_case)]
 
 use pyo3::prelude::*;
+
+use crate::Walkable;
 use pyo3::types::PyTuple;
 
 use music21_rs_crate::figuredbass::resolution::{self as rs, AugmentedSixth, ChordInfo};
@@ -43,7 +45,7 @@ pub const NAMES: &[&str] = &[
 
 fn pitches(possibility: &Bound<'_, PyAny>) -> PyResult<Vec<RsPitch>> {
     possibility
-        .try_iter()?
+        .walk()?
         .map(|pitch| pitch_from_any(&pitch?))
         .collect()
 }
@@ -55,7 +57,7 @@ pub(crate) fn chord_info(value: Option<&Bound<'_, PyAny>>) -> PyResult<Option<Ch
         return Ok(None);
     };
     let mut notes: Vec<Option<RsPitch>> = Vec::new();
-    for note in value.try_iter()? {
+    for note in value.walk()? {
         let note = note?;
         notes.push(if note.is_none() {
             None

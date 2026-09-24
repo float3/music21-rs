@@ -11,6 +11,8 @@
 #![allow(non_snake_case)]
 
 use pyo3::prelude::*;
+
+use crate::Walkable;
 use pyo3::types::{PyDict, PyList, PyTuple, PyType};
 
 use music21_rs_crate::Pitch as RsPitch;
@@ -31,17 +33,16 @@ pub const NAMES: &[&str] = &[
     "SegmentException",
 ];
 
-/// The class music21 now has under `name` in `module`, or the wheel's own
-/// where music21 is not there.
+/// The class the wheel installed under `name` in `module`, or the wheel's
+/// own where nothing is installed: never music21's original, which would
+/// run music21's code under the wheel's name.
 fn class_of<'py>(
     py: Python<'py>,
     module: &str,
     name: &str,
     fallback: Bound<'py, PyType>,
 ) -> Bound<'py, PyAny> {
-    py.import(module)
-        .and_then(|module| module.getattr(name))
-        .unwrap_or_else(|_| fallback.into_any())
+    crate::installed_class(py, module, name).unwrap_or_else(|| fallback.into_any())
 }
 
 fn pitch_object(py: Python<'_>, pitch: RsPitch) -> PyResult<Py<PyAny>> {
@@ -85,15 +86,15 @@ fn rules_of(rules: &Bound<'_, PyAny>) -> PyResult<RsRules> {
         upper_parts_remain_same: flag("_upperPartsRemainSame")?,
         ..RsRules::default()
     };
-    for limit in rules.getattr("partMovementLimits")?.try_iter()? {
+    for limit in rules.getattr("partMovementLimits")?.walk()? {
         read.part_movement_limits
             .push(crate::fbrules::pair::<usize, i32>(&limit?)?);
     }
-    for limit in rules.getattr("_partPitchLimits")?.try_iter()? {
+    for limit in rules.getattr("_partPitchLimits")?.walk()? {
         let (part, pitch) = crate::fbrules::pair::<usize, Bound<'_, PyAny>>(&limit?)?;
         read.part_pitch_limits.push((part, pitch_from_any(&pitch)?));
     }
-    for part in rules.getattr("_partsToCheck")?.try_iter()? {
+    for part in rules.getattr("_partsToCheck")?.walk()? {
         read.parts_to_check.push(part?.extract()?);
     }
     Ok(read)
@@ -108,7 +109,7 @@ struct Objects {
 impl Objects {
     fn of(pitches: &Bound<'_, PyAny>) -> PyResult<Self> {
         let mut known = Vec::new();
-        for pitch in pitches.try_iter()? {
+        for pitch in pitches.walk()? {
             let pitch = pitch?;
             known.push((pitch_from_any(&pitch)?, pitch.unbind()));
         }
@@ -164,7 +165,7 @@ impl Segment {
         let quarter_length: f64 = bass_note.getattr("quarterLength")?.extract()?;
         let names = slf
             .getattr("pitchNamesInChord")?
-            .try_iter()?
+            .walk()?
             .map(|name| name?.extract::<String>())
             .collect::<PyResult<Vec<_>>>()?;
         let rules = rules_of(&slf.getattr("fbRules")?)?;
@@ -542,7 +543,7 @@ impl Segment {
         choices.push(PyList::new(py, [pitch_class.call1((bass_name,))?])?.into_any());
         if slf.is_instance_of::<OverlaidSegment>() {
             let limits = slf.getattr("fbRules")?.getattr("_partPitchLimits")?;
-            for limit in limits.try_iter()? {
+            for limit in limits.walk()? {
                 let (part, pitch) = crate::fbrules::pair::<usize, Bound<'py, PyAny>>(&limit?)?;
                 if let Some(slot) = part.checked_sub(1).and_then(|index| choices.get_mut(index)) {
                     *slot = PyList::new(
@@ -628,7 +629,7 @@ pub(crate) fn getPitches<'py>(
 ) -> PyResult<Bound<'py, PyList>> {
     let names: Vec<String> = match pitchNames.filter(|names| !names.is_none()) {
         Some(names) => names
-            .try_iter()?
+            .walk()?
             .map(|name| name?.extract::<String>())
             .collect::<PyResult<_>>()?,
         None => vec!["C".to_string(), "E".to_string(), "G".to_string()],

@@ -26,6 +26,8 @@
 
 use pyo3::exceptions::{PyIndexError, PyTypeError};
 use pyo3::prelude::*;
+
+use crate::Walkable;
 use pyo3::types::{PyDict, PyList, PySlice, PyTuple};
 
 use music21_rs_crate::voiceleading::QuartetOptions;
@@ -93,13 +95,13 @@ fn length_of(object: &Bound<'_, PyAny>) -> PyResult<f64> {
 fn is_of_class(object: &Bound<'_, PyAny>, class: &Bound<'_, PyAny>) -> PyResult<bool> {
     if let Ok(name) = class.extract::<String>() {
         let lineage = object.get_type().getattr("__mro__")?;
-        for each in lineage.try_iter()? {
+        for each in lineage.walk()? {
             if each?.getattr("__name__")?.extract::<String>()? == name {
                 return Ok(true);
             }
         }
         if let Ok(classes) = object.getattr("classes") {
-            for each in classes.try_iter()? {
+            for each in classes.walk()? {
                 if each?.extract::<String>().is_ok_and(|each| each == name) {
                     return Ok(true);
                 }
@@ -115,7 +117,7 @@ fn is_of_any(object: &Bound<'_, PyAny>, classes: &Bound<'_, PyAny>) -> PyResult<
     if classes.extract::<String>().is_ok() || classes.is_instance_of::<pyo3::types::PyType>() {
         return is_of_class(object, classes);
     }
-    for class in classes.try_iter()? {
+    for class in classes.walk()? {
         if is_of_class(object, &class?)? {
             return Ok(true);
         }
@@ -154,7 +156,7 @@ impl Stream {
         };
         let elements: Vec<Bound<'_, PyAny>> =
             if given.is_instance_of::<PyList>() || given.is_instance_of::<PyTuple>() {
-                given.try_iter()?.collect::<PyResult<_>>()?
+                given.walk()?.collect::<PyResult<_>>()?
             } else {
                 vec![given.clone()]
             };
@@ -343,7 +345,7 @@ impl Stream {
         let py = slf.py();
         let others: Vec<Bound<'_, PyAny>> =
             if others.is_instance_of::<PyList>() || others.is_instance_of::<PyTuple>() {
-                others.try_iter()?.collect::<PyResult<_>>()?
+                others.walk()?.collect::<PyResult<_>>()?
             } else {
                 vec![others.clone()]
             };
@@ -370,7 +372,7 @@ impl Stream {
             || offsetOrItemOrList.is_instance_of::<PyTuple>()
         {
             let items: Vec<Bound<'_, PyAny>> =
-                offsetOrItemOrList.try_iter()?.collect::<PyResult<_>>()?;
+                offsetOrItemOrList.walk()?.collect::<PyResult<_>>()?;
             if !items.len().is_multiple_of(2) {
                 return Err(StreamException::new_err(
                     "an insert list must alternate offsets and objects",
@@ -802,7 +804,7 @@ fn read(stream: &Bound<'_, PyAny>) -> PyResult<Read> {
 
 fn read_into(stream: &Bound<'_, PyAny>, leaves: &mut Vec<Py<PyAny>>) -> PyResult<RsStream> {
     let mut placed: Vec<(f64, Bound<'_, PyAny>)> = Vec::new();
-    for element in stream.getattr("elements")?.try_iter()? {
+    for element in stream.getattr("elements")?.walk()? {
         let element = element?;
         let offset: f64 = stream
             .call_method1("elementOffset", (&element,))?
@@ -944,7 +946,7 @@ fn interpolateElements(
     );
     let between: Vec<(f64, Bound<'_, PyAny>)> = sourceStream
         .getattr("elements")?
-        .try_iter()?
+        .walk()?
         .map(|element| {
             let element = element?;
             let offset: f64 = sourceStream
@@ -1046,7 +1048,7 @@ impl Verticality {
         parts.sort_unstable();
         for part in parts {
             if let Some(held) = content.get_item(part)? {
-                for object in held.try_iter()? {
+                for object in held.walk()? {
                     out.append(object?)?;
                 }
             }

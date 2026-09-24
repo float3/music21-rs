@@ -5,6 +5,8 @@
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+
+use crate::Walkable;
 use pyo3::types::{PyDict, PyList, PyTuple};
 
 use music21_rs_crate::{
@@ -199,7 +201,7 @@ fn target_note<'py>(note: &Bound<'py, PyAny>, in_place: bool) -> PyResult<Bound<
 fn list_of(value: &Bound<'_, PyAny>) -> PyResult<Py<PyList>> {
     let list = PyList::empty(value.py());
     if !value.is_none() {
-        for item in value.try_iter()? {
+        for item in value.walk()? {
             list.append(item?)?;
         }
     }
@@ -1035,7 +1037,7 @@ impl Note {
         if !value.is_instance_of::<PyList>() && !value.is_instance_of::<PyTuple>() {
             return Err(refused());
         }
-        let Some(first) = value.try_iter()?.next() else {
+        let Some(first) = value.walk()?.next() else {
             return Err(refused());
         };
         let first = first?;
@@ -1379,7 +1381,7 @@ impl Note {
         let py = slf.py();
         let list = PyList::empty(py);
         if let Some(value) = value.filter(|value| !value.is_none()) {
-            for item in value.try_iter()? {
+            for item in value.walk()? {
                 let item = item?;
                 if item.extract::<PyRef<'_, Lyric>>().is_ok() {
                     list.append(item)?;

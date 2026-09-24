@@ -13,6 +13,8 @@
 #![allow(non_snake_case)]
 
 use pyo3::prelude::*;
+
+use crate::Walkable;
 use pyo3::types::{PyDict, PyList, PyString, PyTuple};
 
 use music21_rs_crate::expressions::{
@@ -189,7 +191,7 @@ impl Ornament {
     fn place_in_expressions(slf: &Bound<'_, Self>, source: &Bound<'_, PyAny>) -> Option<usize> {
         let expressions = source.getattr("expressions").ok()?;
         expressions
-            .try_iter()
+            .walk()
             .ok()?
             .position(|expression| expression.is_ok_and(|expression| expression.is(slf)))
     }
@@ -1125,7 +1127,7 @@ impl Ornament {
             me.size = held("size");
             if let Ok(pitches) = extra.get_item("ornamentalPitches") {
                 me.ornamental = pitches
-                    .try_iter()?
+                    .walk()?
                     .map(|pitch| pitch.map(Bound::unbind))
                     .collect::<PyResult<_>>()?;
             }

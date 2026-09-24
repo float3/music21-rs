@@ -9,6 +9,8 @@
 #![allow(non_snake_case)]
 
 use pyo3::prelude::*;
+
+use crate::Walkable;
 use pyo3::types::PyDict;
 
 use music21_rs_crate::clef::{Clef as RsClef, ClefKind};
@@ -147,7 +149,7 @@ impl Clef {
             Ok(one) => vec![one],
             Err(_) => {
                 let mut read = Vec::new();
-                for item in pitches.try_iter()? {
+                for item in pitches.walk()? {
                     read.push(pitch_from_any(&item?)?);
                 }
                 read
@@ -336,8 +338,8 @@ fn bestClef(
         streamObj.call_method0("iter")?
     };
     let mut pitches = Vec::new();
-    for element in walked.getattr("notesAndRests")?.try_iter()? {
-        for pitch in element?.getattr("pitches")?.try_iter()? {
+    for element in walked.getattr("notesAndRests")?.walk()? {
+        for pitch in element?.getattr("pitches")?.walk()? {
             pitches.push(pitch_from_any(&pitch?)?);
         }
     }

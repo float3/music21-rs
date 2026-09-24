@@ -6,6 +6,8 @@
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+
+use crate::Walkable;
 use pyo3::types::PyDict;
 
 use music21_rs_crate::{
@@ -2024,7 +2026,7 @@ fn notes_to_interval(
 
 fn intervals_from_list(intervalList: &Bound<'_, PyAny>) -> PyResult<Vec<RsInterval>> {
     intervalList
-        .try_iter()?
+        .walk()?
         .map(|item| interval_from_any(&item?))
         .collect()
 }

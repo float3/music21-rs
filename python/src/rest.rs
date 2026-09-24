@@ -8,6 +8,8 @@
 #![allow(non_snake_case)]
 
 use pyo3::prelude::*;
+
+use crate::Walkable;
 use pyo3::types::{PyDict, PyList, PyTuple};
 
 use music21_rs_crate::{Duration as RsDuration, Rest as RsRest};
@@ -495,7 +497,7 @@ impl Rest {
         let py = slf.py();
         let list = PyList::empty(py);
         if let Some(value) = value.filter(|value| !value.is_none()) {
-            for item in value.try_iter()? {
+            for item in value.walk()? {
                 let item = item?;
                 if item.extract::<PyRef<'_, Lyric>>().is_ok() {
                     list.append(item)?;
@@ -683,7 +685,7 @@ impl Rest {
 fn list_holding(py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<Py<PyList>> {
     let list = PyList::empty(py);
     if !value.is_none() {
-        for item in value.try_iter()? {
+        for item in value.walk()? {
             list.append(item?)?;
         }
     }

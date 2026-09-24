@@ -15,6 +15,8 @@
 #![allow(non_snake_case)]
 
 use pyo3::prelude::*;
+
+use crate::Walkable;
 use pyo3::types::PyDict;
 
 use music21_rs_crate::instrument::{
@@ -302,7 +304,7 @@ impl Instrument {
     fn set_stringPitches(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
         self.member_of("StringInstrument", "stringPitches")?;
         let mut pitches = Vec::new();
-        for item in value.try_iter()? {
+        for item in value.walk()? {
             pitches.push(pitch_from_any(&item?)?);
         }
         self.inner.set_string_pitches(pitches);

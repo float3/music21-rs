@@ -5,6 +5,8 @@
 
 use pyo3::exceptions::PyIndexError;
 use pyo3::prelude::*;
+
+use crate::Walkable;
 use pyo3::types::{PyDict, PyList};
 
 use music21_rs_crate::{
@@ -512,7 +514,7 @@ impl Lyric {
         };
         let list = match value.cast::<PyList>() {
             Ok(list) => list.clone().unbind(),
-            Err(_) => PyList::new(py, value.try_iter()?.collect::<PyResult<Vec<_>>>()?)?.unbind(),
+            Err(_) => PyList::new(py, value.walk()?.collect::<PyResult<Vec<_>>>()?)?.unbind(),
         };
         self.components = Some(list);
         Ok(())
@@ -1246,7 +1248,7 @@ impl Beams {
         srcList: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyList>> {
         let mut beams = Vec::new();
-        for element in srcList.try_iter()? {
+        for element in srcList.walk()? {
             let element = element?;
             let name: String = element.getattr("duration")?.getattr("type")?.extract()?;
             let sounds = element
@@ -1273,7 +1275,7 @@ impl Beams {
         beamsList: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyList>> {
         let mut beams: Vec<Option<RsBeams>> = Vec::new();
-        for entry in beamsList.try_iter()? {
+        for entry in beamsList.walk()? {
             beams.push(beams_of(&entry?)?);
         }
         music21_rs_crate::notation::remove_sandwiched_unbeamables(&mut beams);
@@ -1292,7 +1294,7 @@ impl Beams {
         beamsList: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyList>> {
         let mut beams: Vec<Option<RsBeams>> = Vec::new();
-        for entry in beamsList.try_iter()? {
+        for entry in beamsList.walk()? {
             beams.push(beams_of(&entry?)?);
         }
         music21_rs_crate::notation::sanitize_partial_beams(&mut beams);
@@ -1310,7 +1312,7 @@ impl Beams {
         beamsList: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyList>> {
         let mut beams: Vec<Option<RsBeams>> = Vec::new();
-        for entry in beamsList.try_iter()? {
+        for entry in beamsList.walk()? {
             beams.push(beams_of(&entry?)?);
         }
         music21_rs_crate::notation::merge_connecting_partial_beams(&mut beams);
@@ -1448,14 +1450,14 @@ impl Volume {
                 list.append(value)?;
                 list.into_any().unbind()
             }
-            Some(value) if value.try_iter().is_ok() => value.clone().unbind(),
+            Some(value) if value.walk().is_ok() => value.clone().unbind(),
             _ => match &self.client {
                 Some(client) => client.bind(py).getattr("articulations")?.unbind(),
                 None => PyList::empty(py).into_any().unbind(),
             },
         };
         let mut shift = 0.0;
-        for mark in marks.bind(py).try_iter()? {
+        for mark in marks.bind(py).walk()? {
             shift += mark?.getattr("volumeShift")?.extract::<f64>()?;
         }
         Ok(shift)

@@ -10,6 +10,8 @@
 #![allow(non_snake_case)]
 
 use pyo3::prelude::*;
+
+use crate::Walkable;
 use pyo3::types::PyList;
 
 use music21_rs_crate::figuredbass::rules::Rules as RsRules;
@@ -321,7 +323,7 @@ where
     A: for<'a> FromPyObject<'a, 'py>,
     B: for<'a> FromPyObject<'a, 'py>,
 {
-    let items: Vec<Bound<'py, PyAny>> = value.try_iter()?.collect::<PyResult<_>>()?;
+    let items: Vec<Bound<'py, PyAny>> = value.walk()?.collect::<PyResult<_>>()?;
     let [first, second]: [Bound<'py, PyAny>; 2] = items
         .try_into()
         .map_err(|_| pyo3::exceptions::PyValueError::new_err("expected a pair of two values"))?;
@@ -336,7 +338,7 @@ fn listed(value: &Bound<'_, PyAny>) -> PyResult<Py<PyList>> {
     match value.cast::<PyList>() {
         Ok(list) => Ok(list.clone().unbind()),
         Err(_) => {
-            Ok(PyList::new(value.py(), value.try_iter()?.collect::<PyResult<Vec<_>>>()?)?.unbind())
+            Ok(PyList::new(value.py(), value.walk()?.collect::<PyResult<Vec<_>>>()?)?.unbind())
         }
     }
 }

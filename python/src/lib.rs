@@ -225,6 +225,35 @@ pub(crate) fn installed_class<'py>(
     installed.get_item((module, name)).ok()
 }
 
+/// A Python object's items, one at a time, never asking how many there are.
+///
+/// Collecting pyo3's own iterator asks the object for its length after the
+/// first item, and music21's `StreamIterator` answers by walking itself from
+/// the start -- so its first item came out twice: `Chord(s.notes)` held its
+/// first note twice. Everything here iterates a Python object through this.
+pub(crate) struct Walk<'py>(Bound<'py, pyo3::types::PyIterator>);
+
+impl<'py> Iterator for Walk<'py> {
+    type Item = PyResult<Bound<'py, PyAny>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next()
+    }
+}
+
+/// [`Walk`] for any Python object.
+pub(crate) trait Walkable<'py> {
+    /// The object's items, one at a time; an error for an object that has
+    /// none to give.
+    fn walk(&self) -> PyResult<Walk<'py>>;
+}
+
+impl<'py> Walkable<'py> for Bound<'py, PyAny> {
+    fn walk(&self) -> PyResult<Walk<'py>> {
+        Ok(Walk(self.try_iter()?))
+    }
+}
+
 /// music21's own `Music21Exception`, as a type these classes can be built on.
 ///
 /// Every exception music21 raises is one of these, and its own code catches

@@ -11,6 +11,8 @@
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+
+use crate::Walkable;
 use pyo3::types::{PyDict, PyTuple, PyType};
 
 use music21_rs_crate::scale::{
@@ -359,7 +361,7 @@ impl AbstractScale {
             .and_then(|module| module.getattr("Note"))
             .ok();
         let real = pyo3::types::PyList::empty(py);
-        for item in pitchList.try_iter()? {
+        for item in pitchList.walk()? {
             let item = item?;
             if let Ok(name) = item.extract::<String>() {
                 let pitch = RsPitch::from_name(name).map_err(crate::pitch::pitch_error)?;
@@ -406,7 +408,7 @@ impl AbstractScale {
     fn fixDefaultOctaveForPitchList<'py>(
         pitchList: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let objects = pitchList.try_iter()?.collect::<PyResult<Vec<_>>>()?;
+        let objects = pitchList.walk()?.collect::<PyResult<Vec<_>>>()?;
         let values = objects
             .iter()
             .map(pitch_from_any)
@@ -685,7 +687,7 @@ impl ConcreteScale {
         }
         let realized = pattern.call_method("getRealization", (tonic, degree), Some(&keywords))?;
         let mut pitches = Vec::new();
-        for item in realized.try_iter()? {
+        for item in realized.walk()? {
             pitches.push(item?.extract::<PyRef<'_, Pitch>>()?.clone());
         }
         Ok(Some(pitches))
@@ -901,7 +903,7 @@ impl ConcreteScale {
         pitchSimplification: Option<&str>,
     ) -> PyResult<()> {
         let mut steps = Vec::new();
-        for step in intervalList.try_iter()? {
+        for step in intervalList.walk()? {
             steps.push(interval_from_any(&step?)?);
         }
         let mut me = slf.borrow_mut();
@@ -1044,7 +1046,7 @@ impl ConcreteScale {
     ) -> PyResult<()> {
         let collection: Vec<RsPitch> = slf
             .call_method1("getPitches", (minPitch, maxPitch, direction))?
-            .try_iter()?
+            .walk()?
             .map(|pitch| pitch_from_any(&pitch?))
             .collect::<PyResult<_>>()?;
         let names: Vec<String> = collection.iter().map(RsPitch::name).collect();
@@ -1066,12 +1068,12 @@ impl ConcreteScale {
             None
         };
         let notes = streamObj.call_method0("recurse")?.getattr("notes")?;
-        for element in notes.try_iter()? {
+        for element in notes.walk()? {
             let element = element?;
             if element.getattr("isChord")?.extract::<bool>()? {
                 let pitches: Vec<Bound<'_, PyAny>> = element
                     .getattr("pitches")?
-                    .try_iter()?
+                    .walk()?
                     .collect::<PyResult<_>>()?;
                 // The retuned pitches go in by name, so a music21 note takes
                 // them as readily as one of ours, and then take the cents a
@@ -1087,7 +1089,7 @@ impl ConcreteScale {
                     let names: Vec<String> =
                         retuned.iter().map(RsPitch::name_with_octave).collect();
                     element.setattr("pitches", PyTuple::new(py, names)?)?;
-                    for (written, tuned) in element.getattr("pitches")?.try_iter()?.zip(&retuned) {
+                    for (written, tuned) in element.getattr("pitches")?.walk()?.zip(&retuned) {
                         write_cents(&written?, tuned)?;
                     }
                 }
@@ -1974,11 +1976,11 @@ fn pitch_list(value: &Bound<'_, PyAny>) -> PyResult<Vec<RsPitch>> {
         && !pitches.is_none()
     {
         return pitches
-            .try_iter()?
+            .walk()?
             .map(|pitch| pitch_from_any(&pitch?))
             .collect();
     }
-    let Ok(items) = value.try_iter() else {
+    let Ok(items) = value.walk() else {
         return Ok(vec![pitch_from_any(&value.getattr("pitch")?)?]);
     };
     let mut pitches = Vec::new();

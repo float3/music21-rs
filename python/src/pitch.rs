@@ -4,6 +4,8 @@
 #![allow(non_snake_case)]
 
 use pyo3::prelude::*;
+
+use crate::Walkable;
 use pyo3::types::PyDict;
 
 use music21_rs_crate::{
@@ -731,10 +733,7 @@ pub(crate) fn pitch_list(value: Option<&Bound<'_, PyAny>>) -> PyResult<Vec<RsPit
     let Some(value) = value.filter(|value| !value.is_none()) else {
         return Ok(Vec::new());
     };
-    value
-        .try_iter()?
-        .map(|item| pitch_from_any(&item?))
-        .collect()
+    value.walk()?.map(|item| pitch_from_any(&item?)).collect()
 }
 
 /// The keywords music21's `Pitch.__init__` understands, which its `Note`
@@ -1781,7 +1780,7 @@ impl Pitch {
             return Ok(false);
         }
         let own_name = self.accidental_name();
-        for altered in alteredPitches.try_iter()? {
+        for altered in alteredPitches.walk()? {
             let altered = altered?;
             let step: String = altered.getattr("step")?.extract()?;
             let accidental = altered.getattr("accidental")?;
@@ -1798,7 +1797,7 @@ impl Pitch {
     /// music21's `_stepInKeySignature`: whether the key signature alters
     /// this pitch's step at all.
     fn _stepInKeySignature(&self, alteredPitches: &Bound<'_, PyAny>) -> PyResult<bool> {
-        for altered in alteredPitches.try_iter()? {
+        for altered in alteredPitches.walk()? {
             let step: String = altered?.getattr("step")?.extract()?;
             if step == self.step() {
                 return Ok(true);
@@ -1962,7 +1961,7 @@ pub(crate) fn simplify_multiple_enharmonics(
         ));
     }
     let mut inputs = Vec::new();
-    for item in pitches.try_iter()? {
+    for item in pitches.walk()? {
         inputs.push(pitch_from_any(&item?)?);
     }
     let signature = match keyContext.filter(|value| !value.is_none()) {

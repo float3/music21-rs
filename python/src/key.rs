@@ -5,6 +5,8 @@
 
 use pyo3::exceptions::{PyKeyError, PyValueError};
 use pyo3::prelude::*;
+
+use crate::Walkable;
 use pyo3::types::{PyDict, PyList, PyTuple};
 
 use music21_rs_crate::scale::{
@@ -565,7 +567,7 @@ impl Key {
             return Ok(());
         };
         let list = PyList::empty(value.py());
-        for item in value.try_iter()? {
+        for item in value.walk()? {
             list.append(item?)?;
         }
         self.alternate_interpretations = Some(list.unbind());

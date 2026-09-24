@@ -8,6 +8,8 @@
 #![allow(non_snake_case)]
 
 use pyo3::prelude::*;
+
+use crate::Walkable;
 use pyo3::types::{PyDict, PyList, PyTuple};
 
 use music21_rs_crate::figuredbass::possibility as rs;
@@ -77,7 +79,7 @@ fn paired(a: &Bound<'_, PyAny>, b: &Bound<'_, PyAny>) -> PyResult<(Vec<RsPitch>,
 /// A possibility's pitches, in order.
 fn pitches(possibility: &Bound<'_, PyAny>) -> PyResult<Vec<RsPitch>> {
     possibility
-        .try_iter()?
+        .walk()?
         .map(|pitch| pitch_from_any(&pitch?))
         .collect()
 }
@@ -93,7 +95,7 @@ fn isIncomplete(
     pitchNamesToContain: &Bound<'_, PyAny>,
 ) -> PyResult<bool> {
     let names = pitchNamesToContain
-        .try_iter()?
+        .walk()?
         .map(|name| name?.extract::<String>())
         .collect::<PyResult<Vec<_>>>()?;
     Ok(rs::is_incomplete(&pitches(possibA)?, &names))
@@ -178,7 +180,7 @@ fn partMovementsWithinLimits(
 ) -> PyResult<bool> {
     let mut limits = Vec::new();
     if let Some(given) = partMovementLimits.filter(|given| !given.is_none()) {
-        for limit in given.try_iter()? {
+        for limit in given.walk()? {
             limits.push(crate::fbrules::pair::<usize, i32>(&limit?)?);
         }
     }
@@ -248,8 +250,8 @@ fn partPairs<'py>(
     possibB: &Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyList>> {
     let py = possibA.py();
-    let a: Vec<Bound<'py, PyAny>> = possibA.try_iter()?.collect::<PyResult<_>>()?;
-    let b: Vec<Bound<'py, PyAny>> = possibB.try_iter()?.collect::<PyResult<_>>()?;
+    let a: Vec<Bound<'py, PyAny>> = possibA.walk()?.collect::<PyResult<_>>()?;
+    let b: Vec<Bound<'py, PyAny>> = possibB.walk()?.collect::<PyResult<_>>()?;
     if a.len() != b.len() {
         return Err(unpaired(a.len(), b.len()));
     }

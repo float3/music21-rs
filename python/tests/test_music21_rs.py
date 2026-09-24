@@ -652,3 +652,32 @@ def test_a_figured_bass_segment_voices_as_music21s_does():
     rules = m.Rules()
     rules.partMovementLimits.append((1, 2))
     assert m.Segment(fbRules=rules).fbRules.partMovementLimits == [(1, 2)]
+
+
+class _Restarting:
+    """An iterator that starts again when asked its length, as music21's
+    StreamIterator does."""
+
+    def __init__(self, items):
+        self.items = list(items)
+        self.index = 0
+
+    def __iter__(self):
+        self.index = 0
+        return self
+
+    def __next__(self):
+        if self.index >= len(self.items):
+            raise StopIteration
+        self.index += 1
+        return self.items[self.index - 1]
+
+    def __len__(self):
+        self.index = 0
+        return len(self.items)
+
+
+def test_an_iterator_that_restarts_is_read_once():
+    notes = [m.Note(name) for name in ("C4", "E4", "G4")]
+    chord = m.Chord(_Restarting(notes))
+    assert [p.nameWithOctave for p in chord.pitches] == ["C4", "E4", "G4"]

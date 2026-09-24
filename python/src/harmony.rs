@@ -25,6 +25,8 @@
 
 use pyo3::exceptions::{PyKeyError, PyValueError};
 use pyo3::prelude::*;
+
+use crate::Walkable;
 use pyo3::types::{PyDict, PyList, PyTuple};
 
 use music21_rs_crate::chordsymbol::{
@@ -79,7 +81,7 @@ pub(crate) fn chord_of(
         return Ok(chord.synced_inner(py));
     }
     let mut names = Vec::new();
-    for pitch in inChord.getattr("pitches")?.try_iter()? {
+    for pitch in inChord.getattr("pitches")?.walk()? {
         names.push(pitch?.getattr("nameWithOctave")?.extract::<String>()?);
     }
     let mut chord = music21_rs_crate::Chord::new(names.as_slice())
@@ -1049,7 +1051,7 @@ impl ChordSymbol {
     #[setter]
     fn set_chordStepModifications(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
         let list = PyList::empty(value.py());
-        for item in value.try_iter()? {
+        for item in value.walk()? {
             list.append(item?)?;
         }
         self.modifications = list.unbind();
@@ -1225,7 +1227,7 @@ impl ChordSymbol {
         if slf.borrow().write_as_chord {
             let names: Vec<String> = slf
                 .getattr("pitches")?
-                .try_iter()?
+                .walk()?
                 .map(|pitch| pitch?.getattr("name")?.extract::<String>())
                 .collect::<PyResult<_>>()?;
             summary.push_str(": ");
@@ -1309,7 +1311,7 @@ fn live_kind(py: Python<'_>, figure: &str) -> PyResult<Option<RsChordSymbol>> {
     let Ok(root) = RsPitch::from_name(root) else {
         return Ok(None);
     };
-    for item in table.call_method0("items")?.try_iter()? {
+    for item in table.call_method0("items")?.walk()? {
         let (kind, entry): (String, Bound<'_, PyAny>) = item?.extract()?;
         // A kind the crate knows is read by the crate's reading, which
         // refuses what music21 refuses; only one added since is looked up.

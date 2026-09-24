@@ -8,6 +8,8 @@
 //! iterated or sliced, because a caller hands those straight to `Chord`.
 
 use pyo3::prelude::*;
+
+use crate::Walkable;
 use pyo3::types::{PyDict, PyList, PySlice, PyTuple};
 
 use music21_rs_crate::{
@@ -84,7 +86,7 @@ fn row_from_any(row: Option<&Bound<'_, PyAny>>) -> PyResult<RsToneRow> {
         return Ok(RsToneRow::default());
     };
     let mut classes = Vec::new();
-    for item in row.try_iter()? {
+    for item in row.walk()? {
         classes.push(pitch_class_of(&item?)?);
     }
     Ok(RsToneRow::new(classes))
