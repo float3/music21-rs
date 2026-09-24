@@ -1,24 +1,14 @@
 # Unreleased
 
-music21's key analysis is in the crate, weighted by duration and ranked,
-spelled and scored as music21 ranks, spells and scores it, and music21's own
-`analysis.discrete`, `figuredBass.checker` and `figuredBass.harmony` pass
-every example with the crate beneath them. So do `analysis.enharmonics`,
-`analysis.harmonicFunction`, `analysis.neoRiemannian` and
-`analysis.transposition`, which are the crate's: 40 modules, 1,027
-docstrings and 9,171 examples. A figured-bass segment finds its voicings about eighteen
-times faster than it did in 0.7.0.
+Four more of music21's analysis modules are the crate's—
+`analysis.enharmonics`, `analysis.harmonicFunction`,
+`analysis.neoRiemannian` and `analysis.transposition`—and pass every
+example: 40 modules, 1,027 docstrings and 9,171 examples. Asking music21 and
+the crate the same questions over thousands of random inputs found eleven
+places where they answered differently; they agree now.
 
 ## Added
 
-- `analysis::pitch_class_distribution`, how long each pitch class sounds,
-  and `analysis::estimate_key_from_distribution`, every key ranked against
-  it: music21's key-weight analysis, checked against music21's rankings and
-  coefficients on three chorales and two made-up lines by
-  `key_analysis_parity`.
-- `analysis::pitch_span`, music21's `Ambitus.getPitchSpan`, and
-  `analysis::melodic_interval_counts`, its
-  `MelodicIntervalDiversity.countMelodicIntervals`.
 - `analysis::enharmonics::best_spelling`, music21's
   `EnharmonicSimplifier.bestPitches`, built on `spelling_options` and
   `best_choice`, with its three penalties and scores on `EnharmonicRules`.
@@ -36,16 +26,6 @@ times faster than it did in 0.7.0.
 - `analysis::transposition::TranspositionChecker`, a set of pitches in all
   twelve transpositions and how many differ. The wheel installs it over
   music21's.
-
-## Changed
-
-- `estimate_key_from_pitches` and the rest rank keys as music21 does, ties
-  and all, and spell them as music21 does: a minor key on the eighth pitch
-  class is G-sharp minor, where it was A-flat minor.
-- A figured-bass segment walks its voicings as indices over each pitch's
-  place and name, worked out once, and builds only the voicings it keeps: a
-  seventh chord's 2,744 voicings are looked at in about 75 microseconds,
-  where they took 1.3 milliseconds.
 
 ## Fixed
 
@@ -71,8 +51,8 @@ times faster than it did in 0.7.0.
   numeral that is neither a triad nor a seventh is never mixture. 1,185
   numerals now answer eighteen questions as music21's do.
 - The wheel's `Key` answers the scale questions music21's `Key` inherits
-  from `DiatonicScale` — `getPitches`, `getDominant`, `nextPitch`,
-  `derive`, `romanNumeral` and the rest — as the scale of its mode does,
+  from `DiatonicScale`—`getPitches`, `getDominant`, `nextPitch`,
+  `derive`, `romanNumeral` and the rest—as the scale of its mode does,
   where it raised `AttributeError`, installed or not. `derive` hands back
   keys, as music21's does.
 - A scale's `getChord` and an interval's `noteStart` and `noteEnd` built
@@ -101,6 +81,40 @@ times faster than it did in 0.7.0.
   suites ran and wrote no profile. It passes `--no-rustc-wrapper` now, and
   reads 95.2% of lines where it read 90.6%. A suite that did not pass is
   named beside the figure, since it leaves the figure short.
+
+# music21-rs 0.7.1
+
+The wheel read the first item of a music21 stream iterator twice, so with it
+installed `chord.Chord(stream.notes)` held its first note twice; that is
+fixed. Besides, music21's key analysis is in the crate, weighted by duration
+and ranked, spelled and scored as music21 ranks, spells and scores it, and
+music21's own `analysis.discrete`, `figuredBass.checker` and
+`figuredBass.harmony` pass every example with the crate beneath them: 36
+modules, 1,004 docstrings and 9,008 examples. A figured-bass segment finds its
+voicings about eighteen times faster than it did in 0.7.0.
+
+## Added
+
+- `analysis::pitch_class_distribution`, how long each pitch class sounds,
+  and `analysis::estimate_key_from_distribution`, every key ranked against
+  it: music21's key-weight analysis, checked against music21's rankings and
+  coefficients on three chorales and two made-up lines by
+  `key_analysis_parity`.
+- `analysis::pitch_span`, music21's `Ambitus.getPitchSpan`, and
+  `analysis::melodic_interval_counts`, its
+  `MelodicIntervalDiversity.countMelodicIntervals`.
+
+## Changed
+
+- `estimate_key_from_pitches` and the rest rank keys as music21 does, ties
+  and all, and spell them as music21 does: a minor key on the eighth pitch
+  class is G-sharp minor, where it was A-flat minor.
+- A figured-bass segment walks its voicings as indices over each pitch's
+  place and name, worked out once, and builds only the voicings it keeps: a
+  seventh chord's 2,744 voicings are looked at in about 75 microseconds,
+  where they took 1.3 milliseconds.
+
+## Fixed
 
 - The wheel read a music21 stream iterator's first item twice wherever it
   took a whole iterator at once, so `chord.Chord(stream.notes)` with the
