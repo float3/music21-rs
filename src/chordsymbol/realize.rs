@@ -143,6 +143,37 @@ fn interval_of_alteration(alter: IntegerType) -> Result<Interval> {
 #[derive(Clone, Debug)]
 pub(super) struct Realized {
     pub(super) pitches: Vec<Pitch>,
+    root: Pitch,
+    bass: Pitch,
+}
+
+/// A chord of one of music21's kinds as music21 voices it: its pitches, and
+/// the root and bass music21 holds as objects of their own. Those move with
+/// the chord where it holds them and not where it does not, so they need
+/// not be the first note of their name, nor a note of the chord at all:
+/// `Ab10/F#` sounds `F#2 A-3 C#4 E4` over a root of A3.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ChordVoicing {
+    pitches: Vec<Pitch>,
+    root: Pitch,
+    bass: Pitch,
+}
+
+impl ChordVoicing {
+    /// The pitches, lowest written first.
+    pub fn pitches(&self) -> &[Pitch] {
+        &self.pitches
+    }
+
+    /// The root, where music21's own root object ends up.
+    pub fn root(&self) -> &Pitch {
+        &self.root
+    }
+
+    /// The bass, where music21's own bass object ends up.
+    pub fn bass(&self) -> &Pitch {
+        &self.bass
+    }
 }
 
 /// The inversion a bass stands the chord in, read off the interval from the
@@ -230,6 +261,23 @@ pub fn sound_chord_notation(
     Ok(realize(root, bass, Some(kind), notation, None, modifications)?.pitches)
 }
 
+/// The same, with the root and bass as music21 is left holding them: its
+/// `_updatePitches` in full.
+pub fn voice_chord_notation(
+    root: &Pitch,
+    kind: &str,
+    notation: Option<&str>,
+    bass: Option<&Pitch>,
+    modifications: &[ChordStepModification],
+) -> Result<ChordVoicing> {
+    let realized = realize(root, bass, Some(kind), notation, None, modifications)?;
+    Ok(ChordVoicing {
+        pitches: realized.pitches,
+        root: realized.root,
+        bass: realized.bass,
+    })
+}
+
 /// A pitch named `name` in `octave`.
 fn named(name: &str, octave: IntegerType) -> Result<Pitch> {
     let mut pitch = Pitch::from_name(name)?;
@@ -293,6 +341,108 @@ fn sample_pitches(root: &Pitch, names: &[String]) -> Result<Vec<Pitch>> {
 /// notation's own tokens (`1`, `-3`, `5`), which the modifications are
 /// matched against. `kind` decides the octave lifts and which inversions
 /// the bass may make.
+/// What one place in music21's list of pitches holds. music21 puts its
+/// root and bass objects themselves in the list where it puts them there
+/// at all, so an octave pass over the list moves them with it, and once for
+/// every place they hold: a bass added twice is one note moved twice.
+#[derive(Clone, Copy, PartialEq)]
+enum Slot {
+    Root,
+    Bass,
+    Own(usize),
+}
+
+/// music21's list of pitches with the identity of each place kept.
+///
+/// ```text
+///   slots:  [Root, Bass, Own(0), Bass]
+///   root    C3 <- one object, read and moved through its slot
+///   bass    E2 <- one object, held twice, moved twice a pass
+///   own     [G3]
+/// ```
+struct Voicing {
+    root: Pitch,
+    bass: Pitch,
+    own: Vec<Pitch>,
+    slots: Vec<Slot>,
+}
+
+impl Voicing {
+    /// A list of pitches of their own.
+    fn owning(root: Pitch, bass: Pitch, pitches: Vec<Pitch>) -> Self {
+        let slots = (0..pitches.len()).map(Slot::Own).collect();
+        Self {
+            root,
+            bass,
+            own: pitches,
+            slots,
+        }
+    }
+
+    fn pitch(&self, slot: Slot) -> &Pitch {
+        match slot {
+            Slot::Root => &self.root,
+            Slot::Bass => &self.bass,
+            Slot::Own(index) => &self.own[index],
+        }
+    }
+
+    fn pitch_mut(&mut self, slot: Slot) -> &mut Pitch {
+        match slot {
+            Slot::Root => &mut self.root,
+            Slot::Bass => &mut self.bass,
+            Slot::Own(index) => &mut self.own[index],
+        }
+    }
+
+    /// The pitches the places hold, in order.
+    fn values(&self) -> Vec<Pitch> {
+        self.slots
+            .iter()
+            .map(|slot| self.pitch(*slot).clone())
+            .collect()
+    }
+
+    /// Moves the pitch in the place at `index` by `by` octaves.
+    fn shift(&mut self, index: usize, by: IntegerType) {
+        let slot = self.slots[index];
+        shift_octave(self.pitch_mut(slot), by);
+    }
+
+    /// Moves every place by `by` octaves, as music21's loop over the list
+    /// does: a pitch held twice moves twice.
+    fn shift_all(&mut self, by: IntegerType) {
+        for index in 0..self.slots.len() {
+            self.shift(index, by);
+        }
+    }
+
+    /// Takes `pitches` as the list after a step that worked on its values:
+    /// music21's modifications take pitches out and add new ones at the
+    /// end, so the places that remain keep what they held, in order, and
+    /// what follows them is new.
+    fn replace(&mut self, pitches: Vec<Pitch>) {
+        let old = std::mem::take(&mut self.slots);
+        let mut remaining = old.into_iter().peekable();
+        for pitch in pitches {
+            // Skip the places taken out, up to one that holds this pitch.
+            while remaining
+                .peek()
+                .is_some_and(|slot| *self.pitch(*slot) != pitch)
+            {
+                remaining.next();
+            }
+            match remaining.next() {
+                Some(slot) => self.slots.push(slot),
+                None => {
+                    self.slots.push(Slot::Own(self.own.len()));
+                    self.own.push(pitch);
+                }
+            }
+        }
+    }
+}
+
 pub(super) fn realize(
     root: &Pitch,
     bass: Option<&Pitch>,
@@ -308,28 +458,36 @@ pub(super) fn realize(
     let mut degrees: Vec<String> = notation
         .map(|notation| notation.split(',').map(str::to_string).collect())
         .unwrap_or_default();
-    let mut pitches = match (&names, notation) {
-        (Some(names), _) => sample_pitches(&root, names)?,
+    let mut voicing = match (&names, notation) {
+        (Some(names), _) => {
+            Voicing::owning(root.clone(), bass.clone(), sample_pitches(&root, names)?)
+        }
         (None, Some(notation)) => {
             let names = notation_intervals(notation)?
                 .into_iter()
                 .map(|(_, name)| Ok(Interval::from_name(&name)?.transpose_pitch(&root)?.name()))
                 .collect::<Result<Vec<_>>>()?;
-            sample_pitches(&root, &names)?
+            Voicing::owning(root.clone(), bass.clone(), sample_pitches(&root, &names)?)
         }
         // A kind music21 has no notation for sounds its root, and its bass
-        // beside it.
+        // beside it: the objects themselves.
         (None, None) => {
-            let mut sounded = vec![root.clone()];
-            if bass.name() != root.name() {
-                sounded.push(bass.clone());
+            let mut slots = vec![Slot::Root];
+            if bass != root {
+                slots.push(Slot::Bass);
             }
-            sounded
+            Voicing {
+                root: root.clone(),
+                bass: bass.clone(),
+                own: Vec::new(),
+                slots,
+            }
         }
     };
 
     // music21's `_adjustOctaves`: the upper notes of the stacked kinds go up
-    // an octave, which is what spaces a ninth as a ninth.
+    // an octave, which is what spaces a ninth as a ninth. It builds new
+    // pitches as it does.
     let lifted: &[usize] = match kind {
         "dominant-ninth" | "major-ninth" | "minor-ninth" => &[1],
         "dominant-11th" | "major-11th" | "minor-11th" => &[1, 3],
@@ -337,43 +495,55 @@ pub(super) fn realize(
         _ => &[],
     };
     if !lifted.is_empty() {
+        let mut pitches = voicing.values();
         for &index in lifted {
             if let Some(pitch) = pitches.get_mut(index) {
                 shift_octave(pitch, 1);
             }
         }
         sort_diatonic(&mut pitches);
+        voicing = Voicing::owning(voicing.root, voicing.bass, pitches);
     }
 
-    let mut bass = bass;
     let mut inversion = None;
-    if root.name() != bass.name() {
-        let found = inversion_between(&root, &bass)?;
+    if voicing.root.name() != voicing.bass.name() {
+        let found = inversion_between(&voicing.root, &voicing.bass)?;
         match found {
             Some(number) if inversion_is_valid_for_kind(kind, number) => inversion = Some(number),
             // A bass the chord does not invert onto is a note added under
-            // it, in the octave below the root.
+            // it, in the octave below the root; the object moves, wherever
+            // the list already holds it.
             _ => {
-                bass.set_octave(Some(2));
-                pitches.push(bass.clone());
+                voicing.bass.set_octave(Some(2));
+                voicing.slots.push(Slot::Bass);
             }
         }
     }
 
-    apply_modifications(&root, kind, &mut pitches, &mut degrees, modifications)?;
+    let mut pitches = voicing.values();
+    let current_root = voicing.root.clone();
+    apply_modifications(
+        &current_root,
+        kind,
+        &mut pitches,
+        &mut degrees,
+        modifications,
+    )?;
+    voicing.replace(pitches);
 
     if let Some(number) = inversion.filter(|number| *number != 0) {
         let number = usize::from(number);
-        for pitch in pitches.iter_mut().take(number) {
-            shift_octave(pitch, 1);
+        for index in 0..number.min(voicing.slots.len()) {
+            voicing.shift(index, 1);
             if number > 3 {
-                shift_octave(pitch, 1);
+                voicing.shift(index, 1);
             }
         }
-        let floor = bass.diatonic_note_number();
-        for pitch in &mut pitches {
-            if pitch.diatonic_note_number() < floor {
-                shift_octave(pitch, 1);
+        // The bass is read as it stands now, for it may be in the list.
+        for index in 0..voicing.slots.len() {
+            let slot = voicing.slots[index];
+            if voicing.pitch(slot).diatonic_note_number() < voicing.bass.diatonic_note_number() {
+                voicing.shift(index, 1);
             }
         }
     }
@@ -381,30 +551,41 @@ pub(super) fn realize(
     // Down while anything is above middle C's D, then back up while
     // anything is below the piano's lowest A: music21's `_hasPitchAboveC4`
     // and `_hasPitchBelowA1`.
-    while pitches
-        .iter()
-        .any(|pitch| pitch.diatonic_note_number() > 30)
-    {
-        for pitch in &mut pitches {
-            shift_octave(pitch, -1);
-        }
+    let highest = |voicing: &Voicing| {
+        voicing
+            .values()
+            .iter()
+            .map(Pitch::diatonic_note_number)
+            .max()
+    };
+    while highest(&voicing).is_some_and(|number| number > 30) {
+        voicing.shift_all(-1);
     }
-    while pitches
-        .iter()
-        .any(|pitch| pitch.diatonic_note_number() < 13)
-    {
-        for pitch in &mut pitches {
-            shift_octave(pitch, 1);
-        }
+    let lowest = |voicing: &Voicing| {
+        voicing
+            .values()
+            .iter()
+            .map(Pitch::diatonic_note_number)
+            .min()
+    };
+    while lowest(&voicing).is_some_and(|number| number < 13) {
+        voicing.shift_all(1);
     }
+
+    let mut pitches = voicing.values();
     sort_diatonic(&mut pitches);
     // music21 then sets the bass on the chord it has built, and a bass the
     // chord has no note of by that name is put in front of it where it was
     // written: `C+/G` sounds a G under an augmented triad that has a G#.
+    let bass = voicing.bass;
     if !pitches.iter().any(|pitch| pitch.name() == bass.name()) {
-        pitches.insert(0, bass);
+        pitches.insert(0, bass.clone());
     }
-    Ok(Realized { pitches })
+    Ok(Realized {
+        pitches,
+        root: voicing.root,
+        bass,
+    })
 }
 
 /// A degree token of the notation read as its number: `-7` and `#5` are the

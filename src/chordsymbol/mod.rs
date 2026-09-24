@@ -29,8 +29,8 @@ pub use tables::{
 
 use parse::*;
 pub use realize::{
-    ChordStepModification, ChordStepModificationType, inversion_is_valid_for_kind,
-    sound_chord_kind, sound_chord_notation,
+    ChordStepModification, ChordStepModificationType, ChordVoicing, inversion_is_valid_for_kind,
+    sound_chord_kind, sound_chord_notation, voice_chord_notation,
 };
 use tables::*;
 
@@ -153,6 +153,16 @@ fn music21_kind(shorthand: &str) -> Option<(&'static Music21ChordType, usize)> {
 /// the `add`, `alter`, `omit` and `subtract` tokens in the order written,
 /// then every sharpened or flattened degree left over, each as an addition.
 /// `None` where the leftover is not degrees at all, which music21 refuses.
+/// What Python's `int` makes of a string of digits: an optional sign and
+/// at least one digit, and nothing for anything else.
+fn python_int(text: &str) -> Option<i64> {
+    let digits = text.strip_prefix(['+', '-']).unwrap_or(text);
+    if digits.is_empty() || !digits.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    text.parse().ok()
+}
+
 fn music21_modifications(remaining: &str) -> Option<Vec<ChordStepModification>> {
     const MARKERS: [(&str, ChordStepModificationType); 4] = [
         ("add", ChordStepModificationType::Add),
@@ -225,20 +235,13 @@ fn music21_modifications(remaining: &str) -> Option<Vec<ChordStepModification>> 
         items.push(before);
     }
 
-    // What is left is degrees and nothing else: music21 reads each as a
-    // number once its sharps and flats are off, and refuses anything that
-    // is not one.
-    if items.iter().any(|item| {
-        !item
-            .chars()
-            .all(|c| c.is_ascii_digit() || matches!(c, 'b' | '#'))
-    }) {
-        return None;
-    }
+    // What is left is degrees and nothing else: music21 hands each to
+    // Python's `int` once its sharps and flats are off, and refuses anything
+    // `int` refuses. `int` takes a sign, so `b-7` is a flat seventh.
     let mut tokens: Vec<String> = Vec::new();
     for item in items {
-        let digits: String = item.chars().filter(char::is_ascii_digit).collect();
-        let number: u32 = digits.parse().ok()?;
+        let unsigned: String = item.chars().filter(|c| !matches!(c, 'b' | '#')).collect();
+        let number = python_int(&unsigned)?;
         if number > 20 {
             // Several degrees run together, `69` or `b913`: a `1` takes the
             // digit after it, and an accidental waits for the digit after it.
@@ -274,10 +277,13 @@ fn music21_modifications(remaining: &str) -> Option<Vec<ChordStepModification>> 
         } else {
             token.matches('#').count() as IntegerType
         };
+        // music21's `[1-9]+`: the first run of digits without a nought, so
+        // `10` is a one.
+        let nonzero = |c: &char| matches!(c, '1'..='9');
         let digits: String = token
             .chars()
-            .skip_while(|c| !c.is_ascii_digit())
-            .take_while(char::is_ascii_digit)
+            .skip_while(|c| !nonzero(c))
+            .take_while(nonzero)
             .collect();
         if let Ok(degree) = digits.parse::<u8>() {
             out.push(
@@ -338,7 +344,9 @@ impl ChordSymbol {
                 (root, rest)
             }
         };
-        let root = Pitch::from_name(&root_text).map_err(|_| refused_root())?;
+        // A root the pattern reads but no pitch spells, `C#-`, is refused by
+        // the pitch, as music21 lets its accidental error through.
+        let root = Pitch::from_name(&root_text)?;
         // The bass is `/` and a root-shaped name wherever it stands, and it
         // is taken out of what is left wherever it appears there.
         let mut bass = None;
@@ -1048,6 +1056,119 @@ impl TryFrom<String> for ChordSymbol {
 
 #[cfg(test)]
 mod tests {
+
+    /// music21 puts its root and bass objects themselves in the list it
+    /// voices, so an octave pass over the list moves them too, once for
+    /// every place they hold: a bass added twice is one note, twice. Its
+    /// voicings, as it prints them.
+    #[test]
+    fn the_voicing_keeps_music21s_root_and_bass() {
+        let voiced = |figure: &str| {
+            let symbol = ChordSymbol::parse_music21(figure).unwrap();
+            let kind = symbol.kind().unwrap_or_default();
+            voice_chord_notation(
+                symbol.root(),
+                kind,
+                notation_for_kind(resolve_kind_alias(kind)),
+                symbol.bass(),
+                symbol.chord_step_modifications(),
+            )
+            .unwrap()
+        };
+        let a = voiced("A10/C");
+        assert_eq!(a.root().name_with_octave(), "A3");
+        assert_eq!(a.bass().name_with_octave(), "C2");
+        let names: Vec<String> = a.pitches().iter().map(Pitch::name_with_octave).collect();
+        assert_eq!(names, ["C2", "A2", "A3"]);
+        assert_eq!(voiced("Ab10/F#").root().name_with_octave(), "A3");
+
+        // An added flat one takes the root out and puts a new note in; the
+        // bass, added before, keeps its place and moves with the chord.
+        let flat_one = voiced("Bb10/B-");
+        assert_eq!(flat_one.bass().name_with_octave(), "B-1");
+        assert_eq!(voiced("Ab10/A-").bass().name_with_octave(), "A-1");
+    }
+
+    #[test]
+    fn a_slash_bass_is_voiced_as_music21_voices_it() {
+        let cases: [(&str, &[&str]); 20] = [
+            ("B-5/E", &["E2", "E2", "B-3", "F4"]),
+            ("B-69/E", &["E2", "E2", "B-3", "G4", "C5"]),
+            ("C5/G", &["G3", "G3", "C4"]),
+            ("C5/D", &["D2", "D2", "C3", "G3"]),
+            ("C69/D", &["D2", "D2", "C3", "A3", "D4"]),
+            ("C5/C#", &["C#2", "C#2", "C3", "G3"]),
+            ("F5/E", &["E2", "E2", "F3", "C4"]),
+            ("A-10/E", &["E3", "A-3", "A-3"]),
+            ("A#10/E", &["E3", "A#3", "A#3"]),
+            ("C10/G", &["C3", "G3", "C4"]),
+            ("C35/B", &["B2", "B2", "C3", "E3", "G3"]),
+            ("C/B-", &["B-2", "C3", "E3", "G3"]),
+            ("C7/D", &["D2", "C3", "E3", "G3", "B-3"]),
+            ("Cm/E-", &["E-3", "G3", "C4"]),
+            ("C9/E", &["E3", "G3", "B-3", "C4", "D4"]),
+            ("C13/B-", &["B-2", "C3", "D3", "E3", "F3", "G3", "A3"]),
+            ("Cadd9/D", &["D2", "C3", "E3", "G3", "D4"]),
+            ("C6/D", &["D2", "C3", "E3", "G3", "A3"]),
+            ("C69/E", &["E3", "A3", "C4", "D4"]),
+            ("C5/E", &["E3", "G3", "C4"]),
+        ];
+        for (figure, voiced) in cases {
+            let symbol = ChordSymbol::parse_music21(figure).unwrap();
+            let names: Vec<String> = symbol
+                .pitches()
+                .unwrap()
+                .iter()
+                .map(Pitch::name_with_octave)
+                .collect();
+            assert_eq!(names, voiced, "{figure}");
+        }
+    }
+
+    /// music21 strips a degree's sharps and flats and hands what is left to
+    /// Python's `int`, which takes a sign; the degree is then the first run
+    /// of the digits one to nine. Its answers, as (degree, semitones) adds.
+    #[test]
+    fn degrees_are_read_as_music21_reads_them() {
+        type Adds = &'static [(u8, IntegerType)];
+        let cases: [(&str, &str, Adds); 8] = [
+            ("Cb-7", "", &[(7, -1)]),
+            ("Cb+7", "", &[(7, -1)]),
+            ("C7b-9", "", &[(7, 0), (9, -1)]),
+            ("C9b-13", "", &[(9, 0), (13, -1)]),
+            ("C10", "", &[(1, 0)]),
+            ("C#10", "", &[(1, 0)]),
+            ("Cb10", "major", &[(1, -1)]),
+            ("Abb7", "", &[(7, -2)]),
+        ];
+        for (figure, kind, adds) in cases {
+            let symbol = ChordSymbol::parse_music21(figure).unwrap();
+            assert_eq!(symbol.kind(), Some(kind), "{figure}");
+            let read: Vec<(u8, IntegerType)> = symbol
+                .chord_step_modifications()
+                .iter()
+                .map(|modification| {
+                    let semitones = modification.interval().semitones() as IntegerType;
+                    (modification.degree(), semitones)
+                })
+                .collect();
+            assert_eq!(read, adds, "{figure}");
+        }
+    }
+
+    /// A root music21 reads but no pitch can spell is refused by the pitch,
+    /// as an accidental, not as a figure without a root.
+    #[test]
+    fn a_root_with_an_unspellable_accidental_is_an_accidental_error() {
+        for figure in ["C#-7", "C##-", "F#-7/E"] {
+            let refused = ChordSymbol::parse_music21(figure).unwrap_err();
+            assert!(
+                matches!(refused, Error::Accidental(_)),
+                "{figure}: {refused:?}"
+            );
+        }
+        assert!(ChordSymbol::parse_music21("H7").is_err());
+    }
     /// Every shorthand in music21's table realizes the notes its notation
     /// names, read independently off the root's major scale.
     #[test]
