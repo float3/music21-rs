@@ -14,14 +14,12 @@ on:
 permissions:
   contents: read
 
-# A pull request's run is replaced by its next push. A push to master is not:
-# cancelling it meant a burst of pushes published nothing until the last one
-# had finished every job, and each push restarted the clock. Master's runs
-# finish instead, and `pages` and `pages-report` publish only a run that is
-# still the branch's head.
+# A run is replaced by the next push to its branch. The site is published by
+# `site` and `pages` in a few minutes, so the newest push still goes live
+# quickly; only the full report of a push that was superseded is lost.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
@@ -740,9 +738,9 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      # Runs on master are not cancelled by the next push (see `concurrency`
-      # above), so an older run can reach this point after a newer one has
-      # published. It must not put the older site back.
+      # Cancelling a superseded run is not instant, so an older run can still
+      # reach this point after a newer one has published. It must not put the
+      # older site back.
       - name: Is this commit still the branch's head?
         id: head
         shell: bash
@@ -770,12 +768,6 @@ jobs:
     # and the rest re-runs every suite this workflow has just run as jobs of
     # its own. It is never published from a pull request either.
     if: github.event_name == 'push'
-    # A quarter of an hour, so a burst of pushes must not start one each.
-    # Not cancelled once running, so a report always finishes; while one runs,
-    # GitHub keeps only the newest waiting, and that is the one run next.
-    concurrency:
-      group: report-${{ github.ref }}
-      cancel-in-progress: false
     steps:
       - name: Checkout
         uses: actions/checkout@v7
