@@ -33,6 +33,12 @@ places where they answered differently; they agree now.
   `getMeasureOffsetOrMeterModulusOffset`: where an element falls in the
   bar, given its offset and the meter's. The wheel's member reads the two
   offsets off music21's stream and hands them over.
+- Analysis of a whole `Stream`: `analysis::stream_distribution` and
+  `estimate_key_of_stream`, music21's `KeyWeightKeyAnalysis` over a
+  stream's duration-weighted pitch classes; `stream_pitch_span`, its
+  `Ambitus`; and `melodic_lines`, the lines `MelodicIntervalDiversity`
+  counts, one per part with ties struck once. `Stream::has_part_like_streams`
+  is music21's `hasPartLikeStreams`, which `melodic_lines` reads.
 
 ## Fixed
 

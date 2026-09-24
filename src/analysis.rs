@@ -4,7 +4,10 @@ use crate::{
     error::{Error, Result},
     interval::Interval,
     key::Key,
+    notation::TieType,
+    note::Note,
     pitch::Pitch,
+    stream::{Stream, StreamElement},
 };
 
 pub mod enharmonics;
@@ -173,6 +176,77 @@ pub fn pitch_class_distribution<'a>(
         }
     }
     any.then_some(distribution)
+}
+
+/// How long each pitch class sounds in a stream, nested streams included:
+/// music21's `_getPitchClassDistribution` over the stream's notes and
+/// chords, each pitch counting for its note's whole length. Chord symbols
+/// and rests do not sound here; nothing for a stream with no notes.
+pub fn stream_distribution(stream: &Stream) -> Option<[FloatType; 12]> {
+    let notes: Vec<(Vec<Pitch>, FloatType)> = stream
+        .notes()
+        .iter()
+        .map(|(_, element)| (element.pitches(), element.quarter_length()))
+        .collect();
+    pitch_class_distribution(
+        notes
+            .iter()
+            .map(|(pitches, length)| (pitches.as_slice(), *length)),
+    )
+}
+
+/// The keys a stream is likely in, best first, by `profile`'s weights over
+/// its duration-weighted pitch classes: music21's `KeyWeightKeyAnalysis`
+/// run on a stream. Nothing for a stream with no notes.
+pub fn estimate_key_of_stream(profile: KeyProfile, stream: &Stream) -> Option<Vec<KeyEstimate>> {
+    stream_distribution(stream)
+        .map(|distribution| estimate_key_from_distribution(profile, &distribution))
+}
+
+/// The lowest and highest pitch sounding anywhere in a stream: music21's
+/// `Ambitus.getPitchSpan`, which leaves chord symbols out.
+pub fn stream_pitch_span(stream: &Stream) -> Option<(Pitch, Pitch)> {
+    pitch_span(&stream.pitches())
+}
+
+/// The melodic lines of a stream, as music21's `MelodicIntervalDiversity`
+/// reads them: each part-like stream it holds on its own, or the stream as
+/// one line where it holds none; the notes of each in order, chords and
+/// rests left out, and a note continuing a tie heard once.
+pub fn melodic_lines(stream: &Stream) -> Vec<Vec<Pitch>> {
+    let parts: Vec<&Stream> = if stream.has_part_like_streams() {
+        stream
+            .events()
+            .iter()
+            .filter_map(|event| event.element().as_stream())
+            .collect()
+    } else {
+        vec![stream]
+    };
+    parts
+        .into_iter()
+        .map(|part| {
+            part.flatten()
+                .events()
+                .iter()
+                .filter_map(|event| match event.element() {
+                    StreamElement::Note(note) if !continues_tie(note) => Some(note.pitch().clone()),
+                    _ => None,
+                })
+                .collect()
+        })
+        .collect()
+}
+
+/// Whether a note carries on a tie from the one before, as music21's
+/// `stripTies` folds into it.
+fn continues_tie(note: &Note) -> bool {
+    note.tie().is_some_and(|tie| {
+        matches!(
+            tie.tie_type(),
+            TieType::Stop | TieType::Continue | TieType::ContinueLetRing
+        )
+    })
 }
 
 /// The key names music21's key analysis spells a major tonic with.
@@ -359,6 +433,64 @@ pub fn tonal_certainty_from_scores(scores: &[FloatType]) -> FloatType {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_stream_is_weighed_as_music21_weighs_it() {
+        use super::*;
+        use crate::{Duration, Note, Stream, StreamKind};
+
+        // music21's own example: C for three quarters, F# for two, then a
+        // chord of D, E and B- for one and a half.
+        let note = |name: &str, length: FloatType| {
+            let mut note = Note::from_name(name).unwrap();
+            note.set_duration(Duration::new(length).unwrap());
+            note
+        };
+        let mut stream = Stream::new();
+        stream.push(note("C4", 3.0));
+        stream.push(note("F#4", 2.0));
+        assert_eq!(
+            stream_distribution(&stream),
+            Some([3.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+        );
+        let mut chord = Chord::new("D4 E4 B-4").unwrap();
+        chord.set_duration(Duration::new(1.5).unwrap());
+        stream.push(chord);
+        assert_eq!(
+            stream_distribution(&stream),
+            Some([3.0, 0.0, 1.5, 0.0, 1.5, 0.0, 2.0, 0.0, 0.0, 0.0, 1.5, 0.0])
+        );
+        assert!(estimate_key_of_stream(KeyProfile::AardenEssen, &stream).is_some());
+        assert_eq!(stream_distribution(&Stream::new()), None);
+
+        // Ambitus: the lowest and highest pitch anywhere in the nesting.
+        let (low, high) = stream_pitch_span(&stream).unwrap();
+        assert_eq!(
+            (low.name_with_octave(), high.name_with_octave()),
+            ("C4".into(), "B-4".into())
+        );
+
+        // Two parts, each its own line; a tied note is heard once.
+        let mut upper = Stream::with_kind(StreamKind::Part);
+        let mut tied = note("E4", 1.0);
+        tied.set_tie(Some(crate::Tie::new(crate::TieType::Start)));
+        let mut held = note("E4", 1.0);
+        held.set_tie(Some(crate::Tie::new(crate::TieType::Stop)));
+        for element in [note("C4", 1.0), tied, held, note("G4", 1.0)] {
+            upper.push(element);
+        }
+        let mut lower = Stream::with_kind(StreamKind::Part);
+        lower.push(note("C3", 2.0));
+        lower.push(note("G2", 2.0));
+        let mut score = Stream::with_kind(StreamKind::Score);
+        score.insert(0.0, upper);
+        score.insert(0.0, lower);
+        let lines: Vec<Vec<String>> = melodic_lines(&score)
+            .iter()
+            .map(|line| line.iter().map(Pitch::name_with_octave).collect())
+            .collect();
+        assert_eq!(lines, [vec!["C4", "E4", "G4"], vec!["C3", "G2"]]);
+    }
 
     #[test]
     fn a_profile_names_its_music21_class() {
