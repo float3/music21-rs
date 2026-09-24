@@ -399,6 +399,19 @@ mod tests {
     }
 
     #[test]
+    fn the_presets_are_music21s_rule_classes() {
+        assert_eq!(EnharmonicRules::default(), EnharmonicRules::MELODIC);
+
+        let melodic = EnharmonicRules::MELODIC;
+        assert_eq!(melodic.alteration_penalty(), Some(4));
+        assert_eq!(melodic.aug_dim_penalty(), Some(2));
+        assert_eq!(melodic.mixture_penalty(), None);
+        assert_eq!(EnharmonicRules::CHORDAL.mixture_penalty(), Some(2));
+
+        assert_eq!(EnharmonicRules::new(Some(4), Some(2), Some(0)), melodic);
+    }
+
+    #[test]
     fn a_triple_sharp_has_no_base40_place() {
         let spelling = pitches(&["C###", "E"]);
         assert!(EnharmonicRules::MELODIC.aug_dim_score(&spelling).is_err());

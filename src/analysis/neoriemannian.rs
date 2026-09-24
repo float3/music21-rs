@@ -531,6 +531,7 @@ pub fn is_chromatic_mediant(from: &Chord, to: &Chord) -> Result<Option<Mediant>>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::duration::Duration;
 
     fn chord(names: &str) -> Chord {
         Chord::new(names).unwrap()
@@ -759,6 +760,86 @@ mod tests {
             is_chromatic_mediant(&c_major, &chord("C-4 E-4 A-4")).unwrap(),
             None
         );
+    }
+
+    #[test]
+    fn minor_triads_take_their_mediants_as_music21_does() {
+        let a_minor = chord("A4 C5 E5");
+        let mediant = |mediant| named(&chromatic_mediant(&a_minor, mediant).unwrap());
+        assert_eq!(mediant(Mediant::UpperFlat), ["G4", "C5", "E-5"]);
+        assert_eq!(mediant(Mediant::UpperSharp), ["G#4", "C#5", "E5"]);
+        assert_eq!(mediant(Mediant::LowerFlat), ["A-4", "C5", "F5"]);
+        assert_eq!(mediant(Mediant::LowerSharp), ["A4", "C#5", "F#5"]);
+
+        let side = |side| named(&disjunct_mediant(&a_minor, side).unwrap());
+        assert_eq!(side(MediantSide::Upper), ["A-4", "D-5", "F5"]);
+        assert_eq!(side(MediantSide::Lower), ["A#4", "C#5", "F#5"]);
+    }
+
+    #[test]
+    fn only_triads_take_mediants_or_chains() {
+        let cluster = chord("C4 D4 E4");
+        assert!(matches!(
+            chromatic_mediant(&cluster, Mediant::UpperFlat),
+            Err(Error::Value(_))
+        ));
+        assert!(matches!(
+            disjunct_mediant(&cluster, MediantSide::Upper),
+            Err(Error::Value(_))
+        ));
+
+        let chain = lrp_chain(
+            &cluster,
+            &[Transform::L],
+            ChainOrder::LeftToRight,
+            Respell::Keep,
+        );
+        let message = chain.unwrap_err().to_string();
+        assert!(message.contains("Cannot perform transformations on chord C4 D4 E4"));
+    }
+
+    #[test]
+    fn p_and_r_refuse_in_music21s_capitals() {
+        let cluster = chord("C4 D4 E4");
+        for transform in [Transform::P, Transform::R] {
+            let message = transform.apply(&cluster).unwrap_err().to_string();
+            let expected = format!(
+                "Cannot perform {} on this chord: not a Major or Minor triad",
+                transform.symbol()
+            );
+            assert!(message.contains(&expected), "{message}");
+        }
+    }
+
+    #[test]
+    fn a_chain_parses_back_to_its_letters() {
+        let symbols: String = chain("LPR").into_iter().map(Transform::symbol).collect();
+        assert_eq!(symbols, "LPR");
+    }
+
+    #[test]
+    fn a_result_lasts_as_long_as_its_source() {
+        let mut c_major = chord("C4 E4 G4");
+        c_major.set_duration(Duration::half());
+        let lasts = |chord: &Chord| chord.duration().map(Duration::quarter_length);
+
+        assert_eq!(lasts(&Transform::L.apply(&c_major).unwrap()), Some(2.0));
+        let cycle = complete_hexatonic(&c_major, Respell::Simplify).unwrap();
+        assert_eq!(lasts(&cycle[5]), Some(2.0));
+    }
+
+    #[test]
+    fn hexatonic_systems_have_music21s_names() {
+        let names: Vec<&str> = [
+            HexatonicSystem::Northern,
+            HexatonicSystem::Eastern,
+            HexatonicSystem::Southern,
+            HexatonicSystem::Western,
+        ]
+        .into_iter()
+        .map(HexatonicSystem::name)
+        .collect();
+        assert_eq!(names, ["northern", "eastern", "southern", "western"]);
     }
 
     #[test]
