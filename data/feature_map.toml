@@ -856,11 +856,11 @@ note = "The best spelling of a run of pitches, scored on augmented and diminishe
 
 [class.renames]
 bestPitches = "best_spelling"
+getRepresentations = "spelling_options"
 getMixSharpFlatsScore = "mixture_score"
 
 [class.excluded]
-getRepresentations = "fills the spellings each pitch may take; best_spelling lists them as it goes"
-getProduct = "fills every combination of those spellings; best_spelling walks them as it goes"
+getProduct = "lists every combination of the spellings at once; best_choice walks them one at a time"
 
 [[class]]
 python = "analysis/neoRiemannian.py"

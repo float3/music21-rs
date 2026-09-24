@@ -4,7 +4,7 @@ music21's key analysis is in the crate, weighted by duration and ranked,
 spelled and scored as music21 ranks, spells and scores it, and music21's own
 `analysis.discrete`, `figuredBass.checker` and `figuredBass.harmony` pass
 every example with the crate beneath them. So do `analysis.enharmonics` and
-`analysis.neoRiemannian`, whose transformations are the crate's: 38
+`analysis.neoRiemannian`, which are the crate's: 38
 modules, 1,018 docstrings and 9,121 examples. A figured-bass segment finds its voicings about eighteen
 times faster than it did in 0.7.0.
 
@@ -19,8 +19,10 @@ times faster than it did in 0.7.0.
   `analysis::melodic_interval_counts`, its
   `MelodicIntervalDiversity.countMelodicIntervals`.
 - `analysis::enharmonics::best_spelling`, music21's
-  `EnharmonicSimplifier.bestPitches`, with its three scores on
-  `EnharmonicRules`.
+  `EnharmonicSimplifier.bestPitches`, built on `spelling_options` and
+  `best_choice`, with its three penalties and scores on `EnharmonicRules`.
+  The wheel installs `EnharmonicSimplifier` and both rule classes over
+  music21's.
 - `analysis::neoriemannian`: `Transform` (L, P, R), `lrp_chain` and
   `lrp_combination`, `complete_hexatonic`, `hexatonic_system`,
   `chromatic_mediant`, `disjunct_mediant`, `slide`, `nebenverwandt`,
@@ -38,6 +40,10 @@ times faster than it did in 0.7.0.
   where they took 1.3 milliseconds.
 
 ## Fixed
+
+- The report counted a wheel class that inherits its members, such as
+  `Trill` from `Ornament`, as lacking them. The wheel figure reads 94%
+  where it read 89%.
 
 - The wheel read a music21 stream iterator's first item twice wherever it
   took a whole iterator at once, so `chord.Chord(stream.notes)` with the

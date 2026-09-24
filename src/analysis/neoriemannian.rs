@@ -313,7 +313,7 @@ fn not_a_triad_chain(chord: &Chord) -> Error {
 ///
 /// An empty chord, or a pitch base 40 has no place for.
 pub fn simpler_enharmonics(chord: &Chord) -> Result<Chord> {
-    let best = best_spelling(&chord.pitches(), EnharmonicRules::Melodic)?;
+    let best = best_spelling(&chord.pitches(), EnharmonicRules::MELODIC)?;
     with_duration_of(chord, Chord::new(best.as_slice())?)
 }
 
