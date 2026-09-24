@@ -360,15 +360,72 @@ fn abc_length(quarters: f64) -> Result<String, JsValue> {
     abc_duration(twelfths, TWELFTHS).map_err(js_error)
 }
 
+/// What a stroke of a comping figure plays of the chord.
+#[derive(Clone, Copy)]
+enum Stroke {
+    /// The thumb on the chord's lowest note.
+    Root,
+    /// The thumb on the fifth below the lowest note where the strings reach,
+    /// above it where they do not, and on the bass again over a named bass.
+    Fifth,
+    /// The fingers on the rest of the chord.
+    Chord,
+}
+
+/// A way of playing the chord part other than holding each chord: a bar
+/// length in quarters and the figure of each bar in turn, each stroke the
+/// quarter it falls on and what it plays. A bar of any other length is held.
+struct Comping {
+    bar: f64,
+    bars: &'static [&'static [(f64, Stroke)]],
+}
+
+/// The bossa nova: the thumb on one and three; the fingers on one, two and
+/// the and of three, then on the and of one and of two.
+const BOSSA: Comping = Comping {
+    bar: 4.0,
+    bars: &[
+        &[
+            (0.0, Stroke::Root),
+            (1.0, Stroke::Chord),
+            (2.0, Stroke::Fifth),
+            (2.5, Stroke::Chord),
+        ],
+        &[
+            (0.0, Stroke::Root),
+            (0.5, Stroke::Chord),
+            (1.5, Stroke::Chord),
+            (2.0, Stroke::Fifth),
+        ],
+    ],
+};
+
+/// The comping figure a page names, or `None` to hold each chord.
+fn comping_named(name: &str) -> Option<&'static Comping> {
+    match name {
+        "bossa" => Some(&BOSSA),
+        _ => None,
+    }
+}
+
+/// A chord symbol and where it holds, in quarters.
+struct Span<'a> {
+    start: f64,
+    end: f64,
+    name: &'a str,
+}
+
 /// The chord symbols realized as bars of ABC, one per bar of the score:
 /// each symbol voiced on `strings` and held until the next, tied over the
-/// barlines. A staff whose `clef` sounds an octave down is written an
-/// octave above the voicing.
+/// barlines, or played in the `comping` figure where one is named. A staff
+/// whose `clef` sounds an octave down is written an octave above the
+/// voicing.
 fn chord_bars(
     input: ScoreInput,
     symbols: Vec<Symbol>,
     strings: &[String],
     clef: &str,
+    comping: &str,
 ) -> Result<Vec<Bar>, JsValue> {
     let score = Score::from_input(input)?;
     let lines = score.barlines();
@@ -384,28 +441,99 @@ fn chord_bars(
         Octaves::Written => 0,
         Octaves::Down => OCTAVE_SEMITONES,
     };
+    let lowest_string = open.first().copied().unwrap_or_default();
+    let pattern = comping_named(comping);
 
     let mut symbols = symbols;
     symbols.sort_by(|a, b| a.start.total_cmp(&b.start));
-    let mut voicings: BTreeMap<String, Option<Vec<i32>>> = BTreeMap::new();
-    for symbol in &symbols {
-        voicings.entry(symbol.name.clone()).or_insert_with(|| {
-            chord_symbol_voicing_notes(&symbol.name, &open)
+    let spans: Vec<Span<'_>> = symbols
+        .iter()
+        .enumerate()
+        .map(|(index, symbol)| Span {
+            start: symbol.start,
+            end: symbols.get(index + 1).map_or(end, |next| next.start),
+            name: &symbol.name,
+        })
+        .collect();
+    let mut voicings: BTreeMap<&str, Option<Vec<i32>>> = BTreeMap::new();
+    for span in &spans {
+        voicings.entry(span.name).or_insert_with(|| {
+            chord_symbol_voicing_notes(span.name, &open)
                 .ok()
                 .filter(|notes| !notes.is_empty())
         });
     }
+    let voicing = |name: &str| voicings.get(name).and_then(Option::as_ref);
+
+    // Spells sounding MIDI numbers as ABC, with the accidentals the bar
+    // needs.
+    let write = |notes: &[i32], in_force: &mut BTreeMap<(char, i32), i32>| {
+        let mut written = String::new();
+        for &midi in notes {
+            let pitch = spell_midi(midi + lift, tonic, mode)?;
+            written.push_str(&abc_pitch(&pitch, &alters, in_force)?);
+        }
+        Ok::<_, JsValue>(written)
+    };
 
     let mut bars = Vec::new();
+    let mut patterned = 0;
     for pair in lines.windows(2) {
         let (from, to) = (pair[0], pair[1]);
         let mut in_force = BTreeMap::new();
         let mut tokens = Vec::new();
+
+        // A bar the figure fits is played in it, stroke by stroke.
+        if let Some(pattern) = pattern.filter(|pattern| (to - from - pattern.bar).abs() < EPSILON) {
+            let figure = pattern.bars[patterned % pattern.bars.len()];
+            patterned += 1;
+            for (index, &(at, stroke)) in figure.iter().enumerate() {
+                let start = from + at;
+                let stop = from + figure.get(index + 1).map_or(pattern.bar, |next| next.0);
+                let length = abc_length(stop - start)?;
+                let span = spans
+                    .iter()
+                    .find(|span| span.start <= start + EPSILON && start < span.end - EPSILON);
+                let Some((span, voiced)) = span.and_then(|span| Some((span, voicing(span.name)?)))
+                else {
+                    tokens.push(format!("z{length}"));
+                    continue;
+                };
+                let (low, upper) = (voiced[0], &voiced[1..]);
+                let fifth = if span.name.contains('/') {
+                    low
+                } else if low - 5 >= lowest_string {
+                    low - 5
+                } else {
+                    low + 7
+                };
+                let notes = match stroke {
+                    Stroke::Root => vec![low],
+                    Stroke::Fifth => vec![fifth],
+                    Stroke::Chord => upper.to_vec(),
+                };
+                if notes.is_empty() {
+                    tokens.push(format!("z{length}"));
+                    continue;
+                }
+                let written = write(&notes, &mut in_force)?;
+                if notes.len() > 1 {
+                    tokens.push(format!("[{written}]{length}"));
+                } else {
+                    tokens.push(format!("{written}{length}"));
+                }
+            }
+            bars.push(Bar {
+                start: from,
+                abc: tokens.join(" "),
+            });
+            continue;
+        }
+
         let mut cursor = from;
-        for (index, symbol) in symbols.iter().enumerate() {
-            let span_end = symbols.get(index + 1).map_or(end, |next| next.start);
-            let start = symbol.start.max(from);
-            let stop = span_end.min(to);
+        for span in &spans {
+            let start = span.start.max(from);
+            let stop = span.end.min(to);
             if stop <= start + EPSILON {
                 continue;
             }
@@ -414,17 +542,18 @@ fn chord_bars(
             }
             cursor = stop;
             let length = abc_length(stop - start)?;
-            let Some(Some(voiced)) = voicings.get(&symbol.name) else {
+            let Some(voiced) = voicing(span.name) else {
                 tokens.push(format!("z{length}"));
                 continue;
             };
-            let mut chord = String::new();
-            for &midi in voiced {
-                let pitch = spell_midi(midi + lift, tonic, mode)?;
-                chord.push_str(&abc_pitch(&pitch, &alters, &mut in_force)?);
-            }
-            let tie = if span_end > to + EPSILON { "-" } else { "" };
-            tokens.push(format!("[{chord}]{length}{tie}"));
+            // A held chord ties over the barline, except in a part played
+            // in a figure, whose next bar strikes it again.
+            let tie = if span.end > to + EPSILON && pattern.is_none() {
+                "-"
+            } else {
+                ""
+            };
+            tokens.push(format!("[{}]{length}{tie}", write(voiced, &mut in_force)?));
         }
         if to > cursor + EPSILON {
             tokens.push(format!("z{}", abc_length(to - cursor)?));
@@ -441,20 +570,86 @@ fn chord_bars(
 /// The score's chord symbols (`[{ start, name }]`, in quarters) realized as
 /// a part for a fretted instrument whose open strings are `strings` (ABC,
 /// lowest first) on a staff with `clef`: `[{ start, abc }]`, one per bar.
+/// `comping` names a figure to play the chords in (`bossa`), or is empty
+/// to hold them.
 pub fn chord_part(
     input: JsValue,
     symbols: JsValue,
     strings: Vec<String>,
     clef: &str,
+    comping: &str,
 ) -> Result<JsValue, JsValue> {
     let input: ScoreInput = serde_wasm_bindgen::from_value(input).map_err(js_error)?;
     let symbols: Vec<Symbol> = serde_wasm_bindgen::from_value(symbols).map_err(js_error)?;
-    to_js(&chord_bars(input, symbols, &strings, clef)?)
+    to_js(&chord_bars(input, symbols, &strings, clef, comping)?)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::score::{NoteInput, PitchInput, VoiceInput};
+
+    /// Two bars of 4/4 in quarters under a C chord symbol, as a guitar's
+    /// chord part in `comping`.
+    fn c_chord_part(comping: &str) -> Vec<String> {
+        let notes = (0..8)
+            .map(|beat| NoteInput {
+                start: f64::from(beat),
+                duration: 1.0,
+                velocity: 90,
+                pitches: vec![PitchInput {
+                    midi: 60,
+                    staff: Some(0),
+                }],
+                char_start: None,
+                char_end: None,
+            })
+            .collect();
+        let input = ScoreInput {
+            title: String::new(),
+            tempo_bpm: 120.0,
+            key: None,
+            meter: Some([4, 4]),
+            pickup: 0.0,
+            let_ring: false,
+            voices: vec![VoiceInput {
+                name: String::new(),
+                clef: String::new(),
+                notes,
+            }],
+        };
+        let symbols = vec![Symbol {
+            start: 0.0,
+            name: "C".to_string(),
+        }];
+        let guitar = strings(&["E,", "A,", "D", "G", "B", "e"]);
+        chord_bars(input, symbols, &guitar, "treble-8", comping)
+            .unwrap()
+            .into_iter()
+            .map(|bar| bar.abc)
+            .collect()
+    }
+
+    #[test]
+    fn a_held_chord_ties_over_the_barline() {
+        let bars = c_chord_part("");
+        assert_eq!(bars.len(), 2);
+        assert!(bars[0].ends_with("8-"), "{bars:?}");
+        assert!(!bars[1].contains('-'), "{bars:?}");
+    }
+
+    #[test]
+    fn a_bossa_plays_each_bar_in_its_figure() {
+        let bars = c_chord_part("bossa");
+        // Bass on one, chord on two, fifth on three, chord on its and; then
+        // the bass, the and of one and of two, and the fifth.
+        let strokes: Vec<usize> = bars.iter().map(|bar| bar.split(' ').count()).collect();
+        assert_eq!(strokes, [4, 4], "{bars:?}");
+        assert!(bars.iter().all(|bar| !bar.contains('-')), "{bars:?}");
+        let first: Vec<&str> = bars[0].split(' ').collect();
+        assert!(first[1].starts_with('['), "{bars:?}");
+        assert!(!first[0].starts_with('['), "{bars:?}");
+    }
 
     fn strings(notes: &[&str]) -> Vec<String> {
         notes.iter().map(|note| note.to_string()).collect()
