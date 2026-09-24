@@ -70,6 +70,17 @@ times faster than it did in 0.7.0.
   raised bass; `functionalityScore` looks `V+` up as written; and a
   numeral that is neither a triad nor a seventh is never mixture. 1,185
   numerals now answer eighteen questions as music21's do.
+- The wheel's `Key` answers the scale questions music21's `Key` inherits
+  from `DiatonicScale` — `getPitches`, `getDominant`, `nextPitch`,
+  `derive`, `romanNumeral` and the rest — as the scale of its mode does,
+  where it raised `AttributeError`, installed or not. `derive` hands back
+  keys, as music21's does.
+- A scale's `getChord` built its chord from music21's class even with no
+  music21 installed, and failed there; it uses the wheel's own. Scales
+  have music21's `chord` and `usePitchDegreeCache`.
+- A Roman numeral made from a degree is written in capitals in a modal
+  key, as music21 writes it: 2 in C dorian is `II`, a major triad, where
+  it was `ii`.
 - `Chord::closed_position` measured from the note sounding lowest where
   music21 measures from the note written lowest, so `E#4 F-4` closed to
   `F-4 E#5` where music21 keeps `E#4 F-4`. 31 of 4,000 random chords

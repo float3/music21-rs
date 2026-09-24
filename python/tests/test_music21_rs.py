@@ -734,3 +734,23 @@ def test_a_scale_builds_its_chord_without_music21():
     chord = m.MajorScale("E-").getChord("E-4", "B-4")
     assert repr(chord) == "<music21.chord.Chord E-4 F4 G4 A-4 B-4>"
 
+
+@pytest.mark.parametrize(
+    ("degree", "key_or_scale", "figure"),
+    [
+        (2, lambda: m.Key("C", "dorian"), "II"),
+        (3, lambda: m.Key("C", "lydian"), "III"),
+        (2, lambda: m.Key("C"), "ii"),
+        (2, lambda: m.Key("c"), "ii"),
+        (4, lambda: m.Key("c"), "iv"),
+        (2, lambda: m.MajorScale("C"), "ii"),
+        (2, lambda: m.MinorScale("C"), "ii"),
+        (2, lambda: "C", "ii"),
+        (6, lambda: "E-", "vi"),
+        (5, lambda: None, "V"),
+    ],
+)
+def test_a_degree_is_written_in_the_case_music21_writes_it(degree, key_or_scale, figure):
+    # music21 lowers a degree's numeral in a major or minor key alone; a
+    # modal key keeps it upper case, and so a major triad.
+    assert m.RomanNumeral(degree, key_or_scale()).figure == figure
