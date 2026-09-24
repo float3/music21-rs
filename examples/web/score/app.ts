@@ -728,6 +728,9 @@ interface Rendered {
     /** Whether an offset of the drawn text is in the generated chord part,
      * which is not in the source. */
     isGenerated: (position: number) => boolean;
+    /** Whether the chord symbols are drawn as a part of their own, which then
+     * plays them in place of abcjs's accompaniment. */
+    chordPart: boolean;
 }
 
 function labelFor(slice: Slice, mode: string): string | null {
@@ -778,7 +781,8 @@ function render(source: string): void {
     const additions: { at: number; text: string; order: number; generated?: boolean }[] = hiddenLineStarts(
         source,
     ).map((at) => ({ at, text: "%", order: 0 }));
-    for (const addition of chordPart(source) ?? []) additions.push({ ...addition, order: 1, generated: true });
+    const chords = chordPart(source);
+    for (const addition of chords ?? []) additions.push({ ...addition, order: 1, generated: true });
     for (const [at, label] of labels) additions.push({ at, text: `"_${label.replace(/"/g, "'")}"`, order: 2 });
     additions.sort((a, b) => a.at - b.at || a.order - b.order);
     const insertions: Rendered["insertions"] = [];
@@ -835,7 +839,7 @@ function render(source: string): void {
             }
         }
     }
-    rendered = tune ? { tune, text, insertions, byAnchor, isGenerated } : null;
+    rendered = tune ? { tune, text, insertions, byAnchor, isGenerated, chordPart: chords !== null } : null;
     fitScore();
     scoreNode.scrollTop = scrollTop;
     markIssues();
@@ -1441,9 +1445,7 @@ function chordPart(source: string): { at: number; text: string }[] | null {
 
     const clef = octaveUp ? (view === "bass" ? "bass-8" : "treble-8") : "treble";
     const declaration = `V:tabchords clef=${clef} name="Chords"`;
-    // The written symbols stop sounding, since the part now plays them.
-    const keyLine = /(^|\n)\s*K:[^\n]*\n/.exec(source);
-    const additions = [{ at: keyLine ? keyLine.index + keyLine[0].length : 0, text: "%%MIDI gchordoff\n" }];
+    const additions: { at: number; text: string }[] = [];
 
     // abcjs lines voices up line by line, so the part is written a line of
     // its own under each line of music. That needs a voice for the music to
@@ -1880,11 +1882,14 @@ function followPlayback(node: SVGElement | undefined): void {
     }
 }
 
-/** A synth primed to play `tune` in the chosen playback tuning. */
-async function makeSynth(tune: AbcTune): Promise<InstanceType<AbcjsGlobal["synth"]["CreateSynth"]>> {
+/** A synth primed to play what is drawn in the chosen playback tuning. Where
+ * a chord part plays the chord symbols, abcjs's own accompaniment of them is
+ * switched off; `%%MIDI gchordoff` would have to be written inside a voice. */
+async function makeSynth(drawn: Rendered): Promise<InstanceType<AbcjsGlobal["synth"]["CreateSynth"]>> {
     const synth = new ABCJS.synth.CreateSynth();
     const retune = tuningCallback();
-    await synth.init({ visualObj: tune, ...(retune ? { options: { sequenceCallback: retune } } : {}) });
+    const options = { ...(retune ? { sequenceCallback: retune } : {}), ...(drawn.chordPart ? { chordsOff: true } : {}) };
+    await synth.init({ visualObj: drawn.tune, options });
     await synth.prime();
     return synth;
 }
@@ -1975,7 +1980,7 @@ async function play(): Promise<void> {
     playButton.disabled = true;
     playButton.textContent = "Loading…";
     try {
-        const synth = await makeSynth(rendered.tune);
+        const synth = await makeSynth(rendered);
         const timer = new ABCJS.TimingCallbacks(rendered.tune, {
             eventCallback: (event) => {
                 scoreNode.querySelectorAll(".m21-playing").forEach((node) => node.classList.remove("m21-playing"));
@@ -2079,7 +2084,7 @@ async function exportAs(kind: string): Promise<void> {
             }
             case "wav": {
                 if (!rendered) throw new Error("There is no score to export.");
-                const synth = await makeSynth(rendered.tune);
+                const synth = await makeSynth(rendered);
                 const link = el("a");
                 link.href = synth.download();
                 link.download = `${stem}.wav`;
