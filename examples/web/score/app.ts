@@ -343,12 +343,12 @@ V:LH clef=bass
 T:Two-finger bossa nova
 M:4/4
 L:1/8
-Q:1/4=120
+Q:1/4=130
 K:Bm
 %%MIDI program 24
 V:1 clef=treble-8 name="Guitar"
-F,2 [DAB]2 F, [DAB]2 F, | =F,2 [D^GB] z [DGB]4 | E,2 [DGB]2 E, [DGB]2 z | A,2 [EGc]2 z [EGc] E,=F, |
-F,2 [DAB]2 F, [DAB]2 F, | =F,2 [D^GB] z [DGB]4 | E,2 [DGB]2 E, [DGB]2 z | A,2 [EGc] z [EGc]4 |]
+F,2 [DAB]2 F, [DAB]2 F, | =F,2 [D^GB] z [DGB]4 | E,2 [DGB]2 E, [DGB]2 z | A, [EGc]2 [EGc]3 E,=F, |
+F,2 [DAB]2 F, [DAB]2 F, | =F,2 [D^GB] z [DGB]4 | E,2 [DGB]2 E, [DGB]2 z | A, [EGc]2 [EGc]5 |]
 `,
     },
     {
