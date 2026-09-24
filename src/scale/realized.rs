@@ -3,8 +3,8 @@
 //! degrees, neighbours, matching, derivation and tuning.
 
 use super::scaletype::{
-    DegreeComparison, HUMDRUM_SOLFEG_SYLLABLES, MAX_RANGE_OCTAVES, SCALE_STARTS, SOLFEG_SYLLABLES,
-    ScaleType, Simplification, SolfegVariant, advance, step_interval,
+    DegreeComparison, HUMDRUM_SOLFEG_SYLLABLES, MAX_RANGE_OCTAVES, SOLFEG_SYLLABLES, ScaleType,
+    Simplification, SolfegVariant, advance, step_interval,
 };
 use crate::chord::{Chord, root};
 use crate::defaults::{FloatType, IntegerType};
@@ -409,35 +409,11 @@ impl Scale {
         if !self.is_custom() {
             return self.scale_type.derive_ranked_by(pitches, limit, comparison);
         }
-        let targets: Vec<String> = pitches.iter().map(|p| comparison.key(p)).collect();
-        let Some((lowest, highest)) = super::scaletype::target_range(pitches) else {
-            return Ok(Vec::new());
-        };
-        let mut ranked = Vec::with_capacity(SCALE_STARTS.len());
-        for start in SCALE_STARTS {
+        super::scaletype::rank_on_every_start(pitches, limit, comparison, |tonic| {
             let mut candidate = self.clone();
-            candidate.set_tonic(Pitch::from_name(start)?);
-            let degrees: Vec<String> = candidate
-                .pitches_between(lowest, highest)?
-                .iter()
-                .map(|p| comparison.key(p))
-                .collect();
-            let matched = targets
-                .iter()
-                .filter(|target| degrees.contains(target))
-                .count();
-            ranked.push((matched, candidate));
-        }
-        ranked.sort_by(|left, right| {
-            left.0
-                .cmp(&right.0)
-                .then_with(|| left.1.tonic().ps().total_cmp(&right.1.tonic().ps()))
-        });
-        ranked.reverse();
-        if let Some(limit) = limit {
-            ranked.truncate(limit);
-        }
-        Ok(ranked)
+            candidate.set_tonic(tonic);
+            candidate
+        })
     }
 
     /// How the scale spells what it realizes: music21's

@@ -814,14 +814,7 @@ impl MeterTerminal {
     /// Which part an offset in quarter notes falls in: music21's
     /// `offsetToIndex`. An offset outside the span is an error.
     pub fn offset_to_index(&self, offset: FloatType) -> Result<usize> {
-        let length = self.quarter_length();
-        if offset.is_nan() || offset < 0.0 || offset >= length {
-            return Err(Error::Meter(format!(
-                "cannot access from qLenPos {} where total duration is {}",
-                super::offset_repr(offset),
-                super::offset_repr(length)
-            )));
-        }
+        let offset = super::offset_within(offset, self.quarter_length())?;
         let mut start = 0.0;
         for (index, part) in self.parts.iter().enumerate() {
             let end = start + part.quarter_length();

@@ -1300,8 +1300,8 @@ fn write_harte(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> PyResult
                     ));
                 }
                 pairs.sort_by(|a, b| {
-                    harte_degree_sort_key(&a.0)
-                        .partial_cmp(&harte_degree_sort_key(&b.0))
+                    music21_rs::harte::degree_sort_key(&a.0)
+                        .partial_cmp(&music21_rs::harte::degree_sort_key(&b.0))
                         .unwrap_or(std::cmp::Ordering::Equal)
                         .then_with(|| a.0.cmp(&b.0))
                 });
@@ -1346,24 +1346,6 @@ fn write_harte(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> PyResult
         labels.len()
     );
     Ok(path)
-}
-
-/// Where a Harte degree sorts: by its number, a flat just below it and a
-/// sharp just above, which is harte-library's `degree_to_sort_key`.
-fn harte_degree_sort_key(degree: &str) -> f64 {
-    let number: f64 = degree
-        .chars()
-        .filter(char::is_ascii_digit)
-        .collect::<String>()
-        .parse()
-        .unwrap_or(0.0);
-    if degree.starts_with('b') {
-        number - 0.49
-    } else if degree.starts_with('#') {
-        number + 0.49
-    } else {
-        number
-    }
 }
 
 /// `C:maj7(#11,9)` with the degrees in its parentheses sorted.

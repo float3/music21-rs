@@ -20,6 +20,17 @@ pub(crate) enum StepName {
 pub(crate) type StepType = IntegerType;
 
 impl StepName {
+    /// The seven steps in order, `C` first: indexed by steps above C.
+    pub(crate) const ALL: [StepName; 7] = [
+        StepName::C,
+        StepName::D,
+        StepName::E,
+        StepName::F,
+        StepName::G,
+        StepName::A,
+        StepName::B,
+    ];
+
     pub(crate) fn step_to_dnn_offset(&self) -> StepType {
         *self as StepType
     }

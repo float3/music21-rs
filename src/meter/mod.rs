@@ -1103,13 +1103,7 @@ impl TimeSignature {
         } else {
             offset
         };
-        if offset.is_nan() || offset < 0.0 || offset >= bar {
-            return Err(Error::Meter(format!(
-                "cannot access from qLenPos {} where total duration is {}",
-                offset_repr(offset),
-                offset_repr(bar)
-            )));
-        }
+        let offset = offset_within(offset, bar)?;
         let terminals = self.accent_sequence.level_list(level, true);
         if terminals.len() <= 1 {
             return self.accent_weight_with(offset, force_position_match, permit_meter_modulus);
@@ -1152,13 +1146,7 @@ impl TimeSignature {
         } else {
             offset
         };
-        if offset.is_nan() || offset < 0.0 || offset >= bar {
-            return Err(Error::Meter(format!(
-                "cannot access from qLenPos {} where total duration is {}",
-                offset_repr(offset),
-                offset_repr(bar)
-            )));
-        }
+        let offset = offset_within(offset, bar)?;
         let weights = self.accent_weights();
         let partition = self.accent_partition_quarter_length();
         let index = ((offset + OFFSET_TOLERANCE) / partition).floor() as usize;
@@ -1719,6 +1707,19 @@ pub(crate) fn offset_repr(offset: FloatType) -> String {
     } else {
         offset.to_string()
     }
+}
+
+/// The offset back when it lies within `0..length`, or music21's error for
+/// one that does not.
+fn offset_within(offset: FloatType, length: FloatType) -> Result<FloatType> {
+    if offset.is_nan() || offset < 0.0 || offset >= length {
+        return Err(Error::Meter(format!(
+            "cannot access from qLenPos {} where total duration is {}",
+            offset_repr(offset),
+            offset_repr(length)
+        )));
+    }
+    Ok(offset)
 }
 
 #[cfg(test)]

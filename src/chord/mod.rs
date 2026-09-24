@@ -36,7 +36,6 @@ pub use resolution::ChordResolutionSuggestion;
 pub use setclass::{ChordTableAddress, format_vector_string};
 
 use quality::*;
-use resolution::*;
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -201,17 +200,7 @@ impl Chord {
     {
         Ok(Self {
             notes: notes.try_into_notes()?.into_iter().collect(),
-            duration: None,
-            volume: None,
-            color: None,
-            notehead: Notehead::default(),
-            notehead_fill: None,
-            notehead_parenthesis: false,
-            stem_direction: StemDirection::default(),
-            beams: Beams::default(),
-            stored_instrument: None,
-            root_override: None,
-            bass_override: None,
+            ..Self::empty()
         })
     }
 
@@ -955,16 +944,7 @@ impl IntoNotes for String {
     type Notes = Vec<Note>;
 
     fn try_into_notes(self) -> Result<Self::Notes> {
-        if self.trim().is_empty() {
-            Ok(Vec::new())
-        } else if self.contains(char::is_whitespace) {
-            self.split_whitespace()
-                .collect::<Vec<&str>>()
-                .as_slice()
-                .try_into_notes()
-        } else {
-            Ok(vec![Note::from_name(self)?])
-        }
+        self.as_str().try_into_notes()
     }
 }
 

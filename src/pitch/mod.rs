@@ -5,6 +5,7 @@ mod names;
 
 pub use display::AccidentalDisplayOptions;
 pub use enharmonic::{CriterionFunction, dissonance_score, simplify_multiple_enharmonics};
+pub(crate) use names::display_flats;
 pub use names::{CHROMATIC_PITCH_CLASS_NAMES, pitch_class_name};
 
 use harmonics::*;

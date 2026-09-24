@@ -742,12 +742,8 @@ pub(super) fn chord_symbol_suffix(symbol: &ChordSymbol) -> &str {
         .figure()
         .split_once('/')
         .map_or(symbol.figure(), |(body, _)| body);
-    let root_name = normalize_symbol_root_name(&symbol.root().name());
+    let root_name = crate::pitch::display_flats(&symbol.root().name());
     body.strip_prefix(&root_name).unwrap_or(body)
-}
-
-pub(super) fn normalize_symbol_root_name(name: &str) -> String {
-    name.replace('-', "b")
 }
 
 pub(super) fn figured_bass_suffix(

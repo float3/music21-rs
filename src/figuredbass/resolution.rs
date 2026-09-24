@@ -147,6 +147,18 @@ fn named<'a>(note: Option<&'a Pitch>) -> impl Fn(&Pitch) -> bool + 'a {
     move |pitch| note.is_some_and(|note| pitch.name() == note.name())
 }
 
+/// Moves each named note of `possibility` by its step, and the rest nowhere.
+fn move_named(
+    possibility: &[Pitch],
+    moves: &[(Option<&Pitch>, &'static str)],
+) -> Result<Vec<Pitch>> {
+    let rules: Vec<Rule<'_>> = moves
+        .iter()
+        .map(|&(note, step)| -> Rule<'_> { (Box::new(named(note)), step) })
+        .collect();
+    resolve(possibility, &rules)
+}
+
 /// The chord's notes as a resolution of `possibility` needs them, read off
 /// the possibility where the caller has not given them, after `check` has
 /// said the chord is of the right kind.
@@ -226,22 +238,16 @@ pub fn augmented_sixth_to_dominant(
     kind: Option<AugmentedSixth>,
     info: Option<&ChordInfo>,
 ) -> Result<Vec<Pitch>> {
-    let (kind, info) = augmented_sixth_notes(possibility, kind, info)?;
-    let [bass, root, fifth, other] = augmented_sixth_parts(kind, &info);
-    let rules: Vec<Rule<'_>> = vec![
-        (Box::new(named(bass)), "-m2"),
-        (Box::new(named(root)), "m2"),
-        (Box::new(named(fifth)), "-m2"),
-        (
-            Box::new(move |pitch: &Pitch| kind == AugmentedSixth::Swiss && named(other)(pitch)),
-            "d1",
-        ),
-        (
-            Box::new(move |pitch: &Pitch| kind == AugmentedSixth::German && named(other)(pitch)),
-            "-m2",
-        ),
-    ];
-    resolve(possibility, &rules)
+    resolve_augmented_sixth(
+        possibility,
+        kind,
+        info,
+        "-m2",
+        &[
+            (AugmentedSixth::Swiss, "d1"),
+            (AugmentedSixth::German, "-m2"),
+        ],
+    )
 }
 
 /// Resolves an augmented sixth to the major tonic in second inversion:
@@ -255,26 +261,17 @@ pub fn augmented_sixth_to_major_tonic(
     kind: Option<AugmentedSixth>,
     info: Option<&ChordInfo>,
 ) -> Result<Vec<Pitch>> {
-    let (kind, info) = augmented_sixth_notes(possibility, kind, info)?;
-    let [bass, root, fifth, other] = augmented_sixth_parts(kind, &info);
-    let rules: Vec<Rule<'_>> = vec![
-        (Box::new(named(bass)), "-m2"),
-        (Box::new(named(root)), "m2"),
-        (Box::new(named(fifth)), "P1"),
-        (
-            Box::new(move |pitch: &Pitch| kind == AugmentedSixth::French && named(other)(pitch)),
-            "M2",
-        ),
-        (
-            Box::new(move |pitch: &Pitch| kind == AugmentedSixth::German && named(other)(pitch)),
-            "A1",
-        ),
-        (
-            Box::new(move |pitch: &Pitch| kind == AugmentedSixth::Swiss && named(other)(pitch)),
-            "m2",
-        ),
-    ];
-    resolve(possibility, &rules)
+    resolve_augmented_sixth(
+        possibility,
+        kind,
+        info,
+        "P1",
+        &[
+            (AugmentedSixth::French, "M2"),
+            (AugmentedSixth::German, "A1"),
+            (AugmentedSixth::Swiss, "m2"),
+        ],
+    )
 }
 
 /// Resolves an augmented sixth to the minor tonic in second inversion:
@@ -288,22 +285,35 @@ pub fn augmented_sixth_to_minor_tonic(
     kind: Option<AugmentedSixth>,
     info: Option<&ChordInfo>,
 ) -> Result<Vec<Pitch>> {
+    resolve_augmented_sixth(
+        possibility,
+        kind,
+        info,
+        "P1",
+        &[
+            (AugmentedSixth::French, "m2"),
+            (AugmentedSixth::Swiss, "d2"),
+        ],
+    )
+}
+
+/// Resolves an augmented sixth: the bass falls and the root rises a minor
+/// second, the fifth moves by `fifth`, and the last note moves as `other`
+/// says for the kind of sixth it is, staying put for a kind not listed.
+fn resolve_augmented_sixth(
+    possibility: &[Pitch],
+    kind: Option<AugmentedSixth>,
+    info: Option<&ChordInfo>,
+    fifth: &'static str,
+    other: &[(AugmentedSixth, &'static str)],
+) -> Result<Vec<Pitch>> {
     let (kind, info) = augmented_sixth_notes(possibility, kind, info)?;
-    let [bass, root, fifth, other] = augmented_sixth_parts(kind, &info);
-    let rules: Vec<Rule<'_>> = vec![
-        (Box::new(named(bass)), "-m2"),
-        (Box::new(named(root)), "m2"),
-        (Box::new(named(fifth)), "P1"),
-        (
-            Box::new(move |pitch: &Pitch| kind == AugmentedSixth::French && named(other)(pitch)),
-            "m2",
-        ),
-        (
-            Box::new(move |pitch: &Pitch| kind == AugmentedSixth::Swiss && named(other)(pitch)),
-            "d2",
-        ),
-    ];
-    resolve(possibility, &rules)
+    let [bass, root, fifth_note, other_note] = augmented_sixth_parts(kind, &info);
+    let mut moves = vec![(bass, "-m2"), (root, "m2"), (fifth_note, fifth)];
+    if let Some(&(_, step)) = other.iter().find(|(listed, _)| *listed == kind) {
+        moves.push((other_note, step));
+    }
+    move_named(possibility, &moves)
 }
 
 fn dominant_seventh(chord: &Chord) -> Result<()> {
@@ -421,13 +431,15 @@ pub fn dominant_seventh_to_major_submediant(
 ) -> Result<Vec<Pitch>> {
     let info = info_or_read(possibility, info, dominant_seventh_in_root_position)?;
     let [_, root, third, fifth, seventh] = seventh_notes(&info);
-    let rules: Vec<Rule<'_>> = vec![
-        (Box::new(named(root)), "m2"),
-        (Box::new(named(third)), "m2"),
-        (Box::new(named(fifth)), "-M2"),
-        (Box::new(named(seventh)), "-M2"),
-    ];
-    resolve(possibility, &rules)
+    move_named(
+        possibility,
+        &[
+            (root, "m2"),
+            (third, "m2"),
+            (fifth, "-M2"),
+            (seventh, "-M2"),
+        ],
+    )
 }
 
 /// Resolves a dominant seventh in root position deceptively, to the minor
@@ -442,13 +454,15 @@ pub fn dominant_seventh_to_minor_submediant(
 ) -> Result<Vec<Pitch>> {
     let info = info_or_read(possibility, info, dominant_seventh_in_root_position)?;
     let [_, root, third, fifth, seventh] = seventh_notes(&info);
-    let rules: Vec<Rule<'_>> = vec![
-        (Box::new(named(root)), "M2"),
-        (Box::new(named(third)), "m2"),
-        (Box::new(named(fifth)), "-M2"),
-        (Box::new(named(seventh)), "-m2"),
-    ];
-    resolve(possibility, &rules)
+    move_named(
+        possibility,
+        &[
+            (root, "M2"),
+            (third, "m2"),
+            (fifth, "-M2"),
+            (seventh, "-m2"),
+        ],
+    )
 }
 
 /// Resolves a dominant seventh in root position to the major subdominant:
@@ -463,12 +477,7 @@ pub fn dominant_seventh_to_major_subdominant(
 ) -> Result<Vec<Pitch>> {
     let info = info_or_read(possibility, info, dominant_seventh_in_root_position)?;
     let [_, root, third, fifth, _] = seventh_notes(&info);
-    let rules: Vec<Rule<'_>> = vec![
-        (Box::new(named(root)), "M2"),
-        (Box::new(named(third)), "m2"),
-        (Box::new(named(fifth)), "-M2"),
-    ];
-    resolve(possibility, &rules)
+    move_named(possibility, &[(root, "M2"), (third, "m2"), (fifth, "-M2")])
 }
 
 /// Resolves a dominant seventh in root position to the minor subdominant:
@@ -483,12 +492,7 @@ pub fn dominant_seventh_to_minor_subdominant(
 ) -> Result<Vec<Pitch>> {
     let info = info_or_read(possibility, info, dominant_seventh_in_root_position)?;
     let [_, root, third, fifth, _] = seventh_notes(&info);
-    let rules: Vec<Rule<'_>> = vec![
-        (Box::new(named(root)), "m2"),
-        (Box::new(named(third)), "m2"),
-        (Box::new(named(fifth)), "-M2"),
-    ];
-    resolve(possibility, &rules)
+    move_named(possibility, &[(root, "m2"), (third, "m2"), (fifth, "-M2")])
 }
 
 /// Resolves a diminished seventh to the major tonic: music21's
@@ -555,12 +559,10 @@ pub fn diminished_seventh_to_major_subdominant(
 ) -> Result<Vec<Pitch>> {
     let info = info_or_read(possibility, info, diminished_seventh)?;
     let [_, root, third, _, seventh] = seventh_notes(&info);
-    let rules: Vec<Rule<'_>> = vec![
-        (Box::new(named(root)), "m2"),
-        (Box::new(named(third)), "-M2"),
-        (Box::new(named(seventh)), "A1"),
-    ];
-    resolve(possibility, &rules)
+    move_named(
+        possibility,
+        &[(root, "m2"), (third, "-M2"), (seventh, "A1")],
+    )
 }
 
 /// Resolves a diminished seventh to the minor subdominant: music21's
@@ -575,9 +577,46 @@ pub fn diminished_seventh_to_minor_subdominant(
 ) -> Result<Vec<Pitch>> {
     let info = info_or_read(possibility, info, diminished_seventh)?;
     let [_, root, third, _, _] = seventh_notes(&info);
-    let rules: Vec<Rule<'_>> = vec![
-        (Box::new(named(root)), "m2"),
-        (Box::new(named(third)), "-M2"),
-    ];
-    resolve(possibility, &rules)
+    move_named(possibility, &[(root, "m2"), (third, "-M2")])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// music21's own French, German and Swiss sixths over B-2.
+    fn sixths() -> [Vec<Pitch>; 3] {
+        let chord = |names: [&str; 4]| names.map(|name| Pitch::from_name(name).unwrap()).to_vec();
+        [
+            chord(["G#4", "E4", "D4", "B-2"]),
+            chord(["G#4", "F4", "D4", "B-2"]),
+            chord(["G#4", "E#4", "D4", "B-2"]),
+        ]
+    }
+
+    fn names(pitches: Result<Vec<Pitch>>) -> Vec<String> {
+        pitches
+            .unwrap()
+            .iter()
+            .map(Pitch::name_with_octave)
+            .collect()
+    }
+
+    #[test]
+    fn every_augmented_sixth_resolves_as_music21_resolves_it() {
+        for sixth in sixths() {
+            assert_eq!(
+                names(augmented_sixth_to_dominant(&sixth, None, None)),
+                ["A4", "E4", "C#4", "A2"]
+            );
+            assert_eq!(
+                names(augmented_sixth_to_major_tonic(&sixth, None, None)),
+                ["A4", "F#4", "D4", "A2"]
+            );
+            assert_eq!(
+                names(augmented_sixth_to_minor_tonic(&sixth, None, None)),
+                ["A4", "F4", "D4", "A2"]
+            );
+        }
+    }
 }

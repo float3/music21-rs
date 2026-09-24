@@ -2,6 +2,7 @@
 //! on the chord's own root, and the lead-sheet symbol it is written as.
 
 use super::*;
+use crate::pitch::display_flats;
 
 impl Chord {
     /// Returns the unpitched chord types known to the music21-derived table.
@@ -191,17 +192,7 @@ impl Chord {
                 return "note".to_string();
             }
 
-            let pitch_names = self
-                .notes
-                .iter()
-                .map(|n| n.pitch.name())
-                .collect::<std::collections::BTreeSet<_>>();
-
-            let pitch_pses = self
-                .notes
-                .iter()
-                .map(|n| n.pitch.ps().round() as IntegerType)
-                .collect::<std::collections::BTreeSet<_>>();
+            let (pitch_names, pitch_pses) = self.distinct_names_and_spaces();
 
             if pitch_names.len() == 1 {
                 if pitch_pses.len() == 1 {
@@ -357,18 +348,25 @@ impl Chord {
         has_fifth_above(root) && has_fifth_above(third)
     }
 
-    pub(super) fn dyad_common_name(&self) -> String {
-        let pitch_names = self
-            .notes
-            .iter()
-            .map(|n| n.pitch.name())
-            .collect::<std::collections::BTreeSet<_>>();
-
-        let pitch_pses = self
+    /// The distinct pitch names and the distinct rounded pitch spaces among
+    /// the notes: `C4 C5` is one name and two spaces.
+    fn distinct_names_and_spaces(
+        &self,
+    ) -> (
+        std::collections::BTreeSet<String>,
+        std::collections::BTreeSet<IntegerType>,
+    ) {
+        let names = self.notes.iter().map(|n| n.pitch.name()).collect();
+        let spaces = self
             .notes
             .iter()
             .map(|n| n.pitch.ps().round() as IntegerType)
-            .collect::<std::collections::BTreeSet<_>>();
+            .collect();
+        (names, spaces)
+    }
+
+    pub(super) fn dyad_common_name(&self) -> String {
+        let (pitch_names, pitch_pses) = self.distinct_names_and_spaces();
 
         let Some(p0) = self.notes.first().map(|n| &n.pitch) else {
             return "empty chord".to_string();
@@ -450,10 +448,6 @@ impl Chord {
         names
     }
 
-    pub(super) fn pitch_class_name(pc: u8) -> &'static str {
-        CANDIDATE_TONICS[pc as usize % 12]
-    }
-
     pub(super) fn interval_nice_name(start: &Pitch, end: &Pitch) -> Option<String> {
         Interval::between(start.clone(), end.clone())
             .ok()
@@ -461,19 +455,11 @@ impl Chord {
     }
 
     pub(super) fn display_pitch_name(pitch: &Pitch) -> String {
-        pitch.name().replace('-', "b")
+        display_flats(&pitch.name())
     }
 
     pub(super) fn display_key_name(key: &Key) -> String {
-        format!(
-            "{} {}",
-            Self::display_tonic_name(&key.tonic().name()),
-            key.mode()
-        )
-    }
-
-    pub(super) fn display_tonic_name(name: &str) -> String {
-        name.replace('-', "b")
+        format!("{} {}", display_flats(&key.tonic().name()), key.mode())
     }
 
     /// Returns music21's `fullName`: the pitches' full names between braces,
