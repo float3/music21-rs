@@ -52,10 +52,41 @@ impl Facade {
     /// The blocks rather than the file, because one file holds several
     /// classes — `notation.rs` carries `Beam`, `Beams`, `Tie` and `Volume` —
     /// and a whole-file search would credit one class's members to another.
+    ///
+    /// A subclass carries what it inherits too, since Python finds a
+    /// member up the chain: `Trill` extends `Ornament`, whose `impl` holds
+    /// `realize`.
     pub fn class_body(&self, class: &str) -> Option<String> {
-        let text = self.files.values().find(|text| declares(text, class))?;
-        let body = impl_blocks(text, class);
+        let mut body = String::new();
+        let mut current = class.to_string();
+
+        // Walk up the chain; the depth bound only guards against a cycle.
+        for _ in 0..MAX_INHERITANCE_DEPTH {
+            let (text, parent) = self.declaration(&current)?;
+            body.push_str(&impl_blocks(text, &current));
+            let Some(parent) = parent else {
+                return Some(body);
+            };
+            current = parent;
+        }
         Some(body)
+    }
+
+    /// The file declaring a class, and the class it extends if any.
+    ///
+    /// A class is declared either by hand, with `extends = Parent` in its
+    /// `#[pyclass]`, or as a row of a table a macro expands:
+    /// `(Turn, "Turn", Ornament, [])`.
+    fn declaration(&self, class: &str) -> Option<(&str, Option<String>)> {
+        for text in self.files.values() {
+            if declares(text, class) {
+                return Some((text, extends(text, class)));
+            }
+            if let Some(parent) = table_row_parent(text, class) {
+                return Some((text, Some(parent)));
+            }
+        }
+        None
     }
 
     /// Whether the wheel carries a class of this name at all: declared as a
@@ -89,6 +120,44 @@ fn declares(text: &str, class: &str) -> bool {
     ]
     .iter()
     .any(|pattern| text.contains(pattern.as_str()))
+}
+
+/// How far up a chain of subclasses [`Facade::class_body`] looks.
+const MAX_INHERITANCE_DEPTH: usize = 8;
+
+/// The class a hand-declared `#[pyclass]` extends, read off the attribute
+/// just above its `pub struct`.
+fn extends(text: &str, class: &str) -> Option<String> {
+    let at = text.find(&format!("pub struct {class}"))?;
+    let attribute = &text[text[..at].rfind("#[pyclass")?..at];
+    let (_, rest) = attribute.split_once("extends")?;
+    let parent = rest.trim_start().strip_prefix('=')?.trim_start();
+    let end = parent
+        .find(|c: char| !(c.is_alphanumeric() || c == '_'))
+        .unwrap_or(parent.len());
+    Some(parent[..end].to_string()).filter(|parent| !parent.is_empty())
+}
+
+/// The parent a macro table gives a class, from a row written
+/// `(Class, "Name", Parent, [...])`, on one line or split over several.
+fn table_row_parent(text: &str, class: &str) -> Option<String> {
+    let is_ident =
+        |field: &str| !field.is_empty() && field.chars().all(|c| c.is_alphanumeric() || c == '_');
+
+    for (at, _) in text.match_indices('(') {
+        // The class, the quoted name, the parent: the rest does not matter.
+        let mut fields = text[at + 1..].splitn(4, ',').map(str::trim);
+        if fields.next() != Some(class) {
+            continue;
+        }
+        if !fields.next().is_some_and(|name| name.starts_with('"')) {
+            continue;
+        }
+        if let Some(parent) = fields.next().filter(|parent| is_ident(parent)) {
+            return Some(parent.to_string());
+        }
+    }
+    None
 }
 
 /// Whether a file's `NAMES` list carries the class.
@@ -208,6 +277,74 @@ impl Beams {
     fn a_class_built_at_import_time_is_found_in_the_names_list() {
         assert!(names_list(SOURCE, "MajorScale"));
         assert!(!names_list(SOURCE, "MinorScale"));
+    }
+
+    const INHERITING: &str = "\
+#[pyclass(name = \"Ornament\", subclass)]
+pub struct Ornament {
+    name: String,
+}
+
+#[pymethods]
+impl Ornament {
+    fn realize(&self) {}
+}
+
+#[pyclass(name = \"Trill\", module = \"music21.expressions\", extends = Ornament)]
+pub struct Trill;
+
+#[pymethods]
+impl Trill {
+    fn own(&self) {}
+}
+
+ornament_kinds![
+    (Turn, \"Turn\", Ornament, []),
+    (InvertedTurn, \"InvertedTurn\", Turn, [Turn]),
+    (
+        DelayedTurn,
+        \"DelayedTurn\",
+        Turn,
+        [Turn]
+    ),
+];
+";
+
+    fn inheriting() -> Facade {
+        let files = BTreeMap::from([("expressions".to_string(), INHERITING.to_string())]);
+        Facade { files }
+    }
+
+    #[test]
+    fn a_subclass_carries_what_it_extends() {
+        let body = inheriting().class_body("Trill").unwrap();
+        assert!(defines_member(&body, "own"));
+        assert!(defines_member(&body, "realize"));
+    }
+
+    #[test]
+    fn a_parent_does_not_carry_its_subclass_s_members() {
+        let body = inheriting().class_body("Ornament").unwrap();
+        assert!(!defines_member(&body, "own"));
+    }
+
+    #[test]
+    fn a_class_built_from_a_macro_table_carries_its_ancestors() {
+        let facade = inheriting();
+        assert!(defines_member(
+            &facade.class_body("Turn").unwrap(),
+            "realize"
+        ));
+        assert!(defines_member(
+            &facade.class_body("InvertedTurn").unwrap(),
+            "realize"
+        ));
+    }
+
+    #[test]
+    fn a_table_row_rustfmt_split_over_lines_is_read() {
+        let body = inheriting().class_body("DelayedTurn").unwrap();
+        assert!(defines_member(&body, "realize"));
     }
 
     #[test]
