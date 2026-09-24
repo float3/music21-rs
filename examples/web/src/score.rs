@@ -8,10 +8,10 @@
 //! came from. Everything musical is decided here.
 
 use music21_rs::{
-    Chord, DurationType, Interval, Key, MidiNote, Pitch, TimeSignature, TuningSystem,
-    VoiceLeadingQuartet, abc_duration, abc_note, chord_symbol_figure_from_chord,
-    estimate_key_from_pitches, read_midi_bytes_with_tempo, roman_numeral_from_chord,
-    tonal_certainty, write_midi_bytes,
+    Chord, DurationType, Interval, Key, MidiNote, Minor67Default, Pitch, RomanNumeral,
+    TimeSignature, TuningSystem, VoiceLeadingQuartet, abc_duration, abc_note,
+    chord_symbol_figure_from_chord, estimate_key_from_pitches, read_midi_bytes_with_tempo,
+    roman_numeral_from_chord, tonal_certainty, write_midi_bytes,
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt::Write as _};
@@ -351,7 +351,14 @@ struct SliceInfo {
     common_name: String,
     pitched_common_name: String,
     chord_symbol: Option<String>,
+    /// The numeral as music21 writes it: a flat or sharp in front of a minor
+    /// key's sixth or seventh degree as a caution, and every figure written
+    /// out, `bVII7` and `vio64#2`.
     numeral: Option<String>,
+    /// The same numeral as a harmony textbook writes it: minor's natural
+    /// sixth and seventh unmarked, and the inversion as its usual figure,
+    /// `VII7` and `vio42`.
+    textbook_numeral: Option<String>,
     inversion: Option<u8>,
     root: Option<String>,
     bass: Option<String>,
@@ -553,13 +560,14 @@ fn harmonic_slices(
 
         let chord = Chord::new(pitches.clone()).map_err(js_error)?;
         let harmonic = classes.len() >= 3;
-        let numeral = match key {
-            Some(key) if harmonic => roman_numeral_from_chord(&chord, Some(key))
-                .ok()
-                .flatten()
-                .map(|numeral| numeral.figure().to_string()),
+        let found = match key {
+            Some(key) if harmonic => roman_numeral_from_chord(&chord, Some(key)).ok().flatten(),
             _ => None,
         };
+        let numeral = found.as_ref().map(|numeral| numeral.figure().to_string());
+        let textbook_numeral = found.as_ref().map(|numeral| {
+            textbook_figure(numeral, &chord).unwrap_or_else(|| numeral.figure().to_string())
+        });
         let chord_symbol = if harmonic {
             chord_symbol_figure_from_chord(&chord).ok().flatten()
         } else {
@@ -579,6 +587,7 @@ fn harmonic_slices(
             pitched_common_name: chord.pitched_common_name(),
             chord_symbol,
             numeral,
+            textbook_numeral,
             inversion: if harmonic { chord.inversion() } else { None },
             root: chord.root().map(Pitch::name),
             bass: chord.bass().map(Pitch::name),
@@ -592,6 +601,63 @@ fn harmonic_slices(
         });
     }
     Ok(slices)
+}
+
+/// `numeral` written as a harmony textbook writes it: a triad's inversion as
+/// `6` or `64` and a seventh chord's as `65`, `43` or `42`, and a flat or
+/// sharp in front only where the numeral read the textbook way, with minor's
+/// natural sixth and seventh unmarked, would otherwise be another chord.
+/// Every candidate is read back and kept only if it is `chord` over the same
+/// bass. `None` for what a textbook has no shorter way of writing — an
+/// applied chord, a named one such as `It6`, a ninth.
+fn textbook_figure(numeral: &RomanNumeral, chord: &Chord) -> Option<String> {
+    if numeral.secondary().is_some() {
+        return None;
+    }
+    let alone = numeral.roman_numeral_alone();
+    let unaltered = numeral.figure().trim_start_matches(['b', '#', '-']);
+    if alone.is_empty() || !unaltered.starts_with(&alone) {
+        return None;
+    }
+    let mark = if chord.is_diminished_triad() || chord.is_diminished_seventh() {
+        "o"
+    } else if chord.is_half_diminished_seventh() {
+        "ø"
+    } else if chord.is_augmented_triad() {
+        "+"
+    } else {
+        ""
+    };
+    let inversion = usize::from(numeral.inversion());
+    let figures = if chord.is_triad() {
+        ["", "6", "64"].get(inversion)?
+    } else if chord.is_seventh() {
+        ["7", "65", "43", "42"].get(inversion)?
+    } else {
+        return None;
+    };
+    let classes = |chord: &Chord| {
+        let mut classes = chord.pitch_classes();
+        classes.sort_unstable();
+        classes.dedup();
+        classes
+    };
+    let wanted = (classes(chord), chord.bass().map(pitch_class));
+    ["", "b", "#", "bb", "##"].into_iter().find_map(|front| {
+        let figure = format!("{front}{alone}{mark}{figures}");
+        let read = RomanNumeral::with_minor_defaults(
+            figure.as_str(),
+            numeral.key().clone(),
+            Minor67Default::Quality,
+            Minor67Default::Quality,
+        )
+        .ok()?
+        .to_chord()
+        .ok()?;
+        (classes(&read), read.bass().map(pitch_class))
+            .eq(&wanted)
+            .then_some(figure)
+    })
 }
 
 fn chars_of(soundings: &[&Sounding<'_>]) -> Vec<[usize; 2]> {
@@ -1901,6 +1967,33 @@ mod tests {
         assert_eq!(analysis.slices[0].numeral.as_deref(), Some("I"));
         assert_eq!(analysis.slices[1].numeral.as_deref(), Some("ii"));
         assert!(!kinds.contains(&"Fifths by contrary motion"), "{kinds:?}");
+    }
+
+    #[test]
+    fn a_textbook_numeral_leaves_minors_natural_degrees_unmarked() {
+        let cases = [
+            ("b", "minor", "A2 E3 G3 C#4", "bVII7", "VII7"),
+            ("b", "minor", "F2 D3 G#3 B3", "vio64#2", "vio42"),
+            ("b", "minor", "F#2 D3 A3 B3", "i43", "i43"),
+            ("b", "minor", "E2 D3 G3 B3", "iv7", "iv7"),
+            ("c", "minor", "A-3 C4 E-4", "bVI", "VI"),
+            ("c", "minor", "B3 D4 F4", "viio", "viio"),
+            ("C", "major", "E3 G3 C4", "I6", "I6"),
+            ("C", "major", "B-3 D4 F4", "bVII", "bVII"),
+        ];
+        for (tonic, mode, notes, music21, textbook) in cases {
+            let key = Key::from_tonic_mode(tonic, mode).expect("key");
+            let chord = Chord::new(notes).expect("chord");
+            let numeral = roman_numeral_from_chord(&chord, Some(&key))
+                .expect("analysed")
+                .expect("a numeral");
+            assert_eq!(numeral.figure(), music21, "{notes} in {tonic} {mode}");
+            assert_eq!(
+                textbook_figure(&numeral, &chord).as_deref(),
+                Some(textbook),
+                "{notes} in {tonic} {mode}"
+            );
+        }
     }
 
     #[test]

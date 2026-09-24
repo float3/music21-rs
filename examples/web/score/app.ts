@@ -113,6 +113,7 @@ interface Slice {
     pitched_common_name: string;
     chord_symbol: string | null;
     numeral: string | null;
+    textbook_numeral: string | null;
     inversion: number | null;
     root: string | null;
     bass: string | null;
@@ -192,6 +193,7 @@ const cursorNode = $<HTMLSpanElement>("#cursor");
 const errorNode = $<HTMLParagraphElement>("#error");
 const momentNode = $<HTMLDivElement>("#moment");
 const labelsSelect = $<HTMLSelectElement>("#labels");
+const numeralsSelect = $<HTMLSelectElement>("#numerals");
 const flagsButton = $<HTMLButtonElement>("#flags");
 const ringButton = $<HTMLButtonElement>("#ring");
 const chordsButton = $<HTMLButtonElement>("#chords");
@@ -214,6 +216,7 @@ const zoomLevelButton = $<HTMLButtonElement>("#zoom-level");
 
 const STORAGE_KEY = "music21-rs.score-editor";
 const LABELS_KEY = "music21-rs.score-editor.labels";
+const NUMERALS_KEY = "music21-rs.score-editor.numerals";
 const VIEW_KEY = "music21-rs.score-editor.view";
 const RING_KEY = "music21-rs.score-editor.ring";
 const CHORDS_KEY = "music21-rs.score-editor.chords";
@@ -768,10 +771,16 @@ interface Rendered {
     chordPart: boolean;
 }
 
+/** A slice's Roman numeral in the style chosen: as a harmony textbook writes
+ * it, or exactly as music21 does. */
+function numeralOf(slice: Slice): string | null {
+    return numeralsSelect.value === "music21" ? slice.numeral : slice.textbook_numeral;
+}
+
 function labelFor(slice: Slice, mode: string): string | null {
     switch (mode) {
         case "numeral":
-            return slice.numeral;
+            return numeralOf(slice);
         case "symbol":
             return slice.chord_symbol;
         case "name":
@@ -1047,7 +1056,8 @@ function showMoment(anchor: number): void {
         fact("Chord", slice.pitched_common_name),
     );
     if (slice.chord_symbol) facts.append(fact("Symbol", slice.chord_symbol));
-    if (slice.numeral) facts.append(fact(`Numeral in ${analysis?.analysis_key ?? "key"}`, slice.numeral));
+    const numeral = numeralOf(slice);
+    if (numeral) facts.append(fact(`Numeral in ${analysis?.analysis_key ?? "key"}`, numeral));
     if (slice.root) facts.append(fact("Root · bass", `${slice.root} · ${slice.bass ?? "–"}`));
     const link = el("a", "", "Open in Chord Inspector");
     const params = new URLSearchParams({ chord: slice.pitches.join(" ") });
@@ -1857,7 +1867,7 @@ function renderPanels(): void {
                 el("td", "", slice.pitches.join(" ")),
                 el("td", "", slice.pitched_common_name),
                 el("td", "", slice.chord_symbol ?? ""),
-                el("td", "", slice.numeral ?? ""),
+                el("td", "", numeralOf(slice) ?? ""),
                 el("td", "", slice.inversion == null ? "" : String(slice.inversion)),
             );
             row.addEventListener("click", () => {
@@ -2150,7 +2160,7 @@ async function exportAs(kind: string): Promise<void> {
             case "csv": {
                 const quote = (value: string | number | null) => `"${String(value ?? "").replace(/"/g, '""')}"`;
                 const rows = [
-                    ["bar", "beat", "offset", "pitches", "chord", "symbol", "numeral", "inversion"].join(","),
+                    ["bar", "beat", "offset", "pitches", "chord", "symbol", "numeral", "music21 numeral", "inversion"].join(","),
                     ...(analysis?.slices ?? []).map((slice) =>
                         [
                             slice.measure,
@@ -2159,6 +2169,7 @@ async function exportAs(kind: string): Promise<void> {
                             slice.pitches.join(" "),
                             slice.pitched_common_name,
                             slice.chord_symbol,
+                            slice.textbook_numeral,
                             slice.numeral,
                             slice.inversion,
                         ]
@@ -2219,6 +2230,7 @@ async function shareLink(): Promise<string> {
     if (temperamentSelect.value) params.set("tuning", temperamentSelect.value);
     if (temperamentSelect.value && rootSelect.value) params.set("root", rootSelect.value);
     if (labelsSelect.value !== "numeral") params.set("labels", labelsSelect.value);
+    if (numeralsSelect.value !== "textbook") params.set("numerals", numeralsSelect.value);
     const url = new URL(window.location.href);
     url.search = "";
     url.hash = params.toString();
@@ -2254,6 +2266,11 @@ async function loadFromHash(): Promise<boolean> {
         storageSet(ROOT_KEY, params.get("root") ?? "");
         const labels = params.get("labels");
         if (labels && Array.from(labelsSelect.options).some((option) => option.value === labels)) labelsSelect.value = labels;
+        numeralsSelect.hidden = labelsSelect.value !== "numeral";
+        const numerals = params.get("numerals");
+        if (numerals && Array.from(numeralsSelect.options).some((option) => option.value === numerals)) {
+            numeralsSelect.value = numerals;
+        }
         history.replaceState(null, "", window.location.pathname + window.location.search);
         return true;
     } catch {
@@ -2406,8 +2423,16 @@ $("#share-send").addEventListener("click", () => {
 
 labelsSelect.addEventListener("change", () => {
     storageSet(LABELS_KEY, labelsSelect.value);
+    numeralsSelect.hidden = labelsSelect.value !== "numeral";
     render(textarea.value);
     syncSelection();
+});
+
+numeralsSelect.addEventListener("change", () => {
+    storageSet(NUMERALS_KEY, numeralsSelect.value);
+    render(textarea.value);
+    syncSelection();
+    renderPanels();
 });
 
 flagsButton.addEventListener("click", () => {
@@ -2481,6 +2506,9 @@ async function start(): Promise<void> {
     renderExamples();
     labelsSelect.value = storageGet(LABELS_KEY) ?? "numeral";
     if (!labelsSelect.value) labelsSelect.value = "numeral";
+    numeralsSelect.value = storageGet(NUMERALS_KEY) ?? "textbook";
+    if (!numeralsSelect.value) numeralsSelect.value = "textbook";
+    numeralsSelect.hidden = labelsSelect.value !== "numeral";
     const storedZoom = Number(storageGet(ZOOM_KEY));
     zoom = ZOOMS.includes(storedZoom) ? storedZoom : 1;
     zoomLevelButton.textContent = `${Math.round(zoom * 100)}%`;
