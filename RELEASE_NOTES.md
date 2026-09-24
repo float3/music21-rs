@@ -1,11 +1,13 @@
-# Unreleased
+# music21-rs 0.7.1
 
-music21's key analysis is in the crate, weighted by duration and ranked,
-spelled and scored as music21 ranks, spells and scores it, and music21's own
-`analysis.discrete`, `figuredBass.checker` and `figuredBass.harmony` pass
-every example with the crate beneath them: 36 modules, 1,004 docstrings and
-9,008 examples. A figured-bass segment finds its voicings about eighteen
-times faster than it did in 0.7.0.
+The wheel read the first item of a music21 stream iterator twice, so with it
+installed `chord.Chord(stream.notes)` held its first note twice; that is
+fixed. Besides, music21's key analysis is in the crate, weighted by duration
+and ranked, spelled and scored as music21 ranks, spells and scores it, and
+music21's own `analysis.discrete`, `figuredBass.checker` and
+`figuredBass.harmony` pass every example with the crate beneath them: 36
+modules, 1,004 docstrings and 9,008 examples. A figured-bass segment finds its
+voicings about eighteen times faster than it did in 0.7.0.
 
 ## Added
 
