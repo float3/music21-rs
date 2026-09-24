@@ -39,6 +39,7 @@ use num_traits::ToPrimitive;
 use ordered_float::OrderedFloat;
 use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
+use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 use std::sync::{Arc, LazyLock};
 
@@ -194,6 +195,19 @@ impl PartialEq for Pitch {
             && self.octave == other.octave
             && self.accidental == other.accidental
             && self.microtone == other.microtone
+    }
+}
+
+impl Eq for Pitch {}
+
+/// Hashes what equality compares, so pitches can key a map or fill a set:
+/// `B-4` twice is one entry, `B-4` and `A#4` two.
+impl Hash for Pitch {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.step.hash(state);
+        self.octave.hash(state);
+        self.accidental.hash(state);
+        self.microtone.hash(state);
     }
 }
 
@@ -981,6 +995,19 @@ mod tests {
             assert!(Pitch::builder().ps(number).build().is_err());
         }
         assert_eq!(Pitch::from_pitch_space(61.0).unwrap().name(), "C#");
+    }
+
+    /// Pitches compare and hash by value, so a set holds each spelling once.
+    #[test]
+    fn equal_pitches_are_one_set_entry() {
+        use crate::pitch::Pitch;
+        use std::collections::HashSet;
+
+        let pitches: HashSet<Pitch> = ["B-4", "B-4", "A#4", "B-3"]
+            .into_iter()
+            .map(|name| Pitch::from_name(name).unwrap())
+            .collect();
+        assert_eq!(pitches.len(), 3);
     }
 
     #[test]

@@ -4,6 +4,7 @@ use crate::error::{Error, Result};
 use std::borrow::Cow;
 
 use std::fmt::{Display, Formatter};
+use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 
 enum AccidentalEnum {
@@ -326,6 +327,15 @@ pub struct Accidental {
 impl PartialEq for Accidental {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
+    }
+}
+
+impl Eq for Accidental {}
+
+/// Hashes what equality compares, the name, so an accidental can key a map.
+impl Hash for Accidental {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
     }
 }
 
