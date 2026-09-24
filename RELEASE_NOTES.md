@@ -1,4 +1,4 @@
-# Unreleased
+# music21-rs 0.7.0
 
 `Tuplet` is music21's now in full, and installed over music21's own, and so
 are the instruments and `AbstractScale`. `clef`, `articulations`,
@@ -7,7 +7,7 @@ figured-bass realization: a bass line and its figures voiced in every way the
 rules allow. music21's own doctests pass every example of the modules that
 came with it: 33 modules, 963 docstrings and 8,760 examples in all. A note
 and a chord know the instrument they are played on. The `Tuplet` changes
-break its API, so the next release is a minor bump.
+break its API, which is why this is a minor release.
 
 ## Breaking Changes
 
@@ -85,15 +85,15 @@ break its API, so the next release is a minor bump.
   (`buildNetworkFromPitches`) and fixes their octaves in place
   (`fixDefaultOctaveForPitchList`), which is all it lacked: music21's `scale`
   doctests pass all 344 examples with it installed.
+  An instrument or a clef the wheel builds is the installed class, as
+  music21 holds nothing else in a stream. With every one of them installed,
+  music21's suite fails the same fourteen tests as without.
 - `Scale::from_pitches` closes a collection as music21 does: not at all when
   the last note already carries the tonic's name, and otherwise on the first
   octave of the tonic past the last note in whichever direction the notes
   went. It used to close only upward, and only by pitch space, so a
   collection falling to its last note, or ending on `B#` above a `C`, closed
   somewhere music21 does not.
-  An instrument or a clef the wheel builds is the installed class, as music21 holds nothing else in a stream. With
-  every one of them installed, music21's suite fails the same fourteen tests
-  as without.
 - A tuplet frozen into a pickle keeps its bracket, its placement, how its
   numbers are shown, its nesting and whether it is frozen. music21 reads its
   corpus back out of pickles, so a score read from the cache had lost every
