@@ -387,6 +387,25 @@ struct Suite {
     comparison: bool,
 }
 
+impl Suite {
+    /// A suite with its outcome and nothing more said: no counts, detail,
+    /// note or excused failures, and about the crate.
+    fn new(name: &str, command: String, status: SuiteStatus) -> Self {
+        Self {
+            name: name.to_string(),
+            command,
+            status,
+            passed: 0,
+            failed: 0,
+            detail: None,
+            note: None,
+            expected_failures: 0,
+            subject: Subject::Crate,
+            comparison: false,
+        }
+    }
+}
+
 /// The two things this repository ships, and the suites that exercise both.
 #[derive(Debug, Default, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -456,6 +475,11 @@ enum SuiteStatus {
 }
 
 impl SuiteStatus {
+    /// Passed where the run succeeded, failed where it did not.
+    fn from_success(success: bool) -> Self {
+        if success { Self::Passed } else { Self::Failed }
+    }
+
     fn label(self) -> &'static str {
         match self {
             Self::Passed => "passed",
@@ -1059,16 +1083,8 @@ mod tests {
 
     fn suite(name: &str, status: SuiteStatus, subject: Subject) -> Suite {
         Suite {
-            name: name.to_string(),
-            command: String::new(),
-            status,
-            passed: 0,
-            failed: 0,
-            detail: None,
-            note: None,
-            expected_failures: 0,
             subject,
-            comparison: false,
+            ..Suite::new(name, String::new(), status)
         }
     }
 

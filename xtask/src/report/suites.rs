@@ -276,16 +276,8 @@ pub(super) fn music21_suite(workspace_root: &Path, submodule: &Path) -> Suite {
     let command = "cargo run --release -p xtask --features python -- music21-suite".to_string();
 
     let skipped = |detail: String| Suite {
-        name: NAME.to_string(),
-        command: command.clone(),
-        status: SuiteStatus::Skipped,
-        passed: 0,
-        failed: 0,
         detail: Some(detail),
-        note: None,
-        expected_failures: 0,
-        subject: Subject::Crate,
-        comparison: false,
+        ..Suite::new(NAME, command.clone(), SuiteStatus::Skipped)
     };
 
     if !submodule.exists() {
@@ -317,16 +309,8 @@ pub(super) fn music21_suite(workspace_root: &Path, submodule: &Path) -> Suite {
         return match missing_module(&text) {
             Some(module) => skipped(format!("{module} is not installed in this interpreter")),
             None => Suite {
-                name: NAME.to_string(),
-                command,
-                status: SuiteStatus::Failed,
-                passed: 0,
-                failed: 0,
                 detail: last_line(&text),
-                note: None,
-                expected_failures: 0,
-                subject: Subject::Crate,
-                comparison: false,
+                ..Suite::new(NAME, command, SuiteStatus::Failed)
             },
         };
     };
@@ -352,23 +336,14 @@ pub(super) fn music21_suite(workspace_root: &Path, submodule: &Path) -> Suite {
         .unwrap_or_default() as usize;
 
     Suite {
-        name: NAME.to_string(),
-        command,
-        status: if regressions == 0 {
-            SuiteStatus::Passed
-        } else {
-            SuiteStatus::Failed
-        },
         passed: run.saturating_sub(mine.len()),
         failed: mine.len(),
         detail: Some(format!(
             "{} of these fail on music21 itself; {regressions} fail only under music21_rs",
             theirs.len()
         )),
-        note: None,
         expected_failures: mine.len() - regressions,
-        subject: Subject::Crate,
-        comparison: false,
+        ..Suite::new(NAME, command, SuiteStatus::from_success(regressions == 0))
     }
 }
 
@@ -511,16 +486,8 @@ pub(super) fn cargo_suite(
     let command = format!("cargo {}", args.join(" "));
     if let Some(reason) = skip {
         return Suite {
-            name: name.to_string(),
-            command,
-            status: SuiteStatus::Skipped,
-            passed: 0,
-            failed: 0,
             detail: Some(reason.to_string()),
-            note: None,
-            expected_failures: 0,
-            subject: Subject::Crate,
-            comparison: false,
+            ..Suite::new(name, command, SuiteStatus::Skipped)
         };
     }
     let output = Command::new("cargo")
@@ -532,35 +499,20 @@ pub(super) fn cargo_suite(
         Ok(output) => output,
         Err(err) => {
             return Suite {
-                name: name.to_string(),
-                command,
-                status: SuiteStatus::Skipped,
-                passed: 0,
-                failed: 0,
                 detail: Some(format!("could not run cargo ({err})")),
-                note: None,
-                expected_failures: 0,
-                subject: Subject::Crate,
-                comparison: false,
+                ..Suite::new(name, command, SuiteStatus::Skipped)
             };
         }
     };
     let (passed, failed) = cargo_test_counts(&String::from_utf8_lossy(&output.stdout));
     Suite {
-        name: name.to_string(),
-        command,
-        status: if output.status.success() {
-            SuiteStatus::Passed
-        } else {
-            SuiteStatus::Failed
-        },
         passed,
         failed,
-        detail: None,
-        note: None,
-        expected_failures: 0,
-        subject: Subject::Crate,
-        comparison: false,
+        ..Suite::new(
+            name,
+            command,
+            SuiteStatus::from_success(output.status.success()),
+        )
     }
 }
 
@@ -581,40 +533,16 @@ pub(super) fn wheel_suites(workspace_root: &Path) -> (Suite, Suite) {
         .output();
     let build = match built {
         Err(err) => Suite {
-            name: BUILD.to_string(),
-            command,
-            status: SuiteStatus::Skipped,
-            passed: 0,
-            failed: 0,
             detail: Some(format!("maturin is not installed ({err})")),
-            note: None,
-            expected_failures: 0,
-            subject: Subject::Crate,
-            comparison: false,
+            ..Suite::new(BUILD, command, SuiteStatus::Skipped)
         },
         Ok(output) if output.status.success() => Suite {
-            name: BUILD.to_string(),
-            command,
-            status: SuiteStatus::Passed,
-            passed: 0,
-            failed: 0,
             detail: built_wheel_name(&merged(&output)),
-            note: None,
-            expected_failures: 0,
-            subject: Subject::Crate,
-            comparison: false,
+            ..Suite::new(BUILD, command, SuiteStatus::Passed)
         },
         Ok(output) => Suite {
-            name: BUILD.to_string(),
-            command,
-            status: SuiteStatus::Failed,
-            passed: 0,
-            failed: 0,
             detail: last_line(&merged(&output)),
-            note: None,
-            expected_failures: 0,
-            subject: Subject::Crate,
-            comparison: false,
+            ..Suite::new(BUILD, command, SuiteStatus::Failed)
         },
     };
 
@@ -626,49 +554,26 @@ pub(super) fn wheel_suites(workspace_root: &Path) -> (Suite, Suite) {
         .output();
     let tests = match ran {
         Err(err) => Suite {
-            name: TESTS.to_string(),
-            command,
-            status: SuiteStatus::Skipped,
-            passed: 0,
-            failed: 0,
             detail: Some(format!("could not run {python} ({err})")),
-            note: None,
-            expected_failures: 0,
-            subject: Subject::Crate,
-            comparison: false,
+            ..Suite::new(TESTS, command, SuiteStatus::Skipped)
         },
         Ok(output) => {
             let text = merged(&output);
             match missing_module(&text) {
                 Some(missing) => Suite {
-                    name: TESTS.to_string(),
-                    command,
-                    status: SuiteStatus::Skipped,
-                    passed: 0,
-                    failed: 0,
                     detail: Some(format!("{python} has no {missing}")),
-                    note: None,
-                    expected_failures: 0,
-                    subject: Subject::Crate,
-                    comparison: false,
+                    ..Suite::new(TESTS, command, SuiteStatus::Skipped)
                 },
                 None => {
                     let (passed, failed) = pytest_counts(&text);
                     Suite {
-                        name: TESTS.to_string(),
-                        command,
-                        status: if output.status.success() {
-                            SuiteStatus::Passed
-                        } else {
-                            SuiteStatus::Failed
-                        },
                         passed,
                         failed,
-                        detail: None,
-                        note: None,
-                        expected_failures: 0,
-                        subject: Subject::Crate,
-                        comparison: false,
+                        ..Suite::new(
+                            TESTS,
+                            command,
+                            SuiteStatus::from_success(output.status.success()),
+                        )
                     }
                 }
             }
