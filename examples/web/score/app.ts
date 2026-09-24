@@ -13,6 +13,10 @@ interface AbcElement {
     pitches?: AbcPitch[];
     abselem?: { elemset: SVGElement[] };
     chord?: { name: string; position?: string }[];
+    /** The written length in whole notes; a tuplet's factor is on its first note. */
+    duration?: number;
+    tripletMultiplier?: number;
+    endTriplet?: boolean;
 }
 
 interface AbcStaff {
@@ -227,7 +231,7 @@ const WIDE_KEY = "music21-rs.score-editor.wide";
 const ZOOMS = [0.4, 0.5, 0.67, 0.8, 1, 1.25, 1.5];
 /** Ways of playing the chords part other than holding each chord: a bar
  * length in quarters and the figure of each bar in turn, as the quarter each
- * stroke falls on and whether the thumb plays the chord's bass, its fifth or
+ * stroke falls on and whether the thumb plays the chord's root, its fifth or
  * the fingers the rest. A bar of any other length is held. */
 const COMPING: Record<string, { bar: number; bars: [number, "root" | "fifth" | "chord"][][] }> = {
     // The thumb on one and three; the fingers on one, two and the and of
@@ -1446,6 +1450,17 @@ function tuningForStaff(tuning: string[], clef: string, low: number, high: numbe
     return null;
 }
 
+/** The lowest MIDI note at or above `floor` of the pitch a chord symbol's
+ * letter and accidentals name, or null when it names none. */
+function lowestOf(symbol: string, floor: number): number | null {
+    const parts = /^([A-G])([#b]*)/.exec(symbol.trim());
+    if (!parts) return null;
+    let alter = 0;
+    for (const sign of parts[2]) alter += sign === "#" ? 1 : -1;
+    const pitchClass = (((STEP_SEMITONES[STEP_LETTERS.indexOf(parts[1])] + alter) % 12) + 12) % 12;
+    return floor + ((pitchClass - (floor % 12) + 12) % 12);
+}
+
 /** The chord symbols of the source realized as a part of their own, for a tab
  * view: each symbol voiced by the crate on the instrument's strings and held
  * until the next, split at the barlines. abcjs plays chord symbols but draws
@@ -1456,21 +1471,31 @@ function chordPart(source: string): { at: number; text: string }[] | null {
     if (!chordsButton.classList.contains("on") || !wasm || !scoreInput || !analysis) return null;
     const tune = ABCJS.parseOnly(withoutOrnaments(source))[0];
     if (!tune) return null;
-    const notes = notesByAnchor(scoreInput);
+    // Each symbol and each line of music is placed by counting durations
+    // along its voice, since a symbol may stand on a rest or on the far end
+    // of a tie, where no note of the score begins.
     const symbols = new Map<number, string>();
+    const lineTimes: { char: number; time: number }[] = [];
+    const clocks = new Map<string, { time: number; tuplet: number }>();
     for (const line of tune.lines) {
-        for (const staff of line.staff ?? []) {
-            for (const voice of staff.voices) {
+        (line.staff ?? []).forEach((staff, s) => {
+            staff.voices.forEach((voice, v) => {
+                const clock = clocks.get(`${s}:${v}`) ?? { time: 0, tuplet: 1 };
+                clocks.set(`${s}:${v}`, clock);
                 for (const element of voice) {
-                    if (element.startChar == null || element.endChar == null) continue;
+                    if (element.el_type !== "note") continue;
+                    if (element.tripletMultiplier) clock.tuplet = element.tripletMultiplier;
+                    if (element.startChar != null) lineTimes.push({ char: element.startChar, time: clock.time });
                     for (const chord of element.chord ?? []) {
                         if ((chord.position ?? "default") !== "default") continue;
-                        const note = notes.get(anchorOf(source, element.startChar, element.endChar));
-                        if (note && !symbols.has(note.start)) symbols.set(note.start, chord.name);
+                        const at = Math.round(clock.time * 1e6) / 1e6;
+                        if (!symbols.has(at)) symbols.set(at, chord.name);
                     }
+                    clock.time += (element.duration ?? 0) * 4 * clock.tuplet;
+                    if (element.endTriplet) clock.tuplet = 1;
                 }
-            }
-        }
+            });
+        });
     }
     if (symbols.size === 0) return null;
 
@@ -1544,12 +1569,26 @@ function chordPart(source: string): { at: number; text: string }[] | null {
                     tokens.push(`z${length(stop - start)}`);
                     return;
                 }
-                // The thumb takes the lowest note, and on three the fifth
-                // below it where the strings reach, or else above; over a
-                // named bass the bass again. The fingers take the rest.
-                const [low, ...upper] = voiced;
-                const fifth = span!.name.includes("/") ? low : low - 5 >= sounding[0] ? low - 5 : low + 7;
-                const notes = part === "root" ? [low] : part === "fifth" ? [fifth] : upper;
+                // The thumb plays the symbol's root, or its named bass, where
+                // it first comes on the strings, and on three the fifth below
+                // it, or above where the strings do not reach; a named bass it
+                // plays twice. A root that first comes on the third string
+                // from the bottom leaves the fifth below it on a bass string,
+                // and the thumb starts there. The fingers take the notes of
+                // the voicing above the thumb's.
+                const [name, bassName] = span!.name.split("/");
+                const root = lowestOf(bassName ?? name, sounding[0]);
+                if (root === null) {
+                    tokens.push(`z${length(stop - start)}`);
+                    return;
+                }
+                const below = root - 5 >= sounding[0];
+                const fifth = bassName ? root : below ? root - 5 : root + 7;
+                const fifthFirst = !bassName && below && sounding.length > 2 && root >= sounding[2];
+                const first = fifthFirst ? fifth : root;
+                const second = fifthFirst ? root : fifth;
+                const above = voiced.filter((midi) => midi > Math.max(first, second));
+                const notes = part === "root" ? [first] : part === "fifth" ? [second] : above.length ? above : voiced;
                 const written = write(notes, inForce);
                 tokens.push(`${notes.length > 1 ? `[${written}]` : written}${length(stop - start)}`);
             });
@@ -1613,9 +1652,7 @@ function chordPart(source: string): { at: number; text: string }[] | null {
     };
     const lineStarts = music.map((line) => {
         const end = lineEnd(line.start);
-        const starts = [...notes.values()]
-            .filter((note) => note.char_start >= line.start && note.char_start < end)
-            .map((note) => note.start);
+        const starts = lineTimes.filter(({ char }) => char >= line.start && char < end).map(({ time }) => time);
         return starts.length ? Math.min(...starts) : Infinity;
     });
     lineStarts[0] = 0;
