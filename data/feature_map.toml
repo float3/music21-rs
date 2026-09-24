@@ -885,3 +885,16 @@ note = "The eighteen harmonic function labels and the Roman numerals they stand 
 [class.renames]
 functionToRoman = "to_roman"
 romanToFunction = "from_roman"
+
+[[class]]
+python = "analysis/transposition.py"
+name = "TranspositionChecker"
+rust = ["src/analysis/transposition.rs"]
+note = "A set of pitches in all twelve transpositions, and how many of them differ."
+
+[class.renames]
+listNormalOrders = "normal_orders"
+listDistinctNormalOrders = "distinct_normal_orders"
+numDistinctTranspositions = "distinct_count"
+getChordsOfDistinctTranspositions = "distinct_chords"
+getPitchesOfDistinctTranspositions = "distinct_pitches"

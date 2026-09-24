@@ -10,6 +10,7 @@ use crate::{
 pub mod enharmonics;
 pub mod harmonic_function;
 pub mod neoriemannian;
+pub mod transposition;
 
 /// A set of key-finding weights for the Krumhansl-Schmuckler algorithm.
 ///

@@ -65,6 +65,7 @@ pub use music21_rs_python::segment::NAMES as SEGMENT_NAMES;
 pub use music21_rs_python::serial::NAMES as SERIAL_NAMES;
 pub use music21_rs_python::sieve::NAMES as SIEVE_NAMES;
 pub use music21_rs_python::tempo::NAMES as TEMPO_NAMES;
+pub use music21_rs_python::transposition::NAMES as TRANSPOSITION_NAMES;
 pub use music21_rs_python::voiceleading::NAMES as VOICE_LEADING_NAMES;
 
 #[derive(Debug, Default, Serialize, Deserialize)]

@@ -66,6 +66,7 @@ pub mod serial;
 pub mod sieve;
 pub mod stream;
 pub mod tempo;
+pub mod transposition;
 pub mod voiceleading;
 
 pub use pitch::{Accidental, Microtone, Pitch};
@@ -73,7 +74,7 @@ pub use pitch::{Accidental, Microtone, Pitch};
 /// The names each music21 module has a counterpart for here, which is what
 /// [`install_into_music21`] replaces and what `python-parity`'s doctest
 /// harness swaps one module at a time.
-const MUSIC21_MODULES: [(&str, &[&str]); 33] = [
+const MUSIC21_MODULES: [(&str, &[&str]); 34] = [
     ("music21.pitch", pitch::NAMES),
     ("music21.interval", interval::NAMES),
     ("music21.note", note::NAMES),
@@ -107,6 +108,7 @@ const MUSIC21_MODULES: [(&str, &[&str]); 33] = [
     ("music21.analysis.neoRiemannian", neoriemannian::NAMES),
     ("music21.analysis.enharmonics", enharmonics::NAMES),
     ("music21.analysis.harmonicFunction", harmonicfunction::NAMES),
+    ("music21.analysis.transposition", transposition::NAMES),
 ];
 
 /// An argument that may not have been given at all, which is not the same
@@ -1386,6 +1388,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     neoriemannian::register(m)?;
     enharmonics::register(m)?;
     harmonicfunction::register(m)?;
+    transposition::register(m)?;
     segment::register(m)?;
     tempo::register(m)?;
     voiceleading::register(m)?;

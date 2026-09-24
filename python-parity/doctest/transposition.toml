@@ -1,0 +1,14 @@
+# Docstrings of music21.analysis.transposition whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_transposition`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.analysis.transposition.TranspositionChecker",
+    "music21.analysis.transposition.TranspositionChecker.getChordsOfDistinctTranspositions",
+    "music21.analysis.transposition.TranspositionChecker.getPitchesOfDistinctTranspositions",
+    "music21.analysis.transposition.TranspositionChecker.getTranspositions",
+    "music21.analysis.transposition.TranspositionChecker.listDistinctNormalOrders",
+    "music21.analysis.transposition.TranspositionChecker.listNormalOrders",
+    "music21.analysis.transposition.TranspositionChecker.numDistinctTranspositions",
+]

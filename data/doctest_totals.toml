@@ -41,6 +41,12 @@ examples = 107
 tests = 6
 
 [[module]]
+module = "music21.analysis.transposition"
+docstrings = 7
+examples = 28
+tests = 7
+
+[[module]]
 module = "music21.articulations"
 docstrings = 27
 examples = 105

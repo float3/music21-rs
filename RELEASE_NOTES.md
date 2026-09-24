@@ -4,8 +4,9 @@ music21's key analysis is in the crate, weighted by duration and ranked,
 spelled and scored as music21 ranks, spells and scores it, and music21's own
 `analysis.discrete`, `figuredBass.checker` and `figuredBass.harmony` pass
 every example with the crate beneath them. So do `analysis.enharmonics`,
-`analysis.harmonicFunction` and `analysis.neoRiemannian`, which are the
-crate's: 39 modules, 1,020 docstrings and 9,143 examples. A figured-bass segment finds its voicings about eighteen
+`analysis.harmonicFunction`, `analysis.neoRiemannian` and
+`analysis.transposition`, which are the crate's: 40 modules, 1,027
+docstrings and 9,171 examples. A figured-bass segment finds its voicings about eighteen
 times faster than it did in 0.7.0.
 
 ## Added
@@ -32,6 +33,9 @@ times faster than it did in 0.7.0.
   labels, with `to_roman` and `from_roman`: music21's `functionToRoman`
   and `romanToFunction`. The wheel installs them and the enum over
   music21's `analysis.harmonicFunction`.
+- `analysis::transposition::TranspositionChecker`, a set of pitches in all
+  twelve transpositions and how many differ. The wheel installs it over
+  music21's.
 
 ## Changed
 
