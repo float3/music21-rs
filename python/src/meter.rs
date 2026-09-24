@@ -374,13 +374,7 @@ impl TimeSignature {
         }
         // The class installed over music21's where there is one, since a
         // duration is compared by its class as well as its length.
-        Ok(crate::installed_new(
-            py,
-            "music21.duration",
-            "Duration",
-            Duration::wrap(self.inner.bar_duration()),
-        )?
-        .into_any())
+        Duration::object(py, self.inner.bar_duration())
     }
 
     #[getter]

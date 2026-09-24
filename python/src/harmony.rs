@@ -723,13 +723,9 @@ impl ChordSymbol {
                 || keywords.contains("quarterLength").unwrap_or(false)
         });
         if !timed {
-            let none = crate::installed_new(
+            let none = crate::duration::Duration::object(
                 py,
-                "music21.duration",
-                "Duration",
-                crate::duration::Duration::wrap(
-                    music21_rs_crate::Duration::new(0.0).map_err(harmony_error)?,
-                ),
+                music21_rs_crate::Duration::new(0.0).map_err(harmony_error)?,
             )?;
             slf.setattr("duration", none)?;
         }

@@ -470,14 +470,8 @@ impl Accidental {
     /// step with this object's colour. Requires music21 to be installed.
     #[getter]
     fn get_style(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
-        let py = slf.py();
-        if let Some(style) = &slf.borrow().style {
-            return Ok(style.clone_ref(py));
-        }
         let colour = slf.borrow().inner.color().map(str::to_string);
-        let style = crate::notation::new_style(slf.as_any(), colour.as_deref())?;
-        slf.borrow_mut().style = Some(style.clone_ref(py));
-        Ok(style)
+        crate::notation::style_of(slf, |me| &mut me.style, colour)
     }
 
     #[setter]
