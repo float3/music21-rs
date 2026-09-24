@@ -7,6 +7,17 @@ example: 40 modules, 1,027 docstrings and 9,171 examples. Asking music21 and
 the crate the same questions over thousands of random inputs found eleven
 places where they answered differently; they agree now.
 
+## Breaking Changes
+
+- Every pitch has an accidental. `Pitch::accidental` answers
+  `&Accidental`, a natural where none is written, so arithmetic on it
+  needs no `None` case. What was `accidental` is `written_accidental`,
+  and `accidental_mut` is `written_accidental_mut`: music21's view, where
+  `D` has none and `Dn` a natural, which the wheel keeps.
+  `set_accidental` takes an `Accidental`; `set_written_accidental` takes
+  the `Option` music21's setter does. Cuthbert's "Music21's Mistakes"
+  lists the natural-or-`None` split as more trouble than it is worth.
+
 ## Added
 
 - `chordsymbol::voice_chord_notation` and `ChordVoicing`: a chord of one

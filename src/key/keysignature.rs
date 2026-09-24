@@ -75,12 +75,12 @@ pub fn pitch_to_sharps(pitch_value: &Pitch, mode: Option<&str>) -> Result<Intege
         .ok_or_else(|| Error::StepName("cannot map step to circle of fifths".to_string()))?;
 
     let mut sharps = step_index as IntegerType - 1;
-    if !pitch_value.accidental_or_natural().is_twelve_tone() {
+    if !pitch_value.accidental().is_twelve_tone() {
         return Err(Error::Key(
             "Cannot determine sharps for quarter-tone keys! silly!".to_string(),
         ));
     }
-    sharps += 7 * pitch_value.accidental_or_natural().alter() as IntegerType;
+    sharps += 7 * pitch_value.accidental().alter() as IntegerType;
 
     // A mode nobody has a signature alteration for leaves the signature
     // where the major key put it, which is what music21 does: `C
@@ -253,7 +253,7 @@ impl KeySignature {
             .into_iter()
             .rev()
             .find(|pitch| pitch.step() == step)
-            .and_then(|pitch| pitch.accidental().cloned()))
+            .and_then(|pitch| pitch.written_accidental().cloned()))
     }
 
     /// Returns the signature of the major key this one's major tonic moves
@@ -423,7 +423,11 @@ mod non_traditional_tests {
     fn traditional_altered_pitches_carry_explicit_accidentals() {
         let three_sharps = KeySignature::new(3);
         let altered = three_sharps.altered_pitches().unwrap();
-        assert!(altered.iter().all(|pitch| pitch.accidental().is_some()));
+        assert!(
+            altered
+                .iter()
+                .all(|pitch| pitch.written_accidental().is_some())
+        );
         assert_eq!(
             three_sharps
                 .accidental_by_step('F')

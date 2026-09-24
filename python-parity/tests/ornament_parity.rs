@@ -176,7 +176,7 @@ fn every_ornament_plays_what_music21_s_plays() {
             ornament.update_accidental_display(&mut pitches, &options);
             let ours: Vec<String> = pitches
                 .iter()
-                .map(|pitch| match pitch.accidental() {
+                .map(|pitch| match pitch.written_accidental() {
                     None => "no accidental".to_string(),
                     Some(accidental) => match accidental.display_status() {
                         None => "undecided".to_string(),

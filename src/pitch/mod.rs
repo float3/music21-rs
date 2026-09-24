@@ -434,7 +434,7 @@ impl Pitch {
         // Written out rather than formatted: a name is a letter and a
         // modifier, and `format!` costs more than the string it builds. Every
         // comparison of two pitches by name goes through here.
-        let modifier = self.accidental_or_natural().modifier();
+        let modifier = self.accidental().modifier();
         let mut name = String::with_capacity(1 + modifier.len());
         name.push(self.step.as_char());
         name.push_str(modifier);
@@ -446,7 +446,7 @@ impl Pitch {
     pub(crate) fn is_named(&self, name: &str) -> bool {
         let mut letters = name.chars();
         letters.next() == Some(self.step.as_char())
-            && letters.as_str() == self.accidental_or_natural().modifier()
+            && letters.as_str() == self.accidental().modifier()
     }
 
     fn name_setter(&mut self, usr_str: &str) -> Result<()> {
@@ -539,25 +539,24 @@ impl Pitch {
         post
     }
 
-    /// The accidental written on the pitch, if any: music21's
-    /// `accidental`. A pitch spelled with a bare letter (`D`) has none, and
-    /// one spelled with a natural (`Dn`) has a natural, so the two are
-    /// different pitches as they are upstream. [`Self::alter`] is the
-    /// alteration either way.
-    pub fn accidental(&self) -> Option<&Accidental> {
+    /// The pitch's accidental, a natural where none is written: every pitch
+    /// has one, so `D` and `Dn` both answer a natural. Whether one was
+    /// written is [`Self::written_accidental`].
+    pub fn accidental(&self) -> &Accidental {
+        static NATURAL: LazyLock<Accidental> = LazyLock::new(Accidental::natural);
+        self.accidental.as_ref().unwrap_or(&NATURAL)
+    }
+
+    /// The accidental written on the pitch, if any: music21's `accidental`.
+    /// A bare `D` has none and `Dn` a natural, so the two are different
+    /// pitches as they are upstream.
+    pub fn written_accidental(&self) -> Option<&Accidental> {
         self.accidental.as_ref()
     }
 
-    /// The accidental, for editing in place, if the pitch has one.
-    pub fn accidental_mut(&mut self) -> Option<&mut Accidental> {
+    /// The written accidental, for editing in place, if the pitch has one.
+    pub fn written_accidental_mut(&mut self) -> Option<&mut Accidental> {
         self.accidental.as_mut()
-    }
-
-    /// The accidental, or a natural where none is written: what the pitch
-    /// sounds as, for the arithmetic that does not care which.
-    pub(crate) fn accidental_or_natural(&self) -> &Accidental {
-        static NATURAL: LazyLock<Accidental> = LazyLock::new(Accidental::natural);
-        self.accidental.as_ref().unwrap_or(&NATURAL)
     }
 
     /// Returns this pitch's microtone adjustment, when present.
@@ -651,9 +650,15 @@ impl Pitch {
         Ok(())
     }
 
-    /// Sets or removes the accidental the way music21's `accidental` setter
-    /// does: `None` leaves the pitch with no accidental at all.
-    pub fn set_accidental(&mut self, accidental: Option<Accidental>) {
+    /// Writes an accidental on the pitch, a natural included.
+    pub fn set_accidental(&mut self, accidental: Accidental) {
+        self.accidental_setter(accidental);
+    }
+
+    /// Sets or removes the written accidental the way music21's
+    /// `accidental` setter does: `None` leaves none written, which reads as
+    /// a natural.
+    pub fn set_written_accidental(&mut self, accidental: Option<Accidental>) {
         self.accidental = accidental;
     }
 
@@ -832,7 +837,7 @@ impl Pitch {
     /// Returns whether this pitch lies on the twelve-tone grid: no quarter
     /// tone accidental and no microtone.
     pub fn is_twelve_tone(&self) -> bool {
-        self.accidental_or_natural().is_twelve_tone()
+        self.accidental().is_twelve_tone()
             && self
                 .microtone
                 .as_ref()
@@ -1010,6 +1015,19 @@ mod tests {
         assert_eq!(pitches.len(), 3);
     }
 
+    /// Every pitch has an accidental; only a written one tells `D` from `Dn`.
+    #[test]
+    fn every_pitch_has_an_accidental() {
+        use crate::pitch::Pitch;
+
+        let bare = Pitch::from_name("D").unwrap();
+        let natural = Pitch::from_name("Dn").unwrap();
+        assert_eq!(bare.accidental().name(), "natural");
+        assert_eq!(natural.accidental().name(), "natural");
+        assert!(bare.written_accidental().is_none());
+        assert!(natural.written_accidental().is_some());
+    }
+
     #[test]
     fn a_frequency_that_is_not_finite_is_refused() {
         use crate::pitch::Pitch;
@@ -1107,26 +1125,26 @@ mod tests {
             pitch_past: &past,
             ..AccidentalDisplayOptions::default()
         });
-        assert_eq!(repeat.accidental_or_natural().display_status(), Some(false));
+        assert_eq!(repeat.accidental().display_status(), Some(false));
 
         let mut natural = Pitch::from_name("F4").unwrap();
         natural.update_accidental_display(&AccidentalDisplayOptions {
             pitch_past: &past,
             ..AccidentalDisplayOptions::default()
         });
-        assert!(natural.accidental().is_some());
-        assert_eq!(natural.accidental_or_natural().display_status(), Some(true));
+        assert!(natural.written_accidental().is_some());
+        assert_eq!(natural.accidental().display_status(), Some(true));
 
         let mut in_key = Pitch::from_name("F#4").unwrap();
         in_key.update_accidental_display(&AccidentalDisplayOptions {
             altered_pitches: &[Pitch::from_name("F#").unwrap()],
             ..AccidentalDisplayOptions::default()
         });
-        assert_eq!(in_key.accidental_or_natural().display_status(), Some(false));
+        assert_eq!(in_key.accidental().display_status(), Some(false));
 
         let mut fresh = Pitch::from_name("B-4").unwrap();
         fresh.update_accidental_display(&AccidentalDisplayOptions::default());
-        assert_eq!(fresh.accidental_or_natural().display_status(), Some(true));
+        assert_eq!(fresh.accidental().display_status(), Some(true));
     }
 
     /// music21's `.octave` always answers a number, and `.octaveIsImplicit`
@@ -1479,7 +1497,7 @@ mod tests {
             (
                 pitch.name_with_octave(),
                 pitch.microtone().map_or(0.0, Microtone::cents),
-                pitch.accidental_or_natural().name().to_string(),
+                pitch.accidental().name().to_string(),
             )
         };
 
@@ -2011,9 +2029,9 @@ mod tests {
             .unwrap();
 
         assert_eq!(pitch.name_with_octave(), "D`4");
-        assert_eq!(pitch.accidental_or_natural(), &custom_accidental);
-        assert_eq!(pitch.accidental_or_natural().name(), "half-flat");
-        assert_eq!(pitch.accidental_or_natural().alter(), -0.5);
+        assert_eq!(pitch.accidental(), &custom_accidental);
+        assert_eq!(pitch.accidental().name(), "half-flat");
+        assert_eq!(pitch.accidental().alter(), -0.5);
     }
 
     #[test]

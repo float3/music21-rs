@@ -1189,7 +1189,7 @@ mod tests {
                         token.matches('#').count() as f64 - token.matches('-').count() as f64;
                     let mut pitch = major.pitch_from_degree((degree - 1) % 7 + 1).unwrap();
                     if alter != 0.0 {
-                        pitch.set_accidental(Some(Accidental::new(alter).unwrap()));
+                        pitch.set_accidental(Accidental::new(alter).unwrap());
                     }
                     pitch.name()
                 })

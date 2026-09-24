@@ -111,14 +111,10 @@ impl Pitch {
     /// Returns the name with the accidental as a Unicode symbol, such as
     /// `"C♯"` or `"G𝄫"`.
     pub fn unicode_name(&self) -> String {
-        if self.accidental_or_natural().alter() == 0.0 {
+        if self.accidental().alter() == 0.0 {
             return self.step.as_char().to_string();
         }
-        format!(
-            "{}{}",
-            self.step.as_char(),
-            self.accidental_or_natural().unicode()
-        )
+        format!("{}{}", self.step.as_char(), self.accidental().unicode())
     }
 
     /// Returns music21's `fullName`: the step, the accidental's full name, the
@@ -164,7 +160,7 @@ impl Pitch {
     }
 
     pub(super) fn whole_alteration(&self, language: &str) -> Result<IntegerType> {
-        let alter = self.accidental_or_natural().alter();
+        let alter = self.accidental().alter();
         if alter.fract() != 0.0 {
             return Err(Error::Pitch(match language {
                 "german" => {

@@ -903,11 +903,11 @@ impl Interval {
             }
             match (
                 inherit_accidental_display,
-                pitch2.accidental().is_some(),
-                p.accidental(),
+                pitch2.written_accidental().is_some(),
+                p.written_accidental(),
             ) {
                 (false, true, Some(source)) => {
-                    if let Some(target) = pitch2.accidental_mut() {
+                    if let Some(target) = pitch2.written_accidental_mut() {
                         target.inherit_display(source);
                         target.set_display_status(None);
                     }
@@ -915,25 +915,25 @@ impl Interval {
                 (true, false, Some(source)) => {
                     let mut natural = crate::pitch::Accidental::natural();
                     natural.inherit_display(source);
-                    pitch2.set_accidental(Some(natural));
+                    pitch2.set_accidental(natural);
                 }
                 (true, true, Some(source)) => {
-                    if let Some(target) = pitch2.accidental_mut() {
+                    if let Some(target) = pitch2.written_accidental_mut() {
                         target.inherit_display(source);
                     }
                 }
                 (true, true, None) => {
-                    if let Some(target) = pitch2.accidental_mut() {
+                    if let Some(target) = pitch2.written_accidental_mut() {
                         target.set_display_status(Some(false));
                     }
                 }
                 _ => {}
             }
         } else if inherit_accidental_display
-            && p.accidental()
+            && p.written_accidental()
                 .is_some_and(|accidental| accidental.name() == "natural")
         {
-            pitch2.set_accidental(p.accidental().cloned());
+            pitch2.set_written_accidental(p.written_accidental().cloned());
         }
         if cents_origin != 0.0 {
             let cents = pitch2
@@ -1593,9 +1593,9 @@ mod tests {
     fn interval_between_microtonal_pitches_keeps_the_cent_shift() {
         let c1 = pitch("C1");
         let mut half_sharp = pitch("C1");
-        half_sharp.set_accidental(Some(
+        half_sharp.set_accidental(
             crate::pitch::Accidental::new("half-sharp").expect("half-sharp is an accidental"),
-        ));
+        );
 
         let quarter_tone = Interval::between_pitches(&c1, &half_sharp).unwrap();
         assert_eq!(quarter_tone.semitones(), 0.5);

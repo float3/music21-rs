@@ -61,9 +61,8 @@ impl RomanNumeral {
                 if untouched.contains(&index) {
                     continue;
                 }
-                let alter =
-                    pitch.accidental_or_natural().alter() + FloatType::from(self.accidental);
-                pitch.set_accidental(Some(Accidental::new(alter)?));
+                let alter = pitch.accidental().alter() + FloatType::from(self.accidental);
+                pitch.set_accidental(Accidental::new(alter)?);
             }
         }
 
@@ -138,8 +137,8 @@ impl RomanNumeral {
             let Some(index) = chord_step_index(pitches, root, *step)? else {
                 continue;
             };
-            let moved = pitches[index].accidental_or_natural().alter() + FloatType::from(*alter);
-            pitches[index].set_accidental(Some(Accidental::new(moved)?));
+            let moved = pitches[index].accidental().alter() + FloatType::from(*alter);
+            pitches[index].set_accidental(Accidental::new(moved)?);
         }
         Ok(())
     }
@@ -169,8 +168,8 @@ impl RomanNumeral {
         for (alter, step) in &self.figures.added {
             let degree = IntegerType::from(self.degree) + IntegerType::from(*step) - 1;
             let mut added = reading.pitch_at(degree)?;
-            let moved = added.accidental_or_natural().alter() + FloatType::from(*alter);
-            added.set_accidental(Some(Accidental::new(moved)?));
+            let moved = added.accidental().alter() + FloatType::from(*alter);
+            added.set_accidental(Accidental::new(moved)?);
             while added.ps() < bass {
                 added.set_octave(Some(added.octave().unwrap_or(4) + 1));
             }
@@ -361,9 +360,9 @@ pub(super) fn step_semitones(
 /// music21's `correctFaultyPitch`: moves a note by the semitones it is out
 /// by, reading a correction of half an octave or more the short way round.
 pub(super) fn correct_faulty_pitch(pitch: &mut Pitch, correction: IntegerType) -> Result<()> {
-    let folded = fold_correction(correction) + pitch.accidental_or_natural().alter() as IntegerType;
+    let folded = fold_correction(correction) + pitch.accidental().alter() as IntegerType;
     let alter = fold_correction(folded);
-    pitch.set_accidental(Some(Accidental::new(FloatType::from(alter))?));
+    pitch.set_accidental(Accidental::new(FloatType::from(alter))?);
     Ok(())
 }
 

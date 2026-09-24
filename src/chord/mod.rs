@@ -821,8 +821,7 @@ impl Chord {
 /// Whether two pitches are written with the same letter and accidental,
 /// which is what having the same name is.
 fn same_pitch_name(left: &Pitch, right: &Pitch) -> bool {
-    left.step() == right.step()
-        && left.accidental_or_natural().modifier() == right.accidental_or_natural().modifier()
+    left.step() == right.step() && left.accidental().modifier() == right.accidental().modifier()
 }
 
 /// Tries to convert a supported chord input into notes.
