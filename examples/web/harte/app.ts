@@ -1,6 +1,7 @@
 // @ts-nocheck
 import "../theme.js";
 import { play, stop } from "../play.js";
+import { el, errorLine, fact } from "../dom.js";
 
 const $ = (selector) => document.querySelector(selector);
 const form = $("#form");
@@ -8,6 +9,7 @@ const labelInput = $("#label");
 const playButton = $("#play");
 const examples = $("#examples");
 const errorNode = $("#error");
+const { fail, clearError } = errorLine(errorNode);
 const title = $("#title");
 const facts = $("#facts");
 const pitches = $("#pitches");
@@ -34,28 +36,6 @@ const exampleLabels = [
 
 let wasm = null;
 let current = null;
-
-function fail(message) {
-    errorNode.textContent = message;
-    errorNode.style.display = "block";
-}
-
-function clearError() {
-    errorNode.style.display = "none";
-}
-
-function el(tag, className, text) {
-    const node = document.createElement(tag);
-    if (className) node.className = className;
-    if (text !== undefined) node.textContent = text;
-    return node;
-}
-
-function fact(label, value) {
-    const node = el("div", "fact");
-    node.append(el("span", "", label), el("strong", "", value));
-    return node;
-}
 
 function bits(target, values, from) {
     target.replaceChildren();

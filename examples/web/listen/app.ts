@@ -1,4 +1,5 @@
 import "../theme.js";
+import { el as make, errorLine, fact } from "../dom.js";
 
 type HeardNote = {
     midi: number;
@@ -105,6 +106,7 @@ const gateInput = element<HTMLInputElement>("#gate");
 const gateValue = element<HTMLOutputElement>("#gate-value");
 const sizeSelect = element<HTMLSelectElement>("#size");
 const errorNode = element<HTMLParagraphElement>("#error");
+const { fail, clearError } = errorLine(errorNode);
 const player = element<HTMLAudioElement>("#player");
 const stage = element<HTMLElement>("#stage");
 const statusNode = element<HTMLDivElement>("#status");
@@ -155,26 +157,6 @@ let rememberedAt = 0;
 let colours = readColours();
 let coloursReadAt = 0;
 
-function fail(message: string): void {
-    errorNode.textContent = message;
-    errorNode.style.display = "block";
-}
-
-function clearError(): void {
-    errorNode.style.display = "none";
-}
-
-function make<K extends keyof HTMLElementTagNameMap>(
-    tag: K,
-    className = "",
-    text?: string,
-): HTMLElementTagNameMap[K] {
-    const node = document.createElement(tag);
-    if (className) node.className = className;
-    if (text !== undefined) node.textContent = text;
-    return node;
-}
-
 function readColours() {
     const style = getComputedStyle(document.documentElement);
     const token = (name: string, fallback: string) =>
@@ -219,12 +201,6 @@ function buildKeyboard(module: WasmModule): void {
         hotCells.push(cell);
         hot.appendChild(cell);
     }
-}
-
-function fact(label: string, value: string): HTMLDivElement {
-    const node = make("div", "fact");
-    node.append(make("span", "", label), make("strong", "", value));
-    return node;
 }
 
 function renderNotes(notes: HeardNote[]): void {

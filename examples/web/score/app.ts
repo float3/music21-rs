@@ -1,4 +1,5 @@
 import "../theme.js";
+import { el, errorLine, fact } from "../dom.js";
 
 // abcjs is loaded as a classic script and puts itself on `window.ABCJS`.
 // Only the corners of its API this page touches are typed.
@@ -208,6 +209,7 @@ const scoreNode = $<HTMLDivElement>("#score");
 const statusNode = $<HTMLSpanElement>("#status");
 const cursorNode = $<HTMLSpanElement>("#cursor");
 const errorNode = $<HTMLParagraphElement>("#error");
+const { fail, clearError } = errorLine(errorNode);
 const momentNode = $<HTMLDivElement>("#moment");
 const labelsSelect = $<HTMLSelectElement>("#labels");
 const numeralsSelect = $<HTMLSelectElement>("#numerals");
@@ -426,32 +428,6 @@ const hiddenParts = new Set<string>();
 let player: { synth: InstanceType<AbcjsGlobal["synth"]["CreateSynth"]>; timer: { stop(): void } } | null = null;
 
 // ---------------------------------------------------------------- helpers
-
-function fail(message: string): void {
-    errorNode.textContent = message;
-    errorNode.style.display = "block";
-}
-
-function clearError(): void {
-    errorNode.style.display = "none";
-}
-
-function el<K extends keyof HTMLElementTagNameMap>(
-    tag: K,
-    className?: string,
-    text?: string,
-): HTMLElementTagNameMap[K] {
-    const node = document.createElement(tag);
-    if (className) node.className = className;
-    if (text !== undefined) node.textContent = text;
-    return node;
-}
-
-function fact(label: string, value: string): HTMLDivElement {
-    const node = el("div", "fact");
-    node.append(el("span", "", label), el("strong", "", value));
-    return node;
-}
 
 function formatBeat(beat: number): string {
     return Number.isInteger(beat) ? String(beat) : String(Math.round(beat * 100) / 100);

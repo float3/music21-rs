@@ -1,5 +1,6 @@
 // @ts-nocheck
 import "../theme.js";
+import { el, errorLine } from "../dom.js";
 
 // ---------------------------------------------------------------- elements
 
@@ -24,6 +25,7 @@ const degreesBody = $("#degrees");
 const aboutNode = $("#about");
 const shareButton = $("#share");
 const errorNode = $("#error");
+const { fail, clearError } = errorLine(errorNode);
 
 $("#docs-link").href = "../docs/music21_rs/index.html";
 
@@ -76,15 +78,6 @@ let shareTimer = null;
 
 // ---------------------------------------------------------------- helpers
 
-function fail(message) {
-    errorNode.textContent = message;
-    errorNode.style.display = "block";
-}
-
-function clearError() {
-    errorNode.style.display = "none";
-}
-
 function clamp(value, min, max, fallback) {
     const parsed = Number.parseFloat(value);
     if (!Number.isFinite(parsed)) return fallback;
@@ -110,13 +103,6 @@ function octaveRepeating(system = current) {
 
 function twelveTone(system = current) {
     return steps(system) === 12 && octaveRepeating(system);
-}
-
-function el(tag, className, text) {
-    const node = document.createElement(tag);
-    if (className) node.className = className;
-    if (text !== undefined) node.textContent = text;
-    return node;
 }
 
 // ---------------------------------------------------------------- shaping

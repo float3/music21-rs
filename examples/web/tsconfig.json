@@ -8,6 +8,7 @@
         "target": "ES2022"
     },
     "include": [
+        "./dom.ts",
         "./help-tooltips.ts",
         "./play.ts",
         "./theme.ts",

@@ -1,5 +1,6 @@
 import "../help-tooltips.js";
 import "../theme.js";
+import { writeClipboard } from "../dom.js";
 import init, { known_chords, pitch_class_of } from "../pkg/music21_rs_web.js";
 
 type KnownChord = {
@@ -295,28 +296,6 @@ function markShareCopied(): void {
         window.clearTimeout(shareResetTimer);
     }
     shareResetTimer = window.setTimeout(resetShareButton, 1600);
-}
-
-async function writeClipboard(value: string): Promise<void> {
-    if (navigator.clipboard?.writeText && window.isSecureContext) {
-        await navigator.clipboard.writeText(value);
-        return;
-    }
-
-    const textarea = document.createElement("textarea");
-    textarea.value = value;
-    textarea.setAttribute("readonly", "");
-    textarea.style.position = "fixed";
-    textarea.style.top = "-1000px";
-    document.body.appendChild(textarea);
-    textarea.select();
-    try {
-        if (!document.execCommand("copy")) {
-            throw new Error("Copy command failed");
-        }
-    } finally {
-        textarea.remove();
-    }
 }
 
 function renderRows(): void {
