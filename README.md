@@ -22,7 +22,7 @@ suite results, coverage, benchmarks and sizes, refreshed on every push.
 ## Coverage of music21
 
 - 92% of the public methods of the ported music21 classes are in the crate.
-- The crate's own tests cover 96% of its lines and of its functions.
+- The crate's own tests cover 95% of its lines and of its functions.
 - All 38 music21 modules whose doctests run against the port pass every
   example, 9,121 of them: `pitch`, `interval`, `chord`, `chord.tables`,
   `note`, `duration`, `key`, `scale`, `scale.scala`, `roman`, `harmony`,

@@ -44,6 +44,11 @@ times faster than it did in 0.7.0.
 - The report counted a wheel class that inherits its members, such as
   `Trill` from `Ornament`, as lacking them. The wheel figure reads 94%
   where it read 89%.
+- The report's coverage run instrumented only the workspace since
+  cargo-llvm-cov 0.9, whose default wrapper skips `python-parity`: its
+  suites ran and wrote no profile. It passes `--no-rustc-wrapper` now, and
+  reads 95.2% of lines where it read 90.6%. A suite that did not pass is
+  named beside the figure, since it leaves the figure short.
 
 - The wheel read a music21 stream iterator's first item twice wherever it
   took a whole iterator at once, so `chord.Chord(stream.notes)` with the

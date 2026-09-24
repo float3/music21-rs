@@ -752,6 +752,13 @@ pub(super) fn render_coverage(coverage: &Coverage, view: View) -> String {
         );
     }
     html.push_str("                    </div>\n                </div>\n");
+    if !coverage.short_of.is_empty() {
+        let _ = writeln!(
+            html,
+            "                <p class=\"section-foot\">This figure is short: {} did not pass, and wrote less than they reach.</p>",
+            escape(&coverage.short_of.join(", ")),
+        );
+    }
     let _ = writeln!(
         html,
         "                <p class=\"section-foot\">Coverage is not a run of its own: the suites are run instrumented and the profiles merged. The workspace tests, their rustdoc examples and the parity suite reach it, music21's own suite among them, run against the crate linked into the parity suite; whatever goes through the installed wheel does not. Generated tables and the tooling crates are excluded. <a href=\"{root}coverage/html/index.html\">Read it file by file &rarr;</a></p>\n            </section>",
