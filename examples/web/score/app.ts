@@ -201,7 +201,9 @@ interface WasmModule {
 /** A note as abcjs's synth is about to sound it; `cents` detunes it. */
 interface SynthNote {
     pitch: number;
+    /** Whole notes from the top, as are `end` and a tune's pickup length. */
     start: number;
+    end: number;
     startChar?: number;
     endChar?: number;
     cents?: number;
@@ -222,6 +224,9 @@ const flagsButton = $<HTMLButtonElement>("#flags");
 const ringButton = $<HTMLButtonElement>("#ring");
 const chordsButton = $<HTMLButtonElement>("#chords");
 const compingSelect = $<HTMLSelectElement>("#comping");
+const swingSelect = $<HTMLSelectElement>("#swing");
+const swingUnitSelect = $<HTMLSelectElement>("#swing-unit");
+const swingRatioInput = $<HTMLInputElement>("#swing-ratio");
 const playButton = $<HTMLButtonElement>("#play");
 const stopButton = $<HTMLButtonElement>("#stop");
 const loopButton = $<HTMLButtonElement>("#loop");
@@ -246,6 +251,9 @@ const VIEW_KEY = "music21-rs.score-editor.view";
 const RING_KEY = "music21-rs.score-editor.ring";
 const CHORDS_KEY = "music21-rs.score-editor.chords";
 const COMPING_KEY = "music21-rs.score-editor.comping";
+const SWING_KEY = "music21-rs.score-editor.swing";
+const SWING_UNIT_KEY = "music21-rs.score-editor.swing-unit";
+const SWING_RATIO_KEY = "music21-rs.score-editor.swing-ratio";
 const ZOOM_KEY = "music21-rs.score-editor.zoom";
 const WIDE_KEY = "music21-rs.score-editor.wide";
 const ZOOMS = [0.4, 0.5, 0.67, 0.8, 1, 1.25, 1.5];
@@ -1780,16 +1788,64 @@ function followPlayback(node: SVGElement | undefined): void {
     }
 }
 
-/** A synth primed to play what is drawn in the chosen playback tuning. Where
- * a chord part plays the chord symbols, abcjs's own accompaniment of them is
- * switched off; `%%MIDI gchordoff` would have to be written inside a voice. */
+/** A synth primed to play what is drawn in the chosen playback tuning and
+ * swing. Where a chord part plays the chord symbols, abcjs's own
+ * accompaniment of them is switched off; `%%MIDI gchordoff` would have to be
+ * written inside a voice. */
 async function makeSynth(drawn: Rendered): Promise<InstanceType<AbcjsGlobal["synth"]["CreateSynth"]>> {
     const synth = new ABCJS.synth.CreateSynth();
+    const swing = swingCallback(drawn);
     const retune = tuningCallback();
-    const options = { ...(retune ? { sequenceCallback: retune } : {}), ...(drawn.chordPart ? { chordsOff: true } : {}) };
+    const sequence =
+        swing || retune
+            ? (tracks: SynthNote[][]) => {
+                  swing?.(tracks);
+                  retune?.(tracks);
+              }
+            : null;
+    const options = { ...(sequence ? { sequenceCallback: sequence } : {}), ...(drawn.chordPart ? { chordsOff: true } : {}) };
     await synth.init({ visualObj: drawn.tune, options });
     await synth.prime();
     return synth;
+}
+
+/** The first note's share of each swung pair, or null for straight time. */
+function swingShare(): number | null {
+    const percent = swingSelect.value === "custom" ? Number(swingRatioInput.value) : Number(swingSelect.value);
+    if (!swingSelect.value || !Number.isFinite(percent) || percent <= 50) return null;
+    return Math.min(percent, 85) / 100;
+}
+
+/** A callback playing the chosen swing, or null for straight time. Each pair
+ * of eighths, or of sixteenths, counted from the barlines is played long and
+ * short: whatever starts or stops halfway through a pair moves later, so the
+ * note before it lengthens and the note on it shortens. A point is left where
+ * it is when anything else in its track starts within a unit of it, so a run
+ * of shorter notes or a triplet keeps its own timing. abcjs's
+ * own `swing` does the same for eighths alone and only in X/4. */
+function swingCallback(drawn: Rendered): ((tracks: SynthNote[][]) => void) | null {
+    const share = swingShare();
+    if (share === null) return null;
+    const unit = swingUnitSelect.value === "16" ? 1 / 16 : 1 / 8;
+    const pair = unit * 2;
+    const shift = (share - 0.5) * pair;
+    const pickup = drawn.tune.getPickupLength();
+    const near = (a: number, b: number) => Math.abs(a - b) < 1e-6;
+    return (tracks) => {
+        for (const track of tracks) {
+            const starts = track.map((note) => note.start);
+            const swung = (at: number) => {
+                const phase = ((((at - pickup) % pair) + pair) % pair);
+                if (!near(phase, unit)) return false;
+                return !starts.some((start) => !near(start, at) && start > at - unit + 1e-6 && start < at + unit - 1e-6);
+            };
+            for (const note of track) {
+                const [start, end] = [note.start, note.end];
+                if (swung(start)) note.start = start + shift;
+                if (swung(end)) note.end = end + shift;
+            }
+        }
+    };
 }
 
 /** The note the playback tuning is built on: the one chosen, or the tonic of
@@ -2065,6 +2121,10 @@ async function shareLink(): Promise<string> {
     const params = new URLSearchParams(example ? { example: example.id } : { abc: await packScore(textarea.value) });
     if (viewSelect.value) params.set("view", viewSelect.value);
     if (compingSelect.value) params.set("comping", compingSelect.value);
+    if (swingSelect.value) {
+        params.set("swing", swingSelect.value === "custom" ? swingRatioInput.value : swingSelect.value);
+        if (swingUnitSelect.value !== "8") params.set("swingunit", swingUnitSelect.value);
+    }
     if (viewSelect.value && stringsSelect.value && stringsSelect.value !== "standard") params.set("strings", stringsSelect.value);
     if (temperamentSelect.value) params.set("tuning", temperamentSelect.value);
     if (temperamentSelect.value && rootSelect.value) params.set("root", rootSelect.value);
@@ -2099,6 +2159,12 @@ async function loadFromHash(): Promise<boolean> {
     if (!packed && !example) return false;
     try {
         textarea.value = example ? example.abc : await unpackScore(packed!);
+        const swing = params.get("swing");
+        const preset = swing !== null && Array.from(swingSelect.options).some((option) => option.value === swing);
+        setSwing(swing === null ? "" : preset ? swing : "custom", params.get("swingunit"), preset ? null : swing);
+        storageSet(SWING_KEY, swingSelect.value);
+        storageSet(SWING_UNIT_KEY, swingUnitSelect.value);
+        storageSet(SWING_RATIO_KEY, swingRatioInput.value);
         const comping = params.get("comping") ?? "";
         compingSelect.value = Array.from(compingSelect.options).some((option) => option.value === comping) ? comping : "";
         storageSet(COMPING_KEY, compingSelect.value);
@@ -2304,6 +2370,35 @@ compingSelect.addEventListener("change", () => {
     redraw();
 });
 
+/** Shows the swing unit while there is swing, and the percentage for a
+ * custom one. */
+function showSwing(): void {
+    swingUnitSelect.hidden = !swingSelect.value;
+    swingRatioInput.hidden = swingSelect.value !== "custom";
+}
+
+/** Sets the swing controls, as stored or as a link gives them. */
+function setSwing(swing: string | null, unit: string | null, ratio: string | null): void {
+    const offered = (select: HTMLSelectElement, value: string | null) =>
+        value !== null && Array.from(select.options).some((option) => option.value === value);
+    swingSelect.value = offered(swingSelect, swing) ? swing! : "";
+    swingUnitSelect.value = offered(swingUnitSelect, unit) ? unit! : "8";
+    if (ratio !== null && Number.isFinite(Number(ratio))) swingRatioInput.value = ratio;
+    showSwing();
+}
+
+for (const control of [swingSelect, swingUnitSelect, swingRatioInput]) {
+    control.addEventListener("change", () => {
+        storageSet(SWING_KEY, swingSelect.value);
+        storageSet(SWING_UNIT_KEY, swingUnitSelect.value);
+        storageSet(SWING_RATIO_KEY, swingRatioInput.value);
+        showSwing();
+        // A synth plays the notes it was primed with, so what is playing
+        // stops rather than carrying on in the old swing.
+        stopPlayback();
+    });
+}
+
 for (const [id, steps] of [
     ["#up", 1],
     ["#down", -1],
@@ -2374,6 +2469,7 @@ async function start(): Promise<void> {
     compingSelect.value = storageGet(COMPING_KEY) ?? "";
     if (!Array.from(compingSelect.options).some((option) => option.value === compingSelect.value)) compingSelect.value = "";
     compingSelect.hidden = !chordsButton.classList.contains("on");
+    setSwing(storageGet(SWING_KEY), storageGet(SWING_UNIT_KEY), storageGet(SWING_RATIO_KEY));
     viewSelect.value = storageGet(VIEW_KEY) ?? "";
     if (!(await loadFromHash())) textarea.value = storageGet(STORAGE_KEY) ?? EXAMPLES[0].abc;
     if (!(viewSelect.value in TABLATURES)) viewSelect.value = "";
