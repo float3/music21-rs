@@ -754,7 +754,7 @@ impl ChordSymbol {
     /// the chord-step modifications are applied; and the whole is moved down
     /// until nothing is above the D over middle C, or up until nothing is
     /// below the piano's lowest A. So `C/E` is `E3 G3 C4`, `C11` is `C2 E2 G2
-    /// B-2 D3 F3`, and `Gm/F#` is `F#2 G3 B-3 D4`.
+    /// Bb2 D3 F3`, and `Gm/F#` is `F#2 G3 Bb3 D4`.
     ///
     /// A shorthand naming none of music21's kinds is laid out the same way
     /// from the crate's own reading of it.
@@ -1085,29 +1085,29 @@ mod tests {
         // An added flat one takes the root out and puts a new note in; the
         // bass, added before, keeps its place and moves with the chord.
         let flat_one = voiced("Bb10/B-");
-        assert_eq!(flat_one.bass().name_with_octave(), "B-1");
-        assert_eq!(voiced("Ab10/A-").bass().name_with_octave(), "A-1");
+        assert_eq!(flat_one.bass().name_with_octave(), "Bb1");
+        assert_eq!(voiced("Ab10/A-").bass().name_with_octave(), "Ab1");
     }
 
     #[test]
     fn a_slash_bass_is_voiced_as_music21_voices_it() {
         let cases: [(&str, &[&str]); 20] = [
-            ("B-5/E", &["E2", "E2", "B-3", "F4"]),
-            ("B-69/E", &["E2", "E2", "B-3", "G4", "C5"]),
+            ("B-5/E", &["E2", "E2", "Bb3", "F4"]),
+            ("B-69/E", &["E2", "E2", "Bb3", "G4", "C5"]),
             ("C5/G", &["G3", "G3", "C4"]),
             ("C5/D", &["D2", "D2", "C3", "G3"]),
             ("C69/D", &["D2", "D2", "C3", "A3", "D4"]),
             ("C5/C#", &["C#2", "C#2", "C3", "G3"]),
             ("F5/E", &["E2", "E2", "F3", "C4"]),
-            ("A-10/E", &["E3", "A-3", "A-3"]),
+            ("A-10/E", &["E3", "Ab3", "Ab3"]),
             ("A#10/E", &["E3", "A#3", "A#3"]),
             ("C10/G", &["C3", "G3", "C4"]),
             ("C35/B", &["B2", "B2", "C3", "E3", "G3"]),
-            ("C/B-", &["B-2", "C3", "E3", "G3"]),
-            ("C7/D", &["D2", "C3", "E3", "G3", "B-3"]),
-            ("Cm/E-", &["E-3", "G3", "C4"]),
-            ("C9/E", &["E3", "G3", "B-3", "C4", "D4"]),
-            ("C13/B-", &["B-2", "C3", "D3", "E3", "F3", "G3", "A3"]),
+            ("C/B-", &["Bb2", "C3", "E3", "G3"]),
+            ("C7/D", &["D2", "C3", "E3", "G3", "Bb3"]),
+            ("Cm/E-", &["Eb3", "G3", "C4"]),
+            ("C9/E", &["E3", "G3", "Bb3", "C4", "D4"]),
+            ("C13/B-", &["Bb2", "C3", "D3", "E3", "F3", "G3", "A3"]),
             ("Cadd9/D", &["D2", "C3", "E3", "G3", "D4"]),
             ("C6/D", &["D2", "C3", "E3", "G3", "A3"]),
             ("C69/E", &["E3", "A3", "C4", "D4"]),
@@ -1225,7 +1225,7 @@ mod tests {
                 .to_chord()
                 .unwrap()
                 .pitch_names(),
-            ["E", "G-", "C", "D-"]
+            ["E", "Gb", "C", "Db"]
         );
         let _ = Pitch::from_name("C").unwrap();
     }
@@ -1248,7 +1248,7 @@ mod tests {
         assert_eq!(figure("C3 D-3 E3 G-3").as_deref(), Some("CN6"));
         assert_eq!(kind("C3 D-3 E3 G-3"), Some("Neapolitan"));
         assert_eq!(figure("C3 D3 G3").as_deref(), Some("Csus2"));
-        assert_eq!(figure("C3 E3 G3 D-4").as_deref(), Some("CaddD-"));
+        assert_eq!(figure("C3 E3 G3 D-4").as_deref(), Some("CaddDb"));
         assert_eq!(figure("C3").as_deref(), Some("Cpedal"));
         assert_eq!(figure("").as_deref(), Some(""));
 
@@ -1400,7 +1400,7 @@ mod tests {
             ("C", "C", "D"),
             ("Cm7", "Cm7", "Dm7"),
             ("F#dim", "F#dim", "G#dim"),
-            ("B-/D", "B-/D", "C/E"),
+            ("Bb/D", "Bb/D", "C/E"),
             ("G7/B", "G7/B", "A7/C#"),
             ("Am/C", "Am/C", "Bm/D"),
             ("Cmaj7", "Cmaj7", "Dmaj7"),
@@ -1483,7 +1483,7 @@ mod tests {
     #[test]
     fn parses_dominant_altered_symbol() {
         let symbol = ChordSymbol::parse("Bb7#11").unwrap();
-        assert_eq!(symbol.root().name(), "B-");
+        assert_eq!(symbol.root().name(), "Bb");
         assert_eq!(symbol.quality(), ChordQuality::Dominant);
         assert_eq!(symbol.extensions(), &[7, 11]);
         assert_eq!(symbol.alterations()[0], ChordAlteration::new(11, 1));
@@ -1494,7 +1494,7 @@ mod tests {
             .iter()
             .map(Pitch::name)
             .collect::<Vec<_>>();
-        assert_eq!(names, vec!["B-", "D", "F", "A-", "E"]);
+        assert_eq!(names, vec!["Bb", "D", "F", "Ab", "E"]);
     }
 
     #[test]
@@ -1550,9 +1550,8 @@ mod tests {
 
         assert_eq!(
             names.first().map(String::as_str),
-            Some("Ddom7dim5/CaddA,E-")
+            Some("Ddom7dim5/CaddA,Eb")
         );
-        assert!(names.iter().any(|name| name == "Ddom7dim5/CaddA,E-"));
     }
 
     #[test]
@@ -1588,7 +1587,7 @@ mod tests {
         let altered_dominant = Chord::new("C4 E4 G4 Bb4 Eb5").unwrap();
         let names = chord_symbol_spellings(&altered_dominant);
 
-        assert_eq!(names.first().map(String::as_str), Some("C7addE-"));
+        assert_eq!(names.first().map(String::as_str), Some("C7addEb"));
     }
 
     #[test]
@@ -1633,7 +1632,7 @@ mod tests {
 
         assert_eq!(
             chord_symbol_spellings(&chord).first().map(String::as_str),
-            Some("CsusaddA,A-,D-,E,E-,F#,omitF")
+            Some("CsusaddA,Ab,Db,E,Eb,F#,omitF")
         );
     }
 

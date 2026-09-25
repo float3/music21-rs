@@ -23,7 +23,7 @@ use crate::tuningsystem::scala::{ScalaDegree, ScalaScale};
 /// let scale = Scale::new(ScaleType::Octatonic, Pitch::from_name("C4")?);
 /// let names: Vec<String> = scale.pitches()?.iter().map(|p| p.name()).collect();
 ///
-/// assert_eq!(names, ["C", "D", "E-", "F", "G-", "A-", "A", "B", "C"]);
+/// assert_eq!(names, ["C", "D", "Eb", "F", "Gb", "Ab", "A", "B", "C"]);
 /// # Ok::<(), music21_rs::Error>(())
 /// ```
 #[derive(Clone, Debug, PartialEq)]
@@ -244,7 +244,7 @@ impl Scale {
     /// add up to an octave, but it reaches each one by walking to it from
     /// the tonic, so a note below the tonic is spelled for the step it was
     /// reached by coming down. With microtones that is a different spelling
-    /// -- slendro on C has `B-3(-40c)` below its tonic and `A~4(+10c)` above.
+    /// -- slendro on C has `Bb3(-40c)` below its tonic and `A~4(+10c)` above.
     pub fn from_cycle(tonic: Pitch, steps: Vec<Interval>) -> Result<Self> {
         let mut scale = Self::from_steps(tonic, steps)?;
         scale.cyclic = true;
@@ -461,7 +461,7 @@ impl Scale {
     /// included the way music21's `getPitches` includes it.
     ///
     /// A tonic with no octave is realized in octave 4, which is what music21
-    /// does: the scale on a bare `G` runs `G4 A4 B-4 C5 …`. The tonic itself
+    /// does: the scale on a bare `G` runs `G4 A4 Bb4 C5 …`. The tonic itself
     /// keeps its own spelling — `Scale::tonic` still has no octave — because
     /// the octave belongs to the realization and not to the scale.
     pub fn pitches(&self) -> Result<Vec<Pitch>> {
@@ -636,8 +636,8 @@ impl Scale {
     ///
     /// The scale is realized from the tonic in whatever octave puts it at or
     /// below the bottom of the range, then walked upward, so asking a C major
-    /// scale for `E-5` to `G-7` starts at `E5` — the first scale pitch that
-    /// is not below the bottom — and not at a respelled `E-5`.
+    /// scale for `Eb5` to `Gb7` starts at `E5` — the first scale pitch that
+    /// is not below the bottom — and not at a respelled `Eb5`.
     pub fn pitches_between(&self, minimum: &Pitch, maximum: &Pitch) -> Result<Vec<Pitch>> {
         // Asked the other way round, music21 walks down instead: the same
         // pitches, highest first.

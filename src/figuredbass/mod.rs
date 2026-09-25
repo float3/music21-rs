@@ -449,7 +449,7 @@ mod tests {
                 .unwrap()
                 .modify_pitch_name("F")
                 .unwrap(),
-            "F-"
+            "Fb"
         );
         assert_eq!(
             Modifier::new(Some("n"))
@@ -461,9 +461,9 @@ mod tests {
         assert_eq!(
             Modifier::new(None)
                 .unwrap()
-                .modify_pitch_name("B-")
+                .modify_pitch_name("Bb")
                 .unwrap(),
-            "B-"
+            "Bb"
         );
         assert!(
             Modifier::new(Some("#"))

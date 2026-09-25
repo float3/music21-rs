@@ -17,6 +17,7 @@ use music21_rs_crate::{Interval as RsInterval, Key as RsKey, Note as RsNote, Pit
 
 use crate::note::Note;
 use crate::pitch::pitch_from_any;
+use crate::spelling::music21_name;
 
 /// The names the `voiceleading` facade replaces in `music21.voiceLeading`.
 pub const NAMES: &[&str] = &["VoiceLeadingQuartet", "VoiceLeadingQuartetException"];
@@ -505,11 +506,13 @@ impl VoiceLeadingQuartet {
 
     fn __repr__(&self, py: Python<'_>) -> String {
         let named = |index: usize| {
-            self.notes[index]
-                .borrow(py)
-                .synced(py)
-                .pitch()
-                .name_with_octave()
+            music21_name(
+                &self.notes[index]
+                    .borrow(py)
+                    .synced(py)
+                    .pitch()
+                    .name_with_octave(),
+            )
         };
         format!(
             "<music21.voiceLeading.VoiceLeadingQuartet v1n1={}, v1n2={}, v2n1={}, v2n2={}>",

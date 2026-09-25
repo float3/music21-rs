@@ -55,7 +55,7 @@ impl Pitch {
 
     /// Simplifies this pitch's enharmonic spelling in place.
     pub fn simplify_enharmonic_in_place(&mut self, most_common: bool) -> Result<()> {
-        const EXCLUDED_NAMES: [&str; 4] = ["E#", "B#", "C-", "F-"];
+        const EXCLUDED_NAMES: [&str; 4] = ["E#", "B#", "Cb", "Fb"];
         if self.accidental().alter.abs().partial_cmp(&2.0) != Some(Ordering::Less)
             || EXCLUDED_NAMES.contains(&self.name().as_str())
         {
@@ -77,11 +77,11 @@ impl Pitch {
                     self.step_setter(StepName::B);
                     self.accidental_setter(Accidental::new("flat")?);
                 }
-                "G-" => {
+                "Gb" => {
                     self.step_setter(StepName::F);
                     self.accidental_setter(Accidental::new("sharp")?);
                 }
-                "D-" => {
+                "Db" => {
                     self.step_setter(StepName::C);
                     self.accidental_setter(Accidental::new("sharp")?);
                 }

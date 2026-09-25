@@ -1,3 +1,4 @@
+use music21_rs_python_parity::music21_name;
 use std::{
     collections::BTreeMap,
     fs,
@@ -139,9 +140,13 @@ fn compare_all_pitch_class_subsets(py: Python<'_>) -> Result<(), PyErr> {
             python_common_name,
             "commonName mismatch for mask {mask:012b} pcs {pcs:?}"
         );
+        // music21 names a lone note `E-`, every other chord `Eb-...`.
+        let pitched = match python_common_name.as_str() {
+            "note" | "unison" => music21_name(&rust_chord.pitched_common_name()),
+            _ => rust_chord.pitched_common_name(),
+        };
         assert_eq!(
-            rust_chord.pitched_common_name(),
-            python_pitched_common_name,
+            pitched, python_pitched_common_name,
             "pitchedCommonName mismatch for mask {mask:012b} pcs {pcs:?}"
         );
     }

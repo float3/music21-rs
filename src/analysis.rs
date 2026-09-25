@@ -251,12 +251,12 @@ fn continues_tie(note: &Note) -> bool {
 
 /// The key names music21's key analysis spells a major tonic with.
 const VALID_MAJOR: [&str; 15] = [
-    "C", "C#", "C-", "D-", "D", "E-", "E", "F", "F#", "G-", "G", "A-", "A", "B-", "B",
+    "C", "C#", "Cb", "Db", "D", "Eb", "E", "F", "F#", "Gb", "G", "Ab", "A", "Bb", "B",
 ];
 
 /// The key names music21's key analysis spells a minor tonic with.
 const VALID_MINOR: [&str; 15] = [
-    "C", "C#", "D", "D#", "E-", "E", "F", "F#", "G", "G#", "A-", "A", "A#", "B-", "B",
+    "C", "C#", "D", "D#", "Eb", "E", "F", "F#", "G", "G#", "Ab", "A", "A#", "Bb", "B",
 ];
 
 /// Every key ranked by how well `profile` fits `distribution`, best first:
@@ -334,10 +334,10 @@ fn python_sum(values: &[FloatType]) -> FloatType {
 /// spells it.
 fn key_on(tonic: usize, mode: &str) -> Key {
     const USUAL: [&str; 12] = [
-        "C", "C#", "D", "E-", "E", "F", "F#", "G", "G#", "A", "B-", "B",
+        "C", "C#", "D", "Eb", "E", "F", "F#", "G", "G#", "A", "Bb", "B",
     ];
     const RESPELLED: [&str; 12] = [
-        "B#", "D-", "C##", "D#", "F-", "E#", "G-", "F##", "A-", "B--", "A#", "C-",
+        "B#", "Db", "C##", "D#", "Fb", "E#", "Gb", "F##", "Ab", "Bbb", "A#", "Cb",
     ];
     let valid: &[&str] = if mode == "major" {
         &VALID_MAJOR
@@ -467,7 +467,7 @@ mod tests {
         let (low, high) = stream_pitch_span(&stream).unwrap();
         assert_eq!(
             (low.name_with_octave(), high.name_with_octave()),
-            ("C4".into(), "B-4".into())
+            ("C4".into(), "Bb4".into())
         );
 
         // Two parts, each its own line; a tied note is heard once.

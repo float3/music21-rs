@@ -662,9 +662,9 @@ impl Chord {
     }
 
     /// Returns a copy keeping the first of every pitch that appears more than
-    /// once with the same name and octave. `B-1` (B-flat, octave 1) and `B`
-    /// in octave -1 print alike but are different pitches, and so are `C`
-    /// with no octave of its own and `C4`.
+    /// once with the same name and octave. `Bb1` and `B` in octave -1 are
+    /// different pitches (music21 prints both `B-1`), and so are `C` with no
+    /// octave of its own and `C4`.
     pub fn remove_redundant_pitches(&self) -> Self {
         let mut chord = self.clone();
         chord.retain_first_by(spelling_and_octave);
@@ -718,7 +718,7 @@ impl Chord {
 
     /// Which note carries the bass [`Self::found_bass`] finds: the one
     /// written lowest, as music21's `bass()` reads it, so `E#4` is under
-    /// `F-4` though it sounds above.
+    /// `Fb4` though it sounds above.
     fn bass_index(&self) -> Option<usize> {
         let bass = self.bass_pitch()?;
         self.notes
@@ -878,8 +878,9 @@ where
 }
 
 /// What `removeRedundantPitches` compares: the spelling and the octave as
-/// music21 keeps them, not the printed `nameWithOctave`, which reads the same
-/// for `B-1` and B in octave -1 and for `C` with and without an octave.
+/// music21 keeps them, not the printed `nameWithOctave`, which in music21
+/// reads `B-1` for both B-flat 1 and B in octave -1, and the same for `C`
+/// with and without an octave.
 fn spelling_and_octave(pitch: &Pitch) -> (String, crate::defaults::Octave) {
     (pitch.name(), pitch.octave())
 }
@@ -1104,7 +1105,7 @@ mod tests {
         let names = |chord: &Chord| chord.pitch_names();
         assert_eq!(
             names(&Chord::from_forte_class("3-11").unwrap()),
-            ["C", "E-", "G"]
+            ["C", "Eb", "G"]
         );
         assert_eq!(
             names(&Chord::from_forte_class("3-11B").unwrap()),
@@ -1112,11 +1113,11 @@ mod tests {
         );
         assert_eq!(
             names(&Chord::from_forte_class("3-11a").unwrap()),
-            ["C", "E-", "G"]
+            ["C", "Eb", "G"]
         );
         assert_eq!(
             names(&Chord::from_forte_address(4, 27, Some(-1)).unwrap()),
-            ["C", "E-", "G-", "A-"]
+            ["C", "Eb", "Gb", "Ab"]
         );
         assert_eq!(
             Chord::from_forte_class("3-11").unwrap().prime_form_string(),
@@ -1138,7 +1139,7 @@ mod tests {
 
         assert_eq!(
             names(&Chord::from_interval_vector(&[0, 0, 1, 1, 1, 0], false).unwrap()),
-            ["C", "E-", "G"]
+            ["C", "Eb", "G"]
         );
         assert_eq!(
             names(&Chord::from_interval_vector(&[1, 1, 1, 1, 1, 1], false).unwrap()),
@@ -1146,7 +1147,7 @@ mod tests {
         );
         assert_eq!(
             names(&Chord::from_interval_vector(&[1, 1, 1, 1, 1, 1], true).unwrap()),
-            ["C", "D-", "E-", "G"]
+            ["C", "Db", "Eb", "G"]
         );
         assert!(Chord::from_interval_vector(&[9, 9, 9, 9, 9, 9], false).is_none());
     }
@@ -1439,7 +1440,7 @@ mod tests {
         let cases: [(&str, &[&str], &[&str]); 7] = [
             ("C4 E4 G4", &["C4", "E4", "G4"], &["C3", "E3", "G3"]),
             ("C3 G3 E4 C5", &["C3", "E3", "G3"], &["C3", "E3", "G3"]),
-            ("E-4 G4 C5", &["E-4", "G4", "C5"], &["E-3", "G3", "C4"]),
+            ("E-4 G4 C5", &["Eb4", "G4", "C5"], &["Eb3", "G3", "C4"]),
             (
                 "C4 C#4 D4 E4 F#4 G4 A4 B4",
                 &["C4", "D4", "E4", "F#4", "G4", "A4", "B4", "C#5"],
@@ -1448,8 +1449,8 @@ mod tests {
             ("C4 E4 G4 C5 E5", &["C4", "E4", "G4"], &["C3", "E3", "G3"]),
             (
                 "B#3 C4 E4 G-4 F#4",
-                &["B#3", "C4", "E4", "F#4", "G-4"],
-                &["B#3", "C4", "E4", "F#4", "G-4"],
+                &["B#3", "C4", "E4", "F#4", "Gb4"],
+                &["B#3", "C4", "E4", "F#4", "Gb4"],
             ),
             (
                 "E4 G#4 B4 D5 F5",
@@ -1477,15 +1478,15 @@ mod tests {
         let chord = Chord::new("B#3 C4 E4 G-4 F#4").unwrap();
         assert_eq!(
             octave_names(&chord.sort_chromatic_ascending()),
-            ["B#3", "C4", "E4", "G-4", "F#4"]
+            ["B#3", "C4", "E4", "Gb4", "F#4"]
         );
         assert_eq!(
             octave_names(&chord.sort_diatonic_ascending()),
-            ["B#3", "C4", "E4", "F#4", "G-4"]
+            ["B#3", "C4", "E4", "F#4", "Gb4"]
         );
         assert_eq!(
             octave_names(&chord.sort_frequency_ascending()),
-            ["B#3", "C4", "E4", "G-4", "F#4"]
+            ["B#3", "C4", "E4", "Gb4", "F#4"]
         );
         let spread = Chord::new("C5 G3 E4 C3").unwrap();
         assert_eq!(
@@ -1496,7 +1497,7 @@ mod tests {
             octave_names(&spread.sort_frequency_ascending()),
             ["C3", "G3", "E4", "C5"]
         );
-        assert_eq!(chord.pitch_names(), ["B#", "C", "E", "G-", "F#"]);
+        assert_eq!(chord.pitch_names(), ["B#", "C", "E", "Gb", "F#"]);
     }
 
     #[test]
@@ -1552,12 +1553,12 @@ mod tests {
     fn notes_are_added_and_removed_as_music21_adds_and_removes_them() {
         let mut chord = Chord::new("C4 E4 G4").unwrap();
         chord.add("B-4").unwrap();
-        assert_eq!(chord.pitch_names(), ["C", "E", "G", "B-"]);
+        assert_eq!(chord.pitch_names(), ["C", "E", "G", "Bb"]);
         chord.remove(&Pitch::from_name("E4").unwrap()).unwrap();
         assert!(chord.remove(&Pitch::from_name("E4").unwrap()).is_err());
         chord.remove_named("G4").unwrap();
         assert!(chord.remove_named("G4").is_err());
-        assert_eq!(chord.pitch_names(), ["C", "B-"]);
+        assert_eq!(chord.pitch_names(), ["C", "Bb"]);
         assert_eq!(chord.note_pitch_classes(), [0, 10]);
         assert_eq!(
             Chord::new("E4 C4 G4 C5").unwrap().note_pitch_classes(),
@@ -1650,9 +1651,11 @@ mod tests {
     fn pitches_that_only_print_alike_are_not_redundant() {
         let mut low_b: Pitch = "B".parse().unwrap();
         low_b.octave_setter(Some(-1));
-        let mut b_flat: Pitch = "B-".parse().unwrap();
+        let mut b_flat: Pitch = "Bb".parse().unwrap();
         b_flat.octave_setter(Some(1));
-        assert_eq!(low_b.name_with_octave(), b_flat.name_with_octave());
+        // music21 prints both `B-1`; with `b` for flat they no longer collide.
+        assert_eq!(low_b.name_with_octave(), "B-1");
+        assert_eq!(b_flat.name_with_octave(), "Bb1");
         let chord = Chord::new(vec![low_b, b_flat]).unwrap();
         let (kept, dropped) = chord.remove_redundant_pitches_reporting();
         assert_eq!(kept.notes.len(), 2);
@@ -1761,7 +1764,7 @@ mod tests {
                 notes: "C E- G",
                 quality: Minor,
                 flags: [t, f, t, f, f, f, f, f, f, t, f, f, t, f],
-                third: Some("E-"),
+                third: Some("Eb"),
                 fifth: Some("G"),
                 seventh: None,
                 enharmonic: f,
@@ -1772,8 +1775,8 @@ mod tests {
                 notes: "C E- G-",
                 quality: Diminished,
                 flags: [t, f, f, t, f, f, f, f, f, f, f, f, t, f],
-                third: Some("E-"),
-                fifth: Some("G-"),
+                third: Some("Eb"),
+                fifth: Some("Gb"),
                 seventh: None,
                 enharmonic: f,
                 repeated_third: f,
@@ -1796,7 +1799,7 @@ mod tests {
                 flags: [f, f, f, f, f, t, t, f, f, f, f, f, t, t],
                 third: Some("E4"),
                 fifth: Some("G4"),
-                seventh: Some("B-4"),
+                seventh: Some("Bb4"),
                 enharmonic: f,
                 repeated_third: f,
                 third_semitones: Some(4),
@@ -1805,9 +1808,9 @@ mod tests {
                 notes: "C E- G- B--",
                 quality: Diminished,
                 flags: [f, f, f, f, f, t, f, f, t, f, f, f, t, t],
-                third: Some("E-"),
-                fifth: Some("G-"),
-                seventh: Some("B--"),
+                third: Some("Eb"),
+                fifth: Some("Gb"),
+                seventh: Some("Bbb"),
                 enharmonic: f,
                 repeated_third: f,
                 third_semitones: Some(3),
@@ -1816,9 +1819,9 @@ mod tests {
                 notes: "C E- G- B-",
                 quality: Diminished,
                 flags: [f, f, f, f, f, t, f, t, f, f, f, f, t, t],
-                third: Some("E-"),
-                fifth: Some("G-"),
-                seventh: Some("B-"),
+                third: Some("Eb"),
+                fifth: Some("Gb"),
+                seventh: Some("Bb"),
                 enharmonic: f,
                 repeated_third: f,
                 third_semitones: Some(3),
@@ -1871,7 +1874,7 @@ mod tests {
                 notes: "C E-",
                 quality: Minor,
                 flags: [f, f, f, f, f, f, f, f, f, t, f, t, f, f],
-                third: Some("E-"),
+                third: Some("Eb"),
                 fifth: None,
                 seventh: None,
                 enharmonic: f,
@@ -1961,7 +1964,7 @@ mod tests {
                 flags: [f, f, f, f, f, f, f, f, f, f, f, f, t, t],
                 third: Some("E"),
                 fifth: Some("G"),
-                seventh: Some("B-"),
+                seventh: Some("Bb"),
                 enharmonic: f,
                 repeated_third: f,
                 third_semitones: Some(4),
@@ -1982,7 +1985,7 @@ mod tests {
                 quality: Major,
                 flags: [t, t, f, f, f, f, f, f, f, t, f, f, t, f],
                 third: Some("G4"),
-                fifth: Some("B-4"),
+                fifth: Some("Bb4"),
                 seventh: None,
                 enharmonic: f,
                 repeated_third: f,
@@ -2105,19 +2108,19 @@ mod tests {
             (
                 "C3 C#3 E-3 E3 E#3 G3",
                 None,
-                vec!["C3", "C#3", "E-3", "E3", "E#3", "G3"],
+                vec!["C3", "C#3", "Eb3", "E3", "E#3", "G3"],
             ),
             ("G4 C4 E4", Some(5), vec!["C5", "E5", "G5"]),
             ("C4 E4 G4 C5 E5", None, vec!["C4", "E4", "G4"]),
-            ("C#4 D-4 E4", None, vec!["C#4", "D-4", "E4"]),
+            ("C#4 D-4 E4", None, vec!["C#4", "Db4", "E4"]),
             // The bass is the note written lowest, not the one sounding
             // lowest: E#4 sits under F-4 on the staff.
-            ("E#4 F-4", None, vec!["E#4", "F-4"]),
+            ("E#4 F-4", None, vec!["E#4", "Fb4"]),
             ("C6 B#5", None, vec!["B#5", "C6"]),
             (
                 "A-6 E-2 D#2 E#3 A#5",
                 None,
-                vec!["D#2", "E-2", "E#2", "A-2", "A#2"],
+                vec!["D#2", "Eb2", "E#2", "Ab2", "A#2"],
             ),
         ];
         for (notes, force_octave, expected) in cases {
@@ -2160,7 +2163,7 @@ mod tests {
         );
         assert_eq!(
             names(Chord::new("G-4 F##4 E4").unwrap().sort_ascending()),
-            vec!["E4", "F##4", "G-4"]
+            vec!["E4", "F##4", "Gb4"]
         );
     }
 
@@ -2170,11 +2173,11 @@ mod tests {
             ("C E G", 0, "C", "C"),
             ("E G C", 0, "C", "C"),
             ("G C E", 0, "C", "C"),
-            ("C4 E4 G4 B-4", 0, "C4", "C4"),
-            ("E4 G4 B-4 C5", 1, "C5", "E4"),
-            ("B-3 C4 E4 G4", 3, "C4", "B-3"),
-            ("G3 C4 E4 B-4", 2, "C4", "G3"),
-            ("A-4 C5 F#5", 1, "F#5", "A-4"),
+            ("C4 E4 G4 Bb4", 0, "C4", "C4"),
+            ("E4 G4 Bb4 C5", 1, "C5", "E4"),
+            ("B-3 C4 E4 G4", 3, "C4", "Bb3"),
+            ("G3 C4 E4 Bb4", 2, "C4", "G3"),
+            ("A-4 C5 F#5", 1, "F#5", "Ab4"),
             ("C5 F#5 A-5", 2, "F#5", "C5"),
             ("F#4 A-4 C5", 0, "F#4", "F#4"),
             ("C F G", 2, "F", "C"),
@@ -2187,7 +2190,7 @@ mod tests {
             ("C E G A", 1, "A", "C"),
             ("C F# G", 2, "F#", "C"),
             ("D4 F#4 A4 C5 E5", 0, "D4", "D4"),
-            ("A-3 C4 E-4 F#4", 1, "F#4", "A-3"),
+            ("A-3 C4 Eb4 F#4", 1, "F#4", "Ab3"),
             ("C4 A-4 E-5 F#5", 2, "F#5", "C4"),
             ("E3 G3 B-3 D-4", 0, "E3", "E3"),
         ];
@@ -2472,7 +2475,7 @@ mod tests {
                     .transpose(&Interval::from_semitones(3).unwrap())
                     .unwrap()
             ),
-            vec!["E-4", "G4", "B-4"]
+            vec!["Eb4", "G4", "Bb4"]
         );
         let bare = Chord::new("C E G").unwrap();
         assert_eq!(
@@ -2628,7 +2631,7 @@ mod tests {
         assert_eq!(major_seventh.chord_symbol().as_deref(), Some("Cmaj7"));
         assert_eq!(
             petrushka.chord_symbol().as_deref(),
-            Some("Ddom7dim5/CaddA,E-")
+            Some("Ddom7dim5/CaddA,Eb")
         );
         assert_eq!(slash_chord.chord_symbol().as_deref(), None);
     }

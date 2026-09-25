@@ -12,6 +12,7 @@
 //! therefore needs neither Python nor the submodule — only the checked-in file.
 
 use music21_rs::{Interval, Pitch, Scale, ScaleType};
+use music21_rs_python_parity::music21_name;
 
 /// An octave downwards, for stepping back to the bottom of the range.
 fn octave_down() -> Interval {
@@ -91,7 +92,7 @@ fn every_scale_matches_music21() {
                     panic!("{} on {} failed: {err}", expected.scale_type, case.tonic)
                 })
                 .iter()
-                .map(|pitch| pitch.name_with_octave())
+                .map(|pitch| music21_name(&pitch.name_with_octave()))
                 .collect();
 
             if actual != case.pitches {

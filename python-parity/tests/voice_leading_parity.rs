@@ -17,6 +17,7 @@ use music21_rs::{
     Chord, Duration, MetronomeMark, Note, Pitch, QuartetOptions, Rest, Stream, StreamKind,
     iterate_all_voice_leading_quartets,
 };
+use music21_rs_python_parity::music21_name;
 use serde::Deserialize;
 
 use std::path::{Path, PathBuf};
@@ -120,10 +121,10 @@ fn the_quartets_of_a_score_are_the_ones_music21_finds() {
                 .map(|quartet| {
                     normalized(&format!(
                         "{} {}|{} {}",
-                        quartet.v1n1().name_with_octave(),
-                        quartet.v1n2().name_with_octave(),
-                        quartet.v2n1().name_with_octave(),
-                        quartet.v2n2().name_with_octave(),
+                        music21_name(&quartet.v1n1().name_with_octave()),
+                        music21_name(&quartet.v1n2().name_with_octave()),
+                        music21_name(&quartet.v2n1().name_with_octave()),
+                        music21_name(&quartet.v2n2().name_with_octave()),
                     ))
                 })
                 .collect();

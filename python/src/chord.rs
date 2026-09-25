@@ -9,6 +9,7 @@ use pyo3::exceptions::{PyIndexError, PyKeyError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 
 use crate::Walkable;
+use crate::spelling::music21_name;
 use pyo3::types::{PyDict, PyList, PyTuple};
 
 use music21_rs_crate::{
@@ -764,7 +765,7 @@ impl Chord {
             .ok_or_else(|| {
                 ChordException::new_err(format!(
                     "the given pitch is not in the Chord: {}",
-                    wanted.name_with_octave()
+                    music21_name(&wanted.name_with_octave())
                 ))
             })
     }
@@ -1250,7 +1251,7 @@ fn repoint_override(chord: &Bound<'_, Chord>, key: &str) -> PyResult<()> {
     };
     for note in Chord::note_objects(chord)? {
         let pitch = Note::get_pitch(note.bind(py));
-        if pitch.borrow(py).inner.name() == name {
+        if music21_name(&pitch.borrow(py).inner.name()) == name {
             if let Some(overrides) = chord.borrow().overrides.as_ref() {
                 overrides.bind(py).set_item(key, pitch)?;
             }
@@ -1528,7 +1529,11 @@ impl Chord {
 
     #[getter]
     fn pitchNames(&self) -> Vec<String> {
-        self.inner.pitch_names()
+        self.inner
+            .pitch_names()
+            .iter()
+            .map(|name| music21_name(name))
+            .collect()
     }
 
     #[getter]
@@ -1596,11 +1601,12 @@ impl Chord {
         let wanted = if let Ok(name) = key.extract::<String>() {
             name.to_uppercase()
         } else {
-            pitch_from_any(key)?.name_with_octave()
+            music21_name(&pitch_from_any(key)?.name_with_octave())
         };
+        // Names compared as music21 writes them, which is how they are asked.
         notes
             .iter()
-            .find(|note| note.borrow(py).inner.pitch().name_with_octave() == wanted)
+            .find(|note| music21_name(&note.borrow(py).inner.pitch().name_with_octave()) == wanted)
             .map(|note| note.clone_ref(py))
             .ok_or_else(|| {
                 PyKeyError::new_err(format!(
@@ -1625,12 +1631,12 @@ impl Chord {
                 let wanted = if let Ok(name) = key.extract::<String>() {
                     name.to_uppercase()
                 } else {
-                    pitch_from_any(key)?.name_with_octave()
+                    music21_name(&pitch_from_any(key)?.name_with_octave())
                 };
                 self.inner
                     .notes()
                     .iter()
-                    .position(|note| note.pitch().name_with_octave() == wanted)
+                    .position(|note| music21_name(&note.pitch().name_with_octave()) == wanted)
                     .map(|index| index as isize)
                     .ok_or_else(|| {
                         PyKeyError::new_err(format!("No note in the chord matches {wanted}"))
@@ -1773,7 +1779,15 @@ impl Chord {
 
     #[getter]
     fn pitchedCommonName(&self) -> String {
-        cached!(self, pitched_common_name, self.inner.pitched_common_name())
+        cached!(self, pitched_common_name, {
+            // music21 names a lone note by its pitch, `E-`; every other
+            // name it writes with `b` already, `Eb-major triad`.
+            let named = self.inner.pitched_common_name();
+            match self.inner.common_name().as_str() {
+                "note" | "unison" => music21_name(&named),
+                _ => named,
+            }
+        })
     }
 
     #[getter]
@@ -1885,7 +1899,7 @@ impl Chord {
                 if !allow_add {
                     return Err(ChordException::new_err(format!(
                         "Pitch {} not found in chord",
-                        bass.name_with_octave()
+                        music21_name(&bass.name_with_octave())
                     )));
                 }
                 // music21 puts a bass the chord does not have in front of
@@ -3158,13 +3172,13 @@ impl Chord {
             .inner
             .pitches()
             .iter()
-            .map(RsPitch::name_with_octave)
+            .map(|pitch| music21_name(&pitch.name_with_octave()))
             .collect();
         let mut theirs: Vec<String> = other
             .inner
             .pitches()
             .iter()
-            .map(RsPitch::name_with_octave)
+            .map(|pitch| music21_name(&pitch.name_with_octave()))
             .collect();
         ours.sort();
         theirs.sort();
@@ -3193,7 +3207,7 @@ impl Chord {
             .inner
             .pitches()
             .iter()
-            .map(RsPitch::name_with_octave)
+            .map(|pitch| music21_name(&pitch.name_with_octave()))
             .collect();
         Ok(format!(
             "<music21.chord.{} {}>",

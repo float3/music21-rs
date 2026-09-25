@@ -427,7 +427,7 @@ impl ScaleType {
 /// The tonics music21's `IntervalNetwork.find` tries, in its order. Ties in
 /// the ranking fall back to this order reversed.
 pub(super) const SCALE_STARTS: [&str; 15] = [
-    "C", "C#", "D-", "D", "D#", "E-", "E", "F", "F#", "G", "G#", "A", "B-", "B", "C-",
+    "C", "C#", "Db", "D", "D#", "Eb", "E", "F", "F#", "G", "G#", "A", "Bb", "B", "Cb",
 ];
 
 impl ScaleType {
@@ -641,7 +641,7 @@ Observed Javanese Slendro scale, Helmholtz/Ellis p. 518, nr.94
                 "D~3(-22c)",
                 "F3(-16c)",
                 "G~3(-22c)",
-                "B-3(-40c)",
+                "Bb3(-40c)",
                 "C4",
                 "D~4(-22c)",
                 "F4(-16c)",
@@ -678,7 +678,7 @@ Observed Javanese Slendro scale, Helmholtz/Ellis p. 518, nr.94
                 .unwrap(),
             Some(3)
         );
-        let e_flat = Pitch::from_name("E-").unwrap();
+        let e_flat = Pitch::from_name("Eb").unwrap();
         let (degree, accidental) = major.degree_and_accidental_of(&e_flat).unwrap();
         assert_eq!(degree, 3);
         assert_eq!(accidental.as_ref().map(|a| a.name()), Some("flat"));
@@ -708,7 +708,7 @@ Observed Javanese Slendro scale, Helmholtz/Ellis p. 518, nr.94
         let c_minor = Scale::new(ScaleType::Minor, Pitch::from_name("C").unwrap());
         assert_eq!(tonic(&c_minor.parallel_major()), "C");
         assert_eq!(c_minor.parallel_major().scale_type(), ScaleType::Major);
-        assert_eq!(tonic(&c_minor.relative_major().unwrap()), "E-");
+        assert_eq!(tonic(&c_minor.relative_major().unwrap()), "Eb");
         let c_major = Scale::new(ScaleType::Major, Pitch::from_name("C").unwrap());
         assert_eq!(tonic(&c_major.relative_minor().unwrap()), "A");
         assert_eq!(c_major.parallel_minor().scale_type(), ScaleType::Minor);
@@ -752,29 +752,29 @@ Observed Javanese Slendro scale, Helmholtz/Ellis p. 518, nr.94
         // A whole-tone scale is a cycle, walked down to the range from its
         // tonic above it.
         assert_eq!(
-            between(ScaleType::WholeTone, "B-4", "C#4", "G#4"),
-            ["D4", "F-4", "G-4", "A-4"]
+            between(ScaleType::WholeTone, "Bb4", "C#4", "G#4"),
+            ["D4", "Fb4", "Gb4", "Ab4"]
         );
         // An octave-repeating scale starts from the octave of its tonic just
         // below the range, however far below the range the tonic is.
         assert_eq!(
             between(ScaleType::Octatonic, "G#2", "C#4", "G#4"),
-            ["C#4", "D4", "E4", "F4", "G4", "A-4"]
+            ["C#4", "D4", "E4", "F4", "G4", "Ab4"]
         );
         // And stops at the first note at or past the top, so Rag Marwa's
         // turn back down to G4 is not counted twice.
         assert_eq!(
-            between(ScaleType::RagMarwa, "B-3", "C#4", "G#4"),
+            between(ScaleType::RagMarwa, "Bb3", "C#4", "G#4"),
             ["D4", "E4", "G4"]
         );
         // Coming down, a scale is walked down, and spells as it goes.
         assert_eq!(
-            coming_down(ScaleType::RagAsawari, "B-3"),
-            ["B-4", "A-4", "F#4", "F4", "E-4", "C#4", "C4", "B-3"]
+            coming_down(ScaleType::RagAsawari, "Bb3"),
+            ["Bb4", "Ab4", "F#4", "F4", "Eb4", "C#4", "C4", "Bb3"]
         );
         assert_eq!(
             coming_down(ScaleType::RagMarwa, "C4"),
-            ["D-5", "C5", "D-5", "B4", "A4", "F#4", "E4", "D-4", "C4"]
+            ["Db5", "C5", "Db5", "B4", "A4", "F#4", "E4", "Db4", "C4"]
         );
     }
 
@@ -935,7 +935,7 @@ Observed Javanese Slendro scale, Helmholtz/Ellis p. 518, nr.94
         .collect();
         let scale = Scale::from_pitches(&tuned).unwrap();
         let mut stream = Stream::new();
-        for name in ["D5", "F#4", "A3", "B#4", "G-5"] {
+        for name in ["D5", "F#4", "A3", "B#4", "Gb5"] {
             stream.push(Note::from_pitch(Pitch::from_name(name).unwrap()));
         }
         stream.push(Chord::new("C5 E5 G5").unwrap());
@@ -960,7 +960,7 @@ Observed Javanese Slendro scale, Helmholtz/Ellis p. 518, nr.94
             ("F#4", 66.0),
             ("A3", 56.85),
             ("B#4", 72.0),
-            ("G-5", 78.0),
+            ("Gb5", 78.0),
             ("C5", 72.0),
             ("E5", 76.0),
             ("G5", 79.0),
@@ -986,15 +986,15 @@ Observed Javanese Slendro scale, Helmholtz/Ellis p. 518, nr.94
         use crate::Pitch;
         use crate::tuningsystem::scala::ScalaDegree;
 
-        let scale = Scale::new(ScaleType::Major, Pitch::from_name("A-4").unwrap());
+        let scale = Scale::new(ScaleType::Major, Pitch::from_name("Ab4").unwrap());
         let tonic = scale.roman_numeral(1).unwrap();
-        assert_eq!(tonic.to_chord().unwrap().root().unwrap().to_string(), "A-4");
+        assert_eq!(tonic.to_chord().unwrap().root().unwrap().to_string(), "Ab4");
         let dominant = scale.roman_numeral(5).unwrap();
         assert_eq!(
             dominant.to_chord().unwrap().root().unwrap().to_string(),
-            "E-5"
+            "Eb5"
         );
-        assert_eq!(dominant.figure_and_key(), "V in A- major");
+        assert_eq!(dominant.figure_and_key(), "V in Ab major");
         assert!(scale.roman_numeral(8).is_err());
 
         let scala = scale.scala_data().unwrap();
@@ -1007,14 +1007,14 @@ Observed Javanese Slendro scale, Helmholtz/Ellis p. 518, nr.94
             .collect();
         assert_eq!(cents, [0, 200, 400, 500, 700, 900, 1100]);
         assert_eq!(scala.period().cents().round() as i64, 1200);
-        assert_eq!(scala.description(), "A- major");
+        assert_eq!(scala.description(), "Ab major");
     }
 
     #[test]
     fn a_scale_can_be_given_by_its_notes() {
         // music21's own example: a scale of four notes, which repeats at the
         // octave like any other.
-        let given: Vec<Pitch> = ["C4", "E-4", "G-4", "A4"]
+        let given: Vec<Pitch> = ["C4", "Eb4", "Gb4", "A4"]
             .iter()
             .map(|name| Pitch::from_name(*name).expect("valid pitch"))
             .collect();
@@ -1027,7 +1027,7 @@ Observed Javanese Slendro scale, Helmholtz/Ellis p. 518, nr.94
             .iter()
             .map(Pitch::name_with_octave)
             .collect();
-        assert_eq!(realized, ["C4", "E-4", "G-4", "A4", "C5"]);
+        assert_eq!(realized, ["C4", "Eb4", "Gb4", "A4", "C5"]);
         assert_eq!(scale.pitch_at_degree(4).unwrap().name_with_octave(), "A4");
         // The fifth degree of a four-note scale is the first again, in the
         // octave the scale stands in — music21 reads a degree within the one
@@ -1041,14 +1041,14 @@ Observed Javanese Slendro scale, Helmholtz/Ellis p. 518, nr.94
         // And it walks a range the way a named scale does.
         let range: Vec<String> = scale
             .pitches_between(
-                &Pitch::from_name("E-5").unwrap(),
+                &Pitch::from_name("Eb5").unwrap(),
                 &Pitch::from_name("C6").unwrap(),
             )
             .expect("a range")
             .iter()
             .map(Pitch::name_with_octave)
             .collect();
-        assert_eq!(range, ["E-5", "G-5", "A5", "C6"]);
+        assert_eq!(range, ["Eb5", "Gb5", "A5", "C6"]);
 
         assert!(Scale::from_pitches(&[]).is_err());
     }
@@ -1150,10 +1150,10 @@ Observed Javanese Slendro scale, Helmholtz/Ellis p. 518, nr.94
         assert!(c_major.is_next(&pitch("E4"), &pitch("C4"), 2).unwrap());
 
         let (matched, unmatched) = c_major
-            .match_pitches(&["C4", "E4", "G-4", "B-5", "A"].map(pitch))
+            .match_pitches(&["C4", "E4", "Gb4", "Bb5", "A"].map(pitch))
             .unwrap();
         assert_eq!(names(&matched), ["C4", "E4", "A4"]);
-        assert_eq!(names(&unmatched), ["G-4", "B-5"]);
+        assert_eq!(names(&unmatched), ["Gb4", "Bb5"]);
 
         assert_eq!(
             names(
@@ -1327,7 +1327,7 @@ Observed Javanese Slendro scale, Helmholtz/Ellis p. 518, nr.94
                 &["C", "E", "G"],
                 ScaleType::Major,
                 "G",
-                [("G", 3), ("F", 3), ("C", 3), ("B-", 2)],
+                [("G", 3), ("F", 3), ("C", 3), ("Bb", 2)],
                 &["G", "F", "C"],
             ),
             (
@@ -1341,7 +1341,7 @@ Observed Javanese Slendro scale, Helmholtz/Ellis p. 518, nr.94
                 &["C", "E", "G"],
                 ScaleType::Dorian,
                 "A",
-                [("A", 3), ("G", 3), ("D", 3), ("B-", 2)],
+                [("A", 3), ("G", 3), ("D", 3), ("Bb", 2)],
                 &["A", "G", "D"],
             ),
             (
@@ -1355,28 +1355,28 @@ Observed Javanese Slendro scale, Helmholtz/Ellis p. 518, nr.94
                 &["F#", "A", "C#", "E"],
                 ScaleType::Minor,
                 "B",
-                [("B", 4), ("F#", 4), ("D-", 4), ("C#", 4)],
-                &["B", "F#", "D-", "C#", "C-"],
+                [("B", 4), ("F#", 4), ("Db", 4), ("C#", 4)],
+                &["B", "F#", "Db", "C#", "Cb"],
             ),
             (
                 &["G#", "B", "D", "F"],
                 ScaleType::HarmonicMinor,
                 "A",
-                [("A", 4), ("F#", 4), ("E-", 4), ("D#", 4)],
-                &["A", "F#", "E-", "D#", "C"],
+                [("A", 4), ("F#", 4), ("Eb", 4), ("D#", 4)],
+                &["A", "F#", "Eb", "D#", "C"],
             ),
             (
-                &["B-", "D", "F", "A-"],
+                &["Bb", "D", "F", "A-"],
                 ScaleType::Major,
-                "E-",
-                [("E-", 4), ("D#", 4), ("B-", 3), ("G#", 3)],
-                &["E-", "D#"],
+                "Eb",
+                [("Eb", 4), ("D#", 4), ("Bb", 3), ("G#", 3)],
+                &["Eb", "D#"],
             ),
             (
-                &["B-", "D", "F", "A-"],
+                &["Bb", "D", "F", "A-"],
                 ScaleType::Dorian,
                 "F",
-                [("F", 4), ("B-", 3), ("G#", 3), ("G", 3)],
+                [("F", 4), ("Bb", 3), ("G#", 3), ("G", 3)],
                 &["F"],
             ),
             (
@@ -1390,22 +1390,22 @@ Observed Javanese Slendro scale, Helmholtz/Ellis p. 518, nr.94
                 &["C", "D", "E", "F#", "G", "A", "B"],
                 ScaleType::Minor,
                 "E",
-                [("E", 7), ("B", 6), ("A", 6), ("C-", 6)],
+                [("E", 7), ("B", 6), ("A", 6), ("Cb", 6)],
                 &["E"],
             ),
             (
                 &["C", "C#", "D"],
                 ScaleType::Major,
-                "B-",
-                [("B-", 2), ("A", 2), ("G#", 2), ("G", 2)],
+                "Bb",
+                [("Bb", 2), ("A", 2), ("G#", 2), ("G", 2)],
                 &[],
             ),
             (
-                &["E-", "G", "B-"],
+                &["Eb", "G", "Bb"],
                 ScaleType::Major,
-                "B-",
-                [("B-", 3), ("G#", 3), ("E-", 3), ("D#", 3)],
-                &["B-", "G#", "E-", "D#"],
+                "Bb",
+                [("Bb", 3), ("G#", 3), ("Eb", 3), ("D#", 3)],
+                &["Bb", "G#", "Eb", "D#"],
             ),
         ];
         for (names, scale_type, best, ranked, all) in cases {
@@ -1446,7 +1446,7 @@ Observed Javanese Slendro scale, Helmholtz/Ellis p. 518, nr.94
             ("F#4", 4, Some("sharp")),
             ("G", 5, None),
             ("A#", 6, Some("sharp")),
-            ("B-", 7, Some("flat")),
+            ("Bb", 7, Some("flat")),
             ("D--4", 2, Some("double-flat")),
             ("C#4", 1, Some("sharp")),
             ("E#4", 3, Some("sharp")),
@@ -1483,15 +1483,15 @@ Observed Javanese Slendro scale, Helmholtz/Ellis p. 518, nr.94
         );
         assert_eq!(
             names(ScaleType::Minor, "C4"),
-            ["C", "D", "E-", "F", "G", "A-", "B-", "C"]
+            ["C", "D", "Eb", "F", "G", "Ab", "Bb", "C"]
         );
         assert_eq!(
             names(ScaleType::Dorian, "C4"),
-            ["C", "D", "E-", "F", "G", "A", "B-", "C"]
+            ["C", "D", "Eb", "F", "G", "A", "Bb", "C"]
         );
         assert_eq!(
             names(ScaleType::Phrygian, "C4"),
-            ["C", "D-", "E-", "F", "G", "A-", "B-", "C"]
+            ["C", "Db", "Eb", "F", "G", "Ab", "Bb", "C"]
         );
         assert_eq!(
             names(ScaleType::Lydian, "C4"),
@@ -1499,11 +1499,11 @@ Observed Javanese Slendro scale, Helmholtz/Ellis p. 518, nr.94
         );
         assert_eq!(
             names(ScaleType::Mixolydian, "C4"),
-            ["C", "D", "E", "F", "G", "A", "B-", "C"]
+            ["C", "D", "E", "F", "G", "A", "Bb", "C"]
         );
         assert_eq!(
             names(ScaleType::Locrian, "C4"),
-            ["C", "D-", "E-", "F", "G-", "A-", "B-", "C"]
+            ["C", "Db", "Eb", "F", "Gb", "Ab", "Bb", "C"]
         );
     }
 
@@ -1511,11 +1511,11 @@ Observed Javanese Slendro scale, Helmholtz/Ellis p. 518, nr.94
     fn realizes_the_altered_minors() {
         assert_eq!(
             names(ScaleType::HarmonicMinor, "C4"),
-            ["C", "D", "E-", "F", "G", "A-", "B", "C"]
+            ["C", "D", "Eb", "F", "G", "Ab", "B", "C"]
         );
         assert_eq!(
             names(ScaleType::MelodicMinor, "C4"),
-            ["C", "D", "E-", "F", "G", "A", "B", "C"]
+            ["C", "D", "Eb", "F", "G", "A", "B", "C"]
         );
     }
 
@@ -1581,7 +1581,7 @@ Observed Javanese Slendro scale, Helmholtz/Ellis p. 518, nr.94
             ScaleType::Minor,
             Pitch::from_name("c").expect("valid tonic"),
         );
-        assert_eq!(minor.pitch_at_degree(7).unwrap().name(), "B-");
+        assert_eq!(minor.pitch_at_degree(7).unwrap().name(), "Bb");
         assert_eq!(minor.leading_tone().unwrap().name(), "B");
         // In a major scale it already is.
         let major = Scale::new(
@@ -1609,11 +1609,11 @@ Observed Javanese Slendro scale, Helmholtz/Ellis p. 518, nr.94
     fn octatonic_alternates_tone_and_semitone() {
         assert_eq!(
             names(ScaleType::Octatonic, "C4"),
-            ["C", "D", "E-", "F", "G-", "A-", "A", "B", "C"]
+            ["C", "D", "Eb", "F", "Gb", "Ab", "A", "B", "C"]
         );
         assert_eq!(
             names(ScaleType::Octatonic, "G4"),
-            ["G", "A", "B-", "C", "D-", "E-", "F-", "G-", "G"]
+            ["G", "A", "Bb", "C", "Db", "Eb", "Fb", "Gb", "G"]
         );
     }
 
@@ -1622,7 +1622,7 @@ Observed Javanese Slendro scale, Helmholtz/Ellis p. 518, nr.94
         assert_eq!(
             names(ScaleType::Chromatic, "C4"),
             [
-                "C", "C#", "D", "E-", "E", "F", "F#", "G", "A-", "A", "B-", "B", "C"
+                "C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B", "C"
             ]
         );
     }
@@ -1631,7 +1631,7 @@ Observed Javanese Slendro scale, Helmholtz/Ellis p. 518, nr.94
     fn rag_asawari_is_pentatonic() {
         assert_eq!(
             names(ScaleType::RagAsawari, "C4"),
-            ["C", "D", "F", "G", "A-", "C"]
+            ["C", "D", "F", "G", "Ab", "C"]
         );
     }
 
@@ -1643,11 +1643,11 @@ Observed Javanese Slendro scale, Helmholtz/Ellis p. 518, nr.94
         // that ends above where it closed.
         assert_eq!(
             names(ScaleType::RagMarwa, "C4"),
-            ["C", "D-", "E", "F#", "A", "B", "A", "C", "D-"]
+            ["C", "Db", "E", "F#", "A", "B", "A", "C", "Db"]
         );
         assert_eq!(
             names(ScaleType::RagMarwa, "E-4"),
-            ["E-", "F-", "G", "A", "C", "D", "C", "E-", "F-"]
+            ["Eb", "Fb", "G", "A", "C", "D", "C", "Eb", "Fb"]
         );
     }
 
@@ -1748,7 +1748,7 @@ Observed Javanese Slendro scale, Helmholtz/Ellis p. 518, nr.94
         // music21's own answers for `scale.PhrygianScale('g').pitchFromDegree`.
         let scale = Scale::new(ScaleType::Phrygian, Pitch::from_name("G4").unwrap());
         for (degree, expected) in [
-            (-1, "E-5"),
+            (-1, "Eb5"),
             (0, "F5"),
             (1, "G4"),
             (7, "F5"),

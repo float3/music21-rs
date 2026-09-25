@@ -671,8 +671,8 @@ mod tests {
     #[test]
     fn degrees_sound_in_order_whatever_order_they_were_written_in() {
         for (label, pitches) in [
-            ("F:(b3, 5, b7, 11)", ["F", "A-", "C", "E-", "B-"]),
-            ("F:(b3, 11, b7, 5)", ["F", "A-", "C", "E-", "B-"]),
+            ("F:(b3, 5, b7, 11)", ["F", "Ab", "C", "Eb", "Bb"]),
+            ("F:(b3, 11, b7, 5)", ["F", "Ab", "C", "Eb", "Bb"]),
             ("F:maj7(#11)", ["F", "A", "C", "E", "B"]),
         ] {
             assert_eq!(
@@ -694,11 +694,11 @@ mod tests {
                 .map(Pitch::name_with_octave)
                 .collect()
         };
-        assert_eq!(names("Ab:maj(9)/9"), ["A-4", "C5", "E-5", "B-3"]);
-        assert_eq!(names("Bb:7/b7"), ["B-4", "D5", "F5", "A-3"]);
+        assert_eq!(names("Ab:maj(9)/9"), ["Ab4", "C5", "Eb5", "Bb3"]);
+        assert_eq!(names("Bb:7/b7"), ["Bb4", "D5", "F5", "Ab3"]);
         assert_eq!(names("C:maj(*3)"), ["C4", "G4"]);
         assert_eq!(names("C:sus4(*3,9)"), ["C4", "F4", "G4", "D4"]);
-        assert_eq!(names("Db"), ["D-4", "F4", "A-4"]);
+        assert_eq!(names("Db"), ["Db4", "F4", "Ab4"]);
         assert_eq!(names("C/5"), ["C4", "E4", "G3"]);
 
         let harte = Harte::new("Ab:maj(9)/9").unwrap();
@@ -709,8 +709,8 @@ mod tests {
         assert_eq!(harte.unwrap_shorthand().unwrap(), ["1", "3", "5", "9"]);
         assert!(!harte.bass_is_root());
         assert!(harte.contains_shorthand());
-        assert_eq!(harte.chord().root().unwrap().name_with_octave(), "A-4");
-        assert_eq!(harte.chord().bass().unwrap().name_with_octave(), "B-3");
+        assert_eq!(harte.chord().root().unwrap().name_with_octave(), "Ab4");
+        assert_eq!(harte.chord().bass().unwrap().name_with_octave(), "Bb3");
         assert_eq!(harte.midi_pitches(), [58, 68, 72, 75]);
         assert_eq!(harte.to_string(), "Ab:maj(9)/9");
         assert_eq!(harte.prettify(), "Ab:maj(9)/9");

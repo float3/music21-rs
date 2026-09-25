@@ -2,7 +2,7 @@
 //! sonorities and augmented sixths, in a key and out of one.
 
 use super::*;
-use crate::pitch::{CHROMATIC_PITCH_CLASS_NAMES, display_flats, pitch_class_name};
+use crate::pitch::{CHROMATIC_PITCH_CLASS_NAMES, pitch_class_name};
 
 impl Chord {
     /// Returns the first likely tonal resolution chord in the given key.
@@ -118,10 +118,7 @@ impl Chord {
         let augmented_contexts = self.augmented_sixth_contexts()?;
         if !augmented_contexts.is_empty() {
             for (tonic, mode) in augmented_contexts {
-                let context = format!(
-                    "augmented-sixth resolution in {} {mode}",
-                    display_flats(tonic)
-                );
+                let context = format!("augmented-sixth resolution in {} {mode}", tonic);
                 self.add_resolution_suggestions_for_key(
                     tonic,
                     mode,
@@ -137,7 +134,7 @@ impl Chord {
             if self.is_dominant_function_sonority() {
                 let tonic = pitch_class_name((root_pc + 5) % 12);
                 for mode in ["major", "minor"] {
-                    let context = format!("dominant resolution to {} {mode}", display_flats(tonic));
+                    let context = format!("dominant resolution to {} {mode}", tonic);
                     self.add_resolution_suggestions_for_key(
                         tonic,
                         mode,
@@ -151,8 +148,7 @@ impl Chord {
             if self.is_leading_tone_function_sonority() {
                 let tonic = pitch_class_name((root_pc + 1) % 12);
                 for mode in ["major", "minor"] {
-                    let context =
-                        format!("leading-tone resolution to {} {mode}", display_flats(tonic));
+                    let context = format!("leading-tone resolution to {} {mode}", tonic);
                     self.add_resolution_suggestions_for_key(
                         tonic,
                         mode,

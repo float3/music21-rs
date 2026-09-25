@@ -8,10 +8,11 @@
 //! regenerate-fixtures` from the pinned harte-library checkout, so this test
 //! needs neither Python nor the checkout.
 
+use music21_rs_python_parity::music21_name;
 use std::path::Path;
 
 use music21_rs::harte::degree_sort_key;
-use music21_rs::{Harte, Pitch};
+use music21_rs::Harte;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -107,10 +108,16 @@ fn every_label_in_harte_librarys_coverage_set_builds_the_same_chord() {
             .chord()
             .pitches()
             .iter()
-            .map(Pitch::name_with_octave)
+            .map(|pitch| music21_name(&pitch.name_with_octave()))
             .collect();
-        let root = harte.chord().root().map(Pitch::name_with_octave);
-        let bass = harte.chord().bass().map(Pitch::name_with_octave);
+        let root = harte
+            .chord()
+            .root()
+            .map(|pitch| music21_name(&pitch.name_with_octave()));
+        let bass = harte
+            .chord()
+            .bass()
+            .map(|pitch| music21_name(&pitch.name_with_octave()));
         let pretty = sort_parenthesised(&harte.prettify());
         let got = (
             in_degree_order(harte.sounding_degrees(), &pitches),

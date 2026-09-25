@@ -13,6 +13,7 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 use crate::Walkable;
+use crate::spelling::music21_name;
 use pyo3::types::{PyDict, PyTuple, PyType};
 
 use music21_rs_crate::scale::{
@@ -142,7 +143,8 @@ impl Scale {
                 // A pitch's step is the letter its name starts with.
                 "step" => pitch.name().chars().take(1).collect(),
                 "pitchClass" => pitch.pitch_class().number().to_string(),
-                _ => pitch.name_with_octave(),
+                // music21's own spelling, so that `B-1` meets `B-1`.
+                _ => music21_name(&pitch.name_with_octave()),
             };
             if seen.contains(&key) {
                 continue;
@@ -977,7 +979,11 @@ impl ConcreteScale {
         if !self.has_tonic {
             return format!("Abstract {}", self.r#type());
         }
-        format!("{} {}", self.inner.tonic().name(), self.r#type())
+        format!(
+            "{} {}",
+            music21_name(&self.inner.tonic().name()),
+            self.r#type()
+        )
     }
 
     /// The scale's tonic `Pitch`, or `None` for a scale with no tonic.

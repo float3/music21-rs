@@ -10,6 +10,7 @@
 //! last place, since music21 squares through the platform's `pow`, which on
 //! Windows is not exact, so its own last digit differs by platform.
 
+use music21_rs_python_parity::music21_name;
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -90,7 +91,7 @@ fn every_piece_is_analysed_as_music21_analyses_it() {
                     (
                         format!(
                             "{} {}",
-                            estimate.key().tonic().name(),
+                            music21_name(&estimate.key().tonic().name()),
                             estimate.key().mode()
                         ),
                         estimate.score(),
@@ -113,8 +114,12 @@ fn every_piece_is_analysed_as_music21_analyses_it() {
             .iter()
             .flat_map(|(pitches, _)| pitches.clone())
             .collect();
-        let span =
-            pitch_span(&all).map(|(low, high)| [low.name_with_octave(), high.name_with_octave()]);
+        let span = pitch_span(&all).map(|(low, high)| {
+            [
+                music21_name(&low.name_with_octave()),
+                music21_name(&high.name_with_octave()),
+            ]
+        });
         assert_eq!(span, piece.span, "{label}: span");
 
         let lines: Vec<Vec<Pitch>> = piece

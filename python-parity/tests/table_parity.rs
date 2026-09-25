@@ -102,7 +102,8 @@ fn accidentals_match_music21() {
             }
         };
 
-        if actual.modifier() != expected.modifier {
+        // The crate writes a flat `b` where music21 writes `-`.
+        if actual.modifier().replace('b', "-") != expected.modifier {
             mismatches.push(format!(
                 "{} modifier: music21 {:?}, crate {:?}",
                 expected.name,

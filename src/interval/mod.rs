@@ -1304,10 +1304,10 @@ mod tests {
             ("E4", "C4", ["E4", "C4", "E4", "C4"]),
             ("B#3", "C4", ["C4", "B#3", "B#3", "B#3"]),
             ("C4", "B#3", ["C4", "B#3", "C4", "C4"]),
-            ("C-4", "B3", ["C-4", "B3", "C-4", "C-4"]),
-            ("F#4", "G-4", ["G-4", "F#4", "F#4", "F#4"]),
+            ("Cb4", "B3", ["Cb4", "B3", "Cb4", "Cb4"]),
+            ("F#4", "Gb4", ["Gb4", "F#4", "F#4", "F#4"]),
             ("C4", "C4", ["C4", "C4", "C4", "C4"]),
-            ("B3", "C-4", ["C-4", "B3", "B3", "B3"]),
+            ("B3", "Cb4", ["Cb4", "B3", "B3", "B3"]),
         ];
         for (first, second, expected) in cases {
             let a = Pitch::from_name(first).unwrap();
@@ -1660,7 +1660,7 @@ mod tests {
         let c4 = pitch("C4");
         let m3 = Interval::from_name("m3").unwrap();
         let out = m3.transpose_pitch(&c4).unwrap();
-        assert_eq!(out.name_with_octave(), "E-4");
+        assert_eq!(out.name_with_octave(), "Eb4");
     }
 
     #[test]

@@ -487,7 +487,7 @@ mod tests {
                 .transpose_pitch(&b_flat)
                 .unwrap()
                 .name_with_octave(),
-            "G-4"
+            "Gb4"
         );
         let no_octave = Pitch::from_name("C").unwrap();
         let up = third.transpose_pitch(&no_octave).unwrap();
@@ -522,7 +522,7 @@ mod tests {
             step.transpose_pitch_key_aware(&f_natural, Some(&g_major))
                 .unwrap()
                 .name_with_octave(),
-            "G-4"
+            "Gb4"
         );
         let e = Pitch::from_name("E4").unwrap();
         assert_eq!(

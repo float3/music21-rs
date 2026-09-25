@@ -433,8 +433,8 @@ mod tests {
         use crate::notation::{BeamType, Beams, Lyric};
         use crate::pitch::Pitch;
 
-        let note = Note::try_from("E-4".to_string()).unwrap();
-        assert_eq!(note.pitch_name(), "E-");
+        let note = Note::try_from("Eb4".to_string()).unwrap();
+        assert_eq!(note.pitch_name(), "Eb");
         let pitch = Pitch::from_name("G#3").unwrap();
         let mut from_pitch = Note::from(&pitch);
         assert_eq!(from_pitch.pitch_name(), "G#");
@@ -455,11 +455,11 @@ mod tests {
 
     #[test]
     fn full_name_step_and_octave_match_music21() {
-        let flat = Note::from_name("E-4").unwrap();
+        let flat = Note::from_name("Eb4").unwrap();
         assert_eq!(flat.full_name(), "E-flat in octave 4 Note");
         assert_eq!(flat.step(), 'E');
         assert_eq!(flat.octave(), Some(4));
-        assert_eq!(flat.pitches()[0].name_with_octave(), "E-4");
+        assert_eq!(flat.pitches()[0].name_with_octave(), "Eb4");
         let dotted = Note::from_name("C#5")
             .unwrap()
             .with_duration(crate::Duration::new(1.5).unwrap());
@@ -563,8 +563,8 @@ mod tests {
             .unwrap()
             .with_duration(crate::Duration::half());
         note.set_notehead(crate::Notehead::Diamond);
-        note.set_pitch(crate::Pitch::from_name("E-5").unwrap());
-        assert_eq!(note.pitch_name_with_octave(), "E-5");
+        note.set_pitch(crate::Pitch::from_name("Eb5").unwrap());
+        assert_eq!(note.pitch_name_with_octave(), "Eb5");
         assert_eq!(note.duration().unwrap().quarter_length(), 2.0);
         assert_eq!(note.notehead(), crate::Notehead::Diamond);
     }

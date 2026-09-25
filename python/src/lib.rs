@@ -64,6 +64,7 @@ pub mod scale;
 pub mod segment;
 pub mod serial;
 pub mod sieve;
+mod spelling;
 pub mod stream;
 pub mod tempo;
 pub mod transposition;

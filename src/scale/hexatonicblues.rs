@@ -52,11 +52,11 @@ impl BluesForm {
 ///
 /// let names: Vec<String> = blues.pitches(BluesForm::Hexatonic)?
 ///     .iter().map(|p| p.name()).collect();
-/// assert_eq!(names, ["C", "E-", "F", "F#", "G", "B-", "C"]);
+/// assert_eq!(names, ["C", "Eb", "F", "F#", "G", "Bb", "C"]);
 ///
 /// let names: Vec<String> = blues.pitches(BluesForm::Pentatonic)?
 ///     .iter().map(|p| p.name()).collect();
-/// assert_eq!(names, ["C", "E-", "F", "G", "B-", "C"]);
+/// assert_eq!(names, ["C", "Eb", "F", "G", "Bb", "C"]);
 /// # Ok::<(), music21_rs::Error>(())
 /// ```
 #[derive(Clone, Debug, PartialEq)]
@@ -137,19 +137,19 @@ mod tests {
         // Captured from music21, which returns one or the other at random.
         assert_eq!(
             names("C4", BluesForm::Hexatonic),
-            ["C", "E-", "F", "F#", "G", "B-", "C"]
+            ["C", "Eb", "F", "F#", "G", "Bb", "C"]
         );
         assert_eq!(
             names("C4", BluesForm::Pentatonic),
-            ["C", "E-", "F", "G", "B-", "C"]
+            ["C", "Eb", "F", "G", "Bb", "C"]
         );
         assert_eq!(
             names("G4", BluesForm::Hexatonic),
-            ["G", "B-", "C", "C#", "D", "F", "G"]
+            ["G", "Bb", "C", "C#", "D", "F", "G"]
         );
         assert_eq!(
             names("E-4", BluesForm::Hexatonic),
-            ["E-", "G-", "A-", "A", "B-", "D-", "E-"]
+            ["Eb", "Gb", "Ab", "A", "Bb", "Db", "Eb"]
         );
         assert_eq!(
             names("F#4", BluesForm::Hexatonic),

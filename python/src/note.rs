@@ -7,6 +7,7 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 use crate::Walkable;
+use crate::spelling::music21_name;
 use pyo3::types::{PyDict, PyList, PyTuple};
 
 use music21_rs_crate::{
@@ -970,7 +971,7 @@ impl Note {
     /// renames the pitch and keeps its octave.
     #[getter]
     fn get_name(&self, py: Python<'_>) -> String {
-        self.pitch_value(py).name()
+        music21_name(&self.pitch_value(py).name())
     }
 
     #[setter]
@@ -993,7 +994,7 @@ impl Note {
     /// renames the pitch.
     #[getter]
     fn get_nameWithOctave(&self, py: Python<'_>) -> String {
-        self.pitch_value(py).name_with_octave()
+        music21_name(&self.pitch_value(py).name_with_octave())
     }
 
     #[setter]
@@ -1592,7 +1593,7 @@ impl Note {
         Ok(format!(
             "<music21.note.{} {}>",
             slf.get_type().qualname()?,
-            slf.borrow().pitch_value(slf.py()).name()
+            music21_name(&slf.borrow().pitch_value(slf.py()).name())
         ))
     }
 

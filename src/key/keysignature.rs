@@ -382,10 +382,10 @@ mod non_traditional_tests {
 
     #[test]
     fn a_pitch_list_makes_a_non_traditional_signature() {
-        let unusual = KeySignature::from_altered_pitches(pitches(&["E-", "G#"]));
+        let unusual = KeySignature::from_altered_pitches(pitches(&["Eb", "G#"]));
         assert!(unusual.is_non_traditional());
         assert_eq!(unusual.sharps(), None);
-        assert_eq!(unusual.to_string(), "KeySignature of pitches: [E-, G#]");
+        assert_eq!(unusual.to_string(), "KeySignature of pitches: [Eb, G#]");
         assert_eq!(
             unusual.accidental_by_step('G').unwrap().unwrap().name(),
             "sharp"
@@ -486,17 +486,17 @@ mod tests {
     #[test]
     fn transpose_pitch_from_c_matches_music21() {
         let cases: [(i32, [&str; 5]); 7] = [
-            (0, ["C4", "E4", "B-3", "F#5", "G"]),
+            (0, ["C4", "E4", "Bb3", "F#5", "G"]),
             (1, ["G4", "B4", "F3", "C#5", "D"]),
             (2, ["D4", "F#4", "C3", "G#5", "A"]),
-            (-1, ["F4", "A4", "E-3", "B5", "C"]),
-            (-3, ["E-4", "G4", "D-3", "A5", "B-"]),
+            (-1, ["F4", "A4", "Eb3", "B5", "C"]),
+            (-3, ["Eb4", "G4", "Db3", "A5", "Bb"]),
             (7, ["C#4", "E#4", "B3", "F##5", "G#"]),
-            (-7, ["C-4", "E-4", "B--3", "F5", "G-"]),
+            (-7, ["Cb4", "Eb4", "Bbb3", "F5", "Gb"]),
         ];
         for (sharps, expected) in cases {
             let signature = KeySignature::new(sharps);
-            let actual = ["C4", "E4", "B-3", "F#5", "G"].map(|name| {
+            let actual = ["C4", "E4", "Bb3", "F#5", "G"].map(|name| {
                 signature
                     .transpose_pitch_from_c(&Pitch::from_name(name).unwrap())
                     .unwrap()
@@ -520,55 +520,55 @@ mod tests {
         let cases: [Row; 15] = [
             (
                 -7,
-                &["B-", "E-", "A-", "D-", "G-", "C-", "F-"],
+                &["Bb", "Eb", "Ab", "Db", "Gb", "Cb", "Fb"],
                 [Some("flat"), Some("flat"), Some("flat")],
                 [-6, -8, -12],
-                "C-",
-                "A-",
+                "Cb",
+                "Ab",
             ),
             (
                 -6,
-                &["B-", "E-", "A-", "D-", "G-", "C-"],
+                &["Bb", "Eb", "Ab", "Db", "Gb", "Cb"],
                 [None, Some("flat"), Some("flat")],
                 [-5, -7, -11],
-                "G-",
-                "E-",
+                "Gb",
+                "Eb",
             ),
             (
                 -5,
-                &["B-", "E-", "A-", "D-", "G-"],
+                &["Bb", "Eb", "Ab", "Db", "Gb"],
                 [None, Some("flat"), None],
                 [-4, -6, -10],
-                "D-",
-                "B-",
+                "Db",
+                "Bb",
             ),
             (
                 -4,
-                &["B-", "E-", "A-", "D-"],
+                &["Bb", "Eb", "Ab", "Db"],
                 [None, Some("flat"), None],
                 [-3, -5, -9],
-                "A-",
+                "Ab",
                 "F",
             ),
             (
                 -3,
-                &["B-", "E-", "A-"],
+                &["Bb", "Eb", "Ab"],
                 [None, Some("flat"), None],
                 [-2, -4, -8],
-                "E-",
+                "Eb",
                 "C",
             ),
             (
                 -2,
-                &["B-", "E-"],
+                &["Bb", "Eb"],
                 [None, Some("flat"), None],
                 [-1, -3, -7],
-                "B-",
+                "Bb",
                 "G",
             ),
             (
                 -1,
-                &["B-"],
+                &["Bb"],
                 [None, Some("flat"), None],
                 [0, -2, -6],
                 "F",
@@ -681,9 +681,9 @@ mod tests {
         let f_sharp = sharps_to_pitch(6).unwrap();
         assert_eq!(f_sharp.name(), "F#");
         let b_flat = sharps_to_pitch(-2).unwrap();
-        assert_eq!(b_flat.name(), "B-");
-        assert_eq!(sharps_to_pitch(-7).unwrap().name(), "C-");
+        assert_eq!(b_flat.name(), "Bb");
+        assert_eq!(sharps_to_pitch(-7).unwrap().name(), "Cb");
         assert_eq!(sharps_to_pitch(7).unwrap().name(), "C#");
-        assert_eq!(KeySignature::new(-7).as_key("major").tonic().name(), "C-");
+        assert_eq!(KeySignature::new(-7).as_key("major").tonic().name(), "Cb");
     }
 }

@@ -629,7 +629,7 @@ mod tests {
                 .sounding(&Pitch::from_name("C5").unwrap())
                 .unwrap()
                 .name_with_octave(),
-            "E-4"
+            "Eb4"
         );
         assert!(Instrument::of_kind("Kazoo").is_err());
     }

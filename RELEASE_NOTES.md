@@ -9,6 +9,14 @@ places where they answered differently; they agree now.
 
 ## Breaking Changes
 
+- Flats are written `b`: `Pitch::name` is `Bb`, `name_with_octave`
+  `Bb4`, a flat's `Accidental::modifier` `b` and a double flat's `bb`, and
+  so for every name built from them: key, scale and chord-symbol names,
+  `CHROMATIC_PITCH_CLASS_NAMES`. `-` is still read everywhere a name is.
+  music21 writes `-`, and the wheel still does: it respells every name it
+  hands Python. Cuthbert's "Music21's Mistakes" regrets borrowing `-`.
+  A pitch name and octave no longer collide: B-flat 1 is `Bb1`, B in octave
+  -1 `B-1`.
 - Every pitch has an accidental. `Pitch::accidental` answers
   `&Accidental`, a natural where none is written, so arithmetic on it
   needs no `None` case. What was `accidental` is `written_accidental`,

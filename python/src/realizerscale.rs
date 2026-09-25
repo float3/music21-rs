@@ -17,6 +17,7 @@ use music21_rs_crate::figuredbass::scale::{
 use music21_rs_crate::{Pitch as RsPitch, Scale as RsScale};
 
 use crate::pitch::{Pitch, pitch_from_any};
+use crate::spelling::music21_name;
 
 pyo3::create_exception!(
     music21_rs_facade,
@@ -137,9 +138,11 @@ impl FiguredBassScale {
         bassPitch: &Bound<'_, PyAny>,
         notationString: &str,
     ) -> PyResult<Vec<String>> {
-        self.inner
+        let names = self
+            .inner
             .pitch_names(&pitch_from_any(bassPitch)?, &notation_from(notationString)?)
-            .map_err(scale_error)
+            .map_err(scale_error)?;
+        Ok(names.iter().map(|name| music21_name(name)).collect())
     }
 
     /// Every note a bass and its figures stand for from the bass up to the

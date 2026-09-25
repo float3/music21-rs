@@ -8,6 +8,7 @@
 
 use music21_rs::expressions::{Ornament, OrnamentDelay, OrnamentKind};
 use music21_rs::{Accidental, AccidentalDisplayOptions, Duration, KeySignature, Note, Pitch};
+use music21_rs_python_parity::music21_name;
 use serde::Deserialize;
 
 use std::path::Path;
@@ -64,7 +65,7 @@ fn kind(class: &str) -> OrnamentKind {
 /// after it where there is one.
 fn describe(note: &Note) -> String {
     let length = note.duration().map_or(1.0, Duration::quarter_length);
-    let name = note.pitch().name_with_octave();
+    let name = music21_name(&note.pitch().name_with_octave());
     match note.tie() {
         Some(tie) => format!("{name} {length:?} {}", tie.tie_type().as_str()),
         None => format!("{name} {length:?}"),
@@ -158,7 +159,7 @@ fn every_ornament_plays_what_music21_s_plays() {
             .map(|pitches| {
                 pitches
                     .iter()
-                    .map(|pitch| pitch.name_with_octave())
+                    .map(|pitch| music21_name(&pitch.name_with_octave()))
                     .collect::<Vec<_>>()
             });
         if let Some(theirs) = &played.displayed {

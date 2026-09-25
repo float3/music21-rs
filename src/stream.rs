@@ -781,7 +781,7 @@ mod tests {
         let mut second = Stream::with_kind(StreamKind::Measure);
         second.insert(0.0, KeySignature::new(-1));
         second.push(Note::from_name("A4").unwrap());
-        second.push(Note::from_name("B-4").unwrap());
+        second.push(Note::from_name("Bb4").unwrap());
 
         let mut part = Stream::with_kind(StreamKind::Part);
         part.push(first);
@@ -811,7 +811,7 @@ mod tests {
             .iter()
             .map(Pitch::name_with_octave)
             .collect();
-        assert_eq!(names, ["D4", "E4", "F#4", "G4", "A4", "B-4"]);
+        assert_eq!(names, ["D4", "E4", "F#4", "G4", "A4", "Bb4"]);
 
         // recurse sees the streams themselves; flatten does not
         assert_eq!(score.recurse().len(), 1 + 2 + 6 + 3);

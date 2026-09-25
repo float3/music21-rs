@@ -14,6 +14,7 @@ use music21_rs_crate::{
 };
 
 use crate::note::Note;
+use crate::spelling::{music21_modifier, music21_name};
 
 /// The names the pitch facade provides, for swapping into `music21.pitch`.
 pub const NAMES: &[&str] = &[
@@ -446,7 +447,7 @@ impl Accidental {
 
     #[getter]
     fn modifier(&self) -> String {
-        self.inner.modifier().to_string()
+        music21_modifier(self.inner.modifier())
     }
 
     #[setter]
@@ -1057,7 +1058,7 @@ impl Pitch {
 
     #[getter]
     fn name(&self) -> String {
-        self.inner.name()
+        music21_name(&self.inner.name())
     }
 
     #[setter]
@@ -1089,7 +1090,7 @@ impl Pitch {
 
     #[getter]
     fn nameWithOctave(&self) -> String {
-        self.inner.name_with_octave()
+        music21_name(&self.inner.name_with_octave())
     }
 
     #[setter]
@@ -1872,7 +1873,7 @@ impl Pitch {
     }
 
     fn __str__(&self) -> String {
-        let name = self.inner.name_with_octave();
+        let name = music21_name(&self.inner.name_with_octave());
         match self.inner.microtone() {
             Some(microtone) if microtone.cents() != 0.0 => format!("{name}{microtone}"),
             _ => name,
