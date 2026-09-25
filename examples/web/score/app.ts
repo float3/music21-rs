@@ -308,9 +308,11 @@ const ADAPTIVE_TUNING = "RecursiveJustIntonation";
 /** How many of abcjs's drag steps separate two tab strings. */
 const DRAG_STEPS_PER_STRING = 3;
 
-/** Example scores; `view` is the staff view one opens in. */
-const EXAMPLES: { name: string; abc: string; view?: string; comping?: string }[] = [
+/** Example scores; `id` names one in a share link and never changes, `view`
+ * is the staff view one opens in and `comping` how its chords are played. */
+const EXAMPLES: { id: string; name: string; abc: string; view?: string; comping?: string }[] = [
     {
+        id: "chorale",
         name: "Four-part chorale",
         abc: `X:1
 T:Chorale in C
@@ -330,6 +332,7 @@ V:B clef=bass
 `,
     },
     {
+        id: "waltz",
         name: "Waltz melody",
         abc: `X:2
 T:Waltz sketch
@@ -342,6 +345,7 @@ D2 | "G"G2 B2 d2 | "C"e4 d2 | "D7"c2 A2 F2 | "G"G4 D2 |
 `,
     },
     {
+        id: "piano-study",
         name: "Piano study in A minor",
         abc: `X:3
 T:Minor study
@@ -357,6 +361,7 @@ V:LH clef=bass
 `,
     },
     {
+        id: "two-finger-bossa",
         name: "Two-finger bossa nova",
         view: "guitar",
         abc: `X:4
@@ -372,6 +377,7 @@ F,2 [DAB]2 F, [DAB]2 F, | =F,2 [D^GB] z [DGB]4 | E,2 [DGB]2 E, [DGB]2 z | A, [EG
 `,
     },
     {
+        id: "un-bossa",
         name: "Un bossa +",
         view: "guitar",
         comping: "bossa",
@@ -408,6 +414,7 @@ w: un bos- _ sa _ _ _ más _
 `,
     },
     {
+        id: "un-bossa-easy",
         name: "Un bossa + (easy)",
         view: "guitar",
         abc: `X:6
@@ -443,6 +450,7 @@ w: le-mos un bos-sa más
 `,
     },
     {
+        id: "blank",
         name: "Blank",
         abc: `X:1
 T:Untitled
@@ -2050,9 +2058,13 @@ async function unpackScore(packed: string): Promise<string> {
     return new TextDecoder().decode(bytes);
 }
 
+/** A link to the score as it stands: a built-in example left as it is by
+ * its id, anything else carried whole in the link. */
 async function shareLink(): Promise<string> {
-    const params = new URLSearchParams({ abc: await packScore(textarea.value) });
+    const example = EXAMPLES.find((example) => example.abc === textarea.value);
+    const params = new URLSearchParams(example ? { example: example.id } : { abc: await packScore(textarea.value) });
     if (viewSelect.value) params.set("view", viewSelect.value);
+    if (compingSelect.value) params.set("comping", compingSelect.value);
     if (viewSelect.value && stringsSelect.value && stringsSelect.value !== "standard") params.set("strings", stringsSelect.value);
     if (temperamentSelect.value) params.set("tuning", temperamentSelect.value);
     if (temperamentSelect.value && rootSelect.value) params.set("root", rootSelect.value);
@@ -2067,10 +2079,12 @@ async function shareLink(): Promise<string> {
 async function openShare(): Promise<void> {
     const link = await shareLink();
     shareUrl.value = link;
-    shareNote.textContent =
-        link.length > 8000
-            ? `This link is ${link.length.toLocaleString()} characters; some apps cut long links short, so export the ABC for a score this size.`
-            : `${link.length.toLocaleString()} characters.`;
+    const example = EXAMPLES.find((example) => example.abc === textarea.value);
+    shareNote.textContent = example
+        ? `The built-in “${example.name}”, as it is; an edit makes the link carry the whole score.`
+        : link.length > 8000
+          ? `This link is ${link.length.toLocaleString()} characters; some apps cut long links short, so export the ABC for a score this size.`
+          : `${link.length.toLocaleString()} characters.`;
     $<HTMLButtonElement>("#share-send").hidden = typeof navigator.share !== "function";
     shareUrl.focus();
     shareUrl.select();
@@ -2081,9 +2095,13 @@ async function openShare(): Promise<void> {
 async function loadFromHash(): Promise<boolean> {
     const params = new URLSearchParams(window.location.hash.slice(1));
     const packed = params.get("abc");
-    if (!packed) return false;
+    const example = EXAMPLES.find((example) => example.id === params.get("example"));
+    if (!packed && !example) return false;
     try {
-        textarea.value = await unpackScore(packed);
+        textarea.value = example ? example.abc : await unpackScore(packed!);
+        const comping = params.get("comping") ?? "";
+        compingSelect.value = Array.from(compingSelect.options).some((option) => option.value === comping) ? comping : "";
+        storageSet(COMPING_KEY, compingSelect.value);
         const view = params.get("view");
         if (view !== null && view in TABLATURES) viewSelect.value = view;
         const strings = params.get("strings");
