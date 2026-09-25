@@ -488,7 +488,7 @@ pub fn display_pitch_class_names() -> Vec<String> {
 fn display_class_names(pitch_classes: &[u8]) -> Vec<String> {
     pitch_classes
         .iter()
-        .map(|&pitch_class| display_pitch_name(pitch_class_name(pitch_class)))
+        .map(|&pitch_class| pitch_class_name(pitch_class).to_string())
         .collect()
 }
 
@@ -518,11 +518,11 @@ fn key_info(midi: i32) -> Result<KeyInfo> {
         .get_enharmonic()
         .ok()
         .filter(|other| other.alter().abs() < 2.0)
-        .map(|other| display_pitch_name(&other.name()));
+        .map(|other| other.name());
     Ok(KeyInfo {
         midi,
         name: pitch.name_with_octave(),
-        display: display_pitch_name(&pitch.name()),
+        display: pitch.name(),
         alternate,
         pitch_class,
         octave,
@@ -706,21 +706,14 @@ fn known_chord_info(
     let voicings = (0..pitch_classes.len())
         .map(|inversion| to_root(browser_input_names(&pitch_classes, inversion)))
         .collect::<Vec<_>>();
-    let display_voicing = voicings
-        .first()
-        .map(|names| names.iter().map(|name| display_pitch_name(name)).collect())
-        .unwrap_or_default();
-    let display_pitch_names = pitch_names
-        .iter()
-        .map(|name| display_pitch_name(name))
-        .collect::<Vec<_>>();
+    let display_voicing = voicings.first().cloned().unwrap_or_default();
+    let display_pitch_names = pitch_names.clone();
 
     // The symbol is read off the chord in root position on its root.
     let chord_symbol = voicings
         .first()
         .and_then(|names| Chord::new(names.as_slice()).ok())
-        .and_then(|chord| chord.chord_symbol_with_root(i32::from(root)).ok().flatten())
-        .map(|symbol| display_chord_symbol(&symbol));
+        .and_then(|chord| chord.chord_symbol_with_root(i32::from(root)).ok().flatten());
 
     // Key, numeral and resolutions are read off the pitch-class set on C,
     // as the crate reads one, and moved to the root: octave-less names on
@@ -1105,7 +1098,7 @@ fn pitch_infos(pitches: &[Pitch]) -> Vec<PitchInfo> {
                 index,
                 name: display_pitch.name(),
                 name_with_octave: display_pitch.name_with_octave(),
-                display_name: display_pitch_name(&display_pitch.name_with_octave()),
+                display_name: display_pitch.name_with_octave(),
                 midi: pitch_space.round() as i32,
                 octave: display_pitch.octave(),
                 pitch_space,
@@ -1603,9 +1596,7 @@ fn estimated_key_for_chord(chord: &Chord) -> Option<Key> {
             let root = Pitch::from_name(&root_name).ok()?;
             same_pitch_class(&root, &estimated_tonic).then_some(root_name)
         })
-        .and_then(|root_name| {
-            Key::from_tonic_mode(&display_pitch_name(&root_name), Some(mode.as_str())).ok()
-        });
+        .and_then(|root_name| Key::from_tonic_mode(&root_name, Some(mode.as_str())).ok());
     Some(respelled_key.unwrap_or(estimated_key))
 }
 
@@ -1639,7 +1630,7 @@ fn parse_key_context(key_context: Option<&str>) -> Result<Option<Key>, JsValue> 
 }
 
 fn display_key_context(key: &Key) -> String {
-    format!("{} {}", display_pitch_name(&key.tonic().name()), key.mode())
+    format!("{} {}", key.tonic().name(), key.mode())
 }
 
 fn guitar_fingering_info(fingering: music21_rs::GuitarFingering) -> GuitarFingeringInfo {
@@ -1658,7 +1649,7 @@ fn guitar_fingering_info(fingering: music21_rs::GuitarFingering) -> GuitarFinger
                 pitch_class: string.pitch_class,
                 pitch_name: string
                     .pitch_class
-                    .map(|pitch_class| display_pitch_name(pitch_class_name(pitch_class))),
+                    .map(|pitch_class| pitch_class_name(pitch_class).to_string()),
             })
             .collect(),
         base_fret: fingering.base_fret,
@@ -1684,24 +1675,6 @@ fn resolution_chord_info(suggestion: ChordResolutionSuggestion) -> ResolutionCho
             .collect(),
         pitch_classes: chord.pitch_classes(),
     }
-}
-
-fn display_pitch_name(name: &str) -> String {
-    name.replace('-', "b")
-}
-
-/// A chord symbol with the flats of its root and bass written `b`:
-/// `B-7/A-` is `Bb7/Ab`. A `-` after anything but a letter name is kept.
-fn display_chord_symbol(symbol: &str) -> String {
-    let mut out = String::with_capacity(symbol.len());
-    for ch in symbol.chars() {
-        let after_step = out
-            .chars()
-            .last()
-            .is_some_and(|step| matches!(step, 'A'..='G' | 'b'));
-        out.push(if ch == '-' && after_step { 'b' } else { ch });
-    }
-    out
 }
 
 fn display_pitch_for_sequence(pitch: Pitch, last_pitch_space: &mut Option<i32>) -> Result<Pitch> {
@@ -1732,7 +1705,7 @@ mod tests {
     #[test]
     fn keys_are_named_as_the_crate_names_pitch_classes() {
         let d_flat = super::key_info(61).unwrap();
-        assert_eq!(d_flat.name, "D-4");
+        assert_eq!(d_flat.name, "Db4");
         assert_eq!(d_flat.display, "Db");
         assert_eq!(d_flat.alternate.as_deref(), Some("C#"));
         assert!(d_flat.black);
@@ -1908,7 +1881,6 @@ mod tests {
         );
 
         assert_eq!(info.chord_symbol.as_deref(), Some("Bbpower"));
-        assert_eq!(super::display_chord_symbol("B--7/A-"), "Bbb7/Ab");
     }
 
     #[test]

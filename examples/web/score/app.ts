@@ -1816,7 +1816,7 @@ function renderTemperaments(): void {
     temperamentSelect.value = Array.from(temperamentSelect.options).some((option) => option.value === stored) ? stored : "";
     rootSelect.replaceChildren(
         ...["", ...wasm.pitch_class_names()].map((name) => {
-            const option = el("option", "", name ? `Root: ${name.replace("-", "♭").replace("#", "♯")}` : "Root: key tonic");
+            const option = el("option", "", name ? `Root: ${name.replace(/^([A-G])b/, "$1♭").replace("#", "♯")}` : "Root: key tonic");
             option.value = name;
             return option;
         }),
