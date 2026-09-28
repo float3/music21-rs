@@ -25,7 +25,7 @@ function ensureTooltipStyles(): void {
       background: var(--tooltip-bg, #171717);
       color: var(--tooltip-ink, #ffffff);
       box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       font-size: 12px;
       font-weight: 600;
       line-height: 1.35;

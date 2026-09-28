@@ -12,10 +12,7 @@
             }
 
             .tool {
-                display: grid;
-                min-height: 170px;
-                align-content: space-between;
-                gap: 18px;
+                display: block;
                 padding: 18px;
                 border: 1px solid var(--line);
                 border-radius: 8px;
@@ -38,11 +35,6 @@
                 margin: 0;
                 color: var(--muted);
                 line-height: 1.45;
-            }
-
-            .open {
-                color: var(--accent-strong);
-                font-weight: 800;
             }
 
             @media (max-width: 720px) {
@@ -75,7 +67,6 @@
                 }
 
                 .tool {
-                    min-height: 138px;
                     padding: 16px;
                 }
 
@@ -108,7 +99,6 @@
                             MusicXML.
                         </p>
                     </div>
-                    <span class="open">Open /score/</span>
                 </a>
 
                 <a class="tool" href="./chord/">
@@ -120,7 +110,6 @@
                             frequencies.
                         </p>
                     </div>
-                    <span class="open">Open /chord/</span>
                 </a>
 
                 <a class="tool" href="./chords/">
@@ -132,7 +121,6 @@
                             inspector.
                         </p>
                     </div>
-                    <span class="open">Open /chords/</span>
                 </a>
 
                 <a class="tool" href="./listen/">
@@ -144,7 +132,6 @@
                             at a time.
                         </p>
                     </div>
-                    <span class="open">Open /listen/</span>
                 </a>
 
                 <a class="tool" href="./harte/">
@@ -155,7 +142,6 @@
                             Bb:(b3,5,b7,9), and see the chord it sounds.
                         </p>
                     </div>
-                    <span class="open">Open /harte/</span>
                 </a>
                 <a class="tool" href="./roman/">
                     <div>
@@ -165,7 +151,6 @@
                             numeral the way music21 names it.
                         </p>
                     </div>
-                    <span class="open">Open /roman/</span>
                 </a>
                 <a class="tool" href="./scales/">
                     <div>
@@ -175,7 +160,6 @@
                             scale a handful of pitches belongs to.
                         </p>
                     </div>
-                    <span class="open">Open /scales/</span>
                 </a>
                 <a class="tool" href="./serial/">
                     <div>
@@ -185,7 +169,6 @@
                             and all-interval status, and the historical rows.
                         </p>
                     </div>
-                    <span class="open">Open /serial/</span>
                 </a>
                 <a class="tool" href="./polyrhythm/">
                     <div>
@@ -195,7 +178,6 @@
                             cycle into its equivalent chord/polypitch set.
                         </p>
                     </div>
-                    <span class="open">Open /polyrhythm/</span>
                 </a>
 
                 <a class="tool" href="./tuning/">
@@ -206,7 +188,6 @@
                             ratios and cents offsets, and listen to each scale.
                         </p>
                     </div>
-                    <span class="open">Open /tuning/</span>
                 </a>
 
                 <a class="tool" href="./reports/">
@@ -217,7 +198,6 @@
                             method in scope against what the crate has ported.
                         </p>
                     </div>
-                    <span class="open">Open /reports/</span>
                 </a>
             </div>
         </main>
