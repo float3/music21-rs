@@ -72,7 +72,6 @@ pub mod harte;
 /// Instruments: music21's `instrument` module.
 pub mod instrument;
 
-pub(crate) mod fraction_pow;
 /// Public interval parsing, naming and transposition helpers.
 pub mod interval;
 /// Public key and key-signature helpers.
@@ -187,7 +186,7 @@ pub use tempo::{
 };
 pub use tuningsystem::{
     ALL_TUNING_SYSTEMS, COMMON_EQUAL_TEMPERAMENTS, COMMON_TWELVE_TONE_TUNING_SYSTEMS,
-    EqualDivision, Fraction, HISTORICAL_TEMPERAMENTS, Monzo, Mos, MosScale, OCTAVE_CENTS,
+    EqualDivision, HISTORICAL_TEMPERAMENTS, Monzo, Mos, MosScale, OCTAVE_CENTS, Ratio,
     TRITAVE_CENTS, Temperament, TuningSystem, Val, moment_of_symmetry_sizes,
     scala::{ScalaArchive, ScalaDegree, ScalaScale},
 };

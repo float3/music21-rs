@@ -612,15 +612,94 @@ impl Pitch {
         // music21 raises its stored twelfth root of two to the distance
         // from A4, which rounds otherwise than 2^(distance / 12).
         let twelfth_root_of_two = (2.0 as FloatType).powf(1.0 / 12.0);
-        440.0 * twelfth_root_of_two.powf(self.pitch_space() - 69.0)
+        crate::tuningsystem::A4 * twelfth_root_of_two.powf(self.pitch_space() - 69.0)
     }
 
-    /// Returns this pitch's frequency in hertz for a supported tuning system.
+    /// Returns this pitch's frequency in hertz in a tuning that sizes
+    /// intervals by how they are spelled, measured from `reference`.
     ///
-    /// The pitch-space value is used as the tuning-system degree index, so this
-    /// is most musically meaningful for twelve-tone systems.
+    /// The interval from the reference to this pitch is read as octaves and
+    /// fifths ([`Interval::pythagorean_monzo`]) and `tuning` says how wide it
+    /// sounds, so `C#` and `D-` differ in a meantone or in 19-EDO and agree in
+    /// 12-EDO. A microtone, and the part of a quarter-tone accidental past a
+    /// whole semitone, are added on top in cents.
+    ///
+    /// ```
+    /// use music21_rs::Pitch;
+    /// use music21_rs::tuningsystem::{EqualDivision, Just, Reference};
+    ///
+    /// let a440 = Reference::a440();
+    /// let e5 = Pitch::from_name("E5")?.frequency_hz_tuned(&Just, &a440)?;
+    /// assert!((e5 - 660.0).abs() < 1e-9);
+    ///
+    /// let nineteen = EqualDivision::octave(19)?;
+    /// let sharp = Pitch::from_name("C#4")?.frequency_hz_tuned(&nineteen, &a440)?;
+    /// let flat = Pitch::from_name("D-4")?.frequency_hz_tuned(&nineteen, &a440)?;
+    /// assert!(sharp < flat);
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
+    pub fn frequency_hz_tuned(
+        &self,
+        tuning: &impl crate::tuningsystem::Tuning,
+        reference: &crate::tuningsystem::Reference,
+    ) -> Result<FloatType> {
+        let (steps, semitones, cents) = self.spelled_place();
+        let (reference_steps, reference_semitones, reference_cents) =
+            reference.pitch().spelled_place();
+        let interval = crate::tuningsystem::Monzo::pythagorean(
+            steps - reference_steps,
+            semitones - reference_semitones,
+        );
+        let cents = tuning.cents_of(&interval)? + cents - reference_cents;
+        Ok(reference.hertz() * (2.0 as FloatType).powf(cents / 1200.0))
+    }
+
+    /// Where the pitch is spelled: its staff position, the semitones of its
+    /// whole-semitone spelling, and the cents past that spelling.
+    fn spelled_place(&self) -> (IntegerType, IntegerType, FloatType) {
+        let accidental = self.accidental.as_ref().map_or(0.0, Accidental::alter);
+        let whole = accidental.trunc();
+        let natural = self.pitch_space() - self.alter();
+        let microtone = self.microtone.as_ref().map_or(0.0, Microtone::cents);
+        (
+            self.diatonic_note_number(),
+            (natural + whole).round() as IntegerType,
+            (accidental - whole) * 100.0 + microtone,
+        )
+    }
+
+    /// Returns this pitch's frequency in hertz in a tuning system, reading
+    /// the pitch as a key on a keyboard: `C#` and `D-` sound alike.
+    ///
+    /// A system of twelve degrees to the octave gives each key its own
+    /// degree; any other sounds the degree nearest the key's equal-tempered
+    /// frequency. [`Pitch::frequency_hz_tuned`] tunes the spelling instead.
     pub fn frequency_hz_in(&self, tuning_system: TuningSystem) -> FloatType {
-        tuning_system.frequency_at(self.pitch_space())
+        if tuning_system.is_keyboard() {
+            return tuning_system.frequency_at(self.pitch_space());
+        }
+        let degree = tuning_system
+            .nearest_degree(self.frequency_hz())
+            .expect("an equal-tempered frequency is finite and above nought");
+        tuning_system.frequency_at(degree.into())
+    }
+
+    /// The pitch a tuning system sounds nearest `hertz`, spelled as
+    /// [`TuningSystem::pitch_at`] spells a degree. Errors on a frequency that
+    /// is not a finite number above nought.
+    ///
+    /// ```
+    /// use music21_rs::Pitch;
+    /// use music21_rs::tuningsystem::TuningSystem;
+    ///
+    /// // 330 Hz is a hair flat of E4; the five-limit E is flatter still.
+    /// let e = Pitch::from_frequency_in(330.0, TuningSystem::FiveLimit)?;
+    /// assert_eq!(e.name_with_octave(), "E4");
+    /// assert!(e.frequency_hz() < 330.0);
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
+    pub fn from_frequency_in(hertz: FloatType, tuning_system: TuningSystem) -> Result<Self> {
+        tuning_system.pitch_at(tuning_system.nearest_degree(hertz)?)
     }
 
     fn step_setter(&mut self, step_name: StepName) {
@@ -799,7 +878,7 @@ impl Pitch {
             )));
         }
         let mut pitch = Pitch::default();
-        pitch.ps_setter(12.0 * (hertz / 440.0).log2() + 69.0);
+        pitch.ps_setter(12.0 * (hertz / crate::tuningsystem::A4).log2() + 69.0);
         Ok(pitch)
     }
 
