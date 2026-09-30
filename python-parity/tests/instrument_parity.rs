@@ -10,6 +10,7 @@
 //! a percussion instrument's drum map knows.
 
 use music21_rs::instrument::{Instrument, SearchLanguage};
+use music21_rs_python_parity::music21_name;
 use serde::Deserialize;
 
 use std::collections::BTreeMap;
@@ -120,12 +121,14 @@ fn every_kind_starts_out_as_music21_s_class_does() {
             "{label}: percussion map"
         );
         assert_eq!(
-            made.lowest().map(|pitch| pitch.name_with_octave()),
+            made.lowest()
+                .map(|pitch| music21_name(&pitch.name_with_octave())),
             kind.lowest,
             "{label}: lowest"
         );
         assert_eq!(
-            made.highest().map(|pitch| pitch.name_with_octave()),
+            made.highest()
+                .map(|pitch| music21_name(&pitch.name_with_octave())),
             kind.highest,
             "{label}: highest"
         );
@@ -149,7 +152,7 @@ fn every_tuning_and_modifier_is_music21_s() {
         let strings = made.string_pitches().map(|pitches| {
             pitches
                 .iter()
-                .map(|pitch| pitch.name_with_octave())
+                .map(|pitch| music21_name(&pitch.name_with_octave()))
                 .collect::<Vec<_>>()
         });
         assert_eq!(strings, kind.string_pitches, "{label}: open strings");

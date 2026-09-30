@@ -245,7 +245,7 @@ impl RomanNumeral {
         let Some(root_name) = chord.root_pitch_name() else {
             return Ok(None);
         };
-        let root = Pitch::from_name(normalize_pitch_name(&root_name))?;
+        let root = Pitch::from_name(&root_name)?;
         Self::analyze_with_root(chord, key, &root)
     }
 
@@ -742,7 +742,7 @@ pub(super) fn chord_symbol_suffix(symbol: &ChordSymbol) -> &str {
         .figure()
         .split_once('/')
         .map_or(symbol.figure(), |(body, _)| body);
-    let root_name = crate::pitch::display_flats(&symbol.root().name());
+    let root_name = symbol.root().name();
     body.strip_prefix(&root_name).unwrap_or(body)
 }
 
@@ -781,20 +781,4 @@ pub(super) fn has_seventh(intervals: &[u8]) -> bool {
 pub(super) fn has_triad_shape(intervals: &[u8]) -> bool {
     (intervals.contains(&3) || intervals.contains(&4))
         && intervals.iter().any(|interval| matches!(interval, 6..=8))
-}
-
-pub(super) fn normalize_pitch_name(name: &str) -> String {
-    let mut chars = name.chars();
-    let Some(first) = chars.next() else {
-        return String::new();
-    };
-    let mut normalized = first.to_string();
-    for ch in chars {
-        if ch == 'b' {
-            normalized.push('-');
-        } else {
-            normalized.push(ch);
-        }
-    }
-    normalized
 }

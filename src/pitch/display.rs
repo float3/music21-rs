@@ -151,7 +151,7 @@ impl Pitch {
                 continue;
             }
             let octave_match = self.octave == past.octave;
-            let past_acc = past.accidental();
+            let past_acc = past.written_accidental();
             let past_name = past_acc.map(Accidental::name);
             let past_status = past_acc.and_then(Accidental::display_status);
             let self_acc_name = self.accidental_name().map(str::to_string);

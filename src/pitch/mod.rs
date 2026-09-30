@@ -5,7 +5,6 @@ mod names;
 
 pub use display::AccidentalDisplayOptions;
 pub use enharmonic::{CriterionFunction, dissonance_score, simplify_multiple_enharmonics};
-pub(crate) use names::display_flats;
 pub use names::{CHROMATIC_PITCH_CLASS_NAMES, pitch_class_name};
 
 use harmonics::*;
@@ -39,6 +38,7 @@ use num_traits::ToPrimitive;
 use ordered_float::OrderedFloat;
 use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
+use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 use std::sync::{Arc, LazyLock};
 
@@ -194,6 +194,19 @@ impl PartialEq for Pitch {
             && self.octave == other.octave
             && self.accidental == other.accidental
             && self.microtone == other.microtone
+    }
+}
+
+impl Eq for Pitch {}
+
+/// Hashes what equality compares, so pitches can key a map or fill a set:
+/// `Bb4` twice is one entry, `Bb4` and `A#4` two.
+impl Hash for Pitch {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.step.hash(state);
+        self.octave.hash(state);
+        self.accidental.hash(state);
+        self.microtone.hash(state);
     }
 }
 
@@ -420,19 +433,20 @@ impl Pitch {
         // Written out rather than formatted: a name is a letter and a
         // modifier, and `format!` costs more than the string it builds. Every
         // comparison of two pitches by name goes through here.
-        let modifier = self.accidental_or_natural().modifier();
+        let modifier = self.accidental().modifier();
         let mut name = String::with_capacity(1 + modifier.len());
         name.push(self.step.as_char());
         name.push_str(modifier);
         name
     }
 
-    /// Whether this pitch is spelled `name` -- the letter and the modifier
-    /// [`Pitch::name`] writes -- without writing it out.
+    /// Whether this pitch is spelled `name` -- a letter and a modifier,
+    /// the flat written `b` or music21's `-` -- without writing it out.
     pub(crate) fn is_named(&self, name: &str) -> bool {
         let mut letters = name.chars();
         letters.next() == Some(self.step.as_char())
-            && letters.as_str() == self.accidental_or_natural().modifier()
+            && Accidental::from_standard(letters.as_str())
+                .is_some_and(|accidental| accidental == *self.accidental())
     }
 
     fn name_setter(&mut self, usr_str: &str) -> Result<()> {
@@ -525,25 +539,24 @@ impl Pitch {
         post
     }
 
-    /// The accidental written on the pitch, if any: music21's
-    /// `accidental`. A pitch spelled with a bare letter (`D`) has none, and
-    /// one spelled with a natural (`Dn`) has a natural, so the two are
-    /// different pitches as they are upstream. [`Self::alter`] is the
-    /// alteration either way.
-    pub fn accidental(&self) -> Option<&Accidental> {
+    /// The pitch's accidental, a natural where none is written: every pitch
+    /// has one, so `D` and `Dn` both answer a natural. Whether one was
+    /// written is [`Self::written_accidental`].
+    pub fn accidental(&self) -> &Accidental {
+        static NATURAL: LazyLock<Accidental> = LazyLock::new(Accidental::natural);
+        self.accidental.as_ref().unwrap_or(&NATURAL)
+    }
+
+    /// The accidental written on the pitch, if any: music21's `accidental`.
+    /// A bare `D` has none and `Dn` a natural, so the two are different
+    /// pitches as they are upstream.
+    pub fn written_accidental(&self) -> Option<&Accidental> {
         self.accidental.as_ref()
     }
 
-    /// The accidental, for editing in place, if the pitch has one.
-    pub fn accidental_mut(&mut self) -> Option<&mut Accidental> {
+    /// The written accidental, for editing in place, if the pitch has one.
+    pub fn written_accidental_mut(&mut self) -> Option<&mut Accidental> {
         self.accidental.as_mut()
-    }
-
-    /// The accidental, or a natural where none is written: what the pitch
-    /// sounds as, for the arithmetic that does not care which.
-    pub(crate) fn accidental_or_natural(&self) -> &Accidental {
-        static NATURAL: LazyLock<Accidental> = LazyLock::new(Accidental::natural);
-        self.accidental.as_ref().unwrap_or(&NATURAL)
     }
 
     /// Returns this pitch's microtone adjustment, when present.
@@ -637,9 +650,15 @@ impl Pitch {
         Ok(())
     }
 
-    /// Sets or removes the accidental the way music21's `accidental` setter
-    /// does: `None` leaves the pitch with no accidental at all.
-    pub fn set_accidental(&mut self, accidental: Option<Accidental>) {
+    /// Writes an accidental on the pitch, a natural included.
+    pub fn set_accidental(&mut self, accidental: Accidental) {
+        self.accidental_setter(accidental);
+    }
+
+    /// Sets or removes the written accidental the way music21's
+    /// `accidental` setter does: `None` leaves none written, which reads as
+    /// a natural.
+    pub fn set_written_accidental(&mut self, accidental: Option<Accidental>) {
         self.accidental = accidental;
     }
 
@@ -818,7 +837,7 @@ impl Pitch {
     /// Returns whether this pitch lies on the twelve-tone grid: no quarter
     /// tone accidental and no microtone.
     pub fn is_twelve_tone(&self) -> bool {
-        self.accidental_or_natural().is_twelve_tone()
+        self.accidental().is_twelve_tone()
             && self
                 .microtone
                 .as_ref()
@@ -983,6 +1002,43 @@ mod tests {
         assert_eq!(Pitch::from_pitch_space(61.0).unwrap().name(), "C#");
     }
 
+    /// Pitches compare and hash by value, so a set holds each spelling once.
+    #[test]
+    fn equal_pitches_are_one_set_entry() {
+        use crate::pitch::Pitch;
+        use std::collections::HashSet;
+
+        let pitches: HashSet<Pitch> = ["B-4", "B-4", "A#4", "Bb3"]
+            .into_iter()
+            .map(|name| Pitch::from_name(name).unwrap())
+            .collect();
+        assert_eq!(pitches.len(), 3);
+    }
+
+    /// A name is the pitch's whichever way its flat is written.
+    #[test]
+    fn a_pitch_is_named_either_flat_spelling() {
+        use crate::pitch::Pitch;
+
+        let a_flat = Pitch::from_name("Ab2").unwrap();
+        assert!(a_flat.is_named("Ab"));
+        assert!(a_flat.is_named("A-"));
+        assert!(!a_flat.is_named("A"));
+    }
+
+    /// Every pitch has an accidental; only a written one tells `D` from `Dn`.
+    #[test]
+    fn every_pitch_has_an_accidental() {
+        use crate::pitch::Pitch;
+
+        let bare = Pitch::from_name("D").unwrap();
+        let natural = Pitch::from_name("Dn").unwrap();
+        assert_eq!(bare.accidental().name(), "natural");
+        assert_eq!(natural.accidental().name(), "natural");
+        assert!(bare.written_accidental().is_none());
+        assert!(natural.written_accidental().is_some());
+    }
+
     #[test]
     fn a_frequency_that_is_not_finite_is_refused() {
         use crate::pitch::Pitch;
@@ -1003,16 +1059,16 @@ mod tests {
         assert_eq!(Pitch::from_step('d').unwrap().name(), "D");
         assert!(Pitch::from_step('h').is_err());
         assert_eq!(
-            Pitch::try_from("E-4".to_string())
+            Pitch::try_from("Eb4".to_string())
                 .unwrap()
                 .name_with_octave(),
-            "E-4"
+            "Eb4"
         );
         assert!(matches!(PitchName::from(60), PitchName::Number(n) if n == 60.0));
         assert!(matches!(PitchName::from(61.5), PitchName::Number(n) if n == 61.5));
-        assert_eq!(pitch_class_name(1), "D-");
-        assert_eq!(pitch_class_name(13), "D-");
-        assert_eq!(pitch_class_name(10), "B-");
+        assert_eq!(pitch_class_name(1), "Db");
+        assert_eq!(pitch_class_name(13), "Db");
+        assert_eq!(pitch_class_name(10), "Bb");
     }
 
     #[test]
@@ -1027,7 +1083,7 @@ mod tests {
 
         let mut raised = Pitch::from_name("C#4").unwrap();
         raised.get_higher_enharmonic_in_place().unwrap();
-        assert_eq!(raised.name_with_octave(), "D-4");
+        assert_eq!(raised.name_with_octave(), "Db4");
     }
 
     #[test]
@@ -1049,7 +1105,7 @@ mod tests {
                 .name_in_key_signature(&altered)
         );
         assert!(
-            !Pitch::from_name("F-4")
+            !Pitch::from_name("Fb4")
                 .unwrap()
                 .name_in_key_signature(&altered)
         );
@@ -1080,26 +1136,26 @@ mod tests {
             pitch_past: &past,
             ..AccidentalDisplayOptions::default()
         });
-        assert_eq!(repeat.accidental_or_natural().display_status(), Some(false));
+        assert_eq!(repeat.accidental().display_status(), Some(false));
 
         let mut natural = Pitch::from_name("F4").unwrap();
         natural.update_accidental_display(&AccidentalDisplayOptions {
             pitch_past: &past,
             ..AccidentalDisplayOptions::default()
         });
-        assert!(natural.accidental().is_some());
-        assert_eq!(natural.accidental_or_natural().display_status(), Some(true));
+        assert!(natural.written_accidental().is_some());
+        assert_eq!(natural.accidental().display_status(), Some(true));
 
         let mut in_key = Pitch::from_name("F#4").unwrap();
         in_key.update_accidental_display(&AccidentalDisplayOptions {
             altered_pitches: &[Pitch::from_name("F#").unwrap()],
             ..AccidentalDisplayOptions::default()
         });
-        assert_eq!(in_key.accidental_or_natural().display_status(), Some(false));
+        assert_eq!(in_key.accidental().display_status(), Some(false));
 
         let mut fresh = Pitch::from_name("B-4").unwrap();
         fresh.update_accidental_display(&AccidentalDisplayOptions::default());
-        assert_eq!(fresh.accidental_or_natural().display_status(), Some(true));
+        assert_eq!(fresh.accidental().display_status(), Some(true));
     }
 
     /// music21's `.octave` always answers a number, and `.octaveIsImplicit`
@@ -1147,7 +1203,7 @@ mod tests {
                 .respelled_for(&KeySignature::new(-5))
                 .unwrap()
                 .name(),
-            "G-"
+            "Gb"
         );
         // A pitch the signature says nothing about is left alone, and so is
         // one carrying no accidental at all.
@@ -1164,10 +1220,10 @@ mod tests {
     #[test]
     fn an_octave_digit_may_sit_anywhere_after_the_step() {
         for (name, expected) in [
-            ("e4-", "E-4"),
-            ("e-4", "E-4"),
-            ("b3-", "B-3"),
-            ("g4--", "G--4"),
+            ("e4-", "Eb4"),
+            ("e-4", "Eb4"),
+            ("b3-", "Bb3"),
+            ("g4--", "Gbb4"),
             ("c#4", "C#4"),
             ("f##2", "F##2"),
             ("d1", "D1"),
@@ -1201,7 +1257,7 @@ mod tests {
             .accidental(Accidental::new("double-flat").unwrap())
             .build()
             .unwrap();
-        assert_eq!(double_flat.name(), "D--");
+        assert_eq!(double_flat.name(), "Dbb");
         let inferred = Pitch::from_number(6.0).unwrap();
         assert_eq!(
             inferred
@@ -1289,11 +1345,11 @@ mod tests {
             pitches.iter().map(Pitch::name_with_octave).collect()
         };
         let cases: [(&[&str], &[&str]); 11] = [
-            (&["C#", "D-", "E"], &["C#", "C#", "E"]),
+            (&["C#", "Db", "E"], &["C#", "C#", "E"]),
             (&["A#4", "C#5", "E#5"], &["A#4", "C#5", "E#5"]),
             (&["F#", "A#", "C#"], &["F#", "A#", "C#"]),
-            (&["G-", "B-", "D-"], &["G-", "B-", "D-"]),
-            (&["C", "E-", "G-", "B--"], &["C", "E-", "F#", "A"]),
+            (&["Gb", "Bb", "Db"], &["Gb", "Bb", "Db"]),
+            (&["C", "Eb", "Gb", "B--"], &["C", "Eb", "F#", "A"]),
             (&["B#", "D##", "F##"], &["B#", "E", "G"]),
             (&["C", "E", "G#", "B"], &["C", "E", "G#", "B"]),
             (&["E#", "G##", "B#"], &["E#", "G##", "B#"]),
@@ -1302,10 +1358,10 @@ mod tests {
                 &["C#", "E#", "G#", "B", "D#"],
             ),
             (
-                &["D-", "F", "A-", "C-", "E-", "G-"],
-                &["D-", "F", "A-", "C-", "E-", "G-"],
+                &["Db", "F", "Ab", "Cb", "Eb", "Gb"],
+                &["Db", "F", "Ab", "Cb", "Eb", "Gb"],
             ),
-            (&["C4", "E-4", "F#4"], &["C4", "E-4", "G-4"]),
+            (&["C4", "Eb4", "F#4"], &["C4", "Eb4", "Gb4"]),
         ];
         for (input, expected) in cases {
             let simplified = simplify_multiple_enharmonics(&names(input), None, None).unwrap();
@@ -1314,15 +1370,15 @@ mod tests {
         let three_flats = crate::KeySignature::new(-3);
         assert_eq!(
             spelled(
-                simplify_multiple_enharmonics(&names(&["C#", "D-", "E"]), None, Some(three_flats))
+                simplify_multiple_enharmonics(&names(&["C#", "Db", "E"]), None, Some(three_flats))
                     .unwrap()
             ),
-            ["D-", "D-", "F-"]
+            ["Db", "Db", "Fb"]
         );
         let six_sharps = crate::KeySignature::new(6);
         assert_eq!(
             spelled(
-                simplify_multiple_enharmonics(&names(&["G-", "B-", "D-"]), None, Some(six_sharps))
+                simplify_multiple_enharmonics(&names(&["Gb", "B-", "Db"]), None, Some(six_sharps))
                     .unwrap()
             ),
             ["F#", "A#", "C#"]
@@ -1363,14 +1419,14 @@ mod tests {
             let pitches: Vec<Pitch> = spelled.iter().map(|name| name.parse().unwrap()).collect();
             super::dissonance_score(&pitches).unwrap()
         };
-        let flat = score(&["E-", "G-", "A"]);
-        let sharp = score(&["E-", "F#", "A"]);
+        let flat = score(&["Eb", "Gb", "A"]);
+        let sharp = score(&["Eb", "F#", "A"]);
         assert_eq!(flat, 0.051_031_336_396_830_44);
         assert_eq!(sharp, 0.051_031_336_396_830_475);
 
         // So pitch classes 3, 6 and 9 spell with G-, as music21 spells them.
         let chord = crate::Chord::new([3, 6, 9].as_slice()).unwrap();
-        assert_eq!(chord.pitch_names(), ["E-", "G-", "A"]);
+        assert_eq!(chord.pitch_names(), ["Eb", "Gb", "A"]);
 
         // A twelfth down is 1/3: its fifth's 2 cancels the octave's.
         assert_eq!(score(&["D#6", "B#5", "E#5", "D5"]), 0.235_696_022_824_957_3);
@@ -1388,17 +1444,17 @@ mod tests {
     #[test]
     fn get_enharmonic_picks_the_direction_music21_does() {
         let cases = [
-            ("C#4", "D-4"),
-            ("D-4", "C#4"),
+            ("C#4", "Db4"),
+            ("Db4", "C#4"),
             ("C4", "B#3"),
             ("D4", "C##4"),
             ("G4", "F##4"),
-            ("E4", "F-4"),
-            ("F4", "G--4"),
-            ("B4", "C-5"),
+            ("E4", "Fb4"),
+            ("F4", "Gbb4"),
+            ("B4", "Cb5"),
             ("A-4", "G#4"),
             ("F##4", "G4"),
-            ("C--4", "B-3"),
+            ("C--4", "Bb3"),
             ("B#4", "C5"),
             ("G##4", "A4"),
         ];
@@ -1452,7 +1508,7 @@ mod tests {
             (
                 pitch.name_with_octave(),
                 pitch.microtone().map_or(0.0, Microtone::cents),
-                pitch.accidental_or_natural().name().to_string(),
+                pitch.accidental().name().to_string(),
             )
         };
 
@@ -1460,7 +1516,7 @@ mod tests {
             ("C~4", 0.0, "C4", 50.0, "natural"),
             ("C`4", 0.0, "C4", -50.0, "natural"),
             ("D#~4", 0.0, "D#4", 50.0, "sharp"),
-            ("E-`4", 0.0, "E-4", -50.0, "flat"),
+            ("E-`4", 0.0, "Eb4", -50.0, "flat"),
             ("C~4", 10.0, "C4", 60.0, "natural"),
             ("C#4", 0.0, "C#4", 0.0, "sharp"),
         ];
@@ -1487,9 +1543,9 @@ mod tests {
             ("C4", 70.0, "C~4", 20.0, "half-sharp"),
             ("C#4", 50.0, "C#~4", 0.0, "one-and-a-half-sharp"),
             ("C4", 150.0, "C#4", 50.0, "sharp"),
-            ("C4", -150.0, "C-4", -50.0, "flat"),
+            ("C4", -150.0, "Cb4", -50.0, "flat"),
             ("C4", 120.0, "C#4", 20.0, "sharp"),
-            ("C-4", -50.0, "C-`4", 0.0, "one-and-a-half-flat"),
+            ("Cb4", -50.0, "Cb`4", 0.0, "one-and-a-half-flat"),
             ("C4", 0.0, "C4", 0.0, "natural"),
         ];
         for (name, cents, expected_name, expected_cents, accidental) in to_quarter_tones {
@@ -1604,7 +1660,7 @@ mod tests {
             ("A2", 3, "E4", Some("(+2c)"), 330.009),
             ("A2", 5, "C#5", Some("(-14c)"), 549.9),
             ("C", 3, "G5", Some("(+2c)"), 784.897),
-            ("E-3", 7, "C~6", Some("(+19c)"), 1089.054),
+            ("Eb3", 7, "C~6", Some("(+19c)"), 1089.054),
         ];
         for (fundamental, number, name, microtone, hertz) in cases {
             let harmonic = Pitch::from_name(fundamental)
@@ -1688,44 +1744,44 @@ mod tests {
         let cases = [
             (
                 "C#4",
-                vec!["D-4", "B##3"],
-                vec!["D-4"],
-                vec!["D-4", "E---4", "B##3"],
+                vec!["Db4", "B##3"],
+                vec!["Db4"],
+                vec!["Db4", "Ebbb4", "B##3"],
             ),
             (
                 "E-",
-                vec!["F--", "D#"],
+                vec!["Fbb", "D#"],
                 vec!["D#"],
-                vec!["F--", "D#", "C###"],
+                vec!["Fbb", "D#", "C###"],
             ),
             ("B#3", vec!["C4"], vec!["C4"], vec!["C4", "A###3"]),
             ("F##4", vec!["G4"], vec!["G4"], vec!["G4", "E###4"]),
             (
                 "C4",
-                vec!["D--4", "B#3"],
+                vec!["Dbb4", "B#3"],
                 vec!["B#3"],
-                vec!["D--4", "B#3", "A###3"],
+                vec!["Dbb4", "B#3", "A###3"],
             ),
             (
                 "G-2",
                 vec!["F#2", "E##2"],
                 vec!["F#2"],
-                vec!["A---2", "F#2", "E##2"],
+                vec!["Abbb2", "F#2", "E##2"],
             ),
             (
                 "A4",
-                vec!["B--4", "G##4"],
+                vec!["Bbb4", "G##4"],
                 vec![],
-                vec!["B--4", "C---5", "G##4"],
+                vec!["Bbb4", "Cbbb5", "G##4"],
             ),
             (
                 "B-4",
-                vec!["C--5", "A#4"],
+                vec!["Cbb5", "A#4"],
                 vec!["A#4"],
-                vec!["C--5", "A#4", "G###4"],
+                vec!["Cbb5", "A#4", "G###4"],
             ),
             ("E#5", vec!["F5"], vec!["F5"], vec!["F5", "D###5"]),
-            ("D--4", vec!["C4"], vec!["C4"], vec!["C4"]),
+            ("Dbb4", vec!["C4"], vec!["C4"], vec!["C4"]),
         ];
         for (name, limit_two, limit_one, limit_three) in cases {
             let pitch = Pitch::from_name(name).unwrap();
@@ -1960,7 +2016,7 @@ mod tests {
         let c4 = Pitch::from_name("C4").unwrap();
         let m3 = Interval::from_name("m3").unwrap();
         let out = c4.transpose(&m3).unwrap();
-        assert_eq!(out.name_with_octave(), "E-4");
+        assert_eq!(out.name_with_octave(), "Eb4");
     }
 
     #[test]
@@ -1984,9 +2040,9 @@ mod tests {
             .unwrap();
 
         assert_eq!(pitch.name_with_octave(), "D`4");
-        assert_eq!(pitch.accidental_or_natural(), &custom_accidental);
-        assert_eq!(pitch.accidental_or_natural().name(), "half-flat");
-        assert_eq!(pitch.accidental_or_natural().alter(), -0.5);
+        assert_eq!(pitch.accidental(), &custom_accidental);
+        assert_eq!(pitch.accidental().name(), "half-flat");
+        assert_eq!(pitch.accidental().alter(), -0.5);
     }
 
     #[test]
@@ -2024,7 +2080,7 @@ mod tests {
     fn pitch_exposes_enharmonic_helpers() {
         let c_sharp = Pitch::from_name("C#3").unwrap();
         let out = c_sharp.get_higher_enharmonic().unwrap();
-        assert_eq!(out.name_with_octave(), "D-3");
+        assert_eq!(out.name_with_octave(), "Db3");
 
         let mut d_flat = out;
         d_flat.get_lower_enharmonic_in_place().unwrap();
@@ -2036,7 +2092,7 @@ mod tests {
                 .simplify_enharmonic(true)
                 .unwrap()
                 .name_with_octave(),
-            "E-4"
+            "Eb4"
         );
     }
 }

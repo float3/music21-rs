@@ -494,18 +494,19 @@ pub(super) fn bass_scale_degree_from_notation_in(
     if !FIGURES_IMPLYING_ROOT.contains(&numbers) {
         return Ok(degree);
     }
-    let middle_c = 22;
-    let mut pitches = vec![natural_at_diatonic_number(middle_c)?];
+    // music21 builds the column over C3, whose diatonic note number is 22.
+    let c3 = 22;
+    let mut pitches = vec![natural_at_diatonic_number(c3)?];
     for number in numbers {
         pitches.push(natural_at_diatonic_number(
-            middle_c + IntegerType::from(*number) - 1,
+            c3 + IntegerType::from(*number) - 1,
         )?);
     }
     let spelled = Chord::new(pitches.as_slice())?;
     let root = spelled
         .root()
         .ok_or_else(|| Error::Chord("figured bass column has no root".to_string()))?;
-    let distance = root.diatonic_note_number() - middle_c;
+    let distance = root.diatonic_note_number() - c3;
     let count = IntegerType::from(cardinality);
     let bass = (IntegerType::from(degree) - distance).rem_euclid(count);
     Ok(if bass == 0 { cardinality } else { bass as u8 })

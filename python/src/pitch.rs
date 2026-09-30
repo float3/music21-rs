@@ -14,6 +14,7 @@ use music21_rs_crate::{
 };
 
 use crate::note::Note;
+use crate::spelling::{music21_modifier, music21_name};
 
 /// The names the pitch facade provides, for swapping into `music21.pitch`.
 pub const NAMES: &[&str] = &[
@@ -446,7 +447,7 @@ impl Accidental {
 
     #[getter]
     fn modifier(&self) -> String {
-        self.inner.modifier().to_string()
+        music21_modifier(self.inner.modifier())
     }
 
     #[setter]
@@ -868,7 +869,7 @@ impl Pitch {
         };
         let mut pitch = slf.borrow_mut();
         pitch.inner = rebuilt;
-        pitch.inner.set_accidental(Some(value));
+        pitch.inner.set_accidental(value);
         pitch.write_back()
     }
 
@@ -903,10 +904,7 @@ impl Pitch {
     }
 
     fn accidental_name(&self) -> String {
-        self.inner
-            .accidental()
-            .map_or("natural", |accidental| accidental.name())
-            .to_string()
+        self.inner.accidental().name().to_string()
     }
 
     fn microtone_cents(&self) -> f64 {
@@ -930,8 +928,8 @@ impl Pitch {
             options = options.microtone(cents);
         }
         let mut rebuilt = options.build().map_err(pitch_error)?;
-        if self.inner.accidental().is_none() && accidental == "natural" {
-            rebuilt.set_accidental(None);
+        if self.inner.written_accidental().is_none() && accidental == "natural" {
+            rebuilt.set_written_accidental(None);
         }
         Ok(rebuilt)
     }
@@ -1060,7 +1058,7 @@ impl Pitch {
 
     #[getter]
     fn name(&self) -> String {
-        self.inner.name()
+        music21_name(&self.inner.name())
     }
 
     #[setter]
@@ -1092,7 +1090,7 @@ impl Pitch {
 
     #[getter]
     fn nameWithOctave(&self) -> String {
-        self.inner.name_with_octave()
+        music21_name(&self.inner.name_with_octave())
     }
 
     #[setter]
@@ -1235,7 +1233,7 @@ impl Pitch {
     #[getter]
     fn accidental(slf: &Bound<'_, Self>) -> PyResult<Option<Py<Accidental>>> {
         let py = slf.py();
-        let Some(current) = slf.borrow().inner.accidental().cloned() else {
+        let Some(current) = slf.borrow().inner.written_accidental().cloned() else {
             slf.borrow_mut().accidental = None;
             return Ok(None);
         };
@@ -1280,7 +1278,7 @@ impl Pitch {
         {
             let mut pitch = slf.borrow_mut();
             pitch.inner = rebuilt;
-            pitch.inner.set_accidental(accidental.clone());
+            pitch.inner.set_written_accidental(accidental.clone());
             pitch.accidental = None;
         }
         // An accidental object handed over is kept, and told which pitch it
@@ -1770,7 +1768,7 @@ impl Pitch {
     /// music21's `_nameInKeySignature`: whether one of the key signature's
     /// altered pitches has this pitch's step and accidental.
     fn _nameInKeySignature(&self, alteredPitches: &Bound<'_, PyAny>) -> PyResult<bool> {
-        if self.inner.accidental().is_none() {
+        if self.inner.written_accidental().is_none() {
             return Ok(false);
         }
         let own_name = self.accidental_name();
@@ -1875,7 +1873,7 @@ impl Pitch {
     }
 
     fn __str__(&self) -> String {
-        let name = self.inner.name_with_octave();
+        let name = music21_name(&self.inner.name_with_octave());
         match self.inner.microtone() {
             Some(microtone) if microtone.cents() != 0.0 => format!("{name}{microtone}"),
             _ => name,
@@ -1888,7 +1886,8 @@ impl Pitch {
         };
         self.inner.name_with_octave() == other.inner.name_with_octave()
             && self.inner.octave() == other.inner.octave()
-            && self.inner.accidental().is_some() == other.inner.accidental().is_some()
+            && self.inner.written_accidental().is_some()
+                == other.inner.written_accidental().is_some()
             && self.microtone_cents() == other.microtone_cents()
     }
 

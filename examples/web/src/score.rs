@@ -1929,10 +1929,10 @@ mod tests {
         };
         assert_eq!(name(66, "D", "major"), "F#4");
         assert_eq!(name(63, "D", "major"), "D#4");
-        assert_eq!(name(63, "B-", "major"), "E-4");
+        assert_eq!(name(63, "B-", "major"), "Eb4");
         assert_eq!(name(60, "B", "major"), "C4");
         assert_eq!(name(60, "C#", "major"), "B#3");
-        assert_eq!(name(59, "G-", "major"), "C-4");
+        assert_eq!(name(59, "G-", "major"), "Cb4");
         assert_eq!(name(61, "nonsense", "major"), "C#4");
     }
 
@@ -1943,10 +1943,10 @@ mod tests {
                 .expect("spells")
                 .name_with_octave()
         };
-        assert_eq!(name(58, "Gm7"), "B-3");
-        assert_eq!(name(56, "Fm6"), "A-3");
+        assert_eq!(name(58, "Gm7"), "Bb3");
+        assert_eq!(name(56, "Fm6"), "Ab3");
         assert_eq!(name(61, "A7"), "C#4");
-        assert_eq!(name(58, "C9"), "B-3");
+        assert_eq!(name(58, "C9"), "Bb3");
         // Not in the chord: as the key spells it.
         assert_eq!(name(61, "Gm7"), "C#4");
     }
@@ -2015,7 +2015,7 @@ mod tests {
             staff: Some(6),
         })
         .expect("B-flat spells");
-        assert_eq!(flat.name_with_octave(), "B-4");
+        assert_eq!(flat.name_with_octave(), "Bb4");
         let sharp = spell(&PitchInput {
             midi: 70,
             staff: Some(5),

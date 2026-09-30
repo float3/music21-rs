@@ -34,11 +34,11 @@ static DEFAULT_STEP: LazyLock<Interval> =
 /// let tonic = Pitch::from_name("C4")?;
 /// let cyclical = StepScale::cyclical(tonic.clone(), &["m3", "M3"])?;
 /// let names: Vec<String> = cyclical.pitches()?.iter().map(|p| p.name()).collect();
-/// assert_eq!(names, ["C", "E-", "G"]);
+/// assert_eq!(names, ["C", "Eb", "G"]);
 ///
 /// let repeating = StepScale::octave_repeating(tonic, &["m3", "M3"])?;
 /// let names: Vec<String> = repeating.pitches()?.iter().map(|p| p.name()).collect();
-/// assert_eq!(names, ["C", "E-", "G", "C"]);
+/// assert_eq!(names, ["C", "Eb", "G", "C"]);
 /// # Ok::<(), music21_rs::Error>(())
 /// ```
 /// `Interval` implements neither `PartialEq` nor `Hash`, so neither is derived
@@ -258,7 +258,7 @@ mod tests {
         };
         assert_eq!(
             spelled(scale.pitches_between(&tonic("G2"), &tonic("G4")).unwrap()),
-            ["G2", "C3", "E-3", "G3", "C4", "E-4", "G4"]
+            ["G2", "C3", "Eb3", "G3", "C4", "Eb4", "G4"]
         );
         // The closing octave is the tonic again, not a fourth degree.
         assert_eq!(scale.degree_count(), 3);
@@ -272,11 +272,11 @@ mod tests {
                 .unwrap()
                 .name_with_octave()
         };
-        assert_eq!(next("C4", 1), "E-4");
-        assert_eq!(next("G3", 2), "E-4");
+        assert_eq!(next("C4", 1), "Eb4");
+        assert_eq!(next("G3", 2), "Eb4");
         assert_eq!(
             scale
-                .next_pitch_below(&tonic("E-5"), 1)
+                .next_pitch_below(&tonic("Eb5"), 1)
                 .unwrap()
                 .name_with_octave(),
             "C5"
@@ -297,7 +297,7 @@ mod tests {
         };
         assert_eq!(
             spelled(scale.pitches_between(&tonic("D4"), &tonic("D5")).unwrap()),
-            ["D4", "E-4", "F-4", "F4", "D5"]
+            ["D4", "Eb4", "Fb4", "F4", "D5"]
         );
         assert_eq!(
             spelled(
@@ -322,11 +322,11 @@ mod tests {
         assert_eq!(spelled(fifths.pitches().unwrap()), ["C4", "G4"]);
         assert_eq!(
             spelled(fifths.pitches_between(&tonic("G2"), &tonic("G6")).unwrap()),
-            ["B-2", "F3", "C4", "G4", "D5", "A5", "E6"]
+            ["Bb2", "F3", "C4", "G4", "D5", "A5", "E6"]
         );
         // A cycle of one step has one degree, and every note of it is that.
         assert_eq!(fifths.degree_of(&tonic("G4")).unwrap(), Some(1));
-        assert_eq!(fifths.degree_of(&tonic("B-2")).unwrap(), Some(1));
+        assert_eq!(fifths.degree_of(&tonic("Bb2")).unwrap(), Some(1));
         // A degree is looked for an octave either side of the note, which is
         // where music21 looks: the cycle's F# is six fifths up, far past F#3.
         assert_eq!(fifths.degree_of(&tonic("F#3")).unwrap(), None);
@@ -359,7 +359,7 @@ mod tests {
         assert_eq!(
             spelled(seconds.pitches_between(&tonic("G4"), &tonic("G5")).unwrap()),
             [
-                "G4", "A-4", "A4", "B-4", "C-5", "C5", "D-5", "D5", "E-5", "F-5", "F5", "G-5", "G5"
+                "G4", "Ab4", "A4", "Bb4", "Cb5", "C5", "Db5", "D5", "Eb5", "Fb5", "F5", "Gb5", "G5"
             ]
         );
 
@@ -371,7 +371,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             spelled(whole.pitches_between(&tonic("C2"), &tonic("C3")).unwrap()),
-            ["C2", "D2", "F-2", "G-2", "A-2", "B-2", "C3"]
+            ["C2", "D2", "Fb2", "Gb2", "Ab2", "Bb2", "C3"]
         );
         let quarter = StepScale::sieve_by(tonic("D4"), "1@0", 0.5)
             .unwrap()
@@ -379,7 +379,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             spelled(quarter.pitches_between(&tonic("C2"), &tonic("D2")).unwrap()),
-            ["C2", "C~2", "D-2", "D`2", "D2"]
+            ["C2", "C~2", "Db2", "D`2", "D2"]
         );
     }
 
@@ -398,13 +398,13 @@ mod tests {
         assert_eq!(names(&scale), ["C", "G"]);
 
         let scale = StepScale::cyclical(tonic("C4"), &["m3", "M3"]).unwrap();
-        assert_eq!(names(&scale), ["C", "E-", "G"]);
+        assert_eq!(names(&scale), ["C", "Eb", "G"]);
     }
 
     #[test]
     fn octave_repeating_closes_on_the_octave() {
         let scale = StepScale::octave_repeating(tonic("C4"), &["m3", "M3"]).unwrap();
-        assert_eq!(names(&scale), ["C", "E-", "G", "C"]);
+        assert_eq!(names(&scale), ["C", "Eb", "G", "C"]);
         let pitches = scale.pitches().unwrap();
         assert_eq!(pitches.first().unwrap().octave(), Some(4));
         assert_eq!(pitches.last().unwrap().octave(), Some(5));
@@ -416,11 +416,11 @@ mod tests {
         // [C4, D-4, C5].
         assert_eq!(
             names(&StepScale::cyclical(tonic("C4"), &[]).unwrap()),
-            ["C", "D-"]
+            ["C", "Db"]
         );
         assert_eq!(
             names(&StepScale::octave_repeating(tonic("C4"), &[]).unwrap()),
-            ["C", "D-", "C"]
+            ["C", "Db", "C"]
         );
     }
 
@@ -431,7 +431,7 @@ mod tests {
         // closing interval off the pitches would give a major sixth to C
         // instead. music21 closes on B#, and so does this.
         let scale = StepScale::octave_repeating(tonic("C4"), &["m2", "m2", "m2"]).unwrap();
-        assert_eq!(names(&scale), ["C", "D-", "D", "E-", "B#"]);
+        assert_eq!(names(&scale), ["C", "Db", "D", "Eb", "B#"]);
 
         // Where realization changes nothing, the two agree: M2+M2+m2 is P4 and
         // its complement P5 closes on the octave.
@@ -456,9 +456,9 @@ mod tests {
     #[test]
     fn sieve_scales_match_music21() {
         let cases: [(&str, &str, &[&str]); 6] = [
-            ("C4", "3@0", &["C", "E-"]),
+            ("C4", "3@0", &["C", "Eb"]),
             ("D4", "3@0", &["D", "F"]),
-            ("E-4", "2@0", &["E-", "F"]),
+            ("E-4", "2@0", &["Eb", "F"]),
             (
                 "C2",
                 "(-3@2 & 4) | (-3@1 & 4@1) | (3@2 & 4@2) | (-3 & 4@3)",
@@ -467,9 +467,9 @@ mod tests {
             (
                 "C4",
                 "3@0|7@0",
-                &["C", "E-", "F#", "G", "A", "C", "D", "E-", "F#", "A"],
+                &["C", "Eb", "F#", "G", "A", "C", "D", "Eb", "F#", "A"],
             ),
-            ("C4", "{3@0|4@0}", &["C", "E-", "E", "F#", "G#", "A", "C"]),
+            ("C4", "{3@0|4@0}", &["C", "Eb", "E", "F#", "G#", "A", "C"]),
         ];
 
         for (tonic_name, expression, expected) in cases {

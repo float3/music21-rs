@@ -1530,6 +1530,15 @@ impl PartialEq for Duration {
     }
 }
 
+impl Eq for Duration {}
+
+/// Hashes what equality compares, the quarter length.
+impl std::hash::Hash for Duration {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        ordered_float::OrderedFloat(self.quarter_length).hash(state);
+    }
+}
+
 impl TryFrom<FloatType> for Duration {
     type Error = Error;
 

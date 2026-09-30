@@ -15,6 +15,16 @@
 //! an offset is then a backwards look through the flattened timeline rather
 //! than a search through a graph. That is the same answer for music that is
 //! written once, which is all a stream built here can be.
+//!
+//! Where an element sits is asked for, not stored: [`Stream::placed`]
+//! answers each element with its offset, its measure offset and the key,
+//! metre and tempo in force, as one [`Placed`](crate::stream::Placed) value. music21's author
+//! names keeping objects and sites apart this way as what he would do
+//! again.
+
+mod placed;
+
+pub use placed::Placed;
 
 use crate::{
     chord::Chord, chordsymbol::ChordSymbol, defaults::FloatType, duration::Duration,
@@ -488,6 +498,39 @@ impl Stream {
         }
     }
 
+    /// Whether this stream holds parts, or streams standing in for them:
+    /// music21's `hasPartLikeStreams`. A part says so; a measure or a voice,
+    /// or a stream starting anywhere but the beginning, says not; any other
+    /// stream holding measures or notes and rests says so, unless a later
+    /// one says not.
+    pub fn has_part_like_streams(&self) -> bool {
+        let mut part_like = false;
+        for event in &self.events {
+            let Some(stream) = event.element.as_stream() else {
+                continue;
+            };
+            match stream.kind {
+                StreamKind::Part => return true,
+                StreamKind::Measure | StreamKind::Voice => return false,
+                _ if event.offset != 0.0 => return false,
+                _ => {}
+            }
+            let holds_music = stream.events.iter().any(|inner| {
+                matches!(
+                    inner.element,
+                    StreamElement::Note(_) | StreamElement::Chord(_) | StreamElement::Rest(_)
+                ) || inner
+                    .element
+                    .as_stream()
+                    .is_some_and(|nested| nested.kind == StreamKind::Measure)
+            });
+            if holds_music {
+                part_like = true;
+            }
+        }
+        part_like
+    }
+
     /// The streams of one kind held directly by this one: music21's `.parts`
     /// on a score, `.measures` on a part, `.voices` on a measure.
     pub fn streams_of_kind(&self, kind: StreamKind) -> Vec<&Stream> {
@@ -624,6 +667,36 @@ impl<'a> IntoIterator for &'a Stream {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn a_stream_has_part_like_streams_as_music21_decides() {
+        use super::{Stream, StreamKind};
+        use crate::note::Note;
+
+        // music21's own examples: a part, a measure, one generic stream at
+        // the start, and a second one appended after it.
+        let four_notes = |kind: StreamKind| {
+            let mut stream = Stream::with_kind(kind);
+            for _ in 0..4 {
+                stream.push(Note::from_name("C4").unwrap());
+            }
+            stream
+        };
+        let mut score = Stream::with_kind(StreamKind::Score);
+        assert!(!score.has_part_like_streams());
+        score.insert(0.0, four_notes(StreamKind::Part));
+        assert!(score.has_part_like_streams());
+
+        let mut score = Stream::with_kind(StreamKind::Score);
+        score.push(four_notes(StreamKind::Measure));
+        assert!(!score.has_part_like_streams());
+
+        let mut score = Stream::with_kind(StreamKind::Score);
+        score.push(four_notes(StreamKind::Stream));
+        assert!(score.has_part_like_streams());
+        score.push(four_notes(StreamKind::Stream));
+        assert!(!score.has_part_like_streams());
+    }
+
+    #[test]
     fn a_stream_says_what_kind_it_is_and_walks_its_events() {
         use super::{Stream, StreamElement, StreamEvent, StreamKind};
         use crate::note::Note;
@@ -708,7 +781,7 @@ mod tests {
         let mut second = Stream::with_kind(StreamKind::Measure);
         second.insert(0.0, KeySignature::new(-1));
         second.push(Note::from_name("A4").unwrap());
-        second.push(Note::from_name("B-4").unwrap());
+        second.push(Note::from_name("Bb4").unwrap());
 
         let mut part = Stream::with_kind(StreamKind::Part);
         part.push(first);
@@ -738,7 +811,7 @@ mod tests {
             .iter()
             .map(Pitch::name_with_octave)
             .collect();
-        assert_eq!(names, ["D4", "E4", "F#4", "G4", "A4", "B-4"]);
+        assert_eq!(names, ["D4", "E4", "F#4", "G4", "A4", "Bb4"]);
 
         // recurse sees the streams themselves; flatten does not
         assert_eq!(score.recurse().len(), 1 + 2 + 6 + 3);

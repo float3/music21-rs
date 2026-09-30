@@ -125,12 +125,12 @@ impl Modifier {
             return Ok(pitch.clone());
         };
         let mut modified = pitch.clone();
-        let alter = if accidental.alter() == 0.0 || pitch.accidental().is_none() {
+        let alter = if accidental.alter() == 0.0 || pitch.written_accidental().is_none() {
             accidental.alter()
         } else {
-            pitch.accidental_or_natural().alter() + accidental.alter()
+            pitch.accidental().alter() + accidental.alter()
         };
-        modified.set_accidental(Some(Accidental::new(alter)?));
+        modified.set_accidental(Accidental::new(alter)?);
         Ok(modified)
     }
 
@@ -449,7 +449,7 @@ mod tests {
                 .unwrap()
                 .modify_pitch_name("F")
                 .unwrap(),
-            "F-"
+            "Fb"
         );
         assert_eq!(
             Modifier::new(Some("n"))
@@ -461,9 +461,9 @@ mod tests {
         assert_eq!(
             Modifier::new(None)
                 .unwrap()
-                .modify_pitch_name("B-")
+                .modify_pitch_name("Bb")
                 .unwrap(),
-            "B-"
+            "Bb"
         );
         assert!(
             Modifier::new(Some("#"))

@@ -16,6 +16,62 @@ use pyo3::prelude::*;
 pub mod doctest;
 pub mod suite;
 
+/// A name the crate writes with `b` for flat, as music21 writes it with
+/// `-`: `Bb4` is `B-4`, `bb` (B-flat minor) `b-`. The first letter is the
+/// step; every `b` after it is a flat. The fixtures hold music21's.
+pub fn music21_name(name: &str) -> String {
+    let mut letters = name.chars();
+    let Some(step) = letters.next() else {
+        return String::new();
+    };
+    format!("{step}{}", letters.as_str().replace('b', "-"))
+}
+
+/// A chord-symbol figure as music21 writes it: `Bbm7/Ab` is `B-m7/A-`,
+/// `CaddDb` `CaddD-`. The root opens the figure, the bass follows `/`, and
+/// the added and omitted notes follow `add` and `omit`; the `b`s of the
+/// kind's own abbreviation, `Cm7b5`, are left.
+pub fn music21_figure(figure: &str) -> String {
+    let flats_after = |text: &str| -> String {
+        let mut letters = text.chars();
+        let Some(step) = letters.next() else {
+            return String::new();
+        };
+        let rest = letters.as_str();
+        let flats = rest.len() - rest.trim_start_matches('b').len();
+        format!("{step}{}{}", "-".repeat(flats), &rest[flats..])
+    };
+    let (head, added) = match figure.split_once("add") {
+        Some((head, added)) => (head, Some(added)),
+        None => (figure, None),
+    };
+    let mut out = match head.split_once('/') {
+        Some((body, bass)) => format!("{}/{}", flats_after(body), flats_after(bass)),
+        None => flats_after(head),
+    };
+    if let Some(added) = added {
+        let notes: Vec<String> = added
+            .split(',')
+            .map(|note| match note.strip_prefix("omit") {
+                Some(omitted) => format!("omit{}", flats_after(omitted)),
+                None => flats_after(note),
+            })
+            .collect();
+        out.push_str("add");
+        out.push_str(&notes.join(","));
+    }
+    out
+}
+
+/// Each name in a space-separated list as music21 writes it.
+pub fn music21_names(names: &str) -> String {
+    names
+        .split(' ')
+        .map(music21_name)
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 /// One test that runs a music21 module's doctests against the crate: the
 /// module's dotted name, the name its expectation file and log carry, and
 /// the music21 modules to swap for the run, each with the names replaced.

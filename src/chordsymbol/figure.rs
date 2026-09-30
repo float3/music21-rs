@@ -53,8 +53,8 @@ pub(crate) fn chord_symbol_spellings_with_root(chord: &Chord, root: u8) -> Vec<S
 /// abbreviation, the bass where it is not the root, and the notes the kind
 /// does not account for.
 ///
-/// `Display` writes the figure as music21 writes it — `C7`, `E-m7/G-`,
-/// `CaddD-` — and [`Self::written_with`] writes it with another abbreviation
+/// `Display` writes the figure as music21 writes it, flats as `b` — `C7`,
+/// `Ebm7/Gb`, `CaddDb` — and [`Self::written_with`] writes it with another abbreviation
 /// for the kind.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[must_use]

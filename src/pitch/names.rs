@@ -111,14 +111,10 @@ impl Pitch {
     /// Returns the name with the accidental as a Unicode symbol, such as
     /// `"C♯"` or `"G𝄫"`.
     pub fn unicode_name(&self) -> String {
-        if self.accidental_or_natural().alter() == 0.0 {
+        if self.accidental().alter() == 0.0 {
             return self.step.as_char().to_string();
         }
-        format!(
-            "{}{}",
-            self.step.as_char(),
-            self.accidental_or_natural().unicode()
-        )
+        format!("{}{}", self.step.as_char(), self.accidental().unicode())
     }
 
     /// Returns music21's `fullName`: the step, the accidental's full name, the
@@ -164,7 +160,7 @@ impl Pitch {
     }
 
     pub(super) fn whole_alteration(&self, language: &str) -> Result<IntegerType> {
-        let alter = self.accidental_or_natural().alter();
+        let alter = self.accidental().alter();
         if alter.fract() != 0.0 {
             return Err(Error::Pitch(match language {
                 "german" => {
@@ -187,14 +183,8 @@ impl Pitch {
 
 /// Canonical pitch names for chromatic pitch classes.
 pub const CHROMATIC_PITCH_CLASS_NAMES: [&str; 12] = [
-    "C", "D-", "D", "E-", "E", "F", "F#", "G", "A-", "A", "B-", "B",
+    "C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B",
 ];
-
-/// A pitch name with its flats written `b`, as chord and key names show
-/// them: `B-` is `Bb`.
-pub(crate) fn display_flats(name: &str) -> String {
-    name.replace('-', "b")
-}
 
 /// Returns a canonical pitch name for a chromatic pitch class.
 pub fn pitch_class_name(pitch_class: u8) -> &'static str {

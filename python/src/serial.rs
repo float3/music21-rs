@@ -10,6 +10,7 @@
 use pyo3::prelude::*;
 
 use crate::Walkable;
+use crate::spelling::music21_name;
 use pyo3::types::{PyDict, PyList, PySlice, PyTuple};
 
 use music21_rs_crate::{
@@ -199,7 +200,11 @@ impl ToneRow {
 
     #[allow(non_snake_case)]
     fn noteNames(&self) -> Vec<String> {
-        self.inner.note_names()
+        self.inner
+            .note_names()
+            .iter()
+            .map(|name| music21_name(name))
+            .collect()
     }
 
     #[allow(non_snake_case)]
@@ -365,7 +370,7 @@ impl ToneRow {
         for (offset, pitch) in self.inner.pitches().into_iter().enumerate() {
             print.call1((format!(
                 "{{{offset}.0}} <music21.note.Note {}>",
-                pitch.name()
+                music21_name(&pitch.name())
             ),))?;
         }
         Ok(())

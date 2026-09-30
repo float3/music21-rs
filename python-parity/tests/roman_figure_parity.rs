@@ -1,7 +1,8 @@
 //! Checks the crate's realization of roman numeral figures against
 //! music21's `RomanNumeral`, in `data/roman_figure_expectations.toml`.
 
-use music21_rs::{Key, Pitch, RomanNumeral};
+use music21_rs::{Key, RomanNumeral};
+use music21_rs_python_parity::music21_name;
 
 use std::path::Path;
 
@@ -71,7 +72,7 @@ fn every_roman_figure_realizes_as_music21_realizes_it() {
             chord
                 .pitches()
                 .iter()
-                .map(Pitch::name_with_octave)
+                .map(|pitch| music21_name(&pitch.name_with_octave()))
                 .collect::<Vec<_>>(),
             numeral.roman_numeral(),
             numeral.scale_degree_with_alteration().0,

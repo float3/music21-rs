@@ -2,7 +2,6 @@
 //! on the chord's own root, and the lead-sheet symbol it is written as.
 
 use super::*;
-use crate::pitch::display_flats;
 
 impl Chord {
     /// Returns the unpitched chord types known to the music21-derived table.
@@ -108,7 +107,7 @@ impl Chord {
         {
             // music21's `bass()`, which a bass set by hand answers.
             if let Some(bass) = self.bass() {
-                return format!("{name_str} above {}", Self::display_pitch_name(bass));
+                return format!("{name_str} above {}", bass.name());
             }
             return name_str.to_string();
         }
@@ -118,7 +117,7 @@ impl Chord {
         let root_name = self
             .root()
             .or_else(|| self.notes.first().map(|n| &n.pitch))
-            .map(Self::display_pitch_name);
+            .map(Pitch::name);
 
         match root_name {
             Some(root_name) => format!("{root_name}-{name_str}"),
@@ -433,11 +432,11 @@ impl Chord {
     ///
     /// Returns `None` for empty chords, where there is no bass pitch.
     pub fn bass_pitch_name(&self) -> Option<String> {
-        self.bass_pitch().map(Self::display_pitch_name)
+        self.bass_pitch().map(Pitch::name)
     }
 
     pub(super) fn root_pitch_name_from_tables(&self) -> Option<String> {
-        self.find_root_pitch().map(Self::display_pitch_name)
+        self.find_root_pitch().map(Pitch::name)
     }
 
     pub(super) fn common_names_with_primary(&self) -> Vec<String> {
@@ -454,12 +453,8 @@ impl Chord {
             .map(|interval| interval.nice_name())
     }
 
-    pub(super) fn display_pitch_name(pitch: &Pitch) -> String {
-        display_flats(&pitch.name())
-    }
-
     pub(super) fn display_key_name(key: &Key) -> String {
-        format!("{} {}", display_flats(&key.tonic().name()), key.mode())
+        format!("{} {}", key.tonic().name(), key.mode())
     }
 
     /// Returns music21's `fullName`: the pitches' full names between braces,

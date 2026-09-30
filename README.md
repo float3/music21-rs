@@ -76,7 +76,7 @@ Name a chord and read its set class:
 ```rust
 use music21_rs::Chord;
 
-let chord: Chord = "C E- G B-".parse()?;
+let chord: Chord = "C Eb G Bb".parse()?;
 assert_eq!(chord.pitched_common_name(), "C-minor seventh chord");
 assert_eq!(chord.forte_class().as_deref(), Some("4-26"));
 assert_eq!(chord.chord_symbol().as_deref(), Some("Cm7"));
@@ -90,10 +90,10 @@ use music21_rs::{Interval, Pitch};
 
 let mut pitch = Pitch::from_name("C#4")?;
 pitch.get_higher_enharmonic_in_place()?;
-assert_eq!(pitch.name_with_octave(), "D-4");
+assert_eq!(pitch.name_with_octave(), "Db4");
 
 let fifth = Interval::from_name("P5")?;
-assert_eq!(fifth.transpose_pitch(&pitch)?.name_with_octave(), "A-4");
+assert_eq!(fifth.transpose_pitch(&pitch)?.name_with_octave(), "Ab4");
 assert_eq!(fifth.pythagorean_ratio()?.to_string(), "3/2");
 # Ok::<(), music21_rs::Error>(())
 ```
@@ -105,9 +105,9 @@ use music21_rs::{Chord, Key, RomanNumeral};
 
 let key = Key::from_tonic("c")?;
 let numeral = RomanNumeral::new("viio7", key.clone())?;
-assert_eq!(numeral.to_chord()?.pitch_names(), ["B", "D", "F", "A-"]);
+assert_eq!(numeral.to_chord()?.pitch_names(), ["B", "D", "F", "Ab"]);
 
-let analysed = RomanNumeral::analyze(&Chord::new("F A- C")?, key)?;
+let analysed = RomanNumeral::analyze(&Chord::new("F Ab C")?, key)?;
 assert_eq!(analysed.map(|n| n.figure().to_string()), Some("iv".to_string()));
 # Ok::<(), music21_rs::Error>(())
 ```
@@ -129,8 +129,8 @@ Read a chord label in Harte notation:
 use music21_rs::Harte;
 
 let harte = Harte::new("Bb:min7/b3")?;
-assert_eq!(harte.chord().pitch_names(), ["B-", "D-", "F", "A-"]);
-assert_eq!(harte.chord().bass().map(|p| p.name_with_octave()), Some("D-3".to_string()));
+assert_eq!(harte.chord().pitch_names(), ["Bb", "Db", "F", "Ab"]);
+assert_eq!(harte.chord().bass().map(|p| p.name_with_octave()), Some("Db3".to_string()));
 assert_eq!(Harte::new("C:(b3,5)")?.prettify(), "C:min");
 # Ok::<(), music21_rs::Error>(())
 ```

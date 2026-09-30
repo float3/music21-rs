@@ -16,6 +16,7 @@ use music21_rs_crate::figuredbass::{
 };
 
 use crate::pitch::{Accidental, Pitch, pitch_from_any};
+use crate::spelling::music21_name;
 
 /// The names the `figuredbass` facade replaces in
 /// `music21.figuredBass.notation`.
@@ -110,7 +111,9 @@ impl Modifier {
     /// modifier asks.
     fn modifyPitchName(&self, pitchNameToAlter: &str) -> PyResult<String> {
         let pitch = music21_rs_crate::Pitch::from_name(pitchNameToAlter).map_err(modifier_error)?;
-        Ok(self.inner.modify(&pitch).map_err(modifier_error)?.name())
+        Ok(music21_name(
+            &self.inner.modify(&pitch).map_err(modifier_error)?.name(),
+        ))
     }
 
     /// music21's `modifyPitch`: the same, on a pitch object.
@@ -130,12 +133,7 @@ impl Modifier {
                 "accidental",
                 // music21 assigns an accidental here whatever the pitch comes to,
                 // a natural included.
-                Accidental::from_inner(
-                    modified
-                        .accidental()
-                        .cloned()
-                        .unwrap_or_else(music21_rs_crate::pitch::Accidental::natural),
-                ),
+                Accidental::from_inner(modified.accidental().clone()),
             )?;
             return Ok(py.None());
         }

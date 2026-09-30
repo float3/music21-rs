@@ -7,6 +7,25 @@ example: 40 modules, 1,027 docstrings and 9,171 examples. Asking music21 and
 the crate the same questions over thousands of random inputs found eleven
 places where they answered differently; they agree now.
 
+## Breaking Changes
+
+- Flats are written `b`: `Pitch::name` is `Bb`, `name_with_octave`
+  `Bb4`, a flat's `Accidental::modifier` `b` and a double flat's `bb`, and
+  so for every name built from them: key, scale and chord-symbol names,
+  `CHROMATIC_PITCH_CLASS_NAMES`. `-` is still read everywhere a name is.
+  music21 writes `-`, and the wheel still does: it respells every name it
+  hands Python. Cuthbert's "Music21's Mistakes" regrets borrowing `-`.
+  A pitch name and octave no longer collide: B-flat 1 is `Bb1`, B in octave
+  -1 `B-1`.
+- Every pitch has an accidental. `Pitch::accidental` answers
+  `&Accidental`, a natural where none is written, so arithmetic on it
+  needs no `None` case. What was `accidental` is `written_accidental`,
+  and `accidental_mut` is `written_accidental_mut`: music21's view, where
+  `D` has none and `Dn` a natural, which the wheel keeps.
+  `set_accidental` takes an `Accidental`; `set_written_accidental` takes
+  the `Option` music21's setter does. Cuthbert's "Music21's Mistakes"
+  lists the natural-or-`None` split as more trouble than it is worth.
+
 ## Added
 
 - `chordsymbol::voice_chord_notation` and `ChordVoicing`: a chord of one
@@ -29,9 +48,32 @@ places where they answered differently; they agree now.
 - `analysis::transposition::TranspositionChecker`, a set of pitches in all
   twelve transpositions and how many differ. The wheel installs it over
   music21's.
+- `TimeSignature::offset_in_bar`, the arithmetic of music21's
+  `getMeasureOffsetOrMeterModulusOffset`: where an element falls in the
+  bar, given its offset and the meter's. The wheel's member reads the two
+  offsets off music21's stream and hands them over.
+- Analysis of a whole `Stream`: `analysis::stream_distribution` and
+  `estimate_key_of_stream`, music21's `KeyWeightKeyAnalysis` over a
+  stream's duration-weighted pitch classes; `stream_pitch_span`, its
+  `Ambitus`; and `melodic_lines`, the lines `MelodicIntervalDiversity`
+  counts, one per part with ties struck once. `Stream::has_part_like_streams`
+  is music21's `hasPartLikeStreams`, which `melodic_lines` reads.
+- `Stream::placed`: every element with its offset, its offset in its
+  measure, and the key signature, metre and tempo in force, each part
+  reading its own. music21 stores sites on each object to answer this;
+  the crate answers with a composite `Placed` value instead.
+- `Pitch`, `Accidental`, `Microtone` and `Duration` are `Eq` and `Hash`,
+  hashing what their equality compares, so they key maps and fill sets.
+  music21's are mutable and cannot; its author lists that first among
+  the mistakes he would not repeat.
 
 ## Fixed
 
+- `Accidental`'s ordering agrees with its equality. Equality compares
+  names and ordering alterations, so a renamed natural ordered `Equal` to
+  `natural` while `!=` it, which `PartialOrd` forbids. Two accidentals of
+  one alteration and different names are now unordered. The wheel keeps
+  music21's `<`, which compares alterations alone.
 - A chord symbol is voiced as music21 voices it, root and bass included.
   music21 puts its own root and bass objects in the list it voices, so an
   octave pass moves them with the chord, a bass held twice moves twice,

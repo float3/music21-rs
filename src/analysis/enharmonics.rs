@@ -42,7 +42,7 @@ const BASE40_STEPS: [(char, IntegerType); 7] = [
 
 /// The accidentals base 40 has room for, with the places each moves a step.
 const BASE40_MODIFIERS: [(&str, IntegerType); 5] =
-    [("--", -2), ("-", -1), ("", 0), ("#", 1), ("##", 2)];
+    [("bb", -2), ("b", -1), ("", 0), ("#", 1), ("##", 2)];
 
 /// The number of places in one base-40 octave.
 const BASE40_OCTAVE: IntegerType = 40;
@@ -280,9 +280,9 @@ pub fn best_spelling(pitches: &[Pitch], rules: EnharmonicRules) -> Result<Vec<Pi
 /// The flats and the sharps written in `spelling`'s names.
 fn accidental_counts(spelling: &[Pitch]) -> (IntegerType, IntegerType) {
     spelling.iter().fold((0, 0), |(flats, sharps), pitch| {
-        let name = pitch.name();
-        let count = |mark: char| name.chars().filter(|c| *c == mark).count() as IntegerType;
-        (flats + count('-'), sharps + count('#'))
+        let modifier = pitch.accidental().modifier();
+        let count = |mark: char| modifier.chars().filter(|c| *c == mark).count() as IntegerType;
+        (flats + count('b'), sharps + count('#'))
     })
 }
 
@@ -334,7 +334,7 @@ mod tests {
 
     #[test]
     fn double_accidentals_are_simplified() {
-        let best = best_spelling(&pitches(&["D--", "E", "F##"]), EnharmonicRules::MELODIC).unwrap();
+        let best = best_spelling(&pitches(&["Dbb", "E", "F##"]), EnharmonicRules::MELODIC).unwrap();
         assert_eq!(names(&best), ["C", "E", "G"]);
     }
 
@@ -391,8 +391,8 @@ mod tests {
 
     #[test]
     fn the_best_choice_indexes_each_position_s_options() {
-        let options = spelling_options(&pitches(&["D--", "E"]));
-        assert_eq!(names(&options[0])[0], "D--");
+        let options = spelling_options(&pitches(&["Dbb", "E"]));
+        assert_eq!(names(&options[0])[0], "Dbb");
         let choice = best_choice(&options, EnharmonicRules::MELODIC).unwrap();
         assert_eq!(options[0][choice[0]].name(), "C");
         assert_eq!(choice[1], 0);
