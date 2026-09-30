@@ -47,7 +47,10 @@ const FILES: &[(&str, &str)] = &[
         "monteverdi/madrigal.5.1.rntxt",
         "lengths no one note value has, and an eighth degree",
     ),
-    ("monteverdi/madrigal.5.3.rntxt", "chords left out of their thirds"),
+    (
+        "monteverdi/madrigal.5.3.rntxt",
+        "chords left out of their thirds",
+    ),
 ];
 
 #[test]
