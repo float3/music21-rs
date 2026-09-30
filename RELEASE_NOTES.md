@@ -1,4 +1,4 @@
-# Unreleased
+# music21-rs 0.8.0
 
 Four more of music21's analysis modules are the crate's—
 `analysis.enharmonics`, `analysis.harmonicFunction`,
