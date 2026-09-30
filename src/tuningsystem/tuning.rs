@@ -7,7 +7,7 @@ use crate::tuningsystem::{A4, EqualDivision, Monzo, Temperament, Val};
 ///
 /// A spelled interval is a [`Monzo`] (see
 /// [`Interval::pythagorean_monzo`](crate::Interval::pythagorean_monzo)), so a
-/// tuning here says how wide each monzo sounds. `C#` and `D-` are then two
+/// tuning here says how wide each monzo sounds. `C#` and `Db` are then two
 /// notes wherever the tuning keeps them apart, which a keyboard table indexed
 /// by semitone cannot do.
 pub trait Tuning {
@@ -106,7 +106,7 @@ mod tests {
     #[test]
     fn twelve_edo_agrees_with_the_plain_frequency() {
         let twelve = EqualDivision::octave(12).unwrap();
-        for name in ["C4", "C#4", "D-4", "B#3", "F##5", "E--2", "A4"] {
+        for name in ["C4", "C#4", "Db4", "B#3", "F##5", "Ebb2", "A4"] {
             let plain = Pitch::from_name(name).unwrap().frequency_hz();
             assert!((hz(name, &twelve) - plain).abs() < 1e-9, "{name}");
         }
@@ -116,11 +116,11 @@ mod tests {
     #[test]
     fn a_tuning_keeps_enharmonics_apart_where_it_should() {
         let nineteen = EqualDivision::octave(19).unwrap();
-        assert!(hz("C#4", &nineteen) < hz("D-4", &nineteen));
+        assert!(hz("C#4", &nineteen) < hz("Db4", &nineteen));
         // A Pythagorean sharp is higher than the flat above it.
-        assert!(hz("C#4", &Just) > hz("D-4", &Just));
+        assert!(hz("C#4", &Just) > hz("Db4", &Just));
         let meantone = MEANTONE.temperament().unwrap();
-        assert!(hz("C#4", &meantone) < hz("D-4", &meantone));
+        assert!(hz("C#4", &meantone) < hz("Db4", &meantone));
     }
 
     #[test]

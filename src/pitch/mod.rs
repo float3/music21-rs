@@ -633,7 +633,7 @@ impl Pitch {
     ///
     /// The interval from the reference to this pitch is read as octaves and
     /// fifths ([`Interval::pythagorean_monzo`]) and `tuning` says how wide it
-    /// sounds, so `C#` and `D-` differ in a meantone or in 19-EDO and agree in
+    /// sounds, so `C#` and `Db` differ in a meantone or in 19-EDO and agree in
     /// 12-EDO. A microtone, and the part of a quarter-tone accidental past a
     /// whole semitone, are added on top in cents.
     ///
@@ -647,7 +647,7 @@ impl Pitch {
     ///
     /// let nineteen = EqualDivision::octave(19)?;
     /// let sharp = Pitch::from_name("C#4")?.frequency_hz_tuned(&nineteen, &a440)?;
-    /// let flat = Pitch::from_name("D-4")?.frequency_hz_tuned(&nineteen, &a440)?;
+    /// let flat = Pitch::from_name("Db4")?.frequency_hz_tuned(&nineteen, &a440)?;
     /// assert!(sharp < flat);
     /// # Ok::<(), music21_rs::Error>(())
     /// ```
@@ -682,7 +682,7 @@ impl Pitch {
     }
 
     /// Returns this pitch's frequency in hertz in a tuning system, reading
-    /// the pitch as a key on a keyboard: `C#` and `D-` sound alike.
+    /// the pitch as a key on a keyboard: `C#` and `Db` sound alike.
     ///
     /// A system of twelve degrees to the octave gives each key its own
     /// degree; any other sounds the degree nearest the key's equal-tempered

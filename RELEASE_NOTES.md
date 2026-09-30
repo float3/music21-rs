@@ -41,6 +41,30 @@ reader the same way, on scores from music21's corpus and its own tests.
   `set_accidental` takes an `Accidental`; `set_written_accidental` takes
   the `Option` music21's setter does. Cuthbert's "Music21's Mistakes"
   lists the natural-or-`None` split as more trouble than it is worth.
+- `Polyrhythm::ratio_pitches` and `ratio_chord` sound the ratios in tune:
+  each pitch carries a microtone for the part of its ratio past the nearest
+  semitone, so a 4:5:6 rhythm on `C4` is `C4 E4(-14c) G4(+2c)`.
+- `Polyrhythm::to_chord` and `to_polypitch` are gone. They mapped where each
+  beat falls in the bar onto twelve semitones, which is no chord the rhythm
+  implies; `ratio_chord` is the chord its ratios make.
+- `Interval::pythagorean_ratio` returns an error instead of panicking on an
+  interval too far along the chain of fifths for a ratio of two `i32`s, and
+  answers for up to nineteen fifths where it stopped at eighteen.
+- `Pitch::frequency_hz_in` sounds the degree nearest each key in a system
+  without twelve degrees to the octave, where it read the pitch-space number
+  as a degree: A4 in 19-EDO is 436.0 Hz, where it was degree 69, 101.3 Hz.
+- `TuningSystem::label` names a degree by the pitch it sounds: `C-1` for
+  `CN1`, `C♯/D♭4` for `C#/Db4`, `G0(+2c)` for Bohlen-Pierce's `T0O0`.
+  `TWELVE_TONE_NAMES`, `TWELVE_TONE_NAMES_SHARP`, `TWELVE_TONE_NAMES_FLAT`
+  and `WHOLE_TONE_NAMES` are gone.
+- `tuningsystem::Fraction` is `tuningsystem::Ratio`, an enum of `Rational`
+  and `Root` in place of a struct whose `base` of nought meant rational.
+  `Ratio::root(base, numerator, denominator)` replaces
+  `Fraction::new_with_base(numerator, denominator, base)`, `value` replaces
+  `ratio`, and `to_string` replaces `label`. `TuningSystem::fraction` is
+  `exact_ratio`, `ScalaDegree::as_fraction` is `as_ratio`, and
+  `equal_temperament_12` and `equal_temperament_default` are gone for
+  `equal_temperament`.
 
 ## Added
 
@@ -201,6 +225,23 @@ reader the same way, on scores from music21's corpus and its own tests.
   hashing what their equality compares, so they key maps and fill sets.
   music21's are mutable and cannot; its author lists that first among
   the mistakes he would not repeat.
+- `Pitch::frequency_hz_tuned` tunes a pitch by its spelling:
+  `tuningsystem::Tuning` says how wide an interval sounds, and `Just`,
+  `EqualDivision` and `Temperament` are tunings, measured from a
+  `tuningsystem::Reference` (`A4` at 440 Hz by default). `C#` and `Db` are
+  two notes in a meantone or in 19-EDO, and one in 12-EDO.
+- `Interval::pythagorean_monzo`, a spelled interval as octaves and fifths,
+  and `Monzo::pythagorean` to build one from staff steps and semitones.
+- `Polyrhythm::ratio_frequencies`, the subdivision ratios as frequencies,
+  and `PolyrhythmRatioTone::cents`, each ratio's exact width.
+- `Polyrhythm::to_score`: one measure of the rhythm as a score, a part for
+  each subdivision in tuplets where it does not divide the bar, each playing
+  its ratio's pitch, with the tempo as a metronome mark.
+- `TuningSystem::nearest_degree`, the degree nearest a frequency;
+  `TuningSystem::pitch_at`, the pitch a degree sounds, spelled with a
+  microtone; `TuningSystem::is_keyboard`; and `Pitch::from_frequency_in`, a
+  frequency snapped to a tuning system and spelled.
+- `tuningsystem::Ratio::to_fraction`, `monzo` and `cents`.
 
 ## Changed
 

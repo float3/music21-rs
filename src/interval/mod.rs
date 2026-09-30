@@ -579,7 +579,7 @@ impl Interval {
     /// [Pythagorean ratio](Self::pythagorean_ratio), with no limit on how far
     /// along the chain of fifths the spelling sits.
     ///
-    /// This is what a regular temperament tunes, so `C#` and `D-` stay apart
+    /// This is what a regular temperament tunes, so `C#` and `Db` stay apart
     /// here however a tuning later treats them. Errors on an interval measured
     /// in fractions of a semitone, which no spelling reaches.
     pub fn pythagorean_monzo(&self) -> Result<crate::tuningsystem::Monzo> {
