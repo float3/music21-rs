@@ -518,10 +518,13 @@ impl Span<'_> {
 
     /// music21's `classSortOrder`, which decides what comes first among the
     /// things starting together.
-    fn class_sort_order(&self) -> u8 {
+    fn class_sort_order(&self) -> i8 {
         match self.element {
-            StreamElement::MetronomeMark(_) => 1,
-            StreamElement::KeySignature(_) => 2,
+            StreamElement::TextExpression(_) => -30,
+            StreamElement::Instrument(_) => -25,
+            StreamElement::Clef(_) => 0,
+            StreamElement::MetronomeMark(_) | StreamElement::TempoText(_) => 1,
+            StreamElement::KeySignature(_) | StreamElement::Key(_) => 2,
             StreamElement::TimeSignature(_) => 4,
             StreamElement::Dynamic(_) => 10,
             StreamElement::ChordSymbol(_) => 19,
@@ -543,7 +546,7 @@ fn parts_by_position(stream: &Stream) -> Vec<Vec<(usize, FloatType, &StreamEleme
             event
                 .element()
                 .as_stream()
-                .is_some_and(|part| part.kind() == StreamKind::Part)
+                .is_some_and(|part| matches!(part.kind(), StreamKind::Part | StreamKind::PartStaff))
         })
         .map(|(top, _)| top)
         .collect();

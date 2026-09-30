@@ -11,6 +11,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
 use music21_rs_crate::duration::Duration as RsDuration;
+use music21_rs_crate::notation::Placement;
 use music21_rs_crate::tempo::{
     MetricModulation as RsMetricModulation, MetronomeMark as RsMetronomeMark, ModulationSide,
     TempoText as RsTempoText, convert_tempo_by_referent as rs_convert_tempo_by_referent,
@@ -72,8 +73,6 @@ fn referent_duration(value: Option<&Bound<'_, PyAny>>) -> PyResult<RsDuration> {
 )]
 pub struct MetronomeMark {
     pub(crate) inner: RsMetronomeMark,
-    parentheses: bool,
-    placement: Option<String>,
     /// The referent as an object, so `mark.referent.type` answers and an edit
     /// through it is one the mark sees.
     referent: Option<Py<Duration>>,
@@ -87,8 +86,6 @@ impl MetronomeMark {
     pub(crate) fn wrap(inner: RsMetronomeMark) -> Self {
         Self {
             inner,
-            parentheses: false,
-            placement: None,
             referent: None,
             tempo_text: None,
         }
@@ -130,7 +127,7 @@ impl MetronomeMark {
                 mark.inner = mark.inner.with_number_sounding(value.extract()?);
             }
             if let Some(value) = keywords.get_item("parentheses")? {
-                mark.parentheses = value.extract()?;
+                mark.inner.set_parentheses(value.extract()?);
             }
         }
         Ok(mark)
@@ -142,8 +139,6 @@ impl MetronomeMark {
     fn copied(&self) -> Self {
         Self {
             inner: self.inner.clone(),
-            parentheses: self.parentheses,
-            placement: self.placement.clone(),
             referent: None,
             tempo_text: None,
         }
@@ -191,7 +186,13 @@ impl MetronomeMark {
         let me = slf.borrow();
         // What it is played at goes with it: a mark imported from a score
         // often says nothing and sounds at ninety-six.
-        let written = (me.inner.clone(), me.parentheses, me.placement.clone());
+        let written = (
+            me.inner.clone(),
+            me.inner.parentheses(),
+            me.inner
+                .placement()
+                .map(|placement| placement.as_str().to_string()),
+        );
         drop(me);
         crate::pickled(slf, &written)
     }
@@ -204,8 +205,12 @@ impl MetronomeMark {
         };
         let mut me = slf.borrow_mut();
         me.inner = inner;
-        me.parentheses = parentheses;
-        me.placement = placement;
+        me.inner.set_parentheses(parentheses);
+        me.inner.set_placement(
+            placement
+                .as_deref()
+                .and_then(|name| Placement::from_name(name).ok()),
+        );
         me.referent = None;
         Ok(())
     }
@@ -234,7 +239,6 @@ impl MetronomeMark {
         let built = Self::build(text, number, referent, keywords)?;
         let mut me = slf.borrow_mut();
         me.inner = built.inner;
-        me.parentheses = built.parentheses;
         me.referent = None;
         Ok(())
     }
@@ -357,22 +361,30 @@ impl MetronomeMark {
 
     #[getter]
     fn get_parentheses(&self) -> bool {
-        self.parentheses
+        self.inner.parentheses()
     }
 
     #[setter]
     fn set_parentheses(&mut self, value: bool) {
-        self.parentheses = value;
+        self.inner.set_parentheses(value);
     }
 
     #[getter]
-    fn get_placement(&self) -> Option<String> {
-        self.placement.clone()
+    fn get_placement(&self) -> Option<&'static str> {
+        self.inner.placement().map(Placement::as_str)
     }
 
+    /// music21 takes `above`, `below` or nothing.
     #[setter]
-    fn set_placement(&mut self, value: Option<String>) {
-        self.placement = value;
+    fn set_placement(&mut self, value: Option<String>) -> PyResult<()> {
+        let placement = match value {
+            None => None,
+            Some(name) => Some(Placement::from_name(&name).map_err(|error| {
+                pyo3::exceptions::PyValueError::new_err(crate::pitch::message(&error))
+            })?),
+        };
+        self.inner.set_placement(placement);
+        Ok(())
     }
 
     /// music21's `getQuarterBPM`: the tempo counted in quarter notes,

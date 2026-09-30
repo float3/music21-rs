@@ -138,6 +138,10 @@ pub struct Instrument {
     percussion_pitch: Option<u8>,
     string_pitches: Option<Vec<Pitch>>,
     modifier: Option<String>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    part_id: Option<String>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    instrument_id: Option<String>,
 }
 
 impl Default for Instrument {
@@ -186,7 +190,31 @@ impl Instrument {
                 .iter()
                 .find(|(named, ..)| *named == kind.class)
                 .map(|(_, modifier, ..)| modifier.to_string()),
+            part_id: None,
+            instrument_id: None,
         })
+    }
+
+    /// The id of the part this instrument plays, as a score writes it:
+    /// music21's `partId`, `P1` in a score read from MusicXML.
+    pub fn part_id(&self) -> Option<&str> {
+        self.part_id.as_deref()
+    }
+
+    /// Sets the id of the part this instrument plays.
+    pub fn set_part_id(&mut self, id: Option<String>) {
+        self.part_id = id;
+    }
+
+    /// The instrument's own id within its part, `P1-I1`: music21's
+    /// `instrumentId`.
+    pub fn instrument_id(&self) -> Option<&str> {
+        self.instrument_id.as_deref()
+    }
+
+    /// Sets the instrument's own id.
+    pub fn set_instrument_id(&mut self, id: Option<String>) {
+        self.instrument_id = id;
     }
 
     /// Every kind of instrument music21 has a class for, families first.

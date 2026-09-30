@@ -22,6 +22,7 @@ passing = [
     "music21.harmony.NoChord",
     "music21.harmony.NoChord.transpose",
     "music21.harmony.addNewChordSymbol",
+    "music21.harmony.alterToChordSymbolString",
     "music21.harmony.changeAbbreviationFor",
     "music21.harmony.chordSymbolFigureFromChord",
     "music21.harmony.chordSymbolFromChord",

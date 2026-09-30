@@ -134,7 +134,7 @@ impl Scale {
             ));
         };
         let cents = |pitch: &Pitch| ScalaDegree::Cents((pitch.ps() - tonic.ps()) * 100.0);
-        let mut degrees = vec![ScalaDegree::Ratio(crate::tuningsystem::Fraction::new(1, 1))];
+        let mut degrees = vec![ScalaDegree::Ratio(crate::tuningsystem::Ratio::new(1, 1))];
         degrees.extend(pitches[1..pitches.len() - 1].iter().map(cents));
         Ok(ScalaScale::new(
             format!(

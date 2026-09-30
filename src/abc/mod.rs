@@ -4,6 +4,10 @@
 //! similar in spirit to `music21.abcFormat`. Complete score layout and
 //! application-specific snippets belong in callers.
 
+mod read;
+
+pub use read::{from_abc, from_abc_number};
+
 use crate::{Error, Pitch, Result};
 
 /// Returns an ABC note token for a pitch.

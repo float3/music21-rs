@@ -12,7 +12,8 @@ use crate::Walkable;
 use pyo3::types::{PyDict, PyFloat, PyList, PyTuple};
 
 use music21_rs_crate::{
-    Duration as RsDuration, DurationType as RsDurationType, Tuplet as RsTuplet,
+    Duration as RsDuration, DurationType as RsDurationType, Placement, Tuplet as RsTuplet,
+    TupletBracket, TupletShow, TupletType,
 };
 
 use crate::note::{NoteException, deep_copied_objects, note_error, true_false_or_none};
@@ -219,20 +220,6 @@ impl DurationTuple {
 #[derive(Clone)]
 pub struct Tuplet {
     inner: RsTuplet,
-    /// Where this tuplet's bracket sits over the notes: music21's `type`,
-    /// `'start'` on the first note and `'stop'` on the last, `None` while
-    /// nothing has said. It is engraving rather than rhythm, which is why it
-    /// lives here and not in the crate — but music21's own `makeTupletBrackets`
-    /// writes it on whatever tuplets it finds, ours included.
-    bracket_type: Option<String>,
-    /// Whether a bracket is drawn, and as what: music21's `True`, `False`
-    /// or `'slur'`.
-    bracket: Bracket,
-    /// Which side of the notes the number goes.
-    placement: Option<String>,
-    /// Whether the two counts are shown, and how.
-    tuplet_actual_show: Option<String>,
-    tuplet_normal_show: Option<String>,
     /// How deep inside other tuplets this one is.
     nested_level: u32,
     /// An identifier for grouping tuplets that belong together.
@@ -247,13 +234,6 @@ impl Tuplet {
     pub(crate) fn wrap(inner: RsTuplet) -> Self {
         Self {
             inner,
-            bracket_type: None,
-            bracket: Bracket::Drawn,
-            placement: Some("above".to_string()),
-            tuplet_actual_show: Some("number".to_string()),
-            // music21 shows the actual number and says nothing about the
-            // normal one, which is why a plain triplet writes `3` alone.
-            tuplet_normal_show: None,
             nested_level: 1,
             tuplet_id: 0,
             frozen: false,
@@ -341,11 +321,6 @@ impl Tuplet {
         let py = slf.py();
         let me = slf.borrow();
         let extra = PyDict::new(py);
-        extra.set_item("type", me.bracket_type.as_deref())?;
-        extra.set_item("bracket", me.get_bracket(py)?)?;
-        extra.set_item("placement", me.placement.as_deref())?;
-        extra.set_item("tupletActualShow", me.tuplet_actual_show.as_deref())?;
-        extra.set_item("tupletNormalShow", me.tuplet_normal_show.as_deref())?;
         extra.set_item("nestedLevel", me.nested_level)?;
         extra.set_item("tupletId", me.tuplet_id)?;
         extra.set_item("frozen", me.frozen)?;
@@ -366,20 +341,22 @@ impl Tuplet {
         let Ok(extra) = extra.bind(py).cast::<PyDict>() else {
             return Ok(());
         };
+        // A pickle written before the crate carried how a tuplet is
+        // bracketed says it beside the value.
         if let Some(value) = extra.get_item("type")? {
-            me.bracket_type = value.extract()?;
+            me.set_type(value.extract()?)?;
         }
         if let Some(value) = extra.get_item("bracket")? {
-            me.bracket = Bracket::from_any(&value)?;
+            me.set_bracket(&value)?;
         }
         if let Some(value) = extra.get_item("placement")? {
-            me.placement = value.extract()?;
+            me.set_placement(value.extract()?)?;
         }
         if let Some(value) = extra.get_item("tupletActualShow")? {
-            me.tuplet_actual_show = value.extract()?;
+            me.set_tupletActualShow(value.extract()?)?;
         }
         if let Some(value) = extra.get_item("tupletNormalShow")? {
-            me.tuplet_normal_show = value.extract()?;
+            me.set_tupletNormalShow(value.extract()?)?;
         }
         if let Some(value) = extra.get_item("nestedLevel")? {
             me.nested_level = value.extract()?;
@@ -437,11 +414,11 @@ impl Tuplet {
         tuplet.tuplet_id = tupletId;
         tuplet.nested_level = nestedLevel;
         if let Some(bracket) = bracket {
-            tuplet.bracket = Bracket::from_any(bracket)?;
+            tuplet.set_bracket(bracket)?;
         }
-        tuplet.placement = placement;
-        tuplet.tuplet_actual_show = tupletActualShow;
-        tuplet.tuplet_normal_show = tupletNormalShow;
+        tuplet.set_placement(placement)?;
+        tuplet.set_tupletActualShow(tupletActualShow)?;
+        tuplet.set_tupletNormalShow(tupletNormalShow)?;
         tuplet.frozen = frozen;
         Ok(tuplet)
     }
@@ -556,66 +533,92 @@ impl Tuplet {
 
     /// music21's `type`: where this tuplet's bracket sits over the notes.
     #[getter]
-    fn get_type(&self) -> Option<String> {
-        self.bracket_type.clone()
+    fn get_type(&self) -> Option<&'static str> {
+        self.inner.tuplet_type().map(TupletType::as_str)
     }
 
     #[setter]
     fn set_type(&mut self, value: Option<String>) -> PyResult<()> {
-        if let Some(value) = &value
-            && !matches!(value.as_str(), "start" | "stop" | "startStop")
-        {
-            return Err(DurationException::new_err(format!(
-                "Type must be 'start', 'stop', 'startStop', or None, not {value}"
-            )));
-        }
-        self.bracket_type = value;
+        let kind = match value {
+            None => None,
+            Some(name) => Some(
+                TupletType::from_name(&name)
+                    .map_err(|error| DurationException::new_err(crate::pitch::message(&error)))?,
+            ),
+        };
+        self.inner.set_tuplet_type(kind);
         Ok(())
     }
 
     #[getter]
     fn get_bracket<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        match self.bracket {
-            Bracket::Drawn => true.into_bound_py_any(py),
-            Bracket::None => false.into_bound_py_any(py),
-            Bracket::Slur => "slur".into_bound_py_any(py),
+        match self.inner.bracket() {
+            TupletBracket::Bracket => true.into_bound_py_any(py),
+            TupletBracket::None => false.into_bound_py_any(py),
+            TupletBracket::Slur => "slur".into_bound_py_any(py),
         }
     }
 
+    /// music21 takes `True`, `False` or `'slur'`.
     #[setter]
     fn set_bracket(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
-        self.bracket = Bracket::from_any(value)?;
+        let bracket = if let Ok(text) = value.extract::<String>() {
+            if text != "slur" {
+                return Err(PyValueError::new_err(format!(
+                    "bracket must be True, False or 'slur', not {text:?}"
+                )));
+            }
+            TupletBracket::Slur
+        } else if value.is_truthy()? {
+            TupletBracket::Bracket
+        } else {
+            TupletBracket::None
+        };
+        self.inner.set_bracket(bracket);
         Ok(())
     }
 
     #[getter]
-    fn get_placement(&self) -> Option<String> {
-        self.placement.clone()
+    fn get_placement(&self) -> Option<&'static str> {
+        self.inner.placement().map(Placement::as_str)
     }
 
+    /// music21 takes `above`, `below` or nothing.
     #[setter]
-    fn set_placement(&mut self, value: Option<String>) {
-        self.placement = value;
+    fn set_placement(&mut self, value: Option<String>) -> PyResult<()> {
+        let placement = match value {
+            None => None,
+            Some(name) => Some(
+                Placement::from_name(&name)
+                    .map_err(|error| PyValueError::new_err(crate::pitch::message(&error)))?,
+            ),
+        };
+        self.inner.set_placement(placement);
+        Ok(())
     }
 
     #[getter]
-    fn get_tupletActualShow(&self) -> Option<String> {
-        self.tuplet_actual_show.clone()
+    fn get_tupletActualShow(&self) -> Option<&'static str> {
+        self.inner.actual_show().map(TupletShow::as_str)
     }
 
     #[setter]
-    fn set_tupletActualShow(&mut self, value: Option<String>) {
-        self.tuplet_actual_show = value;
+    fn set_tupletActualShow(&mut self, value: Option<String>) -> PyResult<()> {
+        let show = shown(value)?;
+        self.inner.set_actual_show(show);
+        Ok(())
     }
 
     #[getter]
-    fn get_tupletNormalShow(&self) -> Option<String> {
-        self.tuplet_normal_show.clone()
+    fn get_tupletNormalShow(&self) -> Option<&'static str> {
+        self.inner.normal_show().map(TupletShow::as_str)
     }
 
     #[setter]
-    fn set_tupletNormalShow(&mut self, value: Option<String>) {
-        self.tuplet_normal_show = value;
+    fn set_tupletNormalShow(&mut self, value: Option<String>) -> PyResult<()> {
+        let show = shown(value)?;
+        self.inner.set_normal_show(show);
+        Ok(())
     }
 
     #[getter]
@@ -1017,6 +1020,34 @@ impl Duration {
             .into_iter()
             .map(|tuplet| Ok(Tuplet::wrap(tuplet).into_pyobject(py)?.into_any().unbind()))
             .collect()
+    }
+
+    /// This duration as the crate's, written as it is written here: the
+    /// written values, inside the tuplets a caller set, bracketing and all.
+    /// Nothing where no tuplets were set, or where one is not this wheel's
+    /// or a written value has no type.
+    pub(crate) fn written_value(&self, py: Python<'_>) -> Option<RsDuration> {
+        let tuplets: Vec<RsTuplet> = self
+            .tuplets
+            .as_ref()?
+            .iter()
+            .map(|tuplet| {
+                tuplet
+                    .bind(py)
+                    .extract::<PyRef<'_, Tuplet>>()
+                    .ok()
+                    .map(|tuplet| tuplet.inner)
+            })
+            .collect::<Option<_>>()?;
+        let mut written = RsDuration::default();
+        written.clear();
+        written.set_tuplets(Vec::new());
+        for component in self.component_list() {
+            let kind = RsDurationType::from_music21_name(&component.kind)?;
+            written.add_duration_tuple(kind, component.dots);
+        }
+        written.set_tuplets(tuplets);
+        Some(written)
     }
 
     /// Every tuplet's ratio multiplied together, in lowest terms.
@@ -1820,6 +1851,9 @@ impl Duration {
             written_type = "eighth".to_string();
         }
         let mut grace = self.clone();
+        // Made from the written values alone, as music21 makes it: a grace
+        // note taken from a note inside a triplet is in no tuplet.
+        grace.tuplets = Some(Vec::new());
         grace.components = Some(
             self.component_list()
                 .into_iter()
@@ -2273,6 +2307,38 @@ impl GraceDuration {
     }
 }
 
+/// A grace note's duration as the crate's: its written values sounding for
+/// no time, and how it is written. Nothing for any other duration.
+pub(crate) fn grace_value(object: &Bound<'_, PyAny>) -> PyResult<Option<RsDuration>> {
+    let Ok(grace) = object.cast::<GraceDuration>() else {
+        return Ok(None);
+    };
+    let grace = grace.borrow();
+    let base = grace.as_super();
+    let mut written = RsDuration::default();
+    written.clear();
+    written.set_tuplets(Vec::new());
+    for component in base.component_list() {
+        if let Some(kind) = RsDurationType::from_music21_name(&component.kind) {
+            written.add_duration_tuple(kind, component.dots);
+        }
+    }
+    let mut value = written.grace_duration();
+    // A grace note read from a file keeps the tuplets the file wrote it in.
+    if let Some(tuplets) = base.written_value(object.py()).map(|held| held.tuplets())
+        && !tuplets.is_empty()
+    {
+        value.set_tuplets(tuplets);
+    }
+    let mut marks = music21_rs_crate::Grace::new();
+    marks.set_slash(grace.slash);
+    marks.set_steal_time_previous(grace.steal_previous);
+    marks.set_steal_time_following(grace.steal_following);
+    marks.set_make_time(grace.make_time);
+    value.set_grace(Some(marks));
+    Ok(Some(value))
+}
+
 /// music21's `duration.AppoggiaturaDuration`: a grace note that takes its
 /// time from the note it leans on.
 #[pyclass(
@@ -2318,31 +2384,15 @@ fn duration_tuple_from_any(value: &Bound<'_, PyAny>) -> PyResult<DurationTuple> 
     Ok(DurationTuple::new(kind, dots, quarter_length))
 }
 
-/// How a tuplet's bracket is drawn: music21's `bracket`, which is `True`,
-/// `False` or `'slur'`.
-#[derive(Clone, Copy, PartialEq)]
-enum Bracket {
-    Drawn,
-    None,
-    Slur,
-}
-
-impl Bracket {
-    fn from_any(value: &Bound<'_, PyAny>) -> PyResult<Self> {
-        if let Ok(text) = value.extract::<String>() {
-            if text == "slur" {
-                return Ok(Self::Slur);
-            }
-            return Err(PyValueError::new_err(format!(
-                "bracket must be True, False or 'slur', not {text:?}"
-            )));
-        }
-        Ok(if value.is_truthy()? {
-            Self::Drawn
-        } else {
-            Self::None
+/// A tuplet's `tupletActualShow` or `tupletNormalShow`, read from music21's
+/// `number`, `type`, `both` or nothing.
+fn shown(value: Option<String>) -> PyResult<Option<TupletShow>> {
+    value
+        .map(|name| {
+            TupletShow::from_name(&name)
+                .map_err(|error| PyValueError::new_err(crate::pitch::message(&error)))
         })
-    }
+        .transpose()
 }
 
 /// A tuplet side written as a count and a written value, in a list or a

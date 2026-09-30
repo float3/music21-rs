@@ -28,6 +28,10 @@
 //! - `serde` derives `Serialize` and `Deserialize` for the public types.
 //! - `scala-archive` bundles the Scala scale archive (about 4,000 `.scl`
 //!   files, roughly 1 MB) and enables `ScalaArchive::bundled()`.
+//! - `musicxml` reads and writes MusicXML (`musicxml::from_musicxml`,
+//!   `musicxml::to_musicxml`).
+//! - `musescore` runs an installed MuseScore to read and write the formats it
+//!   opens and saves; it turns on `musicxml`.
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![deny(missing_docs)]
 #![deny(missing_debug_implementations)]
@@ -47,6 +51,8 @@ pub mod abc;
 pub mod analysis;
 /// Articulations: how a note is played.
 pub mod articulations;
+/// Barlines and repeat signs.
+pub mod bar;
 /// Chord construction, common-name analysis and chord input conversion traits.
 pub mod chord;
 /// Lead-sheet chord-symbol parsing.
@@ -67,48 +73,74 @@ pub mod expressions;
 
 /// Figured bass: the numbers written under a bass note.
 pub mod figuredbass;
-/// Harte chord notation: `C:maj7/3`, `Bb:(b3,5,b7,9)`, `N`.
 pub mod harte;
+/// Harte chord notation: `C:maj7/3`, `Bb:(b3,5,b7,9)`, `N`.
+/// Humdrum `**kern` scores.
+pub mod humdrum;
 /// Instruments: music21's `instrument` module.
 pub mod instrument;
 
-pub(crate) mod fraction_pow;
 /// Public interval parsing, naming and transposition helpers.
 pub mod interval;
 /// Public key and key-signature helpers.
 pub mod key;
+/// Measures, ties, rests, voices, beams and stems worked out for a score
+/// that does not say them.
+pub mod makenotation;
+/// MEI scores.
+pub mod mei;
+/// A score's title, composer and the rest of what is said about it.
+pub mod metadata;
 /// Time signatures: bar length, beat count, beat length and beat division.
 pub mod meter;
 /// Minimal MIDI import/export helpers.
 pub mod midi;
+/// MuseScore run as a converter, for its own files and the formats it opens.
+#[cfg(all(feature = "musescore", not(target_arch = "wasm32")))]
+pub mod musescore;
+/// MusicXML import and export: music21's `musicxml.xmlToM21` and
+/// `musicxml.m21ToXml`.
+#[cfg(feature = "musicxml")]
+pub mod musicxml;
 /// Ties, noteheads, stem direction, colour, lyrics and beams.
 pub mod notation;
 /// Note construction and pitch access helpers.
 pub mod note;
+/// Notes with no pitch, and chords of them.
+pub mod percussion;
 /// Pitch construction, spelling and pitch-space helpers.
 pub mod pitch;
 /// Polyrhythm timing and pitch-set helpers.
 pub mod polyrhythm;
+/// Words and signs telling a player where to go next.
+pub mod repeat;
 /// Rests: silence with a written length.
 pub mod rest;
 /// Roman numeral parsing and compact harmonic analysis.
 pub mod roman;
+/// RomanText, a harmonic analysis written as roman numerals.
+pub mod romantext;
 /// Public scale helpers.
 pub mod scale;
 /// Tone rows, twelve-tone matrices and serial transformations.
 pub mod serial;
 pub mod sieve;
+/// Marks joining several notes: slurs.
+pub mod spanner;
 pub(crate) mod stepname;
 /// Streams: notes, chords and other events placed on a timeline, nested as
 /// scores, parts and measures.
 pub mod stream;
 /// Metronome marks and tempo-word conventions.
 pub mod tempo;
+/// TinyNotation, a line of notes written as letters and numbers.
+pub mod tinynotation;
 /// Tuning-system ratios, labels and frequency helpers.
 pub mod tuningsystem;
 /// Two-voice voice-leading classification and parallel-interval checks.
 pub mod voiceleading;
 pub mod volume;
+mod xml;
 // #[macro_use]
 // pub(crate) mod macros;
 
@@ -122,6 +154,7 @@ pub use analysis::{
 };
 pub use analysis::{tonal_certainty, tonal_certainty_from_scores};
 pub use articulations::{Articulation, ArticulationKind};
+pub use bar::{Barline, BarlineType, Ending, RepeatDirection};
 pub use chord::{
     Chord, ChordResolutionSuggestion, ChordTableAddress, GuitarFingering, GuitarStringFingering,
     GuitarTuning, GuitarTuningString, IntoNotes, KnownChordType, TriadQuality,
@@ -134,7 +167,10 @@ pub use chordsymbol::{
 };
 pub use clef::{Clef, ClefKind};
 pub use defaults::{FloatType, FractionType, IntegerType, Octave, UnsignedIntegerType};
-pub use duration::{Duration, DurationTuple, DurationType, Tuplet, quarter_length_to_closest_type};
+pub use duration::{
+    Duration, DurationTuple, DurationType, Grace, Tuplet, TupletBracket, TupletShow, TupletType,
+    quarter_length_to_closest_type,
+};
 pub use dynamics::Dynamic;
 pub use error::{Error, Result};
 pub use harte::{Harte, HarteInterval, SHORTHAND_DEGREES, convert_interval};
@@ -147,16 +183,18 @@ pub use interval::{
     staff_distance_to_generic_number, written_higher_pitch, written_lower_pitch,
 };
 pub use key::{Key, KeySignature, convert_key_string_to_music21_key_string};
+pub use metadata::{Metadata, MetadataValue};
 pub use meter::{BeamedNote, BeatDivision, MeterTerminal, OffsetAlign, TimeSignature};
 pub use midi::{
     DEFAULT_TICKS_PER_QUARTER, MidiNote, midi_notes_from_stream, read_midi_bytes,
     read_midi_bytes_with_tempo, stream_from_midi_notes, write_midi_bytes,
 };
 pub use notation::{
-    Beam, BeamDirection, BeamType, Beams, Lyric, Notehead, Placement, StemDirection, Syllabic, Tie,
-    TieStyle, TieType,
+    Beam, BeamDirection, BeamType, Beams, Lyric, NoteSize, Notehead, Placement, StemDirection,
+    Syllabic, Tie, TieStyle, TieType,
 };
 pub use note::{IntoNote, Note};
+pub use percussion::{PercussionChord, PercussionNote, Unpitched};
 pub use pitch::{
     Accidental, AccidentalAttribute, AccidentalDisplayOptions, AccidentalSpecifier,
     CHROMATIC_PITCH_CLASS_NAMES, Microtone, MicrotoneSpecifier, Pitch, PitchClass,
@@ -164,6 +202,7 @@ pub use pitch::{
     pitch_class_name, simplify_multiple_enharmonics,
 };
 pub use polyrhythm::{Polyrhythm, PolyrhythmAnalysis, PolyrhythmEvent, PolyrhythmRatioTone};
+pub use repeat::{RepeatExpression, RepeatExpressionKind};
 pub use rest::Rest;
 pub use roman::roman_numeral_from_chord;
 pub use roman::{
@@ -180,14 +219,17 @@ pub use serial::{
     row_to_matrix,
 };
 pub use sieve::Sieve;
-pub use stream::{Stream, StreamElement, StreamEvent, StreamKind};
+pub use spanner::{
+    LineEnd, LineEnds, OctaveShift, Pedal, PedalForm, PedalType, Spanner, SpannerKind,
+};
+pub use stream::{BarTogether, StaffGroup, Stream, StreamElement, StreamEvent, StreamKind};
 pub use tempo::{
     DEFAULT_TEMPO_VALUES, MetricModulation, MetronomeMark, ModulationSide, TempoText,
     convert_tempo_by_referent, interpolate_elements,
 };
 pub use tuningsystem::{
     ALL_TUNING_SYSTEMS, COMMON_EQUAL_TEMPERAMENTS, COMMON_TWELVE_TONE_TUNING_SYSTEMS,
-    EqualDivision, Fraction, HISTORICAL_TEMPERAMENTS, Monzo, Mos, MosScale, OCTAVE_CENTS,
+    EqualDivision, HISTORICAL_TEMPERAMENTS, Monzo, Mos, MosScale, OCTAVE_CENTS, Ratio,
     TRITAVE_CENTS, Temperament, TuningSystem, Val, moment_of_symmetry_sizes,
     scala::{ScalaArchive, ScalaDegree, ScalaScale},
 };

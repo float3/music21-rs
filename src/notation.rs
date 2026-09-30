@@ -883,6 +883,50 @@ fn set_beam(
     }
 }
 
+/// How large a note is drawn beside the notes around it: MusicXML's
+/// symbol size, which music21 keeps as the style's `noteSize`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum NoteSize {
+    /// The ordinary size.
+    Full,
+    /// A cue note, drawn small: another part's line, shown to help an entry.
+    Cue,
+    /// A grace note's size.
+    Grace,
+    /// A cue note's grace note.
+    GraceCue,
+    /// Drawn larger than the rest.
+    Large,
+}
+
+impl NoteSize {
+    /// MusicXML's name for the size: `full`, `cue`, `grace`, `grace-cue` or
+    /// `large`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Full => "full",
+            Self::Cue => "cue",
+            Self::Grace => "grace",
+            Self::GraceCue => "grace-cue",
+            Self::Large => "large",
+        }
+    }
+
+    /// Reads MusicXML's name for a size.
+    pub fn from_name(name: &str) -> Option<Self> {
+        [
+            Self::Full,
+            Self::Cue,
+            Self::Grace,
+            Self::GraceCue,
+            Self::Large,
+        ]
+        .into_iter()
+        .find(|size| size.as_str() == name)
+    }
+}
+
 /// Which way the stem points: music21's `stemDirectionNames`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -1032,6 +1076,8 @@ pub struct Lyric {
     identifier: Option<String>,
     components: Vec<Lyric>,
     elision_before: String,
+    #[cfg_attr(feature = "serde", serde(default))]
+    color: crate::display::Color,
 }
 
 /// What music21's `Lyric.elisionBefore` starts as: a space between this
@@ -1059,14 +1105,28 @@ impl Lyric {
             identifier: None,
             components: Vec::new(),
             elision_before: DEFAULT_ELISION.to_string(),
+            color: crate::display::Drawn(None),
         }
+    }
+
+    /// The colour the syllable is written in, where a score says.
+    pub fn color(&self) -> Option<&str> {
+        self.color.0.as_deref()
+    }
+
+    /// Says what colour the syllable is written in.
+    pub fn set_color(&mut self, color: Option<String>) {
+        self.color.0 = color;
     }
 
     /// Reads a lyric from text whose hyphens say where it falls in its word:
     /// `"-ci-"` is a middle syllable, `"ci-"` a beginning, `"-us"` an end.
     pub fn from_raw_text(raw_text: &str) -> Self {
         let mut lyric = Self::unsung();
-        lyric.set_raw_text(raw_text);
+        // No text at all leaves the lyric as it starts out.
+        if !raw_text.is_empty() {
+            lyric.set_raw_text(raw_text);
+        }
         lyric
     }
 
@@ -1248,14 +1308,17 @@ impl Lyric {
             return;
         }
         self.components.clear();
+        // A hyphen alone both starts and ends the text, and is the middle
+        // of a word with nothing sung to it.
         let starts = raw_text.starts_with('-');
-        let ends = raw_text.ends_with('-') && raw_text.len() > 1;
-        let trimmed = raw_text.strip_prefix('-').unwrap_or(raw_text).to_string();
+        let ends = raw_text.ends_with('-');
+        let trimmed = raw_text.strip_prefix('-').unwrap_or(raw_text);
         let trimmed = if ends {
-            trimmed.strip_suffix('-').unwrap_or(&trimmed).to_string()
+            trimmed.strip_suffix('-').unwrap_or(trimmed)
         } else {
             trimmed
-        };
+        }
+        .to_string();
         self.set_syllabic(match (starts, ends) {
             (true, true) => Syllabic::Middle,
             (true, false) => Syllabic::End,
@@ -1348,7 +1411,7 @@ pub(crate) mod verses {
     /// A syllable read from text, whose hyphens say where it falls in its
     /// word unless `apply_raw` takes the text as written.
     fn built(text: &str, apply_raw: bool) -> Lyric {
-        if apply_raw {
+        if apply_raw && !text.is_empty() {
             let mut lyric = Lyric::new(text);
             lyric.set_syllabic(Syllabic::Single);
             lyric
@@ -1694,12 +1757,15 @@ mod tests {
     }
 
     #[test]
-    fn a_lone_hyphen_is_its_own_syllable() {
-        // "-" is a beginning-of-word marker in music21, not an end marker
-        // with empty text, so the trailing hyphen is only stripped when
-        // something else is there to strip it from.
-        let lyric = Lyric::from_raw_text("-");
-        assert_eq!(lyric.syllabic(), Syllabic::End);
-        assert_eq!(lyric.text(), "");
+    fn a_lone_hyphen_is_the_middle_of_a_word() {
+        // music21: `Lyric('-')` both starts and ends with a hyphen, so it is
+        // a middle syllable with nothing sung to it, as `'--'` is.
+        for raw in ["-", "--"] {
+            let lyric = Lyric::from_raw_text(raw);
+            assert_eq!(lyric.syllabic(), Syllabic::Middle);
+            assert_eq!(lyric.text(), "");
+        }
+        assert_eq!(Lyric::from_raw_text("-a").syllabic(), Syllabic::End);
+        assert_eq!(Lyric::from_raw_text("a-").syllabic(), Syllabic::Begin);
     }
 }

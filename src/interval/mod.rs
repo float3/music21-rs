@@ -22,7 +22,6 @@ use crate::common::stringtools::get_num_from_str;
 use crate::error::{Error, Result};
 use crate::{
     defaults::{FloatType, FractionType, IntegerType},
-    fraction_pow::FractionPow,
     note::Note,
     pitch::Pitch,
     stepname::StepName,
@@ -76,8 +75,6 @@ impl PartialEq for Interval {
         self.diatonic == other.diatonic && self.chromatic == other.chromatic
     }
 }
-
-use constants::{PERFECT_FIFTH_DOWN, PERFECT_FIFTH_UP};
 
 fn strip_direction_word(value: &str, word: &str) -> (String, bool) {
     replace_case_insensitive(value, word, "", false, true)
@@ -575,7 +572,28 @@ impl Interval {
     /// The ratio is expressed as a rational fraction built from pure fifths,
     /// matching the helper music21 uses for enharmonic scoring.
     pub fn pythagorean_ratio(&self) -> Result<FractionType> {
-        interval_to_pythagorean_ratio(self)
+        self.pythagorean_monzo()?.ratio()
+    }
+
+    /// The interval as octaves and fifths: the monzo of its
+    /// [Pythagorean ratio](Self::pythagorean_ratio), with no limit on how far
+    /// along the chain of fifths the spelling sits.
+    ///
+    /// This is what a regular temperament tunes, so `C#` and `D-` stay apart
+    /// here however a tuning later treats them. Errors on an interval measured
+    /// in fractions of a semitone, which no spelling reaches.
+    pub fn pythagorean_monzo(&self) -> Result<crate::tuningsystem::Monzo> {
+        let spelled = self.diatonic.get_chromatic()?.semitones();
+        if self.chromatic.semitones() != spelled {
+            return Err(Error::Interval(format!(
+                "{} is not a whole number of semitones, so has no Pythagorean ratio",
+                self.chromatic.semitones()
+            )));
+        }
+        Ok(crate::tuningsystem::Monzo::pythagorean(
+            self.diatonic.generic.staff_distance(),
+            spelled as IntegerType,
+        ))
     }
 
     /// Transposes a pitch by this interval.
@@ -1126,64 +1144,6 @@ impl Interval {
             Interval::from_diatonic_and_chromatic(self.diatonic.reverse(), self.chromatic.reverse())
         }
     }
-}
-
-pub(crate) fn interval_to_pythagorean_ratio(interval: &Interval) -> Result<FractionType> {
-    let start_pitch = Pitch::from_name("C1")?;
-
-    let end_pitch_wanted = interval.transpose_pitch_with_options(&start_pitch, false, Some(4))?;
-
-    let wanted_name = end_pitch_wanted.name();
-
-    let mut end_pitch_up = start_pitch.clone();
-    let mut end_pitch_down = start_pitch.clone();
-    let mut found: Option<(Pitch, FractionType)> = None;
-    let fifth_up: &Interval = &PERFECT_FIFTH_UP;
-    let fifth_down: &Interval = &PERFECT_FIFTH_DOWN;
-
-    for counter in 0..37 {
-        if end_pitch_up.name() == wanted_name {
-            if counter > 18 {
-                return Err(Error::Interval(format!(
-                    "pythagorean ratio for {wanted_name} exceeds integer range"
-                )));
-            }
-            found = Some((
-                end_pitch_up.clone(),
-                FractionType::new(3i32, 2i32).powi(counter),
-            ));
-            break;
-        } else if end_pitch_down.name() == wanted_name {
-            if counter > 18 {
-                return Err(Error::Interval(format!(
-                    "pythagorean ratio for {wanted_name} exceeds integer range"
-                )));
-            }
-            found = Some((
-                end_pitch_down.clone(),
-                FractionType::new(2i32, 3i32).powi(counter),
-            ));
-            break;
-        } else {
-            end_pitch_up = fifth_up.transpose_pitch_with_options(&end_pitch_up, false, Some(4))?;
-            end_pitch_down =
-                fifth_down.transpose_pitch_with_options(&end_pitch_down, false, Some(4))?;
-        }
-    }
-
-    let (found_pitch, found_ratio) = match found {
-        Some(val) => val,
-        None => {
-            return Err(Error::Interval(format!(
-                "Could not find a pythagorean ratio for {interval:?}"
-            )));
-        }
-    };
-
-    let octaves = (end_pitch_wanted.ps() - found_pitch.ps()) / 12.0;
-    let octave_multiplier = FractionType::new(2i32, 1i32).powi(octaves as IntegerType);
-
-    Ok(found_ratio * octave_multiplier)
 }
 
 #[cfg(test)]
@@ -1811,6 +1771,30 @@ mod tests {
             .pythagorean_ratio()
             .unwrap();
         assert_eq!(ratio, FractionType::new(3, 2));
+    }
+
+    #[test]
+    fn a_spelled_interval_is_a_place_on_the_chain_of_fifths() {
+        let monzo = |name: &str| {
+            Interval::from_name(name)
+                .unwrap()
+                .pythagorean_monzo()
+                .unwrap()
+        };
+        assert_eq!(monzo("M3").to_string(), "[-6 4⟩");
+        assert_eq!(monzo("A1").to_string(), "[-11 7⟩");
+        assert_eq!(monzo("m2").to_string(), "[8 -5⟩");
+        assert_eq!(monzo("P8").to_string(), "[1⟩");
+        let fifth_down = Interval::from_name("P5").unwrap().reversed().unwrap();
+        assert_eq!(
+            fifth_down.pythagorean_ratio().unwrap(),
+            FractionType::new(2, 3)
+        );
+        // Twenty-one fifths up is far past a ratio of two `i32`s, but not
+        // past a monzo.
+        let far = Interval::from_name("AAA4").unwrap();
+        assert_eq!(far.pythagorean_monzo().unwrap().exponent_of(3).unwrap(), 20);
+        assert!(far.pythagorean_ratio().is_err());
     }
 
     #[test]

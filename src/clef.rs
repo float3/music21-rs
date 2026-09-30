@@ -380,6 +380,8 @@ pub struct Clef {
     line: Option<u8>,
     octave_change: IntegerType,
     lowest_line: Option<IntegerType>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    color: crate::display::Color,
 }
 
 impl Default for Clef {
@@ -399,7 +401,19 @@ impl Clef {
             line: row.line,
             octave_change: row.octave_change,
             lowest_line: row.lowest_line,
+            color: crate::display::Drawn(None),
         }
+    }
+
+    /// The colour the clef is drawn in, if one was said. Two clefs
+    /// differing only in colour are equal.
+    pub fn color(&self) -> Option<&str> {
+        self.color.0.as_deref()
+    }
+
+    /// Sets the colour the clef is drawn in.
+    pub fn set_color(&mut self, color: Option<String>) {
+        self.color.0 = color;
     }
 
     /// The treble clef.

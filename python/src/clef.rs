@@ -45,7 +45,7 @@ impl Clef {
     /// A clef of the class a new one is made as: the one installed over
     /// music21's where there is one, since music21 holds nothing else in a
     /// stream, and this wheel's own where not.
-    fn object(py: Python<'_>, inner: RsClef) -> PyResult<Py<PyAny>> {
+    pub(crate) fn object(py: Python<'_>, inner: RsClef) -> PyResult<Py<PyAny>> {
         let name = inner.kind().class_name();
         let class = match crate::installed_class(py, "music21.clef", name) {
             Some(class) => class,

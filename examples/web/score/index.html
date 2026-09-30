@@ -327,18 +327,62 @@
                 padding: 8px;
             }
 
-            .menu-items.parts label {
+            .menu-items.parts .part-row {
                 display: flex;
                 align-items: center;
                 gap: 8px;
-                padding: 6px 8px;
                 border-radius: 6px;
+            }
+
+            .menu-items.parts .part-row:hover {
+                background: var(--accent-soft);
+            }
+
+            .menu-items.parts label {
+                display: flex;
+                flex: 1;
+                align-items: center;
+                gap: 8px;
+                padding: 6px 8px;
                 cursor: pointer;
                 white-space: nowrap;
             }
 
-            .menu-items.parts label:hover {
-                background: var(--accent-soft);
+            .menu-items.parts .mute {
+                margin-right: 4px;
+                padding: 2px 8px;
+                border: 1px solid var(--line);
+                border-radius: 6px;
+                background: var(--panel);
+                color: var(--muted);
+                font-size: 12px;
+                font-weight: 700;
+                cursor: pointer;
+            }
+
+            .menu-items.parts .mute.on {
+                border-color: var(--warn);
+                color: var(--warn);
+            }
+
+            .toolbar .bars {
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                color: var(--muted);
+                font-size: 14px;
+                font-weight: 600;
+            }
+
+            .toolbar .bars input {
+                width: 64px;
+                height: 38px;
+                padding: 0 8px;
+                border: 1px solid var(--line);
+                border-radius: 8px;
+                background: var(--panel);
+                color: var(--ink);
+                font: inherit;
             }
 
             .menu-items.parts .part-actions {
@@ -577,9 +621,15 @@
                     Play
                 </button>
                 <button id="stop" type="button" disabled>Stop</button>
-                <button id="loop" type="button" title="Play the score round and round">
+                <button id="loop" type="button" title="Play round and round: the bars chosen beside this, or the whole score">
                     Loop
                 </button>
+                <span class="bars" title="Play only these bars, counting a pickup as bar 0. Leave a field empty to play from the start or to the end.">
+                    <label for="loop-from">Bars</label>
+                    <input id="loop-from" type="number" min="0" step="1" inputmode="numeric" placeholder="start" aria-label="First bar to play" />
+                    <span aria-hidden="true">–</span>
+                    <input id="loop-to" type="number" min="0" step="1" inputmode="numeric" placeholder="end" aria-label="Last bar to play" />
+                </span>
                 <select id="labels" aria-label="Labels under the score">
                     <option value="numeral">Label: roman numerals</option>
                     <option value="symbol">Label: chord symbols</option>
@@ -668,7 +718,8 @@
                 <input
                     id="open-file"
                     type="file"
-                    accept=".abc,.txt,.mid,.midi,text/plain,audio/midi"
+                    multiple
+                    accept=".abc,.txt,.mid,.midi,.gp,.gp3,.gp4,.gp5,.gpx,.musicxml,.mxl,.xml,.json,text/plain,audio/midi"
                 />
                 <details class="menu" id="share-menu">
                     <summary>Share</summary>
@@ -871,7 +922,14 @@
                             Repeats are played out, so the analysis and the
                             exported files follow the music as performed.
                             Opening a MIDI file quantizes it to sixteenths and
-                            spells it in the key its notes suggest. Your work is
+                            spells it in the key its notes suggest. Open also
+                            reads Guitar Pro files (.gp3 to .gp), MusicXML
+                            (.musicxml, .xml, .mxl) and the JSON Songsterr's
+                            player loads for each part of a song; choose every
+                            part's file at once for the whole band. Repeats,
+                            endings, tuplets, ties and chord symbols come across,
+                            drums are left out, and a guitar or bass part opens
+                            the tab view in its own tuning. Your work is
                             kept in this browser between visits. Drag a note up
                             or down the staff, or a tab number onto another
                             string, where it keeps its fret; the arrow keys do
@@ -885,11 +943,18 @@
                             abcjs writes tablature for the first voice on a
                             staff, and only on a staff whose notes the
                             instrument can reach. A score with many parts can be
-                            narrowed to the ones you want with Parts, shrunk
+                            narrowed to the ones you want with Parts, where any
+                            part, the chord symbols included, can also be muted
+                            to play along with the rest (a WAV export leaves it
+                            out too), shrunk
                             with the zoom buttons, which reflow the bars to the
                             width (a tab view keeps its lines, since abcjs draws
                             no tablature on rewrapped lines), and given the whole page with Wide; the score
-                            scrolls on its own and follows the playback.
+                            scrolls on its own and follows the playback. The Bars
+                            fields play only the bars between them, numbered as
+                            the analysis numbers them, with a pickup as bar 0 and
+                            repeats played out; with Loop on they go round and
+                            round for practice.
                         </p>
                         <p>
                             Tab views take a string tuning — drop D, DADGAD, open

@@ -518,45 +518,6 @@ fn write_accidental_display(
     Ok(path)
 }
 
-/// A chord symbol figure with the pitches after `add` and after `omit` in
-/// sorted order. music21 writes each group out of a set, in no fixed order.
-pub(crate) fn sort_figure_modifications(figure: &str) -> String {
-    let (head, rest) = match figure.find("add").or_else(|| figure.find("omit")) {
-        Some(at) => figure.split_at(at),
-        None => return figure.to_string(),
-    };
-    let mut out = head.to_string();
-    let mut rest = rest;
-    while !rest.is_empty() {
-        let (marker, after) = if let Some(after) = rest.strip_prefix("add") {
-            ("add", after)
-        } else if let Some(after) = rest.strip_prefix("omit") {
-            ("omit", after)
-        } else {
-            out.push_str(rest);
-            break;
-        };
-        let end = after
-            .find("add")
-            .into_iter()
-            .chain(after.find("omit"))
-            .min()
-            .unwrap_or(after.len());
-        let mut items: Vec<&str> = after[..end]
-            .split(',')
-            .filter(|item| !item.is_empty())
-            .collect();
-        items.sort_unstable();
-        out.push_str(marker);
-        out.push_str(&items.join(","));
-        rest = &after[end..];
-        if !rest.is_empty() {
-            out.push(',');
-        }
-    }
-    out
-}
-
 /// A Python exception's class name, for a fixture to record where music21
 /// refuses an input.
 fn exception_name(py: Python<'_>, error: &PyErr) -> String {
@@ -770,7 +731,6 @@ fn write_chord_names(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> Py
         let figure: String = harmony
             .call_method1("chordSymbolFigureFromChord", (&chord,))?
             .extract()?;
-        let figure = sort_figure_modifications(&figure);
         let _ = writeln!(
             out,
             "    {{ {label}, common_name = {}, pitched_common_name = {}, quality = {}, forte_class = {}{inversion}{inversion_name}, figure = {}, root = {}, bass = {} }},",

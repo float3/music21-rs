@@ -75,6 +75,24 @@ pub enum Error {
     /// Error associated with figured bass and its realization.
     #[error("Figured bass error: {0}")]
     FiguredBass(String),
+    /// ABC text that cannot be read.
+    #[error("ABC error: {0}")]
+    Abc(String),
+    /// Humdrum that cannot be read.
+    #[error("Humdrum error: {0}")]
+    Humdrum(String),
+    /// A document that is not well-formed XML.
+    #[error("XML error: {0}")]
+    Xml(String),
+    /// MEI that cannot be read.
+    #[error("MEI error: {0}")]
+    Mei(String),
+    /// RomanText that cannot be read.
+    #[error("RomanText error: {0}")]
+    RomanText(String),
+    /// MuseScore could not be run, or could not convert a file.
+    #[error("MuseScore error: {0}")]
+    MuseScore(String),
     /// Error associated with ornaments and other expressions.
     #[error("Expression error: {0}")]
     Expression(String),
@@ -90,6 +108,10 @@ pub enum Error {
     /// Error associated with note volumes.
     #[error("Volume error: {0}")]
     Volume(String),
+    /// A score that cannot be written as MusicXML.
+    #[cfg(feature = "musicxml")]
+    #[error("MusicXML export error: {0}")]
+    MusicXml(String),
     /// Error associated with Harte chord labels and degrees.
     #[error("Harte error: {0}")]
     Harte(String),

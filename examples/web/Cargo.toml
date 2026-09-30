@@ -12,9 +12,15 @@ default = []
 serde = ["music21-rs/serde"]
 
 [dependencies]
-music21-rs = { path = "../..", default-features = false, features = ["scala-archive"] }
+miniz_oxide = "0.9.1"
+music21-rs = { path = "../..", default-features = false, features = [
+  "musicxml",
+  "scala-archive",
+] }
+roxmltree = "0.21.1"
 serde = { version = "1.0.228", features = ["derive"] }
 serde-wasm-bindgen = "0.6.5"
+serde_json = "1.0.151"
 wasm-bindgen = "0.2.121"
 
 [package.metadata.wasm-pack.profile.release]

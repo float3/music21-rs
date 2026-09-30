@@ -57,19 +57,27 @@ error_into!(meter_error, MeterException);
 error_into!(time_signature_error, TimeSignatureException);
 
 /// music21 writes `common` and `cut` for the two meters that have names, and
-/// takes a bare ratio otherwise. The name is kept beside the meter, since
-/// music21 reports it as `symbol` and writes it to a score.
-fn read_meter(value: &str) -> PyResult<(RsTimeSignature, String)> {
+/// takes a bare ratio otherwise. The name is the meter's `symbol`.
+fn read_meter(value: &str) -> PyResult<RsTimeSignature> {
     // music21 reads the two names whatever case they are written in.
     let value = value.trim();
-    match value.to_ascii_lowercase().as_str() {
-        "common" | "c" => Ok((RsTimeSignature::common(), "common".to_string())),
-        "cut" => Ok((RsTimeSignature::cut(), "cut".to_string())),
-        _ => Ok((
+    let (mut meter, symbol) = match value.to_ascii_lowercase().as_str() {
+        "common" | "c" => (RsTimeSignature::common(), Some("common")),
+        "cut" => (RsTimeSignature::cut(), Some("cut")),
+        _ => (
             RsTimeSignature::from_ratio_string(value).map_err(meter_error)?,
-            String::new(),
-        )),
-    }
+            None,
+        ),
+    };
+    meter.set_symbol(symbol.map(str::to_string));
+    Ok(meter)
+}
+
+/// A meter rebuilt from a new ratio, keeping how it was drawn.
+fn keeping_symbol(from: &RsTimeSignature, mut rebuilt: RsTimeSignature) -> RsTimeSignature {
+    rebuilt.set_symbol(from.symbol().map(str::to_string));
+    rebuilt.set_symbolize_denominator(from.symbolize_denominator());
+    rebuilt
 }
 
 /// music21's second argument partitions the bar into that many parts.
@@ -104,13 +112,6 @@ pub struct TimeSignature {
     /// over this meter's own, kept as the object it was given, since that is
     /// what music21 hands back.
     overridden_bar_duration: Option<Py<PyAny>>,
-    /// music21's `symbol`: the name the meter was written with, where it has
-    /// one. Empty for a meter written as a ratio.
-    symbol: String,
-    /// music21's `symbolizeDenominator`: whether a score writes the
-    /// denominator as a note rather than a number. Display only; nothing in
-    /// the crate reads it.
-    symbolize_denominator: bool,
 }
 
 impl Clone for TimeSignature {
@@ -119,8 +120,6 @@ impl Clone for TimeSignature {
     fn clone(&self) -> Self {
         Python::attach(|py| Self {
             inner: self.inner.clone(),
-            symbol: self.symbol.clone(),
-            symbolize_denominator: self.symbolize_denominator,
             overridden_bar_duration: self
                 .overridden_bar_duration
                 .as_ref()
@@ -139,12 +138,10 @@ impl TimeSignature {
         keywords: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Self> {
         let _ = keywords;
-        let (mut inner, symbol) = read_meter(&value)?;
+        let mut inner = read_meter(&value)?;
         checked_divisions(&mut inner, divisions)?;
         Ok(Self {
             inner,
-            symbol,
-            symbolize_denominator: false,
             overridden_bar_duration: None,
         })
     }
@@ -160,28 +157,27 @@ impl TimeSignature {
     ) -> PyResult<()> {
         let built = Self::new(value, divisions, keywords)?;
         slf.inner = built.inner;
-        slf.symbol = built.symbol;
         Ok(())
     }
 
     #[getter]
     fn get_symbol(&self) -> &str {
-        &self.symbol
+        self.inner.symbol().unwrap_or_default()
     }
 
     #[setter]
     fn set_symbol(&mut self, symbol: String) {
-        self.symbol = symbol;
+        self.inner.set_symbol(Some(symbol));
     }
 
     #[getter]
     fn get_symbolizeDenominator(&self) -> bool {
-        self.symbolize_denominator
+        self.inner.symbolize_denominator()
     }
 
     #[setter]
     fn set_symbolizeDenominator(&mut self, symbolize: bool) {
-        self.symbolize_denominator = symbolize;
+        self.inner.set_symbolize_denominator(symbolize);
     }
 
     /// music21's `_reprInternal`, which its `__repr__` writes after the class
@@ -197,8 +193,9 @@ impl TimeSignature {
 
     #[setter]
     fn set_numerator(&mut self, numerator: UnsignedIntegerType) -> PyResult<()> {
-        self.inner =
+        let rebuilt =
             RsTimeSignature::new(numerator, self.inner.denominator()).map_err(meter_error)?;
+        self.inner = keeping_symbol(&self.inner, rebuilt);
         Ok(())
     }
 
@@ -209,8 +206,9 @@ impl TimeSignature {
 
     #[setter]
     fn set_denominator(&mut self, denominator: UnsignedIntegerType) -> PyResult<()> {
-        self.inner =
+        let rebuilt =
             RsTimeSignature::new(self.inner.numerator(), denominator).map_err(meter_error)?;
+        self.inner = keeping_symbol(&self.inner, rebuilt);
         Ok(())
     }
 
@@ -221,17 +219,19 @@ impl TimeSignature {
 
     #[setter]
     fn set_ratioString(&mut self, value: &str) -> PyResult<()> {
-        (self.inner, self.symbol) = read_meter(value)?;
+        let symbolize = self.inner.symbolize_denominator();
+        self.inner = read_meter(value)?;
+        self.inner.set_symbolize_denominator(symbolize);
         Ok(())
     }
 
     /// music21's `load`, which is the ratio-string setter under another name.
     #[pyo3(signature = (value, divisions = None))]
     fn load(&mut self, value: &str, divisions: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
-        let (mut inner, symbol) = read_meter(value)?;
+        let mut inner = read_meter(value)?;
         checked_divisions(&mut inner, divisions)?;
+        inner.set_symbolize_denominator(self.inner.symbolize_denominator());
         self.inner = inner;
-        self.symbol = symbol;
         Ok(())
     }
 
@@ -699,14 +699,12 @@ impl TimeSignature {
 
     /// music21 freezes a score by pickling it, and what this object is lives
     /// in Rust where a pickle cannot see it.
-    /// The name, the display flag and a bar length written over the meter's
-    /// own go with it, since the crate's value carries none of them.
+    /// A bar length written over the meter's own goes with it, since the
+    /// crate's value does not carry it.
     fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<crate::Pickled> {
         let py = slf.py();
         let me = slf.borrow();
         let extra = pyo3::types::PyDict::new(py);
-        extra.set_item("symbol", &me.symbol)?;
-        extra.set_item("symbolizeDenominator", me.symbolize_denominator)?;
         extra.set_item("barDuration", me.overridden_bar_duration.as_ref())?;
         crate::pickled_extra(slf, &me.inner, Some(&extra))
     }
@@ -722,11 +720,13 @@ impl TimeSignature {
         if let Some(extra) = extra
             && let Ok(extra) = extra.bind(py).cast::<pyo3::types::PyDict>()
         {
+            // A pickle written before the crate carried how a meter is drawn
+            // says it beside the value.
             if let Some(symbol) = extra.get_item("symbol")? {
-                me.symbol = symbol.extract()?;
+                me.inner.set_symbol(Some(symbol.extract()?));
             }
             if let Some(symbolize) = extra.get_item("symbolizeDenominator")? {
-                me.symbolize_denominator = symbolize.extract()?;
+                me.inner.set_symbolize_denominator(symbolize.extract()?);
             }
             if let Some(bar) = extra.get_item("barDuration")?
                 && !bar.is_none()
@@ -2110,8 +2110,6 @@ fn bestTimeSignature(meas: &Bound<'_, PyAny>) -> PyResult<Py<TimeSignature>> {
         "TimeSignature",
         TimeSignature {
             inner,
-            symbol: String::new(),
-            symbolize_denominator: false,
             overridden_bar_duration: None,
         },
     )

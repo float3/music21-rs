@@ -3,9 +3,25 @@
 Four more of music21's analysis modules are the crate's—
 `analysis.enharmonics`, `analysis.harmonicFunction`,
 `analysis.neoRiemannian` and `analysis.transposition`—and pass every
-example: 40 modules, 1,027 docstrings and 9,171 examples. Asking music21 and
+example: 40 modules, 1,028 docstrings and 9,174 examples. Asking music21 and
 the crate the same questions over thousands of random inputs found eleven
 places where they answered differently; they agree now.
+
+MusicXML, both ways. `musicxml::to_musicxml` writes a score as music21's
+`ScoreExporter` writes it with `makeNotation=False`, and 41 scores from
+music21's corpus come out byte for byte the same as music21's own export.
+`musicxml::from_musicxml` reads a file as music21's reader reads it: the
+same scores read by the crate and written back give the text music21 gives
+after reading them itself.
+
+ABC, MIDI and TinyNotation are read as music21 reads them. `abc::from_abc`
+was run over all 12,978 tunes of music21's corpus beside music21's own
+reader: 12,860 come out the same score, and the other 118 music21 reads into
+no measures and cannot be compared. `midi::from_midi` reads every MIDI file
+music21 carries, and corpus scores music21 wrote as MIDI, into the score
+music21 reads. Humdrum, MEI and RomanText follow: `humdrum::from_humdrum`,
+`mei::from_mei` and `romantext::from_roman_text`, each held to music21's
+reader the same way, on scores from music21's corpus and its own tests.
 
 ## Breaking Changes
 
@@ -28,6 +44,106 @@ places where they answered differently; they agree now.
 
 ## Added
 
+- `abc::from_abc` and `abc::from_abc_number`, music21's `abcFormat` and its
+  translator: a tune as a score, a file of tunes as an opus, voices as
+  parts, keys and modes, meters, tempos, default lengths, broken rhythm,
+  tuplets, grace notes, chords, ties, slurs, hairpins, bowings and accents,
+  chord symbols, lyrics, repeats and endings, a pickup measure, and a
+  measure holding more than its bar cut in two as `reBar` cuts it.
+- `makenotation::make_beams` and `set_stem_direction_for_beam_groups`,
+  music21's `makeBeams`: the notes of each measure beamed by the meter in
+  force, and each beamed group's stems pointed one way.
+- `musescore::MuseScore`, behind the `musescore` feature: finds an installed
+  MuseScore and runs it to convert a file, so anything MuseScore opens
+  (`.mscz`, `.mscx`, Guitar Pro, MIDI, Capella...) can be read as a score
+  and a score written as anything it saves. It is the one part of the crate
+  that touches files and starts a process, and is not built for wasm.
+- `midi::from_midi`, music21's `midi.translate.midiFileToStream`: each
+  track with notes a part, the tracks without the conductor whose meters,
+  keys and tempos the parts take; notes gathered into chords, moved onto
+  sixteenths and triplets, cut into measures, put in voices where they
+  overlap, tied across barlines and filled out with rests; instruments from
+  program changes and track names, lyrics, velocities, and channel 10 as
+  unpitched percussion.
+- `tinynotation::from_tiny_notation`, music21's TinyNotation: meters, notes
+  by letter and octave mark, lengths, dots, accidentals, rests, ties,
+  `trip{}` and `quad{}`, lyrics and note names.
+- `humdrum::from_humdrum`, music21's `humdrum.spineParser`: each `**kern`
+  spine a part and a spine that splits its voices; notes with their
+  lengths, tuplets, ties, beams, articulations and ornaments, chords,
+  rests, grace notes, barlines and repeats, clefs, keys, meters, tempos and
+  instruments; `**dynam` spines as dynamics and `**text` spines as lyrics;
+  and a file of several scores as an opus.
+- `mei::from_mei`, music21's `mei.base`: staves as parts and layers as
+  voices; the meter, key, clef, instrument and transposition of each
+  `<staffDef>`; notes, chords, rests, tuplets, articulations and ornaments;
+  and the slurs, ties, beams and tuplets written on the notes or apart from
+  them by `xml:id`; with the document's metadata.
+- `romantext::from_roman_text`, music21's `romanText`: measures of roman
+  numerals in their keys, each numeral realized as a chord standing on its
+  beat and carrying its figure as a lyric; measures copied from earlier
+  ones; repeats and endings; and the analysis's metadata.
+- `makenotation::make_measures` and `make_measures_by`, `make_ties`,
+  `make_rests`, `make_voices` and `quantize`: music21's `makeMeasures`,
+  `makeTies`, `makeRests`, `makeVoices` and `quantize`.
+- A note may be named (`Note::id`), and MusicXML export writes the name.
+- A `Rest` may carry a tie, as music21's may.
+- `musicxml::to_musicxml` and `ExportOptions`: parts, measures, voices,
+  notes, chords, rests, grace notes, ties, beams, tuplet brackets,
+  accidentals, lyrics, fermatas, ornaments, articulations, slurs, hairpins,
+  octave lines, line brackets, pedal marks, arpeggios across staves, cue
+  sizes, dynamics, tempo marks and text, segno, coda and the other repeat
+  marks, chord symbols, barlines,
+  repeats and endings, staff groups, a piano's staves joined into one part,
+  instruments, and the score's metadata.
+- `musicxml::from_musicxml`, music21's `musicxml.xmlToM21`: parts, a part
+  on several staves split into one part for each, measures and their
+  numbers, voices, notes, chords, rests, unpitched strokes, grace notes,
+  tuplets nested or not, ties, beams, lyrics, articulations, ornaments,
+  fermatas, arpeggios, slurs, hairpins, octave lines, brackets, pedals,
+  wavy lines, dynamics, tempo marks, words and repeat marks, chord symbols,
+  barlines, repeats and endings, instruments and transpositions, staff
+  groups and metadata. It takes the document's text; unpacking a `.mxl`
+  is the caller's.
+- `SpannerKind::TrillExtension`, the wavy line carrying a trill on.
+- The wheel has `from_musicxml(text)` and `to_musicxml(score,
+  encoding_date=None, software=None)`. The writer takes the wheel's streams
+  or music21's; the reader hands back the wheel's own `Score`, holding what
+  the wheel has classes for -- notes, chords, rests, clefs, keys, meters,
+  tempo marks, dynamics, chord symbols, instruments -- with measure numbers
+  and part names as attributes. A wheel stream now takes attributes.
+- `metadata::Metadata`, music21's `Metadata`, with its 131-property
+  vocabulary; a `Stream` carries one.
+- A `Stream` now carries what a score says of its measures and parts:
+  measure numbers, part names, ids, staff groups (`StaffGroup`), barlines
+  (`bar::Barline`), alternative endings (`bar::Ending`) and spanners.
+- `spanner::Spanner`: slurs, crescendos, diminuendos, octave lines
+  (`OctaveShift`), lines (`LineEnds`), pedal marks (`Pedal`) and arpeggios
+  across several chords, naming what they join by position in
+  `Stream::leaves`.
+- `repeat::RepeatExpression`, music21's `Segno`, `Coda`, `Fine`, `DaCapo`
+  and the rest, with the words each may be written in; a
+  `StreamElement::RepeatExpression` holds one.
+- `notation::NoteSize` on a note or rest, and a lyric's colour.
+- `percussion::Unpitched` and `PercussionChord`, music21's `note.Unpitched`
+  and `percussion.PercussionChord`: strokes with no pitch, displayed at a
+  step and octave, and chords of them. `StreamElement::Unpitched` and
+  `PercussionChord` hold them, and MusicXML export writes them.
+- MusicXML export writes a part that changes instrument, naming on each
+  note the instrument that plays it.
+- `StreamElement::Clef`, `Instrument`, `Key`, `TempoText` and
+  `TextExpression`.
+- A note, chord or rest carries its expressions (`expressions::Expression`:
+  ornaments, `Fermata`, arpeggios) and articulations; a note or rest may be
+  hidden from print, and a rest shifted off the middle line.
+- `Duration::grace` and `Grace`, what music21's `GraceDuration` says; a
+  tuplet says how it is bracketed (`TupletType`, `TupletBracket`,
+  `TupletShow`); a time signature its symbol; a key, signature, meter and
+  clef their colour; dynamics, tempo marks and chord symbols where they are
+  placed; `ChordSymbol::no_chord` for music21's `NoChord`.
+- `musicxml::css_color_hex` and `CSS_COLORS`, the CSS3 colour names
+  music21 writes a named colour with.
+- `Instrument::part_id` and `instrument_id`.
 - `chordsymbol::voice_chord_notation` and `ChordVoicing`: a chord of one
   of music21's kinds as music21 voices it, with the root and bass music21
   is left holding.
@@ -48,6 +164,25 @@ places where they answered differently; they agree now.
 - `analysis::transposition::TranspositionChecker`, a set of pitches in all
   twelve transpositions and how many differ. The wheel installs it over
   music21's.
+- `chordsymbol::alter_to_chord_symbol_string`, music21's
+  `alterToChordSymbolString`: `b` or `#` once per semitone.
+- `Pitch::frequency_hz_tuned` tunes a pitch by its spelling:
+  `tuningsystem::Tuning` says how wide an interval sounds, and `Just`,
+  `EqualDivision` and `Temperament` are tunings, measured from a
+  `tuningsystem::Reference` (`A4` at 440 Hz by default). `C#` and `D-` are
+  two notes in a meantone or in 19-EDO, and one in 12-EDO.
+- `Interval::pythagorean_monzo`, a spelled interval as octaves and fifths,
+  and `Monzo::pythagorean` to build one from staff steps and semitones.
+- `Polyrhythm::ratio_frequencies`, the subdivision ratios as frequencies,
+  and `PolyrhythmRatioTone::cents`, each ratio's exact width.
+- `Polyrhythm::to_score`: one measure of the rhythm as a score, a part for
+  each subdivision in tuplets where it does not divide the bar, each playing
+  its ratio's pitch, with the tempo as a metronome mark.
+- `TuningSystem::nearest_degree`, the degree nearest a frequency;
+  `TuningSystem::pitch_at`, the pitch a degree sounds, spelled with a
+  microtone; `TuningSystem::is_keyboard`; and `Pitch::from_frequency_in`, a
+  frequency snapped to a tuning system and spelled.
+- `tuningsystem::Ratio::to_fraction`, `monzo` and `cents`.
 - `TimeSignature::offset_in_bar`, the arithmetic of music21's
   `getMeasureOffsetOrMeterModulusOffset`: where an element falls in the
   bar, given its offset and the meter's. The wheel's member reads the two
@@ -67,7 +202,71 @@ places where they answered differently; they agree now.
   music21's are mutable and cannot; its author lists that first among
   the mistakes he would not repeat.
 
+## Changed
+
+- MusicXML export writes a chord's notes in the order the chord holds them,
+  as music21 does, rather than lowest first.
+- MusicXML export names a part with no name after the first instrument it
+  holds anywhere, inside its measures too, as music21's `partName` does.
+
+- The web score editor reads and writes MusicXML through the crate. Its
+  export builds a score of the crate's and `to_musicxml` writes it, so the
+  file is laid out as music21 lays one out; its import is `from_musicxml`,
+  with the tablature tuning, rehearsal marks and drum channel the editor
+  wants read off the document beside it.
+- `Stream::parts` includes a `PartStaff`, as music21's `.parts` does, and
+  the wheel reads music21's `PartStaff` as one rather than as a `Part`.
+- `StreamElement` has eight more variants and `expressions::Expression` is
+  new, so a `match` over either needs arms for them.
+- The wheel keeps a tuplet's bracketing, a time signature's symbol and a
+  metronome mark's placement and parentheses in the crate's value.
+- A chord symbol's figure writes its added and omitted notes as degrees
+  above the root, in order, with the bass last, as music21 now does:
+  `G7addb9add11addb13`, `Am7add11/C`, `Dsusadd#3omit4`, where it wrote
+  note names (`CaddD-`) that no chord-symbol parser reads back.
+  `ChordSymbolFigure::additions` is a list of `ChordAlteration`s and
+  `omissions` of degrees. A figure read as music21 reads one takes any run
+  of `b`, `-` and `#` after `add` or `omit` (`add-9`, `addbb9`), and the
+  wheel's `findFigure` writes the bass after the modifications
+  (`C add 2/B-`).
+- `Polyrhythm::ratio_pitches` and `ratio_chord` sound the ratios in tune:
+  each pitch carries a microtone for the part of its ratio past the nearest
+  semitone, so a 4:5:6 rhythm on `C4` is `C4 E4(-14c) G4(+2c)`.
+- `Polyrhythm::to_chord` and `to_polypitch` are gone. They mapped where each
+  beat falls in the bar onto twelve semitones, which is no chord the rhythm
+  implies; `ratio_chord` is the chord its ratios make.
+- MusicXML is behind the `musicxml` feature, which `musescore` turns on.
+- `Pitch::frequency_hz_in` sounds the degree nearest each key in a system
+  without twelve degrees to the octave, where it read the pitch-space number
+  as a degree: A4 in 19-EDO is 436.0 Hz, where it was degree 69, 101.3 Hz.
+- `TuningSystem::label` names a degree by the pitch it sounds: `C-1` for
+  `CN1`, `C♯/D♭4` for `C#/Db4`, `G0(+2c)` for Bohlen-Pierce's `T0O0`.
+  `TWELVE_TONE_NAMES`, `TWELVE_TONE_NAMES_SHARP`, `TWELVE_TONE_NAMES_FLAT`
+  and `WHOLE_TONE_NAMES` are gone.
+- `tuningsystem::Fraction` is `tuningsystem::Ratio`, an enum of `Rational`
+  and `Root` in place of a struct whose `base` of nought meant rational.
+  `Ratio::root(base, numerator, denominator)` replaces
+  `Fraction::new_with_base(numerator, denominator, base)`, `value` replaces
+  `ratio`, and `to_string` replaces `label`. `TuningSystem::fraction` is
+  `exact_ratio`, `ScalaDegree::as_fraction` is `as_ratio`, and
+  `equal_temperament_12` and `equal_temperament_default` are gone for
+  `equal_temperament`.
+- `Interval::pythagorean_ratio` returns an error instead of panicking on an
+  interval too far along the chain of fifths for a ratio of two `i32`s, and
+  answers for up to nineteen fifths where it stopped at eighteen.
+
 ## Fixed
+
+- A lyric written as a hyphen alone is the middle of a word with nothing
+  sung to it, as music21 reads it, not the end of one; and a lyric of no
+  text at all says nothing of where it falls in a word.
+
+- MusicXML export places a rest that is shifted off the middle line by the
+  clef in force where the rest stands, not by the last clef written; and the
+  wheel carries a chord's notes hidden one by one.
+- The voice-leading walk sorts a text expression ahead of everything at its
+  offset, as music21's `classSortOrder` of -30 does; it was sorted with the
+  notes.
 
 - `Accidental`'s ordering agrees with its equality. Equality compares
   names and ordering alterations, so a renamed natural ordered `Equal` to

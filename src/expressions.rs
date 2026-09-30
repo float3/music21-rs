@@ -1257,6 +1257,173 @@ fn python_float(value: FloatType) -> String {
     }
 }
 
+/// Which way up a fermata is drawn: music21's `Fermata.type`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum FermataType {
+    /// The arc opening downward, above the staff: MusicXML's `upright`.
+    Upright,
+    /// The arc opening upward: MusicXML's `inverted`, and music21's default.
+    #[default]
+    Inverted,
+}
+
+impl FermataType {
+    /// The name music21 and MusicXML give it.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Upright => "upright",
+            Self::Inverted => "inverted",
+        }
+    }
+}
+
+/// A pause of unmeasured length over a note: music21's `Fermata`.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
+pub struct Fermata {
+    fermata_type: FermataType,
+    shape: Option<String>,
+}
+
+impl Fermata {
+    /// A normal fermata, drawn inverted as music21's starts out.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Which way up it is drawn.
+    pub fn fermata_type(&self) -> FermataType {
+        self.fermata_type
+    }
+
+    /// Says which way up it is drawn.
+    pub fn set_fermata_type(&mut self, fermata_type: FermataType) {
+        self.fermata_type = fermata_type;
+    }
+
+    /// Its shape, `angled` or `square`, or nothing for the normal arc:
+    /// music21's `shape`, which it writes as `normal`.
+    pub fn shape(&self) -> Option<&str> {
+        self.shape.as_deref()
+    }
+
+    /// Sets its shape; `normal` is the arc and is kept as nothing.
+    pub fn set_shape(&mut self, shape: Option<String>) {
+        self.shape = shape.filter(|shape| shape != "normal");
+    }
+}
+
+/// How a chord's notes are spread: music21's `ArpeggioMark.type`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum ArpeggioType {
+    /// A wavy line, bottom to top.
+    #[default]
+    Normal,
+    /// A wavy line with an arrow pointing up.
+    Up,
+    /// A wavy line with an arrow pointing down.
+    Down,
+    /// A bracket: this chord is not spread, among ones that are.
+    NonArpeggio,
+}
+
+impl ArpeggioType {
+    /// music21's name for it.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Normal => "normal",
+            Self::Up => "up",
+            Self::Down => "down",
+            Self::NonArpeggio => "non-arpeggio",
+        }
+    }
+
+    /// Reads music21's name for it.
+    pub fn from_name(name: &str) -> Result<Self> {
+        match name {
+            "normal" => Ok(Self::Normal),
+            "up" => Ok(Self::Up),
+            "down" => Ok(Self::Down),
+            "non-arpeggio" => Ok(Self::NonArpeggio),
+            other => Err(Error::Value(format!(
+                "Arpeggio type must be \"normal\", \"up\", \"down\", or \"non-arpeggio\", not '{other}'."
+            ))),
+        }
+    }
+}
+
+/// Words written over or under the staff: music21's `TextExpression`, a
+/// score's *dolce* or *cresc.* or a movement's *Grave* where it is not read
+/// as a tempo.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
+pub struct TextExpression {
+    content: String,
+    #[cfg_attr(feature = "serde", serde(default))]
+    placement: crate::display::Drawn<Option<crate::notation::Placement>>,
+}
+
+impl TextExpression {
+    /// Words to write.
+    pub fn new(content: impl Into<String>) -> Self {
+        Self {
+            content: content.into(),
+            placement: crate::display::Drawn(None),
+        }
+    }
+
+    /// The words: music21's `content`.
+    pub fn content(&self) -> &str {
+        &self.content
+    }
+
+    /// Changes the words.
+    pub fn set_content(&mut self, content: impl Into<String>) {
+        self.content = content.into();
+    }
+
+    /// Which side of the staff the words are written on, where the score
+    /// says.
+    pub fn placement(&self) -> Option<crate::notation::Placement> {
+        self.placement.0
+    }
+
+    /// Says which side of the staff the words are written on.
+    pub fn set_placement(&mut self, placement: Option<crate::notation::Placement>) {
+        self.placement.0 = placement;
+    }
+}
+
+/// Something written on a note that is not its pitch or length: an entry
+/// of music21's `GeneralNote.expressions`.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum Expression {
+    /// An ornament: a mordent, a trill, a turn and the rest. Boxed, as an
+    /// ornament is large and most expressions are not one.
+    Ornament(Box<Ornament>),
+    /// A fermata.
+    Fermata(Fermata),
+    /// A chord spread from one end to the other.
+    Arpeggio(ArpeggioType),
+}
+
+impl From<Ornament> for Expression {
+    fn from(value: Ornament) -> Self {
+        Self::Ornament(Box::new(value))
+    }
+}
+
+impl From<Fermata> for Expression {
+    fn from(value: Fermata) -> Self {
+        Self::Fermata(value)
+    }
+}
+
 /// Every ornament on `note` played in turn, as music21's
 /// `realizeOrnaments` plays a note's expressions: each ornament realizes
 /// what the one before left of the note, and an ornament that takes the

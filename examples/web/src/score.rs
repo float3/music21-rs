@@ -7,17 +7,20 @@
 //! number, the staff position it was written on, and where in the text it
 //! came from. Everything musical is decided here.
 
+use music21_rs::musicxml::{ExportOptions, to_musicxml};
 use music21_rs::{
-    Chord, DurationType, Interval, Key, MidiNote, Minor67Default, Pitch, RomanNumeral,
-    TimeSignature, TuningSystem, VoiceLeadingQuartet, abc_duration, abc_note,
-    chord_symbol_figure_from_chord, estimate_key_from_pitches,
-    interval::convert_diatonic_number_to_step, read_midi_bytes_with_tempo,
-    roman_numeral_from_chord, tonal_certainty, write_midi_bytes,
+    Accidental, Chord, Clef, Duration, DurationType, Interval, Key, KeySignature, Metadata,
+    MetronomeMark, MidiNote, Minor67Default, Note, Pitch, Placement, Rest, RomanNumeral, Stream,
+    StreamElement, StreamKind, Tie, TieType, TimeSignature, TuningSystem, Tuplet, TupletType,
+    VoiceLeadingQuartet, abc_duration, abc_note, chord_symbol_figure_from_chord,
+    estimate_key_from_pitches, interval::convert_diatonic_number_to_step,
+    read_midi_bytes_with_tempo, roman_numeral_from_chord, tonal_certainty, write_midi_bytes,
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt::Write as _};
 use wasm_bindgen::prelude::*;
 
+mod import;
 mod labels;
 mod notation;
 
@@ -25,9 +28,6 @@ mod notation;
 /// every binary value and triplets, quintuplets and septuplets of them, and
 /// absorbs the six-decimal rounding abcjs gives tuplet timings.
 const GRID: f64 = 5040.0;
-/// MusicXML `divisions`: every notatable value `notatable` offers is a whole
-/// number of these.
-const DIVISIONS: f64 = 3360.0;
 const EPSILON: f64 = 1e-6;
 /// music21's diatonic note number of middle C, staff position 0.
 const MIDDLE_C_DNN: i32 = 29;
@@ -938,7 +938,7 @@ fn midi_bytes(score: &Score) -> Result<Vec<u8>, JsValue> {
 #[derive(Clone, Copy)]
 struct Notatable {
     quarters: f64,
-    type_name: &'static str,
+    kind: DurationType,
     dots: u32,
     tuplet: Option<(u32, u32)>,
 }
@@ -967,7 +967,7 @@ fn notatable() -> Vec<Notatable> {
         for dots in 0..=max_dots {
             values.push(Notatable {
                 quarters: duration_type.quarter_length_with_dots(dots),
-                type_name: duration_type.music21_name(),
+                kind: duration_type,
                 dots,
                 tuplet: None,
             });
@@ -975,7 +975,7 @@ fn notatable() -> Vec<Notatable> {
         for (actual, normal) in [(3, 2), (5, 4), (7, 4)] {
             values.push(Notatable {
                 quarters: duration_type.quarter_length() * normal as f64 / actual as f64,
-                type_name: duration_type.music21_name(),
+                kind: duration_type,
                 dots: 0,
                 tuplet: Some((actual, normal)),
             });
@@ -1017,13 +1017,6 @@ struct XmlNote {
     tuplet_stop: bool,
 }
 
-fn xml_escape(text: &str) -> String {
-    text.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-}
-
 fn step_alter(pitch: &Pitch) -> (char, i32, i32) {
     let name = pitch.name();
     let step = name.chars().next().unwrap_or('C');
@@ -1053,12 +1046,22 @@ fn key_alters(sharps: i32) -> BTreeMap<char, i32> {
     alters
 }
 
-fn clef_xml(clef: &str, voice: &Voice) -> (&'static str, u8) {
-    match clef {
-        name if name.starts_with("bass") => ("F", 4),
-        name if name.starts_with("alto") => ("C", 3),
-        name if name.starts_with("tenor") => ("C", 4),
-        name if name.starts_with("treble") => ("G", 2),
+/// The clef a voice is written in: the one it names, or treble or bass by
+/// where its notes lie. A clef written an octave from where it sounds keeps
+/// that, since the pitches handed over are the sounding ones.
+fn voice_clef(voice: &Voice) -> Result<Clef, music21_rs::Error> {
+    let octave_change = if voice.clef.ends_with("-8") {
+        -1
+    } else if voice.clef.ends_with("+8") {
+        1
+    } else {
+        0
+    };
+    let sign = match voice.clef.as_str() {
+        name if name.starts_with("bass") => "F4",
+        name if name.starts_with("alto") => "C3",
+        name if name.starts_with("tenor") => "C4",
+        name if name.starts_with("treble") => "G2",
         _ => {
             let pitches: Vec<f64> = voice
                 .events
@@ -1067,12 +1070,13 @@ fn clef_xml(clef: &str, voice: &Voice) -> (&'static str, u8) {
                 .collect();
             let mean = pitches.iter().sum::<f64>() / pitches.len().max(1) as f64;
             if !pitches.is_empty() && mean < 57.0 {
-                ("F", 4)
+                "F4"
             } else {
-                ("G", 2)
+                "G2"
             }
         }
-    }
+    };
+    Clef::from_string(sign, octave_change)
 }
 
 /// One voice as a run of chords and rests: notes that start together are
@@ -1105,94 +1109,79 @@ fn voice_timeline(voice: &Voice) -> Vec<(f64, f64, Vec<Pitch>)> {
     timeline
 }
 
-fn musicxml(score: &Score) -> String {
+/// The score as the crate's streams: a part for each voice, cut into
+/// measures, every length spelled in written values.
+fn notated(score: &Score) -> Result<Stream, music21_rs::Error> {
     let values = notatable();
     let barlines = score.barlines();
     let sharps = score.key.as_ref().map_or(0, |key| key.sharps).clamp(-7, 7);
-    let mode = score
-        .key
-        .as_ref()
-        .map_or("major".to_string(), |key| key.mode.clone());
+    let signature = KeySignature::new(sharps);
+    let mode = score.key.as_ref().map_or("major", |key| key.mode.as_str());
+    let key: StreamElement = match signature.try_as_key(Some(mode), None) {
+        Ok(key) => key.into(),
+        Err(_) => signature.into(),
+    };
+    let pickup = score.anacrusis() > 0.0;
 
-    let mut xml = String::new();
-    xml.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>\n");
-    xml.push_str("<!DOCTYPE score-partwise PUBLIC \"-//Recordare//DTD MusicXML 4.0 Partwise//EN\" \"http://www.musicxml.org/dtds/partwise.dtd\">\n");
-    xml.push_str("<score-partwise version=\"4.0\">\n");
+    let mut out = Stream::with_kind(StreamKind::Score);
+    let mut metadata = Metadata::new();
     if !score.title.is_empty() {
-        let _ = writeln!(
-            xml,
-            "  <work><work-title>{}</work-title></work>",
-            xml_escape(&score.title)
-        );
+        metadata.add_text("title", score.title.clone());
     }
-    xml.push_str("  <identification><encoding><software>music21-rs score editor</software></encoding></identification>\n");
-    xml.push_str("  <part-list>\n");
-    for (index, voice) in score.voices.iter().enumerate() {
-        let name = if voice.name.is_empty() {
-            format!("Voice {}", index + 1)
-        } else {
-            voice.name.clone()
-        };
-        let _ = writeln!(
-            xml,
-            "    <score-part id=\"P{}\"><part-name>{}</part-name></score-part>",
-            index + 1,
-            xml_escape(&name)
-        );
-    }
-    xml.push_str("  </part-list>\n");
+    metadata.add_text("software", "music21-rs score editor");
+    out.set_metadata(Some(metadata));
 
     for (part_index, voice) in score.voices.iter().enumerate() {
-        let _ = writeln!(xml, "  <part id=\"P{}\">", part_index + 1);
+        let mut part = Stream::with_kind(StreamKind::Part);
+        part.set_id(Some(format!("P{}", part_index + 1)));
+        part.set_name(Some(if voice.name.is_empty() {
+            format!("Voice {}", part_index + 1)
+        } else {
+            voice.name.clone()
+        }));
         let timeline = voice_timeline(voice);
         for (measure_index, bounds) in barlines.windows(2).enumerate() {
             let (measure_start, measure_end) = (bounds[0], bounds[1]);
-            let number = if score.anacrusis() > 0.0 {
-                measure_index
+            let mut measure = Stream::with_kind(StreamKind::Measure);
+            measure.set_number(if pickup {
+                measure_index as i32
             } else {
-                measure_index + 1
-            };
-            let implicit = score.anacrusis() > 0.0 && measure_index == 0;
-            let _ = writeln!(
-                xml,
-                "    <measure number=\"{number}\"{}>",
-                if implicit { " implicit=\"yes\"" } else { "" }
-            );
+                measure_index as i32 + 1
+            });
+            measure.set_number_hidden(pickup && measure_index == 0);
             if measure_index == 0 {
-                let (sign, line) = clef_xml(&voice.clef, voice);
-                // A clef written an octave from where it sounds; the pitches
-                // below are the sounding ones, as MusicXML has them.
-                let octave_change = match voice.clef.as_str() {
-                    clef if clef.ends_with("-8") => "<clef-octave-change>-1</clef-octave-change>",
-                    clef if clef.ends_with("+8") => "<clef-octave-change>1</clef-octave-change>",
-                    _ => "",
-                };
-                let _ = writeln!(
-                    xml,
-                    "      <attributes><divisions>{}</divisions><key><fifths>{sharps}</fifths><mode>{}</mode></key><time><beats>{}</beats><beat-type>{}</beat-type></time><clef><sign>{sign}</sign><line>{line}</line>{octave_change}</clef></attributes>",
-                    DIVISIONS as u32,
-                    xml_escape(&mode),
-                    score.meter.numerator(),
-                    score.meter.denominator()
-                );
+                measure.insert(0.0, voice_clef(voice)?);
+                measure.insert(0.0, key.clone());
+                measure.insert(0.0, score.meter.clone());
                 if part_index == 0 {
-                    let _ = writeln!(
-                        xml,
-                        "      <direction placement=\"above\"><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>{}</per-minute></metronome></direction-type><sound tempo=\"{}\"/></direction>",
-                        score.tempo_bpm.round(),
-                        score.tempo_bpm
-                    );
+                    let mut mark = MetronomeMark::new(score.tempo_bpm.round());
+                    mark.set_placement(Some(Placement::Above));
+                    measure.insert(0.0, mark.with_number_sounding(score.tempo_bpm));
                 }
             }
-
             let notes = measure_notes(&timeline, measure_start, measure_end, &values);
-            write_measure_notes(&mut xml, &notes, sharps);
-            xml.push_str("    </measure>\n");
+            let mut offset = 0.0;
+            for element in measure_elements(&notes, sharps)? {
+                let length = element.quarter_length();
+                measure.insert(offset, element);
+                offset += length;
+            }
+            part.insert(measure_start, measure);
         }
-        xml.push_str("  </part>\n");
+        out.insert(0.0, part);
     }
-    xml.push_str("</score-partwise>\n");
-    xml
+    Ok(out)
+}
+
+fn musicxml(score: &Score) -> Result<String, music21_rs::Error> {
+    // The editor's scores are nobody's but their writer's: no title or
+    // composer is made up for one that names none.
+    let options = ExportOptions {
+        default_title: None,
+        default_author: None,
+        ..ExportOptions::default()
+    };
+    to_musicxml(&notated(score)?, &options)
 }
 
 fn measure_notes(
@@ -1286,87 +1275,67 @@ fn mark_tuplets(notes: &mut [XmlNote]) {
     }
 }
 
-fn write_measure_notes(xml: &mut String, notes: &[XmlNote], sharps: i32) {
+/// The notes, chords and rests of one measure, each with its written value,
+/// its ties, its tuplet and whether its accidental is written: one is, where
+/// the note differs from what the key signature or an earlier note in the
+/// measure left in force.
+fn measure_elements(
+    notes: &[XmlNote],
+    sharps: i32,
+) -> Result<Vec<StreamElement>, music21_rs::Error> {
     let key = key_alters(sharps);
     let mut in_force: BTreeMap<(char, i32), i32> = BTreeMap::new();
+    let mut elements = Vec::new();
     for note in notes {
-        let duration = (note.value.quarters * DIVISIONS).round() as u32;
-        let chord_members: Vec<Option<&Pitch>> = if note.pitches.is_empty() {
-            vec![None]
-        } else {
-            note.pitches.iter().map(Some).collect()
-        };
-        for (member, pitch) in chord_members.into_iter().enumerate() {
-            xml.push_str("      <note>");
-            if member > 0 {
-                xml.push_str("<chord/>");
-            }
-            let mut accidental = None;
-            match pitch {
-                None => xml.push_str("<rest/>"),
-                Some(pitch) => {
-                    let (step, alter, octave) = step_alter(pitch);
-                    let current = in_force
-                        .get(&(step, octave))
-                        .copied()
-                        .unwrap_or_else(|| key.get(&step).copied().unwrap_or(0));
-                    if current != alter && !note.tie_stop {
-                        accidental = Some(match alter {
-                            -2 => "flat-flat",
-                            -1 => "flat",
-                            1 => "sharp",
-                            2 => "double-sharp",
-                            _ => "natural",
-                        });
-                    }
-                    in_force.insert((step, octave), alter);
-                    let _ = write!(xml, "<pitch><step>{step}</step>");
-                    if alter != 0 {
-                        let _ = write!(xml, "<alter>{alter}</alter>");
-                    }
-                    let _ = write!(xml, "<octave>{octave}</octave></pitch>");
-                }
-            }
-            let _ = write!(xml, "<duration>{duration}</duration>");
-            if note.tie_stop {
-                xml.push_str("<tie type=\"stop\"/>");
-            }
-            if note.tie_start {
-                xml.push_str("<tie type=\"start\"/>");
-            }
-            let _ = write!(xml, "<voice>1</voice><type>{}</type>", note.value.type_name);
-            for _ in 0..note.value.dots {
-                xml.push_str("<dot/>");
-            }
-            if let Some(accidental) = accidental {
-                let _ = write!(xml, "<accidental>{accidental}</accidental>");
-            }
-            if let Some((actual, normal)) = note.value.tuplet {
-                let _ = write!(
-                    xml,
-                    "<time-modification><actual-notes>{actual}</actual-notes><normal-notes>{normal}</normal-notes></time-modification>"
-                );
-            }
-            let tuplet_marks = member == 0 && (note.tuplet_start || note.tuplet_stop);
-            if note.tie_start || note.tie_stop || tuplet_marks {
-                xml.push_str("<notations>");
-                if note.tie_stop {
-                    xml.push_str("<tied type=\"stop\"/>");
-                }
-                if note.tie_start {
-                    xml.push_str("<tied type=\"start\"/>");
-                }
-                if member == 0 && note.tuplet_start {
-                    xml.push_str("<tuplet type=\"start\" bracket=\"yes\"/>");
-                }
-                if member == 0 && note.tuplet_stop {
-                    xml.push_str("<tuplet type=\"stop\"/>");
-                }
-                xml.push_str("</notations>");
-            }
-            xml.push_str("</note>\n");
+        let mut duration = Duration::from_type_with_dots(note.value.kind, note.value.dots);
+        if let Some((actual, normal)) = note.value.tuplet {
+            let mut tuplet = Tuplet::new(actual, normal, note.value.kind, 0);
+            tuplet.set_tuplet_type(match (note.tuplet_start, note.tuplet_stop) {
+                (true, true) => Some(TupletType::StartStop),
+                (true, false) => Some(TupletType::Start),
+                (false, true) => Some(TupletType::Stop),
+                (false, false) => None,
+            });
+            duration.set_tuplets(vec![tuplet]);
         }
+        if note.pitches.is_empty() {
+            elements.push(Rest::new(duration).into());
+            continue;
+        }
+        let tie = match (note.tie_stop, note.tie_start) {
+            (true, true) => Some(Tie::new(TieType::Continue)),
+            (true, false) => Some(Tie::new(TieType::Stop)),
+            (false, true) => Some(Tie::new(TieType::Start)),
+            (false, false) => None,
+        };
+        let mut members = Vec::new();
+        for pitch in &note.pitches {
+            let (step, alter, octave) = step_alter(pitch);
+            let current = in_force
+                .get(&(step, octave))
+                .copied()
+                .unwrap_or_else(|| key.get(&step).copied().unwrap_or(0));
+            let shown = current != alter && !note.tie_stop;
+            in_force.insert((step, octave), alter);
+            let mut written = pitch.clone();
+            if shown || alter != 0 {
+                let mut accidental = Accidental::new(f64::from(alter))?;
+                accidental.set_display_status(Some(shown));
+                written.set_written_accidental(Some(accidental));
+            }
+            let mut member = Note::from_pitch(written);
+            member.set_tie(tie.clone());
+            members.push(member);
+        }
+        elements.push(if members.len() == 1 {
+            let mut single = members.remove(0);
+            single.set_duration(duration);
+            single.into()
+        } else {
+            Chord::new(members)?.with_duration(duration).into()
+        });
     }
+    Ok(elements)
 }
 
 // ------------------------------------------------------------ MIDI to ABC
@@ -1585,7 +1554,7 @@ pub fn score_to_midi(input: JsValue) -> Result<Vec<u8>, JsValue> {
 #[wasm_bindgen]
 /// Writes a score as MusicXML 4.0, one part per voice.
 pub fn score_to_musicxml(input: JsValue) -> Result<String, JsValue> {
-    Ok(musicxml(&score_from(input)?))
+    musicxml(&score_from(input)?).map_err(js_error)
 }
 
 #[wasm_bindgen]
@@ -2114,13 +2083,29 @@ mod tests {
     }
 
     #[test]
+    fn what_the_editor_writes_the_crate_reads_back() {
+        let xml = musicxml(&chorale()).expect("MusicXML writes");
+        let read = music21_rs::musicxml::from_musicxml(&xml).expect("MusicXML reads");
+        assert_eq!(read.parts().len(), 4);
+        assert_eq!(read.pitches().len(), 8);
+        let meter = read.parts()[0].measures()[0]
+            .events()
+            .iter()
+            .find_map(|event| match event.element() {
+                StreamElement::TimeSignature(meter) => Some(meter.ratio_string()),
+                _ => None,
+            });
+        assert_eq!(meter.as_deref(), Some("4/4"));
+    }
+
+    #[test]
     fn musicxml_ties_a_note_across_the_barline() {
         let mut score = chorale();
         score.voices[3].events[1].end = 6.0;
-        let xml = musicxml(&score);
-        assert!(xml.contains("<measure number=\"2\">"));
-        assert!(xml.contains("<tie type=\"start\"/>"));
-        assert!(xml.contains("<tie type=\"stop\"/>"));
+        let xml = musicxml(&score).expect("MusicXML writes");
+        assert!(xml.contains("<measure implicit=\"no\" number=\"2\">"));
+        assert!(xml.contains("<tie type=\"start\" />"));
+        assert!(xml.contains("<tie type=\"stop\" />"));
         assert_eq!(xml.matches("<part id=").count(), 4);
     }
 
@@ -2191,9 +2176,9 @@ mod tests {
         let mut score = chorale();
         score.pickup = 1.0;
         assert_eq!(score.barlines(), vec![0.0, 1.0, 2.0]);
-        let xml = musicxml(&score);
-        assert!(xml.contains("<measure number=\"0\" implicit=\"yes\">"));
-        assert!(!xml.contains("<rest/>"), "{xml}");
+        let xml = musicxml(&score).expect("MusicXML writes");
+        assert!(xml.contains("<measure implicit=\"yes\" number=\"0\">"));
+        assert!(!xml.contains("<rest"), "{xml}");
     }
 
     #[test]
@@ -2202,7 +2187,7 @@ mod tests {
         let names = |length| {
             spell_length(length, &values)
                 .iter()
-                .map(|value| (value.type_name, value.dots, value.tuplet))
+                .map(|value| (value.kind.music21_name(), value.dots, value.tuplet))
                 .collect::<Vec<_>>()
         };
         assert_eq!(names(1.5), vec![("quarter", 1, None)]);

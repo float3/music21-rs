@@ -108,6 +108,8 @@ pub struct KeySignature {
     sharps: Option<IntegerType>,
     altered: Option<Vec<Pitch>>,
     accidentals_apply_only_to_octave: bool,
+    #[cfg_attr(feature = "serde", serde(default))]
+    color: Option<String>,
 }
 
 impl KeySignature {
@@ -117,7 +119,18 @@ impl KeySignature {
             sharps: Some(sharps),
             altered: None,
             accidentals_apply_only_to_octave: false,
+            color: None,
         }
+    }
+
+    /// The colour the signature is drawn in, if one was said.
+    pub fn color(&self) -> Option<&str> {
+        self.color.as_deref()
+    }
+
+    /// Sets the colour the signature is drawn in.
+    pub fn set_color(&mut self, color: Option<String>) {
+        self.color = color;
     }
 
     /// Creates a non-traditional key signature from the pitches it alters,
@@ -129,6 +142,7 @@ impl KeySignature {
             sharps: None,
             altered: Some(pitches),
             accidentals_apply_only_to_octave: false,
+            color: None,
         }
     }
 

@@ -110,6 +110,13 @@ pub struct TimeSignature {
     beat_sequence: MeterTerminal,
     beam_sequence: MeterTerminal,
     accent_sequence: MeterTerminal,
+    /// How the signature is drawn where it is not drawn as numbers.
+    #[cfg_attr(feature = "serde", serde(default))]
+    symbol: Option<String>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    symbolize_denominator: bool,
+    #[cfg_attr(feature = "serde", serde(default))]
+    color: crate::display::Color,
 }
 
 impl Default for TimeSignature {
@@ -143,9 +150,46 @@ impl TimeSignature {
             beat_sequence: whole_bar(numerator, denominator)?,
             beam_sequence: whole_bar(numerator, denominator)?,
             accent_sequence: whole_bar(numerator, denominator)?,
+            symbol: None,
+            symbolize_denominator: false,
+            color: crate::display::Drawn(None),
         };
         signature.set_default_partitions()?;
         Ok(signature)
+    }
+
+    /// How the signature is drawn where it is not drawn as numbers: music21's
+    /// `symbol`, `common` for the C of `4/4` or `cut` for the struck C of
+    /// `2/2`, and nothing where it is written as numbers.
+    pub fn symbol(&self) -> Option<&str> {
+        self.symbol.as_deref()
+    }
+
+    /// Says how the signature is drawn, or that it is written as numbers.
+    pub fn set_symbol(&mut self, symbol: Option<String>) {
+        self.symbol = symbol.filter(|symbol| !symbol.is_empty());
+    }
+
+    /// Whether the denominator is drawn as a note rather than a number:
+    /// music21's `symbolizeDenominator`.
+    pub fn symbolize_denominator(&self) -> bool {
+        self.symbolize_denominator
+    }
+
+    /// Says whether the denominator is drawn as a note.
+    pub fn set_symbolize_denominator(&mut self, symbolize: bool) {
+        self.symbolize_denominator = symbolize;
+    }
+
+    /// The colour the signature is drawn in, if one was said. Two meters
+    /// differing only in colour are equal.
+    pub fn color(&self) -> Option<&str> {
+        self.color.0.as_deref()
+    }
+
+    /// Sets the colour the signature is drawn in.
+    pub fn set_color(&mut self, color: Option<String>) {
+        self.color.0 = color;
     }
 
     /// How the bar is written, before anything divides it: music21's

@@ -67,8 +67,9 @@ interface AbcjsGlobal {
     strTranspose(abc: string, tunes: AbcTune[], steps: number): string;
     TimingCallbacks: new (
         tune: AbcTune,
-        options: { eventCallback: (event: NoteTimingEvent | null) => void },
-    ) => { start(): void; stop(): void };
+        /** Answering `"continue"` to the event at the end keeps the timer running. */
+        options: { eventCallback: (event: NoteTimingEvent | null) => "continue" | void },
+    ) => { start(offset?: number, units?: "seconds"): void; stop(): void };
     synth: {
         supportsAudio(): boolean;
         CreateSynth: new () => {
@@ -76,7 +77,11 @@ interface AbcjsGlobal {
             prime(): Promise<unknown>;
             start(): void;
             stop(): void;
+            seek(position: number, units: "seconds"): void;
             download(): string;
+            /** How long a bar of `meterSize` whole notes lasts. */
+            millisecondsPerMeasure: number;
+            meterSize: number;
         };
     };
 }
@@ -196,6 +201,18 @@ interface WasmModule {
         tonic: string,
     ): { pitch_class_cents: number[] | null; notes: number[][][] };
     playable_tuning_systems(): { id: string; name: string; description: string }[];
+    ScoreImport: new () => { add(name: string, bytes: Uint8Array): void; finish(): Imported; free(): void };
+}
+
+/** A score read from Guitar Pro, MusicXML or Songsterr files: see
+ * `examples/web/src/score/import`. */
+interface Imported {
+    abc: string;
+    title: string;
+    /** What was left out, and why. */
+    skipped: string[];
+    /** The open strings of the first part that has them, lowest first. */
+    tuning: number[] | null;
 }
 
 /** A note as abcjs's synth is about to sound it; `cents` detunes it. */
@@ -230,6 +247,8 @@ const swingRatioInput = $<HTMLInputElement>("#swing-ratio");
 const playButton = $<HTMLButtonElement>("#play");
 const stopButton = $<HTMLButtonElement>("#stop");
 const loopButton = $<HTMLButtonElement>("#loop");
+const loopFromInput = $<HTMLInputElement>("#loop-from");
+const loopToInput = $<HTMLInputElement>("#loop-to");
 const exportMenu = $<HTMLDetailsElement>("#export-menu");
 const shareMenu = $<HTMLDetailsElement>("#share-menu");
 const shareUrl = $<HTMLInputElement>("#share-url");
@@ -484,7 +503,23 @@ let tabSkipped: string[] = [];
 let zoom = 1;
 /** Voice ids left out of the drawn score. */
 const hiddenParts = new Set<string>();
-let player: { synth: InstanceType<AbcjsGlobal["synth"]["CreateSynth"]>; timer: { stop(): void } } | null = null;
+/** Parts drawn but not heard: voice ids, or the two below, whose space no
+ * voice id can hold. */
+const mutedParts = new Set<string>();
+/** The one voice of a score that declares none. */
+const LONE_PART = " melody";
+/** The chord symbols, whether the chords part plays them or abcjs does. */
+const CHORDS_PART = " chords";
+let player: {
+    synth: InstanceType<AbcjsGlobal["synth"]["CreateSynth"]>;
+    timer: { stop(): void };
+    poll: number;
+    /** Seconds into the score. */
+    position(): number;
+} | null = null;
+/** Counts stops, so a playback still loading when it is stopped or started
+ * again never starts. */
+let playRequest = 0;
 
 // ---------------------------------------------------------------- helpers
 
@@ -1486,38 +1521,94 @@ function hiddenLineStarts(source: string): number[] {
         .map((line) => line.start);
 }
 
-function renderParts(): void {
+/** Whether the drawn score carries chord symbols, which are heard as a part
+ * of their own. */
+function hasChordSymbols(): boolean {
+    return (rendered?.tune.lines ?? []).some((line) =>
+        (line.staff ?? []).some((staff) =>
+            staff.voices.some((voice) =>
+                voice.some((element) => element.chord?.some((chord) => (chord.position ?? "default") === "default")),
+            ),
+        ),
+    );
+}
+
+/** Every part a listener can tell apart: the voices, or the one voice of a
+ * score that declares none, and the chord symbols. */
+function partList(): { id: string; name: string; hideable: boolean }[] {
     const ids = voiceIds(textarea.value);
-    for (const id of [...hiddenParts]) if (!ids.includes(id)) hiddenParts.delete(id);
-    partsMenu.hidden = ids.length < 2;
-    partsMenu.querySelector("summary")!.textContent = hiddenParts.size
-        ? `Parts ${ids.length - hiddenParts.size}/${ids.length}`
-        : "Parts";
     const names = analysis?.voices.length === ids.length ? analysis.voices.map((voice) => voice.name) : ids;
+    const parts = ids.length
+        ? ids.map((id, index) => ({
+              id,
+              name: names[index] && names[index] !== id ? `${names[index]} (${id})` : id,
+              hideable: ids.length > 1,
+          }))
+        : [{ id: LONE_PART, name: "Melody", hideable: false }];
+    if (hasChordSymbols()) parts.push({ id: CHORDS_PART, name: "Chord symbols", hideable: false });
+    return parts;
+}
+
+function renderParts(): void {
+    const parts = partList();
+    const ids = parts.filter((part) => part.hideable).map((part) => part.id);
+    for (const id of [...hiddenParts]) if (!ids.includes(id)) hiddenParts.delete(id);
+    for (const id of [...mutedParts]) if (!parts.some((part) => part.id === id)) mutedParts.delete(id);
+    partsMenu.hidden = parts.length < 2;
+    const counts = [
+        hiddenParts.size ? `${ids.length - hiddenParts.size}/${ids.length}` : "",
+        mutedParts.size ? `${mutedParts.size} muted` : "",
+    ].filter(Boolean);
+    partsMenu.querySelector("summary")!.textContent = ["Parts", ...counts].join(" · ");
     const actions = el("div", "part-actions");
-    const all = el("button", "", "All");
+    const all = el("button", "", "Show and play all");
     all.type = "button";
     all.addEventListener("click", () => {
+        const shown = hiddenParts.size > 0;
         hiddenParts.clear();
-        redraw();
+        mutedParts.clear();
+        if (shown) redraw();
+        else {
+            renderParts();
+            replay();
+        }
     });
     actions.append(all);
     partsNode.replaceChildren(
         actions,
-        ...ids.map((id, index) => {
+        ...parts.map((part) => {
+            const row = el("div", "part-row");
             const label = el("label");
             const box = el("input");
             box.type = "checkbox";
-            box.checked = !hiddenParts.has(id);
-            box.addEventListener("change", () => {
-                if (box.checked) hiddenParts.delete(id);
-                else if (hiddenParts.size < ids.length - 1) hiddenParts.add(id);
-                else box.checked = true;
-                redraw();
+            box.checked = !hiddenParts.has(part.id);
+            box.title = "Draw this part";
+            if (part.hideable) {
+                box.addEventListener("change", () => {
+                    if (box.checked) hiddenParts.delete(part.id);
+                    else if (hiddenParts.size < ids.length - 1) hiddenParts.add(part.id);
+                    else box.checked = true;
+                    redraw();
+                });
+            } else {
+                box.disabled = true;
+                box.style.visibility = "hidden";
+            }
+            label.append(box, part.name);
+            const mute = el("button", "mute", mutedParts.has(part.id) ? "Muted" : "Mute");
+            mute.type = "button";
+            mute.title = "Draw this part but leave it out of the playback";
+            mute.classList.toggle("on", mutedParts.has(part.id));
+            mute.setAttribute("aria-pressed", String(mutedParts.has(part.id)));
+            mute.setAttribute("aria-label", `Mute ${part.name}`);
+            mute.addEventListener("click", () => {
+                if (mutedParts.has(part.id)) mutedParts.delete(part.id);
+                else mutedParts.add(part.id);
+                renderParts();
+                replay();
             });
-            const name = names[index] && names[index] !== id ? `${names[index]} (${id})` : id;
-            label.append(box, name);
-            return label;
+            row.append(label, mute);
+            return row;
         }),
     );
 }
@@ -1762,13 +1853,18 @@ function loadText(text: string): void {
     replaceRange(0, textarea.value.length, text);
     textarea.setSelectionRange(0, 0);
     textarea.scrollTop = 0;
+    // Refreshed here and now, so the refresh the edit scheduled would only
+    // clear a message shown about what was loaded.
+    window.clearTimeout(refreshTimer);
     refresh();
 }
 
 // -------------------------------------------------------------- playback
 
 function stopPlayback(): void {
+    playRequest += 1;
     if (player) {
+        clearInterval(player.poll);
         player.timer.stop();
         player.synth.stop();
         player = null;
@@ -1796,10 +1892,12 @@ async function makeSynth(drawn: Rendered): Promise<InstanceType<AbcjsGlobal["syn
     const synth = new ABCJS.synth.CreateSynth();
     const swing = swingCallback(drawn);
     const retune = tuningCallback();
+    const mute = muteCallback(drawn);
     const sequence =
-        swing || retune
+        swing || retune || mute
             ? (tracks: SynthNote[][]) => {
                   swing?.(tracks);
+                  mute?.(tracks);
                   retune?.(tracks);
               }
             : null;
@@ -1846,6 +1944,69 @@ function swingCallback(drawn: Rendered): ((tracks: SynthNote[][]) => void) | nul
             }
         }
     };
+}
+
+/** A callback silencing the muted parts, or null when none is. A track
+ * belongs to the part its first written note does; one with no written note
+ * is abcjs's accompaniment of the chord symbols, and one written in the
+ * generated chords part is that part. */
+function muteCallback(drawn: Rendered): ((tracks: SynthNote[][]) => void) | null {
+    if (mutedParts.size === 0) return null;
+    const ids = voiceIds(textarea.value);
+    const owners = new Map<number, string>();
+    scoreInput?.voices.forEach((voice, index) => {
+        const part = ids[index] ?? LONE_PART;
+        for (const note of voice.notes) owners.set(note.char_start, part);
+    });
+    return (tracks) => {
+        for (const track of tracks) {
+            const written = track.find((note) => note.startChar != null && note.endChar != null);
+            let part: string | undefined = CHORDS_PART;
+            if (written && !drawn.isGenerated(written.startChar!)) {
+                const anchor = anchorOfElement({ el_type: "note", startChar: written.startChar, endChar: written.endChar! });
+                part = anchor === null ? undefined : owners.get(anchor);
+            }
+            if (part !== undefined && mutedParts.has(part)) track.length = 0;
+        }
+    };
+}
+
+/** Where bar `bar` begins, in quarter lengths from the first note, counting
+ * bars as the analysis does: a pickup is bar 0 and repeats are played out. */
+function barStart(bar: number): number {
+    if (bar <= 0) return 0;
+    const [numerator, denominator] = scoreInput?.meter ?? [4, 4];
+    const length = (numerator * 4) / denominator;
+    const pickup = scoreInput?.pickup ?? 0;
+    const anacrusis = pickup > 1e-9 && pickup < length - 1e-9 ? pickup : 0;
+    return anacrusis + (bar - 1) * length;
+}
+
+/** The bars the bar fields ask for, in quarter lengths: from the start of
+ * the first to the end of the last, or to the end of the score when the last
+ * is left empty. */
+function barRange(): { from: number; to: number | null } {
+    const read = (input: HTMLInputElement) => {
+        const value = Number.parseInt(input.value, 10);
+        return Number.isFinite(value) ? Math.max(0, value) : null;
+    };
+    const first = read(loopFromInput);
+    let last = read(loopToInput);
+    if (first !== null && last !== null && last < first) last = first;
+    const measures = analysis?.measures ?? 0;
+    if (first !== null && measures > 0 && first > measures) {
+        throw new Error(`The score has ${measures} bar${measures === 1 ? "" : "s"}; there is no bar ${first}.`);
+    }
+    return {
+        from: first === null ? 0 : barStart(first),
+        to: last === null || (measures > 0 && last >= measures) ? null : barStart(last + 1),
+    };
+}
+
+/** Plays again from where the playback is, so a change to what is heard
+ * takes effect at once. */
+function replay(): void {
+    if (player) void play(player.position());
 }
 
 /** The note the playback tuning is built on: the one chosen, or the tonic of
@@ -1924,32 +2085,56 @@ function renderTemperaments(): void {
     rootSelect.hidden = !temperamentSelect.value;
 }
 
-async function play(): Promise<void> {
+/** Plays the bars chosen, or the whole score, from `at` seconds in or from
+ * the start of those bars; with Loop on, round and round. */
+async function play(at?: number): Promise<void> {
     if (!rendered) return;
     if (!ABCJS.synth.supportsAudio()) {
         fail("Audio is not available in this browser.");
         return;
     }
     stopPlayback();
+    const request = playRequest;
     playButton.disabled = true;
     playButton.textContent = "Loading…";
     try {
+        const bars = barRange();
         const synth = await makeSynth(rendered);
+        if (request !== playRequest) return;
+        const perQuarter = synth.millisecondsPerMeasure / 1000 / synth.meterSize / 4;
+        const from = bars.from * perQuarter;
+        const to = bars.to === null ? null : bars.to * perQuarter;
+        // When the audio began, on the page's clock, had it begun at the top.
+        let origin = 0;
+        const startAt = (seconds: number) => {
+            synth.stop();
+            synth.seek(seconds, "seconds");
+            synth.start();
+            timer.stop();
+            timer.start(seconds, "seconds");
+            origin = performance.now() - seconds * 1000;
+        };
+        const finish = (): "continue" | void => {
+            if (!loopButton.classList.contains("on")) {
+                stopPlayback();
+                return;
+            }
+            startAt(from);
+            return "continue";
+        };
         const timer = new ABCJS.TimingCallbacks(rendered.tune, {
             eventCallback: (event) => {
                 scoreNode.querySelectorAll(".m21-playing").forEach((node) => node.classList.remove("m21-playing"));
-                if (!event) {
-                    stopPlayback();
-                    if (loopButton.classList.contains("on")) void play();
-                    return;
-                }
+                if (!event) return finish();
                 for (const group of event.elements ?? []) for (const node of group) node.classList.add("m21-playing");
                 followPlayback(event.elements?.[0]?.[0]);
             },
         });
-        player = { synth, timer };
-        synth.start();
-        timer.start();
+        const poll = window.setInterval(() => {
+            if (to !== null && performance.now() - origin >= to * 1000) finish();
+        }, 20);
+        player = { synth, timer, poll, position: () => (performance.now() - origin) / 1000 };
+        startAt(at !== undefined && at >= from && (to === null || at < to) ? at : from);
         playButton.textContent = "Playing";
         stopButton.disabled = false;
     } catch (err) {
@@ -2260,6 +2445,11 @@ scoreNode.addEventListener(
 );
 
 loopButton.addEventListener("click", () => loopButton.classList.toggle("on"));
+for (const input of [loopFromInput, loopToInput]) {
+    input.addEventListener("change", () => {
+        if (player) void play();
+    });
+}
 
 $("#palette").addEventListener("click", (event) => {
     const button = (event.target as HTMLElement).closest("button");
@@ -2420,17 +2610,78 @@ playButton.addEventListener("click", () => {
 });
 stopButton.addEventListener("click", stopPlayback);
 
+/** Files the crate reads into ABC: Guitar Pro, MusicXML and the JSON
+ * Songsterr's player loads for each part. */
+const IMPORTABLE = /\.(gp[345x]?|musicxml|mxl|xml|json)$/i;
+
+/** The MIDI number of an ABC note as the tunings above write them. */
+function abcMidi(token: string): number {
+    const match = /^([_^=]*)([A-Ga-g])([,']*)$/.exec(token);
+    if (!match) return Number.NaN;
+    const [, accidentals, letter, marks] = match;
+    const classes: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+    let midi = 60 + classes[letter.toUpperCase()] + (letter === letter.toLowerCase() ? 12 : 0);
+    for (const mark of marks) midi += mark === "," ? -12 : 12;
+    for (const accidental of accidentals) midi += accidental === "^" ? 1 : accidental === "_" ? -1 : 0;
+    return midi;
+}
+
+/** Turns to the tab view whose string tuning an imported part is written
+ * for, where the editor has one. Guitar and bass tunings are written an
+ * octave above where they sound. */
+function showTuning(tuning: number[]): void {
+    for (const [view, tablature] of Object.entries(TABLATURES)) {
+        const octave = view === "guitar" || view === "bass" ? 12 : 0;
+        const match = tablature.tunings.find(
+            (candidate) =>
+                candidate.notes.length === tuning.length &&
+                candidate.notes.every((note, index) => abcMidi(note) - octave === tuning[index]),
+        );
+        if (!match) continue;
+        viewSelect.value = view;
+        storageSet(VIEW_KEY, view);
+        storageSet(STRINGS_KEY, JSON.stringify({ ...storedStrings(), [view]: match.id }));
+        renderStringTunings();
+        return;
+    }
+}
+
+/** Reads Guitar Pro, MusicXML or Songsterr files into one score. A Songsterr
+ * song is a file for each part, numbered, so they are read in that order. */
+async function importFiles(files: File[]): Promise<void> {
+    if (!wasm) throw new Error("music21-rs has not loaded yet.");
+    const sorted = [...files].sort((left, right) => left.name.localeCompare(right.name, undefined, { numeric: true }));
+    const importer = new wasm.ScoreImport();
+    try {
+        for (const file of sorted) importer.add(file.name, new Uint8Array(await file.arrayBuffer()));
+        const imported = importer.finish();
+        if (imported.tuning) showTuning(imported.tuning);
+        else if (TABLATURES[viewSelect.value]) {
+            viewSelect.value = "";
+            storageSet(VIEW_KEY, "");
+            renderStringTunings();
+        }
+        loadText(imported.abc);
+        if (imported.skipped.length) fail(`Imported without ${imported.skipped.join("; ")}.`);
+    } finally {
+        importer.free();
+    }
+}
+
 $("#open-file").addEventListener("change", async (event) => {
     const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
+    const files = Array.from(input.files ?? []);
     input.value = "";
+    const [file] = files;
     if (!file) return;
     try {
-        if (/\.midi?$/i.test(file.name) || file.type === "audio/midi") {
+        if (files.length === 1 && (/\.midi?$/i.test(file.name) || file.type === "audio/midi")) {
             if (!wasm) throw new Error("music21-rs has not loaded yet.");
             loadText(wasm.midi_to_abc(new Uint8Array(await file.arrayBuffer())));
-        } else {
+        } else if (files.length === 1 && !IMPORTABLE.test(file.name)) {
             loadText(await file.text());
+        } else {
+            await importFiles(files);
         }
     } catch (err) {
         fail(err instanceof Error ? err.message : String(err));

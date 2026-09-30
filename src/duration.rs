@@ -253,6 +253,93 @@ pub struct Duration {
     /// apart, so that neither is worked out from the other.
     #[cfg_attr(feature = "serde", serde(default))]
     unlinked: bool,
+    /// How a grace note is written, where this is the duration of one.
+    #[cfg_attr(feature = "serde", serde(default))]
+    grace: Option<Grace>,
+}
+
+/// How a grace note is written and played: what music21's `GraceDuration`
+/// carries beside its written values.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Grace {
+    slash: bool,
+    steal_time_previous: Option<FloatType>,
+    steal_time_following: Option<FloatType>,
+    make_time: bool,
+}
+
+impl Default for Grace {
+    /// An acciaccatura: slashed, taking no time, as music21's
+    /// `GraceDuration` starts out.
+    fn default() -> Self {
+        Self {
+            slash: true,
+            steal_time_previous: None,
+            steal_time_following: None,
+            make_time: false,
+        }
+    }
+}
+
+impl Grace {
+    /// An acciaccatura, slashed and taking no time.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// An appoggiatura: unslashed, taking its time from the note it leans
+    /// on, as music21's `AppoggiaturaDuration` starts out.
+    pub fn appoggiatura() -> Self {
+        Self {
+            slash: false,
+            make_time: true,
+            ..Self::default()
+        }
+    }
+
+    /// Whether the stem is drawn with a slash through it: music21's `slash`.
+    pub fn slash(&self) -> bool {
+        self.slash
+    }
+
+    /// Says whether the stem is slashed.
+    pub fn set_slash(&mut self, slash: bool) {
+        self.slash = slash;
+    }
+
+    /// The share of the note before's time this one takes: music21's
+    /// `stealTimePrevious`.
+    pub fn steal_time_previous(&self) -> Option<FloatType> {
+        self.steal_time_previous
+    }
+
+    /// Says what share of the note before's time it takes.
+    pub fn set_steal_time_previous(&mut self, share: Option<FloatType>) {
+        self.steal_time_previous = share;
+    }
+
+    /// The share of the note after's time this one takes: music21's
+    /// `stealTimeFollowing`.
+    pub fn steal_time_following(&self) -> Option<FloatType> {
+        self.steal_time_following
+    }
+
+    /// Says what share of the note after's time it takes.
+    pub fn set_steal_time_following(&mut self, share: Option<FloatType>) {
+        self.steal_time_following = share;
+    }
+
+    /// Whether the grace note takes time of its own in performance:
+    /// music21's `makeTime`.
+    pub fn make_time(&self) -> bool {
+        self.make_time
+    }
+
+    /// Says whether it takes time of its own.
+    pub fn set_make_time(&mut self, make_time: bool) {
+        self.make_time = make_time;
+    }
 }
 
 /// One written value of a duration and how long it lasts: music21's
@@ -441,6 +528,120 @@ pub struct Tuplet {
     /// time of one half is the same ratio as three in the time of two
     /// quarters, and music21 keeps both spellings.
     duration_normal: Option<(DurationType, u32)>,
+    /// How the tuplet is bracketed on the page, which is no part of its
+    /// ratio: two tuplets differing only in this are equal.
+    #[cfg_attr(feature = "serde", serde(default))]
+    notation: crate::display::Drawn<TupletNotation>,
+}
+
+/// Where a tuplet's bracket falls over its notes: music21's `Tuplet.type`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum TupletType {
+    /// The bracket starts on this note.
+    Start,
+    /// The bracket stops on this note.
+    Stop,
+    /// The bracket starts and stops on this one note.
+    StartStop,
+}
+
+impl TupletType {
+    /// music21's name for it.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Start => "start",
+            Self::Stop => "stop",
+            Self::StartStop => "startStop",
+        }
+    }
+
+    /// Reads music21's name for it.
+    pub fn from_name(name: &str) -> Result<Self> {
+        match name {
+            "start" => Ok(Self::Start),
+            "stop" => Ok(Self::Stop),
+            "startStop" => Ok(Self::StartStop),
+            other => Err(Error::Duration(format!(
+                "Type must be 'start', 'stop', 'startStop', or None, not {other}"
+            ))),
+        }
+    }
+}
+
+/// How a tuplet's bracket is drawn: music21's `bracket`, `True`, `False` or
+/// `'slur'`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum TupletBracket {
+    /// A square bracket.
+    #[default]
+    Bracket,
+    /// No bracket at all.
+    None,
+    /// A curved line, as a slur is drawn.
+    Slur,
+}
+
+/// Which of a tuplet's counts is shown and how: music21's
+/// `tupletActualShow` and `tupletNormalShow`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum TupletShow {
+    /// The number of notes.
+    Number,
+    /// The note value.
+    Type,
+    /// Both.
+    Both,
+}
+
+impl TupletShow {
+    /// music21's name for it.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Number => "number",
+            Self::Type => "type",
+            Self::Both => "both",
+        }
+    }
+
+    /// Reads music21's name for it.
+    pub fn from_name(name: &str) -> Result<Self> {
+        match name {
+            "number" => Ok(Self::Number),
+            "type" => Ok(Self::Type),
+            "both" => Ok(Self::Both),
+            other => Err(Error::Duration(format!(
+                "a tuplet shows a number, a type or both, not {other}"
+            ))),
+        }
+    }
+}
+
+/// How a tuplet is written on the page, as music21 starts one: no bracket
+/// placed yet, drawn as a bracket above the notes, with the number of notes
+/// shown.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TupletNotation {
+    tuplet_type: Option<TupletType>,
+    bracket: TupletBracket,
+    placement: Option<crate::notation::Placement>,
+    actual_show: Option<TupletShow>,
+    normal_show: Option<TupletShow>,
+}
+
+impl Default for TupletNotation {
+    fn default() -> Self {
+        Self {
+            tuplet_type: None,
+            bracket: TupletBracket::Bracket,
+            placement: Some(crate::notation::Placement::Above),
+            actual_show: Some(TupletShow::Number),
+            normal_show: None,
+        }
+    }
 }
 
 /// The value music21 counts a side in when nothing says: an eighth.
@@ -455,6 +656,7 @@ impl Tuplet {
             normal,
             duration_actual: Some((duration_type, dots)),
             duration_normal: Some((duration_type, dots)),
+            notation: crate::display::Drawn(TupletNotation::default()),
         }
     }
 
@@ -474,7 +676,62 @@ impl Tuplet {
             normal,
             duration_actual: None,
             duration_normal: None,
+            notation: crate::display::Drawn(TupletNotation::default()),
         }
+    }
+
+    /// Where the tuplet's bracket falls over its notes, where something has
+    /// said: music21's `type`.
+    pub fn tuplet_type(&self) -> Option<TupletType> {
+        self.notation.0.tuplet_type
+    }
+
+    /// Says where the bracket falls.
+    pub fn set_tuplet_type(&mut self, tuplet_type: Option<TupletType>) {
+        self.notation.0.tuplet_type = tuplet_type;
+    }
+
+    /// How the bracket is drawn: music21's `bracket`.
+    pub fn bracket(&self) -> TupletBracket {
+        self.notation.0.bracket
+    }
+
+    /// Says how the bracket is drawn.
+    pub fn set_bracket(&mut self, bracket: TupletBracket) {
+        self.notation.0.bracket = bracket;
+    }
+
+    /// Which side of the notes the bracket is drawn: music21's `placement`,
+    /// above unless something says otherwise.
+    pub fn placement(&self) -> Option<crate::notation::Placement> {
+        self.notation.0.placement
+    }
+
+    /// Says which side of the notes the bracket is drawn.
+    pub fn set_placement(&mut self, placement: Option<crate::notation::Placement>) {
+        self.notation.0.placement = placement;
+    }
+
+    /// How the number of notes played is shown: music21's
+    /// `tupletActualShow`.
+    pub fn actual_show(&self) -> Option<TupletShow> {
+        self.notation.0.actual_show
+    }
+
+    /// Says how the number of notes played is shown.
+    pub fn set_actual_show(&mut self, show: Option<TupletShow>) {
+        self.notation.0.actual_show = show;
+    }
+
+    /// How the number of notes they stand for is shown: music21's
+    /// `tupletNormalShow`.
+    pub fn normal_show(&self) -> Option<TupletShow> {
+        self.notation.0.normal_show
+    }
+
+    /// Says how the number of notes they stand for is shown.
+    pub fn set_normal_show(&mut self, show: Option<TupletShow>) {
+        self.notation.0.normal_show = show;
     }
 
     /// The same tuplet counting the `normal` side in a different written
@@ -701,7 +958,26 @@ impl Duration {
             written: None,
             dot_groups: None,
             unlinked: false,
+            grace: None,
         }
+    }
+
+    /// How this grace note is written, or nothing where this is not the
+    /// duration of a grace note: music21's `isGrace` and what its
+    /// `GraceDuration` says.
+    pub fn grace(&self) -> Option<&Grace> {
+        self.grace.as_ref()
+    }
+
+    /// Whether this is the duration of a grace note: music21's `isGrace`.
+    pub fn is_grace(&self) -> bool {
+        self.grace.is_some()
+    }
+
+    /// Says how this grace note is written. A duration is made a grace
+    /// note's by [`Duration::grace_duration`], which gives it no length.
+    pub fn set_grace(&mut self, grace: Option<Grace>) {
+        self.grace = grace;
     }
 
     /// Returns a quarter-note duration.
@@ -1100,6 +1376,7 @@ impl Duration {
             written: Some(written),
             dot_groups: None,
             unlinked: true,
+            grace: Some(Grace::new()),
         }
     }
 

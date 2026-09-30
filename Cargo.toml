@@ -39,6 +39,12 @@ workspace = true
 [features]
 default = []
 scala-archive = []
+# Runs an installed MuseScore to read and write its files. Off by default:
+# it is the one part of the crate that starts a program and touches files.
+musescore = ["musicxml"]
+# music21's MusicXML reader and writer, about 9,000 lines the rest of the crate
+# never calls.
+musicxml = []
 serde = ["dep:serde"]
 
 [dependencies]

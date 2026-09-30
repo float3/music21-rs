@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mei xmlns="http://www.music-encoding.org/ns/mei" meiversion="2013">
+  <meiHead>
+    <fileDesc>
+      <work>
+        <titleStmt>
+          <title>Layers</title>
+          <title type="subtitle">and what is written in them</title>
+          <respStmt><persName role="composer">Somebody</persName></respStmt>
+        </titleStmt>
+        <tempo>Andante</tempo>
+        <history><creation><date notbefore="1800" notafter="1810"/></creation></history>
+      </work>
+    </fileDesc>
+  </meiHead>
+  <music>
+    <score>
+      <scoreDef meter.count="6" meter.unit="8" key.pname="g" key.mode="minor">
+        <staffGrp>
+          <staffDef n="1"><clef shape="G" line="2"/></staffDef>
+          <staffDef n="2" clef.shape="F" clef.line="4" key.pname="b" key.accid="f" key.mode="major"/>
+        </staffGrp>
+      </scoreDef>
+      <section>
+        <section>
+          <measure n="1">
+            <staff n="1">
+              <layer n="1">
+                <beam>
+                  <note pname="g" oct="4" dur="8">
+                    <verse n="1"><syl wordpos="i" con="d">Ky</syl></verse>
+                    <verse n="2"><syl>Lord</syl></verse>
+                  </note>
+                  <note pname="a" oct="4" dur="8">
+                    <verse n="1"><syl wordpos="m" con="d">ri</syl></verse>
+                  </note>
+                  <note pname="b" oct="4" dur="8" accid="f">
+                    <verse n="1"><syl wordpos="t" con="d">e</syl></verse>
+                  </note>
+                </beam>
+                <tuplet num="4" numbase="3">
+                  <beam>
+                    <note pname="c" oct="5" dur="8"/>
+                    <rest dur="8"/>
+                    <note pname="d" oct="5" dur="8"><artic artic="ten"/></note>
+                    <note pname="e" oct="5" dur="8"><accid accid="f"/></note>
+                  </beam>
+                </tuplet>
+              </layer>
+              <layer n="2">
+                <note pname="g" oct="4" dur="4"><dot/></note>
+                <note pname="g" oct="4" dur="4" dots="1"/>
+              </layer>
+            </staff>
+            <staff n="2">
+              <layer n="1">
+                <note pname="g" oct="2" dur="4" grace="acc"/>
+                <note pname="g" oct="3" dur="2" dots="1"><syl>la</syl></note>
+              </layer>
+            </staff>
+          </measure>
+        </section>
+        <staffDef n="2" clef.shape="C" clef.line="4"/>
+        <scoreDef meter.count="2" meter.unit="4"/>
+        <measure n="2" left="rptstart">
+          <staffDef n="1" clef.shape="G" clef.line="2" clef.dis="8" clef.dis.place="above"/>
+          <staff n="1">
+            <layer n="1">
+              <tuplet num="3" numbase="2">
+                <note pname="g" oct="5" dur="8"/>
+                <tuplet num="3" numbase="2">
+                  <note pname="a" oct="5" dur="16"/>
+                  <note pname="b" oct="5" dur="16"/>
+                  <note pname="a" oct="5" dur="16"/>
+                </tuplet>
+                <note pname="g" oct="5" dur="8"/>
+              </tuplet>
+              <clef shape="C" line="1"/>
+              <bTrem unitdur="16">
+                <note pname="f" oct="5" dur="4"/>
+              </bTrem>
+            </layer>
+          </staff>
+          <staff n="2">
+            <layer n="1">
+              <chord dur="4" grace="unacc">
+                <note pname="c" oct="4"/>
+                <note pname="e" oct="4" accid.ges="f"/>
+              </chord>
+              <note pname="d" oct="4" dur="2" artic="marc-stacc upbow"/>
+            </layer>
+          </staff>
+        </measure>
+        <measure right="dbl">
+          <staff n="1">
+            <layer n="1">
+              <note pname="g" oct="5" dur="2"/>
+            </layer>
+          </staff>
+        </measure>
+      </section>
+    </score>
+  </music>
+</mei>

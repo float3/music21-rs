@@ -594,7 +594,44 @@ pub fn split_roman_prefix(value: &str) -> Result<(&str, &str)> {
         return Err(Error::Chord(format!("No roman numeral found in '{value}'")));
     }
 
-    Ok((&value[..end], &value[end..]))
+    // music21 takes the numeral its pattern matches first and then strikes
+    // out every further numeral in the figure, so `VIII` is `VII`.
+    let run = &value[..end];
+    let first = numeral_length(run);
+    let mut rest = &run[first..];
+    while !rest.is_empty() {
+        match numeral_length(rest) {
+            0 => return Ok((run, &value[end..])),
+            length => rest = &rest[length..],
+        }
+    }
+    Ok((&run[..first.max(1)], &value[end..]))
+}
+
+/// How much of the text music21's numeral pattern takes from its start:
+/// `IV`, one to three `I`s, or `V` and up to two `I`s, in either case.
+fn numeral_length(text: &str) -> usize {
+    let bytes = text.as_bytes();
+    let count = |from: usize, letter: u8, most: usize| {
+        bytes[from..]
+            .iter()
+            .take(most)
+            .take_while(|byte| **byte == letter)
+            .count()
+    };
+    for (one, five) in [(b'I', b'V'), (b'i', b'v')] {
+        if bytes.starts_with(&[one, five]) {
+            return 2;
+        }
+        let ones = count(0, one, 3);
+        if ones > 0 {
+            return ones;
+        }
+        if bytes.first() == Some(&five) {
+            return 1 + count(1, one, 2);
+        }
+    }
+    0
 }
 
 pub(super) fn roman_degree(roman: &str) -> Result<u8> {
