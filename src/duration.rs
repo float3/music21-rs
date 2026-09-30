@@ -644,24 +644,25 @@ impl Tuplet {
             (6, 4) => "Sextuplet".to_string(),
             (7, 4) => "Septuplet".to_string(),
             (actual, normal) => format!(
-                "Tuplet of {actual}/{normal}{}s",
-                ordinal_abbreviation(normal)
+                "Tuplet of {actual}/{normal}{}",
+                plural_ordinal_abbreviation(normal)
             ),
         }
     }
 }
 
-/// The `st`, `nd`, `rd` or `th` that follows a number: music21's
-/// `ordinalAbbreviation`, which the tuplet ratios without a name use.
-fn ordinal_abbreviation(value: u32) -> &'static str {
+/// The `st`, `nds`, `rds` or `ths` that follows a number: music21's
+/// `ordinalAbbreviation` asked for a plural, which the tuplet ratios without
+/// a name use. It leaves `st` as it is, so a ratio over 21 is `21st`.
+fn plural_ordinal_abbreviation(value: u32) -> &'static str {
     if matches!(value % 100, 11..=13) {
-        return "th";
+        return "ths";
     }
     match value % 10 {
         1 => "st",
-        2 => "nd",
-        3 => "rd",
-        _ => "th",
+        2 => "nds",
+        3 => "rds",
+        _ => "ths",
     }
 }
 
@@ -2124,6 +2125,17 @@ mod tests {
         let odd = Tuplet::new(17, 14, DurationType::Quarter, 0);
         assert_eq!(odd.full_name(), "Tuplet of 17/14ths");
         assert_eq!(odd.total_tuplet_length(), 14.0);
+        // music21 leaves `st` without its plural
+        for (actual, normal, name) in [
+            (40, 21, "Tuplet of 40/21st"),
+            (3, 1, "Tuplet of 3/1st"),
+            (12, 11, "Tuplet of 12/11ths"),
+            (5, 3, "Tuplet of 5/3rds"),
+            (23, 22, "Tuplet of 23/22nds"),
+        ] {
+            let tuplet = Tuplet::new(actual, normal, DurationType::Quarter, 0);
+            assert_eq!(tuplet.full_name(), name);
+        }
         // Three eighths in the time of one quarter is the same ratio written
         // the other way, and lasts exactly as long.
         let across =
