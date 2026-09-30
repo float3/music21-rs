@@ -125,12 +125,16 @@ impl Key {
     /// Returns the tonic name in music21's case convention: upper case for
     /// major, lower case for minor, unchanged for other modes.
     pub fn tonic_pitch_name_with_case(&self) -> String {
+        // Only the step takes the case: B-flat minor is `bb`, not `BB`.
         let name = self.tonic_pitch.name();
-        match self.mode.as_str() {
-            "major" => name.to_uppercase(),
-            "minor" => name.to_lowercase(),
-            _ => name,
-        }
+        let mut letters = name.chars();
+        let step = letters.next().unwrap_or_default();
+        let step = match self.mode.as_str() {
+            "major" => step.to_ascii_uppercase(),
+            "minor" => step.to_ascii_lowercase(),
+            _ => step,
+        };
+        format!("{step}{}", letters.as_str())
     }
 
     /// Returns the number of sharps in the key signature.
@@ -354,12 +358,12 @@ mod tests {
         assert_eq!((key.tonic().name(), key.mode()), ("A".to_string(), "minor"));
         let dorian = Key::from_tonic_mode("D", "dorian").unwrap();
         assert_eq!(dorian.mode(), "dorian");
-        let major = Key::try_from("E-").unwrap();
+        let major = Key::try_from("Eb").unwrap();
         let pitches: Vec<String> = major.pitches().unwrap().iter().map(|p| p.name()).collect();
-        assert_eq!(pitches, ["E-", "F", "G", "A-", "B-", "C", "D", "E-"]);
+        assert_eq!(pitches, ["Eb", "F", "G", "Ab", "Bb", "C", "D", "Eb"]);
         let sevenths = major.harmonized_sevenths().unwrap();
         assert_eq!(sevenths.len(), 7);
-        assert_eq!(sevenths[4].pitch_names(), ["B-", "D", "F", "A-"]);
+        assert_eq!(sevenths[4].pitch_names(), ["Bb", "D", "F", "Ab"]);
         assert!(Key::try_from("H").is_err());
     }
 
@@ -448,7 +452,7 @@ mod tests {
             ("C", 5, "E", "A3", "major"),
             ("C", 1, "F#4", "F#4", "major"),
             ("a", 3, "C", "A3", "minor"),
-            ("C", 7, "B-", "C-4", "major"),
+            ("C", 7, "B-", "Cb4", "major"),
             ("C", 4, "B", "F#4", "major"),
             ("D", 2, "C#3", "B2", "major"),
             ("c", 6, "A-4", "C4", "minor"),
@@ -484,7 +488,7 @@ mod tests {
             ("C", "M2", "D", 2, "major"),
             ("c", "P5", "g", -2, "minor"),
             ("F#", "m2", "G", 1, "major"),
-            ("B-", "-M3", "G-", -6, "major"),
+            ("Bb", "-M3", "Gb", -6, "major"),
             ("D", "P8", "D", 2, "major"),
             ("e", "M6", "c#", 4, "minor"),
             ("C", "-m2", "B", 5, "major"),
@@ -518,8 +522,8 @@ mod tests {
             ("c", "c", "minor"),
             ("F#", "F#", "major"),
             ("f#", "f#", "minor"),
-            ("B-", "B-", "major"),
-            ("e-", "e-", "minor"),
+            ("Bb", "Bb", "major"),
+            ("eb", "eb", "minor"),
         ];
         for (input, cased, mode) in cases {
             let key: Key = input.parse().unwrap();
@@ -553,7 +557,7 @@ mod tests {
         assert_eq!(a_minor.mode(), "minor");
 
         let b_flat_minor: Key = "Bb minor".parse().unwrap();
-        assert_eq!(b_flat_minor.tonic().name(), "B-");
+        assert_eq!(b_flat_minor.tonic().name(), "Bb");
         assert_eq!(b_flat_minor.mode(), "minor");
     }
 

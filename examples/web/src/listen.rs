@@ -11,7 +11,7 @@
 //! fundamental is still there, which keeps the upper partials of one note
 //! from being heard as notes of their own.
 
-use crate::{display_chord_symbol, display_class_names, display_pitch_name};
+use crate::display_class_names;
 use music21_rs::{Chord, pitch_class_name};
 use serde::Serialize;
 use std::{collections::BTreeMap, f64::consts::PI};
@@ -582,7 +582,7 @@ impl Tracker {
 fn note_name(midi: i32) -> String {
     format!(
         "{}{}",
-        display_pitch_name(pitch_class_name(midi.rem_euclid(12) as u8)),
+        pitch_class_name(midi.rem_euclid(12) as u8),
         midi.div_euclid(12) - 1
     )
 }
@@ -624,11 +624,7 @@ struct ListenFrame<'a> {
 
 fn name_chord(midi: &[i32]) -> Option<ListenedChord> {
     let chord = Chord::new(midi).ok()?;
-    let chord_symbol = chord
-        .chord_symbols()
-        .into_iter()
-        .next()
-        .map(|symbol| display_chord_symbol(&symbol));
+    let chord_symbol = chord.chord_symbols().into_iter().next();
     let pitched_common_name = chord.pitched_common_name();
     Some(ListenedChord {
         midi: midi.to_vec(),
@@ -641,12 +637,8 @@ fn name_chord(midi: &[i32]) -> Option<ListenedChord> {
             .unwrap_or_else(|| pitched_common_name.clone()),
         pitched_common_name,
         chord_symbol,
-        root: chord
-            .root_pitch_name()
-            .map(|name| display_pitch_name(&name)),
-        bass: chord
-            .bass_pitch_name()
-            .map(|name| display_pitch_name(&name)),
+        root: chord.root_pitch_name(),
+        bass: chord.bass_pitch_name(),
         inversion_name: chord
             .inversion()
             .map(|_| chord.inversion_text().to_lowercase()),

@@ -60,11 +60,11 @@ fn every_accidental_display_decision_matches_music21() {
     for case in &expectations.case {
         let mut pitch = Pitch::from_name(&case.pitch).expect("a pitch name");
         if let Some(display_type) = &case.display_type {
-            if pitch.accidental().is_none() {
-                pitch.set_accidental(Some(Accidental::new("natural").expect("a natural")));
+            if pitch.written_accidental().is_none() {
+                pitch.set_accidental(Accidental::new("natural").expect("a natural"));
             }
             pitch
-                .accidental_mut()
+                .written_accidental_mut()
                 .expect("an accidental")
                 .set_display_type(display_type)
                 .expect("a display type");
@@ -86,7 +86,7 @@ fn every_accidental_display_decision_matches_music21() {
             cautionary_not_immediate_repeat: case.cautionary_not_immediate_repeat,
             last_note_was_tied: case.last_note_was_tied,
         });
-        let got = match pitch.accidental() {
+        let got = match pitch.written_accidental() {
             Some(accidental) => (accidental.name().to_string(), accidental.display_status()),
             None => ("none".to_string(), None),
         };

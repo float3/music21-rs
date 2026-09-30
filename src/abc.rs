@@ -25,7 +25,7 @@ pub fn abc_note(pitch: &Pitch) -> Result<String> {
     let accidental = chars
         .map(|modifier| match modifier {
             '#' => Ok('^'),
-            '-' => Ok('_'),
+            'b' => Ok('_'),
             _ => Err(Error::Pitch(format!(
                 "cannot write accidental modifier {modifier:?} as ABC"
             ))),
@@ -111,7 +111,7 @@ pub fn pitch_name_from_abc_note(token: &str) -> Result<Option<String>> {
                 chars.next();
             }
             '_' => {
-                accidental.push('-');
+                accidental.push('b');
                 chars.next();
             }
             '=' => {
@@ -255,14 +255,14 @@ mod tests {
 
         assert_eq!(abc_note(&Pitch::from_name("C4").unwrap()).unwrap(), "C");
         assert_eq!(abc_note(&Pitch::from_name("C#5").unwrap()).unwrap(), "^c");
-        assert_eq!(abc_note(&Pitch::from_name("B-3").unwrap()).unwrap(), "_B,");
+        assert_eq!(abc_note(&Pitch::from_name("Bb3").unwrap()).unwrap(), "_B,");
         assert_eq!(
             pitch_name_from_abc_note("^c'").unwrap().as_deref(),
             Some("C#6")
         );
         assert_eq!(
             pitch_name_from_abc_note("_B,").unwrap().as_deref(),
-            Some("B-3")
+            Some("Bb3")
         );
         assert_eq!(
             pitch_name_from_abc_note("=F").unwrap().as_deref(),
@@ -286,7 +286,7 @@ mod tests {
     fn writes_pitch_tokens_with_accidentals_and_octaves() -> Result<()> {
         assert_eq!(abc_note(&Pitch::from_name("C4")?)?, "C");
         assert_eq!(abc_note(&Pitch::from_name("C#4")?)?, "^C");
-        assert_eq!(abc_note(&Pitch::from_name("E-4")?)?, "_E");
+        assert_eq!(abc_note(&Pitch::from_name("Eb4")?)?, "_E");
         assert_eq!(abc_note(&Pitch::from_name("C5")?)?, "c");
         assert_eq!(abc_note(&Pitch::from_name("B3")?)?, "B,");
         Ok(())
@@ -317,7 +317,7 @@ mod tests {
         assert_eq!(pitch_name_from_abc_note("B,,")?.as_deref(), Some("B2"));
         assert_eq!(pitch_name_from_abc_note("c''")?.as_deref(), Some("C7"));
         assert_eq!(pitch_name_from_abc_note("^g2")?.as_deref(), Some("G#5"));
-        assert_eq!(pitch_name_from_abc_note("_g''")?.as_deref(), Some("G-7"));
+        assert_eq!(pitch_name_from_abc_note("_g''")?.as_deref(), Some("Gb7"));
         assert_eq!(pitch_name_from_abc_note("=c")?.as_deref(), Some("Cn5"));
         assert_eq!(pitch_name_from_abc_note("z4")?, None);
         Ok(())
@@ -331,7 +331,7 @@ mod tests {
         );
         assert_eq!(
             pitch_names_from_abc_chord("[^C_Eg']2")?,
-            vec!["C#4", "E-4", "G6"]
+            vec!["C#4", "Eb4", "G6"]
         );
         Ok(())
     }

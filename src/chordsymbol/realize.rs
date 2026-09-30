@@ -151,7 +151,7 @@ pub(super) struct Realized {
 /// the root and bass music21 holds as objects of their own. Those move with
 /// the chord where it holds them and not where it does not, so they need
 /// not be the first note of their name, nor a note of the chord at all:
-/// `Ab10/F#` sounds `F#2 A-3 C#4 E4` over a root of A3.
+/// `Ab10/F#` sounds `F#2 Ab3 C#4 E4` over a root of A3.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ChordVoicing {
     pitches: Vec<Pitch>,

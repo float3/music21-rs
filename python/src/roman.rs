@@ -23,6 +23,7 @@ use music21_rs_crate::{
 
 use crate::chord::Chord;
 use crate::pitch::{Pitch, pitch_from_any};
+use crate::spelling::music21_figure_and_key;
 
 /// The names the `roman` facade replaces in `music21.roman`.
 pub const NAMES: &[&str] = &["RomanNumeral", "RomanNumeralException"];
@@ -838,7 +839,7 @@ impl RomanNumeral {
         if self.implied_key {
             return self.get_figure();
         }
-        self.inner.figure_and_key()
+        music21_figure_and_key(&self.inner.figure_and_key())
     }
 
     /// music21's `useImpliedScale`: whether the numeral was left to guess

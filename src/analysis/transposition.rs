@@ -165,7 +165,7 @@ mod tests {
         assert_eq!(
             moved,
             [
-                "E-", "E", "F", "F#", "G", "G#", "A", "B-", "B", "C", "C#", "D"
+                "Eb", "E", "F", "F#", "G", "G#", "A", "Bb", "B", "C", "C#", "D"
             ]
         );
     }
@@ -194,19 +194,19 @@ mod tests {
                 ["C", "E", "G#"],
                 ["C#", "F", "A"],
                 ["D", "F#", "A#"],
-                ["E-", "G", "B"],
+                ["Eb", "G", "B"],
             ]
         );
     }
 
     #[test]
     fn a_diminished_seventh_has_three() {
-        let chords = checker(&["C", "E-", "F#", "A"]).distinct_chords().unwrap();
+        let chords = checker(&["C", "Eb", "F#", "A"]).distinct_chords().unwrap();
         let spelled: Vec<Vec<String>> = chords.iter().map(|chord| chord.pitch_names()).collect();
         assert_eq!(
             spelled,
             [
-                ["C", "E-", "F#", "A"],
+                ["C", "Eb", "F#", "A"],
                 ["C#", "E", "G", "A#"],
                 ["D", "F", "G#", "B"],
             ]

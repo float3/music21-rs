@@ -26,6 +26,21 @@ to make an object a *member* of a stream — sites and contexts, derivations,
 to carry music21's own half, which is what makes an installed chord cost
 eight `Music21Object.__init__` calls. See `issues.md`.
 
+**Where music21's author names a mistake, the crate does not repeat it.**
+*Changed 2026-09-25.* Cuthbert's "Music21's Mistakes"
+(`music21/documentation/source/developerReference/startingOver.ipynb`) lists
+what he would do differently. The crate does it differently: a flat is
+written `b` (`Bb4`), and `-` is still read; every pitch has an accidental, a
+natural where none is written, with music21's written-or-not kept as
+`written_accidental`; pitches, accidentals and durations are `Eq` and
+`Hash`; and where an element sits is asked for with `Stream::placed`, not
+stored on it as a site.
+
+*Costs:* the wheel translates. Every name it hands Python is respelled with
+`-` (`python/src/spelling.rs`), and a name built anywhere else in the wheel
+that skips that module leaks `b` into music21's output. The parity suites
+catch it: they compare in music21's spelling.
+
 **Nothing is cached.** A value that answers the same question twice does the
 arithmetic twice. music21 memoizes on the object; this does not.
 

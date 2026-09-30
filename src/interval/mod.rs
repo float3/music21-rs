@@ -579,7 +579,7 @@ impl Interval {
     /// [Pythagorean ratio](Self::pythagorean_ratio), with no limit on how far
     /// along the chain of fifths the spelling sits.
     ///
-    /// This is what a regular temperament tunes, so `C#` and `D-` stay apart
+    /// This is what a regular temperament tunes, so `C#` and `Db` stay apart
     /// here however a tuning later treats them. Errors on an interval measured
     /// in fractions of a semitone, which no spelling reaches.
     pub fn pythagorean_monzo(&self) -> Result<crate::tuningsystem::Monzo> {
@@ -921,11 +921,11 @@ impl Interval {
             }
             match (
                 inherit_accidental_display,
-                pitch2.accidental().is_some(),
-                p.accidental(),
+                pitch2.written_accidental().is_some(),
+                p.written_accidental(),
             ) {
                 (false, true, Some(source)) => {
-                    if let Some(target) = pitch2.accidental_mut() {
+                    if let Some(target) = pitch2.written_accidental_mut() {
                         target.inherit_display(source);
                         target.set_display_status(None);
                     }
@@ -933,25 +933,25 @@ impl Interval {
                 (true, false, Some(source)) => {
                     let mut natural = crate::pitch::Accidental::natural();
                     natural.inherit_display(source);
-                    pitch2.set_accidental(Some(natural));
+                    pitch2.set_accidental(natural);
                 }
                 (true, true, Some(source)) => {
-                    if let Some(target) = pitch2.accidental_mut() {
+                    if let Some(target) = pitch2.written_accidental_mut() {
                         target.inherit_display(source);
                     }
                 }
                 (true, true, None) => {
-                    if let Some(target) = pitch2.accidental_mut() {
+                    if let Some(target) = pitch2.written_accidental_mut() {
                         target.set_display_status(Some(false));
                     }
                 }
                 _ => {}
             }
         } else if inherit_accidental_display
-            && p.accidental()
+            && p.written_accidental()
                 .is_some_and(|accidental| accidental.name() == "natural")
         {
-            pitch2.set_accidental(p.accidental().cloned());
+            pitch2.set_written_accidental(p.written_accidental().cloned());
         }
         if cents_origin != 0.0 {
             let cents = pitch2
@@ -1264,10 +1264,10 @@ mod tests {
             ("E4", "C4", ["E4", "C4", "E4", "C4"]),
             ("B#3", "C4", ["C4", "B#3", "B#3", "B#3"]),
             ("C4", "B#3", ["C4", "B#3", "C4", "C4"]),
-            ("C-4", "B3", ["C-4", "B3", "C-4", "C-4"]),
-            ("F#4", "G-4", ["G-4", "F#4", "F#4", "F#4"]),
+            ("Cb4", "B3", ["Cb4", "B3", "Cb4", "Cb4"]),
+            ("F#4", "Gb4", ["Gb4", "F#4", "F#4", "F#4"]),
             ("C4", "C4", ["C4", "C4", "C4", "C4"]),
-            ("B3", "C-4", ["C-4", "B3", "B3", "B3"]),
+            ("B3", "Cb4", ["Cb4", "B3", "B3", "B3"]),
         ];
         for (first, second, expected) in cases {
             let a = Pitch::from_name(first).unwrap();
@@ -1553,9 +1553,9 @@ mod tests {
     fn interval_between_microtonal_pitches_keeps_the_cent_shift() {
         let c1 = pitch("C1");
         let mut half_sharp = pitch("C1");
-        half_sharp.set_accidental(Some(
+        half_sharp.set_accidental(
             crate::pitch::Accidental::new("half-sharp").expect("half-sharp is an accidental"),
-        ));
+        );
 
         let quarter_tone = Interval::between_pitches(&c1, &half_sharp).unwrap();
         assert_eq!(quarter_tone.semitones(), 0.5);
@@ -1620,7 +1620,7 @@ mod tests {
         let c4 = pitch("C4");
         let m3 = Interval::from_name("m3").unwrap();
         let out = m3.transpose_pitch(&c4).unwrap();
-        assert_eq!(out.name_with_octave(), "E-4");
+        assert_eq!(out.name_with_octave(), "Eb4");
     }
 
     #[test]

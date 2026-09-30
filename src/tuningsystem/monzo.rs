@@ -145,7 +145,7 @@ impl Monzo {
     /// A spelling is a place on the chain of fifths, so this is exact for any
     /// accidental: a major third, two steps and four semitones, is `81/64`
     /// (`[-6 4⟩`), and the augmented unison `C`–`C#` is `[-11 7⟩`, which is not
-    /// the minor second `C`–`D-`, `[8 -5⟩`.
+    /// the minor second `C`–`Db`, `[8 -5⟩`.
     pub fn pythagorean(staff_steps: IntegerType, semitones: IntegerType) -> Self {
         // An octave is seven steps and twelve semitones, a twelfth (3/1)
         // eleven and nineteen; that matrix has determinant one, so its

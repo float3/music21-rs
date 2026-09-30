@@ -73,7 +73,7 @@ pub enum ChainOrder {
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Respell {
-    /// Keep double flats and sharps where they arise: `D--4 F-4 A--4`.
+    /// Keep double flats and sharps where they arise: `Dbb4 Fb4 Abb4`.
     #[default]
     Keep,
     /// Respell with the best enharmonics: `C4 E4 G4`.
@@ -558,7 +558,7 @@ mod tests {
         );
         assert_eq!(
             named(&Transform::P.apply(&c_major).unwrap()),
-            ["C4", "E-4", "G4"]
+            ["C4", "Eb4", "G4"]
         );
         assert_eq!(
             named(&Transform::R.apply(&c_major).unwrap()),
@@ -570,7 +570,7 @@ mod tests {
     fn integer_chords_have_their_spelling_fixed() {
         let c_minor = Chord::new([0, 3, 7].as_slice()).unwrap();
         let l = Transform::L.apply(&c_minor).unwrap();
-        assert_eq!(named(&l), ["C", "E-", "A-"]);
+        assert_eq!(named(&l), ["C", "Eb", "Ab"]);
         assert!(l.pitches().iter().all(|p| !p.spelling_is_inferred()));
     }
 
@@ -588,7 +588,7 @@ mod tests {
         let forward = lrp_combination(&c_major, &lp, ChainOrder::LeftToRight, Respell::Keep);
         let backward = lrp_combination(&c_major, &lp, ChainOrder::RightToLeft, Respell::Keep);
         assert_eq!(named(&forward.unwrap()), ["B3", "E4", "G#4"]);
-        assert_eq!(named(&backward.unwrap()), ["C4", "E-4", "A-4"]);
+        assert_eq!(named(&backward.unwrap()), ["C4", "Eb4", "Ab4"]);
 
         let doubled = chord("C4 E4 G4 C5 E5");
         let rlp = lrp_combination(
@@ -597,7 +597,7 @@ mod tests {
             ChainOrder::LeftToRight,
             Respell::Keep,
         );
-        assert_eq!(named(&rlp.unwrap()), ["C4", "F4", "A-4", "C5", "F5"]);
+        assert_eq!(named(&rlp.unwrap()), ["C4", "F4", "Ab4", "C5", "F5"]);
     }
 
     #[test]
@@ -614,7 +614,7 @@ mod tests {
 
         let c_major = chord("C4 E4 G4");
         let kept = lrp_combination(&c_major, &hexatonic, ChainOrder::RightToLeft, Respell::Keep);
-        assert_eq!(named(&kept.unwrap()), ["D--4", "F-4", "A--4"]);
+        assert_eq!(named(&kept.unwrap()), ["Dbb4", "Fb4", "Abb4"]);
 
         let a_flat = chord("A-4 C4 E-5");
         let sharp = lrp_combination(&a_flat, &hexatonic, ChainOrder::LeftToRight, Respell::Keep);
@@ -635,8 +635,8 @@ mod tests {
                 ["B3", "E4", "G4"],
                 ["B3", "E4", "G#4"],
                 ["B3", "D#4", "G#4"],
-                ["C4", "E-4", "A-4"],
-                ["C4", "E-4", "G4"],
+                ["C4", "Eb4", "Ab4"],
+                ["C4", "Eb4", "G4"],
                 ["C4", "E4", "G4"],
             ]
         );
@@ -648,19 +648,19 @@ mod tests {
         assert_eq!(
             all_named(&complete_hexatonic(&c_major, Respell::Keep).unwrap()),
             [
-                ["C4", "E-4", "G4"],
-                ["C4", "E-4", "A-4"],
-                ["C-4", "E-4", "A-4"],
-                ["C-4", "F-4", "A-4"],
-                ["C-4", "F-4", "A--4"],
-                ["D--4", "F-4", "A--4"],
+                ["C4", "Eb4", "G4"],
+                ["C4", "Eb4", "Ab4"],
+                ["Cb4", "Eb4", "Ab4"],
+                ["Cb4", "Fb4", "Ab4"],
+                ["Cb4", "Fb4", "Abb4"],
+                ["Dbb4", "Fb4", "Abb4"],
             ]
         );
         assert_eq!(
             all_named(&complete_hexatonic(&c_major, Respell::Simplify).unwrap()),
             [
-                ["C4", "E-4", "G4"],
-                ["C4", "E-4", "A-4"],
+                ["C4", "Eb4", "G4"],
+                ["C4", "Eb4", "Ab4"],
                 ["B3", "D#4", "G#4"],
                 ["B3", "E4", "G#4"],
                 ["B3", "E4", "G4"],
@@ -695,7 +695,7 @@ mod tests {
         assert_eq!(normal(Mediant::UpperSharp), [4, 8, 11]);
         assert_eq!(
             named(&chromatic_mediant(&c_major, Mediant::LowerFlat).unwrap()),
-            ["C5", "E-5", "A-5"]
+            ["C5", "Eb5", "Ab5"]
         );
         assert_eq!(
             named(&chromatic_mediant(&c_major, Mediant::LowerSharp).unwrap()),
@@ -709,15 +709,15 @@ mod tests {
         let names = |c: Chord| -> Vec<String> { c.pitches().iter().map(Pitch::name).collect() };
         assert_eq!(
             names(disjunct_mediant(&c_major, MediantSide::Upper).unwrap()),
-            ["B-", "E-", "G-"]
+            ["Bb", "Eb", "Gb"]
         );
         assert_eq!(
             names(disjunct_mediant(&c_major, MediantSide::Lower).unwrap()),
             ["B", "D#", "G#"]
         );
         assert_eq!(names(slide(&c_major).unwrap()), ["C#", "E", "G#"]);
-        assert_eq!(names(slide(&chord("A4 C5 E5")).unwrap()), ["A-", "C", "E-"]);
-        assert_eq!(names(nebenverwandt(&c_major).unwrap()), ["C", "F", "A-"]);
+        assert_eq!(names(slide(&chord("A4 C5 E5")).unwrap()), ["Ab", "C", "Eb"]);
+        assert_eq!(names(nebenverwandt(&c_major).unwrap()), ["C", "F", "Ab"]);
         assert_eq!(
             names(nebenverwandt(&chord("A4 C5 E5")).unwrap()),
             ["G#", "B", "E"]
@@ -766,13 +766,13 @@ mod tests {
     fn minor_triads_take_their_mediants_as_music21_does() {
         let a_minor = chord("A4 C5 E5");
         let mediant = |mediant| named(&chromatic_mediant(&a_minor, mediant).unwrap());
-        assert_eq!(mediant(Mediant::UpperFlat), ["G4", "C5", "E-5"]);
+        assert_eq!(mediant(Mediant::UpperFlat), ["G4", "C5", "Eb5"]);
         assert_eq!(mediant(Mediant::UpperSharp), ["G#4", "C#5", "E5"]);
-        assert_eq!(mediant(Mediant::LowerFlat), ["A-4", "C5", "F5"]);
+        assert_eq!(mediant(Mediant::LowerFlat), ["Ab4", "C5", "F5"]);
         assert_eq!(mediant(Mediant::LowerSharp), ["A4", "C#5", "F#5"]);
 
         let side = |side| named(&disjunct_mediant(&a_minor, side).unwrap());
-        assert_eq!(side(MediantSide::Upper), ["A-4", "D-5", "F5"]);
+        assert_eq!(side(MediantSide::Upper), ["Ab4", "Db5", "F5"]);
         assert_eq!(side(MediantSide::Lower), ["A#4", "C#5", "F#5"]);
     }
 

@@ -2,7 +2,8 @@
 //! every Forte prime form, a list of spelled chords and chords built from
 //! integers, in `data/chord_name_expectations.toml`.
 
-use music21_rs::{Chord, Pitch};
+use music21_rs::Chord;
+use music21_rs_python_parity::{music21_figure, music21_name};
 
 use std::path::Path;
 
@@ -70,18 +71,30 @@ fn every_chord_is_named_the_way_music21_names_it() {
                 continue;
             }
         };
+        // music21 names a lone note `E-`, every other chord `Eb-...`.
+        let pitched = match chord.common_name().as_str() {
+            "note" | "unison" => music21_name(&chord.pitched_common_name()),
+            _ => chord.pitched_common_name(),
+        };
         let got = (
             chord.common_name(),
-            chord.pitched_common_name(),
+            pitched,
             chord.quality().as_str().to_string(),
             chord.forte_class().unwrap_or_default(),
             chord.inversion(),
             chord.inversion_name().ok().flatten(),
+            chord.chord_symbol().map_or_else(
+                || "Chord Symbol Cannot Be Identified".to_string(),
+                |figure| music21_figure(&figure),
+            ),
             chord
-                .chord_symbol()
-                .unwrap_or_else(|| "Chord Symbol Cannot Be Identified".to_string()),
-            chord.root().map(Pitch::name).unwrap_or_default(),
-            chord.bass().map(Pitch::name).unwrap_or_default(),
+                .root()
+                .map(|root| music21_name(&root.name()))
+                .unwrap_or_default(),
+            chord
+                .bass()
+                .map(|bass| music21_name(&bass.name()))
+                .unwrap_or_default(),
         );
         let want = (
             case.common_name.clone(),

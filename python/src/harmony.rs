@@ -27,6 +27,7 @@ use pyo3::exceptions::{PyKeyError, PyValueError};
 use pyo3::prelude::*;
 
 use crate::Walkable;
+use crate::spelling::{music21_figure, music21_name};
 use pyo3::types::{PyDict, PyList, PyTuple};
 
 use music21_rs_crate::chordsymbol::{
@@ -124,7 +125,8 @@ fn figure_and_kind(py: Python<'_>, inChord: &Bound<'_, PyAny>) -> PyResult<(Stri
         .and_then(|list| list.get_item(0))
         .and_then(|first| first.extract::<String>())
         .unwrap_or_else(|_| figure.abbreviation.to_string());
-    Ok((figure.written_with(&abbreviation), figure.kind))
+    let kind = figure.kind;
+    Ok((music21_figure(figure).written_with(&abbreviation), kind))
 }
 
 /// music21's `chordSymbolFigureFromChord`: the lead-sheet symbol a chord
@@ -1282,8 +1284,8 @@ pub(crate) fn crate_value(slf: &Bound<'_, ChordSymbol>) -> PyResult<RsChordSymbo
             Ok(symbol) => symbol,
             // A kind music21's live table has and the crate's has not.
             Err(_) => {
-                let mut symbol =
-                    RsChordSymbol::parse_music21(root.name()).map_err(harmony_error)?;
+                let mut symbol = RsChordSymbol::parse_music21(music21_name(&root.name()))
+                    .map_err(harmony_error)?;
                 symbol.set_root(root);
                 symbol.set_bass(bass);
                 symbol.with_kind(&kind)
@@ -1332,7 +1334,8 @@ fn live_kind(py: Python<'_>, figure: &str) -> PyResult<Option<RsChordSymbol>> {
         }
         let abbreviations: Vec<String> = entry.get_item(1)?.extract()?;
         if abbreviations.iter().any(|each| each == written) {
-            let mut symbol = RsChordSymbol::parse_music21(root.name()).map_err(harmony_error)?;
+            let mut symbol =
+                RsChordSymbol::parse_music21(music21_name(&root.name())).map_err(harmony_error)?;
             symbol.set_root(root);
             return Ok(Some(symbol.with_kind(&kind)));
         }

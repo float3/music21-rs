@@ -7,48 +7,24 @@ example: 40 modules, 1,027 docstrings and 9,171 examples. Asking music21 and
 the crate the same questions over thousands of random inputs found eleven
 places where they answered differently; they agree now.
 
-## Added
+## Breaking Changes
 
-- `chordsymbol::voice_chord_notation` and `ChordVoicing`: a chord of one
-  of music21's kinds as music21 voices it, with the root and bass music21
-  is left holding.
-- `analysis::enharmonics::best_spelling`, music21's
-  `EnharmonicSimplifier.bestPitches`, built on `spelling_options` and
-  `best_choice`, with its three penalties and scores on `EnharmonicRules`.
-  The wheel installs `EnharmonicSimplifier` and both rule classes over
-  music21's.
-- `analysis::neoriemannian`: `Transform` (L, P, R), `lrp_chain` and
-  `lrp_combination`, `complete_hexatonic`, `hexatonic_system`,
-  `chromatic_mediant`, `disjunct_mediant`, `slide`, `nebenverwandt`,
-  `is_neo_r` and `is_chromatic_mediant`. The wheel installs them over
-  music21's `analysis.neoRiemannian`.
-- `analysis::harmonic_function::HarmonicFunction`, the eighteen function
-  labels, with `to_roman` and `from_roman`: music21's `functionToRoman`
-  and `romanToFunction`. The wheel installs them and the enum over
-  music21's `analysis.harmonicFunction`.
-- `analysis::transposition::TranspositionChecker`, a set of pitches in all
-  twelve transpositions and how many differ. The wheel installs it over
-  music21's.
-- `Pitch::frequency_hz_tuned` tunes a pitch by its spelling:
-  `tuningsystem::Tuning` says how wide an interval sounds, and `Just`,
-  `EqualDivision` and `Temperament` are tunings, measured from a
-  `tuningsystem::Reference` (`A4` at 440 Hz by default). `C#` and `D-` are
-  two notes in a meantone or in 19-EDO, and one in 12-EDO.
-- `Interval::pythagorean_monzo`, a spelled interval as octaves and fifths,
-  and `Monzo::pythagorean` to build one from staff steps and semitones.
-- `Polyrhythm::ratio_frequencies`, the subdivision ratios as frequencies,
-  and `PolyrhythmRatioTone::cents`, each ratio's exact width.
-- `Polyrhythm::to_score`: one measure of the rhythm as a score, a part for
-  each subdivision in tuplets where it does not divide the bar, each playing
-  its ratio's pitch, with the tempo as a metronome mark.
-- `TuningSystem::nearest_degree`, the degree nearest a frequency;
-  `TuningSystem::pitch_at`, the pitch a degree sounds, spelled with a
-  microtone; `TuningSystem::is_keyboard`; and `Pitch::from_frequency_in`, a
-  frequency snapped to a tuning system and spelled.
-- `tuningsystem::Ratio::to_fraction`, `monzo` and `cents`.
-
-## Changed
-
+- Flats are written `b`: `Pitch::name` is `Bb`, `name_with_octave`
+  `Bb4`, a flat's `Accidental::modifier` `b` and a double flat's `bb`, and
+  so for every name built from them: key, scale and chord-symbol names,
+  `CHROMATIC_PITCH_CLASS_NAMES`. `-` is still read everywhere a name is.
+  music21 writes `-`, and the wheel still does: it respells every name it
+  hands Python. Cuthbert's "Music21's Mistakes" regrets borrowing `-`.
+  A pitch name and octave no longer collide: B-flat 1 is `Bb1`, B in octave
+  -1 `B-1`.
+- Every pitch has an accidental. `Pitch::accidental` answers
+  `&Accidental`, a natural where none is written, so arithmetic on it
+  needs no `None` case. What was `accidental` is `written_accidental`,
+  and `accidental_mut` is `written_accidental_mut`: music21's view, where
+  `D` has none and `Dn` a natural, which the wheel keeps.
+  `set_accidental` takes an `Accidental`; `set_written_accidental` takes
+  the `Option` music21's setter does. Cuthbert's "Music21's Mistakes"
+  lists the natural-or-`None` split as more trouble than it is worth.
 - `Polyrhythm::ratio_pitches` and `ratio_chord` sound the ratios in tune:
   each pitch carries a microtone for the part of its ratio past the nearest
   semitone, so a 4:5:6 rhythm on `C4` is `C4 E4(-14c) G4(+2c)`.
@@ -74,8 +50,71 @@ places where they answered differently; they agree now.
   `equal_temperament_12` and `equal_temperament_default` are gone for
   `equal_temperament`.
 
+## Added
+
+- `chordsymbol::voice_chord_notation` and `ChordVoicing`: a chord of one
+  of music21's kinds as music21 voices it, with the root and bass music21
+  is left holding.
+- `analysis::enharmonics::best_spelling`, music21's
+  `EnharmonicSimplifier.bestPitches`, built on `spelling_options` and
+  `best_choice`, with its three penalties and scores on `EnharmonicRules`.
+  The wheel installs `EnharmonicSimplifier` and both rule classes over
+  music21's.
+- `analysis::neoriemannian`: `Transform` (L, P, R), `lrp_chain` and
+  `lrp_combination`, `complete_hexatonic`, `hexatonic_system`,
+  `chromatic_mediant`, `disjunct_mediant`, `slide`, `nebenverwandt`,
+  `is_neo_r` and `is_chromatic_mediant`. The wheel installs them over
+  music21's `analysis.neoRiemannian`.
+- `analysis::harmonic_function::HarmonicFunction`, the eighteen function
+  labels, with `to_roman` and `from_roman`: music21's `functionToRoman`
+  and `romanToFunction`. The wheel installs them and the enum over
+  music21's `analysis.harmonicFunction`.
+- `analysis::transposition::TranspositionChecker`, a set of pitches in all
+  twelve transpositions and how many differ. The wheel installs it over
+  music21's.
+- `TimeSignature::offset_in_bar`, the arithmetic of music21's
+  `getMeasureOffsetOrMeterModulusOffset`: where an element falls in the
+  bar, given its offset and the meter's. The wheel's member reads the two
+  offsets off music21's stream and hands them over.
+- Analysis of a whole `Stream`: `analysis::stream_distribution` and
+  `estimate_key_of_stream`, music21's `KeyWeightKeyAnalysis` over a
+  stream's duration-weighted pitch classes; `stream_pitch_span`, its
+  `Ambitus`; and `melodic_lines`, the lines `MelodicIntervalDiversity`
+  counts, one per part with ties struck once. `Stream::has_part_like_streams`
+  is music21's `hasPartLikeStreams`, which `melodic_lines` reads.
+- `Stream::placed`: every element with its offset, its offset in its
+  measure, and the key signature, metre and tempo in force, each part
+  reading its own. music21 stores sites on each object to answer this;
+  the crate answers with a composite `Placed` value instead.
+- `Pitch`, `Accidental`, `Microtone` and `Duration` are `Eq` and `Hash`,
+  hashing what their equality compares, so they key maps and fill sets.
+  music21's are mutable and cannot; its author lists that first among
+  the mistakes he would not repeat.
+- `Pitch::frequency_hz_tuned` tunes a pitch by its spelling:
+  `tuningsystem::Tuning` says how wide an interval sounds, and `Just`,
+  `EqualDivision` and `Temperament` are tunings, measured from a
+  `tuningsystem::Reference` (`A4` at 440 Hz by default). `C#` and `Db` are
+  two notes in a meantone or in 19-EDO, and one in 12-EDO.
+- `Interval::pythagorean_monzo`, a spelled interval as octaves and fifths,
+  and `Monzo::pythagorean` to build one from staff steps and semitones.
+- `Polyrhythm::ratio_frequencies`, the subdivision ratios as frequencies,
+  and `PolyrhythmRatioTone::cents`, each ratio's exact width.
+- `Polyrhythm::to_score`: one measure of the rhythm as a score, a part for
+  each subdivision in tuplets where it does not divide the bar, each playing
+  its ratio's pitch, with the tempo as a metronome mark.
+- `TuningSystem::nearest_degree`, the degree nearest a frequency;
+  `TuningSystem::pitch_at`, the pitch a degree sounds, spelled with a
+  microtone; `TuningSystem::is_keyboard`; and `Pitch::from_frequency_in`, a
+  frequency snapped to a tuning system and spelled.
+- `tuningsystem::Ratio::to_fraction`, `monzo` and `cents`.
+
 ## Fixed
 
+- `Accidental`'s ordering agrees with its equality. Equality compares
+  names and ordering alterations, so a renamed natural ordered `Equal` to
+  `natural` while `!=` it, which `PartialOrd` forbids. Two accidentals of
+  one alteration and different names are now unordered. The wheel keeps
+  music21's `<`, which compares alterations alone.
 - A chord symbol is voiced as music21 voices it, root and bass included.
   music21 puts its own root and bass objects in the list it voices, so an
   octave pass moves them with the chord, a bass held twice moves twice,

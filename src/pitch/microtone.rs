@@ -1,4 +1,6 @@
 use super::{IntegerType, convert_harmonic_to_cents};
+use ordered_float::OrderedFloat;
+use std::hash::{Hash, Hasher};
 
 use crate::defaults::FloatType;
 use crate::error::{Error, Result};
@@ -255,6 +257,15 @@ pub(crate) fn ordinal_suffix(value: IntegerType) -> &'static str {
 impl PartialEq for Microtone {
     fn eq(&self, other: &Self) -> bool {
         self.cents() == other.cents()
+    }
+}
+
+impl Eq for Microtone {}
+
+/// Hashes what equality compares, the total shift in cents.
+impl Hash for Microtone {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        OrderedFloat(self.cents()).hash(state);
     }
 }
 

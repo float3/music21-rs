@@ -1191,7 +1191,7 @@ mod tests {
         };
         let read = |figure: FigureTuple| (figure.deg_from_ref_pitch, figure.alter, figure.prefix);
         assert_eq!(
-            read(figure("A-3", &c_major, "F#2")),
+            read(figure("Ab3", &c_major, "F#2")),
             (3, -1.0, "b".to_string())
         );
         assert_eq!(
@@ -1226,7 +1226,7 @@ mod tests {
                 (5, 1.0, "#".to_string()),
             ]
         );
-        assert_eq!(tuples[2].pitch.name_with_octave(), "A-3");
+        assert_eq!(tuples[2].pitch.name_with_octave(), "Ab3");
         assert!(
             figure_tuples(&Chord::new("").unwrap(), &c_minor)
                 .unwrap()
@@ -1448,24 +1448,24 @@ mod tests {
         // By quality, which is the default: the chord the figure asks for
         // says which sixth it is built on.
         assert_eq!(read("vi", Minor67Default::Quality), "A C E");
-        assert_eq!(read("VI", Minor67Default::Quality), "A- C E-");
+        assert_eq!(read("VI", Minor67Default::Quality), "Ab C Eb");
 
         // Flat is always the natural degree, whatever the figure asks for,
         // and a sharp written in front still raises it.
-        assert_eq!(read("vi", Minor67Default::Flat), "A- C- E-");
+        assert_eq!(read("vi", Minor67Default::Flat), "Ab Cb Eb");
         assert_eq!(read("#vi", Minor67Default::Flat), "A C E");
 
         // Sharp is always the raised one, and a flat still lowers it.
         assert_eq!(read("VI", Minor67Default::Sharp), "A C# E");
-        assert_eq!(read("bVI", Minor67Default::Sharp), "A- C E-");
+        assert_eq!(read("bVI", Minor67Default::Sharp), "Ab C Eb");
 
         // Cautionary reads the quality, but an accidental already written is
         // a caution rather than a further change, so `#vi` is `vi` and
         // `bVI` is `VI`.
         assert_eq!(read("#vi", Minor67Default::Cautionary), "A C E");
         assert_eq!(read("vi", Minor67Default::Cautionary), "A C E");
-        assert_eq!(read("bVI", Minor67Default::Cautionary), "A- C E-");
-        assert_eq!(read("VI", Minor67Default::Cautionary), "A- C E-");
+        assert_eq!(read("bVI", Minor67Default::Cautionary), "Ab C Eb");
+        assert_eq!(read("VI", Minor67Default::Cautionary), "Ab C Eb");
     }
 
     #[test]
@@ -1799,7 +1799,7 @@ mod tests {
             ("A C E", "a", "i6"),
             ("F A C", "a", "bVI64"),
             ("C E G#", "a", "III+"),
-            ("D- F A-", "C", "bII"),
+            ("D- F Ab", "C", "bII"),
             ("B4 D5 F5 A-5", "c", "viio7"),
             ("A-3 C4 F#4", "c", "It6"),
             ("A-3 C4 D4 F#4", "c", "Fr43"),
@@ -1870,7 +1870,7 @@ mod tests {
     fn analyzes_accidentals_inversions_and_half_diminished_quality() {
         let key = Key::from_tonic_mode("C", "major").unwrap();
 
-        let neapolitan = Chord::new("D- F A-").unwrap();
+        let neapolitan = Chord::new("D- F Ab").unwrap();
         let rn = RomanNumeral::analyze(&neapolitan, key.clone())
             .unwrap()
             .unwrap();
@@ -1910,13 +1910,13 @@ mod tests {
     fn analyzes_augmented_sixth_chords_functionally() {
         let key = Key::from_tonic_mode("C", "minor").unwrap();
         let root = Pitch::from_name("C").unwrap();
-        let french = Chord::new("C D F# A-").unwrap();
+        let french = Chord::new("C D F# Ab").unwrap();
         let rn = RomanNumeral::analyze_with_root(&french, key.clone(), &root)
             .unwrap()
             .unwrap();
         assert_eq!(rn.figure(), "Fr+6");
 
-        let german = Chord::new("A- C E- F#").unwrap();
+        let german = Chord::new("Ab C E- F#").unwrap();
         let rn = RomanNumeral::analyze(&german, key).unwrap().unwrap();
         assert_eq!(rn.figure(), "Ger+6");
     }
@@ -1987,13 +1987,13 @@ mod tests {
         };
         // Writing the fifth out says the column is `7,b5` and nothing else,
         // so the third music21 would have implied is gone with it.
-        assert_eq!(names("V7b5", "C"), ["G", "D-", "F"]);
+        assert_eq!(names("V7b5", "C"), ["G", "Db", "F"]);
         assert_eq!(names("V[no3]", "F"), ["C", "G"]);
         assert_eq!(names("I[add4][no3]", "C"), ["C", "F", "G"]);
         // The sharp of `i#7` raises the flattened seventh of a minor key to a
         // natural, rather than spelling a `B#`.
-        assert_eq!(names("i#7", "c"), ["C", "E-", "G", "B"]);
-        assert_eq!(names("i#7", "C"), ["C", "E-", "G", "B#"]);
+        assert_eq!(names("i#7", "c"), ["C", "Eb", "G", "B"]);
+        assert_eq!(names("i#7", "C"), ["C", "Eb", "G", "B#"]);
     }
 
     #[test]
@@ -2020,7 +2020,7 @@ mod tests {
             .iter()
             .map(Pitch::name_with_octave)
             .collect();
-        assert_eq!(pitches, ["C2", "E-2", "G-2", "A2", "C3"]);
+        assert_eq!(pitches, ["C2", "Eb2", "Gb2", "A2", "C3"]);
     }
 
     #[test]
@@ -2101,7 +2101,7 @@ mod tests {
                 .into_iter()
                 .map(|pitch| pitch.name())
                 .collect::<Vec<_>>(),
-            vec!["A-", "C", "D", "F#"]
+            vec!["Ab", "C", "D", "F#"]
         );
     }
 

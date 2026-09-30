@@ -184,8 +184,8 @@ impl FiguredBassScale {
                 let from_key = self
                     .key_signature
                     .accidental_by_step(spelled.step().as_char())?;
-                if from_key.as_ref() != spelled.accidental() {
-                    spelled.set_accidental(from_key);
+                if from_key.as_ref() != spelled.written_accidental() {
+                    spelled.set_written_accidental(from_key);
                 }
                 self.scale.degree_of(&spelled)?.ok_or_else(|| {
                     Error::FiguredBass(format!(

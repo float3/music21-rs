@@ -7,6 +7,7 @@ use pyo3::exceptions::{PyKeyError, PyValueError};
 use pyo3::prelude::*;
 
 use crate::Walkable;
+use crate::spelling::{music21_description, music21_name};
 use pyo3::types::{PyDict, PyList, PyTuple};
 
 use music21_rs_crate::scale::{
@@ -329,7 +330,7 @@ impl KeySignature {
         }
         Ok(format!(
             "<music21.key.KeySignature of {}>",
-            slf.borrow().signature.description()
+            music21_description(&slf.borrow().signature)
         ))
     }
 
@@ -709,7 +710,11 @@ impl Key {
     /// `E- major`.
     #[getter]
     fn name(&self) -> String {
-        format!("{} {}", self.inner.tonic().name(), self.get_type())
+        format!(
+            "{} {}",
+            music21_name(&self.inner.tonic().name()),
+            self.get_type()
+        )
     }
 
     #[setter]
@@ -735,7 +740,7 @@ impl Key {
 
     #[getter]
     fn tonicPitchNameWithCase(&self) -> String {
-        self.inner.tonic_pitch_name_with_case()
+        music21_name(&self.inner.tonic_pitch_name_with_case())
     }
 
     #[getter]
@@ -1178,7 +1183,7 @@ impl Key {
     fn __str__(&self) -> String {
         format!(
             "{} {}",
-            self.inner.tonic_pitch_name_with_case(),
+            music21_name(&self.inner.tonic_pitch_name_with_case()),
             self.inner.mode()
         )
     }

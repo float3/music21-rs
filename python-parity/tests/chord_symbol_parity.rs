@@ -1,8 +1,8 @@
 //! Checks the crate's reading of chord symbol figures against music21's
 //! `ChordSymbol`, in `data/chord_symbol_expectations.toml`.
 
-use music21_rs::Pitch;
 use music21_rs::chordsymbol::ChordSymbol;
+use music21_rs_python_parity::music21_name;
 
 use std::path::Path;
 
@@ -67,7 +67,7 @@ fn every_chord_symbol_figure_realizes_as_music21_realizes_it() {
         let got_names: Vec<String> = chord
             .pitches()
             .iter()
-            .map(Pitch::name_with_octave)
+            .map(|pitch| music21_name(&pitch.name_with_octave()))
             .collect();
         let want_names: Vec<String> = case.pitches.clone();
         // The kind is left out: music21 reads `m7b5` as a minor seventh with
@@ -75,7 +75,10 @@ fn every_chord_symbol_figure_realizes_as_music21_realizes_it() {
         // two sound the same.
         let names_bass = case.figure.contains('/');
         let got_bass = if names_bass {
-            symbol.bass().map(Pitch::name).unwrap_or_default()
+            symbol
+                .bass()
+                .map(|bass| music21_name(&bass.name()))
+                .unwrap_or_default()
         } else {
             String::new()
         };
@@ -84,7 +87,7 @@ fn every_chord_symbol_figure_realizes_as_music21_realizes_it() {
         } else {
             String::new()
         };
-        let got = (got_names, symbol.root().name(), got_bass);
+        let got = (got_names, music21_name(&symbol.root().name()), got_bass);
         let want = (want_names, case.root.clone().unwrap_or_default(), want_bass);
         if got != want {
             mismatches.push(format!(

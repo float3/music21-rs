@@ -247,7 +247,7 @@ impl GenericInterval {
             let step_alter = key_signature
                 .accidental_by_step(pitch.step().as_char())?
                 .map_or(0.0, |accidental| accidental.alter());
-            let offset_from_key = pitch.accidental_or_natural().alter() - step_alter;
+            let offset_from_key = pitch.accidental().alter() - step_alter;
             let new_step_alter = key_signature
                 .accidental_by_step(out.step().as_char())?
                 .map_or(0.0, |accidental| accidental.alter());
@@ -257,7 +257,7 @@ impl GenericInterval {
             } else {
                 Some(Accidental::new(alter)?)
             };
-            out.set_accidental(accidental);
+            out.set_written_accidental(accidental);
         }
         if !had_octave {
             out.octave_setter(None);
@@ -487,7 +487,7 @@ mod tests {
                 .transpose_pitch(&b_flat)
                 .unwrap()
                 .name_with_octave(),
-            "G-4"
+            "Gb4"
         );
         let no_octave = Pitch::from_name("C").unwrap();
         let up = third.transpose_pitch(&no_octave).unwrap();
@@ -522,7 +522,7 @@ mod tests {
             step.transpose_pitch_key_aware(&f_natural, Some(&g_major))
                 .unwrap()
                 .name_with_octave(),
-            "G-4"
+            "Gb4"
         );
         let e = Pitch::from_name("E4").unwrap();
         assert_eq!(

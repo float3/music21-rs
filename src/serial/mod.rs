@@ -687,7 +687,7 @@ mod tests {
         assert_eq!(
             chromatic().note_names(),
             [
-                "C", "C#", "D", "E-", "E", "F", "F#", "G", "G#", "A", "B-", "B"
+                "C", "C#", "D", "Eb", "E", "F", "F#", "G", "G#", "A", "Bb", "B"
             ]
         );
     }
@@ -748,7 +748,7 @@ mod tests {
                 .zero_centered_transformation(Transformation::RetrogradeInversion, 9)
                 .note_names(),
             [
-                "G", "E", "F#", "G#", "B-", "D", "C", "B", "C#", "E-", "F", "A"
+                "G", "E", "F#", "G#", "Bb", "D", "C", "B", "C#", "Eb", "F", "A"
             ]
         );
     }
@@ -779,7 +779,7 @@ mod tests {
                 .original_centered_transformation(Transformation::RetrogradeInversion, 9)
                 .note_names(),
             [
-                "B-", "G", "A", "B", "C#", "F", "E-", "D", "E", "F#", "G#", "C"
+                "Bb", "G", "A", "B", "C#", "F", "Eb", "D", "E", "F#", "G#", "C"
             ]
         );
     }
@@ -910,7 +910,7 @@ mod tests {
         assert_eq!(
             op37.row(0).unwrap().note_names(),
             [
-                "C", "B", "G", "G#", "E-", "C#", "D", "B-", "F#", "F", "E", "A"
+                "C", "B", "G", "G#", "Eb", "C#", "D", "Bb", "F#", "F", "E", "A"
             ]
         );
         assert!(
@@ -1117,7 +1117,7 @@ mod tests {
         assert_eq!(ToneRow::from(vec![0u8, 6, 10]).len(), 3);
         assert_eq!(
             ToneRow::from([0u8, 6, 10]).pitches()[2].name_with_octave(),
-            "B-"
+            "Bb"
         );
     }
 }

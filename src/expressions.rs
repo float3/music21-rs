@@ -882,13 +882,9 @@ impl Ornament {
             }
             if let Some(accidental) = accidental {
                 let status = accidental.display_status();
-                let written = ornamental
-                    .accidental()
-                    .cloned()
-                    .unwrap_or_else(|| Accidental::new("natural").expect("a natural"));
-                let mut written = written;
+                let mut written = ornamental.accidental().clone();
                 written.set_display_status(status);
-                ornamental.set_accidental(Some(written));
+                ornamental.set_accidental(written);
             }
             Ok(ornamental)
         };
@@ -947,11 +943,9 @@ impl Ornament {
                 accidental.filter(|accidental| trill || accidental.display_status().is_some());
             match says {
                 Some(accidental) => {
-                    let mut shown = pitch.accidental().cloned().unwrap_or_else(|| {
-                        Accidental::new("natural").expect("natural is an accidental name")
-                    });
+                    let mut shown = pitch.accidental().clone();
                     shown.set_display_status(accidental.display_status());
-                    pitch.set_accidental(Some(shown));
+                    pitch.set_accidental(shown);
                 }
                 None => pitch.update_accidental_display(&untied),
             }
@@ -1007,8 +1001,8 @@ impl Ornament {
         let interval = self.size(note.pitch(), key)?;
         let mut second = lasting(note, each)?;
         let mut moved = second.pitch().transpose(&interval)?;
-        if moved.accidental().is_none() {
-            moved.set_accidental(key.accidental_by_step(moved.step().as_char())?);
+        if moved.written_accidental().is_none() {
+            moved.set_written_accidental(key.accidental_by_step(moved.step().as_char())?);
         }
         second.set_pitch(moved);
         Ok(Realization {
@@ -1059,10 +1053,10 @@ impl Ornament {
         if from_key {
             for played in &mut trilled {
                 if played.pitch().name_with_octave() != written
-                    && played.pitch().accidental().is_none()
+                    && played.pitch().written_accidental().is_none()
                 {
                     let mut pitch = played.pitch().clone();
-                    pitch.set_accidental(key.accidental_by_step(pitch.step().as_char())?);
+                    pitch.set_written_accidental(key.accidental_by_step(pitch.step().as_char())?);
                     played.set_pitch(pitch);
                 }
             }
@@ -1080,7 +1074,7 @@ impl Ornament {
         if from_key {
             for played in [&mut first, &mut second] {
                 let mut pitch = played.pitch().clone();
-                pitch.set_accidental(key.accidental_by_step(pitch.step().as_char())?);
+                pitch.set_written_accidental(key.accidental_by_step(pitch.step().as_char())?);
                 played.set_pitch(pitch);
             }
         }
@@ -1132,9 +1126,9 @@ impl Ornament {
         let fourth = lasting(note, last.unwrap_or(each))?;
         let mut turned = vec![first, second, third, fourth];
         for index in [0, 2] {
-            if turned[index].pitch().accidental().is_none() {
+            if turned[index].pitch().written_accidental().is_none() {
                 let mut pitch = turned[index].pitch().clone();
-                pitch.set_accidental(key.accidental_by_step(pitch.step().as_char())?);
+                pitch.set_written_accidental(key.accidental_by_step(pitch.step().as_char())?);
                 turned[index].set_pitch(pitch);
             }
         }
@@ -1242,7 +1236,7 @@ fn neighbour(
     key: &KeySignature,
 ) -> Result<Interval> {
     let mut ornamental = source.clone();
-    ornamental.set_accidental(None);
+    ornamental.set_written_accidental(None);
     ornamental.set_octave_is_implicit(false);
     let mut ornamental =
         GenericInterval::new(if up { 2 } else { -2 })?.transpose_pitch(&ornamental)?;
@@ -1250,7 +1244,7 @@ fn neighbour(
         Some(accidental) => Some(accidental.clone()),
         None => key.accidental_by_step(ornamental.step().as_char())?,
     };
-    ornamental.set_accidental(spelled);
+    ornamental.set_written_accidental(spelled);
     Interval::between_pitches(source, &ornamental)
 }
 

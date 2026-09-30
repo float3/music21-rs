@@ -4,6 +4,7 @@ use crate::error::{Error, Result};
 use std::borrow::Cow;
 
 use std::fmt::{Display, Formatter};
+use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 
 enum AccidentalEnum {
@@ -107,11 +108,11 @@ impl AccidentalEnum {
             AccidentalEnum::TripleSharp => "###",
             AccidentalEnum::QuadrupleSharp => "####",
             AccidentalEnum::HalfFlat => "`",
-            AccidentalEnum::Flat => "-",
-            AccidentalEnum::OneAndAHalfFlat => "-`",
-            AccidentalEnum::DoubleFlat => "--",
-            AccidentalEnum::TripleFlat => "---",
-            AccidentalEnum::QuadrupleFlat => "----",
+            AccidentalEnum::Flat => "b",
+            AccidentalEnum::OneAndAHalfFlat => "b`",
+            AccidentalEnum::DoubleFlat => "bb",
+            AccidentalEnum::TripleFlat => "bbb",
+            AccidentalEnum::QuadrupleFlat => "bbbb",
         }
     }
 
@@ -125,11 +126,12 @@ impl AccidentalEnum {
             "###" => Some(AccidentalEnum::TripleSharp),
             "####" => Some(AccidentalEnum::QuadrupleSharp),
             "`" => Some(AccidentalEnum::HalfFlat),
-            "-" => Some(AccidentalEnum::Flat),
-            "-`" => Some(AccidentalEnum::OneAndAHalfFlat),
-            "--" => Some(AccidentalEnum::DoubleFlat),
-            "---" => Some(AccidentalEnum::TripleFlat),
-            "----" => Some(AccidentalEnum::QuadrupleFlat),
+            // Written `b` here and `-` in music21; either is read.
+            "b" | "-" => Some(AccidentalEnum::Flat),
+            "b`" | "-`" => Some(AccidentalEnum::OneAndAHalfFlat),
+            "bb" | "--" => Some(AccidentalEnum::DoubleFlat),
+            "bbb" | "---" => Some(AccidentalEnum::TripleFlat),
+            "bbbb" | "----" => Some(AccidentalEnum::QuadrupleFlat),
             _ => None,
         }
     }
@@ -329,9 +331,26 @@ impl PartialEq for Accidental {
     }
 }
 
+impl Eq for Accidental {}
+
+/// Hashes what equality compares, the name, so an accidental can key a map.
+impl Hash for Accidental {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+    }
+}
+
+/// Orders by alteration. Equality compares names, so two accidentals of one
+/// alteration but different names are unordered rather than `Equal`: the
+/// trait's contract, which music21's `__lt__` and `__eq__` break.
 impl PartialOrd for Accidental {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.alter.partial_cmp(&other.alter)
+        if self == other {
+            return Some(std::cmp::Ordering::Equal);
+        }
+        self.alter
+            .partial_cmp(&other.alter)
+            .filter(|ordering| ordering.is_ne())
     }
 }
 
@@ -878,7 +897,7 @@ mod tests {
         let acc = Accidental::flat();
         assert_eq!(acc.name, "flat");
         assert_eq!(acc.alter, -1.0);
-        assert_eq!(acc.modifier(), "-");
+        assert_eq!(acc.modifier(), "b");
     }
 
     #[test]
@@ -902,7 +921,7 @@ mod tests {
         assert_eq!(parsed.name(), "sharp");
 
         let from_str = Accidental::try_from("flat").unwrap();
-        assert_eq!(from_str.modifier(), "-");
+        assert_eq!(from_str.modifier(), "b");
 
         let from_alter = Accidental::try_from(-0.5).unwrap();
         assert_eq!(from_alter.name(), "half-flat");
@@ -992,10 +1011,10 @@ mod tests {
         assert_eq!(accidental.full_name(), "sharp");
         assert!(accidental.is_twelve_tone());
 
-        accidental.set("--").unwrap();
+        accidental.set("bb").unwrap();
         assert_eq!(accidental.name(), "double-flat");
         assert_eq!(accidental.alter(), -2.0);
-        assert_eq!(accidental.modifier(), "--");
+        assert_eq!(accidental.modifier(), "bb");
 
         accidental.set("quarter-sharp").unwrap();
         assert_eq!(accidental.name(), "half-sharp");
@@ -1011,12 +1030,12 @@ mod tests {
             .unwrap();
         assert_eq!(accidental.name(), "flat-flat-up");
         assert_eq!(accidental.alter(), -1.0);
-        assert_eq!(accidental.modifier(), "-");
+        assert_eq!(accidental.modifier(), "b");
 
         accidental.set_alter(-0.9).unwrap();
         assert_eq!(accidental.name(), "flat-flat-up");
         assert_eq!(accidental.alter(), -0.9);
-        assert_eq!(accidental.modifier(), "-");
+        assert_eq!(accidental.modifier(), "b");
 
         accidental.set_modifier("&");
         assert_eq!(accidental.name(), "flat-flat-up");
@@ -1109,5 +1128,18 @@ mod tests {
     fn accidental_ordering_follows_alter() {
         assert!(Accidental::flat() < Accidental::natural());
         assert!(Accidental::sharp() > Accidental::natural());
+    }
+
+    /// Ordering agrees with equality: two accidentals of one alteration but
+    /// different names are not equal, so neither is ordered before the other.
+    #[test]
+    fn unequal_accidentals_never_order_equal() {
+        let mut custom = Accidental::natural();
+        custom.set_name_independently("custom");
+        assert_ne!(custom, Accidental::natural());
+        assert_ne!(
+            custom.partial_cmp(&Accidental::natural()),
+            Some(std::cmp::Ordering::Equal)
+        );
     }
 }
