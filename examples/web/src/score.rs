@@ -1943,10 +1943,10 @@ mod tests {
                 .expect("spells")
                 .name_with_octave()
         };
-        assert_eq!(name(58, "Gm7"), "B-3");
-        assert_eq!(name(56, "Fm6"), "A-3");
+        assert_eq!(name(58, "Gm7"), "Bb3");
+        assert_eq!(name(56, "Fm6"), "Ab3");
         assert_eq!(name(61, "A7"), "C#4");
-        assert_eq!(name(58, "C9"), "B-3");
+        assert_eq!(name(58, "C9"), "Bb3");
         // Not in the chord: as the key spells it.
         assert_eq!(name(61, "Gm7"), "C#4");
     }
