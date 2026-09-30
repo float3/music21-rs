@@ -11,8 +11,8 @@
 use music21_rs_python_parity::music21_name;
 use std::path::Path;
 
-use music21_rs::harte::degree_sort_key;
 use music21_rs::Harte;
+use music21_rs::harte::degree_sort_key;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
