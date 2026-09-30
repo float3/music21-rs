@@ -13,6 +13,8 @@ default = []
 python = ["dep:pyo3", "dep:reqwest", "dep:music21_rs_python"]
 
 [dependencies]
+# The Harte crate, whose fixture the fixture generator sorts as the crate does.
+harte = { path = "../harte" }
 # The crate itself, so the benchmark can time it with no Python in the way
 # beside timing it through the wheel. Only the `bench` command reads it.
 music21-rs = { path = ".." }

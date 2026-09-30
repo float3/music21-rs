@@ -1,11 +1,16 @@
 use num::integer::{gcd, lcm};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use crate::chord::Chord;
 use crate::defaults::{FloatType, IntegerType, UnsignedIntegerType};
+use crate::duration::Duration;
 use crate::error::{Error, Result};
 use crate::interval::Interval;
+use crate::meter::TimeSignature;
+use crate::note::Note;
 use crate::pitch::Pitch;
+use crate::stream::{Stream, StreamKind};
+use crate::tempo::MetronomeMark;
 
 #[derive(Debug, Clone)]
 /// A repeating polyrhythm defined by a base meter and subdivision voices.
@@ -42,10 +47,12 @@ pub struct PolyrhythmEvent {
 pub struct PolyrhythmRatioTone {
     /// The reduced subdivision component that produced this tone.
     pub component: UnsignedIntegerType,
-    /// Semitone offset above the lowest reduced ratio.
+    /// The nearest whole number of semitones above the lowest reduced ratio.
     pub offset: IntegerType,
     /// Frequency ratio above the lowest reduced ratio.
     pub ratio: FloatType,
+    /// The exact distance above the lowest reduced ratio, in cents.
+    pub cents: FloatType,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -220,10 +227,10 @@ impl Polyrhythm {
 
     /// Returns ratio-derived chord tones for the subdivision components.
     ///
-    /// Components are first reduced by their greatest common divisor. The
-    /// smallest reduced component is treated as the root ratio, and each
-    /// remaining component is mapped to the nearest twelve-tone semitone
-    /// offset using `12 * log2(component / root)`.
+    /// Components are first reduced by their greatest common divisor, and the
+    /// smallest is the root: a component sounds `component / root` above it,
+    /// which is `cents` exactly and `offset` to the nearest semitone. Two
+    /// components that round to the same semitone give one tone, the smaller.
     pub fn ratio_tones(&self) -> Vec<PolyrhythmRatioTone> {
         let divisor = self
             .components
@@ -248,15 +255,23 @@ impl Polyrhythm {
 
         tones_by_offset
             .into_iter()
-            .map(|(offset, component)| PolyrhythmRatioTone {
-                component,
-                offset,
-                ratio: component as FloatType / root_ratio as FloatType,
+            .map(|(offset, component)| {
+                let ratio = component as FloatType / root_ratio as FloatType;
+                PolyrhythmRatioTone {
+                    component,
+                    offset,
+                    ratio,
+                    cents: 1200.0 * ratio.log2(),
+                }
             })
             .collect()
     }
 
-    /// Returns ratio-derived pitches above `base`.
+    /// Returns the pitches the subdivision ratios sound above `base`, in tune.
+    ///
+    /// Each tone is spelled at its nearest semitone and carries the rest as a
+    /// microtone, so a 4:5:6 rhythm on `C4` is `C4 E4(-14c) G4(+2c)`: the just
+    /// major triad, not the equal-tempered one.
     pub fn ratio_pitches<T>(&self, base: T) -> Result<Vec<Pitch>>
     where
         T: TryInto<Pitch>,
@@ -265,10 +280,78 @@ impl Polyrhythm {
         let base_pitch = base.try_into().map_err(Into::into)?;
         self.ratio_tones()
             .into_iter()
-            .map(|tone| {
-                let interval = Interval::from_semitones(tone.offset)?;
-                base_pitch.transpose(&interval)
-            })
+            .map(|tone| pitch_above(&base_pitch, tone.cents))
+            .collect()
+    }
+
+    /// One measure of the rhythm as a score: a part for each subdivision, in
+    /// the order given, each playing its ratio's pitch above `base` as
+    /// [`Polyrhythm::ratio_pitches`] tunes it, so the score is heard as the
+    /// rhythm and its chord at once.
+    ///
+    /// The measure is `base` quarter notes in `base/4`, and a subdivision of
+    /// `n` divides it into `n` equal notes, which are tuplets wherever `n`
+    /// does not divide it evenly. The first part carries the tempo, when one
+    /// is set.
+    ///
+    /// ```
+    /// use music21_rs::Polyrhythm;
+    ///
+    /// let score = Polyrhythm::new(4, &[3, 2])?.with_tempo(90)?.to_score("C4")?;
+    /// let parts = score.parts();
+    /// assert_eq!(parts.len(), 2);
+    /// let triplets = parts[0].measures()[0].notes();
+    /// assert_eq!(triplets.len(), 3);
+    /// assert!((triplets[1].0 - 4.0 / 3.0).abs() < 1e-9);
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
+    pub fn to_score<T>(&self, base: T) -> Result<Stream>
+    where
+        T: TryInto<Pitch>,
+        T::Error: Into<Error>,
+    {
+        let base_pitch = base.try_into().map_err(Into::into)?;
+        let divisor = self
+            .components
+            .iter()
+            .copied()
+            .reduce(gcd)
+            .unwrap_or(1)
+            .max(1);
+        let root = self.components.iter().copied().min().unwrap_or(1).max(1) / divisor;
+        let bar = FloatType::from(self.base);
+        let mut score = Stream::with_kind(StreamKind::Score);
+        for (index, &component) in self.components.iter().enumerate() {
+            let ratio = FloatType::from(component / divisor) / FloatType::from(root);
+            let pitch = pitch_above(&base_pitch, 1200.0 * ratio.log2())?;
+            let length = bar / FloatType::from(component);
+            let mut measure = Stream::with_kind(StreamKind::Measure);
+            measure.set_number(1);
+            measure.insert(0.0, TimeSignature::new(self.base, 4)?);
+            if let (0, Some(tempo)) = (index, self.tempo) {
+                measure.insert(0.0, MetronomeMark::new(FloatType::from(tempo)));
+            }
+            for beat in 0..component {
+                let note = Note::from_pitch(pitch.clone()).with_duration(Duration::new(length)?);
+                measure.insert(FloatType::from(beat) * length, note);
+            }
+            let mut part = Stream::with_kind(StreamKind::Part);
+            part.set_name(Some(component.to_string()));
+            part.push(measure);
+            score.push(part);
+        }
+        Ok(score)
+    }
+
+    /// Returns the frequencies the subdivision ratios sound at, the lowest at
+    /// `base_hertz`.
+    ///
+    /// This is the same ratio heard as pitch rather than as rhythm: a 3:2
+    /// polyrhythm at 110 and 165 Hz is a fifth.
+    pub fn ratio_frequencies(&self, base_hertz: FloatType) -> Vec<FloatType> {
+        self.ratio_tones()
+            .into_iter()
+            .map(|tone| base_hertz * tone.ratio)
             .collect()
     }
 
@@ -318,48 +401,16 @@ impl Polyrhythm {
             })
             .collect()
     }
+}
 
-    fn chord_from_base_pitch(&self, base_pitch: Pitch) -> Result<Chord> {
-        let mut offsets = BTreeSet::new();
-        for &sub in &self.components {
-            let interval = self.cycle / sub;
-            for i in 0..sub {
-                let tick = i * interval;
-                let ratio = tick as FloatType / self.cycle as FloatType;
-                let semitones = (ratio * 12.0).round() as IntegerType;
-                offsets.insert(semitones);
-            }
-        }
-
-        let notes: Result<Vec<Pitch>, Error> = offsets
-            .into_iter()
-            .map(|offset| {
-                let interval = Interval::from_semitones(offset)?;
-                base_pitch.transpose(&interval)
-            })
-            .collect();
-
-        let notes = notes?;
-        Chord::new(notes.as_slice())
-    }
-
-    /// Converts one polyrhythm cycle into a chord above `base`.
-    pub fn to_chord<T>(&self, base: T) -> Result<Chord>
-    where
-        T: TryInto<Pitch>,
-        T::Error: Into<Error>,
-    {
-        self.chord_from_base_pitch(base.try_into().map_err(Into::into)?)
-    }
-
-    /// Converts one polyrhythm cycle into a pitch collection above `base`.
-    pub fn to_polypitch<T>(&self, base: T) -> Result<Chord>
-    where
-        T: TryInto<Pitch>,
-        T::Error: Into<Error>,
-    {
-        self.to_chord(base)
-    }
+/// `cents` above `base`, spelled at the nearest semitone with the rest as a
+/// microtone on top of any `base` already carries.
+fn pitch_above(base: &Pitch, cents: FloatType) -> Result<Pitch> {
+    let semitones = (cents / 100.0).round();
+    let mut pitch = base.transpose(&Interval::from_semitones(semitones as IntegerType)?)?;
+    let carried = base.microtone().map_or(0.0, |microtone| microtone.cents());
+    pitch.set_microtone_cents(carried + cents - 100.0 * semitones)?;
+    Ok(pitch)
 }
 
 impl Iterator for Polyrhythm {
@@ -386,6 +437,7 @@ impl Iterator for Polyrhythm {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::stream::StreamElement;
 
     #[test]
     fn test_from_time_signature() {
@@ -487,6 +539,10 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["C4", "F4", "C5"]
         );
+        // 4/3 is a just fourth, two cents flat of the tempered one.
+        assert!((tones[1].cents - 498.044_999_134_798).abs() < 1e-9);
+        assert!((pitches[1].microtone().unwrap().cents() + 1.955).abs() < 1e-3);
+        assert!(pitches[2].microtone().is_none());
 
         let analysis = poly.analysis().unwrap();
         assert_eq!(analysis.component_intervals, vec![4, 3, 2]);
@@ -502,10 +558,76 @@ mod tests {
     }
 
     #[test]
-    fn test_to_chord_is_public_and_works() {
-        let poly = Polyrhythm::from_time_signature(4, 120, &[2, 3, 4]).unwrap();
-        let chord = poly.to_chord("C4").unwrap();
-        assert!(!chord.pitched_common_name().is_empty());
+    fn a_rhythm_of_four_five_and_six_is_a_just_major_triad() {
+        let poly = Polyrhythm::new(4, &[4, 5, 6]).unwrap();
+        let pitches = poly.ratio_pitches("C4").unwrap();
+        let written = pitches
+            .iter()
+            .map(|pitch| {
+                let microtone = pitch.microtone().map(ToString::to_string);
+                format!(
+                    "{}{}",
+                    pitch.name_with_octave(),
+                    microtone.unwrap_or_default()
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(written, ["C4", "E4(-14c)", "G4(+2c)"]);
+
+        let hertz = poly.ratio_frequencies(200.0);
+        assert_eq!(hertz, [200.0, 250.0, 300.0]);
+        // The pitches sound where the ratios say.
+        let just = pitches[1].frequency_hz() / pitches[0].frequency_hz();
+        assert!((just - 1.25).abs() < 1e-3);
+    }
+
+    #[test]
+    fn a_score_holds_a_part_for_each_subdivision_in_tuplets() {
+        let poly = Polyrhythm::new(4, &[4, 5, 6])
+            .unwrap()
+            .with_tempo(72)
+            .unwrap();
+        let score = poly.to_score("C4").unwrap();
+        let parts = score.parts();
+        assert_eq!(parts.len(), 3);
+        for (part, (count, name)) in parts.iter().zip([(4, "C4"), (5, "E4"), (6, "G4")]) {
+            let notes = part.measures()[0].notes();
+            assert_eq!(notes.len(), count);
+            let StreamElement::Note(note) = &notes[0].1 else {
+                panic!("a part plays notes");
+            };
+            assert_eq!(note.pitch().name_with_octave(), name);
+            let total: FloatType = notes
+                .iter()
+                .map(|(_, element)| element.duration().map_or(0.0, |d| d.quarter_length()))
+                .sum();
+            assert!((total - 4.0).abs() < 1e-9);
+        }
+        let StreamElement::Note(quintuplet) = &parts[1].measures()[0].notes()[0].1 else {
+            panic!("a part plays notes");
+        };
+        assert!(!quintuplet.duration().unwrap().tuplets().is_empty());
+        assert_eq!(parts[1].name(), Some("5"));
+    }
+
+    #[cfg(feature = "musicxml")]
+    #[test]
+    fn a_score_writes_as_musicxml_with_its_tuplets() {
+        use crate::musicxml::{ExportOptions, to_musicxml};
+        for components in [[3, 2], [5, 4], [7, 3]] {
+            let score = Polyrhythm::new(4, &components)
+                .unwrap()
+                .with_tempo(60)
+                .unwrap()
+                .to_score("A3")
+                .unwrap();
+            let xml = to_musicxml(&score, &ExportOptions::default()).unwrap();
+            assert!(xml.contains("<time-modification>"), "{components:?}");
+            assert!(
+                xml.contains("<per-minute>60</per-minute>"),
+                "{components:?}"
+            );
+        }
     }
 
     #[test]

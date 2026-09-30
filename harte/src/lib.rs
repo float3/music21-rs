@@ -8,14 +8,33 @@
 //! `bb7`; [`convert_interval`] gives the music21 interval it stands for, and
 //! [`Harte`] builds the chord the label sounds.
 
+#![deny(missing_docs)]
+#![deny(missing_debug_implementations)]
+#![forbid(unsafe_code)]
+
+/// The README's example, run as a doctest so it cannot go stale.
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+mod readme {}
+
 use std::fmt;
 use std::str::FromStr;
 
-use crate::chord::Chord;
-use crate::defaults::{FloatType, IntegerType};
-use crate::error::{Error, Result};
-use crate::interval::Interval;
-use crate::pitch::Pitch;
+use music21_rs::{Chord, FloatType, IntegerType, Interval, Pitch};
+
+/// What can go wrong reading Harte notation.
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    /// A label, degree or shorthand that is not Harte notation.
+    #[error("Harte error: {0}")]
+    Harte(String),
+    /// The chord the label names could not be built.
+    #[error(transparent)]
+    Music21(#[from] music21_rs::Error),
+}
+
+/// The result of reading Harte notation.
+pub type Result<T> = std::result::Result<T, Error>;
 
 /// A shorthand beside the degrees it stands for.
 pub type Shorthand = (&'static str, &'static [&'static str]);
@@ -200,7 +219,7 @@ impl HarteInterval {
 
     /// The pitch this degree names above a root.
     pub fn transpose_pitch(&self, root: &Pitch) -> Result<Pitch> {
-        self.interval.transpose_pitch(root)
+        Ok(self.interval.transpose_pitch(root)?)
     }
 }
 
@@ -494,13 +513,13 @@ impl Harte {
     /// counted from C, or from the root with `transpose`.
     pub fn multi_hot_encoding(&self, transpose: bool) -> [u8; 12] {
         let shift = if transpose {
-            self.chord.root().map_or(0, crate::chord::root::pitch_class)
+            self.chord.root().map_or(0, pitch_class)
         } else {
             0
         };
         let mut flags = [0u8; 12];
         for pitch in self.chord.pitches() {
-            let class = (crate::chord::root::pitch_class(&pitch) + 12 - shift) % 12;
+            let class = (pitch_class(&pitch) + 12 - shift) % 12;
             flags[usize::from(class)] = 1;
         }
         flags
@@ -573,6 +592,11 @@ impl fmt::Display for Harte {
         }
         Ok(())
     }
+}
+
+/// Which of the twelve pitch classes a pitch sounds, counted from C.
+fn pitch_class(pitch: &Pitch) -> u8 {
+    pitch.pitch_class().number() as u8
 }
 
 impl FromStr for Harte {

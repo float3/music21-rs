@@ -27,9 +27,27 @@ mod placed;
 pub use placed::Placed;
 
 use crate::{
-    chord::Chord, chordsymbol::ChordSymbol, defaults::FloatType, duration::Duration,
-    dynamics::Dynamic, error::Result, interval::Interval, key::KeySignature, meter::TimeSignature,
-    note::Note, pitch::Pitch, rest::Rest, tempo::MetronomeMark,
+    bar::{Barline, Ending},
+    chord::Chord,
+    chordsymbol::ChordSymbol,
+    clef::Clef,
+    defaults::{FloatType, IntegerType},
+    duration::Duration,
+    dynamics::Dynamic,
+    error::Result,
+    expressions::TextExpression,
+    instrument::Instrument,
+    interval::Interval,
+    key::{Key, KeySignature},
+    metadata::Metadata,
+    meter::TimeSignature,
+    note::Note,
+    percussion::{PercussionChord, Unpitched},
+    pitch::Pitch,
+    repeat::RepeatExpression,
+    rest::Rest,
+    spanner::Spanner,
+    tempo::{MetronomeMark, TempoText},
 };
 
 /// Which of music21's `Stream` subclasses a stream stands for.
@@ -101,17 +119,34 @@ pub enum StreamElement {
     /// A stream nested inside this one: a part in a score, a measure in a
     /// part. Boxed, since a stream holds these by value.
     Stream(Box<Stream>),
+    /// The clef in force from here on.
+    Clef(Clef),
+    /// The instrument playing from here on. Boxed: an instrument is large.
+    Instrument(Box<Instrument>),
     /// The key signature in force from here on.
     KeySignature(KeySignature),
+    /// The key in force from here on: a key signature that also says its
+    /// tonic and mode, as music21's `Key` is a `KeySignature`.
+    Key(Key),
     /// The metre in force from here on.
     TimeSignature(TimeSignature),
     /// The tempo in force from here on.
     MetronomeMark(MetronomeMark),
+    /// A tempo said in words, `Grave` or `Allegro`.
+    TempoText(TempoText),
+    /// Words written over or under the staff.
+    TextExpression(TextExpression),
+    /// A sign or words saying where to go next, *Fine* or *D.C.*
+    RepeatExpression(RepeatExpression),
     /// The dynamic in force from here on.
     Dynamic(Dynamic),
     /// A chord named over the music. It holds for the time it has been
     /// given and takes none until then.
     ChordSymbol(ChordSymbol),
+    /// A stroke with no pitch.
+    Unpitched(Unpitched),
+    /// Several strokes at once.
+    PercussionChord(PercussionChord),
 }
 
 impl StreamElement {
@@ -125,12 +160,20 @@ impl StreamElement {
         match self {
             Self::Note(note) => note.duration(),
             Self::Chord(chord) => chord.duration(),
+            Self::Unpitched(stroke) => stroke.duration(),
+            Self::PercussionChord(chord) => chord.duration(),
             Self::Rest(rest) => Some(rest.duration()),
             Self::ChordSymbol(symbol) => Some(symbol.duration()),
             Self::Stream(_)
+            | Self::Clef(_)
+            | Self::Instrument(_)
             | Self::KeySignature(_)
+            | Self::Key(_)
             | Self::TimeSignature(_)
             | Self::MetronomeMark(_)
+            | Self::TempoText(_)
+            | Self::TextExpression(_)
+            | Self::RepeatExpression(_)
             | Self::Dynamic(_) => None,
         }
     }
@@ -143,9 +186,15 @@ impl StreamElement {
     pub fn quarter_length(&self) -> FloatType {
         match self {
             Self::Stream(stream) => stream.end_offset(),
-            Self::KeySignature(_)
+            Self::Clef(_)
+            | Self::Instrument(_)
+            | Self::KeySignature(_)
+            | Self::Key(_)
             | Self::TimeSignature(_)
             | Self::MetronomeMark(_)
+            | Self::TempoText(_)
+            | Self::TextExpression(_)
+            | Self::RepeatExpression(_)
             | Self::Dynamic(_) => 0.0,
             _ => self
                 .duration()
@@ -161,10 +210,18 @@ impl StreamElement {
             Self::Note(note) => vec![note.pitch().clone()],
             Self::Chord(chord) => chord.pitches(),
             Self::Stream(stream) => stream.pitches(),
-            Self::Rest(_)
+            Self::PercussionChord(chord) => chord.pitches(),
+            Self::Unpitched(_)
+            | Self::Rest(_)
+            | Self::Clef(_)
+            | Self::Instrument(_)
             | Self::KeySignature(_)
+            | Self::Key(_)
             | Self::TimeSignature(_)
             | Self::MetronomeMark(_)
+            | Self::TempoText(_)
+            | Self::TextExpression(_)
+            | Self::RepeatExpression(_)
             | Self::Dynamic(_)
             | Self::ChordSymbol(_) => Vec::new(),
         }
@@ -175,6 +232,24 @@ impl StreamElement {
         match self {
             Self::Stream(stream) => Some(stream),
             _ => None,
+        }
+    }
+
+    /// music21's `classSortOrder`: what comes first among the things standing
+    /// at one offset.
+    pub(crate) fn class_sort_order(&self) -> i32 {
+        match self {
+            Self::TextExpression(_) => -30,
+            Self::Instrument(_) => -25,
+            Self::Stream(stream) if stream.kind() == StreamKind::Voice => 5,
+            Self::Stream(_) => -20,
+            Self::Clef(_) => 0,
+            Self::MetronomeMark(_) | Self::TempoText(_) => 1,
+            Self::KeySignature(_) | Self::Key(_) => 2,
+            Self::TimeSignature(_) => 4,
+            Self::Dynamic(_) => 10,
+            Self::ChordSymbol(_) => 19,
+            _ => 20,
         }
     }
 
@@ -197,10 +272,20 @@ impl StreamElement {
             }
             Self::Chord(chord) => Ok(Self::Chord(chord.transpose(interval)?)),
             Self::Rest(rest) => Ok(Self::Rest(rest.clone())),
+            // A stroke has no pitch to move, and a percussion part is not
+            // transposed with the music.
+            Self::Unpitched(stroke) => Ok(Self::Unpitched(stroke.clone())),
+            Self::PercussionChord(chord) => Ok(Self::PercussionChord(chord.clone())),
             Self::Stream(stream) => Ok(Self::Stream(Box::new(stream.transpose(interval)?))),
+            Self::Clef(clef) => Ok(Self::Clef(clef.clone())),
+            Self::Instrument(instrument) => Ok(Self::Instrument(instrument.clone())),
             Self::KeySignature(key) => Ok(Self::KeySignature(key.transpose(interval)?)),
+            Self::Key(key) => Ok(Self::Key(key.transpose(interval)?)),
             Self::TimeSignature(meter) => Ok(Self::TimeSignature(meter.clone())),
             Self::MetronomeMark(mark) => Ok(Self::MetronomeMark(mark.clone())),
+            Self::TempoText(text) => Ok(Self::TempoText(text.clone())),
+            Self::TextExpression(text) => Ok(Self::TextExpression(text.clone())),
+            Self::RepeatExpression(mark) => Ok(Self::RepeatExpression(mark.clone())),
             Self::Dynamic(dynamic) => Ok(Self::Dynamic(dynamic.clone())),
             Self::ChordSymbol(symbol) => Ok(Self::ChordSymbol(symbol.transpose(interval)?)),
         }
@@ -231,6 +316,24 @@ impl From<Stream> for StreamElement {
     }
 }
 
+impl From<Clef> for StreamElement {
+    fn from(value: Clef) -> Self {
+        Self::Clef(value)
+    }
+}
+
+impl From<Instrument> for StreamElement {
+    fn from(value: Instrument) -> Self {
+        Self::Instrument(Box::new(value))
+    }
+}
+
+impl From<Key> for StreamElement {
+    fn from(value: Key) -> Self {
+        Self::Key(value)
+    }
+}
+
 impl From<KeySignature> for StreamElement {
     fn from(value: KeySignature) -> Self {
         Self::KeySignature(value)
@@ -252,6 +355,36 @@ impl From<Dynamic> for StreamElement {
 impl From<ChordSymbol> for StreamElement {
     fn from(value: ChordSymbol) -> Self {
         Self::ChordSymbol(value)
+    }
+}
+
+impl From<TextExpression> for StreamElement {
+    fn from(value: TextExpression) -> Self {
+        Self::TextExpression(value)
+    }
+}
+
+impl From<Unpitched> for StreamElement {
+    fn from(value: Unpitched) -> Self {
+        Self::Unpitched(value)
+    }
+}
+
+impl From<PercussionChord> for StreamElement {
+    fn from(value: PercussionChord) -> Self {
+        Self::PercussionChord(value)
+    }
+}
+
+impl From<RepeatExpression> for StreamElement {
+    fn from(value: RepeatExpression) -> Self {
+        Self::RepeatExpression(value)
+    }
+}
+
+impl From<TempoText> for StreamElement {
+    fn from(value: TempoText) -> Self {
+        Self::TempoText(value)
     }
 }
 
@@ -307,6 +440,155 @@ pub struct Stream {
     #[cfg_attr(feature = "serde", serde(default))]
     kind: StreamKind,
     events: Vec<StreamEvent>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    labels: Labels,
+}
+
+/// How a staff group's barlines are drawn: music21's `barTogether`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum BarTogether {
+    /// Barlines run through every staff of the group.
+    Yes,
+    /// Each staff is barred on its own.
+    No,
+    /// Barlines run between the staves but not through them.
+    Mensurstrich,
+}
+
+impl BarTogether {
+    /// The group barline MusicXML writes for it.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Yes => "yes",
+            Self::No => "no",
+            Self::Mensurstrich => "Mensurstrich",
+        }
+    }
+}
+
+/// Parts of a score bracketed together: music21's `layout.StaffGroup`,
+/// which holds the parts it spans.
+///
+/// The parts are named by where they stand among the score's parts, first
+/// to last, in the order the group was given them.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct StaffGroup {
+    parts: Vec<usize>,
+    name: Option<String>,
+    abbreviation: Option<String>,
+    symbol: Option<String>,
+    bar_together: Option<BarTogether>,
+    name_hidden: bool,
+}
+
+impl StaffGroup {
+    /// A group of the parts at these positions, barred together and drawn
+    /// with no symbol, as music21's starts out.
+    pub fn new(parts: Vec<usize>) -> Self {
+        Self {
+            parts,
+            name: None,
+            abbreviation: None,
+            symbol: None,
+            bar_together: Some(BarTogether::Yes),
+            name_hidden: false,
+        }
+    }
+
+    /// The positions of the parts the group spans.
+    pub fn parts(&self) -> &[usize] {
+        &self.parts
+    }
+
+    /// The group's name.
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_deref()
+    }
+
+    /// Names the group, or clears the name.
+    pub fn set_name(&mut self, name: Option<String>) {
+        self.name = name;
+    }
+
+    /// The group's short name.
+    pub fn abbreviation(&self) -> Option<&str> {
+        self.abbreviation.as_deref()
+    }
+
+    /// Sets the short name, or clears it.
+    pub fn set_abbreviation(&mut self, abbreviation: Option<String>) {
+        self.abbreviation = abbreviation;
+    }
+
+    /// What the group is drawn with: `bracket`, `brace`, `line` or `square`.
+    pub fn symbol(&self) -> Option<&str> {
+        self.symbol.as_deref()
+    }
+
+    /// Sets what the group is drawn with. As in music21, `none` in any case
+    /// clears it, and anything but the four symbols is refused.
+    pub fn set_symbol(&mut self, symbol: Option<&str>) -> Result<()> {
+        self.symbol = match symbol.map(str::to_lowercase) {
+            None => None,
+            Some(symbol) if symbol == "none" => None,
+            Some(symbol) if ["brace", "line", "bracket", "square"].contains(&symbol.as_str()) => {
+                Some(symbol)
+            }
+            Some(symbol) => {
+                return Err(crate::error::Error::Value(format!(
+                    "the symbol value {symbol} is not acceptable"
+                )));
+            }
+        };
+        Ok(())
+    }
+
+    /// How the group's barlines are drawn, where that has been said.
+    pub fn bar_together(&self) -> Option<BarTogether> {
+        self.bar_together
+    }
+
+    /// Says how the group's barlines are drawn.
+    pub fn set_bar_together(&mut self, bar_together: Option<BarTogether>) {
+        self.bar_together = bar_together;
+    }
+
+    /// Whether the name is left unprinted: music21's `hideObjectOnPrint`.
+    pub fn name_hidden(&self) -> bool {
+        self.name_hidden
+    }
+
+    /// Says whether the name is left unprinted.
+    pub fn set_name_hidden(&mut self, hidden: bool) {
+        self.name_hidden = hidden;
+    }
+}
+
+/// What a stream is called and numbered, as distinct from what it holds.
+///
+/// music21 spreads these over its subclasses: a measure has a number, a part
+/// a name. They are kept together here, and a stream of a kind that has no
+/// use for one simply leaves it unset.
+#[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+struct Labels {
+    number: IntegerType,
+    number_suffix: Option<String>,
+    number_hidden: bool,
+    id: Option<String>,
+    name: Option<String>,
+    abbreviation: Option<String>,
+    name_hidden: bool,
+    abbreviation_hidden: bool,
+    /// Boxed: most streams carry none.
+    metadata: Option<Box<Metadata>>,
+    staff_groups: Vec<StaffGroup>,
+    left_barline: Option<Barline>,
+    right_barline: Option<Barline>,
+    spanners: Vec<Spanner>,
+    ending: Option<Ending>,
 }
 
 impl Stream {
@@ -319,8 +601,172 @@ impl Stream {
     pub fn with_kind(kind: StreamKind) -> Self {
         Self {
             kind,
-            events: Vec::new(),
+            ..Self::default()
         }
+    }
+
+    /// A measure's number: music21's `Measure.number`, which is nought until
+    /// something numbers it.
+    pub fn number(&self) -> IntegerType {
+        self.labels.number
+    }
+
+    /// Numbers the measure.
+    pub fn set_number(&mut self, number: IntegerType) {
+        self.labels.number = number;
+    }
+
+    /// What follows the number, as the `a` of a measure numbered `12a`:
+    /// music21's `numberSuffix`.
+    pub fn number_suffix(&self) -> Option<&str> {
+        self.labels.number_suffix.as_deref()
+    }
+
+    /// Sets what follows the number, or clears it.
+    pub fn set_number_suffix(&mut self, suffix: Option<String>) {
+        self.labels.number_suffix = suffix;
+    }
+
+    /// The number with its suffix, `12a`: music21's
+    /// `measureNumberWithSuffix`.
+    pub fn number_with_suffix(&self) -> String {
+        format!(
+            "{}{}",
+            self.labels.number,
+            self.labels.number_suffix.as_deref().unwrap_or("")
+        )
+    }
+
+    /// Whether the measure's number is left unshown, as a pickup bar's is:
+    /// music21's `showNumber` set to `NEVER`.
+    pub fn number_hidden(&self) -> bool {
+        self.labels.number_hidden
+    }
+
+    /// Says whether the measure's number is left unshown.
+    pub fn set_number_hidden(&mut self, hidden: bool) {
+        self.labels.number_hidden = hidden;
+    }
+
+    /// The name the stream is known by, as a part's `P1`: music21's `id`
+    /// where one was given rather than taken from a memory address.
+    pub fn id(&self) -> Option<&str> {
+        self.labels.id.as_deref()
+    }
+
+    /// Sets the stream's id, or clears it.
+    pub fn set_id(&mut self, id: Option<String>) {
+        self.labels.id = id;
+    }
+
+    /// A part's name, as printed beside its first system: music21's
+    /// `partName`.
+    pub fn name(&self) -> Option<&str> {
+        self.labels.name.as_deref()
+    }
+
+    /// Names the part, or clears the name.
+    pub fn set_name(&mut self, name: Option<String>) {
+        self.labels.name = name;
+    }
+
+    /// A part's short name, as printed beside the systems after the first:
+    /// music21's `partAbbreviation`.
+    pub fn abbreviation(&self) -> Option<&str> {
+        self.labels.abbreviation.as_deref()
+    }
+
+    /// Sets the part's short name, or clears it.
+    pub fn set_abbreviation(&mut self, abbreviation: Option<String>) {
+        self.labels.abbreviation = abbreviation;
+    }
+
+    /// Whether the part's name is left unprinted: music21's
+    /// `style.printPartName` set to false.
+    pub fn name_hidden(&self) -> bool {
+        self.labels.name_hidden
+    }
+
+    /// Says whether the part's name is left unprinted.
+    pub fn set_name_hidden(&mut self, hidden: bool) {
+        self.labels.name_hidden = hidden;
+    }
+
+    /// Whether the part's short name is left unprinted: music21's
+    /// `style.printPartAbbreviation` set to false.
+    pub fn abbreviation_hidden(&self) -> bool {
+        self.labels.abbreviation_hidden
+    }
+
+    /// Says whether the part's short name is left unprinted.
+    pub fn set_abbreviation_hidden(&mut self, hidden: bool) {
+        self.labels.abbreviation_hidden = hidden;
+    }
+
+    /// The title, composer and the rest a score carries: music21's
+    /// `metadata`.
+    pub fn metadata(&self) -> Option<&Metadata> {
+        self.labels.metadata.as_deref()
+    }
+
+    /// Sets the metadata, or clears it.
+    pub fn set_metadata(&mut self, metadata: Option<Metadata>) {
+        self.labels.metadata = metadata.map(Box::new);
+    }
+
+    /// The groups a score brackets its parts in, in the order they were
+    /// added.
+    pub fn staff_groups(&self) -> &[StaffGroup] {
+        &self.labels.staff_groups
+    }
+
+    /// Brackets some of the score's parts together.
+    pub fn add_staff_group(&mut self, group: StaffGroup) {
+        self.labels.staff_groups.push(group);
+    }
+
+    /// The barline a measure starts with, where it is not an ordinary one:
+    /// music21's `leftBarline`.
+    pub fn left_barline(&self) -> Option<&Barline> {
+        self.labels.left_barline.as_ref()
+    }
+
+    /// Sets the barline a measure starts with, or clears it.
+    pub fn set_left_barline(&mut self, barline: Option<Barline>) {
+        self.labels.left_barline = barline;
+    }
+
+    /// The barline a measure ends with, where it is not an ordinary one:
+    /// music21's `rightBarline`.
+    pub fn right_barline(&self) -> Option<&Barline> {
+        self.labels.right_barline.as_ref()
+    }
+
+    /// Sets the barline a measure ends with, or clears it.
+    pub fn set_right_barline(&mut self, barline: Option<Barline>) {
+        self.labels.right_barline = barline;
+    }
+
+    /// The alternative ending a measure is part of, where it is in one.
+    pub fn ending(&self) -> Option<&Ending> {
+        self.labels.ending.as_ref()
+    }
+
+    /// Puts the measure in an alternative ending, or takes it out.
+    pub fn set_ending(&mut self, ending: Option<Ending>) {
+        self.labels.ending = ending;
+    }
+
+    /// The slurs and other spanners this stream holds, each naming what it
+    /// joins by position in this stream's [`Stream::leaves`].
+    pub fn spanners(&self) -> &[Spanner] {
+        &self.labels.spanners
+    }
+
+    /// Adds a spanner, naming what it joins by position in this stream's
+    /// [`Stream::leaves`].
+    pub fn add_spanner(&mut self, spanner: Spanner) {
+        self.labels.spanners.push(spanner);
     }
 
     /// Which of music21's `Stream` subclasses this stands for.
@@ -333,11 +779,24 @@ impl Stream {
         self.kind = kind;
     }
 
+    /// This stream holding other events, in the order given: its kind, name
+    /// and numbers kept, its spanners dropped, since the places they name
+    /// are gone.
+    pub(crate) fn with_events(&self, events: Vec<StreamEvent>) -> Self {
+        let mut labels = self.labels.clone();
+        labels.spanners.clear();
+        Self {
+            kind: self.kind,
+            events,
+            labels,
+        }
+    }
+
     /// Creates a stream from events, sorted by offset.
     pub fn from_events(events: impl IntoIterator<Item = StreamEvent>) -> Self {
         let mut stream = Self {
-            kind: StreamKind::Stream,
             events: events.into_iter().collect(),
+            ..Self::default()
         };
         stream.sort_events();
         stream
@@ -541,9 +1000,14 @@ impl Stream {
             .collect()
     }
 
-    /// The parts this stream holds.
+    /// The parts this stream holds, a staff of a part written on several
+    /// included: music21's `.parts`, which a `PartStaff` is one of.
     pub fn parts(&self) -> Vec<&Stream> {
-        self.streams_of_kind(StreamKind::Part)
+        self.events
+            .iter()
+            .filter_map(|event| event.element.as_stream())
+            .filter(|stream| matches!(stream.kind, StreamKind::Part | StreamKind::PartStaff))
+            .collect()
     }
 
     /// The measures this stream holds.
@@ -594,6 +1058,7 @@ impl Stream {
     pub fn key_signature_at(&self, offset: FloatType) -> Option<KeySignature> {
         self.in_force_at(offset, |element| match element {
             StreamElement::KeySignature(key) => Some(key.clone()),
+            StreamElement::Key(key) => Some(key.key_signature()),
             _ => None,
         })
     }
@@ -641,6 +1106,7 @@ impl Stream {
             })
             .collect::<Result<Vec<_>>>()?;
         let mut out = Self::with_kind(self.kind);
+        out.labels = self.labels.clone();
         out.events = events;
         out.sort_events();
         Ok(out)

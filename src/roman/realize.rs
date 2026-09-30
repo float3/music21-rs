@@ -62,7 +62,13 @@ impl RomanNumeral {
                     continue;
                 }
                 let alter = pitch.accidental().alter() + FloatType::from(self.accidental);
-                pitch.set_accidental(Accidental::new(alter)?);
+                // A note moved onto a natural carries no accidental at all,
+                // as a note music21 transposes there carries none.
+                if alter == 0.0 {
+                    pitch.set_written_accidental(None);
+                } else {
+                    pitch.set_accidental(Accidental::new(alter)?);
+                }
             }
         }
 
@@ -304,9 +310,14 @@ pub(super) fn upper_extension_indices(pitches: &[Pitch]) -> Result<Vec<usize>> {
     let mut indices = Vec::new();
     for step in [7u8, 2, 4, 6] {
         if let Some(index) = chord_step_index(pitches, Some(&root), step)? {
-            indices.push(index);
+            // music21 asks whether a pitch is *equal* to one of these, so a
+            // note written twice is left alone twice.
+            let found = pitches[index].clone();
+            indices.extend((0..pitches.len()).filter(|other| pitches[*other] == found));
         }
     }
+    indices.sort_unstable();
+    indices.dedup();
     Ok(indices)
 }
 

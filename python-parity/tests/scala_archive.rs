@@ -4,7 +4,7 @@
 //! `music21` submodule, and `cargo test` on the library must work without it.
 //! It needs no Python, unlike the parity suite next to it.
 
-use music21_rs::{ScalaArchive, ScalaScale};
+use music21_rs::{Ratio, ScalaArchive, ScalaScale};
 
 use std::path::{Path, PathBuf};
 
@@ -112,11 +112,12 @@ fn reads_partch_43_as_the_committed_tuning_table_does() {
     let ratios: Vec<(u32, u32)> = scale
         .degrees()
         .iter()
-        .map(|degree| {
-            let fraction = degree
-                .as_fraction()
-                .expect("partch_43 is written entirely in exact ratios");
-            (fraction.numerator(), fraction.denominator())
+        .map(|degree| match degree.as_ratio() {
+            Some(Ratio::Rational {
+                numerator,
+                denominator,
+            }) => (numerator, denominator),
+            other => panic!("partch_43 is written entirely in exact ratios, not {other:?}"),
         })
         .collect();
 

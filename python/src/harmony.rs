@@ -33,7 +33,7 @@ use pyo3::types::{PyDict, PyList, PyTuple};
 use music21_rs_crate::chordsymbol::{
     ChordStepModification as RsChordStepModification,
     ChordStepModificationType as RsChordStepModificationType, ChordSymbolFigure,
-    inversion_is_valid_for_kind, voice_chord_notation,
+    alter_to_chord_symbol_string, inversion_is_valid_for_kind, voice_chord_notation,
 };
 use music21_rs_crate::{ChordSymbol as RsChordSymbol, Interval as RsInterval, Pitch as RsPitch};
 
@@ -856,8 +856,8 @@ impl ChordSymbol {
     }
 
     /// music21's `findFigure`. A symbol with a kind or modifications is
-    /// written from those — the root, the kind's abbreviation, the bass, and
-    /// each modification spelled out as ` add b9` — since there is no reading
+    /// written from those — the root, the kind's abbreviation, each
+    /// modification spelled out as ` add b9`, and the bass — since there is no reading
     /// a modified chord back off its notes; one with neither is read off its
     /// notes as `chordSymbolFigureFromChord` reads any chord.
     fn findFigure<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
@@ -885,14 +885,6 @@ impl ChordSymbol {
         if music21_rs_crate::chordsymbol::notation_for_kind(kind).is_some() {
             figure.push_str(&abbreviation_for(py, kind));
         }
-        let bass = slf.call_method0("bass")?;
-        if !bass.is_none() {
-            let bass_name: String = bass.getattr("name")?.extract()?;
-            if bass_name != root_name {
-                figure.push('/');
-                figure.push_str(&bass_name);
-            }
-        }
         for modification in modifications.iter() {
             let mod_type: String = modification.getattr("modType")?.extract()?;
             let degree = modification.getattr("degree")?.str()?.to_string();
@@ -901,10 +893,17 @@ impl ChordSymbol {
                 String::new()
             } else {
                 let semitones: f64 = interval.getattr("semitones")?.extract()?;
-                let sign = if semitones > 0.0 { "#" } else { "b" };
-                sign.repeat(semitones.abs().round() as usize)
+                alter_to_chord_symbol_string(semitones.round() as music21_rs_crate::IntegerType)
             };
             figure.push_str(&format!(" {mod_type} {prefix}{degree}"));
+        }
+        let bass = slf.call_method0("bass")?;
+        if !bass.is_none() {
+            let bass_name: String = bass.getattr("name")?.extract()?;
+            if bass_name != root_name {
+                figure.push('/');
+                figure.push_str(&bass_name);
+            }
         }
         Ok(figure.into_pyobject(py)?.into_any())
     }
@@ -1265,12 +1264,7 @@ impl ChordSymbol {
 pub(crate) fn crate_value(slf: &Bound<'_, ChordSymbol>) -> PyResult<RsChordSymbol> {
     let root = slf.call_method0("root")?;
     let mut symbol = if root.is_none() {
-        RsChordSymbol::from_kind(
-            RsPitch::from_name("C").map_err(harmony_error)?,
-            "major",
-            None,
-        )
-        .map_err(harmony_error)?
+        RsChordSymbol::no_chord(Some(slf.borrow().chord_kind_str.clone()))
     } else {
         let root = pitch_from_any(&root)?;
         let bass = slf.call_method0("bass")?;
@@ -1297,6 +1291,24 @@ pub(crate) fn crate_value(slf: &Bound<'_, ChordSymbol>) -> PyResult<RsChordSymbo
         .getattr("quarterLength")?
         .extract()?;
     symbol.set_duration(music21_rs_crate::Duration::new(length).map_err(harmony_error)?);
+    let py = slf.py();
+    let me = slf.borrow();
+    if !symbol.is_no_chord() {
+        symbol.set_kind_text(Some(me.chord_kind_str.clone()));
+        let modifications: Vec<RsChordStepModification> = me
+            .modifications
+            .bind(py)
+            .iter()
+            .map(|each| modification_value(&each))
+            .collect::<PyResult<_>>()?;
+        symbol.set_chord_step_modifications(modifications);
+    }
+    symbol.set_placement(
+        me.placement
+            .as_ref()
+            .and_then(|placement| placement.bind(py).extract::<String>().ok())
+            .and_then(|name| music21_rs_crate::Placement::from_name(&name).ok()),
+    );
     Ok(symbol)
 }
 

@@ -656,8 +656,16 @@ impl Note {
         }
         // music21 keeps the colour on the style, so an edit through
         // `n.style.color` is an edit to the note.
-        if self.style.is_some() {
+        if let Some(style) = &self.style {
             note.set_color(crate::notation::style_colour(py, self.style.as_ref()));
+            note.set_size(
+                style
+                    .bind(py)
+                    .getattr("noteSize")
+                    .ok()
+                    .and_then(|size| size.extract::<String>().ok())
+                    .and_then(|size| music21_rs_crate::notation::NoteSize::from_name(&size)),
+            );
         }
         // music21 keeps the tie on an object a caller may still be holding,
         // and its own note-splitting writes through it.
@@ -726,8 +734,17 @@ impl Note {
         if let Ok(pitch) = pitch.extract::<Py<Pitch>>() {
             copied.pitch = pitch;
         }
+        let had_volume = slf.borrow().volume.is_some();
         let object = crate::copy_as_same_type(slf, copied)?;
-        Self::claim_pitch(py, &object.clone().cast_into::<Self>()?.unbind());
+        let note = object.clone().cast_into::<Self>()?;
+        Self::claim_pitch(py, &note.clone().unbind());
+        // A note with a volume copies to a note with one, the copy's own:
+        // music21 reads the object's mere existence as
+        // `hasVolumeInformation`, and its MusicXML writer asks that before
+        // it writes how loud the tied remainder of a split note is.
+        if had_volume {
+            Self::get_volume(&note, py)?;
+        }
         Ok(object)
     }
 

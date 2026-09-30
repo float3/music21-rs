@@ -246,6 +246,7 @@ struct PolyrhythmRatioToneInfo {
     component: u32,
     offset: i32,
     ratio: f64,
+    cents: f64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -957,8 +958,8 @@ pub fn tuning_systems(root_frequency_hz: f64) -> Result<JsValue, JsValue> {
                         // Every system the page offers is exact; a ratio
                         // with no exact form is written as a decimal.
                         ratio_label: tuning_system
-                            .fraction(degree as usize)
-                            .map_or_else(|| format!("{ratio:.6}"), |fraction| fraction.label()),
+                            .exact_ratio(degree as usize)
+                            .map_or_else(|| format!("{ratio:.6}"), |exact| exact.to_string()),
                         frequency_hz: root_frequency_hz * ratio,
                         cents: ratio_cents(ratio),
                         cents_from_equal_temperament: tuning_system.cents(degree),
@@ -1020,11 +1021,22 @@ pub fn analyze_polyrhythm(
         abc_chord_document(&ratio_pitches).map_err(|err| JsValue::from_str(&err.to_string()))?;
     let rhythm_abc_notation = abc_polyrhythm_document(&analysis.components, analysis.base)
         .map_err(|err| JsValue::from_str(&err.to_string()))?;
-    let pitches = ratio_pitches
+    let chord_input = ratio_pitches
         .iter()
         .map(Pitch::name_with_octave)
+        .collect::<Vec<_>>()
+        .join(" ");
+    let pitches = ratio_pitches
+        .iter()
+        .map(|pitch| {
+            let microtone = pitch.microtone().map(ToString::to_string);
+            format!(
+                "{}{}",
+                pitch.name_with_octave(),
+                microtone.unwrap_or_default()
+            )
+        })
         .collect::<Vec<_>>();
-    let chord_input = pitches.join(" ");
 
     serde_wasm_bindgen::to_value(&PolyrhythmAnalysisInfo {
         components: analysis.components,
@@ -1049,6 +1061,7 @@ pub fn analyze_polyrhythm(
                 component: tone.component,
                 offset: tone.offset,
                 ratio: tone.ratio,
+                cents: tone.cents,
             })
             .collect(),
         pitches,
@@ -1083,7 +1096,7 @@ fn pitch_infos(pitches: &[Pitch]) -> Vec<PitchInfo> {
             let pitch_space = display_pitch.ps();
             let tuning_frequencies = all_playable()
                 .map(|tuning_system| {
-                    let frequency_hz = frequency_in_system(tuning_system, pitch_space);
+                    let frequency_hz = display_pitch.frequency_hz_in(tuning_system);
                     TuningFrequencyInfo {
                         id: tuning_id(tuning_system),
                         name: tuning_label(tuning_system),
@@ -1490,29 +1503,6 @@ mod adaptive_tests {
         let f_over_c = adaptive_frequency(0.0, 5.0, C4).unwrap();
         assert!((f_over_c - C4 * 4.0 / 3.0).abs() < 1e-9, "{f_over_c}");
     }
-}
-
-/// A pitch's frequency in a tuning system, which for a system of twelve
-/// degrees is its own degree and for any other the degree nearest it in
-/// cents within the octave.
-fn frequency_in_system(tuning_system: TuningSystem, pitch_space: f64) -> f64 {
-    let octave_size = tuning_system.degrees_per_period();
-    if octave_size == 12 {
-        return tuning_system.frequency_at(pitch_space);
-    }
-    let cents = pitch_space.rem_euclid(12.0) * 100.0;
-    let nearest = (0..octave_size)
-        .min_by(|a, b| {
-            let distance = |degree: &u32| {
-                (1200.0 * tuning_system.ratio(*degree as usize).log2() - cents).abs()
-            };
-            distance(a)
-                .partial_cmp(&distance(b))
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })
-        .unwrap_or(0);
-    let octave = pitch_space.div_euclid(12.0);
-    music21_rs::tuningsystem::CN1 * (2.0_f64).powf(octave) * tuning_system.ratio(nearest as usize)
 }
 
 fn parse_midi_input(input: &str) -> Option<Vec<i32>> {
@@ -2018,7 +2008,7 @@ fn describe_scale(file: &str, scale: &ScalaScale, root_frequency_hz: f64) -> Sca
         .map(|(degree, entry)| ScalaDegreeInfo {
             degree,
             label: entry.to_string(),
-            is_exact_ratio: entry.as_fraction().is_some(),
+            is_exact_ratio: entry.as_ratio().is_some(),
             ratio: entry.ratio(),
             cents: entry.cents(),
             cents_from_equal: entry.cents() - degree as f64 * equal_step,
@@ -2139,7 +2129,7 @@ struct HarteInfo {
 #[wasm_bindgen]
 /// Reads a chord label in Harte notation and describes the chord it sounds.
 pub fn harte_chord(label: &str) -> Result<JsValue, JsValue> {
-    let harte = music21_rs::Harte::new(label).map_err(|err| JsValue::from_str(&err.to_string()))?;
+    let harte = harte::Harte::new(label).map_err(|err| JsValue::from_str(&err.to_string()))?;
     let chord = harte.chord();
     let info = HarteInfo {
         label: label.to_string(),
@@ -2187,7 +2177,7 @@ struct ShorthandInfo {
 #[wasm_bindgen]
 /// The shorthands Harte notation knows, each with the degrees it stands for.
 pub fn harte_shorthands() -> Result<JsValue, JsValue> {
-    let table = music21_rs::harte::SHORTHAND_DEGREES
+    let table = harte::SHORTHAND_DEGREES
         .iter()
         .map(|(name, degrees)| ShorthandInfo {
             name,

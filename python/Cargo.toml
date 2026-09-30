@@ -20,6 +20,7 @@ name = "music21_rs"
 # `music21_rs`, and rustdoc will not build a doctest against two externs of
 # one name — which is why `cargo test` here could never run them.
 music21_rs_crate = { package = "music21-rs", path = "..", default-features = false, features = [
+  "musicxml",
   "serde",
 ] }
 pyo3 = "0.29.0"

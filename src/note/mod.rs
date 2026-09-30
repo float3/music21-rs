@@ -1,9 +1,11 @@
+use crate::articulations::Articulation;
 use crate::defaults::{FloatType, IntegerType};
 use crate::duration::Duration;
 use crate::error::Result;
+use crate::expressions::Expression;
 use crate::instrument::Instrument;
 use crate::interval::Interval;
-use crate::notation::{Beams, Lyric, Notehead, StemDirection, Tie, verses};
+use crate::notation::{Beams, Lyric, NoteSize, Notehead, StemDirection, Tie, verses};
 use crate::pitch::Pitch;
 use crate::volume::Volume;
 
@@ -32,11 +34,18 @@ struct Notation {
     notehead_parenthesis: bool,
     stem_direction: StemDirection,
     color: Option<String>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    size: Option<NoteSize>,
     volume: Option<Volume>,
     lyrics: Vec<Lyric>,
     beams: Beams,
     /// Boxed: an instrument is large and most notes carry none.
     stored_instrument: Option<Box<Instrument>>,
+    expressions: Vec<Expression>,
+    articulations: Vec<Articulation>,
+    hidden: bool,
+    #[cfg_attr(feature = "serde", serde(default))]
+    id: Option<String>,
 }
 
 impl Note {
@@ -211,6 +220,17 @@ impl Note {
         self.notation.color = color;
     }
 
+    /// How large the note is drawn, where a score says: music21 keeps this
+    /// on the note's style as `noteSize`.
+    pub fn size(&self) -> Option<NoteSize> {
+        self.notation.size
+    }
+
+    /// Says how large the note is drawn.
+    pub fn set_size(&mut self, size: Option<NoteSize>) {
+        self.notation.size = size;
+    }
+
     /// How loud the note is. music21 makes a volume on first access, so this
     /// answers a default one for a note nobody has marked; see
     /// [`Self::has_volume_information`] to tell the two apart.
@@ -247,6 +267,52 @@ impl Note {
     /// `Volume::new()` set on a note counts.
     pub fn has_volume_information(&self) -> bool {
         self.notation.volume.is_some()
+    }
+
+    /// The fermatas, ornaments and other marks written on the note:
+    /// music21's `expressions`.
+    pub fn expressions(&self) -> &[Expression] {
+        &self.notation.expressions
+    }
+
+    /// The same, to be changed.
+    pub fn expressions_mut(&mut self) -> &mut Vec<Expression> {
+        &mut self.notation.expressions
+    }
+
+    /// Whether it is left off the printed page, keeping its place and its
+    /// time: music21's `style.hideObjectOnPrint`, which a score uses for a
+    /// rest that only fills out a voice.
+    pub fn hidden(&self) -> bool {
+        self.notation.hidden
+    }
+
+    /// Says whether it is left off the printed page.
+    pub fn set_hidden(&mut self, hidden: bool) {
+        self.notation.hidden = hidden;
+    }
+
+    /// The name the note is known by, where it has been given one:
+    /// music21's `id`, when that is a name and not a number of its own
+    /// making.
+    pub fn id(&self) -> Option<&str> {
+        self.notation.id.as_deref()
+    }
+
+    /// Names the note, or takes its name away.
+    pub fn set_id(&mut self, id: Option<String>) {
+        self.notation.id = id;
+    }
+
+    /// How the note is played: its accents, staccatos, bowings and
+    /// fingerings, music21's `articulations`.
+    pub fn articulations(&self) -> &[Articulation] {
+        &self.notation.articulations
+    }
+
+    /// The same, to be changed.
+    pub fn articulations_mut(&mut self) -> &mut Vec<Articulation> {
+        &mut self.notation.articulations
     }
 
     /// The syllables sung on this note, one per verse.

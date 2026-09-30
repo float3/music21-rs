@@ -248,19 +248,22 @@ impl Lyric {
     /// This lyric as a value, with whatever its component objects say now
     /// written into it, so the crate answers every question about it.
     pub(crate) fn synced(&self, py: Python<'_>) -> RsLyric {
+        let mut lyric = self.inner.clone();
+        // music21 keeps the colour on the style.
+        if self.style.is_some() {
+            lyric.set_color(style_colour(py, self.style.as_ref()));
+        }
         let Some(components) = self.components.as_ref().map(|list| list.bind(py)) else {
-            return self.inner.clone();
+            return lyric;
         };
         let syllables: Vec<RsLyric> = components
             .iter()
             .filter_map(|component| component.extract::<PyRef<'_, Lyric>>().ok())
             .map(|component| component.synced(py))
             .collect();
-        if syllables.is_empty() {
-            return self.inner.clone();
+        if !syllables.is_empty() {
+            lyric.set_components(syllables);
         }
-        let mut lyric = self.inner.clone();
-        lyric.set_components(syllables);
         lyric
     }
 }

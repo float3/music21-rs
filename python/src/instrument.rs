@@ -95,7 +95,7 @@ impl Instrument {
     }
 
     /// An instrument of the wheel's class for its kind.
-    fn object(py: Python<'_>, inner: RsInstrument) -> PyResult<Py<PyAny>> {
+    pub(crate) fn object(py: Python<'_>, inner: RsInstrument) -> PyResult<Py<PyAny>> {
         // The class installed over music21's where there is one, since
         // music21 holds nothing else in a stream; this wheel's own where not.
         let class = match crate::installed_class(py, "music21.instrument", inner.kind()) {

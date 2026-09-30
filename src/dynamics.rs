@@ -9,7 +9,9 @@ use std::fmt;
 
 use crate::{
     defaults::FloatType,
+    display::Drawn,
     error::{Error, Result},
+    notation::Placement,
 };
 
 /// The marks music21 lists, softest first: its `shortNames`.
@@ -115,6 +117,8 @@ pub struct Dynamic {
     /// A loudness a caller gave, which wins over the mark's own.
     #[cfg_attr(feature = "serde", serde(default))]
     volume_scalar: Option<FloatType>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    placement: Drawn<Option<Placement>>,
 }
 
 impl Dynamic {
@@ -124,7 +128,18 @@ impl Dynamic {
         Self {
             value: value.into(),
             volume_scalar: None,
+            placement: Drawn(None),
         }
+    }
+
+    /// Which side of the staff it is written on, where the score says.
+    pub fn placement(&self) -> Option<Placement> {
+        self.placement.0
+    }
+
+    /// Says which side of the staff it is written on.
+    pub fn set_placement(&mut self, placement: Option<Placement>) {
+        self.placement.0 = placement;
     }
 
     /// A dynamic from a loudness between nought and one, named as the mark

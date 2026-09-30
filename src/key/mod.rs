@@ -23,6 +23,8 @@ pub struct Key {
     tonic_pitch: Pitch,
     mode: String,
     sharps: IntegerType,
+    #[cfg_attr(feature = "serde", serde(default))]
+    color: Option<String>,
 }
 
 impl Key {
@@ -31,7 +33,18 @@ impl Key {
             tonic_pitch,
             mode: mode.to_string(),
             sharps,
+            color: None,
         }
+    }
+
+    /// The colour the key's signature is drawn in, if one was said.
+    pub fn color(&self) -> Option<&str> {
+        self.color.as_deref()
+    }
+
+    /// Sets the colour the key's signature is drawn in.
+    pub fn set_color(&mut self, color: Option<String>) {
+        self.color = color;
     }
 
     /// Builds a key from a tonic and mode.

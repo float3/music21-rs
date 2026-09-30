@@ -1,5 +1,7 @@
+use crate::articulations::Articulation;
 use crate::defaults::IntegerType;
 use crate::duration::Duration;
+use crate::expressions::Expression;
 use crate::notation::{Lyric, verses};
 
 /// A silent musical event with a duration.
@@ -18,6 +20,18 @@ pub struct Rest {
     duration: Duration,
     #[cfg_attr(feature = "serde", serde(default))]
     lyrics: Vec<Lyric>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    hidden: bool,
+    #[cfg_attr(feature = "serde", serde(default))]
+    expressions: Vec<Expression>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    articulations: Vec<Articulation>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    step_shift: IntegerType,
+    #[cfg_attr(feature = "serde", serde(default))]
+    size: Option<crate::notation::NoteSize>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    tie: Option<crate::notation::Tie>,
 }
 
 impl PartialEq for Rest {
@@ -32,7 +46,80 @@ impl Rest {
         Self {
             duration,
             lyrics: Vec::new(),
+            hidden: false,
+            expressions: Vec::new(),
+            articulations: Vec::new(),
+            step_shift: 0,
+            size: None,
+            tie: None,
         }
+    }
+
+    /// The tie written on the rest, which music21 lets a rest carry and a
+    /// score now and then writes.
+    pub fn tie(&self) -> Option<&crate::notation::Tie> {
+        self.tie.as_ref()
+    }
+
+    /// Writes a tie on the rest, or takes it off.
+    pub fn set_tie(&mut self, tie: Option<crate::notation::Tie>) {
+        self.tie = tie;
+    }
+
+    /// How large the rest is drawn, where a score says, as a cue part's
+    /// rests are drawn small.
+    pub fn size(&self) -> Option<crate::notation::NoteSize> {
+        self.size
+    }
+
+    /// Says how large the rest is drawn.
+    pub fn set_size(&mut self, size: Option<crate::notation::NoteSize>) {
+        self.size = size;
+    }
+
+    /// How many staff steps above the middle line the rest is drawn, below
+    /// where negative: music21's `stepShift`, which a score uses to keep one
+    /// voice's rests out of another's way.
+    pub fn step_shift(&self) -> IntegerType {
+        self.step_shift
+    }
+
+    /// Says how many staff steps from the middle line it is drawn.
+    pub fn set_step_shift(&mut self, shift: IntegerType) {
+        self.step_shift = shift;
+    }
+
+    /// The fermatas and other marks written over the rest: music21's
+    /// `expressions`, which a rest has as a note does.
+    pub fn expressions(&self) -> &[Expression] {
+        &self.expressions
+    }
+
+    /// The same, to be changed.
+    pub fn expressions_mut(&mut self) -> &mut Vec<Expression> {
+        &mut self.expressions
+    }
+
+    /// The articulations written on the rest: music21's `articulations`.
+    pub fn articulations(&self) -> &[Articulation] {
+        &self.articulations
+    }
+
+    /// The same, to be changed.
+    pub fn articulations_mut(&mut self) -> &mut Vec<Articulation> {
+        &mut self.articulations
+    }
+
+    /// Whether it is left off the printed page, keeping its place and its
+    /// time: music21's `style.hideObjectOnPrint`, which a score uses for a
+    /// rest that only fills out a voice.
+    pub fn hidden(&self) -> bool {
+        self.hidden
+    }
+
+    /// Says whether it is left off the printed page.
+    pub fn set_hidden(&mut self, hidden: bool) {
+        self.hidden = hidden;
     }
 
     /// Creates a rest from a quarter-length value.

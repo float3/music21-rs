@@ -22,15 +22,13 @@ pub(crate) fn music21_name(name: &str) -> String {
     format!("{step}{}", music21_modifier(letters.as_str()))
 }
 
-/// A chord-symbol figure with its pitch names spelled music21's way, so
-/// that it writes `B-7/A-` rather than `Bb7/Ab`.
+/// A chord-symbol figure with its root and bass spelled music21's way, so
+/// that it writes `B-7/A-` rather than `Bb7/Ab`; its additions and
+/// omissions are degrees and carry no name.
 pub(crate) fn music21_figure(figure: ChordSymbolFigure) -> ChordSymbolFigure {
-    let names = |names: Vec<String>| names.iter().map(|name| music21_name(name)).collect();
     ChordSymbolFigure {
         root: music21_name(&figure.root),
         bass: figure.bass.as_deref().map(music21_name),
-        additions: names(figure.additions),
-        omissions: names(figure.omissions),
         ..figure
     }
 }

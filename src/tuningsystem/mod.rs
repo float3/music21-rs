@@ -21,6 +21,8 @@ pub mod scala_bundled;
 /// Rank-2 regular temperaments, a period and a generator over a mapping.
 pub mod temperament;
 mod temperaments_generated;
+/// Tuning spelled pitches: a way of sizing intervals, and where it starts.
+pub mod tuning;
 
 pub use equal::{EqualDivision, TRITAVE_CENTS};
 
@@ -30,9 +32,11 @@ pub use mos::{Mos, MosScale, OCTAVE_CENTS, moment_of_symmetry_sizes};
 use std::num::NonZeroU32;
 pub use temperament::Temperament;
 pub use temperaments_generated::*;
+pub use tuning::{Just, Reference, Tuning};
 
-use crate::defaults::{FloatType, IntegerType, UnsignedIntegerType};
+use crate::defaults::{FloatType, FractionType, IntegerType, UnsignedIntegerType};
 use crate::error::{Error, Result};
+use crate::pitch::Pitch;
 use crate::tuningsystem::adaptive::AdaptiveTuningSystem;
 
 use std::fmt::{Display, Formatter};
@@ -54,24 +58,6 @@ pub const A4: FloatType = 440.0;
 pub const A0: FloatType = A4 / 16.0;
 /// Frequency of A-1 in hertz.
 pub const AN1: FloatType = A4 / 32.0;
-
-/// Degree labels for a twelve-tone chromatic octave.
-pub const TWELVE_TONE_NAMES: [&str; 12] = [
-    "C", "C#/Db", "D", "D#/Eb", "E", "F", "F#/Gb", "G", "G#/Ab", "A", "A#/Bb", "B",
-];
-
-/// Degree labels for a twelve-tone chromatic octave using sharps.
-pub const TWELVE_TONE_NAMES_SHARP: [&str; 12] = [
-    "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
-];
-
-/// Degree labels for a twelve-tone chromatic octave using flats.
-pub const TWELVE_TONE_NAMES_FLAT: [&str; 12] = [
-    "C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B",
-];
-
-/// Degree labels for a whole-tone octave.
-pub const WHOLE_TONE_NAMES: [&str; 6] = ["C", "D", "E", "F#/Gb", "G#/Ab", "A#/Bb"];
 
 /// The common twelve-tone tuning systems useful for comparing pitch frequencies.
 pub const COMMON_TWELVE_TONE_TUNING_SYSTEMS: [TuningSystem; 4] = [
@@ -214,140 +200,169 @@ pub const ALL_TUNING_SYSTEMS: [TuningSystem; 28] = [
     TuningSystem::LehmanBach,
 ];
 
+/// An exact interval as a tuning table writes one: a ratio of whole numbers,
+/// or a root of one.
+///
+/// A root is how an equal division is exact: a step of twelve-tone equal
+/// temperament is `2^(1/12)`, and one of Bohlen-Pierce `3^(1/13)`. Neither is
+/// a fraction, which is why this is not a [`FractionType`]; a rational one
+/// converts to that with [`Ratio::to_fraction`], and to a [`Monzo`] with
+/// [`Ratio::monzo`].
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// A ratio-like value used by tuning tables.
 #[must_use]
-pub struct Fraction {
-    /// Numerator for a rational ratio, or exponent numerator when `base` is set.
-    pub numerator: UnsignedIntegerType,
-    /// Denominator for a rational ratio, or exponent denominator when `base` is set.
-    pub denominator: UnsignedIntegerType,
-    /// Exponential base. A value of `0` means use `numerator / denominator`.
-    pub base: UnsignedIntegerType,
+pub enum Ratio {
+    /// `numerator / denominator`.
+    Rational {
+        /// The number on top.
+        numerator: UnsignedIntegerType,
+        /// The number below.
+        denominator: UnsignedIntegerType,
+    },
+    /// `base^(numerator / denominator)`.
+    Root {
+        /// The number a root is taken of.
+        base: UnsignedIntegerType,
+        /// The power it is raised to.
+        numerator: UnsignedIntegerType,
+        /// Which root is taken.
+        denominator: UnsignedIntegerType,
+    },
 }
 
-impl Fraction {
-    /// Creates a rational fraction.
+impl Ratio {
+    /// `numerator / denominator`.
     pub const fn new(numerator: UnsignedIntegerType, denominator: UnsignedIntegerType) -> Self {
-        Self::new_with_base(numerator, denominator, 0)
-    }
-
-    /// Creates a fraction with an optional exponential base.
-    pub const fn new_with_base(
-        numerator: UnsignedIntegerType,
-        denominator: UnsignedIntegerType,
-        base: UnsignedIntegerType,
-    ) -> Self {
-        Self {
+        Self::Rational {
             numerator,
             denominator,
-            base,
         }
     }
 
-    /// Returns the numerator.
-    pub const fn numerator(&self) -> UnsignedIntegerType {
-        self.numerator
-    }
-
-    /// Returns the denominator.
-    pub const fn denominator(&self) -> UnsignedIntegerType {
-        self.denominator
-    }
-
-    /// Returns the exponential base, or `0` for rational ratios.
-    pub const fn base(&self) -> UnsignedIntegerType {
-        self.base
-    }
-
-    /// Converts this value into a floating-point ratio.
-    pub fn ratio(self) -> FloatType {
-        self.into()
-    }
-
-    /// Returns a compact music-friendly display label.
-    pub fn label(self) -> String {
-        self.to_string()
-    }
-
-    /// Returns this fraction shifted upward by `octaves`.
-    pub fn with_octaves(mut self, octaves: UnsignedIntegerType) -> Self {
-        if octaves == 0 {
-            return self;
-        }
-
-        if self.base == 0 {
-            let multiplier = (2 as UnsignedIntegerType)
-                .checked_pow(octaves)
-                .expect("octave multiplier exceeds u32 range");
-            self.numerator = self
-                .numerator
-                .checked_mul(multiplier)
-                .expect("fraction numerator exceeds u32 range");
-        } else {
-            let octave_offset = self
-                .denominator
-                .checked_mul(octaves)
-                .expect("fraction octave offset exceeds u32 range");
-            self.numerator = self
-                .numerator
-                .checked_add(octave_offset)
-                .expect("fraction numerator exceeds u32 range");
-        }
-
-        self
-    }
-}
-
-impl From<Fraction> for FloatType {
-    fn from(frac: Fraction) -> Self {
-        if frac.base == 0 {
-            frac.numerator as FloatType / frac.denominator as FloatType
-        } else {
-            (frac.base as FloatType)
-                .powf(frac.numerator as FloatType / frac.denominator as FloatType)
-        }
-    }
-}
-
-impl Display for Fraction {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if self.base == 0 {
-            if self.denominator == 1 {
-                write!(f, "{}", self.numerator)
-            } else {
-                write!(f, "{}/{}", self.numerator, self.denominator)
-            }
-        } else if self.numerator == 0 {
-            write!(f, "1")
-        } else {
-            write!(f, "{}^({}/{})", self.base, self.numerator, self.denominator)
-        }
-    }
-}
-
-impl From<(UnsignedIntegerType, UnsignedIntegerType)> for Fraction {
-    fn from(frac: (UnsignedIntegerType, UnsignedIntegerType)) -> Self {
-        Self::new(frac.0, frac.1)
-    }
-}
-
-impl
-    From<(
-        UnsignedIntegerType,
-        UnsignedIntegerType,
-        UnsignedIntegerType,
-    )> for Fraction
-{
-    fn from(
-        frac: (
-            UnsignedIntegerType,
-            UnsignedIntegerType,
-            UnsignedIntegerType,
-        ),
+    /// `base^(numerator / denominator)`.
+    pub const fn root(
+        base: UnsignedIntegerType,
+        numerator: UnsignedIntegerType,
+        denominator: UnsignedIntegerType,
     ) -> Self {
-        Self::new_with_base(frac.0, frac.1, frac.2)
+        Self::Root {
+            base,
+            numerator,
+            denominator,
+        }
+    }
+
+    /// How many times wider than a unison the interval is.
+    #[must_use]
+    pub fn value(self) -> FloatType {
+        match self {
+            Self::Rational {
+                numerator,
+                denominator,
+            } => FloatType::from(numerator) / FloatType::from(denominator),
+            Self::Root {
+                base,
+                numerator,
+                denominator,
+            } => FloatType::from(base)
+                .powf(FloatType::from(numerator) / FloatType::from(denominator)),
+        }
+    }
+
+    /// How wide the interval is, in cents.
+    #[must_use]
+    pub fn cents(self) -> FloatType {
+        OCTAVE_CENTS * self.value().log2()
+    }
+
+    /// The ratio as a [`FractionType`]: `None` for a root, and for a ratio
+    /// too wide for one.
+    #[must_use]
+    pub fn to_fraction(self) -> Option<FractionType> {
+        match self {
+            Self::Rational {
+                numerator,
+                denominator,
+            } => Some(FractionType::new(
+                IntegerType::try_from(numerator).ok()?,
+                IntegerType::try_from(denominator).ok()?,
+            )),
+            Self::Root { .. } => None,
+        }
+    }
+
+    /// The ratio's prime exponents. Errors on a root, whose exponents are not
+    /// whole, and on a ratio with a prime past the ones [`Monzo`] carries.
+    pub fn monzo(self) -> Result<Monzo> {
+        let fraction = self.to_fraction().ok_or_else(|| {
+            Error::TuningSystem(format!(
+                "{self} is not a ratio of two i32s, so has no monzo"
+            ))
+        })?;
+        Monzo::from_fraction(fraction)
+    }
+
+    /// The interval raised by `octaves` periods: octaves for a ratio, and
+    /// whole powers of its base for a root.
+    pub fn with_octaves(self, octaves: UnsignedIntegerType) -> Self {
+        match self {
+            Self::Rational {
+                numerator,
+                denominator,
+            } => {
+                let multiplier = (2 as UnsignedIntegerType)
+                    .checked_pow(octaves)
+                    .expect("octave multiplier exceeds u32 range");
+                Self::new(
+                    numerator
+                        .checked_mul(multiplier)
+                        .expect("ratio numerator exceeds u32 range"),
+                    denominator,
+                )
+            }
+            Self::Root {
+                base,
+                numerator,
+                denominator,
+            } => Self::root(
+                base,
+                numerator
+                    .checked_add(
+                        denominator
+                            .checked_mul(octaves)
+                            .expect("root octave offset exceeds u32 range"),
+                    )
+                    .expect("root numerator exceeds u32 range"),
+                denominator,
+            ),
+        }
+    }
+}
+
+impl From<Ratio> for FloatType {
+    fn from(ratio: Ratio) -> Self {
+        ratio.value()
+    }
+}
+
+impl Display for Ratio {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            Self::Rational {
+                numerator,
+                denominator: 1,
+            } => write!(f, "{numerator}"),
+            Self::Rational {
+                numerator,
+                denominator,
+            } => write!(f, "{numerator}/{denominator}"),
+            Self::Root { numerator: 0, .. } => write!(f, "1"),
+            Self::Root {
+                base,
+                numerator,
+                denominator,
+            } => write!(f, "{base}^({numerator}/{denominator})"),
+        }
     }
 }
 
@@ -557,7 +572,7 @@ impl TuningSystem {
         let whole = index.floor() as IntegerType;
         let len = IntegerType::try_from(table.len()).expect("ratio table length exceeds i32 range");
         let fraction = index - FloatType::from(whole);
-        table[whole.rem_euclid(len) as usize].ratio()
+        table[whole.rem_euclid(len) as usize].value()
             * period.powi(whole.div_euclid(len))
             * period.powf(fraction / steps)
     }
@@ -568,14 +583,14 @@ impl TuningSystem {
     /// division of a whole-number period, as a root of it: a step of `13edt`
     /// is the thirteenth root of three. A division of an irrational period,
     /// Carlos Alpha's 78 cents, has none.
-    pub fn fraction(self, index: usize) -> Option<Fraction> {
+    pub fn exact_ratio(self, index: usize) -> Option<Ratio> {
         let index = UnsignedIntegerType::try_from(index).expect("tone index exceeds u32 range");
         match self {
             Self::Equal(division) => match division.period_ratio() {
-                Some((base, 1)) => Some(Fraction::new_with_base(
+                Some((base, 1)) => Some(Ratio::root(
+                    UnsignedIntegerType::try_from(base).ok()?,
                     index,
                     division.divisions(),
-                    UnsignedIntegerType::try_from(base).ok()?,
                 )),
                 _ => None,
             },
@@ -587,11 +602,36 @@ impl TuningSystem {
         }
     }
 
-    /// A label for a degree: its name within the period and which period it
-    /// is in.
+    /// A name for a degree, counted from `C-1`.
+    ///
+    /// A system of twelve degrees to the octave names each degree for its key,
+    /// `C♯/D♭4`, however it is tuned, and so does any other system on a degree
+    /// that lands on a key. Every other degree is the pitch it sounds, as
+    /// [`TuningSystem::pitch_at`] spells it, with its microtone: `G0(+2c)` is
+    /// the thirteenth step of Bohlen-Pierce. Ptolemy's intense diatonic and
+    /// the Sa-grama are named in sargam, `Re0`.
     pub fn label(self, index: UnsignedIntegerType) -> String {
         let steps = self.degrees_per_period();
-        degree_name_with_octave(&self.degree_label(index, steps), index / steps)
+        if matches!(self, Self::PtolemyIntenseDiatonic | Self::IndianAlt) && steps == 7 {
+            let octave = IntegerType::try_from(index / steps).expect("an octave fits an i32") - 1;
+            return format!("{}{octave}", INDIAN_SCALE_NAMES[(index % steps) as usize]);
+        }
+        let index = IntegerType::try_from(index).expect("a degree index fits an i32");
+        if self.is_keyboard() {
+            return key_label(index);
+        }
+        let pitch = self
+            .pitch_at(index)
+            .expect("every degree of a tuning system is a pitch");
+        if pitch.is_twelve_tone() {
+            return key_label(pitch.pitch_space().round() as IntegerType);
+        }
+        let microtone = pitch.microtone().map(ToString::to_string);
+        format!(
+            "{}{}",
+            pitch.unicode_name_with_octave(),
+            microtone.unwrap_or_default()
+        )
     }
 
     /// Which period a degree falls in, counting from nought.
@@ -607,6 +647,58 @@ impl TuningSystem {
     /// The frequency in hertz of a fractional degree above `C-1`.
     pub fn frequency_at(self, index: FloatType) -> FloatType {
         CN1 * self.ratio_at(index)
+    }
+
+    /// The degree sounding nearest `hertz`, counted from `C-1` as
+    /// [`TuningSystem::frequency`] counts, and measured in cents. Errors on a
+    /// frequency that is not a finite number above nought.
+    ///
+    /// ```
+    /// use music21_rs::tuningsystem::TuningSystem;
+    ///
+    /// let nineteen = TuningSystem::edo(19);
+    /// // A4 at 440 Hz is nearest degree 5 of the fifth period above C-1.
+    /// assert_eq!(nineteen.nearest_degree(440.0)?, 5 * 19 + 14);
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
+    pub fn nearest_degree(self, hertz: FloatType) -> Result<IntegerType> {
+        if !hertz.is_finite() || hertz <= 0.0 {
+            return Err(Error::TuningSystem(format!(
+                "a frequency must be a finite number above nought, got {hertz}"
+            )));
+        }
+        Ok(self.nearest_degree_to_cents(OCTAVE_CENTS * (hertz / CN1).log2()))
+    }
+
+    /// The degree nearest a distance above `C-1` in cents. A table may be
+    /// uneven enough that the nearest degree lies in the next period, so the
+    /// periods either side are searched too.
+    fn nearest_degree_to_cents(self, cents: FloatType) -> IntegerType {
+        let steps = IntegerType::try_from(self.degrees_per_period())
+            .expect("a period's degree count fits an i32");
+        let period = (cents / self.period_cents()).floor() as IntegerType;
+        let distance = |degree: IntegerType| {
+            (OCTAVE_CENTS * self.ratio_at(degree.into()).log2() - cents).abs()
+        };
+        ((period - 1) * steps..=(period + 2) * steps)
+            .min_by(|&a, &b| distance(a).total_cmp(&distance(b)))
+            .expect("the search range is never empty")
+    }
+
+    /// The pitch a degree sounds, counted from `C-1`: spelled as the nearest
+    /// pitch-space value is spelled, with any remainder as a microtone.
+    ///
+    /// ```
+    /// use music21_rs::tuningsystem::TuningSystem;
+    ///
+    /// // Degree 4 of the five-limit table is a just major third above C-1.
+    /// let e = TuningSystem::FiveLimit.pitch_at(64)?;
+    /// assert_eq!(e.name_with_octave(), "E4");
+    /// assert!((e.microtone().unwrap().cents() + 13.686).abs() < 1e-3);
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
+    pub fn pitch_at(self, index: IntegerType) -> Result<Pitch> {
+        Pitch::from_pitch_space(OCTAVE_CENTS * self.ratio_at(index.into()).log2() / 100.0)
     }
 
     /// How far a degree lies from the same degree of the equal division of
@@ -652,11 +744,17 @@ impl TuningSystem {
         }
     }
 
+    /// Whether the system has twelve degrees to the octave, one for each key
+    /// of a keyboard.
+    pub fn is_keyboard(self) -> bool {
+        self.degrees_per_period() == 12 && self.repeats_at_the_octave()
+    }
+
     fn period_ratio(self) -> FloatType {
         (2.0 as FloatType).powf(self.period_cents() / OCTAVE_CENTS)
     }
 
-    fn ratio_table(self) -> Option<&'static [Fraction]> {
+    fn ratio_table(self) -> Option<&'static [Ratio]> {
         match self {
             Self::CarlosHarmonic => Some(&CARLOS_HARMONIC),
             Self::CarlosHarmonic24 => Some(&CARLOS_HARMONIC_24),
@@ -684,24 +782,6 @@ impl TuningSystem {
             Self::Silbermann => Some(&SILBERMANN),
             Self::LehmanBach => Some(&LEHMAN_BACH),
             Self::Equal(_) => None,
-        }
-    }
-
-    fn degree_label(self, index: UnsignedIntegerType, octave_size: UnsignedIntegerType) -> String {
-        if octave_size == 0 {
-            return default_degree_label(OCTAVE_SIZE, index);
-        }
-
-        let degree = index % octave_size;
-        match self {
-            Self::Equal(division) if division == EqualDivision::edo(nonzero(6)) => {
-                WHOLE_TONE_NAMES[degree as usize].to_string()
-            }
-            Self::PtolemyIntenseDiatonic | Self::IndianAlt if octave_size == 7 => {
-                INDIAN_SCALE_NAMES[degree as usize].to_string()
-            }
-            _ if !self.repeats_at_the_octave() => format!("T{degree}"),
-            _ => default_degree_label(octave_size, index),
         }
     }
 
@@ -809,68 +889,54 @@ impl FromStr for TuningSystem {
     }
 }
 
-/// Creates an equal-temperament fraction for `tone` within `octave_size`.
-pub fn equal_temperament(tone: UnsignedIntegerType, octave_size: UnsignedIntegerType) -> Fraction {
-    Fraction::new_with_base(tone, octave_size, 2)
+/// A step of an equal division of the octave: `tone` steps of `octave_size`.
+pub const fn equal_temperament(
+    tone: UnsignedIntegerType,
+    octave_size: UnsignedIntegerType,
+) -> Ratio {
+    Ratio::root(2, tone, octave_size)
 }
 
-/// Creates a twelve-tone equal-temperament fraction.
-pub fn equal_temperament_12(tone: UnsignedIntegerType) -> Fraction {
-    equal_temperament(tone, 12)
-}
-
-/// Creates an equal-temperament fraction using [`OCTAVE_SIZE`].
-pub fn equal_temperament_default(tone: UnsignedIntegerType) -> Fraction {
-    equal_temperament(tone, OCTAVE_SIZE)
-}
-
-fn default_degree_label(octave_size: UnsignedIntegerType, index: UnsignedIntegerType) -> String {
-    if octave_size == OCTAVE_SIZE {
-        TWELVE_TONE_NAMES[(index % OCTAVE_SIZE) as usize].to_string()
+/// A key of a keyboard by its pitch-space number: a white key by its
+/// letter, a black one by both of its names, `C♯/D♭4`.
+fn key_label(pitch_space: IntegerType) -> String {
+    let pitch =
+        Pitch::from_pitch_space(pitch_space.into()).expect("a whole pitch-space value is a pitch");
+    let octave = pitch_space.div_euclid(12) - 1;
+    let alter = pitch.alter();
+    if alter == 0.0 {
+        return format!("{}{octave}", pitch.unicode_name());
+    }
+    let (sharp, flat) = if alter < 0.0 {
+        (pitch.get_lower_enharmonic(), Ok(pitch))
     } else {
-        format!("T{}", index % octave_size)
-    }
-}
-
-fn degree_name_with_octave(degree_label: &str, octave: UnsignedIntegerType) -> String {
-    let adjusted_octave = i64::from(octave) - 1;
-    let generic_degree_label = degree_label
-        .strip_prefix('T')
-        .is_some_and(|rest| !rest.is_empty() && rest.chars().all(|ch| ch.is_ascii_digit()));
-
-    if generic_degree_label {
-        return if adjusted_octave < 0 {
-            format!("{degree_label}ON{}", -adjusted_octave)
-        } else {
-            format!("{degree_label}O{adjusted_octave}")
-        };
-    }
-
-    if adjusted_octave < 0 {
-        format!("{degree_label}N{}", -adjusted_octave)
-    } else {
-        format!("{degree_label}{adjusted_octave}")
-    }
+        (Ok(pitch.clone()), pitch.get_higher_enharmonic())
+    };
+    let (sharp, flat) = (
+        sharp.expect("a black key has a sharp name"),
+        flat.expect("a black key has a flat name"),
+    );
+    format!("{}/{}{octave}", sharp.unicode_name(), flat.unicode_name())
 }
 
 /// Five-tone Javanese equal-temperament approximation.
-pub const JAVANESE: [Fraction; 5] = [
-    Fraction::new_with_base(0, 5, 2),
-    Fraction::new_with_base(1, 5, 2),
-    Fraction::new_with_base(2, 5, 2),
-    Fraction::new_with_base(3, 5, 2),
-    Fraction::new_with_base(4, 5, 2),
+pub const JAVANESE: [Ratio; 5] = [
+    Ratio::root(2, 0, 5),
+    Ratio::root(2, 1, 5),
+    Ratio::root(2, 2, 5),
+    Ratio::root(2, 3, 5),
+    Ratio::root(2, 4, 5),
 ];
 
 /// Seven-tone Thai equal-temperament approximation.
-pub const THAI: [Fraction; 7] = [
-    Fraction::new_with_base(0, 7, 2),
-    Fraction::new_with_base(1, 7, 2),
-    Fraction::new_with_base(2, 7, 2),
-    Fraction::new_with_base(3, 7, 2),
-    Fraction::new_with_base(4, 7, 2),
-    Fraction::new_with_base(5, 7, 2),
-    Fraction::new_with_base(6, 7, 2),
+pub const THAI: [Ratio; 7] = [
+    Ratio::root(2, 0, 7),
+    Ratio::root(2, 1, 7),
+    Ratio::root(2, 2, 7),
+    Ratio::root(2, 3, 7),
+    Ratio::root(2, 4, 7),
+    Ratio::root(2, 5, 7),
+    Ratio::root(2, 6, 7),
 ];
 
 /// Degree labels for the seven-tone PtolemyIntenseDiatonic scale.
@@ -881,10 +947,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn every_system_answers_cents_and_a_fraction_for_its_degrees() {
+    fn every_system_answers_cents_and_an_exact_ratio_for_its_degrees() {
         for system in ALL_TUNING_SYSTEMS {
-            let unison = system.fraction(0).expect("every listed system is exact");
-            assert!(unison.numerator == 0 || unison.numerator == unison.denominator);
+            let unison = system.exact_ratio(0).expect("every listed system is exact");
+            assert_eq!(unison.value(), 1.0);
             assert_eq!(system.cents(0), 0.0);
             assert!(system.cents(system.degrees_per_period()).abs() < 1e-9);
         }
@@ -1015,7 +1081,7 @@ mod tests {
 
     #[test]
     fn equal_temperament_degree_helpers_work_without_tone_objects() {
-        assert_eq!(TuningSystem::edo(12).label(0), "CN1");
+        assert_eq!(TuningSystem::edo(12).label(0), "C-1");
         assert_eq!(TuningSystem::edo(12).period_of(0), 0);
         assert!((TuningSystem::edo(12).frequency(0) - CN1).abs() < 1e-12);
 
@@ -1038,41 +1104,36 @@ mod tests {
 
     #[test]
     fn ratio_helpers_cover_octaves() {
-        let two_one: FloatType = Fraction::new(2, 1).into();
+        let two_one: FloatType = Ratio::new(2, 1).into();
         assert_eq!(TuningSystem::CarlosHarmonic.ratio(12), two_one);
         assert_eq!(TuningSystem::CarlosHarmonic24.ratio(24), two_one);
         assert_eq!(TuningSystem::EQUAL_TEMPERAMENT.ratio(12), two_one);
     }
 
     #[test]
-    fn fraction_helpers_cover_rational_and_exponential_forms() {
-        let rational = Fraction::from((3, 2));
-        assert_eq!(rational.numerator(), 3);
-        assert_eq!(rational.denominator(), 2);
-        assert_eq!(rational.base(), 0);
-        assert_eq!(rational.ratio(), 1.5);
-        assert_eq!(rational.label(), "3/2");
-        assert_eq!(rational.with_octaves(2), Fraction::new(12, 2));
+    fn a_ratio_is_rational_or_a_root() {
+        let rational = Ratio::new(3, 2);
+        assert_eq!(rational.value(), 1.5);
+        assert_eq!(rational.to_string(), "3/2");
+        assert_eq!(rational.with_octaves(2), Ratio::new(12, 2));
+        assert_eq!(rational.to_fraction(), Some(FractionType::new(3, 2)));
+        assert_eq!(rational.monzo().unwrap().to_string(), "[-1 1⟩");
+        assert!((rational.cents() - 701.955).abs() < 1e-3);
 
-        let exponential = Fraction::from((7, 12, 2));
-        assert_eq!(exponential.label(), "2^(7/12)");
-        assert_eq!(
-            exponential.with_octaves(1),
-            Fraction::new_with_base(19, 12, 2)
-        );
-        assert!((exponential.ratio() - 2.0_f64.powf(7.0 / 12.0)).abs() < 1e-12);
+        let root = Ratio::root(2, 7, 12);
+        assert_eq!(root.to_string(), "2^(7/12)");
+        assert_eq!(root.with_octaves(1), Ratio::root(2, 19, 12));
+        assert!((root.value() - 2.0_f64.powf(7.0 / 12.0)).abs() < 1e-12);
+        assert_eq!(root.to_fraction(), None);
+        assert!(root.monzo().is_err());
     }
 
     #[test]
     fn an_equal_division_carries_its_own_step_count() {
-        assert_eq!(equal_temperament_12(12), Fraction::new_with_base(12, 12, 2));
-        assert_eq!(
-            equal_temperament_default(3),
-            Fraction::new_with_base(3, OCTAVE_SIZE, 2)
-        );
+        assert_eq!(equal_temperament(12, 12), Ratio::root(2, 12, 12));
         let quarter = TuningSystem::QUARTER_TONE;
-        assert_eq!(quarter.fraction(6), Some(Fraction::new_with_base(6, 24, 2)));
-        assert_eq!(quarter.label(24), "T0O0");
+        assert_eq!(quarter.exact_ratio(6), Some(Ratio::root(2, 6, 24)));
+        assert_eq!(quarter.label(24), "C0");
         assert!((quarter.frequency(12) - CN1 * 2.0_f64.sqrt()).abs() < 1e-10);
         assert_eq!(quarter.cents(12), 0.0);
     }
@@ -1087,15 +1148,12 @@ mod tests {
         assert!((bohlen_pierce.ratio(13) - 3.0).abs() < 1e-12);
         assert!((bohlen_pierce.ratio(26) - 9.0).abs() < 1e-12);
         assert_eq!(bohlen_pierce.period_of(26), 2);
-        assert_eq!(
-            bohlen_pierce.fraction(13),
-            Some(Fraction::new_with_base(13, 13, 3))
-        );
+        assert_eq!(bohlen_pierce.exact_ratio(13), Some(Ratio::root(3, 13, 13)));
         assert!(
-            (bohlen_pierce.fraction(4).unwrap().ratio() - bohlen_pierce.ratio(4)).abs() < 1e-12
+            (bohlen_pierce.exact_ratio(4).unwrap().value() - bohlen_pierce.ratio(4)).abs() < 1e-12
         );
         assert_eq!(bohlen_pierce.cents(5), 0.0);
-        assert_eq!(bohlen_pierce.label(13), "T0O0");
+        assert_eq!(bohlen_pierce.label(13), "G0(+2c)");
         assert_eq!(bohlen_pierce.id(), "13edt");
         assert_eq!("13edt".parse::<TuningSystem>().unwrap(), bohlen_pierce);
     }
@@ -1105,7 +1163,7 @@ mod tests {
     #[test]
     fn an_equal_division_of_an_irrational_period_has_no_fractions() {
         let alpha = TuningSystem::Equal(EqualDivision::new(18, 1404.0).unwrap());
-        assert_eq!(alpha.fraction(1), None);
+        assert_eq!(alpha.exact_ratio(1), None);
         assert!((1200.0 * alpha.ratio(1).log2() - 78.0).abs() < 1e-9);
         assert!((1200.0 * alpha.ratio(18).log2() - 1404.0).abs() < 1e-9);
         assert_eq!(alpha.id().parse::<TuningSystem>().unwrap(), alpha);
@@ -1150,6 +1208,57 @@ mod tests {
     }
 
     #[test]
+    fn a_keyboard_system_names_its_degrees_for_their_keys() {
+        let five_limit = TuningSystem::FiveLimit;
+        assert_eq!(five_limit.label(60), "C4");
+        assert_eq!(five_limit.label(61), "C♯/D♭4");
+        assert_eq!(five_limit.label(63), "D♯/E♭4");
+        assert_eq!(five_limit.label(70), "A♯/B♭4");
+        assert_eq!(TuningSystem::WHOLE_TONE.label(34), "G♯/A♭4");
+        // Nineteen steps do not land on keys, so each is the pitch it sounds.
+        assert_eq!(TuningSystem::edo(19).label(95), "C4");
+        assert_eq!(TuningSystem::edo(19).label(96), "C𝄲4(+13c)");
+    }
+
+    #[test]
+    fn the_nearest_degree_to_a_degree_is_that_degree() {
+        for system in ALL_TUNING_SYSTEMS
+            .into_iter()
+            .chain([TuningSystem::Equal(EqualDivision::tritave(13).unwrap())])
+        {
+            let steps = system.degrees_per_period() as IntegerType;
+            for degree in (2 * steps)..(6 * steps) {
+                let hertz = system.frequency_at(degree.into());
+                assert_eq!(system.nearest_degree(hertz).unwrap(), degree, "{system:?}");
+            }
+        }
+        assert!(TuningSystem::FiveLimit.nearest_degree(0.0).is_err());
+        assert!(
+            TuningSystem::FiveLimit
+                .nearest_degree(FloatType::INFINITY)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn a_pitch_sounds_the_nearest_degree_of_a_system_without_its_keys() {
+        let nineteen = TuningSystem::edo(19);
+        let a4 = Pitch::from_name("A4").unwrap();
+        // 440 Hz lies between two steps of nineteen; the nearer is 436.0 Hz.
+        let sounded = a4.frequency_hz_in(nineteen);
+        assert!((sounded - nineteen.frequency(109)).abs() < 1e-9);
+        assert!((sounded - 440.0).abs() < 1200.0 / 19.0);
+        // A keyboard system still sounds each key's own degree.
+        let e4 = Pitch::from_name("E4").unwrap();
+        assert!((e4.frequency_hz_in(TuningSystem::FiveLimit) - 327.032).abs() < 0.001);
+
+        // Spelled back to within the six significant digits a pitch-space
+        // value is kept to.
+        let back = Pitch::from_frequency_in(sounded, nineteen).unwrap();
+        assert!((1200.0 * (back.frequency_hz() / sounded).log2()).abs() < 0.01);
+    }
+
+    #[test]
     fn table_ratios_shift_by_real_octaves() {
         assert_eq!(TuningSystem::CarlosHarmonic.ratio(19), 3.0);
         assert_eq!(TuningSystem::FortyThreeTone.ratio(68), 3.0);
@@ -1158,20 +1267,20 @@ mod tests {
 
     #[test]
     fn non_twelve_tone_systems_keep_system_octaves_and_labels() {
-        assert_eq!(TuningSystem::WHOLE_TONE.label(1), "DN1");
+        assert_eq!(TuningSystem::WHOLE_TONE.label(1), "D-1");
         assert_eq!(TuningSystem::WHOLE_TONE.degrees_per_period(), 6);
         assert!(
             (TuningSystem::WHOLE_TONE.ratio(1) - (2.0 as FloatType).powf(1.0 / 6.0)).abs() < 1e-12
         );
 
-        assert_eq!(TuningSystem::QUARTER_TONE.label(13), "T13ON1");
+        assert_eq!(TuningSystem::QUARTER_TONE.label(13), "F♯𝄲-1");
         assert_eq!(TuningSystem::QUARTER_TONE.degrees_per_period(), 24);
         assert!(
             (TuningSystem::QUARTER_TONE.ratio(13) - (2.0 as FloatType).powf(13.0 / 24.0)).abs()
                 < 1e-12
         );
 
-        assert_eq!(TuningSystem::Thai.label(7), "T0O0");
+        assert_eq!(TuningSystem::Thai.label(7), "C0");
         assert_eq!(TuningSystem::Thai.degrees_per_period(), 7);
         assert_eq!(TuningSystem::Thai.ratio(7), 2.0);
 
@@ -1179,7 +1288,7 @@ mod tests {
         assert_eq!(TuningSystem::PtolemyIntenseDiatonic.degrees_per_period(), 7);
         assert_eq!(TuningSystem::PtolemyIntenseDiatonic.ratio(8), 2.25);
 
-        assert_eq!(TuningSystem::FortyThreeTone.label(68), "T25O0");
+        assert_eq!(TuningSystem::FortyThreeTone.label(68), "G0(+2c)");
         assert_eq!(TuningSystem::FortyThreeTone.degrees_per_period(), 43);
         assert_eq!(TuningSystem::FortyThreeTone.ratio(68), 3.0);
     }

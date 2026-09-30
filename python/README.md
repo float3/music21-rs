@@ -36,6 +36,25 @@ m.RomanNumeral("viio7", m.Key("c")).pitches
 m.TimeSignature("6/8").getAccentWeight(1.5)   # 0.5
 ```
 
+## MusicXML
+
+```python
+import music21_rs as m
+
+score = m.from_musicxml(open("tune.musicxml", encoding="utf-8").read())
+for part in score.parts:
+    print(part.partName, len(part.getElementsByClass("Measure")))
+
+text = m.to_musicxml(score, encoding_date="2026-01-01")
+```
+
+`to_musicxml` takes one of this package's streams or one of music21's and
+writes what music21's exporter writes with `makeNotation=False`.
+`from_musicxml` reads what music21's reader reads and hands back this
+package's own `Score`; what the package has no class for -- words, barlines,
+slurs and other spanners, metadata -- is read and left out. A compressed
+`.mxl` is a zip holding the document: unpack it first.
+
 ## Using it inside music21
 
 `install_into_music21()` replaces the classes of an installed music21 with
@@ -61,7 +80,7 @@ MusicXML.
 - 94% of the public methods of the ported music21 classes are reachable from
   this wheel.
 - All 40 music21 modules whose doctests run against the port pass every
-  example, 9,171 of them: `pitch`, `interval`, `chord`, `chord.tables`,
+  example, 9,174 of them: `pitch`, `interval`, `chord`, `chord.tables`,
   `note`, `duration`, `key`, `scale`, `scale.scala`, `roman`, `harmony`,
   `serial`, `sieve`, `meter.base`, `meter.core`, `beam`, `tie`, `volume`,
   `dynamics`, `instrument`, `clef`, `articulations`, `expressions`, `tempo`,
@@ -146,7 +165,8 @@ Asato Cuthbert and all music21 contributors for the original library.
 
 ### harte-library
 
-The crate's `harte` module, compiled into the wheel, is a port of
+The `harte` crate beside this one, which `xtask downstream` runs
+harte-library's own tests against, is a port of
 [harte-library](https://github.com/andreamust/harte-library) by Andrea
 Poltronieri, licensed
 [MIT](https://github.com/andreamust/harte-library/blob/main/LICENSE).
@@ -183,18 +203,20 @@ Fixes found while porting went upstream:
 - [cuthbertLab/music21#2028](https://github.com/cuthbertLab/music21/pull/2028):
   `getPitchFromNodeDegree` handing back a pitch owned by the scale's cache.
 - [cuthbertLab/music21#2038](https://github.com/cuthbertLab/music21/pull/2038):
-  `OctaveRepeatingScale` appending to the list of steps it was given (open).
+  `OctaveRepeatingScale` appending to the list of steps it was given.
 - [cuthbertLab/music21#2043](https://github.com/cuthbertLab/music21/pull/2043):
   a descending realization checking its range against the unaltered pitch.
 - [cuthbertLab/music21#2044](https://github.com/cuthbertLab/music21/pull/2044):
   `derive` leaving out a scale's altered degrees, so a harmonic minor derived
-  as a natural minor (open).
+  as a natural minor.
 - [cuthbertLab/music21#2045](https://github.com/cuthbertLab/music21/pull/2045):
   an octave-repeating scale wider than an octave starting an octave off its
   tonic.
 - [cuthbertLab/music21#2046](https://github.com/cuthbertLab/music21/pull/2046):
   timespan offsets added as floats, which gave a voice-leading quartet that is
   not in the music.
+- [cuthbertLab/music21#2048](https://github.com/cuthbertLab/music21/pull/2048):
+  two deepcopies in `AbstractScale` of values that are already copies (open).
 - [PLAINSOUND/hexatone#3](https://github.com/PLAINSOUND/hexatone/pull/3):
   Scala headers in five Hexatone scale files (open).
 - Corrections to the Xenharmonic Wiki's temperament pages, found while

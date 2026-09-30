@@ -43,7 +43,7 @@ impl Chord {
     ///
     /// This is separate from [`Self::pitched_common_name`]: common names follow
     /// the music21/Forte tables, while chord symbols use music21-style
-    /// figures such as `Cmaj7`, `F#m7b5`, or `Ddom7dim5/CaddA,E-`.
+    /// figures such as `Cmaj7`, `F#m7b5`, or `Ddom7dim5add5addb9/C`.
     pub fn chord_symbol(&self) -> Option<String> {
         self.chord_symbols().into_iter().next()
     }

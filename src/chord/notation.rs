@@ -57,6 +57,12 @@ impl Chord {
         self.stored_instrument()
     }
 
+    /// Whether a volume was set on the chord itself: music21's
+    /// `hasVolumeInformation`, which does not look at the notes.
+    pub fn has_volume_information(&self) -> bool {
+        self.volume.is_some()
+    }
+
     /// Sets the chord's own volume, which drops any the notes carried.
     pub fn set_volume(&mut self, volume: Option<Volume>) {
         for note in &mut self.notes {
@@ -162,6 +168,28 @@ impl Chord {
         for note in &mut self.notes {
             note.set_tie(tie.clone());
         }
+    }
+
+    /// The fermatas, ornaments and arpeggios written on the chord as a
+    /// whole: music21's `expressions`.
+    pub fn expressions(&self) -> &[crate::expressions::Expression] {
+        &self.expressions
+    }
+
+    /// The same, to be changed.
+    pub fn expressions_mut(&mut self) -> &mut Vec<crate::expressions::Expression> {
+        &mut self.expressions
+    }
+
+    /// How the chord is played: music21's `articulations`, where a
+    /// fingering is one note's and anything else the whole chord's.
+    pub fn articulations(&self) -> &[crate::articulations::Articulation] {
+        &self.articulations
+    }
+
+    /// The same, to be changed.
+    pub fn articulations_mut(&mut self) -> &mut Vec<crate::articulations::Articulation> {
+        &mut self.articulations
     }
 
     /// The syllables sung on the chord, kept on its first note as music21

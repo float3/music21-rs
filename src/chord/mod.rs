@@ -80,6 +80,13 @@ pub struct Chord {
     /// A bass the caller decided on, which wins over the lowest pitch.
     #[cfg_attr(feature = "serde", serde(default))]
     bass_override: Option<Pitch>,
+    /// The fermatas, ornaments and arpeggios written on the chord as a
+    /// whole.
+    #[cfg_attr(feature = "serde", serde(default))]
+    expressions: Vec<crate::expressions::Expression>,
+    /// How the chord as a whole is played, fingerings one to a note.
+    #[cfg_attr(feature = "serde", serde(default))]
+    articulations: Vec<crate::articulations::Articulation>,
 }
 
 use crate::interval::constants::PERFECT_FIFTH_UP as PERFECT_FIFTH;
@@ -219,6 +226,8 @@ impl Chord {
             stored_instrument: None,
             root_override: None,
             bass_override: None,
+            expressions: Vec::new(),
+            articulations: Vec::new(),
         }
     }
 
@@ -2631,7 +2640,7 @@ mod tests {
         assert_eq!(major_seventh.chord_symbol().as_deref(), Some("Cmaj7"));
         assert_eq!(
             petrushka.chord_symbol().as_deref(),
-            Some("Ddom7dim5/CaddA,Eb")
+            Some("Ddom7dim5add5addb9/C")
         );
         assert_eq!(slash_chord.chord_symbol().as_deref(), None);
     }

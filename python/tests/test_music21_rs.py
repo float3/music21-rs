@@ -8,6 +8,7 @@ handful of behaviours a caller reaches for first are right.
 """
 
 import gc
+import copy
 import math
 import subprocess
 import sys
@@ -107,6 +108,40 @@ def test_a_note_keeps_one_duration_object():
     duration.type = "half"
     assert note.duration is duration
     assert note.quarterLength == 2.0
+
+
+@pytest.mark.parametrize("copier", [copy.deepcopy, copy.copy])
+def test_a_copied_note_keeps_its_volume(copier):
+    # music21's `splitAtQuarterLength` makes the second piece by deep copy.
+    note = m.Note("C4")
+    note.volume.velocity = 64
+    copied = copier(note)
+    assert copied.hasVolumeInformation()
+    assert copied.volume.velocity == 64
+    assert copied.volume is not note.volume
+    assert copied.volume.client is copied
+    assert not copier(m.Note("C4")).hasVolumeInformation()
+
+
+def test_a_grace_note_is_in_no_tuplet():
+    note = m.Note("C4")
+    note.duration.quarterLength = 1 / 3
+    assert len(note.duration.tuplets) == 1
+    assert note.duration.getGraceDuration().tuplets == ()
+    assert note.duration.getGraceDuration(appoggiatura=True).tuplets == ()
+    grace = note.getGrace()
+    assert grace.duration.tuplets == ()
+    assert grace.duration.type == "eighth"
+    assert len(note.duration.tuplets) == 1
+    note.getGrace(inPlace=True)
+    assert note.duration.tuplets == ()
+
+
+def test_a_length_no_single_value_comes_to_is_a_value_in_a_tuplet():
+    duration = m.Duration(5 / 6)
+    assert duration.type == "quarter"
+    (tuplet,) = duration.tuplets
+    assert (tuplet.numberNotesActual, tuplet.numberNotesNormal) == (6, 5)
 
 
 def test_interval_arithmetic():
@@ -821,3 +856,62 @@ def test_a_chord_symbol_keeps_the_root_and_bass_music21_voices(figure, root, bas
     assert symbol.root().nameWithOctave == root
     assert symbol.bass().nameWithOctave == bass
     assert symbol.inversion() == inversion
+
+
+MUSICXML = """<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="4.0">
+  <part-list>
+    <score-part id="P1"><part-name>Flute</part-name></score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>2</divisions>
+        <key><fifths>2</fifths><mode>major</mode></key>
+        <time><beats>2</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef>
+      </attributes>
+      <note><pitch><step>D</step><octave>4</octave></pitch>
+        <duration>2</duration><voice>1</voice><type>quarter</type></note>
+      <note><pitch><step>F</step><alter>1</alter><octave>4</octave></pitch>
+        <duration>1</duration><voice>1</voice><type>eighth</type></note>
+      <note><chord/><pitch><step>A</step><octave>4</octave></pitch>
+        <duration>1</duration><voice>1</voice><type>eighth</type></note>
+      <note><rest/><duration>1</duration><voice>1</voice><type>eighth</type></note>
+    </measure>
+  </part>
+</score-partwise>
+"""
+
+
+def test_musicxml_is_read_into_the_wheels_own_streams():
+    score = m.from_musicxml(MUSICXML)
+    assert type(score).__name__ == "Score"
+    (part,) = score.parts
+    assert part.partName == "Flute"
+    (measure,) = part.getElementsByClass("Measure")
+    assert measure.number == 1
+    kinds = [type(element).__name__ for element in measure]
+    assert kinds == ["TrebleClef", "Key", "TimeSignature", "Note", "Chord", "Rest"]
+    note, chord, rest = list(measure)[3:]
+    assert note.nameWithOctave == "D4"
+    assert [pitch.nameWithOctave for pitch in chord.pitches] == ["F#4", "A4"]
+    assert measure.elementOffset(chord) == 1.0
+    assert rest.quarterLength == 0.5
+
+
+def test_what_is_read_is_written_back_as_musicxml():
+    written = m.to_musicxml(m.from_musicxml(MUSICXML), encoding_date="2026-01-01")
+    assert "<encoding-date>2026-01-01</encoding-date>" in written
+    assert "<part-name>Flute</part-name>" in written
+    assert "<fifths>2</fifths>" in written
+    assert written.count("<note>") == 4
+    assert "<chord />" in written
+    # And what was written reads back the same.
+    again = m.to_musicxml(m.from_musicxml(written), encoding_date="2026-01-01")
+    assert again == written
+
+
+def test_a_document_that_is_not_musicxml_is_refused():
+    with pytest.raises(Exception):
+        m.from_musicxml("<html></html>")

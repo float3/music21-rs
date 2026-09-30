@@ -2,6 +2,7 @@
 //! `chordSymbolFigureFromChord` names it.
 
 use super::*;
+use crate::scale::{Scale, ScaleType};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct Music21FigureMatch {
@@ -54,8 +55,8 @@ pub(crate) fn chord_symbol_spellings_with_root(chord: &Chord, root: u8) -> Vec<S
 /// does not account for.
 ///
 /// `Display` writes the figure as music21 writes it, flats as `b` — `C7`,
-/// `Ebm7/Gb`, `CaddDb` — and [`Self::written_with`] writes it with another abbreviation
-/// for the kind.
+/// `Ebm7/Gb`, `Caddb9`, `Am7add11/C` — and [`Self::written_with`] writes it
+/// with another abbreviation for the kind.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[must_use]
 pub struct ChordSymbolFigure {
@@ -70,12 +71,20 @@ pub struct ChordSymbolFigure {
     pub abbreviation: &'static str,
     /// The bass, where it is not the root.
     pub bass: Option<String>,
-    /// The notes of the chord the kind does not account for.
-    pub additions: Vec<String>,
-    /// The notes the kind expects that the chord lacks. music21 writes these
-    /// only beside additions: a chord that leaves out a note of its kind is
-    /// still that kind, and says nothing about it.
-    pub omissions: Vec<String>,
+    /// The notes of the chord the kind does not account for, each as a
+    /// degree above the root and how far it stands from that degree of the
+    /// root's major scale, in order of degree: `G B D F A- C E-` over `G7` is
+    /// a flat ninth, an eleventh and a flat thirteenth.
+    ///
+    /// A second, fourth or sixth the kind does not have is counted an octave
+    /// up, as a ninth, eleventh or thirteenth.
+    pub additions: Vec<ChordAlteration>,
+    /// The degrees the kind expects that the chord lacks, in order, counted
+    /// as [`Self::additions`] are, so a suspended fourth that lacks its fourth
+    /// omits a 4 and not an 11. music21 writes these only beside additions: a
+    /// chord that leaves out a note of its kind is still that kind, and says
+    /// nothing about it.
+    pub omissions: Vec<u8>,
 }
 
 impl ChordSymbolFigure {
@@ -119,9 +128,41 @@ impl ChordSymbolFigure {
         let (additions, omissions) = if perfect.is_superset(&present) {
             (Vec::new(), Vec::new())
         } else {
+            let major = Scale::new(ScaleType::Major, root.clone());
+            let kind_degrees: Vec<u8> = notation_intervals(notation)
+                .ok()?
+                .into_iter()
+                .map(|(degree, _)| degree)
+                .collect();
+            let degree_and_alter = |name: &String| -> Option<(u8, IntegerType)> {
+                let (degree, accidental) = major
+                    .degree_and_accidental_of(&Pitch::from_name(name).ok()?)
+                    .ok()?;
+                let mut degree = u8::try_from(degree).ok()?;
+                if matches!(degree, 2 | 4 | 6) && !kind_degrees.contains(&degree) {
+                    degree += 7;
+                }
+                Some((
+                    degree,
+                    accidental.map_or(0, |accidental| accidental.alter() as IntegerType),
+                ))
+            };
+            let mut additions = present
+                .difference(&perfect)
+                .map(degree_and_alter)
+                .collect::<Option<Vec<_>>>()?;
+            additions.sort_unstable();
+            let mut omissions = perfect
+                .difference(&present)
+                .map(|name| degree_and_alter(name).map(|(degree, _)| degree))
+                .collect::<Option<Vec<_>>>()?;
+            omissions.sort_unstable();
             (
-                present.difference(&perfect).cloned().collect(),
-                perfect.difference(&present).cloned().collect(),
+                additions
+                    .into_iter()
+                    .map(|(degree, alter)| ChordAlteration::new(degree, alter))
+                    .collect(),
+                omissions,
             )
         };
         Some(Self {
@@ -146,17 +187,18 @@ impl ChordSymbolFigure {
     /// how music21 writes it after `changeAbbreviationFor`.
     pub fn written_with(&self, abbreviation: &str) -> String {
         let mut figure = format!("{}{abbreviation}", self.root);
+        for addition in &self.additions {
+            figure.push_str("add");
+            figure.push_str(&alter_to_chord_symbol_string(addition.semitones()));
+            figure.push_str(&addition.degree().to_string());
+        }
+        for omission in &self.omissions {
+            figure.push_str("omit");
+            figure.push_str(&omission.to_string());
+        }
         if let Some(bass) = &self.bass {
             figure.push('/');
             figure.push_str(bass);
-        }
-        if !self.additions.is_empty() {
-            figure.push_str("add");
-            figure.push_str(&self.additions.join(","));
-            if !self.omissions.is_empty() {
-                figure.push_str(",omit");
-                figure.push_str(&self.omissions.join(","));
-            }
         }
         figure
     }
@@ -185,6 +227,15 @@ impl Music21ChordAnalysis {
         }
     }
 }
+
+/// How a lead-sheet symbol writes an alteration of so many semitones: a `b`
+/// for each semitone down and a `#` for each one up, so `-1` is `b`, `2` is
+/// `##` and nought is nothing. music21's `alterToChordSymbolString`.
+pub fn alter_to_chord_symbol_string(alter: IntegerType) -> String {
+    let sign = if alter < 0 { "b" } else { "#" };
+    sign.repeat(alter.unsigned_abs() as usize)
+}
+
 pub(super) fn identify_music21_chord_type(
     analysis: &Music21ChordAnalysis,
 ) -> Option<Music21FigureMatch> {

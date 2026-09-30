@@ -1,5 +1,9 @@
 use std::collections::BTreeMap;
 
+mod score;
+
+pub use score::from_midi;
+
 use crate::{
     defaults::{FloatType, IntegerType},
     duration::Duration,
@@ -93,10 +97,18 @@ pub fn midi_notes_from_stream(stream: &Stream) -> Result<Vec<MidiNote>> {
             // A rest is silence, and the marks that say what is in force
             // carry no pitch; a nested stream is gone by now.
             StreamElement::Rest(_)
+            | StreamElement::Unpitched(_)
+            | StreamElement::PercussionChord(_)
             | StreamElement::Stream(_)
+            | StreamElement::Clef(_)
+            | StreamElement::Instrument(_)
             | StreamElement::KeySignature(_)
+            | StreamElement::Key(_)
             | StreamElement::TimeSignature(_)
             | StreamElement::MetronomeMark(_)
+            | StreamElement::TempoText(_)
+            | StreamElement::TextExpression(_)
+            | StreamElement::RepeatExpression(_)
             | StreamElement::Dynamic(_)
             | StreamElement::ChordSymbol(_) => {}
         }

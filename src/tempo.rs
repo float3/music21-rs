@@ -2,8 +2,10 @@
 
 use crate::{
     defaults::FloatType,
+    display::Drawn,
     duration::Duration,
     error::{Error, Result},
+    notation::Placement,
     stream::Stream,
 };
 
@@ -107,6 +109,10 @@ pub struct MetronomeMark {
     /// What the mark is played at, where that is not what it says.
     #[cfg_attr(feature = "serde", serde(default))]
     number_sounding: Option<FloatType>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    parentheses: Drawn<bool>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    placement: Drawn<Option<Placement>>,
 }
 
 impl Default for MetronomeMark {
@@ -154,7 +160,30 @@ impl MetronomeMark {
             text,
             referent,
             number_sounding: None,
+            parentheses: Drawn(false),
+            placement: Drawn(None),
         }
+    }
+
+    /// Whether the mark is written in parentheses: music21's
+    /// `parentheses`.
+    pub fn parentheses(&self) -> bool {
+        self.parentheses.0
+    }
+
+    /// Says whether the mark is written in parentheses.
+    pub fn set_parentheses(&mut self, parentheses: bool) {
+        self.parentheses.0 = parentheses;
+    }
+
+    /// Which side of the staff it is written on, where the score says.
+    pub fn placement(&self) -> Option<Placement> {
+        self.placement.0
+    }
+
+    /// Says which side of the staff it is written on.
+    pub fn set_placement(&mut self, placement: Option<Placement>) {
+        self.placement.0 = placement;
     }
 
     /// The same tempo counted in a different note value: music21's
@@ -427,12 +456,27 @@ pub enum ModulationSide {
 #[must_use]
 pub struct TempoText {
     text: String,
+    #[cfg_attr(feature = "serde", serde(default))]
+    placement: Drawn<Option<Placement>>,
 }
 
 impl TempoText {
     /// A tempo said as `text`.
     pub fn new(text: impl Into<String>) -> Self {
-        Self { text: text.into() }
+        Self {
+            text: text.into(),
+            placement: Drawn(None),
+        }
+    }
+
+    /// Which side of the staff it is written on, where the score says.
+    pub fn placement(&self) -> Option<Placement> {
+        self.placement.0
+    }
+
+    /// Says which side of the staff it is written on.
+    pub fn set_placement(&mut self, placement: Option<Placement>) {
+        self.placement.0 = placement;
     }
 
     /// The words the tempo is said in.

@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mei xmlns="http://www.music-encoding.org/ns/mei" meiversion="2013">
+  <meiHead>
+    <fileDesc>
+      <work>
+        <titleStmt>
+          <title>Spans</title>
+          <composer>A. Composer</composer>
+          <composer><persName>B. Composer</persName></composer>
+        </titleStmt>
+        <history><creation><date>1723-04</date></creation></history>
+      </work>
+    </fileDesc>
+  </meiHead>
+  <music>
+    <score>
+      <scoreDef meter.count="4" meter.unit="4" key.sig="2s">
+        <staffGrp>
+          <staffDef n="1" label="Violin" label.abbr="Vl." clef.shape="G" clef.line="2"/>
+          <staffGrp>
+            <staffDef n="2" clef.shape="C" clef.line="3">
+              <instrDef midi.instrnum="41"/>
+            </staffDef>
+            <staffDef n="3" label="Clarinet in A" trans.diat="-2" trans.semi="-3" clef.shape="F" clef.line="4" clef.dis="8" clef.dis.place="below"/>
+          </staffGrp>
+        </staffGrp>
+      </scoreDef>
+      <section>
+        <measure n="1" right="rptboth">
+          <staff n="1">
+            <layer n="1">
+              <note xml:id="a1" pname="d" oct="5" dur="4" slur="1i"/>
+              <note xml:id="a2" pname="e" oct="5" dur="8"/>
+              <note xml:id="a3" pname="f" oct="5" dur="8" accid="s" slur="1t"/>
+              <note xml:id="a4" pname="g" oct="5" dur="8"/>
+              <note xml:id="a5" pname="a" oct="5" dur="8"/>
+              <note xml:id="a6" pname="b" oct="5" dur="8"/>
+              <note xml:id="a7" pname="a" oct="5" dur="8" tie="i"/>
+            </layer>
+          </staff>
+          <staff n="2">
+            <layer n="1">
+              <note xml:id="b1" pname="d" oct="4" dur="8"/>
+              <note xml:id="b2" pname="e" oct="4" dur="8"/>
+              <note xml:id="b3" pname="f" oct="4" dur="8"/>
+              <note xml:id="b4" pname="g" oct="4" dur="4"/>
+              <note xml:id="b5" pname="a" oct="4" dur="4"/>
+              <rest dur="4"/>
+            </layer>
+          </staff>
+          <slur startid="#b1" endid="#b3"/>
+          <beamSpan startid="#a4" endid="#a6" plist="#a4 #a5 #a6"/>
+          <tupletSpan startid="#b1" endid="#b3" num="3" numbase="2"/>
+          <tie startid="#b4" endid="#b5"/>
+        </measure>
+        <measure n="2">
+          <staff n="1">
+            <layer n="1">
+              <note pname="a" oct="5" dur="2" tie="t"/>
+              <chord dur="4" artic="stacc acc" tie="i">
+                <note pname="d" oct="5"/>
+                <note pname="f" oct="5" accid="s"/>
+                <note pname="a" oct="5"/>
+              </chord>
+              <chord dur="4" tie="t">
+                <note pname="d" oct="5"/>
+                <note pname="f" oct="5" accid="s"/>
+                <note pname="a" oct="5"/>
+              </chord>
+            </layer>
+          </staff>
+          <staff n="2">
+            <layer n="1">
+              <note xml:id="c1" pname="d" oct="4" dur="4"/>
+              <note xml:id="c2" pname="c" oct="4" dur="4" accid="n"/>
+              <note xml:id="c3" pname="b" oct="3" dur="4"/>
+              <note xml:id="c4" pname="a" oct="3" dur="4"/>
+            </layer>
+          </staff>
+          <staff n="3">
+            <layer n="1">
+              <note pname="d" oct="2" dur="1"/>
+            </layer>
+          </staff>
+          <tupletSpan plist="#c2 #c3" num="5" numbase="4"/>
+        </measure>
+        <measure n="3" right="end">
+          <staff n="1">
+            <layer n="1"><mRest/></layer>
+          </staff>
+          <staff n="2">
+            <layer n="1">
+              <space dur="2"/>
+              <note pname="d" oct="4" dur="2" dots="0"/>
+            </layer>
+          </staff>
+          <staff n="3">
+            <layer n="1"><mSpace/></layer>
+          </staff>
+        </measure>
+      </section>
+    </score>
+  </music>
+</mei>

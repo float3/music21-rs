@@ -25,7 +25,7 @@
 //! # Ok::<(), music21_rs::Error>(())
 //! ```
 
-use super::Fraction;
+use super::Ratio;
 use crate::defaults::{FloatType, IntegerType, UnsignedIntegerType};
 use crate::error::{Error, Result};
 use crate::interval::{ChromaticInterval, Interval};
@@ -46,8 +46,9 @@ const CENTS_PER_OCTAVE: FloatType = 1200.0;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[must_use]
 pub enum ScalaDegree {
-    /// An exact integer ratio, such as `3/2`.
-    Ratio(Fraction),
+    /// An exact ratio, such as `3/2`. A Scala file writes only ratios of
+    /// whole numbers, so this is always [`Ratio::Rational`].
+    Ratio(Ratio),
     /// A cents value above the scale root, such as `701.955`.
     Cents(FloatType),
 }
@@ -56,7 +57,7 @@ impl ScalaDegree {
     /// Returns this degree as a frequency ratio above the scale root.
     pub fn ratio(self) -> FloatType {
         match self {
-            Self::Ratio(fraction) => fraction.ratio(),
+            Self::Ratio(ratio) => ratio.value(),
             Self::Cents(cents) => (2.0 as FloatType).powf(cents / CENTS_PER_OCTAVE),
         }
     }
@@ -64,15 +65,15 @@ impl ScalaDegree {
     /// Returns this degree in cents above the scale root.
     pub fn cents(self) -> FloatType {
         match self {
-            Self::Ratio(fraction) => CENTS_PER_OCTAVE * fraction.ratio().log2(),
+            Self::Ratio(ratio) => ratio.cents(),
             Self::Cents(cents) => cents,
         }
     }
 
     /// Returns the exact ratio, when this degree was written as one.
-    pub fn as_fraction(self) -> Option<Fraction> {
+    pub fn as_ratio(self) -> Option<Ratio> {
         match self {
-            Self::Ratio(fraction) => Some(fraction),
+            Self::Ratio(ratio) => Some(ratio),
             Self::Cents(_) => None,
         }
     }
@@ -86,7 +87,11 @@ impl ScalaDegree {
     /// twelve hundred to one.
     pub fn written(self) -> String {
         match self {
-            Self::Ratio(fraction) => format!("{}/{}", fraction.numerator(), fraction.denominator()),
+            Self::Ratio(Ratio::Rational {
+                numerator,
+                denominator,
+            }) => format!("{numerator}/{denominator}"),
+            Self::Ratio(root @ Ratio::Root { .. }) => Self::Cents(root.cents()).written(),
             Self::Cents(cents) => {
                 let written = format!("{cents}");
                 if written.contains(['.', 'e', 'E', 'n', 'i']) {
@@ -149,13 +154,13 @@ impl ScalaDegree {
         ) && numerator != 0
             && denominator != 0
         {
-            return Ok(Self::Ratio(Fraction::new(numerator, denominator)));
+            return Ok(Self::Ratio(Ratio::new(numerator, denominator)));
         }
 
-        // Four archive scales quote ratios far wider than the u32 `Fraction`
+        // Four archive scales quote ratios far wider than the u32 `Ratio`
         // can hold, such as atomschis.scl's
         // 156348578434374084375/147573952589676412928. Rather than reject the
-        // whole file, keep the degree as cents - `as_fraction` then reports
+        // whole file, keep the degree as cents - `as_ratio` then reports
         // that it is not exact.
         let (numerator, denominator) = (
             parse_ratio_term(numerator, token, "numerator")?,
@@ -173,7 +178,7 @@ impl ScalaDegree {
     }
 }
 
-/// Parses one side of a ratio that did not fit `Fraction`'s integer range.
+/// Parses one side of a ratio that did not fit `Ratio`'s integer range.
 fn parse_ratio_term(term: &str, token: &str, side: &str) -> Result<FloatType> {
     if term.is_empty() || !term.bytes().all(|byte| byte.is_ascii_digit()) {
         return Err(Error::TuningSystem(format!(
@@ -280,8 +285,8 @@ impl ScalaScale {
         // A file may legitimately declare zero degrees, in which case there is
         // neither a degree list nor a repeat interval to read.
         let (mut degrees, period) = match parsed.pop() {
-            Some(period) => (vec![ScalaDegree::Ratio(Fraction::new(1, 1))], period),
-            None => (Vec::new(), ScalaDegree::Ratio(Fraction::new(1, 1))),
+            Some(period) => (vec![ScalaDegree::Ratio(Ratio::new(1, 1))], period),
+            None => (Vec::new(), ScalaDegree::Ratio(Ratio::new(1, 1))),
         };
         degrees.append(&mut parsed);
 
@@ -438,11 +443,11 @@ impl ScalaScale {
     fn from_written(description: impl Into<String>, mut written: Vec<ScalaDegree>) -> Self {
         let (degrees, period) = match written.pop() {
             Some(period) => {
-                let mut degrees = vec![ScalaDegree::Ratio(Fraction::new(1, 1))];
+                let mut degrees = vec![ScalaDegree::Ratio(Ratio::new(1, 1))];
                 degrees.append(&mut written);
                 (degrees, period)
             }
-            None => (Vec::new(), ScalaDegree::Ratio(Fraction::new(1, 1))),
+            None => (Vec::new(), ScalaDegree::Ratio(Ratio::new(1, 1))),
         };
         Self::new(description, degrees, period)
     }
@@ -875,11 +880,11 @@ Saved scale from Scala
         assert_eq!(
             scale.degrees(),
             &[
-                ScalaDegree::Ratio(Fraction::new(1, 1)),
-                ScalaDegree::Ratio(Fraction::new(3, 2)),
+                ScalaDegree::Ratio(Ratio::new(1, 1)),
+                ScalaDegree::Ratio(Ratio::new(3, 2)),
             ]
         );
-        assert_eq!(scale.period(), ScalaDegree::Ratio(Fraction::new(2, 1)));
+        assert_eq!(scale.period(), ScalaDegree::Ratio(Ratio::new(2, 1)));
     }
 
     #[test]
@@ -897,7 +902,7 @@ Saved scale from Scala
     fn honours_a_non_octave_period() {
         // Bohlen-Pierce repeats at a tritave rather than an octave.
         let scale = ScalaScale::parse("Tritave\n 2\n 5/3\n 3/1\n").unwrap();
-        assert_eq!(scale.period(), ScalaDegree::Ratio(Fraction::new(3, 1)));
+        assert_eq!(scale.period(), ScalaDegree::Ratio(Ratio::new(3, 1)));
         assert_eq!(scale.ratio_at(2), 3.0);
         assert_eq!(scale.ratio_at(4), 9.0);
     }
@@ -921,8 +926,8 @@ Saved scale from Scala
     #[test]
     fn treats_a_bare_integer_as_a_whole_ratio() {
         let scale = ScalaScale::parse("Integers\n 2\n 3\n 4\n").unwrap();
-        assert_eq!(scale.degrees()[1], ScalaDegree::Ratio(Fraction::new(3, 1)));
-        assert_eq!(scale.period(), ScalaDegree::Ratio(Fraction::new(4, 1)));
+        assert_eq!(scale.degrees()[1], ScalaDegree::Ratio(Ratio::new(3, 1)));
+        assert_eq!(scale.period(), ScalaDegree::Ratio(Ratio::new(4, 1)));
     }
 
     #[test]
@@ -936,7 +941,7 @@ Saved scale from Scala
         // dyadic53tone9div.scl writes degrees as `2957/2048!Gb`.
         let scale = ScalaScale::parse("Bang\n 2\n 3/2!the fifth\n 2/1!octave\n").unwrap();
         assert_eq!(scale.ratio_at(1), 1.5);
-        assert_eq!(scale.period(), ScalaDegree::Ratio(Fraction::new(2, 1)));
+        assert_eq!(scale.period(), ScalaDegree::Ratio(Ratio::new(2, 1)));
     }
 
     #[test]
@@ -963,7 +968,7 @@ Saved scale from Scala
         .unwrap();
 
         let degree = scale.degrees()[1];
-        assert!(degree.as_fraction().is_none(), "not exactly representable");
+        assert!(degree.as_ratio().is_none(), "not exactly representable");
         assert!(
             (degree.cents() - 99.993_599_6).abs() < 1e-6,
             "{}",

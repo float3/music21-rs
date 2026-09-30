@@ -24,7 +24,7 @@ suite results, coverage, benchmarks and sizes, refreshed on every push.
 - 92% of the public methods of the ported music21 classes are in the crate.
 - The crate's own tests cover 95% of its lines and of its functions.
 - All 40 music21 modules whose doctests run against the port pass every
-  example, 9,171 of them: `pitch`, `interval`, `chord`, `chord.tables`,
+  example, 9,174 of them: `pitch`, `interval`, `chord`, `chord.tables`,
   `note`, `duration`, `key`, `scale`, `scale.scala`, `roman`, `harmony`,
   `serial`, `sieve`, `meter.base`, `meter.core`, `beam`, `tie`, `volume`,
   `dynamics`, `instrument`, `clef`, `articulations`, `expressions`, `tempo`,
@@ -37,7 +37,15 @@ suite results, coverage, benchmarks and sizes, refreshed on every push.
 - music21's own test suite gives the same results with the crate's classes
   standing in for music21's as with music21 alone.
 
-Not ported: streams, parsing, notation output and the corpus.
+- MusicXML export writes what music21's exporter writes for a notated
+  score, and 41 scores from music21's corpus — chorales, lead sheets,
+  piano music, whole string quartets — come out byte for byte the same.
+- MusicXML import reads a file as music21's reader reads it: those same
+  scores, read by the crate and written back, give the text music21 gives
+  after reading them itself.
+
+Not ported: music21's stream machinery, parsing of other formats,
+`makeNotation` and the corpus.
 
 ## Speed and size
 
@@ -69,7 +77,13 @@ cargo add music21-rs
 ```
 
 Default features are empty. `serde` adds `Serialize` and `Deserialize` to the
-public types; `scala-archive` bundles the Scala scale archive described below.
+public types; `scala-archive` bundles the Scala scale archive described below;
+`musicxml` reads and writes MusicXML; `musescore` converts through an installed
+MuseScore, and turns `musicxml` on. ABC, MIDI, TinyNotation, Humdrum, MEI
+and RomanText are read with no feature at all: `abc::from_abc`,
+`midi::from_midi`, `tinynotation::from_tiny_notation`,
+`humdrum::from_humdrum`, `mei::from_mei` and `romantext::from_roman_text`
+each read what music21 reads into the score music21 makes of it.
 
 Name a chord and read its set class:
 
@@ -123,15 +137,32 @@ assert_eq!(six_eight.accent_weight(1.5)?, 0.5);
 # Ok::<(), music21_rs::Error>(())
 ```
 
-Read a chord label in Harte notation:
+Write a score as MusicXML, with the `musicxml` feature:
 
 ```rust
-use music21_rs::Harte;
+# #[cfg(feature = "musicxml")] {
+use music21_rs::musicxml::{ExportOptions, to_musicxml};
+use music21_rs::{Clef, Note, Stream, StreamKind, TimeSignature};
 
-let harte = Harte::new("Bb:min7/b3")?;
-assert_eq!(harte.chord().pitch_names(), ["Bb", "Db", "F", "Ab"]);
-assert_eq!(harte.chord().bass().map(|p| p.name_with_octave()), Some("Db3".to_string()));
-assert_eq!(Harte::new("C:(b3,5)")?.prettify(), "C:min");
+let mut measure = Stream::with_kind(StreamKind::Measure);
+measure.set_number(1);
+measure.insert(0.0, Clef::treble());
+measure.insert(0.0, TimeSignature::new(3, 4)?);
+for name in ["C4", "E4", "G4"] {
+    measure.push(Note::from_name(name)?);
+}
+let mut part = Stream::with_kind(StreamKind::Part);
+part.push(measure);
+let mut score = Stream::with_kind(StreamKind::Score);
+score.push(part);
+
+let xml = to_musicxml(&score, &ExportOptions::default())?;
+assert!(xml.contains("<beats>3</beats>"));
+
+// And read it back.
+let read = music21_rs::musicxml::from_musicxml(&xml)?;
+assert_eq!(read.parts()[0].measures()[0].pitches().len(), 3);
+# }
 # Ok::<(), music21_rs::Error>(())
 ```
 
@@ -154,9 +185,11 @@ The tuning code has no counterpart in music21:
 - A check for the same scale filed under two names. Scales are compared by
   their cents, so one written as ratios and one written as cents still match.
   The Scala archive has 44 such groups.
-- Harte chord notation, `C:maj7/3` or `Bb:(b3,5,b7,9)`, ported from
-  [harte-library](https://github.com/andreamust/harte-library) and checked
-  against every label in that library's 8,064-chord coverage set.
+- Harte chord notation, `C:maj7/3` or `Bb:(b3,5,b7,9)`, as the
+  [`harte`](harte/) crate beside this one: a port of
+  [harte-library](https://github.com/andreamust/harte-library) that builds
+  music21-rs chords, checked against every label in that library's
+  8,064-chord coverage set. It is not music21's, so it is not in this crate.
 
 ## Browser demos
 
@@ -252,7 +285,7 @@ contributors for the original library.
 
 ### harte-library
 
-The `harte` module is a port of
+The [`harte`](harte/) crate in this repository is a port of
 [harte-library](https://github.com/andreamust/harte-library) by Andrea
 Poltronieri, licensed
 [MIT](https://github.com/andreamust/harte-library/blob/main/LICENSE), and
@@ -304,18 +337,20 @@ Fixes found while porting went upstream:
 - [cuthbertLab/music21#2028](https://github.com/cuthbertLab/music21/pull/2028):
   `getPitchFromNodeDegree` handing back a pitch owned by the scale's cache.
 - [cuthbertLab/music21#2038](https://github.com/cuthbertLab/music21/pull/2038):
-  `OctaveRepeatingScale` appending to the list of steps it was given (open).
+  `OctaveRepeatingScale` appending to the list of steps it was given.
 - [cuthbertLab/music21#2043](https://github.com/cuthbertLab/music21/pull/2043):
   a descending realization checking its range against the unaltered pitch.
 - [cuthbertLab/music21#2044](https://github.com/cuthbertLab/music21/pull/2044):
   `derive` leaving out a scale's altered degrees, so a harmonic minor derived
-  as a natural minor (open).
+  as a natural minor.
 - [cuthbertLab/music21#2045](https://github.com/cuthbertLab/music21/pull/2045):
   an octave-repeating scale wider than an octave starting an octave off its
   tonic.
 - [cuthbertLab/music21#2046](https://github.com/cuthbertLab/music21/pull/2046):
   timespan offsets added as floats, which gave a voice-leading quartet that is
   not in the music.
+- [cuthbertLab/music21#2048](https://github.com/cuthbertLab/music21/pull/2048):
+  two deepcopies in `AbstractScale` of values that are already copies (open).
 - [PLAINSOUND/hexatone#3](https://github.com/PLAINSOUND/hexatone/pull/3):
   Scala headers in five Hexatone scale files (open).
 - Corrections to the Xenharmonic Wiki's temperament pages, found while

@@ -1195,3 +1195,29 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: cargo publish --locked
+
+      # The `harte` crate is released with the crate it depends on, at its own
+      # version, whenever that version is not on crates.io yet. It goes second:
+      # its manifest names the music21-rs version it builds against, and
+      # `cargo publish` waits for the crate published just before it to reach
+      # the index.
+      - name: Is harte's version already on crates.io?
+        id: harte-published
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          version="$(python3 -c 'import tomllib, pathlib; print(tomllib.loads(pathlib.Path("harte/Cargo.toml").read_text())["package"]["version"])')"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          url="https://crates.io/api/v1/crates/harte/$version"
+          if curl -sfL -H "User-Agent: music21-rs release workflow" "$url" >/dev/null; then
+            echo "already=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "already=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish harte
+        if: steps.harte-published.outputs.already == 'false'
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish --package harte --locked

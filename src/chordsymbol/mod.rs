@@ -18,8 +18,8 @@ mod realize;
 mod tables;
 
 pub use figure::{
-    ChordSymbolFigure, chord_symbol_figure_from_chord, chord_symbol_from_chord,
-    chord_symbol_kind_from_chord,
+    ChordSymbolFigure, alter_to_chord_symbol_string, chord_symbol_figure_from_chord,
+    chord_symbol_from_chord, chord_symbol_kind_from_chord,
 };
 pub(crate) use figure::{chord_symbol_spellings, chord_symbol_spellings_with_root};
 pub use tables::{
@@ -111,6 +111,12 @@ pub struct ChordSymbol {
     /// music21's takes none.
     #[cfg_attr(feature = "serde", serde(default = "no_time"))]
     duration: Duration,
+    /// How the kind is written where a score says, as `M` for a major
+    /// triad: music21's `chordKindStr`.
+    #[cfg_attr(feature = "serde", serde(default))]
+    kind_text: crate::display::Drawn<Option<String>>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    placement: crate::display::Drawn<Option<crate::notation::Placement>>,
 }
 
 /// The length of a symbol nobody has given one: none at all.
@@ -184,12 +190,9 @@ fn music21_modifications(remaining: &str) -> Option<Vec<ChordStepModification>> 
         {
             let mut rest = &text[at + marker.len()..];
             let mut alter = 0;
-            if let Some(after) = rest.strip_prefix('b') {
-                alter = -1;
-                rest = after;
-            } else if let Some(after) = rest.strip_prefix('#') {
-                alter = 1;
-                rest = after;
+            while let Some(sign) = rest.chars().next().filter(|c| matches!(c, 'b' | '-' | '#')) {
+                alter += if sign == '#' { 1 } else { -1 };
+                rest = &rest[1..];
             }
             let digits = rest.chars().take_while(char::is_ascii_digit).count().min(2);
             let degree_text = &rest[..digits];
@@ -400,6 +403,8 @@ impl ChordSymbol {
             kind: Some(kind),
             modifications,
             duration: no_time(),
+            kind_text: crate::display::Drawn(None),
+            placement: crate::display::Drawn(None),
         })
     }
 
@@ -480,7 +485,56 @@ impl ChordSymbol {
             kind,
             modifications,
             duration: no_time(),
+            kind_text: crate::display::Drawn(None),
+            placement: crate::display::Drawn(None),
         })
+    }
+
+    /// A symbol saying nothing sounds, written `N.C.` unless `text` says
+    /// otherwise: music21's `NoChord`, whose kind is `none`. It has a root
+    /// only because every symbol has one; it sounds no pitches at all.
+    pub fn no_chord(text: Option<String>) -> Self {
+        Self {
+            figure: "N.C.".to_string(),
+            root: Pitch::from_name("C").expect("C is a pitch name"),
+            bass: None,
+            quality: ChordQuality::Major,
+            extensions: Vec::new(),
+            alterations: Vec::new(),
+            omissions: Vec::new(),
+            additions: Vec::new(),
+            kind: Some("none".to_string()),
+            modifications: Vec::new(),
+            duration: no_time(),
+            kind_text: crate::display::Drawn(Some(text.unwrap_or_else(|| "N.C.".to_string()))),
+            placement: crate::display::Drawn(None),
+        }
+    }
+
+    /// Whether this says nothing sounds: music21's `NoChord`.
+    pub fn is_no_chord(&self) -> bool {
+        self.kind.as_deref() == Some("none")
+    }
+
+    /// How the kind is written where a score says, as `M` for a major
+    /// triad: music21's `chordKindStr`.
+    pub fn kind_text(&self) -> Option<&str> {
+        self.kind_text.0.as_deref()
+    }
+
+    /// Says how the kind is written.
+    pub fn set_kind_text(&mut self, text: Option<String>) {
+        self.kind_text.0 = text.filter(|text| !text.is_empty());
+    }
+
+    /// Which side of the staff the symbol is written on, where a score says.
+    pub fn placement(&self) -> Option<crate::notation::Placement> {
+        self.placement.0
+    }
+
+    /// Says which side of the staff the symbol is written on.
+    pub fn set_placement(&mut self, placement: Option<crate::notation::Placement>) {
+        self.placement.0 = placement;
     }
 
     /// How long the symbol holds. A symbol as written takes no time, which
@@ -759,6 +813,9 @@ impl ChordSymbol {
     /// A shorthand naming none of music21's kinds is laid out the same way
     /// from the crate's own reading of it.
     pub fn pitches(&self) -> Result<Vec<Pitch>> {
+        if self.is_no_chord() {
+            return Ok(Vec::new());
+        }
         if self.kind.as_deref() == Some("") {
             return realize::sound_chord_kind(
                 &self.root,
@@ -1156,6 +1213,75 @@ mod tests {
         }
     }
 
+    /// An `add` or `omit` takes any run of `b`, `-` and `#` before its
+    /// degree, as music21 reads one.
+    #[test]
+    fn a_modification_takes_every_accidental_before_its_degree() {
+        for (figure, semitones) in [("G7addb9", -1), ("G7add-9", -1), ("G7addbb9", -2)] {
+            let symbol = ChordSymbol::parse_music21(figure).unwrap();
+            let modification = &symbol.chord_step_modifications()[0];
+            assert_eq!(modification.degree(), 9, "{figure}");
+            assert_eq!(
+                modification.interval().semitones() as IntegerType,
+                semitones,
+                "{figure}"
+            );
+        }
+    }
+
+    /// music21's own cases for a figure with additions and omissions, each
+    /// of which reads back as the notes it was written from.
+    #[test]
+    fn additions_and_omissions_are_written_as_degrees_that_read_back() {
+        use super::chord_symbol_figure_from_chord;
+        for (notes, expected) in [
+            ("G3 B3 D4 F4 A-4 C5 E-5", "G7addb9add11addb13"),
+            ("E2 B2 G#3 D4 F##4", "E7add#9"),
+            ("B-2 F3 A3 D4 E4", "Bbmaj7add#11"),
+            ("A-2 E-3 G-3 C4 D4 B-4", "Ab9add#11"),
+            ("A2 E3 A3 B3 C4 E4", "Amadd9"),
+            ("D4 E4 F#4 A4", "Dadd9"),
+            ("D3 A3 F#4 E5", "Dadd9"),
+            ("G B D F A C# E", "C#øb9addb11addb13"),
+            ("C E G B- D- F#", "C7addb9add#11"),
+            ("C E G A D", "Am7add11/C"),
+            ("C# F# B D-", "C#susaddb7addbb9omit5"),
+            ("D-3 F#3 A-3", "Dbsusadd#3omit4"),
+            ("F#2 C#3 E-3 A3", "F#m6addbb7omit6"),
+        ] {
+            let chord = Chord::new(notes).unwrap();
+            let figure = chord_symbol_figure_from_chord(&chord).unwrap().unwrap();
+            assert_eq!(figure, expected, "{notes}");
+            // music21's parser reads a flat root or bass as `-`, which is
+            // how the wheel spells a figure before handing it over.
+            let respell = |name: &str| {
+                let mut chars = name.chars();
+                let Some(first) = chars.next() else {
+                    return String::new();
+                };
+                let rest = chars.as_str();
+                let flats = rest.chars().take_while(|c| *c == 'b').count();
+                format!("{first}{}{}", "-".repeat(flats), &rest[flats..])
+            };
+            let spelled = match figure.split_once('/') {
+                Some((root, bass)) => format!("{}/{}", respell(root), respell(bass)),
+                None => respell(&figure),
+            };
+            let sounded: BTreeSet<String> = ChordSymbol::parse_music21(spelled)
+                .unwrap()
+                .pitches()
+                .unwrap()
+                .iter()
+                .map(Pitch::name)
+                .collect();
+            let written: BTreeSet<String> = chord.pitches().iter().map(Pitch::name).collect();
+            assert_eq!(sounded, written, "{notes}");
+        }
+        assert_eq!(super::alter_to_chord_symbol_string(-1), "b");
+        assert_eq!(super::alter_to_chord_symbol_string(2), "##");
+        assert_eq!(super::alter_to_chord_symbol_string(0), "");
+    }
+
     /// A root music21 reads but no pitch can spell is refused by the pitch,
     /// as an accidental, not as a figure without a root.
     #[test]
@@ -1248,7 +1374,7 @@ mod tests {
         assert_eq!(figure("C3 D-3 E3 G-3").as_deref(), Some("CN6"));
         assert_eq!(kind("C3 D-3 E3 G-3"), Some("Neapolitan"));
         assert_eq!(figure("C3 D3 G3").as_deref(), Some("Csus2"));
-        assert_eq!(figure("C3 E3 G3 D-4").as_deref(), Some("CaddDb"));
+        assert_eq!(figure("C3 E3 G3 D-4").as_deref(), Some("Caddb9"));
         assert_eq!(figure("C3").as_deref(), Some("Cpedal"));
         assert_eq!(figure("").as_deref(), Some(""));
 
@@ -1341,7 +1467,7 @@ mod tests {
             ("C4 E4 G4 B-4 D5 F5 A5", Some("C13")),
             ("C4 E4 G4 A4", Some("Am7/C")),
             ("C4 E-4 G4 A4", Some("A\u{00f8}7/C")),
-            ("C4 E4 G4 D5", Some("CaddD")),
+            ("C4 E4 G4 D5", Some("Cadd9")),
             ("F4 A4 C5 D5", Some("Dm7/F")),
             ("B3 D4 F4", Some("Bdim")),
             ("C4 D-4 E4", None),
@@ -1550,7 +1676,7 @@ mod tests {
 
         assert_eq!(
             names.first().map(String::as_str),
-            Some("Ddom7dim5/CaddA,Eb")
+            Some("Ddom7dim5add5addb9/C")
         );
     }
 
@@ -1578,16 +1704,16 @@ mod tests {
         let split_third = Chord::new("D4 A4 F#4 F4").unwrap();
         let names = chord_symbol_spellings(&split_third);
 
-        assert_eq!(names.first().map(String::as_str), Some("DaddF"));
+        assert_eq!(names.first().map(String::as_str), Some("Daddb3"));
         assert!(!names.iter().any(|name| name == "D add(#9)"));
     }
 
     #[test]
-    fn altered_dominants_use_music21_pitch_name_additions() {
+    fn altered_dominants_write_additions_as_degrees() {
         let altered_dominant = Chord::new("C4 E4 G4 Bb4 Eb5").unwrap();
         let names = chord_symbol_spellings(&altered_dominant);
 
-        assert_eq!(names.first().map(String::as_str), Some("C7addEb"));
+        assert_eq!(names.first().map(String::as_str), Some("C7addb3"));
     }
 
     #[test]
@@ -1632,7 +1758,7 @@ mod tests {
 
         assert_eq!(
             chord_symbol_spellings(&chord).first().map(String::as_str),
-            Some("CsusaddA,Ab,Db,E,Eb,F#,omitF")
+            Some("Csusaddb3add3add#4addb9addb13add13omit4")
         );
     }
 
