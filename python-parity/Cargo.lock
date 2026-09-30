@@ -759,7 +759,7 @@ dependencies = [
 
 [[package]]
 name = "music21-rs"
-version = "0.7.1"
+version = "0.8.0"
 dependencies = [
  "fraction",
  "itertools",
@@ -772,7 +772,7 @@ dependencies = [
 
 [[package]]
 name = "music21-rs-python"
-version = "0.7.1"
+version = "0.8.0"
 dependencies = [
  "music21-rs",
  "pyo3",
