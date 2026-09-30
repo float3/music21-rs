@@ -1009,12 +1009,14 @@ impl Duration {
         if let Some(tuplets) = &self.tuplets {
             return Ok(tuplets.iter().map(|one| one.clone_ref(py)).collect());
         }
-        match self.inner.tuplet() {
-            Some(tuplet) => Ok(vec![
-                Tuplet::wrap(tuplet).into_pyobject(py)?.into_any().unbind(),
-            ]),
-            None => Ok(Vec::new()),
-        }
+        // The crate's `tuplets` rather than its `tuplet`: a length no tie
+        // reaches, such as five sixths, is written inside a tuplet that only
+        // the full conversion finds.
+        self.inner
+            .tuplets()
+            .into_iter()
+            .map(|tuplet| Ok(Tuplet::wrap(tuplet).into_pyobject(py)?.into_any().unbind()))
+            .collect()
     }
 
     /// Every tuplet's ratio multiplied together, in lowest terms.
