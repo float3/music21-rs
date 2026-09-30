@@ -139,14 +139,6 @@ body.page-reports {
     overflow: hidden;
 }
 
-.subject {
-    border-top: 3px solid var(--crate);
-}
-
-.subject.is-wheel {
-    border-top-color: var(--wheel);
-}
-
 .subject-head {
     display: flex;
     flex-wrap: wrap;
@@ -269,14 +261,9 @@ a.fact:hover {
 .facts.is-board {
     margin-bottom: 22px;
     border: 1px solid var(--line);
-    border-top: 3px solid var(--crate);
     border-radius: 12px;
     box-shadow: var(--shadow);
     overflow: hidden;
-}
-
-.facts.is-board.is-wheel {
-    border-top-color: var(--wheel);
 }
 
 /* ---- meters ------------------------------------------------------------ */
@@ -339,9 +326,8 @@ a.fact:hover {
 .tag {
     padding: 2px 8px;
     border: 1px solid var(--line);
-    border-left: 3px solid var(--crate);
     border-radius: 5px;
-    color: var(--muted);
+    color: var(--crate);
     font-size: 11px;
     font-weight: 800;
     letter-spacing: 0.04em;
@@ -349,7 +335,7 @@ a.fact:hover {
 }
 
 .tag.is-wheel {
-    border-left-color: var(--wheel);
+    color: var(--wheel);
 }
 
 /* ---- section navigation ------------------------------------------------ */

@@ -201,7 +201,9 @@ interface WasmModule {
 /** A note as abcjs's synth is about to sound it; `cents` detunes it. */
 interface SynthNote {
     pitch: number;
+    /** Whole notes from the top, as are `end` and a tune's pickup length. */
     start: number;
+    end: number;
     startChar?: number;
     endChar?: number;
     cents?: number;
@@ -222,6 +224,9 @@ const flagsButton = $<HTMLButtonElement>("#flags");
 const ringButton = $<HTMLButtonElement>("#ring");
 const chordsButton = $<HTMLButtonElement>("#chords");
 const compingSelect = $<HTMLSelectElement>("#comping");
+const swingSelect = $<HTMLSelectElement>("#swing");
+const swingUnitSelect = $<HTMLSelectElement>("#swing-unit");
+const swingRatioInput = $<HTMLInputElement>("#swing-ratio");
 const playButton = $<HTMLButtonElement>("#play");
 const stopButton = $<HTMLButtonElement>("#stop");
 const loopButton = $<HTMLButtonElement>("#loop");
@@ -246,6 +251,9 @@ const VIEW_KEY = "music21-rs.score-editor.view";
 const RING_KEY = "music21-rs.score-editor.ring";
 const CHORDS_KEY = "music21-rs.score-editor.chords";
 const COMPING_KEY = "music21-rs.score-editor.comping";
+const SWING_KEY = "music21-rs.score-editor.swing";
+const SWING_UNIT_KEY = "music21-rs.score-editor.swing-unit";
+const SWING_RATIO_KEY = "music21-rs.score-editor.swing-ratio";
 const ZOOM_KEY = "music21-rs.score-editor.zoom";
 const WIDE_KEY = "music21-rs.score-editor.wide";
 const ZOOMS = [0.4, 0.5, 0.67, 0.8, 1, 1.25, 1.5];
@@ -308,9 +316,11 @@ const ADAPTIVE_TUNING = "RecursiveJustIntonation";
 /** How many of abcjs's drag steps separate two tab strings. */
 const DRAG_STEPS_PER_STRING = 3;
 
-/** Example scores; `view` is the staff view one opens in. */
-const EXAMPLES: { name: string; abc: string; view?: string; comping?: string }[] = [
+/** Example scores; `id` names one in a share link and never changes, `view`
+ * is the staff view one opens in and `comping` how its chords are played. */
+const EXAMPLES: { id: string; name: string; abc: string; view?: string; comping?: string }[] = [
     {
+        id: "chorale",
         name: "Four-part chorale",
         abc: `X:1
 T:Chorale in C
@@ -330,6 +340,7 @@ V:B clef=bass
 `,
     },
     {
+        id: "waltz",
         name: "Waltz melody",
         abc: `X:2
 T:Waltz sketch
@@ -342,6 +353,7 @@ D2 | "G"G2 B2 d2 | "C"e4 d2 | "D7"c2 A2 F2 | "G"G4 D2 |
 `,
     },
     {
+        id: "piano-study",
         name: "Piano study in A minor",
         abc: `X:3
 T:Minor study
@@ -357,6 +369,7 @@ V:LH clef=bass
 `,
     },
     {
+        id: "two-finger-bossa",
         name: "Two-finger bossa nova",
         view: "guitar",
         abc: `X:4
@@ -372,6 +385,7 @@ F,2 [DAB]2 F, [DAB]2 F, | =F,2 [D^GB] z [DGB]4 | E,2 [DGB]2 E, [DGB]2 z | A, [EG
 `,
     },
     {
+        id: "un-bossa",
         name: "Un bossa +",
         view: "guitar",
         comping: "bossa",
@@ -408,6 +422,43 @@ w: un bos- _ sa _ _ _ más _
 `,
     },
     {
+        id: "un-bossa-easy",
+        name: "Un bossa + (easy)",
+        view: "guitar",
+        abc: `X:6
+T:Un bossa + (easy)
+M:4/4
+L:1/8
+Q:1/4=130
+K:C
+%%MIDI program 24
+P:A
+D E F G | "Dm7" A4 A2 z2 | "G" B4 c B A G | "Cmaj7" e2 d c B2 z2 | z4 z D E F |
+w: hoy que no a-guan-to más quie-ro em-pe-zar de ce-ro y con un
+"Dm7" A4 F4 | "G" G4 B c d d | "Cmaj7" e4 c2 z2 | z4 D E F G |
+w: bos-sa más quie-ro que bai-le-mos por-que en la
+P:B
+"Fmaj7" A4 F2 E F | "Fm6" c3 _A G =A B c | "Cmaj7" e3 d c z2 B | "A7" ^c4 A2 z E |
+w: no-che que te fuis-te no fue el fi-nal que vos qui-si-ste bai-
+"Dm7" A4 F2 z E | "G" d4 B4 | "Cmaj7" c8 | z6 G A |
+w: le-mos un bos-sa más por-que
+P:C
+"Dm7" A4 F2 z D | "G" B4 z3 d | "Cmaj7" e8 | z8 |
+w: cuan-do es-toy con vos
+"Dm7" A4 A4 | "G" B4 G2 z A | "Gm7" _B8 | "C9" z4 D E F G |
+w: to-do nues-tro a-mor y no ha-ce
+"Fmaj7" A4 F G A G | "Fm6" _A2 F2 G =A B c | "Cmaj7" e4 d c z B | "A7" ^c4 A2 z E |
+w: fal-ta que me ex-pli-ques bas-ta que es-tés pa-ra de-cir-te bai-
+"Dm7" A4 F2 z E | "G" d4 B4 | "Gm7" _B8 | "C9" z7 E |
+w: le-mos un bos-sa más bai-
+"Fmaj7" A4 F G A z | "Fm6" _A4 z3 F | "Cmaj7" G4 E F G z | "A7" A4 z3 E |
+w: le-mos o-tro más bai-le-mos o-tro más bai-
+"Dm7" A4 F2 z E | "G" d4 B4 | "Cmaj7" c8 | z8 |]
+w: le-mos un bos-sa más
+`,
+    },
+    {
+        id: "blank",
         name: "Blank",
         abc: `X:1
 T:Untitled
@@ -1737,16 +1788,64 @@ function followPlayback(node: SVGElement | undefined): void {
     }
 }
 
-/** A synth primed to play what is drawn in the chosen playback tuning. Where
- * a chord part plays the chord symbols, abcjs's own accompaniment of them is
- * switched off; `%%MIDI gchordoff` would have to be written inside a voice. */
+/** A synth primed to play what is drawn in the chosen playback tuning and
+ * swing. Where a chord part plays the chord symbols, abcjs's own
+ * accompaniment of them is switched off; `%%MIDI gchordoff` would have to be
+ * written inside a voice. */
 async function makeSynth(drawn: Rendered): Promise<InstanceType<AbcjsGlobal["synth"]["CreateSynth"]>> {
     const synth = new ABCJS.synth.CreateSynth();
+    const swing = swingCallback(drawn);
     const retune = tuningCallback();
-    const options = { ...(retune ? { sequenceCallback: retune } : {}), ...(drawn.chordPart ? { chordsOff: true } : {}) };
+    const sequence =
+        swing || retune
+            ? (tracks: SynthNote[][]) => {
+                  swing?.(tracks);
+                  retune?.(tracks);
+              }
+            : null;
+    const options = { ...(sequence ? { sequenceCallback: sequence } : {}), ...(drawn.chordPart ? { chordsOff: true } : {}) };
     await synth.init({ visualObj: drawn.tune, options });
     await synth.prime();
     return synth;
+}
+
+/** The first note's share of each swung pair, or null for straight time. */
+function swingShare(): number | null {
+    const percent = swingSelect.value === "custom" ? Number(swingRatioInput.value) : Number(swingSelect.value);
+    if (!swingSelect.value || !Number.isFinite(percent) || percent <= 50) return null;
+    return Math.min(percent, 85) / 100;
+}
+
+/** A callback playing the chosen swing, or null for straight time. Each pair
+ * of eighths, or of sixteenths, counted from the barlines is played long and
+ * short: whatever starts or stops halfway through a pair moves later, so the
+ * note before it lengthens and the note on it shortens. A point is left where
+ * it is when anything else in its track starts within a unit of it, so a run
+ * of shorter notes or a triplet keeps its own timing. abcjs's
+ * own `swing` does the same for eighths alone and only in X/4. */
+function swingCallback(drawn: Rendered): ((tracks: SynthNote[][]) => void) | null {
+    const share = swingShare();
+    if (share === null) return null;
+    const unit = swingUnitSelect.value === "16" ? 1 / 16 : 1 / 8;
+    const pair = unit * 2;
+    const shift = (share - 0.5) * pair;
+    const pickup = drawn.tune.getPickupLength();
+    const near = (a: number, b: number) => Math.abs(a - b) < 1e-6;
+    return (tracks) => {
+        for (const track of tracks) {
+            const starts = track.map((note) => note.start);
+            const swung = (at: number) => {
+                const phase = ((((at - pickup) % pair) + pair) % pair);
+                if (!near(phase, unit)) return false;
+                return !starts.some((start) => !near(start, at) && start > at - unit + 1e-6 && start < at + unit - 1e-6);
+            };
+            for (const note of track) {
+                const [start, end] = [note.start, note.end];
+                if (swung(start)) note.start = start + shift;
+                if (swung(end)) note.end = end + shift;
+            }
+        }
+    };
 }
 
 /** The note the playback tuning is built on: the one chosen, or the tonic of
@@ -2015,9 +2114,17 @@ async function unpackScore(packed: string): Promise<string> {
     return new TextDecoder().decode(bytes);
 }
 
+/** A link to the score as it stands: a built-in example left as it is by
+ * its id, anything else carried whole in the link. */
 async function shareLink(): Promise<string> {
-    const params = new URLSearchParams({ abc: await packScore(textarea.value) });
+    const example = EXAMPLES.find((example) => example.abc === textarea.value);
+    const params = new URLSearchParams(example ? { example: example.id } : { abc: await packScore(textarea.value) });
     if (viewSelect.value) params.set("view", viewSelect.value);
+    if (compingSelect.value) params.set("comping", compingSelect.value);
+    if (swingSelect.value) {
+        params.set("swing", swingSelect.value === "custom" ? swingRatioInput.value : swingSelect.value);
+        if (swingUnitSelect.value !== "8") params.set("swingunit", swingUnitSelect.value);
+    }
     if (viewSelect.value && stringsSelect.value && stringsSelect.value !== "standard") params.set("strings", stringsSelect.value);
     if (temperamentSelect.value) params.set("tuning", temperamentSelect.value);
     if (temperamentSelect.value && rootSelect.value) params.set("root", rootSelect.value);
@@ -2032,10 +2139,12 @@ async function shareLink(): Promise<string> {
 async function openShare(): Promise<void> {
     const link = await shareLink();
     shareUrl.value = link;
-    shareNote.textContent =
-        link.length > 8000
-            ? `This link is ${link.length.toLocaleString()} characters; some apps cut long links short, so export the ABC for a score this size.`
-            : `${link.length.toLocaleString()} characters.`;
+    const example = EXAMPLES.find((example) => example.abc === textarea.value);
+    shareNote.textContent = example
+        ? `The built-in “${example.name}”, as it is; an edit makes the link carry the whole score.`
+        : link.length > 8000
+          ? `This link is ${link.length.toLocaleString()} characters; some apps cut long links short, so export the ABC for a score this size.`
+          : `${link.length.toLocaleString()} characters.`;
     $<HTMLButtonElement>("#share-send").hidden = typeof navigator.share !== "function";
     shareUrl.focus();
     shareUrl.select();
@@ -2046,9 +2155,19 @@ async function openShare(): Promise<void> {
 async function loadFromHash(): Promise<boolean> {
     const params = new URLSearchParams(window.location.hash.slice(1));
     const packed = params.get("abc");
-    if (!packed) return false;
+    const example = EXAMPLES.find((example) => example.id === params.get("example"));
+    if (!packed && !example) return false;
     try {
-        textarea.value = await unpackScore(packed);
+        textarea.value = example ? example.abc : await unpackScore(packed!);
+        const swing = params.get("swing");
+        const preset = swing !== null && Array.from(swingSelect.options).some((option) => option.value === swing);
+        setSwing(swing === null ? "" : preset ? swing : "custom", params.get("swingunit"), preset ? null : swing);
+        storageSet(SWING_KEY, swingSelect.value);
+        storageSet(SWING_UNIT_KEY, swingUnitSelect.value);
+        storageSet(SWING_RATIO_KEY, swingRatioInput.value);
+        const comping = params.get("comping") ?? "";
+        compingSelect.value = Array.from(compingSelect.options).some((option) => option.value === comping) ? comping : "";
+        storageSet(COMPING_KEY, compingSelect.value);
         const view = params.get("view");
         if (view !== null && view in TABLATURES) viewSelect.value = view;
         const strings = params.get("strings");
@@ -2251,6 +2370,35 @@ compingSelect.addEventListener("change", () => {
     redraw();
 });
 
+/** Shows the swing unit while there is swing, and the percentage for a
+ * custom one. */
+function showSwing(): void {
+    swingUnitSelect.hidden = !swingSelect.value;
+    swingRatioInput.hidden = swingSelect.value !== "custom";
+}
+
+/** Sets the swing controls, as stored or as a link gives them. */
+function setSwing(swing: string | null, unit: string | null, ratio: string | null): void {
+    const offered = (select: HTMLSelectElement, value: string | null) =>
+        value !== null && Array.from(select.options).some((option) => option.value === value);
+    swingSelect.value = offered(swingSelect, swing) ? swing! : "";
+    swingUnitSelect.value = offered(swingUnitSelect, unit) ? unit! : "8";
+    if (ratio !== null && Number.isFinite(Number(ratio))) swingRatioInput.value = ratio;
+    showSwing();
+}
+
+for (const control of [swingSelect, swingUnitSelect, swingRatioInput]) {
+    control.addEventListener("change", () => {
+        storageSet(SWING_KEY, swingSelect.value);
+        storageSet(SWING_UNIT_KEY, swingUnitSelect.value);
+        storageSet(SWING_RATIO_KEY, swingRatioInput.value);
+        showSwing();
+        // A synth plays the notes it was primed with, so what is playing
+        // stops rather than carrying on in the old swing.
+        stopPlayback();
+    });
+}
+
 for (const [id, steps] of [
     ["#up", 1],
     ["#down", -1],
@@ -2321,6 +2469,7 @@ async function start(): Promise<void> {
     compingSelect.value = storageGet(COMPING_KEY) ?? "";
     if (!Array.from(compingSelect.options).some((option) => option.value === compingSelect.value)) compingSelect.value = "";
     compingSelect.hidden = !chordsButton.classList.contains("on");
+    setSwing(storageGet(SWING_KEY), storageGet(SWING_UNIT_KEY), storageGet(SWING_RATIO_KEY));
     viewSelect.value = storageGet(VIEW_KEY) ?? "";
     if (!(await loadFromHash())) textarea.value = storageGet(STORAGE_KEY) ?? EXAMPLES[0].abc;
     if (!(viewSelect.value in TABLATURES)) viewSelect.value = "";

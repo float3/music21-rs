@@ -30,7 +30,6 @@
     --key-black-active: #99f6e4;
     --tooltip-bg: #171717;
     --tooltip-ink: #ffffff;
-    --wash: rgba(15, 118, 110, 0.08);
     --pulse: #f59e0b;
     --shadow: 0 18px 42px rgba(15, 23, 42, 0.08);
     --shell-width: 1180px;
@@ -68,7 +67,6 @@
         --key-black-active: #f4cf83;
         --tooltip-bg: #080808;
         --tooltip-ink: #f4f1e8;
-        --wash: rgba(228, 180, 93, 0.08);
         --pulse: #88d4c0;
         --shadow: 0 22px 54px rgba(0, 0, 0, 0.34);
     }
@@ -105,7 +103,6 @@
     --key-black-active: #f4cf83;
     --tooltip-bg: #080808;
     --tooltip-ink: #f4f1e8;
-    --wash: rgba(228, 180, 93, 0.08);
     --pulse: #88d4c0;
     --shadow: 0 22px 54px rgba(0, 0, 0, 0.34);
 }
@@ -118,10 +115,8 @@ body {
     margin: 0;
     min-height: 100vh;
     color: var(--ink);
-    background:
-        linear-gradient(90deg, var(--wash), transparent 34rem), var(--soft);
+    background: var(--soft);
     font-family:
-        Inter,
         ui-sans-serif,
         system-ui,
         -apple-system,

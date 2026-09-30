@@ -166,6 +166,22 @@ def test_duration_module_functions():
     assert m.convertTypeToNumber("eighth") == 8.0
 
 
+def test_duration_infers_a_tuplet_no_tie_reaches():
+    from fractions import Fraction
+
+    assigned = m.Duration()
+    assigned.quarterLength = Fraction(5, 6)
+    for duration in (assigned, m.Duration(5 / 6)):
+        assert duration.type == "quarter"
+        (tuplet,) = duration.tuplets
+        assert (tuplet.numberNotesActual, tuplet.numberNotesNormal) == (6, 5)
+        assert tuplet.durationNormal.type == "32nd"
+        assert duration.quarterLength == Fraction(5, 6)
+    (triplet,) = m.Duration(1 / 3).tuplets
+    assert (triplet.numberNotesActual, triplet.numberNotesNormal) == (3, 2)
+    assert m.Duration(1.25).tuplets == ()
+
+
 def test_sieve_module_functions():
     import itertools
 

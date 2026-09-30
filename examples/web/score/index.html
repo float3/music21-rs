@@ -635,6 +635,28 @@
                     <option value="">Chords: held</option>
                     <option value="bossa">Chords: bossa nova</option>
                 </select>
+                <select id="swing" aria-label="Swing" title="How each pair of notes is played back: the first one's share of the pair">
+                    <option value="">Swing: straight</option>
+                    <option value="60">Swing: light 3:2</option>
+                    <option value="66.667">Swing: triplet 2:1</option>
+                    <option value="75">Swing: hard 3:1</option>
+                    <option value="custom">Swing: custom</option>
+                </select>
+                <select id="swing-unit" aria-label="Swing unit" title="Which notes are swung" hidden>
+                    <option value="8">on eighths</option>
+                    <option value="16">on sixteenths</option>
+                </select>
+                <input
+                    id="swing-ratio"
+                    type="number"
+                    min="50"
+                    max="85"
+                    step="1"
+                    value="62"
+                    aria-label="Custom swing, percent"
+                    title="The first note's share of each pair, in percent: 50 is straight, 66.7 a triplet feel, 75 a dotted one"
+                    hidden
+                />
                 <button id="down" type="button" title="Transpose down a semitone">
                     Transpose −
                 </button>
@@ -902,6 +924,13 @@
                             That part is
                             drawn and played but is not in your text, so it is
                             not in the exports and cannot be selected.
+                            <strong>Swing</strong> plays each pair of eighths, or of
+                            sixteenths, long and short: light is 3:2, triplet 2:1,
+                            hard 3:1, and custom takes the first note's share of the
+                            pair in percent. A pair already split into shorter
+                            notes, or into a triplet, keeps its own timing. Swing
+                            is heard and in the WAV export; the score, the MIDI and
+                            the MusicXML stay straight.
                         </p>
                     </div>
                 </section>

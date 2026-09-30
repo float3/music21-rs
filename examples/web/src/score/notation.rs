@@ -14,7 +14,7 @@
 use super::{
     EPSILON, MIDDLE_C_DNN, Score, ScoreInput, WrittenKey, abc_pitch,
     chord_symbol_voicing_above_notes, chord_symbol_voicing_notes, js_error, key_alters, natural_at,
-    spell_midi,
+    spell_midi, spell_midi_in_chord,
 };
 use music21_rs::{Pitch, abc_duration, abc_note, pitch_name_from_abc_note};
 use serde::{Deserialize, Serialize};
@@ -489,11 +489,12 @@ fn chord_bars(
     let voicing = |name: &str| voicings.get(name).and_then(Option::as_ref);
 
     // Spells sounding MIDI numbers as ABC, with the accidentals the bar
-    // needs.
-    let write = |notes: &[i32], in_force: &mut BTreeMap<(char, i32), i32>| {
+    // needs: as the chord symbol `figure` spells them, so Gm7's B-flat is
+    // no A-sharp, and a note the chord has not got as the key does.
+    let write = |notes: &[i32], figure: &str, in_force: &mut BTreeMap<(char, i32), i32>| {
         let mut written = String::new();
         for &midi in notes {
-            let pitch = spell_midi(midi + lift, tonic, mode)?;
+            let pitch = spell_midi_in_chord(midi + lift, figure, tonic, mode)?;
             written.push_str(&abc_pitch(&pitch, &alters, in_force)?);
         }
         Ok::<_, JsValue>(written)
@@ -581,7 +582,7 @@ fn chord_bars(
                     tokens.push(format!("z{length}"));
                     continue;
                 }
-                let written = write(&notes, &mut in_force)?;
+                let written = write(&notes, span.name, &mut in_force)?;
                 if notes.len() > 1 {
                     tokens.push(format!("[{written}]{length}"));
                 } else {
@@ -618,7 +619,10 @@ fn chord_bars(
             } else {
                 ""
             };
-            tokens.push(format!("[{}]{length}{tie}", write(voiced, &mut in_force)?));
+            tokens.push(format!(
+                "[{}]{length}{tie}",
+                write(voiced, span.name, &mut in_force)?
+            ));
         }
         if to > cursor + EPSILON {
             tokens.push(format!("z{}", abc_length(to - cursor)?));
