@@ -12,6 +12,7 @@ default = []
 serde = ["music21-rs/serde"]
 
 [dependencies]
+harte = { path = "../../harte" }
 miniz_oxide = "0.9.1"
 music21-rs = { path = "../..", default-features = false, features = [
   "musicxml",

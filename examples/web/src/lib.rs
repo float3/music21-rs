@@ -2129,7 +2129,7 @@ struct HarteInfo {
 #[wasm_bindgen]
 /// Reads a chord label in Harte notation and describes the chord it sounds.
 pub fn harte_chord(label: &str) -> Result<JsValue, JsValue> {
-    let harte = music21_rs::Harte::new(label).map_err(|err| JsValue::from_str(&err.to_string()))?;
+    let harte = harte::Harte::new(label).map_err(|err| JsValue::from_str(&err.to_string()))?;
     let chord = harte.chord();
     let info = HarteInfo {
         label: label.to_string(),
@@ -2177,7 +2177,7 @@ struct ShorthandInfo {
 #[wasm_bindgen]
 /// The shorthands Harte notation knows, each with the degrees it stands for.
 pub fn harte_shorthands() -> Result<JsValue, JsValue> {
-    let table = music21_rs::harte::SHORTHAND_DEGREES
+    let table = harte::SHORTHAND_DEGREES
         .iter()
         .map(|(name, degrees)| ShorthandInfo {
             name,

@@ -112,9 +112,6 @@ pub enum Error {
     #[cfg(feature = "musicxml")]
     #[error("MusicXML export error: {0}")]
     MusicXml(String),
-    /// Error associated with Harte chord labels and degrees.
-    #[error("Harte error: {0}")]
-    Harte(String),
     /// A value the caller gave that nothing musical could be read from.
     ///
     /// music21 keeps this apart from its own exceptions — an octave written

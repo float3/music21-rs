@@ -631,10 +631,10 @@ note = "Equal steps of any interval, not only of the octave: Bohlen-Pierce divid
 
 [[beyond]]
 name = "Harte chord notation"
-rust = "src/harte.rs"
+rust = "harte/src/lib.rs"
 count = "SHORTHAND_DEGREES"
 unit = "shorthands"
-note = "Chord labels as harte-library reads them, C:maj7/3 or Bb:(b3,5,b7,9), built into chords with the root fixed as the label names it. Ported from harte-library and checked against every label in that library's 8,064-chord coverage set."
+note = "Chord labels as harte-library reads them, C:maj7/3 or Bb:(b3,5,b7,9), built into chords with the root fixed as the label names it. The `harte` crate in this repository, ported from harte-library and checked against every label in that library's 8,064-chord coverage set."
 
 [[beyond]]
 name = "Duplicate detection"

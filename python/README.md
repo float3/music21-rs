@@ -165,7 +165,8 @@ Asato Cuthbert and all music21 contributors for the original library.
 
 ### harte-library
 
-The crate's `harte` module, compiled into the wheel, is a port of
+The `harte` crate beside this one, which `xtask downstream` runs
+harte-library's own tests against, is a port of
 [harte-library](https://github.com/andreamust/harte-library) by Andrea
 Poltronieri, licensed
 [MIT](https://github.com/andreamust/harte-library/blob/main/LICENSE).

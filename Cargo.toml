@@ -21,7 +21,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [workspace]
 exclude = ["python", "python-parity"]
-members = ["utils", "examples/audio", "examples/web", "xtask"]
+members = ["harte", "utils", "examples/audio", "examples/web", "xtask"]
 
 # CI denies warnings on the command line; stating the same levels here means a
 # local `cargo clippy` fails on exactly what CI fails on.

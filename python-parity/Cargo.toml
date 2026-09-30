@@ -5,6 +5,7 @@ publish = false
 version = "0.0.0"
 
 [dependencies]
+harte = { path = "../harte" }
 music21-rs = { path = "..", default-features = false, features = ["musicxml"] }
 # Renamed because the wheel crate's lib is also called `music21_rs`,
 # which is the name the extension module has to have.

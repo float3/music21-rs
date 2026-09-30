@@ -73,8 +73,6 @@ pub mod expressions;
 
 /// Figured bass: the numbers written under a bass note.
 pub mod figuredbass;
-pub mod harte;
-/// Harte chord notation: `C:maj7/3`, `Bb:(b3,5,b7,9)`, `N`.
 /// Humdrum `**kern` scores.
 pub mod humdrum;
 /// Instruments: music21's `instrument` module.
@@ -173,7 +171,6 @@ pub use duration::{
 };
 pub use dynamics::Dynamic;
 pub use error::{Error, Result};
-pub use harte::{Harte, HarteInterval, SHORTHAND_DEGREES, convert_interval};
 pub use instrument::{Instrument, SearchLanguage, ensemble_name_by_size};
 pub use interval::{
     ChromaticInterval, DiatonicInterval, GenericInterval, Interval, IntervalDirection, Specifier,

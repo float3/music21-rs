@@ -1,0 +1,24 @@
+[package]
+authors = ["hill <hill@hilll.dev>"]
+categories = ["multimedia::audio", "science"]
+description = "Harte chord notation, read into music21-rs chords"
+edition = "2024"
+keywords = ["music", "music-theory", "chords", "harte", "music21"]
+license = "AGPL-3.0-only"
+name = "harte"
+readme = "README.md"
+repository = "https://github.com/float3/music21-rs"
+rust-version = "1.90"
+version = "0.1.0"
+
+[features]
+default = []
+serde = ["dep:serde", "music21-rs/serde"]
+
+[dependencies]
+music21-rs = { path = "..", version = "0.7.1" }
+serde = { version = "1.0.228", optional = true, features = ["derive"] }
+thiserror = "2.0.17"
+
+[lints]
+workspace = true

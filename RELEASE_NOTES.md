@@ -25,6 +25,13 @@ reader the same way, on scores from music21's corpus and its own tests.
 
 ## Breaking Changes
 
+- Harte chord notation is the `harte` crate, a workspace member beside this
+  one that depends on it, rather than the `harte` module: `harte::Harte`,
+  `HarteInterval`, `SHORTHAND_DEGREES` and `convert_interval` moved there
+  as they were, and it refuses a label with its own `harte::Error`, so
+  `Error::Harte` is gone from this crate. It is harte-library's notation,
+  not music21's, and music21's author asks for a small core with add-ons
+  around it.
 - Flats are written `b`: `Pitch::name` is `Bb`, `name_with_octave`
   `Bb4`, a flat's `Accidental::modifier` `b` and a double flat's `bb`, and
   so for every name built from them: key, scale and chord-symbol names,

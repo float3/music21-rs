@@ -1182,7 +1182,7 @@ fn write_doctest_totals(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) ->
 
 /// What harte-library, on music21, makes of every chord label in its own
 /// coverage set: the pitches, root, bass, sounding degrees and prettified
-/// spelling of each, or the exception it raises. `src/harte.rs` is checked
+/// spelling of each, or the exception it raises. the `harte` crate is checked
 /// against it by `harte_parity`.
 fn write_harte(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> PyResult<PathBuf> {
     let checkout = crate::downstream::checkout(&workspace_root.join("target/downstream"))
@@ -1260,8 +1260,8 @@ fn write_harte(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> PyResult
                     ));
                 }
                 pairs.sort_by(|a, b| {
-                    music21_rs::harte::degree_sort_key(&a.0)
-                        .partial_cmp(&music21_rs::harte::degree_sort_key(&b.0))
+                    harte::degree_sort_key(&a.0)
+                        .partial_cmp(&harte::degree_sort_key(&b.0))
                         .unwrap_or(std::cmp::Ordering::Equal)
                         .then_with(|| a.0.cmp(&b.0))
                 });

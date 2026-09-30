@@ -501,6 +501,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "harte"
+version = "0.1.0"
+dependencies = [
+ "music21-rs",
+ "serde",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "hashbrown"
 version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -991,6 +1000,7 @@ dependencies = [
 name = "music21-rs-web"
 version = "0.0.0"
 dependencies = [
+ "harte",
  "miniz_oxide",
  "music21-rs",
  "roxmltree",
@@ -2722,6 +2732,7 @@ checksum = "3ad82d2a33cdc9674dc7465672f271e096168fcdbe0f799d9e6db8c5892679dc"
 name = "xtask"
 version = "0.1.0"
 dependencies = [
+ "harte",
  "music21-rs",
  "music21-rs-python",
  "proc-macro2",

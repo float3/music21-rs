@@ -367,6 +367,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "harte"
+version = "0.1.0"
+dependencies = [
+ "music21-rs",
+ "thiserror",
+]
+
+[[package]]
 name = "hashbrown"
 version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -776,6 +784,7 @@ dependencies = [
 name = "music21-rs-python-parity"
 version = "0.0.0"
 dependencies = [
+ "harte",
  "music21-rs",
  "music21-rs-python",
  "pyo3",
