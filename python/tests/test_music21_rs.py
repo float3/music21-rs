@@ -180,6 +180,9 @@ def test_duration_infers_a_tuplet_no_tie_reaches():
     (triplet,) = m.Duration(1 / 3).tuplets
     assert (triplet.numberNotesActual, triplet.numberNotesNormal) == (3, 2)
     assert m.Duration(1.25).tuplets == ()
+    assert m.Duration(5 / 6).fullName == "Quarter Tuplet of 6/5ths (5/6 QL)"
+    assert m.Duration(21 / 5).fullName == "Breve Tuplet of 40/21st (4 1/5 QL)"
+    assert m.Tuplet(3, 1).fullName == "Tuplet of 3/1st"
 
 
 def test_sieve_module_functions():
