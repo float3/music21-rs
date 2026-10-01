@@ -16,7 +16,7 @@ default = []
 serde = ["dep:serde", "music21-rs/serde"]
 
 [dependencies]
-music21-rs = { path = "..", version = "0.7.1" }
+music21-rs = { path = "..", version = "0.8.0" }
 serde = { version = "1.0.228", optional = true, features = ["derive"] }
 thiserror = "2.0.17"
 
