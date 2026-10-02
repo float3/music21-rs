@@ -37,7 +37,9 @@ use crate::note::Note;
 use crate::pitch::{Accidental, Pitch};
 use crate::repeat::{RepeatExpression, RepeatExpressionKind};
 use crate::rest::Rest;
-use crate::spanner::{PedalForm, PedalType, Spanner, SpannerKind};
+use crate::spanner::{
+    PedalForm, PedalObject, PedalObjectKind, PedalType, SlideType, Spanner, SpannerKind,
+};
 use crate::stream::{StaffGroup, Stream, StreamElement, StreamKind};
 use crate::tempo::MetronomeMark;
 
@@ -155,18 +157,6 @@ fn score_element(score: &Stream, options: &ExportOptions) -> Result<Element> {
     let joined = joinable_groups(&parts, groups);
     let voice_bases = voice_bases(&parts, groups, &joined);
     let numbered = id_locals(score, &parts);
-    // music21 follows such a pedal's sign with a line resumed at the
-    // spanner's own offset, which is not the place of anything it holds.
-    if numbered.iter().any(|numbered| {
-        numbered
-            .spanner
-            .pedal()
-            .is_some_and(|pedal| pedal.form == Some(PedalForm::SymbolLine))
-    }) {
-        return Err(export_error(
-            "writing a pedal mark drawn as a sign and a line is not supported yet",
-        ));
-    }
     let mut shared = Shared::default();
     let mut exported = Vec::with_capacity(parts.len());
     for (index, part) in parts.iter().copied().enumerate() {
@@ -1451,11 +1441,14 @@ impl<'a, 'b> MeasureExporter<'a, 'b> {
 
     /// music21's `parseOneElement`.
     fn parse_one_element(&mut self, offset: FloatType, element: &StreamElement) -> Result<()> {
+        let position = element as *const StreamElement;
+        // Asked before the writer moves past the element, which is where a
+        // pedal's resumed line counts its offset from.
+        let (before, after) =
+            related_spanners(position, &self.context.spanners, self.offset_in_measure);
         if is_written_as_note(element) {
             self.offset_in_measure += element.quarter_length();
         }
-        let position = element as *const StreamElement;
-        let (before, after) = related_spanners(position, &self.context.spanners);
         for direction in before {
             self.root.push(direction);
         }
@@ -1549,8 +1542,54 @@ impl<'a, 'b> MeasureExporter<'a, 'b> {
                     inner.kind()
                 )));
             }
+            StreamElement::PedalObject(object) => self.pedal_object_elements(object, position),
+            // music21 writes nothing for a barline standing inside a
+            // measure: `Barline` is one of `ignoreOnParseClasses`.
+            StreamElement::Barline(_) => {}
         }
         Ok(())
+    }
+
+    /// music21's `pedalObjectToXml`: a bounce or a gap in a held pedal, as
+    /// the pedal mark holding it is drawn. One no pedal mark holds writes
+    /// nothing.
+    fn pedal_object_elements(&mut self, object: &PedalObject, position: *const StreamElement) {
+        let Some(pedal) = self
+            .context
+            .spanners
+            .iter()
+            .find(|numbered| {
+                numbered.spanner.kind() == SpannerKind::PedalMark && numbered.holds(position)
+            })
+            .map(|numbered| numbered.spanner.pedal().unwrap_or_default())
+        else {
+            return;
+        };
+        let lined = pedal.form.is_some_and(PedalForm::has_line);
+        // Soft and silent pedals have no start of their own in MusicXML, and
+        // music21 writes them, and a pedal that does not say, as `sustain`.
+        let down = match pedal.pedal_type {
+            Some(PedalType::Sostenuto) => "sostenuto",
+            Some(PedalType::Sustain) => "start",
+            _ => "sustain",
+        };
+        let types: &[&str] = match object.kind() {
+            PedalObjectKind::Bounce => match pedal.form {
+                Some(PedalForm::Line | PedalForm::SymbolLine) => &["change"],
+                Some(PedalForm::SymbolAlt) => &[down],
+                Some(PedalForm::Symbol) => &["stop", down],
+                None => return,
+            },
+            PedalObjectKind::GapStart => &["discontinue"],
+            PedalObjectKind::GapEnd => &["resume"],
+        };
+        for kind in types {
+            let mut mark = Element::new("pedal");
+            mark.set("type", *kind);
+            mark.set(if lined { "line" } else { "sign" }, "yes");
+            let direction = self.direction(mark, object.placement(), self.element_offset, true);
+            self.root.push(direction);
+        }
     }
 
     /// music21's `wrapObjectInAttributes`: a mark after the start of a
@@ -1920,18 +1959,7 @@ impl<'a, 'b> MeasureExporter<'a, 'b> {
     /// music21's `setOffsetOptional`: an `<offset>` for a direction that does
     /// not stand where the writer has got to.
     fn offset_element(&self, offset: FloatType, sound: bool) -> Option<Element> {
-        // music21 counts its place in the measure as a float, and holds an
-        // offset no float spells exactly -- a triplet's -- as a `Fraction`,
-        // which compares unequal to every float.
-        if offset == self.offset_in_measure && !is_fraction_offset(offset) {
-            return None;
-        }
-        let difference = ((offset - self.offset_in_measure) * DIVISIONS_PER_QUARTER) as i64;
-        let mut element = Element::with_text("offset", difference.to_string());
-        if sound {
-            element.set("sound", "yes");
-        }
-        Some(element)
+        offset_element_from(offset, self.offset_in_measure, sound)
     }
 
     /// music21's `placeInDirection`.
@@ -2426,10 +2454,13 @@ fn technical_element(articulation: &Articulation) -> Element {
 
 /// music21's `relatedSpanners`: the directions a hairpin opens with before
 /// the element it starts on, and closes with after the one it ends on. A
-/// hairpin over one element does both.
+/// hairpin over one element does both. A pedal drawn as a sign and a line
+/// resumes its line straight after the sign, at the pedal mark's own offset
+/// counted from `offset_in_measure`: music21's `makePedalResumeLineXml`.
 fn related_spanners(
     position: *const StreamElement,
     spanners: &[Numbered<'_>],
+    offset_in_measure: FloatType,
 ) -> (Vec<Element>, Vec<Element>) {
     let mut before = Vec::new();
     let mut after = Vec::new();
@@ -2506,9 +2537,48 @@ fn related_spanners(
             } else {
                 after.push(direction);
             }
+            if start
+                && spanner.kind() == SpannerKind::PedalMark
+                && spanner.pedal().and_then(|pedal| pedal.form) == Some(PedalForm::SymbolLine)
+            {
+                let mut line = Element::new("pedal");
+                line.set("type", "resume");
+                line.set("line", "yes");
+                let mut direction = Element::new("direction");
+                direction.sub("direction-type").push(line);
+                if let Some(placement) = spanner.placement() {
+                    direction.set("placement", placement.as_str());
+                }
+                if let Some(offset) = offset_element_from(spanner.offset(), offset_in_measure, true)
+                {
+                    direction.push(offset);
+                }
+                before.push(direction);
+            }
         }
     }
     (before, after)
+}
+
+/// music21's `setOffsetOptional`: an `<offset>` for a direction at `offset`
+/// that does not stand where the writer has got to, `offset_in_measure`.
+fn offset_element_from(
+    offset: FloatType,
+    offset_in_measure: FloatType,
+    sound: bool,
+) -> Option<Element> {
+    // music21 counts its place in the measure as a float, and holds an
+    // offset no float spells exactly -- a triplet's -- as a `Fraction`,
+    // which compares unequal to every float.
+    if offset == offset_in_measure && !is_fraction_offset(offset) {
+        return None;
+    }
+    let difference = ((offset - offset_in_measure) * DIVISIONS_PER_QUARTER) as i64;
+    let mut element = Element::with_text("offset", difference.to_string());
+    if sound {
+        element.set("sound", "yes");
+    }
+    Some(element)
 }
 
 /// A pedal mark's `<pedal>`, where it goes down or where it comes up:
@@ -2650,9 +2720,58 @@ fn spanner_notations(
         slur.set("number", id_local.to_string());
         notations.push(slur);
     }
-    // A trill's wavy line: where it starts, where it stops, and both on a
-    // line over one note. These go in an `<ornaments>` of their own.
+    // A glissando, or a slide where it is played without steps, written as
+    // a slur is; only its start carries its words.
+    for numbered in spanners {
+        let (spanner, id_local) = (numbered.spanner, numbered.id_local);
+        if spanner.kind() != SpannerKind::Glissando {
+            continue;
+        }
+        let details = spanner.glissando_details().cloned().unwrap_or_default();
+        let mut glissando = Element::new(if details.slide_type == SlideType::Continuous {
+            "slide"
+        } else {
+            "glissando"
+        });
+        glissando.set("number", id_local.to_string());
+        if let Some(line_type) = spanner.line_type() {
+            glissando.set("line-type", line_type);
+        }
+        if numbered.is_first(position) {
+            if let Some(label) = details.label {
+                glissando.set_text(label);
+            }
+            glissando.set("type", "start");
+        } else if numbered.is_last(position) {
+            glissando.set("type", "stop");
+        } else {
+            continue;
+        }
+        notations.push(glissando);
+    }
+    // A tremolo between notes, then a trill's wavy line: where it starts,
+    // where it stops, and both on a line over one note. These go in an
+    // `<ornaments>` of their own.
     let mut ornaments = Element::new("ornaments");
+    for numbered in spanners {
+        let spanner = numbered.spanner;
+        if spanner.kind() != SpannerKind::TremoloSpanner || !numbered.holds(position) {
+            continue;
+        }
+        let mut tremolo = Element::with_text(
+            "tremolo",
+            spanner.number_of_marks().unwrap_or(3).to_string(),
+        );
+        if numbered.is_first(position) {
+            tremolo.set("type", "start");
+            if let Some(placement) = spanner.placement() {
+                tremolo.set("placement", placement.as_str());
+            }
+        } else if numbered.is_last(position) {
+            tremolo.set("type", "stop");
+        }
+        ornaments.push(tremolo);
+    }
     for numbered in spanners {
         let (spanner, id_local) = (numbered.spanner, numbered.id_local);
         if spanner.kind() != SpannerKind::TrillExtension {
@@ -3238,6 +3357,15 @@ fn lyric_element(lyric: &Lyric) -> Result<Element> {
     }
     element.set("name", lyric.identifier());
     element.set("number", lyric.number().to_string());
+    if let Some(justify) = lyric.justify() {
+        element.set("justify", justify.as_str());
+    }
+    if let Some(placement) = lyric.placement() {
+        element.set("placement", placement.as_str());
+    }
+    if lyric.is_hidden() {
+        element.set("print-object", "no");
+    }
     if let Some(color) = lyric.color() {
         element.set("color", normalize_color(color)?);
     }

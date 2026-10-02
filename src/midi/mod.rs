@@ -110,7 +110,9 @@ pub fn midi_notes_from_stream(stream: &Stream) -> Result<Vec<MidiNote>> {
             | StreamElement::TextExpression(_)
             | StreamElement::RepeatExpression(_)
             | StreamElement::Dynamic(_)
-            | StreamElement::ChordSymbol(_) => {}
+            | StreamElement::ChordSymbol(_)
+            | StreamElement::Barline(_)
+            | StreamElement::PedalObject(_) => {}
         }
     }
     Ok(notes)
