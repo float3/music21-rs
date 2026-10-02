@@ -35,6 +35,13 @@ use musicxml_common::{
     normalize_ids,
 };
 
+/// Tunes of the reader test's that cannot be written so as to be read back,
+/// and why not.
+const NOT_READ_BACK: &[(&str, &str)] = &[(
+    "airdsAirs/book4.abc#0722",
+    "barlines written among the header fields leave the meter in the part      outside every measure; ABC written properly states the meter in the      header, which is read into the first measure",
+)];
+
 /// music21 reading ABC text and writing what it read: as MusicXML where its
 /// exporter will, as an outline where it will not.
 const MUSIC21_READS: &str = r#"
@@ -99,7 +106,11 @@ fn what_the_crate_writes_as_abc_is_read_back_as_the_same_score() {
                 .filter(|name| !name.is_empty())
                 .map(str::to_string)
                 .collect(),
-            Err(_) => ABC_TUNES.iter().map(|(name, _)| name.to_string()).collect(),
+            Err(_) => ABC_TUNES
+                .iter()
+                .map(|(name, _)| name.to_string())
+                .filter(|name| !NOT_READ_BACK.iter().any(|(known, _)| known == name))
+                .collect(),
         };
         let directory = root.join("target").join("abc-write-parity");
         let keep = |tune: &str, files: &[(&str, &str)]| {
