@@ -85,6 +85,14 @@ and RomanText are read with no feature at all: `abc::from_abc`,
 `humdrum::from_humdrum`, `mei::from_mei` and `romantext::from_roman_text`
 each read what music21 reads into the score music21 makes of it.
 
+MuseScore's own files are read with no feature and no MuseScore installed:
+`musescore::from_mscx` takes the text of a `.mscx`, as MuseScore 3 and 4 save
+it, and hands back the score, held to what MuseScore itself exports from the
+same file. It opens and unpacks nothing, so a `.mscz`, which is a zip archive
+holding a `.mscx`, is the caller's to unzip. Percussion and tablature staves
+and a few kinds of line are refused with an error rather than guessed at; the
+function's documentation lists them.
+
 Name a chord and read its set class:
 
 ```rust

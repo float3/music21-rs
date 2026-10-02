@@ -1,6 +1,6 @@
 //! MuseScore's own files, read natively, and MuseScore run as a converter.
 //!
-//! [`from_mscx`] reads the uncompressed `.mscx` format MuseScore 4 saves --
+//! [`from_mscx`](crate::musescore::from_mscx) reads the uncompressed `.mscx` format MuseScore 4 saves --
 //! and MuseScore 3's, where the two are the same -- into a score, with no
 //! program installed. It opens no file and unpacks nothing: a `.mscz` is a
 //! zip archive holding the `.mscx`, and it is the caller's to unpack and

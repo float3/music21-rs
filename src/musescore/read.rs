@@ -2453,16 +2453,48 @@ struct BuiltPart {
 /// Every `<Part>` is a part, and a part on several staves -- a piano -- is
 /// a part for each staff joined by a brace, as a MusicXML reader makes it.
 /// Pitches are spelled as the file spells them, and a transposing
-/// instrument's are written as it reads them. What the file leaves to be
-/// worked out when the page is laid out is worked out as MuseScore works
-/// it out: beams from the meter, the brackets of beamed tuplets, the key
-/// signature a staff starts with when none is written.
+/// instrument's are written as it reads them.
 ///
-/// What is only drawn -- frames, page and system breaks, positions, fonts
-/// -- is passed over. What the crate has no value for, or cannot yet read
-/// -- percussion and tablature staves, ornaments, arpeggios, tremolos,
-/// jumps and markers, multi-measure rests -- is refused with an error
-/// rather than dropped.
+/// # What is read
+///
+/// - Parts, their names and abbreviations, instruments, MIDI programs and
+///   channels, transpositions, and the brackets and braces joining staves.
+/// - Measures and their numbers -- pickups, measures left out of the count,
+///   sections that start again from one -- and up to four voices in each.
+/// - Notes, chords and rests, measure rests among them: lengths, dots,
+///   tuplets and tuplets inside tuplets, ties, written accidentals,
+///   noteheads, colours, velocities, stems the file fixes, and grace notes
+///   before and after a note.
+/// - Clefs, key signatures, meters, tempo marks, dynamics, staff and system
+///   text, lyrics and chord symbols.
+/// - Articulations, fingerings, breath marks, fermatas on notes and on
+///   barlines, ornaments and arpeggios.
+/// - Barlines, repeats, endings, and the signs and words that send a
+///   player elsewhere: segno, coda, *To Coda*, *Fine*, *D.C.* and *D.S.*
+/// - Slurs, hairpins and pedal lines.
+/// - The title, composer and the rest of the file's `metaTag`s.
+///
+/// A MuseScore file leaves some of what a page shows to be worked out when
+/// the page is laid out, and that is worked out here as MuseScore does it:
+/// beams from the meter and the beam modes of the notes, whether a tuplet
+/// takes a bracket, the clef and key signature a staff starts with when
+/// none is written, and the final barline.
+///
+/// # What is not read
+///
+/// What is only drawn -- frames, page and system breaks, positions, fonts,
+/// rehearsal marks, and whatever is marked invisible -- is passed over.
+/// MuseScore 4 keeps a score's style in a file of its own beside the
+/// `.mscx`, which this function is not given; where the style decides
+/// something, MuseScore's default is taken.
+///
+/// What the crate has no value for, or cannot read yet, is refused with an
+/// [`Error::MuseScore`] naming it rather than dropped: percussion and
+/// tablature staves, files in a format older than MuseScore 3's, tremolos,
+/// trill, octave, glissando and text lines, arpeggios across staves,
+/// ornaments with accidentals, key signatures of a score's own making,
+/// measure repeats, fret diagrams, figured bass, instrument changes, shape
+/// notes, and a chord symbol whose name is none the crate knows.
 ///
 /// ```
 /// use music21_rs::musescore::from_mscx;
@@ -3663,12 +3695,11 @@ mod tests {
 
     #[test]
     fn a_notehead_a_colour_and_a_fingering_are_read_off_the_note() {
-        let body = format!(
-            "<Chord><durationType>whole</durationType><Note><pitch>60</pitch><tpc>14</tpc>\
-             <head>cross</head><color r=\"255\" g=\"38\" b=\"0\" a=\"255\"/>\
-             <Fingering><text>3</text></Fingering></Note></Chord>"
-        );
-        let notes = notes_of(&from_mscx(&document(&body)).unwrap());
+        let body = "<Chord><durationType>whole</durationType><Note><pitch>60</pitch>\
+                    <tpc>14</tpc><head>cross</head>\
+                    <color r=\"255\" g=\"38\" b=\"0\" a=\"255\"/>\
+                    <Fingering><text>3</text></Fingering></Note></Chord>";
+        let notes = notes_of(&from_mscx(&document(body)).unwrap());
         assert_eq!(notes[0].notehead(), Notehead::from_name("x").unwrap());
         assert_eq!(notes[0].color(), Some("#FF2600"));
         assert_eq!(notes[0].articulations().len(), 1);
