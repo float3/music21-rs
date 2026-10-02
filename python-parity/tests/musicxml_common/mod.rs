@@ -108,6 +108,60 @@ pub const SCORES: &[(&str, &str)] = &[
     ),
 ];
 
+/// ABC tunes of the corpus both readers read alike, and what each exercises.
+/// A tune is named by its corpus file, with `#n` after it for the tune
+/// numbered `n` of a file holding several.
+#[allow(dead_code)]
+pub const ABC_TUNES: &[(&str, &str)] = &[
+    ("ryansMammoth/7thRegimentReel.abc", "a reel with repeats"),
+    (
+        "ryansMammoth/42dHighlandRegimentStrathspey.abc",
+        "measures holding more than their bar, cut in two",
+    ),
+    (
+        "ryansMammoth/BullDozerReel.abc",
+        "a pickup of triplets, bowings and fingerings",
+    ),
+    (
+        "ryansMammoth/CzarOfRussiasFavoriteHornpipe.abc",
+        "chords written highest note first, endings",
+    ),
+    (
+        "ryansMammoth/LafricansJig.abc",
+        "a repeat moved onto the measure cut from its own",
+    ),
+    ("ryansMammoth/RisingSunReel.abc", "an ending never closed"),
+    ("oneills1850/0001-0050.abc#1", "one tune of a file of fifty"),
+    (
+        "oneills1850/0001-0050.abc#25",
+        "a run of nine in the time of two",
+    ),
+    (
+        "oneills1850/1376-1475.abc#1427",
+        "a grace note inside a triplet",
+    ),
+    ("essenFolksong/han1.abc#10", "a folk song changing meter"),
+    ("essenFolksong/erk20.abc#169", "a tie written on a rest"),
+    ("airdsAirs/book1.abc#5", "an air with a tempo"),
+    (
+        "airdsAirs/book4.abc#0722",
+        "barlines in the header, so the meter stands outside the measures",
+    ),
+];
+
+/// Python reading the text of a corpus file.
+#[allow(dead_code)]
+pub const ABC_SOURCE_TEXT: &str = r#"
+from music21 import corpus
+
+def source_text(name):
+    path = corpus.getWork(name)
+    if isinstance(path, (list, tuple)):
+        path = path[0]
+    with open(str(path), encoding='utf-8') as handle:
+        return handle.read()
+"#;
+
 /// Takes out of a parsed score what belongs to a page rather than to the
 /// music, which the crate does not model.
 pub const STRIP_LAYOUT: &str = r#"
@@ -373,6 +427,18 @@ def outline(score):
                 else:
                     out.append(line(e, e.getOffsetBySite(measure)))
     return '\n'.join(said for said in out if said is not None)
+
+def flat_outline(score):
+    """Every part with all it holds, measures or none."""
+    out = []
+    for part in score.parts:
+        out.append('Part')
+        for e in part.recurse():
+            if 'Measure' in e.classes:
+                out.append(f'  Measure {e.number} {number(e.getOffsetInHierarchy(part))}')
+            elif not e.isStream:
+                out.append(line(e, e.getOffsetInHierarchy(part)))
+    return '\n'.join(said for said in out if said is not None)
 "#;
 
 #[allow(dead_code)]
@@ -516,6 +582,38 @@ pub fn outline(score: &Stream) -> String {
                 }
             }
         }
+    }
+    out.join("\n")
+}
+
+/// A score as an outline of every part with all it holds, whether in
+/// measures or not: the outline of a tune with no measures, which `outline`
+/// says nothing of.
+#[allow(dead_code)]
+pub fn flat_outline(score: &Stream) -> String {
+    fn walk(stream: &Stream, base: f64, out: &mut Vec<String>) {
+        for event in stream.events() {
+            let offset = base + event.offset();
+            match event.element().as_stream() {
+                Some(inner) => {
+                    if inner.kind() == StreamKind::Measure {
+                        out.push(format!("  Measure {} {}", inner.number(), number(offset)));
+                    }
+                    walk(inner, offset, out);
+                }
+                None => out.push(format!(
+                    "    {} {} {}",
+                    number(offset),
+                    number(event.element().quarter_length()),
+                    describe(event.element())
+                )),
+            }
+        }
+    }
+    let mut out = Vec::new();
+    for part in score.parts() {
+        out.push("Part".to_string());
+        walk(part, 0.0, &mut out);
     }
     out.join("\n")
 }

@@ -5,8 +5,10 @@
 //! application-specific snippets belong in callers.
 
 mod read;
+mod write;
 
 pub use read::{from_abc, from_abc_number};
+pub use write::{ExportOptions, to_abc};
 
 use crate::{Error, Pitch, Result};
 
