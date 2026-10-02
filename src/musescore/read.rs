@@ -2910,19 +2910,13 @@ impl Assembler<'_> {
         Ok(out)
     }
 
-    /// The barline MuseScore draws at the end of a measure that has none of
-    /// its own: a double one before a change of key, a final one at the end
-    /// of the score.
+    /// The barline a measure ends with where it writes none of its own: a
+    /// final one at the end of the score, which MuseScore draws without
+    /// being told. The double barline it draws before a courtesy key
+    /// signature depends on where a system ends, which is the page's to
+    /// say, and is not one of these.
     fn drawn_barline(&self, index: usize) -> Option<Barline> {
-        let Some(next) = self.staves[0].get(index + 1) else {
-            return Some(Barline::new(BarlineType::Final));
-        };
-        let changes_key = next
-            .voices
-            .iter()
-            .flat_map(|voice| &voice.events)
-            .any(|event| matches!(event.what, What::Key(_)) && event.tick.is_zero());
-        changes_key.then(|| Barline::new(BarlineType::Double))
+        (index + 1 == self.staves[0].len()).then(|| Barline::new(BarlineType::Final))
     }
 
     /// Whether a volta starting at this measure is the first measure of it.
