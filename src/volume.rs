@@ -2,10 +2,11 @@
 //!
 //! A volume is one number held two ways — a MIDI velocity from 0 to 127 and
 //! the same value as a scalar from 0 to 1 — plus the rule for reading it
-//! against the dynamic marks around it. music21 finds those marks by
-//! searching the stream the note sits in; there are no streams here, so
-//! [`Volume::realized_with`] takes the dynamic scalar and the articulation
-//! shift as arguments instead of going looking for them.
+//! against the dynamic marks around it. A volume does not know the note it
+//! belongs to, so [`Volume::realized_with`] takes the dynamic scalar and the
+//! articulation shift as arguments; the marks themselves are found in a
+//! stream by [`dynamic_context`], [`dynamics_in_force`] and
+//! [`realize_volume`].
 
 use std::fmt;
 
@@ -13,7 +14,7 @@ use crate::{
     defaults::{FloatType, IntegerType},
     dynamics::{Dynamic, dynamic_str_from_decimal as dynamic_name},
     error::{Error, Result},
-    stream::{Stream, StreamElement},
+    stream::{Stream, StreamElement, StreamKind},
 };
 
 /// The velocity music21 assumes when none was set, as a scalar. It is the
@@ -364,6 +365,113 @@ pub fn dynamics_in_force(stream: &Stream) -> Vec<Option<usize>> {
                 })
         })
         .collect()
+}
+
+/// The dynamic a note's volume is read against: music21's
+/// `getDynamicContext`, which asks the note for the nearest dynamic at or
+/// before it.
+///
+/// `position` is the note's place in [`Stream::leaves`], and the answer is
+/// the dynamic's place there, or `None` where no dynamic comes before it.
+/// The search starts in the stream holding the note and works outwards, as
+/// music21's `getContextByClass` does: a measure, a voice or a plain stream
+/// is searched first among its own elements and then through the streams it
+/// holds, a part only through them, and a score or an opus only among its
+/// own elements -- so a dynamic in another part is never the one, while a
+/// dynamic nearer the note in its own voice wins over a later one in
+/// another voice. A dynamic at the note's own offset is before it.
+///
+/// ```
+/// use music21_rs::{volume::dynamic_context, Dynamic, Note, Stream, StreamKind};
+///
+/// let mut measure = Stream::with_kind(StreamKind::Measure);
+/// measure.insert(0.0, Dynamic::new("ff"));
+/// measure.insert(0.0, Note::from_name("C4")?);
+/// measure.insert(1.0, Note::from_name("D4")?);
+/// assert_eq!(dynamic_context(&measure, 2), Some(0));
+/// assert_eq!(dynamic_context(&Stream::new(), 0), None);
+/// # Ok::<(), music21_rs::Error>(())
+/// ```
+pub fn dynamic_context(stream: &Stream, position: usize) -> Option<usize> {
+    // The streams holding the note, outermost first: each with the offset it
+    // starts at and the position of its first leaf.
+    let mut chain: Vec<(&Stream, FloatType, usize)> = Vec::new();
+    let at = holders_of(stream, 0.0, 0, position, &mut chain)?;
+    for &(site, start, first) in chain.iter().rev() {
+        let at = at - start;
+        let own_first = !matches!(site.kind(), StreamKind::Part | StreamKind::PartStaff);
+        let then_inside = !matches!(site.kind(), StreamKind::Score | StreamKind::Opus);
+        if own_first && let Some(found) = last_dynamic(site, first, at, false) {
+            return Some(found);
+        }
+        if then_inside && let Some(found) = last_dynamic(site, first, at, true) {
+            return Some(found);
+        }
+    }
+    None
+}
+
+/// Walks down to the leaf at `position`, pushing every stream on the way,
+/// and answers the leaf's offset; `None` where there is no such leaf.
+fn holders_of<'a>(
+    stream: &'a Stream,
+    start: FloatType,
+    first: usize,
+    position: usize,
+    chain: &mut Vec<(&'a Stream, FloatType, usize)>,
+) -> Option<FloatType> {
+    chain.push((stream, start, first));
+    let mut next = first;
+    for event in stream.events() {
+        let offset = start + event.offset();
+        match event.element() {
+            StreamElement::Stream(inner) => {
+                let count = inner.leaves().len();
+                if position < next + count {
+                    return holders_of(inner, offset, next, position, chain);
+                }
+                next += count;
+            }
+            _ => {
+                if next == position {
+                    return Some(offset);
+                }
+                next += 1;
+            }
+        }
+    }
+    None
+}
+
+/// The last dynamic at or before `at` among a stream's own elements, or
+/// among everything it holds where `inside`, as its place among the leaves.
+fn last_dynamic(stream: &Stream, first: usize, at: FloatType, inside: bool) -> Option<usize> {
+    let mut found: Option<(FloatType, usize)> = None;
+    let mut consider = |offset: FloatType, position: usize| {
+        if offset <= at + 1e-9 && found.is_none_or(|(best, _)| offset >= best) {
+            found = Some((offset, position));
+        }
+    };
+    if inside {
+        for (position, (offset, element)) in stream.leaves().into_iter().enumerate() {
+            if matches!(element, StreamElement::Dynamic(_)) {
+                consider(offset, first + position);
+            }
+        }
+    } else {
+        let mut next = first;
+        for event in stream.events() {
+            match event.element() {
+                StreamElement::Stream(inner) => next += inner.leaves().len(),
+                StreamElement::Dynamic(_) => {
+                    consider(event.offset(), next);
+                    next += 1;
+                }
+                _ => next += 1,
+            }
+        }
+    }
+    found.map(|(_, position)| position)
 }
 
 impl fmt::Display for Volume {

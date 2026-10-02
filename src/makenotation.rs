@@ -11,6 +11,7 @@ use crate::clef::Clef;
 use crate::defaults::FloatType;
 use crate::duration::Duration;
 use crate::error::{Error, Result};
+use crate::expressions::split_expressions;
 use crate::meter::{BeamedNote, TimeSignature};
 use crate::notation::{BeamType, StemDirection, Tie, TieType};
 use crate::note::Note;
@@ -357,23 +358,27 @@ pub(crate) fn op_frac(value: FloatType) -> FloatType {
 /// Sorts events as music21 sorts a stream: by offset, then by class, grace
 /// notes first, then in the order given.
 pub(crate) fn sorted_events(mut events: Vec<StreamEvent>) -> Vec<StreamEvent> {
+    events.sort_by(music21_order);
+    events
+}
+
+/// Which of two events music21 sorts first, those it cannot tell apart
+/// being equal: [`sorted_events`] one pair at a time.
+pub(crate) fn music21_order(left: &StreamEvent, right: &StreamEvent) -> std::cmp::Ordering {
     let grace = |event: &StreamEvent| {
         event
             .element()
             .duration()
             .is_some_and(crate::duration::Duration::is_grace)
     };
-    events.sort_by(|left, right| {
-        left.offset()
-            .total_cmp(&right.offset())
-            .then(
-                left.element()
-                    .class_sort_order()
-                    .cmp(&right.element().class_sort_order()),
-            )
-            .then(grace(right).cmp(&grace(left)))
-    });
-    events
+    left.offset()
+        .total_cmp(&right.offset())
+        .then(
+            left.element()
+                .class_sort_order()
+                .cmp(&right.element().class_sort_order()),
+        )
+        .then(grace(right).cmp(&grace(left)))
 }
 
 fn placed(offset: FloatType, voice: Option<usize>, element: &StreamElement) -> Placed {
@@ -728,6 +733,9 @@ pub(crate) fn split_element(
         let (kept, moved) = share(note.articulations());
         *first.articulations_mut() = kept;
         *second.articulations_mut() = moved;
+        let (kept, moved) = split_expressions(note.expressions());
+        *first.expressions_mut() = kept;
+        *second.expressions_mut() = moved;
         first.set_duration(first_length.clone());
         second.set_duration(second_length.clone());
         let closing = split_tie(&mut first);
@@ -754,6 +762,9 @@ pub(crate) fn split_element(
             let (kept, moved) = share(chord.articulations());
             *first.articulations_mut() = kept;
             *second.articulations_mut() = moved;
+            let (kept, moved) = split_expressions(chord.expressions());
+            *first.expressions_mut() = kept;
+            *second.expressions_mut() = moved;
             first.set_duration(first_length);
             second.set_duration(second_length);
             // A chord's lyrics are kept on its first note.
@@ -770,6 +781,9 @@ pub(crate) fn split_element(
         StreamElement::PercussionChord(chord) => {
             let mut first = chord.clone();
             let mut second = chord.clone();
+            let (kept, moved) = split_expressions(chord.written().expressions());
+            *first.written_mut().expressions_mut() = kept;
+            *second.written_mut().expressions_mut() = moved;
             first.written_mut().set_duration(first_length);
             second.written_mut().set_duration(second_length);
             Ok((first.into(), second.into()))
@@ -778,6 +792,9 @@ pub(crate) fn split_element(
             let mut first = rest.clone();
             let mut second = rest.clone();
             second.lyrics_mut().clear();
+            let (kept, moved) = split_expressions(rest.expressions());
+            *first.expressions_mut() = kept;
+            *second.expressions_mut() = moved;
             first.set_duration(first_length);
             second.set_duration(second_length);
             Ok((first.into(), second.into()))

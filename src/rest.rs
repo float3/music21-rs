@@ -55,6 +55,14 @@ impl Rest {
         }
     }
 
+    /// This rest written as a grace note's value and lasting no time:
+    /// music21's `getGrace`, which a rest has as a note does.
+    pub fn grace_note(&self, appoggiatura: bool) -> Self {
+        let mut grace = self.clone();
+        grace.set_duration(self.duration.grace_duration_as(appoggiatura));
+        grace
+    }
+
     /// The tie written on the rest, which music21 lets a rest carry and a
     /// score now and then writes.
     pub fn tie(&self) -> Option<&crate::notation::Tie> {

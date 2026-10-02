@@ -39,6 +39,15 @@ impl Chord {
         Volume::from_velocity(mean.round_ties_even() as IntegerType)
     }
 
+    /// This chord as a grace chord, written as it is and sounding for no
+    /// time: music21's `getGrace`, as [`Note::grace_note`] makes a note one.
+    pub fn grace_note(&self, appoggiatura: bool) -> Self {
+        let written = self.duration().cloned().unwrap_or_default();
+        let mut grace = self.clone();
+        grace.set_duration(written.grace_duration_as(appoggiatura));
+        grace
+    }
+
     /// The instrument this chord is played on, over whichever is in force
     /// where it stands: music21's `storedInstrument`.
     pub fn stored_instrument(&self) -> Option<&crate::instrument::Instrument> {

@@ -1,3 +1,34 @@
+# Unreleased
+
+## Added
+
+- What instruments do to a stream they stand in, music21's four functions:
+  `instrument::unbundle_instruments` puts the instrument each note keeps as
+  its own into the stream beside it, `bundle_instruments` takes them back,
+  `deduplicate` folds together the instruments a part says more than once,
+  and `partition_by_instrument` splits a score into a part for each
+  instrument playing in it. Fifteen streams built both as music21's and as
+  the crate's come out the same from each.
+- `volume::dynamic_context` is `Volume.getDynamicContext`: the dynamic a
+  note is read against, searched for outwards from the stream holding the
+  note as music21's `getContextByClass` searches. 5,167 notes of three
+  corpus scores are given the dynamic music21 gives them.
+- `Note::grace_note`, `Chord::grace_note` and `Rest::grace_note` are
+  `getGrace`: the same note written as a grace note or an appoggiatura.
+- `Beams::naive_beams` is `Beams.naiveBeams`, over the elements of a stream.
+- `Ornament::split_client` is `Trill.splitClient`: it carries a trill onto
+  the first of the pieces a trilled note was split into and answers the
+  trill extension joining them. `Expression::tie_attach` says which piece
+  of a split note keeps any expression.
+
+## Fixed
+
+- A note cut at a barline shares out its expressions as music21's
+  `splitAtQuarterLength` does: a trill stays on the first piece, a fermata
+  goes to the last, and an ornament goes where its `tie_attach` says. Both
+  pieces used to keep them all, so `make_ties` and the ABC reader's
+  rebarring wrote a trill and a fermata twice.
+
 # music21-rs 0.8.0
 
 Four more of music21's analysis modules are the crate's—

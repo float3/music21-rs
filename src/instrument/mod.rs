@@ -16,11 +16,17 @@
 //! `"Clarinet in A"` is a clarinet sounding a minor third below what is
 //! written.
 //!
-//! What stays music21's is what an instrument does to a stream -- part ids,
-//! bundling, partitioning a score by instrument -- which is where a score
-//! holds one rather than what one is.
+//! What an instrument does to a stream it stands in is here too: moving the
+//! instruments notes keep as their own into the stream and back
+//! ([`unbundle_instruments`], [`bundle_instruments`]), folding together the
+//! instruments a part says twice ([`deduplicate`]) and splitting a score into
+//! a part for each instrument ([`partition_by_instrument`]).
 
+mod streams;
 mod tables;
+
+pub(crate) use streams::settle;
+pub use streams::{bundle_instruments, deduplicate, partition_by_instrument, unbundle_instruments};
 
 use std::fmt;
 

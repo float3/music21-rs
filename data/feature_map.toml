@@ -233,19 +233,13 @@ note = "How an unpitched percussion instrument is played, and the drum that play
 
 [[class]]
 python = "instrument.py"
-rust = ["src/instrument/mod.rs"]
-note = "Module-level helpers."
+rust = ["src/instrument/mod.rs", "src/instrument/streams.rs"]
+note = "Module-level helpers: finding an instrument by name or program, and what instruments do to a stream they stand in."
 
 [class.renames]
 fromString = "from_name"
 instrumentFromMidiProgram = "from_midi_program"
 getAllNamesForInstrument = "all_names"
-
-[class.excluded]
-deduplicate = "rearranges a stream by the instruments in it, and a stream here holds none"
-partitionByInstrument = "rearranges a stream by the instruments in it, and a stream here holds none"
-unbundleInstruments = "rearranges a stream by the instruments in it, and a stream here holds none"
-bundleInstruments = "rearranges a stream by the instruments in it, and a stream here holds none"
 
 [[class]]
 python = "duration.py"
@@ -314,9 +308,6 @@ note = "All the beams over one note, and the rules for a run of them."
 [class.renames]
 getTypeByNumber = "by_number"
 
-[class.excluded]
-naiveBeams = "it asks each object for its written value and whether it sounds, which is the facade's to ask; the rules it feeds are here as pure functions over the beams"
-
 [[class]]
 python = "volume.py"
 name = "Volume"
@@ -324,7 +315,6 @@ rust = ["src/volume.rs"]
 note = "How loud a note sounds, as a velocity and as a scalar."
 
 [class.excluded]
-getDynamicContext = "the dynamic in force is a search through the stream the note sits in; `realized_with` takes it as an argument instead"
 cachedRealized = "the crate caches nothing -- a value that answers the same question twice is doing arithmetic. The wheel caches as music21 does"
 cachedRealizedStr = "the crate caches nothing -- a value that answers the same question twice is doing arithmetic. The wheel caches as music21 does"
 
@@ -363,8 +353,8 @@ facade = "Note"
 rust = ["src/note/mod.rs", "src/notation.rs", "src/duration.rs"]
 note = "What every written note and chord has: a length, what is sung to it, and the marks over it. The crate has no type of its own for it -- the GeneralNote to NotRest to Note chain was mirrored here once as wrapper structs and taken out again -- so its members are matched against the types that carry them."
 
-[class.excluded]
-getGrace = "a grace note is written and does not sound, which is a duration music21 keeps unlinked; the wheel makes one by swapping that duration in"
+[class.renames]
+getGrace = "grace_note"
 
 [[class]]
 python = "note.py"
@@ -711,9 +701,6 @@ rust = ["src/expressions.rs"]
 [class.renames]
 resolveOrnamentalPitches = "ornamental_pitches"
 ornamentalPitch = "ornamental_pitches"
-
-[class.excluded]
-splitClient = "joins the notes a trilled note is split into with a TrillExtension spanner; there are no spanners here"
 
 [[class]]
 python = "expressions.py"
