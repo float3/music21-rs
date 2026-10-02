@@ -650,7 +650,7 @@ fn the_crate_makes_notation_as_music21_does() {
                     };
                     (
                         corpus.call_method("parse", (file,), Some(&kwargs)),
-                        read.map(&signed),
+                        read.map(signed),
                     )
                 }
                 "xml" => {
