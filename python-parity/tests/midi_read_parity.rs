@@ -99,7 +99,9 @@ const HELPERS: &str = r#"
 from music21 import corpus, midi
 
 def corpus_midi(name):
-    score = corpus.parse(name)
+    # From the file itself: a cached score is a pickle, and one written
+    # while this crate's classes stood in for music21's brings them back.
+    score = corpus.parse(name, forceSource=True)
     return midi.translate.streamToMidiFile(score).writestr()
 "#;
 

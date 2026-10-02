@@ -43,9 +43,14 @@ suite results, coverage, benchmarks and sizes, refreshed on every push.
 - MusicXML import reads a file as music21's reader reads it: those same
   scores, read by the crate and written back, give the text music21 gives
   after reading them itself.
+- With `ExportOptions::make_notation` the export works out the notation a
+  score leaves unsaid first, as music21's does by default: measures, rests,
+  ties, accidentals, beams, tuplet brackets. 244 subjects — MIDI files,
+  ABC tunes with no barlines, loose notes, notated corpus scores — come out
+  byte for byte as music21 writes them.
 
-Not ported: music21's stream machinery, parsing of other formats,
-`makeNotation` and the corpus.
+Not ported: music21's stream machinery, parsing of other formats and the
+corpus.
 
 ## Speed and size
 

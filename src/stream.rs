@@ -589,6 +589,10 @@ struct Labels {
     right_barline: Option<Barline>,
     spanners: Vec<Spanner>,
     ending: Option<Ending>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    padding_left: FloatType,
+    #[cfg_attr(feature = "serde", serde(default))]
+    padding_right: FloatType,
 }
 
 impl Stream {
@@ -747,6 +751,28 @@ impl Stream {
         self.labels.right_barline = barline;
     }
 
+    /// How much of a measure's bar goes unfilled before its first note, as
+    /// a pickup leaves the start of its bar: music21's `paddingLeft`.
+    pub fn padding_left(&self) -> FloatType {
+        self.labels.padding_left
+    }
+
+    /// Says how much of the bar goes unfilled before the first note.
+    pub fn set_padding_left(&mut self, padding: FloatType) {
+        self.labels.padding_left = padding;
+    }
+
+    /// How much of a measure's bar goes unfilled after its last note, as a
+    /// measure cut short leaves its end: music21's `paddingRight`.
+    pub fn padding_right(&self) -> FloatType {
+        self.labels.padding_right
+    }
+
+    /// Says how much of the bar goes unfilled after the last note.
+    pub fn set_padding_right(&mut self, padding: FloatType) {
+        self.labels.padding_right = padding;
+    }
+
     /// The alternative ending a measure is part of, where it is in one.
     pub fn ending(&self) -> Option<&Ending> {
         self.labels.ending.as_ref()
@@ -767,6 +793,11 @@ impl Stream {
     /// [`Stream::leaves`].
     pub fn add_spanner(&mut self, spanner: Spanner) {
         self.labels.spanners.push(spanner);
+    }
+
+    /// Takes every spanner off this stream.
+    pub(crate) fn clear_spanners(&mut self) {
+        self.labels.spanners.clear();
     }
 
     /// Which of music21's `Stream` subclasses this stands for.

@@ -435,6 +435,12 @@ impl Spanner {
         &self.spanned
     }
 
+    /// The positions of the elements it joins, to be moved where an edit
+    /// has moved them.
+    pub(crate) fn spanned_mut(&mut self) -> &mut Vec<Option<usize>> {
+        &mut self.spanned
+    }
+
     /// How many elements it joins, those standing nowhere included.
     pub fn len(&self) -> usize {
         self.spanned.len()

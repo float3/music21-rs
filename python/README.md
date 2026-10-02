@@ -49,7 +49,10 @@ text = m.to_musicxml(score, encoding_date="2026-01-01")
 ```
 
 `to_musicxml` takes one of this package's streams or one of music21's and
-writes what music21's exporter writes with `makeNotation=False`.
+writes what music21's exporter writes with `makeNotation=False`. With
+`make_notation=True` it makes the notation first, as music21's exporter does
+by default, so a part of loose notes is written in measures, with its ties,
+rests, accidentals and beams.
 `from_musicxml` reads what music21's reader reads and hands back this
 package's own `Score`; what the package has no class for -- words, barlines,
 slurs and other spanners, metadata -- is read and left out. A compressed

@@ -669,6 +669,8 @@ pub(crate) fn from_crate<'py>(py: Python<'py>, stream: &RsStream) -> PyResult<Bo
         StreamKind::Measure => {
             made.setattr("number", stream.number())?;
             made.setattr("numberSuffix", stream.number_suffix())?;
+            made.setattr("paddingLeft", stream.padding_left())?;
+            made.setattr("paddingRight", stream.padding_right())?;
         }
         StreamKind::Part | StreamKind::PartStaff => {
             made.setattr("partName", stream.name())?;
@@ -892,6 +894,9 @@ fn element_value(object: &Bound<'_, PyAny>, stand_ins: bool) -> PyResult<Option<
         if !stand_ins && let Some(duration) = written_duration(object, value.duration())? {
             value = value.with_duration(duration);
         }
+        if !stand_ins && let Some(duration) = inferred_duration(object, value.duration()) {
+            value = value.with_duration(duration);
+        }
         return Ok(Some(StreamElement::Chord(value)));
     }
     // music21's own percussion classes, read for a score writer. The walks
@@ -909,6 +914,9 @@ fn element_value(object: &Bound<'_, PyAny>, stand_ins: bool) -> PyResult<Option<
         *value.expressions_mut() = expressions_of(object)?;
         *value.articulations_mut() = articulations_of(object)?;
         if !stand_ins && let Some(duration) = written_duration(object, value.duration())? {
+            value.set_duration(duration);
+        }
+        if !stand_ins && let Some(duration) = inferred_duration(object, value.duration()) {
             value.set_duration(duration);
         }
         return Ok(Some(StreamElement::Note(value)));
@@ -941,6 +949,9 @@ fn element_value(object: &Bound<'_, PyAny>, stand_ins: bool) -> PyResult<Option<
         *value.expressions_mut() = expressions_of(object)?;
         *value.articulations_mut() = articulations_of(object)?;
         if !stand_ins && let Some(duration) = written_duration(object, Some(value.duration()))? {
+            value.set_duration(duration);
+        }
+        if !stand_ins && let Some(duration) = inferred_duration(object, Some(value.duration())) {
             value.set_duration(duration);
         }
         return Ok(Some(StreamElement::Rest(value)));
@@ -1146,6 +1157,9 @@ fn read_written(object: &Bound<'_, PyAny>, note: &mut music21_rs_crate::Note) ->
         if let Some(written) = written_duration(object, note.duration())? {
             note.set_duration(written);
         }
+        if let Some(inferred) = inferred_duration(object, note.duration()) {
+            note.set_duration(inferred);
+        }
     }
     if let Some(name) = text_attribute(object, "stemDirection") {
         note.set_stem_direction(StemDirection::from_name(&name).map_err(failed)?);
@@ -1249,6 +1263,29 @@ fn written_duration(
             .map_err(|error| StreamException::new_err(error.to_string()))?;
     }
     Ok(Some(written))
+}
+
+/// A duration saying, as its object's does, whether the way it is written
+/// was worked out from its length: music21's `expressionIsInferred`, which
+/// making notation asks before it writes a length another way. Nothing
+/// where the duration says so already.
+fn inferred_duration(
+    object: &Bound<'_, PyAny>,
+    duration: Option<&music21_rs_crate::Duration>,
+) -> Option<music21_rs_crate::Duration> {
+    let inferred = object
+        .getattr("duration")
+        .ok()?
+        .getattr("expressionIsInferred")
+        .ok()?
+        .extract::<bool>()
+        .ok()?;
+    let mut duration = duration.cloned().unwrap_or_default();
+    if duration.expression_is_inferred() == inferred {
+        return None;
+    }
+    duration.set_expression_is_inferred(inferred);
+    Some(duration)
 }
 
 /// A note's or chord's `articulations`, which are this wheel's own.
@@ -1409,6 +1446,16 @@ fn read_labels(object: &Bound<'_, PyAny>, stream: &mut RsStream) -> PyResult<()>
         stream.set_number(number);
     }
     stream.set_number_suffix(text_attribute(object, "numberSuffix"));
+    // How much of its bar a pickup or a measure cut short leaves unfilled.
+    let padding = |name: &str| {
+        object
+            .getattr(name)
+            .ok()
+            .and_then(|padding| padding.extract::<f64>().ok())
+            .unwrap_or(0.0)
+    };
+    stream.set_padding_left(padding("paddingLeft"));
+    stream.set_padding_right(padding("paddingRight"));
     if let Ok(show) = object.getattr("showNumber") {
         stream.set_number_hidden(show.str()?.to_str()?.to_lowercase().ends_with("never"));
     }

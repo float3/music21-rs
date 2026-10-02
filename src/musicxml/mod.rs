@@ -7,8 +7,14 @@
 //! again. A score is parts holding measures, a measure may hold voices, and a
 //! stream holding no parts is written as one part.
 //!
+//! [`ExportOptions::make_notation`] asks for the notation to be worked out
+//! first, as music21's exporter does by default: a part of loose notes, or a
+//! score whose lengths no single note value writes, is then written as
+//! music21 writes it.
+//!
 //! The writer does no file IO; it hands back the document as a string.
 
+mod notate;
 mod partstaff;
 mod read;
 mod tree;
@@ -70,6 +76,18 @@ pub struct ExportOptions {
     /// The composer named when the score names no contributor: music21's
     /// `defaults.author`, `Music21`.
     pub default_author: Option<String>,
+    /// Whether to work out the notation the score leaves unsaid before
+    /// writing it, as music21's exporter does with `makeNotation=True`:
+    /// gaps filled with unprinted rests, a part with no measures cut into
+    /// them, notes running past a barline cut and tied, accidentals decided,
+    /// notes beamed and tuplets bracketed where the part has none yet, and
+    /// lengths no single note value writes cut into tied values. The score
+    /// handed in is not changed.
+    ///
+    /// Off, the score is written as it stands, which is music21's
+    /// `makeNotation=False`: a caller that has made its notation already
+    /// gets exactly what it made.
+    pub make_notation: bool,
 }
 
 impl Default for ExportOptions {
@@ -79,6 +97,7 @@ impl Default for ExportOptions {
             software: format!("music21-rs v.{}", env!("CARGO_PKG_VERSION")),
             default_title: Some("Music21 Fragment".to_string()),
             default_author: Some("Music21".to_string()),
+            make_notation: false,
         }
     }
 }
@@ -105,13 +124,41 @@ impl Default for ExportOptions {
 /// # Ok::<(), music21_rs::Error>(())
 /// ```
 ///
+/// With [`ExportOptions::make_notation`] a part or a stream of loose notes
+/// may be handed in as readily as a score:
+///
+/// ```
+/// use music21_rs::{Duration, Note, Stream, StreamKind, TimeSignature};
+/// use music21_rs::musicxml::{ExportOptions, to_musicxml};
+///
+/// let mut part = Stream::with_kind(StreamKind::Part);
+/// part.insert(0.0, TimeSignature::new(3, 4)?);
+/// part.insert(0.0, Note::from_name("C4")?.with_duration(Duration::new(5.0)?));
+/// let options = ExportOptions {
+///     make_notation: true,
+///     ..ExportOptions::default()
+/// };
+/// let xml = to_musicxml(&part, &options)?;
+/// // A dotted half tied to a half, in two measures.
+/// assert_eq!(xml.matches("<measure ").count(), 2);
+/// assert!(xml.contains("<tie type=\"start\" />"));
+/// # Ok::<(), music21_rs::Error>(())
+/// ```
+///
 /// # Errors
 ///
 /// A part with no measures, a score nested in a score, a duration no single
 /// note value writes, and anything the crate cannot yet write: each as
-/// music21's `MusicXMLExportException` says it where music21 raises.
+/// music21's `MusicXMLExportException` says it where music21 raises. Making
+/// the notation first leaves only what no notation can write: a lone
+/// measure or voice, and a length no tie of note values reaches that is not
+/// an unprinted rest.
 pub fn to_musicxml(score: &Stream, options: &ExportOptions) -> Result<String> {
-    let root = score_element(score, options)?;
+    let root = if options.make_notation {
+        score_element(&notate::notated(score)?, options)?
+    } else {
+        score_element(score, options)?
+    };
     Ok(format!(
         "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<!DOCTYPE score-partwise  PUBLIC \
          \"-//Recordare//DTD MusicXML {MUSICXML_VERSION} Partwise//EN\" \
@@ -1415,6 +1462,15 @@ impl<'a, 'b> MeasureExporter<'a, 'b> {
                 }
             }
             for (offset, element) in notes_for_later {
+                // An unprinted rest of a length no note value writes is
+                // left as a gap, which the next element is moved past.
+                if let StreamElement::Rest(rest) = element
+                    && rest.hidden()
+                    && rest.quarter_length() != 0.0
+                    && rest.duration().components().is_empty()
+                {
+                    continue;
+                }
                 self.parse_one_element(offset, element)?;
             }
             index = end;

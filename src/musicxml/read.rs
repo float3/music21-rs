@@ -240,6 +240,8 @@ struct MeasureIr {
     left: Option<Barline>,
     right: Option<Barline>,
     ending: Option<Ending>,
+    padding_left: FloatType,
+    padding_right: FloatType,
     items: Vec<Item>,
     voices: Vec<VoiceIr>,
 }
@@ -1076,14 +1078,22 @@ impl<'a, 'x> PartParser<'a, 'x> {
             self.last_measure_was_short = false;
             bar_length
         } else {
-            if self.last_measure_offset != 0.0 {
-                if self.last_measure_was_short {
-                    if highest < bar_length {
-                        self.last_measure_was_short = false;
-                    }
-                } else {
-                    self.last_measure_was_short = highest < bar_length;
+            // A short measure is a pickup where it opens the part or follows
+            // another short one, and is cut short at its end otherwise.
+            if self.last_measure_offset == 0.0 {
+                if highest < bar_length {
+                    measure.padding_left = bar_length - highest;
                 }
+            } else if self.last_measure_was_short {
+                if highest < bar_length {
+                    measure.padding_left = bar_length - highest;
+                    self.last_measure_was_short = false;
+                }
+            } else {
+                if highest < bar_length {
+                    measure.padding_right = bar_length - highest;
+                }
+                self.last_measure_was_short = highest < bar_length;
             }
             highest
         };
@@ -1169,6 +1179,8 @@ impl<'a, 'x> PartParser<'a, 'x> {
                     left: measure.left.clone(),
                     right: measure.right.clone(),
                     ending: measure.ending.clone(),
+                    padding_left: measure.padding_left,
+                    padding_right: measure.padding_right,
                     items: Vec::new(),
                     voices: Vec::new(),
                 };
@@ -1290,6 +1302,8 @@ fn build_measure(measure: MeasureIr) -> (Stream, Vec<Option<usize>>) {
     stream.set_left_barline(measure.left);
     stream.set_right_barline(measure.right);
     stream.set_ending(measure.ending);
+    stream.set_padding_left(measure.padding_left);
+    stream.set_padding_right(measure.padding_right);
     (stream, uids)
 }
 
@@ -1492,8 +1506,11 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
         };
         let change = op_frac(ticks / self.divisions);
         if self.part.importer.finale {
-            // Finale writes a hidden rest as a `<forward>`.
-            let mut rest = Rest::new(Duration::new(change)?);
+            // Finale writes a hidden rest as a `<forward>`. One of no
+            // length is a quarter rest: music21 takes a length of nought
+            // for no length given.
+            let length = if change == 0.0 { 1.0 } else { change };
+            let mut rest = Rest::new(Duration::new(length)?);
             rest.set_hidden(true);
             let seq = self.seq;
             self.insert_note(element, staff_number(element), rest.into());
@@ -1991,7 +2008,9 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
         if kind.quarter_length_with_dots(dots) == quarter_length && tuplets.is_empty() {
             return Duration::new(quarter_length);
         }
-        let mut duration = Duration::default();
+        // Made from the length first, as music21 makes it, so its writing
+        // counts as worked out even with the written value put in its place.
+        let mut duration = Duration::new(quarter_length)?;
         duration.clear();
         duration.set_tuplets(Vec::new());
         duration.add_duration_tuple(kind, dots);
