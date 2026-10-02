@@ -407,7 +407,8 @@ enum What {
     Key(StreamElement),
     Meter(TimeSignature),
     Element(StreamElement),
-    Barline(Barline),
+    /// A barline, and whether a fermata stands on it.
+    Barline(Barline, bool),
 }
 
 #[derive(Clone, Debug)]
@@ -432,7 +433,14 @@ struct StaffMeasure {
     number_offset: i64,
     start_repeat: bool,
     end_repeat: Option<u32>,
+    /// Whether a section ends with it, the numbering starting again after.
     section_break: bool,
+    /// Whether a section ended just before it.
+    starts_section: bool,
+    /// The signs and words saying where to go next: those standing at its
+    /// start, and those at its end.
+    marks_at_start: Vec<StreamElement>,
+    marks_at_end: Vec<StreamElement>,
 }
 
 /// A part, as the head of the file describes it.
@@ -444,6 +452,7 @@ struct PartRead {
     name: Option<String>,
     abbreviation: Option<String>,
     name_hidden: bool,
+    abbreviation_hidden: bool,
     instrument: Instrument,
     default_clefs: Vec<String>,
     /// The brackets starting on its first staff, each its kind and how many
@@ -487,15 +496,29 @@ impl Reader {
         staff_index: usize,
         transposition: (i64, i64),
     ) -> Result<Vec<StaffMeasure>> {
-        let mut measures = Vec::new();
+        let mut measures: Vec<StaffMeasure> = Vec::new();
+        let mut section_ended = false;
         for element in &staff.children {
             match element.tag.as_str() {
+                // The measure MuseScore draws for a run of empty ones stands
+                // in the file beside the measures it covers, which are the
+                // music.
+                "Measure" if element.find("multiMeasureRest").is_some() => {}
                 "Measure" => {
                     let index = measures.len() as i64;
-                    measures.push(self.measure(element, staff_index, index, transposition)?);
+                    let mut measure = self.measure(element, staff_index, index, transposition)?;
+                    measure.starts_section = std::mem::take(&mut section_ended);
+                    section_ended = measure.section_break;
+                    measures.push(measure);
                 }
-                // Frames hold titles and text for the page.
-                "VBox" | "HBox" | "TBox" | "FBox" | "eid" => {}
+                // Frames hold titles and text for the page; a section may end
+                // on one.
+                "VBox" | "HBox" | "TBox" | "FBox" => {
+                    if element.find_all("LayoutBreak").any(ends_section) {
+                        section_ended = true;
+                    }
+                }
+                "eid" => {}
                 other => return Err(mscx_error(format!("<{other}> in a staff"))),
             }
         }
@@ -527,14 +550,21 @@ impl Reader {
                 "startRepeat" => measure.start_repeat = true,
                 "endRepeat" => measure.end_repeat = Some(integer(held)?.max(0) as u32),
                 "LayoutBreak" => {
-                    if held.child_text("subtype") == "section" {
+                    if ends_section(held) {
                         measure.section_break = true;
                     }
                 }
-                "multiMeasureRest" | "measureRepeatCount" => {
+                "measureRepeatCount" => {
                     return Err(refused(format!("<{}>", held.tag)));
                 }
-                "Marker" | "Jump" => return Err(refused(format!("A <{}>", held.tag))),
+                "Marker" if held.child_text("visible") != "0" => match marker_of(held)? {
+                    (false, mark) => measure.marks_at_start.push(mark),
+                    (true, mark) => measure.marks_at_end.push(mark),
+                },
+                "Jump" if held.child_text("visible") != "0" => {
+                    measure.marks_at_end.push(jump_of(held)?);
+                }
+                "Marker" | "Jump" => {}
                 // What places the measure on the page.
                 "eid"
                 | "linkedMain"
@@ -669,10 +699,12 @@ impl Reader {
                     }
                 }
                 "BarLine" => {
+                    // A fermata written before a barline stands on it.
+                    let fermata = !std::mem::take(&mut fermatas).is_empty();
                     if let Some(barline) = barline_of(held)? {
                         read.events.push(Event {
                             tick,
-                            what: What::Barline(barline),
+                            what: What::Barline(barline, fermata),
                         });
                     }
                 }
@@ -1157,13 +1189,99 @@ fn articulation_of(element: &Xml) -> Result<Option<Articulation>> {
         let up = !subtype.ends_with("Below");
         articulation.set_point_direction(Some(if up { "up" } else { "down" }.to_string()));
     } else {
+        // Above, below, or wherever it falls; any other number is an older
+        // file's, which MuseScore reads as below.
         match element.child_text("anchor") {
+            "" | "2" => {}
             "0" => articulation.set_placement(Some("above".to_string())),
-            "1" => articulation.set_placement(Some("below".to_string())),
-            _ => {}
+            _ => articulation.set_placement(Some("below".to_string())),
         }
     }
     Ok(Some(articulation))
+}
+
+/// Whether a `<LayoutBreak>` ends a section, after which measures are
+/// numbered from one again.
+fn ends_section(element: &Xml) -> bool {
+    element.child_text("subtype") == "section" && element.child_text("startWithMeasureOne") != "0"
+}
+
+/// Words saying where to go next: a repeat mark where they are ones music21
+/// reads as one, and plain words otherwise.
+fn repeat_words(text: &str) -> StreamElement {
+    let repeat = RepeatExpressionKind::ALL
+        .into_iter()
+        .find(|kind| RepeatExpression::new(*kind).is_valid_text(text));
+    match repeat {
+        Some(kind) => {
+            let mut mark = RepeatExpression::new(kind);
+            mark.set_text(text);
+            mark.set_placement(Some(Placement::Above));
+            mark.into()
+        }
+        None => {
+            let mut words = TextExpression::new(text);
+            words.set_placement(Some(Placement::Above));
+            words.into()
+        }
+    }
+}
+
+/// A `<Marker>`: a segno or a coda sign, which stands at the start of its
+/// measure, or *Fine* or *To Coda*, which stand at its end. The first
+/// answer is whether it stands at the end.
+fn marker_of(element: &Xml) -> Result<(bool, StreamElement)> {
+    let sign = |kind: RepeatExpressionKind| {
+        let mut mark = RepeatExpression::new(kind);
+        mark.set_placement(Some(Placement::Above));
+        (false, mark.into())
+    };
+    let text = element
+        .find("text")
+        .map(plain_text)
+        .transpose()?
+        .unwrap_or_default();
+    Ok(match element.child_text("label") {
+        "segno" | "varsegno" => sign(RepeatExpressionKind::Segno),
+        "codab" | "varcoda" | "codetta" => sign(RepeatExpressionKind::Coda),
+        "fine" if !text.trim().is_empty() => (true, repeat_words(text.trim())),
+        "coda" => (
+            true,
+            repeat_words(if text.trim().is_empty() {
+                "To Coda"
+            } else {
+                text.trim()
+            }),
+        ),
+        other => return Err(refused(format!("A marker labelled {other:?}"))),
+    })
+}
+
+/// A `<Jump>`: *D.C.*, *D.S.* and their kin, in the words written or else
+/// the words MuseScore has for where the jump goes.
+fn jump_of(element: &Xml) -> Result<StreamElement> {
+    let text = element
+        .find("text")
+        .map(plain_text)
+        .transpose()?
+        .unwrap_or_default();
+    let text = text.trim();
+    let to = (
+        element.child_text("jumpTo"),
+        element.child_text("playUntil"),
+        element.child_text("continueAt"),
+    );
+    let words = match to {
+        ("segno", "end", "") => "D.S.",
+        _ if !text.is_empty() => text,
+        ("start", "end", "") => "D.C.",
+        ("start", "fine", "") => "D.C. al Fine",
+        ("start", "coda", "codab") => "D.C. al Coda",
+        ("segno", "coda", "codab") => "D.S. al Coda",
+        ("segno", "fine", "") => "D.S. al Fine",
+        _ => return Err(refused("A jump that does not say in words where it goes")),
+    };
+    Ok(repeat_words(words))
 }
 
 fn ornament_of(element: &Xml) -> Result<Expression> {
@@ -1489,19 +1607,42 @@ fn harmony_of(element: &Xml) -> Result<ChordSymbol> {
         Ok((pitch, format!("{step}{written}")))
     };
     let (root, root_name) = pitch(root)?;
-    let bass = child_integer(info, "base")?.map(pitch).transpose()?;
+    let bass = match child_integer(info, "bass")? {
+        Some(bass) => Some(bass),
+        None => child_integer(info, "base")?,
+    }
+    .map(pitch)
+    .transpose()?;
     let mut figure = format!("{root_name}{name}");
     if let Some((_, bass_name)) = &bass {
         figure.push('/');
         figure.push_str(bass_name);
     }
-    let parsed = ChordSymbol::parse_music21(&figure)?;
+    let unread = || refused(format!("The chord symbol {figure:?}"));
+    let parsed = ChordSymbol::parse_music21(&figure).map_err(|_| unread())?;
     let kind = parsed
         .kind()
-        .ok_or_else(|| refused(format!("The chord symbol {figure:?}")))?
+        .filter(|kind| !kind.is_empty())
+        .ok_or_else(unread)?
         .to_string();
-    let mut symbol = ChordSymbol::from_kind(root, &kind, bass.map(|(pitch, _)| pitch))?;
-    symbol.set_kind_text(Some(name.to_string()));
+    // The text of the kind itself: the name up to where its added and
+    // altered degrees begin.
+    let mut kind_text = name;
+    if !parsed.chord_step_modifications().is_empty() {
+        kind_text = "";
+        for (end, _) in name.char_indices().skip(1).chain([(name.len(), ' ')]) {
+            let alone = ChordSymbol::parse_music21(format!("{root_name}{}", &name[..end]));
+            if let Ok(alone) = alone
+                && alone.kind() == Some(kind.as_str())
+                && alone.chord_step_modifications().is_empty()
+            {
+                kind_text = &name[..end];
+            }
+        }
+    }
+    let mut symbol =
+        ChordSymbol::from_kind(root, &kind, bass.map(|(pitch, _)| pitch)).map_err(|_| unread())?;
+    symbol.set_kind_text(Some(kind_text.to_string()));
     symbol.set_chord_step_modifications(parsed.chord_step_modifications().to_vec());
     Ok(symbol)
 }
@@ -1645,6 +1786,7 @@ fn parts_of(score: &Xml, hides_single_name: bool) -> Result<Vec<PartRead>> {
             Some(name) => (Some(name), hidden),
             None => (part_track.clone(), part_track.is_some() || hidden),
         };
+        let abbreviation_hidden = hidden;
         let mut brackets: Vec<(i64, i64, usize)> = Vec::new();
         let mut bracket_found = false;
         for (staff_index, staff) in part.find_all("Staff").enumerate() {
@@ -1754,6 +1896,7 @@ fn parts_of(score: &Xml, hides_single_name: bool) -> Result<Vec<PartRead>> {
             name,
             abbreviation: short_name,
             name_hidden,
+            abbreviation_hidden,
             instrument: made,
             default_clefs,
             brackets: brackets
@@ -2211,7 +2354,7 @@ pub fn from_mscx(document: &str) -> Result<Stream> {
         return Err(mscx_error("staves with different numbers of measures"));
     }
 
-    let grid = grid_of(&read_staves)?;
+    let grid = grid_of(&mut read_staves)?;
     Assembler {
         parts: &parts,
         staves: &read_staves,
@@ -2224,7 +2367,10 @@ pub fn from_mscx(document: &str) -> Result<Stream> {
 }
 
 /// Where each measure starts and how long it is.
-fn grid_of(staves: &[Vec<StaffMeasure>]) -> Result<Grid> {
+///
+/// A clef, a key or a meter written at the very end of a measure is the
+/// next measure's, and is moved to its start on the way.
+fn grid_of(staves: &mut [Vec<StaffMeasure>]) -> Result<Grid> {
     let count = staves.first().map_or(0, Vec::len);
     let mut grid = Grid {
         starts: Vec::with_capacity(count),
@@ -2235,7 +2381,7 @@ fn grid_of(staves: &[Vec<StaffMeasure>]) -> Result<Grid> {
     let mut start = Frac::zero();
     for index in 0..count {
         // The meter a measure starts with, from whichever staff says one.
-        for staff in staves {
+        for staff in staves.iter() {
             let found = staff[index]
                 .voices
                 .iter()
@@ -2260,6 +2406,36 @@ fn grid_of(staves: &[Vec<StaffMeasure>]) -> Result<Grid> {
         grid.lengths.push(length);
         grid.meters.push(meter);
         start += length;
+        if index + 1 < count {
+            for staff in staves.iter_mut() {
+                let mut moved: Vec<Event> = Vec::new();
+                for voice in &mut staff[index].voices {
+                    let (ending, kept): (Vec<Event>, Vec<Event>) =
+                        std::mem::take(&mut voice.events)
+                            .into_iter()
+                            .partition(|event| {
+                                event.tick == length
+                                    && matches!(
+                                        event.what,
+                                        What::Clef(_) | What::Key(_) | What::Meter(_)
+                                    )
+                            });
+                    voice.events = kept;
+                    moved.extend(ending);
+                }
+                if moved.is_empty() {
+                    continue;
+                }
+                let next = &mut staff[index + 1];
+                if next.voices.is_empty() {
+                    next.voices.push(VoiceRead::default());
+                }
+                for (place, mut event) in moved.into_iter().enumerate() {
+                    event.tick = Frac::zero();
+                    next.voices[0].events.insert(place, event);
+                }
+            }
+        }
     }
     Ok(grid)
 }
@@ -2629,7 +2805,7 @@ impl Assembler<'_> {
         stream.set_abbreviation(part.abbreviation.clone());
         if kind != StreamKind::PartStaff {
             stream.set_name_hidden(part.name_hidden);
-            stream.set_abbreviation_hidden(part.name_hidden);
+            stream.set_abbreviation_hidden(part.abbreviation_hidden);
         }
         (stream, uids)
     }
@@ -2652,7 +2828,7 @@ impl Assembler<'_> {
             let first_staff = &self.staves[0][index];
             // The measure's number, as MuseScore's MusicXML writes it and
             // music21 reads that.
-            if index > 0 && self.staves[0][index - 1].section_break {
+            if first_staff.starts_section {
                 number = 1;
                 irregular_count = 1;
             }
@@ -2707,6 +2883,7 @@ impl Assembler<'_> {
             let mut voice_items: Vec<(String, Vec<Item>)> = Vec::new();
             let mut plain: Vec<Item> = Vec::new();
             let mut right: Option<Barline> = None;
+            let mut right_fermata = false;
             for staff in 0..part.staves {
                 let global = part.first_staff + staff;
                 let staff_number = if part.staves > 1 { staff + 1 } else { 0 };
@@ -2754,9 +2931,15 @@ impl Assembler<'_> {
                                     &groups.groups,
                                 );
                                 note_index += 1;
+                                // A chord may be written on the staff beside its
+                                // own; a rest is not.
+                                let staff_move = if read_cr.is_rest {
+                                    0
+                                } else {
+                                    read_cr.staff_move
+                                };
                                 let cr_staff = if part.staves > 1 {
-                                    (staff as i64 + 1 + read_cr.staff_move)
-                                        .clamp(1, part.staves as i64)
+                                    (staff as i64 + 1 + staff_move).clamp(1, part.staves as i64)
                                         as usize
                                 } else {
                                     0
@@ -2841,6 +3024,9 @@ impl Assembler<'_> {
                                 }
                             }
                             What::Meter(meter) => {
+                                if event.tick == self.grid.lengths[index] {
+                                    continue;
+                                }
                                 if staff == 0 {
                                     push(&mut plain, at, 0, None, meter.clone().into());
                                 }
@@ -2850,26 +3036,25 @@ impl Assembler<'_> {
                                 let _ = staff_number;
                                 push(&mut plain, at, target, None, element.clone());
                             }
-                            What::Barline(barline) => {
+                            What::Barline(barline, fermata) => {
                                 if event.tick == self.grid.lengths[index] && staff == 0 {
                                     right = Some(barline.clone());
+                                    right_fermata = *fermata;
                                 }
                             }
                         }
                     }
                 }
-                // A clef standing at the end of the measure before.
-                if index > 0 {
-                    let before = &self.staves[global][index - 1];
-                    for voice in &before.voices {
-                        for event in &voice.events {
-                            if let What::Clef(clef) = &event.what
-                                && event.tick == self.grid.lengths[index - 1]
-                            {
-                                push(&mut plain, 0.0, key_staff, None, clef.clone().into());
-                            }
-                        }
-                    }
+            }
+            // Signs and words saying where to go next are the first part's.
+            if part_index == 0 {
+                let target = usize::from(part.staves > 1);
+                for mark in &first_staff.marks_at_start {
+                    push(&mut plain, 0.0, target, None, mark.clone());
+                }
+                let end = quarters(self.grid.lengths[index]);
+                for mark in &first_staff.marks_at_end {
+                    push(&mut plain, end, target, None, mark.clone());
                 }
             }
             if part.staves == 1 {
@@ -2889,7 +3074,11 @@ impl Assembler<'_> {
                 // An ordinary barline written out is what a measure ends
                 // with anyway, and stands in the way of any other.
                 ir.right = match right {
-                    Some(barline) if barline.bar_type() == BarlineType::Regular => None,
+                    Some(barline)
+                        if barline.bar_type() == BarlineType::Regular && !right_fermata =>
+                    {
+                        None
+                    }
                     Some(barline) => Some(barline),
                     None => self.drawn_barline(index),
                 };
