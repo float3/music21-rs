@@ -27,7 +27,10 @@ use crate::duration::{
 };
 use crate::dynamics::Dynamic;
 use crate::error::{Error, Result};
-use crate::expressions::{Expression, Fermata, FermataType, TextExpression};
+use crate::expressions::{
+    ArpeggioType, Expression, Fermata, FermataType, Ornament, OrnamentDelay, OrnamentKind,
+    TextExpression,
+};
 use crate::instrument::{Instrument, SearchLanguage};
 use crate::interval::Interval;
 use crate::key::KeySignature;
@@ -39,7 +42,7 @@ use crate::note::Note;
 use crate::pitch::{Accidental, Pitch};
 use crate::repeat::{RepeatExpression, RepeatExpressionKind};
 use crate::rest::Rest;
-use crate::spanner::{Spanner, SpannerKind};
+use crate::spanner::{Pedal, PedalForm, PedalType, Spanner, SpannerKind};
 use crate::stream::{BarTogether, StaffGroup, Stream, StreamElement, StreamEvent, StreamKind};
 use crate::tempo::MetronomeMark;
 use crate::xml::Xml;
@@ -99,47 +102,67 @@ fn ticks(value: Frac) -> i64 {
 }
 
 /// Text as MuseScore writes it, its formatting taken off and each symbol
-/// read as the character it draws.
-fn plain_text(element: &Xml) -> String {
+/// read as the character that draws it.
+fn plain_text(element: &Xml) -> Result<String> {
     let mut out = String::new();
-    plain_into(element, &mut out);
-    out
+    plain_into(element, &mut out)?;
+    Ok(out)
 }
 
-fn plain_into(element: &Xml, out: &mut String) {
+fn plain_into(element: &Xml, out: &mut String) -> Result<()> {
     if element.tag == "sym" {
-        if let Some(name) = element.text() {
-            out.push_str(symbol_text(name.trim()));
-        }
-        return;
+        out.push(symbol_named(element.text().unwrap_or("").trim())?);
+        return Ok(());
     }
     if let Some(text) = element.text() {
         out.push_str(text);
     }
     for child in &element.children {
-        plain_into(child, out);
+        plain_into(child, out)?;
         if let Some(tail) = child.tail() {
             out.push_str(tail);
         }
     }
+    Ok(())
 }
 
-/// What a symbol inside a text stands for, where it is one a reader of the
-/// text would read.
-fn symbol_text(name: &str) -> &'static str {
-    match name {
-        "metNoteWhole" => "\u{1D15D}",
-        "metNoteHalfUp" => "\u{1D15E}",
-        "metNoteQuarterUp" => "\u{1D15F}",
-        "metNote8thUp" => "\u{1D160}",
-        "metNote16thUp" => "\u{1D161}",
-        "metAugmentationDot" => ".",
-        "accidentalFlat" => "\u{266D}",
-        "accidentalNatural" => "\u{266E}",
-        "accidentalSharp" => "\u{266F}",
-        "space" => " ",
-        _ => "",
-    }
+/// The character a symbol inside a text is drawn with: its place in the
+/// Standard Music Font Layout, which is what MuseScore names its symbols by.
+fn symbol_named(name: &str) -> Result<char> {
+    Ok(match name {
+        "segno" => '\u{E047}',
+        "coda" => '\u{E048}',
+        "codaSquare" => '\u{E049}',
+        "segnoSerpent1" => '\u{E04A}',
+        "segnoSerpent2" => '\u{E04B}',
+        "accidentalFlat" => '\u{E260}',
+        "accidentalNatural" => '\u{E261}',
+        "accidentalSharp" => '\u{E262}',
+        "accidentalDoubleSharp" => '\u{E263}',
+        "accidentalDoubleFlat" => '\u{E264}',
+        "dynamicPiano" => '\u{E520}',
+        "dynamicMezzo" => '\u{E521}',
+        "dynamicForte" => '\u{E522}',
+        "dynamicRinforzando" => '\u{E523}',
+        "dynamicSforzando" => '\u{E524}',
+        "dynamicZ" => '\u{E525}',
+        "dynamicNiente" => '\u{E526}',
+        "keyboardPedalPed" => '\u{E650}',
+        "keyboardPedalUp" => '\u{E655}',
+        "metNoteDoubleWhole" => '\u{ECA0}',
+        "metNoteWhole" => '\u{ECA2}',
+        "metNoteHalfUp" => '\u{ECA3}',
+        "metNoteHalfDown" => '\u{ECA4}',
+        "metNoteQuarterUp" => '\u{ECA5}',
+        "metNoteQuarterDown" => '\u{ECA6}',
+        "metNote8thUp" => '\u{ECA7}',
+        "metNote8thDown" => '\u{ECA8}',
+        "metNote16thUp" => '\u{ECA9}',
+        "metNote16thDown" => '\u{ECAA}',
+        "metAugmentationDot" => '\u{ECB7}',
+        "space" => ' ',
+        other => return Err(refused(format!("The symbol {other:?} in a text"))),
+    })
 }
 
 // ------------------------------------------------------------ vocabulary
@@ -322,6 +345,8 @@ struct ChordRest {
     stem: StemDirection,
     lyrics: Vec<LyricRead>,
     articulations: Vec<Articulation>,
+    /// Ornaments and an arpeggio, in the order written.
+    expressions: Vec<Expression>,
     fermatas: Vec<Fermata>,
     step_shift: IntegerType,
     staff_move: i64,
@@ -340,9 +365,10 @@ struct SpannerRead {
 
 #[derive(Clone, Debug)]
 enum SpannerStart {
-    Slur,
+    Slur(Option<Placement>),
     Wedge(SpannerKind),
-    Volta { numbers: Vec<u32>, closed: bool },
+    Pedal(Pedal),
+    Volta { numbers: Vec<u32> },
 }
 
 /// A place in the score: a measure, a moment in it, a track.
@@ -399,6 +425,11 @@ struct PartRead {
     name_hidden: bool,
     instrument: Instrument,
     default_clefs: Vec<String>,
+    /// The brackets starting on its first staff, each its kind and how many
+    /// staves it joins, the innermost first.
+    brackets: Vec<(i64, usize)>,
+    /// Whether any of its staves starts a bracket.
+    bracket_found: bool,
     /// How far the written notes stand from the sounding ones: diatonic
     /// steps and semitones.
     transposition: (i64, i64),
@@ -418,6 +449,8 @@ struct Grid {
 struct Reader {
     next_uid: usize,
     spanners: Vec<SpannerRead>,
+    /// The places between notes that lines start and end at.
+    time_ticks: Vec<Position>,
 }
 
 impl Reader {
@@ -527,6 +560,15 @@ impl Reader {
                     if held.find("measures").is_some() {
                         return Err(mscx_error("a <location> in a voice that moves measures"));
                     }
+                    // A place between the notes that a line starts or ends
+                    // at.
+                    if flag(held, "timeTick") {
+                        self.time_ticks.push(Position {
+                            measure,
+                            tick,
+                            track,
+                        });
+                    }
                 }
                 "Chord" | "Rest" => {
                     let mut chord_rest =
@@ -631,7 +673,7 @@ impl Reader {
                     } else {
                         Placement::Above
                     };
-                    if let Some(element) = words_of(held, default) {
+                    if let Some(element) = words_of(held, default)? {
                         read.events.push(Event {
                             tick,
                             what: What::Element(element),
@@ -726,6 +768,7 @@ impl Reader {
             stem: StemDirection::Unspecified,
             lyrics: Vec::new(),
             articulations: Vec::new(),
+            expressions: Vec::new(),
             fermatas: Vec::new(),
             step_shift: 0,
             staff_move: child_integer(element, "staffMove")?.unwrap_or(0),
@@ -761,8 +804,9 @@ impl Reader {
                         (steps - 0.5) as IntegerType
                     };
                 }
-                "Ornament" | "Arpeggio" | "Tremolo" | "TremoloSingleChord" | "TremoloTwoChord"
-                | "ChordLine" => {
+                "Ornament" => read.expressions.push(ornament_of(held)?),
+                "Arpeggio" => read.expressions.push(arpeggio_of(held)?),
+                "Tremolo" | "TremoloSingleChord" | "TremoloTwoChord" | "ChordLine" => {
                     return Err(refused(format!("A <{}>", held.tag)));
                 }
                 // Read elsewhere, or only drawn.
@@ -818,7 +862,11 @@ impl Reader {
 impl SpannerStart {
     fn from(kind: &str, body: Option<&Xml>) -> Result<Option<Self>> {
         Ok(Some(match kind {
-            "Slur" => Self::Slur,
+            "Slur" => Self::Slur(match body.map_or("", |body| body.child_text("up")) {
+                "up" => Some(Placement::Above),
+                "down" => Some(Placement::Below),
+                _ => None,
+            }),
             "HairPin" => {
                 let subtype = body.map_or("0", |body| body.child_text("subtype"));
                 match subtype {
@@ -842,10 +890,36 @@ impl SpannerStart {
                             body.child_text("endings")
                         ))
                     })?;
-                Self::Volta {
-                    numbers,
-                    closed: body.child_text("endHookType") != "0",
+                Self::Volta { numbers }
+            }
+            "Pedal" => {
+                let body = body.ok_or_else(|| mscx_error("a pedal line that says nothing"))?;
+                if body.find("beginHookType").is_some() {
+                    return Err(refused("A pedal line that starts with a hook"));
                 }
+                let text = body.find("beginText").map(Xml::all_text);
+                if text.as_deref() == Some("") {
+                    return Err(refused("A pedal line carried on from another"));
+                }
+                let sostenuto = body
+                    .find("beginText")
+                    .and_then(|text| text.find("sym"))
+                    .is_some_and(|sym| {
+                        matches!(sym.stripped(), "keyboardPedalSost" | "keyboardPedalS")
+                    });
+                Self::Pedal(Pedal {
+                    pedal_type: Some(if sostenuto {
+                        PedalType::Sostenuto
+                    } else {
+                        PedalType::Sustain
+                    }),
+                    form: Some(if body.child_text("lineVisible") == "0" {
+                        PedalForm::Symbol
+                    } else {
+                        PedalForm::Line
+                    }),
+                    abbreviated: false,
+                })
             }
             // A tie is read on its note.
             "Tie" | "LaissezVib" | "PartialTie" => return Ok(None),
@@ -971,7 +1045,11 @@ fn lyric_of(element: &Xml) -> Result<LyricRead> {
     Ok(LyricRead {
         number: number as IntegerType,
         syllabic,
-        text: element.find("text").map(plain_text).unwrap_or_default(),
+        text: element
+            .find("text")
+            .map(plain_text)
+            .transpose()?
+            .unwrap_or_default(),
     })
 }
 
@@ -1014,6 +1092,53 @@ fn articulation_of(element: &Xml) -> Result<Option<Articulation>> {
         }
     }
     Ok(Some(articulation))
+}
+
+fn ornament_of(element: &Xml) -> Result<Expression> {
+    if element.find("Accidental").is_some() {
+        return Err(refused("An ornament with an accidental"));
+    }
+    let subtype = element.child_text("subtype");
+    let (class, turn) = match subtype {
+        "ornamentTrill" => ("Trill", false),
+        "ornamentTurn" => ("Turn", true),
+        "ornamentTurnInverted" => ("InvertedTurn", true),
+        "ornamentMordent"
+        | "ornamentPrallMordent"
+        | "ornamentUpMordent"
+        | "ornamentDownMordent" => ("Mordent", false),
+        "ornamentShortTrill"
+        | "ornamentTremblement"
+        | "ornamentUpPrall"
+        | "ornamentPrecompMordentUpperPrefix"
+        | "ornamentPrallDown"
+        | "ornamentPrallUp"
+        | "ornamentLinePrall" => ("InvertedMordent", false),
+        "ornamentPrecompSlide" => ("Schleifer", false),
+        other => return Err(refused(format!("The ornament {other:?}"))),
+    };
+    let kind = OrnamentKind::from_class_name(class)
+        .ok_or_else(|| mscx_error(format!("no ornament {class}")))?;
+    let mut ornament = Ornament::of_kind(kind);
+    if turn {
+        ornament.set_delay(OrnamentDelay::NoDelay);
+    }
+    Ok(ornament.into())
+}
+
+/// An arpeggio on one chord. One drawn across staves joins chords, which
+/// is not read.
+fn arpeggio_of(element: &Xml) -> Result<Expression> {
+    if child_integer(element, "span")?.is_some_and(|span| span > 1) {
+        return Err(refused("An arpeggio across staves"));
+    }
+    Ok(Expression::Arpeggio(match element.child_text("subtype") {
+        "0" | "" | "arpeggiato" => ArpeggioType::Normal,
+        "1" | "4" | "up" | "upStraight" => ArpeggioType::Up,
+        "2" | "5" | "down" | "downStraight" => ArpeggioType::Down,
+        "3" | "bracket" => ArpeggioType::NonArpeggio,
+        other => return Err(refused(format!("An arpeggio of the kind {other:?}"))),
+    }))
 }
 
 fn fermata_of(element: &Xml) -> Fermata {
@@ -1110,8 +1235,12 @@ fn meter_of(element: &Xml) -> Result<TimeSignature> {
 /// A barline written in a voice. A repeat is not one: that is the
 /// measure's.
 fn barline_of(element: &Xml) -> Result<Option<Barline>> {
+    if element.child_text("visible") == "0" {
+        return Ok(Some(Barline::new(BarlineType::None)));
+    }
     let kind = match element.child_text("subtype") {
-        "normal" | "" => BarlineType::Regular,
+        // An ordinary barline is what a measure ends with anyway.
+        "normal" | "" => return Ok(None),
         "double" => BarlineType::Double,
         "end" => BarlineType::Final,
         "reverse-end" => BarlineType::HeavyLight,
@@ -1156,7 +1285,7 @@ fn tempo_of(element: &Xml) -> Result<Vec<StreamElement>> {
         }
         None => {
             if let Some(text) = text {
-                let written = plain_text(text);
+                let written = plain_text(text)?;
                 if !written.trim().is_empty() {
                     let mut words = TextExpression::new(written.trim());
                     words.set_placement(Some(placement));
@@ -1199,7 +1328,7 @@ fn metronome_in(text: &Xml) -> Option<(String, Duration, FloatType)> {
                 if later.tag == "sym" && later.text().unwrap_or("").trim() == "metAugmentationDot" {
                     dots += 1;
                 } else {
-                    rest.push_str(&plain_text(later));
+                    rest.push_str(&plain_text(later).ok()?);
                 }
                 if let Some(tail) = later.tail() {
                     rest.push_str(tail);
@@ -1220,7 +1349,7 @@ fn metronome_in(text: &Xml) -> Option<(String, Duration, FloatType)> {
             let before = before.trim_end_matches('(').to_string();
             return Some((before, referent, number));
         }
-        before.push_str(&plain_text(child));
+        before.push_str(&plain_text(child).ok()?);
         if let Some(tail) = child.tail() {
             before.push_str(tail);
         }
@@ -1230,17 +1359,21 @@ fn metronome_in(text: &Xml) -> Option<(String, Duration, FloatType)> {
 
 /// Words written over or under the staff; words saying where to go next
 /// are a repeat mark.
-fn words_of(element: &Xml, default: Placement) -> Option<StreamElement> {
-    let text = element.find("text").map(plain_text).unwrap_or_default();
+fn words_of(element: &Xml, default: Placement) -> Result<Option<StreamElement>> {
+    let text = element
+        .find("text")
+        .map(plain_text)
+        .transpose()?
+        .unwrap_or_default();
     let text = text.trim();
     if text.is_empty() {
-        return None;
+        return Ok(None);
     }
     let placement = placement_of(element, default);
     let repeat = RepeatExpressionKind::ALL
         .into_iter()
         .find(|kind| RepeatExpression::new(*kind).is_valid_text(text));
-    Some(match repeat {
+    Ok(Some(match repeat {
         Some(kind) => {
             let mut mark = RepeatExpression::new(kind);
             mark.set_text(text);
@@ -1252,42 +1385,48 @@ fn words_of(element: &Xml, default: Placement) -> Option<StreamElement> {
             words.set_placement(Some(placement));
             words.into()
         }
-    })
+    }))
 }
 
 /// A chord symbol: its root and bass as tonal pitch classes, and the name
-/// of its kind as written.
+/// of its kind as written, which is read as music21 reads a figure.
 fn harmony_of(element: &Xml) -> Result<ChordSymbol> {
     let info = element.find("harmonyInfo").unwrap_or(element);
-    let root = child_integer(info, "root")?;
     let name = info.child_text("name");
-    let Some(root) = root else {
+    let Some(root) = child_integer(info, "root")? else {
         return Err(refused("A chord symbol with no root"));
     };
-    let (step, alter) = spelling(root)?;
-    let mut figure = step.to_string();
-    let accidental = match alter {
-        -2 => "--",
-        -1 => "-",
-        1 => "#",
-        2 => "##",
-        _ => "",
-    };
-    figure.push_str(accidental);
-    figure.push_str(name);
-    if let Some(bass) = child_integer(info, "base")? {
-        let (step, alter) = spelling(bass)?;
-        figure.push('/');
-        figure.push(step);
-        figure.push_str(match alter {
+    let pitch = |tpc: i64| -> Result<(Pitch, String)> {
+        let (step, alter) = spelling(tpc)?;
+        let mut pitch = Pitch::from_name(step.to_string())?;
+        if alter != 0 {
+            pitch.set_written_accidental(Some(Accidental::new(alter as FloatType)?));
+        }
+        let written = match alter {
             -2 => "--",
             -1 => "-",
             1 => "#",
             2 => "##",
             _ => "",
-        });
+        };
+        Ok((pitch, format!("{step}{written}")))
+    };
+    let (root, root_name) = pitch(root)?;
+    let bass = child_integer(info, "base")?.map(pitch).transpose()?;
+    let mut figure = format!("{root_name}{name}");
+    if let Some((_, bass_name)) = &bass {
+        figure.push('/');
+        figure.push_str(bass_name);
     }
-    ChordSymbol::parse_music21(&figure)
+    let parsed = ChordSymbol::parse_music21(&figure)?;
+    let kind = parsed
+        .kind()
+        .ok_or_else(|| refused(format!("The chord symbol {figure:?}")))?
+        .to_string();
+    let mut symbol = ChordSymbol::from_kind(root, &kind, bass.map(|(pitch, _)| pitch))?;
+    symbol.set_kind_text(Some(name.to_string()));
+    symbol.set_chord_step_modifications(parsed.chord_step_modifications().to_vec());
+    Ok(symbol)
 }
 
 // ---------------------------------------------------------------- the head
@@ -1309,21 +1448,29 @@ fn metadata_of(score: &Xml, program: &str) -> Metadata {
             .map(|(_, value)| value.clone())
     };
     let mut metadata = Metadata::new();
-    if let Some(title) = get("workTitle") {
-        metadata.add_text("title", title);
-    }
     if let Some(number) = get("workNumber") {
         metadata.add_text("number", number);
     }
     if let Some(number) = get("movementNumber") {
         metadata.add_text("movementNumber", number);
     }
+    // A work title that only repeats the movement's is left out, as the
+    // MusicXML reader leaves it out, so that both read one score alike.
+    let title = get("workTitle").filter(|title| Some(title) != get("movementTitle").as_ref());
+    if let Some(title) = title {
+        metadata.add_text("title", title);
+    }
     if let Some(title) = get("movementTitle") {
         metadata.add_text("movementName", title);
     }
     for role in ["arranger", "composer", "lyricist", "poet", "translator"] {
         if let Some(name) = get(role) {
-            metadata.add(role, MetadataValue::with_role(name.trim(), role));
+            let unique = if crate::metadata::is_contributor_unique_name(role) {
+                role
+            } else {
+                "otherContributor"
+            };
+            metadata.add(unique, MetadataValue::with_role(name.trim(), role));
         }
     }
     if let Some(copyright) = get("copyright") {
@@ -1383,7 +1530,6 @@ fn parts_of(score: &Xml) -> Result<Vec<PartRead>> {
     let mut first_staff = 0;
     let mut channel: u8 = 0;
     let listed: Vec<&Xml> = score.find_all("Part").collect();
-    let single = listed.len() == 1;
     for (index, part) in listed.into_iter().enumerate() {
         let staves = part.find_all("Staff").count();
         if staves == 0 {
@@ -1403,40 +1549,76 @@ fn parts_of(score: &Xml) -> Result<Vec<PartRead>> {
         if flag(instrument, "useDrumset") {
             return Err(refused("A drum set"));
         }
-        let text = |element: &Xml, tag: &str| {
-            element
+        let text = |element: &Xml, tag: &str| -> Result<Option<String>> {
+            Ok(element
                 .find(tag)
                 .map(plain_text)
+                .transpose()?
                 .map(|text| text.trim().replace('\n', " "))
-                .filter(|text| !text.is_empty())
+                .filter(|text| !text.is_empty()))
         };
-        let long_name = text(instrument, "longName");
-        let short_name = text(instrument, "shortName");
-        let track_name = text(instrument, "trackName");
-        let part_track = text(part, "trackName");
+        let long_name = text(instrument, "longName")?;
+        let short_name = text(instrument, "shortName")?;
+        let track_name = text(instrument, "trackName")?;
+        let part_track = text(part, "trackName")?;
+        // A part with no name of its own goes by its track's, which is not
+        // printed. A style sheet may hide the one name of a score of one
+        // part; that is a file of its own and is not read.
         let (name, name_hidden) = match long_name {
-            Some(name) => (Some(name), single),
-            None => (part_track.clone(), part_track.is_some() || single),
+            Some(name) => (Some(name), false),
+            None => (part_track.clone(), part_track.is_some()),
         };
+        let mut brackets: Vec<(i64, i64, usize)> = Vec::new();
+        let mut bracket_found = false;
+        for (staff_index, staff) in part.find_all("Staff").enumerate() {
+            for bracket in staff.find_all("bracket") {
+                let number = |name: &str| {
+                    bracket
+                        .get(name)
+                        .and_then(|value| value.parse::<i64>().ok())
+                        .unwrap_or(0)
+                };
+                if number("type") < 0 {
+                    continue;
+                }
+                bracket_found = true;
+                if staff_index == 0 {
+                    brackets.push((
+                        number("col"),
+                        number("type"),
+                        number("span").max(0) as usize,
+                    ));
+                }
+            }
+        }
+        brackets.sort_by_key(|(column, _, _)| *column);
         let channels: Vec<&Xml> = instrument.find_all("Channel").collect();
         let program = channels
             .first()
             .and_then(|first| first.find("program"))
             .and_then(|program| program.get("value"))
             .and_then(|value| value.parse::<u8>().ok());
-        let first_channel = channel;
+        // The channel the file gives the instrument's first sound, or the
+        // next one free where it gives none; the tenth is the drums'.
+        if channel == 9 {
+            channel += 1;
+        }
+        let written = channels
+            .first()
+            .and_then(|first| first.find("midiChannel"))
+            .map(integer)
+            .transpose()?;
+        let first_channel = match written {
+            Some(written) => written.rem_euclid(16) as u8,
+            None => channel % 16,
+        };
         for _ in 0..channels.len().max(1) {
             channel += 1;
             if channel == 9 {
                 channel += 1;
             }
         }
-        let first_channel = if first_channel == 9 {
-            10
-        } else {
-            first_channel
-        };
-        let mut made = instrument_of(program, Some(first_channel % 16), track_name.as_deref());
+        let mut made = instrument_of(program, Some(first_channel), track_name.as_deref());
         made.set_part_id(Some(format!("P{}", index + 1)));
         made.set_part_name(name.clone());
         made.set_part_abbreviation(short_name.clone());
@@ -1451,20 +1633,21 @@ fn parts_of(score: &Xml) -> Result<Vec<PartRead>> {
             child_integer(instrument, "transposeDiatonic")?.unwrap_or(0),
             child_integer(instrument, "transposeChromatic")?.unwrap_or(0),
         );
-        if transposition != (0, 0) {
-            let (diatonic, chromatic) = (-transposition.0, -transposition.1);
+        if transposition.1 != 0 {
+            // The interval from the written note to the sounding one, the
+            // octaves counted into both halves.
+            let octaves = transposition.1 / 12;
+            let diatonic = transposition.0 % 7 + 7 * octaves;
             let steps = if diatonic < 0 {
                 diatonic - 1
             } else {
                 diatonic + 1
             };
-            // The written notes stand this far from the sounding ones,
-            // which is the interval music21 keeps turned round.
             let interval = Interval::from_generic_and_chromatic(
-                -steps as IntegerType,
-                -chromatic as IntegerType,
+                steps as IntegerType,
+                transposition.1 as IntegerType,
             )
-            .or_else(|_| Interval::from_semitones(-chromatic as IntegerType))?;
+            .or_else(|_| Interval::from_semitones(transposition.1 as IntegerType))?;
             made.set_transposition(Some(interval));
         }
         let mut default_clefs = vec![String::from("G"); staves];
@@ -1485,6 +1668,11 @@ fn parts_of(score: &Xml) -> Result<Vec<PartRead>> {
             name_hidden,
             instrument: made,
             default_clefs,
+            brackets: brackets
+                .into_iter()
+                .map(|(_, kind, span)| (kind, span))
+                .collect(),
+            bracket_found,
             transposition,
         });
         first_staff += staves;
@@ -1685,18 +1873,25 @@ fn element_of(
         .map(|lyric| {
             let mut made = Lyric::unsung();
             made.set_text(lyric.text.trim());
-            if let Some(syllabic) = lyric.syllabic {
-                made.set_syllabic(syllabic);
-            }
+            made.set_syllabic(lyric.syllabic.unwrap_or(Syllabic::Single));
             made.set_number(lyric.number);
             made
         })
         .collect();
+    // Fermatas, then an arpeggio, then the ornaments.
+    let is_arpeggio = |expression: &&Expression| matches!(expression, Expression::Arpeggio(_));
     let expressions: Vec<Expression> = read
         .fermatas
         .iter()
         .cloned()
         .map(Expression::Fermata)
+        .chain(read.expressions.iter().filter(is_arpeggio).cloned())
+        .chain(
+            read.expressions
+                .iter()
+                .filter(|expression| !is_arpeggio(expression))
+                .cloned(),
+        )
         .collect();
     if read.is_rest {
         let mut rest = Rest::new(duration);
@@ -1889,6 +2084,7 @@ pub fn from_mscx(document: &str) -> Result<Stream> {
     let mut reader = Reader {
         next_uid: 0,
         spanners: Vec::new(),
+        time_ticks: Vec::new(),
     };
     let mut read_staves: Vec<Vec<StaffMeasure>> = Vec::new();
     for part in &parts {
@@ -1908,7 +2104,9 @@ pub fn from_mscx(document: &str) -> Result<Stream> {
         staves: &read_staves,
         grid: &grid,
         spanners: &reader.spanners,
+        time_ticks: &reader.time_ticks,
         uids: HashMap::new(),
+        placed: Vec::new(),
         next_uid: reader.next_uid,
     }
     .score(metadata)
@@ -1960,20 +2158,39 @@ struct Assembler<'a> {
     staves: &'a [Vec<StaffMeasure>],
     grid: &'a Grid,
     spanners: &'a [SpannerRead],
+    time_ticks: &'a [Position],
     /// Each note's uid by where it stands: measure, tick and track.
     uids: HashMap<(i64, Frac, usize), usize>,
+    /// Every note, chord and rest in the order MuseScore writes them out:
+    /// part by part, measure by measure, staff by staff, voice by voice.
+    placed: Vec<Placed>,
     next_uid: usize,
+}
+
+/// A note, chord or rest by where it stands, from the top of the score.
+#[derive(Clone, Copy, Debug)]
+struct Placed {
+    part: usize,
+    measure: i64,
+    track: usize,
+    start: Frac,
+    end: Frac,
+    uid: usize,
+    /// Whether grace notes lean on it from before.
+    graces_before: bool,
 }
 
 impl Assembler<'_> {
     fn score(mut self, metadata: Metadata) -> Result<Stream> {
         let mut built: Vec<BuiltPart> = Vec::new();
         let mut groups: Vec<StaffGroup> = Vec::new();
+        let mut part_positions: Vec<Vec<usize>> = Vec::new();
         for (index, part) in self.parts.iter().enumerate() {
             let first = built.len();
             let staves = self.part(index, part)?;
             let count = staves.len();
             built.extend(staves);
+            part_positions.push((first..first + count).collect());
             if count > 1 {
                 let mut group = StaffGroup::new((first..first + count).collect());
                 group.set_name(part.name.clone());
@@ -1983,6 +2200,7 @@ impl Assembler<'_> {
                 groups.push(group);
             }
         }
+        groups.extend(self.part_groups(&part_positions)?);
         let mut uids: Vec<Option<usize>> = Vec::new();
         let mut events = Vec::new();
         for part in built {
@@ -1996,38 +2214,211 @@ impl Assembler<'_> {
             assembled.add_staff_group(group);
         }
         let position_of = |uid: usize| uids.iter().position(|held| *held == Some(uid));
-        for spanner in self.spanners {
-            let (kind, start, end) = match &spanner.kind {
-                SpannerStart::Slur => (SpannerKind::Slur, spanner.start, spanner.end),
-                SpannerStart::Wedge(kind) => (*kind, spanner.start, spanner.end),
+        // A part's spanners in the order they start: measure by measure,
+        // and in a measure staff by staff and voice by voice.
+        let part_of = |track: usize| {
+            self.parts
+                .iter()
+                .position(|part| {
+                    (part.first_staff..part.first_staff + part.staves).contains(&(track / 4))
+                })
+                .unwrap_or(0)
+        };
+        let mut order: Vec<&SpannerRead> = self.spanners.iter().collect();
+        order.sort_by_key(|spanner| {
+            (
+                part_of(spanner.start.track),
+                spanner.start.measure,
+                spanner.start.track,
+                spanner.start.tick,
+            )
+        });
+        for spanner in order {
+            let (start, end) = (spanner.start, spanner.end);
+            let made = match &spanner.kind {
+                SpannerStart::Slur(placement) => {
+                    let first = self
+                        .uids
+                        .get(&(start.measure, start.tick, start.track))
+                        .copied();
+                    let last = self.uids.get(&(end.measure, end.tick, end.track)).copied();
+                    let mut positions = Vec::new();
+                    for uid in [first, last].into_iter().flatten() {
+                        if let Some(position) = position_of(uid)
+                            && !positions.contains(&Some(position))
+                        {
+                            positions.push(Some(position));
+                        }
+                    }
+                    if positions.is_empty() {
+                        continue;
+                    }
+                    let mut slur = Spanner::with_unplaced(SpannerKind::Slur, positions);
+                    slur.set_placement(*placement);
+                    slur
+                }
+                SpannerStart::Wedge(_) | SpannerStart::Pedal(_) => {
+                    let part = part_of(start.track);
+                    let mut positions: Vec<Option<usize>> = Vec::new();
+                    if let Some(first) = self.line_start(part, start) {
+                        positions.push(first.and_then(&position_of));
+                    }
+                    if let Some(last) = self.line_end(part, start, end)
+                        && let Some(position) = position_of(last)
+                        && !positions.contains(&Some(position))
+                    {
+                        positions.push(Some(position));
+                    }
+                    match &spanner.kind {
+                        SpannerStart::Wedge(kind) => {
+                            let template = Spanner::wedge(*kind, Vec::new());
+                            let mut wedge = Spanner::with_unplaced(*kind, positions);
+                            wedge.set_placement(template.placement());
+                            wedge.set_spread(template.spread());
+                            wedge
+                        }
+                        SpannerStart::Pedal(pedal) => {
+                            let mut mark =
+                                Spanner::with_unplaced(SpannerKind::PedalMark, positions);
+                            mark.set_pedal(Some(*pedal));
+                            mark
+                        }
+                        _ => continue,
+                    }
+                }
                 SpannerStart::Volta { .. } => continue,
             };
-            let first = self
-                .uids
-                .get(&(start.measure, start.tick, start.track))
-                .copied();
-            let last = self.uids.get(&(end.measure, end.tick, end.track)).copied();
-            let mut positions = Vec::new();
-            for uid in [first, last].into_iter().flatten() {
-                if let Some(position) = position_of(uid)
-                    && !positions.contains(&Some(position))
-                {
-                    positions.push(Some(position));
-                }
-            }
-            if positions.is_empty() {
+            if made.is_empty() {
                 continue;
             }
-            let made = if kind.is_wedge() {
-                let mut wedge = Spanner::with_unplaced(kind, positions);
-                wedge.set_placement(Some(Placement::Below));
-                wedge
-            } else {
-                Spanner::with_unplaced(kind, positions)
-            };
             assembled.add_spanner(made);
         }
         Ok(assembled)
+    }
+
+    /// The note a line under the staff starts on: the one standing where it
+    /// starts, in the first voice of its staff that has one there, or else
+    /// the next note of its own voice. `Some(None)` is a note the score
+    /// does not hold, a grace note leaning on that one.
+    fn line_start(&self, part: usize, start: Position) -> Option<Option<usize>> {
+        let at = self.grid.starts[start.measure as usize] + start.tick;
+        let staff = start.track / 4;
+        let on_staff = self
+            .placed
+            .iter()
+            .filter(|placed| {
+                placed.part == part
+                    && placed.measure == start.measure
+                    && placed.track / 4 == staff
+                    && placed.start == at
+            })
+            .min_by_key(|placed| placed.track);
+        let found = on_staff.or_else(|| {
+            self.placed.iter().find(|placed| {
+                placed.part == part
+                    && (placed.measure, placed.track, placed.start)
+                        > (start.measure, start.track, at)
+            })
+        })?;
+        Some(if found.graces_before {
+            None
+        } else {
+            Some(found.uid)
+        })
+    }
+
+    /// The note a line under the staff ends on: the first on its staff to
+    /// end where the line ends, or the last one read before a place between
+    /// the notes that the line ends at.
+    fn line_end(&self, part: usize, start: Position, end: Position) -> Option<usize> {
+        let measure = usize::try_from(end.measure).ok()?;
+        let at = *self.grid.starts.get(measure)? + end.tick;
+        let staff = start.track / 4;
+        for track in staff * 4..staff * 4 + 4 {
+            let ending = self
+                .placed
+                .iter()
+                .find(|placed| placed.part == part && placed.track == track && placed.end == at);
+            if let Some(ending) = ending {
+                return Some(ending.uid);
+            }
+            let between = self.time_ticks.iter().find(|tick| {
+                tick.track / 4 == staff
+                    && self
+                        .grid
+                        .starts
+                        .get(tick.measure as usize)
+                        .is_some_and(|begins| *begins + tick.tick == at)
+            });
+            if let Some(between) = between {
+                return self
+                    .placed
+                    .iter()
+                    .rfind(|placed| {
+                        placed.part == part
+                            && placed.measure == between.measure
+                            && (placed.track, placed.start) < (track, at)
+                    })
+                    .map(|placed| placed.uid);
+            }
+        }
+        None
+    }
+
+    /// The brackets joining parts, as MuseScore's part list says them: a
+    /// bracket on a part's first staff joins the parts its span reaches, a
+    /// brace over exactly the staves of one part being that part's own.
+    fn part_groups(&self, positions: &[Vec<usize>]) -> Result<Vec<StaffGroup>> {
+        let mut groups: Vec<(i64, Vec<usize>)> = Vec::new();
+        // Each open group's index and the staff it ends before.
+        let mut open: Vec<Option<(usize, usize)>> = vec![None; 8];
+        let mut staff_count = 0usize;
+        let last = self.parts.len().saturating_sub(1);
+        for (index, part) in self.parts.iter().enumerate() {
+            let mut starting: Vec<(i64, usize)> = Vec::new();
+            for (kind, span) in &part.brackets {
+                if *span == part.staves && *kind == 1 {
+                    continue;
+                }
+                if index < last {
+                    starting.push((*kind, staff_count + span));
+                }
+            }
+            if !part.bracket_found && part.staves > 1 {
+                starting.push((-1, index + part.staves));
+            }
+            for (kind, end) in starting {
+                if let Some(slot) = open.iter().position(Option::is_none) {
+                    open[slot] = Some((groups.len(), end));
+                    groups.push((kind, Vec::new()));
+                }
+            }
+            for (group, _) in open.iter().flatten() {
+                groups[*group].1.extend(positions[index].iter().copied());
+            }
+            staff_count += part.staves;
+            for slot in open.iter_mut() {
+                if let Some((_, end)) = slot
+                    && staff_count >= *end
+                {
+                    *slot = None;
+                }
+            }
+        }
+        let mut out = Vec::new();
+        for (kind, parts) in groups {
+            let mut group = StaffGroup::new(parts);
+            group.set_symbol(Some(match kind {
+                0 => "bracket",
+                1 => "brace",
+                2 => "square",
+                3 => "line",
+                _ => "none",
+            }))?;
+            group.set_bar_together(Some(BarTogether::Yes));
+            out.push(group);
+        }
+        Ok(out)
     }
 
     fn uid(&mut self) -> usize {
@@ -2140,13 +2531,15 @@ impl Assembler<'_> {
         let mut last_suffix: Option<String> = None;
         let mut offset = 0.0;
         let mut last_meter: Option<TimeSignature> = None;
-        let mut open_voltas: Vec<(Vec<u32>, i64, bool)> = Vec::new();
+        let mut open_voltas: Vec<(Vec<u32>, i64)> = Vec::new();
         let count = self.grid.lengths.len();
         for index in 0..count {
-            let first_staff = &self.staves[part.first_staff][index];
+            // What is said of a measure as a whole is said on the score's
+            // first staff.
+            let first_staff = &self.staves[0][index];
             // The measure's number, as MuseScore's MusicXML writes it and
             // music21 reads that.
-            if index > 0 && self.staves[part.first_staff][index - 1].section_break {
+            if index > 0 && self.staves[0][index - 1].section_break {
                 number = 1;
                 irregular_count = 1;
             }
@@ -2276,6 +2669,16 @@ impl Assembler<'_> {
                                 let element = element_of(read_cr, tuplets, beams)?;
                                 self.uids
                                     .insert((index as i64, event.tick, track), read_cr.uid);
+                                let begins = self.grid.starts[index] + event.tick;
+                                self.placed.push(Placed {
+                                    part: part_index,
+                                    measure: index as i64,
+                                    track,
+                                    start: begins,
+                                    end: begins + read_cr.length,
+                                    uid: read_cr.uid,
+                                    graces_before: !read_cr.graces_before.is_empty(),
+                                });
                                 push(items, at, cr_staff, Some(read_cr.uid), element);
                                 let end = quarters(event.tick + read_cr.length);
                                 for (grace_index, grace) in read_cr.graces_after.iter().enumerate()
@@ -2348,30 +2751,35 @@ impl Assembler<'_> {
                 ir.left = Some(Barline::repeat(RepeatDirection::Start, None));
             }
             if let Some(times) = first_staff.end_repeat {
-                let times = (times != 2).then_some(times);
+                let times = (times > 2).then_some(times);
                 ir.right = Some(Barline::repeat(RepeatDirection::End, times));
             } else {
                 ir.right = right;
             }
             for spanner in self.spanners {
-                if let SpannerStart::Volta { numbers, closed } = &spanner.kind
+                if let SpannerStart::Volta { numbers } = &spanner.kind
                     && spanner.start.measure == index as i64
                     && spanner.start.track / 4 >= part.first_staff
                     && spanner.start.track / 4 < part.first_staff + part.staves
                 {
                     let end = self.measure_at(spanner.end);
-                    open_voltas.push((numbers.clone(), end, *closed));
+                    open_voltas.push((numbers.clone(), end));
                 }
             }
-            if let Some(position) = open_voltas
-                .iter()
-                .position(|(_, end, _)| index as i64 <= *end)
-            {
-                let (numbers, end, closed) = open_voltas[position].clone();
+            if let Some(position) = open_voltas.iter().position(|(_, end)| index as i64 <= *end) {
+                let (numbers, end) = open_voltas[position].clone();
                 let starts = self.volta_start(&numbers, index, part);
                 let stops = index as i64 == end;
-                ir.ending = Some(Ending::new(numbers.clone(), starts, stops && closed));
+                ir.ending = Some(Ending::new(numbers.clone(), starts, stops));
+                // A bracket starts and ends on a barline, an ordinary one
+                // where the measure has no other.
+                if starts && ir.left.is_none() {
+                    ir.left = Some(Barline::default());
+                }
                 if stops {
+                    if ir.right.is_none() {
+                        ir.right = Some(Barline::default());
+                    }
                     open_voltas.remove(position);
                 }
             }
