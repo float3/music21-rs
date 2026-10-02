@@ -1,3 +1,37 @@
+# Unreleased
+
+## Added
+
+- The wheel reads every format the crate reads: `from_abc(text)`,
+  `from_abc_number(text, number)`, `from_midi(data)` taking the file's
+  `bytes`, `from_tiny_notation(text)`, `from_humdrum(text)`,
+  `from_mei(text)` and `from_roman_text(text)`, beside `from_musicxml`. Each
+  hands back the wheel's own streams: a `Score`, an `Opus` of scores for an
+  ABC, Humdrum or RomanText file holding several, and a `Part` for
+  TinyNotation. A RomanText score's chords carry their numerals as lyrics.
+  What the wheel has no class for -- unpitched strokes, words, barlines,
+  spanners, metadata -- is read and left out. A reader that cannot read its
+  input raises `StreamException`, which the wheel now exports.
+- The web score editor opens MIDI (`.mid`, `.midi`), Humdrum (`.krn`), MEI
+  (`.mei`), RomanText (`.rntxt`, each numeral written under its chord) and
+  TinyNotation (`.tntxt`) through the crate's readers, by the same
+  conversion its MusicXML import uses. A MIDI file now keeps its meters,
+  triplets, voices, tracks and instruments; the notes of a track that also
+  plays the drums are kept and its strokes left out.
+
+## Changed
+
+- The score editor's own MIDI reader, `midi_to_abc`, is gone: MIDI is read
+  by the crate's `from_midi` like the other formats.
+
+## Fixed
+
+- The score editor read a flat as a natural wherever it spelled a note
+  itself -- an imported score, a note dragged or moved by the arrow keys,
+  the comping part -- and decided which accidentals its MusicXML export
+  shows the same way, since pitch names came to write flats as `b`. A B flat
+  in F major was written `=B`.
+
 # music21-rs 0.8.0
 
 Four more of music21's analysis modules are the crate's—
