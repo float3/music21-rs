@@ -1060,10 +1060,10 @@ impl Ornament {
         let copied = slf.get_type().call0()?;
         {
             let me = slf.borrow();
-            let accidental = me.accidental.as_ref().map(&copy_of).transpose()?;
-            let upper = me.upper_accidental.as_ref().map(&copy_of).transpose()?;
-            let lower = me.lower_accidental.as_ref().map(&copy_of).transpose()?;
-            let size = me.size.as_ref().map(&copy_of).transpose()?;
+            let accidental = me.accidental.as_ref().map(copy_of).transpose()?;
+            let upper = me.upper_accidental.as_ref().map(copy_of).transpose()?;
+            let lower = me.lower_accidental.as_ref().map(copy_of).transpose()?;
+            let size = me.size.as_ref().map(copy_of).transpose()?;
             let ornamental = me
                 .ornamental
                 .iter()
