@@ -10,8 +10,11 @@ classes, `Pitch`, `Interval`, `Chord`, `Note`, `Duration`, `Key`, `Scale`,
 and packaged for Python. The classes have music21's names, arguments,
 properties and `repr`, and give music21's answers. The Rust half is the
 [music21-rs](https://crates.io/crates/music21-rs) crate; the wheel needs no
-Rust toolchain and no music21 to run on its own. Streams, parsing, notation
-output and the corpus are not included; those remain music21's.
+Rust toolchain and no music21 to run on its own. music21's stream
+machinery, its `converter` and the corpus are not included; those remain
+music21's. The package does read scores in seven formats into streams of its
+own, and writes MusicXML: see [Reading and writing
+scores](#reading-and-writing-scores).
 
 The [reports page](https://hilll.dev/music21-rs/reports/) has the full
 numbers: every music21 method and whether it is ported, the doctest and test
@@ -36,7 +39,7 @@ m.RomanNumeral("viio7", m.Key("c")).pitches
 m.TimeSignature("6/8").getAccentWeight(1.5)   # 0.5
 ```
 
-## MusicXML
+## Reading and writing scores
 
 ```python
 import music21_rs as m
@@ -46,17 +49,38 @@ for part in score.parts:
     print(part.partName, len(part.getElementsByClass("Measure")))
 
 text = m.to_musicxml(score, encoding_date="2026-01-01")
+
+song = m.from_midi(open("song.mid", "rb").read())
+line = m.from_tiny_notation("tinyNotation: 3/4 E4 r f# g trip{b-8 a g} c'2.")
 ```
+
+Every format music21-rs reads is read as music21's `converter.parse` reads
+it, into this package's own streams:
+
+| function | format | hands back |
+| --- | --- | --- |
+| `from_musicxml(text)` | MusicXML, partwise | `Score` |
+| `from_abc(text)` | ABC | `Score`, or an `Opus` of them for several tunes |
+| `from_abc_number(text, number)` | one tune of an ABC file, by its `X:` | `Score` |
+| `from_midi(data)` | a standard MIDI file's `bytes` | `Score` |
+| `from_tiny_notation(text)` | TinyNotation | `Part` |
+| `from_humdrum(text)` | Humdrum `**kern` | `Score`, or an `Opus` for several tables |
+| `from_mei(text)` | MEI | `Score` |
+| `from_roman_text(text)` | RomanText | `Score`, or an `Opus` for several movements |
+
+The streams hold measures of notes, chords, rests, clefs, keys, meters,
+tempo marks, dynamics, chord symbols and instruments, and a voice apiece
+where a measure has more than one. A RomanText score's chords carry their
+numerals as lyrics. What the package has no class for -- words, barlines,
+repeat marks, slurs and other spanners, unpitched percussion, metadata -- is
+read and left out. Input a reader cannot read raises `StreamException`. A
+compressed `.mxl` is a zip holding the document: unpack it first.
 
 `to_musicxml` takes one of this package's streams or one of music21's and
 writes what music21's exporter writes with `makeNotation=False`. With
 `make_notation=True` it makes the notation first, as music21's exporter does
 by default, so a part of loose notes is written in measures, with its ties,
 rests, accidentals and beams.
-`from_musicxml` reads what music21's reader reads and hands back this
-package's own `Score`; what the package has no class for -- words, barlines,
-slurs and other spanners, metadata -- is read and left out. A compressed
-`.mxl` is a zip holding the document: unpack it first.
 
 ## Using it inside music21
 

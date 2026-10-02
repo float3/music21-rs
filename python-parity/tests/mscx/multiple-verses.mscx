@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="4.70">
+  <programVersion>4.7.5</programVersion>
+  <programRevision>3654226</programRevision>
+  <Score>
+    <eid>hQmdlWWSnHH_oVCT2P0C/0G</eid>
+    <Division>480</Division>
+    <showInvisible>1</showInvisible>
+    <showUnprintable>1</showUnprintable>
+    <showFrames>1</showFrames>
+    <showMargins>0</showMargins>
+    <open>1</open>
+    <metaTag name="arranger"></metaTag>
+    <metaTag name="composer"></metaTag>
+    <metaTag name="copyright"></metaTag>
+    <metaTag name="creationDate">2026-09-30</metaTag>
+    <metaTag name="description">music21 multiple verses</metaTag>
+    <metaTag name="lyricist"></metaTag>
+    <metaTag name="movementNumber"></metaTag>
+    <metaTag name="movementTitle"></metaTag>
+    <metaTag name="originalFormat">xml</metaTag>
+    <metaTag name="platform">Microsoft Windows</metaTag>
+    <metaTag name="source"></metaTag>
+    <metaTag name="translator"></metaTag>
+    <metaTag name="workNumber"></metaTag>
+    <metaTag name="workTitle">Multiple verses</metaTag>
+    <Part id="1">
+      <Staff>
+        <eid>KgtEexhJyKF_OgrGJFWuIB</eid>
+        <StaffType group="pitched">
+          <name>stdNormal</name>
+          </StaffType>
+        </Staff>
+      <trackName>test</trackName>
+      <Instrument id="grand-piano">
+        <longName>test</longName>
+        <trackName></trackName>
+        <instrumentId>keyboard.piano.grand</instrumentId>
+        <Articulation>
+          <velocity>100</velocity>
+          <gateTime>100</gateTime>
+          </Articulation>
+        <Articulation name="staccatissimo">
+          <velocity>100</velocity>
+          <gateTime>33</gateTime>
+          </Articulation>
+        <Articulation name="staccato">
+          <velocity>100</velocity>
+          <gateTime>50</gateTime>
+          </Articulation>
+        <Articulation name="portato">
+          <velocity>100</velocity>
+          <gateTime>67</gateTime>
+          </Articulation>
+        <Articulation name="tenuto">
+          <velocity>100</velocity>
+          <gateTime>100</gateTime>
+          </Articulation>
+        <Articulation name="marcato">
+          <velocity>120</velocity>
+          <gateTime>67</gateTime>
+          </Articulation>
+        <Articulation name="sforzato">
+          <velocity>150</velocity>
+          <gateTime>100</gateTime>
+          </Articulation>
+        <Articulation name="sforzatoStaccato">
+          <velocity>150</velocity>
+          <gateTime>50</gateTime>
+          </Articulation>
+        <Articulation name="marcatoStaccato">
+          <velocity>120</velocity>
+          <gateTime>50</gateTime>
+          </Articulation>
+        <Articulation name="marcatoTenuto">
+          <velocity>120</velocity>
+          <gateTime>100</gateTime>
+          </Articulation>
+        <Channel>
+          <program value="0"/>
+          <controller ctrl="10" value="63"/>
+          <synti>Fluid</synti>
+          </Channel>
+        </Instrument>
+      </Part>
+    <Staff id="1">
+      <VBox>
+        <height>10</height>
+        <eid>OM3UOCJf44F_xjm7XLkFBvD</eid>
+        <Text>
+          <eid>u6faa08bo4K_P3vh7wo45KJ</eid>
+          <style>title</style>
+          <text>Multiple verses</text>
+          </Text>
+        </VBox>
+      <Measure>
+        <eid>rHWPFoOKBVP_MCt+25yklzG</eid>
+        <voice>
+          <Clef>
+            <concertClefType>G</concertClefType>
+            <transposingClefType>G</transposingClefType>
+            <isHeader>1</isHeader>
+            <eid>l845wrxhLbE_TnN9bN+sldN</eid>
+            </Clef>
+          <TimeSig>
+            <subtype>1</subtype>
+            <eid>lJQphbvtwTN_pM/njjjhUF</eid>
+            <sigN>4</sigN>
+            <sigD>4</sigD>
+            </TimeSig>
+          <Chord>
+            <eid>awJB3Q+9cQL_ZMrEg5i6YiC</eid>
+            <durationType>whole</durationType>
+            <Lyrics>
+              <eid>ve7kAKh3pO_RlHGBcKZtMI</eid>
+              <family>CenturySchL</family>
+              <text><font size="11"/><font face="CenturySchL"/>1. First</text>
+              </Lyrics>
+            <Lyrics>
+              <no>1</no>
+              <eid>mqYHd0akutC_ndmPcPZ2JIP</eid>
+              <family>CenturySchL</family>
+              <text><font size="11"/><font face="CenturySchL"/>2. Second</text>
+              </Lyrics>
+            <Lyrics>
+              <no>2</no>
+              <eid>jBS+zTEnwPO_VtyXbd+4KOG</eid>
+              <family>CenturySchL</family>
+              <text><font size="11"/><font face="CenturySchL"/>3. Third</text>
+              </Lyrics>
+            <Lyrics>
+              <no>3</no>
+              <eid>+udu6lXXkU_dP7aSSCCyWF</eid>
+              <family>CenturySchL</family>
+              <text><font size="11"/><font face="CenturySchL"/>4. Fourth</text>
+              </Lyrics>
+            <Lyrics>
+              <no>4</no>
+              <eid>v7q21Sanu0K_So4z5J8BjBN</eid>
+              <family>CenturySchL</family>
+              <text><font size="11"/><font face="CenturySchL"/>5. Fifth</text>
+              </Lyrics>
+            <StemDirection>up</StemDirection>
+            <Note>
+              <eid>Bn7N1n/8sCJ_AO3w//9/wwI</eid>
+              <pitch>69</pitch>
+              <tpc>17</tpc>
+              </Note>
+            </Chord>
+          <BarLine>
+            <eid>1hQIuT4ehkD_EenA7PqgrdL</eid>
+            </BarLine>
+          </voice>
+        </Measure>
+      </Staff>
+    </Score>
+  </museScore>

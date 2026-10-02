@@ -1414,6 +1414,17 @@ impl Duration {
         self.said = !inferred;
     }
 
+    /// [`Duration::grace_duration`], as an appoggiatura where `appoggiatura`
+    /// says so: music21's `getGraceDuration(appoggiatura=True)`, which is
+    /// unslashed and takes its time from the note it leans on.
+    pub(crate) fn grace_duration_as(&self, appoggiatura: bool) -> Duration {
+        let mut grace = self.grace_duration();
+        if appoggiatura {
+            grace.grace = Some(Grace::appoggiatura());
+        }
+        grace
+    }
+
     /// Whether the length needs more than one written value, tied: music21's
     /// `isComplex`.
     pub fn is_complex(&self) -> bool {

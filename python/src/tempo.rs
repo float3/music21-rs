@@ -969,6 +969,14 @@ impl MetricModulation {
         Ok(value)
     }
 
+    /// The modulation as the crate's value with how it is written, for a
+    /// score writer.
+    pub(crate) fn written_value(&self, py: Python<'_>) -> PyResult<RsMetricModulation> {
+        let mut value = self.value(py)?;
+        value.set_parentheses(self.parentheses);
+        Ok(value)
+    }
+
     /// Takes the sides the crate changed, as new mark objects; a side it did
     /// not change keeps the object it was.
     fn adopt(

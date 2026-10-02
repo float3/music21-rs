@@ -912,6 +912,29 @@ def test_what_is_read_is_written_back_as_musicxml():
     assert again == written
 
 
+def test_a_lyric_keeps_how_it_is_drawn_through_musicxml():
+    sung = MUSICXML.replace(
+        "<duration>2</duration><voice>1</voice><type>quarter</type></note>",
+        "<duration>2</duration><voice>1</voice><type>quarter</type>"
+        '<lyric number="1" justify="left" placement="below">'
+        "<syllabic>single</syllabic><text>la</text></lyric></note>",
+    )
+    score = m.from_musicxml(sung)
+    assert (
+        '<lyric justify="left" name="1" number="1" placement="below">'
+        in m.to_musicxml(score)
+    )
+    # The lyric's style says the same, and what is written there is written
+    # out.
+    note = [e for e in score.parts[0].getElementsByClass("Measure")[0]][3]
+    lyric = note.lyrics[0]
+    assert lyric.hasStyleInformation
+    assert lyric.style.justify == "left"
+    assert lyric.style.placement == "below"
+    lyric.style.justify = "right"
+    assert 'justify="right"' in m.to_musicxml(score)
+
+
 def test_loose_notes_are_written_once_their_notation_is_made():
     part = m.Part()
     part.insert(0, m.TimeSignature("3/4"))
@@ -951,5 +974,213 @@ def test_making_notation_leaves_a_notated_score_as_it_reads():
 
 
 def test_a_document_that_is_not_musicxml_is_refused():
-    with pytest.raises(Exception):
+    with pytest.raises(m.StreamException):
         m.from_musicxml("<html></html>")
+
+
+def measures_of(stream):
+    return list(stream.getElementsByClass("Measure"))
+
+
+def pitches_of(stream):
+    return [
+        pitch.nameWithOctave
+        for measure in measures_of(stream)
+        for element in measure
+        if type(element).__name__ in ("Note", "Chord")
+        for pitch in element.pitches
+    ]
+
+
+def test_every_reader_is_exported():
+    for name in (
+        "from_musicxml",
+        "from_abc",
+        "from_abc_number",
+        "from_midi",
+        "from_tiny_notation",
+        "from_humdrum",
+        "from_mei",
+        "from_roman_text",
+    ):
+        assert name in m.__all__
+
+
+ABC_TUNES = """X:1
+T:One
+M:2/4
+L:1/4
+K:G
+G A | B c |
+
+X:2
+T:Two
+M:3/4
+L:1/4
+K:D
+D E F | A3 |
+"""
+
+
+def test_abc_is_read_into_a_score_of_parts_and_measures():
+    score = m.from_abc("X:1\nT:Scale\nM:2/4\nL:1/4\nK:G\nG A | B c | d e |\n")
+    assert type(score).__name__ == "Score"
+    (part,) = score.parts
+    measures = measures_of(part)
+    assert [measure.number for measure in measures] == [0, 1, 2]
+    assert [type(element).__name__ for element in measures[0]] == [
+        "TrebleClef",
+        "Key",
+        "TimeSignature",
+        "Note",
+        "Note",
+    ]
+    assert pitches_of(part) == ["G4", "A4", "B4", "C5", "D5", "E5"]
+
+
+def test_several_abc_tunes_are_an_opus_and_one_can_be_read_by_number():
+    opus = m.from_abc(ABC_TUNES)
+    assert type(opus).__name__ == "Opus"
+    first, second = list(opus)
+    assert type(first).__name__ == type(second).__name__ == "Score"
+    assert pitches_of(first.parts[0]) == ["G4", "A4", "B4", "C5"]
+    assert pitches_of(second.parts[0]) == ["D4", "E4", "F#4", "A4"]
+    score = m.from_abc_number(ABC_TUNES, 2)
+    assert type(score).__name__ == "Score"
+    assert pitches_of(score.parts[0]) == ["D4", "E4", "F#4", "A4"]
+    with pytest.raises(m.StreamException):
+        m.from_abc_number(ABC_TUNES, 3)
+
+
+def vlq(number):
+    out = [number & 0x7F]
+    number >>= 7
+    while number:
+        out.insert(0, (number & 0x7F) | 0x80)
+        number >>= 7
+    return bytes(out)
+
+
+def midi_file(*tracks):
+    def track(events):
+        body = b"".join(vlq(delta) + event for delta, event in events)
+        body += vlq(0) + b"\xff\x2f\x00"
+        return b"MTrk" + len(body).to_bytes(4, "big") + body
+
+    header = b"MThd" + (6).to_bytes(4, "big") + (1).to_bytes(2, "big")
+    header += len(tracks).to_bytes(2, "big") + (480).to_bytes(2, "big")
+    return header + b"".join(track(events) for events in tracks)
+
+
+def test_midi_is_read_from_bytes_into_measures_of_notes_and_chords():
+    conductor = [(0, b"\xff\x58\x04\x03\x02\x18\x08"), (0, b"\xff\x51\x03\x07\xa1\x20")]
+    piano = [(0, b"\xff\x03\x05Piano"), (0, b"\xc0\x00")]
+    for key in (60, 62, 64, 65):
+        piano += [(0, bytes([0x90, key, 80])), (480, bytes([0x80, key, 0]))]
+    piano += [(0, b"\x90\x3c\x50"), (0, b"\x90\x40\x50"), (960, b"\x80\x3c\x00"), (0, b"\x80\x40\x00")]
+    drums = [(0, b"\xff\x03\x05Drums"), (0, b"\x99\x24\x64"), (480, b"\x89\x24\x00")]
+    score = m.from_midi(midi_file(conductor, piano, drums))
+    assert type(score).__name__ == "Score"
+    keys, strokes = score.parts
+    first, second = measures_of(keys)
+    kinds = [type(element).__name__ for element in first]
+    assert kinds == ["Piano", "TrebleClef", "MetronomeMark", "TimeSignature", "Note", "Note", "Note"]
+    assert first.getElementsByClass("MetronomeMark")[0].number == 120
+    assert pitches_of(keys) == ["C4", "D4", "E4", "F4", "C4", "E4"]
+    assert type(list(second)[1]).__name__ == "Chord"
+    # A stroke with no pitch has no class here; its measure keeps the rest
+    # after it.
+    (drum_measure,) = measures_of(strokes)
+    assert [type(element).__name__ for element in drum_measure][-1] == "Rest"
+    assert pitches_of(strokes) == []
+
+
+def test_a_file_that_is_not_midi_is_refused():
+    with pytest.raises(m.StreamException):
+        m.from_midi(b"not a MIDI file")
+
+
+def test_tiny_notation_is_read_into_a_part_of_measures():
+    part = m.from_tiny_notation("tinyNotation: 3/4 E4 r f# g trip{b-8 a g} c'2.")
+    assert type(part).__name__ == "Part"
+    measures = measures_of(part)
+    assert len(measures) == 3
+    first = list(measures[0])
+    assert [type(element).__name__ for element in first] == [
+        "TrebleClef",
+        "TimeSignature",
+        "Note",
+        "Rest",
+        "Note",
+    ]
+    # Upper case is the octave below middle C; the number is the length.
+    assert pitches_of(part) == ["E3", "F#4", "G4", "B-4", "A4", "G4", "C5"]
+    triplet = list(measures[1])[1]
+    assert triplet.duration.tuplets[0].numberNotesActual == 3
+    assert triplet.quarterLength == pytest.approx(1 / 3)
+
+
+def test_humdrum_is_read_with_a_part_for_each_spine():
+    score = m.from_humdrum(
+        "**kern\t**kern\n*clefF4\t*clefG2\n*M2/4\t*M2/4\n"
+        "=1\t=1\n4C\t4c\n4D\t4d\n=2\t=2\n2E\t2e\n==\t==\n*-\t*-\n"
+    )
+    upper, lower = score.parts
+    # The last spine in the file is the first part.
+    assert type(measures_of(upper)[0].getElementsByClass("Clef")[0]).__name__ == "TrebleClef"
+    assert type(measures_of(lower)[0].getElementsByClass("Clef")[0]).__name__ == "BassClef"
+    assert [measure.number for measure in measures_of(upper)] == [1, 2]
+    assert pitches_of(upper) == ["C4", "D4", "E4"]
+    assert pitches_of(lower) == ["C3", "D3", "E3"]
+
+
+MEI = """<mei xmlns="http://www.music-encoding.org/ns/mei"><music><score>
+<scoreDef meter.count="2" meter.unit="4">
+  <staffGrp>
+    <staffDef n="1" clef.shape="G" clef.line="2"/>
+    <staffDef n="2" clef.shape="F" clef.line="4"/>
+  </staffGrp>
+</scoreDef>
+<section>
+  <measure n="1">
+    <staff n="1"><layer n="1"><note pname="c" oct="5" dur="4"/><note pname="e" oct="5" dur="4" accid="f"/></layer></staff>
+    <staff n="2"><layer n="1"><chord dur="2"><note pname="c" oct="3"/><note pname="g" oct="3"/></chord></layer></staff>
+  </measure>
+  <measure n="2">
+    <staff n="1"><layer n="1"><rest dur="2"/></layer></staff>
+    <staff n="2"><layer n="1"><note pname="c" oct="3" dur="2"/></layer></staff>
+  </measure>
+</section>
+</score></music></mei>"""
+
+
+def test_mei_is_read_with_a_part_for_each_staff():
+    upper, lower = m.from_mei(MEI).parts
+    assert [measure.number for measure in measures_of(upper)] == [1, 2]
+    # Every layer is a voice.
+    (voice,) = measures_of(upper)[0].getElementsByClass("Voice")
+    assert [note.nameWithOctave for note in voice.notes] == ["C5", "E-5"]
+    (rest,) = measures_of(upper)[1].getElementsByClass("Voice")[0]
+    assert type(rest).__name__ == "Rest"
+    (chord,) = measures_of(lower)[0].getElementsByClass("Voice")[0]
+    assert [pitch.nameWithOctave for pitch in chord.pitches] == ["C3", "G3"]
+
+
+def test_roman_text_is_read_as_chords_carrying_their_figures():
+    score = m.from_roman_text("Title: Test\nTime Signature: 3/4\nm1 G: I b3 V6\nm2 I\nm3 NC\n")
+    (part,) = score.parts
+    first, second, third = measures_of(part)
+    key = first.getElementsByClass("Key")[0]
+    assert (key.tonic.name, key.mode) == ("G", "major")
+    chords = list(first.getElementsByClass("Chord"))
+    assert [chord.lyric for chord in chords] == ["G: I", "V6"]
+    assert [first.elementOffset(chord) for chord in chords] == [0.0, 2.0]
+    assert [pitch.name for pitch in chords[1].pitches] == ["F#", "A", "D"]
+    assert chords[1].quarterLength == 1.0
+    assert [pitch.name for pitch in second.getElementsByClass("Chord")[0].pitches] == ["G", "B", "D"]
+    assert [type(element).__name__ for element in third] == ["NoChord", "Rest"]
+
+
+def test_a_reader_refuses_what_it_cannot_read():
+    with pytest.raises(m.StreamException):
+        m.from_mei("<html></html>")

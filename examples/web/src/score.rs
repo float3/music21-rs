@@ -12,12 +12,12 @@ use music21_rs::{
     Accidental, Chord, Clef, Duration, DurationType, Interval, Key, KeySignature, Metadata,
     MetronomeMark, MidiNote, Minor67Default, Note, Pitch, Placement, Rest, RomanNumeral, Stream,
     StreamElement, StreamKind, Tie, TieType, TimeSignature, TuningSystem, Tuplet, TupletType,
-    VoiceLeadingQuartet, abc_duration, abc_note, chord_symbol_figure_from_chord,
-    estimate_key_from_pitches, interval::convert_diatonic_number_to_step,
-    read_midi_bytes_with_tempo, roman_numeral_from_chord, tonal_certainty, write_midi_bytes,
+    VoiceLeadingQuartet, abc_note, chord_symbol_figure_from_chord, estimate_key_from_pitches,
+    interval::convert_diatonic_number_to_step, roman_numeral_from_chord, tonal_certainty,
+    write_midi_bytes,
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, fmt::Write as _};
+use std::collections::BTreeMap;
 use wasm_bindgen::prelude::*;
 
 mod import;
@@ -1025,7 +1025,7 @@ fn step_alter(pitch: &Pitch) -> (char, i32, i32) {
         .skip(1)
         .fold(0, |alter, modifier| match modifier {
             '#' => alter + 1,
-            '-' => alter - 1,
+            'b' | '-' => alter - 1,
             _ => alter,
         });
     (step, alter, pitch.octave().unwrap_or(4))
@@ -1402,133 +1402,6 @@ fn abc_pitch(
     Ok(format!("{accidental}{letter}"))
 }
 
-fn midi_to_abc_text(bytes: &[u8]) -> Result<String, JsValue> {
-    const SIXTEENTHS_PER_BAR: i64 = 16;
-    let (notes, tempo) = read_midi_bytes_with_tempo(bytes).map_err(js_error)?;
-    if notes.is_empty() {
-        return Err(JsValue::from_str("the MIDI file has no notes"));
-    }
-    let pitches: Vec<Pitch> = notes
-        .iter()
-        .filter_map(|note| Pitch::from_midi(note.pitch as i32).ok())
-        .collect();
-    let key = estimate_key_from_pitches(&pitches)
-        .map_err(js_error)?
-        .first()
-        .map(|estimate| estimate.key().clone())
-        .ok_or_else(|| JsValue::from_str("no key could be estimated"))?;
-    let scale = key.pitches().map_err(js_error)?;
-    let key_signature = key_alters(key.sharps());
-
-    let mut channels: BTreeMap<u8, Vec<MidiNote>> = BTreeMap::new();
-    for note in notes {
-        channels.entry(note.channel).or_default().push(note);
-    }
-
-    let mut abc = String::new();
-    let _ = writeln!(abc, "X:1\nT:Imported MIDI\nM:4/4\nL:1/8");
-    let _ = writeln!(abc, "Q:1/4={}", tempo.unwrap_or(120.0).round());
-    let _ = writeln!(abc, "K:{}", abc_key_name(&key));
-
-    for (voice_number, (_, mut channel_notes)) in channels.into_iter().enumerate() {
-        // Quantized to sixteenths: (start, end, midi numbers).
-        channel_notes.sort_by(|left, right| left.start.total_cmp(&right.start));
-        let mut chords: Vec<(i64, i64, Vec<i32>)> = Vec::new();
-        for note in &channel_notes {
-            let start = (note.start * 4.0).round() as i64;
-            let end = ((note.start + note.duration) * 4.0)
-                .round()
-                .max(start as f64 + 1.0) as i64;
-            match chords.last_mut() {
-                Some(last) if last.0 == start => {
-                    last.1 = last.1.max(end);
-                    last.2.push(note.pitch as i32);
-                }
-                _ => chords.push((start, end, vec![note.pitch as i32])),
-            }
-        }
-        for index in 1..chords.len() {
-            let next = chords[index].0;
-            if chords[index - 1].1 > next {
-                chords[index - 1].1 = next;
-            }
-        }
-        let mean = channel_notes
-            .iter()
-            .map(|note| note.pitch as f64)
-            .sum::<f64>()
-            / channel_notes.len() as f64;
-        let _ = writeln!(
-            abc,
-            "V:{} clef={}",
-            voice_number + 1,
-            if mean < 57.0 { "bass" } else { "treble" }
-        );
-
-        let mut line = String::new();
-        let mut in_force = BTreeMap::new();
-        let mut cursor = 0_i64;
-        let mut bars_on_line = 0;
-        let mut spans: Vec<(i64, i64, Vec<i32>)> = Vec::new();
-        for (start, end, midi) in chords {
-            if start > cursor {
-                spans.push((cursor, start, Vec::new()));
-            }
-            spans.push((start, end, midi));
-            cursor = end;
-        }
-        let total_bars = (cursor + SIXTEENTHS_PER_BAR - 1) / SIXTEENTHS_PER_BAR;
-        if cursor < total_bars * SIXTEENTHS_PER_BAR {
-            spans.push((cursor, total_bars * SIXTEENTHS_PER_BAR, Vec::new()));
-        }
-
-        for (start, end, midi) in spans {
-            let mut from = start;
-            while from < end {
-                let bar_end = (from / SIXTEENTHS_PER_BAR + 1) * SIXTEENTHS_PER_BAR;
-                let to = end.min(bar_end);
-                let length = abc_duration((to - from) as u32, 2).map_err(js_error)?;
-                if midi.is_empty() {
-                    let _ = write!(line, "z{length} ");
-                } else {
-                    let mut spelled = midi
-                        .iter()
-                        .map(|&number| spell_in_key(number, &key, &scale))
-                        .collect::<Result<Vec<_>, _>>()?;
-                    spelled.sort_by(|left, right| left.ps().total_cmp(&right.ps()));
-                    let written = spelled
-                        .iter()
-                        .map(|pitch| abc_pitch(pitch, &key_signature, &mut in_force))
-                        .collect::<Result<Vec<_>, _>>()?;
-                    let tie = if to < end { "-" } else { "" };
-                    if written.len() == 1 {
-                        let _ = write!(line, "{}{length}{tie} ", written[0]);
-                    } else {
-                        let _ = write!(line, "[{}]{length}{tie} ", written.concat());
-                    }
-                }
-                from = to;
-                if from == bar_end {
-                    line.push_str("| ");
-                    in_force.clear();
-                    bars_on_line += 1;
-                    if bars_on_line == 4 {
-                        abc.push_str(line.trim_end());
-                        abc.push('\n');
-                        line.clear();
-                        bars_on_line = 0;
-                    }
-                }
-            }
-        }
-        if !line.trim().is_empty() {
-            abc.push_str(line.trim_end());
-            abc.push('\n');
-        }
-    }
-    Ok(abc)
-}
-
 // ------------------------------------------------------------- bindings
 
 fn score_from(input: JsValue) -> Result<Score, JsValue> {
@@ -1555,13 +1428,6 @@ pub fn score_to_midi(input: JsValue) -> Result<Vec<u8>, JsValue> {
 /// Writes a score as MusicXML 4.0, one part per voice.
 pub fn score_to_musicxml(input: JsValue) -> Result<String, JsValue> {
     musicxml(&score_from(input)?).map_err(js_error)
-}
-
-#[wasm_bindgen]
-/// Reads a Standard MIDI File into ABC, one voice per channel, quantized to
-/// sixteenths and spelled in the key the notes suggest.
-pub fn midi_to_abc(bytes: &[u8]) -> Result<String, JsValue> {
-    midi_to_abc_text(bytes)
 }
 
 // ----------------------------------------------------------------- tuning
@@ -1788,6 +1654,7 @@ fn spell_midi_in_chord(midi: i32, figure: &str, tonic: &str, mode: &str) -> Resu
 #[cfg(test)]
 mod tests {
     use super::*;
+    use music21_rs::read_midi_bytes_with_tempo;
 
     /// One voice per list, each note a quarter long at the start given.
     type Notes<'a> = &'a [(f64, &'a [(i32, i32)])];
@@ -2215,18 +2082,14 @@ mod tests {
     }
 
     #[test]
-    fn midi_is_read_back_as_abc_in_the_key_it_suggests() {
-        let notes: Vec<MidiNote> = [67, 71, 74, 66, 67]
-            .iter()
-            .enumerate()
-            .map(|(index, &pitch)| MidiNote::new(pitch, index as f64, 1.0, 90).expect("valid note"))
-            .collect();
-        let bytes = write_midi_bytes(&notes, 100.0).expect("MIDI writes");
-        let abc = midi_to_abc_text(&bytes).expect("ABC writes");
-        assert!(abc.contains("K:G"), "{abc}");
-        assert!(abc.contains("Q:1/4=100"), "{abc}");
-        // F# is in the key signature, so it needs no accidental.
-        assert!(abc.contains("F2"), "{abc}");
-        assert!(!abc.contains("^F"), "{abc}");
+    fn a_flat_the_key_signature_carries_is_written_bare() {
+        let flat = Pitch::from_name("B-4").expect("B-4");
+        assert_eq!(step_alter(&flat), ('B', -1, 4));
+        let mut in_force = BTreeMap::new();
+        let written = abc_pitch(&flat, &key_alters(-1), &mut in_force).expect("ABC writes");
+        assert_eq!(written, "B");
+        let natural = Pitch::from_name("B4").expect("B4");
+        let written = abc_pitch(&natural, &key_alters(-1), &mut in_force).expect("ABC writes");
+        assert_eq!(written, "=B");
     }
 }

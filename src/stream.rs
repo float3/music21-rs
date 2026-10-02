@@ -35,7 +35,7 @@ use crate::{
     duration::Duration,
     dynamics::Dynamic,
     error::Result,
-    expressions::TextExpression,
+    expressions::{RehearsalMark, TextExpression},
     instrument::Instrument,
     interval::Interval,
     key::{Key, KeySignature},
@@ -46,8 +46,8 @@ use crate::{
     pitch::Pitch,
     repeat::RepeatExpression,
     rest::Rest,
-    spanner::Spanner,
-    tempo::{MetronomeMark, TempoText},
+    spanner::{PedalObject, Spanner},
+    tempo::{MetricModulation, MetronomeMark, TempoText},
 };
 
 /// Which of music21's `Stream` subclasses a stream stands for.
@@ -147,6 +147,17 @@ pub enum StreamElement {
     Unpitched(Unpitched),
     /// Several strokes at once.
     PercussionChord(PercussionChord),
+    /// A barline standing inside a measure rather than at either end of it,
+    /// where a measure's own barlines are kept.
+    Barline(Barline),
+    /// A bounce or a gap in the line of a held pedal, joined by the pedal
+    /// mark it belongs to.
+    PedalObject(PedalObject),
+    /// A letter or number marking a place to rehearse from.
+    RehearsalMark(RehearsalMark),
+    /// A change of tempo written as one note value becoming another. Boxed:
+    /// it holds two tempo marks.
+    MetricModulation(Box<MetricModulation>),
 }
 
 impl StreamElement {
@@ -174,7 +185,11 @@ impl StreamElement {
             | Self::TempoText(_)
             | Self::TextExpression(_)
             | Self::RepeatExpression(_)
-            | Self::Dynamic(_) => None,
+            | Self::Dynamic(_)
+            | Self::Barline(_)
+            | Self::PedalObject(_)
+            | Self::RehearsalMark(_)
+            | Self::MetricModulation(_) => None,
         }
     }
 
@@ -195,7 +210,11 @@ impl StreamElement {
             | Self::TempoText(_)
             | Self::TextExpression(_)
             | Self::RepeatExpression(_)
-            | Self::Dynamic(_) => 0.0,
+            | Self::Dynamic(_)
+            | Self::Barline(_)
+            | Self::PedalObject(_)
+            | Self::RehearsalMark(_)
+            | Self::MetricModulation(_) => 0.0,
             _ => self
                 .duration()
                 .map(Duration::quarter_length)
@@ -223,7 +242,11 @@ impl StreamElement {
             | Self::TextExpression(_)
             | Self::RepeatExpression(_)
             | Self::Dynamic(_)
-            | Self::ChordSymbol(_) => Vec::new(),
+            | Self::ChordSymbol(_)
+            | Self::Barline(_)
+            | Self::PedalObject(_)
+            | Self::RehearsalMark(_)
+            | Self::MetricModulation(_) => Vec::new(),
         }
     }
 
@@ -239,12 +262,13 @@ impl StreamElement {
     /// at one offset.
     pub(crate) fn class_sort_order(&self) -> i32 {
         match self {
-            Self::TextExpression(_) => -30,
+            Self::TextExpression(_) | Self::RehearsalMark(_) => -30,
             Self::Instrument(_) => -25,
             Self::Stream(stream) if stream.kind() == StreamKind::Voice => 5,
             Self::Stream(_) => -20,
+            Self::Barline(_) => -5,
             Self::Clef(_) => 0,
-            Self::MetronomeMark(_) | Self::TempoText(_) => 1,
+            Self::MetronomeMark(_) | Self::TempoText(_) | Self::MetricModulation(_) => 1,
             Self::KeySignature(_) | Self::Key(_) => 2,
             Self::TimeSignature(_) => 4,
             Self::Dynamic(_) => 10,
@@ -288,7 +312,35 @@ impl StreamElement {
             Self::RepeatExpression(mark) => Ok(Self::RepeatExpression(mark.clone())),
             Self::Dynamic(dynamic) => Ok(Self::Dynamic(dynamic.clone())),
             Self::ChordSymbol(symbol) => Ok(Self::ChordSymbol(symbol.transpose(interval)?)),
+            Self::Barline(barline) => Ok(Self::Barline(barline.clone())),
+            Self::PedalObject(object) => Ok(Self::PedalObject(object.clone())),
+            Self::RehearsalMark(mark) => Ok(Self::RehearsalMark(mark.clone())),
+            Self::MetricModulation(modulation) => Ok(Self::MetricModulation(modulation.clone())),
         }
+    }
+}
+
+impl From<Barline> for StreamElement {
+    fn from(value: Barline) -> Self {
+        Self::Barline(value)
+    }
+}
+
+impl From<PedalObject> for StreamElement {
+    fn from(value: PedalObject) -> Self {
+        Self::PedalObject(value)
+    }
+}
+
+impl From<RehearsalMark> for StreamElement {
+    fn from(value: RehearsalMark) -> Self {
+        Self::RehearsalMark(value)
+    }
+}
+
+impl From<MetricModulation> for StreamElement {
+    fn from(value: MetricModulation) -> Self {
+        Self::MetricModulation(Box::new(value))
     }
 }
 
@@ -988,6 +1040,91 @@ impl Stream {
         }
     }
 
+    /// Keeps the leaves `keep` accepts, handed each with its position in
+    /// [`Stream::leaves`] to change as it likes, and drops the rest. Every
+    /// spanner, here or in a nested stream, is moved to where what it names
+    /// now stands, and names nothing for an element dropped.
+    pub(crate) fn retain_leaves(
+        &mut self,
+        keep: &mut impl FnMut(usize, &mut StreamElement) -> bool,
+    ) {
+        let mut seen = 0;
+        self.retain_leaves_from(&mut seen, keep);
+    }
+
+    /// Adds events to this stream's own and puts them all in the order
+    /// music21 sorts a stream in, an added event after one already here that
+    /// sorts alike. Every spanner of this stream is moved to where what it
+    /// names now stands.
+    pub(crate) fn insert_sorted(&mut self, added: Vec<StreamEvent>) {
+        // Each event held here with where its leaves started; nothing for
+        // one added.
+        let mut first = 0;
+        let mut held: Vec<(StreamEvent, Option<usize>)> = Vec::new();
+        for event in std::mem::take(&mut self.events) {
+            let count = leaf_count(&event.element);
+            held.push((event, Some(first)));
+            first += count;
+        }
+        held.extend(added.into_iter().map(|event| (event, None)));
+        held.sort_by(|left, right| crate::makenotation::event_order(&left.0, &right.0));
+        let mut moved: Vec<Option<usize>> = vec![None; first];
+        let mut placed = 0;
+        for (event, start) in &held {
+            let count = leaf_count(&event.element);
+            if let Some(start) = start {
+                for offset in 0..count {
+                    moved[start + offset] = Some(placed + offset);
+                }
+            }
+            placed += count;
+        }
+        self.events = held.into_iter().map(|(event, _)| event).collect();
+        for spanner in &mut self.labels.spanners {
+            spanner.move_places(&moved);
+        }
+    }
+
+    /// [`Stream::retain_leaves`] below the `seen` leaves already walked; the
+    /// answer is where each of this stream's leaves went, by old position.
+    fn retain_leaves_from(
+        &mut self,
+        seen: &mut usize,
+        keep: &mut impl FnMut(usize, &mut StreamElement) -> bool,
+    ) -> Vec<Option<usize>> {
+        let mut moved: Vec<Option<usize>> = Vec::new();
+        let mut kept = 0;
+        self.events.retain_mut(|event| match &mut event.element {
+            StreamElement::Stream(inner) => {
+                let inner_moved = inner.retain_leaves_from(seen, keep);
+                let count = inner_moved.iter().flatten().count();
+                moved.extend(
+                    inner_moved
+                        .into_iter()
+                        .map(|place| place.map(|place| place + kept)),
+                );
+                kept += count;
+                true
+            }
+            element => {
+                let position = *seen;
+                *seen += 1;
+                if keep(position, element) {
+                    moved.push(Some(kept));
+                    kept += 1;
+                    true
+                } else {
+                    moved.push(None);
+                    false
+                }
+            }
+        });
+        for spanner in &mut self.labels.spanners {
+            spanner.move_places(&moved);
+        }
+        moved
+    }
+
     /// Whether this stream holds parts, or streams standing in for them:
     /// music21's `hasPartLikeStreams`. A part says so; a measure or a voice,
     /// or a stream starting anywhere but the beginning, says not; any other
@@ -1149,6 +1286,14 @@ impl Stream {
                 .partial_cmp(&right.offset)
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
+    }
+}
+
+/// How many leaves an element is: those of a nested stream, or itself.
+fn leaf_count(element: &StreamElement) -> usize {
+    match element {
+        StreamElement::Stream(inner) => inner.leaves().len(),
+        _ => 1,
     }
 }
 

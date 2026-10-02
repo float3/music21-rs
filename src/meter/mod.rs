@@ -120,6 +120,8 @@ pub struct TimeSignature {
     /// Whether this is an earlier measure's meter standing a second time.
     #[cfg_attr(feature = "serde", serde(default))]
     restated: crate::display::Drawn<bool>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    hidden: crate::display::Drawn<bool>,
 }
 
 impl Default for TimeSignature {
@@ -157,6 +159,7 @@ impl TimeSignature {
             symbolize_denominator: false,
             color: crate::display::Drawn(None),
             restated: crate::display::Drawn(false),
+            hidden: crate::display::Drawn(false),
         };
         signature.set_default_partitions()?;
         Ok(signature)
@@ -212,6 +215,18 @@ impl TimeSignature {
     /// Sets the colour the signature is drawn in.
     pub fn set_color(&mut self, color: Option<String>) {
         self.color.0 = color;
+    }
+
+    /// Whether the signature is left off the page while still in force:
+    /// music21's `style.hideObjectOnPrint`. Two meters differing only in
+    /// this are equal.
+    pub fn is_hidden(&self) -> bool {
+        self.hidden.0
+    }
+
+    /// Says whether the signature is left off the page.
+    pub fn set_hidden(&mut self, hidden: bool) {
+        self.hidden.0 = hidden;
     }
 
     /// How the bar is written, before anything divides it: music21's
@@ -1342,18 +1357,10 @@ impl TimeSignature {
 
         // music21's `naiveBeams`: the fullest set of beams each written value
         // can carry, with what each one does left undecided.
-        let mut beamed: Vec<Option<Beams>> = Vec::with_capacity(notes.len());
-        for note in notes {
-            let levels = Beams::levels_for(note.duration_type).filter(|_| note.sounds);
-            beamed.push(match levels {
-                Some(levels) => {
-                    let mut made = Beams::new();
-                    made.fill_levels(levels, None)?;
-                    Some(made)
-                }
-                None => None,
-            });
-        }
+        let mut beamed: Vec<Option<Beams>> = notes
+            .iter()
+            .map(|note| Beams::naive(Some(note.duration_type), note.sounds))
+            .collect();
         crate::notation::remove_sandwiched_unbeamables(&mut beamed);
 
         for depth in 0..Beams::LEVELS {

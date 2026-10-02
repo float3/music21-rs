@@ -106,10 +106,39 @@ pub const SCORES: &[(&str, &str)] = &[
         "built:instrument-change",
         "parts that change instrument, which no corpus score does",
     ),
+    (
+        "built:glissandi",
+        "glissandi and slides, which no corpus score has",
+    ),
+    ("built:tremolo-spanners", "tremolos between notes"),
+    (
+        "built:pedals",
+        "pedals drawn as lines, signs and both, with bounces and gaps",
+    ),
+    ("built:inner-barline", "a barline inside a measure"),
+    (
+        "built:lyric-styles",
+        "lyrics justified, placed and left unprinted",
+    ),
+    ("built:rehearsal-marks", "rehearsal marks, boxed and not"),
+    (
+        "trecento/PMFC_12_19-Sanctus Barbitonsoris.xml",
+        "rehearsal marks in a file",
+    ),
+    (
+        "trecento/PMFC_23_16-Kyrie Apt 16.xml",
+        "time signatures left unprinted",
+    ),
+    (
+        "trecento/PMFC_06_8-In Verde Prato.xml",
+        "a metric modulation",
+    ),
 ];
 
 /// Takes out of a parsed score what belongs to a page rather than to the
 /// music, which the crate does not model.
+// The MuseScore reader's test shares this module and asks music21 nothing.
+#[allow(dead_code)]
 pub const STRIP_LAYOUT: &str = r#"
 from music21 import expressions, layout, repeat, tempo
 
@@ -136,12 +165,12 @@ def fresh_style(thing):
     except Exception:
         return thing._styleClass()
 
-def reset_placing(thing):
+def reset_placing(thing, keep=()):
     if not getattr(thing, 'hasStyleInformation', False):
         return
     fresh = fresh_style(thing)
     for name in PLACING:
-        if hasattr(thing.style, name):
+        if name not in keep and hasattr(thing.style, name):
             setattr(thing.style, name, getattr(fresh, name, None))
 
 def items(thing, name):
@@ -171,6 +200,182 @@ def two_measures(first, second, low):
     part.append([one, two, three])
     return part
 
+def quarters(bars):
+    """A part of 4/4 bars of quarter notes, and the notes of each bar. A
+    pitch of None is a rest, and a list of pitches a chord."""
+    from music21 import chord, clef, meter, note, stream
+    part = stream.Part()
+    measures = []
+    for index, pitches in enumerate(bars):
+        measure = stream.Measure(number=index + 1)
+        if index == 0:
+            measure.insert(0, clef.TrebleClef())
+            measure.insert(0, meter.TimeSignature('4/4'))
+        for pitch in pitches:
+            if pitch is None:
+                measure.append(note.Rest(type='quarter'))
+            elif isinstance(pitch, list):
+                measure.append(chord.Chord(pitch, type='quarter'))
+            else:
+                measure.append(note.Note(pitch, type='quarter'))
+        measures.append(measure)
+    part.append(measures)
+    return part, [list(measure.notesAndRests) for measure in measures]
+
+def one_part(part):
+    from music21 import stream
+    score = stream.Score()
+    score.insert(0, part)
+    return score
+
+def glissandi():
+    """Glissandi and slides, of every line and every way of playing one."""
+    from music21 import spanner
+    part, bars = quarters([
+        ['C4', 'G4', 'E4', 'C5'],
+        ['D4', 'A4', ['F4', 'A4'], 'D5'],
+        ['E4', 'B4', 'G4', 'E5'],
+        ['F4', 'C5', 'A4', 'F5'],
+    ])
+    plain = spanner.Glissando(bars[0][0], bars[0][1])
+    worded = spanner.Glissando(bars[0][2], bars[0][3], lineType='solid', label='gliss.')
+    # Across a barline, and from a note another one ends on.
+    slide = spanner.Glissando(bars[0][3], bars[1][0])
+    slide.slideType = 'continuous'
+    white = spanner.Glissando(bars[1][1], bars[1][2], lineType='dashed')
+    white.slideType = 'white'
+    # From a chord, which says it on its first note alone.
+    dotted = spanner.Glissando(bars[1][2], bars[1][3], lineType='dotted', label='port.')
+    dotted.slideType = 'continuous'
+    # Over three notes, the middle one of which says nothing.
+    harp = spanner.Glissando(bars[2][0], bars[2][1], bars[2][2])
+    harp.slideType = 'diatonic'
+    black = spanner.Glissando(bars[2][3], bars[3][0], label='black keys')
+    black.slideType = 'black'
+    # A seventh, which takes the first number again.
+    last = spanner.Glissando(bars[3][2], bars[3][3])
+    for made in (plain, worded, slide, white, dotted, harp, black, last):
+        part.insert(0, made)
+    return one_part(part)
+
+def tremolos():
+    """Tremolos between two notes, and one over three."""
+    from music21 import expressions
+    part, bars = quarters([
+        ['C4', 'E4', 'G4', 'C5'],
+        ['D4', 'F4', ['A4', 'C5'], ['D5', 'F5']],
+        ['E4', 'G4', 'B4', None],
+    ])
+    plain = expressions.TremoloSpanner(bars[0][0], bars[0][1])
+    above = expressions.TremoloSpanner(bars[0][2], bars[0][3])
+    above.numberOfMarks = 2
+    above.placement = 'above'
+    below = expressions.TremoloSpanner(bars[1][0], bars[1][1])
+    below.numberOfMarks = 4
+    below.placement = 'below'
+    chords = expressions.TremoloSpanner(bars[1][2], bars[1][3])
+    chords.numberOfMarks = 1
+    three = expressions.TremoloSpanner(bars[2][0], bars[2][1], bars[2][2])
+    for made in (plain, above, below, chords, three):
+        part.insert(0, made)
+    return one_part(part)
+
+def pedals():
+    """Pedal marks drawn each way, with the bounces and gaps inside them."""
+    from music21 import expressions
+    Form, Type = expressions.PedalForm, expressions.PedalType
+    part, bars = quarters([['C4', 'D4', 'E4', 'F4']] * 7)
+
+    def held(bar, first, last, form, kind, inside=(), within=None, **said):
+        """A pedal from one note of a bar to another, with what happens
+        between them: (offset, class, placement)."""
+        measure = part.getElementsByClass('Measure')[bar]
+        mark = expressions.PedalMark(bars[bar][first])
+        mark.pedalForm = form
+        mark.pedalType = kind
+        for name, value in said.items():
+            setattr(mark, name, value)
+        for offset, made, placement in inside:
+            moment = made()
+            moment.placement = placement
+            measure.insert(offset, moment)
+            mark.addSpannedElements(moment)
+        mark.addSpannedElements(bars[bar][last])
+        if within is None:
+            part.insert(0, mark)
+        else:
+            # Standing in its measure, which is where its line resumes.
+            measure.insert(within, mark)
+
+    bounce = expressions.PedalBounce
+    gap, back = expressions.PedalGapStart, expressions.PedalGapEnd
+    held(0, 0, 3, Form.Line, Type.Sustain, [(2.0, bounce, None)])
+    held(1, 0, 3, Form.Symbol, Type.Sustain, [(1.0, bounce, 'below')])
+    held(2, 0, 3, Form.SymbolAlt, Type.Sostenuto, [(2.0, bounce, None)], abbreviated=True)
+    held(3, 1, 3, Form.SymbolLine, Type.Sustain,
+         [(2.0, gap, 'below'), (2.5, back, 'above')], within=1.0, placement='below')
+    # Its line resumes where the pedal mark stands, at the start of the part.
+    held(4, 2, 3, Form.SymbolLine, Type.Soft, [(2.5, bounce, None)])
+    held(5, 0, 3, Form.Line, Type.Sostenuto, [(1.0, gap, None), (3.0, back, None)])
+    held(6, 0, 2, Form.Symbol, Type.Silent, [(1.5, bounce, None), (0.5, bounce, None)])
+    return one_part(part)
+
+def inner_barline():
+    """A barline standing inside a measure, which music21 keeps and does not
+    write."""
+    from music21 import bar
+    part, _ = quarters([['C4', 'D4', 'E4', 'F4'], ['G4', 'A4', 'B4', 'C5']])
+    part.getElementsByClass('Measure')[0].insert(2.0, bar.Barline('dashed'))
+    part.getElementsByClass('Measure')[1].insert(3.0, bar.Barline('double'))
+    return one_part(part)
+
+def lyric_styles():
+    """Lyrics that say how they line up, which side they are on and whether
+    they are printed."""
+    part, bars = quarters([['C4', 'D4', 'E4', 'F4']])
+    said = [
+        ('left', None, False),
+        ('center', 'above', False),
+        ('right', 'below', True),
+        (None, 'above', True),
+    ]
+    for sung, (justify, placement, hidden) in zip(bars[0], said):
+        sung.addLyric('la')
+        sung.addLyric('li')
+        lyric = sung.lyrics[0]
+        if justify is not None:
+            lyric.style.justify = justify
+        if placement is not None:
+            lyric.style.placement = placement
+        if hidden:
+            lyric.style.hideObjectOnPrint = True
+    return one_part(part)
+
+def rehearsal_marks():
+    """Rehearsal marks, boxed and not, at the start of a bar and inside one."""
+    from music21 import expressions
+    part, _ = quarters([['C4', 'D4', 'E4', 'F4'], ['G4', 'A4', 'B4', 'C5']])
+    measures = part.getElementsByClass('Measure')
+    boxed = expressions.RehearsalMark('A')
+    boxed.style.enclosure = 'square'
+    boxed.style.placement = 'above'
+    measures[0].insert(0, boxed)
+    measures[0].insert(2.0, expressions.RehearsalMark(12))
+    plain = expressions.RehearsalMark('B', numbering='alphabetical')
+    plain.style.enclosure = 'none'
+    plain.style.placement = 'below'
+    measures[1].insert(0, plain)
+    return one_part(part)
+
+BUILT = {
+    'built:rehearsal-marks': rehearsal_marks,
+    'built:glissandi': glissandi,
+    'built:tremolo-spanners': tremolos,
+    'built:pedals': pedals,
+    'built:inner-barline': inner_barline,
+    'built:lyric-styles': lyric_styles,
+}
+
 def build(name):
     """A score made here rather than read from the corpus."""
     from music21 import instrument, stream
@@ -179,7 +384,40 @@ def build(name):
         score.insert(0, two_measures(instrument.Violin(), instrument.Viola(), 'E3'))
         score.insert(0, two_measures(instrument.Flute(), instrument.Oboe(), 'F3'))
         return score
+    if name in BUILT:
+        return BUILT[name]()
     raise ValueError(name)
+
+# What a built score's document gains that music21 reads and does not write.
+ADDED = {
+    'built:inner-barline': (
+        '</note>',
+        2,
+        '</note>\n      <barline location="middle">\n'
+        '        <bar-style>dashed</bar-style>\n      </barline>',
+    ),
+    'built:lyric-styles': ('<lyric name="2" number="2">', 1, '<lyric name="2" number="2" print-object="yes">'),
+}
+
+def built_source(name, directory):
+    """The MusicXML music21 writes of a built score, as a file a reader can
+    be given: its path and its text."""
+    import os
+    from music21.musicxml import m21ToXml
+    exporter = m21ToXml.GeneralObjectExporter(strip_layout(build(name)))
+    exporter.makeNotation = False
+    text = exporter.parse().decode('utf-8')
+    if name in ADDED:
+        old, which, new = ADDED[name]
+        at = -1
+        for _ in range(which):
+            at = text.index(old, at + 1)
+        text = text[:at] + new + text[at + len(old):]
+    os.makedirs(directory, exist_ok=True)
+    path = os.path.join(directory, name.replace(':', '_') + '.musicxml')
+    with open(path, 'w', encoding='utf-8') as handle:
+        handle.write(text)
+    return path, text
 
 def strip_layout(score):
     from music21 import text
@@ -206,7 +444,8 @@ def strip_layout(score):
             fresh.placement = old.placement
             element.setTextExpression(fresh)
         for lyric in items(element, 'lyrics'):
-            reset_placing(lyric)
+            # How a syllable lines up under its note is the crate's to say.
+            reset_placing(lyric, keep=('justify',))
         for expression in items(element, 'expressions'):
             reset_placing(expression)
         for articulation in items(element, 'articulations'):

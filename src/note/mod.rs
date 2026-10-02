@@ -129,6 +129,29 @@ impl Note {
         self
     }
 
+    /// This note as a grace note: written as it is, sounding for no time,
+    /// music21's `getGrace`. A grace note is slashed and takes no time, and
+    /// an `appoggiatura` is unslashed and takes its time from the note it
+    /// leans on.
+    ///
+    /// ```
+    /// use music21_rs::{Duration, DurationType, Note};
+    ///
+    /// let note = Note::from_name("G4")?.with_duration(Duration::half());
+    /// let grace = note.grace_note(false);
+    /// let duration = grace.duration().unwrap();
+    /// assert_eq!(duration.quarter_length(), 0.0);
+    /// assert_eq!(duration.components(), [(DurationType::Half, 0)]);
+    /// assert!(duration.grace().unwrap().slash());
+    /// assert!(!note.grace_note(true).duration().unwrap().grace().unwrap().slash());
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
+    pub fn grace_note(&self, appoggiatura: bool) -> Self {
+        let written = self.duration.clone().unwrap_or_default();
+        self.clone()
+            .with_duration(written.grace_duration_as(appoggiatura))
+    }
+
     /// Returns this note transposed by the interval, keeping everything but
     /// its pitch.
     pub fn transpose(&self, interval: &Interval) -> Result<Self> {

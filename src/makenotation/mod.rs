@@ -16,6 +16,7 @@ use crate::clef::Clef;
 use crate::defaults::FloatType;
 use crate::duration::Duration;
 use crate::error::{Error, Result};
+use crate::expressions::split_expressions;
 use crate::meter::{BeamedNote, TimeSignature};
 use crate::notation::{BeamType, StemDirection, Tie, TieType};
 use crate::note::Note;
@@ -793,6 +794,9 @@ pub(crate) fn split_element(
         let (kept, moved) = share(note.articulations());
         *first.articulations_mut() = kept;
         *second.articulations_mut() = moved;
+        let (kept, moved) = split_expressions(note.expressions());
+        *first.expressions_mut() = kept;
+        *second.expressions_mut() = moved;
         first.set_duration(first_length.clone());
         second.set_duration(second_length.clone());
         let closing = split_tie(&mut first);
@@ -819,6 +823,9 @@ pub(crate) fn split_element(
             let (kept, moved) = share(chord.articulations());
             *first.articulations_mut() = kept;
             *second.articulations_mut() = moved;
+            let (kept, moved) = split_expressions(chord.expressions());
+            *first.expressions_mut() = kept;
+            *second.expressions_mut() = moved;
             first.set_duration(first_length);
             second.set_duration(second_length);
             // A chord's lyrics are kept on its first note.
@@ -835,6 +842,9 @@ pub(crate) fn split_element(
         StreamElement::PercussionChord(chord) => {
             let mut first = chord.clone();
             let mut second = chord.clone();
+            let (kept, moved) = split_expressions(chord.written().expressions());
+            *first.written_mut().expressions_mut() = kept;
+            *second.written_mut().expressions_mut() = moved;
             first.written_mut().set_duration(first_length);
             second.written_mut().set_duration(second_length);
             Ok((first.into(), second.into()))
@@ -843,6 +853,9 @@ pub(crate) fn split_element(
             let mut first = rest.clone();
             let mut second = rest.clone();
             second.lyrics_mut().clear();
+            let (kept, moved) = split_expressions(rest.expressions());
+            *first.expressions_mut() = kept;
+            *second.expressions_mut() = moved;
             first.set_duration(first_length);
             second.set_duration(second_length);
             Ok((first.into(), second.into()))
@@ -1560,6 +1573,13 @@ fn pitches_in_order(stream: &Stream) -> Vec<Pitch> {
 ///
 /// The accidentals an ornament implies are not considered.
 pub fn make_accidentals(stream: &mut Stream) {
+    make_accidentals_by(stream, true);
+}
+
+/// [`make_accidentals`] with music21's `cautionaryNotImmediateRepeat` said:
+/// whether an altered note written again later in its measure, not straight
+/// after, shows its accidental again.
+pub(crate) fn make_accidentals_by(stream: &mut Stream, cautionary_not_immediate_repeat: bool) {
     let part_like = |element: &StreamElement| {
         element
             .as_stream()
@@ -1569,7 +1589,7 @@ pub fn make_accidentals(stream: &mut Stream) {
     if events.iter().any(|event| part_like(event.element())) {
         for event in &mut events {
             if let StreamElement::Stream(inner) = event.element_mut() {
-                make_accidentals(inner);
+                make_accidentals_by(inner, cautionary_not_immediate_repeat);
             }
         }
         let spanners = stream.spanners().to_vec();
@@ -1636,6 +1656,7 @@ pub fn make_accidentals(stream: &mut Stream) {
                     pitch_past_measure: &past_measure,
                     altered_pitches: &altered,
                     last_note_was_tied: open.contains(&pitch.name_with_octave()),
+                    cautionary_not_immediate_repeat,
                     ..AccidentalDisplayOptions::default()
                 });
                 note.set_pitch(pitch.clone());
@@ -1667,6 +1688,7 @@ pub fn make_accidentals(stream: &mut Stream) {
                         other_simultaneous_pitches: &others,
                         altered_pitches: &altered,
                         last_note_was_tied: open.contains(&pitch.name_with_octave()),
+                        cautionary_not_immediate_repeat,
                         ..AccidentalDisplayOptions::default()
                     });
                     note.set_pitch(pitch.clone());
