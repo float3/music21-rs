@@ -507,6 +507,7 @@ dependencies = [
  "music21-rs",
  "serde",
  "thiserror 2.0.21",
+ "toml",
 ]
 
 [[package]]

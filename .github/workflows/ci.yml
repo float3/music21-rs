@@ -379,10 +379,18 @@ jobs:
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@v2
 
-      # Only the published crate: the examples pull in cpal and wasm-bindgen,
-      # whose own floors are no promise this crate makes.
-      - name: Check the published crate on its declared MSRV
-        run: cargo check --package music21-rs --all-features --locked
+      # Only the published crates: the examples pull in cpal and wasm-bindgen,
+      # whose own floors are no promise these crates make. `harte` declares
+      # the floor music21-rs does, since it cannot build below it.
+      - name: Check the published crates on their declared MSRV
+        run: |
+          set -euo pipefail
+          declared="$(grep '^rust-version' harte/Cargo.toml | cut -d'"' -f2)"
+          if [[ "$declared" != "${{ steps.msrv.outputs.version }}" ]]; then
+            echo "harte declares rust-version $declared, music21-rs ${{ steps.msrv.outputs.version }}" >&2
+            exit 1
+          fi
+          cargo check --package music21-rs --package harte --all-features --locked
 
   semver:
     name: Semver Checks
@@ -431,6 +439,25 @@ jobs:
           fi
           echo "comparing against $BASELINE"
           cargo semver-checks --package music21-rs --all-features --baseline-rev "$BASELINE"
+
+      # `harte` has a version of its own and no tag, so its baseline is what
+      # a downstream holds: the newest version on crates.io, which is what
+      # cargo-semver-checks compares against when given no baseline. Before
+      # its first release there is nobody to break and nothing to compare.
+      #
+      # Its public API hands out music21-rs's types, so moving its music21-rs
+      # dependency to a new minor is a breaking change for it too, and one
+      # this check cannot see: bump harte's minor with it.
+      - name: Compare harte's public API against its last release
+        shell: bash
+        run: |
+          set -euo pipefail
+          if curl -sfL -H "User-Agent: music21-rs semver check" \
+            https://crates.io/api/v1/crates/harte >/dev/null; then
+            cargo semver-checks --package harte --all-features
+          else
+            echo "harte is not on crates.io yet; nothing to compare against"
+          fi
 
   test:
     name: Test (${{ matrix.os }})

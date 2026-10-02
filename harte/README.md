@@ -23,6 +23,6 @@ It is a port of [harte-library](https://github.com/andreamust/harte-library)
 by Andrea Poltronieri, licensed
 [MIT](https://github.com/andreamust/harte-library/blob/main/LICENSE), and is
 checked against every label in that library's 8,064-chord coverage set
-(`data/harte_expectations.toml` in the music21-rs repository, generated from
-the library's test data). It lives in the music21-rs repository and is
-released from it.
+(`data/harte_expectations.toml`, generated from the library's test data; the
+crate's own tests run the comparison). It lives in the music21-rs repository
+and is released from it.
