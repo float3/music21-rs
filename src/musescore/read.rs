@@ -346,6 +346,8 @@ struct ChordRest {
     tuplet: Option<usize>,
     mode: BeamMode,
     grace: Option<GraceKind>,
+    /// Its place among the grace notes of its note, as the file counts.
+    grace_index: usize,
     graces_before: Vec<ChordRest>,
     graces_after: Vec<ChordRest>,
     notes: Vec<NoteRead>,
@@ -374,7 +376,7 @@ struct SpannerRead {
 
 #[derive(Clone, Debug)]
 enum SpannerStart {
-    Slur(Option<Placement>),
+    Slur(Option<Placement>, Option<&'static str>),
     Wedge(SpannerKind),
     Pedal(Pedal),
     Volta { numbers: Vec<u32> },
@@ -386,6 +388,9 @@ struct Position {
     measure: i64,
     tick: Frac,
     track: usize,
+    /// Which of the grace notes leaning on the note there, where it is one
+    /// of them and not the note itself.
+    grace: Option<usize>,
 }
 
 #[derive(Clone, Debug)]
@@ -571,8 +576,18 @@ impl Reader {
                 "Chord" | "Rest" => {
                     let mut chord_rest =
                         self.chord_rest(held, tick, tuplet, &read.tuplets, transposition)?;
-                    self.spanners_of(held, measure, tick, track)?;
-                    if chord_rest.grace.is_some() {
+                    let grace = chord_rest.grace.map(|_| graces.len());
+                    self.spanners_of(
+                        held,
+                        Position {
+                            measure,
+                            tick,
+                            track,
+                            grace,
+                        },
+                    )?;
+                    if let Some(index) = grace {
+                        chord_rest.grace_index = index;
                         graces.push(*chord_rest);
                         continue;
                     }
@@ -685,7 +700,15 @@ impl Reader {
                         what: What::Element(harmony_of(held)?.into()),
                     });
                 }
-                "Spanner" => self.spanner(held, measure, tick, track)?,
+                "Spanner" => self.spanner(
+                    held,
+                    Position {
+                        measure,
+                        tick,
+                        track,
+                        grace: None,
+                    },
+                )?,
                 "Beam" => {}
                 // What is drawn and not played.
                 "Symbol" | "Image" | "Breath" | "RehearsalMark" | "StaffState" | "Ambitus"
@@ -759,6 +782,7 @@ impl Reader {
             tuplet: if grace.is_some() { None } else { tuplet },
             mode: BeamMode::Auto,
             grace,
+            grace_index: 0,
             graces_before: Vec::new(),
             graces_after: Vec::new(),
             notes: Vec::new(),
@@ -824,16 +848,16 @@ impl Reader {
     }
 
     /// The spanners a note or rest starts: a slur written inside it.
-    fn spanners_of(&mut self, element: &Xml, measure: i64, tick: Frac, track: usize) -> Result<()> {
+    fn spanners_of(&mut self, element: &Xml, here: Position) -> Result<()> {
         for held in element.find_all("Spanner") {
-            self.spanner(held, measure, tick, track)?;
+            self.spanner(held, here)?;
         }
         Ok(())
     }
 
     /// A `<Spanner>`: where one starts, with where it ends; the end itself
     /// says nothing that the start did not.
-    fn spanner(&mut self, element: &Xml, measure: i64, tick: Frac, track: usize) -> Result<()> {
+    fn spanner(&mut self, element: &Xml, here: Position) -> Result<()> {
         let kind = element.get("type").unwrap_or("");
         let Some(next) = element.find("next") else {
             return Ok(());
@@ -842,11 +866,6 @@ impl Reader {
         let start = SpannerStart::from(kind, body)?;
         let Some(start) = start else {
             return Ok(());
-        };
-        let here = Position {
-            measure,
-            tick,
-            track,
         };
         let end = moved(here, next.find("location"))?;
         self.spanners.push(SpannerRead {
@@ -861,11 +880,18 @@ impl Reader {
 impl SpannerStart {
     fn from(kind: &str, body: Option<&Xml>) -> Result<Option<Self>> {
         Ok(Some(match kind {
-            "Slur" => Self::Slur(match body.map_or("", |body| body.child_text("up")) {
-                "up" => Some(Placement::Above),
-                "down" => Some(Placement::Below),
-                _ => None,
-            }),
+            "Slur" => Self::Slur(
+                match body.map_or("", |body| body.child_text("up")) {
+                    "up" => Some(Placement::Above),
+                    "down" => Some(Placement::Below),
+                    _ => None,
+                },
+                match body.map_or("", |body| body.child_text("lineType")) {
+                    "1" => Some("dotted"),
+                    "2" | "3" => Some("dashed"),
+                    _ => None,
+                },
+            ),
             "HairPin" => {
                 let subtype = body.map_or("0", |body| body.child_text("subtype"));
                 match subtype {
@@ -929,10 +955,16 @@ impl SpannerStart {
 
 /// A position moved by a relative `<location>`.
 fn moved(from: Position, location: Option<&Xml>) -> Result<Position> {
-    let Some(location) = location else {
-        return Ok(from);
+    // A place names a grace note outright, and the note itself by naming
+    // none.
+    let mut to = Position {
+        grace: None,
+        ..from
     };
-    let mut to = from;
+    let Some(location) = location else {
+        return Ok(to);
+    };
+    to.grace = child_integer(location, "grace")?.and_then(|index| usize::try_from(index).ok());
     if let Some(measures) = child_integer(location, "measures")? {
         to.measure += measures;
     }
@@ -2124,7 +2156,6 @@ pub fn from_mscx(document: &str) -> Result<Stream> {
         spanners: &reader.spanners,
         uids: HashMap::new(),
         placed: Vec::new(),
-        next_uid: reader.next_uid,
     }
     .score(metadata)
 }
@@ -2176,11 +2207,10 @@ struct Assembler<'a> {
     grid: &'a Grid,
     spanners: &'a [SpannerRead],
     /// Each note's uid by where it stands: measure, tick and track.
-    uids: HashMap<(i64, Frac, usize), usize>,
+    uids: HashMap<(i64, Frac, usize, Option<usize>), usize>,
     /// Every note, chord and rest in the order MuseScore writes them out:
     /// part by part, measure by measure, staff by staff, voice by voice.
     placed: Vec<Placed>,
-    next_uid: usize,
 }
 
 /// A note, chord or rest by where it stands, from the top of the score.
@@ -2249,12 +2279,15 @@ impl Assembler<'_> {
         for spanner in order {
             let (start, end) = (spanner.start, spanner.end);
             let made = match &spanner.kind {
-                SpannerStart::Slur(placement) => {
+                SpannerStart::Slur(placement, line_type) => {
                     let first = self
                         .uids
-                        .get(&(start.measure, start.tick, start.track))
+                        .get(&(start.measure, start.tick, start.track, start.grace))
                         .copied();
-                    let last = self.uids.get(&(end.measure, end.tick, end.track)).copied();
+                    let last = self
+                        .uids
+                        .get(&(end.measure, end.tick, end.track, end.grace))
+                        .copied();
                     let mut positions = Vec::new();
                     for uid in [first, last].into_iter().flatten() {
                         if let Some(position) = position_of(uid)
@@ -2268,6 +2301,7 @@ impl Assembler<'_> {
                     }
                     let mut slur = Spanner::with_unplaced(SpannerKind::Slur, positions);
                     slur.set_placement(*placement);
+                    slur.set_line_type(line_type.map(str::to_string));
                     slur
                 }
                 SpannerStart::Wedge(_) | SpannerStart::Pedal(_) => {
@@ -2440,11 +2474,6 @@ impl Assembler<'_> {
             out.push(group);
         }
         Ok(out)
-    }
-
-    fn uid(&mut self) -> usize {
-        self.next_uid += 1;
-        self.next_uid
     }
 
     /// A part, or one part for each of its staves.
@@ -2684,12 +2713,15 @@ impl Assembler<'_> {
                                         .cloned()
                                         .flatten();
                                     let element = element_of(grace, Vec::new(), grace_beams)?;
-                                    let uid = self.uid();
-                                    push(items, at, cr_staff, Some(uid), element);
+                                    self.uids.insert(
+                                        (index as i64, event.tick, track, Some(grace.grace_index)),
+                                        grace.uid,
+                                    );
+                                    push(items, at, cr_staff, Some(grace.uid), element);
                                 }
                                 let element = element_of(read_cr, tuplets, beams)?;
                                 self.uids
-                                    .insert((index as i64, event.tick, track), read_cr.uid);
+                                    .insert((index as i64, event.tick, track, None), read_cr.uid);
                                 let begins = self.grid.starts[index] + event.tick;
                                 self.placed.push(Placed {
                                     part: part_index,
@@ -2707,8 +2739,11 @@ impl Assembler<'_> {
                                         .cloned()
                                         .flatten();
                                     let element = element_of(grace, Vec::new(), grace_beams)?;
-                                    let uid = self.uid();
-                                    push(items, end, cr_staff, Some(uid), element);
+                                    self.uids.insert(
+                                        (index as i64, event.tick, track, Some(grace.grace_index)),
+                                        grace.uid,
+                                    );
+                                    push(items, end, cr_staff, Some(grace.uid), element);
                                 }
                             }
                             What::Clef(clef) => {
