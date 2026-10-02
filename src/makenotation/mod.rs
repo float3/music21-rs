@@ -5,6 +5,11 @@
 //! rests, putting overlapping notes in voices, moving notes onto a grid,
 //! beaming the notes of each measure by its meter and pointing the stems of
 //! each beamed group one way.
+//!
+//! [`make_notation`] is the whole of it in music21's order, for a score
+//! that says only what sounds: measures, accidentals, ties, tuplets
+//! completed and bracketed, beams. [`split_at_durations`] cuts a length no
+//! single note value writes into values that do.
 
 use crate::articulations::Articulation;
 use crate::clef::Clef;
@@ -18,6 +23,14 @@ use crate::note::Note;
 use crate::pitch::{AccidentalDisplayOptions, Pitch};
 use crate::rest::Rest;
 use crate::stream::{Stream, StreamElement, StreamEvent, StreamKind};
+
+mod score;
+
+#[cfg(feature = "musicxml")]
+pub(crate) use score::{
+    Kept, for_each_measure, keeping_spanners, make_part_notation, tuplet_brackets_made,
+};
+pub use score::{make_notation, make_tuplet_brackets, split_at_durations};
 
 /// Beams the notes of every measure of a part by the meter in force, and
 /// points the stems of each beamed group one way: music21's `makeBeams`.
@@ -88,6 +101,7 @@ fn meter_in(measure: &Stream) -> Option<TimeSignature> {
 }
 
 fn beam_measure(measure: &mut Stream, meter: &TimeSignature) -> Result<()> {
+    let padding = (measure.padding_left(), measure.padding_right());
     let has_voices = measure.events().iter().any(|event| {
         event
             .element()
@@ -99,17 +113,22 @@ fn beam_measure(measure: &mut Stream, meter: &TimeSignature) -> Result<()> {
             if let StreamElement::Stream(voice) = event.element_mut()
                 && voice.kind() == StreamKind::Voice
             {
-                beam_line(voice, meter)?;
+                beam_line(voice, meter, padding)?;
             }
         }
         Ok(())
     } else {
-        beam_line(measure, meter)
+        beam_line(measure, meter, padding)
     }
 }
 
-/// Beams one line of notes: a measure with no voices, or one voice.
-fn beam_line(line: &mut Stream, meter: &TimeSignature) -> Result<()> {
+/// Beams one line of notes: a measure with no voices, or one voice. The
+/// padding is the measure's, left and right.
+fn beam_line(
+    line: &mut Stream,
+    meter: &TimeSignature,
+    (padding_left, padding_right): (FloatType, FloatType),
+) -> Result<()> {
     // music21's `notesAndRests`, which takes a chord symbol for a note.
     let is_general_note = |element: &StreamElement| {
         matches!(
@@ -169,12 +188,36 @@ fn beam_line(line: &mut Stream, meter: &TimeSignature) -> Result<()> {
         .iter()
         .map(|note| note.offset + note.quarter_length)
         .fold(0.0, FloatType::max);
-    // A short measure is taken as ending with the bar: a pickup.
-    let start = if highest < bar - 1e-9 {
+    // A measure padded on the left starts that far into its bar, and one
+    // padded on the right at its start; a short measure saying neither is
+    // taken as ending with the bar, a pickup.
+    let start = if padding_left != 0.0 {
+        op_frac(padding_left)
+    } else if padding_right != 0.0 {
+        0.0
+    } else if highest < bar - 1e-9 {
         bar - highest
     } else {
         0.0
     };
+    // music21 reads each note's written value to beam it, and a copy of a
+    // duration whose one value has been read keeps that value as said. Every
+    // step that asks whether a length may be written another way works on
+    // such a copy, so the reading is recorded here.
+    for place in &places {
+        let element = line.events_mut()[*place].element_mut();
+        let Some(mut duration) = element.duration().cloned() else {
+            continue;
+        };
+        if duration.expression_is_inferred()
+            && duration.linked()
+            && duration.tuplets().is_empty()
+            && duration.components().len() <= 1
+        {
+            duration.set_expression_is_inferred(false);
+            score::set_duration(element, duration);
+        }
+    }
     let beams = meter.beams_for(&notes, start, None)?;
     for (place, beams) in places.into_iter().zip(beams) {
         let beams = beams.unwrap_or_default();
@@ -358,13 +401,31 @@ pub(crate) fn op_frac(value: FloatType) -> FloatType {
 /// Sorts events as music21 sorts a stream: by offset, then by class, grace
 /// notes first, then in the order given.
 pub(crate) fn sorted_events(mut events: Vec<StreamEvent>) -> Vec<StreamEvent> {
-    events.sort_by(music21_order);
+    events.sort_by(event_order);
     events
 }
 
-/// Which of two events music21 sorts first, those it cannot tell apart
-/// being equal: [`sorted_events`] one pair at a time.
-pub(crate) fn music21_order(left: &StreamEvent, right: &StreamEvent) -> std::cmp::Ordering {
+/// Puts an element into a stream where music21's sort puts it: after
+/// everything that sorts no later.
+#[cfg(feature = "musicxml")]
+pub(crate) fn insert_sorted(stream: &mut Stream, offset: FloatType, element: StreamElement) {
+    let event = StreamEvent::new(offset, element);
+    let mut events = stream.events().to_vec();
+    let place = events
+        .iter()
+        .position(|held| event_order(held, &event).is_gt())
+        .unwrap_or(events.len());
+    events.insert(place, event);
+    let spanners = stream.spanners().to_vec();
+    *stream = stream.with_events(events);
+    for spanner in spanners {
+        stream.add_spanner(spanner);
+    }
+}
+
+/// The order music21 sorts two things standing in one stream in, leaving
+/// equals in the order they were put there.
+pub(crate) fn event_order(left: &StreamEvent, right: &StreamEvent) -> std::cmp::Ordering {
     let grace = |event: &StreamEvent| {
         event
             .element()
@@ -1030,6 +1091,30 @@ fn meters_of(part: &Stream) -> Result<Vec<(FloatType, TimeSignature)>> {
         })
         .collect();
     meters.sort_by(|left, right| left.0.total_cmp(&right.0));
+    // A meter standing again is the object the earlier measure holds, and
+    // music21's list of meters keeps one place for one object: the last it
+    // stands at. Each such meter and the one it restates are moved there.
+    let mut group: Vec<usize> = (0..meters.len()).collect();
+    for index in 0..meters.len() {
+        if !meters[index].1.is_restated() {
+            continue;
+        }
+        let ratio = meters[index].1.ratio_string();
+        if let Some(earlier) = (0..index)
+            .rev()
+            .find(|earlier| meters[*earlier].1.ratio_string() == ratio)
+        {
+            group[index] = group[earlier];
+        }
+    }
+    for index in (0..meters.len()).rev() {
+        let last = (0..meters.len())
+            .rev()
+            .find(|other| group[*other] == group[index])
+            .unwrap_or(index);
+        meters[index].0 = meters[last].0;
+    }
+    meters.sort_by(|left, right| left.0.total_cmp(&right.0));
     if meters.first().is_none_or(|(offset, _)| *offset > 0.0) {
         meters.insert(0, (0.0, TimeSignature::new(4, 4)?));
     }
@@ -1249,9 +1334,15 @@ fn make_ties_of(stream: &mut Stream, wanted: fn(&StreamElement) -> bool) -> Resu
     Ok(())
 }
 
-/// Fills one line out to a length with rests: before its first element,
-/// after its last, and in every gap between.
-fn fill_with_rests(line: &mut Stream, target: FloatType) -> Result<()> {
+/// Fills one line out with rests from `low` to `high`: before its first
+/// element, after its last, and in every gap between. `hidden` rests are
+/// left unprinted.
+pub(crate) fn fill_line(
+    line: &mut Stream,
+    low: FloatType,
+    high: FloatType,
+    hidden: bool,
+) -> Result<()> {
     let mut events = line.events().to_vec();
     let lowest = events
         .iter()
@@ -1260,16 +1351,15 @@ fn fill_with_rests(line: &mut Stream, target: FloatType) -> Result<()> {
     let lowest = if lowest.is_finite() { lowest } else { 0.0 };
     let highest = op_frac(line.end_offset());
     let rest = |at: FloatType, length: FloatType| -> Result<StreamEvent> {
-        Ok(StreamEvent::new(
-            at,
-            Rest::new(Duration::new(op_frac(length))?),
-        ))
+        let mut rest = Rest::new(Duration::new(op_frac(length))?);
+        rest.set_hidden(hidden);
+        Ok(StreamEvent::new(at, rest))
     };
-    if lowest > 1e-9 {
-        events.push(rest(0.0, lowest)?);
+    if lowest - low > 1e-9 {
+        events.push(rest(low, lowest - low)?);
     }
-    if target - highest > 1e-9 {
-        events.push(rest(highest, target - highest)?);
+    if high - highest > 1e-9 {
+        events.push(rest(highest, high - highest)?);
     }
     events = sorted_events(events);
     let mut gaps: Vec<StreamEvent> = Vec::new();
@@ -1289,9 +1379,22 @@ fn fill_with_rests(line: &mut Stream, target: FloatType) -> Result<()> {
 /// voices too: music21's `makeRests` with `fillGaps=True` and
 /// `timeRangeFromBarDuration=True`.
 ///
-/// A stream holding parts has each of them filled. The measures are then put
-/// one after another by what each holds.
+/// A stream holding parts has each of them filled. A measure padded as a
+/// pickup, or cut short, is filled only as far as its padding leaves. The
+/// measures are then put one after another by what each holds.
 pub fn make_rests(stream: &mut Stream) -> Result<()> {
+    fill_rests(stream, None, false)
+}
+
+/// music21's `makeRests` with `fillGaps=True` and
+/// `timeRangeFromBarDuration=True`, rests `hidden` or not. A stream with no
+/// measures is filled over `range`, or from its start to its end where none
+/// is given.
+pub(crate) fn fill_rests(
+    stream: &mut Stream,
+    range: Option<(FloatType, FloatType)>,
+    hidden: bool,
+) -> Result<()> {
     let is_part = |element: &StreamElement| {
         element
             .as_stream()
@@ -1303,7 +1406,12 @@ pub fn make_rests(stream: &mut Stream) -> Result<()> {
             if let StreamElement::Stream(inner) = event.element_mut()
                 && matches!(inner.kind(), StreamKind::Part | StreamKind::PartStaff)
             {
-                make_rests(inner)?;
+                let spanners = inner.spanners().to_vec();
+                fill_rests(inner, range, hidden)?;
+                inner.clear_spanners();
+                for spanner in spanners {
+                    inner.add_spanner(spanner);
+                }
             }
         }
         let spanners = stream.spanners().to_vec();
@@ -1313,9 +1421,53 @@ pub fn make_rests(stream: &mut Stream) -> Result<()> {
         }
         return Ok(());
     }
+    let has_measures = stream.events().iter().any(|event| {
+        event
+            .element()
+            .as_stream()
+            .is_some_and(|inner| inner.kind() == StreamKind::Measure)
+    });
+    if !has_measures {
+        let (low, high) = range.unwrap_or((0.0, stream.end_offset()));
+        let has_voices = stream
+            .events()
+            .iter()
+            .any(|event| is_voice(event.element()));
+        if has_voices {
+            let mut events = stream.events().to_vec();
+            for event in &mut events {
+                if let StreamElement::Stream(voice) = event.element_mut()
+                    && voice.kind() == StreamKind::Voice
+                {
+                    fill_line(voice, low, high, hidden)?;
+                }
+            }
+            let spanners = stream.spanners().to_vec();
+            *stream = stream.with_events(events);
+            for spanner in spanners {
+                stream.add_spanner(spanner);
+            }
+        } else {
+            let spanners = stream.spanners().to_vec();
+            fill_line(stream, low, high, hidden)?;
+            for spanner in spanners {
+                stream.add_spanner(spanner);
+            }
+        }
+        return Ok(());
+    }
     let mut events = stream.events().to_vec();
+    // The meters standing in the part itself, outside any measure.
+    let loose: Vec<(FloatType, TimeSignature)> = events
+        .iter()
+        .filter_map(|event| match event.element() {
+            StreamElement::TimeSignature(meter) => Some((event.offset(), meter.clone())),
+            _ => None,
+        })
+        .collect();
     let mut meter: Option<TimeSignature> = None;
     for event in &mut events {
+        let offset = event.offset();
         let StreamElement::Stream(measure) = event.element_mut() else {
             continue;
         };
@@ -1325,19 +1477,31 @@ pub fn make_rests(stream: &mut Stream) -> Result<()> {
         if let Some(own) = meter_in(measure) {
             meter = Some(own);
         }
-        let bar = meter
-            .as_ref()
-            .map_or(4.0, TimeSignature::bar_quarter_length);
+        // A measure no meter has been stated for takes the one standing in
+        // the part before it, and failing that is as long as the meter that
+        // fits what it holds: music21's `barDuration`.
+        let bar = match &meter {
+            Some(meter) => meter.bar_quarter_length(),
+            None => match loose.iter().rev().find(|(at, _)| *at < offset) {
+                Some((_, meter)) => meter.bar_quarter_length(),
+                None => crate::meter::best_time_signature(measure)
+                    .map_or_else(|_| measure.end_offset(), |meter| meter.bar_quarter_length()),
+            },
+        };
+        let target = FloatType::max(
+            op_frac(bar - measure.padding_left() - measure.padding_right()),
+            0.0,
+        );
         let mut held = measure.events().to_vec();
         for inner in &mut held {
             if let StreamElement::Stream(voice) = inner.element_mut()
                 && voice.kind() == StreamKind::Voice
             {
-                fill_with_rests(voice, bar)?;
+                fill_line(voice, 0.0, target, hidden)?;
             }
         }
         **measure = measure.with_events(held);
-        fill_with_rests(measure, bar)?;
+        fill_line(measure, 0.0, target.min(bar), hidden)?;
     }
     *stream = stream.with_events(events);
     make_ties_of(stream, |element| matches!(element, StreamElement::Rest(_)))?;
@@ -1379,6 +1543,23 @@ fn diatonic_names(signature: &crate::key::KeySignature) -> Vec<String> {
         .and_then(|scale| scale.pitches())
         .map(|pitches| pitches.iter().map(Pitch::name).collect())
         .unwrap_or_default()
+}
+
+/// Every pitch a stream holds, element by element and each nested stream
+/// where it stands, the notes a chord symbol stands for among them:
+/// music21's `Stream.pitches`.
+fn pitches_in_order(stream: &Stream) -> Vec<Pitch> {
+    let mut out = Vec::new();
+    for event in stream.events() {
+        match event.element() {
+            StreamElement::Stream(inner) => out.extend(pitches_in_order(inner)),
+            StreamElement::ChordSymbol(symbol) => {
+                out.extend(symbol.pitches().unwrap_or_default());
+            }
+            element => out.extend(element.pitches()),
+        }
+    }
+    out
 }
 
 /// Decides which accidentals are written, measure by measure: music21's
@@ -1522,9 +1703,57 @@ pub(crate) fn make_accidentals_by(stream: &mut Stream, cautionary_not_immediate_
                 last_sounding = Some(open.clone());
                 past.extend(chord.notes().iter().map(|note| note.pitch().clone()));
             }
-            StreamElement::ChordSymbol(_) => {
+            StreamElement::ChordSymbol(symbol) => {
+                // A chord symbol is a chord to music21: each note it stands
+                // for is decided like a chord's, and counts among those
+                // already heard.
+                let mut sounded = symbol.pitches().unwrap_or_default();
+                for index in 0..sounded.len() {
+                    let others: Vec<Pitch> = sounded
+                        .iter()
+                        .enumerate()
+                        .filter(|(other, _)| *other != index)
+                        .map(|(_, pitch)| pitch.clone())
+                        .collect();
+                    let tied = open.contains(&sounded[index].name_with_octave());
+                    sounded[index].update_accidental_display(&AccidentalDisplayOptions {
+                        pitch_past: &past,
+                        pitch_past_measure: &past_measure,
+                        other_simultaneous_pitches: &others,
+                        altered_pitches: &altered,
+                        last_note_was_tied: tied,
+                        ..AccidentalDisplayOptions::default()
+                    });
+                }
+                // The root and the bass are notes of that chord, so a
+                // natural one of them is given is the root's or the bass's.
+                let given = |named: &Pitch| {
+                    sounded
+                        .iter()
+                        .find(|pitch| {
+                            pitch.step() == named.step() && pitch.alter() == named.alter()
+                        })
+                        .and_then(Pitch::written_accidental)
+                        .cloned()
+                };
+                if symbol.root().written_accidental().is_none()
+                    && let Some(accidental) = given(symbol.root())
+                {
+                    let mut root = symbol.root().clone();
+                    root.set_written_accidental(Some(accidental));
+                    symbol.set_root(root);
+                }
+                if let Some(bass) = symbol.bass().cloned()
+                    && bass.written_accidental().is_none()
+                    && let Some(accidental) = given(&bass)
+                {
+                    let mut bass = bass;
+                    bass.set_written_accidental(Some(accidental));
+                    symbol.set_bass(Some(bass));
+                }
                 open.clear();
                 last_sounding = Some(Vec::new());
+                past.extend(sounded);
             }
             StreamElement::Rest(_) => open.clear(),
             StreamElement::Unpitched(_) | StreamElement::PercussionChord(_) => {
@@ -1534,7 +1763,7 @@ pub(crate) fn make_accidentals_by(stream: &mut Stream, cautionary_not_immediate_
             _ => {}
         });
         tied = Some(open);
-        previous = Some((measure.pitches(), last_sounding));
+        previous = Some((pitches_in_order(measure), last_sounding));
     }
     *stream = stream.with_events(events);
 }

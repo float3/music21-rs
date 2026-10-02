@@ -645,6 +645,12 @@ impl Spanner {
         &self.spanned
     }
 
+    /// The positions of the elements it joins, to be moved where an edit
+    /// has moved them.
+    pub(crate) fn spanned_mut(&mut self) -> &mut Vec<Option<usize>> {
+        &mut self.spanned
+    }
+
     /// Moves each place it names to where `moved` says that element now
     /// stands, indexed by the old place: nothing for one no longer held.
     pub(crate) fn move_places(&mut self, moved: &[Option<usize>]) {

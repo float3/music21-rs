@@ -12,6 +12,9 @@
   none of `left`, `center`, `right` and `full`, a `<rehearsal>` enclosed in
   nothing music21 names, and a `<tremolo>` of more than eight strokes,
   which was read as eight.
+- `musicxml::ExportOptions` has a new public field, `make_notation`. Code
+  building one with every field named needs it; code using
+  `..ExportOptions::default()` does not.
 
 ## Added
 
@@ -115,6 +118,40 @@
   where it refused a pedal object, a rehearsal mark and a metric modulation
   and left the rest out; a wheel `Lyric`'s `style` carries the
   justification, placement and `hideObjectOnPrint` the crate read.
+- `musicxml::ExportOptions::make_notation` writes a score as music21's
+  exporter writes one by default, with `makeNotation=True`: the notation the
+  score leaves unsaid is worked out before it is written. Gaps are filled
+  with rests that are not printed, a part of loose notes is cut into
+  measures and its overlapping notes put in voices, notes running past a
+  barline are cut and tied, accidentals are decided, tuplets a cut left
+  unfinished are completed, notes are beamed and tuplets bracketed where the
+  part has none yet, and lengths no single note value writes are cut into
+  tied values. `to_musicxml` then takes a part or a plain stream as readily
+  as a score, and the score handed in is not changed. Off, which is the
+  default, the score is written as it stands, as before.
+  It is held to music21 byte for byte on 244 subjects, each read by the
+  crate's own reader and written by both: 15 TinyNotation lines and the same
+  15 as loose notes, 9 parts built a note at a time, 29 MIDI files, 134 ABC
+  tunes — every one of the 118 in music21's corpus that it reads into no
+  measures, which could not be compared before — and 42 corpus scores kept
+  as MusicXML. Beyond those, 600 generated TinyNotation subjects, every
+  fortieth ABC tune of the corpus, 215 further corpus scores and every
+  corpus score tried as MIDI that music21 can write agree.
+- `makenotation::make_notation` is music21's `makeNotation` on a stream:
+  the same steps for a caller that wants the notated score rather than its
+  MusicXML. `makenotation::make_tuplet_brackets` and
+  `makenotation::split_at_durations` are music21's `makeTupletBrackets` and
+  `splitAtDurations`.
+- `Duration::expression_is_inferred` and `set_expression_is_inferred`:
+  music21's `expressionIsInferred`. A duration made from a length may be
+  written another way when notation is made; one made from a note value is
+  left as written.
+- `Stream::padding_left` and `padding_right`: music21's `paddingLeft` and
+  `paddingRight`, how much of its bar a pickup or a measure cut short leaves
+  unfilled. The MusicXML and ABC readers set them as music21's do.
+- `TimeSignature::is_restated`: whether a meter is an earlier measure's
+  standing again, as music21's ABC reader leaves one object in two measures.
+- The wheel's `to_musicxml` takes `make_notation=True`.
 
 ## Changed
 
@@ -124,6 +161,18 @@
   program. `musescore::MuseScore`, which finds and runs an installed
   MuseScore, is still behind the `musescore` feature and still left out of
   a wasm build.
+- `makenotation::make_rests` fills a measure only as far as its padding
+  leaves, and takes a measure no meter has been stated for as long as the
+  meter standing in the part before it, or failing that as the meter that
+  fits what it holds, where it took `4/4`.
+- `makenotation::make_accidentals` treats a chord symbol as the chord it is
+  in music21: the notes it stands for count among those already heard, and
+  a natural one of them is given is written on the symbol's root.
+- `makenotation::make_beams` starts a measure padded on the left where its
+  padding says.
+- `Duration::from_type` and the named values (`Duration::quarter()` and the
+  rest) say how they are written, so `expression_is_inferred` is false for
+  them, as it is for music21's `Duration('quarter')`.
 
 ## Fixed
 
@@ -148,6 +197,13 @@
   whole number, as music21 makes it: a dotted quarter at 110 counted in
   quarters is `165`, where `equivalent_by_referent` answered
   `165.00000000000003` and everything worked out from it carried the hair.
+- `abc::from_abc` transposes a tune whose key says `-8va` by semitones, as
+  music21 does, which spells each note afresh and leaves how its accidental
+  is shown undecided. It kept each spelling and showing.
+- `musicxml::from_musicxml` reads a Finale `<forward>` of no length as a
+  quarter rest that is not printed, as music21 does.
+- `musicxml::to_musicxml` passes over an unprinted rest whose length no note
+  value writes, leaving a `<forward>`, where it refused the score.
 
 # music21-rs 0.8.0
 

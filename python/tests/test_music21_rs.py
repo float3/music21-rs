@@ -935,6 +935,44 @@ def test_a_lyric_keeps_how_it_is_drawn_through_musicxml():
     assert 'justify="right"' in m.to_musicxml(score)
 
 
+def test_loose_notes_are_written_once_their_notation_is_made():
+    part = m.Part()
+    part.insert(0, m.TimeSignature("3/4"))
+    for offset, (name, length) in enumerate(
+        [("C4", 1), ("D4", 1), ("F#4", 1), ("F4", 1)]
+    ):
+        part.insert(offset, m.Note(name, quarterLength=length))
+    # A half note running past the second barline.
+    part.insert(4, m.Note("G4", quarterLength=3))
+    part.insert(8, m.Note("A4", quarterLength=0.5))
+    part.insert(8.5, m.Note("B4", quarterLength=0.5))
+
+    # As it stands it has no measures, and is refused as music21 refuses it.
+    with pytest.raises(Exception):
+        m.to_musicxml(part)
+
+    written = m.to_musicxml(part, make_notation=True)
+    assert written.count("<measure ") == 3
+    # The note across the barline is cut and tied.
+    assert written.count('<tie type="start" />') == 1
+    assert written.count('<tie type="stop" />') == 1
+    # The gap before the last two notes is a rest that is not printed.
+    assert 'print-object="no"' in written
+    # F natural after F sharp is given its natural, and the eighths a beam.
+    assert "<accidental>natural</accidental>" in written
+    assert '<beam number="1">begin</beam>' in written
+    # The part handed in is left as it was.
+    assert len(list(part.getElementsByClass("Measure"))) == 0
+
+
+def test_making_notation_leaves_a_notated_score_as_it_reads():
+    read = m.from_musicxml(MUSICXML)
+    plain = m.to_musicxml(read, encoding_date="2026-01-01")
+    made = m.to_musicxml(read, encoding_date="2026-01-01", make_notation=True)
+    assert made.count("<note>") == plain.count("<note>") == 4
+    assert made.count("<measure ") == 1
+
+
 def test_a_document_that_is_not_musicxml_is_refused():
     with pytest.raises(m.StreamException):
         m.from_musicxml("<html></html>")

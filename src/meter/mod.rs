@@ -117,6 +117,9 @@ pub struct TimeSignature {
     symbolize_denominator: bool,
     #[cfg_attr(feature = "serde", serde(default))]
     color: crate::display::Color,
+    /// Whether this is an earlier measure's meter standing a second time.
+    #[cfg_attr(feature = "serde", serde(default))]
+    restated: crate::display::Drawn<bool>,
     #[cfg_attr(feature = "serde", serde(default))]
     hidden: crate::display::Drawn<bool>,
 }
@@ -155,6 +158,7 @@ impl TimeSignature {
             symbol: None,
             symbolize_denominator: false,
             color: crate::display::Drawn(None),
+            restated: crate::display::Drawn(false),
             hidden: crate::display::Drawn(false),
         };
         signature.set_default_partitions()?;
@@ -171,6 +175,24 @@ impl TimeSignature {
     /// Says how the signature is drawn, or that it is written as numbers.
     pub fn set_symbol(&mut self, symbol: Option<String>) {
         self.symbol = symbol.filter(|symbol| !symbol.is_empty());
+    }
+
+    /// Whether this is the meter an earlier measure states, standing again
+    /// in a later one, rather than a meter of its own.
+    ///
+    /// music21 holds a meter as an object, and one object may stand in
+    /// several measures: its ABC reader gives a measure the meter in force
+    /// back, the very object, after cutting an overlong measure in two.
+    /// music21's `makeTies` then finds that meter only where it stands last,
+    /// which decides where it cuts, so a reader that restates a meter says
+    /// so here. Two meters differing only in this are equal.
+    pub fn is_restated(&self) -> bool {
+        self.restated.0
+    }
+
+    /// Says whether this is an earlier measure's meter standing again.
+    pub fn set_restated(&mut self, restated: bool) {
+        self.restated.0 = restated;
     }
 
     /// Whether the denominator is drawn as a note rather than a number:

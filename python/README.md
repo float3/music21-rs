@@ -77,7 +77,10 @@ read and left out. Input a reader cannot read raises `StreamException`. A
 compressed `.mxl` is a zip holding the document: unpack it first.
 
 `to_musicxml` takes one of this package's streams or one of music21's and
-writes what music21's exporter writes with `makeNotation=False`.
+writes what music21's exporter writes with `makeNotation=False`. With
+`make_notation=True` it makes the notation first, as music21's exporter does
+by default, so a part of loose notes is written in measures, with its ties,
+rests, accidentals and beams.
 
 ## Using it inside music21
 

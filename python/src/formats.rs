@@ -32,20 +32,33 @@ fn handed_back<'py>(
 /// Writes a score as MusicXML and hands back the document's text.
 ///
 /// The score may be one of this wheel's streams or one of music21's, and is
-/// written as music21's own exporter writes it with `makeNotation=False`:
-/// what it holds has to be in measures already. `encoding_date` is the date
-/// the document says it was written on, as `YYYY-MM-DD`, left out where none
-/// is given; `software` is what a score with no metadata is signed with.
+/// written as it stands, as music21's own exporter writes one with
+/// `makeNotation=False`: what it holds has to be in measures already.
+///
+/// With `make_notation=True` the notation the score leaves unsaid is worked
+/// out first, as music21's exporter does by default, and what is written
+/// need not be a score in measures: a part of loose notes is cut into
+/// measures, gaps are filled with rests that are not printed, notes running
+/// past a barline are cut and tied, accidentals are decided, notes are
+/// beamed and tuplets bracketed where the part has none yet, and lengths no
+/// single note value writes are cut into tied values. The score handed in
+/// is not changed.
+///
+/// `encoding_date` is the date the document says it was written on, as
+/// `YYYY-MM-DD`, left out where none is given; `software` is what a score
+/// with no metadata is signed with.
 #[pyfunction]
-#[pyo3(signature = (score, *, encoding_date = None, software = None))]
+#[pyo3(signature = (score, *, encoding_date = None, software = None, make_notation = false))]
 fn to_musicxml(
     score: &Bound<'_, PyAny>,
     encoding_date: Option<String>,
     software: Option<String>,
+    make_notation: bool,
 ) -> PyResult<String> {
     let stream = crate::stream::crate_stream(score)?;
     let mut options = ExportOptions {
         encoding_date,
+        make_notation,
         ..ExportOptions::default()
     };
     if let Some(software) = software {
