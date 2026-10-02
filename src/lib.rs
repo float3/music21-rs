@@ -188,8 +188,8 @@ pub use midi::{
     read_midi_bytes_with_tempo, stream_from_midi_notes, write_midi_bytes,
 };
 pub use notation::{
-    Beam, BeamDirection, BeamType, Beams, Lyric, NoteSize, Notehead, Placement, StemDirection,
-    Syllabic, Tie, TieStyle, TieType,
+    Beam, BeamDirection, BeamType, Beams, Justification, Lyric, NoteSize, Notehead, Placement,
+    StemDirection, Syllabic, Tie, TieStyle, TieType,
 };
 pub use note::{IntoNote, Note};
 pub use percussion::{PercussionChord, PercussionNote, Unpitched};
@@ -218,7 +218,8 @@ pub use serial::{
 };
 pub use sieve::Sieve;
 pub use spanner::{
-    LineEnd, LineEnds, OctaveShift, Pedal, PedalForm, PedalType, Spanner, SpannerKind,
+    Glissando, LineEnd, LineEnds, OctaveShift, Pedal, PedalForm, PedalObject, PedalObjectKind,
+    PedalType, SlideType, Spanner, SpannerKind,
 };
 pub use stream::{BarTogether, StaffGroup, Stream, StreamElement, StreamEvent, StreamKind};
 pub use tempo::{

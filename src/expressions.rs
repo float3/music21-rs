@@ -1481,6 +1481,62 @@ impl TextExpression {
     }
 }
 
+/// A letter or number marking a place to rehearse from: music21's
+/// `RehearsalMark`.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
+pub struct RehearsalMark {
+    content: String,
+    #[cfg_attr(feature = "serde", serde(default))]
+    placement: crate::display::Drawn<Option<crate::notation::Placement>>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    enclosure: crate::display::Drawn<Option<String>>,
+}
+
+impl RehearsalMark {
+    /// A mark reading as given, `A` or `12`.
+    pub fn new(content: impl Into<String>) -> Self {
+        Self {
+            content: content.into(),
+            placement: crate::display::Drawn(None),
+            enclosure: crate::display::Drawn(None),
+        }
+    }
+
+    /// What the mark reads: music21's `content`.
+    pub fn content(&self) -> &str {
+        &self.content
+    }
+
+    /// Changes what the mark reads.
+    pub fn set_content(&mut self, content: impl Into<String>) {
+        self.content = content.into();
+    }
+
+    /// Which side of the staff the mark is written on, where the score
+    /// says.
+    pub fn placement(&self) -> Option<crate::notation::Placement> {
+        self.placement.0
+    }
+
+    /// Says which side of the staff the mark is written on.
+    pub fn set_placement(&mut self, placement: Option<crate::notation::Placement>) {
+        self.placement.0 = placement;
+    }
+
+    /// What is drawn round the mark, `square` or `circle`, where the score
+    /// says: music21's `style.enclosure`.
+    pub fn enclosure(&self) -> Option<&str> {
+        self.enclosure.0.as_deref()
+    }
+
+    /// Says what is drawn round the mark.
+    pub fn set_enclosure(&mut self, enclosure: Option<String>) {
+        self.enclosure.0 = enclosure;
+    }
+}
+
 /// Something written on a note that is not its pitch or length: an entry
 /// of music21's `GeneralNote.expressions`.
 #[derive(Clone, Debug, PartialEq)]

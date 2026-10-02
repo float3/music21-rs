@@ -1137,6 +1137,62 @@ pub struct Lyric {
     elision_before: String,
     #[cfg_attr(feature = "serde", serde(default))]
     color: crate::display::Color,
+    #[cfg_attr(feature = "serde", serde(default))]
+    justify: crate::display::Drawn<Option<Justification>>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    placement: crate::display::Drawn<Option<Placement>>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    hidden: crate::display::Drawn<bool>,
+}
+
+/// How a line of text lines up with where it is placed: music21's
+/// `TextStyle.justify`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum Justification {
+    /// Starting there.
+    Left,
+    /// Centred on it.
+    Center,
+    /// Ending there.
+    Right,
+    /// Spread to fill the line, which MusicXML cannot say.
+    Full,
+}
+
+impl Justification {
+    /// music21's name for it: `left`, `center`, `right` or `full`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Left => "left",
+            Self::Center => "center",
+            Self::Right => "right",
+            Self::Full => "full",
+        }
+    }
+
+    /// Reads music21's name for a justification, whatever its case.
+    ///
+    /// # Errors
+    ///
+    /// Anything else, as music21's `TextFormatException`.
+    pub fn from_name(name: &str) -> Result<Self> {
+        match name.to_lowercase().as_str() {
+            "left" => Ok(Self::Left),
+            "center" => Ok(Self::Center),
+            "right" => Ok(Self::Right),
+            "full" => Ok(Self::Full),
+            _ => Err(Error::Notation(format!(
+                "Not a supported justification: '{name}'"
+            ))),
+        }
+    }
+}
+
+impl fmt::Display for Justification {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
 }
 
 /// What music21's `Lyric.elisionBefore` starts as: a space between this
@@ -1165,6 +1221,9 @@ impl Lyric {
             components: Vec::new(),
             elision_before: DEFAULT_ELISION.to_string(),
             color: crate::display::Drawn(None),
+            justify: crate::display::Drawn(None),
+            placement: crate::display::Drawn(None),
+            hidden: crate::display::Drawn(false),
         }
     }
 
@@ -1176,6 +1235,38 @@ impl Lyric {
     /// Says what colour the syllable is written in.
     pub fn set_color(&mut self, color: Option<String>) {
         self.color.0 = color;
+    }
+
+    /// How the syllable lines up under its note, where a score says.
+    pub fn justify(&self) -> Option<Justification> {
+        self.justify.0
+    }
+
+    /// Says how the syllable lines up under its note.
+    pub fn set_justify(&mut self, justify: Option<Justification>) {
+        self.justify.0 = justify;
+    }
+
+    /// Which side of the staff the syllable is written on, where a score
+    /// says.
+    pub fn placement(&self) -> Option<Placement> {
+        self.placement.0
+    }
+
+    /// Says which side of the staff the syllable is written on.
+    pub fn set_placement(&mut self, placement: Option<Placement>) {
+        self.placement.0 = placement;
+    }
+
+    /// Whether the syllable is left off the page, though it is still sung:
+    /// music21's `style.hideObjectOnPrint`.
+    pub fn is_hidden(&self) -> bool {
+        self.hidden.0
+    }
+
+    /// Says whether the syllable is left off the page.
+    pub fn set_hidden(&mut self, hidden: bool) {
+        self.hidden.0 = hidden;
     }
 
     /// Reads a lyric from text whose hyphens say where it falls in its word:

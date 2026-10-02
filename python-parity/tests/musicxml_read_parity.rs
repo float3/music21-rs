@@ -5,7 +5,8 @@
 //! `music21_rs::musicxml::from_musicxml`, whose score the crate's writer
 //! writes out. The writer is held to music21's by `musicxml_parity`, so the
 //! two documents are the same text only if the two readers read the same
-//! score.
+//! score. A score the test builds itself, for want of a corpus score holding
+//! what it holds, is read from the document music21 writes of it.
 //!
 //! `MUSICXML_PARITY_SCORES`, a `;`-separated list of corpus names, runs
 //! those scores instead of the ones this test knows.
@@ -99,7 +100,6 @@ fn the_crate_reads_musicxml_as_music21_does() {
             Err(_) => SCORES
                 .iter()
                 .map(|(name, _)| name.to_string())
-                .filter(|name| !name.starts_with("built:"))
                 .filter(|name| !NOT_YET.iter().any(|(held, _)| held == name))
                 .collect(),
         };
@@ -107,16 +107,36 @@ fn the_crate_reads_musicxml_as_music21_does() {
         let mut count = 0;
         for name in &chosen {
             let name = name.as_str();
-            let source: Option<(String, String)> =
-                sources.getattr("source_text")?.call1((name,))?.extract()?;
-            let Some((text, file_name)) = source else {
-                // Kept in another format, which the reader is not for.
-                continue;
-            };
-            count += 1;
             let kwargs = pyo3::types::PyDict::new(py);
             kwargs.set_item("forceSource", true)?;
-            let score = corpus.call_method("parse", (name,), Some(&kwargs))?;
+            let (text, file_name, score) = if name.starts_with("built:") {
+                // A score the test builds is read from the document music21
+                // writes of it, kept as a file so that music21's converter
+                // reads it as it reads a corpus score.
+                let directory = root.join("target").join("musicxml-read-parity");
+                let (path, text): (String, String) = helpers
+                    .getattr("built_source")?
+                    .call1((name, directory.to_string_lossy().into_owned()))?
+                    .extract()?;
+                let file_name = std::path::Path::new(&path)
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                let score =
+                    py.import("music21.converter")?
+                        .call_method("parse", (path,), Some(&kwargs))?;
+                (text, file_name, score)
+            } else {
+                let source: Option<(String, String)> =
+                    sources.getattr("source_text")?.call1((name,))?.extract()?;
+                let Some((text, file_name)) = source else {
+                    // Kept in another format, which the reader is not for.
+                    continue;
+                };
+                let score = corpus.call_method("parse", (name,), Some(&kwargs))?;
+                (text, file_name, score)
+            };
+            count += 1;
             let score = helpers.getattr("strip_layout")?.call1((score,))?;
             let general = exporter
                 .getattr("GeneralObjectExporter")?

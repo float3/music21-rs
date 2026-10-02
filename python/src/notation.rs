@@ -249,9 +249,34 @@ impl Lyric {
     /// written into it, so the crate answers every question about it.
     pub(crate) fn synced(&self, py: Python<'_>) -> RsLyric {
         let mut lyric = self.inner.clone();
-        // music21 keeps the colour on the style.
-        if self.style.is_some() {
-            lyric.set_color(style_colour(py, self.style.as_ref()));
+        // music21 keeps the colour, the justification, the placement and
+        // whether it is printed on the style.
+        if let Some(style) = self.style.as_ref() {
+            lyric.set_color(style_colour(py, Some(style)));
+            let style = style.bind(py);
+            let text = |name: &str| -> Option<String> {
+                style
+                    .getattr(name)
+                    .ok()
+                    .filter(|value| !value.is_none())
+                    .and_then(|value| value.str().ok())
+                    .map(|value| value.to_string())
+            };
+            lyric.set_justify(
+                text("justify").and_then(|name| {
+                    music21_rs_crate::notation::Justification::from_name(&name).ok()
+                }),
+            );
+            lyric.set_placement(
+                text("placement")
+                    .and_then(|name| music21_rs_crate::notation::Placement::from_name(&name).ok()),
+            );
+            lyric.set_hidden(
+                style
+                    .getattr("hideObjectOnPrint")
+                    .and_then(|hidden| hidden.is_truthy())
+                    .unwrap_or(false),
+            );
         }
         let Some(components) = self.components.as_ref().map(|list| list.bind(py)) else {
             return lyric;
@@ -377,7 +402,27 @@ impl Lyric {
     /// installed.
     #[getter]
     fn get_style(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
-        style_of(slf, |me| &mut me.style, None)
+        let py = slf.py();
+        let (made, lyric) = {
+            let me = slf.borrow();
+            (me.style.is_some(), me.inner.clone())
+        };
+        let style = style_of(slf, |me| &mut me.style, lyric.color().map(str::to_string))?;
+        // A lyric the crate read carries how it is drawn until a style
+        // object is made to hold it.
+        if !made {
+            let bound = style.bind(py);
+            if let Some(justify) = lyric.justify() {
+                bound.setattr("justify", justify.as_str())?;
+            }
+            if let Some(placement) = lyric.placement() {
+                bound.setattr("placement", placement.as_str())?;
+            }
+            if lyric.is_hidden() {
+                bound.setattr("hideObjectOnPrint", true)?;
+            }
+        }
+        Ok(style)
     }
 
     #[setter]
@@ -386,10 +431,15 @@ impl Lyric {
         Ok(())
     }
 
-    /// Whether a `style` object has been created for this yet.
+    /// Whether a `style` object has been created for this yet, or there is
+    /// something about how it is drawn for one to hold.
     #[getter]
     fn hasStyleInformation(&self) -> bool {
         self.style.is_some()
+            || self.inner.color().is_some()
+            || self.inner.justify().is_some()
+            || self.inner.placement().is_some()
+            || self.inner.is_hidden()
     }
 
     /// The text sung, without hyphens, or `None` when there is none.

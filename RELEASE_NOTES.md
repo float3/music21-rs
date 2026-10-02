@@ -1,5 +1,18 @@
 # Unreleased
 
+## Breaking Changes
+
+- `StreamElement` has four more variants, `Barline`, `PedalObject`,
+  `RehearsalMark` and `MetricModulation`, and `SpannerKind` two more,
+  `Glissando` and `TremoloSpanner`, so a `match` over either needs arms for
+  them.
+- `from_musicxml` refuses what music21 raises on and it used to pass over
+  or bend: a `<glissando>` or `<slide>` whose `line-type` is none of
+  `solid`, `dashed`, `dotted` and `wavy`, a `<lyric>` whose `justify` is
+  none of `left`, `center`, `right` and `full`, a `<rehearsal>` enclosed in
+  nothing music21 names, and a `<tremolo>` of more than eight strokes,
+  which was read as eight.
+
 ## Added
 
 - The wheel reads every format the crate reads: `from_abc(text)`,
@@ -71,6 +84,37 @@
   compares the texts. Thirteen agree; the three that differ are places
   where MuseScore's export says something other than its own file does, and
   the reader follows the file. The test lists each with its reason.
+- MusicXML, written and read as music21 writes and reads it, for what the
+  writer refused and the reader passed over:
+  - glissandi and slides: `SpannerKind::Glissando`, `Spanner::glissando`,
+    with `Glissando` saying how it is played (`SlideType`) and the words
+    along it. One played `Continuous` is written `<slide>`.
+  - tremolos between notes: `SpannerKind::TremoloSpanner`,
+    `Spanner::tremolo`, `number_of_marks`.
+  - a pedal drawn as a sign and a line (`PedalForm::SymbolLine`), which
+    `to_musicxml` refused: its line resumes straight after the sign, at
+    `Spanner::offset`, where the pedal mark itself stands.
+  - the bounces and gaps inside a held pedal: `PedalObject` and
+    `PedalObjectKind`, standing in the stream as
+    `StreamElement::PedalObject` and joined by their pedal mark.
+  - a barline inside a measure, `StreamElement::Barline`, which music21
+    keeps where it appends it and writes nothing for.
+  - how a lyric is drawn: `Lyric::justify` (`Justification`), `placement`
+    and `is_hidden`.
+  - rehearsal marks: `expressions::RehearsalMark`, with its placement and
+    what is drawn round it, as `StreamElement::RehearsalMark`.
+  - a time signature left unprinted: `TimeSignature::is_hidden`.
+  - a metric modulation, which `from_musicxml` refused:
+    `StreamElement::MetricModulation`, with `MetricModulation::placement`.
+    A file gives its two note values and no numbers; the writer gives each
+    side its number from the tempo in force before it in the part, as
+    music21's exporter does, and writes the speed the new side is played at.
+- The wheel's `to_musicxml` reads music21's own `Glissando`,
+  `TremoloSpanner`, `PedalBounce`, `PedalGapStart`, `PedalGapEnd`,
+  `RehearsalMark` and `MetricModulation` and a barline inside a measure,
+  where it refused a pedal object, a rehearsal mark and a metric modulation
+  and left the rest out; a wheel `Lyric`'s `style` carries the
+  justification, placement and `hideObjectOnPrint` the crate read.
 
 ## Changed
 
@@ -97,6 +141,13 @@
   goes to the last, and an ornament goes where its `tie_attach` says. Both
   pieces used to keep them all, so `make_ties` and the ABC reader's
   rebarring wrote a trill and a fermata twice.
+- `from_musicxml` reads words naming a coda or a segno as music21 does: the
+  mark is drawn as its sign, which has no side of the staff, where the
+  words' placement was kept and written on the sign.
+- A `MetronomeMark`'s number within a millionth of a whole number is that
+  whole number, as music21 makes it: a dotted quarter at 110 counted in
+  quarters is `165`, where `equivalent_by_referent` answered
+  `165.00000000000003` and everything worked out from it carried the hair.
 
 # music21-rs 0.8.0
 
