@@ -45,6 +45,7 @@ use crate::rest::Rest;
 use crate::spanner::{Pedal, PedalForm, PedalType, Spanner, SpannerKind};
 use crate::stream::{BarTogether, StaffGroup, Stream, StreamElement, StreamEvent, StreamKind};
 use crate::tempo::MetronomeMark;
+use crate::volume::Volume;
 use crate::xml::Xml;
 
 /// A length or a place in time, in whole notes, as MuseScore counts.
@@ -112,6 +113,10 @@ fn plain_text(element: &Xml) -> Result<String> {
 fn plain_into(element: &Xml, out: &mut String) -> Result<()> {
     if element.tag == "sym" {
         out.push(symbol_named(element.text().unwrap_or("").trim())?);
+        return Ok(());
+    }
+    if element.tag == "br" {
+        out.push('\n');
         return Ok(());
     }
     if let Some(text) = element.text() {
@@ -313,6 +318,10 @@ struct NoteRead {
     pitch: Pitch,
     tie_start: bool,
     tie_stop: bool,
+    /// Which way the tie it starts curves, where the file says.
+    tie_placement: Option<Placement>,
+    /// How hard it is struck, of 127, where the file says.
+    velocity: Option<i64>,
     hidden: bool,
     small: bool,
 }
@@ -449,8 +458,6 @@ struct Grid {
 struct Reader {
     next_uid: usize,
     spanners: Vec<SpannerRead>,
-    /// The places between notes that lines start and end at.
-    time_ticks: Vec<Position>,
 }
 
 impl Reader {
@@ -560,15 +567,6 @@ impl Reader {
                     if held.find("measures").is_some() {
                         return Err(mscx_error("a <location> in a voice that moves measures"));
                     }
-                    // A place between the notes that a line starts or ends
-                    // at.
-                    if flag(held, "timeTick") {
-                        self.time_ticks.push(Position {
-                            measure,
-                            tick,
-                            track,
-                        });
-                    }
                 }
                 "Chord" | "Rest" => {
                     let mut chord_rest =
@@ -586,7 +584,8 @@ impl Reader {
                             .into_iter()
                             .partition(|grace| grace.grace == Some(GraceKind::After));
                     chord_rest.graces_before = before;
-                    chord_rest.graces_after = after;
+                    // MuseScore keeps the graces after a note last first.
+                    chord_rest.graces_after = after.into_iter().rev().collect();
                     if let Some(open) = tuplet {
                         read.tuplets[open].elements.push(Held::Note(notes));
                     }
@@ -1013,6 +1012,8 @@ fn note_of(element: &Xml, transposition: (i64, i64)) -> Result<NoteRead> {
         pitch,
         tie_start: false,
         tie_stop: false,
+        tie_placement: None,
+        velocity: child_integer(element, "velocity")?.filter(|velocity| *velocity != 0),
         hidden: element.child_text("visible") == "0",
         small: flag(element, "small"),
     };
@@ -1020,6 +1021,11 @@ fn note_of(element: &Xml, transposition: (i64, i64)) -> Result<NoteRead> {
         if held.get("type") == Some("Tie") {
             if held.find("next").is_some() {
                 read.tie_start = true;
+                read.tie_placement = match held.find("Tie").map(|tie| tie.child_text("up")) {
+                    Some("up") => Some(Placement::Above),
+                    Some("down") => Some(Placement::Below),
+                    _ => None,
+                };
             }
             if held.find("prev").is_some() {
                 read.tie_stop = true;
@@ -1239,8 +1245,7 @@ fn barline_of(element: &Xml) -> Result<Option<Barline>> {
         return Ok(Some(Barline::new(BarlineType::None)));
     }
     let kind = match element.child_text("subtype") {
-        // An ordinary barline is what a measure ends with anyway.
-        "normal" | "" => return Ok(None),
+        "normal" | "" => BarlineType::Regular,
         "double" => BarlineType::Double,
         "end" => BarlineType::Final,
         "reverse-end" => BarlineType::HeavyLight,
@@ -1919,7 +1924,21 @@ fn element_of(
             (false, true) => Some(TieType::Stop),
             (false, false) => None,
         };
-        note.set_tie(tie.map(Tie::new));
+        note.set_tie(tie.map(|tie_type| {
+            let mut tie = Tie::new(tie_type);
+            if tie_type == TieType::Start {
+                tie.set_placement(written.tie_placement);
+            }
+            tie
+        }));
+        if let Some(velocity) = written.velocity {
+            // MuseScore's MusicXML writes a velocity as a percentage of
+            // ninety to two places, which is as fine as the two can agree.
+            let percent = (velocity as FloatType * 10000.0 / 90.0).round() / 100.0;
+            note.set_volume(Some(Volume::from_velocity_scalar(
+                percent * 90.0 / 12700.0,
+            )?));
+        }
         note.set_stem_direction(read.stem);
         notes.push(note);
     }
@@ -2084,7 +2103,6 @@ pub fn from_mscx(document: &str) -> Result<Stream> {
     let mut reader = Reader {
         next_uid: 0,
         spanners: Vec::new(),
-        time_ticks: Vec::new(),
     };
     let mut read_staves: Vec<Vec<StaffMeasure>> = Vec::new();
     for part in &parts {
@@ -2104,7 +2122,6 @@ pub fn from_mscx(document: &str) -> Result<Stream> {
         staves: &read_staves,
         grid: &grid,
         spanners: &reader.spanners,
-        time_ticks: &reader.time_ticks,
         uids: HashMap::new(),
         placed: Vec::new(),
         next_uid: reader.next_uid,
@@ -2158,7 +2175,6 @@ struct Assembler<'a> {
     staves: &'a [Vec<StaffMeasure>],
     grid: &'a Grid,
     spanners: &'a [SpannerRead],
-    time_ticks: &'a [Position],
     /// Each note's uid by where it stands: measure, tick and track.
     uids: HashMap<(i64, Frac, usize), usize>,
     /// Every note, chord and rest in the order MuseScore writes them out:
@@ -2171,13 +2187,10 @@ struct Assembler<'a> {
 #[derive(Clone, Copy, Debug)]
 struct Placed {
     part: usize,
-    measure: i64,
     track: usize,
     start: Frac,
     end: Frac,
     uid: usize,
-    /// Whether grace notes lean on it from before.
-    graces_before: bool,
 }
 
 impl Assembler<'_> {
@@ -2260,8 +2273,10 @@ impl Assembler<'_> {
                 SpannerStart::Wedge(_) | SpannerStart::Pedal(_) => {
                     let part = part_of(start.track);
                     let mut positions: Vec<Option<usize>> = Vec::new();
-                    if let Some(first) = self.line_start(part, start) {
-                        positions.push(first.and_then(&position_of));
+                    if let Some(first) = self.line_start(part, start, end)
+                        && let Some(position) = position_of(first)
+                    {
+                        positions.push(Some(position));
                     }
                     if let Some(last) = self.line_end(part, start, end)
                         && let Some(position) = position_of(last)
@@ -2296,70 +2311,76 @@ impl Assembler<'_> {
         Ok(assembled)
     }
 
-    /// The note a line under the staff starts on: the one standing where it
-    /// starts, in the first voice of its staff that has one there, or else
-    /// the next note of its own voice. `Some(None)` is a note the score
-    /// does not hold, a grace note leaning on that one.
-    fn line_start(&self, part: usize, start: Position) -> Option<Option<usize>> {
-        let at = self.grid.starts[start.measure as usize] + start.tick;
+    /// The note a line under the staff starts on. A line belongs to a staff
+    /// and runs from one moment to another, not from note to note: it
+    /// starts on the note of its staff standing where it starts, or on the
+    /// first note of its voice to start under it, or else on the note
+    /// sounding as it starts.
+    fn line_start(&self, part: usize, start: Position, end: Position) -> Option<usize> {
+        let from = *self.grid.starts.get(usize::try_from(start.measure).ok()?)? + start.tick;
+        let to = *self.grid.starts.get(usize::try_from(end.measure).ok()?)? + end.tick;
         let staff = start.track / 4;
-        let on_staff = self
+        let here = |placed: &&Placed| placed.part == part && placed.track / 4 == staff;
+        let exact = self
             .placed
             .iter()
-            .filter(|placed| {
-                placed.part == part
-                    && placed.measure == start.measure
-                    && placed.track / 4 == staff
-                    && placed.start == at
-            })
+            .filter(here)
+            .filter(|placed| placed.start == from)
             .min_by_key(|placed| placed.track);
-        let found = on_staff.or_else(|| {
-            self.placed.iter().find(|placed| {
-                placed.part == part
-                    && (placed.measure, placed.track, placed.start)
-                        > (start.measure, start.track, at)
-            })
-        })?;
-        Some(if found.graces_before {
-            None
-        } else {
-            Some(found.uid)
-        })
+        if let Some(exact) = exact {
+            return Some(exact.uid);
+        }
+        let mut tracks: Vec<usize> = vec![start.track];
+        tracks.extend((staff * 4..staff * 4 + 4).filter(|track| *track != start.track));
+        for track in tracks {
+            let voice = || {
+                self.placed
+                    .iter()
+                    .filter(here)
+                    .filter(move |placed| placed.track == track)
+            };
+            let under = voice()
+                .filter(|placed| placed.start >= from && placed.start < to)
+                .min_by_key(|placed| placed.start);
+            let sounding = || voice().find(|placed| placed.start <= from && from < placed.end);
+            if let Some(found) = under.or_else(sounding) {
+                return Some(found.uid);
+            }
+        }
+        None
     }
 
-    /// The note a line under the staff ends on: the first on its staff to
-    /// end where the line ends, or the last one read before a place between
-    /// the notes that the line ends at.
+    /// The note a line under the staff ends on: the note of its staff
+    /// ending where it ends, or else the last note of its voice to start
+    /// under it.
     fn line_end(&self, part: usize, start: Position, end: Position) -> Option<usize> {
-        let measure = usize::try_from(end.measure).ok()?;
-        let at = *self.grid.starts.get(measure)? + end.tick;
+        let from = *self.grid.starts.get(usize::try_from(start.measure).ok()?)? + start.tick;
+        let to = *self.grid.starts.get(usize::try_from(end.measure).ok()?)? + end.tick;
         let staff = start.track / 4;
-        for track in staff * 4..staff * 4 + 4 {
-            let ending = self
-                .placed
-                .iter()
-                .find(|placed| placed.part == part && placed.track == track && placed.end == at);
-            if let Some(ending) = ending {
-                return Some(ending.uid);
-            }
-            let between = self.time_ticks.iter().find(|tick| {
-                tick.track / 4 == staff
-                    && self
-                        .grid
-                        .starts
-                        .get(tick.measure as usize)
-                        .is_some_and(|begins| *begins + tick.tick == at)
-            });
-            if let Some(between) = between {
-                return self
-                    .placed
+        let here = |placed: &&Placed| placed.part == part && placed.track / 4 == staff;
+        let exact = self
+            .placed
+            .iter()
+            .filter(here)
+            .filter(|placed| placed.end == to)
+            .min_by_key(|placed| placed.track);
+        if let Some(exact) = exact {
+            return Some(exact.uid);
+        }
+        let mut tracks: Vec<usize> = vec![start.track];
+        tracks.extend((staff * 4..staff * 4 + 4).filter(|track| *track != start.track));
+        for track in tracks {
+            let voice = || {
+                self.placed
                     .iter()
-                    .rfind(|placed| {
-                        placed.part == part
-                            && placed.measure == between.measure
-                            && (placed.track, placed.start) < (track, at)
-                    })
-                    .map(|placed| placed.uid);
+                    .filter(here)
+                    .filter(move |placed| placed.track == track)
+            };
+            let last = voice()
+                .filter(|placed| placed.start < to && placed.end > from)
+                .max_by_key(|placed| placed.start);
+            if let Some(found) = last {
+                return Some(found.uid);
             }
         }
         None
@@ -2672,12 +2693,10 @@ impl Assembler<'_> {
                                 let begins = self.grid.starts[index] + event.tick;
                                 self.placed.push(Placed {
                                     part: part_index,
-                                    measure: index as i64,
                                     track,
                                     start: begins,
                                     end: begins + read_cr.length,
                                     uid: read_cr.uid,
-                                    graces_before: !read_cr.graces_before.is_empty(),
                                 });
                                 push(items, at, cr_staff, Some(read_cr.uid), element);
                                 let end = quarters(event.tick + read_cr.length);
@@ -2754,7 +2773,13 @@ impl Assembler<'_> {
                 let times = (times > 2).then_some(times);
                 ir.right = Some(Barline::repeat(RepeatDirection::End, times));
             } else {
-                ir.right = right;
+                // An ordinary barline written out is what a measure ends
+                // with anyway, and stands in the way of any other.
+                ir.right = match right {
+                    Some(barline) if barline.bar_type() == BarlineType::Regular => None,
+                    Some(barline) => Some(barline),
+                    None => self.drawn_barline(index),
+                };
             }
             for spanner in self.spanners {
                 if let SpannerStart::Volta { numbers } = &spanner.kind
@@ -2815,6 +2840,21 @@ impl Assembler<'_> {
             out.push(ir);
         }
         Ok(out)
+    }
+
+    /// The barline MuseScore draws at the end of a measure that has none of
+    /// its own: a double one before a change of key, a final one at the end
+    /// of the score.
+    fn drawn_barline(&self, index: usize) -> Option<Barline> {
+        let Some(next) = self.staves[0].get(index + 1) else {
+            return Some(Barline::new(BarlineType::Final));
+        };
+        let changes_key = next
+            .voices
+            .iter()
+            .flat_map(|voice| &voice.events)
+            .any(|event| matches!(event.what, What::Key(_)) && event.tick.is_zero());
+        changes_key.then(|| Barline::new(BarlineType::Double))
     }
 
     /// Whether a volta starting at this measure is the first measure of it.
