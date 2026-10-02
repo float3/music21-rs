@@ -37,7 +37,9 @@ use crate::key::KeySignature;
 use crate::makenotation::op_frac;
 use crate::metadata::{Metadata, MetadataValue};
 use crate::meter::TimeSignature;
-use crate::notation::{Beams, Lyric, NoteSize, Placement, StemDirection, Syllabic, Tie, TieType};
+use crate::notation::{
+    Beams, Lyric, NoteSize, Notehead, Placement, StemDirection, Syllabic, Tie, TieType,
+};
 use crate::note::Note;
 use crate::pitch::{Accidental, Pitch};
 use crate::repeat::{RepeatExpression, RepeatExpressionKind};
@@ -354,6 +356,8 @@ struct ChordRest {
     hidden: bool,
     small: bool,
     stem: StemDirection,
+    /// Whether it is drawn with no stem.
+    no_stem: bool,
     /// The way the stems of the beam starting on it go, where a beam is
     /// written out before it.
     beam_stem: StemDirection,
@@ -810,6 +814,7 @@ impl Reader {
             hidden: element.child_text("visible") == "0",
             small: flag(element, "small"),
             stem: StemDirection::Unspecified,
+            no_stem: false,
             beam_stem: StemDirection::Unspecified,
             lyrics: Vec::new(),
             articulations: Vec::new(),
@@ -833,6 +838,8 @@ impl Reader {
                         _ => StemDirection::Unspecified,
                     };
                 }
+                "Stem" if held.child_text("visible") == "0" => read.no_stem = true,
+                "noStem" if held.stripped() != "0" => read.no_stem = true,
                 "Note" => read.notes.push(note_of(held, transposition)?),
                 "Lyrics" => read.lyrics.push(lyric_of(held)?),
                 "Articulation" => {
@@ -1951,6 +1958,7 @@ fn element_of(
     // Its own stem direction, else its beam's; a note written with no
     // stem has neither.
     let stem = match read.stem {
+        _ if read.no_stem => StemDirection::NoStem,
         _ if read.order < 3 => StemDirection::Unspecified,
         StemDirection::Unspecified => beam_stem,
         own => own,
@@ -1998,7 +2006,11 @@ fn element_of(
     for written in &read.notes {
         let mut note = Note::from_pitch(written.pitch.clone());
         note.set_duration(duration.clone());
-        note.set_hidden(written.hidden || read.hidden);
+        // MuseScore hides a note's head and its stem each on its own, so a
+        // hidden note is one with no head and not one left off the page.
+        if written.hidden {
+            note.set_notehead(Notehead::NoneShape);
+        }
         if written.small || read.small {
             note.set_size(Some(NoteSize::Cue));
         }
