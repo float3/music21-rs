@@ -1,0 +1,2594 @@
+//! MuseScore's `.mscx`, read into a score.
+//!
+//! A MuseScore file keeps a score's parts apart from what is written on
+//! their staves: each `<Part>` names its instrument and how many staves it
+//! has, and after the parts comes one `<Staff>` for every staff of the
+//! score, holding its measures. A measure holds a `<voice>` for each of up
+//! to four voices, and a voice is its notes and rests in order, with the
+//! clefs, signatures, texts and marks standing between them. Nothing in the
+//! file says where a note starts; that is worked out by adding up the
+//! lengths of what comes before it, a `<location>` moving the place along
+//! where a mark stands between two notes.
+
+use std::collections::HashMap;
+
+use num::rational::Ratio;
+use num::{One, ToPrimitive, Zero};
+
+use super::beams::{self, BeamMode, Member};
+use crate::articulations::{Articulation, ArticulationKind};
+use crate::bar::{Barline, BarlineType, Ending, RepeatDirection};
+use crate::chord::Chord;
+use crate::chordsymbol::ChordSymbol;
+use crate::clef::Clef;
+use crate::defaults::{FloatType, IntegerType};
+use crate::duration::{
+    Duration, DurationType, Grace, Tuplet, TupletBracket, TupletShow, TupletType,
+};
+use crate::dynamics::Dynamic;
+use crate::error::{Error, Result};
+use crate::expressions::{Expression, Fermata, FermataType, TextExpression};
+use crate::instrument::{Instrument, SearchLanguage};
+use crate::interval::Interval;
+use crate::key::KeySignature;
+use crate::makenotation::op_frac;
+use crate::metadata::{Metadata, MetadataValue};
+use crate::meter::TimeSignature;
+use crate::notation::{Beams, Lyric, NoteSize, Placement, StemDirection, Syllabic, Tie, TieType};
+use crate::note::Note;
+use crate::pitch::{Accidental, Pitch};
+use crate::repeat::{RepeatExpression, RepeatExpressionKind};
+use crate::rest::Rest;
+use crate::spanner::{Spanner, SpannerKind};
+use crate::stream::{BarTogether, StaffGroup, Stream, StreamElement, StreamEvent, StreamKind};
+use crate::tempo::MetronomeMark;
+use crate::xml::Xml;
+
+/// A length or a place in time, in whole notes, as MuseScore counts.
+type Frac = Ratio<i64>;
+
+fn mscx_error(message: impl Into<String>) -> Error {
+    Error::MuseScore(message.into())
+}
+
+fn refused(what: impl std::fmt::Display) -> Error {
+    mscx_error(format!("{what} cannot be read yet"))
+}
+
+/// A fraction as MuseScore writes one: `3/4`, or a whole number.
+fn fraction(text: &str) -> Result<Frac> {
+    let text = text.trim();
+    let bad = || mscx_error(format!("{text:?} is not a fraction"));
+    match text.split_once('/') {
+        Some((numerator, denominator)) => {
+            let numerator: i64 = numerator.trim().parse().map_err(|_| bad())?;
+            let denominator: i64 = denominator.trim().parse().map_err(|_| bad())?;
+            if denominator == 0 {
+                return Err(bad());
+            }
+            Ok(Frac::new(numerator, denominator))
+        }
+        None => Ok(Frac::from_integer(text.parse().map_err(|_| bad())?)),
+    }
+}
+
+fn integer(element: &Xml) -> Result<i64> {
+    let text = element.stripped();
+    text.parse()
+        .map_err(|_| mscx_error(format!("<{}> holds {text:?}, not a number", element.tag)))
+}
+
+fn child_integer(element: &Xml, tag: &str) -> Result<Option<i64>> {
+    element.find(tag).map(integer).transpose()
+}
+
+fn flag(element: &Xml, tag: &str) -> bool {
+    element
+        .find(tag)
+        .is_some_and(|found| found.stripped() != "0" && found.stripped() != "false")
+}
+
+/// A length in quarter notes, snapped as music21 snaps one.
+fn quarters(value: Frac) -> FloatType {
+    op_frac((value * 4).to_f64().unwrap_or(0.0))
+}
+
+/// A place in MuseScore's ticks, 480 to a quarter.
+fn ticks(value: Frac) -> i64 {
+    (value * beams::WHOLE).floor().to_integer()
+}
+
+/// Text as MuseScore writes it, its formatting taken off and each symbol
+/// read as the character it draws.
+fn plain_text(element: &Xml) -> String {
+    let mut out = String::new();
+    plain_into(element, &mut out);
+    out
+}
+
+fn plain_into(element: &Xml, out: &mut String) {
+    if element.tag == "sym" {
+        if let Some(name) = element.text() {
+            out.push_str(symbol_text(name.trim()));
+        }
+        return;
+    }
+    if let Some(text) = element.text() {
+        out.push_str(text);
+    }
+    for child in &element.children {
+        plain_into(child, out);
+        if let Some(tail) = child.tail() {
+            out.push_str(tail);
+        }
+    }
+}
+
+/// What a symbol inside a text stands for, where it is one a reader of the
+/// text would read.
+fn symbol_text(name: &str) -> &'static str {
+    match name {
+        "metNoteWhole" => "\u{1D15D}",
+        "metNoteHalfUp" => "\u{1D15E}",
+        "metNoteQuarterUp" => "\u{1D15F}",
+        "metNote8thUp" => "\u{1D160}",
+        "metNote16thUp" => "\u{1D161}",
+        "metAugmentationDot" => ".",
+        "accidentalFlat" => "\u{266D}",
+        "accidentalNatural" => "\u{266E}",
+        "accidentalSharp" => "\u{266F}",
+        "space" => " ",
+        _ => "",
+    }
+}
+
+// ------------------------------------------------------------ vocabulary
+
+/// A written value by MuseScore's name for it, with its length in whole
+/// notes and its place in MuseScore's order of values.
+fn duration_named(name: &str) -> Result<(DurationType, Frac, u8)> {
+    Ok(match name {
+        "long" => (DurationType::Longa, Frac::from_integer(4), 0),
+        "breve" => (DurationType::Breve, Frac::from_integer(2), 1),
+        "whole" => (DurationType::Whole, Frac::one(), 2),
+        "half" => (DurationType::Half, Frac::new(1, 2), 3),
+        "quarter" => (DurationType::Quarter, Frac::new(1, 4), 4),
+        "eighth" => (DurationType::Eighth, Frac::new(1, 8), 5),
+        "16th" => (DurationType::Sixteenth, Frac::new(1, 16), 6),
+        "32nd" => (DurationType::ThirtySecond, Frac::new(1, 32), 7),
+        "64th" => (DurationType::SixtyFourth, Frac::new(1, 64), 8),
+        "128th" => (DurationType::HundredTwentyEighth, Frac::new(1, 128), 9),
+        "256th" => (DurationType::TwoHundredFiftySixth, Frac::new(1, 256), 10),
+        "512th" => (DurationType::FiveHundredTwelfth, Frac::new(1, 512), 11),
+        "1024th" => (DurationType::TenTwentyFourth, Frac::new(1, 1024), 12),
+        other => return Err(mscx_error(format!("a note of the value {other:?}"))),
+    })
+}
+
+fn dotted(length: Frac, dots: u32) -> Frac {
+    let mut total = length;
+    let mut added = length;
+    for _ in 0..dots {
+        added /= 2;
+        total += added;
+    }
+    total
+}
+
+/// A clef by MuseScore's name: the sign and line MusicXML writes it with,
+/// and how many octaves it sounds away.
+fn clef_named(name: &str) -> Result<Clef> {
+    let (sign, line, octaves) = match name {
+        "G" | "G8vbp" | "C_19C" => ("G", 2, 0),
+        "G15mb" => ("G", 2, -2),
+        "G8vb" | "G8vbo" | "G8vbc" => ("G", 2, -1),
+        "G8va" => ("G", 2, 1),
+        "G15ma" => ("G", 2, 2),
+        "G1" => ("G", 1, 0),
+        "C1" | "C1_F18C" | "C1_F20C" => ("C", 1, 0),
+        "C2" => ("C", 2, 0),
+        "C3" | "C3_F18C" | "C3_F20C" => ("C", 3, 0),
+        "C4" | "C4_F18C" | "C4_F20C" => ("C", 4, 0),
+        "C4_8VB" => ("C", 4, -1),
+        "C5" => ("C", 5, 0),
+        "F" | "F_F18C" | "F_19C" => ("F", 4, 0),
+        "F15mb" => ("F", 4, -2),
+        "F8vb" => ("F", 4, -1),
+        "F8va" => ("F", 4, 1),
+        "F15ma" => ("F", 4, 2),
+        "F3" => ("F", 3, 0),
+        "F5" => ("F", 5, 0),
+        "PERC" | "PERC2" => return Clef::from_string("percussion", 0),
+        "TAB" | "TAB4" | "TAB2" | "TAB4_SERIF" => return Err(refused("A tablature clef")),
+        other => return Err(mscx_error(format!("a clef of the kind {other:?}"))),
+    };
+    Clef::from_string(&format!("{sign}{line}"), octaves)
+}
+
+/// The accidental a MuseScore accidental draws, by music21's name.
+fn accidental_named(subtype: &str) -> Result<&'static str> {
+    Ok(match subtype {
+        "accidentalSharp" => "sharp",
+        "accidentalFlat" => "flat",
+        "accidentalNatural" => "natural",
+        "accidentalDoubleSharp" | "accidentalSharpSharp" => "double-sharp",
+        "accidentalDoubleFlat" => "double-flat",
+        "accidentalTripleSharp" => "triple-sharp",
+        "accidentalTripleFlat" => "triple-flat",
+        "accidentalNaturalSharp" => "natural-sharp",
+        "accidentalNaturalFlat" => "natural-flat",
+        other => return Err(refused(format!("The accidental {other:?}"))),
+    })
+}
+
+/// The spelling a tonal pitch class stands for: MuseScore's `tpc`, a place on
+/// the line of fifths where C is fourteen.
+fn spelling(tpc: i64) -> Result<(char, i64)> {
+    if !(-1..=33).contains(&tpc) {
+        return Err(mscx_error(format!("the tonal pitch class {tpc}")));
+    }
+    let step = b"FCGDAEB"[((tpc + 1) % 7) as usize] as char;
+    let alter = (tpc + 1) / 7 - 2;
+    Ok((step, alter))
+}
+
+fn natural_semitone(step: char) -> i64 {
+    match step {
+        'C' => 0,
+        'D' => 2,
+        'E' => 4,
+        'F' => 5,
+        'G' => 7,
+        'A' => 9,
+        _ => 11,
+    }
+}
+
+/// The letter and octave of a pitch, from its MIDI number and its spelling.
+fn pitch_of(midi: i64, tpc: i64) -> Result<Pitch> {
+    let (step, alter) = spelling(tpc)?;
+    let natural = midi - alter;
+    let octave = (natural - natural_semitone(step)).div_euclid(12) - 1;
+    Pitch::from_name(format!("{step}{octave}"))
+}
+
+// ------------------------------------------------------------ what is read
+
+/// A tuplet of one voice of one measure.
+#[derive(Clone, Debug)]
+struct TupletRead {
+    actual: u32,
+    normal: u32,
+    base: (DurationType, u32),
+    /// MuseScore's `bracketType`: 0 as the beams decide, 1 a bracket, 2 none.
+    bracket: i64,
+    /// MuseScore's `numberType`: 0 the number, 1 the ratio, 2 nothing.
+    number: i64,
+    placement: Option<Placement>,
+    parent: Option<usize>,
+    /// What it holds in order: notes and rests by their index among the
+    /// voice's notes, tuplets by their own.
+    elements: Vec<Held>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Held {
+    Note(usize),
+    Tuplet(usize),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum GraceKind {
+    Acciaccatura,
+    Appoggiatura,
+    Before,
+    After,
+}
+
+#[derive(Clone, Debug)]
+struct NoteRead {
+    pitch: Pitch,
+    tie_start: bool,
+    tie_stop: bool,
+    hidden: bool,
+    small: bool,
+}
+
+#[derive(Clone, Debug)]
+struct LyricRead {
+    number: IntegerType,
+    syllabic: Option<Syllabic>,
+    text: String,
+}
+
+/// A note, chord or rest as it was read.
+#[derive(Clone, Debug)]
+struct ChordRest {
+    tick: Frac,
+    /// How long it lasts, in whole notes.
+    length: Frac,
+    value: Option<(DurationType, u32)>,
+    order: u8,
+    measure_rest: bool,
+    is_rest: bool,
+    tuplet: Option<usize>,
+    mode: BeamMode,
+    grace: Option<GraceKind>,
+    graces_before: Vec<ChordRest>,
+    graces_after: Vec<ChordRest>,
+    notes: Vec<NoteRead>,
+    hidden: bool,
+    small: bool,
+    stem: StemDirection,
+    lyrics: Vec<LyricRead>,
+    articulations: Vec<Articulation>,
+    fermatas: Vec<Fermata>,
+    step_shift: IntegerType,
+    staff_move: i64,
+    /// What spanners know it by.
+    uid: usize,
+}
+
+/// A spanner as it was started: what it is, where it starts and where the
+/// file says it ends.
+#[derive(Clone, Debug)]
+struct SpannerRead {
+    kind: SpannerStart,
+    start: Position,
+    end: Position,
+}
+
+#[derive(Clone, Debug)]
+enum SpannerStart {
+    Slur,
+    Wedge(SpannerKind),
+    Volta { numbers: Vec<u32>, closed: bool },
+}
+
+/// A place in the score: a measure, a moment in it, a track.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Position {
+    measure: i64,
+    tick: Frac,
+    track: usize,
+}
+
+#[derive(Clone, Debug)]
+enum What {
+    ChordRest(Box<ChordRest>),
+    Clef(Clef),
+    Key(StreamElement),
+    Meter(TimeSignature),
+    Element(StreamElement),
+    Barline(Barline),
+}
+
+#[derive(Clone, Debug)]
+struct Event {
+    tick: Frac,
+    what: What,
+}
+
+/// One voice of one measure of one staff.
+#[derive(Clone, Debug, Default)]
+struct VoiceRead {
+    events: Vec<Event>,
+    tuplets: Vec<TupletRead>,
+}
+
+/// One measure of one staff.
+#[derive(Clone, Debug, Default)]
+struct StaffMeasure {
+    voices: Vec<VoiceRead>,
+    len: Option<Frac>,
+    irregular: bool,
+    number_offset: i64,
+    start_repeat: bool,
+    end_repeat: Option<u32>,
+    section_break: bool,
+}
+
+/// A part, as the head of the file describes it.
+#[derive(Clone, Debug)]
+struct PartRead {
+    staves: usize,
+    /// The global index of its first staff.
+    first_staff: usize,
+    name: Option<String>,
+    abbreviation: Option<String>,
+    name_hidden: bool,
+    instrument: Instrument,
+    default_clefs: Vec<String>,
+    /// How far the written notes stand from the sounding ones: diatonic
+    /// steps and semitones.
+    transposition: (i64, i64),
+}
+
+// ----------------------------------------------------------------- reading
+
+/// What reading a staff needs of the measures across the score.
+#[derive(Clone, Debug)]
+struct Grid {
+    /// Where each measure starts, in whole notes from the top.
+    starts: Vec<Frac>,
+    lengths: Vec<Frac>,
+    meters: Vec<(i64, i64)>,
+}
+
+struct Reader {
+    next_uid: usize,
+    spanners: Vec<SpannerRead>,
+}
+
+impl Reader {
+    fn uid(&mut self) -> usize {
+        self.next_uid += 1;
+        self.next_uid
+    }
+
+    /// A staff's measures, each with its voices read.
+    fn staff(
+        &mut self,
+        staff: &Xml,
+        staff_index: usize,
+        transposition: (i64, i64),
+    ) -> Result<Vec<StaffMeasure>> {
+        let mut measures = Vec::new();
+        for element in &staff.children {
+            match element.tag.as_str() {
+                "Measure" => {
+                    let index = measures.len() as i64;
+                    measures.push(self.measure(element, staff_index, index, transposition)?);
+                }
+                // Frames hold titles and text for the page.
+                "VBox" | "HBox" | "TBox" | "FBox" | "eid" => {}
+                other => return Err(mscx_error(format!("<{other}> in a staff"))),
+            }
+        }
+        Ok(measures)
+    }
+
+    fn measure(
+        &mut self,
+        element: &Xml,
+        staff_index: usize,
+        index: i64,
+        transposition: (i64, i64),
+    ) -> Result<StaffMeasure> {
+        let mut measure = StaffMeasure {
+            len: element.get("len").map(fraction).transpose()?,
+            ..StaffMeasure::default()
+        };
+        let mut voice = 0usize;
+        for held in &element.children {
+            match held.tag.as_str() {
+                "voice" => {
+                    let track = staff_index * 4 + voice;
+                    let read = self.voice(held, index, track, transposition)?;
+                    measure.voices.push(read);
+                    voice += 1;
+                }
+                "irregular" => measure.irregular = held.stripped() != "0",
+                "noOffset" => measure.number_offset = integer(held)?,
+                "startRepeat" => measure.start_repeat = true,
+                "endRepeat" => measure.end_repeat = Some(integer(held)?.max(0) as u32),
+                "LayoutBreak" => {
+                    if held.child_text("subtype") == "section" {
+                        measure.section_break = true;
+                    }
+                }
+                "multiMeasureRest" | "measureRepeatCount" => {
+                    return Err(refused(format!("<{}>", held.tag)));
+                }
+                "Marker" | "Jump" => return Err(refused(format!("A <{}>", held.tag))),
+                // What places the measure on the page.
+                "eid"
+                | "linkedMain"
+                | "stretch"
+                | "measureNumberMode"
+                | "breakMultiMeasureRest"
+                | "vspacer"
+                | "vspacerDown"
+                | "vspacerUp"
+                | "vspacerFixed"
+                | "visible"
+                | "stemless"
+                | "hideIfEmpty"
+                | "MeasureNumber"
+                | "MMRestRange"
+                | "SystemDivider"
+                | "Spacer"
+                | "StaffTypeChange" => {}
+                other => return Err(mscx_error(format!("<{other}> in a measure"))),
+            }
+        }
+        Ok(measure)
+    }
+
+    fn voice(
+        &mut self,
+        element: &Xml,
+        measure: i64,
+        track: usize,
+        transposition: (i64, i64),
+    ) -> Result<VoiceRead> {
+        let mut read = VoiceRead::default();
+        let mut tick = Frac::zero();
+        let mut tuplet: Option<usize> = None;
+        let mut graces: Vec<ChordRest> = Vec::new();
+        let mut fermatas: Vec<Fermata> = Vec::new();
+        let mut notes = 0usize;
+        for held in &element.children {
+            match held.tag.as_str() {
+                "location" => {
+                    if let Some(fractions) = held.find("fractions") {
+                        tick += fraction(fractions.stripped())?;
+                    }
+                    if held.find("measures").is_some() {
+                        return Err(mscx_error("a <location> in a voice that moves measures"));
+                    }
+                }
+                "Chord" | "Rest" => {
+                    let mut chord_rest =
+                        self.chord_rest(held, tick, tuplet, &read.tuplets, transposition)?;
+                    self.spanners_of(held, measure, tick, track)?;
+                    if chord_rest.grace.is_some() {
+                        graces.push(*chord_rest);
+                        continue;
+                    }
+                    chord_rest.fermatas = std::mem::take(&mut fermatas);
+                    // Graces before the note come first, those after it
+                    // follow it.
+                    let (after, before): (Vec<ChordRest>, Vec<ChordRest>) =
+                        std::mem::take(&mut graces)
+                            .into_iter()
+                            .partition(|grace| grace.grace == Some(GraceKind::After));
+                    chord_rest.graces_before = before;
+                    chord_rest.graces_after = after;
+                    if let Some(open) = tuplet {
+                        read.tuplets[open].elements.push(Held::Note(notes));
+                    }
+                    notes += 1;
+                    let length = chord_rest.length;
+                    read.events.push(Event {
+                        tick,
+                        what: What::ChordRest(chord_rest),
+                    });
+                    tick += length;
+                }
+                "Tuplet" => {
+                    let made = tuplet_of(held, tuplet)?;
+                    let index = read.tuplets.len();
+                    if let Some(open) = tuplet {
+                        read.tuplets[open].elements.push(Held::Tuplet(index));
+                    }
+                    read.tuplets.push(made);
+                    tuplet = Some(index);
+                }
+                "endTuplet" => {
+                    let open =
+                        tuplet.ok_or_else(|| mscx_error("an <endTuplet/> with no tuplet"))?;
+                    tuplet = read.tuplets[open].parent;
+                }
+                "Clef" => {
+                    let name = match held.find("concertClefType") {
+                        Some(clef) => clef.stripped(),
+                        None => held.child_text("subtype"),
+                    };
+                    let name = match held.find("transposingClefType") {
+                        Some(written) => written.stripped(),
+                        None => name,
+                    };
+                    read.events.push(Event {
+                        tick,
+                        what: What::Clef(clef_named(name)?),
+                    });
+                }
+                "KeySig" => {
+                    if !flag(held, "isCourtesy") {
+                        read.events.push(Event {
+                            tick,
+                            what: What::Key(key_of(held, transposition)?),
+                        });
+                    }
+                }
+                "TimeSig" => {
+                    if !flag(held, "isCourtesy") {
+                        read.events.push(Event {
+                            tick,
+                            what: What::Meter(meter_of(held)?),
+                        });
+                    }
+                }
+                "BarLine" => {
+                    if let Some(barline) = barline_of(held)? {
+                        read.events.push(Event {
+                            tick,
+                            what: What::Barline(barline),
+                        });
+                    }
+                }
+                "Fermata" => fermatas.push(fermata_of(held)),
+                "Dynamic" => {
+                    let mut dynamic = Dynamic::new(held.child_text("subtype"));
+                    dynamic.set_placement(Some(placement_of(held, Placement::Below)));
+                    read.events.push(Event {
+                        tick,
+                        what: What::Element(dynamic.into()),
+                    });
+                }
+                "Tempo" => {
+                    for element in tempo_of(held)? {
+                        read.events.push(Event {
+                            tick,
+                            what: What::Element(element),
+                        });
+                    }
+                }
+                "StaffText" | "SystemText" | "Expression" | "Text" => {
+                    let default = if held.tag == "Expression" {
+                        Placement::Below
+                    } else {
+                        Placement::Above
+                    };
+                    if let Some(element) = words_of(held, default) {
+                        read.events.push(Event {
+                            tick,
+                            what: What::Element(element),
+                        });
+                    }
+                }
+                "Harmony" => {
+                    read.events.push(Event {
+                        tick,
+                        what: What::Element(harmony_of(held)?.into()),
+                    });
+                }
+                "Spanner" => self.spanner(held, measure, tick, track)?,
+                "Beam" => {}
+                // What is drawn and not played.
+                "Symbol" | "Image" | "Breath" | "RehearsalMark" | "StaffState" | "Ambitus"
+                | "eid" | "LayoutBreak" | "Segment" => {}
+                other => return Err(refused(format!("A <{other}>"))),
+            }
+        }
+        if !graces.is_empty() {
+            return Err(mscx_error("grace notes with no note to lean on"));
+        }
+        Ok(read)
+    }
+
+    /// A `<Chord>` or `<Rest>`.
+    fn chord_rest(
+        &mut self,
+        element: &Xml,
+        tick: Frac,
+        tuplet: Option<usize>,
+        tuplets: &[TupletRead],
+        transposition: (i64, i64),
+    ) -> Result<Box<ChordRest>> {
+        let is_rest = element.tag == "Rest";
+        let written = element.child_text("durationType");
+        let dots = child_integer(element, "dots")?.unwrap_or(0).max(0) as u32;
+        let (value, base, order, measure_rest) = if written == "measure" {
+            let length = element
+                .find("duration")
+                .map(|duration| fraction(duration.stripped()))
+                .transpose()?
+                .ok_or_else(|| mscx_error("a measure rest that does not say how long it is"))?;
+            (None, length, 0, true)
+        } else {
+            let (kind, length, order) = duration_named(written)?;
+            (Some((kind, dots)), dotted(length, dots), order, false)
+        };
+        // A tuplet shortens what it holds by its ratio, and one inside
+        // another by both.
+        let mut length = base;
+        let mut open = tuplet;
+        while let Some(index) = open {
+            let held = &tuplets[index];
+            length = length * Frac::from_integer(i64::from(held.normal))
+                / Frac::from_integer(i64::from(held.actual));
+            open = held.parent;
+        }
+        let grace = [
+            ("acciaccatura", GraceKind::Acciaccatura),
+            ("appoggiatura", GraceKind::Appoggiatura),
+            ("grace4", GraceKind::Before),
+            ("grace16", GraceKind::Before),
+            ("grace32", GraceKind::Before),
+            ("grace8after", GraceKind::After),
+            ("grace16after", GraceKind::After),
+            ("grace32after", GraceKind::After),
+        ]
+        .into_iter()
+        .find(|(tag, _)| element.find(tag).is_some())
+        .map(|(_, kind)| kind);
+        let mut read = ChordRest {
+            tick,
+            length: if grace.is_some() {
+                Frac::zero()
+            } else {
+                length
+            },
+            value,
+            order,
+            measure_rest,
+            is_rest,
+            tuplet: if grace.is_some() { None } else { tuplet },
+            mode: BeamMode::Auto,
+            grace,
+            graces_before: Vec::new(),
+            graces_after: Vec::new(),
+            notes: Vec::new(),
+            hidden: element.child_text("visible") == "0",
+            small: flag(element, "small"),
+            stem: StemDirection::Unspecified,
+            lyrics: Vec::new(),
+            articulations: Vec::new(),
+            fermatas: Vec::new(),
+            step_shift: 0,
+            staff_move: child_integer(element, "staffMove")?.unwrap_or(0),
+            uid: self.uid(),
+        };
+        for held in &element.children {
+            match held.tag.as_str() {
+                "BeamMode" => {
+                    read.mode = BeamMode::from_name(held.stripped()).ok_or_else(|| {
+                        mscx_error(format!("the beam mode {:?}", held.stripped()))
+                    })?;
+                }
+                "StemDirection" => {
+                    read.stem = match held.stripped() {
+                        "up" => StemDirection::Up,
+                        "down" => StemDirection::Down,
+                        _ => StemDirection::Unspecified,
+                    };
+                }
+                "Note" => read.notes.push(note_of(held, transposition)?),
+                "Lyrics" => read.lyrics.push(lyric_of(held)?),
+                "Articulation" => {
+                    if let Some(articulation) = articulation_of(held)? {
+                        read.articulations.push(articulation);
+                    }
+                }
+                "offset" if is_rest => {
+                    let y: FloatType = held.get("y").and_then(|y| y.parse().ok()).unwrap_or(0.0);
+                    let steps = -2.0 * y;
+                    read.step_shift = if steps > 0.0 {
+                        (steps + 0.5) as IntegerType
+                    } else {
+                        (steps - 0.5) as IntegerType
+                    };
+                }
+                "Ornament" | "Arpeggio" | "Tremolo" | "TremoloSingleChord" | "TremoloTwoChord"
+                | "ChordLine" => {
+                    return Err(refused(format!("A <{}>", held.tag)));
+                }
+                // Read elsewhere, or only drawn.
+                "durationType" | "dots" | "duration" | "visible" | "small" | "staffMove"
+                | "acciaccatura" | "appoggiatura" | "grace4" | "grace16" | "grace32"
+                | "grace8after" | "grace16after" | "grace32after" | "Spanner" | "eid" | "Stem"
+                | "Hook" | "NoteDot" | "Beam" | "offset" | "linkedMain" | "stemDirection"
+                | "noStem" | "showStemSlash" | "combineVoice" | "ChordRest" | "StemSlash" => {}
+                other => return Err(refused(format!("A <{other}> in a chord"))),
+            }
+        }
+        if !is_rest && read.notes.is_empty() {
+            return Err(mscx_error("a chord with no notes"));
+        }
+        Ok(Box::new(read))
+    }
+
+    /// The spanners a note or rest starts: a slur written inside it.
+    fn spanners_of(&mut self, element: &Xml, measure: i64, tick: Frac, track: usize) -> Result<()> {
+        for held in element.find_all("Spanner") {
+            self.spanner(held, measure, tick, track)?;
+        }
+        Ok(())
+    }
+
+    /// A `<Spanner>`: where one starts, with where it ends; the end itself
+    /// says nothing that the start did not.
+    fn spanner(&mut self, element: &Xml, measure: i64, tick: Frac, track: usize) -> Result<()> {
+        let kind = element.get("type").unwrap_or("");
+        let Some(next) = element.find("next") else {
+            return Ok(());
+        };
+        let body = element.find(kind);
+        let start = SpannerStart::from(kind, body)?;
+        let Some(start) = start else {
+            return Ok(());
+        };
+        let here = Position {
+            measure,
+            tick,
+            track,
+        };
+        let end = moved(here, next.find("location"))?;
+        self.spanners.push(SpannerRead {
+            kind: start,
+            start: here,
+            end,
+        });
+        Ok(())
+    }
+}
+
+impl SpannerStart {
+    fn from(kind: &str, body: Option<&Xml>) -> Result<Option<Self>> {
+        Ok(Some(match kind {
+            "Slur" => Self::Slur,
+            "HairPin" => {
+                let subtype = body.map_or("0", |body| body.child_text("subtype"));
+                match subtype {
+                    "0" | "" => Self::Wedge(SpannerKind::Crescendo),
+                    "1" => Self::Wedge(SpannerKind::Diminuendo),
+                    other => {
+                        return Err(refused(format!("A hairpin of the kind {other}")));
+                    }
+                }
+            }
+            "Volta" => {
+                let body = body.ok_or_else(|| mscx_error("a volta that says nothing"))?;
+                let numbers = body
+                    .child_text("endings")
+                    .split(',')
+                    .map(|number| number.trim().parse::<u32>())
+                    .collect::<std::result::Result<Vec<u32>, _>>()
+                    .map_err(|_| {
+                        mscx_error(format!(
+                            "the volta endings {:?}",
+                            body.child_text("endings")
+                        ))
+                    })?;
+                Self::Volta {
+                    numbers,
+                    closed: body.child_text("endHookType") != "0",
+                }
+            }
+            // A tie is read on its note.
+            "Tie" | "LaissezVib" | "PartialTie" => return Ok(None),
+            other => return Err(refused(format!("A {other} spanner"))),
+        }))
+    }
+}
+
+/// A position moved by a relative `<location>`.
+fn moved(from: Position, location: Option<&Xml>) -> Result<Position> {
+    let Some(location) = location else {
+        return Ok(from);
+    };
+    let mut to = from;
+    if let Some(measures) = child_integer(location, "measures")? {
+        to.measure += measures;
+    }
+    if let Some(fractions) = location.find("fractions") {
+        to.tick += fraction(fractions.stripped())?;
+    }
+    let staves = child_integer(location, "staves")?.unwrap_or(0);
+    let voices = child_integer(location, "voices")?.unwrap_or(0);
+    let track = from.track as i64 + staves * 4 + voices;
+    to.track = usize::try_from(track).map_err(|_| mscx_error("a spanner ending on no staff"))?;
+    Ok(to)
+}
+
+fn tuplet_of(element: &Xml, parent: Option<usize>) -> Result<TupletRead> {
+    let count = |tag: &str| -> Result<u32> {
+        let value = child_integer(element, tag)?
+            .ok_or_else(|| mscx_error(format!("a tuplet with no <{tag}>")))?;
+        u32::try_from(value)
+            .ok()
+            .filter(|value| *value > 0)
+            .ok_or_else(|| mscx_error(format!("a tuplet of {value}")))
+    };
+    let base_name = element.child_text("baseNote");
+    let (kind, _, _) = duration_named(base_name)?;
+    let base_dots = child_integer(element, "baseDots")?.unwrap_or(0).max(0) as u32;
+    let placement = match element.child_text("direction") {
+        "up" => Some(Placement::Above),
+        "down" => Some(Placement::Below),
+        _ => None,
+    };
+    Ok(TupletRead {
+        actual: count("actualNotes")?,
+        normal: count("normalNotes")?,
+        base: (kind, base_dots),
+        bracket: child_integer(element, "bracketType")?.unwrap_or(0),
+        number: child_integer(element, "numberType")?.unwrap_or(0),
+        placement,
+        parent,
+        elements: Vec::new(),
+    })
+}
+
+fn note_of(element: &Xml, transposition: (i64, i64)) -> Result<NoteRead> {
+    let midi =
+        child_integer(element, "pitch")?.ok_or_else(|| mscx_error("a note with no pitch"))?;
+    let concert = child_integer(element, "tpc")?.ok_or_else(|| mscx_error("a note with no tpc"))?;
+    // A transposing instrument's notes are written as it reads them.
+    let written_tpc = child_integer(element, "tpc2")?.unwrap_or(concert);
+    let (tpc, midi) = if transposition == (0, 0) {
+        (concert, midi)
+    } else {
+        (written_tpc, midi - transposition.1)
+    };
+    let mut pitch = pitch_of(midi, tpc)?;
+    let (_, alter) = spelling(tpc)?;
+    match element.find("Accidental") {
+        Some(written) => {
+            let name = accidental_named(written.child_text("subtype"))?;
+            let mut accidental = Accidental::natural();
+            accidental.set_allowing_non_standard_value(name)?;
+            accidental.set_display_status(Some(true));
+            match written.child_text("bracket") {
+                "1" => accidental.set_display_style("parentheses")?,
+                "2" => accidental.set_display_style("bracket")?,
+                _ => {}
+            }
+            pitch.set_written_accidental(Some(accidental));
+        }
+        None if alter != 0 => {
+            let mut accidental = Accidental::new(alter as FloatType)?;
+            accidental.set_display_status(Some(false));
+            pitch.set_written_accidental(Some(accidental));
+        }
+        None => {}
+    }
+    let mut read = NoteRead {
+        pitch,
+        tie_start: false,
+        tie_stop: false,
+        hidden: element.child_text("visible") == "0",
+        small: flag(element, "small"),
+    };
+    for held in element.find_all("Spanner") {
+        if held.get("type") == Some("Tie") {
+            if held.find("next").is_some() {
+                read.tie_start = true;
+            }
+            if held.find("prev").is_some() {
+                read.tie_stop = true;
+            }
+        }
+    }
+    // MuseScore 3 wrote a tie as a `<Tie>` on the note it starts from.
+    if element.find("Tie").is_some() {
+        read.tie_start = true;
+    }
+    if element.find("endSpanner").is_some() {
+        read.tie_stop = true;
+    }
+    Ok(read)
+}
+
+fn lyric_of(element: &Xml) -> Result<LyricRead> {
+    let number = child_integer(element, "no")?.unwrap_or(0) + 1;
+    let syllabic = match element.child_text("syllabic") {
+        "" => None,
+        written => Some(Syllabic::from_name(written)?),
+    };
+    Ok(LyricRead {
+        number: number as IntegerType,
+        syllabic,
+        text: element.find("text").map(plain_text).unwrap_or_default(),
+    })
+}
+
+fn articulation_of(element: &Xml) -> Result<Option<Articulation>> {
+    let subtype = element.child_text("subtype");
+    let base = subtype
+        .strip_suffix("Above")
+        .or_else(|| subtype.strip_suffix("Below"))
+        .unwrap_or(subtype);
+    let class = match base {
+        "articAccent" => "Accent",
+        "articStaccato" => "Staccato",
+        "articStaccatissimo" | "articStaccatissimoWedge" => "Staccatissimo",
+        "articStaccatissimoStroke" => "Spiccato",
+        "articTenuto" => "Tenuto",
+        "articMarcato" => "StrongAccent",
+        "articTenutoStaccato" => "DetachedLegato",
+        "articStress" => "Stress",
+        "articUnstress" => "Unstress",
+        "stringsUpBow" => "UpBow",
+        "stringsDownBow" => "DownBow",
+        "stringsHarmonic" => "StringHarmonic",
+        "brassMuteOpen" => "OpenString",
+        "stringsThumbPosition" => "StringThumbPosition",
+        "brassMuteClosed" => "Stopped",
+        "pluckedSnapPizzicatoAbove" | "pluckedSnapPizzicato" => "SnapPizzicato",
+        other => return Err(refused(format!("The articulation {other:?}"))),
+    };
+    let kind = ArticulationKind::from_class_name(class)
+        .ok_or_else(|| mscx_error(format!("no articulation {class}")))?;
+    let mut articulation = Articulation::of_kind(kind);
+    if class == "StrongAccent" {
+        let up = !subtype.ends_with("Below");
+        articulation.set_point_direction(Some(if up { "up" } else { "down" }.to_string()));
+    } else {
+        match element.child_text("anchor") {
+            "0" => articulation.set_placement(Some("above".to_string())),
+            "1" => articulation.set_placement(Some("below".to_string())),
+            _ => {}
+        }
+    }
+    Ok(Some(articulation))
+}
+
+fn fermata_of(element: &Xml) -> Fermata {
+    let mut fermata = Fermata::new();
+    let subtype = element.child_text("subtype");
+    if subtype.ends_with("Below") {
+        fermata.set_fermata_type(FermataType::Inverted);
+    } else {
+        fermata.set_fermata_type(FermataType::Upright);
+    }
+    let shape = subtype
+        .strip_suffix("Above")
+        .or_else(|| subtype.strip_suffix("Below"))
+        .unwrap_or(subtype);
+    let shape = match shape {
+        "fermata" => None,
+        "fermataShort" => Some("angled"),
+        "fermataLong" => Some("square"),
+        "fermataVeryShort" => Some("double-angled"),
+        "fermataVeryLong" => Some("double-square"),
+        "fermataLongHenze" => Some("double-dot"),
+        "fermataShortHenze" => Some("half-curve"),
+        _ => None,
+    };
+    fermata.set_shape(shape.map(str::to_string));
+    fermata
+}
+
+/// Where a mark is placed: what it says, else its default.
+fn placement_of(element: &Xml, default: Placement) -> Placement {
+    match element.child_text("placement") {
+        "above" => Placement::Above,
+        "below" => Placement::Below,
+        _ => match element.child_text("direction") {
+            "up" => Placement::Above,
+            "down" => Placement::Below,
+            _ => default,
+        },
+    }
+}
+
+/// A key signature as it is written, for a transposing instrument in the
+/// key it reads.
+fn key_of(element: &Xml, transposition: (i64, i64)) -> Result<StreamElement> {
+    if flag(element, "custom") || element.find("KeySym").is_some() {
+        return Err(refused("A key signature of its own making"));
+    }
+    let concert = child_integer(element, "concertKey")?
+        .or(child_integer(element, "accidental")?)
+        .unwrap_or(0);
+    let mut sharps = match child_integer(element, "actualKey")? {
+        Some(actual) => actual,
+        None => concert - 7 * transposition.1 + 12 * transposition.0,
+    };
+    while sharps > 7 {
+        sharps -= 12;
+    }
+    while sharps < -7 {
+        sharps += 12;
+    }
+    let signature = KeySignature::new(sharps as IntegerType);
+    let mode = element.child_text("mode");
+    if !mode.is_empty()
+        && mode != "none"
+        && mode != "unknown"
+        && let Ok(key) = signature.try_as_key(Some(mode), None)
+    {
+        return Ok(key.into());
+    }
+    Ok(signature.into())
+}
+
+fn meter_of(element: &Xml) -> Result<TimeSignature> {
+    let numerator =
+        child_integer(element, "sigN")?.ok_or_else(|| mscx_error("a meter with no <sigN>"))?;
+    let denominator =
+        child_integer(element, "sigD")?.ok_or_else(|| mscx_error("a meter with no <sigD>"))?;
+    let written = element.child_text("textN");
+    let ratio = if written.is_empty() {
+        format!("{numerator}/{denominator}")
+    } else {
+        format!("{written}/{denominator}")
+    };
+    let mut meter = TimeSignature::from_ratio_string(&ratio)
+        .map_err(|_| mscx_error(format!("the meter {ratio}")))?;
+    match element.child_text("subtype") {
+        "1" => meter.set_symbol(Some("common".to_string())),
+        "2" => meter.set_symbol(Some("cut".to_string())),
+        _ => {}
+    }
+    Ok(meter)
+}
+
+/// A barline written in a voice. A repeat is not one: that is the
+/// measure's.
+fn barline_of(element: &Xml) -> Result<Option<Barline>> {
+    let kind = match element.child_text("subtype") {
+        "normal" | "" => BarlineType::Regular,
+        "double" => BarlineType::Double,
+        "end" => BarlineType::Final,
+        "reverse-end" => BarlineType::HeavyLight,
+        "heavy" => BarlineType::Heavy,
+        "double-heavy" => BarlineType::HeavyHeavy,
+        "dashed" => BarlineType::Dashed,
+        "dotted" => BarlineType::Dotted,
+        "start-repeat" | "end-repeat" | "end-start-repeat" => return Ok(None),
+        other => return Err(mscx_error(format!("a barline of the kind {other:?}"))),
+    };
+    Ok(Some(Barline::new(kind)))
+}
+
+/// A tempo mark: the mark, and whatever words stand beside it.
+fn tempo_of(element: &Xml) -> Result<Vec<StreamElement>> {
+    let per_second: FloatType = element
+        .child_text("tempo")
+        .parse()
+        .map_err(|_| mscx_error("a tempo that is not a number"))?;
+    let bpm = (per_second * 60.0 * 100.0).round() / 100.0;
+    if element.child_text("visible") == "0" {
+        return Ok(vec![
+            MetronomeMark::default().with_number_sounding(bpm).into(),
+        ]);
+    }
+    let placement = placement_of(element, Placement::Above);
+    let text = element.find("text");
+    let found = text.and_then(metronome_in);
+    let mut out: Vec<StreamElement> = Vec::new();
+    match found {
+        Some((left, referent, number)) => {
+            if !left.trim().is_empty() {
+                let mut words = TextExpression::new(left.trim());
+                words.set_placement(Some(placement));
+                out.push(words.into());
+            }
+            let mut mark = MetronomeMark::default();
+            mark.set_number(Some(number));
+            mark.set_referent(referent);
+            mark.set_placement(Some(placement));
+            out.push(mark.into());
+        }
+        None => {
+            if let Some(text) = text {
+                let written = plain_text(text);
+                if !written.trim().is_empty() {
+                    let mut words = TextExpression::new(written.trim());
+                    words.set_placement(Some(placement));
+                    out.push(words.into());
+                }
+            }
+            let mut mark = MetronomeMark::default().with_number_sounding(bpm);
+            mark.set_placement(Some(placement));
+            out.push(mark.into());
+        }
+    }
+    Ok(out)
+}
+
+/// The metronome mark in a tempo's text: the words before it, the note it
+/// counts and how many to the minute.
+fn metronome_in(text: &Xml) -> Option<(String, Duration, FloatType)> {
+    let mut before = String::new();
+    if let Some(leading) = text.text() {
+        before.push_str(leading);
+    }
+    for (index, child) in text.children.iter().enumerate() {
+        if child.tag == "sym" {
+            let name = child.text().unwrap_or("").trim();
+            let referent = match name {
+                "metNoteWhole" => Duration::from_type(DurationType::Whole),
+                "metNoteHalfUp" => Duration::from_type(DurationType::Half),
+                "metNoteQuarterUp" => Duration::from_type(DurationType::Quarter),
+                "metNote8thUp" => Duration::from_type(DurationType::Eighth),
+                "metNote16thUp" => Duration::from_type(DurationType::Sixteenth),
+                _ => return None,
+            };
+            let mut referent = referent;
+            let mut rest = String::new();
+            let mut dots = 0;
+            if let Some(tail) = child.tail() {
+                rest.push_str(tail);
+            }
+            for later in &text.children[index + 1..] {
+                if later.tag == "sym" && later.text().unwrap_or("").trim() == "metAugmentationDot" {
+                    dots += 1;
+                } else {
+                    rest.push_str(&plain_text(later));
+                }
+                if let Some(tail) = later.tail() {
+                    rest.push_str(tail);
+                }
+            }
+            if dots > 0
+                && let Some((kind, _)) = referent.type_and_dots()
+            {
+                referent = Duration::from_type_with_dots(kind, dots);
+            }
+            let rest = rest.trim_start();
+            let rest = rest.strip_prefix('=')?.trim_start();
+            let digits: String = rest
+                .chars()
+                .take_while(|c| c.is_ascii_digit() || *c == '.' || *c == ',')
+                .collect();
+            let number: FloatType = digits.replace(',', ".").parse().ok()?;
+            let before = before.trim_end_matches('(').to_string();
+            return Some((before, referent, number));
+        }
+        before.push_str(&plain_text(child));
+        if let Some(tail) = child.tail() {
+            before.push_str(tail);
+        }
+    }
+    None
+}
+
+/// Words written over or under the staff; words saying where to go next
+/// are a repeat mark.
+fn words_of(element: &Xml, default: Placement) -> Option<StreamElement> {
+    let text = element.find("text").map(plain_text).unwrap_or_default();
+    let text = text.trim();
+    if text.is_empty() {
+        return None;
+    }
+    let placement = placement_of(element, default);
+    let repeat = RepeatExpressionKind::ALL
+        .into_iter()
+        .find(|kind| RepeatExpression::new(*kind).is_valid_text(text));
+    Some(match repeat {
+        Some(kind) => {
+            let mut mark = RepeatExpression::new(kind);
+            mark.set_text(text);
+            mark.set_placement(Some(placement));
+            mark.into()
+        }
+        None => {
+            let mut words = TextExpression::new(text);
+            words.set_placement(Some(placement));
+            words.into()
+        }
+    })
+}
+
+/// A chord symbol: its root and bass as tonal pitch classes, and the name
+/// of its kind as written.
+fn harmony_of(element: &Xml) -> Result<ChordSymbol> {
+    let info = element.find("harmonyInfo").unwrap_or(element);
+    let root = child_integer(info, "root")?;
+    let name = info.child_text("name");
+    let Some(root) = root else {
+        return Err(refused("A chord symbol with no root"));
+    };
+    let (step, alter) = spelling(root)?;
+    let mut figure = step.to_string();
+    let accidental = match alter {
+        -2 => "--",
+        -1 => "-",
+        1 => "#",
+        2 => "##",
+        _ => "",
+    };
+    figure.push_str(accidental);
+    figure.push_str(name);
+    if let Some(bass) = child_integer(info, "base")? {
+        let (step, alter) = spelling(bass)?;
+        figure.push('/');
+        figure.push(step);
+        figure.push_str(match alter {
+            -2 => "--",
+            -1 => "-",
+            1 => "#",
+            2 => "##",
+            _ => "",
+        });
+    }
+    ChordSymbol::parse_music21(&figure)
+}
+
+// ---------------------------------------------------------------- the head
+
+fn metadata_of(score: &Xml, program: &str) -> Metadata {
+    let mut tags: Vec<(String, String)> = score
+        .find_all("metaTag")
+        .filter_map(|tag| {
+            let name = tag.get("name")?.to_string();
+            let value = tag.all_text();
+            (!value.is_empty()).then_some((name, value))
+        })
+        .collect();
+    // MuseScore keeps its tags sorted by name.
+    tags.sort_by(|left, right| left.0.cmp(&right.0));
+    let get = |name: &str| {
+        tags.iter()
+            .find(|(held, _)| held == name)
+            .map(|(_, value)| value.clone())
+    };
+    let mut metadata = Metadata::new();
+    if let Some(title) = get("workTitle") {
+        metadata.add_text("title", title);
+    }
+    if let Some(number) = get("workNumber") {
+        metadata.add_text("number", number);
+    }
+    if let Some(number) = get("movementNumber") {
+        metadata.add_text("movementNumber", number);
+    }
+    if let Some(title) = get("movementTitle") {
+        metadata.add_text("movementName", title);
+    }
+    for role in ["arranger", "composer", "lyricist", "poet", "translator"] {
+        if let Some(name) = get(role) {
+            metadata.add(role, MetadataValue::with_role(name.trim(), role));
+        }
+    }
+    if let Some(copyright) = get("copyright") {
+        metadata.add("copyright", MetadataValue::new(copyright.trim()));
+    }
+    if !program.is_empty() {
+        metadata.add_text("software", program);
+    }
+    const NAMED: [&str; 12] = [
+        "arranger",
+        "composer",
+        "lyricist",
+        "poet",
+        "translator",
+        "copyright",
+        "source",
+        "workTitle",
+        "workNumber",
+        "movementTitle",
+        "movementNumber",
+        "originalFormat",
+    ];
+    for (name, value) in &tags {
+        if NAMED.contains(&name.as_str()) {
+            continue;
+        }
+        let unique = crate::metadata::STANDARD_PROPERTIES
+            .iter()
+            .find(|(unique, namespaced, _)| unique == name || namespaced == name)
+            .map_or(name.as_str(), |(unique, _, _)| unique);
+        metadata.add_text(unique, value.clone());
+    }
+    metadata
+}
+
+/// music21's `getDefaultInstrument`, from what MuseScore says of the
+/// instrument: a program and a name.
+fn instrument_of(program: Option<u8>, channel: Option<u8>, name: Option<&str>) -> Instrument {
+    let mut instrument = program
+        .and_then(|program| Instrument::from_midi_program(program).ok())
+        .unwrap_or_default();
+    if program.is_some() {
+        instrument.set_midi_channel(channel);
+    }
+    if let Some(name) = name.filter(|name| !name.is_empty()) {
+        let mut from_name = Instrument::from_name(name, SearchLanguage::All).unwrap_or_default();
+        from_name.set_midi_channel(instrument.midi_channel());
+        if from_name.midi_program() == instrument.midi_program() || instrument.is_a("Piano") {
+            instrument = from_name;
+        }
+    }
+    instrument
+}
+
+fn parts_of(score: &Xml) -> Result<Vec<PartRead>> {
+    let mut parts = Vec::new();
+    let mut first_staff = 0;
+    let mut channel: u8 = 0;
+    let listed: Vec<&Xml> = score.find_all("Part").collect();
+    let single = listed.len() == 1;
+    for (index, part) in listed.into_iter().enumerate() {
+        let staves = part.find_all("Staff").count();
+        if staves == 0 {
+            return Err(mscx_error("a part with no staff"));
+        }
+        for staff in part.find_all("Staff") {
+            if let Some(kind) = staff.find("StaffType")
+                && let Some(group) = kind.get("group")
+                && group != "pitched"
+            {
+                return Err(refused(format!("A {group} staff")));
+            }
+        }
+        let instrument = part
+            .find("Instrument")
+            .ok_or_else(|| mscx_error("a part with no instrument"))?;
+        if flag(instrument, "useDrumset") {
+            return Err(refused("A drum set"));
+        }
+        let text = |element: &Xml, tag: &str| {
+            element
+                .find(tag)
+                .map(plain_text)
+                .map(|text| text.trim().replace('\n', " "))
+                .filter(|text| !text.is_empty())
+        };
+        let long_name = text(instrument, "longName");
+        let short_name = text(instrument, "shortName");
+        let track_name = text(instrument, "trackName");
+        let part_track = text(part, "trackName");
+        let (name, name_hidden) = match long_name {
+            Some(name) => (Some(name), single),
+            None => (part_track.clone(), part_track.is_some() || single),
+        };
+        let channels: Vec<&Xml> = instrument.find_all("Channel").collect();
+        let program = channels
+            .first()
+            .and_then(|first| first.find("program"))
+            .and_then(|program| program.get("value"))
+            .and_then(|value| value.parse::<u8>().ok());
+        let first_channel = channel;
+        for _ in 0..channels.len().max(1) {
+            channel += 1;
+            if channel == 9 {
+                channel += 1;
+            }
+        }
+        let first_channel = if first_channel == 9 {
+            10
+        } else {
+            first_channel
+        };
+        let mut made = instrument_of(program, Some(first_channel % 16), track_name.as_deref());
+        made.set_part_id(Some(format!("P{}", index + 1)));
+        made.set_part_name(name.clone());
+        made.set_part_abbreviation(short_name.clone());
+        if let Some(track_name) = &track_name {
+            made.set_name(Some(track_name.clone()));
+        }
+        let sound = instrument.child_text("instrumentId");
+        if !sound.is_empty() {
+            made.set_sound(Some(sound.to_string()));
+        }
+        let transposition = (
+            child_integer(instrument, "transposeDiatonic")?.unwrap_or(0),
+            child_integer(instrument, "transposeChromatic")?.unwrap_or(0),
+        );
+        if transposition != (0, 0) {
+            let (diatonic, chromatic) = (-transposition.0, -transposition.1);
+            let steps = if diatonic < 0 {
+                diatonic - 1
+            } else {
+                diatonic + 1
+            };
+            // The written notes stand this far from the sounding ones,
+            // which is the interval music21 keeps turned round.
+            let interval = Interval::from_generic_and_chromatic(
+                -steps as IntegerType,
+                -chromatic as IntegerType,
+            )
+            .or_else(|_| Interval::from_semitones(-chromatic as IntegerType))?;
+            made.set_transposition(Some(interval));
+        }
+        let mut default_clefs = vec![String::from("G"); staves];
+        for clef in instrument.find_all("clef") {
+            let staff = clef
+                .get("staff")
+                .and_then(|staff| staff.parse::<usize>().ok())
+                .unwrap_or(1);
+            if (1..=staves).contains(&staff) {
+                default_clefs[staff - 1] = clef.stripped().to_string();
+            }
+        }
+        parts.push(PartRead {
+            staves,
+            first_staff,
+            name,
+            abbreviation: short_name,
+            name_hidden,
+            instrument: made,
+            default_clefs,
+            transposition,
+        });
+        first_staff += staves;
+    }
+    if parts.is_empty() {
+        return Err(mscx_error("a score with no parts"));
+    }
+    Ok(parts)
+}
+
+// --------------------------------------------------------------- assembly
+
+/// One element of a measure as music21 would hold it once read.
+#[derive(Clone, Debug)]
+struct Item {
+    offset: FloatType,
+    seq: usize,
+    staff: usize,
+    uid: Option<usize>,
+    element: StreamElement,
+}
+
+impl Item {
+    fn order(&self) -> i32 {
+        self.element.class_sort_order()
+    }
+
+    fn is_grace(&self) -> bool {
+        self.element.duration().is_some_and(Duration::is_grace)
+    }
+}
+
+fn sorted(mut items: Vec<Item>) -> Vec<Item> {
+    items.sort_by(|left, right| {
+        left.offset
+            .total_cmp(&right.offset)
+            .then(left.order().cmp(&right.order()))
+            .then(right.is_grace().cmp(&left.is_grace()))
+            .then(left.seq.cmp(&right.seq))
+    });
+    items
+}
+
+#[derive(Clone, Debug, Default)]
+struct VoiceIr {
+    id: String,
+    items: Vec<Item>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct MeasureIr {
+    offset: FloatType,
+    number: IntegerType,
+    suffix: Option<String>,
+    hidden: bool,
+    left: Option<Barline>,
+    right: Option<Barline>,
+    ending: Option<Ending>,
+    items: Vec<Item>,
+    voices: Vec<VoiceIr>,
+}
+
+fn build_measure(measure: MeasureIr) -> (Stream, Vec<Option<usize>>) {
+    let mut entries: Vec<(Item, Vec<Option<usize>>)> = Vec::new();
+    for (index, voice) in measure.voices.into_iter().enumerate() {
+        let mut uids = Vec::new();
+        let mut events = Vec::new();
+        for item in sorted(voice.items) {
+            uids.push(item.uid);
+            events.push(StreamEvent::new(item.offset, item.element));
+        }
+        let mut stream = Stream::from_events(events);
+        stream.set_kind(StreamKind::Voice);
+        stream.set_id(Some(voice.id));
+        entries.push((
+            Item {
+                offset: 0.0,
+                seq: index,
+                staff: 0,
+                uid: None,
+                element: stream.into(),
+            },
+            uids,
+        ));
+    }
+    let voices = entries.len();
+    for mut item in measure.items {
+        item.seq = item.seq.saturating_add(voices);
+        let uid = item.uid;
+        entries.push((item, vec![uid]));
+    }
+    entries.sort_by(|(left, _), (right, _)| {
+        left.offset
+            .total_cmp(&right.offset)
+            .then(left.order().cmp(&right.order()))
+            .then(right.is_grace().cmp(&left.is_grace()))
+            .then(left.seq.cmp(&right.seq))
+    });
+    let mut uids = Vec::new();
+    let mut events = Vec::new();
+    for (item, leaf_uids) in entries {
+        uids.extend(leaf_uids);
+        events.push(StreamEvent::new(item.offset, item.element));
+    }
+    let mut stream = Stream::from_events(events);
+    stream.set_kind(StreamKind::Measure);
+    stream.set_number(measure.number);
+    stream.set_number_suffix(measure.suffix);
+    stream.set_number_hidden(measure.hidden);
+    stream.set_left_barline(measure.left);
+    stream.set_right_barline(measure.right);
+    stream.set_ending(measure.ending);
+    (stream, uids)
+}
+
+/// The tuplets a note is written inside, outermost first, each marked where
+/// it starts and stops.
+fn tuplets_for(
+    tuplets: &[TupletRead],
+    innermost: Option<usize>,
+    note: usize,
+    groups: &[Vec<usize>],
+) -> Vec<Tuplet> {
+    let mut chain = Vec::new();
+    let mut open = innermost;
+    let mut held = Held::Note(note);
+    while let Some(index) = open {
+        let tuplet = &tuplets[index];
+        let first = tuplet.elements.first() == Some(&held);
+        let last = tuplet.elements.last() == Some(&held);
+        let mut made = Tuplet::new(tuplet.actual, tuplet.normal, tuplet.base.0, tuplet.base.1);
+        made.set_tuplet_type(match (first, last) {
+            (true, true) => Some(TupletType::StartStop),
+            (true, false) => Some(TupletType::Start),
+            (false, true) => Some(TupletType::Stop),
+            _ => None,
+        });
+        let bracket = match tuplet.bracket {
+            1 => true,
+            2 => false,
+            // As the beams decide: no bracket over notes one beam joins.
+            _ => !beamed_together(tuplets, index, groups),
+        };
+        made.set_bracket(if bracket {
+            TupletBracket::Bracket
+        } else {
+            TupletBracket::None
+        });
+        match tuplet.number {
+            1 => {
+                made.set_normal_show(Some(TupletShow::Number));
+            }
+            2 => made.set_actual_show(None),
+            _ => {}
+        }
+        made.set_placement(tuplet.placement);
+        chain.push(made);
+        held = Held::Tuplet(index);
+        open = tuplet.parent;
+    }
+    chain.reverse();
+    chain
+}
+
+/// Whether every note of a tuplet is under one beam.
+fn beamed_together(tuplets: &[TupletRead], index: usize, groups: &[Vec<usize>]) -> bool {
+    let mut notes = Vec::new();
+    collect_notes(tuplets, index, &mut notes);
+    let (Some(first), Some(last)) = (notes.first(), notes.last()) else {
+        return false;
+    };
+    groups.iter().any(|group| {
+        group.contains(first)
+            && group.contains(last)
+            && notes.iter().all(|note| group.contains(note))
+    })
+}
+
+fn collect_notes(tuplets: &[TupletRead], index: usize, out: &mut Vec<usize>) {
+    for held in &tuplets[index].elements {
+        match held {
+            Held::Note(note) => out.push(*note),
+            Held::Tuplet(inner) => collect_notes(tuplets, *inner, out),
+        }
+    }
+}
+
+/// The note, chord or rest a read one stands for.
+fn element_of(
+    read: &ChordRest,
+    tuplets: Vec<Tuplet>,
+    beams: Option<Beams>,
+) -> Result<StreamElement> {
+    let duration = duration_of(read, tuplets)?;
+    let lyrics: Vec<Lyric> = read
+        .lyrics
+        .iter()
+        .map(|lyric| {
+            let mut made = Lyric::unsung();
+            made.set_text(lyric.text.trim());
+            if let Some(syllabic) = lyric.syllabic {
+                made.set_syllabic(syllabic);
+            }
+            made.set_number(lyric.number);
+            made
+        })
+        .collect();
+    let expressions: Vec<Expression> = read
+        .fermatas
+        .iter()
+        .cloned()
+        .map(Expression::Fermata)
+        .collect();
+    if read.is_rest {
+        let mut rest = Rest::new(duration);
+        rest.set_hidden(read.hidden);
+        if read.small {
+            rest.set_size(Some(NoteSize::Cue));
+        }
+        rest.set_step_shift(read.step_shift);
+        *rest.lyrics_mut() = lyrics;
+        *rest.expressions_mut() = expressions;
+        *rest.articulations_mut() = read.articulations.clone();
+        return Ok(rest.into());
+    }
+    let mut notes: Vec<Note> = Vec::new();
+    for written in &read.notes {
+        let mut note = Note::from_pitch(written.pitch.clone());
+        note.set_duration(duration.clone());
+        note.set_hidden(written.hidden || read.hidden);
+        if written.small || read.small {
+            note.set_size(Some(NoteSize::Cue));
+        }
+        let tie = match (written.tie_start, written.tie_stop) {
+            (true, true) => Some(TieType::Continue),
+            (true, false) => Some(TieType::Start),
+            (false, true) => Some(TieType::Stop),
+            (false, false) => None,
+        };
+        note.set_tie(tie.map(Tie::new));
+        note.set_stem_direction(read.stem);
+        notes.push(note);
+    }
+    if notes.len() == 1 {
+        let mut note = notes.remove(0);
+        if let Some(beams) = beams {
+            note.set_beams(beams);
+        }
+        *note.lyrics_mut() = lyrics;
+        *note.articulations_mut() = read.articulations.clone();
+        *note.expressions_mut() = expressions;
+        return Ok(note.into());
+    }
+    // A chord keeps its notes as MuseScore does, lowest first.
+    for note in &mut notes {
+        note.set_stem_direction(StemDirection::Unspecified);
+    }
+    if let Some(first) = notes.first_mut() {
+        *first.lyrics_mut() = lyrics;
+    }
+    let mut chord = Chord::new(notes)?;
+    chord.set_duration(duration);
+    if let Some(beams) = beams {
+        chord.set_beams(beams);
+    }
+    chord.set_stem_direction(read.stem);
+    *chord.articulations_mut() = read.articulations.clone();
+    *chord.expressions_mut() = expressions;
+    Ok(chord.into())
+}
+
+fn duration_of(read: &ChordRest, tuplets: Vec<Tuplet>) -> Result<Duration> {
+    let quarter_length = quarters(read.length);
+    let Some((kind, dots)) = read.value else {
+        return Duration::new(quarter_length);
+    };
+    if let Some(grace) = read.grace {
+        let mut written = Duration::default();
+        written.clear();
+        written.set_tuplets(Vec::new());
+        written.add_duration_tuple(kind, dots);
+        let mut value = written.grace_duration();
+        let mut marks = Grace::new();
+        marks.set_slash(grace == GraceKind::Acciaccatura);
+        value.set_grace(Some(marks));
+        return Ok(value);
+    }
+    if tuplets.is_empty() {
+        return Duration::new(quarter_length);
+    }
+    let mut duration = Duration::default();
+    duration.clear();
+    duration.set_tuplets(Vec::new());
+    duration.add_duration_tuple(kind, dots);
+    duration.set_tuplets(tuplets);
+    if (duration.quarter_length() - quarter_length).abs() > 1e-7 {
+        duration.set_linked(false);
+        duration.set_quarter_length(quarter_length)?;
+    }
+    Ok(duration)
+}
+
+/// A part put together out of its measures, with the uid of each leaf.
+struct BuiltPart {
+    stream: Stream,
+    uids: Vec<Option<usize>>,
+}
+
+/// Reads a MuseScore file into a score.
+///
+/// The text is an uncompressed `.mscx` as MuseScore 4 saves it, or as
+/// MuseScore 3 does where the two formats are the same. A `.mscz` is a zip
+/// archive holding one; the library opens no file and unpacks nothing, so
+/// the caller hands over the text of the `.mscx` inside it.
+///
+/// Every `<Part>` is a part, and a part on several staves -- a piano -- is
+/// a part for each staff joined by a brace, as a MusicXML reader makes it.
+/// Pitches are spelled as the file spells them, and a transposing
+/// instrument's are written as it reads them. What the file leaves to be
+/// worked out when the page is laid out is worked out as MuseScore works
+/// it out: beams from the meter, the brackets of beamed tuplets, the key
+/// signature a staff starts with when none is written.
+///
+/// What is only drawn -- frames, page and system breaks, positions, fonts
+/// -- is passed over. What the crate has no value for, or cannot yet read
+/// -- percussion and tablature staves, ornaments, arpeggios, tremolos,
+/// jumps and markers, multi-measure rests -- is refused with an error
+/// rather than dropped.
+///
+/// ```
+/// use music21_rs::musescore::from_mscx;
+///
+/// let score = from_mscx(
+///     r#"<museScore version="4.20"><Score>
+///     <Part><Staff/><trackName>Flute</trackName>
+///       <Instrument><longName>Flute</longName><trackName>Flute</trackName>
+///       <Channel><program value="73"/></Channel></Instrument></Part>
+///     <Staff id="1"><Measure><voice>
+///       <TimeSig><sigN>2</sigN><sigD>4</sigD></TimeSig>
+///       <Chord><durationType>quarter</durationType><Note><pitch>60</pitch><tpc>14</tpc></Note></Chord>
+///       <Chord><durationType>quarter</durationType><Note><pitch>63</pitch><tpc>11</tpc></Note></Chord>
+///     </voice></Measure></Staff>
+///     </Score></museScore>"#,
+/// )?;
+/// let names: Vec<String> = score.parts()[0]
+///     .pitches()
+///     .iter()
+///     .map(|pitch| pitch.name_with_octave())
+///     .collect();
+/// assert_eq!(names, ["C4", "Eb4"]);
+/// # Ok::<(), music21_rs::Error>(())
+/// ```
+pub fn from_mscx(document: &str) -> Result<Stream> {
+    let root = Xml::parse(document)?;
+    if root.tag != "museScore" {
+        return Err(mscx_error(format!(
+            "a MuseScore file starts with <museScore>, not <{}>",
+            root.tag
+        )));
+    }
+    let version = root.get("version").unwrap_or("");
+    let major: u32 = version
+        .split('.')
+        .next()
+        .and_then(|major| major.parse().ok())
+        .unwrap_or(0);
+    if major < 3 {
+        return Err(refused(format!("A file in MuseScore's format {version:?}")));
+    }
+    let score = root
+        .find("Score")
+        .ok_or_else(|| mscx_error("a MuseScore file with no <Score>"))?;
+
+    let program_version = root.child_text("programVersion");
+    let program = if program_version.is_empty() {
+        String::new()
+    } else {
+        let studio = program_version
+            .split('.')
+            .take(2)
+            .map(|piece| piece.parse::<u32>().unwrap_or(0))
+            .collect::<Vec<_>>();
+        let renamed = studio.first().copied().unwrap_or(0) > 4
+            || (studio.first() == Some(&4) && studio.get(1).copied().unwrap_or(0) >= 4);
+        if renamed {
+            format!("MuseScore Studio {program_version}")
+        } else {
+            format!("MuseScore {program_version}")
+        }
+    };
+    let metadata = metadata_of(score, &program);
+    let parts = parts_of(score)?;
+    let staves: Vec<&Xml> = score.find_all("Staff").collect();
+    let staff_count: usize = parts.iter().map(|part| part.staves).sum();
+    if staves.len() != staff_count {
+        return Err(mscx_error(format!(
+            "{} staves are written for parts with {staff_count}",
+            staves.len()
+        )));
+    }
+
+    let mut reader = Reader {
+        next_uid: 0,
+        spanners: Vec::new(),
+    };
+    let mut read_staves: Vec<Vec<StaffMeasure>> = Vec::new();
+    for part in &parts {
+        for index in 0..part.staves {
+            let global = part.first_staff + index;
+            read_staves.push(reader.staff(staves[global], global, part.transposition)?);
+        }
+    }
+    let measure_count = read_staves.first().map_or(0, Vec::len);
+    if read_staves.iter().any(|staff| staff.len() != measure_count) {
+        return Err(mscx_error("staves with different numbers of measures"));
+    }
+
+    let grid = grid_of(&read_staves)?;
+    Assembler {
+        parts: &parts,
+        staves: &read_staves,
+        grid: &grid,
+        spanners: &reader.spanners,
+        uids: HashMap::new(),
+        next_uid: reader.next_uid,
+    }
+    .score(metadata)
+}
+
+/// Where each measure starts and how long it is.
+fn grid_of(staves: &[Vec<StaffMeasure>]) -> Result<Grid> {
+    let count = staves.first().map_or(0, Vec::len);
+    let mut grid = Grid {
+        starts: Vec::with_capacity(count),
+        lengths: Vec::with_capacity(count),
+        meters: Vec::with_capacity(count),
+    };
+    let mut meter = (4, 4);
+    let mut start = Frac::zero();
+    for index in 0..count {
+        // The meter a measure starts with, from whichever staff says one.
+        for staff in staves {
+            let found = staff[index]
+                .voices
+                .iter()
+                .flat_map(|voice| &voice.events)
+                .find_map(|event| match &event.what {
+                    What::Meter(written) if event.tick.is_zero() => Some(written),
+                    _ => None,
+                });
+            if let Some(written) = found {
+                meter = (
+                    i64::from(written.numerator()),
+                    i64::from(written.denominator()),
+                );
+                break;
+            }
+        }
+        let length = staves
+            .iter()
+            .find_map(|staff| staff[index].len)
+            .unwrap_or_else(|| Frac::new(meter.0, meter.1));
+        grid.starts.push(start);
+        grid.lengths.push(length);
+        grid.meters.push(meter);
+        start += length;
+    }
+    Ok(grid)
+}
+
+struct Assembler<'a> {
+    parts: &'a [PartRead],
+    staves: &'a [Vec<StaffMeasure>],
+    grid: &'a Grid,
+    spanners: &'a [SpannerRead],
+    /// Each note's uid by where it stands: measure, tick and track.
+    uids: HashMap<(i64, Frac, usize), usize>,
+    next_uid: usize,
+}
+
+impl Assembler<'_> {
+    fn score(mut self, metadata: Metadata) -> Result<Stream> {
+        let mut built: Vec<BuiltPart> = Vec::new();
+        let mut groups: Vec<StaffGroup> = Vec::new();
+        for (index, part) in self.parts.iter().enumerate() {
+            let first = built.len();
+            let staves = self.part(index, part)?;
+            let count = staves.len();
+            built.extend(staves);
+            if count > 1 {
+                let mut group = StaffGroup::new((first..first + count).collect());
+                group.set_name(part.name.clone());
+                group.set_symbol(Some("brace"))?;
+                group.set_bar_together(Some(BarTogether::Yes));
+                group.set_name_hidden(true);
+                groups.push(group);
+            }
+        }
+        let mut uids: Vec<Option<usize>> = Vec::new();
+        let mut events = Vec::new();
+        for part in built {
+            uids.extend(part.uids);
+            events.push(StreamEvent::new(0.0, part.stream));
+        }
+        let mut assembled = Stream::from_events(events);
+        assembled.set_kind(StreamKind::Score);
+        assembled.set_metadata(Some(metadata));
+        for group in groups {
+            assembled.add_staff_group(group);
+        }
+        let position_of = |uid: usize| uids.iter().position(|held| *held == Some(uid));
+        for spanner in self.spanners {
+            let (kind, start, end) = match &spanner.kind {
+                SpannerStart::Slur => (SpannerKind::Slur, spanner.start, spanner.end),
+                SpannerStart::Wedge(kind) => (*kind, spanner.start, spanner.end),
+                SpannerStart::Volta { .. } => continue,
+            };
+            let first = self
+                .uids
+                .get(&(start.measure, start.tick, start.track))
+                .copied();
+            let last = self.uids.get(&(end.measure, end.tick, end.track)).copied();
+            let mut positions = Vec::new();
+            for uid in [first, last].into_iter().flatten() {
+                if let Some(position) = position_of(uid)
+                    && !positions.contains(&Some(position))
+                {
+                    positions.push(Some(position));
+                }
+            }
+            if positions.is_empty() {
+                continue;
+            }
+            let made = if kind.is_wedge() {
+                let mut wedge = Spanner::with_unplaced(kind, positions);
+                wedge.set_placement(Some(Placement::Below));
+                wedge
+            } else {
+                Spanner::with_unplaced(kind, positions)
+            };
+            assembled.add_spanner(made);
+        }
+        Ok(assembled)
+    }
+
+    fn uid(&mut self) -> usize {
+        self.next_uid += 1;
+        self.next_uid
+    }
+
+    /// A part, or one part for each of its staves.
+    fn part(&mut self, index: usize, part: &PartRead) -> Result<Vec<BuiltPart>> {
+        let measures = self.measures(index, part)?;
+        if part.staves == 1 {
+            let (stream, uids) = self.build(part, StreamKind::Part, None, measures);
+            return Ok(vec![BuiltPart { stream, uids }]);
+        }
+        let mut out = Vec::new();
+        let mut taken: Vec<usize> = Vec::new();
+        for key in 1..=part.staves {
+            let mut split = Vec::new();
+            for measure in &measures {
+                let mut copy = MeasureIr {
+                    offset: measure.offset,
+                    number: measure.number,
+                    suffix: measure.suffix.clone(),
+                    hidden: false,
+                    left: measure.left.clone(),
+                    right: measure.right.clone(),
+                    ending: measure.ending.clone(),
+                    items: Vec::new(),
+                    voices: Vec::new(),
+                };
+                let mut seq = 0usize;
+                let mut take = |items: &[Item], into: &mut Vec<Item>, seq: &mut usize| {
+                    for item in sorted(items.to_vec()) {
+                        if item.staff != 0 && item.staff != key {
+                            continue;
+                        }
+                        let mut item = item;
+                        let seq_key = item.uid.unwrap_or(usize::MAX);
+                        if taken.contains(&seq_key) {
+                            item.uid = None;
+                        } else {
+                            taken.push(seq_key);
+                        }
+                        item.seq = *seq;
+                        *seq += 1;
+                        into.push(item);
+                    }
+                };
+                take(&measure.items, &mut copy.items, &mut seq);
+                for voice in &measure.voices {
+                    let mut items = Vec::new();
+                    take(&voice.items, &mut items, &mut seq);
+                    copy.voices.push(VoiceIr {
+                        id: voice.id.clone(),
+                        items,
+                    });
+                }
+                copy.voices.retain(|voice| !voice.items.is_empty());
+                if copy.voices.len() == 1 {
+                    let voice = copy.voices.remove(0);
+                    for mut item in sorted(voice.items) {
+                        item.seq = seq;
+                        seq += 1;
+                        copy.items.push(item);
+                    }
+                }
+                split.push(copy);
+            }
+            let id = format!("P{}-Staff{key}", index + 1);
+            let (stream, uids) = self.build(part, StreamKind::PartStaff, Some(id), split);
+            out.push(BuiltPart { stream, uids });
+        }
+        Ok(out)
+    }
+
+    fn build(
+        &self,
+        part: &PartRead,
+        kind: StreamKind,
+        id: Option<String>,
+        measures: Vec<MeasureIr>,
+    ) -> (Stream, Vec<Option<usize>>) {
+        let mut uids = vec![None];
+        let mut events = vec![StreamEvent::new(0.0, part.instrument.clone())];
+        for measure in measures {
+            let offset = measure.offset;
+            let (stream, leaf_uids) = build_measure(measure);
+            uids.extend(leaf_uids);
+            events.push(StreamEvent::new(offset, stream));
+        }
+        let mut stream = Stream::from_events(events);
+        stream.set_kind(kind);
+        stream.set_id(id.or_else(|| part.instrument.best_name().map(str::to_string)));
+        stream.set_name(part.name.clone());
+        stream.set_abbreviation(part.abbreviation.clone());
+        if kind != StreamKind::PartStaff {
+            stream.set_name_hidden(part.name_hidden);
+            stream.set_abbreviation_hidden(part.name_hidden);
+        }
+        (stream, uids)
+    }
+
+    /// Every measure of a part, all its staves together, as music21 holds
+    /// a measure it has read before separating the staves.
+    fn measures(&mut self, part_index: usize, part: &PartRead) -> Result<Vec<MeasureIr>> {
+        let mut out: Vec<MeasureIr> = Vec::new();
+        let mut number: IntegerType = 1;
+        let mut irregular_count: IntegerType = 1;
+        let mut last_number: IntegerType = 0;
+        let mut last_suffix: Option<String> = None;
+        let mut offset = 0.0;
+        let mut last_meter: Option<TimeSignature> = None;
+        let mut open_voltas: Vec<(Vec<u32>, i64, bool)> = Vec::new();
+        let count = self.grid.lengths.len();
+        for index in 0..count {
+            let first_staff = &self.staves[part.first_staff][index];
+            // The measure's number, as MuseScore's MusicXML writes it and
+            // music21 reads that.
+            if index > 0 && self.staves[part.first_staff][index - 1].section_break {
+                number = 1;
+                irregular_count = 1;
+            }
+            number += first_staff.number_offset as IntegerType;
+            let (mut measure_number, mut suffix, hidden) =
+                if first_staff.irregular && irregular_count + number == 2 {
+                    (0, None, true)
+                } else if first_staff.irregular {
+                    let written = irregular_count;
+                    irregular_count += 1;
+                    (written, Some("X".to_string()), true)
+                } else {
+                    number += 1;
+                    (number - 1, None, false)
+                };
+            if suffix.as_deref() == Some("X") && measure_number != last_number + 1 {
+                let mut written = format!("X{measure_number}");
+                if let Some(before) = &last_suffix {
+                    written = format!("{before}{written}");
+                }
+                measure_number = last_number;
+                suffix = Some(written);
+            }
+            if measure_number != last_number {
+                last_number = measure_number;
+                last_suffix = suffix.clone();
+            }
+
+            let mut ir = MeasureIr {
+                number: measure_number,
+                suffix,
+                hidden,
+                ..MeasureIr::default()
+            };
+            let mut seq = 0usize;
+            let mut push = |items: &mut Vec<Item>,
+                            offset: FloatType,
+                            staff: usize,
+                            uid: Option<usize>,
+                            element: StreamElement| {
+                items.push(Item {
+                    offset,
+                    seq,
+                    staff,
+                    uid,
+                    element,
+                });
+                seq += 1;
+            };
+
+            // What the measure's staves hold, staff by staff, voice by voice.
+            let mut voice_items: Vec<(String, Vec<Item>)> = Vec::new();
+            let mut plain: Vec<Item> = Vec::new();
+            let mut right: Option<Barline> = None;
+            for staff in 0..part.staves {
+                let global = part.first_staff + staff;
+                let staff_number = if part.staves > 1 { staff + 1 } else { 0 };
+                let key_staff = staff + 1;
+                let read = &self.staves[global][index];
+                // A staff with no clef at its very start takes its
+                // instrument's.
+                if index == 0 {
+                    let has_clef = read
+                        .voices
+                        .iter()
+                        .flat_map(|voice| &voice.events)
+                        .any(|event| matches!(event.what, What::Clef(_)) && event.tick.is_zero());
+                    if !has_clef {
+                        let clef = clef_named(&part.default_clefs[staff])?;
+                        push(&mut plain, 0.0, key_staff, None, clef.into());
+                    }
+                    let has_key = read
+                        .voices
+                        .iter()
+                        .flat_map(|voice| &voice.events)
+                        .any(|event| matches!(event.what, What::Key(_)) && event.tick.is_zero());
+                    if !has_key && staff == 0 {
+                        push(&mut plain, 0.0, 0, None, KeySignature::new(0).into());
+                    }
+                }
+                for (voice_index, voice) in read.voices.iter().enumerate() {
+                    let track = global * 4 + voice_index;
+                    let voice_id = if part.staves > 1 {
+                        (staff * 4 + voice_index + 1).to_string()
+                    } else {
+                        (voice_index + 1).to_string()
+                    };
+                    let groups = self.beams_for(voice, index, voice_index, global)?;
+                    let mut note_index = 0usize;
+                    for event in &voice.events {
+                        let at = quarters(event.tick);
+                        match &event.what {
+                            What::ChordRest(read_cr) => {
+                                let beams = groups.beams.get(&note_index).cloned();
+                                let tuplets = tuplets_for(
+                                    &voice.tuplets,
+                                    read_cr.tuplet,
+                                    note_index,
+                                    &groups.groups,
+                                );
+                                note_index += 1;
+                                let cr_staff = if part.staves > 1 {
+                                    (staff as i64 + 1 + read_cr.staff_move)
+                                        .clamp(1, part.staves as i64)
+                                        as usize
+                                } else {
+                                    0
+                                };
+                                let items =
+                                    match voice_items.iter_mut().find(|(id, _)| *id == voice_id) {
+                                        Some((_, items)) => items,
+                                        None => {
+                                            voice_items.push((voice_id.clone(), Vec::new()));
+                                            &mut voice_items.last_mut().expect("just pushed").1
+                                        }
+                                    };
+                                for (grace_index, grace) in read_cr.graces_before.iter().enumerate()
+                                {
+                                    let grace_beams = grace_beams(&read_cr.graces_before)
+                                        .get(grace_index)
+                                        .cloned()
+                                        .flatten();
+                                    let element = element_of(grace, Vec::new(), grace_beams)?;
+                                    let uid = self.uid();
+                                    push(items, at, cr_staff, Some(uid), element);
+                                }
+                                let element = element_of(read_cr, tuplets, beams)?;
+                                self.uids
+                                    .insert((index as i64, event.tick, track), read_cr.uid);
+                                push(items, at, cr_staff, Some(read_cr.uid), element);
+                                let end = quarters(event.tick + read_cr.length);
+                                for (grace_index, grace) in read_cr.graces_after.iter().enumerate()
+                                {
+                                    let grace_beams = grace_beams(&read_cr.graces_after)
+                                        .get(grace_index)
+                                        .cloned()
+                                        .flatten();
+                                    let element = element_of(grace, Vec::new(), grace_beams)?;
+                                    let uid = self.uid();
+                                    push(items, end, cr_staff, Some(uid), element);
+                                }
+                            }
+                            What::Clef(clef) => {
+                                // A clef at the end of a measure is the next
+                                // measure's.
+                                if event.tick == self.grid.lengths[index] {
+                                    continue;
+                                }
+                                push(&mut plain, at, key_staff, None, clef.clone().into());
+                            }
+                            What::Key(key) => {
+                                if event.tick == self.grid.lengths[index] {
+                                    continue;
+                                }
+                                if staff == 0 {
+                                    push(&mut plain, at, 0, None, key.clone());
+                                }
+                            }
+                            What::Meter(meter) => {
+                                if staff == 0 {
+                                    push(&mut plain, at, 0, None, meter.clone().into());
+                                }
+                            }
+                            What::Element(element) => {
+                                let target = if part.staves > 1 { staff + 1 } else { 0 };
+                                let _ = staff_number;
+                                push(&mut plain, at, target, None, element.clone());
+                            }
+                            What::Barline(barline) => {
+                                if event.tick == self.grid.lengths[index] && staff == 0 {
+                                    right = Some(barline.clone());
+                                }
+                            }
+                        }
+                    }
+                }
+                // A clef standing at the end of the measure before.
+                if index > 0 {
+                    let before = &self.staves[global][index - 1];
+                    for voice in &before.voices {
+                        for event in &voice.events {
+                            if let What::Clef(clef) = &event.what
+                                && event.tick == self.grid.lengths[index - 1]
+                            {
+                                push(&mut plain, 0.0, key_staff, None, clef.clone().into());
+                            }
+                        }
+                    }
+                }
+            }
+            if part.staves == 1 {
+                for item in &mut plain {
+                    item.staff = 0;
+                }
+            }
+
+            // Repeats and endings.
+            if first_staff.start_repeat {
+                ir.left = Some(Barline::repeat(RepeatDirection::Start, None));
+            }
+            if let Some(times) = first_staff.end_repeat {
+                let times = (times != 2).then_some(times);
+                ir.right = Some(Barline::repeat(RepeatDirection::End, times));
+            } else {
+                ir.right = right;
+            }
+            for spanner in self.spanners {
+                if let SpannerStart::Volta { numbers, closed } = &spanner.kind
+                    && spanner.start.measure == index as i64
+                    && spanner.start.track / 4 >= part.first_staff
+                    && spanner.start.track / 4 < part.first_staff + part.staves
+                {
+                    let end = self.measure_at(spanner.end);
+                    open_voltas.push((numbers.clone(), end, *closed));
+                }
+            }
+            if let Some(position) = open_voltas
+                .iter()
+                .position(|(_, end, _)| index as i64 <= *end)
+            {
+                let (numbers, end, closed) = open_voltas[position].clone();
+                let starts = self.volta_start(&numbers, index, part);
+                let stops = index as i64 == end;
+                ir.ending = Some(Ending::new(numbers.clone(), starts, stops && closed));
+                if stops {
+                    open_voltas.remove(position);
+                }
+            }
+
+            let use_voices = voice_items.len() > 1;
+            if use_voices {
+                voice_items.sort_by(|left, right| left.0.cmp(&right.0));
+                ir.voices = voice_items
+                    .into_iter()
+                    .map(|(id, items)| VoiceIr { id, items })
+                    .collect();
+                ir.items = plain;
+            } else {
+                ir.items = plain;
+                for (_, items) in voice_items {
+                    ir.items.extend(items);
+                }
+            }
+
+            // Where the measure stands, as music21 works it out.
+            let own_meter = ir.items.iter().find_map(|item| match &item.element {
+                StreamElement::TimeSignature(meter) => Some(meter.clone()),
+                _ => None,
+            });
+            if let Some(meter) = own_meter {
+                last_meter = Some(meter);
+            } else if last_meter.is_none() {
+                last_meter = Some(TimeSignature::new(4, 4)?);
+            }
+            ir.offset = offset;
+            offset = op_frac(offset + quarters(self.grid.lengths[index]));
+            let _ = part_index;
+            out.push(ir);
+        }
+        Ok(out)
+    }
+
+    /// Whether a volta starting at this measure is the first measure of it.
+    fn volta_start(&self, _numbers: &[u32], index: usize, part: &PartRead) -> bool {
+        self.spanners.iter().any(|spanner| {
+            matches!(spanner.kind, SpannerStart::Volta { .. })
+                && spanner.start.measure == index as i64
+                && spanner.start.track / 4 >= part.first_staff
+                && spanner.start.track / 4 < part.first_staff + part.staves
+        })
+    }
+
+    /// The last measure a spanner ending here covers.
+    fn measure_at(&self, end: Position) -> i64 {
+        let Some(start) = self.grid.starts.get(end.measure.max(0) as usize) else {
+            return self.grid.starts.len() as i64 - 1;
+        };
+        let at = *start + end.tick;
+        let mut last = 0;
+        for (index, begins) in self.grid.starts.iter().enumerate() {
+            if *begins < at {
+                last = index as i64;
+            }
+        }
+        last
+    }
+
+    /// The beams of every note of a voice.
+    fn beams_for(
+        &self,
+        voice: &VoiceRead,
+        index: usize,
+        voice_index: usize,
+        _staff: usize,
+    ) -> Result<Beamed> {
+        let (numerator, denominator) = self.grid.meters[index];
+        let groups_table = beams::default_groups(numerator, denominator);
+        let bar = Frac::new(numerator, denominator);
+        let anacrusis = if index == 0 && self.grid.lengths[0] < bar {
+            ticks(bar - self.grid.lengths[0])
+        } else {
+            0
+        };
+        let context = beams::Context {
+            groups: &groups_table,
+            denominator,
+            anacrusis,
+            voice: voice_index,
+        };
+        let mut members = Vec::new();
+        for event in &voice.events {
+            if let What::ChordRest(read) = &event.what {
+                members.push(member_of(read));
+            }
+        }
+        let groups = beams::beam_groups(&context, &members);
+        let mut beams = HashMap::new();
+        for group in &groups {
+            let held: Vec<&Member> = group.iter().map(|index| &members[*index]).collect();
+            for (at, made) in group.iter().zip(beams::beams_of_group(&held)) {
+                if !members[*at].is_rest {
+                    beams.insert(*at, made);
+                }
+            }
+        }
+        Ok(Beamed { groups, beams })
+    }
+}
+
+struct Beamed {
+    groups: Vec<Vec<usize>>,
+    beams: HashMap<usize, Beams>,
+}
+
+fn member_of(read: &ChordRest) -> Member {
+    let dots = read.value.map_or(0, |(_, dots)| dots);
+    Member {
+        tick: ticks(read.tick),
+        ticks: ticks(read.length),
+        value: (if read.measure_rest { 14 } else { read.order }, dots),
+        is_rest: read.is_rest,
+        mode: read.mode,
+        tuplet: read.tuplet,
+    }
+}
+
+/// The beams of a run of grace notes.
+fn grace_beams(graces: &[ChordRest]) -> Vec<Option<Beams>> {
+    let members: Vec<Member> = graces.iter().map(member_of).collect();
+    let mut out = vec![None; graces.len()];
+    for group in beams::grace_groups(&members) {
+        let held: Vec<&Member> = group.iter().map(|index| &members[*index]).collect();
+        for (at, made) in group.iter().zip(beams::beams_of_group(&held)) {
+            out[*at] = Some(made);
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn document(voice: &str) -> String {
+        format!(
+            r#"<museScore version="4.70"><Score>
+            <Part><Staff/><trackName>Flute</trackName>
+            <Instrument><longName>Flute</longName><trackName>Flute</trackName>
+            <Channel><program value="73"/></Channel></Instrument></Part>
+            <Staff id="1"><Measure><voice>
+            <TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>{voice}</voice></Measure></Staff>
+            </Score></museScore>"#
+        )
+    }
+
+    fn chord(value: &str, pitch: i64, tpc: i64) -> String {
+        format!(
+            "<Chord><durationType>{value}</durationType><Note><pitch>{pitch}</pitch>\
+             <tpc>{tpc}</tpc></Note></Chord>"
+        )
+    }
+
+    #[test]
+    fn a_tonal_pitch_class_spells_its_note() {
+        assert_eq!(spelling(14).unwrap(), ('C', 0));
+        assert_eq!(spelling(21).unwrap(), ('C', 1));
+        assert_eq!(spelling(-1).unwrap(), ('F', -2));
+        // The letter and the octave; the accidental is the note's to add.
+        assert_eq!(pitch_of(60, 26).unwrap().name_with_octave(), "B3");
+        assert_eq!(pitch_of(59, 7).unwrap().name_with_octave(), "C4");
+    }
+
+    #[test]
+    fn notes_follow_one_another_and_eighths_are_beamed() {
+        let body = [
+            chord("eighth", 60, 14),
+            chord("eighth", 62, 16),
+            chord("quarter", 64, 18),
+            chord("half", 65, 13),
+        ]
+        .concat();
+        let score = from_mscx(&document(&body)).unwrap();
+        let notes = score.parts()[0].notes();
+        let offsets: Vec<FloatType> = notes.iter().map(|(offset, _)| *offset).collect();
+        assert_eq!(offsets, [0.0, 0.5, 1.0, 2.0]);
+        let beams: Vec<usize> = notes
+            .iter()
+            .map(|(_, element)| match element {
+                StreamElement::Note(note) => note.beams().len(),
+                _ => 0,
+            })
+            .collect();
+        assert_eq!(beams, [1, 1, 0, 0]);
+    }
+
+    #[test]
+    fn a_triplet_shortens_its_notes() {
+        let body = format!(
+            "<Tuplet><normalNotes>2</normalNotes><actualNotes>3</actualNotes>\
+             <baseNote>eighth</baseNote></Tuplet>{}{}{}<endTuplet/>\
+             <Chord><durationType>quarter</durationType><dots>1</dots><Note><pitch>60</pitch><tpc>14</tpc></Note></Chord>\
+             <Rest><durationType>quarter</durationType></Rest>",
+            chord("eighth", 60, 14),
+            chord("eighth", 62, 16),
+            chord("eighth", 64, 18),
+        );
+        let score = from_mscx(&document(&body)).unwrap();
+        let lengths: Vec<FloatType> = score.parts()[0].measures()[0]
+            .events()
+            .iter()
+            .map(|event| event.element().quarter_length())
+            .filter(|length| *length > 0.0)
+            .collect();
+        assert_eq!(lengths.len(), 5);
+        assert!((lengths[0] - 1.0 / 3.0).abs() < 1e-9);
+        assert_eq!(lengths[3], 1.5);
+    }
+
+    #[test]
+    fn what_is_not_a_musescore_file_is_refused() {
+        assert!(from_mscx("<score-partwise/>").is_err());
+        assert!(from_mscx("not xml").is_err());
+        assert!(from_mscx(r#"<museScore version="2.06"><Score/></museScore>"#).is_err());
+    }
+}

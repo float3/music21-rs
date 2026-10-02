@@ -31,7 +31,8 @@
 //! - `musicxml` reads and writes MusicXML (`musicxml::from_musicxml`,
 //!   `musicxml::to_musicxml`).
 //! - `musescore` runs an installed MuseScore to read and write the formats it
-//!   opens and saves; it turns on `musicxml`.
+//!   opens and saves; it turns on `musicxml`. MuseScore's own `.mscx` is
+//!   read without it, by `musescore::from_mscx`.
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![deny(missing_docs)]
 #![deny(missing_debug_implementations)]
@@ -93,8 +94,8 @@ pub mod metadata;
 pub mod meter;
 /// Minimal MIDI import/export helpers.
 pub mod midi;
-/// MuseScore run as a converter, for its own files and the formats it opens.
-#[cfg(all(feature = "musescore", not(target_arch = "wasm32")))]
+/// MuseScore's own `.mscx` files, and MuseScore run as a converter for the
+/// formats it opens.
 pub mod musescore;
 /// MusicXML import and export: music21's `musicxml.xmlToM21` and
 /// `musicxml.m21ToXml`.
