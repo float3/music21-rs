@@ -1422,7 +1422,11 @@ fn repeat_words(text: &str) -> StreamElement {
         Some(kind) => {
             let mut mark = RepeatExpression::new(kind);
             mark.set_text(text);
-            mark.set_placement(Some(Placement::Above));
+            // The words are placed, not the mark: one drawn as its sign, a
+            // coda or a segno, stands where a sign stands.
+            if !mark.use_symbol() {
+                mark.set_placement(Some(Placement::Above));
+            }
             mark.into()
         }
         None => {
@@ -1779,7 +1783,9 @@ fn words_of(element: &Xml, default: Placement) -> Result<Option<StreamElement>> 
         Some(kind) => {
             let mut mark = RepeatExpression::new(kind);
             mark.set_text(text);
-            mark.set_placement(Some(placement));
+            if !mark.use_symbol() {
+                mark.set_placement(Some(placement));
+            }
             mark.into()
         }
         None => {
