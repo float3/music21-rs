@@ -49,11 +49,37 @@
   the first of the pieces a trilled note was split into and answers the
   trill extension joining them. `Expression::tie_attach` says which piece
   of a split note keeps any expression.
+- `musescore::from_mscx` reads MuseScore's own uncompressed `.mscx` format,
+  as MuseScore 4 saves it and MuseScore 3 where the two agree, into a score.
+  It needs no feature and no MuseScore installed, and builds for wasm. It
+  takes the document's text: a `.mscz` is a zip archive holding a `.mscx`,
+  and unzipping it is the caller's. It reads parts and staves, measures and
+  their numbers, voices, notes as the file spells them, chords, rests, ties,
+  dots, tuplets, grace notes, clefs, keys, meters, tempo marks, dynamics,
+  text, lyrics, chord symbols, articulations, fingerings, fermatas,
+  ornaments, arpeggios, barlines, repeats, endings, segno and coda signs and
+  the jumps to them, slurs, hairpins, pedal lines, instruments and the
+  file's metadata. Beams, tuplet brackets and the clef and key a staff
+  starts with are worked out as MuseScore works them out where the file
+  leaves them to its layout. Percussion and tablature staves, files older
+  than MuseScore 3's, tremolos, trill, octave, glissando and text lines,
+  measure repeats, fret diagrams and figured bass are refused with
+  `Error::MuseScore` rather than dropped.
+- The reader is held to MuseScore itself, music21 having no reader of the
+  format: `mscx_parity` reads sixteen `.mscx` files and the MusicXML
+  MuseScore 4.7.5 exported from each, writes both with `to_musicxml`, and
+  compares the texts. Thirteen agree; the three that differ are places
+  where MuseScore's export says something other than its own file does, and
+  the reader follows the file. The test lists each with its reason.
 
 ## Changed
 
 - The score editor's own MIDI reader, `midi_to_abc`, is gone: MIDI is read
   by the crate's `from_midi` like the other formats.
+- The `musescore` module is always there, since reading a `.mscx` runs no
+  program. `musescore::MuseScore`, which finds and runs an installed
+  MuseScore, is still behind the `musescore` feature and still left out of
+  a wasm build.
 
 ## Fixed
 

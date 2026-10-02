@@ -1,20 +1,9 @@
-//! MuseScore as a converter: reading and writing its own files, and every
-//! format it opens or saves, by running the program.
-//!
-//! MuseScore is an application and not a library -- nothing of it can be
-//! linked against -- but it converts from the command line, which is how
-//! music21 uses it too. A score is handed across as MusicXML: to read a
-//! `.mscz`, MuseScore writes it out as MusicXML and
-//! [`from_musicxml`](crate::musicxml::from_musicxml) reads that; to write
-//! one, [`to_musicxml`](crate::musicxml::to_musicxml) writes the score and
-//! MuseScore converts it. So whatever MuseScore opens -- its own `.mscz` and
-//! `.mscx`, Guitar Pro, Capella, MEI, MIDI, compressed MusicXML -- can be
-//! read, and whatever it saves -- those, and PDF, PNG, SVG and audio -- can
-//! be written.
-//!
-//! This is the one module that runs a program and touches files, which is
-//! why it sits behind the `musescore` feature and is left out of a wasm
-//! build.
+// MuseScore run as a converter. A score is handed across as MusicXML: to
+// read a file MuseScore writes it out as MusicXML and `from_musicxml` reads
+// that; to write one, `to_musicxml` writes the score and MuseScore converts
+// it. This is the one part of the crate that runs a program and touches
+// files, which is why it sits behind the `musescore` feature and is left out
+// of a wasm build.
 
 use crate::error::{Error, Result};
 use crate::musicxml::{ExportOptions, from_musicxml, to_musicxml};
