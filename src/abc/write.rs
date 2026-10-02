@@ -132,12 +132,14 @@ fn length_text(written: FloatType, unit: FloatType) -> Result<String> {
     })
 }
 
-/// Text that can stand in a field or between quotation marks.
+/// Text that can stand in a field: on one line.
 fn plain(text: &str) -> String {
-    text.replace(['\n', '\r'], " ")
-        .replace('"', "'")
-        .trim()
-        .to_string()
+    text.replace(['\n', '\r'], " ").trim().to_string()
+}
+
+/// Text that can stand between quotation marks.
+fn quoted(text: &str) -> String {
+    plain(text).replace('"', "'")
 }
 
 /// How far each of the seven letters, C to B, is moved by a signature.
@@ -299,7 +301,7 @@ fn number_text(number: FloatType) -> String {
 fn tempo_field(mark: &MetronomeMark) -> Result<Option<String>> {
     let mut parts = Vec::new();
     if let Some(text) = mark.text().filter(|_| !mark.text_implicit()) {
-        parts.push(format!("\"{}\"", plain(text)));
+        parts.push(format!("\"{}\"", quoted(text)));
     }
     if let Some(number) = mark.number().filter(|_| !mark.number_implicit()) {
         let (numerator, denominator) = fraction(mark.referent().quarter_length() / 4.0)?;
@@ -630,8 +632,12 @@ fn tuplet_markers(tokens: &[Sounding<'_>]) -> BTreeMap<usize, String> {
         let mut last = index;
         let mut filled = tokens[index].written;
         loop {
+            // A marker with no count takes as many notes as it names, and
+            // fewer where they already fill the time: a quarter and an
+            // eighth are a whole triplet of eighths.
             let whole = filled / FloatType::from(actual);
-            let complete = whole > 0.0 && (whole.log2() - whole.log2().round()).abs() < 1e-9;
+            let filled_up = whole > 0.0 && (whole.log2() - whole.log2().round()).abs() < 1e-9;
+            let complete = last - start + 1 >= actual as usize || (filled_up && last > index);
             if complete
                 || matches!(
                     tokens[last].bracket,
@@ -1059,7 +1065,12 @@ impl<'a> Tune<'a> {
             }
         };
         let mut reading = Reading { alters: [0; 7] };
-        if let Some(voice) = first {
+        let several = self.voices.len() > 1;
+        // A first voice stating no key leaves the key to the voices that
+        // state one, each after its own `V:` line.
+        let key_heads = !several || shared.key.is_some();
+        if !key_heads {
+        } else if let Some(voice) = first {
             let _ = writeln!(out, "K:{}", key_line(voice, &shared)?);
             reading.alters = shared
                 .key
@@ -1069,7 +1080,6 @@ impl<'a> Tune<'a> {
             let _ = writeln!(out, "K:none");
         }
 
-        let several = self.voices.len() > 1;
         if self.parts.iter().any(|(_, voices)| *voices > 1) {
             // Voices of one part share its staff.
             let mut next = 1;
@@ -1093,7 +1103,7 @@ impl<'a> Tune<'a> {
             if several {
                 let _ = write!(out, "V:{}", index + 1);
                 if let Some(name) = voice.part.name().filter(|_| voice.within == 0) {
-                    let _ = write!(out, " name=\"{}\"", plain(name));
+                    let _ = write!(out, " name=\"{}\"", quoted(name));
                 }
                 out.push('\n');
                 if !shared_meter {
@@ -1117,9 +1127,11 @@ impl<'a> Tune<'a> {
                     .and_then(signature_of)
                     .map_or([0; 7], |signature| alters_of(&signature));
                 let line = key_line(voice, opening)?;
-                if index > 0
-                    && (alters != reading.alters || line != key_line(&self.voices[0], &shared)?)
-                {
+                let stated = opening.key.is_some() || clef_of(voice, opening).is_some();
+                let differs = !key_heads
+                    || alters != reading.alters
+                    || line != key_line(&self.voices[0], &shared)?;
+                if stated && differs && (index > 0 || !key_heads) {
                     let _ = writeln!(out, "K:{line}");
                 }
                 reading.alters = alters;
@@ -1213,9 +1225,9 @@ impl<'a> Tune<'a> {
             )?);
         }
         // The barline after each measure, with the ending the next opens.
-        let barline_after = |index: usize| -> String {
+        let barline_after = |index: usize| -> (String, bool) {
             if !voice.measured {
-                return String::new();
+                return (String::new(), false);
             }
             let bar = &voice.bars[index];
             let right = if joined[index] {
@@ -1242,12 +1254,15 @@ impl<'a> Tune<'a> {
         let mut sung: Vec<&[Lyric]> = Vec::new();
         if voice.measured {
             let first = voice.bars.first().and_then(|bar| bar.measure);
-            line.push_str(&barline_text(
-                None,
-                first.and_then(Stream::left_barline),
-                first.and_then(Stream::ending),
-                true,
-            ));
+            line.push_str(
+                &barline_text(
+                    None,
+                    first.and_then(Stream::left_barline),
+                    first.and_then(Stream::ending),
+                    true,
+                )
+                .0,
+            );
         }
         for (index, bar) in written.iter().enumerate() {
             if !line.is_empty() && !line.ends_with(' ') && !bar.music.is_empty() {
@@ -1260,8 +1275,17 @@ impl<'a> Tune<'a> {
             }
             on_line += 1;
             let next = written.get(index + 1);
-            let barline = barline_after(index);
-            let fields_follow = next.is_some_and(|next| !next.opening.is_empty());
+            let (barline, keep_off) = barline_after(index);
+            // The fields the next measure opens with. A barline that is not
+            // the next measure's to take is kept off it by a field between
+            // them, which music21 passes over: the unit note length again.
+            let said_again = [format!("L:{unit_text}")];
+            let opening: &[String] = match next {
+                Some(next) if !next.opening.is_empty() => &next.opening,
+                Some(next) if keep_off && next.starts_with_note => &said_again,
+                _ => &[],
+            };
+            let fields_follow = !opening.is_empty();
             // A word is not broken across lines of words.
             let mid_word = sung
                 .iter()
@@ -1302,12 +1326,10 @@ impl<'a> Tune<'a> {
             if before_bar {
                 line.push_str(&barline);
             }
-            if let Some(next) = next
-                && !next.opening.is_empty()
-            {
+            if !opening.is_empty() {
                 push_line(out, &line);
                 line.clear();
-                for field in &next.opening {
+                for field in opening {
                     let _ = writeln!(out, "{field}");
                 }
             }
@@ -1471,7 +1493,7 @@ impl<'a> Tune<'a> {
                     }
                 }
                 StreamElement::TempoText(text) => {
-                    let field = format!("Q:\"{}\"", plain(text.text()));
+                    let field = format!("Q:\"{}\"", quoted(text.text()));
                     self.field(voice, &mut music, &mut lead, field);
                 }
                 StreamElement::ChordSymbol(chord_symbol) => {
@@ -1495,7 +1517,7 @@ impl<'a> Tune<'a> {
                     } else {
                         '^'
                     };
-                    let _ = write!(before, "\"{side}{}\"", plain(expression.content()));
+                    let _ = write!(before, "\"{side}{}\"", quoted(expression.content()));
                     waiting_since.get_or_insert(held.offset);
                 }
                 StreamElement::RepeatExpression(mark) => {
@@ -1505,7 +1527,7 @@ impl<'a> Tune<'a> {
                         RepeatExpressionKind::Fine => "!fine!".to_string(),
                         RepeatExpressionKind::DaCapo => "!D.C.!".to_string(),
                         RepeatExpressionKind::DalSegno => "!D.S.!".to_string(),
-                        _ => format!("\"^{}\"", plain(mark.text())),
+                        _ => format!("\"^{}\"", quoted(mark.text())),
                     };
                     before.push_str(&sign);
                     waiting_since.get_or_insert(held.offset);
@@ -1627,12 +1649,18 @@ impl<'a> Tune<'a> {
             music.push(lead);
         }
         written.music = music.concat().trim().to_string();
+        if written.music.is_empty() && voice.measured {
+            // A measure of nothing is a space.
+            written.music = "y".to_string();
+        }
 
         // One field alone after a barline and before a note is passed over
         // by music21; with the unit note length said again after it, it and
         // the measure are read together.
-        if let Some((alters, signature)) = silent_key {
-            if written.opening.is_empty() && written.starts_with_note {
+        if let Some((alters, signature)) =
+            silent_key.filter(|_| written.opening.is_empty() && written.starts_with_note)
+        {
+            {
                 written
                     .opening
                     .push(format!("K:{}", key_field(&signature.into(), None)?));
@@ -1845,7 +1873,7 @@ fn rest_text(rest: &Rest, length: &str) -> Result<String> {
 /// A chord symbol as it is written between quotation marks: a flat as `b`.
 fn symbol_text(symbol: &ChordSymbol) -> String {
     if symbol.is_no_chord() {
-        return plain(symbol.kind_text().unwrap_or("N.C."));
+        return quoted(symbol.kind_text().unwrap_or("N.C."));
     }
     let figure: Vec<char> = symbol.figure().chars().collect();
     let mut text = String::new();
@@ -1857,48 +1885,56 @@ fn symbol_text(symbol: &ChordSymbol) -> String {
             *character
         });
     }
-    plain(&text)
+    quoted(&text)
 }
 
 /// The barline between two measures, or before the first or after the last,
 /// with the ending the second opens: from the barline closing the one and
-/// the barline and ending opening the other.
+/// the barline and ending opening the other. The second answer is whether
+/// the measure after must be kept from taking the barline as its own.
+///
+/// One barline written is read as closing the measure before it and opening
+/// the one after, unless it is a repeat, which is read on its own side only.
+/// Two different ones are written one after the other.
 fn barline_text(
     right: Option<&Barline>,
     left: Option<&Barline>,
     ending: Option<&Ending>,
     opens_tune: bool,
-) -> String {
-    let repeats = |barline: Option<&Barline>, direction: RepeatDirection| {
-        barline.is_some_and(|barline| barline.repeat_direction() == Some(direction))
-    };
-    let style = |barline: Option<&Barline>| -> Option<&'static str> {
+) -> (String, bool) {
+    let token = |barline: Option<&Barline>| -> Option<&'static str> {
         let barline = barline?;
-        if barline.repeat_direction().is_some() {
-            return None;
-        }
-        match barline.bar_type() {
-            BarlineType::Double => Some("||"),
-            BarlineType::Final => Some("|]"),
-            BarlineType::HeavyLight => Some("[|"),
-            BarlineType::Dotted | BarlineType::Dashed => Some(":"),
-            _ => None,
+        match barline.repeat_direction() {
+            Some(RepeatDirection::End) => Some(":|"),
+            Some(RepeatDirection::Start) => Some("|:"),
+            None => match barline.bar_type() {
+                BarlineType::Double => Some("||"),
+                BarlineType::Final => Some("|]"),
+                BarlineType::HeavyLight => Some("[|"),
+                BarlineType::Dotted | BarlineType::Dashed => Some(":"),
+                _ => None,
+            },
         }
     };
-    let ends = repeats(right, RepeatDirection::End);
-    let starts = repeats(left, RepeatDirection::Start);
-    let mut text = match (ends, starts) {
-        (true, true) => "::".to_string(),
-        (true, false) => ":|".to_string(),
-        (false, true) => format!("{}|:", style(right).unwrap_or("")),
-        (false, false) => match (style(right), style(left)) {
-            (Some(right), _) => right.to_string(),
-            (None, Some(left)) => left.to_string(),
-            // Nothing is written before the first measure but what it
-            // opens with.
-            (None, None) if opens_tune => String::new(),
-            (None, None) => "|".to_string(),
-        },
+    let repeats = |barline: Option<&Barline>| {
+        barline.is_some_and(|barline| barline.repeat_direction().is_some())
+    };
+    let mut keep_off = false;
+    let mut text = match (token(right), token(left)) {
+        (Some(":|"), Some("|:")) => "::".to_string(),
+        (Some(right), Some(left)) if right == left => right.to_string(),
+        // A dotted barline before another would be read with it as a repeat.
+        (Some(":"), Some(left)) => format!(": {left}"),
+        (Some(right), Some(left)) => format!("{right}{left}"),
+        (Some(right_token), None) => {
+            keep_off = !repeats(right);
+            right_token.to_string()
+        }
+        (None, Some(left)) => left.to_string(),
+        // Nothing is written before the first measure but what it opens
+        // with.
+        (None, None) if opens_tune => String::new(),
+        (None, None) => "|".to_string(),
     };
     if let Some(ending) = ending.filter(|ending| ending.starts()) {
         let numbers = ending
@@ -1921,7 +1957,7 @@ fn barline_text(
             }
         }
     }
-    text
+    (text, keep_off)
 }
 
 /// The `w:` lines for the notes of one line of music, a line for each verse.

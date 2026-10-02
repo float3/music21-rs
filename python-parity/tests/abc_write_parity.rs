@@ -39,7 +39,9 @@ use musicxml_common::{
 /// and why not.
 const NOT_READ_BACK: &[(&str, &str)] = &[(
     "airdsAirs/book4.abc#0722",
-    "barlines written among the header fields leave the meter in the part      outside every measure; ABC written properly states the meter in the      header, which is read into the first measure",
+    "barlines written among the header fields leave the meter in the part \
+     outside every measure; ABC written properly states the meter in the \
+     header, which is read into the first measure",
 )];
 
 /// music21 reading ABC text and writing what it read: as MusicXML where its
