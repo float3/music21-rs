@@ -624,7 +624,6 @@ impl Beams {
         self.beams.push(beam);
     }
 
-    /// How many beams a written value carries, where it carries any:
     /// How many beams a written value can carry at the most: music21's
     /// `beamableDurationTypes`, an eighth through a 2048th. It is how many
     /// depths a run of notes is beamed at.
@@ -636,6 +635,66 @@ impl Beams {
             .into_iter()
             .find(|(candidate, _)| *candidate == duration_type)
             .map(|(_, levels)| levels)
+    }
+
+    /// For each element, the fullest set of beams its written value can
+    /// carry, with nothing said about what any of them does: music21's
+    /// `naiveBeams`.
+    ///
+    /// An element carries none where it does not sound -- a rest, or
+    /// anything that is not a note -- or where it is written as a quarter or
+    /// longer, or as more than one value.
+    ///
+    /// ```
+    /// use music21_rs::{Beams, Duration, Note, Rest, StreamElement};
+    ///
+    /// let elements: Vec<StreamElement> = vec![
+    ///     Note::from_name("C4")?.with_duration(Duration::quarter()).into(),
+    ///     Note::from_name("C4")?.with_duration(Duration::eighth()).into(),
+    ///     Note::from_name("C4")?.with_duration(Duration::new(0.25)?).into(),
+    ///     Rest::new(Duration::new(0.125)?).into(),
+    /// ];
+    /// let levels: Vec<Option<usize>> = Beams::naive_beams(&elements)
+    ///     .iter()
+    ///     .map(|beams| beams.as_ref().map(Beams::len))
+    ///     .collect();
+    /// assert_eq!(levels, [None, Some(1), Some(2), None]);
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
+    pub fn naive_beams<'a>(
+        elements: impl IntoIterator<Item = &'a crate::stream::StreamElement>,
+    ) -> Vec<Option<Beams>> {
+        use crate::stream::StreamElement;
+        elements
+            .into_iter()
+            .map(|element| {
+                let sounds = matches!(
+                    element,
+                    StreamElement::Note(_)
+                        | StreamElement::Chord(_)
+                        | StreamElement::Unpitched(_)
+                        | StreamElement::PercussionChord(_)
+                        | StreamElement::ChordSymbol(_)
+                );
+                let written = element.duration().and_then(|duration| {
+                    match duration.components().as_slice() {
+                        [(duration_type, _)] => Some(*duration_type),
+                        _ => None,
+                    }
+                });
+                Self::naive(written, sounds)
+            })
+            .collect()
+    }
+
+    /// The beams one element of [`Beams::naive_beams`] carries, given the
+    /// one value it is written as, if it is written as one, and whether it
+    /// sounds: as many as that value has, each left undecided, or none.
+    pub fn naive(written: Option<DurationType>, sounds: bool) -> Option<Beams> {
+        let levels = written.and_then(Self::levels_for).filter(|_| sounds)?;
+        let mut made = Beams::new();
+        made.fill_levels(levels, None).ok()?;
+        Some(made)
     }
 
     /// Gives the note as many beams as its written value has, all of the same

@@ -1296,14 +1296,10 @@ impl Beams {
                 .getattr("classSet")
                 .and_then(|classes| classes.contains("NotRest"))
                 .unwrap_or(false);
-            let levels = RsDurationType::from_music21_name(&name)
-                .and_then(RsBeams::levels_for)
-                .filter(|_| sounds);
-            beams.push(levels.and_then(|levels| {
-                let mut made = RsBeams::new();
-                made.fill_levels(levels, None).ok()?;
-                Some(made)
-            }));
+            beams.push(RsBeams::naive(
+                RsDurationType::from_music21_name(&name),
+                sounds,
+            ));
         }
         beams_list(py, beams)
     }

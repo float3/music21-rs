@@ -1009,6 +1009,91 @@ impl Stream {
         }
     }
 
+    /// Keeps the leaves `keep` accepts, handed each with its position in
+    /// [`Stream::leaves`] to change as it likes, and drops the rest. Every
+    /// spanner, here or in a nested stream, is moved to where what it names
+    /// now stands, and names nothing for an element dropped.
+    pub(crate) fn retain_leaves(
+        &mut self,
+        keep: &mut impl FnMut(usize, &mut StreamElement) -> bool,
+    ) {
+        let mut seen = 0;
+        self.retain_leaves_from(&mut seen, keep);
+    }
+
+    /// Adds events to this stream's own and puts them all in the order
+    /// music21 sorts a stream in, an added event after one already here that
+    /// sorts alike. Every spanner of this stream is moved to where what it
+    /// names now stands.
+    pub(crate) fn insert_sorted(&mut self, added: Vec<StreamEvent>) {
+        // Each event held here with where its leaves started; nothing for
+        // one added.
+        let mut first = 0;
+        let mut held: Vec<(StreamEvent, Option<usize>)> = Vec::new();
+        for event in std::mem::take(&mut self.events) {
+            let count = leaf_count(&event.element);
+            held.push((event, Some(first)));
+            first += count;
+        }
+        held.extend(added.into_iter().map(|event| (event, None)));
+        held.sort_by(|left, right| crate::makenotation::music21_order(&left.0, &right.0));
+        let mut moved: Vec<Option<usize>> = vec![None; first];
+        let mut placed = 0;
+        for (event, start) in &held {
+            let count = leaf_count(&event.element);
+            if let Some(start) = start {
+                for offset in 0..count {
+                    moved[start + offset] = Some(placed + offset);
+                }
+            }
+            placed += count;
+        }
+        self.events = held.into_iter().map(|(event, _)| event).collect();
+        for spanner in &mut self.labels.spanners {
+            spanner.move_places(&moved);
+        }
+    }
+
+    /// [`Stream::retain_leaves`] below the `seen` leaves already walked; the
+    /// answer is where each of this stream's leaves went, by old position.
+    fn retain_leaves_from(
+        &mut self,
+        seen: &mut usize,
+        keep: &mut impl FnMut(usize, &mut StreamElement) -> bool,
+    ) -> Vec<Option<usize>> {
+        let mut moved: Vec<Option<usize>> = Vec::new();
+        let mut kept = 0;
+        self.events.retain_mut(|event| match &mut event.element {
+            StreamElement::Stream(inner) => {
+                let inner_moved = inner.retain_leaves_from(seen, keep);
+                let count = inner_moved.iter().flatten().count();
+                moved.extend(
+                    inner_moved
+                        .into_iter()
+                        .map(|place| place.map(|place| place + kept)),
+                );
+                kept += count;
+                true
+            }
+            element => {
+                let position = *seen;
+                *seen += 1;
+                if keep(position, element) {
+                    moved.push(Some(kept));
+                    kept += 1;
+                    true
+                } else {
+                    moved.push(None);
+                    false
+                }
+            }
+        });
+        for spanner in &mut self.labels.spanners {
+            spanner.move_places(&moved);
+        }
+        moved
+    }
+
     /// Whether this stream holds parts, or streams standing in for them:
     /// music21's `hasPartLikeStreams`. A part says so; a measure or a voice,
     /// or a stream starting anywhere but the beginning, says not; any other
@@ -1170,6 +1255,14 @@ impl Stream {
                 .partial_cmp(&right.offset)
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
+    }
+}
+
+/// How many leaves an element is: those of a nested stream, or itself.
+fn leaf_count(element: &StreamElement) -> usize {
+    match element {
+        StreamElement::Stream(inner) => inner.leaves().len(),
+        _ => 1,
     }
 }
 

@@ -389,59 +389,32 @@ fn meta_of(events: &[(u64, Event)]) -> Result<Vec<(u64, StreamElement)>> {
     Ok(found)
 }
 
-/// music21's `instrument.deduplicate`: where every instrument a part holds
-/// is of one kind they are made one, the first, and a generic one among
-/// others of a kind goes. music21 gathers the instruments of the whole part
-/// for this and not only those standing together, so a program change after
-/// a track name is folded into the instrument the name made.
+/// music21's `instrument.deduplicate` over the events of one part: where
+/// every instrument it holds is of one kind they are made one, the first,
+/// and a generic one among others of a kind goes. music21 gathers the
+/// instruments of the whole part for this and not only those standing
+/// together, so a program change after a track name is folded into the
+/// instrument the name made.
 fn deduplicate(events: &mut Vec<StreamEvent>) {
-    // A loop run once, so that what cannot be settled is simply left.
-    for _ in 0..1 {
-        let places: Vec<usize> = (0..events.len())
-            .filter(|index| matches!(events[*index].element(), StreamElement::Instrument(_)))
-            .collect();
-        if places.len() <= 1 {
-            continue;
-        }
-        let instrument = |index: usize| match events[index].element() {
-            StreamElement::Instrument(instrument) => instrument.as_ref().clone(),
-            _ => Instrument::new(),
-        };
-        let held: Vec<Instrument> = places.iter().map(|index| instrument(*index)).collect();
-        let mut part_names: Vec<&str> = held.iter().filter_map(Instrument::part_name).collect();
-        part_names.dedup();
-        part_names.sort_unstable();
-        part_names.dedup();
-        let mut names: Vec<&str> = held.iter().filter_map(Instrument::name).collect();
-        names.sort_unstable();
-        names.dedup();
-        if part_names.len() > 1 || names.len() > 1 {
-            continue;
-        }
-        let part_name = part_names.first().map(|name| name.to_string());
-        let name = names.first().map(|name| name.to_string());
-        let mut kinds: Vec<&str> = held.iter().map(Instrument::kind).collect();
-        kinds.sort_unstable();
-        kinds.dedup();
-        let one_kind = kinds.len() == 1;
-        let mut remove: Vec<usize> = Vec::new();
-        for (count, (place, instrument)) in places.iter().zip(&held).enumerate() {
-            let goes = if one_kind {
-                count > 0
-            } else {
-                instrument.kind() == "Instrument"
-            };
-            if goes {
-                remove.push(*place);
-                continue;
+    let places: Vec<usize> = (0..events.len())
+        .filter(|index| matches!(events[*index].element(), StreamElement::Instrument(_)))
+        .collect();
+    let held: Vec<&Instrument> = places
+        .iter()
+        .filter_map(|index| match events[*index].element() {
+            StreamElement::Instrument(instrument) => Some(instrument.as_ref()),
+            _ => None,
+        })
+        .collect();
+    let Some(settled) = crate::instrument::settle(&held) else {
+        return;
+    };
+    for (place, becomes) in places.into_iter().zip(settled).rev() {
+        match becomes {
+            Some(named) => events[place] = StreamEvent::new(events[place].offset(), named),
+            None => {
+                events.remove(place);
             }
-            let mut named = instrument.clone();
-            named.set_part_name(part_name.clone());
-            named.set_name(name.clone());
-            events[*place] = StreamEvent::new(events[*place].offset(), named);
-        }
-        for place in remove.into_iter().rev() {
-            events.remove(place);
         }
     }
 }

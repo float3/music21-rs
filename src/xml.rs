@@ -16,6 +16,9 @@ pub(crate) struct Xml {
     attributes: Vec<(String, String)>,
     /// The text before the first child; `None` where there is none at all.
     text: Option<String>,
+    /// The text after this element's end tag, up to its next sibling or its
+    /// parent's end: ElementTree's `.tail`.
+    tail: Option<String>,
     pub(crate) children: Vec<Xml>,
 }
 
@@ -33,26 +36,47 @@ impl Xml {
         self.text.as_deref()
     }
 
-    #[cfg(any(feature = "musicxml", test))]
+    /// Every piece of text inside the element, its children's included, in
+    /// document order: ElementTree's `itertext`.
+    pub(crate) fn all_text(&self) -> String {
+        let mut out = String::new();
+        self.collect_text(&mut out);
+        out
+    }
+
+    fn collect_text(&self, out: &mut String) {
+        if let Some(text) = &self.text {
+            out.push_str(text);
+        }
+        for child in &self.children {
+            child.collect_text(out);
+            if let Some(tail) = &child.tail {
+                out.push_str(tail);
+            }
+        }
+    }
+
+    /// The text after this element's end tag, as written.
+    pub(crate) fn tail(&self) -> Option<&str> {
+        self.tail.as_deref()
+    }
+
     /// The text with the space around it taken off, empty where there is
     /// none: music21's `strippedText`.
     pub(crate) fn stripped(&self) -> &str {
         self.text.as_deref().map_or("", str::trim)
     }
 
-    #[cfg(any(feature = "musicxml", test))]
     /// The first child of a tag: ElementTree's `find`.
     pub(crate) fn find(&self, tag: &str) -> Option<&Xml> {
         self.children.iter().find(|child| child.tag == tag)
     }
 
-    #[cfg(any(feature = "musicxml", test))]
     /// Every child of a tag, in order: ElementTree's `findall`.
     pub(crate) fn find_all<'a>(&'a self, tag: &'a str) -> impl Iterator<Item = &'a Xml> {
         self.children.iter().filter(move |child| child.tag == tag)
     }
 
-    #[cfg(any(feature = "musicxml", test))]
     /// The stripped text of the first child of a tag, empty where the child
     /// or its text is missing.
     pub(crate) fn child_text(&self, tag: &str) -> &str {
@@ -61,6 +85,15 @@ impl Xml {
 
     /// Reads a document and hands back its root element.
     pub(crate) fn parse(document: &str) -> Result<Xml> {
+        // A line ends in a line feed whatever the file wrote, as the XML
+        // standard has a reader take it.
+        let normalized;
+        let document = if document.contains('\r') {
+            normalized = document.replace("\r\n", "\n").replace('\r', "\n");
+            normalized.as_str()
+        } else {
+            document
+        };
         let mut reader = Reader {
             text: document,
             at: 0,
@@ -196,23 +229,28 @@ impl Reader<'_> {
         }
 
         // Content: text, children, comments, until the closing tag.
+        // The text before the first child, and then each child's tail.
         let mut text = String::new();
-        let mut seen_child = false;
+        let close = |element: &mut Xml, text: String| {
+            if text.is_empty() {
+                return;
+            }
+            match element.children.last_mut() {
+                Some(last) => last.tail = Some(text),
+                None => element.text = Some(text),
+            }
+        };
         loop {
             let rest = self.rest();
             let Some(open) = rest.find('<') else {
                 return Err(malformed(format!("<{}> is not closed", element.tag)));
             };
-            if !seen_child {
-                text.push_str(&unescape(&rest[..open]));
-            }
+            text.push_str(&unescape(&rest[..open]));
             self.at += open;
             let rest = self.rest();
             if rest.starts_with("</") {
                 self.skip_past(">")?;
-                if !text.is_empty() {
-                    element.text = Some(text);
-                }
+                close(&mut element, text);
                 return Ok(element);
             } else if rest.starts_with("<!--") {
                 self.skip_past("-->")?;
@@ -222,15 +260,13 @@ impl Reader<'_> {
                     .rest()
                     .find("]]>")
                     .ok_or_else(|| malformed("a CDATA section is not closed"))?;
-                if !seen_child {
-                    text.push_str(&self.rest()[..end]);
-                }
+                text.push_str(&self.rest()[..end]);
                 self.at += end + 3;
             } else if rest.starts_with("<?") {
                 self.skip_past("?>")?;
             } else {
+                close(&mut element, std::mem::take(&mut text));
                 element.children.push(self.element()?);
-                seen_child = true;
             }
         }
     }
@@ -305,6 +341,21 @@ mod tests {
         let root = Xml::parse("<a><b>&#233;&#xE9;&lt;</b><c><![CDATA[<raw>]]></c></a>").unwrap();
         assert_eq!(root.child_text("b"), "\u{e9}\u{e9}<");
         assert_eq!(root.child_text("c"), "<raw>");
+    }
+
+    #[test]
+    fn text_between_children_is_kept_as_their_tails() {
+        let root = Xml::parse("<a>one<b/>two<c>three</c>four</a>").unwrap();
+        assert_eq!(root.text(), Some("one"));
+        assert_eq!(root.find("b").unwrap().tail(), Some("two"));
+        assert_eq!(root.find("c").unwrap().tail(), Some("four"));
+        assert_eq!(root.all_text(), "onetwothreefour");
+    }
+
+    #[test]
+    fn a_line_ends_in_a_line_feed_however_it_was_written() {
+        let root = Xml::parse("<a>one\r\ntwo\rthree</a>").unwrap();
+        assert_eq!(root.text(), Some("one\ntwo\nthree"));
     }
 
     #[test]

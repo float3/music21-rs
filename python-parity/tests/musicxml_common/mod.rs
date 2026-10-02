@@ -137,6 +137,8 @@ pub const SCORES: &[(&str, &str)] = &[
 
 /// Takes out of a parsed score what belongs to a page rather than to the
 /// music, which the crate does not model.
+// The MuseScore reader's test shares this module and asks music21 nothing.
+#[allow(dead_code)]
 pub const STRIP_LAYOUT: &str = r#"
 from music21 import expressions, layout, repeat, tempo
 
