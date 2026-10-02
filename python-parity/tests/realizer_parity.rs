@@ -423,7 +423,7 @@ fn the_realizer_writes_the_scores_music21_s_writes() {
                     their_line()?
                         .call_method0("generateBassLine")
                         .and_then(|part| asked.getattr("in_score")?.call1((part,)))
-                        .and_then(&written),
+                        .and_then(written),
                     in_score(ours.generate_bass_line()),
                 ));
             } else if their_line()?.call_method0("generateBassLine").is_ok()
@@ -492,7 +492,7 @@ fn the_realizer_writes_the_scores_music21_s_writes() {
                     compared += 1;
                     failures.extend(differs(
                         format!("{label}: way {index} in {style} style"),
-                        theirs.and_then(&written),
+                        theirs.and_then(written),
                         our_realization.generate_realization_from_possibility_progression(
                             &our_progressions[index],
                         ),
@@ -503,7 +503,7 @@ fn the_realizer_writes_the_scores_music21_s_writes() {
                     format!("{label}: a chosen way in {style} style"),
                     their_realization(keyboard)
                         .and_then(|realization| asked.getattr("chosen_way")?.call1((realization,)))
-                        .and_then(&written),
+                        .and_then(written),
                     our_realization.generate_random_realization(chooser()),
                 ));
                 if !line.repeats {
@@ -516,7 +516,7 @@ fn the_realizer_writes_the_scores_music21_s_writes() {
                     format!("{label}: a way music21 chooses and writes in {style} style"),
                     their_realization(keyboard)
                         .and_then(|realization| realization.call_method0("generateRandomRealization"))
-                        .and_then(&written),
+                        .and_then(written),
                     our_realization.generate_random_realization(chooser()),
                 ));
                 if count <= 12 {
@@ -525,7 +525,7 @@ fn the_realizer_writes_the_scores_music21_s_writes() {
                         format!("{label}: every way in {style} style"),
                         their_realization(keyboard)
                             .and_then(|realization| realization.call_method0("generateAllRealizations"))
-                            .and_then(&written),
+                            .and_then(written),
                         our_realization.generate_all_realizations(),
                     ));
                 }
@@ -539,7 +539,7 @@ fn the_realizer_writes_the_scores_music21_s_writes() {
                         .and_then(|realization| {
                             realization.call_method("generateRandomRealizations", (), Some(&kwargs))
                         })
-                        .and_then(&written),
+                        .and_then(written),
                     our_realization.generate_random_realizations(3, chooser()),
                 ));
             }
