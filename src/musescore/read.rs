@@ -16,7 +16,7 @@ use num::rational::Ratio;
 use num::{One, ToPrimitive, Zero};
 
 use super::beams::{self, BeamMode, Member};
-use crate::articulations::{Articulation, ArticulationKind};
+use crate::articulations::{Articulation, ArticulationKind, Finger};
 use crate::bar::{Barline, BarlineType, Ending, RepeatDirection};
 use crate::chord::Chord;
 use crate::chordsymbol::ChordSymbol;
@@ -115,6 +115,10 @@ fn plain_text(element: &Xml) -> Result<String> {
 fn plain_into(element: &Xml, out: &mut String) -> Result<()> {
     if element.tag == "sym" {
         out.push(symbol_named(element.text().unwrap_or("").trim())?);
+        return Ok(());
+    }
+    // An older file wrote a name as a small HTML page.
+    if matches!(element.tag.as_str(), "head" | "style" | "meta" | "title") {
         return Ok(());
     }
     if element.tag == "br" {
@@ -326,6 +330,12 @@ struct NoteRead {
     velocity: Option<i64>,
     hidden: bool,
     small: bool,
+    /// The shape of its head, where it is not the usual one.
+    head: Option<Notehead>,
+    /// Whether its head is filled in, where the file fixes that.
+    head_filled: Option<bool>,
+    /// The fingerings written on it.
+    fingerings: Vec<Articulation>,
 }
 
 #[derive(Clone, Debug)]
@@ -709,6 +719,36 @@ impl Reader {
                     }
                 }
                 "Fermata" => fermatas.push(fermata_of(held)),
+                // A breath is taken after the note before it.
+                "Breath" => {
+                    let mark = breath_of(held)?;
+                    let before =
+                        read.events
+                            .iter_mut()
+                            .rev()
+                            .find_map(|event| match &mut event.what {
+                                What::ChordRest(before) => Some(before),
+                                _ => None,
+                            });
+                    match before {
+                        Some(before) => before.articulations.push(mark),
+                        None => return Err(mscx_error("a breath mark with no note before it")),
+                    }
+                }
+                "Sticking" | "PlayTechAnnotation" if held.child_text("visible") == "0" => {}
+                "Sticking" | "PlayTechAnnotation" => {
+                    let default = if held.tag == "Sticking" {
+                        Placement::Below
+                    } else {
+                        Placement::Above
+                    };
+                    if let Some(element) = words_of(held, default)? {
+                        read.events.push(Event {
+                            tick,
+                            what: What::Element(element),
+                        });
+                    }
+                }
                 // A mark that is hidden has nothing here to say so with, and
                 // is left out, as MuseScore leaves it out of what it
                 // exports.
@@ -768,8 +808,8 @@ impl Reader {
                     };
                 }
                 // What is drawn and not played.
-                "Symbol" | "Image" | "Breath" | "RehearsalMark" | "StaffState" | "Ambitus"
-                | "eid" | "LayoutBreak" | "Segment" => {}
+                "Symbol" | "Image" | "RehearsalMark" | "StaffState" | "Ambitus" | "eid"
+                | "LayoutBreak" | "Segment" | "PlayCountText" => {}
                 other => return Err(refused(format!("A <{other}>"))),
             }
         }
@@ -1114,7 +1154,49 @@ fn note_of(element: &Xml, transposition: (i64, i64)) -> Result<NoteRead> {
         velocity: child_integer(element, "velocity")?.filter(|velocity| *velocity != 0),
         hidden: element.child_text("visible") == "0",
         small: flag(element, "small"),
+        head: None,
+        head_filled: None,
+        fingerings: Vec::new(),
     };
+    for held in &element.children {
+        match held.tag.as_str() {
+            "head" => read.head = head_named(held.stripped())?,
+            "headType" => {
+                read.head_filled = match held.stripped() {
+                    "quarter" => Some(true),
+                    "half" | "whole" => Some(false),
+                    "auto" | "breve" => None,
+                    other => return Err(refused(format!("A notehead of the kind {other:?}"))),
+                };
+            }
+            "Fingering" => {
+                if let Some(fingering) = fingering_of(held)? {
+                    read.fingerings.push(fingering);
+                }
+            }
+            "tuning" => {
+                if held
+                    .stripped()
+                    .parse::<FloatType>()
+                    .is_ok_and(|cents| cents != 0.0)
+                {
+                    return Err(refused("A note tuned away from its pitch"));
+                }
+            }
+            "Spanner" => match held.get("type") {
+                Some("Tie" | "LaissezVib" | "PartialTie") => {}
+                Some(other) => return Err(refused(format!("A {other} on a note"))),
+                None => {}
+            },
+            // Read above or below, or only drawn or played.
+            "pitch" | "tpc" | "tpc2" | "Accidental" | "Tie" | "endSpanner" | "visible"
+            | "small" | "velocity" | "veloType" | "veloOffset" | "play" | "eid" | "NoteDot"
+            | "Events" | "mirror" | "dotPosition" | "fixed" | "fixedLine" | "offset" | "linked"
+            | "linkedMain" | "track" | "color" | "Symbol" | "fret" | "string" | "ghost"
+            | "headScheme" | "z" | "autoplace" | "LaissezVib" | "PartialTie" => {}
+            other => return Err(refused(format!("A <{other}> on a note"))),
+        }
+    }
     for held in element.find_all("Spanner") {
         if held.get("type") == Some("Tie") {
             if held.find("next").is_some() {
@@ -1138,6 +1220,95 @@ fn note_of(element: &Xml, transposition: (i64, i64)) -> Result<NoteRead> {
         read.tie_stop = true;
     }
     Ok(read)
+}
+
+/// The shape of a notehead by MuseScore's name for it; nothing for the
+/// usual one.
+fn head_named(name: &str) -> Result<Option<Notehead>> {
+    let written = match name {
+        "normal" => return Ok(None),
+        "cross" => "x",
+        "plus" => "cross",
+        "xcircle" => "circle-x",
+        "circled" => "circled",
+        "triangle-up" => "triangle",
+        "triangle-down" => "inverted triangle",
+        "slashed1" => "slashed",
+        "slashed2" => "back slashed",
+        "diamond" | "slash" | "do" | "re" | "mi" | "la" | "ti" => name,
+        "sol" => "so",
+        other => return Err(refused(format!("A notehead of the shape {other:?}"))),
+    };
+    Notehead::from_name(written).map(Some)
+}
+
+/// A fingering written on a note: a finger, a plucking finger, or the
+/// string it is played on.
+fn fingering_of(element: &Xml) -> Result<Option<Articulation>> {
+    if element.child_text("visible") == "0" {
+        return Ok(None);
+    }
+    let text = element
+        .find("text")
+        .map(plain_text)
+        .transpose()?
+        .unwrap_or_default();
+    let text = text.trim();
+    let style = element.child_text("style");
+    let made = |class: &str| {
+        ArticulationKind::from_class_name(class)
+            .map(Articulation::of_kind)
+            .ok_or_else(|| mscx_error(format!("no articulation {class}")))
+    };
+    let plucked = matches!(text, "p" | "i" | "m" | "a" | "c");
+    Ok(Some(match style {
+        "String Number" | "string_number" => match text.parse::<IntegerType>() {
+            Ok(0) => made("OpenString")?,
+            Ok(number) if number > 0 => {
+                let mut string = made("StringIndication")?;
+                string.set_number(number);
+                string
+            }
+            _ => return Ok(None),
+        },
+        "RH Guitar Fingering" | "guitar_fingering_rh" => made("FrettedPluck")?,
+        "" | "Fingering" | "fingering" if plucked => made("FrettedPluck")?,
+        "" | "Fingering" | "fingering" | "LH Guitar Fingering" | "guitar_fingering_lh" => {
+            let mut fingering = made("Fingering")?;
+            fingering.set_finger(Some(Finger::from_written(text)));
+            fingering
+        }
+        other => return Err(refused(format!("A fingering in the style {other:?}"))),
+    }))
+}
+
+/// A breath mark or a caesura.
+fn breath_of(element: &Xml) -> Result<Articulation> {
+    let symbol = element.child_text("symbol");
+    let made = |class: &str| {
+        ArticulationKind::from_class_name(class)
+            .map(Articulation::of_kind)
+            .ok_or_else(|| mscx_error(format!("no articulation {class}")))
+    };
+    let mut mark = if symbol.contains("aesura") {
+        made("Caesura")?
+    } else {
+        let mut breath = made("BreathMark")?;
+        breath.set_symbol(Some(
+            match symbol {
+                "breathMarkTick" => "tick",
+                "breathMarkUpbow" => "upbow",
+                "breathMarkSalzedo" => "salzedo",
+                _ => "comma",
+            }
+            .to_string(),
+        ));
+        breath
+    };
+    if element.child_text("placement") == "below" {
+        mark.set_placement(Some("below".to_string()));
+    }
+    Ok(mark)
 }
 
 fn lyric_of(element: &Xml) -> Result<LyricRead> {
@@ -1231,11 +1402,7 @@ fn repeat_words(text: &str) -> StreamElement {
 /// measure, or *Fine* or *To Coda*, which stand at its end. The first
 /// answer is whether it stands at the end.
 fn marker_of(element: &Xml) -> Result<(bool, StreamElement)> {
-    let sign = |kind: RepeatExpressionKind| {
-        let mut mark = RepeatExpression::new(kind);
-        mark.set_placement(Some(Placement::Above));
-        (false, mark.into())
-    };
+    let sign = |kind: RepeatExpressionKind| (false, RepeatExpression::new(kind).into());
     let text = element
         .find("text")
         .map(plain_text)
@@ -1786,7 +1953,7 @@ fn parts_of(score: &Xml, hides_single_name: bool) -> Result<Vec<PartRead>> {
             Some(name) => (Some(name), hidden),
             None => (part_track.clone(), part_track.is_some() || hidden),
         };
-        let abbreviation_hidden = hidden;
+        let abbreviation_hidden = name_hidden && short_name.is_some();
         let mut brackets: Vec<(i64, i64, usize)> = Vec::new();
         let mut bracket_found = false;
         for (staff_index, staff) in part.find_all("Staff").enumerate() {
@@ -2025,7 +2192,7 @@ fn tuplets_for(
     tuplets: &[TupletRead],
     innermost: Option<usize>,
     note: usize,
-    groups: &[Vec<usize>],
+    brackets: &[bool],
 ) -> Vec<Tuplet> {
     let mut chain = Vec::new();
     let mut open = innermost;
@@ -2044,8 +2211,8 @@ fn tuplets_for(
         let bracket = match tuplet.bracket {
             1 => true,
             2 => false,
-            // As the beams decide: no bracket over notes one beam joins.
-            _ => !beamed_together(tuplets, index, groups),
+            // As the beams decide.
+            _ => brackets[index],
         };
         made.set_bracket(if bracket {
             TupletBracket::Bracket
@@ -2066,20 +2233,6 @@ fn tuplets_for(
     }
     chain.reverse();
     chain
-}
-
-/// Whether every note of a tuplet is under one beam.
-fn beamed_together(tuplets: &[TupletRead], index: usize, groups: &[Vec<usize>]) -> bool {
-    let mut notes = Vec::new();
-    collect_notes(tuplets, index, &mut notes);
-    let (Some(first), Some(last)) = (notes.first(), notes.last()) else {
-        return false;
-    };
-    groups.iter().any(|group| {
-        group.contains(first)
-            && group.contains(last)
-            && notes.iter().all(|note| group.contains(note))
-    })
 }
 
 fn collect_notes(tuplets: &[TupletRead], index: usize, out: &mut Vec<usize>) {
@@ -2178,8 +2331,24 @@ fn element_of(
                 percent * 90.0 / 12700.0,
             )?));
         }
+        if let Some(head) = written.head {
+            note.set_notehead(head);
+        }
+        if written.head_filled.is_some() {
+            note.set_notehead_fill(written.head_filled);
+        }
         note.set_stem_direction(stem);
         notes.push(note);
+    }
+    // The marks of the chord, each note's fingerings among them: those of
+    // the lowest note first, then what is written on the chord itself, then
+    // the fingerings of the notes above.
+    let mut articulations: Vec<Articulation> = Vec::new();
+    for (index, written) in read.notes.iter().enumerate() {
+        articulations.extend(written.fingerings.iter().cloned());
+        if index == 0 {
+            articulations.extend(read.articulations.iter().cloned());
+        }
     }
     if notes.len() == 1 {
         let mut note = notes.remove(0);
@@ -2187,7 +2356,7 @@ fn element_of(
             note.set_beams(beams);
         }
         *note.lyrics_mut() = lyrics;
-        *note.articulations_mut() = read.articulations.clone();
+        *note.articulations_mut() = articulations;
         *note.expressions_mut() = expressions;
         return Ok(note.into());
     }
@@ -2199,7 +2368,7 @@ fn element_of(
     if let Some(beams) = beams {
         chord.set_beams(beams);
     }
-    *chord.articulations_mut() = read.articulations.clone();
+    *chord.articulations_mut() = articulations;
     *chord.expressions_mut() = expressions;
     Ok(chord.into())
 }
@@ -2884,6 +3053,14 @@ impl Assembler<'_> {
             let mut plain: Vec<Item> = Vec::new();
             let mut right: Option<Barline> = None;
             let mut right_fermata = false;
+            // Signs and words saying where to go next are the first part's;
+            // a sign stands ahead of the notes it stands with.
+            if part_index == 0 {
+                let target = usize::from(part.staves > 1);
+                for mark in &first_staff.marks_at_start {
+                    push(&mut plain, 0.0, target, None, mark.clone());
+                }
+            }
             for staff in 0..part.staves {
                 let global = part.first_staff + staff;
                 let staff_number = if part.staves > 1 { staff + 1 } else { 0 };
@@ -2928,7 +3105,7 @@ impl Assembler<'_> {
                                     &voice.tuplets,
                                     read_cr.tuplet,
                                     note_index,
-                                    &groups.groups,
+                                    &groups.brackets,
                                 );
                                 note_index += 1;
                                 // A chord may be written on the staff beside its
@@ -3046,12 +3223,8 @@ impl Assembler<'_> {
                     }
                 }
             }
-            // Signs and words saying where to go next are the first part's.
             if part_index == 0 {
                 let target = usize::from(part.staves > 1);
-                for mark in &first_staff.marks_at_start {
-                    push(&mut plain, 0.0, target, None, mark.clone());
-                }
                 let end = quarters(self.grid.lengths[index]);
                 for mark in &first_staff.marks_at_end {
                     push(&mut plain, end, target, None, mark.clone());
@@ -3234,17 +3407,56 @@ impl Assembler<'_> {
                 }
             }
         }
+        // Whether each tuplet that leaves its bracket to MuseScore takes
+        // one.
+        let under: Vec<Vec<usize>> = (0..voice.tuplets.len())
+            .map(|index| {
+                let mut notes = Vec::new();
+                collect_notes(&voice.tuplets, index, &mut notes);
+                notes
+            })
+            .collect();
+        let tuplet_ticks =
+            |index: usize| -> i64 { under[index].iter().map(|note| members[*note].ticks).sum() };
+        let brackets = voice
+            .tuplets
+            .iter()
+            .enumerate()
+            .map(|(index, tuplet)| {
+                let own: Vec<usize> = tuplet
+                    .elements
+                    .iter()
+                    .filter_map(|held| match held {
+                        Held::Note(note) => Some(*note),
+                        Held::Tuplet(_) => None,
+                    })
+                    .collect();
+                beams::tuplet_has_bracket(
+                    &context,
+                    &members,
+                    &groups,
+                    &beams::TupletShape {
+                        notes: &under[index],
+                        own: &own,
+                        nests: own.len() != tuplet.elements.len(),
+                    },
+                    &tuplet_ticks,
+                )
+            })
+            .collect();
         Ok(Beamed {
-            groups,
             beams,
             stems,
+            brackets,
         })
     }
 }
 
 struct Beamed {
-    groups: Vec<Vec<usize>>,
     beams: HashMap<usize, Beams>,
+    /// Whether each tuplet of the voice is drawn with a bracket, where it
+    /// leaves that to MuseScore.
+    brackets: Vec<bool>,
     /// The stem direction each beamed note takes from its beam.
     stems: HashMap<usize, StemDirection>,
 }

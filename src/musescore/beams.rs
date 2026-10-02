@@ -449,6 +449,134 @@ pub(super) fn beam_groups(context: &Context<'_>, members: &[Member]) -> Vec<Vec<
     groups
 }
 
+/// The longest plain value no longer than so many ticks: MuseScore's
+/// `TDuration(Fraction)`, of which only the flags are asked.
+fn value_within(ticks: i64) -> Value {
+    let mut length = 4 * WHOLE;
+    for ordinal in 0..=13u8 {
+        if length <= ticks {
+            return (ordinal, 0);
+        }
+        length /= 2;
+    }
+    INVALID
+}
+
+/// Whether the beams below the first break at a note: MuseScore's
+/// `Beam::calcBeamBreaks`, answering for the sixteenth beam and for the
+/// thirty-second one.
+fn beam_breaks(
+    context: &Context<'_>,
+    members: &[Member],
+    at: usize,
+    prev: Option<usize>,
+    level: u32,
+    tuplet_ticks: &dyn Fn(usize) -> i64,
+) -> (bool, bool) {
+    let member = &members[at];
+    if member.is_rest && member.mode.is_mid() {
+        return match member.mode {
+            BeamMode::Begin16 => (level > 0, false),
+            BeamMode::Begin32 => (false, level > 1),
+            _ => (false, false),
+        };
+    }
+    let prev = prev.map(|prev| &members[prev]);
+    let default = base_mode(context, member, member.value, prev);
+    let said =
+        |mode: BeamMode| member.mode == mode || (member.mode == BeamMode::Auto && default == mode);
+    let mut broken16 = level >= 1 && said(BeamMode::Begin16);
+    let mut broken32 = level >= 2 && said(BeamMode::Begin32);
+    // A tuplet inside a beam breaks the beams below as its whole length
+    // would.
+    if level > 0
+        && member.mode == BeamMode::Auto
+        && let Some(prev) = prev
+    {
+        let starting = member.tuplet.filter(|_| member.tuplet != prev.tuplet);
+        let ended = prev.tuplet.filter(|_| member.tuplet.is_none());
+        if let Some(tuplet) = starting.or(ended) {
+            let flags = hooks(value_within(tuplet_ticks(tuplet))).max(1);
+            if flags <= level {
+                broken16 = level == 1;
+                broken32 = level >= 2;
+            }
+        }
+    }
+    (broken16, broken32)
+}
+
+/// A tuplet as the bracket rule sees it.
+pub(super) struct TupletShape<'a> {
+    /// Every note and rest under it, those of the tuplets inside it too.
+    pub(super) notes: &'a [usize],
+    /// The notes and rests it holds itself.
+    pub(super) own: &'a [usize],
+    /// Whether it holds another tuplet.
+    pub(super) nests: bool,
+}
+
+/// Whether a tuplet that leaves its bracket to MuseScore is drawn with one:
+/// MuseScore's `Tuplet::calcHasBracket`. A tuplet whose notes one beam
+/// joins, and which that beam sets apart from its neighbours, needs none.
+pub(super) fn tuplet_has_bracket(
+    context: &Context<'_>,
+    members: &[Member],
+    groups: &[Vec<usize>],
+    shape: &TupletShape<'_>,
+    tuplet_ticks: &dyn Fn(usize) -> i64,
+) -> bool {
+    let (Some(&first), Some(&last)) = (shape.notes.first(), shape.notes.last()) else {
+        return true;
+    };
+    if first == last {
+        return false;
+    }
+    if members[first].is_rest || members[last].is_rest {
+        return true;
+    }
+    let Some(group) = groups.iter().find(|group| group.contains(&first)) else {
+        return true;
+    };
+    if !group.contains(&last) {
+        return true;
+    }
+    let starts = group.first() == Some(&first);
+    let ends = group.last() == Some(&last);
+    if starts && ends {
+        return false;
+    }
+    if shape.nests {
+        return true;
+    }
+    let flags = hooks(members[first].value);
+    for &own in shape.own {
+        let member = &members[own];
+        if member.is_rest || !group.contains(&own) || hooks(member.value) != flags {
+            return true;
+        }
+    }
+    if flags < 1 {
+        return true;
+    }
+    let level = flags - 1;
+    let before = first.checked_sub(1).filter(|at| !members[*at].is_rest);
+    let (start16, start32) = match before {
+        Some(before) => beam_breaks(context, members, first, Some(before), level, tuplet_ticks),
+        None => (false, false),
+    };
+    let start_defines =
+        start16 || start32 || starts || before.is_some_and(|at| hooks(members[at].value) < flags);
+    let after = Some(last + 1).filter(|at| members.get(*at).is_some_and(|next| !next.is_rest));
+    let (end16, end32) = match after {
+        Some(after) => beam_breaks(context, members, after, Some(last), level, tuplet_ticks),
+        None => (false, false),
+    };
+    let end_defines =
+        end16 || end32 || ends || after.is_some_and(|at| hooks(members[at].value) < flags);
+    !(start_defines && end_defines)
+}
+
 /// The grace notes before or after one note, beamed among themselves:
 /// MuseScore's `beamGraceNotes`.
 pub(super) fn grace_groups(members: &[Member]) -> Vec<Vec<usize>> {
