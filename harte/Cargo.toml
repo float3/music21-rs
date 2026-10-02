@@ -20,5 +20,10 @@ music21-rs = { path = "..", version = "0.8.0" }
 serde = { version = "1.0.228", optional = true, features = ["derive"] }
 thiserror = "2.0.17"
 
+# The parity test reads the fixture in `data/`.
+[dev-dependencies]
+serde = { version = "1.0.228", features = ["derive"] }
+toml = "1.1"
+
 [lints]
 workspace = true

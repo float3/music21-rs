@@ -1,13 +1,17 @@
 //! Scores written by other programs, read into ABC for the editor: Guitar
-//! Pro 3 to 8, MusicXML and the per-part JSON Songsterr's player loads.
-//! Every reader fills the one [`Imported`] shape below and one writer turns
-//! it into ABC, so a repeat, a tuplet or a tie comes out the same whichever
+//! Pro 3 to 8, the per-part JSON Songsterr's player loads, and every format
+//! the crate reads -- MusicXML, MIDI, Humdrum, MEI, RomanText and
+//! TinyNotation -- which [`stream`] turns from the crate's score. Every
+//! reader fills the one [`Imported`] shape below and one writer turns it
+//! into ABC, so a repeat, a tuplet or a tie comes out the same whichever
 //! program wrote it.
 
+mod formats;
 mod gpif;
 mod guitarpro;
 mod musicxml;
 mod songsterr;
+mod stream;
 mod zip;
 
 use super::{abc_key_name, abc_pitch, js_error, key_alters, spell_in_key};
@@ -82,6 +86,8 @@ struct Beat {
     notes: Vec<Note>,
     chord: Option<String>,
     text: Option<String>,
+    /// An analysis written under the beat: a RomanText numeral.
+    figure: Option<String>,
 }
 
 impl Beat {
@@ -160,8 +166,16 @@ fn decode_text(bytes: &[u8]) -> String {
     }
 }
 
-/// Reads one file, whichever of the formats it is in, by what it holds.
+/// Reads one file, whichever of the formats it is in, by what it holds or,
+/// for the plain-text formats that say nothing of themselves, by its name.
 fn read_file(name: &str, bytes: &[u8]) -> Result<Imported, String> {
+    let lower = name.to_ascii_lowercase();
+    let extension = lower
+        .rsplit_once('.')
+        .map_or("", |(_, extension)| extension);
+    if bytes.starts_with(b"MThd") {
+        return formats::midi(bytes);
+    }
     if bytes.starts_with(b"PK\x03\x04") {
         let archive = zip::Archive::new(bytes)?;
         if let Some(gpif) = archive.read("Content/score.gpif")? {
@@ -191,8 +205,25 @@ fn read_file(name: &str, bytes: &[u8]) -> Result<Imported, String> {
     if text.contains("<GPIF") {
         return gpif::read_xml(&text);
     }
+    if text.contains("<mei") {
+        return formats::mei(&text);
+    }
+    if extension == "krn" || text.lines().any(|line| line.starts_with("**")) {
+        return formats::humdrum(&text);
+    }
+    if matches!(extension, "rntxt" | "rntext" | "romantext" | "rtxt") {
+        return formats::roman_text(&text);
+    }
+    if matches!(extension, "tntxt" | "tinynotation")
+        || trimmed
+            .get(..13)
+            .is_some_and(|head| head.eq_ignore_ascii_case("tinynotation:"))
+    {
+        return formats::tiny_notation(&text);
+    }
     Err(format!(
-        "{name} is not a Guitar Pro, MusicXML or Songsterr file this editor can read"
+        "{name} is not a Guitar Pro, MusicXML, MIDI, Humdrum, MEI, RomanText, \
+         TinyNotation or Songsterr file this editor can read"
     ))
 }
 
@@ -471,6 +502,9 @@ fn write_measure(
         }
         if let Some(text) = &beat.text {
             let _ = write!(out, "\"^{}\"", quoted(text));
+        }
+        if let Some(figure) = &beat.figure {
+            let _ = write!(out, "\"_{}\"", quoted(figure));
         }
         if !graces.is_empty() {
             let _ = write!(out, "{{{graces}}}");
@@ -807,8 +841,10 @@ impl ScoreImport {
     }
 
     /// Reads a Guitar Pro (`.gp3`, `.gp4`, `.gp5`, `.gpx`, `.gp`), MusicXML
-    /// (`.musicxml`, `.xml`, `.mxl`) or Songsterr JSON file into the score,
-    /// adding its parts after those already read.
+    /// (`.musicxml`, `.xml`, `.mxl`), MIDI (`.mid`, `.midi`), Humdrum
+    /// (`.krn`), MEI (`.mei`), RomanText (`.rntxt`), TinyNotation (`.tntxt`)
+    /// or Songsterr JSON file into the score, adding its parts after those
+    /// already read.
     pub fn add(&mut self, name: &str, bytes: &[u8]) -> Result<(), JsValue> {
         let read = read_file(name, bytes).map_err(|err| js_error(format!("{name}: {err}")))?;
         if self.imported.title.is_empty() {

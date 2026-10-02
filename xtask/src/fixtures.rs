@@ -1183,7 +1183,7 @@ fn write_doctest_totals(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) ->
 /// What harte-library, on music21, makes of every chord label in its own
 /// coverage set: the pitches, root, bass, sounding degrees and prettified
 /// spelling of each, or the exception it raises. the `harte` crate is checked
-/// against it by `harte_parity`.
+/// against it by its own `parity` test.
 fn write_harte(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> PyResult<PathBuf> {
     let checkout = crate::downstream::checkout(&workspace_root.join("target/downstream"))
         .map_err(|error| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(error.to_string()))?;
@@ -1298,7 +1298,7 @@ fn write_harte(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> PyResult
     }
     let _ = writeln!(out, "]");
 
-    let path = workspace_root.join("data/harte_expectations.toml");
+    let path = workspace_root.join("harte/data/harte_expectations.toml");
     fs::write(&path, out)?;
     println!(
         "  wrote {} ({} labels, {errors} the library refuses)",

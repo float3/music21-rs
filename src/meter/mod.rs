@@ -1320,18 +1320,10 @@ impl TimeSignature {
 
         // music21's `naiveBeams`: the fullest set of beams each written value
         // can carry, with what each one does left undecided.
-        let mut beamed: Vec<Option<Beams>> = Vec::with_capacity(notes.len());
-        for note in notes {
-            let levels = Beams::levels_for(note.duration_type).filter(|_| note.sounds);
-            beamed.push(match levels {
-                Some(levels) => {
-                    let mut made = Beams::new();
-                    made.fill_levels(levels, None)?;
-                    Some(made)
-                }
-                None => None,
-            });
-        }
+        let mut beamed: Vec<Option<Beams>> = notes
+            .iter()
+            .map(|note| Beams::naive(Some(note.duration_type), note.sounds))
+            .collect();
         crate::notation::remove_sandwiched_unbeamables(&mut beamed);
 
         for depth in 0..Beams::LEVELS {

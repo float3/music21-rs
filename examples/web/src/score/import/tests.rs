@@ -635,3 +635,167 @@ fn a_songsterr_ending_runs_on_to_the_bar_that_closes_the_repeat() {
     let abc = to_abc(&imported).expect("the score writes");
     assert_eq!(music(&abc), "|: C8 |[1 C8 | C8 :|[2 C8 || C8 |]");
 }
+
+// ------------------------------------------------ the crate's other readers
+
+/// Two bars of G major in MIDI, closing on a chord struck across the
+/// barline.
+fn midi_file() -> Vec<u8> {
+    let mut notes: Vec<music21_rs::MidiNote> = [67, 71, 74, 66, 67]
+        .iter()
+        .enumerate()
+        .map(|(index, &pitch)| {
+            music21_rs::MidiNote::new(pitch, index as f64, 1.0, 90).expect("valid note")
+        })
+        .collect();
+    for pitch in [55, 59] {
+        notes.push(music21_rs::MidiNote::new(pitch, 5.0, 3.0, 90).expect("valid note"));
+    }
+    music21_rs::write_midi_bytes(&notes, 100.0).expect("MIDI writes")
+}
+
+#[test]
+fn midi_is_read_through_the_crate_in_the_key_it_suggests() {
+    let abc = abc_of("tune.mid", &midi_file());
+    assert!(abc.contains("M:4/4"), "{abc}");
+    assert!(abc.contains("K:G"), "{abc}");
+    assert!(abc.contains("Q:1/4=100"), "{abc}");
+    // F# is in the key signature, so it needs no accidental.
+    assert_eq!(music(&abc), "G2 B2 d2 F2 | G2 [G,B,]6 |]");
+}
+
+/// A format 1 file of these tracks, 480 ticks to the quarter, each event
+/// the sixteenths since the last and its bytes.
+fn midi_tracks(tracks: &[&[(u8, &[u8])]]) -> Vec<u8> {
+    let mut file = vec![b'M', b'T', b'h', b'd', 0, 0, 0, 6, 0, 1];
+    file.extend((tracks.len() as u16).to_be_bytes());
+    file.extend(480u16.to_be_bytes());
+    for events in tracks {
+        let mut body = Vec::new();
+        for (sixteenths, event) in events.iter() {
+            // Every delta here fits in two bytes of a variable-length number.
+            let delta = u16::from(*sixteenths) * 120;
+            if delta >= 128 {
+                body.push(0x80 | (delta >> 7) as u8);
+            }
+            body.push((delta & 0x7f) as u8);
+            body.extend(*event);
+        }
+        body.extend([0, 0xff, 0x2f, 0]);
+        file.extend(b"MTrk");
+        file.extend((body.len() as u32).to_be_bytes());
+        file.extend(body);
+    }
+    file
+}
+
+#[test]
+fn a_midi_track_keeps_its_name_program_meter_and_tempo() {
+    let conductor: &[(u8, &[u8])] = &[
+        (0, &[0xff, 0x58, 4, 3, 2, 24, 8]),
+        (0, &[0xff, 0x51, 3, 0x09, 0x27, 0xc0]),
+    ];
+    let flute: &[(u8, &[u8])] = &[
+        (0, &[0xff, 3, 5, b'F', b'l', b'u', b't', b'e']),
+        (0, &[0xc0, 73]),
+        (0, &[0x90, 72, 80]),
+        (4, &[0x80, 72, 0]),
+        (0, &[0x90, 74, 80]),
+        (8, &[0x80, 74, 0]),
+    ];
+    let abc = abc_of("flute.mid", &midi_tracks(&[conductor, flute]));
+    assert!(abc.contains("M:3/4"), "{abc}");
+    assert!(abc.contains("Q:1/4=100"), "{abc}");
+    assert!(
+        abc.contains("V:P1 clef=treble name=\"Flute\"\n%%MIDI program 73"),
+        "{abc}"
+    );
+    assert_eq!(music(&abc), "c2 d4 |]");
+}
+
+#[test]
+fn a_midi_file_of_drums_alone_is_refused_with_the_reason() {
+    let strokes: Vec<music21_rs::MidiNote> = (0..4)
+        .map(|beat| {
+            music21_rs::MidiNote::with_channel(36, f64::from(beat), 1.0, 100, 9)
+                .expect("valid note")
+        })
+        .collect();
+    let bytes = music21_rs::write_midi_bytes(&strokes, 120.0).expect("MIDI writes");
+    let imported = read_file("drums.midi", &bytes).expect("the file reads");
+    let error = to_abc(&imported).unwrap_err();
+    assert!(error.contains("unpitched percussion"), "{error}");
+}
+
+const HUMDRUM: &str = "!!!OTL: Two spines\n**kern\t**kern\n*clefF4\t*clefG2\n*k[f#]\t*k[f#]\n*M3/4\t*M3/4\n\
+=1\t=1\n2G\t4g\n.\t8a\n.\t8b\n4D\t4cc\n=2\t=2\n2.G\t2.g\n==\t==\n*-\t*-\n";
+
+#[test]
+fn humdrum_spines_are_parts_the_last_spine_first() {
+    let abc = abc_of("tune.krn", HUMDRUM.as_bytes());
+    assert!(abc.contains("T:Two spines"), "{abc}");
+    assert!(abc.contains("M:3/4"), "{abc}");
+    assert!(abc.contains("K:G"), "{abc}");
+    assert!(abc.contains("V:P1 clef=treble"), "{abc}");
+    assert!(abc.contains("V:P2 clef=bass"), "{abc}");
+    assert_eq!(music(&abc), "G2 AB c2 | G6 |]");
+    assert!(abc.contains("[V:P2] G,4 D,2 | G,6 |]"), "{abc}");
+}
+
+const MEI: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<mei xmlns="http://www.music-encoding.org/ns/mei" meiversion="4.0.1">
+<meiHead><fileDesc><titleStmt><title>Two staves</title></titleStmt></fileDesc></meiHead>
+<music><body><mdiv><score>
+<scoreDef meter.count="2" meter.unit="4" key.sig="1f">
+  <staffGrp>
+    <staffDef n="1" lines="5" clef.shape="G" clef.line="2"/>
+    <staffDef n="2" lines="5" clef.shape="F" clef.line="4"/>
+  </staffGrp>
+</scoreDef>
+<section>
+  <measure n="1">
+    <staff n="1"><layer n="1"><note pname="f" oct="4" dur="4"/><note pname="b" oct="4" dur="4" accid.ges="f"/></layer></staff>
+    <staff n="2"><layer n="1"><chord dur="2"><note pname="f" oct="2"/><note pname="c" oct="3"/></chord></layer></staff>
+  </measure>
+  <measure n="2">
+    <staff n="1"><layer n="1"><tuplet num="3" numbase="2"><note pname="a" oct="4" dur="8"/><note pname="g" oct="4" dur="8"/><note pname="f" oct="4" dur="8"/></tuplet><rest dur="4"/></layer></staff>
+    <staff n="2"><layer n="1"><note pname="f" oct="2" dur="2"/></layer></staff>
+  </measure>
+</section>
+</score></mdiv></body></music></mei>"#;
+
+#[test]
+fn mei_staves_are_parts_and_keep_their_tuplets() {
+    let abc = abc_of("tune.mei", MEI.as_bytes());
+    assert!(abc.contains("M:2/4"), "{abc}");
+    assert!(abc.contains("K:F"), "{abc}");
+    // The B is flat by the key, written as `accid.ges`.
+    assert_eq!(music(&abc), "F2 B2 | (3:2:3AGF z2 |]");
+    assert!(abc.contains("[V:P2] [F,,C,]4 | F,,4 |]"), "{abc}");
+}
+
+const ROMAN_TEXT: &str = "Composer: Nobody\nTitle: Cadence\nTime Signature: 3/4\n\
+m1 G: I b2 IV b3 V7\nm2 I\nm3 NC\n";
+
+#[test]
+fn roman_text_writes_each_numeral_under_its_chord() {
+    let abc = abc_of("cadence.rntxt", ROMAN_TEXT.as_bytes());
+    assert!(abc.contains("T:Cadence"), "{abc}");
+    assert!(abc.contains("K:G"), "{abc}");
+    assert_eq!(
+        music(&abc),
+        "\"_G: I\"[GBd]2 \"_IV\"[ceg]2 \"_V7\"[dfac']2 | \"_I\"[GBd]6 | z6 |]"
+    );
+}
+
+#[test]
+fn tiny_notation_is_read_by_name_or_by_its_label() {
+    let text = "tinyNotation: 3/4 E4 r f# g trip{b-8 a g} c'2.";
+    let abc = abc_of("line.tntxt", text.as_bytes());
+    assert!(abc.contains("M:3/4"), "{abc}");
+    let music = music(&abc);
+    assert!(music.starts_with("E,2 z2 ^F2 | G2 (3:2:3"), "{abc}");
+    // The last note runs past its barline and is tied into the next bar.
+    assert!(music.ends_with("G c2- | c4 |]"), "{abc}");
+    assert_eq!(abc_of("line.txt", text.as_bytes()), abc);
+}
