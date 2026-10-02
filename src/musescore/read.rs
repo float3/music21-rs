@@ -354,6 +354,9 @@ struct ChordRest {
     hidden: bool,
     small: bool,
     stem: StemDirection,
+    /// The way the stems of the beam starting on it go, where a beam is
+    /// written out before it.
+    beam_stem: StemDirection,
     lyrics: Vec<LyricRead>,
     articulations: Vec<Articulation>,
     /// Ornaments and an arpeggio, in the order written.
@@ -564,6 +567,7 @@ impl Reader {
         let mut tuplet: Option<usize> = None;
         let mut graces: Vec<ChordRest> = Vec::new();
         let mut fermatas: Vec<Fermata> = Vec::new();
+        let mut beam_stem = StemDirection::Unspecified;
         let mut notes = 0usize;
         for held in &element.children {
             match held.tag.as_str() {
@@ -578,6 +582,8 @@ impl Reader {
                 "Chord" | "Rest" => {
                     let mut chord_rest =
                         self.chord_rest(held, tick, tuplet, &read.tuplets, transposition)?;
+                    chord_rest.beam_stem =
+                        std::mem::replace(&mut beam_stem, StemDirection::Unspecified);
                     let grace = chord_rest.grace.map(|_| graces.len());
                     self.spanners_of(
                         held,
@@ -716,7 +722,15 @@ impl Reader {
                         grace: None,
                     },
                 )?,
-                "Beam" => {}
+                // A beam written out says which way its stems go; which
+                // notes it joins is still the beam modes' to say.
+                "Beam" => {
+                    beam_stem = match held.child_text("StemDirection") {
+                        "up" => StemDirection::Up,
+                        "down" => StemDirection::Down,
+                        _ => StemDirection::Unspecified,
+                    };
+                }
                 // What is drawn and not played.
                 "Symbol" | "Image" | "Breath" | "RehearsalMark" | "StaffState" | "Ambitus"
                 | "eid" | "LayoutBreak" | "Segment" => {}
@@ -796,6 +810,7 @@ impl Reader {
             hidden: element.child_text("visible") == "0",
             small: flag(element, "small"),
             stem: StemDirection::Unspecified,
+            beam_stem: StemDirection::Unspecified,
             lyrics: Vec::new(),
             articulations: Vec::new(),
             expressions: Vec::new(),
@@ -1931,7 +1946,15 @@ fn element_of(
     read: &ChordRest,
     tuplets: Vec<Tuplet>,
     beams: Option<Beams>,
+    beam_stem: StemDirection,
 ) -> Result<StreamElement> {
+    // Its own stem direction, else its beam's; a note written with no
+    // stem has neither.
+    let stem = match read.stem {
+        _ if read.order < 3 => StemDirection::Unspecified,
+        StemDirection::Unspecified => beam_stem,
+        own => own,
+    };
     let duration = duration_of(read, tuplets)?;
     let lyrics: Vec<Lyric> = read
         .lyrics
@@ -2000,7 +2023,7 @@ fn element_of(
                 percent * 90.0 / 12700.0,
             )?));
         }
-        note.set_stem_direction(read.stem);
+        note.set_stem_direction(stem);
         notes.push(note);
     }
     if notes.len() == 1 {
@@ -2013,10 +2036,6 @@ fn element_of(
         *note.expressions_mut() = expressions;
         return Ok(note.into());
     }
-    // A chord keeps its notes as MuseScore does, lowest first.
-    for note in &mut notes {
-        note.set_stem_direction(StemDirection::Unspecified);
-    }
     if let Some(first) = notes.first_mut() {
         *first.lyrics_mut() = lyrics;
     }
@@ -2025,7 +2044,6 @@ fn element_of(
     if let Some(beams) = beams {
         chord.set_beams(beams);
     }
-    chord.set_stem_direction(read.stem);
     *chord.articulations_mut() = read.articulations.clone();
     *chord.expressions_mut() = expressions;
     Ok(chord.into())
@@ -2745,14 +2763,24 @@ impl Assembler<'_> {
                                         .get(grace_index)
                                         .cloned()
                                         .flatten();
-                                    let element = element_of(grace, Vec::new(), grace_beams)?;
+                                    let element = element_of(
+                                        grace,
+                                        Vec::new(),
+                                        grace_beams,
+                                        grace.beam_stem,
+                                    )?;
                                     self.uids.insert(
                                         (index as i64, event.tick, track, Some(grace.grace_index)),
                                         grace.uid,
                                     );
                                     push(items, at, cr_staff, Some(grace.uid), element);
                                 }
-                                let element = element_of(read_cr, tuplets, beams)?;
+                                let beam_stem = groups
+                                    .stems
+                                    .get(&(note_index - 1))
+                                    .copied()
+                                    .unwrap_or(StemDirection::Unspecified);
+                                let element = element_of(read_cr, tuplets, beams, beam_stem)?;
                                 self.uids
                                     .insert((index as i64, event.tick, track, None), read_cr.uid);
                                 let begins = self.grid.starts[index] + event.tick;
@@ -2771,7 +2799,12 @@ impl Assembler<'_> {
                                         .get(grace_index)
                                         .cloned()
                                         .flatten();
-                                    let element = element_of(grace, Vec::new(), grace_beams)?;
+                                    let element = element_of(
+                                        grace,
+                                        Vec::new(),
+                                        grace_beams,
+                                        grace.beam_stem,
+                                    )?;
                                     self.uids.insert(
                                         (index as i64, event.tick, track, Some(grace.grace_index)),
                                         grace.uid,
@@ -2967,13 +3000,16 @@ impl Assembler<'_> {
             voice: voice_index,
         };
         let mut members = Vec::new();
+        let mut written_stems = Vec::new();
         for event in &voice.events {
             if let What::ChordRest(read) = &event.what {
                 members.push(member_of(read));
+                written_stems.push((read.beam_stem, read.staff_move != 0));
             }
         }
         let groups = beams::beam_groups(&context, &members);
         let mut beams = HashMap::new();
+        let mut stems = HashMap::new();
         for group in &groups {
             let held: Vec<&Member> = group.iter().map(|index| &members[*index]).collect();
             for (at, made) in group.iter().zip(beams::beams_of_group(&held)) {
@@ -2981,14 +3017,35 @@ impl Assembler<'_> {
                     beams.insert(*at, made);
                 }
             }
+            // A beam written out with a direction turns every stem under
+            // it, unless it runs between two staves, where the stems of
+            // each staff go their own way.
+            let direction = group
+                .iter()
+                .map(|at| written_stems[*at].0)
+                .find(|stem| *stem != StemDirection::Unspecified);
+            let crosses = group.iter().any(|at| written_stems[*at].1);
+            if let Some(direction) = direction
+                && !crosses
+            {
+                for at in group {
+                    stems.insert(*at, direction);
+                }
+            }
         }
-        Ok(Beamed { groups, beams })
+        Ok(Beamed {
+            groups,
+            beams,
+            stems,
+        })
     }
 }
 
 struct Beamed {
     groups: Vec<Vec<usize>>,
     beams: HashMap<usize, Beams>,
+    /// The stem direction each beamed note takes from its beam.
+    stems: HashMap<usize, StemDirection>,
 }
 
 fn member_of(read: &ChordRest) -> Member {
