@@ -336,6 +336,8 @@ struct NoteRead {
     head_filled: Option<bool>,
     /// The fingerings written on it.
     fingerings: Vec<Articulation>,
+    /// The colour it is drawn in, where that is not the usual one.
+    color: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -489,6 +491,9 @@ struct Grid {
 struct Reader {
     /// Whether the file is in a format older than 4.1.
     old_format: bool,
+    /// Whether a marker is of the kind its label names. From format 4.6 on
+    /// it says its kind apart, and one that says none marks the end.
+    markers_by_label: bool,
     next_uid: usize,
     spanners: Vec<SpannerRead>,
 }
@@ -567,10 +572,12 @@ impl Reader {
                 "measureRepeatCount" => {
                     return Err(refused(format!("<{}>", held.tag)));
                 }
-                "Marker" if held.child_text("visible") != "0" => match marker_of(held)? {
-                    (false, mark) => measure.marks_at_start.push(mark),
-                    (true, mark) => measure.marks_at_end.push(mark),
-                },
+                "Marker" if held.child_text("visible") != "0" => {
+                    match marker_of(held, self.markers_by_label)? {
+                        (false, mark) => measure.marks_at_start.push(mark),
+                        (true, mark) => measure.marks_at_end.push(mark),
+                    }
+                }
                 "Jump" if held.child_text("visible") != "0" => {
                     measure.marks_at_end.push(jump_of(held)?);
                 }
@@ -1157,6 +1164,7 @@ fn note_of(element: &Xml, transposition: (i64, i64)) -> Result<NoteRead> {
         head: None,
         head_filled: None,
         fingerings: Vec::new(),
+        color: None,
     };
     for held in &element.children {
         match held.tag.as_str() {
@@ -1172,6 +1180,13 @@ fn note_of(element: &Xml, transposition: (i64, i64)) -> Result<NoteRead> {
             "Fingering" => {
                 if let Some(fingering) = fingering_of(held)? {
                     read.fingerings.push(fingering);
+                }
+            }
+            "color" => read.color = Some(color_of(held)?),
+            // Shape notes are drawn by the degree of the scale a note is.
+            "headScheme" => {
+                if !matches!(held.stripped(), "auto" | "normal") {
+                    return Err(refused("A note drawn as a shape note"));
                 }
             }
             "tuning" => {
@@ -1192,8 +1207,8 @@ fn note_of(element: &Xml, transposition: (i64, i64)) -> Result<NoteRead> {
             "pitch" | "tpc" | "tpc2" | "Accidental" | "Tie" | "endSpanner" | "visible"
             | "small" | "velocity" | "veloType" | "veloOffset" | "play" | "eid" | "NoteDot"
             | "Events" | "mirror" | "dotPosition" | "fixed" | "fixedLine" | "offset" | "linked"
-            | "linkedMain" | "track" | "color" | "Symbol" | "fret" | "string" | "ghost"
-            | "headScheme" | "z" | "autoplace" | "LaissezVib" | "PartialTie" => {}
+            | "linkedMain" | "track" | "Symbol" | "fret" | "string" | "ghost" | "dead" | "z"
+            | "autoplace" | "LaissezVib" | "PartialTie" => {}
             other => return Err(refused(format!("A <{other}> on a note"))),
         }
     }
@@ -1240,6 +1255,26 @@ fn head_named(name: &str) -> Result<Option<Notehead>> {
         other => return Err(refused(format!("A notehead of the shape {other:?}"))),
     };
     Notehead::from_name(written).map(Some)
+}
+
+/// A colour as MuseScore's export writes one.
+fn color_of(element: &Xml) -> Result<String> {
+    let part = |name: &str| -> Result<i64> {
+        element
+            .get(name)
+            .and_then(|text| text.parse::<i64>().ok())
+            .filter(|value| (0..=255).contains(value))
+            .ok_or_else(|| mscx_error(format!("a colour with no {name}")))
+    };
+    if part("a")? != 255 {
+        return Err(refused("A colour that is partly transparent"));
+    }
+    Ok(format!(
+        "#{:02X}{:02X}{:02X}",
+        part("r")?,
+        part("g")?,
+        part("b")?
+    ))
 }
 
 /// A fingering written on a note: a finger, a plucking finger, or the
@@ -1401,18 +1436,23 @@ fn repeat_words(text: &str) -> StreamElement {
 /// A `<Marker>`: a segno or a coda sign, which stands at the start of its
 /// measure, or *Fine* or *To Coda*, which stand at its end. The first
 /// answer is whether it stands at the end.
-fn marker_of(element: &Xml) -> Result<(bool, StreamElement)> {
+fn marker_of(element: &Xml, by_label: bool) -> Result<(bool, StreamElement)> {
     let sign = |kind: RepeatExpressionKind| (false, RepeatExpression::new(kind).into());
     let text = element
         .find("text")
         .map(plain_text)
         .transpose()?
         .unwrap_or_default();
-    Ok(match element.child_text("label") {
+    let kind = match element.child_text("markerType") {
+        "" if by_label => element.child_text("label"),
+        "" => "fine",
+        kind => kind,
+    };
+    Ok(match kind {
         "segno" | "varsegno" => sign(RepeatExpressionKind::Segno),
         "codab" | "varcoda" | "codetta" => sign(RepeatExpressionKind::Coda),
         "fine" if !text.trim().is_empty() => (true, repeat_words(text.trim())),
-        "coda" => (
+        "coda" | "codasym" | "dacoda" | "dadblcoda" => (
             true,
             repeat_words(if text.trim().is_empty() {
                 "To Coda"
@@ -1420,7 +1460,7 @@ fn marker_of(element: &Xml) -> Result<(bool, StreamElement)> {
                 text.trim()
             }),
         ),
-        other => return Err(refused(format!("A marker labelled {other:?}"))),
+        other => return Err(refused(format!("A marker of the kind {other:?}"))),
     })
 }
 
@@ -2032,20 +2072,10 @@ fn parts_of(score: &Xml, hides_single_name: bool) -> Result<Vec<PartRead>> {
             made.set_transposition(Some(interval));
         }
         // The clef a staff starts with where its first measure writes
-        // none: the staff's own, else its instrument's, else a treble
-        // clef. A transposing instrument's is the one it reads.
+        // none: the staff's own, else a treble clef, whatever clef its
+        // instrument is usually written in. A transposing instrument's is
+        // the one it reads.
         let mut default_clefs = vec![String::from("G"); staves];
-        for tag in ["clef", "concertClef", "transposingClef"] {
-            for clef in instrument.find_all(tag) {
-                let staff = clef
-                    .get("staff")
-                    .and_then(|staff| staff.parse::<usize>().ok())
-                    .unwrap_or(1);
-                if (1..=staves).contains(&staff) {
-                    default_clefs[staff - 1] = clef.stripped().to_string();
-                }
-            }
-        }
         for (staff_index, staff) in part.find_all("Staff").enumerate() {
             for tag in [
                 "defaultClef",
@@ -2334,6 +2364,9 @@ fn element_of(
         if let Some(head) = written.head {
             note.set_notehead(head);
         }
+        if written.color.is_some() {
+            note.set_color(written.color.clone());
+        }
         if written.head_filled.is_some() {
             note.set_notehead_fill(written.head_filled);
         }
@@ -2508,6 +2541,7 @@ pub fn from_mscx(document: &str) -> Result<Stream> {
 
     let mut reader = Reader {
         old_format: format < 4.1,
+        markers_by_label: format < 4.6,
         next_uid: 0,
         spanners: Vec::new(),
     };
@@ -3563,6 +3597,179 @@ mod tests {
         assert_eq!(lengths.len(), 5);
         assert!((lengths[0] - 1.0 / 3.0).abs() < 1e-9);
         assert_eq!(lengths[3], 1.5);
+    }
+
+    /// The notes of the first measure of the first part.
+    fn notes_of(score: &Stream) -> Vec<Note> {
+        score.parts()[0].measures()[0]
+            .events()
+            .iter()
+            .filter_map(|event| match event.element() {
+                StreamElement::Note(note) => Some(note.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_grace_note_is_slashed_only_where_it_is_an_acciaccatura() {
+        let grace = |kind: &str| {
+            format!(
+                "<Chord><durationType>eighth</durationType><{kind}/>\
+                 <Note><pitch>62</pitch><tpc>16</tpc></Note></Chord>"
+            )
+        };
+        let body = [
+            grace("acciaccatura"),
+            chord("half", 60, 14),
+            grace("appoggiatura"),
+            chord("half", 60, 14),
+        ]
+        .concat();
+        let notes = notes_of(&from_mscx(&document(&body)).unwrap());
+        let slashed: Vec<Option<bool>> = notes
+            .iter()
+            .map(|note| {
+                note.duration()
+                    .and_then(Duration::grace)
+                    .map(|grace| grace.slash())
+            })
+            .collect();
+        assert_eq!(slashed, [Some(true), None, Some(false), None]);
+    }
+
+    #[test]
+    fn a_stem_points_where_the_file_fixes_it_and_nowhere_otherwise() {
+        let body = format!(
+            "<Chord><durationType>quarter</durationType><StemDirection>up</StemDirection>\
+             <Note><pitch>72</pitch><tpc>14</tpc></Note></Chord>{}\
+             <Chord><durationType>half</durationType><noStem>1</noStem>\
+             <Note><pitch>72</pitch><tpc>14</tpc></Note></Chord>",
+            chord("quarter", 72, 14),
+        );
+        let stems: Vec<StemDirection> = notes_of(&from_mscx(&document(&body)).unwrap())
+            .iter()
+            .map(Note::stem_direction)
+            .collect();
+        assert_eq!(
+            stems,
+            [
+                StemDirection::Up,
+                StemDirection::Unspecified,
+                StemDirection::NoStem
+            ]
+        );
+    }
+
+    #[test]
+    fn a_notehead_a_colour_and_a_fingering_are_read_off_the_note() {
+        let body = format!(
+            "<Chord><durationType>whole</durationType><Note><pitch>60</pitch><tpc>14</tpc>\
+             <head>cross</head><color r=\"255\" g=\"38\" b=\"0\" a=\"255\"/>\
+             <Fingering><text>3</text></Fingering></Note></Chord>"
+        );
+        let notes = notes_of(&from_mscx(&document(&body)).unwrap());
+        assert_eq!(notes[0].notehead(), Notehead::from_name("x").unwrap());
+        assert_eq!(notes[0].color(), Some("#FF2600"));
+        assert_eq!(notes[0].articulations().len(), 1);
+        assert!(notes[0].articulations()[0].is_a("Fingering"));
+    }
+
+    #[test]
+    fn a_tuplet_takes_a_bracket_unless_a_beam_sets_it_apart() {
+        let triplet = |value: &str| {
+            format!(
+                "<Tuplet><normalNotes>2</normalNotes><actualNotes>3</actualNotes>                 <baseNote>{value}</baseNote></Tuplet>{}{}{}<endTuplet/>",
+                chord(value, 60, 14),
+                chord(value, 62, 16),
+                chord(value, 64, 18),
+            )
+        };
+        let body = [
+            triplet("eighth"),
+            triplet("quarter"),
+            chord("quarter", 60, 14),
+        ]
+        .concat();
+        let brackets: Vec<TupletBracket> = notes_of(&from_mscx(&document(&body)).unwrap())
+            .iter()
+            .filter_map(|note| {
+                note.duration()
+                    .and_then(|length| length.tuplets().first().cloned())
+            })
+            .map(|tuplet| tuplet.bracket())
+            .collect();
+        // Three beamed eighths, then three quarters no beam can join.
+        assert_eq!(brackets[..3], [TupletBracket::None; 3]);
+        assert_eq!(brackets[3..], [TupletBracket::Bracket; 3]);
+    }
+
+    /// A score of one whole note with something written in its measure.
+    fn marked(version: &str, mark: &str) -> String {
+        format!(
+            r#"<museScore version="{version}"><Score>
+            <Part><Staff/><trackName>Flute</trackName>
+            <Instrument><longName>Flute</longName><trackName>Flute</trackName>
+            <Channel><program value="73"/></Channel></Instrument></Part>
+            <Staff id="1"><Measure>{mark}<voice>
+            <TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>{}</voice></Measure></Staff>
+            </Score></museScore>"#,
+            chord("whole", 60, 14)
+        )
+    }
+
+    /// The signs and jumps of the first measure, each with its offset.
+    fn repeat_marks(score: &Stream) -> Vec<(FloatType, RepeatExpressionKind)> {
+        score.parts()[0].measures()[0]
+            .events()
+            .iter()
+            .filter_map(|event| match event.element() {
+                StreamElement::RepeatExpression(mark) => Some((event.offset(), mark.kind())),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_marker_is_of_the_kind_the_file_says_in_the_way_its_format_says_it() {
+        let segno = "<Marker><text><sym>segno</sym></text><label>segno</label></Marker>";
+        let typed = "<Marker><text><sym>segno</sym></text><label>segno</label>\
+                     <markerType>segno</markerType></Marker>";
+        // Before format 4.6 the label says what a marker is.
+        let old = from_mscx(&marked("4.40", segno)).unwrap();
+        assert_eq!(repeat_marks(&old), [(0.0, RepeatExpressionKind::Segno)]);
+        // From 4.6 on its kind is said apart, and one that says none is the
+        // end of the piece, as MuseScore reads it.
+        let new = from_mscx(&marked("4.70", typed)).unwrap();
+        assert_eq!(repeat_marks(&new), [(0.0, RepeatExpressionKind::Segno)]);
+        let untyped = from_mscx(&marked("4.70", segno)).unwrap();
+        assert!(
+            !repeat_marks(&untyped)
+                .iter()
+                .any(|(_, kind)| *kind == RepeatExpressionKind::Segno)
+        );
+        // A jump stands at the end of its measure.
+        let jump = "<Jump><text>D.C.</text><jumpTo>start</jumpTo><playUntil>end</playUntil>\
+                    <continueAt></continueAt></Jump>";
+        let jumped = from_mscx(&marked("4.70", jump)).unwrap();
+        assert_eq!(repeat_marks(&jumped), [(4.0, RepeatExpressionKind::DaCapo)]);
+    }
+
+    #[test]
+    fn what_the_model_has_no_value_for_is_refused_by_name() {
+        let tremolo = "<Chord><durationType>whole</durationType><Tremolo><subtype>r8</subtype>\
+                       </Tremolo><Note><pitch>60</pitch><tpc>14</tpc></Note></Chord>";
+        let error = from_mscx(&document(tremolo)).unwrap_err().to_string();
+        assert!(
+            error.contains("Tremolo") && error.contains("cannot be read yet"),
+            "{error}"
+        );
+        let trill = "<Spanner type=\"Trill\"><Trill/><next><location><measures>1</measures>\
+                     </location></next></Spanner>";
+        let error = from_mscx(&document(&[trill, &chord("whole", 60, 14)].concat()))
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("Trill"), "{error}");
     }
 
     #[test]

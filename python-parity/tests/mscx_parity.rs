@@ -22,8 +22,13 @@
 //! MuseScore4 -o score.musicxml score.mscx   # its own export of that file
 //! ```
 //!
-//! `features`, `pickup` and `arpeggios` were written for this test rather
-//! than taken from the corpus, to reach what the corpus scores here do not.
+//! `features`, `marks`, `pickup` and `arpeggios` were written for this test
+//! rather than taken from the corpus, to reach what the corpus scores here
+//! do not. MuseScore's MusicXML importer makes plain words of a segno, a
+//! coda and the words that send a player to them, so in `marks` those were
+//! rewritten by hand as the `<Marker>` and `<Jump>` elements MuseScore
+//! writes itself, and the file was opened and saved by MuseScore again
+//! before it was exported.
 //!
 //! # What is not compared
 //!
@@ -136,6 +141,13 @@ const SCORES: &[Score] = &[
         "a transposing clarinet and a piano: a grace note, a trill, a pedal line, a \
          hairpin, endings, tuplets with and without brackets, a tempo mark, and a key \
          and a clef that change",
+    ),
+    agrees(
+        "marks",
+        "a violin and a guitar: a segno, a coda, To Coda, D.S. al Coda and Fine; \
+         fingerings on notes and on a chord, a breath mark and a caesura, noteheads of \
+         other shapes and a coloured one, ornaments, grace notes, chord symbols, and \
+         tuplets inside and across beams",
     ),
     Score {
         name: "pickup",
