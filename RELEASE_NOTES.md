@@ -19,7 +19,8 @@
   tunes — every one of the 118 in music21's corpus that it reads into no
   measures, which could not be compared before — and 42 corpus scores kept
   as MusicXML. Beyond those, 600 generated TinyNotation subjects, every
-  fortieth ABC tune of the corpus and 215 further corpus scores agree.
+  fortieth ABC tune of the corpus, 215 further corpus scores and every
+  corpus score tried as MIDI that music21 can write agree.
 - `makenotation::make_notation` is music21's `makeNotation` on a stream:
   the same steps for a caller that wants the notated score rather than its
   MusicXML. `makenotation::make_tuplet_brackets` and

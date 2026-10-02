@@ -515,12 +515,6 @@ def source_text(name, musicxml=False):
     return data.decode('latin-1'), file_name
 "#;
 
-/// A subject as the crate reads it.
-enum Ours {
-    Read(Stream),
-    Refused(String),
-}
-
 #[test]
 fn the_crate_makes_notation_as_music21_does() {
     let root = repo_root();
@@ -595,35 +589,23 @@ fn the_crate_makes_notation_as_music21_does() {
             let (theirs, ours) = match kind {
                 "tiny" => (
                     converter.call_method1("parse", (format!("tinyNotation: {name}"),)),
-                    match music21_rs::tinynotation::from_tiny_notation(name) {
-                        Ok(part) => Ours::Read(part),
-                        Err(error) => Ours::Refused(error.to_string()),
-                    },
+                    music21_rs::tinynotation::from_tiny_notation(name),
                 ),
                 "flat" => (
                     helpers.getattr("flat_part")?.call1((name,)),
-                    match music21_rs::tinynotation::from_tiny_notation(name) {
-                        Ok(part) => Ours::Read(flattened(&part)),
-                        Err(error) => Ours::Refused(error.to_string()),
-                    },
+                    music21_rs::tinynotation::from_tiny_notation(name).map(|part| flattened(&part)),
                 ),
                 "loose" => (
                     helpers.getattr("loose_part")?.call1((name,)),
-                    match loose_part(name) {
-                        Ok(part) => Ours::Read(part),
-                        Err(error) => Ours::Refused(error.to_string()),
-                    },
+                    loose_part(name),
                 ),
                 "scored" => (
                     helpers.getattr("scored_part")?.call1((name,)),
-                    match loose_part(name) {
-                        Ok(part) => {
-                            let mut score = Stream::with_kind(StreamKind::Score);
-                            score.insert(0.0, part);
-                            Ours::Read(score)
-                        }
-                        Err(error) => Ours::Refused(error.to_string()),
-                    },
+                    loose_part(name).map(|part| {
+                        let mut score = Stream::with_kind(StreamKind::Score);
+                        score.insert(0.0, part);
+                        score
+                    }),
                 ),
                 "midi" => {
                     let bytes: Vec<u8> = match name.strip_prefix("corpus:") {
@@ -647,10 +629,7 @@ fn the_crate_makes_notation_as_music21_does() {
                             (pyo3::types::PyBytes::new(py, &bytes),),
                             Some(&kwargs),
                         ),
-                        match music21_rs::midi::from_midi(&bytes) {
-                            Ok(score) => Ours::Read(score),
-                            Err(error) => Ours::Refused(error.to_string()),
-                        },
+                        music21_rs::midi::from_midi(&bytes),
                     )
                 }
                 "abc" => {
@@ -671,10 +650,7 @@ fn the_crate_makes_notation_as_music21_does() {
                     };
                     (
                         corpus.call_method("parse", (file,), Some(&kwargs)),
-                        match read {
-                            Ok(score) => Ours::Read(signed(score)),
-                            Err(error) => Ours::Refused(error.to_string()),
-                        },
+                        read.map(&signed),
                     )
                 }
                 "xml" => {
@@ -690,20 +666,16 @@ fn the_crate_makes_notation_as_music21_does() {
                     kwargs.set_item("forceSource", true)?;
                     (
                         corpus.call_method("parse", (name,), Some(&kwargs)),
-                        match from_musicxml(&text) {
-                            Ok(score) => {
-                                let mut score = signed(score);
-                                let mut metadata = score.metadata().cloned().unwrap_or_default();
-                                // A score with no title is called after its
-                                // file.
-                                if metadata.get("movementName").is_empty() {
-                                    metadata.add_text("movementName", file_name);
-                                }
-                                score.set_metadata(Some(metadata));
-                                Ours::Read(score)
+                        from_musicxml(&text).map(|score| {
+                            let mut score = signed(score);
+                            let mut metadata = score.metadata().cloned().unwrap_or_default();
+                            // A score with no title is called after its file.
+                            if metadata.get("movementName").is_empty() {
+                                metadata.add_text("movementName", file_name);
                             }
-                            Err(error) => Ours::Refused(error.to_string()),
-                        },
+                            score.set_metadata(Some(metadata));
+                            score
+                        }),
                     )
                 }
                 other => {
@@ -732,8 +704,8 @@ fn the_crate_makes_notation_as_music21_does() {
                 }
             };
             let ours = match ours {
-                Ours::Read(stream) => stream,
-                Ours::Refused(error) => {
+                Ok(stream) => stream,
+                Err(error) => {
                     failures.push(format!("{subject}: the crate could not read it: {error}"));
                     continue;
                 }
