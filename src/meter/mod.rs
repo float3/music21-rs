@@ -117,6 +117,8 @@ pub struct TimeSignature {
     symbolize_denominator: bool,
     #[cfg_attr(feature = "serde", serde(default))]
     color: crate::display::Color,
+    #[cfg_attr(feature = "serde", serde(default))]
+    hidden: crate::display::Drawn<bool>,
 }
 
 impl Default for TimeSignature {
@@ -153,6 +155,7 @@ impl TimeSignature {
             symbol: None,
             symbolize_denominator: false,
             color: crate::display::Drawn(None),
+            hidden: crate::display::Drawn(false),
         };
         signature.set_default_partitions()?;
         Ok(signature)
@@ -190,6 +193,18 @@ impl TimeSignature {
     /// Sets the colour the signature is drawn in.
     pub fn set_color(&mut self, color: Option<String>) {
         self.color.0 = color;
+    }
+
+    /// Whether the signature is left off the page while still in force:
+    /// music21's `style.hideObjectOnPrint`. Two meters differing only in
+    /// this are equal.
+    pub fn is_hidden(&self) -> bool {
+        self.hidden.0
+    }
+
+    /// Says whether the signature is left off the page.
+    pub fn set_hidden(&mut self, hidden: bool) {
+        self.hidden.0 = hidden;
     }
 
     /// How the bar is written, before anything divides it: music21's

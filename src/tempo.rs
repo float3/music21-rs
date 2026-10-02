@@ -58,6 +58,19 @@ pub fn convert_tempo_by_referent(
     60.0 / (seconds_per_quarter * destination_quarter_length)
 }
 
+/// A number within a millionth of a whole one as that whole number, which is
+/// what music21's `numToIntOrFloat` makes of every number a mark is given:
+/// a tempo counted in another note value comes back a hair off, and the mark
+/// keeps `165`, not `165.00000000000003`.
+fn whole_where_nearly(number: FloatType) -> FloatType {
+    let rounded = number.round_ties_even();
+    if (rounded - number).abs() < 1e-6 {
+        rounded
+    } else {
+        number
+    }
+}
+
 /// Returns the tempo word music21 pairs with a beats-per-minute value, when
 /// one lies within two beats of it. Ties go to the lower value, then the
 /// alphabetically earlier word, as music21 sorts them.
@@ -149,6 +162,7 @@ impl MetronomeMark {
     }
 
     fn build(number: Option<FloatType>, text: Option<String>, referent: Duration) -> Self {
+        let number = number.map(whole_where_nearly);
         let number_implicit = number.is_none();
         let text_implicit = text.is_none();
         let number = number.or_else(|| text.as_deref().and_then(default_number_for_text));
@@ -214,6 +228,7 @@ impl MetronomeMark {
     /// Sets the beats per minute, which is then no longer implied. A mark
     /// with no word of its own picks one up, as music21 does.
     pub fn set_number(&mut self, number: Option<FloatType>) {
+        let number = number.map(whole_where_nearly);
         self.number = number;
         self.number_implicit = false;
         if self.text.is_none()
@@ -550,6 +565,8 @@ pub struct MetricModulation {
     transition_symbol: String,
     arrow_direction: Option<String>,
     parentheses: bool,
+    #[cfg_attr(feature = "serde", serde(default))]
+    placement: Drawn<Option<Placement>>,
 }
 
 impl Default for MetricModulation {
@@ -569,7 +586,19 @@ impl MetricModulation {
             transition_symbol: "=".to_string(),
             arrow_direction: None,
             parentheses: false,
+            placement: Drawn(None),
         }
+    }
+
+    /// Which side of the staff the modulation is written on, where the
+    /// score says.
+    pub fn placement(&self) -> Option<Placement> {
+        self.placement.0
+    }
+
+    /// Says which side of the staff the modulation is written on.
+    pub fn set_placement(&mut self, placement: Option<Placement>) {
+        self.placement.0 = placement;
     }
 
     /// The mark in force before the modulation, if one is given.
@@ -762,6 +791,24 @@ impl MetricModulation {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_number_a_hair_off_a_whole_one_is_that_whole_number() {
+        // Read off music21: dotted quarter = 110 counted in quarters is 165,
+        // and a dotted quarter at 165 is 247.5 quarters a minute.
+        let mark = super::MetronomeMark::new(110.0)
+            .with_referent(super::Duration::from_type_with_dots(
+                crate::duration::DurationType::Quarter,
+                1,
+            ))
+            .equivalent_by_referent(super::Duration::quarter());
+        assert_eq!(mark.number(), Some(165.0));
+        let dotted = mark.maintained_number_with_referent(super::Duration::from_type_with_dots(
+            crate::duration::DurationType::Quarter,
+            1,
+        ));
+        assert_eq!(dotted.quarter_bpm(), Some(247.5));
+    }
+
     use super::*;
 
     #[test]

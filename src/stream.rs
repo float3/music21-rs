@@ -35,7 +35,7 @@ use crate::{
     duration::Duration,
     dynamics::Dynamic,
     error::Result,
-    expressions::TextExpression,
+    expressions::{RehearsalMark, TextExpression},
     instrument::Instrument,
     interval::Interval,
     key::{Key, KeySignature},
@@ -47,7 +47,7 @@ use crate::{
     repeat::RepeatExpression,
     rest::Rest,
     spanner::{PedalObject, Spanner},
-    tempo::{MetronomeMark, TempoText},
+    tempo::{MetricModulation, MetronomeMark, TempoText},
 };
 
 /// Which of music21's `Stream` subclasses a stream stands for.
@@ -153,6 +153,11 @@ pub enum StreamElement {
     /// A bounce or a gap in the line of a held pedal, joined by the pedal
     /// mark it belongs to.
     PedalObject(PedalObject),
+    /// A letter or number marking a place to rehearse from.
+    RehearsalMark(RehearsalMark),
+    /// A change of tempo written as one note value becoming another. Boxed:
+    /// it holds two tempo marks.
+    MetricModulation(Box<MetricModulation>),
 }
 
 impl StreamElement {
@@ -182,7 +187,9 @@ impl StreamElement {
             | Self::RepeatExpression(_)
             | Self::Dynamic(_)
             | Self::Barline(_)
-            | Self::PedalObject(_) => None,
+            | Self::PedalObject(_)
+            | Self::RehearsalMark(_)
+            | Self::MetricModulation(_) => None,
         }
     }
 
@@ -205,7 +212,9 @@ impl StreamElement {
             | Self::RepeatExpression(_)
             | Self::Dynamic(_)
             | Self::Barline(_)
-            | Self::PedalObject(_) => 0.0,
+            | Self::PedalObject(_)
+            | Self::RehearsalMark(_)
+            | Self::MetricModulation(_) => 0.0,
             _ => self
                 .duration()
                 .map(Duration::quarter_length)
@@ -235,7 +244,9 @@ impl StreamElement {
             | Self::Dynamic(_)
             | Self::ChordSymbol(_)
             | Self::Barline(_)
-            | Self::PedalObject(_) => Vec::new(),
+            | Self::PedalObject(_)
+            | Self::RehearsalMark(_)
+            | Self::MetricModulation(_) => Vec::new(),
         }
     }
 
@@ -251,13 +262,13 @@ impl StreamElement {
     /// at one offset.
     pub(crate) fn class_sort_order(&self) -> i32 {
         match self {
-            Self::TextExpression(_) => -30,
+            Self::TextExpression(_) | Self::RehearsalMark(_) => -30,
             Self::Instrument(_) => -25,
             Self::Stream(stream) if stream.kind() == StreamKind::Voice => 5,
             Self::Stream(_) => -20,
             Self::Barline(_) => -5,
             Self::Clef(_) => 0,
-            Self::MetronomeMark(_) | Self::TempoText(_) => 1,
+            Self::MetronomeMark(_) | Self::TempoText(_) | Self::MetricModulation(_) => 1,
             Self::KeySignature(_) | Self::Key(_) => 2,
             Self::TimeSignature(_) => 4,
             Self::Dynamic(_) => 10,
@@ -303,6 +314,8 @@ impl StreamElement {
             Self::ChordSymbol(symbol) => Ok(Self::ChordSymbol(symbol.transpose(interval)?)),
             Self::Barline(barline) => Ok(Self::Barline(barline.clone())),
             Self::PedalObject(object) => Ok(Self::PedalObject(object.clone())),
+            Self::RehearsalMark(mark) => Ok(Self::RehearsalMark(mark.clone())),
+            Self::MetricModulation(modulation) => Ok(Self::MetricModulation(modulation.clone())),
         }
     }
 }
@@ -316,6 +329,18 @@ impl From<Barline> for StreamElement {
 impl From<PedalObject> for StreamElement {
     fn from(value: PedalObject) -> Self {
         Self::PedalObject(value)
+    }
+}
+
+impl From<RehearsalMark> for StreamElement {
+    fn from(value: RehearsalMark) -> Self {
+        Self::RehearsalMark(value)
+    }
+}
+
+impl From<MetricModulation> for StreamElement {
+    fn from(value: MetricModulation) -> Self {
+        Self::MetricModulation(Box::new(value))
     }
 }
 

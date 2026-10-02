@@ -912,6 +912,29 @@ def test_what_is_read_is_written_back_as_musicxml():
     assert again == written
 
 
+def test_a_lyric_keeps_how_it_is_drawn_through_musicxml():
+    sung = MUSICXML.replace(
+        "<duration>2</duration><voice>1</voice><type>quarter</type></note>",
+        "<duration>2</duration><voice>1</voice><type>quarter</type>"
+        '<lyric number="1" justify="left" placement="below">'
+        "<syllabic>single</syllabic><text>la</text></lyric></note>",
+    )
+    score = m.from_musicxml(sung)
+    assert (
+        '<lyric justify="left" name="1" number="1" placement="below">'
+        in m.to_musicxml(score)
+    )
+    # The lyric's style says the same, and what is written there is written
+    # out.
+    note = [e for e in score.parts[0].getElementsByClass("Measure")[0]][3]
+    lyric = note.lyrics[0]
+    assert lyric.hasStyleInformation
+    assert lyric.style.justify == "left"
+    assert lyric.style.placement == "below"
+    lyric.style.justify = "right"
+    assert 'justify="right"' in m.to_musicxml(score)
+
+
 def test_a_document_that_is_not_musicxml_is_refused():
     with pytest.raises(Exception):
         m.from_musicxml("<html></html>")

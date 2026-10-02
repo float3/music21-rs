@@ -761,7 +761,9 @@ fn element_object<'py>(
         | StreamElement::Unpitched(_)
         | StreamElement::PercussionChord(_)
         | StreamElement::Barline(_)
-        | StreamElement::PedalObject(_) => return Ok(None),
+        | StreamElement::PedalObject(_)
+        | StreamElement::RehearsalMark(_)
+        | StreamElement::MetricModulation(_) => return Ok(None),
     }))
 }
 
@@ -970,10 +972,20 @@ fn element_value(object: &Bound<'_, PyAny>, stand_ins: bool) -> PyResult<Option<
         let mut value = meter.inner.clone();
         drop(meter);
         value.set_color(style_color(object));
+        value.set_hidden(hidden_on_print(object));
         return Ok(Some(StreamElement::TimeSignature(value)));
     }
     if let Ok(mark) = object.extract::<PyRef<'_, MetronomeMark>>() {
         return Ok(Some(StreamElement::MetronomeMark(mark.inner.clone())));
+    }
+    // The walks keep a metric modulation as the stand-in it has always been.
+    if !stand_ins
+        && let Ok(modulation) = object.extract::<PyRef<'_, crate::tempo::MetricModulation>>()
+    {
+        let mut value = modulation.written_value(py)?;
+        drop(modulation);
+        value.set_placement(placement_of(object));
+        return Ok(Some(StreamElement::from(value)));
     }
     if let Ok(clef) = object.extract::<PyRef<'_, crate::clef::Clef>>() {
         let mut value = clef.inner.clone();
@@ -1071,6 +1083,28 @@ fn element_value(object: &Bound<'_, PyAny>, stand_ins: bool) -> PyResult<Option<
             let mut value = music21_rs_crate::PedalObject::new(kind);
             value.set_placement(placement_of(object));
             return Ok(Some(StreamElement::PedalObject(value)));
+        }
+        if is_of_class(object, &pyo3::types::PyString::new(py, "RehearsalMark"))? {
+            // music21 writes whatever the mark holds as text.
+            let mut mark = music21_rs_crate::expressions::RehearsalMark::new(
+                object.getattr("content")?.str()?.to_string(),
+            );
+            let styled = object
+                .getattr("hasStyleInformation")
+                .and_then(|said| said.is_truthy())
+                .unwrap_or(false);
+            if styled && let Ok(style) = object.getattr("style") {
+                mark.set_placement(placement_of(&style));
+                mark.set_enclosure(
+                    style
+                        .getattr("enclosure")
+                        .ok()
+                        .filter(|enclosure| !enclosure.is_none())
+                        .and_then(|enclosure| enclosure.str().ok())
+                        .map(|enclosure| enclosure.to_string()),
+                );
+            }
+            return Ok(Some(StreamElement::RehearsalMark(mark)));
         }
         // Read for a score writer, something a score writes out as a note or
         // a direction cannot be left out without the score saying less.

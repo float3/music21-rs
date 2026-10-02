@@ -22,7 +22,7 @@ use crate::dynamics::Dynamic;
 use crate::error::{Error, Result};
 use crate::expressions::{
     ArpeggioType, Expression, Fermata, FermataType, Ornament, OrnamentDelay, OrnamentKind,
-    TextExpression,
+    RehearsalMark, TextExpression,
 };
 use crate::instrument::{Instrument, SearchLanguage};
 use crate::interval::Interval;
@@ -43,9 +43,28 @@ use crate::spanner::{
     PedalType, SlideType, Spanner, SpannerKind,
 };
 use crate::stream::{BarTogether, StaffGroup, Stream, StreamElement, StreamEvent, StreamKind};
-use crate::tempo::MetronomeMark;
+use crate::tempo::{MetricModulation, MetronomeMark};
 use crate::volume::Volume;
 use crate::xml::Xml;
+
+/// What may be drawn round a mark: music21's `style.Enclosure`.
+const ENCLOSURES: [&str; 15] = [
+    "rectangle",
+    "square",
+    "oval",
+    "circle",
+    "bracket",
+    "triangle",
+    "diamond",
+    "pentagon",
+    "hexagon",
+    "heptagon",
+    "octagon",
+    "nonagon",
+    "decagon",
+    "inverted-bracket",
+    "none",
+];
 
 /// The staff an element is written on where nothing says: music21's
 /// `NO_STAFF_ASSIGNED`.
@@ -141,6 +160,16 @@ fn parse_int(text: &str) -> Option<IntegerType> {
     })
 }
 
+/// How many strokes a `<tremolo>` says, three where it says nothing a
+/// number can be read from: music21's `xmlToTremolo`.
+fn tremolo_marks(mark: &Xml) -> Result<u8> {
+    let marks = parse_int(mark.stripped()).unwrap_or(3);
+    u8::try_from(marks)
+        .ok()
+        .filter(|marks| *marks <= 8)
+        .ok_or_else(|| import_error("Number of marks must be a number from 0 to 8"))
+}
+
 fn yes(value: Option<&str>) -> bool {
     value == Some("yes")
 }
@@ -181,13 +210,15 @@ impl Item {
     /// music21's `classSortOrder`.
     fn order(&self) -> i32 {
         match &self.element {
-            StreamElement::TextExpression(_) => -30,
+            StreamElement::TextExpression(_) | StreamElement::RehearsalMark(_) => -30,
             StreamElement::Instrument(_) => -25,
             StreamElement::Stream(stream) if stream.kind() == StreamKind::Voice => 5,
             StreamElement::Stream(_) => -20,
             StreamElement::Barline(_) => -5,
             StreamElement::Clef(_) => 0,
-            StreamElement::MetronomeMark(_) | StreamElement::TempoText(_) => 1,
+            StreamElement::MetronomeMark(_)
+            | StreamElement::TempoText(_)
+            | StreamElement::MetricModulation(_) => 1,
             StreamElement::KeySignature(_) | StreamElement::Key(_) => 2,
             StreamElement::TimeSignature(_) => 4,
             StreamElement::Dynamic(_) => 10,
@@ -2290,8 +2321,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
                     }
                     "turn" | "inverted-turn" => ornament.set_delay(OrnamentDelay::NoDelay),
                     "tremolo" => {
-                        let marks = parse_int(mark.stripped()).unwrap_or(3);
-                        ornament.set_number_of_marks(marks.clamp(0, 8) as u8)?;
+                        ornament.set_number_of_marks(tremolo_marks(mark)?)?;
                     }
                     _ => {}
                 }
@@ -2348,8 +2378,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
                     "tremolo" if matches!(mark.get("type"), Some("start" | "stop")) => {
                         let index =
                             self.one_spanner(mark, Some(uid), SpannerKind::TremoloSpanner, false);
-                        let marks = parse_int(mark.stripped()).unwrap_or(3);
-                        self.part.importer.spanners[index].marks = marks.clamp(0, 8) as u8;
+                        self.part.importer.spanners[index].marks = tremolo_marks(mark)?;
                     }
                     _ => {}
                 }
@@ -2509,10 +2538,24 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
                 };
                 self.insert(total, staff, RepeatExpression::new(kind));
             }
-            "metronome" => {
-                let mut mark = metronome(specific)?;
+            "rehearsal" => {
+                // music21's `xmlToRehearsalMark`.
+                let mut mark = RehearsalMark::new(specific.stripped());
+                if let Some(enclosure) = specific.get("enclosure") {
+                    let lower = enclosure.to_lowercase();
+                    if !ENCLOSURES.contains(&lower.as_str()) {
+                        return Err(import_error(format!(
+                            "Not a supported enclosure: '{enclosure}'"
+                        )));
+                    }
+                    mark.set_enclosure(Some(lower));
+                }
                 mark.set_placement(placement_of(direction));
                 self.insert(total, staff, mark);
+            }
+            "metronome" => {
+                let tempo = metronome(specific, placement_of(direction))?;
+                self.insert(total, staff, tempo);
             }
             "words" => {
                 let text = specific.stripped();
@@ -2525,7 +2568,12 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
                     Some(kind) => {
                         let mut mark = RepeatExpression::new(kind);
                         mark.set_text(text);
-                        mark.set_placement(placement);
+                        // The words are placed, not the mark: one drawn as
+                        // its sign, a coda or a segno, stands where music21
+                        // puts a sign whatever side its words were on.
+                        if !mark.use_symbol() {
+                            mark.set_placement(placement);
+                        }
                         self.insert(total, staff, mark);
                     }
                     None => {
@@ -3359,7 +3407,9 @@ fn technical_of(mark: &Xml) -> Option<Articulation> {
 }
 
 /// music21's `xmlToTempoIndication`, for a mark with one note value.
-fn metronome(written: &Xml) -> Result<MetronomeMark> {
+/// music21's `xmlToTempoIndication`: a `<metronome>` is a tempo mark, or
+/// with two note values a metric modulation, placed as its direction says.
+fn metronome(written: &Xml, placement: Option<Placement>) -> Result<StreamElement> {
     let mut referents: Vec<Duration> = Vec::new();
     let mut numbers: Vec<FloatType> = Vec::new();
     for child in &written.children {
@@ -3384,10 +3434,21 @@ fn metronome(written: &Xml) -> Result<MetronomeMark> {
             _ => {}
         }
     }
+    let parentheses = written.get("parentheses") == Some("yes");
     if referents.len() > 1 {
-        return Err(import_error(
-            "reading a metric modulation is not supported yet",
-        ));
+        // All a file gives are the two note values: neither side has a
+        // number until the mark in force before it is known.
+        let mut sides = referents.into_iter();
+        let mut modulation = MetricModulation::new();
+        if let Some(old) = sides.next() {
+            modulation.set_old_referent(old, None);
+        }
+        if let Some(new) = sides.next() {
+            modulation.set_new_referent(new);
+        }
+        modulation.set_parentheses(parentheses);
+        modulation.set_placement(placement);
+        return Ok(modulation.into());
     }
     let mut mark = MetronomeMark::default();
     if let Some(number) = numbers.first() {
@@ -3396,10 +3457,11 @@ fn metronome(written: &Xml) -> Result<MetronomeMark> {
     if let Some(referent) = referents.into_iter().next() {
         mark.set_referent(referent);
     }
-    if written.get("parentheses") == Some("yes") {
+    if parentheses {
         mark.set_parentheses(true);
     }
-    Ok(mark)
+    mark.set_placement(placement);
+    Ok(mark.into())
 }
 
 /// music21's `xmlToTimeSignature`.
@@ -3430,6 +3492,7 @@ fn time_signature(written: &Xml) -> Result<Option<TimeSignature>> {
     if let Some(color) = written.get("color") {
         meter.set_color(Some(color.to_string()));
     }
+    meter.set_hidden(written.get("print-object") == Some("no"));
     match written.get("symbol") {
         Some(symbol @ ("common" | "cut" | "single-number" | "normal")) => {
             meter.set_symbol(Some(symbol.to_string()));
@@ -3937,6 +4000,115 @@ mod tests {
             "<lyric justify=\"left\" name=\"1\" number=\"1\" placement=\"below\" \
              print-object=\"no\">"
         ));
+    }
+
+    #[test]
+    fn a_rehearsal_mark_is_read_and_written_centred() {
+        let read = from_musicxml(&measure_of(&format!(
+            "<direction placement=\"above\"><direction-type>             <rehearsal enclosure=\"square\">A</rehearsal></direction-type></direction>{NOTE}"
+        )))
+        .unwrap();
+        let leaves = read.leaves();
+        let mark = leaves
+            .iter()
+            .find_map(|(_, element)| match element {
+                StreamElement::RehearsalMark(mark) => Some(mark),
+                _ => None,
+            })
+            .expect("the measure holds a rehearsal mark");
+        assert_eq!(mark.content(), "A");
+        assert_eq!(mark.enclosure(), Some("square"));
+        assert_eq!(mark.placement(), Some(Placement::Above));
+        assert!(written_back(&read).contains(
+            "<rehearsal enclosure=\"square\" halign=\"center\" valign=\"middle\">A</rehearsal>"
+        ));
+        // music21 raises on an enclosure it has no name for.
+        assert!(
+            from_musicxml(&measure_of(
+                "<direction><direction-type><rehearsal enclosure=\"star\">A</rehearsal>                 </direction-type></direction>"
+            ))
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn a_time_signature_may_be_left_unprinted() {
+        let read = from_musicxml(&score(
+            "<measure number=\"1\"><attributes><divisions>1</divisions>             <time print-object=\"no\"><beats>3</beats><beat-type>4</beat-type></time>             </attributes></measure>",
+        ))
+        .unwrap();
+        let leaves = read.leaves();
+        let meter = leaves
+            .iter()
+            .find_map(|(_, element)| match element {
+                StreamElement::TimeSignature(meter) => Some(meter),
+                _ => None,
+            })
+            .expect("the measure holds a time signature");
+        assert!(meter.is_hidden());
+        assert!(written_back(&read).contains("<time print-object=\"no\">"));
+    }
+
+    #[test]
+    fn a_metric_modulation_takes_its_numbers_from_the_tempo_before_it() {
+        // Read off music21: a dotted quarter at 110, then a quarter becoming
+        // a dotted quarter, sounds at 247.5 quarters a minute.
+        let read = from_musicxml(&score(&format!(
+            "<measure number=\"1\"><attributes><divisions>1</divisions></attributes>\
+             <direction><direction-type><metronome><beat-unit>quarter</beat-unit>\
+             <beat-unit-dot/><per-minute>110</per-minute></metronome></direction-type>\
+             </direction>{NOTE}</measure><measure number=\"2\">\
+             <direction placement=\"above\"><direction-type><metronome>\
+             <beat-unit>quarter</beat-unit><beat-unit>quarter</beat-unit><beat-unit-dot/>\
+             </metronome></direction-type></direction>{NOTE}</measure>"
+        )))
+        .unwrap();
+        let leaves = read.leaves();
+        let modulation = leaves
+            .iter()
+            .find_map(|(_, element)| match element {
+                StreamElement::MetricModulation(modulation) => Some(modulation),
+                _ => None,
+            })
+            .expect("the second measure holds a metric modulation");
+        // As read, neither side has a number: a file gives the note values.
+        assert_eq!(
+            modulation.old_metronome().and_then(|old| old.number()),
+            None
+        );
+        assert_eq!(modulation.placement(), Some(Placement::Above));
+        let written = written_back(&read);
+        assert!(written.contains(
+            "<metronome parentheses=\"no\">\n            <beat-unit>quarter</beat-unit>\n            \
+             <beat-unit>quarter</beat-unit>\n            <beat-unit-dot />\n          \
+             </metronome>\n        </direction-type>\n        <sound tempo=\"247.5\" />"
+        ));
+    }
+
+    #[test]
+    fn words_naming_a_coda_place_no_sign() {
+        let words = |text: &str| {
+            format!(
+                "<direction placement=\"above\"><direction-type><words>{text}</words>                 </direction-type></direction>"
+            )
+        };
+        let read = from_musicxml(&measure_of(&format!(
+            "{}{NOTE}{}",
+            words("Coda"),
+            words("Fine")
+        )))
+        .unwrap();
+        let placed: Vec<Option<Placement>> = read
+            .leaves()
+            .iter()
+            .filter_map(|(_, element)| match element {
+                StreamElement::RepeatExpression(mark) => Some(mark.placement()),
+                _ => None,
+            })
+            .collect();
+        // The coda is drawn as its sign, which music21 places nowhere; the
+        // words of a fine stay where they were written.
+        assert_eq!(placed, [None, Some(Placement::Above)]);
     }
 
     #[test]

@@ -120,6 +120,19 @@ pub const SCORES: &[(&str, &str)] = &[
         "built:lyric-styles",
         "lyrics justified, placed and left unprinted",
     ),
+    ("built:rehearsal-marks", "rehearsal marks, boxed and not"),
+    (
+        "trecento/PMFC_12_19-Sanctus Barbitonsoris.xml",
+        "rehearsal marks in a file",
+    ),
+    (
+        "trecento/PMFC_23_16-Kyrie Apt 16.xml",
+        "time signatures left unprinted",
+    ),
+    (
+        "trecento/PMFC_06_8-In Verde Prato.xml",
+        "a metric modulation",
+    ),
 ];
 
 /// Takes out of a parsed score what belongs to a page rather than to the
@@ -336,7 +349,24 @@ def lyric_styles():
             lyric.style.hideObjectOnPrint = True
     return one_part(part)
 
+def rehearsal_marks():
+    """Rehearsal marks, boxed and not, at the start of a bar and inside one."""
+    from music21 import expressions
+    part, _ = quarters([['C4', 'D4', 'E4', 'F4'], ['G4', 'A4', 'B4', 'C5']])
+    measures = part.getElementsByClass('Measure')
+    boxed = expressions.RehearsalMark('A')
+    boxed.style.enclosure = 'square'
+    boxed.style.placement = 'above'
+    measures[0].insert(0, boxed)
+    measures[0].insert(2.0, expressions.RehearsalMark(12))
+    plain = expressions.RehearsalMark('B', numbering='alphabetical')
+    plain.style.enclosure = 'none'
+    plain.style.placement = 'below'
+    measures[1].insert(0, plain)
+    return one_part(part)
+
 BUILT = {
+    'built:rehearsal-marks': rehearsal_marks,
     'built:glissandi': glissandi,
     'built:tremolo-spanners': tremolos,
     'built:pedals': pedals,
