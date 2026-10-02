@@ -85,6 +85,15 @@ impl Xml {
 
     /// Reads a document and hands back its root element.
     pub(crate) fn parse(document: &str) -> Result<Xml> {
+        // A line ends in a line feed whatever the file wrote, as the XML
+        // standard has a reader take it.
+        let normalized;
+        let document = if document.contains('\r') {
+            normalized = document.replace("\r\n", "\n").replace('\r', "\n");
+            normalized.as_str()
+        } else {
+            document
+        };
         let mut reader = Reader {
             text: document,
             at: 0,
@@ -341,6 +350,12 @@ mod tests {
         assert_eq!(root.find("b").unwrap().tail(), Some("two"));
         assert_eq!(root.find("c").unwrap().tail(), Some("four"));
         assert_eq!(root.all_text(), "onetwothreefour");
+    }
+
+    #[test]
+    fn a_line_ends_in_a_line_feed_however_it_was_written() {
+        let root = Xml::parse("<a>one\r\ntwo\rthree</a>").unwrap();
+        assert_eq!(root.text(), Some("one\ntwo\nthree"));
     }
 
     #[test]

@@ -461,6 +461,8 @@ struct Grid {
 }
 
 struct Reader {
+    /// Whether the file is in a format older than 4.1.
+    old_format: bool,
     next_uid: usize,
     spanners: Vec<SpannerRead>,
 }
@@ -644,7 +646,7 @@ impl Reader {
                     if !flag(held, "isCourtesy") {
                         read.events.push(Event {
                             tick,
-                            what: What::Key(key_of(held, transposition)?),
+                            what: What::Key(key_of(held, transposition, self.old_format)?),
                         });
                     }
                 }
@@ -665,6 +667,11 @@ impl Reader {
                     }
                 }
                 "Fermata" => fermatas.push(fermata_of(held)),
+                // A mark that is hidden has nothing here to say so with, and
+                // is left out, as MuseScore leaves it out of what it
+                // exports.
+                "Dynamic" | "StaffText" | "SystemText" | "Expression" | "Text"
+                    if held.child_text("visible") == "0" => {}
                 "Dynamic" => {
                     let mut dynamic = Dynamic::new(held.child_text("subtype"));
                     dynamic.set_placement(Some(placement_of(held, Placement::Below)));
@@ -863,6 +870,11 @@ impl Reader {
             return Ok(());
         };
         let body = element.find(kind);
+        if matches!(kind, "HairPin" | "Pedal")
+            && body.is_some_and(|body| body.child_text("visible") == "0")
+        {
+            return Ok(());
+        }
         let start = SpannerStart::from(kind, body)?;
         let Some(start) = start else {
             return Ok(());
@@ -1220,16 +1232,22 @@ fn placement_of(element: &Xml, default: Placement) -> Placement {
 
 /// A key signature as it is written, for a transposing instrument in the
 /// key it reads.
-fn key_of(element: &Xml, transposition: (i64, i64)) -> Result<StreamElement> {
+fn key_of(element: &Xml, transposition: (i64, i64), old_format: bool) -> Result<StreamElement> {
     if flag(element, "custom") || element.find("KeySym").is_some() {
         return Err(refused("A key signature of its own making"));
     }
-    let concert = child_integer(element, "concertKey")?
-        .or(child_integer(element, "accidental")?)
-        .unwrap_or(0);
-    let mut sharps = match child_integer(element, "actualKey")? {
-        Some(actual) => actual,
-        None => concert - 7 * transposition.1 + 12 * transposition.0,
+    // Before format 4.1 a signature said the key its staff is written in,
+    // as `<accidental>`; since then it says the sounding key, and the
+    // written one beside it where a transposing instrument has another.
+    // MuseScore reads each format by its own rule and so does this.
+    let mut sharps = if old_format {
+        child_integer(element, "accidental")?.unwrap_or(0)
+    } else {
+        let concert = child_integer(element, "concertKey")?.unwrap_or(0);
+        match child_integer(element, "actualKey")? {
+            Some(actual) => actual,
+            None => concert - 7 * transposition.1 + 12 * transposition.0,
+        }
     };
     while sharps > 7 {
         sharps -= 12;
@@ -1562,11 +1580,12 @@ fn instrument_of(program: Option<u8>, channel: Option<u8>, name: Option<&str>) -
     instrument
 }
 
-fn parts_of(score: &Xml) -> Result<Vec<PartRead>> {
+fn parts_of(score: &Xml, hides_single_name: bool) -> Result<Vec<PartRead>> {
     let mut parts = Vec::new();
     let mut first_staff = 0;
-    let mut channel: u8 = 0;
+    let mut channel: usize = 0;
     let listed: Vec<&Xml> = score.find_all("Part").collect();
+    let hidden = hides_single_name && listed.len() == 1;
     for (index, part) in listed.into_iter().enumerate() {
         let staves = part.find_all("Staff").count();
         if staves == 0 {
@@ -1599,11 +1618,10 @@ fn parts_of(score: &Xml) -> Result<Vec<PartRead>> {
         let track_name = text(instrument, "trackName")?;
         let part_track = text(part, "trackName")?;
         // A part with no name of its own goes by its track's, which is not
-        // printed. A style sheet may hide the one name of a score of one
-        // part; that is a file of its own and is not read.
+        // printed.
         let (name, name_hidden) = match long_name {
-            Some(name) => (Some(name), false),
-            None => (part_track.clone(), part_track.is_some()),
+            Some(name) => (Some(name), hidden),
+            None => (part_track.clone(), part_track.is_some() || hidden),
         };
         let mut brackets: Vec<(i64, i64, usize)> = Vec::new();
         let mut bracket_found = false;
@@ -1637,25 +1655,20 @@ fn parts_of(score: &Xml) -> Result<Vec<PartRead>> {
             .and_then(|value| value.parse::<u8>().ok());
         // The channel the file gives the instrument's first sound, or the
         // next one free where it gives none; the tenth is the drums'.
-        if channel == 9 {
-            channel += 1;
-        }
         let written = channels
             .first()
             .and_then(|first| first.find("midiChannel"))
             .map(integer)
             .transpose()?;
-        let first_channel = match written {
-            Some(written) => written.rem_euclid(16) as u8,
-            None => channel % 16,
-        };
+        let mut first_channel = written.map(|written| written.rem_euclid(16) as u8);
         for _ in 0..channels.len().max(1) {
-            channel += 1;
-            if channel == 9 {
+            if channel % 16 == 9 {
                 channel += 1;
             }
+            first_channel.get_or_insert((channel % 16) as u8);
+            channel += 1;
         }
-        let mut made = instrument_of(program, Some(first_channel), track_name.as_deref());
+        let mut made = instrument_of(program, first_channel, track_name.as_deref());
         made.set_part_id(Some(format!("P{}", index + 1)));
         made.set_part_name(name.clone());
         made.set_part_abbreviation(short_name.clone());
@@ -1687,14 +1700,30 @@ fn parts_of(score: &Xml) -> Result<Vec<PartRead>> {
             .or_else(|_| Interval::from_semitones(transposition.1 as IntegerType))?;
             made.set_transposition(Some(interval));
         }
+        // The clef a staff starts with where its first measure writes
+        // none: the staff's own, else its instrument's, else a treble
+        // clef. A transposing instrument's is the one it reads.
         let mut default_clefs = vec![String::from("G"); staves];
-        for clef in instrument.find_all("clef") {
-            let staff = clef
-                .get("staff")
-                .and_then(|staff| staff.parse::<usize>().ok())
-                .unwrap_or(1);
-            if (1..=staves).contains(&staff) {
-                default_clefs[staff - 1] = clef.stripped().to_string();
+        for tag in ["clef", "concertClef", "transposingClef"] {
+            for clef in instrument.find_all(tag) {
+                let staff = clef
+                    .get("staff")
+                    .and_then(|staff| staff.parse::<usize>().ok())
+                    .unwrap_or(1);
+                if (1..=staves).contains(&staff) {
+                    default_clefs[staff - 1] = clef.stripped().to_string();
+                }
+            }
+        }
+        for (staff_index, staff) in part.find_all("Staff").enumerate() {
+            for tag in [
+                "defaultClef",
+                "defaultConcertClef",
+                "defaultTransposingClef",
+            ] {
+                if let Some(clef) = staff.find(tag) {
+                    default_clefs[staff_index] = clef.stripped().to_string();
+                }
             }
         }
         parts.push(PartRead {
@@ -2092,12 +2121,8 @@ pub fn from_mscx(document: &str) -> Result<Stream> {
         )));
     }
     let version = root.get("version").unwrap_or("");
-    let major: u32 = version
-        .split('.')
-        .next()
-        .and_then(|major| major.parse().ok())
-        .unwrap_or(0);
-    if major < 3 {
+    let format: FloatType = version.parse().unwrap_or(0.0);
+    if format < 3.0 {
         return Err(refused(format!("A file in MuseScore's format {version:?}")));
     }
     let score = root
@@ -2122,7 +2147,14 @@ pub fn from_mscx(document: &str) -> Result<Stream> {
         }
     };
     let metadata = metadata_of(score, &program);
-    let parts = parts_of(score)?;
+    // A score of one part does not print the part's name, unless its style
+    // says otherwise. MuseScore 4 keeps the style in a file of its own,
+    // which is not read; MuseScore 3 wrote it into the score.
+    let hides_single_name = score
+        .find("Style")
+        .and_then(|style| style.find("hideInstrumentNameIfOneInstrument"))
+        .is_none_or(|hide| hide.stripped() != "0");
+    let parts = parts_of(score, hides_single_name)?;
     let staves: Vec<&Xml> = score.find_all("Staff").collect();
     let staff_count: usize = parts.iter().map(|part| part.staves).sum();
     if staves.len() != staff_count {
@@ -2133,6 +2165,7 @@ pub fn from_mscx(document: &str) -> Result<Stream> {
     }
 
     let mut reader = Reader {
+        old_format: format < 4.1,
         next_uid: 0,
         spanners: Vec::new(),
     };
