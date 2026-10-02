@@ -2,6 +2,18 @@
 
 ## Added
 
+- A figured bass is written out as a score, as music21's realizer writes
+  one. `FiguredBassLine::generate_bass_line` is the bass with its figures
+  under it as lyrics, in measures, and a `Realization` writes a way of
+  voicing the line with `generate_realization_from_possibility_progression`
+  -- in keyboard style, the upper parts as chords over the bass, or with
+  `set_keyboard_style_output(false)` in chorale style, a staff for each
+  part -- every way with `generate_all_realizations`, and ways the caller
+  chooses with `generate_random_realization` and
+  `generate_random_realizations`. `FiguredBassLine::overlay_part` lays a
+  written part over the line for every realization to keep, and
+  `in_key_and_time` gives a line its meter. Nine lines are written by both,
+  112 scores in all, and each comes out the same MusicXML byte for byte.
 - What instruments do to a stream they stand in, music21's four functions:
   `instrument::unbundle_instruments` puts the instrument each note keeps as
   its own into the stream beside it, `bundle_instruments` takes them back,
@@ -15,7 +27,8 @@
   corpus scores are given the dynamic music21 gives them.
 - `Note::grace_note`, `Chord::grace_note` and `Rest::grace_note` are
   `getGrace`: the same note written as a grace note or an appoggiatura.
-- `Beams::naive_beams` is `Beams.naiveBeams`, over the elements of a stream.
+- `Beams::naive_beams` is `Beams.naiveBeams`, over the elements of a stream,
+  and `Beams::naive` its rule for one element.
 - `Ornament::split_client` is `Trill.splitClient`: it carries a trill onto
   the first of the pieces a trilled note was split into and answers the
   trill extension joining them. `Expression::tie_attach` says which piece
@@ -23,6 +36,10 @@
 
 ## Fixed
 
+- A figured bass line is realized as it is written. A bass note running
+  past a barline is a segment for each of the two notes it is written as,
+  as it is in music21, where it used to be one; a line in a meter its notes
+  cross the barlines of now has the voicings music21 finds for it.
 - A note cut at a barline shares out its expressions as music21's
   `splitAtQuarterLength` does: a trill stays on the first piece, a fermata
   goes to the last, and an ornament goes where its `tie_attach` says. Both

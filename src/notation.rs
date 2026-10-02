@@ -687,9 +687,10 @@ impl Beams {
             .collect()
     }
 
-    /// The beams one element of [`Beams::naive_beams`] carries: as many as
-    /// its written value has, where it sounds and has any.
-    pub(crate) fn naive(written: Option<DurationType>, sounds: bool) -> Option<Beams> {
+    /// The beams one element of [`Beams::naive_beams`] carries, given the
+    /// one value it is written as, if it is written as one, and whether it
+    /// sounds: as many as that value has, each left undecided, or none.
+    pub fn naive(written: Option<DurationType>, sounds: bool) -> Option<Beams> {
         let levels = written.and_then(Self::levels_for).filter(|_| sounds)?;
         let mut made = Beams::new();
         made.fill_levels(levels, None).ok()?;

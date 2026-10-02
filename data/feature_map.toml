@@ -44,7 +44,7 @@ freq440 = "frequency_hz"
 
 [class.excluded]
 informClient = "observer callback for a containing note; there is none"
-groups = "stream grouping"
+groups = "the group names music21 picks elements out of a stream by (`getElementsByGroup`); a stream here picks by kind and by position, and nothing in it carries group names"
 
 [[class]]
 python = "pitch.py"
@@ -138,8 +138,8 @@ match = "match_pitches"
 [class.excluded]
 abstract = "a scale's pattern is its ScaleType or the steps it was given, read with scale_type and custom_steps; there is no abstract scale object beside it, and the wheel hands music21 one built from those"
 isConcrete = "every Scale here has a tonic, so the question has one answer; the wheel answers it for a scale built without one"
-show = "notation output"
-write = "notation output"
+show = "opens the scale in another program, which is the caller's to do"
+write = "writes a file, and this library does no file IO: a caller saves the Scala text `scala_data` and `file_string` give, or a score `musicxml::to_musicxml` writes"
 
 [[class]]
 python = "scale/__init__.py"
@@ -216,8 +216,8 @@ rust = ["src/instrument/mod.rs"]
 note = "One of music21's instrument classes, with what an instrument of it starts out as."
 
 [class.excluded]
-partIdRandomize = "a part id is what a score writer assigns; the crate keeps no ids, and the wheel gives a random one as music21 does"
-instrumentIdRandomize = "an instrument id is what a score writer assigns; the crate keeps no ids, and the wheel gives a random one as music21 does"
+partIdRandomize = "makes an id up out of the clock and a random number; the crate keeps the id a score gives (`part_id`) and makes none up, reading no clock -- the wheel gives a random one as music21 does"
+instrumentIdRandomize = "makes an id up out of the clock and a random number; the crate keeps the id a score gives (`instrument_id`) and makes none up, reading no clock -- the wheel gives a random one as music21 does"
 
 [[class]]
 python = "instrument.py"
@@ -532,7 +532,7 @@ members = "slots"
 type = "tie_type"
 
 [class.excluded]
-id = "the id music21 gives every object so that a stream can find it again; nothing here is held by a stream of Python objects"
+id = "the address of the Python object, which is how music21 tells one tie from another; a tie here is a value its note holds, and has no identity apart from it"
 
 [[class]]
 python = "meter/core.py"
@@ -734,7 +734,7 @@ rust = ["src/figuredbass/resolution.rs"]
 note = "How a dominant seventh, a diminished seventh or an augmented sixth resolves, voiced part for part."
 
 [class.excluded]
-showResolutions = "notation output"
+showResolutions = "puts the voicings in a score and opens it in another program; `Realization::generate_realization_from_possibility_progression` writes voicings as a score, and opening a program is the caller's to do"
 
 [[class]]
 python = "figuredBass/realizerScale.py"
@@ -768,28 +768,19 @@ printRules = "prints music21's rule tables, which hold its Python functions"
 python = "figuredBass/realizer.py"
 name = "FiguredBassLine"
 rust = ["src/figuredbass/realizer.rs"]
-note = "A bass line and its figures in a key, realized into every voicing that keeps the rules."
+note = "A bass line and its figures in a key and a meter, written out as a part, and realized into every voicing that keeps the rules -- and keeps any part laid over it."
 
 [class.renames]
 retrieveSegments = "segments"
-
-[class.excluded]
-generateBassLine = "builds the bass line as a stream Part with notation; a line here is its notes and figures"
-overlayPart = "pairs the line with written upper parts through a stream; there are no streams here"
 
 [[class]]
 python = "figuredBass/realizer.py"
 name = "Realization"
 rust = ["src/figuredbass/realizer.rs"]
+note = "Every way of voicing a line: counted, listed, chosen from, and written out as a score in keyboard or chorale style. Where music21 chooses at random the caller chooses."
 
 [class.renames]
 getRandomPossibilityProgression = "possibility_progression_by"
-
-[class.excluded]
-generateAllRealizations = "builds a score; the realization answers the voicings themselves"
-generateRandomRealization = "builds a score; the realization answers the voicings themselves"
-generateRandomRealizations = "builds a score; the realization answers the voicings themselves"
-generateRealizationFromPossibilityProgression = "builds a score; the realization answers the voicings themselves"
 
 [[class]]
 python = "analysis/discrete.py"

@@ -1392,6 +1392,13 @@ fn diatonic_names(signature: &crate::key::KeySignature) -> Vec<String> {
 ///
 /// The accidentals an ornament implies are not considered.
 pub fn make_accidentals(stream: &mut Stream) {
+    make_accidentals_by(stream, true);
+}
+
+/// [`make_accidentals`] with music21's `cautionaryNotImmediateRepeat` said:
+/// whether an altered note written again later in its measure, not straight
+/// after, shows its accidental again.
+pub(crate) fn make_accidentals_by(stream: &mut Stream, cautionary_not_immediate_repeat: bool) {
     let part_like = |element: &StreamElement| {
         element
             .as_stream()
@@ -1401,7 +1408,7 @@ pub fn make_accidentals(stream: &mut Stream) {
     if events.iter().any(|event| part_like(event.element())) {
         for event in &mut events {
             if let StreamElement::Stream(inner) = event.element_mut() {
-                make_accidentals(inner);
+                make_accidentals_by(inner, cautionary_not_immediate_repeat);
             }
         }
         let spanners = stream.spanners().to_vec();
@@ -1468,6 +1475,7 @@ pub fn make_accidentals(stream: &mut Stream) {
                     pitch_past_measure: &past_measure,
                     altered_pitches: &altered,
                     last_note_was_tied: open.contains(&pitch.name_with_octave()),
+                    cautionary_not_immediate_repeat,
                     ..AccidentalDisplayOptions::default()
                 });
                 note.set_pitch(pitch.clone());
@@ -1499,6 +1507,7 @@ pub fn make_accidentals(stream: &mut Stream) {
                         other_simultaneous_pitches: &others,
                         altered_pitches: &altered,
                         last_note_was_tied: open.contains(&pitch.name_with_octave()),
+                        cautionary_not_immediate_repeat,
                         ..AccidentalDisplayOptions::default()
                     });
                     note.set_pitch(pitch.clone());
