@@ -176,7 +176,6 @@ interface WasmModule {
     analyze_score(input: ScoreInput): Analysis;
     score_to_midi(input: ScoreInput): Uint8Array;
     score_to_musicxml(input: ScoreInput): string;
-    midi_to_abc(bytes: Uint8Array): string;
     pitch_class_names(): string[];
     staff_midi(staff: number): number;
     abc_staff(token: string): number;
@@ -204,7 +203,7 @@ interface WasmModule {
     ScoreImport: new () => { add(name: string, bytes: Uint8Array): void; finish(): Imported; free(): void };
 }
 
-/** A score read from Guitar Pro, MusicXML or Songsterr files: see
+/** A score read from any file the editor imports: see
  * `examples/web/src/score/import`. */
 interface Imported {
     abc: string;
@@ -2610,9 +2609,15 @@ playButton.addEventListener("click", () => {
 });
 stopButton.addEventListener("click", stopPlayback);
 
-/** Files the crate reads into ABC: Guitar Pro, MusicXML and the JSON
- * Songsterr's player loads for each part. */
-const IMPORTABLE = /\.(gp[345x]?|musicxml|mxl|xml|json)$/i;
+/** Files the crate reads into ABC: Guitar Pro, the JSON Songsterr's player
+ * loads for each part, and every format music21-rs reads -- MusicXML, MIDI,
+ * Humdrum, MEI, RomanText and TinyNotation. */
+const IMPORTABLE = /\.(gp[345x]?|musicxml|mxl|xml|json|midi?|krn|mei|rntxt|rntext|romantext|rtxt|tntxt|tinynotation)$/i;
+
+/** Whether a file is imported rather than opened as ABC text. */
+function importable(file: File): boolean {
+    return IMPORTABLE.test(file.name) || file.type === "audio/midi";
+}
 
 /** The MIDI number of an ABC note as the tunings above write them. */
 function abcMidi(token: string): number {
@@ -2646,8 +2651,9 @@ function showTuning(tuning: number[]): void {
     }
 }
 
-/** Reads Guitar Pro, MusicXML or Songsterr files into one score. A Songsterr
- * song is a file for each part, numbered, so they are read in that order. */
+/** Reads Guitar Pro, Songsterr, MusicXML, MIDI, Humdrum, MEI, RomanText or
+ * TinyNotation files into one score. A Songsterr song is a file for each
+ * part, numbered, so they are read in that order. */
 async function importFiles(files: File[]): Promise<void> {
     if (!wasm) throw new Error("music21-rs has not loaded yet.");
     const sorted = [...files].sort((left, right) => left.name.localeCompare(right.name, undefined, { numeric: true }));
@@ -2675,10 +2681,7 @@ $("#open-file").addEventListener("change", async (event) => {
     const [file] = files;
     if (!file) return;
     try {
-        if (files.length === 1 && (/\.midi?$/i.test(file.name) || file.type === "audio/midi")) {
-            if (!wasm) throw new Error("music21-rs has not loaded yet.");
-            loadText(wasm.midi_to_abc(new Uint8Array(await file.arrayBuffer())));
-        } else if (files.length === 1 && !IMPORTABLE.test(file.name)) {
+        if (files.length === 1 && !importable(file)) {
             loadText(await file.text());
         } else {
             await importFiles(files);

@@ -289,7 +289,7 @@ The [`harte`](harte/) crate in this repository is a port of
 [harte-library](https://github.com/andreamust/harte-library) by Andrea
 Poltronieri, licensed
 [MIT](https://github.com/andreamust/harte-library/blob/main/LICENSE), and
-`data/harte_expectations.toml` is generated from its test data.
+`harte/data/harte_expectations.toml` is generated from its test data.
 
 ### The Scala scale archive
 

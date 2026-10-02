@@ -719,7 +719,7 @@
                     id="open-file"
                     type="file"
                     multiple
-                    accept=".abc,.txt,.mid,.midi,.gp,.gp3,.gp4,.gp5,.gpx,.musicxml,.mxl,.xml,.json,text/plain,audio/midi"
+                    accept=".abc,.txt,.mid,.midi,.gp,.gp3,.gp4,.gp5,.gpx,.musicxml,.mxl,.xml,.krn,.mei,.rntxt,.tntxt,.json,text/plain,audio/midi"
                 />
                 <details class="menu" id="share-menu">
                     <summary>Share</summary>
@@ -921,11 +921,14 @@
                         <p>
                             Repeats are played out, so the analysis and the
                             exported files follow the music as performed.
-                            Opening a MIDI file quantizes it to sixteenths and
-                            spells it in the key its notes suggest. Open also
-                            reads Guitar Pro files (.gp3 to .gp), MusicXML
-                            (.musicxml, .xml, .mxl) and the JSON Songsterr's
-                            player loads for each part of a song; choose every
+                            Open reads Guitar Pro files (.gp3 to .gp), the
+                            JSON Songsterr's player loads for each part of a
+                            song, and every format music21-rs reads the way
+                            music21 does: MusicXML (.musicxml, .xml, .mxl),
+                            MIDI (.mid, .midi, quantized to sixteenths and
+                            triplet eighths), Humdrum (.krn), MEI (.mei),
+                            RomanText (.rntxt, each numeral written under its
+                            chord) and TinyNotation (.tntxt). Choose every
                             part's file at once for the whole band. Repeats,
                             endings, tuplets, ties and chord symbols come across,
                             drums are left out, and a guitar or bass part opens
