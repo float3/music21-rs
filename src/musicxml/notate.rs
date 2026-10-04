@@ -6,8 +6,9 @@
 use crate::clef::Clef;
 use crate::error::{Error, Result};
 use crate::makenotation::{
-    Kept, fill_rests, for_each_measure, insert_sorted, keeping_spanners, make_beams, make_measures,
-    make_part_notation, make_tuplet_brackets, split_at_durations, tuplet_brackets_made,
+    Kept, accidentals_made, fill_rests, for_each_measure, insert_sorted, keeping_spanners,
+    make_accidentals, make_beams, make_measures, make_part_notation, make_tuplet_brackets,
+    split_at_durations, tuplet_brackets_made,
 };
 use crate::pitch::Pitch;
 use crate::stream::{Stream, StreamElement, StreamEvent, StreamKind};
@@ -52,6 +53,10 @@ pub(super) fn notated(stream: &Stream) -> Result<Stream> {
         }
         Ok(failed)
     })?;
+
+    // `ScoreExporter.parse`: a part at sounding pitch turned to written
+    // pitch, which leaves every accidental it moves undecided again.
+    score.make_written_pitch()?;
 
     // Each `PartExporter`: lengths no one value writes cut into values...
     split_at_durations(&mut score)?;
@@ -125,8 +130,9 @@ fn from_stream(mut stream: Stream) -> Result<Stream> {
 
 /// music21's `fixupNotationMeasured`: the first measure given the clef, key
 /// and meter a part states outside its measures where it states none
-/// itself; the notes beamed if beaming failed before; and every measure's
-/// and voice's tuplets bracketed if none in the part are yet.
+/// itself; accidentals decided if none in the part are yet; the notes beamed
+/// if beaming failed before; and every measure's and voice's tuplets
+/// bracketed if none in the part are yet.
 fn fix_up_measured(part: &mut Stream, beams_failed: bool) -> Result<()> {
     let loose: Vec<StreamElement> = part
         .events()
@@ -172,6 +178,9 @@ fn fix_up_measured(part: &mut Stream, beams_failed: bool) -> Result<()> {
         }
     }
 
+    if !accidentals_made(part) {
+        make_accidentals(part);
+    }
     if beams_failed {
         // music21 warns and writes the notes unbeamed.
         let _ = make_beams(part);

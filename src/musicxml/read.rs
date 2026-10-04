@@ -757,6 +757,9 @@ struct PartParser<'a, 'x> {
     last_clefs: Vec<(i32, Clef)>,
     active_tuplets: [Option<Tuplet>; 7],
     first_measure_parsed: bool,
+    /// music21's `PartParser.atSoundingPitch`: a part is at sounding pitch
+    /// until a `<transpose>` says otherwise.
+    at_sounding_pitch: bool,
 }
 
 impl<'a, 'x> PartParser<'a, 'x> {
@@ -791,6 +794,7 @@ impl<'a, 'x> PartParser<'a, 'x> {
             last_clefs: Vec::new(),
             active_tuplets: Default::default(),
             first_measure_parsed: false,
+            at_sounding_pitch: true,
         }
     }
 
@@ -909,6 +913,9 @@ impl<'a, 'x> PartParser<'a, 'x> {
         }));
         stream.set_name(self.name.clone());
         stream.set_abbreviation(self.abbreviation.clone());
+        // A staff split off a part is music21's `template` of it, which
+        // copies this.
+        stream.set_at_sounding_pitch(Some(self.at_sounding_pitch));
         // A staff split off a part is a fresh stream, which prints both.
         if kind != StreamKind::PartStaff || self.max_staves <= 1 {
             stream.set_name_hidden(self.name_hidden);
@@ -1201,6 +1208,7 @@ impl<'a, 'x> PartParser<'a, 'x> {
         if let Some((_, instrument)) = self.instruments.last_mut() {
             instrument.set_transposition(Some(transposition));
         }
+        self.at_sounding_pitch = false;
     }
 
     /// music21's `separateOutPartStaves`: a part written on several staves
