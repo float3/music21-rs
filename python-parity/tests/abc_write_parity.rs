@@ -21,6 +21,15 @@
 //! names a file to write a line for every tune to: `ok`, or what differed.
 //! A tune that differs leaves what was read and written under
 //! `target/abc-write-parity/`.
+//!
+//! Over every tenth tune of the corpus, 1,298, all but four agree both ways.
+//! The four are tunes whose own reading cannot be written back: two lose
+//! the notes a quoted `">"` before them swallows, leaving a tie that ends
+//! with no start or a measure with nothing in it (O'Neill's 181 and 401);
+//! one has an empty bar that the reader's rebarring cuts as no written bar
+//! can be (O'Neill's 231); and one has barlines among its header fields,
+//! which leave the key outside every measure (Aird's 411, as with Aird's 722
+//! below).
 
 use music21_rs::Stream;
 use music21_rs::abc::{ExportOptions as AbcOptions, from_abc, from_abc_number, to_abc};

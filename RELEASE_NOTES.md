@@ -1,5 +1,11 @@
 # Unreleased
 
+ABC is written as well as read. music21 writes no ABC, so `abc::to_abc` is
+held to the two readers instead: on every tenth tune of music21's corpus,
+1,294 of 1,298 are read back by the crate as the score they were written
+from, and by music21 as the score it reads from the original. The other four
+are tunes whose own reading cannot be written back.
+
 ## Breaking Changes
 
 - `StreamElement` has four more variants, `Barline`, `PedalObject`,
@@ -18,6 +24,18 @@
 
 ## Added
 
+- `abc::to_abc` and `abc::ExportOptions` write a score, a part or an opus as
+  ABC: the header (title, composer, origin, meter, unit length, tempo, key
+  and mode), a voice for each part and for each voice a measure holds,
+  measures with their barlines, repeats and endings, notes, chords and rests
+  with their lengths, accidentals and octaves, ties, tuplets, grace notes
+  with their decorations, slurs and hairpins, chord symbols, lyrics,
+  dynamics, articulations, ornaments, fermatas and text, and changes of
+  meter, key and tempo. A note music21 cut at a barline when reading is
+  written whole, so a tune reads back into the measures it was read into.
+  What ABC cannot say is refused with `Error::Abc`: a microtone, a tuplet
+  inside a tuplet, unpitched strokes, pedals, octave lines, glissandi,
+  tremolos between notes, rehearsal marks and metric modulations.
 - The wheel reads every format the crate reads: `from_abc(text)`,
   `from_abc_number(text, number)`, `from_midi(data)` taking the file's
   `bytes`, `from_tiny_notation(text)`, `from_humdrum(text)`,

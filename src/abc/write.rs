@@ -65,8 +65,10 @@ impl Default for ExportOptions {
 ///
 /// What ABC has no way to say is refused with [`Error::Abc`] rather than
 /// left out: a microtone, a tuplet inside a tuplet, an unpitched stroke, a
-/// chord symbol or a dynamic standing where no note starts, a pedal or an
-/// octave line.
+/// chord symbol or a dynamic standing where no note starts, a pedal with its
+/// bounces and gaps, an octave line, a glissando, a tremolo between notes, a
+/// rehearsal mark or a metric modulation. A barline inside a measure is
+/// drawn and not heard, and is written as nothing.
 ///
 /// Three things are written as music21's reader takes them, since
 /// [`from_abc`](crate::abc::from_abc) is that reader. An accidental is
@@ -1723,13 +1725,7 @@ impl<'a> Tune<'a> {
                             // before the group.
                             lead.push_str(&opening);
                         }
-                        graces.push_str(&self.note_text(
-                            &sounding,
-                            unit,
-                            &reading.alters,
-                            true,
-                            None,
-                        )?);
+                        graces.push_str(&self.note_text(&sounding, unit, &reading.alters, None)?);
                         grace_closes.push_str(&closes);
                         first_token = false;
                         continue;
@@ -1774,13 +1770,7 @@ impl<'a> Tune<'a> {
                     first_token = false;
                     token.push_str(symbol.take().as_deref().unwrap_or(""));
                     token.push_str(&std::mem::take(&mut before));
-                    token.push_str(&self.note_text(
-                        &sounding,
-                        unit,
-                        &reading.alters,
-                        false,
-                        tail,
-                    )?);
+                    token.push_str(&self.note_text(&sounding, unit, &reading.alters, tail)?);
                     token.push_str(&closes);
                     token.push_str(tail.map_or("", |tail| tail.closes.as_str()));
                     music.push(token);
@@ -1876,7 +1866,6 @@ impl<'a> Tune<'a> {
         sounding: &Sounding<'a>,
         unit: FloatType,
         alters: &Alters,
-        grace: bool,
         tail: Option<&Tail>,
     ) -> Result<String> {
         let length = length_text(sounding.written + tail.map_or(0.0, |tail| tail.extra), unit)?;
@@ -1889,11 +1878,9 @@ impl<'a> Tune<'a> {
         };
         Ok(match sounding.held.element {
             StreamElement::Note(note) => {
-                let marks = if grace {
-                    String::new()
-                } else {
-                    decorations(note.articulations(), note.expressions())?
-                };
+                // A grace note carries its own decorations, inside the
+                // braces: `{vfga}` bows the first grace note down.
+                let marks = decorations(note.articulations(), note.expressions())?;
                 format!(
                     "{marks}{}{length}{}",
                     pitch_text(note.pitch(), alters)?,
