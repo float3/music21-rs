@@ -449,8 +449,10 @@ struct Importer {
     /// The spanners waiting for the next note, chord or rest, which becomes
     /// the first thing the one at the front joins.
     pending: std::collections::VecDeque<usize>,
-    /// Spanners in the order music21's score holds them once it is read.
-    finished: Vec<Building>,
+    /// Spanners in the order music21's score holds them once it is read, by
+    /// where each stands in `spanners`: one finished in a part may still be
+    /// handed the first note of the next by the queue.
+    finished: Vec<usize>,
     next_uid: usize,
     finale: bool,
 }
@@ -574,11 +576,8 @@ impl Importer {
                 building.complete = true;
             }
         }
-        let late: Vec<Building> = self
-            .spanners
-            .iter()
-            .filter(|building| building.complete && !building.placed)
-            .cloned()
+        let late: Vec<usize> = (0..self.spanners.len())
+            .filter(|index| self.spanners[*index].complete && !self.spanners[*index].placed)
             .collect();
         self.finished.extend(late);
 
@@ -595,8 +594,8 @@ impl Importer {
             assembled.add_staff_group(group);
         }
         let position_of = |uid: usize| uids.iter().position(|held| *held == Some(uid));
-        for building in &self.finished {
-            assembled.add_spanner(building.finish(&position_of));
+        for index in &self.finished {
+            assembled.add_spanner(self.spanners[*index].finish(&position_of));
         }
         Ok(assembled)
     }
@@ -824,13 +823,13 @@ impl<'a, 'x> PartParser<'a, 'x> {
         }
 
         // Spanners completed by now belong to this part, octave lines last.
-        let mut ours: Vec<Building> = Vec::new();
+        let mut ours: Vec<usize> = Vec::new();
         for pass in [false, true] {
-            for building in &mut self.importer.spanners {
+            for (index, building) in self.importer.spanners.iter_mut().enumerate() {
                 let ottava = building.kind == SpannerKind::Ottava;
                 if building.complete && !building.placed && ottava == pass {
                     building.placed = true;
-                    ours.push(building.clone());
+                    ours.push(index);
                 }
             }
         }
@@ -3751,6 +3750,47 @@ mod tests {
         assert_eq!(ends.len(), 2);
         assert!(matches!(leaves[ends[0]].1, StreamElement::Note(_)));
         assert_eq!(leaves[ends[1]].0, 2.0);
+    }
+
+    #[test]
+    fn a_hairpin_started_after_a_part_ends_takes_the_next_part_first_note() {
+        let wedge = |kind: &str| {
+            format!(
+                "<direction><direction-type><wedge type=\"{kind}\"/></direction-type></direction>"
+            )
+        };
+        let measure = |step: &str, after: &str| {
+            format!(
+                "<measure number=\"1\"><attributes><divisions>1</divisions></attributes>\
+                 <note><pitch><step>{step}</step><octave>4</octave></pitch><duration>1</duration>\
+                 <type>quarter</type></note>{after}</measure>"
+            )
+        };
+        let document = format!(
+            "<?xml version=\"1.0\"?><score-partwise version=\"4.0\"><part-list>\
+             <score-part id=\"P1\"><part-name>One</part-name></score-part>\
+             <score-part id=\"P2\"><part-name>Two</part-name></score-part></part-list>\
+             <part id=\"P1\">{}</part><part id=\"P2\">{}</part></score-partwise>",
+            measure("C", &(wedge("diminuendo") + &wedge("stop"))),
+            measure("D", ""),
+        );
+        let read = from_musicxml(&document).unwrap();
+        let spanners = read.spanners();
+        assert_eq!(spanners.len(), 1);
+        assert_eq!(spanners[0].kind(), SpannerKind::Diminuendo);
+        let leaves = read.leaves();
+        let named: Vec<String> = spanners[0]
+            .spanned()
+            .iter()
+            .flatten()
+            .map(|position| match leaves[*position].1 {
+                StreamElement::Note(note) => note.pitch().name_with_octave(),
+                _ => String::new(),
+            })
+            .collect();
+        // The stop names the note it follows, and the queue then puts the
+        // next note read, in the next part, first.
+        assert_eq!(named, ["D4", "C4"]);
     }
 
     #[test]

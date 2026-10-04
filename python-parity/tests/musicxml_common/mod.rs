@@ -141,6 +141,10 @@ pub const SCORES: &[(&str, &str)] = &[
         "trecento/PMFC_13_01-Kyrie-Summe-Clementissime.mxl",
         "the same, read from a compressed file",
     ),
+    (
+        "beethoven/opus59no3/movement3.mxl",
+        "a hairpin started after a part's last note, which takes the next part's first",
+    ),
 ];
 
 /// ABC tunes of the corpus both readers read alike, and what each exercises.
