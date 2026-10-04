@@ -363,7 +363,13 @@ Fixes found while porting went upstream:
   timespan offsets added as floats, which gave a voice-leading quartet that is
   not in the music.
 - [cuthbertLab/music21#2048](https://github.com/cuthbertLab/music21/pull/2048):
-  two deepcopies in `AbstractScale` of values that are already copies (open).
+  two deepcopies in `AbstractScale` of values that are already copies.
+- [cuthbertLab/music21#2054](https://github.com/cuthbertLab/music21/pull/2054):
+  a realization cached without its altered degrees, so a harmonic minor lost
+  its raised seventh after `nextPitch` (open).
+- [cuthbertLab/music21#2056](https://github.com/cuthbertLab/music21/pull/2056):
+  `getAllNamesForInstrument` finding names only for an instrument whose name
+  is spelled like its class.
 - [PLAINSOUND/hexatone#3](https://github.com/PLAINSOUND/hexatone/pull/3):
   Scala headers in five Hexatone scale files (open).
 - Corrections to the Xenharmonic Wiki's temperament pages, found while
