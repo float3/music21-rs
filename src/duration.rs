@@ -1090,6 +1090,12 @@ impl Duration {
         }
     }
 
+    /// The tuplets a caller has said, and nothing where they are only read
+    /// off the length.
+    pub(crate) fn said_tuplets(&self) -> Option<&[Tuplet]> {
+        self.tuplets.as_deref()
+    }
+
     /// What the written values are multiplied by to give the sounding
     /// length: music21's `aggregateTupletMultiplier`, every tuplet's ratio
     /// multiplied together, so a triplet inside a quintuplet is `8/15`.

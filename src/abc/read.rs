@@ -1467,7 +1467,7 @@ impl Line {
 }
 
 /// music21's `classSortOrder`.
-fn class_sort_order(element: &StreamElement) -> i32 {
+pub(super) fn class_sort_order(element: &StreamElement) -> i32 {
     match element {
         StreamElement::TextExpression(_) => -30,
         StreamElement::Instrument(_) => -25,

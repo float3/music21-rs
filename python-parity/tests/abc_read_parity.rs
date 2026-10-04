@@ -11,7 +11,7 @@
 //! A tune is named by its corpus file, with `#n` after it for the tune
 //! numbered `n` of a file holding several. `ABC_PARITY_TUNES`, a
 //! `;`-separated list of such names or `@` and the path of a file of them,
-//! runs those instead of the ones below.
+//! runs those instead of `musicxml_common`'s `ABC_TUNES`.
 
 use music21_rs::abc::{from_abc, from_abc_number};
 use music21_rs::metadata::MetadataValue;
@@ -21,57 +21,10 @@ use pyo3::prelude::*;
 use utils::{init_py, prepare};
 
 mod musicxml_common;
-use musicxml_common::{STRIP_LAYOUT, first_difference, normalize_ids};
-
-/// Tunes both readers read alike, and what each exercises.
-const TUNES: &[(&str, &str)] = &[
-    ("ryansMammoth/7thRegimentReel.abc", "a reel with repeats"),
-    (
-        "ryansMammoth/42dHighlandRegimentStrathspey.abc",
-        "measures holding more than their bar, cut in two",
-    ),
-    (
-        "ryansMammoth/BullDozerReel.abc",
-        "a pickup of triplets, bowings and fingerings",
-    ),
-    (
-        "ryansMammoth/CzarOfRussiasFavoriteHornpipe.abc",
-        "chords written highest note first, endings",
-    ),
-    (
-        "ryansMammoth/LafricansJig.abc",
-        "a repeat moved onto the measure cut from its own",
-    ),
-    ("ryansMammoth/RisingSunReel.abc", "an ending never closed"),
-    ("oneills1850/0001-0050.abc#1", "one tune of a file of fifty"),
-    (
-        "oneills1850/0001-0050.abc#25",
-        "a run of nine in the time of two",
-    ),
-    (
-        "oneills1850/1376-1475.abc#1427",
-        "a grace note inside a triplet",
-    ),
-    ("essenFolksong/han1.abc#10", "a folk song changing meter"),
-    ("essenFolksong/erk20.abc#169", "a tie written on a rest"),
-    ("airdsAirs/book1.abc#5", "an air with a tempo"),
-    (
-        "airdsAirs/book4.abc#0722",
-        "barlines in the header, so the meter stands outside the measures",
-    ),
-];
-
-/// The text of a corpus file.
-const SOURCE_TEXT: &str = r#"
-from music21 import corpus
-
-def source_text(name):
-    path = corpus.getWork(name)
-    if isinstance(path, (list, tuple)):
-        path = path[0]
-    with open(str(path), encoding='utf-8') as handle:
-        return handle.read()
-"#;
+use musicxml_common::{
+    ABC_SOURCE_TEXT as SOURCE_TEXT, ABC_TUNES as TUNES, STRIP_LAYOUT, first_difference,
+    normalize_ids,
+};
 
 #[test]
 fn the_crate_reads_abc_as_music21_does() {
