@@ -23,6 +23,7 @@
 //! again.
 
 mod placed;
+mod repeats;
 mod sounding;
 mod ties;
 
