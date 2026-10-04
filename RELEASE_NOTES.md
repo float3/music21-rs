@@ -194,6 +194,10 @@ are tunes whose own reading cannot be written back.
 
 ## Fixed
 
+- `from_musicxml` gives a hairpin, bracket, octave line or pedal started
+  after the last note of a part the next part's first note, as music21
+  does. The note was taken from the queue and then lost, leaving the
+  spanner on the one note it ended on.
 - The score editor read a flat as a natural wherever it spelled a note
   itself -- an imported score, a note dragged or moved by the arrow keys,
   the comping part -- and decided which accidentals its MusicXML export
