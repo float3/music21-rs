@@ -24,6 +24,9 @@ are tunes whose own reading cannot be written back.
 
 ## Added
 
+- The wheel has `to_abc`, writing one of its streams or one of music21's as
+  ABC, which music21 has no writer for, with `unit_length` and
+  `measures_per_line` as the crate's `abc::ExportOptions` has them.
 - `midi::to_midi` and `midi::ExportOptions` write a score as a standard MIDI
   file, as music21's `streamToMidiFile(...).writestr()` writes it, byte for
   byte: a conductor track with the tempos, meters and keys, a track per part
