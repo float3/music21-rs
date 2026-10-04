@@ -666,6 +666,9 @@ pub(crate) fn from_crate<'py>(py: Python<'py>, stream: &RsStream) -> PyResult<Bo
             held.id = Some(pyo3::types::PyString::new(py, id).into_any().unbind());
         }
     }
+    if let Some(at) = stream.at_sounding_pitch() {
+        made.setattr("atSoundingPitch", at)?;
+    }
     match stream.kind() {
         StreamKind::Measure => {
             made.setattr("number", stream.number())?;
@@ -1508,6 +1511,14 @@ fn read_labels(object: &Bound<'_, PyAny>, stream: &mut RsStream) -> PyResult<()>
     };
     stream.set_padding_left(padding("paddingLeft"));
     stream.set_padding_right(padding("paddingRight"));
+    // music21's `atSoundingPitch` is a bool or the string 'unknown'.
+    stream.set_at_sounding_pitch(
+        object
+            .getattr("atSoundingPitch")
+            .ok()
+            .filter(|at| at.is_instance_of::<pyo3::types::PyBool>())
+            .and_then(|at| at.extract::<bool>().ok()),
+    );
     if let Ok(show) = object.getattr("showNumber") {
         stream.set_number_hidden(show.str()?.to_str()?.to_lowercase().ends_with("never"));
     }

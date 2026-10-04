@@ -133,6 +133,14 @@ pub const SCORES: &[(&str, &str)] = &[
         "trecento/PMFC_06_8-In Verde Prato.xml",
         "a metric modulation",
     ),
+    (
+        "trecento/Fava_Dicant_nunc_iudei.xml",
+        "a part named for a transposing instrument, written at its written pitch",
+    ),
+    (
+        "trecento/PMFC_13_01-Kyrie-Summe-Clementissime.mxl",
+        "the same, read from a compressed file",
+    ),
 ];
 
 /// ABC tunes of the corpus both readers read alike, and what each exercises.

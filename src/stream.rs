@@ -23,6 +23,7 @@
 //! again.
 
 mod placed;
+mod sounding;
 
 pub use placed::Placed;
 
@@ -645,6 +646,9 @@ struct Labels {
     padding_left: FloatType,
     #[cfg_attr(feature = "serde", serde(default))]
     padding_right: FloatType,
+    /// music21's `atSoundingPitch`, `None` for its `'unknown'`.
+    #[cfg_attr(feature = "serde", serde(default))]
+    at_sounding_pitch: Option<bool>,
 }
 
 impl Stream {
