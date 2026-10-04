@@ -31,7 +31,8 @@
 //! - `musicxml` reads and writes MusicXML (`musicxml::from_musicxml`,
 //!   `musicxml::to_musicxml`).
 //! - `musescore` runs an installed MuseScore to read and write the formats it
-//!   opens and saves; it turns on `musicxml`.
+//!   opens and saves; it turns on `musicxml`. MuseScore's own `.mscx` is
+//!   read without it, by `musescore::from_mscx`.
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![deny(missing_docs)]
 #![deny(missing_debug_implementations)]
@@ -93,8 +94,8 @@ pub mod metadata;
 pub mod meter;
 /// Minimal MIDI import/export helpers.
 pub mod midi;
-/// MuseScore run as a converter, for its own files and the formats it opens.
-#[cfg(all(feature = "musescore", not(target_arch = "wasm32")))]
+/// MuseScore's own `.mscx` files, and MuseScore run as a converter for the
+/// formats it opens.
 pub mod musescore;
 /// MusicXML import and export: music21's `musicxml.xmlToM21` and
 /// `musicxml.m21ToXml`.
@@ -187,8 +188,8 @@ pub use midi::{
     read_midi_bytes_with_tempo, stream_from_midi_notes, write_midi_bytes,
 };
 pub use notation::{
-    Beam, BeamDirection, BeamType, Beams, Lyric, NoteSize, Notehead, Placement, StemDirection,
-    Syllabic, Tie, TieStyle, TieType,
+    Beam, BeamDirection, BeamType, Beams, Justification, Lyric, NoteSize, Notehead, Placement,
+    StemDirection, Syllabic, Tie, TieStyle, TieType,
 };
 pub use note::{IntoNote, Note};
 pub use percussion::{PercussionChord, PercussionNote, Unpitched};
@@ -217,7 +218,8 @@ pub use serial::{
 };
 pub use sieve::Sieve;
 pub use spanner::{
-    LineEnd, LineEnds, OctaveShift, Pedal, PedalForm, PedalType, Spanner, SpannerKind,
+    Glissando, LineEnd, LineEnds, OctaveShift, Pedal, PedalForm, PedalObject, PedalObjectKind,
+    PedalType, SlideType, Spanner, SpannerKind,
 };
 pub use stream::{BarTogether, StaffGroup, Stream, StreamElement, StreamEvent, StreamKind};
 pub use tempo::{

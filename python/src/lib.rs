@@ -43,6 +43,7 @@ pub mod enharmonics;
 pub mod expressions;
 pub mod fbrules;
 pub mod figuredbass;
+pub mod formats;
 pub mod harmonicfunction;
 pub mod harmony;
 pub mod instrument;
@@ -50,7 +51,6 @@ mod instrument_kinds;
 pub mod interval;
 pub mod key;
 pub mod meter;
-pub mod musicxml;
 pub mod neoriemannian;
 pub mod notation;
 pub mod note;
@@ -1311,6 +1311,11 @@ exceptions![
         Some("music21.dynamics")
     ),
     ("SieveException", sieve::SieveException, None),
+    (
+        "StreamException",
+        stream::StreamException,
+        Some("music21.exceptions21")
+    ),
     ("TempoException", tempo::TempoException, None),
     (
         "InstrumentException",
@@ -1415,7 +1420,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     articulations::register(m)?;
     expressions::register(m)?;
     stream::register(m)?;
-    musicxml::register(m)?;
+    formats::register(m)?;
     // The other end of every pickle these classes write. It belongs here
     // rather than on the wheel's module alone: `python-parity` builds its
     // own module out of this one, and a score frozen under that harness --

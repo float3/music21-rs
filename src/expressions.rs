@@ -16,6 +16,8 @@ use crate::key::keysignature::KeySignature;
 use crate::notation::{Tie, TieType};
 use crate::note::Note;
 use crate::pitch::{Accidental, AccidentalDisplayOptions, Pitch};
+use crate::spanner::{Spanner, SpannerKind};
+use crate::stream::{Stream, StreamElement};
 
 /// Which ornament a class is, as far as how it is played goes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -682,6 +684,87 @@ impl Ornament {
     /// Changes which part keeps it.
     pub fn set_tie_attach(&mut self, attach: impl Into<String>) {
         self.tie_attach = attach.into();
+    }
+
+    /// Carries this trill onto the pieces a trilled note was split into:
+    /// music21's `splitClient`, which its `splitAtQuarterLength` calls.
+    ///
+    /// The pieces are the leaves of `stream` at `positions`, first to last.
+    /// The trill is written on the first piece alone, and where there is
+    /// more than one piece they are joined by a trill extension, the spanner
+    /// answered, unless one of `stream`'s trill extensions already takes in
+    /// the first. The spanner is answered rather than added, as music21's is.
+    ///
+    /// ```
+    /// use music21_rs::{
+    ///     expressions::{Ornament, OrnamentKind},
+    ///     Duration, Note, SpannerKind, Stream,
+    /// };
+    ///
+    /// let mut stream = Stream::new();
+    /// stream.insert(0.0, Note::from_name("C4")?.with_duration(Duration::new(3.0)?));
+    /// stream.insert(3.0, Note::from_name("C4")?);
+    /// let trill = Ornament::of_kind(OrnamentKind::Trill);
+    /// let extension = trill.split_client(&mut stream, &[0, 1])?.unwrap();
+    /// assert_eq!(extension.kind(), SpannerKind::TrillExtension);
+    /// assert_eq!(extension.spanned(), [Some(0), Some(1)]);
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// An ornament that is not a trill, which music21 gives no such hook, or
+    /// a first piece that is not a note, a chord or a rest.
+    pub fn split_client(
+        &self,
+        stream: &mut Stream,
+        positions: &[usize],
+    ) -> Result<Option<Spanner>> {
+        if !self.is_a("Trill") {
+            return Err(Error::Expression(format!(
+                "a {} is not split with the note it is on; only a trill is",
+                self.kind.class_name()
+            )));
+        }
+        let Some(&first) = positions.first() else {
+            return Ok(None);
+        };
+        let mut position = 0;
+        let mut placed = false;
+        stream.for_each_mut(&mut |_, element| {
+            if position == first {
+                let expressions = match element {
+                    StreamElement::Note(note) => Some(note.expressions_mut()),
+                    StreamElement::Chord(chord) => Some(chord.expressions_mut()),
+                    StreamElement::Rest(rest) => Some(rest.expressions_mut()),
+                    StreamElement::Unpitched(stroke) => {
+                        Some(stroke.written_mut().expressions_mut())
+                    }
+                    _ => None,
+                };
+                if let Some(expressions) = expressions {
+                    expressions.push(Expression::from(self.clone()));
+                    placed = true;
+                }
+            }
+            position += 1;
+        });
+        if !placed {
+            return Err(Error::Expression(format!(
+                "there is no note at position {first} to carry the trill"
+            )));
+        }
+        let extended = stream.spanners().iter().any(|spanner| {
+            spanner.kind() == SpannerKind::TrillExtension
+                && spanner.spanned().contains(&Some(first))
+        });
+        if positions.len() > 1 && !extended {
+            return Ok(Some(Spanner::new(
+                SpannerKind::TrillExtension,
+                positions.to_vec(),
+            )));
+        }
+        Ok(None)
     }
 
     /// A mordent's or trill's accidental, which spells its ornamental note
@@ -1398,6 +1481,62 @@ impl TextExpression {
     }
 }
 
+/// A letter or number marking a place to rehearse from: music21's
+/// `RehearsalMark`.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
+pub struct RehearsalMark {
+    content: String,
+    #[cfg_attr(feature = "serde", serde(default))]
+    placement: crate::display::Drawn<Option<crate::notation::Placement>>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    enclosure: crate::display::Drawn<Option<String>>,
+}
+
+impl RehearsalMark {
+    /// A mark reading as given, `A` or `12`.
+    pub fn new(content: impl Into<String>) -> Self {
+        Self {
+            content: content.into(),
+            placement: crate::display::Drawn(None),
+            enclosure: crate::display::Drawn(None),
+        }
+    }
+
+    /// What the mark reads: music21's `content`.
+    pub fn content(&self) -> &str {
+        &self.content
+    }
+
+    /// Changes what the mark reads.
+    pub fn set_content(&mut self, content: impl Into<String>) {
+        self.content = content.into();
+    }
+
+    /// Which side of the staff the mark is written on, where the score
+    /// says.
+    pub fn placement(&self) -> Option<crate::notation::Placement> {
+        self.placement.0
+    }
+
+    /// Says which side of the staff the mark is written on.
+    pub fn set_placement(&mut self, placement: Option<crate::notation::Placement>) {
+        self.placement.0 = placement;
+    }
+
+    /// What is drawn round the mark, `square` or `circle`, where the score
+    /// says: music21's `style.enclosure`.
+    pub fn enclosure(&self) -> Option<&str> {
+        self.enclosure.0.as_deref()
+    }
+
+    /// Says what is drawn round the mark.
+    pub fn set_enclosure(&mut self, enclosure: Option<String>) {
+        self.enclosure.0 = enclosure;
+    }
+}
+
 /// Something written on a note that is not its pitch or length: an entry
 /// of music21's `GeneralNote.expressions`.
 #[derive(Clone, Debug, PartialEq)]
@@ -1422,6 +1561,51 @@ impl From<Fermata> for Expression {
     fn from(value: Fermata) -> Self {
         Self::Fermata(value)
     }
+}
+
+impl Expression {
+    /// Which piece of a note split across a tie keeps this expression:
+    /// music21's `tieAttach`, `"first"`, `"last"` or `"all"`. A fermata stays
+    /// on the last piece, an arpeggio on the first, and an ornament where it
+    /// says.
+    pub fn tie_attach(&self) -> &str {
+        match self {
+            Self::Ornament(ornament) => ornament.tie_attach(),
+            Self::Fermata(_) => "last",
+            Self::Arpeggio(_) => "first",
+        }
+    }
+
+    /// Whether this is a trill, the one expression music21 hands the pieces
+    /// of a split note to: only its `Trill` has `splitClient`.
+    fn is_trill(&self) -> bool {
+        matches!(self, Self::Ornament(ornament) if ornament.is_a("Trill"))
+    }
+}
+
+/// The expressions of a note split in two, shared between the pieces as
+/// music21's `splitAtQuarterLength` shares them: a trill goes onto the first
+/// piece by [`Ornament::split_client`], anything else where its
+/// [`Expression::tie_attach`] says. The trill extension music21 makes
+/// alongside is not kept, as its `makeTies` keeps none.
+pub(crate) fn split_expressions(expressions: &[Expression]) -> (Vec<Expression>, Vec<Expression>) {
+    let mut first = Vec::new();
+    let mut second = Vec::new();
+    for expression in expressions {
+        if expression.is_trill() {
+            first.push(expression.clone());
+            continue;
+        }
+        match expression.tie_attach() {
+            "first" => first.push(expression.clone()),
+            "last" => second.push(expression.clone()),
+            _ => {
+                first.push(expression.clone());
+                second.push(expression.clone());
+            }
+        }
+    }
+    (first, second)
 }
 
 /// Every ornament on `note` played in turn, as music21's

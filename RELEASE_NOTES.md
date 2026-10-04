@@ -1,3 +1,210 @@
+# Unreleased
+
+## Breaking Changes
+
+- `StreamElement` has four more variants, `Barline`, `PedalObject`,
+  `RehearsalMark` and `MetricModulation`, and `SpannerKind` two more,
+  `Glissando` and `TremoloSpanner`, so a `match` over either needs arms for
+  them.
+- `from_musicxml` refuses what music21 raises on and it used to pass over
+  or bend: a `<glissando>` or `<slide>` whose `line-type` is none of
+  `solid`, `dashed`, `dotted` and `wavy`, a `<lyric>` whose `justify` is
+  none of `left`, `center`, `right` and `full`, a `<rehearsal>` enclosed in
+  nothing music21 names, and a `<tremolo>` of more than eight strokes,
+  which was read as eight.
+- `musicxml::ExportOptions` has a new public field, `make_notation`. Code
+  building one with every field named needs it; code using
+  `..ExportOptions::default()` does not.
+
+## Added
+
+- The wheel reads every format the crate reads: `from_abc(text)`,
+  `from_abc_number(text, number)`, `from_midi(data)` taking the file's
+  `bytes`, `from_tiny_notation(text)`, `from_humdrum(text)`,
+  `from_mei(text)` and `from_roman_text(text)`, beside `from_musicxml`. Each
+  hands back the wheel's own streams: a `Score`, an `Opus` of scores for an
+  ABC, Humdrum or RomanText file holding several, and a `Part` for
+  TinyNotation. A RomanText score's chords carry their numerals as lyrics.
+  What the wheel has no class for -- unpitched strokes, words, barlines,
+  spanners, metadata -- is read and left out. A reader that cannot read its
+  input raises `StreamException`, which the wheel now exports.
+- The web score editor opens MIDI (`.mid`, `.midi`), Humdrum (`.krn`), MEI
+  (`.mei`), RomanText (`.rntxt`, each numeral written under its chord) and
+  TinyNotation (`.tntxt`) through the crate's readers, by the same
+  conversion its MusicXML import uses. A MIDI file now keeps its meters,
+  triplets, voices, tracks and instruments; the notes of a track that also
+  plays the drums are kept and its strokes left out.
+- A figured bass is written out as a score, as music21's realizer writes
+  one. `FiguredBassLine::generate_bass_line` is the bass with its figures
+  under it as lyrics, in measures, and a `Realization` writes a way of
+  voicing the line with `generate_realization_from_possibility_progression`
+  -- in keyboard style, the upper parts as chords over the bass, or with
+  `set_keyboard_style_output(false)` in chorale style, a staff for each
+  part -- every way with `generate_all_realizations`, and ways the caller
+  chooses with `generate_random_realization` and
+  `generate_random_realizations`. `FiguredBassLine::overlay_part` lays a
+  written part over the line for every realization to keep, and
+  `in_key_and_time` gives a line its meter. Nine lines are written by both,
+  112 scores in all, and each comes out the same MusicXML byte for byte.
+- What instruments do to a stream they stand in, music21's four functions:
+  `instrument::unbundle_instruments` puts the instrument each note keeps as
+  its own into the stream beside it, `bundle_instruments` takes them back,
+  `deduplicate` folds together the instruments a part says more than once,
+  and `partition_by_instrument` splits a score into a part for each
+  instrument playing in it. Fifteen streams built both as music21's and as
+  the crate's come out the same from each.
+- `volume::dynamic_context` is `Volume.getDynamicContext`: the dynamic a
+  note is read against, searched for outwards from the stream holding the
+  note as music21's `getContextByClass` searches. 5,167 notes of three
+  corpus scores are given the dynamic music21 gives them.
+- `Note::grace_note`, `Chord::grace_note` and `Rest::grace_note` are
+  `getGrace`: the same note written as a grace note or an appoggiatura.
+- `Beams::naive_beams` is `Beams.naiveBeams`, over the elements of a stream,
+  and `Beams::naive` its rule for one element.
+- `Ornament::split_client` is `Trill.splitClient`: it carries a trill onto
+  the first of the pieces a trilled note was split into and answers the
+  trill extension joining them. `Expression::tie_attach` says which piece
+  of a split note keeps any expression.
+- `musescore::from_mscx` reads MuseScore's own uncompressed `.mscx` format,
+  as MuseScore 4 saves it and MuseScore 3 where the two agree, into a score.
+  It needs no feature and no MuseScore installed, and builds for wasm. It
+  takes the document's text: a `.mscz` is a zip archive holding a `.mscx`,
+  and unzipping it is the caller's. It reads parts and staves, measures and
+  their numbers, voices, notes as the file spells them, chords, rests, ties,
+  dots, tuplets, grace notes, clefs, keys, meters, tempo marks, dynamics,
+  text, lyrics, chord symbols, articulations, fingerings, fermatas,
+  ornaments, arpeggios, barlines, repeats, endings, segno and coda signs and
+  the jumps to them, slurs, hairpins, pedal lines, instruments and the
+  file's metadata. Beams, tuplet brackets and the clef and key a staff
+  starts with are worked out as MuseScore works them out where the file
+  leaves them to its layout. Percussion and tablature staves, files older
+  than MuseScore 3's, tremolos, trill, octave, glissando and text lines,
+  measure repeats, fret diagrams and figured bass are refused with
+  `Error::MuseScore` rather than dropped.
+- The reader is held to MuseScore itself, music21 having no reader of the
+  format: `mscx_parity` reads sixteen `.mscx` files and the MusicXML
+  MuseScore 4.7.5 exported from each, writes both with `to_musicxml`, and
+  compares the texts. Thirteen agree; the three that differ are places
+  where MuseScore's export says something other than its own file does, and
+  the reader follows the file. The test lists each with its reason.
+- MusicXML, written and read as music21 writes and reads it, for what the
+  writer refused and the reader passed over:
+  - glissandi and slides: `SpannerKind::Glissando`, `Spanner::glissando`,
+    with `Glissando` saying how it is played (`SlideType`) and the words
+    along it. One played `Continuous` is written `<slide>`.
+  - tremolos between notes: `SpannerKind::TremoloSpanner`,
+    `Spanner::tremolo`, `number_of_marks`.
+  - a pedal drawn as a sign and a line (`PedalForm::SymbolLine`), which
+    `to_musicxml` refused: its line resumes straight after the sign, at
+    `Spanner::offset`, where the pedal mark itself stands.
+  - the bounces and gaps inside a held pedal: `PedalObject` and
+    `PedalObjectKind`, standing in the stream as
+    `StreamElement::PedalObject` and joined by their pedal mark.
+  - a barline inside a measure, `StreamElement::Barline`, which music21
+    keeps where it appends it and writes nothing for.
+  - how a lyric is drawn: `Lyric::justify` (`Justification`), `placement`
+    and `is_hidden`.
+  - rehearsal marks: `expressions::RehearsalMark`, with its placement and
+    what is drawn round it, as `StreamElement::RehearsalMark`.
+  - a time signature left unprinted: `TimeSignature::is_hidden`.
+  - a metric modulation, which `from_musicxml` refused:
+    `StreamElement::MetricModulation`, with `MetricModulation::placement`.
+    A file gives its two note values and no numbers; the writer gives each
+    side its number from the tempo in force before it in the part, as
+    music21's exporter does, and writes the speed the new side is played at.
+- The wheel's `to_musicxml` reads music21's own `Glissando`,
+  `TremoloSpanner`, `PedalBounce`, `PedalGapStart`, `PedalGapEnd`,
+  `RehearsalMark` and `MetricModulation` and a barline inside a measure,
+  where it refused a pedal object, a rehearsal mark and a metric modulation
+  and left the rest out; a wheel `Lyric`'s `style` carries the
+  justification, placement and `hideObjectOnPrint` the crate read.
+- `musicxml::ExportOptions::make_notation` writes a score as music21's
+  exporter writes one by default, with `makeNotation=True`: the notation the
+  score leaves unsaid is worked out before it is written. Gaps are filled
+  with rests that are not printed, a part of loose notes is cut into
+  measures and its overlapping notes put in voices, notes running past a
+  barline are cut and tied, accidentals are decided, tuplets a cut left
+  unfinished are completed, notes are beamed and tuplets bracketed where the
+  part has none yet, and lengths no single note value writes are cut into
+  tied values. `to_musicxml` then takes a part or a plain stream as readily
+  as a score, and the score handed in is not changed. Off, which is the
+  default, the score is written as it stands, as before.
+  It is held to music21 byte for byte on 244 subjects, each read by the
+  crate's own reader and written by both: 15 TinyNotation lines and the same
+  15 as loose notes, 9 parts built a note at a time, 29 MIDI files, 134 ABC
+  tunes — every one of the 118 in music21's corpus that it reads into no
+  measures, which could not be compared before — and 42 corpus scores kept
+  as MusicXML. Beyond those, 600 generated TinyNotation subjects, every
+  fortieth ABC tune of the corpus, 215 further corpus scores and every
+  corpus score tried as MIDI that music21 can write agree.
+- `makenotation::make_notation` is music21's `makeNotation` on a stream:
+  the same steps for a caller that wants the notated score rather than its
+  MusicXML. `makenotation::make_tuplet_brackets` and
+  `makenotation::split_at_durations` are music21's `makeTupletBrackets` and
+  `splitAtDurations`.
+- `Duration::expression_is_inferred` and `set_expression_is_inferred`:
+  music21's `expressionIsInferred`. A duration made from a length may be
+  written another way when notation is made; one made from a note value is
+  left as written.
+- `Stream::padding_left` and `padding_right`: music21's `paddingLeft` and
+  `paddingRight`, how much of its bar a pickup or a measure cut short leaves
+  unfilled. The MusicXML and ABC readers set them as music21's do.
+- `TimeSignature::is_restated`: whether a meter is an earlier measure's
+  standing again, as music21's ABC reader leaves one object in two measures.
+- The wheel's `to_musicxml` takes `make_notation=True`.
+
+## Changed
+
+- The score editor's own MIDI reader, `midi_to_abc`, is gone: MIDI is read
+  by the crate's `from_midi` like the other formats.
+- The `musescore` module is always there, since reading a `.mscx` runs no
+  program. `musescore::MuseScore`, which finds and runs an installed
+  MuseScore, is still behind the `musescore` feature and still left out of
+  a wasm build.
+- `makenotation::make_rests` fills a measure only as far as its padding
+  leaves, and takes a measure no meter has been stated for as long as the
+  meter standing in the part before it, or failing that as the meter that
+  fits what it holds, where it took `4/4`.
+- `makenotation::make_accidentals` treats a chord symbol as the chord it is
+  in music21: the notes it stands for count among those already heard, and
+  a natural one of them is given is written on the symbol's root.
+- `makenotation::make_beams` starts a measure padded on the left where its
+  padding says.
+- `Duration::from_type` and the named values (`Duration::quarter()` and the
+  rest) say how they are written, so `expression_is_inferred` is false for
+  them, as it is for music21's `Duration('quarter')`.
+
+## Fixed
+
+- The score editor read a flat as a natural wherever it spelled a note
+  itself -- an imported score, a note dragged or moved by the arrow keys,
+  the comping part -- and decided which accidentals its MusicXML export
+  shows the same way, since pitch names came to write flats as `b`. A B flat
+  in F major was written `=B`.
+- A figured bass line is realized as it is written. A bass note running
+  past a barline is a segment for each of the two notes it is written as,
+  as it is in music21, where it used to be one; a line in a meter its notes
+  cross the barlines of now has the voicings music21 finds for it.
+- A note cut at a barline shares out its expressions as music21's
+  `splitAtQuarterLength` does: a trill stays on the first piece, a fermata
+  goes to the last, and an ornament goes where its `tie_attach` says. Both
+  pieces used to keep them all, so `make_ties` and the ABC reader's
+  rebarring wrote a trill and a fermata twice.
+- `from_musicxml` reads words naming a coda or a segno as music21 does: the
+  mark is drawn as its sign, which has no side of the staff, where the
+  words' placement was kept and written on the sign.
+- A `MetronomeMark`'s number within a millionth of a whole number is that
+  whole number, as music21 makes it: a dotted quarter at 110 counted in
+  quarters is `165`, where `equivalent_by_referent` answered
+  `165.00000000000003` and everything worked out from it carried the hair.
+- `abc::from_abc` transposes a tune whose key says `-8va` by semitones, as
+  music21 does, which spells each note afresh and leaves how its accidental
+  is shown undecided. It kept each spelling and showing.
+- `musicxml::from_musicxml` reads a Finale `<forward>` of no length as a
+  quarter rest that is not printed, as music21 does.
+- `musicxml::to_musicxml` passes over an unprinted rest whose length no note
+  value writes, leaving a `<forward>`, where it refused the score.
+
 # music21-rs 0.8.0
 
 Four more of music21's analysis modules are the crate's—

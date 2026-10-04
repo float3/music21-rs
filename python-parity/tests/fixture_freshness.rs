@@ -20,7 +20,6 @@ const VERSIONED_FIXTURES: [&str; 20] = [
     "data/voice_leading_expectations.toml",
     "data/instrument_expectations.toml",
     "data/scale_expectations.toml",
-    "data/harte_expectations.toml",
     "data/accidental_display_expectations.toml",
     "data/chord_name_expectations.toml",
     "data/chord_symbol_expectations.toml",
@@ -42,7 +41,13 @@ const VERSIONED_FIXTURES: [&str; 20] = [
     // invisible to them and has to be caught here.
     "data/chord_tables.toml",
     "data/tuning_tables.toml",
+    // The `harte` crate's fixture lives in that crate, which carries its own
+    // parity test, but is generated from the submodule like the rest.
+    "harte/data/harte_expectations.toml",
 ];
+
+/// Every directory a generated fixture may sit in.
+const FIXTURE_DIRECTORIES: [&str; 2] = ["data", "harte/data"];
 
 /// The one generated file that also carries scales from the `hexatone`
 /// submodule, and so records its commit as well.
@@ -176,10 +181,14 @@ fn every_fixture_was_generated_from_the_pinned_submodule() {
 fn every_generated_fixture_is_listed_here() {
     // A new fixture that forgets to register itself would never be checked for
     // staleness, so the directory listing is the source of truth.
-    let data = repo_root().join("data");
     let mut unlisted = Vec::new();
+    let entries = FIXTURE_DIRECTORIES.iter().flat_map(|directory| {
+        std::fs::read_dir(repo_root().join(directory))
+            .unwrap_or_else(|err| panic!("{directory} is unreadable: {err}"))
+            .map(move |entry| (*directory, entry))
+    });
 
-    for entry in std::fs::read_dir(&data).expect("data directory is readable") {
+    for (directory, entry) in entries {
         let path = entry.expect("directory entry is readable").path();
         if path.extension().and_then(|ext| ext.to_str()) != Some("toml") {
             continue;
@@ -192,7 +201,7 @@ fn every_generated_fixture_is_listed_here() {
             continue;
         }
         let name = format!(
-            "data/{}",
+            "{directory}/{}",
             path.file_name()
                 .and_then(|name| name.to_str())
                 .expect("fixture has a UTF-8 name")

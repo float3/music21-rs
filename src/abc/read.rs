@@ -1488,6 +1488,7 @@ struct MeasureIr {
     number: IntegerType,
     left: Option<Barline>,
     right: Option<Barline>,
+    padding_left: FloatType,
 }
 
 /// An ending while its measures are being met.
@@ -1871,8 +1872,15 @@ fn part_of(
         }
 
         if in_measure {
-            if bar_count == 1 && measure.line.meter().is_some() {
+            if bar_count == 1
+                && let Some(meter) = measure.line.meter()
+            {
                 // A short first measure is a pickup, numbered nought.
+                let bar = meter.bar_quarter_length();
+                let highest = measure_stream(&measure.line).end_offset();
+                if highest < bar {
+                    measure.padding_left = bar - highest;
+                }
                 measure.number = 0;
             } else {
                 measure.number = measure_number;
@@ -1940,11 +1948,10 @@ fn part_of(
     }
 
     if reader.post_transposition != 0 {
-        let interval = Interval::from_name(if reader.post_transposition == -12 {
-            "P-8"
-        } else {
-            "P-15"
-        })?;
+        // music21 transposes by a count of semitones, which spells each
+        // note afresh from where it lands and decides nothing about how its
+        // accidental is shown.
+        let interval = Interval::from_semitones(reader.post_transposition)?;
         for item in measures
             .iter_mut()
             .flat_map(|measure| &mut measure.line.items)
@@ -1976,6 +1983,7 @@ fn part_of(
         stream.set_left_barline(measure.left);
         stream.set_right_barline(measure.right);
         stream.set_ending(endings[index].clone());
+        stream.set_padding_left(measure.padding_left);
         let length = measure.line.end;
         events.push(StreamEvent::new(offset, stream));
         offset = op_frac(offset + length);
@@ -2134,9 +2142,11 @@ fn re_bar(measures: &mut Vec<MeasureIr>, brackets: &mut [Bracket]) {
                 };
                 second.set_at_start(best.into());
                 if original + 1 < count && measures[index + 1].line.meter().is_none() {
-                    measures[index + 1]
-                        .line
-                        .set_at_start(current.clone().into());
+                    // music21 puts the very meter object back, so it stands
+                    // in two measures at once.
+                    let mut again = current.clone();
+                    again.set_restated(true);
+                    measures[index + 1].line.set_at_start(again.into());
                 }
             }
             let number = measures[index].number + 1;
@@ -2151,6 +2161,7 @@ fn re_bar(measures: &mut Vec<MeasureIr>, brackets: &mut [Bracket]) {
                     number,
                     left,
                     right: None,
+                    padding_left: 0.0,
                 },
             );
             index += 1;

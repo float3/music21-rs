@@ -34,6 +34,11 @@ pub enum SpannerKind {
     /// One arpeggio across several chords, as across both hands' staves:
     /// music21's `ArpeggioMarkSpanner`.
     ArpeggioMark,
+    /// A glissando or a slide from one note to the next: music21's
+    /// `Glissando`.
+    Glissando,
+    /// A tremolo alternating between two notes: music21's `TremoloSpanner`.
+    TremoloSpanner,
 }
 
 impl SpannerKind {
@@ -48,6 +53,8 @@ impl SpannerKind {
             Self::PedalMark => "PedalMark",
             Self::ArpeggioMark => "ArpeggioMarkSpanner",
             Self::TrillExtension => "TrillExtension",
+            Self::Glissando => "Glissando",
+            Self::TremoloSpanner => "TremoloSpanner",
         }
     }
 
@@ -90,6 +97,142 @@ pub struct Spanner {
     pedal: Option<Pedal>,
     #[cfg_attr(feature = "serde", serde(default))]
     arpeggio: crate::expressions::ArpeggioType,
+    #[cfg_attr(feature = "serde", serde(default))]
+    glissando: Option<Glissando>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    marks: Option<u8>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    offset: Drawn<FloatType>,
+}
+
+/// How a glissando is played: music21's `Glissando.slideType`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum SlideType {
+    /// Through every semitone between, which is how music21's starts out.
+    #[default]
+    Chromatic,
+    /// With no steps at all, a slide or a smear.
+    Continuous,
+    /// Through the notes of the scale, as a harp plays one.
+    Diatonic,
+    /// Over the white keys.
+    White,
+    /// Over the black keys.
+    Black,
+}
+
+impl SlideType {
+    /// music21's name for it: `chromatic`, `continuous`, `diatonic`,
+    /// `white` or `black`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Chromatic => "chromatic",
+            Self::Continuous => "continuous",
+            Self::Diatonic => "diatonic",
+            Self::White => "white",
+            Self::Black => "black",
+        }
+    }
+
+    /// Reads music21's name for a slide, whatever its case.
+    ///
+    /// # Errors
+    ///
+    /// A name that is none of the five, as music21's `SpannerException`.
+    pub fn from_name(name: &str) -> crate::error::Result<Self> {
+        let lower = name.to_lowercase();
+        [
+            Self::Chromatic,
+            Self::Continuous,
+            Self::Diatonic,
+            Self::White,
+            Self::Black,
+        ]
+        .into_iter()
+        .find(|kind| kind.as_str() == lower)
+        .ok_or_else(|| crate::error::Error::Value(format!("not a valid value: {name}")))
+    }
+}
+
+/// What a glissando says beside the notes it joins: how it is played and
+/// the words written along it, music21's `slideType` and `label`.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Glissando {
+    /// How it is played.
+    pub slide_type: SlideType,
+    /// The words along the line, *gliss.*, where it has any.
+    pub label: Option<String>,
+}
+
+/// Which of music21's pedal objects a [`PedalObject`] is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum PedalObjectKind {
+    /// The pedal let up and put down again at once: music21's
+    /// `PedalBounce`.
+    Bounce,
+    /// Where the pedal line stops being drawn while the pedalling goes on,
+    /// usually beside *simile*: music21's `PedalGapStart`.
+    GapStart,
+    /// Where the pedal line is drawn again: music21's `PedalGapEnd`.
+    GapEnd,
+}
+
+impl PedalObjectKind {
+    /// music21's class name for it.
+    pub fn class_name(self) -> &'static str {
+        match self {
+            Self::Bounce => "PedalBounce",
+            Self::GapStart => "PedalGapStart",
+            Self::GapEnd => "PedalGapEnd",
+        }
+    }
+
+    /// Reads music21's class name for one.
+    pub fn from_class_name(name: &str) -> Option<Self> {
+        [Self::Bounce, Self::GapStart, Self::GapEnd]
+            .into_iter()
+            .find(|kind| kind.class_name() == name)
+    }
+}
+
+/// A moment inside a held pedal -- a bounce, or a gap in its line -- which
+/// stands in the stream at its own offset and is joined by the pedal mark
+/// it belongs to: music21's `PedalObject`.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
+pub struct PedalObject {
+    kind: PedalObjectKind,
+    #[cfg_attr(feature = "serde", serde(default))]
+    placement: Drawn<Option<Placement>>,
+}
+
+impl PedalObject {
+    /// A pedal object of a kind.
+    pub fn new(kind: PedalObjectKind) -> Self {
+        Self {
+            kind,
+            placement: Drawn(None),
+        }
+    }
+
+    /// Which kind it is.
+    pub fn kind(&self) -> PedalObjectKind {
+        self.kind
+    }
+
+    /// Which side of the staff it is drawn on, where the score says.
+    pub fn placement(&self) -> Option<Placement> {
+        self.placement.0
+    }
+
+    /// Says which side of the staff it is drawn on.
+    pub fn set_placement(&mut self, placement: Option<Placement>) {
+        self.placement.0 = placement;
+    }
 }
 
 /// How a line's ends are drawn: music21's `startTick`, `endTick`,
@@ -325,7 +468,74 @@ impl Spanner {
             ends: Drawn(LineEnds::default()),
             pedal: None,
             arpeggio: crate::expressions::ArpeggioType::Normal,
+            glissando: None,
+            marks: None,
+            offset: Drawn(0.0),
         }
+    }
+
+    /// A glissando over the elements at these positions, drawn as a wavy
+    /// line and played chromatically, as music21's starts out.
+    pub fn glissando(spanned: Vec<usize>) -> Self {
+        let mut glissando = Self::new(SpannerKind::Glissando, spanned);
+        glissando.line_type = Drawn(Some("wavy".to_string()));
+        glissando.glissando = Some(Glissando::default());
+        glissando
+    }
+
+    /// How a glissando is played and what is written along it.
+    pub fn glissando_details(&self) -> Option<&Glissando> {
+        self.glissando.as_ref()
+    }
+
+    /// Says how a glissando is played and what is written along it.
+    pub fn set_glissando_details(&mut self, glissando: Option<Glissando>) {
+        self.glissando = glissando;
+    }
+
+    /// A tremolo alternating between the elements at these positions, with
+    /// so many strokes through the stems.
+    ///
+    /// # Errors
+    ///
+    /// More than eight strokes, as music21's `TremoloException`.
+    pub fn tremolo(marks: u8, spanned: Vec<usize>) -> crate::error::Result<Self> {
+        let mut tremolo = Self::new(SpannerKind::TremoloSpanner, spanned);
+        tremolo.set_number_of_marks(Some(marks))?;
+        Ok(tremolo)
+    }
+
+    /// How many strokes a tremolo between notes is written with: music21's
+    /// `numberOfMarks`.
+    pub fn number_of_marks(&self) -> Option<u8> {
+        self.marks
+    }
+
+    /// Says how many strokes a tremolo between notes is written with.
+    ///
+    /// # Errors
+    ///
+    /// More than eight, as music21's `TremoloException`.
+    pub fn set_number_of_marks(&mut self, marks: Option<u8>) -> crate::error::Result<()> {
+        if marks.is_some_and(|marks| marks > 8) {
+            return Err(crate::error::Error::Value(
+                "Number of marks must be a number from 0 to 8".to_string(),
+            ));
+        }
+        self.marks = marks;
+        Ok(())
+    }
+
+    /// Where the spanner itself stands in the stream holding it: nought for
+    /// one a score is read with. A pedal mark drawn as a sign and a line
+    /// says where its line resumes by it.
+    pub fn offset(&self) -> FloatType {
+        self.offset.0
+    }
+
+    /// Says where the spanner itself stands in the stream holding it.
+    pub fn set_offset(&mut self, offset: FloatType) {
+        self.offset.0 = offset;
     }
 
     /// One arpeggio across the chords at these positions.
@@ -433,6 +643,20 @@ impl Spanner {
     /// one that stands in no stream.
     pub fn spanned(&self) -> &[Option<usize>] {
         &self.spanned
+    }
+
+    /// The positions of the elements it joins, to be moved where an edit
+    /// has moved them.
+    pub(crate) fn spanned_mut(&mut self) -> &mut Vec<Option<usize>> {
+        &mut self.spanned
+    }
+
+    /// Moves each place it names to where `moved` says that element now
+    /// stands, indexed by the old place: nothing for one no longer held.
+    pub(crate) fn move_places(&mut self, moved: &[Option<usize>]) {
+        for place in &mut self.spanned {
+            *place = place.and_then(|old| moved.get(old).copied().flatten());
+        }
     }
 
     /// How many elements it joins, those standing nowhere included.

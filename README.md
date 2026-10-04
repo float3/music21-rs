@@ -43,9 +43,14 @@ suite results, coverage, benchmarks and sizes, refreshed on every push.
 - MusicXML import reads a file as music21's reader reads it: those same
   scores, read by the crate and written back, give the text music21 gives
   after reading them itself.
+- With `ExportOptions::make_notation` the export works out the notation a
+  score leaves unsaid first, as music21's does by default: measures, rests,
+  ties, accidentals, beams, tuplet brackets. 244 subjects — MIDI files,
+  ABC tunes with no barlines, loose notes, notated corpus scores — come out
+  byte for byte as music21 writes them.
 
-Not ported: music21's stream machinery, parsing of other formats,
-`makeNotation` and the corpus.
+Not ported: music21's stream machinery, parsing of other formats and the
+corpus.
 
 ## Speed and size
 
@@ -84,6 +89,14 @@ and RomanText are read with no feature at all: `abc::from_abc`,
 `midi::from_midi`, `tinynotation::from_tiny_notation`,
 `humdrum::from_humdrum`, `mei::from_mei` and `romantext::from_roman_text`
 each read what music21 reads into the score music21 makes of it.
+
+MuseScore's own files are read with no feature and no MuseScore installed:
+`musescore::from_mscx` takes the text of a `.mscx`, as MuseScore 3 and 4 save
+it, and hands back the score, held to what MuseScore itself exports from the
+same file. It opens and unpacks nothing, so a `.mscz`, which is a zip archive
+holding a `.mscx`, is the caller's to unzip. Percussion and tablature staves
+and a few kinds of line are refused with an error rather than guessed at; the
+function's documentation lists them.
 
 Name a chord and read its set class:
 
@@ -289,7 +302,7 @@ The [`harte`](harte/) crate in this repository is a port of
 [harte-library](https://github.com/andreamust/harte-library) by Andrea
 Poltronieri, licensed
 [MIT](https://github.com/andreamust/harte-library/blob/main/LICENSE), and
-`data/harte_expectations.toml` is generated from its test data.
+`harte/data/harte_expectations.toml` is generated from its test data.
 
 ### The Scala scale archive
 

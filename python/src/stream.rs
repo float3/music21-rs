@@ -637,7 +637,8 @@ impl Stream {
 /// attributes music21 keeps them in.
 ///
 /// What the wheel has no class for is left out: words and repeat marks,
-/// unpitched strokes, barlines, spanners and a score's metadata.
+/// unpitched strokes, barlines, pedal bounces and gaps, spanners and a
+/// score's metadata.
 pub(crate) fn from_crate<'py>(py: Python<'py>, stream: &RsStream) -> PyResult<Bound<'py, PyAny>> {
     let class = match stream.kind() {
         StreamKind::Score => py.get_type::<Score>(),
@@ -669,6 +670,8 @@ pub(crate) fn from_crate<'py>(py: Python<'py>, stream: &RsStream) -> PyResult<Bo
         StreamKind::Measure => {
             made.setattr("number", stream.number())?;
             made.setattr("numberSuffix", stream.number_suffix())?;
+            made.setattr("paddingLeft", stream.padding_left())?;
+            made.setattr("paddingRight", stream.padding_right())?;
         }
         StreamKind::Part | StreamKind::PartStaff => {
             made.setattr("partName", stream.name())?;
@@ -758,7 +761,11 @@ fn element_object<'py>(
         | StreamElement::TextExpression(_)
         | StreamElement::RepeatExpression(_)
         | StreamElement::Unpitched(_)
-        | StreamElement::PercussionChord(_) => return Ok(None),
+        | StreamElement::PercussionChord(_)
+        | StreamElement::Barline(_)
+        | StreamElement::PedalObject(_)
+        | StreamElement::RehearsalMark(_)
+        | StreamElement::MetricModulation(_) => return Ok(None),
     }))
 }
 
@@ -892,6 +899,9 @@ fn element_value(object: &Bound<'_, PyAny>, stand_ins: bool) -> PyResult<Option<
         if !stand_ins && let Some(duration) = written_duration(object, value.duration())? {
             value = value.with_duration(duration);
         }
+        if !stand_ins && let Some(duration) = inferred_duration(object, value.duration()) {
+            value = value.with_duration(duration);
+        }
         return Ok(Some(StreamElement::Chord(value)));
     }
     // music21's own percussion classes, read for a score writer. The walks
@@ -909,6 +919,9 @@ fn element_value(object: &Bound<'_, PyAny>, stand_ins: bool) -> PyResult<Option<
         *value.expressions_mut() = expressions_of(object)?;
         *value.articulations_mut() = articulations_of(object)?;
         if !stand_ins && let Some(duration) = written_duration(object, value.duration())? {
+            value.set_duration(duration);
+        }
+        if !stand_ins && let Some(duration) = inferred_duration(object, value.duration()) {
             value.set_duration(duration);
         }
         return Ok(Some(StreamElement::Note(value)));
@@ -943,6 +956,9 @@ fn element_value(object: &Bound<'_, PyAny>, stand_ins: bool) -> PyResult<Option<
         if !stand_ins && let Some(duration) = written_duration(object, Some(value.duration()))? {
             value.set_duration(duration);
         }
+        if !stand_ins && let Some(duration) = inferred_duration(object, Some(value.duration())) {
+            value.set_duration(duration);
+        }
         return Ok(Some(StreamElement::Rest(value)));
     }
     if let Ok(dynamic) = object.extract::<PyRef<'_, Dynamic>>() {
@@ -967,10 +983,20 @@ fn element_value(object: &Bound<'_, PyAny>, stand_ins: bool) -> PyResult<Option<
         let mut value = meter.inner.clone();
         drop(meter);
         value.set_color(style_color(object));
+        value.set_hidden(hidden_on_print(object));
         return Ok(Some(StreamElement::TimeSignature(value)));
     }
     if let Ok(mark) = object.extract::<PyRef<'_, MetronomeMark>>() {
         return Ok(Some(StreamElement::MetronomeMark(mark.inner.clone())));
+    }
+    // The walks keep a metric modulation as the stand-in it has always been.
+    if !stand_ins
+        && let Ok(modulation) = object.extract::<PyRef<'_, crate::tempo::MetricModulation>>()
+    {
+        let mut value = modulation.written_value(py)?;
+        drop(modulation);
+        value.set_placement(placement_of(object));
+        return Ok(Some(StreamElement::from(value)));
     }
     if let Ok(clef) = object.extract::<PyRef<'_, crate::clef::Clef>>() {
         let mut value = clef.inner.clone();
@@ -1048,15 +1074,52 @@ fn element_value(object: &Bound<'_, PyAny>, stand_ins: bool) -> PyResult<Option<
     // sorts with the notes, a spanner music21 keeps at the start of a part,
     // takes part in no walk and is left out.
     if !stand_ins {
+        if is_of_class(object, &pyo3::types::PyString::new(py, "PedalObject"))? {
+            let class: String = object.get_type().getattr("__name__")?.extract()?;
+            let mut kind = music21_rs_crate::PedalObjectKind::from_class_name(&class);
+            if kind.is_none() {
+                for base in object.get_type().getattr("__mro__")?.walk()? {
+                    let name: String = base?.getattr("__name__")?.extract()?;
+                    kind = music21_rs_crate::PedalObjectKind::from_class_name(&name);
+                    if kind.is_some() {
+                        break;
+                    }
+                }
+            }
+            // music21's own base class, which is none of the three, writes
+            // nothing.
+            let Some(kind) = kind else {
+                return Ok(None);
+            };
+            let mut value = music21_rs_crate::PedalObject::new(kind);
+            value.set_placement(placement_of(object));
+            return Ok(Some(StreamElement::PedalObject(value)));
+        }
+        if is_of_class(object, &pyo3::types::PyString::new(py, "RehearsalMark"))? {
+            // music21 writes whatever the mark holds as text.
+            let mut mark = music21_rs_crate::expressions::RehearsalMark::new(
+                object.getattr("content")?.str()?.to_string(),
+            );
+            let styled = object
+                .getattr("hasStyleInformation")
+                .and_then(|said| said.is_truthy())
+                .unwrap_or(false);
+            if styled && let Ok(style) = object.getattr("style") {
+                mark.set_placement(placement_of(&style));
+                mark.set_enclosure(
+                    style
+                        .getattr("enclosure")
+                        .ok()
+                        .filter(|enclosure| !enclosure.is_none())
+                        .and_then(|enclosure| enclosure.str().ok())
+                        .map(|enclosure| enclosure.to_string()),
+                );
+            }
+            return Ok(Some(StreamElement::RehearsalMark(mark)));
+        }
         // Read for a score writer, something a score writes out as a note or
         // a direction cannot be left out without the score saying less.
-        for written in [
-            "GeneralNote",
-            "Expression",
-            "TempoIndication",
-            "Dynamic",
-            "PedalObject",
-        ] {
+        for written in ["GeneralNote", "Expression", "TempoIndication", "Dynamic"] {
             if is_of_class(object, &pyo3::types::PyString::new(py, written))? {
                 let class: String = object.get_type().getattr("__name__")?.extract()?;
                 return Err(StreamException::new_err(format!(
@@ -1145,6 +1208,9 @@ fn read_written(object: &Bound<'_, PyAny>, note: &mut music21_rs_crate::Note) ->
         }
         if let Some(written) = written_duration(object, note.duration())? {
             note.set_duration(written);
+        }
+        if let Some(inferred) = inferred_duration(object, note.duration()) {
+            note.set_duration(inferred);
         }
     }
     if let Some(name) = text_attribute(object, "stemDirection") {
@@ -1249,6 +1315,29 @@ fn written_duration(
             .map_err(|error| StreamException::new_err(error.to_string()))?;
     }
     Ok(Some(written))
+}
+
+/// A duration saying, as its object's does, whether the way it is written
+/// was worked out from its length: music21's `expressionIsInferred`, which
+/// making notation asks before it writes a length another way. Nothing
+/// where the duration says so already.
+fn inferred_duration(
+    object: &Bound<'_, PyAny>,
+    duration: Option<&music21_rs_crate::Duration>,
+) -> Option<music21_rs_crate::Duration> {
+    let inferred = object
+        .getattr("duration")
+        .ok()?
+        .getattr("expressionIsInferred")
+        .ok()?
+        .extract::<bool>()
+        .ok()?;
+    let mut duration = duration.cloned().unwrap_or_default();
+    if duration.expression_is_inferred() == inferred {
+        return None;
+    }
+    duration.set_expression_is_inferred(inferred);
+    Some(duration)
 }
 
 /// A note's or chord's `articulations`, which are this wheel's own.
@@ -1409,6 +1498,16 @@ fn read_labels(object: &Bound<'_, PyAny>, stream: &mut RsStream) -> PyResult<()>
         stream.set_number(number);
     }
     stream.set_number_suffix(text_attribute(object, "numberSuffix"));
+    // How much of its bar a pickup or a measure cut short leaves unfilled.
+    let padding = |name: &str| {
+        object
+            .getattr(name)
+            .ok()
+            .and_then(|padding| padding.extract::<f64>().ok())
+            .unwrap_or(0.0)
+    };
+    stream.set_padding_left(padding("paddingLeft"));
+    stream.set_padding_right(padding("paddingRight"));
     if let Ok(show) = object.getattr("showNumber") {
         stream.set_number_hidden(show.str()?.to_str()?.to_lowercase().ends_with("never"));
     }
@@ -1659,6 +1758,14 @@ fn read_into(
                 offset,
                 StreamElement::Stream(Box::new(inner)),
             ));
+        } else if !stand_ins && is_inner_barline(stream, &element)? {
+            // A measure's own barlines are read with the measure; one
+            // standing inside it is an element of its own.
+            leaves.push(element.clone().unbind());
+            events.push(StreamEvent::new(
+                offset,
+                StreamElement::Barline(barline_value(&element)?),
+            ));
         } else if let Some(value) = element_value(&element, stand_ins)? {
             leaves.push(element.unbind());
             events.push(StreamEvent::new(offset, value));
@@ -1668,6 +1775,23 @@ fn read_into(
     read.set_kind(kind_of(stream)?);
     read_labels(stream, &mut read)?;
     Ok(read)
+}
+
+/// Whether an element of a stream is a barline that is not the stream's own
+/// left or right one.
+fn is_inner_barline(stream: &Bound<'_, PyAny>, element: &Bound<'_, PyAny>) -> PyResult<bool> {
+    if !is_of_class(
+        element,
+        &pyo3::types::PyString::new(element.py(), "Barline"),
+    )? {
+        return Ok(false);
+    }
+    for end in ["leftBarline", "rightBarline"] {
+        if stream.getattr(end).is_ok_and(|barline| barline.is(element)) {
+            return Ok(false);
+        }
+    }
+    Ok(true)
 }
 
 /// A music21 spanner of a kind the crate carries, naming what it joins by
@@ -1696,6 +1820,10 @@ fn spanner_value(
         SpannerKind::ArpeggioMark
     } else if is("TrillExtension")? {
         SpannerKind::TrillExtension
+    } else if is("Glissando")? {
+        SpannerKind::Glissando
+    } else if is("TremoloSpanner")? {
+        SpannerKind::TremoloSpanner
     } else {
         return Ok(None);
     };
@@ -1708,6 +1836,37 @@ fn spanner_value(
     }
     let mut value = Spanner::with_unplaced(kind, positions);
     value.set_placement(placement_of(spanner));
+    if let Some(offset) = spanner
+        .getattr("offset")
+        .ok()
+        .and_then(|offset| offset.extract::<f64>().ok())
+    {
+        value.set_offset(offset);
+    }
+    if kind == SpannerKind::Glissando {
+        value.set_glissando_details(Some(music21_rs_crate::Glissando {
+            slide_type: music21_rs_crate::SlideType::from_name(
+                &text_attribute(spanner, "slideType").unwrap_or_default(),
+            )
+            .unwrap_or_default(),
+            label: spanner
+                .getattr("label")
+                .ok()
+                .filter(|label| !label.is_none())
+                .map(|label| label.str().map(|text| text.to_string()))
+                .transpose()?,
+        }));
+    }
+    if kind == SpannerKind::TremoloSpanner {
+        let marks = spanner
+            .getattr("numberOfMarks")
+            .ok()
+            .and_then(|marks| marks.extract::<u8>().ok())
+            .unwrap_or(3);
+        value
+            .set_number_of_marks(Some(marks))
+            .map_err(|error| StreamException::new_err(crate::pitch::message(&error)))?;
+    }
     if kind == SpannerKind::Ottava {
         let name = text_attribute(spanner, "type").unwrap_or_default();
         let transposing = spanner
@@ -1733,6 +1892,10 @@ fn spanner_value(
         .unwrap_or(false);
     if styled && let Ok(style) = spanner.getattr("style") {
         value.set_line_type(text_attribute(&style, "lineType"));
+    }
+    // A glissando's line is its own attribute, not its style's.
+    if kind == SpannerKind::Glissando {
+        value.set_line_type(text_attribute(spanner, "lineType"));
     }
     if kind == SpannerKind::Line {
         let tick = |name: &str| -> PyResult<music21_rs_crate::LineEnd> {

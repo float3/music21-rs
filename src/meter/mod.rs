@@ -117,6 +117,11 @@ pub struct TimeSignature {
     symbolize_denominator: bool,
     #[cfg_attr(feature = "serde", serde(default))]
     color: crate::display::Color,
+    /// Whether this is an earlier measure's meter standing a second time.
+    #[cfg_attr(feature = "serde", serde(default))]
+    restated: crate::display::Drawn<bool>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    hidden: crate::display::Drawn<bool>,
 }
 
 impl Default for TimeSignature {
@@ -153,6 +158,8 @@ impl TimeSignature {
             symbol: None,
             symbolize_denominator: false,
             color: crate::display::Drawn(None),
+            restated: crate::display::Drawn(false),
+            hidden: crate::display::Drawn(false),
         };
         signature.set_default_partitions()?;
         Ok(signature)
@@ -168,6 +175,24 @@ impl TimeSignature {
     /// Says how the signature is drawn, or that it is written as numbers.
     pub fn set_symbol(&mut self, symbol: Option<String>) {
         self.symbol = symbol.filter(|symbol| !symbol.is_empty());
+    }
+
+    /// Whether this is the meter an earlier measure states, standing again
+    /// in a later one, rather than a meter of its own.
+    ///
+    /// music21 holds a meter as an object, and one object may stand in
+    /// several measures: its ABC reader gives a measure the meter in force
+    /// back, the very object, after cutting an overlong measure in two.
+    /// music21's `makeTies` then finds that meter only where it stands last,
+    /// which decides where it cuts, so a reader that restates a meter says
+    /// so here. Two meters differing only in this are equal.
+    pub fn is_restated(&self) -> bool {
+        self.restated.0
+    }
+
+    /// Says whether this is an earlier measure's meter standing again.
+    pub fn set_restated(&mut self, restated: bool) {
+        self.restated.0 = restated;
     }
 
     /// Whether the denominator is drawn as a note rather than a number:
@@ -190,6 +215,18 @@ impl TimeSignature {
     /// Sets the colour the signature is drawn in.
     pub fn set_color(&mut self, color: Option<String>) {
         self.color.0 = color;
+    }
+
+    /// Whether the signature is left off the page while still in force:
+    /// music21's `style.hideObjectOnPrint`. Two meters differing only in
+    /// this are equal.
+    pub fn is_hidden(&self) -> bool {
+        self.hidden.0
+    }
+
+    /// Says whether the signature is left off the page.
+    pub fn set_hidden(&mut self, hidden: bool) {
+        self.hidden.0 = hidden;
     }
 
     /// How the bar is written, before anything divides it: music21's
@@ -1320,18 +1357,10 @@ impl TimeSignature {
 
         // music21's `naiveBeams`: the fullest set of beams each written value
         // can carry, with what each one does left undecided.
-        let mut beamed: Vec<Option<Beams>> = Vec::with_capacity(notes.len());
-        for note in notes {
-            let levels = Beams::levels_for(note.duration_type).filter(|_| note.sounds);
-            beamed.push(match levels {
-                Some(levels) => {
-                    let mut made = Beams::new();
-                    made.fill_levels(levels, None)?;
-                    Some(made)
-                }
-                None => None,
-            });
-        }
+        let mut beamed: Vec<Option<Beams>> = notes
+            .iter()
+            .map(|note| Beams::naive(Some(note.duration_type), note.sounds))
+            .collect();
         crate::notation::remove_sandwiched_unbeamables(&mut beamed);
 
         for depth in 0..Beams::LEVELS {

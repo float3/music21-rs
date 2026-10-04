@@ -256,6 +256,10 @@ pub struct Duration {
     /// How a grace note is written, where this is the duration of one.
     #[cfg_attr(feature = "serde", serde(default))]
     grace: Option<Grace>,
+    /// Whether the way this length is written was said, by a note value,
+    /// rather than left to be worked out from the length.
+    #[cfg_attr(feature = "serde", serde(default))]
+    said: bool,
 }
 
 /// How a grace note is written and played: what music21's `GraceDuration`
@@ -959,6 +963,7 @@ impl Duration {
             dot_groups: None,
             unlinked: false,
             grace: None,
+            said: false,
         }
     }
 
@@ -1002,12 +1007,15 @@ impl Duration {
 
     /// Creates a duration from a note-value type.
     pub fn from_type(duration_type: DurationType) -> Self {
-        Self::of_length(duration_type.quarter_length())
+        Self::from_type_with_dots(duration_type, 0)
     }
 
     /// Creates a duration from a note-value type carrying augmentation dots.
     pub fn from_type_with_dots(duration_type: DurationType, dots: u32) -> Self {
-        Self::of_length(duration_type.quarter_length_with_dots(dots))
+        Self {
+            said: true,
+            ..Self::of_length(duration_type.quarter_length_with_dots(dots))
+        }
     }
 
     /// Returns the note-value type and dot count that together make exactly
@@ -1383,7 +1391,44 @@ impl Duration {
             dot_groups: None,
             unlinked: true,
             grace: Some(Grace::new()),
+            said: true,
         }
+    }
+
+    /// Whether the way this length is written was worked out from the
+    /// length rather than said: music21's `expressionIsInferred`.
+    ///
+    /// A duration made from a length is inferred, and one made from a note
+    /// value is not. Making notation may write an inferred length another
+    /// way, cutting it to finish a tuplet or joining it with its neighbours;
+    /// one that was said is left as it was written.
+    ///
+    /// ```
+    /// use music21_rs::{Duration, DurationType};
+    ///
+    /// assert!(Duration::new(0.5)?.expression_is_inferred());
+    /// assert!(!Duration::from_type(DurationType::Eighth).expression_is_inferred());
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
+    pub fn expression_is_inferred(&self) -> bool {
+        !self.said
+    }
+
+    /// Says whether the way this length is written may be worked out again
+    /// from the length.
+    pub fn set_expression_is_inferred(&mut self, inferred: bool) {
+        self.said = !inferred;
+    }
+
+    /// [`Duration::grace_duration`], as an appoggiatura where `appoggiatura`
+    /// says so: music21's `getGraceDuration(appoggiatura=True)`, which is
+    /// unslashed and takes its time from the note it leans on.
+    pub(crate) fn grace_duration_as(&self, appoggiatura: bool) -> Duration {
+        let mut grace = self.grace_duration();
+        if appoggiatura {
+            grace.grace = Some(Grace::appoggiatura());
+        }
+        grace
     }
 
     /// Whether the length needs more than one written value, tied: music21's
@@ -1551,10 +1596,12 @@ impl Duration {
     /// The written values are read off the new length, unless the duration
     /// is [unlinked](Duration::set_linked) and keeps the ones it has.
     pub fn set_quarter_length(&mut self, quarter_length: FloatType) -> Result<()> {
-        let replacement = Self::new(quarter_length)?;
+        let mut replacement = Self::new(quarter_length)?;
         if self.unlinked {
             self.quarter_length = replacement.quarter_length;
         } else {
+            // A length given again as it already is says nothing new.
+            replacement.said = self.said && self.quarter_length == replacement.quarter_length;
             *self = replacement;
         }
         Ok(())

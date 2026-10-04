@@ -7,8 +7,14 @@
 //! again. A score is parts holding measures, a measure may hold voices, and a
 //! stream holding no parts is written as one part.
 //!
+//! [`ExportOptions::make_notation`] asks for the notation to be worked out
+//! first, as music21's exporter does by default: a part of loose notes, or a
+//! score whose lengths no single note value writes, is then written as
+//! music21 writes it.
+//!
 //! The writer does no file IO; it hands back the document as a string.
 
+mod notate;
 mod partstaff;
 mod read;
 mod tree;
@@ -37,9 +43,11 @@ use crate::note::Note;
 use crate::pitch::{Accidental, Pitch};
 use crate::repeat::{RepeatExpression, RepeatExpressionKind};
 use crate::rest::Rest;
-use crate::spanner::{PedalForm, PedalType, Spanner, SpannerKind};
+use crate::spanner::{
+    PedalForm, PedalObject, PedalObjectKind, PedalType, SlideType, Spanner, SpannerKind,
+};
 use crate::stream::{StaffGroup, Stream, StreamElement, StreamKind};
-use crate::tempo::MetronomeMark;
+use crate::tempo::{MetricModulation, MetronomeMark};
 
 use tree::Element;
 
@@ -70,6 +78,18 @@ pub struct ExportOptions {
     /// The composer named when the score names no contributor: music21's
     /// `defaults.author`, `Music21`.
     pub default_author: Option<String>,
+    /// Whether to work out the notation the score leaves unsaid before
+    /// writing it, as music21's exporter does with `makeNotation=True`:
+    /// gaps filled with unprinted rests, a part with no measures cut into
+    /// them, notes running past a barline cut and tied, accidentals decided,
+    /// notes beamed and tuplets bracketed where the part has none yet, and
+    /// lengths no single note value writes cut into tied values. The score
+    /// handed in is not changed.
+    ///
+    /// Off, the score is written as it stands, which is music21's
+    /// `makeNotation=False`: a caller that has made its notation already
+    /// gets exactly what it made.
+    pub make_notation: bool,
 }
 
 impl Default for ExportOptions {
@@ -79,6 +99,7 @@ impl Default for ExportOptions {
             software: format!("music21-rs v.{}", env!("CARGO_PKG_VERSION")),
             default_title: Some("Music21 Fragment".to_string()),
             default_author: Some("Music21".to_string()),
+            make_notation: false,
         }
     }
 }
@@ -105,13 +126,41 @@ impl Default for ExportOptions {
 /// # Ok::<(), music21_rs::Error>(())
 /// ```
 ///
+/// With [`ExportOptions::make_notation`] a part or a stream of loose notes
+/// may be handed in as readily as a score:
+///
+/// ```
+/// use music21_rs::{Duration, Note, Stream, StreamKind, TimeSignature};
+/// use music21_rs::musicxml::{ExportOptions, to_musicxml};
+///
+/// let mut part = Stream::with_kind(StreamKind::Part);
+/// part.insert(0.0, TimeSignature::new(3, 4)?);
+/// part.insert(0.0, Note::from_name("C4")?.with_duration(Duration::new(5.0)?));
+/// let options = ExportOptions {
+///     make_notation: true,
+///     ..ExportOptions::default()
+/// };
+/// let xml = to_musicxml(&part, &options)?;
+/// // A dotted half tied to a half, in two measures.
+/// assert_eq!(xml.matches("<measure ").count(), 2);
+/// assert!(xml.contains("<tie type=\"start\" />"));
+/// # Ok::<(), music21_rs::Error>(())
+/// ```
+///
 /// # Errors
 ///
 /// A part with no measures, a score nested in a score, a duration no single
 /// note value writes, and anything the crate cannot yet write: each as
-/// music21's `MusicXMLExportException` says it where music21 raises.
+/// music21's `MusicXMLExportException` says it where music21 raises. Making
+/// the notation first leaves only what no notation can write: a lone
+/// measure or voice, and a length no tie of note values reaches that is not
+/// an unprinted rest.
 pub fn to_musicxml(score: &Stream, options: &ExportOptions) -> Result<String> {
-    let root = score_element(score, options)?;
+    let root = if options.make_notation {
+        score_element(&notate::notated(score)?, options)?
+    } else {
+        score_element(score, options)?
+    };
     Ok(format!(
         "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<!DOCTYPE score-partwise  PUBLIC \
          \"-//Recordare//DTD MusicXML {MUSICXML_VERSION} Partwise//EN\" \
@@ -155,18 +204,6 @@ fn score_element(score: &Stream, options: &ExportOptions) -> Result<Element> {
     let joined = joinable_groups(&parts, groups);
     let voice_bases = voice_bases(&parts, groups, &joined);
     let numbered = id_locals(score, &parts);
-    // music21 follows such a pedal's sign with a line resumed at the
-    // spanner's own offset, which is not the place of anything it holds.
-    if numbered.iter().any(|numbered| {
-        numbered
-            .spanner
-            .pedal()
-            .is_some_and(|pedal| pedal.form == Some(PedalForm::SymbolLine))
-    }) {
-        return Err(export_error(
-            "writing a pedal mark drawn as a sign and a line is not supported yet",
-        ));
-    }
     let mut shared = Shared::default();
     let mut exported = Vec::with_capacity(parts.len());
     for (index, part) in parts.iter().copied().enumerate() {
@@ -559,6 +596,45 @@ impl Numbered<'_> {
     }
 }
 
+/// music21's `MetricModulation.updateByContext`, as its exporter sets it off
+/// by asking each modulation of a part for its two marks: one with a side
+/// that has no number yet takes it from the tempo in force before it -- the
+/// last mark, tempo word or modulation standing earlier in the part, and
+/// none standing where it stands itself.
+fn resolved_modulations(part: &Stream) -> Vec<(*const StreamElement, MetricModulation)> {
+    let mut elements = part.recurse();
+    elements.sort_by(|left, right| left.0.total_cmp(&right.0));
+    // Every tempo so far with where it stands, as the mark it sounds at.
+    let mut tempos: Vec<(FloatType, Option<MetronomeMark>)> = Vec::new();
+    let mut resolved = Vec::new();
+    for (offset, element) in elements {
+        match element {
+            StreamElement::MetronomeMark(mark) => tempos.push((offset, Some(mark.clone()))),
+            StreamElement::TempoText(text) => tempos.push((offset, Some(text.metronome_mark()))),
+            StreamElement::MetricModulation(modulation) => {
+                let previous = tempos
+                    .iter()
+                    .rev()
+                    .find(|(at, _)| *at < offset)
+                    .and_then(|(_, mark)| mark.as_ref());
+                let mut modulation = (**modulation).clone();
+                let unnumbered =
+                    |side: Option<&MetronomeMark>| side.is_some_and(|mark| mark.number().is_none());
+                if unnumbered(modulation.old_metronome()) {
+                    modulation.update_from(previous);
+                }
+                if unnumbered(modulation.new_metronome()) {
+                    modulation.update_from(previous);
+                }
+                tempos.push((offset, modulation.new_metronome().cloned()));
+                resolved.push((element as *const StreamElement, modulation));
+            }
+            _ => {}
+        }
+    }
+    resolved
+}
+
 /// music21's `setIdLocals` over the score's spanners: each kind numbered
 /// one to six and round again -- the number MusicXML pairs a spanner's start
 /// with its stop by -- in the order the score holds them, its own first and
@@ -949,6 +1025,7 @@ impl<'a> PartExporter<'a> {
             clef: None,
             previous,
             voice_bases,
+            modulations: resolved_modulations(self.stream),
         };
         for (offset, measure) in measures {
             add_divider_comment(&mut part, &format!("Measure {}", measure.number()));
@@ -1152,6 +1229,9 @@ struct PartContext<'a> {
     /// The score's spanners, each with the number it is written with and
     /// the elements it joins.
     spanners: Vec<Numbered<'a>>,
+    /// The part's metric modulations as they are once each has taken its
+    /// numbers from the tempo in force before it.
+    modulations: Vec<(*const StreamElement, MetricModulation)>,
     /// The clef in force where the writer has got to.
     clef: Option<Clef>,
     /// The staff before this one where it is one of several written as one
@@ -1415,6 +1495,15 @@ impl<'a, 'b> MeasureExporter<'a, 'b> {
                 }
             }
             for (offset, element) in notes_for_later {
+                // An unprinted rest of a length no note value writes is
+                // left as a gap, which the next element is moved past.
+                if let StreamElement::Rest(rest) = element
+                    && rest.hidden()
+                    && rest.quarter_length() != 0.0
+                    && rest.duration().components().is_empty()
+                {
+                    continue;
+                }
                 self.parse_one_element(offset, element)?;
             }
             index = end;
@@ -1451,11 +1540,14 @@ impl<'a, 'b> MeasureExporter<'a, 'b> {
 
     /// music21's `parseOneElement`.
     fn parse_one_element(&mut self, offset: FloatType, element: &StreamElement) -> Result<()> {
+        let position = element as *const StreamElement;
+        // Asked before the writer moves past the element, which is where a
+        // pedal's resumed line counts its offset from.
+        let (before, after) =
+            related_spanners(position, &self.context.spanners, self.offset_in_measure);
         if is_written_as_note(element) {
             self.offset_in_measure += element.quarter_length();
         }
-        let position = element as *const StreamElement;
-        let (before, after) = related_spanners(position, &self.context.spanners);
         for direction in before {
             self.root.push(direction);
         }
@@ -1507,6 +1599,16 @@ impl<'a, 'b> MeasureExporter<'a, 'b> {
             }
             StreamElement::Dynamic(dynamic) => self.dynamic_element(dynamic, offset),
             StreamElement::MetronomeMark(mark) => self.tempo_elements(mark, offset)?,
+            StreamElement::MetricModulation(modulation) => {
+                let resolved = self
+                    .context
+                    .modulations
+                    .iter()
+                    .find(|(held, _)| std::ptr::eq(*held, position))
+                    .map_or(&**modulation, |(_, resolved)| resolved);
+                let direction = self.metric_modulation_element(resolved, offset)?;
+                self.root.push(direction);
+            }
             StreamElement::TempoText(text) => {
                 let direction = self.tempo_words(text.text(), text.placement(), offset);
                 self.root.push(direction);
@@ -1549,8 +1651,66 @@ impl<'a, 'b> MeasureExporter<'a, 'b> {
                     inner.kind()
                 )));
             }
+            StreamElement::PedalObject(object) => self.pedal_object_elements(object, position),
+            StreamElement::RehearsalMark(mark) => {
+                // music21's `rehearsalMarkToXml`: a mark is centred on where
+                // it stands, as its class starts every mark out.
+                let mut rehearsal = Element::with_text("rehearsal", mark.content());
+                if let Some(enclosure) = mark.enclosure() {
+                    rehearsal.set("enclosure", enclosure);
+                }
+                rehearsal.set("halign", "center");
+                rehearsal.set("valign", "middle");
+                let direction = self.direction(rehearsal, mark.placement(), offset, true);
+                self.root.push(direction);
+            }
+            // music21 writes nothing for a barline standing inside a
+            // measure: `Barline` is one of `ignoreOnParseClasses`.
+            StreamElement::Barline(_) => {}
         }
         Ok(())
+    }
+
+    /// music21's `pedalObjectToXml`: a bounce or a gap in a held pedal, as
+    /// the pedal mark holding it is drawn. One no pedal mark holds writes
+    /// nothing.
+    fn pedal_object_elements(&mut self, object: &PedalObject, position: *const StreamElement) {
+        let Some(pedal) = self
+            .context
+            .spanners
+            .iter()
+            .find(|numbered| {
+                numbered.spanner.kind() == SpannerKind::PedalMark && numbered.holds(position)
+            })
+            .map(|numbered| numbered.spanner.pedal().unwrap_or_default())
+        else {
+            return;
+        };
+        let lined = pedal.form.is_some_and(PedalForm::has_line);
+        // Soft and silent pedals have no start of their own in MusicXML, and
+        // music21 writes them, and a pedal that does not say, as `sustain`.
+        let down = match pedal.pedal_type {
+            Some(PedalType::Sostenuto) => "sostenuto",
+            Some(PedalType::Sustain) => "start",
+            _ => "sustain",
+        };
+        let types: &[&str] = match object.kind() {
+            PedalObjectKind::Bounce => match pedal.form {
+                Some(PedalForm::Line | PedalForm::SymbolLine) => &["change"],
+                Some(PedalForm::SymbolAlt) => &[down],
+                Some(PedalForm::Symbol) => &["stop", down],
+                None => return,
+            },
+            PedalObjectKind::GapStart => &["discontinue"],
+            PedalObjectKind::GapEnd => &["resume"],
+        };
+        for kind in types {
+            let mut mark = Element::new("pedal");
+            mark.set("type", *kind);
+            mark.set(if lined { "line" } else { "sign" }, "yes");
+            let direction = self.direction(mark, object.placement(), self.element_offset, true);
+            self.root.push(direction);
+        }
     }
 
     /// music21's `wrapObjectInAttributes`: a mark after the start of a
@@ -1920,18 +2080,7 @@ impl<'a, 'b> MeasureExporter<'a, 'b> {
     /// music21's `setOffsetOptional`: an `<offset>` for a direction that does
     /// not stand where the writer has got to.
     fn offset_element(&self, offset: FloatType, sound: bool) -> Option<Element> {
-        // music21 counts its place in the measure as a float, and holds an
-        // offset no float spells exactly -- a triplet's -- as a `Fraction`,
-        // which compares unequal to every float.
-        if offset == self.offset_in_measure && !is_fraction_offset(offset) {
-            return None;
-        }
-        let difference = ((offset - self.offset_in_measure) * DIVISIONS_PER_QUARTER) as i64;
-        let mut element = Element::with_text("offset", difference.to_string());
-        if sound {
-            element.set("sound", "yes");
-        }
-        Some(element)
+        offset_element_from(offset, self.offset_in_measure, sound)
     }
 
     /// music21's `placeInDirection`.
@@ -2111,6 +2260,39 @@ impl<'a, 'b> MeasureExporter<'a, 'b> {
             self.root.push(direction);
         }
         Ok(())
+    }
+
+    /// music21's `tempoIndicationToXml` for a metric modulation: the two
+    /// note values side by side, neither with its number, and the speed the
+    /// new one is played at.
+    fn metric_modulation_element(
+        &self,
+        modulation: &MetricModulation,
+        offset: FloatType,
+    ) -> Result<Element> {
+        let mut metronome = Element::new("metronome");
+        for side in [modulation.old_metronome(), modulation.new_metronome()] {
+            let side = side.ok_or_else(|| {
+                export_error("a metric modulation needs a mark on both sides to be written")
+            })?;
+            let (beat_unit, dots) = written_type(side.referent())?;
+            metronome.sub_text("beat-unit", beat_unit);
+            for _ in 0..dots {
+                metronome.sub("beat-unit-dot");
+            }
+        }
+        metronome.set("parentheses", yes_no(modulation.parentheses()));
+        let mut direction = self.direction(metronome, modulation.placement(), offset, true);
+        if let Some(bpm) = modulation
+            .new_metronome()
+            .and_then(MetronomeMark::sounding_quarter_bpm)
+            .filter(|bpm| *bpm != 0.0)
+        {
+            direction
+                .sub("sound")
+                .set("tempo", num_to_int_or_float(bpm));
+        }
+        Ok(direction)
     }
 
     /// A tempo said in words, as music21's `TempoText.applyTextFormatting`
@@ -2426,10 +2608,13 @@ fn technical_element(articulation: &Articulation) -> Element {
 
 /// music21's `relatedSpanners`: the directions a hairpin opens with before
 /// the element it starts on, and closes with after the one it ends on. A
-/// hairpin over one element does both.
+/// hairpin over one element does both. A pedal drawn as a sign and a line
+/// resumes its line straight after the sign, at the pedal mark's own offset
+/// counted from `offset_in_measure`: music21's `makePedalResumeLineXml`.
 fn related_spanners(
     position: *const StreamElement,
     spanners: &[Numbered<'_>],
+    offset_in_measure: FloatType,
 ) -> (Vec<Element>, Vec<Element>) {
     let mut before = Vec::new();
     let mut after = Vec::new();
@@ -2506,9 +2691,48 @@ fn related_spanners(
             } else {
                 after.push(direction);
             }
+            if start
+                && spanner.kind() == SpannerKind::PedalMark
+                && spanner.pedal().and_then(|pedal| pedal.form) == Some(PedalForm::SymbolLine)
+            {
+                let mut line = Element::new("pedal");
+                line.set("type", "resume");
+                line.set("line", "yes");
+                let mut direction = Element::new("direction");
+                direction.sub("direction-type").push(line);
+                if let Some(placement) = spanner.placement() {
+                    direction.set("placement", placement.as_str());
+                }
+                if let Some(offset) = offset_element_from(spanner.offset(), offset_in_measure, true)
+                {
+                    direction.push(offset);
+                }
+                before.push(direction);
+            }
         }
     }
     (before, after)
+}
+
+/// music21's `setOffsetOptional`: an `<offset>` for a direction at `offset`
+/// that does not stand where the writer has got to, `offset_in_measure`.
+fn offset_element_from(
+    offset: FloatType,
+    offset_in_measure: FloatType,
+    sound: bool,
+) -> Option<Element> {
+    // music21 counts its place in the measure as a float, and holds an
+    // offset no float spells exactly -- a triplet's -- as a `Fraction`,
+    // which compares unequal to every float.
+    if offset == offset_in_measure && !is_fraction_offset(offset) {
+        return None;
+    }
+    let difference = ((offset - offset_in_measure) * DIVISIONS_PER_QUARTER) as i64;
+    let mut element = Element::with_text("offset", difference.to_string());
+    if sound {
+        element.set("sound", "yes");
+    }
+    Some(element)
 }
 
 /// A pedal mark's `<pedal>`, where it goes down or where it comes up:
@@ -2650,9 +2874,58 @@ fn spanner_notations(
         slur.set("number", id_local.to_string());
         notations.push(slur);
     }
-    // A trill's wavy line: where it starts, where it stops, and both on a
-    // line over one note. These go in an `<ornaments>` of their own.
+    // A glissando, or a slide where it is played without steps, written as
+    // a slur is; only its start carries its words.
+    for numbered in spanners {
+        let (spanner, id_local) = (numbered.spanner, numbered.id_local);
+        if spanner.kind() != SpannerKind::Glissando {
+            continue;
+        }
+        let details = spanner.glissando_details().cloned().unwrap_or_default();
+        let mut glissando = Element::new(if details.slide_type == SlideType::Continuous {
+            "slide"
+        } else {
+            "glissando"
+        });
+        glissando.set("number", id_local.to_string());
+        if let Some(line_type) = spanner.line_type() {
+            glissando.set("line-type", line_type);
+        }
+        if numbered.is_first(position) {
+            if let Some(label) = details.label {
+                glissando.set_text(label);
+            }
+            glissando.set("type", "start");
+        } else if numbered.is_last(position) {
+            glissando.set("type", "stop");
+        } else {
+            continue;
+        }
+        notations.push(glissando);
+    }
+    // A tremolo between notes, then a trill's wavy line: where it starts,
+    // where it stops, and both on a line over one note. These go in an
+    // `<ornaments>` of their own.
     let mut ornaments = Element::new("ornaments");
+    for numbered in spanners {
+        let spanner = numbered.spanner;
+        if spanner.kind() != SpannerKind::TremoloSpanner || !numbered.holds(position) {
+            continue;
+        }
+        let mut tremolo = Element::with_text(
+            "tremolo",
+            spanner.number_of_marks().unwrap_or(3).to_string(),
+        );
+        if numbered.is_first(position) {
+            tremolo.set("type", "start");
+            if let Some(placement) = spanner.placement() {
+                tremolo.set("placement", placement.as_str());
+            }
+        } else if numbered.is_last(position) {
+            tremolo.set("type", "stop");
+        }
+        ornaments.push(tremolo);
+    }
     for numbered in spanners {
         let (spanner, id_local) = (numbered.spanner, numbered.id_local);
         if spanner.kind() != SpannerKind::TrillExtension {
@@ -3238,6 +3511,15 @@ fn lyric_element(lyric: &Lyric) -> Result<Element> {
     }
     element.set("name", lyric.identifier());
     element.set("number", lyric.number().to_string());
+    if let Some(justify) = lyric.justify() {
+        element.set("justify", justify.as_str());
+    }
+    if let Some(placement) = lyric.placement() {
+        element.set("placement", placement.as_str());
+    }
+    if lyric.is_hidden() {
+        element.set("print-object", "no");
+    }
     if let Some(color) = lyric.color() {
         element.set("color", normalize_color(color)?);
     }
@@ -3314,6 +3596,9 @@ fn time_signature_element(meter: &TimeSignature) -> Result<Element> {
         element.set("symbol", "note");
     } else if let Some(symbol) = meter.symbol() {
         element.set("symbol", symbol);
+    }
+    if meter.is_hidden() {
+        element.set("print-object", "no");
     }
     Ok(element)
 }
@@ -3626,6 +3911,7 @@ mod tests {
             clef: None,
             previous: None,
             voice_bases: &NO_BASES,
+            modulations: Vec::new(),
         };
         let mut exporter = MeasureExporter::new(&stream, 0.0, &mut context);
         run(&mut exporter)
@@ -3698,6 +3984,156 @@ mod tests {
         assert_eq!(
             pedal_element(&line, 2, false).dump(),
             "<pedal line=\"yes\" number=\"2\" type=\"stop\" />"
+        );
+    }
+
+    #[test]
+    fn glissandi_a_tremolo_and_a_pedal_with_a_bounce_are_written_as_music21_writes_them() {
+        use crate::spanner::{Glissando, Pedal};
+        // Read off music21's own export of the same two bars.
+        let bar = |number, names: [&str; 4]| {
+            let mut measure = Stream::with_kind(StreamKind::Measure);
+            measure.set_number(number);
+            for name in names {
+                measure.push(Note::from_name(name).unwrap());
+            }
+            measure
+        };
+        let mut first = bar(1, ["C4", "D4", "E4", "F4"]);
+        first.insert(3.0, PedalObject::new(PedalObjectKind::Bounce));
+        let mut part = Stream::with_kind(StreamKind::Part);
+        part.push(first);
+        part.push(bar(2, ["G4", "A4", "B4", "C5"]));
+        let mut score = Stream::with_kind(StreamKind::Score);
+        score.push(part);
+        // The notes of the first bar stand at 0 to 3, the bounce at 4, and
+        // the notes of the second at 5 to 8.
+        let kinds: Vec<bool> = score
+            .leaves()
+            .iter()
+            .map(|(_, element)| matches!(element, StreamElement::PedalObject(_)))
+            .collect();
+        assert_eq!(kinds.iter().position(|bounce| *bounce), Some(4));
+
+        // A pedal from the second note to the seventh, its bounce joined
+        // last, so that is where it comes up.
+        let pedal = Spanner::pedal_mark(
+            Pedal {
+                pedal_type: Some(PedalType::Sustain),
+                form: Some(PedalForm::SymbolLine),
+                abbreviated: false,
+            },
+            vec![1, 7, 4],
+        );
+        score.add_spanner(pedal);
+        score.add_spanner(Spanner::glissando(vec![2, 3]));
+        let mut slide = Spanner::glissando(vec![5, 6]);
+        slide.set_glissando_details(Some(Glissando {
+            slide_type: SlideType::Continuous,
+            label: Some("gl.".to_string()),
+        }));
+        score.add_spanner(slide);
+        let mut tremolo = Spanner::tremolo(3, vec![7, 8]).unwrap();
+        tremolo.set_placement(Some(Placement::Above));
+        score.add_spanner(tremolo);
+
+        let written = to_musicxml(&score, &ExportOptions::default()).unwrap();
+        let direction = |pedal: &str, offset: &str| {
+            format!(
+                "      <direction>\n        <direction-type>\n          {pedal}\n        \
+                 </direction-type>\n{offset}      </direction>\n"
+            )
+        };
+        // The sign, and the line resumed where the pedal mark stands: the
+        // start of the part, a quarter before the note it goes down on.
+        assert!(written.contains(&format!(
+            "{}{}",
+            direction("<pedal number=\"1\" sign=\"yes\" type=\"start\" />", ""),
+            direction(
+                "<pedal line=\"yes\" type=\"resume\" />",
+                "        <offset sound=\"yes\">-10080</offset>\n"
+            )
+        )));
+        // The bounce, and after it the pedal coming up.
+        assert!(written.contains(&format!(
+            "{}{}",
+            direction("<pedal line=\"yes\" type=\"change\" />", ""),
+            direction("<pedal line=\"yes\" number=\"1\" type=\"stop\" />", "")
+        )));
+        for notation in [
+            "<glissando line-type=\"wavy\" number=\"1\" type=\"start\" />",
+            "<glissando line-type=\"wavy\" number=\"1\" type=\"stop\" />",
+            "<slide line-type=\"wavy\" number=\"2\" type=\"start\">gl.</slide>",
+            "<slide line-type=\"wavy\" number=\"2\" type=\"stop\" />",
+            "<tremolo placement=\"above\" type=\"start\">3</tremolo>",
+            "<tremolo type=\"stop\">3</tremolo>",
+        ] {
+            assert!(written.contains(notation), "{notation} in\n{written}");
+        }
+    }
+
+    #[test]
+    fn a_bounce_is_written_as_its_pedal_is_drawn() {
+        use crate::spanner::Pedal;
+        // music21's `pedalObjectToXml`.
+        let written = |form, pedal_type, kind| {
+            let mut measure = Stream::with_kind(StreamKind::Measure);
+            measure.set_number(1);
+            measure.push(Note::from_name("C4").unwrap());
+            measure.insert(1.0, PedalObject::new(kind));
+            measure.push(Note::from_name("D4").unwrap());
+            let mut part = Stream::with_kind(StreamKind::Part);
+            part.push(measure);
+            part.add_spanner(Spanner::pedal_mark(
+                Pedal {
+                    pedal_type,
+                    form: Some(form),
+                    abbreviated: false,
+                },
+                vec![0, 1, 2],
+            ));
+            let mut score = Stream::with_kind(StreamKind::Score);
+            score.push(part);
+            let document = to_musicxml(&score, &ExportOptions::default()).unwrap();
+            document
+                .lines()
+                .map(str::trim)
+                .filter(|line| line.starts_with("<pedal") && !line.contains("number"))
+                .collect::<Vec<_>>()
+                .join("")
+        };
+        let sustain = Some(PedalType::Sustain);
+        assert_eq!(
+            written(PedalForm::Line, sustain, PedalObjectKind::Bounce),
+            "<pedal line=\"yes\" type=\"change\" />"
+        );
+        assert_eq!(
+            written(PedalForm::Symbol, sustain, PedalObjectKind::Bounce),
+            "<pedal sign=\"yes\" type=\"stop\" /><pedal sign=\"yes\" type=\"start\" />"
+        );
+        assert_eq!(
+            written(
+                PedalForm::SymbolAlt,
+                Some(PedalType::Sostenuto),
+                PedalObjectKind::Bounce
+            ),
+            "<pedal sign=\"yes\" type=\"sostenuto\" />"
+        );
+        assert_eq!(
+            written(
+                PedalForm::Symbol,
+                Some(PedalType::Soft),
+                PedalObjectKind::Bounce
+            ),
+            "<pedal sign=\"yes\" type=\"stop\" /><pedal sign=\"yes\" type=\"sustain\" />"
+        );
+        assert_eq!(
+            written(PedalForm::Line, sustain, PedalObjectKind::GapStart),
+            "<pedal line=\"yes\" type=\"discontinue\" />"
+        );
+        assert_eq!(
+            written(PedalForm::Symbol, sustain, PedalObjectKind::GapEnd),
+            "<pedal sign=\"yes\" type=\"resume\" />"
         );
     }
 
@@ -3837,6 +4273,7 @@ mod tests {
             clef: None,
             previous: None,
             voice_bases: &NO_BASES,
+            modulations: Vec::new(),
         };
         let exporter = MeasureExporter::new(&measure, 0.0, &mut context);
         assert_eq!(

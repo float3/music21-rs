@@ -624,7 +624,6 @@ impl Beams {
         self.beams.push(beam);
     }
 
-    /// How many beams a written value carries, where it carries any:
     /// How many beams a written value can carry at the most: music21's
     /// `beamableDurationTypes`, an eighth through a 2048th. It is how many
     /// depths a run of notes is beamed at.
@@ -636,6 +635,66 @@ impl Beams {
             .into_iter()
             .find(|(candidate, _)| *candidate == duration_type)
             .map(|(_, levels)| levels)
+    }
+
+    /// For each element, the fullest set of beams its written value can
+    /// carry, with nothing said about what any of them does: music21's
+    /// `naiveBeams`.
+    ///
+    /// An element carries none where it does not sound -- a rest, or
+    /// anything that is not a note -- or where it is written as a quarter or
+    /// longer, or as more than one value.
+    ///
+    /// ```
+    /// use music21_rs::{Beams, Duration, Note, Rest, StreamElement};
+    ///
+    /// let elements: Vec<StreamElement> = vec![
+    ///     Note::from_name("C4")?.with_duration(Duration::quarter()).into(),
+    ///     Note::from_name("C4")?.with_duration(Duration::eighth()).into(),
+    ///     Note::from_name("C4")?.with_duration(Duration::new(0.25)?).into(),
+    ///     Rest::new(Duration::new(0.125)?).into(),
+    /// ];
+    /// let levels: Vec<Option<usize>> = Beams::naive_beams(&elements)
+    ///     .iter()
+    ///     .map(|beams| beams.as_ref().map(Beams::len))
+    ///     .collect();
+    /// assert_eq!(levels, [None, Some(1), Some(2), None]);
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
+    pub fn naive_beams<'a>(
+        elements: impl IntoIterator<Item = &'a crate::stream::StreamElement>,
+    ) -> Vec<Option<Beams>> {
+        use crate::stream::StreamElement;
+        elements
+            .into_iter()
+            .map(|element| {
+                let sounds = matches!(
+                    element,
+                    StreamElement::Note(_)
+                        | StreamElement::Chord(_)
+                        | StreamElement::Unpitched(_)
+                        | StreamElement::PercussionChord(_)
+                        | StreamElement::ChordSymbol(_)
+                );
+                let written = element.duration().and_then(|duration| {
+                    match duration.components().as_slice() {
+                        [(duration_type, _)] => Some(*duration_type),
+                        _ => None,
+                    }
+                });
+                Self::naive(written, sounds)
+            })
+            .collect()
+    }
+
+    /// The beams one element of [`Beams::naive_beams`] carries, given the
+    /// one value it is written as, if it is written as one, and whether it
+    /// sounds: as many as that value has, each left undecided, or none.
+    pub fn naive(written: Option<DurationType>, sounds: bool) -> Option<Beams> {
+        let levels = written.and_then(Self::levels_for).filter(|_| sounds)?;
+        let mut made = Beams::new();
+        made.fill_levels(levels, None).ok()?;
+        Some(made)
     }
 
     /// Gives the note as many beams as its written value has, all of the same
@@ -1078,6 +1137,62 @@ pub struct Lyric {
     elision_before: String,
     #[cfg_attr(feature = "serde", serde(default))]
     color: crate::display::Color,
+    #[cfg_attr(feature = "serde", serde(default))]
+    justify: crate::display::Drawn<Option<Justification>>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    placement: crate::display::Drawn<Option<Placement>>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    hidden: crate::display::Drawn<bool>,
+}
+
+/// How a line of text lines up with where it is placed: music21's
+/// `TextStyle.justify`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum Justification {
+    /// Starting there.
+    Left,
+    /// Centred on it.
+    Center,
+    /// Ending there.
+    Right,
+    /// Spread to fill the line, which MusicXML cannot say.
+    Full,
+}
+
+impl Justification {
+    /// music21's name for it: `left`, `center`, `right` or `full`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Left => "left",
+            Self::Center => "center",
+            Self::Right => "right",
+            Self::Full => "full",
+        }
+    }
+
+    /// Reads music21's name for a justification, whatever its case.
+    ///
+    /// # Errors
+    ///
+    /// Anything else, as music21's `TextFormatException`.
+    pub fn from_name(name: &str) -> Result<Self> {
+        match name.to_lowercase().as_str() {
+            "left" => Ok(Self::Left),
+            "center" => Ok(Self::Center),
+            "right" => Ok(Self::Right),
+            "full" => Ok(Self::Full),
+            _ => Err(Error::Notation(format!(
+                "Not a supported justification: '{name}'"
+            ))),
+        }
+    }
+}
+
+impl fmt::Display for Justification {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
 }
 
 /// What music21's `Lyric.elisionBefore` starts as: a space between this
@@ -1106,6 +1221,9 @@ impl Lyric {
             components: Vec::new(),
             elision_before: DEFAULT_ELISION.to_string(),
             color: crate::display::Drawn(None),
+            justify: crate::display::Drawn(None),
+            placement: crate::display::Drawn(None),
+            hidden: crate::display::Drawn(false),
         }
     }
 
@@ -1117,6 +1235,38 @@ impl Lyric {
     /// Says what colour the syllable is written in.
     pub fn set_color(&mut self, color: Option<String>) {
         self.color.0 = color;
+    }
+
+    /// How the syllable lines up under its note, where a score says.
+    pub fn justify(&self) -> Option<Justification> {
+        self.justify.0
+    }
+
+    /// Says how the syllable lines up under its note.
+    pub fn set_justify(&mut self, justify: Option<Justification>) {
+        self.justify.0 = justify;
+    }
+
+    /// Which side of the staff the syllable is written on, where a score
+    /// says.
+    pub fn placement(&self) -> Option<Placement> {
+        self.placement.0
+    }
+
+    /// Says which side of the staff the syllable is written on.
+    pub fn set_placement(&mut self, placement: Option<Placement>) {
+        self.placement.0 = placement;
+    }
+
+    /// Whether the syllable is left off the page, though it is still sung:
+    /// music21's `style.hideObjectOnPrint`.
+    pub fn is_hidden(&self) -> bool {
+        self.hidden.0
+    }
+
+    /// Says whether the syllable is left off the page.
+    pub fn set_hidden(&mut self, hidden: bool) {
+        self.hidden.0 = hidden;
     }
 
     /// Reads a lyric from text whose hyphens say where it falls in its word:
