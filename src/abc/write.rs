@@ -1671,6 +1671,18 @@ impl<'a> Tune<'a> {
                     before.push_str(&sign);
                     waiting_since.get_or_insert(held.offset);
                 }
+                // A barline inside a measure is drawn and not heard, and
+                // music21's exporters write nothing for one either.
+                StreamElement::Barline(_) => {}
+                StreamElement::PedalObject(_) => {
+                    return Err(abc_error("ABC has no pedal bounces or gaps"));
+                }
+                StreamElement::RehearsalMark(_) => {
+                    return Err(abc_error("ABC has no rehearsal marks"));
+                }
+                StreamElement::MetricModulation(_) => {
+                    return Err(abc_error("ABC has no metric modulations"));
+                }
                 StreamElement::Unpitched(_) | StreamElement::PercussionChord(_) => {
                     return Err(abc_error("ABC has no unpitched notes"));
                 }
