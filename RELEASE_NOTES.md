@@ -170,6 +170,11 @@ are tunes whose own reading cannot be written back.
 - `TimeSignature::is_restated`: whether a meter is an earlier measure's
   standing again, as music21's ABC reader leaves one object in two measures.
 - The wheel's `to_musicxml` takes `make_notation=True`.
+- `to_musicxml` with `make_notation` writes a measure or a voice standing
+  alone, as music21's `fromMeasure` and `fromVoice` do: the measure is
+  filled out to its bar, given a meter and a clef its notes fit where it
+  states none, its accidentals decided and its notes beamed; a voice is
+  written as measure one.
 - `Stream::at_sounding_pitch` and `set_at_sounding_pitch` say whether a
   stream's notes are written at the pitch they sound, at the pitch a
   transposing instrument reads, or neither has been said: music21's
@@ -210,6 +215,12 @@ are tunes whose own reading cannot be written back.
 
 ## Fixed
 
+- `TimeSignature::average_beat_strength` weighs the stream's own elements
+  only, as music21's `averageBeatStrength` does, and with `notes_only` its
+  notes and chords without its rests. It used to weigh everything inside
+  the measures and voices the stream held, so `best_time_signature` gave a
+  measure whose notes stand in a voice three-four where music21 gives
+  six-eight.
 - `from_musicxml` gives a hairpin, bracket, octave line or pedal started
   after the last note of a part the next part's first note, as music21
   does. The note was taken from the queue and then lost, leaving the

@@ -23,7 +23,9 @@
 //! line, `flat:` and one read as notes only, with no measures made, `loose:`
 //! and notes each written `name@offset+length`, which may overlap, after a
 //! meter if there is one, `scored:` and the same put in a score, which is
-//! where music21 makes voices of what overlaps, `midi:`
+//! where music21 makes voices of what overlaps, `measure:` and `voice:` and
+//! the same as a lone measure or voice, written as music21's `fromMeasure`
+//! and `fromVoice` write one, `midi:`
 //! and a path under the music21 package or `corpus:` and a corpus score
 //! music21 first writes as MIDI, `abc:` and a corpus file with `#n` for one
 //! tune of several, and `xml:` and a corpus score kept as MusicXML.
@@ -172,6 +174,23 @@ const SUBJECTS: &[(&str, &str)] = &[
         "scored:C4@1+1 E4@1.5+1 G4@6+3 B4@7+0.25",
         "voices starting late",
     ),
+    // A lone measure or voice.
+    (
+        "measure:C4@0+1 E4@1+1 G4@2+1",
+        "a measure with no meter, given the one its notes fit",
+    ),
+    (
+        "measure:2/4 F#4@0+0.5 F4@0.5+0.5",
+        "a measure filled out to its bar, accidentals decided, notes beamed",
+    ),
+    ("measure:C2@0+4", "a measure given the clef its notes fit"),
+    ("measure:3/4 C4@0.5+0.5 E4@2+0.5", "a measure with gaps"),
+    (
+        "measure:6/8 C4@0+0.5 D4@0.5+0.5 E4@1+0.5 F4@1.5+1.5",
+        "a measure in compound time",
+    ),
+    ("voice:C5@0+2 B4@2+1", "a voice, put in measure one"),
+    ("voice:C4@1+1 E4@3+0.5", "a voice with gaps"),
     // MIDI files, most of which hold lengths no one note value has.
     ("midi:midi/testPrimitive/test01.mid", "one line of notes"),
     ("midi:midi/testPrimitive/test02.mid", "four parts"),
@@ -483,6 +502,13 @@ def loose_part(text):
         part.insert(float(offset), note.Note(name, quarterLength=float(length)))
     return part
 
+def lone_stream(text, kind):
+    """The notes of a loose part in a measure or a voice standing alone."""
+    lone = stream.Measure() if kind == 'measure' else stream.Voice()
+    for element in loose_part(text):
+        lone.insert(element.offset, element)
+    return lone
+
 def scored_part(text):
     score = stream.Score()
     score.insert(0, loose_part(text))
@@ -598,6 +624,17 @@ fn the_crate_makes_notation_as_music21_does() {
                 "loose" => (
                     helpers.getattr("loose_part")?.call1((name,)),
                     loose_part(name),
+                ),
+                "measure" | "voice" => (
+                    helpers.getattr("lone_stream")?.call1((name, kind)),
+                    loose_part(name).map(|mut lone| {
+                        lone.set_kind(if kind == "measure" {
+                            StreamKind::Measure
+                        } else {
+                            StreamKind::Voice
+                        });
+                        lone
+                    }),
                 ),
                 "scored" => (
                     helpers.getattr("scored_part")?.call1((name,)),

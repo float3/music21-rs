@@ -126,6 +126,39 @@ pub(crate) fn make_part_notation(part: &mut Stream) -> Result<PartNotation> {
     Ok(PartNotation { beams_failed })
 }
 
+/// music21's `Measure.makeNotation`, on each measure of a part: accidentals
+/// decided, a meter where the measure states none (`best_time_signature`,
+/// or `4/4` where none fits), tuplets completed and the tied ones joined,
+/// the notes beamed and each line's tuplets bracketed.
+#[cfg(feature = "musicxml")]
+pub(crate) fn make_measure_notation(part: &mut Stream) -> Result<()> {
+    make_accidentals(part);
+    for_each_measure(part, &mut |measure| {
+        if super::meter_in(measure).is_none() {
+            let meter = crate::meter::best_time_signature(measure)
+                .or_else(|_| crate::meter::TimeSignature::new(4, 4))?;
+            super::insert_sorted(measure, 0.0, StreamElement::TimeSignature(meter));
+        }
+        for_each_container(measure, &mut split_elements_to_complete_tuplets)?;
+        for_each_container(measure, &mut |container| {
+            consolidate_completed_tuplets(container);
+            Ok(())
+        })
+    })?;
+    make_beams(part)?;
+    for_each_measure(part, &mut |measure| {
+        make_tuplet_brackets(measure);
+        for event in measure.events_mut() {
+            if let StreamElement::Stream(voice) = event.element_mut()
+                && voice.kind() == StreamKind::Voice
+            {
+                make_tuplet_brackets(voice);
+            }
+        }
+        Ok(())
+    })
+}
+
 /// music21's `makeVoices` with `fillGaps`, on a stream with no measures:
 /// overlapping notes are put in voices, which are filled out with rests.
 fn make_voices_filling_gaps(stream: &mut Stream) -> Result<()> {
