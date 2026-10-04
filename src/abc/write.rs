@@ -518,6 +518,96 @@ fn length_of(bar: &Bar<'_>) -> FloatType {
         .fold(0.0, FloatType::max)
 }
 
+/// What the measure after gives the last note of a measure: the second half
+/// of a note music21 cut at the barline, written back onto the first.
+#[derive(Clone, Debug, Default)]
+struct Tail {
+    /// The length of the second half, in quarter notes.
+    extra: FloatType,
+    /// Whether the note is tied on past its second half.
+    tied: bool,
+    /// The slurs and hairpins closing on the second half.
+    closes: String,
+}
+
+/// How one measure is written where it is one of two music21 cut from one.
+#[derive(Clone, Debug, Default)]
+struct Plan {
+    /// The meter is the cut's to bring, not the text's.
+    drop_meter: bool,
+    /// The last note takes on the first of the next measure.
+    tail: Option<Tail>,
+    /// The first note is written on the measure before.
+    skip_head: bool,
+}
+
+fn first_sounding(bar: &Bar<'_>) -> Option<usize> {
+    bar.held.iter().position(|held| is_sounding(held.element))
+}
+
+fn last_sounding(bar: &Bar<'_>) -> Option<usize> {
+    bar.held
+        .iter()
+        .rposition(|held| is_sounding(held.element) && !is_grace(held.element))
+}
+
+/// The notes of a note or a chord.
+fn notes_of(element: &StreamElement) -> Option<&[Note]> {
+    match element {
+        StreamElement::Note(note) => Some(std::slice::from_ref(note)),
+        StreamElement::Chord(chord) => Some(chord.notes()),
+        _ => None,
+    }
+}
+
+/// Whether the note a measure ends with and the one the next begins with
+/// are the two halves of one, cut at the barline: the same pitches, tied
+/// from the one to the other. The answer inside is whether writing them
+/// apart would be read differently: a chord's ties are not read at all, and
+/// the second half does not show an accidental the first does.
+fn cut_note(first: &Bar<'_>, second: &Bar<'_>) -> Option<bool> {
+    let before = first.held[last_sounding(first)?];
+    let after = second.held[first_sounding(second)?];
+    if is_grace(after.element)
+        || after.offset > EPSILON
+        || (before.offset + before.element.quarter_length() - length_of(first)).abs() > EPSILON
+    {
+        return None;
+    }
+    let is_chord = matches!(before.element, StreamElement::Chord(_));
+    if is_chord != matches!(after.element, StreamElement::Chord(_)) {
+        return None;
+    }
+    let (ending, starting) = (notes_of(before.element)?, notes_of(after.element)?);
+    let said = |element: &StreamElement| {
+        element
+            .duration()
+            .and_then(Duration::said_tuplets)
+            .is_some_and(|tuplets| !tuplets.is_empty())
+    };
+    if ending.len() != starting.len() || said(before.element) || said(after.element) {
+        return None;
+    }
+    let tie = |note: &Note| note.tie().map(crate::notation::Tie::tie_type);
+    let halves = ending.iter().zip(starting).all(|(one, other)| {
+        one.pitch().name_with_octave() == other.pitch().name_with_octave()
+            && matches!(tie(one), Some(TieType::Start | TieType::Continue))
+            && matches!(tie(other), Some(TieType::Stop | TieType::Continue))
+            && other.lyrics().is_empty()
+    });
+    if !halves {
+        return None;
+    }
+    let hidden = ending.iter().zip(starting).any(|(one, other)| {
+        shows_accidental(one.pitch())
+            && other
+                .pitch()
+                .written_accidental()
+                .is_some_and(|accidental| accidental.display_status() == Some(false))
+    });
+    Some(is_chord || hidden)
+}
+
 /// What a note-like element is written from.
 struct Sounding<'a> {
     duration: Duration,
@@ -615,7 +705,10 @@ fn tuplet_marker(actual: u32, normal: u32, count: usize) -> String {
 
 /// Where the tuplet markers of a voice go: before which note-like element,
 /// counted through the voice, and what each says.
-fn tuplet_markers(tokens: &[Sounding<'_>]) -> BTreeMap<usize, String> {
+fn tuplet_markers(
+    tokens: &[Sounding<'_>],
+    opens_on: &dyn Fn(&Sounding<'_>) -> bool,
+) -> BTreeMap<usize, String> {
     let mut markers = BTreeMap::new();
     let mut index = 0;
     while index < tokens.len() {
@@ -623,11 +716,16 @@ fn tuplet_markers(tokens: &[Sounding<'_>]) -> BTreeMap<usize, String> {
             index += 1;
             continue;
         };
-        // Grace notes written before the first note are written after the
-        // marker, and are counted by it.
+        // Grace notes before the first note are written before the marker
+        // and are none of its notes, unless a slur opens on one of them:
+        // music21 closes whichever of a slur and a tuplet it met last, so
+        // the marker then goes first, and counts them.
         let mut start = index;
         while start > 0 && tokens[start - 1].grace {
             start -= 1;
+        }
+        if !tokens[start..index].iter().any(opens_on) {
+            start = index;
         }
         let mut last = index;
         let mut filled = tokens[index].written;
@@ -1162,7 +1260,8 @@ impl<'a> Tune<'a> {
                 }
             }
         }
-        let markers: BTreeMap<(usize, usize), String> = tuplet_markers(&tokens)
+        let opens_on = |sounding: &Sounding<'_>| self.opens.contains_key(&sounding.held.leaf);
+        let markers: BTreeMap<(usize, usize), String> = tuplet_markers(&tokens, &opens_on)
             .into_iter()
             .map(|(token, marker)| (places[token], marker))
             .collect();
@@ -1174,7 +1273,7 @@ impl<'a> Tune<'a> {
         // it are the cut's to bring again.
         let count = voice.bars.len();
         let mut joined = vec![false; count];
-        let mut drop_meter = vec![false; count];
+        let mut plans = vec![Plan::default(); count];
         if voice.measured {
             let mut meter: Option<&TimeSignature> = None;
             for index in 0..count {
@@ -1192,19 +1291,51 @@ impl<'a> Tune<'a> {
                     .is_some_and(|barline| {
                         barline.repeat_direction() != Some(RepeatDirection::Start)
                     });
-                let closed = first.measure.and_then(Stream::right_barline).is_some();
-                let full = before.is_some_and(|meter| {
-                    (length_of(first) - meter.bar_quarter_length()).abs() < EPSILON
-                });
-                if moved && !closed && full && first.filler.is_none() && second.filler.is_none() {
+                let closed = first.measure.and_then(Stream::right_barline).is_some()
+                    || second.measure.and_then(Stream::right_barline).is_some();
+                let bar_length = before.map(TimeSignature::bar_quarter_length);
+                let full = bar_length.is_some_and(|bar| (length_of(first) - bar).abs() < EPSILON);
+                // What is left of a cut measure is a whole bar or states the
+                // meter that fits it.
+                let remainder = meter_of(second).is_some()
+                    || bar_length.is_some_and(|bar| (length_of(second) - bar).abs() < EPSILON);
+                let cut = cut_note(first, second);
+                if (moved || (cut == Some(true) && remainder))
+                    && !closed
+                    && full
+                    && first.filler.is_none()
+                    && second.filler.is_none()
+                {
                     joined[index] = true;
-                    drop_meter[index] = true;
+                    plans[index].drop_meter = true;
+                    if cut.is_some()
+                        && let Some(head) = first_sounding(second)
+                    {
+                        let head = second.held[head];
+                        plans[index].skip_head = true;
+                        plans[index - 1].tail = Some(Tail {
+                            extra: head.element.quarter_length(),
+                            tied: notes_of(head.element).is_some_and(|notes| {
+                                notes.iter().any(|note| {
+                                    note.tie().map(crate::notation::Tie::tie_type)
+                                        == Some(TieType::Continue)
+                                })
+                            }),
+                            closes: self
+                                .closes
+                                .get(&head.leaf)
+                                .map_or(&[][..], Vec::as_slice)
+                                .iter()
+                                .map(|kind| spanner_close(*kind))
+                                .collect(),
+                        });
+                    }
                     // The measure after is given the old meter back.
                     if let (Some(next), Some(old)) = (voice.bars.get(index + 1), before)
                         && meter_of(next)
                             .is_some_and(|given| given.ratio_string() == old.ratio_string())
                     {
-                        drop_meter[index + 1] = true;
+                        plans[index + 1].drop_meter = true;
                     }
                     meter = before;
                 }
@@ -1221,7 +1352,7 @@ impl<'a> Tune<'a> {
                 unit_text,
                 &markers,
                 reading,
-                drop_meter[index],
+                &plans[index],
             )?);
         }
         // The barline after each measure, with the ending the next opens.
@@ -1236,11 +1367,16 @@ impl<'a> Tune<'a> {
                 bar.measure.and_then(Stream::right_barline)
             };
             let next = voice.bars.get(index + 1).and_then(|bar| bar.measure);
+            // After the last measure there is nothing to keep a barline off.
+            let field_can_follow = written
+                .get(index + 1)
+                .is_none_or(|next| next.opening.is_empty() && next.starts_with_note);
             barline_text(
                 right,
                 next.and_then(Stream::left_barline),
                 next.and_then(Stream::ending),
                 false,
+                field_can_follow,
             )
         };
 
@@ -1260,6 +1396,7 @@ impl<'a> Tune<'a> {
                     first.and_then(Stream::left_barline),
                     first.and_then(Stream::ending),
                     true,
+                    false,
                 )
                 .0,
             );
@@ -1282,7 +1419,7 @@ impl<'a> Tune<'a> {
             let said_again = [format!("L:{unit_text}")];
             let opening: &[String] = match next {
                 Some(next) if !next.opening.is_empty() => &next.opening,
-                Some(next) if keep_off && next.starts_with_note => &said_again,
+                Some(_) if keep_off => &said_again,
                 _ => &[],
             };
             let fields_follow = !opening.is_empty();
@@ -1348,7 +1485,7 @@ impl<'a> Tune<'a> {
         unit_text: &str,
         markers: &BTreeMap<(usize, usize), String>,
         reading: &mut Reading,
-        drop_meter: bool,
+        plan: &Plan,
     ) -> Result<Written<'a>> {
         let mut written = Written::default();
         if let Some(length) = bar.filler {
@@ -1363,6 +1500,8 @@ impl<'a> Tune<'a> {
             .map(|held| held.offset + held.element.quarter_length())
             .fold(0.0, FloatType::max);
         let first = index == 0;
+        let skipped = first_sounding(bar).filter(|_| plan.skip_head);
+        let tailed = last_sounding(bar).filter(|_| plan.tail.is_some());
 
         // How the key is said, where the measure states one: after the
         // barline, where the measure's own notes are read under it, or
@@ -1374,7 +1513,7 @@ impl<'a> Tune<'a> {
         let mut key_closes = false;
         let mut silent_key = None;
         if voice.measured && !first {
-            let unmarked = unmarked_notes(bar);
+            let unmarked = unmarked_notes(bar, skipped);
             let fits = |alters: &Alters| {
                 unmarked
                     .iter()
@@ -1411,7 +1550,7 @@ impl<'a> Tune<'a> {
                 continue;
             }
             match held.element {
-                StreamElement::TimeSignature(meter) if !drop_meter => {
+                StreamElement::TimeSignature(meter) if !plan.drop_meter => {
                     written.opening.push(format!("M:{}", meter_field(meter)));
                 }
                 StreamElement::MetronomeMark(mark) if end > EPSILON => {
@@ -1536,6 +1675,11 @@ impl<'a> Tune<'a> {
                     return Err(abc_error("ABC has no unpitched notes"));
                 }
                 StreamElement::Note(_) | StreamElement::Chord(_) | StreamElement::Rest(_) => {
+                    if skipped == Some(held_index) {
+                        cursor = held.offset + held.element.quarter_length();
+                        continue;
+                    }
+                    let tail = plan.tail.as_ref().filter(|_| tailed == Some(held_index));
                     let sounding = sounding_of(*held)?
                         .ok_or_else(|| abc_error("a note with nothing to write it from"))?;
                     let opens = self.opens.get(&held.leaf).map_or(&[][..], Vec::as_slice);
@@ -1567,7 +1711,13 @@ impl<'a> Tune<'a> {
                             // before the group.
                             lead.push_str(&opening);
                         }
-                        graces.push_str(&self.note_text(&sounding, unit, &reading.alters, true)?);
+                        graces.push_str(&self.note_text(
+                            &sounding,
+                            unit,
+                            &reading.alters,
+                            true,
+                            None,
+                        )?);
                         grace_closes.push_str(&closes);
                         first_token = false;
                         continue;
@@ -1598,6 +1748,7 @@ impl<'a> Tune<'a> {
                             std::mem::take(&mut graces),
                             std::mem::take(&mut grace_closes)
                         );
+                        token.push_str(marker.map_or("", String::as_str));
                     } else if let Some(marker) = marker {
                         token.push_str(marker);
                     }
@@ -1611,8 +1762,15 @@ impl<'a> Tune<'a> {
                     first_token = false;
                     token.push_str(symbol.take().as_deref().unwrap_or(""));
                     token.push_str(&std::mem::take(&mut before));
-                    token.push_str(&self.note_text(&sounding, unit, &reading.alters, false)?);
+                    token.push_str(&self.note_text(
+                        &sounding,
+                        unit,
+                        &reading.alters,
+                        false,
+                        tail,
+                    )?);
                     token.push_str(&closes);
+                    token.push_str(tail.map_or("", |tail| tail.closes.as_str()));
                     music.push(token);
                     cursor = held.offset + held.element.quarter_length();
 
@@ -1667,9 +1825,8 @@ impl<'a> Tune<'a> {
                 reading.alters = alters;
                 // The notes were written before the key was known to be
                 // readable under; write them again.
-                let again = self.write_bar(
-                    voice, index, bar, unit, unit_text, markers, reading, drop_meter,
-                )?;
+                let again =
+                    self.write_bar(voice, index, bar, unit, unit_text, markers, reading, plan)?;
                 written.music = again.music;
             }
         } else if written.opening.len() == 1 {
@@ -1708,13 +1865,15 @@ impl<'a> Tune<'a> {
         unit: FloatType,
         alters: &Alters,
         grace: bool,
+        tail: Option<&Tail>,
     ) -> Result<String> {
-        let length = length_text(sounding.written, unit)?;
-        let tied = |note: &Note| {
-            matches!(
+        let length = length_text(sounding.written + tail.map_or(0.0, |tail| tail.extra), unit)?;
+        let tied = |note: &Note| match tail {
+            Some(tail) => tail.tied,
+            None => matches!(
                 note.tie().map(crate::notation::Tie::tie_type),
                 Some(TieType::Start | TieType::Continue)
-            )
+            ),
         };
         Ok(match sounding.held.element {
             StreamElement::Note(note) => {
@@ -1776,7 +1935,7 @@ fn beamed_on(beams: &Beams) -> bool {
 
 /// The notes of a measure music21 would read with no accidental written:
 /// each letter and how far it is moved.
-fn unmarked_notes(bar: &Bar<'_>) -> Vec<(usize, IntegerType)> {
+fn unmarked_notes(bar: &Bar<'_>, skipped: Option<usize>) -> Vec<(usize, IntegerType)> {
     let mut notes = Vec::new();
     let mut take = |pitch: &Pitch| {
         if !shows_accidental(pitch) {
@@ -1786,7 +1945,10 @@ fn unmarked_notes(bar: &Bar<'_>) -> Vec<(usize, IntegerType)> {
             ));
         }
     };
-    for held in &bar.held {
+    for (index, held) in bar.held.iter().enumerate() {
+        if skipped == Some(index) {
+            continue;
+        }
         match held.element {
             StreamElement::Note(note) => take(note.pitch()),
             StreamElement::Chord(chord) => {
@@ -1901,6 +2063,7 @@ fn barline_text(
     left: Option<&Barline>,
     ending: Option<&Ending>,
     opens_tune: bool,
+    field_can_follow: bool,
 ) -> (String, bool) {
     let token = |barline: Option<&Barline>| -> Option<&'static str> {
         let barline = barline?;
@@ -1919,24 +2082,32 @@ fn barline_text(
     let repeats = |barline: Option<&Barline>| {
         barline.is_some_and(|barline| barline.repeat_direction().is_some())
     };
+    let ending = ending.filter(|ending| ending.starts() && !ending.numbers().is_empty());
     let mut keep_off = false;
     let mut text = match (token(right), token(left)) {
         (Some(":|"), Some("|:")) => "::".to_string(),
-        (Some(right), Some(left)) if right == left => right.to_string(),
+        (Some(closing), Some(opening)) if closing == opening => closing.to_string(),
         // A dotted barline before another would be read with it as a repeat.
-        (Some(":"), Some(left)) => format!(": {left}"),
-        (Some(right), Some(left)) => format!("{right}{left}"),
-        (Some(right_token), None) => {
-            keep_off = !repeats(right);
-            right_token.to_string()
+        (Some(":"), Some(opening)) => format!(": {opening}"),
+        (Some(closing), Some(opening)) => format!("{closing}{opening}"),
+        (Some(closing), None) if repeats(right) || opens_tune => closing.to_string(),
+        // A barline that is not a repeat is read as the next measure's too.
+        // A field after it keeps it off, and so does a plain barline.
+        (Some(closing), None) if field_can_follow && ending.is_none() => {
+            keep_off = true;
+            closing.to_string()
         }
-        (None, Some(left)) => left.to_string(),
+        (Some(closing), None) => format!("{closing} |"),
+        (None, Some(opening)) if opens_tune || repeats(left) => opening.to_string(),
+        // The plain barline closes the measure before and the other opens
+        // the one after.
+        (None, Some(opening)) => format!("| {opening}"),
         // Nothing is written before the first measure but what it opens
         // with.
         (None, None) if opens_tune => String::new(),
         (None, None) => "|".to_string(),
     };
-    if let Some(ending) = ending.filter(|ending| ending.starts()) {
+    if let Some(ending) = ending {
         let numbers = ending
             .numbers()
             .iter()
