@@ -45,6 +45,18 @@ const SUBJECTS: &[(&str, &str)] = &[
         "a string quartet with many dynamics",
     ),
     (
+        "xml:beethoven/opus59no2/movement3.mxl",
+        "repeats played out through a dal segno",
+    ),
+    (
+        "xml:joplin/maple_leaf_rag.mxl",
+        "repeats on two staves, chords whose notes each carry a volume",
+    ),
+    (
+        "xml:schumann_clara/polonaise_op1n4.mxl",
+        "a chord's volumes realized with its staccato",
+    ),
+    (
         "built:microtones",
         "overlapping notes between the keys, each bent on a channel of its own",
     ),

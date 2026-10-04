@@ -83,7 +83,7 @@ by default, so a part of loose notes is written in measures, with its ties,
 rests, accidentals and beams.
 
 `to_midi` takes the same and hands back the `bytes` of the MIDI file
-music21's `streamToMidiFile` writes, for a score with no repeats in it.
+music21's `streamToMidiFile` writes, its repeats played out first.
 
 ## Using it inside music21
 

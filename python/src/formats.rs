@@ -73,8 +73,8 @@ fn to_musicxml(
 /// The score may be one of this wheel's streams or one of music21's. A
 /// score is a conductor track holding its tempos, meters and keys, then a
 /// track per part; tied notes sound as one, each note at the velocity its
-/// dynamic and articulations give it. A score holding repeats is refused,
-/// since music21 expands them first and this does not yet.
+/// dynamic and articulations give it. Repeats are played out first, as
+/// music21 plays them.
 #[pyfunction]
 #[pyo3(signature = (score, *, add_start_delay = false, add_end_delay = true, acceptable_channels = None))]
 fn to_midi<'py>(

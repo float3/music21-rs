@@ -30,10 +30,15 @@ are tunes whose own reading cannot be written back.
   named after its instrument, a channel per program, tied notes sounding
   once, each note's velocity from the dynamic in force and its
   articulations, lyrics, chord symbols sounding, strokes on the drum
-  channel, and a pitch between the keys bent on a channel of its own. A
-  score holding repeats is refused for now, since music21 expands them
-  first. The wheel has `to_midi` too, taking music21's streams as readily as
-  its own and handing back `bytes`.
+  channel, and a pitch between the keys bent on a channel of its own, its
+  repeats played out first. The wheel has `to_midi` too, taking music21's
+  streams as readily as its own and handing back `bytes`.
+- `Stream::expand_repeats` plays a score's or a part's repeats out, as
+  music21's `expandRepeats` does: passages between repeat barlines written
+  out as often as they say, first and second endings in turn, and a *da
+  capo* or *dal segno* taken to its *fine* or through its *coda*, numbered as
+  music21 numbers them and laid out where music21 lays them. Repeats music21
+  finds badly formed are refused.
 - `Stream::strip_ties` folds each run of tied notes into its first, as
   music21's `stripTies` does.
 - `Error::Stream`, music21's `StreamException`.
@@ -228,6 +233,10 @@ are tunes whose own reading cannot be written back.
 
 ## Fixed
 
+- `midi::to_midi` plays a chord whose notes each carry a volume as music21
+  does: each note's velocity realized under the dynamic the chord's context
+  finds -- in its own staff, or in the other staves of the part it was read
+  from -- and with the chord's articulations.
 - `volume::dynamics_in_force` finds the dynamic music21's `realizeVolume`
   finds: offsets are held as music21 holds them, a binary fraction as a
   float and anything else as an exact fraction, so where music21 adds a

@@ -79,12 +79,13 @@ impl Default for ExportOptions {
 /// # Ok::<(), music21_rs::Error>(())
 /// ```
 ///
+/// Repeats are played out first, as [`Stream::expand_repeats`] plays them.
+///
 /// # Errors
 ///
-/// A score holding repeats, which music21 expands first and this does not
-/// yet; more pitches between the keys sounding at once than there are
-/// channels to bend; and a run of tied notes after the first lasting no
-/// time.
+/// Repeats music21 cannot make sense of; more pitches between the keys
+/// sounding at once than there are channels to bend; and a run of tied
+/// notes after the first lasting no time.
 pub fn to_midi(stream: &Stream, options: &ExportOptions) -> Result<Vec<u8>> {
     let tracks = midi_tracks(stream, options)?;
     let mut bytes = Vec::new();
@@ -230,19 +231,46 @@ fn ticks(quarter_length: FloatType) -> i64 {
 struct Track {
     elements: Vec<(FloatType, StreamElement)>,
     conductor: bool,
+    /// The part's id, by which the staves read from one part on several
+    /// know one another: `P1-Staff1`, `P1-Staff2`.
+    id: Option<String>,
+}
+
+impl Track {
+    /// The staff a part on several staves was split into, as the part it
+    /// was split from.
+    fn split_from(&self) -> Option<&str> {
+        self.id
+            .as_deref()
+            .and_then(|id| id.rsplit_once("-Staff").map(|(part, _)| part))
+    }
+
+    /// The scalar of the last dynamic at or before an offset.
+    fn dynamic_at_or_before(&self, offset: FloatType) -> Option<(FloatType, FloatType)> {
+        self.elements
+            .iter()
+            .rev()
+            .find(|(at, element)| *at <= offset && matches!(element, StreamElement::Dynamic(_)))
+            .and_then(|(at, element)| match element {
+                StreamElement::Dynamic(dynamic) => Some((*at, dynamic.volume_scalar())),
+                _ => None,
+            })
+    }
 }
 
 /// music21's `prepareStreamForMidi` and the walk of
 /// `streamHierarchyToMidiTracks` up to its packets: the conductor first,
 /// then each part, ties stripped and flattened.
 fn tracks_of(stream: &Stream) -> Result<Vec<Track>> {
-    if has_repeats(stream) {
-        return Err(Error::Midi(
-            "writing a score with repeats as MIDI needs them expanded, which is not ported"
-                .to_string(),
-        ));
-    }
-    let mut stream = stream.clone();
+    // music21 plays the repeats out of anything holding measures.
+    let holds_measures = stream.recurse().iter().any(|(_, element)| {
+        matches!(element, StreamElement::Stream(inner) if inner.kind() == crate::stream::StreamKind::Measure)
+    });
+    let mut stream = if holds_measures {
+        stream.expand_repeats()?
+    } else {
+        stream.clone()
+    };
     let conductor = conductor_of(&mut stream);
     let mut parts: Vec<Stream> = if stream.has_part_like_streams() {
         stream
@@ -256,38 +284,17 @@ fn tracks_of(stream: &Stream) -> Result<Vec<Track>> {
     let mut tracks = vec![Track {
         elements: conductor,
         conductor: true,
+        id: None,
     }];
     for part in &mut parts {
         part.strip_ties(true)?;
         tracks.push(Track {
             elements: flattened(part),
             conductor: false,
+            id: part.id().map(str::to_string),
         });
     }
     Ok(tracks)
-}
-
-/// Whether anything in the stream makes music21's `expandRepeats` play a
-/// passage twice or jump.
-fn has_repeats(stream: &Stream) -> bool {
-    let measure_repeats = |stream: &Stream| {
-        stream.ending().is_some()
-            || stream
-                .left_barline()
-                .is_some_and(|barline| barline.repeat_direction().is_some())
-            || stream
-                .right_barline()
-                .is_some_and(|barline| barline.repeat_direction().is_some())
-    };
-    if measure_repeats(stream) {
-        return true;
-    }
-    stream.recurse().iter().any(|(_, element)| match element {
-        StreamElement::Stream(inner) => measure_repeats(inner),
-        StreamElement::Barline(barline) => barline.repeat_direction().is_some(),
-        StreamElement::RepeatExpression(_) => true,
-        _ => false,
-    })
 }
 
 /// music21's `conductorStream`: every tempo, meter and key signature taken
@@ -450,7 +457,7 @@ fn midi_tracks(stream: &Stream, options: &ExportOptions) -> Result<Vec<Vec<u8>>>
                     .unwrap_or(1),
             ),
         };
-        let mut track_packets = track_packets(id, track, options, &mut events)?;
+        let mut track_packets = track_packets(id, &tracks, options, &mut events)?;
         for packet in &mut track_packets {
             packet.initial_channel = channel;
         }
@@ -601,10 +608,36 @@ impl<K: PartialEq, V> Keyed<K, V> for Vec<(K, V)> {
 /// music21's `streamToPackets` over one flattened track.
 fn track_packets(
     id: usize,
-    track: &Track,
+    tracks: &[Track],
     options: &ExportOptions,
     events: &mut Vec<Event>,
 ) -> Result<Vec<Packet>> {
+    let track = &tracks[id];
+    // music21 realizes the notes of a chord that each carry a volume when
+    // it writes them, each volume answering to the chord: against the
+    // dynamic the chord's context search finds -- the last at or before it
+    // in its own part, or else in the part it was split from, which holds
+    // every staff of it -- and the chord's articulations.
+    let context_dynamic = |offset: FloatType| -> Option<FloatType> {
+        track
+            .dynamic_at_or_before(offset)
+            .map(|(_, scalar)| scalar)
+            .or_else(|| {
+                let part = track.split_from()?;
+                tracks
+                    .iter()
+                    .filter(|other| other.split_from() == Some(part))
+                    .filter_map(|other| other.dynamic_at_or_before(offset))
+                    .fold(
+                        None,
+                        |best: Option<(FloatType, FloatType)>, found| match best {
+                            Some(best) if best.0 > found.0 => Some(best),
+                            _ => Some(found),
+                        },
+                    )
+                    .map(|(_, scalar)| scalar)
+            })
+    };
     let as_stream = Stream::from_events(
         track
             .elements
@@ -633,7 +666,12 @@ fn track_packets(
                 percussion_in_force = Some(pitch);
             }
         }
-        let list = element_events(element, dynamic_at(index), percussion_in_force)?;
+        let list = element_events(
+            element,
+            dynamic_at(index),
+            context_dynamic(*offset),
+            percussion_in_force,
+        )?;
         let Some(list) = list else {
             continue;
         };
@@ -682,6 +720,7 @@ fn track_packets(
 fn element_events(
     element: &StreamElement,
     dynamic: Option<FloatType>,
+    context_dynamic: Option<FloatType>,
     percussion_in_force: Option<u8>,
 ) -> Result<Option<Vec<Event>>> {
     let shift = |articulations: &[crate::articulations::Articulation]| -> FloatType {
@@ -728,7 +767,11 @@ fn element_events(
                             (
                                 note.pitch().midi(),
                                 pitch_shift(note.pitch()),
-                                velocity(&note.volume(), None, 0.0),
+                                velocity(
+                                    &note.volume(),
+                                    context_dynamic,
+                                    shift(chord.articulations()),
+                                ),
                             )
                         })
                         .collect()
@@ -762,7 +805,11 @@ fn element_events(
                 .enumerate()
                 .map(|(index, note)| {
                     let velocity = if component {
-                        velocity(&note.volume(), None, 0.0)
+                        velocity(
+                            &note.volume(),
+                            context_dynamic,
+                            shift(written.articulations()),
+                        )
                     } else {
                         loud
                     };
