@@ -7,8 +7,8 @@ use crate::clef::Clef;
 use crate::error::{Error, Result};
 use crate::makenotation::{
     Kept, accidentals_made, fill_rests, for_each_measure, insert_sorted, keeping_spanners,
-    make_accidentals, make_beams, make_measures, make_part_notation, make_tuplet_brackets,
-    split_at_durations, tuplet_brackets_made,
+    make_accidentals, make_beams, make_measure_notation, make_measures, make_part_notation,
+    make_tuplet_brackets, split_at_durations, tuplet_brackets_made,
 };
 use crate::pitch::Pitch;
 use crate::stream::{Stream, StreamElement, StreamEvent, StreamKind};
@@ -22,14 +22,30 @@ pub(super) fn notated(stream: &Stream) -> Result<Stream> {
         return Ok(stream);
     }
     // `fromGeneralObject`: every gap filled with rests that are not
-    // printed, out to where the stream ends.
-    let end = stream.end_offset();
-    keeping_spanners(&mut stream, Kept::InMeasure, &mut |stream| {
-        fill_rests(stream, Some((0.0, end)), true)
-    })?;
+    // printed, out to where the stream ends -- or, for a measure, out to
+    // where its bar does, which filling it in a part of its own works out.
+    let lone_measure = stream.kind() == StreamKind::Measure;
+    if lone_measure {
+        stream = in_a_part(stream);
+        keeping_spanners(&mut stream, Kept::InMeasure, &mut |part| {
+            fill_rests(part, None, true)
+        })?;
+    } else {
+        let end = stream.end_offset();
+        keeping_spanners(&mut stream, Kept::InMeasure, &mut |stream| {
+            fill_rests(stream, Some((0.0, end)), true)
+        })?;
+    }
 
     let mut score = match stream.kind() {
+        _ if lone_measure => from_measure(stream)?,
         StreamKind::Score => stream,
+        StreamKind::Voice => {
+            let mut measure = Stream::with_kind(StreamKind::Measure);
+            measure.set_number(1);
+            measure.insert(0.0, stream);
+            from_measure(in_a_part(measure))?
+        }
         StreamKind::Part | StreamKind::PartStaff => from_part(stream)?,
         StreamKind::Stream => from_stream(stream)?,
         kind => {
@@ -96,6 +112,43 @@ fn from_part(mut part: Stream) -> Result<Stream> {
     score.set_metadata(part.metadata().cloned());
     score.insert(0.0, part);
     Ok(score)
+}
+
+/// A measure standing alone, put in a part of its own with its spanners,
+/// which name the same leaves there.
+fn in_a_part(mut measure: Stream) -> Stream {
+    let spanners = measure.spanners().to_vec();
+    measure.clear_spanners();
+    let mut part = Stream::with_kind(StreamKind::Part);
+    part.set_metadata(measure.metadata().cloned());
+    part.insert(0.0, measure);
+    for spanner in spanners {
+        part.add_spanner(spanner);
+    }
+    part
+}
+
+/// music21's `fromMeasure` (and through it `fromVoice`), the measure being
+/// the one a part of its own holds: `Measure.makeNotation`, the clef the
+/// notes fit best where none stands at its start, and the part put in a
+/// score.
+fn from_measure(mut part: Stream) -> Result<Stream> {
+    keeping_spanners(&mut part, Kept::Retained, &mut make_measure_notation)?;
+    for_each_measure(&mut part, &mut |measure| {
+        let has_clef = measure.events().iter().any(|event| {
+            event.offset() == 0.0 && matches!(event.element(), StreamElement::Clef(_))
+        });
+        if !has_clef {
+            let pitches: Vec<Pitch> = measure
+                .leaves()
+                .iter()
+                .flat_map(|(_, element)| element.pitches())
+                .collect();
+            insert_sorted(measure, 0.0, Clef::best_for(&pitches, false).into());
+        }
+        Ok(())
+    })?;
+    from_part(part)
 }
 
 /// music21's `fromStream`: a stream of no particular kind taken as the part

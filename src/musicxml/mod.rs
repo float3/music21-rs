@@ -83,7 +83,9 @@ pub struct ExportOptions {
     /// gaps filled with unprinted rests, a part with no measures cut into
     /// them, notes running past a barline cut and tied, accidentals decided,
     /// notes beamed and tuplets bracketed where the part has none yet, and
-    /// lengths no single note value writes cut into tied values. The score
+    /// lengths no single note value writes cut into tied values. A measure
+    /// or a voice handed in alone is written as a part of one measure, given
+    /// the meter and clef its notes fit where it states none. The score
     /// handed in is not changed.
     ///
     /// Off, the score is written as it stands, which is music21's
@@ -152,9 +154,8 @@ impl Default for ExportOptions {
 /// A part with no measures, a score nested in a score, a duration no single
 /// note value writes, and anything the crate cannot yet write: each as
 /// music21's `MusicXMLExportException` says it where music21 raises. Making
-/// the notation first leaves only what no notation can write: a lone
-/// measure or voice, and a length no tie of note values reaches that is not
-/// an unprinted rest.
+/// the notation first leaves only what no notation can write: a length no
+/// tie of note values reaches that is not an unprinted rest.
 pub fn to_musicxml(score: &Stream, options: &ExportOptions) -> Result<String> {
     // music21's exporter turns a part at sounding pitch to the pitch its
     // instruments read (`toWrittenPitch`) before it writes; making the

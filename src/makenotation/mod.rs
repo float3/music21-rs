@@ -28,8 +28,8 @@ mod score;
 
 #[cfg(feature = "musicxml")]
 pub(crate) use score::{
-    Kept, accidentals_made, for_each_measure, keeping_spanners, make_part_notation,
-    tuplet_brackets_made,
+    Kept, accidentals_made, for_each_measure, keeping_spanners, make_measure_notation,
+    make_part_notation, tuplet_brackets_made,
 };
 pub use score::{make_notation, make_tuplet_brackets, split_at_durations};
 
@@ -699,7 +699,7 @@ fn is_general_note(element: &StreamElement) -> bool {
 }
 
 /// Whether an element sounds: music21's `NotRest`.
-fn is_not_rest(element: &StreamElement) -> bool {
+pub(crate) fn is_not_rest(element: &StreamElement) -> bool {
     is_general_note(element) && !matches!(element, StreamElement::Rest(_))
 }
 

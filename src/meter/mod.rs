@@ -1247,24 +1247,17 @@ impl TimeSignature {
     /// The mean accent weight of what a stream holds: music21's
     /// `averageBeatStrength`, each element weighed where it falls in the
     /// bar, with an element off the accent grid counting half the smallest
-    /// weight. `notes_only` weighs the notes, chords and rests alone; an empty
-    /// stream weighs nothing.
+    /// weight. Only the stream's own elements are weighed, not what the
+    /// measures or voices inside it hold; `notes_only` weighs its notes and
+    /// chords alone. A stream with nothing to weigh weighs nothing.
     pub fn average_beat_strength(&self, stream: &crate::Stream, notes_only: bool) -> FloatType {
         let bar = self.bar_quarter_length();
-        let offsets: Vec<FloatType> = if notes_only {
-            stream
-                .notes()
-                .into_iter()
-                .map(|(offset, _)| offset)
-                .collect()
-        } else {
-            stream
-                .recurse()
-                .into_iter()
-                .filter(|(_, element)| element.as_stream().is_none())
-                .map(|(offset, _)| offset)
-                .collect()
-        };
+        let offsets: Vec<FloatType> = stream
+            .events()
+            .iter()
+            .filter(|event| !notes_only || crate::makenotation::is_not_rest(event.element()))
+            .map(crate::stream::StreamEvent::offset)
+            .collect();
         if offsets.is_empty() {
             return 0.0;
         }
@@ -2157,6 +2150,32 @@ mod tests {
                 .average_beat_strength(&Stream::new(), true),
             0.0
         );
+    }
+
+    /// music21 weighs a measure's own notes, so one whose notes all stand in
+    /// a voice weighs nothing, and a half and a quarter there read as six-
+    /// eight where the same two notes in the measure itself read as
+    /// three-four.
+    #[test]
+    fn a_measure_weighs_its_own_notes_and_not_its_voices() {
+        use crate::stream::StreamKind;
+        use crate::{Note, Pitch, Stream};
+
+        let mut voice = Stream::with_kind(StreamKind::Voice);
+        for (name, length) in [("C5", 2.0), ("B4", 1.0)] {
+            let mut note = Note::from_pitch(Pitch::from_name(name).unwrap());
+            note.set_duration(Duration::new(length).unwrap());
+            voice.push(note);
+        }
+        let mut plain = voice.clone();
+        plain.set_kind(StreamKind::Measure);
+        let mut voiced = Stream::with_kind(StreamKind::Measure);
+        voiced.insert(0.0, voice);
+
+        let three_four = TimeSignature::new(3, 4).unwrap();
+        assert_eq!(three_four.average_beat_strength(&voiced, true), 0.0);
+        assert_eq!(best_time_signature(&plain).unwrap().ratio_string(), "3/4");
+        assert_eq!(best_time_signature(&voiced).unwrap().ratio_string(), "6/8");
     }
 
     #[test]
