@@ -1,8 +1,10 @@
 use std::collections::BTreeMap;
 
 mod score;
+mod write;
 
 pub use score::from_midi;
+pub use write::{ExportOptions, to_midi};
 
 use crate::{
     defaults::{FloatType, IntegerType},

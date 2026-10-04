@@ -82,6 +82,9 @@ writes what music21's exporter writes with `makeNotation=False`. With
 by default, so a part of loose notes is written in measures, with its ties,
 rests, accidentals and beams.
 
+`to_midi` takes the same and hands back the `bytes` of the MIDI file
+music21's `streamToMidiFile` writes, for a score with no repeats in it.
+
 ## Using it inside music21
 
 `install_into_music21()` replaces the classes of an installed music21 with

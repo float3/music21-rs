@@ -24,6 +24,19 @@ are tunes whose own reading cannot be written back.
 
 ## Added
 
+- `midi::to_midi` and `midi::ExportOptions` write a score as a standard MIDI
+  file, as music21's `streamToMidiFile(...).writestr()` writes it, byte for
+  byte: a conductor track with the tempos, meters and keys, a track per part
+  named after its instrument, a channel per program, tied notes sounding
+  once, each note's velocity from the dynamic in force and its
+  articulations, lyrics, chord symbols sounding, strokes on the drum
+  channel, and a pitch between the keys bent on a channel of its own. A
+  score holding repeats is refused for now, since music21 expands them
+  first. The wheel has `to_midi` too, taking music21's streams as readily as
+  its own and handing back `bytes`.
+- `Stream::strip_ties` folds each run of tied notes into its first, as
+  music21's `stripTies` does.
+- `Error::Stream`, music21's `StreamException`.
 - `abc::to_abc` and `abc::ExportOptions` write a score, a part or an opus as
   ABC: the header (title, composer, origin, meter, unit length, tempo, key
   and mode), a voice for each part and for each voice a measure holds,
@@ -215,6 +228,14 @@ are tunes whose own reading cannot be written back.
 
 ## Fixed
 
+- `volume::dynamics_in_force` finds the dynamic music21's `realizeVolume`
+  finds: offsets are held as music21 holds them, a binary fraction as a
+  float and anything else as an exact fraction, so where music21 adds a
+  float span to a fractional start and the span ends a hair past the next
+  dynamic, the earlier dynamic is in force there, as it is in music21.
+- A chord symbol of a kind music21 has no notation for, such as MusicXML's
+  `minor-major`, sounds its root and its bass alone, as music21's does,
+  rather than the chord the crate read its letters as.
 - `TimeSignature::average_beat_strength` weighs the stream's own elements
   only, as music21's `averageBeatStrength` does, and with `notes_only` its
   notes and chords without its rests. It used to weigh everything inside

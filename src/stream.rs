@@ -24,6 +24,7 @@
 
 mod placed;
 mod sounding;
+mod ties;
 
 pub use placed::Placed;
 

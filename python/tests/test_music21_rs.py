@@ -1095,6 +1095,18 @@ def test_midi_is_read_from_bytes_into_measures_of_notes_and_chords():
     assert pitches_of(strokes) == []
 
 
+def test_a_score_is_written_as_midi_and_read_back():
+    part = m.from_tiny_notation("tinyNotation: 4/4 c4 d e~ e g1")
+    written = m.to_midi(part)
+    assert written[:4] == b"MThd"
+    # A conductor track and the part's own.
+    assert int.from_bytes(written[10:12], "big") == 2
+    again = m.from_midi(written)
+    # The tied notes sound as one.
+    (read,) = again.parts
+    assert pitches_of(read) == ["C4", "D4", "E4", "G4"]
+
+
 def test_a_file_that_is_not_midi_is_refused():
     with pytest.raises(m.StreamException):
         m.from_midi(b"not a MIDI file")

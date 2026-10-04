@@ -109,6 +109,10 @@ pub enum Error {
     /// Error associated with note volumes.
     #[error("Volume error: {0}")]
     Volume(String),
+    /// A stream that cannot be changed as asked: music21's
+    /// `StreamException`.
+    #[error("Stream error: {0}")]
+    Stream(String),
     /// A score that cannot be written as MusicXML.
     #[cfg(feature = "musicxml")]
     #[error("MusicXML export error: {0}")]

@@ -659,6 +659,20 @@ impl Spanner {
         }
     }
 
+    /// Joins an element once where moving its places has made it join one
+    /// twice, keeping the first.
+    pub(crate) fn drop_repeated_places(&mut self) {
+        let mut seen: Vec<usize> = Vec::new();
+        self.spanned.retain(|place| match place {
+            Some(place) if seen.contains(place) => false,
+            Some(place) => {
+                seen.push(*place);
+                true
+            }
+            None => true,
+        });
+    }
+
     /// How many elements it joins, those standing nowhere included.
     pub fn len(&self) -> usize {
         self.spanned.len()

@@ -686,7 +686,7 @@ pub fn make_measures_by(stream: &Stream, given: &[(FloatType, TimeSignature)]) -
 
 /// Whether an element is a note, a chord, a rest or a stroke: music21's
 /// `GeneralNote`, which a chord symbol is one of.
-fn is_general_note(element: &StreamElement) -> bool {
+pub(crate) fn is_general_note(element: &StreamElement) -> bool {
     matches!(
         element,
         StreamElement::Note(_)
