@@ -816,10 +816,15 @@ impl ChordSymbol {
         if self.is_no_chord() {
             return Ok(Vec::new());
         }
-        if self.kind.as_deref() == Some("") {
+        // A kind music21's table has no notation for -- one a MusicXML file
+        // names, as `minor-major` -- sounds as the empty kind does: the root,
+        // and the bass where it is another note.
+        if self.kind.as_deref() == Some("")
+            || (self.kind.is_some() && self.kind_notation().is_none())
+        {
             return realize::sound_chord_kind(
                 &self.root,
-                "",
+                self.kind.as_deref().unwrap_or(""),
                 self.bass.as_ref(),
                 &self.modifications,
             );

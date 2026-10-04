@@ -90,7 +90,9 @@ and RomanText are read with no feature at all: `abc::from_abc`,
 `humdrum::from_humdrum`, `mei::from_mei` and `romantext::from_roman_text`
 each read what music21 reads into the score music21 makes of it. ABC is
 written as well: `abc::to_abc` writes a score as a tune music21's reader and
-the crate's both read back as the same score.
+the crate's both read back as the same score. So is MIDI: `midi::to_midi`
+writes the file music21's `streamToMidiFile` writes, byte for byte, for a
+score with no repeats in it.
 
 MuseScore's own files are read with no feature and no MuseScore installed:
 `musescore::from_mscx` takes the text of a `.mscx`, as MuseScore 3 and 4 save

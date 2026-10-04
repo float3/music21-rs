@@ -8,6 +8,7 @@
 //! stream by [`dynamic_context`], [`dynamics_in_force`] and
 //! [`realize_volume`].
 
+use std::cmp::Ordering;
 use std::fmt;
 
 use crate::{
@@ -344,27 +345,169 @@ pub fn realize_volume(stream: &mut Stream, context: &DynamicContext, use_velocit
 /// ```
 pub fn dynamics_in_force(stream: &Stream) -> Vec<Option<usize>> {
     let leaves = stream.leaves();
-    let end = stream.end_offset();
-    let mut starts: Vec<(FloatType, usize)> = leaves
+    // The leaves in the order music21's `flatten` gives them.
+    let mut order: Vec<usize> = (0..leaves.len()).collect();
+    order.sort_by(|left, right| {
+        let (left_offset, left_element) = leaves[*left];
+        let (right_offset, right_element) = leaves[*right];
+        let grace = |element: &StreamElement| {
+            element
+                .duration()
+                .is_some_and(crate::duration::Duration::is_grace)
+        };
+        left_offset
+            .total_cmp(&right_offset)
+            .then(
+                left_element
+                    .class_sort_order()
+                    .cmp(&right_element.class_sort_order()),
+            )
+            .then(grace(right_element).cmp(&grace(left_element)))
+    });
+    let dynamics: Vec<(Held, usize)> = order
         .iter()
-        .enumerate()
-        .filter(|(_, (_, element))| matches!(element, StreamElement::Dynamic(_)))
-        .map(|(position, (offset, _))| (*offset, position))
+        .filter(|position| matches!(leaves[**position].1, StreamElement::Dynamic(_)))
+        .map(|position| (Held::of(leaves[*position].0), *position))
         .collect();
-    // Stable, so dynamics at one offset keep the order the stream gives them.
-    starts.sort_by(|left, right| left.0.total_cmp(&right.0));
-    leaves
-        .iter()
-        .map(|(offset, _)| {
-            starts
-                .iter()
-                .enumerate()
-                .find_map(|(index, &(start, position))| {
-                    let stop = starts.get(index + 1).map_or(end, |next| next.0);
-                    (start <= *offset && *offset < stop).then_some(position)
-                })
-        })
-        .collect()
+    // `extendDuration`: each dynamic lasts until the next, the last until
+    // the end, each span snapped as `opFrac` snaps it. music21 then adds a
+    // span to a start, and where either is a float that sum is a float, so
+    // a span can end a hair past where the next one starts.
+    let total = Held::of(stream.end_offset());
+    let mut spans: Vec<((Held, Held), usize)> = Vec::new();
+    for (index, &(start, position)) in dynamics.iter().enumerate() {
+        let next = dynamics.get(index + 1).map_or(total, |(next, _)| *next);
+        let key = (start, start.add(next.span_from(start)));
+        // Two dynamics with one span: the later is the one kept.
+        match spans
+            .iter_mut()
+            .find(|(held, _)| held.0.same(key.0) && held.1.same(key.1))
+        {
+            Some(held) => held.1 = position,
+            None => spans.push((key, position)),
+        }
+    }
+    spans.sort_by(|left, right| {
+        left.0
+            .0
+            .compare(right.0.0)
+            .then(left.0.1.compare(right.0.1))
+    });
+
+    let mut answers: Vec<Option<usize>> = vec![None; leaves.len()];
+    let mut last = 0;
+    for &position in &order {
+        let at = Held::of(leaves[position].0);
+        let found = spans[last.min(spans.len())..]
+            .iter()
+            .position(|((start, end), _)| {
+                end.compare(at) == Ordering::Greater && at.compare(*start) != Ordering::Less
+            })
+            .map(|index| index + last);
+        if crate::makenotation::is_not_rest(leaves[position].1)
+            && let Some(index) = found
+        {
+            last = index;
+        }
+        answers[position] = found.map(|index| spans[index].1);
+    }
+    answers
+}
+
+/// An offset as music21 holds one once `opFrac` has had it: a float where it
+/// is a binary fraction, and the exact fraction otherwise.
+#[derive(Clone, Copy, Debug)]
+enum Held {
+    Float(FloatType),
+    Exact(i128, i128),
+}
+
+impl Held {
+    fn of(value: FloatType) -> Self {
+        let snapped = crate::makenotation::op_frac(value);
+        match crate::duration::limited_fraction(snapped, 65535) {
+            Some((numerator, denominator)) if !is_power_of_two(denominator) => {
+                Self::Exact(numerator, denominator)
+            }
+            _ => Self::Float(snapped),
+        }
+    }
+
+    fn float(self) -> FloatType {
+        match self {
+            Self::Float(value) => value,
+            Self::Exact(numerator, denominator) => {
+                numerator as FloatType / denominator as FloatType
+            }
+        }
+    }
+
+    /// Python's `+`: exact for two fractions, a float otherwise.
+    fn add(self, other: Self) -> Self {
+        match (self, other) {
+            (Self::Exact(a, b), Self::Exact(c, d)) => reduced(a * d + c * b, b * d),
+            _ => Self::Float(self.float() + other.float()),
+        }
+    }
+
+    /// `opFrac(self - start)`: the distance snapped to a float where it is a
+    /// binary fraction.
+    fn span_from(self, start: Self) -> Self {
+        match (self, start) {
+            (Self::Exact(a, b), Self::Exact(c, d)) => match reduced(a * d - c * b, b * d) {
+                Self::Exact(numerator, denominator)
+                    if is_power_of_two(denominator) || denominator > 65535 =>
+                {
+                    Self::of(numerator as FloatType / denominator as FloatType)
+                }
+                exact => exact,
+            },
+            _ => Self::of(self.float() - start.float()),
+        }
+    }
+
+    /// The two compared exactly, as Python compares a float with a fraction.
+    fn compare(self, other: Self) -> Ordering {
+        let (a, b) = self.ratio();
+        let (c, d) = other.ratio();
+        match (a.checked_mul(d), c.checked_mul(b)) {
+            (Some(left), Some(right)) => left.cmp(&right),
+            _ => self.float().total_cmp(&other.float()),
+        }
+    }
+
+    fn same(self, other: Self) -> bool {
+        self.compare(other) == Ordering::Equal
+    }
+
+    /// The exact value as a fraction, a float being a binary one.
+    fn ratio(self) -> (i128, i128) {
+        match self {
+            Self::Exact(numerator, denominator) => (numerator, denominator),
+            Self::Float(value) => {
+                let mut exact = value;
+                let mut denominator: i128 = 1;
+                while exact.fract() != 0.0 && denominator < (1 << 70) {
+                    exact *= 2.0;
+                    denominator *= 2;
+                }
+                (exact as i128, denominator)
+            }
+        }
+    }
+}
+
+fn reduced(numerator: i128, denominator: i128) -> Held {
+    let (mut a, mut b) = (numerator.abs(), denominator.abs());
+    while b != 0 {
+        (a, b) = (b, a % b);
+    }
+    let divisor = a.max(1);
+    Held::Exact(numerator / divisor, denominator / divisor)
+}
+
+fn is_power_of_two(value: i128) -> bool {
+    value > 0 && value & (value - 1) == 0
 }
 
 /// The dynamic a note's volume is read against: music21's

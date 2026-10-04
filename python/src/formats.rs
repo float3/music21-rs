@@ -67,6 +67,33 @@ fn to_musicxml(
     music21_rs_crate::musicxml::to_musicxml(&stream, &options).map_err(format_error)
 }
 
+/// Writes a score as a standard MIDI file and hands back its bytes, as
+/// music21's `midi.translate.streamToMidiFile(score).writestr()` does.
+///
+/// The score may be one of this wheel's streams or one of music21's. A
+/// score is a conductor track holding its tempos, meters and keys, then a
+/// track per part; tied notes sound as one, each note at the velocity its
+/// dynamic and articulations give it. A score holding repeats is refused,
+/// since music21 expands them first and this does not yet.
+#[pyfunction]
+#[pyo3(signature = (score, *, add_start_delay = false, add_end_delay = true, acceptable_channels = None))]
+fn to_midi<'py>(
+    py: Python<'py>,
+    score: &Bound<'py, PyAny>,
+    add_start_delay: bool,
+    add_end_delay: bool,
+    acceptable_channels: Option<Vec<u8>>,
+) -> PyResult<Bound<'py, pyo3::types::PyBytes>> {
+    let stream = crate::stream::crate_stream(score)?;
+    let options = music21_rs_crate::midi::ExportOptions {
+        add_start_delay,
+        add_end_delay,
+        acceptable_channels,
+    };
+    let bytes = music21_rs_crate::midi::to_midi(&stream, &options).map_err(format_error)?;
+    Ok(pyo3::types::PyBytes::new(py, &bytes))
+}
+
 /// Reads the text of a MusicXML document into a `Score` of this wheel's
 /// streams: parts, or a part for each staff of one written on several,
 /// holding measures, holding the notes, chords, rests, clefs, keys, meters,
@@ -174,6 +201,7 @@ fn from_roman_text<'py>(py: Python<'py>, text: &str) -> PyResult<Bound<'py, PyAn
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(to_musicxml, m)?)?;
+    m.add_function(wrap_pyfunction!(to_midi, m)?)?;
     m.add_function(wrap_pyfunction!(from_musicxml, m)?)?;
     m.add_function(wrap_pyfunction!(from_abc, m)?)?;
     m.add_function(wrap_pyfunction!(from_abc_number, m)?)?;
