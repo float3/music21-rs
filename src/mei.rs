@@ -1606,10 +1606,10 @@ pub fn from_mei(document: &str) -> Result<Stream> {
                 }
             }
         }
-        events.push(StreamEvent::new(
-            0.0,
-            Stream::with_kind(StreamKind::Part).with_events(held),
-        ));
+        let mut part = Stream::with_kind(StreamKind::Part).with_events(held);
+        // music21 says an MEI part is at written pitch.
+        part.set_at_sounding_pitch(Some(false));
+        events.push(StreamEvent::new(0.0, part));
     }
     let mut made = Stream::with_kind(StreamKind::Score).with_events(events);
     made.set_metadata(Some(metadata_of(&root)));

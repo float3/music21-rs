@@ -170,9 +170,25 @@ are tunes whose own reading cannot be written back.
 - `TimeSignature::is_restated`: whether a meter is an earlier measure's
   standing again, as music21's ABC reader leaves one object in two measures.
 - The wheel's `to_musicxml` takes `make_notation=True`.
+- `Stream::at_sounding_pitch` and `set_at_sounding_pitch` say whether a
+  stream's notes are written at the pitch they sound, at the pitch a
+  transposing instrument reads, or neither has been said: music21's
+  `atSoundingPitch`. `Stream::to_written_pitch` and `to_sounding_pitch`
+  transpose each part by its instruments' transpositions, each instrument
+  moving the notes, chords, chord symbols and keys from where it stands to
+  where the next one does, as music21's `toWrittenPitch` and
+  `toSoundingPitch` do. The wheel reads and sets `atSoundingPitch`.
 
 ## Changed
 
+- `to_musicxml` writes a part at written pitch, as music21's exporter
+  does: a stream holding anything at sounding pitch is turned to written
+  pitch before it is written. `from_musicxml` says a part is at sounding
+  pitch unless the file gave it a `<transpose>`, and `from_mei` says its
+  parts are at written pitch, as music21's readers do, so a part whose
+  instrument transposes is written as music21 writes it. With
+  `make_notation` the part is turned to written pitch after the score's
+  notation is made, and its accidentals are decided again at written pitch.
 - The score editor's own MIDI reader, `midi_to_abc`, is gone: MIDI is read
   by the crate's `from_midi` like the other formats.
 - The `musescore` module is always there, since reading a `.mscx` runs no

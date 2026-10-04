@@ -134,6 +134,14 @@ pub const SCORES: &[(&str, &str)] = &[
         "a metric modulation",
     ),
     (
+        "trecento/Fava_Dicant_nunc_iudei.xml",
+        "a part named for a transposing instrument, written at its written pitch",
+    ),
+    (
+        "trecento/PMFC_13_01-Kyrie-Summe-Clementissime.mxl",
+        "the same, read from a compressed file",
+    ),
+    (
         "beethoven/opus59no3/movement3.mxl",
         "a hairpin started after a part's last note, which takes the next part's first",
     ),

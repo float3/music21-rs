@@ -28,7 +28,8 @@ mod score;
 
 #[cfg(feature = "musicxml")]
 pub(crate) use score::{
-    Kept, for_each_measure, keeping_spanners, make_part_notation, tuplet_brackets_made,
+    Kept, accidentals_made, for_each_measure, keeping_spanners, make_part_notation,
+    tuplet_brackets_made,
 };
 pub use score::{make_notation, make_tuplet_brackets, split_at_durations};
 

@@ -156,17 +156,37 @@ impl Default for ExportOptions {
 /// measure or voice, and a length no tie of note values reaches that is not
 /// an unprinted rest.
 pub fn to_musicxml(score: &Stream, options: &ExportOptions) -> Result<String> {
-    let root = if options.make_notation {
-        score_element(&notate::notated(score)?, options)?
+    // music21's exporter turns a part at sounding pitch to the pitch its
+    // instruments read (`toWrittenPitch`) before it writes; making the
+    // notation does that itself, at the point music21 does it.
+    let prepared;
+    let score = if options.make_notation {
+        prepared = notate::notated(score)?;
+        &prepared
+    } else if holds_sounding_pitch(score) {
+        prepared = score.to_written_pitch()?;
+        &prepared
     } else {
-        score_element(score, options)?
+        score
     };
+    let root = score_element(score, options)?;
     Ok(format!(
         "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<!DOCTYPE score-partwise  PUBLIC \
          \"-//Recordare//DTD MusicXML {MUSICXML_VERSION} Partwise//EN\" \
          \"http://www.musicxml.org/dtds/partwise.dtd\">\n{}",
         root.dump()
     ))
+}
+
+/// Whether anything in the stream, itself included, says it is at sounding
+/// pitch: nothing else is moved by writing it at written pitch.
+fn holds_sounding_pitch(stream: &Stream) -> bool {
+    stream.at_sounding_pitch() == Some(true)
+        || stream
+            .events()
+            .iter()
+            .filter_map(|event| event.element().as_stream())
+            .any(holds_sounding_pitch)
 }
 
 fn export_error(message: impl Into<String>) -> Error {
