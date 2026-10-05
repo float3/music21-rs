@@ -87,6 +87,11 @@ pub struct Chord {
     /// How the chord as a whole is played, fingerings one to a note.
     #[cfg_attr(feature = "serde", serde(default))]
     articulations: Vec<crate::articulations::Articulation>,
+    /// The roman numeral the chord stands for, where it was read as one:
+    /// music21's `RomanNumeral` is a chord, and a RomanText analysis is a
+    /// part of them. Boxed, as most chords carry none.
+    #[cfg_attr(feature = "serde", serde(default))]
+    numeral: Option<Box<crate::roman::RomanNumeral>>,
 }
 
 use crate::interval::constants::PERFECT_FIFTH_UP as PERFECT_FIFTH;
@@ -228,7 +233,26 @@ impl Chord {
             bass_override: None,
             expressions: Vec::new(),
             articulations: Vec::new(),
+            numeral: None,
         }
+    }
+
+    /// The roman numeral the chord stands for, where it is one: a chord a
+    /// RomanText analysis is read into says which numeral it sounds.
+    pub fn numeral(&self) -> Option<&crate::roman::RomanNumeral> {
+        self.numeral.as_deref()
+    }
+
+    /// Says which roman numeral the chord stands for, or that it stands for
+    /// none. The notes are left as they are.
+    pub fn set_numeral(&mut self, numeral: Option<crate::roman::RomanNumeral>) {
+        self.numeral = numeral.map(Box::new);
+    }
+
+    /// The chord, standing for a roman numeral.
+    pub fn with_numeral(mut self, numeral: crate::roman::RomanNumeral) -> Self {
+        self.set_numeral(Some(numeral));
+        self
     }
 
     /// Returns a suggested standard-tuning guitar fingering.
@@ -775,6 +799,10 @@ impl Chord {
         }
         if let Some(bass) = &chord.bass_override {
             chord.bass_override = Some(interval.transpose_pitch(bass)?);
+        }
+        // The numeral stays the same figure in the key moved with it.
+        if let Some(numeral) = &chord.numeral {
+            chord.numeral = Some(Box::new(numeral.transpose(interval)?));
         }
         Ok(chord)
     }

@@ -98,6 +98,9 @@ writes the file music21's `streamToMidiFile` writes, byte for byte, its
 repeats played out first as `Stream::expand_repeats` plays them. Chant
 written in Volpiano is read and written by `volpiano::from_volpiano` and
 `volpiano::to_volpiano`, as music21's `volpiano` module reads and writes it.
+A RomanText analysis is written back by `romantext::to_roman_text`, as
+music21's `RnWriter` writes one: every analysis of music21's corpus comes
+out the same text on both sides.
 
 MuseScore's own files are read with no feature and no MuseScore installed:
 `musescore::from_mscx` takes the text of a `.mscx`, as MuseScore 3 and 4 save

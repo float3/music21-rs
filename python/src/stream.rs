@@ -703,6 +703,18 @@ fn element_object<'py>(
                 .into_bound(py)
                 .into_any()
         }
+        StreamElement::Chord(chord) if chord.numeral().is_some() => {
+            let numeral = chord.numeral().cloned().ok_or_else(|| {
+                pyo3::exceptions::PyRuntimeError::new_err("a numeral chord with no numeral")
+            })?;
+            crate::roman::RomanNumeral::object_on(
+                py,
+                crate::roman::RomanNumeral::wrap(numeral, None),
+                chord.clone(),
+            )?
+            .into_bound(py)
+            .into_any()
+        }
         StreamElement::Chord(chord) => crate::installed_new(
             py,
             "music21.chord",
@@ -889,6 +901,10 @@ fn element_value(object: &Bound<'_, PyAny>, stand_ins: bool) -> PyResult<Option<
     if let Ok(chord) = object.extract::<PyRef<'_, Chord>>() {
         let mut value = chord.synced_inner(py);
         drop(chord);
+        // A numeral is a chord that says which numeral it is.
+        if let Ok(numeral) = object.extract::<PyRef<'_, crate::roman::RomanNumeral>>() {
+            value.set_numeral(Some(numeral.inner.clone()));
+        }
         // music21 hides a chord's notes one by one.
         if !stand_ins && let Ok(notes) = object.getattr("notes") {
             for (index, note) in notes.walk()?.enumerate() {

@@ -1303,6 +1303,15 @@ def test_roman_text_is_read_as_chords_carrying_their_figures():
     assert chords[1].quarterLength == 1.0
     assert [pitch.name for pitch in second.getElementsByClass("Chord")[0].pitches] == ["G", "B", "D"]
     assert [type(element).__name__ for element in third] == ["NoChord", "Rest"]
+    assert [type(chord).__name__ for chord in chords] == ["RomanNumeral", "RomanNumeral"]
+    assert [chord.figure for chord in chords] == ["I", "V6"]
+
+
+def test_roman_numerals_are_written_as_roman_text():
+    analysis = "Time Signature: 3/4\nm1 G: I b3 V6\nm2 I\n"
+    written = m.to_roman_text(m.from_roman_text(analysis))
+    assert written.startswith("Composer: Composer unknown\nTitle: Title unknown\n")
+    assert written.endswith(analysis)
 
 
 def test_a_reader_refuses_what_it_cannot_read():
