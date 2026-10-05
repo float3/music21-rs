@@ -68,6 +68,7 @@ it, into this package's own streams:
 | `from_mei(text)` | MEI | `Score` |
 | `from_roman_text(text)` | RomanText | `Score`, or an `Opus` for several movements |
 | `from_noteworthy(text)` | NoteWorthy Composer text, `.nwctxt` | `Score` |
+| `from_nwc(data)` | a NoteWorthy Composer `.nwc` file's `bytes`, compressed or not | `Score` |
 | `from_volpiano(text)` | Volpiano, the chant font's notation | `Part` |
 
 The streams hold measures of notes, chords, rests, clefs, keys, meters,

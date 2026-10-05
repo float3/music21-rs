@@ -244,6 +244,26 @@ fn to_volpiano(score: &Bound<'_, PyAny>) -> PyResult<String> {
     music21_rs_crate::volpiano::to_volpiano(&stream).map_err(format_error)
 }
 
+/// Reads a NoteWorthy Composer `.nwc` file's `bytes` as music21's
+/// `converter.parse` reads one, as a `Score` of a part per staff: the
+/// objects written out as `.nwctxt` lines and those read as
+/// `from_noteworthy` reads them. A compressed file is inflated first, as
+/// music21 inflates one.
+#[pyfunction]
+fn from_nwc<'py>(py: Python<'py>, data: &[u8]) -> PyResult<Bound<'py, PyAny>> {
+    let inflated: Vec<u8>;
+    let data = if data.starts_with(b"[NWZ]\x00") {
+        inflated = py
+            .import("zlib")?
+            .call_method1("decompress", (pyo3::types::PyBytes::new(py, &data[6..]),))?
+            .extract()?;
+        &inflated[..]
+    } else {
+        data
+    };
+    handed_back(py, music21_rs_crate::noteworthy::from_nwc(data))
+}
+
 /// Reads RomanText as music21's `converter.parse` reads it, as a `Score`.
 ///
 /// The score holds one part of measures, and in each the chords the
@@ -271,6 +291,7 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(from_mei, m)?)?;
     m.add_function(wrap_pyfunction!(from_roman_text, m)?)?;
     m.add_function(wrap_pyfunction!(from_noteworthy, m)?)?;
+    m.add_function(wrap_pyfunction!(from_nwc, m)?)?;
     m.add_function(wrap_pyfunction!(from_volpiano, m)?)?;
     m.add_function(wrap_pyfunction!(to_volpiano, m)?)?;
     Ok(())
