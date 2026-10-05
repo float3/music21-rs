@@ -1744,6 +1744,11 @@ impl<'a> Tune<'a> {
                 StreamElement::RehearsalMark(_) => {
                     return Err(abc_error("ABC has no rehearsal marks"));
                 }
+                StreamElement::Break(_) => {
+                    return Err(abc_error(
+                        "ABC writes no manuscript's line, page or column breaks",
+                    ));
+                }
                 StreamElement::MetricModulation(_) => {
                     return Err(abc_error("ABC has no metric modulations"));
                 }

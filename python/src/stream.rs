@@ -637,8 +637,8 @@ impl Stream {
 /// attributes music21 keeps them in.
 ///
 /// What the wheel has no class for is left out: words and repeat marks,
-/// unpitched strokes, barlines, pedal bounces and gaps, spanners and a
-/// score's metadata.
+/// unpitched strokes, barlines, pedal bounces and gaps, a manuscript's
+/// breaks, spanners and a score's metadata.
 pub(crate) fn from_crate<'py>(py: Python<'py>, stream: &RsStream) -> PyResult<Bound<'py, PyAny>> {
     let class = match stream.kind() {
         StreamKind::Score => py.get_type::<Score>(),
@@ -768,7 +768,8 @@ fn element_object<'py>(
         | StreamElement::Barline(_)
         | StreamElement::PedalObject(_)
         | StreamElement::RehearsalMark(_)
-        | StreamElement::MetricModulation(_) => return Ok(None),
+        | StreamElement::MetricModulation(_)
+        | StreamElement::Break(_) => return Ok(None),
     }))
 }
 
@@ -1097,6 +1098,16 @@ fn element_value(object: &Bound<'_, PyAny>, stand_ins: bool) -> PyResult<Option<
             let mut value = music21_rs_crate::PedalObject::new(kind);
             value.set_placement(placement_of(object));
             return Ok(Some(StreamElement::PedalObject(value)));
+        }
+        // music21's volpiano breaks.
+        for kind in [
+            music21_rs_crate::volpiano::Break::Line,
+            music21_rs_crate::volpiano::Break::Page,
+            music21_rs_crate::volpiano::Break::Column,
+        ] {
+            if is_of_class(object, &pyo3::types::PyString::new(py, kind.class_name()))? {
+                return Ok(Some(StreamElement::Break(kind)));
+            }
         }
         if is_of_class(object, &pyo3::types::PyString::new(py, "RehearsalMark"))? {
             // music21 writes whatever the mark holds as text.
@@ -1835,6 +1846,8 @@ fn spanner_value(
         SpannerKind::Glissando
     } else if is("TremoloSpanner")? {
         SpannerKind::TremoloSpanner
+    } else if is("Neume")? {
+        SpannerKind::Neume
     } else {
         return Ok(None);
     };

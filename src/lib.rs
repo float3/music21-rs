@@ -138,6 +138,7 @@ pub mod tinynotation;
 pub mod tuningsystem;
 /// Two-voice voice-leading classification and parallel-interval checks.
 pub mod voiceleading;
+pub mod volpiano;
 pub mod volume;
 mod xml;
 // #[macro_use]

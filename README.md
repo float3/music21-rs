@@ -92,7 +92,9 @@ each read what music21 reads into the score music21 makes of it. ABC is
 written as well: `abc::to_abc` writes a score as a tune music21's reader and
 the crate's both read back as the same score. So is MIDI: `midi::to_midi`
 writes the file music21's `streamToMidiFile` writes, byte for byte, its
-repeats played out first as `Stream::expand_repeats` plays them.
+repeats played out first as `Stream::expand_repeats` plays them. Chant
+written in Volpiano is read and written by `volpiano::from_volpiano` and
+`volpiano::to_volpiano`, as music21's `volpiano` module reads and writes it.
 
 MuseScore's own files are read with no feature and no MuseScore installed:
 `musescore::from_mscx` takes the text of a `.mscx`, as MuseScore 3 and 4 save
