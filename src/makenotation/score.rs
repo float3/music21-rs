@@ -10,8 +10,8 @@ use crate::spanner::Spanner;
 use crate::stream::{Stream, StreamElement, StreamEvent, StreamKind};
 
 use super::{
-    is_general_note, is_not_rest, is_voice, make_accidentals, make_beams, make_measures, make_ties,
-    op_frac, split_element,
+    is_general_note, is_not_rest, is_voice, make_accidentals_by, make_beams, make_measures,
+    make_ties, op_frac, split_element,
 };
 
 /// Works out what a score leaves unsaid, as music21's `makeNotation` does,
@@ -79,6 +79,15 @@ fn has_parts(stream: &Stream) -> bool {
 
 /// music21's `Stream.makeNotation` on one part.
 pub(crate) fn make_part_notation(part: &mut Stream) -> Result<PartNotation> {
+    make_part_notation_by(part, true)
+}
+
+/// music21's `Stream.makeNotation` on one part, given its
+/// `cautionaryNotImmediateRepeat`.
+pub(crate) fn make_part_notation_by(
+    part: &mut Stream,
+    cautionary_not_immediate_repeat: bool,
+) -> Result<PartNotation> {
     if part.measures().is_empty() {
         make_voices_filling_gaps(part)?;
         *part = make_measures(part)?;
@@ -90,7 +99,7 @@ pub(crate) fn make_part_notation(part: &mut Stream) -> Result<PartNotation> {
         }
     }
     if !accidentals_made(part) {
-        make_accidentals(part);
+        make_accidentals_by(part, cautionary_not_immediate_repeat);
     }
     make_ties(part)?;
     // Which measures had tuplets joined in their own line, which music21
@@ -132,7 +141,7 @@ pub(crate) fn make_part_notation(part: &mut Stream) -> Result<PartNotation> {
 /// the notes beamed and each line's tuplets bracketed.
 #[cfg(feature = "musicxml")]
 pub(crate) fn make_measure_notation(part: &mut Stream) -> Result<()> {
-    make_accidentals(part);
+    make_accidentals_by(part, true);
     for_each_measure(part, &mut |measure| {
         if super::meter_in(measure).is_none() {
             let meter = crate::meter::best_time_signature(measure)

@@ -31,6 +31,9 @@ are tunes whose own reading cannot be written back.
   `ottavasToSounding`. `to_musicxml` writes the notes under a transposing
   line at the pitch they sound, as music21's writer does.
   `OctaveShift::interval` and `set_transposing` are new.
+- The wheel has `to_abc`, writing one of its streams or one of music21's as
+  ABC, which music21 has no writer for, with `unit_length` and
+  `measures_per_line` as the crate's `abc::ExportOptions` has them.
 - `midi::to_midi` and `midi::ExportOptions` write a score as a standard MIDI
   file, as music21's `streamToMidiFile(...).writestr()` writes it, byte for
   byte: a conductor track with the tempos, meters and keys, a track per part
@@ -250,6 +253,10 @@ are tunes whose own reading cannot be written back.
 
 ## Fixed
 
+- The figured-bass realizer's scores bracket and complete their tuplets and
+  join tied tuplet notes back up, as music21's `makeNotation` does when the
+  realizer writes a part. A line holding a triplet was written with its
+  tuplets unbracketed.
 - `abc::to_abc` no longer writes a bass clef that music21's reader, and the
   crate's, read as lowering every note two octaves: music21 takes a bass
   clef named in the header's `K:` field that way. It also gives every voice

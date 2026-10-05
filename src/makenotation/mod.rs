@@ -26,6 +26,7 @@ use crate::stream::{Stream, StreamElement, StreamEvent, StreamKind};
 
 mod score;
 
+pub(crate) use score::make_part_notation_by;
 #[cfg(feature = "musicxml")]
 pub(crate) use score::{
     Kept, accidentals_made, for_each_measure, keeping_spanners, make_measure_notation,
