@@ -27,6 +27,16 @@ are tunes whose own reading cannot be written back.
 
 ## Added
 
+- `musedata::from_musedata` reads a MuseData work, its files' texts in
+  order, as music21's `musedata` and `musedata.translate` do, in both of the
+  encoding's stages: a part for each part, measures with their barlines and
+  repeats, notes, chords and rests, ties, voices, beams, the accidentals the
+  encoding shows, articulations, fermatas, ornaments, dynamics, lyrics, the
+  clef, key, meter and tempo word, a transposing part turned to the pitch
+  it sounds, and the work's title, number and movement. Held to music21 byte
+  for byte as MusicXML on the work music21 carries, read whole and file by
+  file, and on parts written for the test in both stages. The wheel has
+  `from_musedata` too.
 - `noteworthy::from_nwc` reads NoteWorthy Composer's binary `.nwc`, as
   music21's `noteworthy.binaryTranslate` does: each staff and object written
   out as `.nwctxt` lines (`noteworthy::nwc_lines`, music21's

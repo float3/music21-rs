@@ -1004,6 +1004,7 @@ def test_every_reader_is_exported():
         "from_roman_text",
         "from_noteworthy",
         "from_nwc",
+        "from_musedata",
         "from_volpiano",
     ):
         assert name in m.__all__
@@ -1135,6 +1136,36 @@ def test_a_binary_noteworthy_file_is_read_compressed_or_not():
     assert len(score.parts) == 4
     squeezed = b"[NWZ]\x00" + zlib.compress(plain)
     assert pitches_of(m.from_nwc(squeezed).parts[0]) == pitches_of(score.parts[0])
+
+
+MUSEDATA = "\n".join([
+    "",
+    "",
+    "",
+    "01/01/01 x",
+    "WK#:1 MV#:1",
+    "source",
+    "Work",
+    "Movement",
+    "Flute",
+    "1 0",
+    "Group memberships: score",
+    "score: part 1 of 1",
+    "$  K:-1   Q:2   T:2/4   C:4",
+    "C5     2        q     u",
+    "Bf4    2        q     u",
+    "measure 2",
+    "A4     4        h     u",
+    "/END",
+])
+
+
+def test_musedata_is_read_from_one_file_or_several():
+    score = m.from_musedata(MUSEDATA)
+    (part,) = score.parts
+    assert part.partName == "Flute"
+    assert pitches_of(part) == ["C5", "B-4", "A4"]
+    assert len(m.from_musedata([MUSEDATA, MUSEDATA]).parts) == 2
 
 
 def test_a_file_that_is_not_noteworthy_is_refused():

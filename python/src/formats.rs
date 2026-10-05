@@ -210,6 +210,27 @@ fn from_mei<'py>(py: Python<'py>, text: &str) -> PyResult<Bound<'py, PyAny>> {
     handed_back(py, music21_rs_crate::mei::from_mei(text))
 }
 
+/// Reads a MuseData work as music21's `converter.parse` reads one, as a
+/// `Score` of a part for each part the files hold.
+///
+/// `texts` is the text of one file, or a list of the files' texts in the
+/// order the work's parts go in. Barlines, articulations, ornaments and
+/// fermatas, and the work's title are read and left out.
+#[pyfunction]
+fn from_musedata<'py>(py: Python<'py>, texts: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    use crate::Walkable;
+    let texts: Vec<String> = if let Ok(text) = texts.extract::<String>() {
+        vec![text]
+    } else {
+        texts
+            .walk()?
+            .map(|text| text.and_then(|text| text.extract::<String>()))
+            .collect::<PyResult<_>>()?
+    };
+    let texts: Vec<&str> = texts.iter().map(String::as_str).collect();
+    handed_back(py, music21_rs_crate::musedata::from_musedata(&texts))
+}
+
 /// Reads the text of a NoteWorthy Composer `.nwctxt` file as music21's
 /// `converter.parse` reads one, as a `Score` of a part per staff.
 ///
@@ -291,6 +312,7 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(from_mei, m)?)?;
     m.add_function(wrap_pyfunction!(from_roman_text, m)?)?;
     m.add_function(wrap_pyfunction!(from_noteworthy, m)?)?;
+    m.add_function(wrap_pyfunction!(from_musedata, m)?)?;
     m.add_function(wrap_pyfunction!(from_nwc, m)?)?;
     m.add_function(wrap_pyfunction!(from_volpiano, m)?)?;
     m.add_function(wrap_pyfunction!(to_volpiano, m)?)?;

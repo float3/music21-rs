@@ -90,6 +90,9 @@ pub enum Error {
     /// RomanText that cannot be read.
     #[error("RomanText error: {0}")]
     RomanText(String),
+    /// MuseData that cannot be read.
+    #[error("MuseData error: {0}")]
+    MuseData(String),
     /// NoteWorthy Composer text that cannot be read.
     #[error("NoteWorthy error: {0}")]
     Noteworthy(String),
