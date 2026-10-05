@@ -22,11 +22,13 @@
 //! names keeping objects and sites apart this way as what he would do
 //! again.
 
+mod chordify;
 mod placed;
 mod repeats;
 mod sounding;
 mod ties;
 
+pub use chordify::ChordifyOptions;
 pub use placed::Placed;
 
 use crate::{

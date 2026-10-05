@@ -449,6 +449,39 @@ impl Stream {
         Self::highest_time(slf)
     }
 
+    /// The stream as one line of chords, as music21's `chordify` makes it:
+    /// laid out as the first part is, with a chord of every pitch sounding
+    /// wherever any part starts or stops a note, a held note tied across.
+    ///
+    /// The chords are new objects, whatever `copyPitches` says, and
+    /// `addPartIdAsGroup` is refused, as this package keeps no groups.
+    #[pyo3(signature = (*, addTies = true, addPartIdAsGroup = false, removeRedundantPitches = true, toSoundingPitch = true, copyPitches = true))]
+    fn chordify<'py>(
+        slf: &Bound<'py, Self>,
+        addTies: bool,
+        addPartIdAsGroup: bool,
+        removeRedundantPitches: bool,
+        toSoundingPitch: bool,
+        copyPitches: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let _ = copyPitches;
+        if addPartIdAsGroup {
+            return Err(StreamException::new_err(
+                "addPartIdAsGroup needs groups, which this package does not keep",
+            ));
+        }
+        let stream = crate_stream(slf.as_any())?;
+        let options = music21_rs_crate::stream::ChordifyOptions {
+            add_ties: addTies,
+            remove_redundant_pitches: removeRedundantPitches,
+            to_sounding_pitch: toSoundingPitch,
+        };
+        let made = stream
+            .chordify_with(&options)
+            .map_err(|error| StreamException::new_err(crate::pitch::message(&error)))?;
+        from_crate(slf.py(), &made)
+    }
+
     /// How long the stream lasts, which is its highest time.
     #[getter]
     fn quarterLength(slf: &Bound<'_, Self>) -> PyResult<f64> {
