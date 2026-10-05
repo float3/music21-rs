@@ -18,7 +18,7 @@ use crate::figuredbass::rules::Rules;
 use crate::figuredbass::scale::{FiguredBassMode, FiguredBassScale};
 use crate::figuredbass::segment::{Possibility, Segment};
 use crate::key::{Key, KeySignature};
-use crate::makenotation::{make_accidentals_by, make_beams, make_measures, make_ties, op_frac};
+use crate::makenotation::{make_part_notation_by, op_frac};
 use crate::meter::TimeSignature;
 use crate::note::Note;
 use crate::pitch::Pitch;
@@ -243,9 +243,8 @@ impl FiguredBassLine {
     /// The bass line written out as a part: a bass clef, the key signature,
     /// the meter and the bass notes one after another, each with its
     /// figures under it as lyrics, cut into measures with the notes that
-    /// run past a barline tied. music21's `generateBassLine`.
-    ///
-    /// Tuplets are not bracketed.
+    /// run past a barline tied, tuplets completed and bracketed and the
+    /// notes beamed. music21's `generateBassLine`.
     ///
     /// ```
     /// use music21_rs::figuredbass::realizer::FiguredBassLine;
@@ -634,11 +633,8 @@ fn bass_note(bass: &Pitch, quarter_length: FloatType, notation: Option<&str>) ->
 /// `cautionaryNotImmediateRepeat=False`, which is how the realizer writes
 /// every part it makes.
 fn notated(part: &Stream) -> Result<Stream> {
-    let mut made = make_measures(part)?;
-    make_accidentals_by(&mut made, false);
-    make_ties(&mut made)?;
-    // music21 warns and carries on where a meter cannot beam its bar.
-    let _ = make_beams(&mut made);
+    let mut made = part.clone();
+    make_part_notation_by(&mut made, false)?;
     Ok(made)
 }
 
@@ -868,7 +864,7 @@ impl Realization {
     /// clef; in chorale style each part has a staff of its own, under the
     /// clef that fits it best. Every part opens with the key signature and
     /// the meter of the line, is cut into measures, and has the notes that
-    /// run past a barline tied. Tuplets are not bracketed.
+    /// run past a barline tied, its tuplets bracketed and its notes beamed.
     ///
     /// ```
     /// use music21_rs::Pitch;

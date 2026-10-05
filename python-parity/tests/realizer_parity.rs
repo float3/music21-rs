@@ -60,6 +60,13 @@ struct Line {
     /// realizations from one `Realization`: a line in C major with no
     /// accidental to write.
     repeats: bool,
+    /// Whether music21 can realize the line. In a line with a tuplet it
+    /// cannot: `createOffsetMapping` adds a note's length to a float offset,
+    /// which gives a float, `retrieveSegments` compares that with the next
+    /// note's offset, a `Fraction` no float equals, and every segment from
+    /// there on is taken for one an overlaid part made and lasts nothing.
+    /// Such a line's bass line is compared alone.
+    realizes: bool,
 }
 
 const LINES: &[Line] = &[
@@ -76,6 +83,7 @@ const LINES: &[Line] = &[
         chords: &[],
         overlaid: &[],
         repeats: false,
+        realizes: true,
     },
     Line {
         label: "a suspension",
@@ -89,6 +97,7 @@ const LINES: &[Line] = &[
         chords: &[],
         overlaid: &[],
         repeats: true,
+        realizes: true,
     },
     Line {
         label: "a dominant seventh resolving, few enough ways to write them all",
@@ -98,6 +107,7 @@ const LINES: &[Line] = &[
         chords: &[],
         overlaid: &[],
         repeats: true,
+        realizes: true,
     },
     Line {
         label: "a minor key, eighths to beam, an accidental to write",
@@ -114,6 +124,23 @@ const LINES: &[Line] = &[
         chords: &[],
         overlaid: &[],
         repeats: false,
+        realizes: true,
+    },
+    Line {
+        label: "a triplet, bracketed and beamed",
+        key: "C",
+        meter: "2/4",
+        notes: &[
+            ("C3", 1.0 / 3.0, None),
+            ("D3", 1.0 / 3.0, Some("6")),
+            ("E3", 1.0 / 3.0, Some("6")),
+            ("F3", 1.0, Some("6,4")),
+            ("C3", 2.0, None),
+        ],
+        chords: &[],
+        overlaid: &[],
+        repeats: false,
+        realizes: false,
     },
     Line {
         label: "one chord",
@@ -123,6 +150,7 @@ const LINES: &[Line] = &[
         chords: &[],
         overlaid: &[],
         repeats: true,
+        realizes: true,
     },
     Line {
         label: "a melody laid over the line, moving once while the bass holds",
@@ -141,6 +169,7 @@ const LINES: &[Line] = &[
             (Some("C5"), 1.0),
         ]],
         repeats: true,
+        realizes: true,
     },
     Line {
         label: "two parts laid over the line",
@@ -153,6 +182,7 @@ const LINES: &[Line] = &[
             &[(Some("G4"), 2.0), (Some("B4"), 2.0), (Some("G4"), 4.0)],
         ],
         repeats: true,
+        realizes: true,
     },
     Line {
         label: "a line of chords, as music21 reads roman numerals into one",
@@ -162,6 +192,7 @@ const LINES: &[Line] = &[
         chords: &["I", "IV", "V7", "I"],
         overlaid: &[],
         repeats: true,
+        realizes: true,
     },
     Line {
         label: "a compound meter in a flat key",
@@ -179,6 +210,7 @@ const LINES: &[Line] = &[
         chords: &[],
         overlaid: &[],
         repeats: false,
+        realizes: true,
     },
 ];
 
@@ -433,6 +465,9 @@ fn the_realizer_writes_the_scores_music21_s_writes() {
                 failures.push(format!("{label}: a bass line was written of chords"));
             }
 
+            if !line.realizes {
+                continue;
+            }
             let first = their_realization(true)?;
             let top = Pitch::from_name("B5").expect("a pitch");
             let mut our_realization: Realization = match ours.realize(&Rules::default(), 4, &top) {
