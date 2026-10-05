@@ -116,7 +116,8 @@ pub fn midi_notes_from_stream(stream: &Stream) -> Result<Vec<MidiNote>> {
             | StreamElement::Barline(_)
             | StreamElement::PedalObject(_)
             | StreamElement::RehearsalMark(_)
-            | StreamElement::MetricModulation(_) => {}
+            | StreamElement::MetricModulation(_)
+            | StreamElement::Break(_) => {}
         }
     }
     Ok(notes)

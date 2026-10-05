@@ -39,6 +39,9 @@ pub enum SpannerKind {
     Glissando,
     /// A tremolo alternating between two notes: music21's `TremoloSpanner`.
     TremoloSpanner,
+    /// Notes sung to one syllable as one figure, as chant writes them:
+    /// music21's volpiano `Neume`.
+    Neume,
 }
 
 impl SpannerKind {
@@ -55,6 +58,7 @@ impl SpannerKind {
             Self::TrillExtension => "TrillExtension",
             Self::Glissando => "Glissando",
             Self::TremoloSpanner => "TremoloSpanner",
+            Self::Neume => "Neume",
         }
     }
 
@@ -444,6 +448,25 @@ impl OctaveShift {
     /// music21's `transposing`.
     pub fn transposing(&self) -> bool {
         self.transposing
+    }
+
+    /// Says whether the notes under the line are written where they sound.
+    /// This moves no notes; [`crate::Stream::to_sounding_pitch`] and
+    /// [`crate::Stream::to_written_pitch`] move them and say so.
+    pub fn set_transposing(&mut self, transposing: bool) {
+        self.transposing = transposing;
+    }
+
+    /// How far the notes under the line sound from where they are written,
+    /// one, two or three octaves up or down: music21's `interval()`.
+    pub fn interval(&self) -> crate::interval::Interval {
+        let name = if self.up {
+            format!("P{}", self.size)
+        } else {
+            format!("P-{}", self.size)
+        };
+        crate::interval::Interval::from_name(&name)
+            .expect("a perfect octave, fifteenth or twenty-second is an interval")
     }
 }
 

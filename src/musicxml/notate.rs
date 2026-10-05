@@ -71,8 +71,9 @@ pub(super) fn notated(stream: &Stream) -> Result<Stream> {
     })?;
 
     // `ScoreExporter.parse`: a part at sounding pitch turned to written
-    // pitch, which leaves every accidental it moves undecided again.
-    score.make_written_pitch()?;
+    // pitch, which leaves every accidental it moves undecided again, and
+    // the notes under an octave line put where they sound.
+    score.make_written_pitch(true)?;
 
     // Each `PartExporter`: lengths no one value writes cut into values...
     split_at_durations(&mut score)?;

@@ -122,6 +122,10 @@ pub const SCORES: &[(&str, &str)] = &[
     ),
     ("built:rehearsal-marks", "rehearsal marks, boxed and not"),
     (
+        "built:ottavas",
+        "octave lines written where they are read, moved where they sound",
+    ),
+    (
         "trecento/PMFC_12_19-Sanctus Barbitonsoris.xml",
         "rehearsal marks in a file",
     ),
@@ -433,7 +437,28 @@ def rehearsal_marks():
     measures[1].insert(0, plain)
     return one_part(part)
 
+def ottavas():
+    """Octave lines over notes written where they are read, which music21's
+    writer moves to where they sound, and one over notes already there."""
+    from music21 import spanner
+    part, bars = quarters([
+        ['C5', 'D5', 'E5', 'F5'],
+        ['G3', ['C3', 'E3'], 'A3', 'B3'],
+        ['C4', 'D4', 'E4', None],
+    ])
+    made = (
+        spanner.Ottava(bars[0][0], bars[0][1], bars[0][2], type='8va'),
+        spanner.Ottava(bars[1][0], bars[1][1], type='8vb', placement='below'),
+        spanner.Ottava(bars[1][2], bars[1][3], type='15mb', transposing=False,
+                       placement='below'),
+        spanner.Ottava(bars[2][0], bars[2][1], type='15ma'),
+    )
+    for ottava in made:
+        part.insert(0, ottava)
+    return one_part(part)
+
 BUILT = {
+    'built:ottavas': ottavas,
     'built:rehearsal-marks': rehearsal_marks,
     'built:glissandi': glissandi,
     'built:tremolo-spanners': tremolos,

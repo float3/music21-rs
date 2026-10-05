@@ -1003,6 +1003,7 @@ def test_every_reader_is_exported():
         "from_mei",
         "from_roman_text",
         "from_noteworthy",
+        "from_volpiano",
     ):
         assert name in m.__all__
 
@@ -1124,6 +1125,14 @@ def test_noteworthy_text_is_read_into_a_part_per_staff():
 def test_a_file_that_is_not_noteworthy_is_refused():
     with pytest.raises(m.StreamException):
         m.from_noteworthy("|Note|Dur:4th|Pos:1\n")
+
+
+def test_volpiano_is_read_and_written_back():
+    part = m.from_volpiano("1---c--d---fg---3--wE")
+    assert type(part).__name__ == "Part"
+    assert pitches_of(part) == ["C4", "D4", "F4", "G4", "E-4"]
+    # This package's streams keep no neumes or barlines to write.
+    assert m.to_volpiano(part) == "1---c-d-f-g-wE-"
 
 
 def test_a_score_is_written_as_midi_and_read_back():

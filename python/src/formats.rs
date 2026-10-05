@@ -220,6 +220,30 @@ fn from_noteworthy<'py>(py: Python<'py>, text: &str) -> PyResult<Bound<'py, PyAn
     handed_back(py, music21_rs_crate::noteworthy::from_noteworthy(text))
 }
 
+/// Reads Volpiano, the chant font's notation, as music21's
+/// `volpiano.toPart` reads it, as a `Part`.
+///
+/// Each note is a quarter note with no stem, a liquescent one with an `x`
+/// notehead, in measures closed by the barlines the string writes. Breaks
+/// and neumes are read and left out.
+#[pyfunction]
+fn from_volpiano<'py>(py: Python<'py>, text: &str) -> PyResult<Bound<'py, PyAny>> {
+    handed_back(py, music21_rs_crate::volpiano::from_volpiano(text))
+}
+
+/// Writes a score as Volpiano, as music21's `volpiano.fromStream` writes
+/// it.
+///
+/// The score may be one of this wheel's streams or one of music21's. Treble
+/// and bass clefs, barlines, notes, flats and naturals on B and E, music21's
+/// volpiano breaks and its neumes are written; what Volpiano cannot say is
+/// left out, as music21 leaves it out.
+#[pyfunction]
+fn to_volpiano(score: &Bound<'_, PyAny>) -> PyResult<String> {
+    let stream = crate::stream::crate_stream(score)?;
+    music21_rs_crate::volpiano::to_volpiano(&stream).map_err(format_error)
+}
+
 /// Reads RomanText as music21's `converter.parse` reads it, as a `Score`.
 ///
 /// The score holds one part of measures, and in each the chords the
@@ -247,5 +271,7 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(from_mei, m)?)?;
     m.add_function(wrap_pyfunction!(from_roman_text, m)?)?;
     m.add_function(wrap_pyfunction!(from_noteworthy, m)?)?;
+    m.add_function(wrap_pyfunction!(from_volpiano, m)?)?;
+    m.add_function(wrap_pyfunction!(to_volpiano, m)?)?;
     Ok(())
 }
