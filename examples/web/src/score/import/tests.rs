@@ -1,6 +1,7 @@
 //! Every reader against small files built here in each format, and the
 //! writer against what they read.
 
+use super::abc::{rests, to_abc};
 use super::*;
 
 fn abc_of(name: &str, bytes: &[u8]) -> String {
@@ -8,13 +9,30 @@ fn abc_of(name: &str, bytes: &[u8]) -> String {
     to_abc(&imported).expect("the score writes")
 }
 
-/// The music of the first voice's lines, header left out.
+/// The music of the first voice, every field and directive left out.
 fn music(abc: &str) -> String {
-    abc.lines()
-        .filter(|line| line.starts_with("[V:P1]"))
-        .map(|line| line.trim_start_matches("[V:P1]").trim())
-        .collect::<Vec<_>>()
-        .join(" ")
+    voice_music(abc, 1)
+}
+
+/// The music of the `n`th voice, counted from one: what follows its `V:`
+/// line, or the whole tune where it has no `V:` lines, fields and
+/// directives left out.
+fn voice_music(abc: &str, n: usize) -> String {
+    let mut voices = 0;
+    let mut lines = Vec::new();
+    for line in abc.lines() {
+        if line.starts_with("V:") {
+            voices += 1;
+        }
+        let field = line.starts_with("%%")
+            || line.len() > 1
+                && line.as_bytes()[1] == b':'
+                && line.as_bytes()[0].is_ascii_alphabetic();
+        if !field && voices.max(1) == n {
+            lines.push(line.trim());
+        }
+    }
+    lines.join(" ")
 }
 
 // --------------------------------------------------------------- Songsterr
@@ -54,13 +72,13 @@ fn a_songsterr_track_keeps_its_repeats_tuplets_ties_and_chords() {
     assert!(abc.contains("Q:1/4=96"), "{abc}");
     assert!(abc.contains("K:F"), "one flat, major: {abc}");
     assert!(
-        abc.contains("V:P1 clef=treble-8 name=\"Lead\"\n%%MIDI program 24"),
+        abc.contains("V:1 clef=treble-8 name=\"Lead\"\n%%MIDI program 24"),
         "{abc}"
     );
     // String 1 is the B string: its first fret is C4.
     assert_eq!(
         music(&abc),
-        "|: \"^Intro\"\"C\"C2 (3:2:3EFG A,2- |[1 A,2 [E,G,]3 z :|[2 {D/4}C6 |]"
+        "|: \"C\"\"^Intro\"C2 (3EFG A,2- |1 A,2 [E,G,]3 z :|2 {D/4}C6 |]"
     );
 }
 
@@ -88,8 +106,10 @@ fn songsterr_parts_added_together_make_one_score() {
         )
         .expect("the second part reads");
     let abc = to_abc(&import.imported).expect("the score writes");
-    assert!(abc.contains("V:P2 clef=treble-8 name=\"Rhythm\""), "{abc}");
-    assert_eq!(abc.matches("[V:P2]").count(), abc.matches("[V:P1]").count());
+    assert!(abc.contains("V:2 clef=treble-8 name=\"Rhythm\""), "{abc}");
+    // Each part's music, bar for bar.
+    let bars = |n: usize| voice_music(&abc, n).matches('|').count();
+    assert_eq!(bars(2), bars(1));
 }
 
 // ---------------------------------------------------------------- MusicXML
@@ -143,17 +163,14 @@ fn musicxml_sounds_at_concert_pitch_and_keeps_its_voices() {
     assert!(abc.contains("Q:1/4=72"), "{abc}");
     // Written in D for a B-flat clarinet, it sounds in C.
     assert!(abc.contains("K:C\n"), "{abc}");
-    assert!(abc.contains("%%score (P1 P1v2)"), "{abc}");
+    assert!(abc.contains("%%score (1 2)"), "{abc}");
     assert!(abc.contains("%%MIDI program 71"), "{abc}");
     assert_eq!(
         music(&abc),
-        "G2 |: \"^×3\"\"D\"c4- c2 [EG]2 :| (3:2:3dcB z2 c3 |]"
+        "G2 |: \"D\"\"^×3\"c4- c2 [EG]2 :| (3dc B z2 c3 |]"
     );
-    let lower: Vec<&str> = abc
-        .lines()
-        .filter(|line| line.starts_with("[V:P1v2]"))
-        .collect();
-    assert_eq!(lower, ["[V:P1v2] x2 |: C8 :| x4 x2 x |]"]);
+    // The lower voice is filled out with rests nothing draws.
+    assert_eq!(voice_music(&abc, 2), "x2 |: C8 :| x4 x2 x |]");
 }
 
 /// A guitar part on a staff and a tablature staff under it, and a drum part.
@@ -364,7 +381,7 @@ const GPIF: &str = r#"<?xml version="1.0" encoding="utf-8"?>
   </Rhythms>
 </GPIF>"#;
 
-const GPIF_MUSIC: &str = "|: \"^Riff\"\"Em\"E,,2 {B,,/4}A,2- | A,2 z2 :|";
+const GPIF_MUSIC: &str = "|: \"Em\"\"^Riff\"E,,2 {B,,/4}A,2- | A,2 z2 :|";
 
 #[test]
 fn a_guitar_pro_7_file_reads_from_its_zip() {
@@ -377,7 +394,7 @@ fn a_guitar_pro_7_file_reads_from_its_zip() {
     assert!(abc.contains("Q:1/4=100"), "{abc}");
     assert!(abc.contains("K:Em"), "{abc}");
     assert!(
-        abc.contains("V:P1 clef=treble-8 name=\"Guitar\"\n%%MIDI program 29"),
+        abc.contains("V:1 clef=treble-8 name=\"Guitar\"\n%%MIDI program 29"),
         "{abc}"
     );
     assert_eq!(music(&abc), GPIF_MUSIC);
@@ -520,7 +537,7 @@ fn a_guitar_pro_3_file_reads_its_headers_notes_and_ties() {
     assert!(abc.contains("%%MIDI program 24"), "{abc}");
     assert_eq!(
         music(&abc),
-        "|: \"^Verse\"^A,2 (3:2:3B,B,B,- | \"^×3\"B,2 z3 :|"
+        "|: \"^Verse\"^A,2 (3B,B,B,- | \"^×3\"B,2 z3 :|"
     );
 }
 
@@ -604,10 +621,11 @@ fn a_repeat_closing_where_the_next_opens_is_one_double_repeat_bar() {
 #[test]
 fn padding_is_written_in_values_abc_can_draw() {
     // A whole, a quarter and a 64th, and a crumb too short for any value.
-    assert_eq!(
-        rests(TICKS * 5 + TICKS / 16 + 7, 'z').unwrap(),
-        "z8 z2 z/8 "
-    );
+    let lengths: Vec<f64> = rests(TICKS * 5 + TICKS / 16 + 7, false)
+        .iter()
+        .map(|(_, rest)| rest.duration().quarter_length())
+        .collect();
+    assert_eq!(lengths, [4.0, 1.0, 0.0625]);
 }
 
 #[test]
@@ -633,7 +651,7 @@ fn a_songsterr_ending_runs_on_to_the_bar_that_closes_the_repeat() {
         .collect();
     assert_eq!(endings, [vec![], vec![1], vec![1], vec![2], vec![]]);
     let abc = to_abc(&imported).expect("the score writes");
-    assert_eq!(music(&abc), "|: C8 |[1 C8 | C8 :|[2 C8 || C8 |]");
+    assert_eq!(music(&abc), "|: C8 |1 C8 | C8 :|2 C8 || C8 |]");
 }
 
 // ------------------------------------------------ the crate's other readers
@@ -707,7 +725,7 @@ fn a_midi_track_keeps_its_name_program_meter_and_tempo() {
     assert!(abc.contains("M:3/4"), "{abc}");
     assert!(abc.contains("Q:1/4=100"), "{abc}");
     assert!(
-        abc.contains("V:P1 clef=treble name=\"Flute\"\n%%MIDI program 73"),
+        abc.contains("V:1 name=\"Flute\"\n%%MIDI program 73"),
         "{abc}"
     );
     assert_eq!(music(&abc), "c2 d4 |]");
@@ -736,10 +754,10 @@ fn humdrum_spines_are_parts_the_last_spine_first() {
     assert!(abc.contains("T:Two spines"), "{abc}");
     assert!(abc.contains("M:3/4"), "{abc}");
     assert!(abc.contains("K:G"), "{abc}");
-    assert!(abc.contains("V:P1 clef=treble"), "{abc}");
-    assert!(abc.contains("V:P2 clef=bass"), "{abc}");
+    // The lower spine reads in the bass clef, said where it is.
+    assert!(abc.contains("V:2 clef=bass name=\"Part\""), "{abc}");
     assert_eq!(music(&abc), "G2 AB c2 | G6 |]");
-    assert!(abc.contains("[V:P2] G,4 D,2 | G,6 |]"), "{abc}");
+    assert_eq!(voice_music(&abc, 2), "G,4 D,2 | G,6 |]");
 }
 
 const MEI: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -770,8 +788,8 @@ fn mei_staves_are_parts_and_keep_their_tuplets() {
     assert!(abc.contains("M:2/4"), "{abc}");
     assert!(abc.contains("K:F"), "{abc}");
     // The B is flat by the key, written as `accid.ges`.
-    assert_eq!(music(&abc), "F2 B2 | (3:2:3AGF z2 |]");
-    assert!(abc.contains("[V:P2] [F,,C,]4 | F,,4 |]"), "{abc}");
+    assert_eq!(music(&abc), "F2 B2 | (3AGF z2 |]");
+    assert_eq!(voice_music(&abc, 2), "[F,,C,]4 | F,,4 |]");
 }
 
 const ROMAN_TEXT: &str = "Composer: Nobody\nTitle: Cadence\nTime Signature: 3/4\n\
@@ -794,7 +812,7 @@ fn tiny_notation_is_read_by_name_or_by_its_label() {
     let abc = abc_of("line.tntxt", text.as_bytes());
     assert!(abc.contains("M:3/4"), "{abc}");
     let music = music(&abc);
-    assert!(music.starts_with("E,2 z2 ^F2 | G2 (3:2:3"), "{abc}");
+    assert!(music.starts_with("E,2 z2 ^F2 | G2 (3"), "{abc}");
     // The last note runs past its barline and is tied into the next bar.
     assert!(music.ends_with("G c2- | c4 |]"), "{abc}");
     assert_eq!(abc_of("line.txt", text.as_bytes()), abc);

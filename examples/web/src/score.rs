@@ -1365,15 +1365,6 @@ fn spell_in_key(midi: i32, key: &Key, scale: &[Pitch]) -> Result<Pitch, JsValue>
     Pitch::from_name(format!("{name}{octave}")).map_err(js_error)
 }
 
-fn abc_key_name(key: &Key) -> String {
-    let tonic = key.tonic_pitch().name().replace('-', "b");
-    if key.mode() == "minor" {
-        format!("{tonic}m")
-    } else {
-        tonic
-    }
-}
-
 /// Writes a pitch as ABC with the accidental the bar needs: none where the
 /// key signature or an earlier accidental in the bar already gives it.
 fn abc_pitch(
