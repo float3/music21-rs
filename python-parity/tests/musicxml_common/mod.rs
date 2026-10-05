@@ -556,6 +556,7 @@ def strip_layout(score):
 /// uuid, which no second run can reproduce; the crate numbers them. What is
 /// compared is that the same part or instrument is named the same wherever
 /// it is named.
+#[allow(dead_code)]
 pub fn normalize_ids(document: &str) -> String {
     const NAMED: [(&str, &str); 5] = [
         ("<score-part id=\"", "PART"),

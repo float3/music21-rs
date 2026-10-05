@@ -351,7 +351,10 @@ impl Sounding {
             } => {
                 let numeral =
                     RomanNumeral::with_minor_defaults(figure, key.clone(), *sixth, *seventh)?;
-                let mut chord: Chord = numeral.to_chord()?.with_duration(duration);
+                let mut chord: Chord = numeral
+                    .to_chord()?
+                    .with_duration(duration)
+                    .with_numeral(numeral);
                 if let (Some(lyric), Some(singer)) = (&self.lyric, chord.notes_mut().first_mut()) {
                     singer.set_lyric(Some(lyric))?;
                 }
@@ -379,6 +382,10 @@ struct Measure {
     items: Vec<(FloatType, Held)>,
     left: Option<Barline>,
     right: Option<Barline>,
+    /// What a pickup leaves out before its first chord, and the last
+    /// measure after its last.
+    padding_left: FloatType,
+    padding_right: FloatType,
 }
 
 /// music21's `PartTranslator`.
@@ -997,6 +1004,7 @@ impl Translator {
                 *offset -= padding;
             }
         }
+        self.measures[first].padding_left = padding;
         let last = self.measures.len() - 1;
         if last == first {
             return;
@@ -1013,6 +1021,7 @@ impl Translator {
         {
             let length = self.measure_length(&self.measures[last]);
             self.soundings[index].quarter_length -= length - padding;
+            self.measures[last].padding_right = length - padding;
         }
     }
 
@@ -1073,6 +1082,8 @@ impl Translator {
                 Stream::with_kind(StreamKind::Measure).with_events(sorted_events(held));
             stream.set_number(measure.number);
             stream.set_number_suffix(measure.suffix.clone());
+            stream.set_padding_left(measure.padding_left);
+            stream.set_padding_right(measure.padding_right);
             stream.set_left_barline(measure.left.clone());
             stream.set_right_barline(measure.right.clone());
             stream.set_ending(ending);
@@ -1157,6 +1168,265 @@ pub fn from_roman_text(text: &str) -> Result<Stream> {
         offset = op_frac(offset + length);
     }
     Ok(Stream::with_kind(StreamKind::Opus).with_events(events))
+}
+
+/// Writes a score's roman numerals as a RomanText analysis, as music21's
+/// `romanText.writeRoman.RnWriter` writes one, a line after each line.
+///
+/// The header names the composer, the title (with the movement's number and
+/// name), the analyst and the proofreader, as the score's metadata gives
+/// them. Then measure by measure: a `Time Signature:` line where a meter
+/// stands, and a line of the measure's numerals -- each chord standing for
+/// one ([`Chord::numeral`]) at its beat, `b2.5`, beat one left unsaid, the
+/// key written before a numeral where it is not the key of the one before,
+/// and a chord tied from the one before passed over -- with `||:` and
+/// `:||` where a repeat starts and ends. A score is written from its first
+/// part, an opus score by score.
+///
+/// ```
+/// use music21_rs::romantext::{from_roman_text, to_roman_text};
+///
+/// let score = from_roman_text("Time Signature: 3/4\nm1 G: I b3 V6\nm2 I\n")?;
+/// let written = to_roman_text(&score)?;
+/// assert!(written.ends_with("Time Signature: 3/4\nm1 G: I b3 V6\nm2 I\n"));
+/// # Ok::<(), music21_rs::Error>(())
+/// ```
+///
+/// # Errors
+///
+/// A numeral standing where a meter has no beat.
+pub fn to_roman_text(stream: &Stream) -> Result<String> {
+    let mut lines = Vec::new();
+    write_lines(stream, &mut lines)?;
+    Ok(lines.iter().map(|line| format!("{line}\n")).collect())
+}
+
+/// `RnWriter`'s `combinedList` for one stream.
+fn write_lines(stream: &Stream, lines: &mut Vec<String>) -> Result<()> {
+    if stream.kind() == StreamKind::Opus {
+        for event in stream.events() {
+            if let StreamElement::Stream(score) = event.element() {
+                write_lines(score, lines)?;
+                lines.push("\n".to_string());
+            }
+        }
+        return Ok(());
+    }
+    let wrapped;
+    let container: &Stream = match stream.kind() {
+        StreamKind::Score => stream.parts().first().copied().unwrap_or(stream),
+        StreamKind::Part | StreamKind::PartStaff => stream,
+        StreamKind::Measure => {
+            let mut part = Stream::with_kind(StreamKind::Part);
+            part.insert(0.0, stream.clone());
+            wrapped = part;
+            &wrapped
+        }
+        _ => {
+            // music21 appends everything the stream holds to one measure.
+            let mut measure = Stream::with_kind(StreamKind::Measure);
+            for event in stream.events() {
+                measure.push(event.element().clone());
+            }
+            let mut part = Stream::with_kind(StreamKind::Part);
+            part.insert(0.0, measure);
+            wrapped = part;
+            &wrapped
+        }
+    };
+
+    let mut composer = "Composer unknown".to_string();
+    let mut title = "Title unknown".to_string();
+    let mut analyst = String::new();
+    let mut proofreader = String::new();
+    if let Some(metadata) = stream.metadata() {
+        if let Some(prepared) = written_title(metadata) {
+            title = prepared;
+        }
+        if let Some(name) = contributor(metadata, "composer") {
+            composer = name;
+        }
+        if let Some(name) = contributor(metadata, "analyst") {
+            analyst = name;
+        }
+        if let Some(name) = contributor(metadata, "proofreader") {
+            proofreader = name;
+        }
+    }
+    lines.push(format!("Composer: {composer}"));
+    lines.push(format!("Title: {title}"));
+    lines.push(format!("Analyst: {analyst}"));
+    lines.push(format!("Proofreader: {proofreader}"));
+    lines.push(String::new());
+
+    // A meter standing in the part itself is in force from its start; with
+    // none anywhere, music21 puts a 4/4 there.
+    let mut meter = container
+        .events()
+        .iter()
+        .find_map(|event| match event.element() {
+            StreamElement::TimeSignature(meter) => Some(meter.clone()),
+            _ => None,
+        });
+    let any_meter = container
+        .leaves()
+        .iter()
+        .any(|(_, element)| matches!(element, StreamElement::TimeSignature(_)));
+    if !any_meter {
+        meter = Some(TimeSignature::new(4, 4)?);
+    }
+
+    let mut key_string = String::new();
+    for measure in container.measures() {
+        let meters: Vec<(FloatType, &TimeSignature)> = measure
+            .events()
+            .iter()
+            .filter_map(|event| match event.element() {
+                StreamElement::TimeSignature(meter) => Some((event.offset(), meter)),
+                _ => None,
+            })
+            .collect();
+        if let Some((_, first)) = meters.first() {
+            lines.push(format!("Time Signature: {}", first.ratio_string()));
+            if meters.len() > 1 {
+                let rest: Vec<String> = meters[1..]
+                    .iter()
+                    .map(|(_, meter)| format!("'{}'", meter.ratio_string()))
+                    .collect();
+                lines.push(format!(
+                    "Note: further time signature change(s) unprocessed: [{}]",
+                    rest.join(", ")
+                ));
+            }
+        }
+        let number = format!(
+            "{}{}",
+            measure.number(),
+            measure.number_suffix().unwrap_or("")
+        );
+        let mut line = String::new();
+        if measure
+            .left_barline()
+            .is_some_and(|barline| barline.repeat_direction() == Some(RepeatDirection::Start))
+        {
+            push_chord_string(&mut line, &number, 1.0, "||:");
+        }
+        let mut last_beat = None;
+        for event in measure.events() {
+            let StreamElement::Chord(chord) = event.element() else {
+                continue;
+            };
+            let Some(numeral) = chord.numeral() else {
+                continue;
+            };
+            let at = event.offset();
+            // The meter in force: the last standing at or before the
+            // numeral in this measure, else the one carried in.
+            let in_force = meters
+                .iter()
+                .rev()
+                .find(|(offset, _)| *offset <= at)
+                .map(|(_, meter)| (*meter).clone())
+                .or_else(|| meter.clone())
+                .ok_or_else(|| roman_text_error("a roman numeral with no meter in force"))?;
+            let beat = in_force.beat_proportion(op_frac(at + measure.padding_left()))?;
+            last_beat = Some(beat);
+            if chord
+                .tie()
+                .is_some_and(|tie| tie.tie_type() != TieType::Start)
+            {
+                continue;
+            }
+            let key = numeral.key().tonic_pitch_name_with_case().replace('-', "b");
+            let written = if key == key_string {
+                numeral.figure().to_string()
+            } else {
+                key_string = key.clone();
+                format!("{key}: {}", numeral.figure())
+            };
+            push_chord_string(&mut line, &number, beat, &written);
+        }
+        if measure
+            .right_barline()
+            .is_some_and(|barline| barline.repeat_direction() == Some(RepeatDirection::End))
+        {
+            push_chord_string(&mut line, &number, last_beat.unwrap_or(1.0), ":||");
+        }
+        if !line.is_empty() {
+            lines.push(line);
+        }
+        if let Some((_, last)) = meters.last() {
+            meter = Some((*last).clone());
+        }
+    }
+    Ok(())
+}
+
+/// `rnString`: a chord string added to a measure's line, its beat said
+/// where it is not the first.
+fn push_chord_string(line: &mut String, number: &str, beat: FloatType, chord: &str) {
+    if line.is_empty() {
+        line.push('m');
+        line.push_str(number);
+    }
+    let beat = int_beat(beat);
+    if beat == "1" {
+        line.push_str(&format!(" {chord}"));
+    } else {
+        line.push_str(&format!(" b{beat} {chord}"));
+    }
+}
+
+/// `intBeat`: a beat as a whole number where it is one, else rounded to two
+/// places, written as Python writes a float.
+fn int_beat(beat: FloatType) -> String {
+    if beat.fract() == 0.0 {
+        return format!("{}", beat as i64);
+    }
+    let rounded = (beat * 100.0).round() / 100.0;
+    let written = format!("{rounded}");
+    if written.contains('.') {
+        written
+    } else {
+        format!("{written}.0")
+    }
+}
+
+/// `prepTitle`: the best title, the movement's number and its name where
+/// that is not the title.
+fn written_title(metadata: &Metadata) -> Option<String> {
+    let mut parts = Vec::new();
+    if let Some(title) = ["title", "popularTitle", "alternativeTitle", "movementName"]
+        .iter()
+        .find_map(|name| metadata.first_text(name))
+    {
+        parts.push(title.to_string());
+    }
+    if let Some(number) = metadata.first_text("movementNumber") {
+        parts.push(format!("- No.{number}:"));
+    }
+    if let Some(name) = metadata.first_text("movementName")
+        && metadata.first_text("title") != Some(name)
+    {
+        parts.push(name.to_string());
+    }
+    (!parts.is_empty()).then(|| parts.join(" "))
+}
+
+/// The first contributor in a role, filed under the role or among the
+/// other contributors.
+fn contributor(metadata: &Metadata, role: &str) -> Option<String> {
+    metadata
+        .first_text(role)
+        .or_else(|| {
+            metadata
+                .get("otherContributor")
+                .iter()
+                .find(|value| value.role() == Some(role))
+                .map(MetadataValue::text)
+        })
+        .filter(|name| !name.is_empty())
+        .map(str::to_string)
 }
 
 #[cfg(test)]

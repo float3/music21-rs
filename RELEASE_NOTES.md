@@ -27,6 +27,16 @@ are tunes whose own reading cannot be written back.
 
 ## Added
 
+- `romantext::to_roman_text` writes a score's roman numerals as a RomanText
+  analysis, as music21's `romanText.writeRoman.RnWriter` does: the header,
+  `Time Signature:` lines, and each measure's numerals at their beats with
+  the key where it changes, repeats included. Every analysis of music21's
+  corpus, read and written on both sides, comes out the same text. A chord
+  now says which roman numeral it stands for (`Chord::numeral`,
+  `set_numeral`, `with_numeral`), as music21's `RomanNumeral` is a chord;
+  `from_roman_text` gives each chord its numeral, and transposing a chord
+  moves its numeral's key. The wheel has `to_roman_text`, and its
+  `from_roman_text` hands back `RomanNumeral`s rather than plain `Chord`s.
 - `capella::from_capella` reads Capella's CapXML, the `score.xml` a `.capx`
   holds, as music21's `capella.fromCapellaXML` does: system by system, each
   staff's share put end to end into a part, clefs and key signatures that
@@ -298,6 +308,10 @@ are tunes whose own reading cannot be written back.
 
 ## Fixed
 
+- `from_roman_text` records a pickup's `padding_left`, and the last
+  measure's `padding_right`, as music21 does; it moved the pickup's chords
+  to the start of the measure and said nothing of what was left out, so
+  their beats were read a beat or more early.
 - The figured-bass realizer's scores bracket and complete their tuplets and
   join tied tuplet notes back up, as music21's `makeNotation` does when the
   realizer writes a part. A line holding a triplet was written with its

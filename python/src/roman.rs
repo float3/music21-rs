@@ -202,10 +202,23 @@ impl RomanNumeral {
     /// The same as an object, and as the class music21 now has under that
     /// name — a numeral built as the bare facade is one no stream can hold.
     pub(crate) fn object(py: Python<'_>, numeral: Self) -> PyResult<Py<Self>> {
+        let chord = numeral.chord()?;
+        Self::object_on(py, numeral, chord)
+    }
+
+    /// The numeral as an object standing on the chord given, which may be
+    /// longer, tied or sung to where the numeral's own is not: a chord a
+    /// RomanText analysis was read into.
+    pub(crate) fn object_on(
+        py: Python<'_>,
+        numeral: Self,
+        chord: music21_rs_crate::Chord,
+    ) -> PyResult<Py<Self>> {
         let Some(class) = crate::installed_class(py, "music21.roman", "RomanNumeral") else {
-            return Py::new(py, Self::initializer(py, numeral)?);
+            let chord = Chord::from_inner(py, chord)?;
+            return Py::new(py, PyClassInitializer::from(chord).add_subclass(numeral));
         };
-        let chord = Chord::from_inner(py, numeral.chord()?)?;
+        let chord = Chord::from_inner(py, chord)?;
         let object = crate::blank_installed(&class)?;
         let cell = object.cast::<Self>()?;
         {

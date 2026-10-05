@@ -75,8 +75,8 @@ it, into this package's own streams:
 
 The streams hold measures of notes, chords, rests, clefs, keys, meters,
 tempo marks, dynamics, chord symbols and instruments, and a voice apiece
-where a measure has more than one. A RomanText score's chords carry their
-numerals as lyrics. What the package has no class for -- words, barlines,
+where a measure has more than one. A RomanText score's chords are
+`RomanNumeral`s, carrying their figures as lyrics. What the package has no class for -- words, barlines,
 repeat marks, slurs and other spanners, unpitched percussion, metadata -- is
 read and left out. Input a reader cannot read raises `StreamException`. A
 compressed `.mxl` is a zip holding the document: unpack it first.
@@ -91,7 +91,9 @@ rests, accidentals and beams.
 music21's `streamToMidiFile` writes, its repeats played out first, and
 `to_abc` writes it as ABC, which music21 has no writer for: a tune music21's
 reader and this package's both read back as the same score. `to_volpiano`
-writes it as Volpiano, as music21's `volpiano.fromStream` does.
+writes it as Volpiano, as music21's `volpiano.fromStream` does, and
+`to_roman_text` writes its roman numerals as a RomanText analysis, as
+music21's `RnWriter` does.
 
 ## Using it inside music21
 

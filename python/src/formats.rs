@@ -210,6 +210,19 @@ fn from_mei<'py>(py: Python<'py>, text: &str) -> PyResult<Bound<'py, PyAny>> {
     handed_back(py, music21_rs_crate::mei::from_mei(text))
 }
 
+/// Writes a score's roman numerals as a RomanText analysis, as music21's
+/// `romanText.writeRoman.RnWriter` writes one, and hands back the text.
+///
+/// The score may be one of this wheel's streams or one of music21's; its
+/// `RomanNumeral`s are written measure by measure at their beats, with the
+/// key where it changes, under a header of the composer, title, analyst and
+/// proofreader.
+#[pyfunction]
+fn to_roman_text(score: &Bound<'_, PyAny>) -> PyResult<String> {
+    let stream = crate::stream::crate_stream(score)?;
+    music21_rs_crate::romantext::to_roman_text(&stream).map_err(format_error)
+}
+
 /// Reads a Capella score as music21's `converter.parse` reads a `.capx`, as
 /// a `Score` of a part for each staff.
 ///
@@ -315,12 +328,11 @@ fn from_nwc<'py>(py: Python<'py>, data: &[u8]) -> PyResult<Bound<'py, PyAny>> {
 /// Reads RomanText as music21's `converter.parse` reads it, as a `Score`.
 ///
 /// The score holds one part of measures, and in each the chords the
-/// numerals stand for, in the key they were written in, each carrying its
-/// figure as its lyric -- the key too where it has just changed, as
-/// `G: V7`. `NC` is a rest under a no-chord symbol. A file of several
-/// `Movement:` lines comes back as an `Opus` of scores. The chords are
-/// `Chord`s rather than music21's `RomanNumeral`s. The title, composer and
-/// other metadata are read and left out.
+/// numerals stand for, in the key they were written in, each a
+/// `RomanNumeral` carrying its figure as its lyric -- the key too where it
+/// has just changed, as `G: V7`. `NC` is a rest under a no-chord symbol. A
+/// file of several `Movement:` lines comes back as an `Opus` of scores. The
+/// title, composer and other metadata are read and left out.
 #[pyfunction]
 fn from_roman_text<'py>(py: Python<'py>, text: &str) -> PyResult<Bound<'py, PyAny>> {
     handed_back(py, music21_rs_crate::romantext::from_roman_text(text))
@@ -341,6 +353,7 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(from_noteworthy, m)?)?;
     m.add_function(wrap_pyfunction!(from_musedata, m)?)?;
     m.add_function(wrap_pyfunction!(from_capella, m)?)?;
+    m.add_function(wrap_pyfunction!(to_roman_text, m)?)?;
     m.add_function(wrap_pyfunction!(from_nwc, m)?)?;
     m.add_function(wrap_pyfunction!(from_volpiano, m)?)?;
     m.add_function(wrap_pyfunction!(to_volpiano, m)?)?;
