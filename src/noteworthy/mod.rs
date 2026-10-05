@@ -3,7 +3,12 @@
 //!
 //! A file is a line per object, each `|Command|Name:value|Name:value`, and
 //! [`from_noteworthy`] reads it into a score of a part per staff. The binary
-//! `.nwc` format is not read.
+//! `.nwc` format is read by [`from_nwc`], which writes it out as those lines
+//! first, as music21 does.
+
+mod binary;
+
+pub use binary::{from_nwc, nwc_lines};
 
 use crate::bar::{Barline, BarlineType, Ending, RepeatDirection};
 use crate::chord::Chord;
@@ -68,8 +73,14 @@ fn error(message: impl Into<String>) -> Error {
 /// value, a clef, barline style, flow mark or note length it does not know,
 /// an octave shift on an alto or tenor clef -- or a number that is not one.
 pub fn from_noteworthy(text: &str) -> Result<Stream> {
+    from_lines(text.lines())
+}
+
+/// [`from_noteworthy`] over lines already split, as music21's `parseList`
+/// takes them.
+fn from_lines<'a>(lines: impl IntoIterator<Item = &'a str>) -> Result<Stream> {
     let mut reader = Reader::new();
-    for line in text.lines() {
+    for line in lines {
         let line = line.trim_end();
         if !line.starts_with('|') {
             continue;
@@ -878,6 +889,8 @@ impl Reader {
     }
 
     fn chord(&mut self, attributes: &Attributes) -> Result<()> {
+        attributes.required("Dur")?;
+        attributes.required("Pos")?;
         let durations = attributes.list("Dur");
         let positions = attributes.list("Pos");
         let length = if self.measure.has_voices() {

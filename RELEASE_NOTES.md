@@ -27,6 +27,13 @@ are tunes whose own reading cannot be written back.
 
 ## Added
 
+- `noteworthy::from_nwc` reads NoteWorthy Composer's binary `.nwc`, as
+  music21's `noteworthy.binaryTranslate` does: each staff and object written
+  out as `.nwctxt` lines (`noteworthy::nwc_lines`, music21's
+  `dumpToNWCText`) and those read by the text reader. A compressed file
+  must be inflated first, as the crate unpacks nothing; the wheel's
+  `from_nwc` inflates one itself. Held to music21 on its four `.nwc` files,
+  line for line and as MusicXML.
 - `noteworthy::from_noteworthy` reads NoteWorthy Composer's text format,
   `.nwctxt`, as music21's `noteworthy.translate` does: a part per staff,
   notes, chords and rests spelled from their places under the clef, the

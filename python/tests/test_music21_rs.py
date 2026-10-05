@@ -1003,6 +1003,7 @@ def test_every_reader_is_exported():
         "from_mei",
         "from_roman_text",
         "from_noteworthy",
+        "from_nwc",
         "from_volpiano",
     ):
         assert name in m.__all__
@@ -1120,6 +1121,20 @@ def test_noteworthy_text_is_read_into_a_part_per_staff():
     assert pitches_of(lower) == ["C3", "E3", "G3"]
     # music21 keeps the quotation marks round a staff's name.
     assert upper.partName == '"Upper"'
+
+
+def test_a_binary_noteworthy_file_is_read_compressed_or_not():
+    import pathlib
+    import zlib
+
+    nwctxt = pathlib.Path(__file__).parents[2] / "music21" / "music21" / "noteworthy"
+    if not nwctxt.is_dir():
+        pytest.skip("music21's NoteWorthy files are not here")
+    plain = (nwctxt / "cuthbert_test1_uncompressed.nwc").read_bytes()
+    score = m.from_nwc(plain)
+    assert len(score.parts) == 4
+    squeezed = b"[NWZ]\x00" + zlib.compress(plain)
+    assert pitches_of(m.from_nwc(squeezed).parts[0]) == pitches_of(score.parts[0])
 
 
 def test_a_file_that_is_not_noteworthy_is_refused():
