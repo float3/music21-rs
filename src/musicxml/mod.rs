@@ -158,14 +158,15 @@ impl Default for ExportOptions {
 /// tie of note values reaches that is not an unprinted rest.
 pub fn to_musicxml(score: &Stream, options: &ExportOptions) -> Result<String> {
     // music21's exporter turns a part at sounding pitch to the pitch its
-    // instruments read (`toWrittenPitch`) before it writes; making the
-    // notation does that itself, at the point music21 does it.
+    // instruments read, and the notes under an octave line to where they
+    // sound (`toWrittenPitch(ottavasToSounding=True)`), before it writes;
+    // making the notation does that itself, at the point music21 does it.
     let prepared;
     let score = if options.make_notation {
         prepared = notate::notated(score)?;
         &prepared
-    } else if holds_sounding_pitch(score) {
-        prepared = score.to_written_pitch()?;
+    } else if holds_sounding_pitch(score) || score.holds_transposing_ottava() {
+        prepared = score.to_written_pitch_by(true)?;
         &prepared
     } else {
         score
