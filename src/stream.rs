@@ -161,6 +161,8 @@ pub enum StreamElement {
     /// A change of tempo written as one note value becoming another. Boxed:
     /// it holds two tempo marks.
     MetricModulation(Box<MetricModulation>),
+    /// Where a manuscript's line, page or column breaks.
+    Break(crate::volpiano::Break),
 }
 
 impl StreamElement {
@@ -192,7 +194,8 @@ impl StreamElement {
             | Self::Barline(_)
             | Self::PedalObject(_)
             | Self::RehearsalMark(_)
-            | Self::MetricModulation(_) => None,
+            | Self::MetricModulation(_)
+            | Self::Break(_) => None,
         }
     }
 
@@ -217,7 +220,8 @@ impl StreamElement {
             | Self::Barline(_)
             | Self::PedalObject(_)
             | Self::RehearsalMark(_)
-            | Self::MetricModulation(_) => 0.0,
+            | Self::MetricModulation(_)
+            | Self::Break(_) => 0.0,
             _ => self
                 .duration()
                 .map(Duration::quarter_length)
@@ -249,7 +253,8 @@ impl StreamElement {
             | Self::Barline(_)
             | Self::PedalObject(_)
             | Self::RehearsalMark(_)
-            | Self::MetricModulation(_) => Vec::new(),
+            | Self::MetricModulation(_)
+            | Self::Break(_) => Vec::new(),
         }
     }
 
@@ -319,6 +324,7 @@ impl StreamElement {
             Self::PedalObject(object) => Ok(Self::PedalObject(object.clone())),
             Self::RehearsalMark(mark) => Ok(Self::RehearsalMark(mark.clone())),
             Self::MetricModulation(modulation) => Ok(Self::MetricModulation(modulation.clone())),
+            Self::Break(kind) => Ok(Self::Break(*kind)),
         }
     }
 }

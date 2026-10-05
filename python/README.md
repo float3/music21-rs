@@ -67,6 +67,7 @@ it, into this package's own streams:
 | `from_humdrum(text)` | Humdrum `**kern` | `Score`, or an `Opus` for several tables |
 | `from_mei(text)` | MEI | `Score` |
 | `from_roman_text(text)` | RomanText | `Score`, or an `Opus` for several movements |
+| `from_volpiano(text)` | Volpiano, the chant font's notation | `Part` |
 
 The streams hold measures of notes, chords, rests, clefs, keys, meters,
 tempo marks, dynamics, chord symbols and instruments, and a voice apiece
@@ -85,7 +86,8 @@ rests, accidentals and beams.
 `to_midi` takes the same and hands back the `bytes` of the MIDI file
 music21's `streamToMidiFile` writes, its repeats played out first, and
 `to_abc` writes it as ABC, which music21 has no writer for: a tune music21's
-reader and this package's both read back as the same score.
+reader and this package's both read back as the same score. `to_volpiano`
+writes it as Volpiano, as music21's `volpiano.fromStream` does.
 
 ## Using it inside music21
 

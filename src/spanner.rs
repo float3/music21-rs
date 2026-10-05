@@ -39,6 +39,9 @@ pub enum SpannerKind {
     Glissando,
     /// A tremolo alternating between two notes: music21's `TremoloSpanner`.
     TremoloSpanner,
+    /// Notes sung to one syllable as one figure, as chant writes them:
+    /// music21's volpiano `Neume`.
+    Neume,
 }
 
 impl SpannerKind {
@@ -55,6 +58,7 @@ impl SpannerKind {
             Self::TrillExtension => "TrillExtension",
             Self::Glissando => "Glissando",
             Self::TremoloSpanner => "TremoloSpanner",
+            Self::Neume => "Neume",
         }
     }
 

@@ -1687,8 +1687,9 @@ impl<'a, 'b> MeasureExporter<'a, 'b> {
                 self.root.push(direction);
             }
             // music21 writes nothing for a barline standing inside a
-            // measure: `Barline` is one of `ignoreOnParseClasses`.
-            StreamElement::Barline(_) => {}
+            // measure: `Barline` is one of `ignoreOnParseClasses`. A
+            // manuscript's break is no class its exporter knows.
+            StreamElement::Barline(_) | StreamElement::Break(_) => {}
         }
         Ok(())
     }

@@ -8,6 +8,9 @@ are tunes whose own reading cannot be written back.
 
 ## Breaking Changes
 
+- `StreamElement` has a `Break` variant, a manuscript's line, page or column
+  break, and `SpannerKind` a `Neume` variant, so a `match` over either needs
+  arms for them.
 - `StreamElement` has four more variants, `Barline`, `PedalObject`,
   `RehearsalMark` and `MetricModulation`, and `SpannerKind` two more,
   `Glissando` and `TremoloSpanner`, so a `match` over either needs arms for
@@ -24,6 +27,14 @@ are tunes whose own reading cannot be written back.
 
 ## Added
 
+- `volpiano::from_volpiano` and `volpiano::to_volpiano` read and write
+  Volpiano, the notation of the chant font the CANTUS database is written
+  in, as music21's `volpiano.toPart` and `fromStream` do: clefs, notes
+  liquescent or not, flats and naturals on B and E, barlines, neumes and
+  line, page and column breaks. Held to music21 on music21's own examples
+  and 300 generated strings, read both ways and written back, and on every
+  MusicXML score of its corpus written as Volpiano. The wheel has
+  `from_volpiano` and `to_volpiano` too.
 - `Stream::to_sounding_pitch` and `Stream::to_written_pitch` move the notes
   under an octave line, as music21's `Ottava.performTransposition` and
   `undoTransposition` do, and turn the line's `OctaveShift::transposing`
