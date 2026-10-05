@@ -27,6 +27,14 @@ are tunes whose own reading cannot be written back.
 
 ## Added
 
+- `capella::from_capella` reads Capella's CapXML, the `score.xml` a `.capx`
+  holds, as music21's `capella.fromCapellaXML` does: system by system, each
+  staff's share put end to end into a part, clefs and key signatures that
+  restate the one before dropped, and each part cut into measures. Clefs,
+  keys, meters, notes and chords with their accidentals, ties, tuplets and
+  lyrics, rests and barlines are read. Held to music21 byte for byte as
+  MusicXML on the `.capx` music21 carries and documents written for the
+  test. The wheel has `from_capella`, which unpacks a `.capx` itself.
 - `musedata::from_musedata` reads a MuseData work, its files' texts in
   order, as music21's `musedata` and `musedata.translate` do, in both of the
   encoding's stages: a part for each part, measures with their barlines and

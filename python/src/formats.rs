@@ -210,6 +210,33 @@ fn from_mei<'py>(py: Python<'py>, text: &str) -> PyResult<Bound<'py, PyAny>> {
     handed_back(py, music21_rs_crate::mei::from_mei(text))
 }
 
+/// Reads a Capella score as music21's `converter.parse` reads a `.capx`, as
+/// a `Score` of a part for each staff.
+///
+/// `data` is a `.capx` file's `bytes`, which are unpacked to the
+/// `score.xml` they hold, or that document's text. Barlines are read and
+/// left out, as music21's MusicXML writer leaves out a barline standing in
+/// a measure.
+#[pyfunction]
+fn from_capella<'py>(py: Python<'py>, data: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    let text: String = if let Ok(text) = data.extract::<String>() {
+        text
+    } else {
+        let bytes: Vec<u8> = data.extract()?;
+        if bytes.starts_with(b"PK") {
+            let archive = py.import("zipfile")?.getattr("ZipFile")?.call1((py
+                .import("io")?
+                .getattr("BytesIO")?
+                .call1((pyo3::types::PyBytes::new(py, &bytes),))?,))?;
+            let inner: Vec<u8> = archive.call_method1("read", ("score.xml",))?.extract()?;
+            String::from_utf8_lossy(&inner).into_owned()
+        } else {
+            String::from_utf8_lossy(&bytes).into_owned()
+        }
+    };
+    handed_back(py, music21_rs_crate::capella::from_capella(&text))
+}
+
 /// Reads a MuseData work as music21's `converter.parse` reads one, as a
 /// `Score` of a part for each part the files hold.
 ///
@@ -313,6 +340,7 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(from_roman_text, m)?)?;
     m.add_function(wrap_pyfunction!(from_noteworthy, m)?)?;
     m.add_function(wrap_pyfunction!(from_musedata, m)?)?;
+    m.add_function(wrap_pyfunction!(from_capella, m)?)?;
     m.add_function(wrap_pyfunction!(from_nwc, m)?)?;
     m.add_function(wrap_pyfunction!(from_volpiano, m)?)?;
     m.add_function(wrap_pyfunction!(to_volpiano, m)?)?;

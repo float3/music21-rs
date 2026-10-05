@@ -90,6 +90,9 @@ pub enum Error {
     /// RomanText that cannot be read.
     #[error("RomanText error: {0}")]
     RomanText(String),
+    /// Capella's CapXML that cannot be read.
+    #[error("Capella error: {0}")]
+    Capella(String),
     /// MuseData that cannot be read.
     #[error("MuseData error: {0}")]
     MuseData(String),

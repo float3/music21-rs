@@ -89,8 +89,8 @@ and RomanText are read with no feature at all: `abc::from_abc`,
 `midi::from_midi`, `tinynotation::from_tiny_notation`,
 `humdrum::from_humdrum`, `mei::from_mei`, `romantext::from_roman_text` and
 `noteworthy::from_noteworthy` and `noteworthy::from_nwc` (NoteWorthy
-Composer's `.nwctxt` and, uncompressed, `.nwc`) and `musedata::from_musedata`
-each read
+Composer's `.nwctxt` and, uncompressed, `.nwc`), `musedata::from_musedata`
+and `capella::from_capella` (a `.capx`'s `score.xml`) each read
 what music21 reads into the score music21 makes of it. ABC is
 written as well: `abc::to_abc` writes a score as a tune music21's reader and
 the crate's both read back as the same score. So is MIDI: `midi::to_midi`
