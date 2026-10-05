@@ -24,6 +24,13 @@ are tunes whose own reading cannot be written back.
 
 ## Added
 
+- `Stream::to_sounding_pitch` and `Stream::to_written_pitch` move the notes
+  under an octave line, as music21's `Ottava.performTransposition` and
+  `undoTransposition` do, and turn the line's `OctaveShift::transposing`
+  to say where they now are. `to_written_pitch_by` takes music21's
+  `ottavasToSounding`. `to_musicxml` writes the notes under a transposing
+  line at the pitch they sound, as music21's writer does.
+  `OctaveShift::interval` and `set_transposing` are new.
 - The wheel has `to_abc`, writing one of its streams or one of music21's as
   ABC, which music21 has no writer for, with `unit_length` and
   `measures_per_line` as the crate's `abc::ExportOptions` has them.
