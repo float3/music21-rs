@@ -1005,6 +1005,7 @@ def test_every_reader_is_exported():
         "from_noteworthy",
         "from_nwc",
         "from_musedata",
+        "from_capella",
         "from_volpiano",
     ):
         assert name in m.__all__
@@ -1166,6 +1167,31 @@ def test_musedata_is_read_from_one_file_or_several():
     assert part.partName == "Flute"
     assert pitches_of(part) == ["C5", "B-4", "A4"]
     assert len(m.from_musedata([MUSEDATA, MUSEDATA]).parts) == 2
+
+
+CAPELLA = (
+    '<score xmlns="http://www.capella.de/CapXML/2.0"><systems><system><staves>'
+    '<staff layout="S"><voices><voice><noteObjects>'
+    '<clefSign clef="treble"/><timeSign time="2/4"/>'
+    '<chord><duration base="1/4"/><heads><head pitch="C5"/></heads></chord>'
+    '<chord><duration base="1/4"/><heads><head pitch="E5"><alter step="-1"/></head>'
+    '</heads></chord>'
+    '</noteObjects></voice></voices></staff></staves></system></systems></score>'
+)
+
+
+def test_capella_is_read_from_its_document_or_its_archive():
+    import io
+    import zipfile
+
+    (part,) = m.from_capella(CAPELLA).parts
+    # Capella writes its octaves one higher.
+    assert pitches_of(part) == ["C4", "E-4"]
+    packed = io.BytesIO()
+    with zipfile.ZipFile(packed, "w") as archive:
+        archive.writestr("score.xml", CAPELLA)
+    (again,) = m.from_capella(packed.getvalue()).parts
+    assert pitches_of(again) == pitches_of(part)
 
 
 def test_a_file_that_is_not_noteworthy_is_refused():
