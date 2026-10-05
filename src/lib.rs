@@ -96,6 +96,7 @@ pub mod meter;
 pub mod midi;
 /// MuseScore's own `.mscx` files, and MuseScore run as a converter for the
 /// formats it opens.
+pub mod musedata;
 pub mod musescore;
 /// MusicXML import and export: music21's `musicxml.xmlToM21` and
 /// `musicxml.m21ToXml`.
