@@ -67,6 +67,7 @@ it, into this package's own streams:
 | `from_humdrum(text)` | Humdrum `**kern` | `Score`, or an `Opus` for several tables |
 | `from_mei(text)` | MEI | `Score` |
 | `from_roman_text(text)` | RomanText | `Score`, or an `Opus` for several movements |
+| `from_noteworthy(text)` | NoteWorthy Composer text, `.nwctxt` | `Score` |
 
 The streams hold measures of notes, chords, rests, clefs, keys, meters,
 tempo marks, dynamics, chord symbols and instruments, and a voice apiece

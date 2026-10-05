@@ -90,6 +90,9 @@ pub enum Error {
     /// RomanText that cannot be read.
     #[error("RomanText error: {0}")]
     RomanText(String),
+    /// NoteWorthy Composer text that cannot be read.
+    #[error("NoteWorthy error: {0}")]
+    Noteworthy(String),
     /// A MuseScore file that cannot be read, or MuseScore itself could not be
     /// run or could not convert a file.
     #[error("MuseScore error: {0}")]

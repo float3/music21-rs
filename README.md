@@ -87,8 +87,9 @@ public types; `scala-archive` bundles the Scala scale archive described below;
 MuseScore, and turns `musicxml` on. ABC, MIDI, TinyNotation, Humdrum, MEI
 and RomanText are read with no feature at all: `abc::from_abc`,
 `midi::from_midi`, `tinynotation::from_tiny_notation`,
-`humdrum::from_humdrum`, `mei::from_mei` and `romantext::from_roman_text`
-each read what music21 reads into the score music21 makes of it. ABC is
+`humdrum::from_humdrum`, `mei::from_mei`, `romantext::from_roman_text` and
+`noteworthy::from_noteworthy` (NoteWorthy Composer's `.nwctxt`) each read
+what music21 reads into the score music21 makes of it. ABC is
 written as well: `abc::to_abc` writes a score as a tune music21's reader and
 the crate's both read back as the same score. So is MIDI: `midi::to_midi`
 writes the file music21's `streamToMidiFile` writes, byte for byte, its

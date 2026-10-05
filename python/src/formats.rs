@@ -210,6 +210,16 @@ fn from_mei<'py>(py: Python<'py>, text: &str) -> PyResult<Bound<'py, PyAny>> {
     handed_back(py, music21_rs_crate::mei::from_mei(text))
 }
 
+/// Reads the text of a NoteWorthy Composer `.nwctxt` file as music21's
+/// `converter.parse` reads one, as a `Score` of a part per staff.
+///
+/// Words, barlines, repeat marks, slurs, endings, unpitched strokes and the
+/// title are read and left out.
+#[pyfunction]
+fn from_noteworthy<'py>(py: Python<'py>, text: &str) -> PyResult<Bound<'py, PyAny>> {
+    handed_back(py, music21_rs_crate::noteworthy::from_noteworthy(text))
+}
+
 /// Reads RomanText as music21's `converter.parse` reads it, as a `Score`.
 ///
 /// The score holds one part of measures, and in each the chords the
@@ -236,5 +246,6 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(from_humdrum, m)?)?;
     m.add_function(wrap_pyfunction!(from_mei, m)?)?;
     m.add_function(wrap_pyfunction!(from_roman_text, m)?)?;
+    m.add_function(wrap_pyfunction!(from_noteworthy, m)?)?;
     Ok(())
 }

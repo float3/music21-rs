@@ -105,6 +105,7 @@ pub mod musicxml;
 pub mod notation;
 /// Note construction and pitch access helpers.
 pub mod note;
+pub mod noteworthy;
 /// Notes with no pitch, and chords of them.
 pub mod percussion;
 /// Pitch construction, spelling and pitch-space helpers.
