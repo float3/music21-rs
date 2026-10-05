@@ -1002,6 +1002,7 @@ def test_every_reader_is_exported():
         "from_humdrum",
         "from_mei",
         "from_roman_text",
+        "from_noteworthy",
         "from_volpiano",
     ):
         assert name in m.__all__
@@ -1104,6 +1105,26 @@ def test_a_score_is_written_as_abc_and_read_back():
     assert "G A B c | d e f g | a4 |" in written
     assert m.to_abc(m.from_abc(written)) == written
     assert "L:1/8" in m.to_abc(m.from_abc(tune), unit_length=(1, 8))
+
+
+def test_noteworthy_text_is_read_into_a_part_per_staff():
+    score = m.from_noteworthy(
+        "!NoteWorthyComposer(2.0)\n|AddStaff|Name:\"Upper\"\n|Key|Signature:Bb\n"
+        "|Note|Dur:Half|Pos:0\n|Note|Dur:Half|Pos:#0\n|Bar\n"
+        "|AddStaff|\n|Clef|Type:Bass\n|Chord|Dur:Whole|Pos:-1,1,3\n"
+    )
+    upper, lower = score.parts
+    # A position counts from the middle line: the key's flat, then a sharp
+    # written over it.
+    assert pitches_of(upper) == ["B-4", "B#4"]
+    assert pitches_of(lower) == ["C3", "E3", "G3"]
+    # music21 keeps the quotation marks round a staff's name.
+    assert upper.partName == '"Upper"'
+
+
+def test_a_file_that_is_not_noteworthy_is_refused():
+    with pytest.raises(m.StreamException):
+        m.from_noteworthy("|Note|Dur:4th|Pos:1\n")
 
 
 def test_volpiano_is_read_and_written_back():

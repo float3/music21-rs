@@ -27,6 +27,15 @@ are tunes whose own reading cannot be written back.
 
 ## Added
 
+- `noteworthy::from_noteworthy` reads NoteWorthy Composer's text format,
+  `.nwctxt`, as music21's `noteworthy.translate` does: a part per staff,
+  notes, chords and rests spelled from their places under the clef, the
+  key and the accidentals written before them, slurs, ties, triplets, grace
+  notes, lyrics, barlines, repeats and endings, clefs, keys, meters, tempos,
+  dynamics, words, *Coda* and *Segno* marks, instruments and the title.
+  Every file music21 carries beside its reader is read into the score
+  music21 makes, held to it byte for byte as MusicXML. The wheel has
+  `from_noteworthy` too.
 - `volpiano::from_volpiano` and `volpiano::to_volpiano` read and write
   Volpiano, the notation of the chant font the CANTUS database is written
   in, as music21's `volpiano.toPart` and `fromStream` do: clefs, notes
