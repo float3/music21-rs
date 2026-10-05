@@ -95,11 +95,15 @@ impl Key {
         &self.mode
     }
 
-    /// Returns this key moved by the interval, keeping its mode.
+    /// Returns this key moved by the interval, keeping its mode and the
+    /// colour it is drawn in.
     pub fn transpose(&self, interval: &Interval) -> Result<Self> {
-        self.key_signature()
+        let mut moved = self
+            .key_signature()
             .transpose(interval)?
-            .try_as_key(Some(&self.mode), None)
+            .try_as_key(Some(&self.mode), None)?;
+        moved.color = self.color.clone();
+        Ok(moved)
     }
 
     /// The scale this key is written in: its tonic, and the diatonic mode

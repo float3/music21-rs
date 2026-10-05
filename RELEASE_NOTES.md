@@ -27,6 +27,16 @@ are tunes whose own reading cannot be written back.
 
 ## Added
 
+- `Stream::chordify` and `chordify_with` make a score's parts one line of
+  chords, as music21's `chordify` does: laid out as the first part is, with
+  a chord of every pitch sounding wherever any part starts or stops a note,
+  a held note tied across, a pitch two parts share one note, the notes'
+  articulations and expressions gathered onto the chord, and rests standing
+  together joined. `ChordifyOptions` carries music21's `addTies`,
+  `removeRedundantPitches` and `toSoundingPitch`. Every MusicXML score of
+  music21's corpus chordifies as music21 chordifies it, byte for byte as
+  MusicXML where music21 can write the result. The wheel's `Stream` has
+  `chordify` too.
 - `romantext::to_roman_text` writes a score's roman numerals as a RomanText
   analysis, as music21's `romanText.writeRoman.RnWriter` does: the header,
   `Time Signature:` lines, and each measure's numerals at their beats with
@@ -308,6 +318,8 @@ are tunes whose own reading cannot be written back.
 
 ## Fixed
 
+- Transposing a `Key` or a `KeySignature` keeps the colour it is drawn in,
+  as music21's does; a score turned to sounding pitch lost it.
 - `from_roman_text` records a pickup's `padding_left`, and the last
   measure's `padding_right`, as music21 does; it moved the pickup's chords
   to the start of the measure and said nothing of what was left out, so

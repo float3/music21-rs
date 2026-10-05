@@ -1317,3 +1317,24 @@ def test_roman_numerals_are_written_as_roman_text():
 def test_a_reader_refuses_what_it_cannot_read():
     with pytest.raises(m.StreamException):
         m.from_mei("<html></html>")
+
+
+def test_a_score_is_chordified_into_one_line_of_chords():
+    upper = m.from_tiny_notation("tinyNotation: 2/4 c'2")
+    lower = m.from_tiny_notation("tinyNotation: 2/4 e4 g4")
+    score = m.Score()
+    score.insert(0, upper)
+    score.insert(0, lower)
+    chords = score.chordify()
+    assert type(chords).__name__ == "Part"
+    (measure,) = measures_of(chords)
+    made = [element for element in measure if type(element).__name__ == "Chord"]
+    assert [[pitch.nameWithOctave for pitch in chord.pitches] for chord in made] == [
+        ["E4", "C5"],
+        ["G4", "C5"],
+    ]
+    # The upper note sounds on through both chords, tied.
+    assert [note.tie.type if note.tie else None for note in made[0].notes] == [None, "start"]
+    assert [note.tie.type if note.tie else None for note in made[1].notes] == [None, "stop"]
+    with pytest.raises(m.StreamException):
+        score.chordify(addPartIdAsGroup=True)

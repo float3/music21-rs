@@ -271,14 +271,17 @@ impl KeySignature {
     }
 
     /// Returns the signature of the major key this one's major tonic moves
-    /// to by the interval.
+    /// to by the interval, drawn in the colour this one is.
     pub fn transpose(&self, interval: &Interval) -> Result<Self> {
         let tonic = self.try_as_key(Some("major"), None)?.tonic();
         let mut transposed = interval.transpose_pitch(&tonic)?;
         if interval.implicit_diatonic && pitch_to_sharps(&transposed, None)?.abs() > 6 {
             transposed = transposed.get_enharmonic()?;
         }
-        Ok(Self::new(pitch_to_sharps(&transposed, None)?))
+        // music21 transposes the object, so it is drawn as it was.
+        let mut moved = Self::new(pitch_to_sharps(&transposed, None)?);
+        moved.color = self.color.clone();
+        Ok(moved)
     }
 
     /// Transposes a pitch spelled in C into this key signature the way
