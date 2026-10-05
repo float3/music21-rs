@@ -61,7 +61,12 @@ impl Default for ExportOptions {
 /// notes, is a tune of one voice. The header carries the title, composer and
 /// origin, the meter, the unit note length, the tempo and the key with its
 /// mode; a score of several parts has a `V:` voice for each, and a part
-/// whose measures hold voices of their own has one for each of those.
+/// whose measures hold voices of their own has one for each of those. A
+/// voice's clef is said on its `V:` line, unless it is a treble clef the
+/// notes fit, which is what a reader takes where none is said, and a part's
+/// name goes there too; a tune of one voice has a `V:` line only for those.
+/// A part opening with an instrument that has a General MIDI program says so
+/// with abc2midi's `%%MIDI program`, before its music.
 ///
 /// What ABC has no way to say is refused with [`Error::Abc`] rather than
 /// left out: a microtone, a tuplet inside a tuplet, an unpitched stroke, a
@@ -340,6 +345,23 @@ struct Voice<'a> {
     within: usize,
 }
 
+/// The General MIDI program of the instrument a part opens with: the first
+/// standing in it no later than its first note.
+fn program_of(part: &Stream) -> Option<u8> {
+    let leaves = part.leaves();
+    let first_note = leaves
+        .iter()
+        .filter(|(_, element)| is_sounding(element))
+        .map(|(offset, _)| *offset)
+        .fold(FloatType::INFINITY, FloatType::min);
+    leaves.iter().find_map(|(offset, element)| match element {
+        StreamElement::Instrument(instrument) if *offset <= first_note + EPSILON => {
+            instrument.midi_program()
+        }
+        _ => None,
+    })
+}
+
 fn is_sounding(element: &StreamElement) -> bool {
     matches!(
         element,
@@ -482,6 +504,28 @@ fn voices_of<'a>(part: &'a Stream, leaf: &mut usize) -> Result<Vec<Voice<'a>>> {
                 if index == 0 {
                     held.extend(loose.iter().filter(|held| held.offset < EPSILON).copied());
                 }
+            } else {
+                // The clef, key and meter standing outside the voices are
+                // every voice's: each voice of ABC states its own.
+                let shared = |held: &&Held<'a>| {
+                    matches!(
+                        held.element,
+                        StreamElement::Clef(_)
+                            | StreamElement::Key(_)
+                            | StreamElement::KeySignature(_)
+                            | StreamElement::TimeSignature(_)
+                    )
+                };
+                held.extend(common.iter().filter(shared).copied());
+                if index == 0 {
+                    held.extend(
+                        loose
+                            .iter()
+                            .filter(|held| held.offset < EPSILON)
+                            .filter(shared)
+                            .copied(),
+                    );
+                }
             }
             let filler = match own {
                 Some(own) => {
@@ -491,7 +535,7 @@ fn voices_of<'a>(part: &'a Stream, leaf: &mut usize) -> Result<Vec<Voice<'a>>> {
                 None if within == 0 && plain_measure => None,
                 None => Some(length),
             };
-            if within == 0 && (!plain_measure || index == 0) {
+            if within > 0 || !plain_measure || index == 0 {
                 sort_held(&mut held);
             }
             voice.bars.push(Bar {
@@ -1150,28 +1194,41 @@ impl<'a> Tune<'a> {
                     element => element.pitches(),
                 })
                 .collect();
-            // The clef that fits the notes best is the one read where none
-            // is written.
-            (*clef != Clef::best_for(&pitches, false)).then_some(clef)
+            // A clef is left unsaid only where it is treble, ABC's own
+            // default, and fits the notes best, which is what music21's
+            // reader takes where none is written.
+            let unsaid = clef.kind() == crate::clef::ClefKind::TrebleClef
+                && *clef == Clef::best_for(&pitches, false);
+            (!unsaid).then_some(clef)
         };
-        let key_line = |voice: &Voice<'a>, opening: &Opening<'a>| -> Result<String> {
-            let clef = clef_of(voice, opening);
+        // A voice's opening clef is said on its `V:` line: music21's reader
+        // takes a bass clef named in the header's `K:` as lowering every
+        // note two octaves, and one on a `V:` line as the clef alone.
+        let key_line = |opening: &Opening<'a>| -> Result<String> {
             match opening.key {
-                Some(key) => key_field(key, clef),
-                None => Ok(match clef {
-                    Some(clef) => format!("none clef={}", clef_name(clef)?),
-                    None => "none".to_string(),
-                }),
+                Some(key) => key_field(key, None),
+                None => Ok("none".to_string()),
             }
         };
+        let voice_line =
+            |index: usize, voice: &Voice<'a>, opening: &Opening<'a>| -> Result<String> {
+                let mut line = format!("V:{}", index + 1);
+                if let Some(clef) = clef_of(voice, opening) {
+                    let _ = write!(line, " clef={}", clef_name(clef)?);
+                }
+                if let Some(name) = voice.part.name().filter(|_| voice.within == 0) {
+                    let _ = write!(line, " name=\"{}\"", quoted(name));
+                }
+                Ok(line)
+            };
         let mut reading = Reading { alters: [0; 7] };
         let several = self.voices.len() > 1;
         // A first voice stating no key leaves the key to the voices that
         // state one, each after its own `V:` line.
         let key_heads = !several || shared.key.is_some();
         if !key_heads {
-        } else if let Some(voice) = first {
-            let _ = writeln!(out, "K:{}", key_line(voice, &shared)?);
+        } else if first.is_some() {
+            let _ = writeln!(out, "K:{}", key_line(&shared)?);
             reading.alters = shared
                 .key
                 .and_then(signature_of)
@@ -1200,12 +1257,14 @@ impl<'a> Tune<'a> {
         }
         for (index, voice) in self.voices.iter().enumerate() {
             let opening = &openings[index];
+            // A tune of one voice has a `V:` line only for a clef to say or
+            // a part's name, which no reader takes for the part's but every
+            // renderer draws.
+            let line = voice_line(index, voice, opening)?;
+            if several || line != "V:1" {
+                let _ = writeln!(out, "{line}");
+            }
             if several {
-                let _ = write!(out, "V:{}", index + 1);
-                if let Some(name) = voice.part.name().filter(|_| voice.within == 0) {
-                    let _ = write!(out, " name=\"{}\"", quoted(name));
-                }
-                out.push('\n');
                 if !shared_meter {
                     let _ = writeln!(
                         out,
@@ -1226,15 +1285,18 @@ impl<'a> Tune<'a> {
                     .key
                     .and_then(signature_of)
                     .map_or([0; 7], |signature| alters_of(&signature));
-                let line = key_line(voice, opening)?;
-                let stated = opening.key.is_some() || clef_of(voice, opening).is_some();
-                let differs = !key_heads
-                    || alters != reading.alters
-                    || line != key_line(&self.voices[0], &shared)?;
+                let line = key_line(opening)?;
+                let stated = opening.key.is_some();
+                let differs = !key_heads || alters != reading.alters || line != key_line(&shared)?;
                 if stated && differs && (index > 0 || !key_heads) {
                     let _ = writeln!(out, "K:{line}");
                 }
                 reading.alters = alters;
+            }
+            // The part's instrument, as abc2midi and abcjs take it: no
+            // reader of ABC music21's or this crate's reads it back.
+            if let Some(program) = program_of(voice.part) {
+                let _ = writeln!(out, "%%MIDI program {program}");
             }
             self.write_voice(voice, unit, &unit_text, options, &mut reading, &mut out)?;
         }
@@ -2243,5 +2305,72 @@ mod tests {
             written.contains("L:1/8\nK:G\n^C, _e'3 =F2 f/ z3/2 | c8 | C8 |]"),
             "{written}"
         );
+    }
+
+    /// A part of whole notes in measures, holding what `opening` gives its
+    /// first measure.
+    fn part_of(names: &[&str], opening: Vec<StreamElement>) -> Stream {
+        let mut part = Stream::with_kind(StreamKind::Part);
+        for (index, name) in names.iter().enumerate() {
+            let mut measure = Stream::with_kind(StreamKind::Measure);
+            if index == 0 {
+                for element in &opening {
+                    measure.insert(0.0, element.clone());
+                }
+            }
+            measure.insert(
+                0.0,
+                Note::from_name(name)
+                    .unwrap()
+                    .with_duration(Duration::whole()),
+            );
+            part.insert(index as FloatType * 4.0, measure);
+        }
+        part
+    }
+
+    #[test]
+    fn a_part_says_its_name_and_its_instrument_s_program() {
+        let mut part = part_of(
+            &["C4", "D4"],
+            vec![StreamElement::TimeSignature(
+                TimeSignature::new(4, 4).unwrap(),
+            )],
+        );
+        part.set_name(Some("Guitar".to_string()));
+        let mut guitar = crate::instrument::Instrument::new();
+        guitar.set_midi_program(Some(24));
+        part.insert(0.0, StreamElement::Instrument(Box::new(guitar)));
+        let written = to_abc(&part, &ExportOptions::default()).unwrap();
+        assert!(
+            written.contains(
+                "V:1 name=\"Guitar\"
+%%MIDI program 24
+"
+            ),
+            "{written}"
+        );
+    }
+
+    #[test]
+    fn a_clef_other_than_treble_is_said_even_where_the_notes_imply_it() {
+        let low = part_of(
+            &["C2", "G2"],
+            vec![
+                StreamElement::Clef(Clef::of_kind(crate::clef::ClefKind::BassClef)),
+                StreamElement::TimeSignature(TimeSignature::new(4, 4).unwrap()),
+            ],
+        );
+        let written = to_abc(&low, &ExportOptions::default()).unwrap();
+        assert!(written.contains("clef=bass"), "{written}");
+        let high = part_of(
+            &["C5", "G5"],
+            vec![
+                StreamElement::Clef(Clef::of_kind(crate::clef::ClefKind::TrebleClef)),
+                StreamElement::TimeSignature(TimeSignature::new(4, 4).unwrap()),
+            ],
+        );
+        let written = to_abc(&high, &ExportOptions::default()).unwrap();
+        assert!(!written.contains("clef="), "{written}");
     }
 }

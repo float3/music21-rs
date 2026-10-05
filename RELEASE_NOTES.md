@@ -204,6 +204,16 @@ are tunes whose own reading cannot be written back.
 
 ## Changed
 
+- `abc::to_abc` says each voice's opening clef on its `V:` line, where it
+  used to name it in the `K:` field, and says every clef but a treble clef
+  the notes fit, where it used to leave unsaid any clef the notes fit. A
+  renderer drawing the tune, whose default is treble, now draws a bass part
+  in the bass clef. A tune of one voice names its part on a `V:1` line, and
+  a part opening with an instrument that has a General MIDI program says so
+  with `%%MIDI program`.
+- The score editor writes an imported score as ABC with `abc::to_abc`, its
+  own ABC writer gone: what it reads is turned into the crate's score and
+  written by the crate.
 - `to_musicxml` writes a part at written pitch, as music21's exporter
   does: a stream holding anything at sounding pitch is turned to written
   pitch before it is written. `from_musicxml` says a part is at sounding
@@ -233,6 +243,11 @@ are tunes whose own reading cannot be written back.
 
 ## Fixed
 
+- `abc::to_abc` no longer writes a bass clef that music21's reader, and the
+  crate's, read as lowering every note two octaves: music21 takes a bass
+  clef named in the header's `K:` field that way. It also gives every voice
+  of a measure the measure's clef, key and meter, where only the first voice
+  had them and the others were written with no meter.
 - `midi::to_midi` plays a chord whose notes each carry a volume as music21
   does: each note's velocity realized under the dynamic the chord's context
   finds -- in its own staff, or in the other staves of the part it was read
