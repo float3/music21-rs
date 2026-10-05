@@ -1095,6 +1095,16 @@ def test_midi_is_read_from_bytes_into_measures_of_notes_and_chords():
     assert pitches_of(strokes) == []
 
 
+def test_a_score_is_written_as_abc_and_read_back():
+    tune = "X:1\nT:Scale\nM:4/4\nL:1/4\nK:G\nGABc|defg|a4|]\n"
+    written = m.to_abc(m.from_abc(tune))
+    # This package's streams keep no title or barline style to write.
+    assert written.startswith("X:1\nM:4/4\nL:1/4\nK:G\n"), written
+    assert "G A B c | d e f g | a4 |" in written
+    assert m.to_abc(m.from_abc(written)) == written
+    assert "L:1/8" in m.to_abc(m.from_abc(tune), unit_length=(1, 8))
+
+
 def test_a_score_is_written_as_midi_and_read_back():
     part = m.from_tiny_notation("tinyNotation: 4/4 c4 d e~ e g1")
     written = m.to_midi(part)

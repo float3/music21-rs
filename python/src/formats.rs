@@ -67,6 +67,31 @@ fn to_musicxml(
     music21_rs_crate::musicxml::to_musicxml(&stream, &options).map_err(format_error)
 }
 
+/// Writes a score as ABC and hands back the tune's text.
+///
+/// The score may be one of this wheel's streams or one of music21's, which
+/// has no ABC writer of its own. What is written reads back, with music21's
+/// reader and this package's alike, as the score it was written from; what
+/// ABC cannot say, such as a microtone or an unpitched stroke, raises
+/// `StreamException` rather than being left out. `unit_length` is the `L:`
+/// field as a fraction of a whole note, `(1, 8)` for an eighth, the one the
+/// tune is shortest to write against where it is not given;
+/// `measures_per_line` is how many measures go on a line.
+#[pyfunction]
+#[pyo3(signature = (score, *, unit_length = None, measures_per_line = 4))]
+fn to_abc(
+    score: &Bound<'_, PyAny>,
+    unit_length: Option<(u32, u32)>,
+    measures_per_line: usize,
+) -> PyResult<String> {
+    let stream = crate::stream::crate_stream(score)?;
+    let options = music21_rs_crate::abc::ExportOptions {
+        unit_length,
+        measures_per_line,
+    };
+    music21_rs_crate::abc::to_abc(&stream, &options).map_err(format_error)
+}
+
 /// Writes a score as a standard MIDI file and hands back its bytes, as
 /// music21's `midi.translate.streamToMidiFile(score).writestr()` does.
 ///
@@ -202,6 +227,7 @@ fn from_roman_text<'py>(py: Python<'py>, text: &str) -> PyResult<Bound<'py, PyAn
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(to_musicxml, m)?)?;
     m.add_function(wrap_pyfunction!(to_midi, m)?)?;
+    m.add_function(wrap_pyfunction!(to_abc, m)?)?;
     m.add_function(wrap_pyfunction!(from_musicxml, m)?)?;
     m.add_function(wrap_pyfunction!(from_abc, m)?)?;
     m.add_function(wrap_pyfunction!(from_abc_number, m)?)?;
