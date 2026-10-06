@@ -428,6 +428,26 @@ def a_three_part_score():
     return m.Score([upper, middle, lower])
 
 
+def test_consecutive_notes_are_the_objects_held():
+    # Each answer read off music21 11.0.0b9.
+    line = m.Stream()
+    for name in ["C4", "D5", None, "B4", "B5"]:
+        line.append(m.Rest() if name is None else m.Note(name))
+    found = line.findConsecutiveNotes()
+    assert found[0] is line[0] and found[2] is None
+    assert [None if each is None else each.nameWithOctave for each in found] == [
+        "C4", "D5", None, "B4", "B5"
+    ]
+    skipped = line.findConsecutiveNotes(skipRests=True, skipOctaves=True, noNone=True)
+    assert [each.nameWithOctave for each in skipped] == ["C4", "D5", "B4"]
+    steps = line.melodicIntervals()
+    assert [step.directedName for step in steps] == ["M9", "P8"]
+    assert [steps.elementOffset(step) for step in steps] == [1.0, 4.0]
+    assert steps[0].noteStart is line[0]
+    rests_skipped = line.melodicIntervals(skipRests=True, skipOctaves=True)
+    assert [step.directedName for step in rests_skipped] == ["M9", "m-3"]
+
+
 def test_a_stream_holds_the_objects_it_is_given():
     # Each answer read off music21 11.0.0b9.
     c, d = m.Note("C"), m.Note("D", quarterLength=2)
