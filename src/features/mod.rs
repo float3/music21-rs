@@ -177,6 +177,7 @@ pub struct DataInstance {
     midi_interval_histogram: OnceCell<Vec<usize>>,
     contour: OnceCell<Vec<IntegerType>>,
     seconds: OnceCell<std::result::Result<Vec<Seconds>, Error>>,
+    parts_sounding: OnceCell<std::result::Result<Vec<usize>, Error>>,
 }
 
 /// Where a note sounds in time, in seconds at the tempi of the piece:
@@ -232,6 +233,7 @@ impl DataInstance {
             midi_interval_histogram: OnceCell::new(),
             contour: OnceCell::new(),
             seconds: OnceCell::new(),
+            parts_sounding: OnceCell::new(),
         })
     }
 
@@ -436,6 +438,40 @@ impl DataInstance {
             });
         }
         Ok(seconds)
+    }
+
+    /// How many parts sound in each chord of the piece chordified, in order:
+    /// music21's `chordify(addPartIdAsGroup=True)`, read as the number of
+    /// part ids on each chord's pitches. A piece that is not a score is not
+    /// chordified, and its own chords carry no part ids, so each counts
+    /// nought.
+    ///
+    /// # Errors
+    ///
+    /// A score that cannot be chordified.
+    pub fn parts_sounding(&self) -> Result<&[usize]> {
+        self.parts_sounding
+            .get_or_init(|| {
+                if self.prepared.kind() == StreamKind::Score {
+                    self.prepared.chordify_parts_sounding()
+                } else {
+                    Ok(self
+                        .prepared
+                        .flatten()
+                        .events()
+                        .iter()
+                        .filter(|event| {
+                            matches!(
+                                event.element(),
+                                StreamElement::Chord(_) | StreamElement::ChordSymbol(_)
+                            )
+                        })
+                        .map(|_| 0)
+                        .collect())
+                }
+            })
+            .as_deref()
+            .map_err(Clone::clone)
     }
 
     /// The meters the piece states, in order.

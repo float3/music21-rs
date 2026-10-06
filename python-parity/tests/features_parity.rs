@@ -52,7 +52,7 @@ def source_text(name):
     return data.decode('latin-1')
 
 def ours(extractor_id):
-    return extractor_id[:1].upper() in 'MPR'
+    return extractor_id[:1].upper() in 'MPRTI'
 
 def metadata():
     return [(cls.id, cls.name, ' '.join(cls.description.split()), cls.dimensions,
