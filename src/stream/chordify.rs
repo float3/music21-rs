@@ -44,6 +44,8 @@ struct Span<'a> {
     start: FloatType,
     end: FloatType,
     element: &'a StreamElement,
+    /// Which of the streams read the element came from.
+    part: usize,
 }
 
 impl Stream {
@@ -99,6 +101,51 @@ impl Stream {
     ///
     /// As [`Stream::chordify`].
     pub fn chordify_with(&self, options: &ChordifyOptions) -> Result<Stream> {
+        Ok(self.chordify_tracking(options)?.0)
+    }
+
+    /// How many parts sound a single note in each chord [`Stream::chordify`]
+    /// makes, in order, parts sharing an id counted once: the groups
+    /// music21's `chordify(addPartIdAsGroup=True)` writes on the chord's
+    /// pitches, which it finds no part for where a note is one of a chord.
+    pub(crate) fn chordify_parts_sounding(&self) -> Result<Vec<usize>> {
+        let options = ChordifyOptions {
+            remove_redundant_pitches: false,
+            ..ChordifyOptions::default()
+        };
+        let ids: Vec<Option<String>> = self
+            .events
+            .iter()
+            .filter_map(|event| match &event.element {
+                StreamElement::Stream(inner) if inner.kind() != StreamKind::Voice => {
+                    Some(inner.id().map(str::to_string))
+                }
+                _ => None,
+            })
+            .collect();
+        let (_, heard) = self.chordify_tracking(&options)?;
+        Ok(heard
+            .into_iter()
+            .map(|parts| {
+                let mut named: Vec<String> = Vec::new();
+                for part in parts {
+                    let name = ids
+                        .get(part)
+                        .cloned()
+                        .flatten()
+                        .unwrap_or_else(|| format!("#{part}"));
+                    if !named.contains(&name) {
+                        named.push(name);
+                    }
+                }
+                named.len()
+            })
+            .collect())
+    }
+
+    /// The chords and, beside them, the streams sounding in each chord made.
+    fn chordify_tracking(&self, options: &ChordifyOptions) -> Result<(Stream, Vec<Vec<usize>>)> {
+        let mut heard: Vec<Vec<usize>> = Vec::new();
         let first_stream = |stream: &Stream| -> Option<Stream> {
             stream.events.iter().find_map(|event| match &event.element {
                 StreamElement::Stream(inner) => Some((**inner).clone()),
@@ -125,7 +172,7 @@ impl Stream {
 
         if template.measures().is_empty() {
             let spans = spans_of(&[&work]);
-            fill(&mut template, &spans, options)?;
+            fill(&mut template, &spans, options, &mut heard)?;
         } else {
             // Each part's measures, by their place among its measures.
             let parts: Vec<&Stream> = if parted {
@@ -156,7 +203,7 @@ impl Stream {
                     .collect();
                 index += 1;
                 let spans = spans_of(&sources);
-                fill(measure, &spans, options)?;
+                fill(measure, &spans, options, &mut heard)?;
             }
         }
 
@@ -180,7 +227,7 @@ impl Stream {
         if parted && let Some(metadata) = work.metadata() {
             template.set_metadata(Some(metadata.clone()));
         }
-        Ok(template)
+        Ok((template, heard))
     }
 }
 
@@ -227,7 +274,7 @@ fn template_of(stream: &Stream) -> Stream {
 /// after another, each read from its own start.
 fn spans_of<'a>(streams: &[&'a Stream]) -> Vec<Span<'a>> {
     let mut spans = Vec::new();
-    for stream in streams {
+    for (part, stream) in streams.iter().enumerate() {
         for (offset, element) in stream.leaves() {
             if is_general_note(element) {
                 let start = op_frac(offset);
@@ -235,6 +282,7 @@ fn spans_of<'a>(streams: &[&'a Stream]) -> Vec<Span<'a>> {
                     start,
                     end: op_frac(start + element.quarter_length()),
                     element,
+                    part,
                 });
             }
         }
@@ -244,7 +292,12 @@ fn spans_of<'a>(streams: &[&'a Stream]) -> Vec<Span<'a>> {
 
 /// `chordifyOneMeasure`: a chord or rest at every time point of the spans,
 /// put in the stream, and the rests standing together there joined.
-fn fill(stream: &mut Stream, spans: &[Span<'_>], options: &ChordifyOptions) -> Result<()> {
+fn fill(
+    stream: &mut Stream,
+    spans: &[Span<'_>],
+    options: &ChordifyOptions,
+    heard: &mut Vec<Vec<usize>>,
+) -> Result<()> {
     let mut points: Vec<FloatType> = spans
         .iter()
         .flat_map(|span| [span.start, span.end])
@@ -261,6 +314,18 @@ fn fill(stream: &mut Stream, spans: &[Span<'_>], options: &ChordifyOptions) -> R
             continue;
         }
         let element = make_element(spans, offset, op_frac(end - offset), options)?;
+        if matches!(element, StreamElement::Chord(_)) {
+            // music21 finds a note's part by where the note stands, and a
+            // note inside a chord stands nowhere: only single notes say
+            // which part they are in.
+            let mut parts = Vec::new();
+            for span in sounding_at(spans, offset) {
+                if matches!(span.element, StreamElement::Note(_)) && !parts.contains(&span.part) {
+                    parts.push(span.part);
+                }
+            }
+            heard.push(parts);
+        }
         made.push(StreamEvent::new(op_frac(offset), element));
     }
     stream.insert_sorted(made);

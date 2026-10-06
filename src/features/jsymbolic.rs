@@ -4,8 +4,9 @@
 //!
 //! The melodic features (`M`) read the intervals between neighbouring notes
 //! of each part; the rhythmic features (`R`) read when each note sounds, in
-//! seconds at the piece's tempi, and its meters; the pitch features (`P`)
-//! read the piece's pitches. Several
+//! seconds at the piece's tempi, and its meters; the texture features (`T`)
+//! read how many parts sound in each chord of the piece chordified; the
+//! pitch features (`P`) read the piece's pitches. Several
 //! of music21's habits are kept, since the values are the comparison: the
 //! pitch variety (`P8`) counts the MIDI numbers sounding but MIDI nought, a
 //! tie between two pitches equally common goes to the one sounded first, and
@@ -18,7 +19,7 @@ use crate::{
     error::{Error, Result},
 };
 
-/// Every jSymbolic extractor of melody, rhythm and pitch music21
+/// Every jSymbolic extractor of melody, rhythm, texture and pitch music21
 /// implements, in music21's order.
 pub const JSYMBOLIC: &[Extractor] = &[
     Extractor {
@@ -335,6 +336,33 @@ pub const JSYMBOLIC: &[Extractor] = &[
         discrete: false,
         normalize: false,
         process: duration,
+    },
+    Extractor {
+        id: "T1",
+        name: "Maximum Number of Independent Voices",
+        description: "Maximum number of different channels in which notes have sounded simultaneously. Here, Parts are treated as channels.",
+        dimensions: 1,
+        discrete: true,
+        normalize: false,
+        process: maximum_number_of_independent_voices,
+    },
+    Extractor {
+        id: "T2",
+        name: "Average Number of Independent Voices",
+        description: "Average number of different channels in which notes have sounded simultaneously. Rests are not included in this calculation. Here, Parts are treated as voices.",
+        dimensions: 1,
+        discrete: true,
+        normalize: false,
+        process: average_number_of_independent_voices,
+    },
+    Extractor {
+        id: "T3",
+        name: "Variability of Number of Independent Voices",
+        description: "Standard deviation of number of different channels in which notes have sounded simultaneously. Rests are not included in this calculation.",
+        dimensions: 1,
+        discrete: true,
+        normalize: false,
+        process: variability_of_number_of_independent_voices,
     },
     Extractor {
         id: "P1",
@@ -1233,5 +1261,38 @@ fn duration(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
         .iter()
         .map(|note| note.end)
         .fold(FloatType::NEG_INFINITY, FloatType::max);
+    Ok(())
+}
+
+fn maximum_number_of_independent_voices(
+    data: &DataInstance,
+    vector: &mut [FloatType],
+) -> Result<()> {
+    vector[0] = data.parts_sounding()?.iter().copied().max().unwrap_or(0) as FloatType;
+    Ok(())
+}
+
+fn average_number_of_independent_voices(
+    data: &DataInstance,
+    vector: &mut [FloatType],
+) -> Result<()> {
+    let sounding = data.parts_sounding()?;
+    if sounding.is_empty() {
+        return Err(lacks_notes());
+    }
+    vector[0] = sounding.iter().sum::<usize>() as FloatType / sounding.len() as FloatType;
+    Ok(())
+}
+
+fn variability_of_number_of_independent_voices(
+    data: &DataInstance,
+    vector: &mut [FloatType],
+) -> Result<()> {
+    let sounding = data.parts_sounding()?;
+    if sounding.is_empty() {
+        return Err(lacks_notes());
+    }
+    let counts: Vec<FloatType> = sounding.iter().map(|count| *count as FloatType).collect();
+    vector[0] = crate::statistics::pstdev(&counts);
     Ok(())
 }
