@@ -11,6 +11,7 @@ use crate::{
 };
 
 pub mod enharmonics;
+pub mod floating_key;
 pub mod harmonic_function;
 pub mod metrical;
 pub mod neoriemannian;
@@ -18,6 +19,7 @@ pub mod patel;
 pub mod pitch_analysis;
 pub mod segment_by_rests;
 pub mod transposition;
+pub mod windowed;
 
 /// A set of key-finding weights for the Krumhansl-Schmuckler algorithm.
 ///
@@ -183,14 +185,27 @@ pub fn pitch_class_distribution<'a>(
 }
 
 /// How long each pitch class sounds in a stream, nested streams included:
-/// music21's `_getPitchClassDistribution` over the stream's notes and
-/// chords, each pitch counting for its note's whole length. Chord symbols
-/// and rests do not sound here; nothing for a stream with no notes.
+/// music21's `_getPitchClassDistribution` over the stream's notes, each
+/// pitch counting for its note's whole length. A note is music21's: a note,
+/// a chord, a chord symbol or the pitched members of a percussion chord,
+/// so a stream of chord symbols lasting nothing has a distribution of
+/// nothing but noughts. Nothing for a stream with no notes at all.
 pub fn stream_distribution(stream: &Stream) -> Option<[FloatType; 12]> {
     let notes: Vec<(Vec<Pitch>, FloatType)> = stream
-        .notes()
+        .flatten()
+        .events()
         .iter()
-        .map(|(_, element)| (element.pitches(), element.quarter_length()))
+        .filter_map(|event| {
+            let element = event.element();
+            let pitches = match element {
+                StreamElement::Note(_)
+                | StreamElement::Chord(_)
+                | StreamElement::PercussionChord(_) => element.pitches(),
+                StreamElement::ChordSymbol(symbol) => symbol.pitches().unwrap_or_default(),
+                _ => return None,
+            };
+            Some((pitches, element.quarter_length()))
+        })
         .collect();
     pitch_class_distribution(
         notes

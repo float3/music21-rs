@@ -29,6 +29,12 @@ examples = 6
 tests = 4
 
 [[module]]
+module = "music21.analysis.floatingKey"
+docstrings = 2
+examples = 14
+tests = 0
+
+[[module]]
 module = "music21.analysis.harmonicFunction"
 docstrings = 2
 examples = 22
@@ -69,6 +75,12 @@ module = "music21.analysis.transposition"
 docstrings = 7
 examples = 28
 tests = 7
+
+[[module]]
+module = "music21.analysis.windowed"
+docstrings = 3
+examples = 35
+tests = 4
 
 [[module]]
 module = "music21.articulations"

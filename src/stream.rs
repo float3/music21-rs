@@ -954,7 +954,9 @@ impl Stream {
 
     fn flatten_into(&self, base: FloatType, out: &mut Vec<StreamEvent>) {
         for event in &self.events {
-            let offset = base + event.offset;
+            // Summed as music21 sums them, snapped by `opFrac`, so three
+            // triplets end on the beat however deep they sit.
+            let offset = crate::makenotation::op_frac(base + event.offset);
             match &event.element {
                 StreamElement::Stream(stream) => stream.flatten_into(offset, out),
                 element => out.push(StreamEvent::new(offset, element.clone())),
@@ -972,7 +974,9 @@ impl Stream {
 
     fn recurse_into<'a>(&'a self, base: FloatType, out: &mut Vec<(FloatType, &'a StreamElement)>) {
         for event in &self.events {
-            let offset = base + event.offset;
+            // Summed as music21 sums them, snapped by `opFrac`, so three
+            // triplets end on the beat however deep they sit.
+            let offset = crate::makenotation::op_frac(base + event.offset);
             out.push((offset, &event.element));
             if let StreamElement::Stream(stream) = &event.element {
                 stream.recurse_into(offset, out);
@@ -1022,7 +1026,9 @@ impl Stream {
 
     fn leaves_into<'a>(&'a self, base: FloatType, out: &mut Vec<(FloatType, &'a StreamElement)>) {
         for event in &self.events {
-            let offset = base + event.offset;
+            // Summed as music21 sums them, snapped by `opFrac`, so three
+            // triplets end on the beat however deep they sit.
+            let offset = crate::makenotation::op_frac(base + event.offset);
             match &event.element {
                 StreamElement::Stream(stream) => stream.leaves_into(offset, out),
                 element => out.push((offset, element)),
@@ -1048,7 +1054,9 @@ impl Stream {
         visit: &mut impl FnMut(FloatType, &mut StreamElement),
     ) {
         for event in &mut self.events {
-            let offset = base + event.offset;
+            // Summed as music21 sums them, snapped by `opFrac`, so three
+            // triplets end on the beat however deep they sit.
+            let offset = crate::makenotation::op_frac(base + event.offset);
             match &mut event.element {
                 StreamElement::Stream(stream) => stream.for_each_mut_from(offset, visit),
                 element => visit(offset, element),

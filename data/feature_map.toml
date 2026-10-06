@@ -904,3 +904,22 @@ getIntervalList = "interval_list"
 python = "analysis/pitchAnalysis.py"
 rust = ["src/analysis/pitch_analysis.rs"]
 note = "How often each value of a property of a stream's pitches comes."
+
+[[class]]
+python = "analysis/windowed.py"
+name = "WindowedAnalysis"
+rust = ["src/analysis/windowed.rs"]
+note = "A stream cut into quarter-note windows, and an analysis run over windows of each size."
+
+[class.renames]
+getMinimumWindowStream = "new"
+
+[[class]]
+python = "analysis/floatingKey.py"
+name = "KeyAnalyzer"
+rust = ["src/analysis/floating_key.rs"]
+note = "A key for every measure, each measure's reading smoothed by its neighbours'."
+
+[[class]]
+python = "analysis/floatingKey.py"
+rust = ["src/analysis/floating_key.rs"]

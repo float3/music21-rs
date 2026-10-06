@@ -27,6 +27,12 @@ are tunes whose own reading cannot be written back.
 
 ## Added
 
+- `analysis::windowed::WindowedAnalysis` cuts a stream into windows of a
+  quarter note and runs any analysis over windows of each size, overlapping,
+  side by side or averaged, as music21's `WindowedAnalysis` does; and
+  `analysis::floating_key::KeyAnalyzer` reads a key for every measure and
+  smooths each by its neighbours, as music21's `floatingKey` does. Every
+  MusicXML score of music21's corpus gives music21's windows and keys.
 - `Stream::find_consecutive_notes` and `melodic_intervals` find the notes
   of a stream that follow one another and the intervals between them, as
   music21's `findConsecutiveNotes` and `melodicIntervals` do, with its
@@ -353,6 +359,12 @@ are tunes whose own reading cannot be written back.
 
 ## Fixed
 
+- `Stream::flatten`, `recurse` and `leaves` snap each offset they add up
+  as music21's `opFrac` does, so a note after three triplets stands on the
+  beat rather than a hair before it, and lands in the measure it starts.
+- The key a stream is analysed in counts chord symbols and percussion
+  chords among its notes, as music21's does, so a stretch holding only
+  chord symbols lasting nothing is read, at nought, rather than not at all.
 - Transposing a `Key` or a `KeySignature` keeps the colour it is drawn in,
   as music21's does; a score turned to sounding pitch lost it.
 - `from_roman_text` records a pickup's `padding_left`, and the last
