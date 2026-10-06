@@ -24,7 +24,7 @@ suite results, coverage, benchmarks and sizes, refreshed on every push.
 - 92% of the public methods of the ported music21 classes are in the crate.
 - The crate's own tests cover 95% of its lines and of its functions.
 - All 40 music21 modules whose doctests run against the port pass every
-  example, 9,174 of them: `pitch`, `interval`, `chord`, `chord.tables`,
+  example, 9,185 of them: `pitch`, `interval`, `chord`, `chord.tables`,
   `note`, `duration`, `key`, `scale`, `scale.scala`, `roman`, `harmony`,
   `serial`, `sieve`, `meter.base`, `meter.core`, `beam`, `tie`, `volume`,
   `dynamics`, `instrument`, `clef`, `articulations`, `expressions`, `tempo`,
@@ -101,6 +101,13 @@ written in Volpiano is read and written by `volpiano::from_volpiano` and
 A RomanText analysis is written back by `romantext::to_roman_text`, as
 music21's `RnWriter` writes one: every analysis of music21's corpus comes
 out the same text on both sides.
+
+music21's analyses of whole pieces are ported beside its chord and pitch
+analysis, each held to music21 on its corpus: `Stream::chordify`, the
+melodic intervals between consecutive notes, Patel's rhythmic and melodic
+variability, metrical depth and melodic accent, windowed and floating key
+analysis (`analysis::windowed`, `analysis::floating_key`), and jSymbolic's
+melodic and pitch features for machine learning (`features::jsymbolic`).
 
 MuseScore's own files are read with no feature and no MuseScore installed:
 `musescore::from_mscx` takes the text of a `.mscx`, as MuseScore 3 and 4 save

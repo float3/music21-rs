@@ -120,7 +120,7 @@ MusicXML.
 - 94% of the public methods of the ported music21 classes are reachable from
   this wheel.
 - All 40 music21 modules whose doctests run against the port pass every
-  example, 9,174 of them: `pitch`, `interval`, `chord`, `chord.tables`,
+  example, 9,185 of them: `pitch`, `interval`, `chord`, `chord.tables`,
   `note`, `duration`, `key`, `scale`, `scale.scala`, `roman`, `harmony`,
   `serial`, `sieve`, `meter.base`, `meter.core`, `beam`, `tie`, `volume`,
   `dynamics`, `instrument`, `clef`, `articulations`, `expressions`, `tempo`,

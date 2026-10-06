@@ -122,6 +122,11 @@ pub enum Error {
     /// `StreamException`.
     #[error("Stream error: {0}")]
     Stream(String),
+
+    /// A feature that cannot be read out of a piece, or a normalized feature
+    /// whose values are all nought: music21's `FeatureException`.
+    #[error("Feature error: {0}")]
+    Feature(String),
     /// A score that cannot be written as MusicXML.
     #[cfg(feature = "musicxml")]
     #[error("MusicXML export error: {0}")]

@@ -72,6 +72,8 @@ pub mod dynamics;
 pub mod error;
 /// Ornaments and what they play.
 pub mod expressions;
+/// Features of a piece for machine learning: music21's `features`.
+pub mod features;
 
 /// Figured bass: the numbers written under a bass note.
 pub mod figuredbass;
@@ -129,6 +131,7 @@ pub mod serial;
 pub mod sieve;
 /// Marks joining several notes: slurs.
 pub mod spanner;
+pub(crate) mod statistics;
 pub(crate) mod stepname;
 /// Streams: notes, chords and other events placed on a timeline, nested as
 /// scores, parts and measures.
