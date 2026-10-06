@@ -35,8 +35,11 @@ are tunes whose own reading cannot be written back.
   `features::jsymbolic::JSYMBOLIC` holds all 72 extractors music21
   implements from jSymbolic -- melodic, instrumental, rhythmic, texture and
   pitch --, each answering a `Feature`
-  vector. Every one gives music21's values on every MusicXML score of
-  music21's corpus.
+  vector, and `features::native::NATIVE` the 19 music21 adds of its own:
+  the key's mode and tonal certainty, note lengths, the chords of the piece
+  chordified, chord-symbol bass motion and the Landini cadence. music21's
+  language feature is not ported. Every one gives music21's values on
+  every MusicXML score of music21's corpus.
 - `text` is music21's `text` module: `assemble_lyrics` and
   `assemble_all_lyrics` join a stream's lyrics into words and lines, and
   `prepend_article` and `postpend_article` move a title's article. With it

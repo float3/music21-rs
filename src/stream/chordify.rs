@@ -104,11 +104,12 @@ impl Stream {
         Ok(self.chordify_tracking(options)?.0)
     }
 
-    /// How many parts sound a single note in each chord [`Stream::chordify`]
-    /// makes, in order, parts sharing an id counted once: the groups
-    /// music21's `chordify(addPartIdAsGroup=True)` writes on the chord's
-    /// pitches, which it finds no part for where a note is one of a chord.
-    pub(crate) fn chordify_parts_sounding(&self) -> Result<Vec<usize>> {
+    /// The stream chordified with every pitch kept, and how many parts
+    /// sound a single note in each chord made, in order, parts sharing an
+    /// id counted once: the groups music21's
+    /// `chordify(addPartIdAsGroup=True)` writes on the chord's pitches,
+    /// which it finds no part for where a note is one of a chord.
+    pub(crate) fn chordify_parts_sounding(&self) -> Result<(Stream, Vec<usize>)> {
         let options = ChordifyOptions {
             remove_redundant_pitches: false,
             ..ChordifyOptions::default()
@@ -123,8 +124,8 @@ impl Stream {
                 _ => None,
             })
             .collect();
-        let (_, heard) = self.chordify_tracking(&options)?;
-        Ok(heard
+        let (chordified, heard) = self.chordify_tracking(&options)?;
+        let sounding = heard
             .into_iter()
             .map(|parts| {
                 let mut named: Vec<String> = Vec::new();
@@ -140,7 +141,8 @@ impl Stream {
                 }
                 named.len()
             })
-            .collect())
+            .collect();
+        Ok((chordified, sounding))
     }
 
     /// The chords and, beside them, the streams sounding in each chord made.
