@@ -583,29 +583,20 @@ pub(super) fn sharpen_figure(figure: &mut String) {
 }
 
 /// Splits the leading roman numeral off a figure, returning the numeral and
-/// what follows it. Errors when the value does not begin with one.
+/// what follows it. Errors when the value does not begin with one, or when
+/// the numeral runs on past seven, as `VIII` does.
 pub fn split_roman_prefix(value: &str) -> Result<(&str, &str)> {
-    let end = value
-        .char_indices()
-        .find_map(|(idx, ch)| (!matches!(ch, 'I' | 'V' | 'X' | 'i' | 'v' | 'x')).then_some(idx))
-        .unwrap_or(value.len());
-
-    if end == 0 {
+    let first = numeral_length(value);
+    if first == 0 {
         return Err(Error::Chord(format!("No roman numeral found in '{value}'")));
     }
-
-    // music21 takes the numeral its pattern matches first and then strikes
-    // out every further numeral in the figure, so `VIII` is `VII`.
-    let run = &value[..end];
-    let first = numeral_length(run);
-    let mut rest = &run[first..];
-    while !rest.is_empty() {
-        match numeral_length(rest) {
-            0 => return Ok((run, &value[end..])),
-            length => rest = &rest[length..],
-        }
+    let rest = &value[first..];
+    if rest.starts_with(['I', 'V', 'X', 'i', 'v']) {
+        return Err(Error::Chord(format!(
+            "No roman numeral for a scale degree found in '{value}'"
+        )));
     }
-    Ok((&run[..first.max(1)], &value[end..]))
+    Ok((&value[..first], rest))
 }
 
 /// How much of the text music21's numeral pattern takes from its start:

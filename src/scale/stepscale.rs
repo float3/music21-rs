@@ -72,7 +72,8 @@ impl StepScale {
     }
 
     /// Builds music21's `OctaveRepeatingScale`: the intervals plus a closing
-    /// interval that completes the octave.
+    /// interval that completes the octave, where they do not reach it
+    /// already.
     ///
     /// An empty list defaults to a single `m2`, as music21 does.
     ///
@@ -107,7 +108,10 @@ impl StepScale {
                 Interval::from_semitones((octaves * 12.0 - risen).round() as IntegerType)?
             }
         };
-        steps.push(closing);
+        // Steps that already reach the octave need no closing step.
+        if closing.short_name() != "P1" {
+            steps.push(closing);
+        }
         Ok(Self {
             tonic,
             steps,
@@ -229,6 +233,16 @@ mod tests {
         assert_eq!(scale.tonic(), &tonic);
         assert_eq!(scale.steps().len(), 2);
         assert_eq!(scale.degree_count(), 2);
+    }
+
+    #[test]
+    fn steps_reaching_the_octave_close_with_no_unison() {
+        let scale = StepScale::octave_repeating(
+            Pitch::from_name("C4").unwrap(),
+            &["m3", "M2", "m3", "M2", "M2"],
+        )
+        .unwrap();
+        assert_eq!(names(&scale), ["C", "Eb", "F", "Ab", "Bb", "C"]);
     }
 
     fn names(scale: &StepScale) -> Vec<String> {

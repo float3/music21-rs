@@ -311,6 +311,11 @@ impl AbstractScale {
             return Some(scale_type);
         }
         let name = value.get_type().name().ok()?.extract::<String>().ok()?;
+        // music21's octatonic pattern in its first mode starts with a half
+        // step, which no pattern here does; its own network answers for it.
+        if name == "AbstractOctatonicScale" && is_half_whole(value.getattr("mode").ok().as_ref()) {
+            return None;
+        }
         named_scale_type(&name)
     }
 }
@@ -525,6 +530,25 @@ impl AbstractScale {
 /// class name (`MajorScale`, `AbstractHarmonicMinorScale`) or as a mode
 /// (`major`, `harmonic minor`).
 fn named_scale_type(name: &str) -> Option<RsScaleType> {
+    // A diatonic mode is named as music21's `AbstractDiatonicScale` takes
+    // it, in any case: `dorian`, `ionian`, `aeolian`.
+    let lower = name.to_lowercase();
+    match lower.as_str() {
+        "ionian" => return Some(RsScaleType::Major),
+        "aeolian" => return Some(RsScaleType::Minor),
+        _ => {}
+    }
+    // A mode is one word; a class name (`MajorScale`) has a capital inside.
+    if !name.chars().skip(1).any(char::is_uppercase)
+        && let Some(first) = lower.chars().next()
+        && let Some(found) = RsScaleType::from_music21_name(&format!(
+            "{}{}Scale",
+            first.to_ascii_uppercase(),
+            &lower[first.len_utf8()..]
+        ))
+    {
+        return Some(found);
+    }
     let bare = name.strip_prefix("Abstract").unwrap_or(name);
     RsScaleType::from_music21_name(bare)
         .or_else(|| RsScaleType::from_music21_name(&format!("{bare}Scale")))
@@ -885,11 +909,43 @@ impl ConcreteScale {
             Some(value) => tonic_pitch(value)?,
             None => RsPitch::from_name("C").map_err(scale_error)?,
         };
+        let mode = match _keywords {
+            Some(keywords) => keywords.get_item("mode")?.filter(|mode| !mode.is_none()),
+            None => None,
+        };
         let mut me = slf.borrow_mut();
-        me.inner = RsScale::new(scale_type, tonic);
-        me.family = family;
+        me.inner = RsScale::new(scale_type, tonic.clone());
+        me.family = family.clone();
         me.named_pattern = named;
         me.has_tonic = given.is_some();
+        let Some(mode) = mode else {
+            return Ok(());
+        };
+        if !named && family == "diatonic" {
+            // `DiatonicScale(tonic, mode=...)`: the mode names the pattern,
+            // and the scale is still called diatonic.
+            let written: String = mode.str()?.extract()?;
+            let scale_type = named_scale_type(&written).ok_or_else(|| {
+                ScaleException::new_err(format!(
+                    "cannot create a scale of the following mode: {written}"
+                ))
+            })?;
+            me.inner = RsScale::new(scale_type, tonic);
+            me.named_pattern = true;
+            me.named_type = Some(family);
+        } else if scale_type == RsScaleType::Octatonic && is_half_whole(Some(&mode)) {
+            // The octatonic scale's first mode starts with the half step.
+            let steps = ["m2", "M2", "m2", "M2", "m2", "M2", "m2", "M2"]
+                .iter()
+                .map(RsInterval::from_name)
+                .collect::<music21_rs_crate::Result<Vec<_>>>()
+                .map_err(scale_error)?;
+            me.inner = RsStepScale::octave_repeating_of(tonic, steps)
+                .and_then(|stepped| stepped.scale())
+                .map_err(scale_error)?
+                .with_simplification(RsSimplification::MaxAccidental);
+            me.named_type = Some("Octatonic".to_string());
+        }
         Ok(())
     }
 
@@ -1488,10 +1544,9 @@ impl ConcreteScale {
     /// music21's `pitchFromDegree`: the pitch at a scale degree, counting the
     /// tonic as one.
     ///
-    /// `minPitch` and `maxPitch` are accepted for compatibility and ignored:
-    /// the pitch is always taken from the octave above the tonic.
-    /// `direction` matters for scales that descend differently from how
-    /// they ascend.
+    /// Given `minPitch` and `maxPitch`, the degree is read off the range
+    /// realized. `direction` matters for scales that descend differently
+    /// from how they ascend. A pattern of music21's own is asked itself.
     #[pyo3(signature = (
         degree,
         minPitch = None,
@@ -1501,13 +1556,40 @@ impl ConcreteScale {
     ))]
     fn pitchFromDegree(
         &self,
+        py: Python<'_>,
         degree: i32,
         minPitch: Option<&Bound<'_, PyAny>>,
         maxPitch: Option<&Bound<'_, PyAny>>,
         direction: Option<&Bound<'_, PyAny>>,
         equateTermini: bool,
     ) -> PyResult<Option<Pitch>> {
-        let _ = equateTermini;
+        if let Some(pattern) = &self.abstract_scale {
+            let pattern = pattern.bind(py);
+            let tonic = Bound::new(py, Pitch::wrap(self.inner.tonic().clone(), false))?;
+            let keywords = PyDict::new(py);
+            keywords.set_item("pitchReference", tonic)?;
+            keywords.set_item("nodeName", pattern.getattr("tonicDegree")?)?;
+            keywords.set_item("nodeDegreeTarget", degree)?;
+            if let Some(direction) = direction.filter(|value| !value.is_none()) {
+                keywords.set_item("direction", direction)?;
+            }
+            for (name, value) in [("minPitch", minPitch), ("maxPitch", maxPitch)] {
+                if let Some(value) = value.filter(|value| !value.is_none()) {
+                    keywords.set_item(
+                        name,
+                        Bound::new(py, Pitch::wrap(pitch_from_any(value)?, false))?,
+                    )?;
+                }
+            }
+            keywords.set_item("equateTermini", equateTermini)?;
+            let found = pattern.call_method("getPitchFromNodeDegree", (), Some(&keywords))?;
+            if found.is_none() {
+                return Ok(None);
+            }
+            return Ok(Some(
+                pitch_from_any(&found).map(|pitch| Pitch::wrap(pitch, false))?,
+            ));
+        }
         // Given a range, the degree is read off the range realized, which is
         // where a scale that respells as it goes spells it.
         if let (Some(low), Some(high)) = (
@@ -2167,6 +2249,16 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add(name.extract::<String>()?.as_str(), class)?;
     }
     Ok(())
+}
+
+/// Whether an octatonic mode is music21's first, which starts with the half
+/// step: `1` or `'m2'`.
+fn is_half_whole(mode: Option<&Bound<'_, PyAny>>) -> bool {
+    let Some(mode) = mode else {
+        return false;
+    };
+    mode.extract::<i64>().is_ok_and(|number| number == 1)
+        || mode.extract::<String>().is_ok_and(|name| name == "m2")
 }
 
 #[cfg(test)]

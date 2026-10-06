@@ -3,10 +3,10 @@
 # The classes are transcribed into src/expressions.rs; what they play is
 # checked behaviourally.
 #
-# music21 11.0.0b9 at 9916ae61d8c05ec757f00e8839b1d1c6d1b9c580
+# music21 11.0.0b10 at 50f399c12875575e9cc2ac9782ae33f768da8c00
 
-music21_version = "11.0.0b9"
-music21_commit = "9916ae61d8c05ec757f00e8839b1d1c6d1b9c580"
+music21_version = "11.0.0b10"
+music21_commit = "50f399c12875575e9cc2ac9782ae33f768da8c00"
 
 [[ornament]]
 class = "Ornament"
@@ -2431,7 +2431,7 @@ sharps = 0
 accidental = "sharp"
 name = "trill (sharp)"
 ornamental = ["D#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["C4 0.125", "D#4 0.125", "C4 0.125", "D#4 0.125", "C4 0.125", "D#4 0.125", "C4 0.125", "D#4 0.125"]
 after = []
 
@@ -2444,7 +2444,7 @@ sharps = 0
 accidental = "flat"
 name = "trill (flat)"
 ornamental = ["D-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["C4 0.125", "D-4 0.125", "C4 0.125", "D-4 0.125", "C4 0.125", "D-4 0.125", "C4 0.125", "D-4 0.125"]
 after = []
 
@@ -2494,7 +2494,7 @@ sharps = 2
 accidental = "sharp"
 name = "trill (sharp)"
 ornamental = ["D#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["C4 0.125", "D#4 0.125", "C4 0.125", "D#4 0.125", "C4 0.125", "D#4 0.125", "C4 0.125", "D#4 0.125"]
 after = []
 
@@ -2507,7 +2507,7 @@ sharps = 2
 accidental = "flat"
 name = "trill (flat)"
 ornamental = ["D-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["C4 0.125", "D-4 0.125", "C4 0.125", "D-4 0.125", "C4 0.125", "D-4 0.125", "C4 0.125", "D-4 0.125"]
 after = []
 
@@ -2557,7 +2557,7 @@ sharps = -3
 accidental = "sharp"
 name = "trill (sharp)"
 ornamental = ["D#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["C4 0.125", "D#4 0.125", "C4 0.125", "D#4 0.125", "C4 0.125", "D#4 0.125", "C4 0.125", "D#4 0.125"]
 after = []
 
@@ -2570,7 +2570,7 @@ sharps = -3
 accidental = "flat"
 name = "trill (flat)"
 ornamental = ["D-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["C4 0.125", "D-4 0.125", "C4 0.125", "D-4 0.125", "C4 0.125", "D-4 0.125", "C4 0.125", "D-4 0.125"]
 after = []
 
@@ -2620,7 +2620,7 @@ sharps = 6
 accidental = "sharp"
 name = "trill (sharp)"
 ornamental = ["D#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["C4 0.125", "D#4 0.125", "C4 0.125", "D#4 0.125", "C4 0.125", "D#4 0.125", "C4 0.125", "D#4 0.125"]
 after = []
 
@@ -2633,7 +2633,7 @@ sharps = 6
 accidental = "flat"
 name = "trill (flat)"
 ornamental = ["D-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["C4 0.125", "D-4 0.125", "C4 0.125", "D-4 0.125", "C4 0.125", "D-4 0.125", "C4 0.125", "D-4 0.125"]
 after = []
 
@@ -2681,7 +2681,7 @@ sharps = 0
 accidental = "sharp"
 name = "trill (sharp)"
 ornamental = ["E#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 error = "ExpressionException"
 
 [[played]]
@@ -2693,7 +2693,7 @@ sharps = 0
 accidental = "flat"
 name = "trill (flat)"
 ornamental = ["E-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 error = "ExpressionException"
 
 [[played]]
@@ -2739,7 +2739,7 @@ sharps = 2
 accidental = "sharp"
 name = "trill (sharp)"
 ornamental = ["E#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 error = "ExpressionException"
 
 [[played]]
@@ -2751,7 +2751,7 @@ sharps = 2
 accidental = "flat"
 name = "trill (flat)"
 ornamental = ["E-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 error = "ExpressionException"
 
 [[played]]
@@ -2797,7 +2797,7 @@ sharps = -3
 accidental = "sharp"
 name = "trill (sharp)"
 ornamental = ["E#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 error = "ExpressionException"
 
 [[played]]
@@ -2809,7 +2809,7 @@ sharps = -3
 accidental = "flat"
 name = "trill (flat)"
 ornamental = ["E-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 error = "ExpressionException"
 
 [[played]]
@@ -2855,7 +2855,7 @@ sharps = 6
 accidental = "sharp"
 name = "trill (sharp)"
 ornamental = ["E#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 error = "ExpressionException"
 
 [[played]]
@@ -2867,7 +2867,7 @@ sharps = 6
 accidental = "flat"
 name = "trill (flat)"
 ornamental = ["E-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 error = "ExpressionException"
 
 [[played]]
@@ -2915,7 +2915,7 @@ sharps = 0
 accidental = "sharp"
 name = "trill (sharp)"
 ornamental = ["G#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["F#4 0.125", "G#4 0.125", "F#4 0.125", "G#4 0.125"]
 after = []
 
@@ -2928,7 +2928,7 @@ sharps = 0
 accidental = "flat"
 name = "trill (flat)"
 ornamental = ["G-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["F#4 0.125", "G-4 0.125", "F#4 0.125", "G-4 0.125"]
 after = []
 
@@ -2978,7 +2978,7 @@ sharps = 2
 accidental = "sharp"
 name = "trill (sharp)"
 ornamental = ["G#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["F#4 0.125", "G#4 0.125", "F#4 0.125", "G#4 0.125"]
 after = []
 
@@ -2991,7 +2991,7 @@ sharps = 2
 accidental = "flat"
 name = "trill (flat)"
 ornamental = ["G-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["F#4 0.125", "G-4 0.125", "F#4 0.125", "G-4 0.125"]
 after = []
 
@@ -3041,7 +3041,7 @@ sharps = -3
 accidental = "sharp"
 name = "trill (sharp)"
 ornamental = ["G#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["F#4 0.125", "G#4 0.125", "F#4 0.125", "G#4 0.125"]
 after = []
 
@@ -3054,7 +3054,7 @@ sharps = -3
 accidental = "flat"
 name = "trill (flat)"
 ornamental = ["G-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["F#4 0.125", "G-4 0.125", "F#4 0.125", "G-4 0.125"]
 after = []
 
@@ -3104,7 +3104,7 @@ sharps = 6
 accidental = "sharp"
 name = "trill (sharp)"
 ornamental = ["G#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["F#4 0.125", "G#4 0.125", "F#4 0.125", "G#4 0.125"]
 after = []
 
@@ -3117,7 +3117,7 @@ sharps = 6
 accidental = "flat"
 name = "trill (flat)"
 ornamental = ["G-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["F#4 0.125", "G-4 0.125", "F#4 0.125", "G-4 0.125"]
 after = []
 
@@ -3167,7 +3167,7 @@ sharps = 0
 accidental = "sharp"
 name = "trill (sharp)"
 ornamental = ["C#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["B-3 0.125", "C#4 0.125", "B-3 0.125", "C#4 0.125", "B-3 0.125", "C#4 0.125", "B-3 0.125", "C#4 0.125", "B-3 0.125", "C#4 0.125", "B-3 0.125", "C#4 0.125", "B-3 0.125", "C#4 0.125", "B-3 0.125", "C#4 0.125"]
 after = []
 
@@ -3180,7 +3180,7 @@ sharps = 0
 accidental = "flat"
 name = "trill (flat)"
 ornamental = ["C-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["B-3 0.125", "C-4 0.125", "B-3 0.125", "C-4 0.125", "B-3 0.125", "C-4 0.125", "B-3 0.125", "C-4 0.125", "B-3 0.125", "C-4 0.125", "B-3 0.125", "C-4 0.125", "B-3 0.125", "C-4 0.125", "B-3 0.125", "C-4 0.125"]
 after = []
 
@@ -3230,7 +3230,7 @@ sharps = 2
 accidental = "sharp"
 name = "trill (sharp)"
 ornamental = ["C#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["B-3 0.125", "C#4 0.125", "B-3 0.125", "C#4 0.125", "B-3 0.125", "C#4 0.125", "B-3 0.125", "C#4 0.125", "B-3 0.125", "C#4 0.125", "B-3 0.125", "C#4 0.125", "B-3 0.125", "C#4 0.125", "B-3 0.125", "C#4 0.125"]
 after = []
 
@@ -3243,7 +3243,7 @@ sharps = 2
 accidental = "flat"
 name = "trill (flat)"
 ornamental = ["C-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["B-3 0.125", "C-4 0.125", "B-3 0.125", "C-4 0.125", "B-3 0.125", "C-4 0.125", "B-3 0.125", "C-4 0.125", "B-3 0.125", "C-4 0.125", "B-3 0.125", "C-4 0.125", "B-3 0.125", "C-4 0.125", "B-3 0.125", "C-4 0.125"]
 after = []
 
@@ -3293,7 +3293,7 @@ sharps = -3
 accidental = "sharp"
 name = "trill (sharp)"
 ornamental = ["C#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["B-3 0.125", "C#4 0.125", "B-3 0.125", "C#4 0.125", "B-3 0.125", "C#4 0.125", "B-3 0.125", "C#4 0.125", "B-3 0.125", "C#4 0.125", "B-3 0.125", "C#4 0.125", "B-3 0.125", "C#4 0.125", "B-3 0.125", "C#4 0.125"]
 after = []
 
@@ -3306,7 +3306,7 @@ sharps = -3
 accidental = "flat"
 name = "trill (flat)"
 ornamental = ["C-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["B-3 0.125", "C-4 0.125", "B-3 0.125", "C-4 0.125", "B-3 0.125", "C-4 0.125", "B-3 0.125", "C-4 0.125", "B-3 0.125", "C-4 0.125", "B-3 0.125", "C-4 0.125", "B-3 0.125", "C-4 0.125", "B-3 0.125", "C-4 0.125"]
 after = []
 
@@ -3356,7 +3356,7 @@ sharps = 6
 accidental = "sharp"
 name = "trill (sharp)"
 ornamental = ["C#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["B-3 0.125", "C#4 0.125", "B-3 0.125", "C#4 0.125", "B-3 0.125", "C#4 0.125", "B-3 0.125", "C#4 0.125", "B-3 0.125", "C#4 0.125", "B-3 0.125", "C#4 0.125", "B-3 0.125", "C#4 0.125", "B-3 0.125", "C#4 0.125"]
 after = []
 
@@ -3369,7 +3369,7 @@ sharps = 6
 accidental = "flat"
 name = "trill (flat)"
 ornamental = ["C-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["B-3 0.125", "C-4 0.125", "B-3 0.125", "C-4 0.125", "B-3 0.125", "C-4 0.125", "B-3 0.125", "C-4 0.125", "B-3 0.125", "C-4 0.125", "B-3 0.125", "C-4 0.125", "B-3 0.125", "C-4 0.125", "B-3 0.125", "C-4 0.125"]
 after = []
 
@@ -3419,7 +3419,7 @@ sharps = 0
 accidental = "sharp"
 name = "trill (sharp)"
 ornamental = ["F#5"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["E5 0.125", "F#5 0.125"]
 after = []
 
@@ -3432,7 +3432,7 @@ sharps = 0
 accidental = "flat"
 name = "trill (flat)"
 ornamental = ["F-5"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["E5 0.125", "F-5 0.125"]
 after = []
 
@@ -3482,7 +3482,7 @@ sharps = 2
 accidental = "sharp"
 name = "trill (sharp)"
 ornamental = ["F#5"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["E5 0.125", "F#5 0.125"]
 after = []
 
@@ -3495,7 +3495,7 @@ sharps = 2
 accidental = "flat"
 name = "trill (flat)"
 ornamental = ["F-5"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["E5 0.125", "F-5 0.125"]
 after = []
 
@@ -3545,7 +3545,7 @@ sharps = -3
 accidental = "sharp"
 name = "trill (sharp)"
 ornamental = ["F#5"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["E5 0.125", "F#5 0.125"]
 after = []
 
@@ -3558,7 +3558,7 @@ sharps = -3
 accidental = "flat"
 name = "trill (flat)"
 ornamental = ["F-5"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["E5 0.125", "F-5 0.125"]
 after = []
 
@@ -3608,7 +3608,7 @@ sharps = 6
 accidental = "sharp"
 name = "trill (sharp)"
 ornamental = ["F#5"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["E5 0.125", "F#5 0.125"]
 after = []
 
@@ -3621,7 +3621,7 @@ sharps = 6
 accidental = "flat"
 name = "trill (flat)"
 ornamental = ["F-5"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["E5 0.125", "F-5 0.125"]
 after = []
 
@@ -3671,7 +3671,7 @@ sharps = 0
 accidental = "sharp"
 name = "trill (sharp)"
 ornamental = ["A#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125"]
 after = []
 
@@ -3684,7 +3684,7 @@ sharps = 0
 accidental = "flat"
 name = "trill (flat)"
 ornamental = ["A-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125"]
 after = []
 
@@ -3734,7 +3734,7 @@ sharps = 2
 accidental = "sharp"
 name = "trill (sharp)"
 ornamental = ["A#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125"]
 after = []
 
@@ -3747,7 +3747,7 @@ sharps = 2
 accidental = "flat"
 name = "trill (flat)"
 ornamental = ["A-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125"]
 after = []
 
@@ -3797,7 +3797,7 @@ sharps = -3
 accidental = "sharp"
 name = "trill (sharp)"
 ornamental = ["A#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125"]
 after = []
 
@@ -3810,7 +3810,7 @@ sharps = -3
 accidental = "flat"
 name = "trill (flat)"
 ornamental = ["A-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125"]
 after = []
 
@@ -3860,7 +3860,7 @@ sharps = 6
 accidental = "sharp"
 name = "trill (sharp)"
 ornamental = ["A#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125", "G4 0.125", "A#4 0.125"]
 after = []
 
@@ -3873,7 +3873,7 @@ sharps = 6
 accidental = "flat"
 name = "trill (flat)"
 ornamental = ["A-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125", "G4 0.125", "A-4 0.125"]
 after = []
 
@@ -8203,7 +8203,7 @@ sharps = 0
 accidental = "sharp"
 name = "inverted trill (sharp)"
 ornamental = ["B#3"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["C4 0.125", "B#3 0.125", "C4 0.125", "B#3 0.125", "C4 0.125", "B#3 0.125", "C4 0.125", "B#3 0.125"]
 after = []
 
@@ -8216,7 +8216,7 @@ sharps = 0
 accidental = "flat"
 name = "inverted trill (flat)"
 ornamental = ["B-3"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["C4 0.125", "B-3 0.125", "C4 0.125", "B-3 0.125", "C4 0.125", "B-3 0.125", "C4 0.125", "B-3 0.125"]
 after = []
 
@@ -8266,7 +8266,7 @@ sharps = 2
 accidental = "sharp"
 name = "inverted trill (sharp)"
 ornamental = ["B#3"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["C4 0.125", "B#3 0.125", "C4 0.125", "B#3 0.125", "C4 0.125", "B#3 0.125", "C4 0.125", "B#3 0.125"]
 after = []
 
@@ -8279,7 +8279,7 @@ sharps = 2
 accidental = "flat"
 name = "inverted trill (flat)"
 ornamental = ["B-3"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["C4 0.125", "B-3 0.125", "C4 0.125", "B-3 0.125", "C4 0.125", "B-3 0.125", "C4 0.125", "B-3 0.125"]
 after = []
 
@@ -8329,7 +8329,7 @@ sharps = -3
 accidental = "sharp"
 name = "inverted trill (sharp)"
 ornamental = ["B#3"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["C4 0.125", "B#3 0.125", "C4 0.125", "B#3 0.125", "C4 0.125", "B#3 0.125", "C4 0.125", "B#3 0.125"]
 after = []
 
@@ -8342,7 +8342,7 @@ sharps = -3
 accidental = "flat"
 name = "inverted trill (flat)"
 ornamental = ["B-3"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["C4 0.125", "B-3 0.125", "C4 0.125", "B-3 0.125", "C4 0.125", "B-3 0.125", "C4 0.125", "B-3 0.125"]
 after = []
 
@@ -8392,7 +8392,7 @@ sharps = 6
 accidental = "sharp"
 name = "inverted trill (sharp)"
 ornamental = ["B#3"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["C4 0.125", "B#3 0.125", "C4 0.125", "B#3 0.125", "C4 0.125", "B#3 0.125", "C4 0.125", "B#3 0.125"]
 after = []
 
@@ -8405,7 +8405,7 @@ sharps = 6
 accidental = "flat"
 name = "inverted trill (flat)"
 ornamental = ["B-3"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["C4 0.125", "B-3 0.125", "C4 0.125", "B-3 0.125", "C4 0.125", "B-3 0.125", "C4 0.125", "B-3 0.125"]
 after = []
 
@@ -8453,7 +8453,7 @@ sharps = 0
 accidental = "sharp"
 name = "inverted trill (sharp)"
 ornamental = ["C#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 error = "ExpressionException"
 
 [[played]]
@@ -8465,7 +8465,7 @@ sharps = 0
 accidental = "flat"
 name = "inverted trill (flat)"
 ornamental = ["C-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 error = "ExpressionException"
 
 [[played]]
@@ -8511,7 +8511,7 @@ sharps = 2
 accidental = "sharp"
 name = "inverted trill (sharp)"
 ornamental = ["C#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 error = "ExpressionException"
 
 [[played]]
@@ -8523,7 +8523,7 @@ sharps = 2
 accidental = "flat"
 name = "inverted trill (flat)"
 ornamental = ["C-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 error = "ExpressionException"
 
 [[played]]
@@ -8569,7 +8569,7 @@ sharps = -3
 accidental = "sharp"
 name = "inverted trill (sharp)"
 ornamental = ["C#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 error = "ExpressionException"
 
 [[played]]
@@ -8581,7 +8581,7 @@ sharps = -3
 accidental = "flat"
 name = "inverted trill (flat)"
 ornamental = ["C-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 error = "ExpressionException"
 
 [[played]]
@@ -8627,7 +8627,7 @@ sharps = 6
 accidental = "sharp"
 name = "inverted trill (sharp)"
 ornamental = ["C#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 error = "ExpressionException"
 
 [[played]]
@@ -8639,7 +8639,7 @@ sharps = 6
 accidental = "flat"
 name = "inverted trill (flat)"
 ornamental = ["C-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 error = "ExpressionException"
 
 [[played]]
@@ -8687,7 +8687,7 @@ sharps = 0
 accidental = "sharp"
 name = "inverted trill (sharp)"
 ornamental = ["E#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["F#4 0.125", "E#4 0.125", "F#4 0.125", "E#4 0.125"]
 after = []
 
@@ -8700,7 +8700,7 @@ sharps = 0
 accidental = "flat"
 name = "inverted trill (flat)"
 ornamental = ["E-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["F#4 0.125", "E-4 0.125", "F#4 0.125", "E-4 0.125"]
 after = []
 
@@ -8750,7 +8750,7 @@ sharps = 2
 accidental = "sharp"
 name = "inverted trill (sharp)"
 ornamental = ["E#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["F#4 0.125", "E#4 0.125", "F#4 0.125", "E#4 0.125"]
 after = []
 
@@ -8763,7 +8763,7 @@ sharps = 2
 accidental = "flat"
 name = "inverted trill (flat)"
 ornamental = ["E-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["F#4 0.125", "E-4 0.125", "F#4 0.125", "E-4 0.125"]
 after = []
 
@@ -8813,7 +8813,7 @@ sharps = -3
 accidental = "sharp"
 name = "inverted trill (sharp)"
 ornamental = ["E#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["F#4 0.125", "E#4 0.125", "F#4 0.125", "E#4 0.125"]
 after = []
 
@@ -8826,7 +8826,7 @@ sharps = -3
 accidental = "flat"
 name = "inverted trill (flat)"
 ornamental = ["E-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["F#4 0.125", "E-4 0.125", "F#4 0.125", "E-4 0.125"]
 after = []
 
@@ -8876,7 +8876,7 @@ sharps = 6
 accidental = "sharp"
 name = "inverted trill (sharp)"
 ornamental = ["E#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["F#4 0.125", "E#4 0.125", "F#4 0.125", "E#4 0.125"]
 after = []
 
@@ -8889,7 +8889,7 @@ sharps = 6
 accidental = "flat"
 name = "inverted trill (flat)"
 ornamental = ["E-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["F#4 0.125", "E-4 0.125", "F#4 0.125", "E-4 0.125"]
 after = []
 
@@ -8939,7 +8939,7 @@ sharps = 0
 accidental = "sharp"
 name = "inverted trill (sharp)"
 ornamental = ["A#3"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["B-3 0.125", "A#3 0.125", "B-3 0.125", "A#3 0.125", "B-3 0.125", "A#3 0.125", "B-3 0.125", "A#3 0.125", "B-3 0.125", "A#3 0.125", "B-3 0.125", "A#3 0.125", "B-3 0.125", "A#3 0.125", "B-3 0.125", "A#3 0.125"]
 after = []
 
@@ -8952,7 +8952,7 @@ sharps = 0
 accidental = "flat"
 name = "inverted trill (flat)"
 ornamental = ["A-3"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["B-3 0.125", "A-3 0.125", "B-3 0.125", "A-3 0.125", "B-3 0.125", "A-3 0.125", "B-3 0.125", "A-3 0.125", "B-3 0.125", "A-3 0.125", "B-3 0.125", "A-3 0.125", "B-3 0.125", "A-3 0.125", "B-3 0.125", "A-3 0.125"]
 after = []
 
@@ -9002,7 +9002,7 @@ sharps = 2
 accidental = "sharp"
 name = "inverted trill (sharp)"
 ornamental = ["A#3"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["B-3 0.125", "A#3 0.125", "B-3 0.125", "A#3 0.125", "B-3 0.125", "A#3 0.125", "B-3 0.125", "A#3 0.125", "B-3 0.125", "A#3 0.125", "B-3 0.125", "A#3 0.125", "B-3 0.125", "A#3 0.125", "B-3 0.125", "A#3 0.125"]
 after = []
 
@@ -9015,7 +9015,7 @@ sharps = 2
 accidental = "flat"
 name = "inverted trill (flat)"
 ornamental = ["A-3"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["B-3 0.125", "A-3 0.125", "B-3 0.125", "A-3 0.125", "B-3 0.125", "A-3 0.125", "B-3 0.125", "A-3 0.125", "B-3 0.125", "A-3 0.125", "B-3 0.125", "A-3 0.125", "B-3 0.125", "A-3 0.125", "B-3 0.125", "A-3 0.125"]
 after = []
 
@@ -9065,7 +9065,7 @@ sharps = -3
 accidental = "sharp"
 name = "inverted trill (sharp)"
 ornamental = ["A#3"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["B-3 0.125", "A#3 0.125", "B-3 0.125", "A#3 0.125", "B-3 0.125", "A#3 0.125", "B-3 0.125", "A#3 0.125", "B-3 0.125", "A#3 0.125", "B-3 0.125", "A#3 0.125", "B-3 0.125", "A#3 0.125", "B-3 0.125", "A#3 0.125"]
 after = []
 
@@ -9078,7 +9078,7 @@ sharps = -3
 accidental = "flat"
 name = "inverted trill (flat)"
 ornamental = ["A-3"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["B-3 0.125", "A-3 0.125", "B-3 0.125", "A-3 0.125", "B-3 0.125", "A-3 0.125", "B-3 0.125", "A-3 0.125", "B-3 0.125", "A-3 0.125", "B-3 0.125", "A-3 0.125", "B-3 0.125", "A-3 0.125", "B-3 0.125", "A-3 0.125"]
 after = []
 
@@ -9128,7 +9128,7 @@ sharps = 6
 accidental = "sharp"
 name = "inverted trill (sharp)"
 ornamental = ["A#3"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["B-3 0.125", "A#3 0.125", "B-3 0.125", "A#3 0.125", "B-3 0.125", "A#3 0.125", "B-3 0.125", "A#3 0.125", "B-3 0.125", "A#3 0.125", "B-3 0.125", "A#3 0.125", "B-3 0.125", "A#3 0.125", "B-3 0.125", "A#3 0.125"]
 after = []
 
@@ -9141,7 +9141,7 @@ sharps = 6
 accidental = "flat"
 name = "inverted trill (flat)"
 ornamental = ["A-3"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["B-3 0.125", "A-3 0.125", "B-3 0.125", "A-3 0.125", "B-3 0.125", "A-3 0.125", "B-3 0.125", "A-3 0.125", "B-3 0.125", "A-3 0.125", "B-3 0.125", "A-3 0.125", "B-3 0.125", "A-3 0.125", "B-3 0.125", "A-3 0.125"]
 after = []
 
@@ -9191,7 +9191,7 @@ sharps = 0
 accidental = "sharp"
 name = "inverted trill (sharp)"
 ornamental = ["D#5"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["E5 0.125", "D#5 0.125"]
 after = []
 
@@ -9204,7 +9204,7 @@ sharps = 0
 accidental = "flat"
 name = "inverted trill (flat)"
 ornamental = ["D-5"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["E5 0.125", "D-5 0.125"]
 after = []
 
@@ -9254,7 +9254,7 @@ sharps = 2
 accidental = "sharp"
 name = "inverted trill (sharp)"
 ornamental = ["D#5"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["E5 0.125", "D#5 0.125"]
 after = []
 
@@ -9267,7 +9267,7 @@ sharps = 2
 accidental = "flat"
 name = "inverted trill (flat)"
 ornamental = ["D-5"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["E5 0.125", "D-5 0.125"]
 after = []
 
@@ -9317,7 +9317,7 @@ sharps = -3
 accidental = "sharp"
 name = "inverted trill (sharp)"
 ornamental = ["D#5"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["E5 0.125", "D#5 0.125"]
 after = []
 
@@ -9330,7 +9330,7 @@ sharps = -3
 accidental = "flat"
 name = "inverted trill (flat)"
 ornamental = ["D-5"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["E5 0.125", "D-5 0.125"]
 after = []
 
@@ -9380,7 +9380,7 @@ sharps = 6
 accidental = "sharp"
 name = "inverted trill (sharp)"
 ornamental = ["D#5"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["E5 0.125", "D#5 0.125"]
 after = []
 
@@ -9393,7 +9393,7 @@ sharps = 6
 accidental = "flat"
 name = "inverted trill (flat)"
 ornamental = ["D-5"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["E5 0.125", "D-5 0.125"]
 after = []
 
@@ -9443,7 +9443,7 @@ sharps = 0
 accidental = "sharp"
 name = "inverted trill (sharp)"
 ornamental = ["F#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125"]
 after = []
 
@@ -9456,7 +9456,7 @@ sharps = 0
 accidental = "flat"
 name = "inverted trill (flat)"
 ornamental = ["F-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125"]
 after = []
 
@@ -9506,7 +9506,7 @@ sharps = 2
 accidental = "sharp"
 name = "inverted trill (sharp)"
 ornamental = ["F#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125"]
 after = []
 
@@ -9519,7 +9519,7 @@ sharps = 2
 accidental = "flat"
 name = "inverted trill (flat)"
 ornamental = ["F-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125"]
 after = []
 
@@ -9569,7 +9569,7 @@ sharps = -3
 accidental = "sharp"
 name = "inverted trill (sharp)"
 ornamental = ["F#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125"]
 after = []
 
@@ -9582,7 +9582,7 @@ sharps = -3
 accidental = "flat"
 name = "inverted trill (flat)"
 ornamental = ["F-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125"]
 after = []
 
@@ -9632,7 +9632,7 @@ sharps = 6
 accidental = "sharp"
 name = "inverted trill (sharp)"
 ornamental = ["F#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125", "G4 0.125", "F#4 0.125"]
 after = []
 
@@ -9645,7 +9645,7 @@ sharps = 6
 accidental = "flat"
 name = "inverted trill (flat)"
 ornamental = ["F-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125", "G4 0.125", "F-4 0.125"]
 after = []
 
@@ -12799,7 +12799,7 @@ sharps = 0
 accidental = "sharp"
 name = "shake (sharp)"
 ornamental = ["D#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["C4 0.25", "D#4 0.25", "C4 0.25", "D#4 0.25"]
 after = []
 
@@ -12812,7 +12812,7 @@ sharps = 0
 accidental = "flat"
 name = "shake (flat)"
 ornamental = ["D-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["C4 0.25", "D-4 0.25", "C4 0.25", "D-4 0.25"]
 after = []
 
@@ -12862,7 +12862,7 @@ sharps = 2
 accidental = "sharp"
 name = "shake (sharp)"
 ornamental = ["D#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["C4 0.25", "D#4 0.25", "C4 0.25", "D#4 0.25"]
 after = []
 
@@ -12875,7 +12875,7 @@ sharps = 2
 accidental = "flat"
 name = "shake (flat)"
 ornamental = ["D-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["C4 0.25", "D-4 0.25", "C4 0.25", "D-4 0.25"]
 after = []
 
@@ -12925,7 +12925,7 @@ sharps = -3
 accidental = "sharp"
 name = "shake (sharp)"
 ornamental = ["D#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["C4 0.25", "D#4 0.25", "C4 0.25", "D#4 0.25"]
 after = []
 
@@ -12938,7 +12938,7 @@ sharps = -3
 accidental = "flat"
 name = "shake (flat)"
 ornamental = ["D-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["C4 0.25", "D-4 0.25", "C4 0.25", "D-4 0.25"]
 after = []
 
@@ -12988,7 +12988,7 @@ sharps = 6
 accidental = "sharp"
 name = "shake (sharp)"
 ornamental = ["D#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["C4 0.25", "D#4 0.25", "C4 0.25", "D#4 0.25"]
 after = []
 
@@ -13001,7 +13001,7 @@ sharps = 6
 accidental = "flat"
 name = "shake (flat)"
 ornamental = ["D-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["C4 0.25", "D-4 0.25", "C4 0.25", "D-4 0.25"]
 after = []
 
@@ -13049,7 +13049,7 @@ sharps = 0
 accidental = "sharp"
 name = "shake (sharp)"
 ornamental = ["E#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 error = "ExpressionException"
 
 [[played]]
@@ -13061,7 +13061,7 @@ sharps = 0
 accidental = "flat"
 name = "shake (flat)"
 ornamental = ["E-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 error = "ExpressionException"
 
 [[played]]
@@ -13107,7 +13107,7 @@ sharps = 2
 accidental = "sharp"
 name = "shake (sharp)"
 ornamental = ["E#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 error = "ExpressionException"
 
 [[played]]
@@ -13119,7 +13119,7 @@ sharps = 2
 accidental = "flat"
 name = "shake (flat)"
 ornamental = ["E-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 error = "ExpressionException"
 
 [[played]]
@@ -13165,7 +13165,7 @@ sharps = -3
 accidental = "sharp"
 name = "shake (sharp)"
 ornamental = ["E#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 error = "ExpressionException"
 
 [[played]]
@@ -13177,7 +13177,7 @@ sharps = -3
 accidental = "flat"
 name = "shake (flat)"
 ornamental = ["E-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 error = "ExpressionException"
 
 [[played]]
@@ -13223,7 +13223,7 @@ sharps = 6
 accidental = "sharp"
 name = "shake (sharp)"
 ornamental = ["E#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 error = "ExpressionException"
 
 [[played]]
@@ -13235,7 +13235,7 @@ sharps = 6
 accidental = "flat"
 name = "shake (flat)"
 ornamental = ["E-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 error = "ExpressionException"
 
 [[played]]
@@ -13283,7 +13283,7 @@ sharps = 0
 accidental = "sharp"
 name = "shake (sharp)"
 ornamental = ["G#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["F#4 0.25", "G#4 0.25"]
 after = []
 
@@ -13296,7 +13296,7 @@ sharps = 0
 accidental = "flat"
 name = "shake (flat)"
 ornamental = ["G-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["F#4 0.25", "G-4 0.25"]
 after = []
 
@@ -13346,7 +13346,7 @@ sharps = 2
 accidental = "sharp"
 name = "shake (sharp)"
 ornamental = ["G#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["F#4 0.25", "G#4 0.25"]
 after = []
 
@@ -13359,7 +13359,7 @@ sharps = 2
 accidental = "flat"
 name = "shake (flat)"
 ornamental = ["G-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["F#4 0.25", "G-4 0.25"]
 after = []
 
@@ -13409,7 +13409,7 @@ sharps = -3
 accidental = "sharp"
 name = "shake (sharp)"
 ornamental = ["G#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["F#4 0.25", "G#4 0.25"]
 after = []
 
@@ -13422,7 +13422,7 @@ sharps = -3
 accidental = "flat"
 name = "shake (flat)"
 ornamental = ["G-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["F#4 0.25", "G-4 0.25"]
 after = []
 
@@ -13472,7 +13472,7 @@ sharps = 6
 accidental = "sharp"
 name = "shake (sharp)"
 ornamental = ["G#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["F#4 0.25", "G#4 0.25"]
 after = []
 
@@ -13485,7 +13485,7 @@ sharps = 6
 accidental = "flat"
 name = "shake (flat)"
 ornamental = ["G-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["F#4 0.25", "G-4 0.25"]
 after = []
 
@@ -13535,7 +13535,7 @@ sharps = 0
 accidental = "sharp"
 name = "shake (sharp)"
 ornamental = ["C#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["B-3 0.25", "C#4 0.25", "B-3 0.25", "C#4 0.25", "B-3 0.25", "C#4 0.25", "B-3 0.25", "C#4 0.25"]
 after = []
 
@@ -13548,7 +13548,7 @@ sharps = 0
 accidental = "flat"
 name = "shake (flat)"
 ornamental = ["C-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["B-3 0.25", "C-4 0.25", "B-3 0.25", "C-4 0.25", "B-3 0.25", "C-4 0.25", "B-3 0.25", "C-4 0.25"]
 after = []
 
@@ -13598,7 +13598,7 @@ sharps = 2
 accidental = "sharp"
 name = "shake (sharp)"
 ornamental = ["C#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["B-3 0.25", "C#4 0.25", "B-3 0.25", "C#4 0.25", "B-3 0.25", "C#4 0.25", "B-3 0.25", "C#4 0.25"]
 after = []
 
@@ -13611,7 +13611,7 @@ sharps = 2
 accidental = "flat"
 name = "shake (flat)"
 ornamental = ["C-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["B-3 0.25", "C-4 0.25", "B-3 0.25", "C-4 0.25", "B-3 0.25", "C-4 0.25", "B-3 0.25", "C-4 0.25"]
 after = []
 
@@ -13661,7 +13661,7 @@ sharps = -3
 accidental = "sharp"
 name = "shake (sharp)"
 ornamental = ["C#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["B-3 0.25", "C#4 0.25", "B-3 0.25", "C#4 0.25", "B-3 0.25", "C#4 0.25", "B-3 0.25", "C#4 0.25"]
 after = []
 
@@ -13674,7 +13674,7 @@ sharps = -3
 accidental = "flat"
 name = "shake (flat)"
 ornamental = ["C-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["B-3 0.25", "C-4 0.25", "B-3 0.25", "C-4 0.25", "B-3 0.25", "C-4 0.25", "B-3 0.25", "C-4 0.25"]
 after = []
 
@@ -13724,7 +13724,7 @@ sharps = 6
 accidental = "sharp"
 name = "shake (sharp)"
 ornamental = ["C#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["B-3 0.25", "C#4 0.25", "B-3 0.25", "C#4 0.25", "B-3 0.25", "C#4 0.25", "B-3 0.25", "C#4 0.25"]
 after = []
 
@@ -13737,7 +13737,7 @@ sharps = 6
 accidental = "flat"
 name = "shake (flat)"
 ornamental = ["C-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["B-3 0.25", "C-4 0.25", "B-3 0.25", "C-4 0.25", "B-3 0.25", "C-4 0.25", "B-3 0.25", "C-4 0.25"]
 after = []
 
@@ -13787,7 +13787,7 @@ sharps = 0
 accidental = "sharp"
 name = "shake (sharp)"
 ornamental = ["F#5"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["E5 0.125", "F#5 0.125"]
 after = []
 
@@ -13800,7 +13800,7 @@ sharps = 0
 accidental = "flat"
 name = "shake (flat)"
 ornamental = ["F-5"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["E5 0.125", "F-5 0.125"]
 after = []
 
@@ -13850,7 +13850,7 @@ sharps = 2
 accidental = "sharp"
 name = "shake (sharp)"
 ornamental = ["F#5"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["E5 0.125", "F#5 0.125"]
 after = []
 
@@ -13863,7 +13863,7 @@ sharps = 2
 accidental = "flat"
 name = "shake (flat)"
 ornamental = ["F-5"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["E5 0.125", "F-5 0.125"]
 after = []
 
@@ -13913,7 +13913,7 @@ sharps = -3
 accidental = "sharp"
 name = "shake (sharp)"
 ornamental = ["F#5"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["E5 0.125", "F#5 0.125"]
 after = []
 
@@ -13926,7 +13926,7 @@ sharps = -3
 accidental = "flat"
 name = "shake (flat)"
 ornamental = ["F-5"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["E5 0.125", "F-5 0.125"]
 after = []
 
@@ -13976,7 +13976,7 @@ sharps = 6
 accidental = "sharp"
 name = "shake (sharp)"
 ornamental = ["F#5"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["E5 0.125", "F#5 0.125"]
 after = []
 
@@ -13989,7 +13989,7 @@ sharps = 6
 accidental = "flat"
 name = "shake (flat)"
 ornamental = ["F-5"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["E5 0.125", "F-5 0.125"]
 after = []
 
@@ -14039,7 +14039,7 @@ sharps = 0
 accidental = "sharp"
 name = "shake (sharp)"
 ornamental = ["A#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["G4 0.25", "A#4 0.25", "G4 0.25", "A#4 0.25", "G4 0.25", "A#4 0.25", "G4 0.25", "A#4 0.25", "G4 0.25", "A#4 0.25", "G4 0.25", "A#4 0.25"]
 after = []
 
@@ -14052,7 +14052,7 @@ sharps = 0
 accidental = "flat"
 name = "shake (flat)"
 ornamental = ["A-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["G4 0.25", "A-4 0.25", "G4 0.25", "A-4 0.25", "G4 0.25", "A-4 0.25", "G4 0.25", "A-4 0.25", "G4 0.25", "A-4 0.25", "G4 0.25", "A-4 0.25"]
 after = []
 
@@ -14102,7 +14102,7 @@ sharps = 2
 accidental = "sharp"
 name = "shake (sharp)"
 ornamental = ["A#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["G4 0.25", "A#4 0.25", "G4 0.25", "A#4 0.25", "G4 0.25", "A#4 0.25", "G4 0.25", "A#4 0.25", "G4 0.25", "A#4 0.25", "G4 0.25", "A#4 0.25"]
 after = []
 
@@ -14115,7 +14115,7 @@ sharps = 2
 accidental = "flat"
 name = "shake (flat)"
 ornamental = ["A-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["G4 0.25", "A-4 0.25", "G4 0.25", "A-4 0.25", "G4 0.25", "A-4 0.25", "G4 0.25", "A-4 0.25", "G4 0.25", "A-4 0.25", "G4 0.25", "A-4 0.25"]
 after = []
 
@@ -14165,7 +14165,7 @@ sharps = -3
 accidental = "sharp"
 name = "shake (sharp)"
 ornamental = ["A#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["G4 0.25", "A#4 0.25", "G4 0.25", "A#4 0.25", "G4 0.25", "A#4 0.25", "G4 0.25", "A#4 0.25", "G4 0.25", "A#4 0.25", "G4 0.25", "A#4 0.25"]
 after = []
 
@@ -14178,7 +14178,7 @@ sharps = -3
 accidental = "flat"
 name = "shake (flat)"
 ornamental = ["A-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["G4 0.25", "A-4 0.25", "G4 0.25", "A-4 0.25", "G4 0.25", "A-4 0.25", "G4 0.25", "A-4 0.25", "G4 0.25", "A-4 0.25", "G4 0.25", "A-4 0.25"]
 after = []
 
@@ -14228,7 +14228,7 @@ sharps = 6
 accidental = "sharp"
 name = "shake (sharp)"
 ornamental = ["A#4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["G4 0.25", "A#4 0.25", "G4 0.25", "A#4 0.25", "G4 0.25", "A#4 0.25", "G4 0.25", "A#4 0.25", "G4 0.25", "A#4 0.25", "G4 0.25", "A#4 0.25"]
 after = []
 
@@ -14241,7 +14241,7 @@ sharps = 6
 accidental = "flat"
 name = "shake (flat)"
 ornamental = ["A-4"]
-displayed = ["undecided"]
+displayed = ["shown"]
 before = ["G4 0.25", "A-4 0.25", "G4 0.25", "A-4 0.25", "G4 0.25", "A-4 0.25", "G4 0.25", "A-4 0.25", "G4 0.25", "A-4 0.25", "G4 0.25", "A-4 0.25"]
 after = []
 

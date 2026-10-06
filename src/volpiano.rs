@@ -85,14 +85,9 @@ const BELOW_LOWEST_LINE: IntegerType = 5;
 /// until a clef token says otherwise; a flat token flats every E or B from
 /// there on, and its capital takes the flat away again. A barline closes
 /// the measure, every measure numbered nought. Two notes with nothing
-/// between them are a neume, a [`SpannerKind::Neume`] the part holds; more
-/// notes than two are paired off from the first, and only the last whole
-/// pair is a neume.
-///
-/// music21 keeps adding to its first measure after a barline has closed it,
-/// and that is kept: every break and neume is put in the first measure,
-/// at its end, wherever it stands in the string. Tokens that are none of
-/// these are passed over.
+/// between them are a neume, a [`SpannerKind::Neume`] the part holds, and a
+/// neume takes in every note of its run. A break goes at the end of the
+/// measure being read. Tokens that are none of these are passed over.
 ///
 /// ```
 /// use music21_rs::volpiano::from_volpiano;
@@ -114,9 +109,9 @@ const BELOW_LOWEST_LINE: IntegerType = 5;
 pub fn from_volpiano(text: &str) -> Result<Stream> {
     let mut measures: Vec<Stream> = Vec::new();
     let mut measure = Stream::with_kind(StreamKind::Measure);
-    // Neumes, as the ordinals of their two notes among every note read.
-    let mut neumes: Vec<(usize, usize)> = Vec::new();
-    let mut current_neume: Option<(usize, usize)> = None;
+    // Neumes, as the ordinals of their notes among every note read.
+    let mut neumes: Vec<Vec<usize>> = Vec::new();
+    let mut current_neume: Option<Vec<usize>> = None;
     let mut waiting: Option<usize> = None;
     let mut notes_read = 0;
     let mut lowest_line = Clef::treble().lowest_line().unwrap_or(31);
@@ -124,34 +119,23 @@ pub fn from_volpiano(text: &str) -> Result<Stream> {
     let mut b_is_flat = false;
     let mut e_is_flat = false;
 
-    // music21 appends breaks and neumes to the first measure it made, even
-    // after that measure has been closed.
-    fn append_to_first(measures: &mut [Stream], measure: &mut Stream, element: StreamElement) {
-        match measures.first_mut() {
-            Some(first) => append(first, element),
-            None => append(measure, element),
-        }
-    }
-
     for token in text.chars() {
         if token == '7' {
             breaks += 1;
             continue;
         }
         if let Some(kind) = Break::of_count(breaks) {
-            append_to_first(&mut measures, &mut measure, StreamElement::Break(kind));
+            append(&mut measure, StreamElement::Break(kind));
         }
         breaks = 0;
-        if token == '-' {
+        if token == '-' || "1234".contains(token) {
             waiting = None;
             if let Some(neume) = current_neume.take() {
                 neumes.push(neume);
             }
-            continue;
-        }
-        if "1234".contains(token) {
-            waiting = None;
-            current_neume = None;
+            if token == '-' {
+                continue;
+            }
         }
         match token {
             '1' | '2' => {
@@ -195,9 +179,13 @@ pub fn from_volpiano(text: &str) -> Result<Stream> {
                     append(&mut measure, StreamElement::Note(note));
                     let this = notes_read;
                     notes_read += 1;
-                    match waiting.take() {
-                        Some(before) => current_neume = Some((before, this)),
-                        None => waiting = Some(this),
+                    // Notes with no hyphen between them are one neume.
+                    if let Some(neume) = current_neume.as_mut() {
+                        neume.push(this);
+                    } else if let Some(before) = waiting.take() {
+                        current_neume = Some(vec![before, this]);
+                    } else {
+                        waiting = Some(this);
                     }
                 } else if let Some(lower) = flat_token(token) {
                     let flat = !token.is_uppercase();
@@ -210,8 +198,11 @@ pub fn from_volpiano(text: &str) -> Result<Stream> {
             }
         }
     }
+    if let Some(neume) = current_neume {
+        neumes.push(neume);
+    }
     if let Some(kind) = Break::of_count(breaks) {
-        append_to_first(&mut measures, &mut measure, StreamElement::Break(kind));
+        append(&mut measure, StreamElement::Break(kind));
     }
     if !measure.is_empty() {
         measures.push(measure);
@@ -229,10 +220,10 @@ pub fn from_volpiano(text: &str) -> Result<Stream> {
         .filter(|(_, (_, element))| matches!(element, StreamElement::Note(_)))
         .map(|(place, _)| place)
         .collect();
-    for (first, last) in neumes {
+    for neume in neumes {
         part.add_spanner(Spanner::new(
             SpannerKind::Neume,
-            vec![places[first], places[last]],
+            neume.into_iter().map(|ordinal| places[ordinal]).collect(),
         ));
     }
     Ok(part)
@@ -489,7 +480,7 @@ mod tests {
         let part = from_volpiano("1--c--d---f--d---ed--c--d---f---g--h--j---hgf--g--h---").unwrap();
         assert_eq!(
             to_volpiano(&part).unwrap(),
-            "1---c-d-f-d-ed-c-d-f-g-h-j-hg-f-g-h-"
+            "1---c-d-f-d-ed-c-d-f-g-h-j-hgf-g-h-"
         );
     }
 
@@ -516,11 +507,11 @@ mod tests {
     }
 
     #[test]
-    fn breaks_and_neumes_after_a_barline_go_in_the_first_measure() {
+    fn breaks_and_neumes_go_in_the_measure_being_read() {
         let part = from_volpiano("1---e-3-ef-g-7-e-4-gh--j-77").unwrap();
         let measures = part.measures();
         assert_eq!(measures.len(), 3);
-        let breaks: Vec<Break> = measures[0]
+        let breaks: Vec<Break> = measures[1]
             .events()
             .iter()
             .filter_map(|event| match event.element() {
@@ -528,19 +519,35 @@ mod tests {
                 _ => None,
             })
             .collect();
-        assert_eq!(breaks, [Break::Line, Break::Page]);
+        assert_eq!(breaks, [Break::Line]);
+        assert_eq!(part.spanners().len(), 2);
         assert_eq!(
             to_volpiano(&part).unwrap(),
-            "1---e777------3ef-g-e----4gh-j-"
+            "1---e----3ef-g7---e----4gh-j77---"
         );
     }
 
     #[test]
-    fn notes_are_paired_into_neumes_and_only_the_last_pair_is_kept() {
-        let part = from_volpiano("1---abcde-").unwrap();
+    fn a_neume_takes_every_note_of_its_run() {
+        let part = from_volpiano("1---cdef-g-").unwrap();
         assert_eq!(part.spanners().len(), 1);
         // The clef is the part's first leaf.
-        assert_eq!(part.spanners()[0].spanned(), [Some(3), Some(4)]);
-        assert_eq!(to_volpiano(&part).unwrap(), "1---a-b-cd-e-");
+        assert_eq!(
+            part.spanners()[0].spanned(),
+            [Some(1), Some(2), Some(3), Some(4)]
+        );
+        assert_eq!(to_volpiano(&part).unwrap(), "1---cdef-g-");
+    }
+
+    #[test]
+    fn a_neume_ends_at_a_barline_or_the_end() {
+        let part = from_volpiano("1---ef3-gh").unwrap();
+        let lengths: Vec<usize> = part
+            .spanners()
+            .iter()
+            .map(|neume| neume.spanned().len())
+            .collect();
+        assert_eq!(lengths, [2, 2]);
+        assert_eq!(to_volpiano(&part).unwrap(), "1---ef----3gh-");
     }
 }

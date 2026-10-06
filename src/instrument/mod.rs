@@ -25,7 +25,7 @@
 mod streams;
 mod tables;
 
-pub(crate) use streams::settle;
+pub(crate) use streams::settle_by_offset;
 pub use streams::{bundle_instruments, deduplicate, partition_by_instrument, unbundle_instruments};
 
 use std::fmt;
@@ -585,9 +585,12 @@ impl Instrument {
     /// not name, a string instrument's -- whatever the instrument itself is
     /// called.
     pub fn all_names(&self, language: SearchLanguage) -> Vec<(SearchLanguage, Vec<&'static str>)> {
+        // An instrument no table names by its kind is looked up by its own
+        // name, as the class it would be.
         let named = std::iter::once(self.kind.as_str())
             .chain(self.families().iter().copied())
-            .find(|class| tables::ALL.iter().any(|(_, named)| named == class));
+            .find(|class| tables::ALL.iter().any(|(_, named)| named == class))
+            .or(self.name.as_deref());
         let languages: &[SearchLanguage] = match language {
             SearchLanguage::All => &SearchLanguage::EACH,
             _ => std::slice::from_ref(&language),
@@ -648,6 +651,16 @@ mod tests {
     use super::*;
 
     // Every expectation here was read off music21 11.0.0b9.
+
+    #[test]
+    fn an_instrument_of_no_named_kind_is_looked_up_by_its_name() {
+        let mut violin = Instrument::new();
+        violin.set_name(Some("Violin".to_string()));
+        assert_eq!(
+            violin.all_names(SearchLanguage::English),
+            [(SearchLanguage::English, vec!["violin", "violins"])]
+        );
+    }
 
     #[test]
     fn an_instrument_starts_out_as_its_class_does() {

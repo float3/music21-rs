@@ -412,6 +412,37 @@ impl Chord {
         Ok(())
     }
 
+    /// Puts the notes lowest first on the staff, keeping the note objects
+    /// that are built, as music21 sorts its own list of notes: a chord
+    /// already in order is left alone, its cache and all.
+    fn sort_in_place(&mut self, py: Python<'_>) {
+        let synced = self.synced_inner(py);
+        let keys: Vec<(music21_rs_crate::IntegerType, f64)> = synced
+            .notes()
+            .iter()
+            .map(|note| (note.pitch().diatonic_note_number(), note.pitch().ps()))
+            .collect();
+        let mut order: Vec<usize> = (0..keys.len()).collect();
+        order.sort_by(|left, right| {
+            keys[*left]
+                .partial_cmp(&keys[*right])
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        if order
+            .iter()
+            .enumerate()
+            .all(|(place, index)| place == *index)
+        {
+            return;
+        }
+        if !self.notes.is_empty() {
+            let mut held: Vec<Option<Py<Note>>> = std::mem::take(&mut self.notes);
+            self.notes = order.iter().map(|index| held[*index].take()).collect();
+        }
+        self.inner = synced.sort_diatonic_ascending();
+        self.clear_cache();
+    }
+
     /// Throws away what the chord had worked out. music21 does this wherever
     /// the notes change — `add`, `remove`, the `pitches` and `pitchNames`
     /// setters, `sortDiatonicAscending`, `semiClosedPosition` — and every one
@@ -2081,37 +2112,9 @@ impl Chord {
             return Ok(Some(-1));
         }
         if let Some(newInversion) = newInversion.filter(|value| !value.is_none()) {
-            let Ok(inversion) = newInversion.extract::<i32>() else {
-                return Err(ChordException::new_err(format!(
-                    "Inversion must be an integer, got: {}",
-                    newInversion.get_type()
-                )));
-            };
-            if !transposeOnSet {
-                // music21 records the answer without moving anything, which
-                // is how a chord badly spelt or with a note added is told
-                // what inversion it stands in.
-                let py = slf.py();
-                let overrides = slf.borrow_mut()._overrides(py);
-                overrides.bind(py).set_item("inversion", inversion)?;
-                return Ok(None);
-            }
-            let inversion = u8::try_from(inversion).map_err(|_| {
-                ChordException::new_err("Could not invert chord: inversion may not exist")
-            })?;
-            clear_override(slf, "inversion")?;
-            clear_override(slf, "bass")?;
-            // Through the notes as they stand and back into them: the note
-            // objects may already be built, and a chord whose notes did not
-            // move would not have been inverted at all.
-            let py = slf.py();
-            let mut moved = slf.borrow().synced_inner(py);
-            moved.set_inversion(inversion).map_err(chord_error)?;
-            slf.borrow_mut().replace_inner(py, moved)?;
-            // music21 moves its notes in place, so a root fixed on one of
-            // them is still that note, an octave up; here it is the note of
-            // that name in the chord the notes were rebuilt into.
-            repoint_override(slf, "root")?;
+            // Setting is music21's `setInversion` now; this form stays for
+            // callers that have not moved.
+            set_inversion_of(slf, newInversion, transposeOnSet)?;
             return Ok(None);
         }
         if let Some(testRoot) = testRoot.filter(|value| !value.is_none()) {
@@ -2123,12 +2126,51 @@ impl Chord {
                     .map_or(-1, i32::from),
             ));
         }
-        // An answer fixed by hand stands, unless the caller asks for the
-        // search outright.
-        if !find && let Some(fixed) = overridden(slf, "inversion")? {
+        // An answer recorded stands; with none, the search is made unless
+        // the caller asked for no search.
+        if let Some(fixed) = overridden(slf, "inversion")? {
             return Ok(Some(fixed.extract::<i32>().unwrap_or(-1)));
         }
+        if !find {
+            return Ok(Some(-1));
+        }
         Ok(Some(slf.borrow().inner.inversion().map_or(-1, i32::from)))
+    }
+
+    /// The chord in a new inversion, its lowest note raised by octaves until
+    /// it stands there; with `transpose=False` the inversion is only
+    /// recorded, and `None` forgets one recorded. music21's `setInversion`.
+    #[pyo3(signature = (newInversion, *, transpose = true, inPlace = false))]
+    fn setInversion(
+        slf: &Bound<'_, Self>,
+        newInversion: &Bound<'_, PyAny>,
+        transpose: bool,
+        inPlace: bool,
+    ) -> PyResult<Option<Py<PyAny>>> {
+        let target = if inPlace {
+            slf.clone().into_any()
+        } else {
+            slf.py().import("copy")?.call_method1("deepcopy", (slf,))?
+        };
+        let target = target.cast::<Chord>()?;
+        if newInversion.is_none() {
+            clear_override(target, "inversion")?;
+        } else {
+            set_inversion_of(target, newInversion, transpose)?;
+        }
+        Ok((!inPlace).then(|| target.clone().into_any().unbind()))
+    }
+
+    /// Whether the notes stand lowest to highest on the staff, as
+    /// `sortDiatonicAscending` puts them: music21's
+    /// `isSortedDiatonicAscending`.
+    fn isSortedDiatonicAscending(&self) -> bool {
+        let notes = self.inner.notes();
+        notes.windows(2).all(|pair| {
+            let key = |note: &RsNote| (note.pitch().diatonic_note_number(), note.pitch().ps());
+            let (lower, higher) = (key(&pair[0]), key(&pair[1]));
+            lower.0 < higher.0 || (lower.0 == higher.0 && lower.1 <= higher.1)
+        })
     }
 
     fn inversionName(&self) -> PyResult<Option<i32>> {
@@ -2448,7 +2490,7 @@ impl Chord {
     fn sortAscending(&mut self, py: Python<'_>, inPlace: bool) -> PyResult<Option<Chord>> {
         let sorted = self.inner.sort_ascending();
         if inPlace {
-            self.replace_inner(py, sorted)?;
+            self.sort_in_place(py);
             Ok(None)
         } else {
             Ok(Some(Self::from_inner(py, sorted)?))
@@ -2459,7 +2501,7 @@ impl Chord {
     fn sortDiatonicAscending(&mut self, py: Python<'_>, inPlace: bool) -> PyResult<Option<Chord>> {
         let sorted = self.inner.sort_diatonic_ascending();
         if inPlace {
-            self.replace_inner(py, sorted)?;
+            self.sort_in_place(py);
             Ok(None)
         } else {
             Ok(Some(Self::from_inner(py, sorted)?))
@@ -3316,5 +3358,49 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(fromIntervalVector, m)?)?;
     m.add_class::<Chord>()?;
     m.add_class::<ChordTableAddress>()?;
+    Ok(())
+}
+
+/// music21's `setInversion` with a number: the inversion recorded, or with
+/// `transpose` the chord's notes moved until it stands there.
+fn set_inversion_of(
+    slf: &Bound<'_, Chord>,
+    newInversion: &Bound<'_, PyAny>,
+    transpose: bool,
+) -> PyResult<()> {
+    let Ok(inversion) = newInversion.extract::<i32>() else {
+        return Err(ChordException::new_err(format!(
+            "Inversion must be an integer, got: {}",
+            newInversion.get_type()
+        )));
+    };
+    let py = slf.py();
+    if !transpose {
+        // music21 records the answer without moving anything, which is how
+        // a chord badly spelt or with a note added is told what inversion it
+        // stands in.
+        let overrides = slf.borrow_mut()._overrides(py);
+        overrides.bind(py).set_item("inversion", inversion)?;
+        return Ok(());
+    }
+    if slf.borrow().inner.pitches().is_empty() {
+        return Err(ChordException::new_err(
+            "Cannot invert a chord without pitches",
+        ));
+    }
+    let inversion = u8::try_from(inversion)
+        .map_err(|_| ChordException::new_err("Could not invert chord: inversion may not exist"))?;
+    clear_override(slf, "inversion")?;
+    clear_override(slf, "bass")?;
+    // Through the notes as they stand and back into them: the note objects
+    // may already be built, and a chord whose notes did not move would not
+    // have been inverted at all.
+    let mut moved = slf.borrow().synced_inner(py);
+    moved.set_inversion(inversion).map_err(chord_error)?;
+    slf.borrow_mut().replace_inner(py, moved)?;
+    // music21 moves its notes in place, so a root fixed on one of them is
+    // still that note, an octave up; here it is the note of that name in the
+    // chord the notes were rebuilt into.
+    repoint_override(slf, "root")?;
     Ok(())
 }

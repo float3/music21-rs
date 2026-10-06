@@ -759,6 +759,9 @@ struct PartParser<'a, 'x> {
     /// music21's `PartParser.atSoundingPitch`: a part is at sounding pitch
     /// until a `<transpose>` says otherwise.
     at_sounding_pitch: bool,
+    /// The arpeggios across chords, by their number and the offset in the
+    /// part they stand at, each as where it stands among the spanners.
+    arpeggios: Vec<((String, FloatType), usize)>,
 }
 
 impl<'a, 'x> PartParser<'a, 'x> {
@@ -794,6 +797,7 @@ impl<'a, 'x> PartParser<'a, 'x> {
             active_tuplets: Default::default(),
             first_measure_parsed: false,
             at_sounding_pitch: true,
+            arpeggios: Vec::new(),
         }
     }
 
@@ -2378,19 +2382,29 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
                     ArpeggioType::from_name(written.get("direction").unwrap_or("normal"))
                         .unwrap_or(ArpeggioType::Normal)
                 };
+                // A number tells apart arpeggios struck together, which may
+                // cross staves but not parts.
+                let key = (
+                    number.to_string(),
+                    op_frac(self.part.last_measure_offset + self.offset),
+                );
+                let found = self
+                    .part
+                    .arpeggios
+                    .iter()
+                    .find(|(held, _)| *held == key)
+                    .map(|(_, index)| *index);
                 let spanners = &mut self.part.importer.spanners;
-                let found = spanners.iter().position(|held| {
-                    held.kind == SpannerKind::ArpeggioMark
-                        && !held.complete
-                        && held.id_local.as_deref() == Some(number)
-                });
                 let index = found.unwrap_or_else(|| {
                     let mut building = Building::new(SpannerKind::ArpeggioMark, Some(number));
                     building.arpeggio = kind;
                     spanners.push(building);
                     spanners.len() - 1
                 });
-                spanners[index].add(uid);
+                if found.is_none() {
+                    self.part.arpeggios.push((key, index));
+                }
+                self.part.importer.spanners[index].add(uid);
             }
         }
         for ornaments in notations.find_all("ornaments") {

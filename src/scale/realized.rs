@@ -842,7 +842,9 @@ impl Scale {
         let at = Self::sounding(origin).ps();
         let ascending = steps > 0;
         let (mut current, mut place, mut remaining) =
-            match self.cycle_place_sounding(origin, DegreeComparison::Name)? {
+            // A pitch sounding where a note of the cycle does is on it,
+            // however it is spelled: music21 compares them by pitch space.
+            match self.cycle_place_sounding(origin, DegreeComparison::PitchClass)? {
                 Some((pitch, place)) => (pitch, place, steps),
                 None => {
                     let take_below = neighbour_below.unwrap_or(!ascending);
@@ -1271,7 +1273,7 @@ impl Scale {
     fn places_on(&self, origin: &Pitch) -> Result<Vec<(usize, IntegerType)>> {
         if !self.repeats_at_the_octave() {
             return Ok(self
-                .cycle_place_sounding(origin, DegreeComparison::Name)?
+                .cycle_place_sounding(origin, DegreeComparison::PitchClass)?
                 .map(|(_, place)| (place, 0))
                 .into_iter()
                 .collect());

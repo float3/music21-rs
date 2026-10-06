@@ -995,6 +995,20 @@ pub struct NumeralAlone {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn numerals_past_seven_are_no_figures() {
+        use super::RomanNumeral;
+        use crate::Key;
+
+        for figure in ["VIII", "viii7", "IX", "bVIII"] {
+            assert!(
+                RomanNumeral::new(figure, Key::from_tonic("C").unwrap()).is_err(),
+                "{figure}"
+            );
+        }
+        assert!(RomanNumeral::new("VII", Key::from_tonic("C").unwrap()).is_ok());
+    }
+
+    #[test]
     fn the_front_alteration_is_what_was_written() {
         use super::RomanNumeral;
         use crate::Key;

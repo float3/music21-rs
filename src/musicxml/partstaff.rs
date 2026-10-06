@@ -116,41 +116,54 @@ fn process_subsequent_part_staff(
         if target_measure.tag() != "measure" {
             continue;
         }
-        let Some(source_measure) = source_measures.peek().copied() else {
+        let Some(mut source_measure) = source_measures.peek().copied() else {
             return Ok(insertions);
         };
         let target_number = target_measure.get("number").map(str::to_string);
-        let source_number = source_measure.get("number").map(str::to_string);
+        let mut source_number = source_measure.get("number").map(str::to_string);
         if target_number == source_number {
             move_measure_contents(source_measure, target_measure, staff)?;
             source_measures.next();
             continue;
         }
-        let (Some(target_number), Some(source_number)) = (target_number, source_number) else {
-            return Err(export_error(
-                "joinPartStaffs() was unable to order the measures",
-            ));
+        let before = |first: &Option<String>, second: &Option<String>| match (first, second) {
+            (Some(first), Some(second)) => measure_number_comes_before(first, second),
+            _ => false,
         };
-        if measure_number_comes_before(&target_number, &source_number) {
+        // A measure the later staff lacks: wait for it with the same source
+        // measure.
+        if before(&target_number, &source_number) {
             continue;
         }
-        if !measure_number_comes_before(&source_number, &target_number) {
-            return Err(export_error(format!(
-                "joinPartStaffs() was unable to order the measures {target_number}, \
-                 {source_number}"
-            )));
-        }
-        // music21 reads the number once and never again, so once the first
-        // staff is missing a measure every measure the later staff has left
-        // goes in here, each under the first one's number.
-        for measure in source_measures {
+        // Measures the first staff lacks go in on their own, until the
+        // numbers meet again.
+        while before(&source_number, &target_number) {
+            let number = source_number.clone().unwrap_or_default();
             add(
                 &mut insertions,
                 index,
-                vec![divider(&source_number), Node::Element(measure.clone())],
+                vec![divider(&number), Node::Element(source_measure.clone())],
             );
+            source_measures.next();
+            let Some(next) = source_measures.peek().copied() else {
+                return Ok(insertions);
+            };
+            source_measure = next;
+            source_number = source_measure.get("number").map(str::to_string);
         }
-        return Ok(insertions);
+        if target_number == source_number {
+            move_measure_contents(source_measure, target_measure, staff)?;
+            source_measures.next();
+            continue;
+        }
+        if before(&target_number, &source_number) {
+            continue;
+        }
+        return Err(export_error(format!(
+            "joinPartStaffs() was unable to order the measures {}, {}",
+            target_number.as_deref().unwrap_or("None"),
+            source_number.as_deref().unwrap_or("None")
+        )));
     }
     let end = target.children().len();
     for remaining in source_measures {

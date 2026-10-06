@@ -497,11 +497,12 @@ impl Reader {
                     _ => {}
                 }
             }
-            // A meter passes through the open states like a note: it takes
-            // the place of one in a tie or at the end of a bracket.
+            // Only notes and rests count towards a tie or go in a bracket;
+            // a meter passes the open states by.
             let index = self.elements.len();
+            let counts = !matches!(element, StreamElement::TimeSignature(_));
             self.elements.push(element);
-            {
+            if counts {
                 let mut place = 0;
                 while place < self.states.len() {
                     let expired = match &mut self.states[place] {
@@ -516,7 +517,7 @@ impl Reader {
                             let values = element
                                 .duration()
                                 .map_or(1, |duration| duration.components().len());
-                            if values != 1 && !matches!(element, StreamElement::TimeSignature(_)) {
+                            if values != 1 {
                                 return Err(Error::Duration("Unknown type: complex".to_string()));
                             }
                             with_duration(element, |duration| {
@@ -540,10 +541,14 @@ impl Reader {
             }
         }
 
+        // A closing brace ends the last bracket opened, not a tie.
         for _ in 0..closing.min(self.states.len()) {
-            if let Some(state) = self.states.pop() {
-                self.end(state)?;
+            let mut at = self.states.len() - 1;
+            while at > 0 && matches!(self.states[at], State::Tie { .. }) {
+                at -= 1;
             }
+            let state = self.states.remove(at);
+            self.end(state)?;
         }
         Ok(())
     }
@@ -603,6 +608,43 @@ pub fn from_tiny_notation(text: &str) -> Result<Stream> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_closing_brace_ends_the_bracket_rather_than_a_tie() {
+        let part = from_tiny_notation("4/4 trip{c8 d e~} e4 f2").unwrap();
+        let held: Vec<(FloatType, Option<TieType>, usize)> = part
+            .notes()
+            .into_iter()
+            .filter_map(|(_, element)| match element {
+                StreamElement::Note(note) => Some((
+                    note.duration().map_or(0.0, Duration::quarter_length),
+                    note.tie().map(|tie| tie.tie_type()),
+                    note.duration()
+                        .map_or(0, |duration| duration.tuplets().len()),
+                )),
+                _ => None,
+            })
+            .collect();
+        let third = 1.0 / 3.0;
+        assert_eq!(
+            held,
+            [
+                (third, None, 1),
+                (third, None, 1),
+                (third, Some(TieType::Start), 1),
+                (1.0, Some(TieType::Stop), 0),
+                (2.0, None, 0),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_meter_passes_open_states_by() {
+        let part = from_tiny_notation("2/4 trip{c8 d 4/4} e4 f4 g2").unwrap();
+        let lengths: Vec<FloatType> = notes(&part).into_iter().map(|(_, length)| length).collect();
+        let third = 1.0 / 3.0;
+        assert_eq!(lengths, [third, third, 1.0, 1.0, 2.0]);
+    }
 
     fn notes(part: &Stream) -> Vec<(String, FloatType)> {
         part.notes()
