@@ -28,8 +28,10 @@ use crate::{
     analysis::pitch_analysis,
     defaults::{FloatType, IntegerType},
     error::{Error, Result},
+    meter::TimeSignature,
     pitch::Pitch,
-    stream::{ConsecutiveOptions, Stream, StreamElement, StreamKind},
+    stream::{ConsecutiveOptions, Stream, StreamElement, StreamEvent, StreamKind},
+    tempo::MetronomeMark,
 };
 
 /// What an [`Extractor`] answers: its name and the vector it found.
@@ -174,6 +176,20 @@ pub struct DataInstance {
     pitch_class_histogram: OnceCell<[usize; 12]>,
     midi_interval_histogram: OnceCell<Vec<usize>>,
     contour: OnceCell<Vec<IntegerType>>,
+    seconds: OnceCell<std::result::Result<Vec<Seconds>, Error>>,
+}
+
+/// Where a note sounds in time, in seconds at the tempi of the piece:
+/// music21's `secondsMap` entry.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Seconds {
+    /// When the note starts.
+    pub offset: FloatType,
+    /// How long it sounds.
+    pub duration: FloatType,
+    /// When it stops.
+    pub end: FloatType,
 }
 
 impl DataInstance {
@@ -215,6 +231,7 @@ impl DataInstance {
             pitch_class_histogram: OnceCell::new(),
             midi_interval_histogram: OnceCell::new(),
             contour: OnceCell::new(),
+            seconds: OnceCell::new(),
         })
     }
 
@@ -316,6 +333,124 @@ impl DataInstance {
         })
     }
 
+    /// The stretches of the piece each tempo holds, start, end and the mark
+    /// sounding there: music21's `metronomeMarkBoundaries`. Where the piece
+    /// states no tempo, or none from its start, a quarter at 120 holds.
+    ///
+    /// # Errors
+    ///
+    /// A metric modulation whose new tempo cannot be worked out.
+    pub fn metronome_mark_boundaries(&self) -> Result<Vec<(FloatType, FloatType, MetronomeMark)>> {
+        let flat = self.prepared.flatten();
+        let highest = flat.end_offset();
+        let lowest = flat.events().first().map_or(0.0, StreamEvent::offset);
+        let mut marks: Vec<(FloatType, MetronomeMark)> = Vec::new();
+        for event in flat.events() {
+            let sounding = match event.element() {
+                StreamElement::MetronomeMark(mark) => mark.clone(),
+                StreamElement::TempoText(text) => text.metronome_mark(),
+                StreamElement::MetricModulation(modulation) => {
+                    let mut modulation = (**modulation).clone();
+                    if modulation
+                        .new_metronome()
+                        .is_some_and(|mark| mark.number().is_none())
+                    {
+                        let previous = marks.last().map(|(_, mark)| mark.clone());
+                        modulation.update_from(previous.as_ref());
+                    }
+                    modulation.new_metronome().cloned().ok_or_else(|| {
+                        Error::Tempo("a metric modulation with no new tempo".to_string())
+                    })?
+                }
+                _ => continue,
+            };
+            marks.push((event.offset(), sounding));
+        }
+        let default = || MetronomeMark::new(120.0);
+        let mut boundaries = Vec::new();
+        match marks.as_slice() {
+            [] => boundaries.push((lowest, highest, default())),
+            [(offset, mark)] => {
+                if *offset > lowest {
+                    boundaries.push((lowest, *offset, default()));
+                    boundaries.push((*offset, highest, mark.clone()));
+                } else {
+                    boundaries.push((lowest, highest, mark.clone()));
+                }
+            }
+            _ => {
+                if marks[0].0 > lowest {
+                    boundaries.push((lowest, marks[0].0, default()));
+                }
+                boundaries.push((marks[0].0, marks[1].0, marks[0].1.clone()));
+                for index in 1..marks.len() {
+                    let end = marks.get(index + 1).map_or(highest, |(offset, _)| *offset);
+                    boundaries.push((marks[index].0, end, marks[index].1.clone()));
+                }
+            }
+        }
+        Ok(boundaries)
+    }
+
+    /// When each note, chord and chord symbol of the piece sounds, in
+    /// seconds: music21's `secondsMap`, notes alone, in the order the piece
+    /// holds them.
+    ///
+    /// # Errors
+    ///
+    /// A tempo that says no number, or as
+    /// [`DataInstance::metronome_mark_boundaries`].
+    pub fn seconds_map(&self) -> Result<&[Seconds]> {
+        self.seconds
+            .get_or_init(|| self.work_out_seconds())
+            .as_deref()
+            .map_err(Clone::clone)
+    }
+
+    fn work_out_seconds(&self) -> Result<Vec<Seconds>> {
+        let boundaries = self.metronome_mark_boundaries()?;
+        let flat = self.prepared.flatten();
+        let lowest = flat.events().first().map_or(0.0, StreamEvent::offset);
+        let mut seconds = Vec::new();
+        for event in flat.events() {
+            let element = event.element();
+            if !matches!(
+                element,
+                StreamElement::Note(_)
+                    | StreamElement::Chord(_)
+                    | StreamElement::Unpitched(_)
+                    | StreamElement::PercussionChord(_)
+                    | StreamElement::ChordSymbol(_)
+            ) {
+                continue;
+            }
+            // music21 rounds the offset to eight places first.
+            let offset = crate::statistics::python_round(event.offset(), 8);
+            let start = accumulated_seconds(&boundaries, lowest, offset)?;
+            let duration =
+                accumulated_seconds(&boundaries, offset, offset + element.quarter_length())?;
+            seconds.push(Seconds {
+                offset: start,
+                duration,
+                end: start + duration,
+            });
+        }
+        Ok(seconds)
+    }
+
+    /// The meters the piece states, in order.
+    fn time_signatures(&self) -> Vec<TimeSignature> {
+        self.prepared
+            .flatten()
+            .events()
+            .iter()
+            .filter_map(|event| match event.element() {
+                StreamElement::TimeSignature(meter) => Some(meter.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
     /// The modes of the keys the piece states, in order.
     fn key_modes(&self) -> Vec<String> {
         self.prepared
@@ -369,4 +504,33 @@ fn consecutive_midis(
             _ => None,
         })
         .collect()
+}
+
+/// How long the stretch from one offset to another lasts in seconds, at the
+/// tempo holding each part of it: music21's `_accumulatedSeconds`.
+fn accumulated_seconds(
+    boundaries: &[(FloatType, FloatType, MetronomeMark)],
+    start: FloatType,
+    end: FloatType,
+) -> Result<FloatType> {
+    let mut total = 0.0;
+    let mut active_start = start;
+    for (from, to, mark) in boundaries {
+        if !(*from <= active_start && active_start < *to) {
+            continue;
+        }
+        let active_end = if end < *to { end } else { *to };
+        let per_quarter = mark
+            .sounding_quarter_bpm()
+            .map(|bpm| 60.0 / bpm)
+            .ok_or_else(|| {
+                Error::Tempo("cannot derive seconds as getQuarterBPM() returns None".to_string())
+            })?;
+        total += per_quarter * (active_end - active_start);
+        if active_end == end {
+            break;
+        }
+        active_start = active_end;
+    }
+    Ok(total)
 }

@@ -3,7 +3,9 @@
 //! by its id with [`extractor`].
 //!
 //! The melodic features (`M`) read the intervals between neighbouring notes
-//! of each part; the pitch features (`P`) read the piece's pitches. Several
+//! of each part; the rhythmic features (`R`) read when each note sounds, in
+//! seconds at the piece's tempi, and its meters; the pitch features (`P`)
+//! read the piece's pitches. Several
 //! of music21's habits are kept, since the values are the comparison: the
 //! pitch variety (`P8`) counts the MIDI numbers sounding but MIDI nought, a
 //! tie between two pitches equally common goes to the one sounded first, and
@@ -16,8 +18,8 @@ use crate::{
     error::{Error, Result},
 };
 
-/// Every jSymbolic extractor of melody and pitch music21 implements, in
-/// music21's order.
+/// Every jSymbolic extractor of melody, rhythm and pitch music21
+/// implements, in music21's order.
 pub const JSYMBOLIC: &[Extractor] = &[
     Extractor {
         id: "M1",
@@ -180,6 +182,159 @@ pub const JSYMBOLIC: &[Extractor] = &[
         discrete: true,
         normalize: false,
         process: size_of_melodic_arcs,
+    },
+    Extractor {
+        id: "R15",
+        name: "Note Density",
+        description: "Average number of notes per second.",
+        dimensions: 1,
+        discrete: true,
+        normalize: false,
+        process: note_density,
+    },
+    Extractor {
+        id: "R17",
+        name: "Average Note Duration",
+        description: "Average duration of notes in seconds.",
+        dimensions: 1,
+        discrete: true,
+        normalize: false,
+        process: average_note_duration,
+    },
+    Extractor {
+        id: "R18",
+        name: "Variability of Note Duration",
+        description: "Standard deviation of note durations in seconds.",
+        dimensions: 1,
+        discrete: true,
+        normalize: false,
+        process: variability_of_note_duration,
+    },
+    Extractor {
+        id: "R19",
+        name: "Maximum Note Duration",
+        description: "Duration of the longest note (in seconds).",
+        dimensions: 1,
+        discrete: true,
+        normalize: false,
+        process: maximum_note_duration,
+    },
+    Extractor {
+        id: "R20",
+        name: "Minimum Note Duration",
+        description: "Duration of the shortest note (in seconds).",
+        dimensions: 1,
+        discrete: true,
+        normalize: false,
+        process: minimum_note_duration,
+    },
+    Extractor {
+        id: "R21",
+        name: "Staccato Incidence",
+        description: "Number of notes with durations of less than a 10th of a second divided by the total number of notes in the recording.",
+        dimensions: 1,
+        discrete: true,
+        normalize: false,
+        process: staccato_incidence,
+    },
+    Extractor {
+        id: "R22",
+        name: "Average Time Between Attacks",
+        description: "Average time in seconds between Note On events (regardless of channel).",
+        dimensions: 1,
+        discrete: true,
+        normalize: false,
+        process: average_time_between_attacks,
+    },
+    Extractor {
+        id: "R23",
+        name: "Variability of Time Between Attacks",
+        description: "Standard deviation of the times, in seconds, between Note On events (regardless of channel).",
+        dimensions: 1,
+        discrete: true,
+        normalize: false,
+        process: variability_of_time_between_attacks,
+    },
+    Extractor {
+        id: "R24",
+        name: "Average Time Between Attacks For Each Voice",
+        description: "Average of average times in seconds between Note On events on individual channels that contain at least one note.",
+        dimensions: 1,
+        discrete: true,
+        normalize: false,
+        process: average_time_between_attacks_for_each_voice,
+    },
+    Extractor {
+        id: "R25",
+        name: "Average Variability of Time Between Attacks For Each Voice",
+        description: "Average standard deviation, in seconds, of time between Note On events on individual channels that contain at least one note.",
+        dimensions: 1,
+        discrete: true,
+        normalize: false,
+        process: average_variability_of_time_between_attacks_for_each_voice,
+    },
+    Extractor {
+        id: "R30",
+        name: "Initial Tempo",
+        description: "Tempo in beats per minute at the start of the recording.",
+        dimensions: 1,
+        discrete: true,
+        normalize: false,
+        process: initial_tempo,
+    },
+    Extractor {
+        id: "R31",
+        name: "Initial Time Signature",
+        description: "A feature array with two elements. The first is the numerator of the first occurring time signature and the second is the denominator of the first occurring time signature. Both are set to 0 if no time signature is present.",
+        dimensions: 2,
+        discrete: true,
+        normalize: false,
+        process: initial_time_signature,
+    },
+    Extractor {
+        id: "R32",
+        name: "Compound Or Simple Meter",
+        description: "Set to 1 if the initial meter is compound (numerator of time signature is greater than or equal to 6 and is evenly divisible by 3) and to 0 if it is simple (if the above condition is not fulfilled).",
+        dimensions: 1,
+        discrete: true,
+        normalize: false,
+        process: compound_or_simple_meter,
+    },
+    Extractor {
+        id: "R33",
+        name: "Triple Meter",
+        description: "Set to 1 if numerator of initial time signature is 3, set to 0 otherwise.",
+        dimensions: 1,
+        discrete: true,
+        normalize: false,
+        process: triple_meter,
+    },
+    Extractor {
+        id: "R34",
+        name: "Quintuple Meter",
+        description: "Set to 1 if numerator of initial time signature is 5, set to 0 otherwise.",
+        dimensions: 1,
+        discrete: true,
+        normalize: false,
+        process: quintuple_meter,
+    },
+    Extractor {
+        id: "R35",
+        name: "Changes of Meter",
+        description: "Set to 1 if the time signature is changed one or more times during the recording.",
+        dimensions: 1,
+        discrete: true,
+        normalize: false,
+        process: changes_of_meter,
+    },
+    Extractor {
+        id: "R36",
+        name: "Duration",
+        description: "The total duration in seconds of the music.",
+        dimensions: 1,
+        discrete: false,
+        normalize: false,
+        process: duration,
     },
     Extractor {
         id: "P1",
@@ -834,5 +989,249 @@ fn quality(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
             _ => None,
         })
         .unwrap_or(0.0);
+    Ok(())
+}
+
+/// When each note of a piece starts, in seconds, earliest first.
+fn onsets(data: &DataInstance) -> Result<Vec<FloatType>> {
+    let mut onsets: Vec<FloatType> = data.seconds_map()?.iter().map(|note| note.offset).collect();
+    onsets.sort_by(FloatType::total_cmp);
+    Ok(onsets)
+}
+
+/// The time between each onset and the next, leaving out notes struck
+/// together: music21's `isclose(dif, 0.0, abs_tol=1e-7)`.
+fn time_between(onsets: &[FloatType]) -> Vec<FloatType> {
+    onsets
+        .windows(2)
+        .map(|pair| pair[1] - pair[0])
+        .filter(|gap| gap.abs() > 1e-7)
+        .collect()
+}
+
+/// The onsets of each part of a score, or of the piece where it is not one.
+fn onsets_by_part(data: &DataInstance) -> Result<Vec<Vec<FloatType>>> {
+    if data.parts_count() > 0 {
+        data.parts()[..data.parts_count()]
+            .iter()
+            .map(onsets)
+            .collect()
+    } else {
+        Ok(vec![onsets(data)?])
+    }
+}
+
+fn note_density(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+    let seconds = data.seconds_map()?;
+    let last = seconds
+        .iter()
+        .map(|note| note.end)
+        .fold(None, |most: Option<FloatType>, end| {
+            Some(most.map_or(end, |most| most.max(end)))
+        });
+    if let Some(last) = last {
+        if last == 0.0 {
+            return Err(Error::Feature("float division by zero".to_string()));
+        }
+        vector[0] = seconds.len() as FloatType / last;
+    }
+    Ok(())
+}
+
+fn average_note_duration(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+    let seconds = data.seconds_map()?;
+    if seconds.is_empty() {
+        return Err(lacks_notes());
+    }
+    let mut total = 0.0;
+    for note in seconds {
+        total += note.duration;
+    }
+    vector[0] = total / seconds.len() as FloatType;
+    Ok(())
+}
+
+fn variability_of_note_duration(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+    let seconds = data.seconds_map()?;
+    if seconds.is_empty() {
+        return Err(lacks_notes());
+    }
+    let durations: Vec<FloatType> = seconds.iter().map(|note| note.duration).collect();
+    vector[0] = crate::statistics::pstdev(&durations);
+    Ok(())
+}
+
+fn maximum_note_duration(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+    let seconds = data.seconds_map()?;
+    if seconds.is_empty() {
+        return Err(lacks_notes());
+    }
+    let mut longest = 0.0;
+    for note in seconds {
+        if note.duration > longest {
+            longest = note.duration;
+        }
+    }
+    vector[0] = longest;
+    Ok(())
+}
+
+fn minimum_note_duration(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+    let seconds = data.seconds_map()?;
+    let Some(first) = seconds.first() else {
+        return Err(lacks_notes());
+    };
+    let mut shortest = first.duration;
+    for note in seconds {
+        if note.duration < shortest {
+            shortest = note.duration;
+        }
+    }
+    vector[0] = shortest;
+    Ok(())
+}
+
+fn staccato_incidence(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+    let seconds = data.seconds_map()?;
+    if seconds.is_empty() {
+        return Err(lacks_notes());
+    }
+    let short = seconds.iter().filter(|note| note.duration < 0.10).count();
+    vector[0] = short as FloatType / seconds.len() as FloatType;
+    Ok(())
+}
+
+fn average_time_between_attacks(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+    let onsets = onsets(data)?;
+    if onsets.is_empty() {
+        return Err(lacks_notes());
+    }
+    let gaps = time_between(&onsets);
+    if gaps.is_empty() {
+        return Err(Error::Feature("division by zero".to_string()));
+    }
+    vector[0] = crate::statistics::python_sum(&gaps) / gaps.len() as FloatType;
+    Ok(())
+}
+
+fn variability_of_time_between_attacks(
+    data: &DataInstance,
+    vector: &mut [FloatType],
+) -> Result<()> {
+    let onsets = onsets(data)?;
+    if onsets.is_empty() {
+        return Err(lacks_notes());
+    }
+    let gaps = time_between(&onsets);
+    if gaps.is_empty() {
+        return Err(Error::Feature(
+            "pstdev requires at least one data point".to_string(),
+        ));
+    }
+    vector[0] = crate::statistics::pstdev(&gaps);
+    Ok(())
+}
+
+fn average_time_between_attacks_for_each_voice(
+    data: &DataInstance,
+    vector: &mut [FloatType],
+) -> Result<()> {
+    let mut averages = Vec::new();
+    for onsets in onsets_by_part(data)? {
+        let gaps = time_between(&onsets);
+        if gaps.is_empty() {
+            return Err(Error::Feature("at least one part lacks notes".to_string()));
+        }
+        averages.push(crate::statistics::python_sum(&gaps) / gaps.len() as FloatType);
+    }
+    vector[0] = crate::statistics::python_sum(&averages) / averages.len() as FloatType;
+    Ok(())
+}
+
+fn average_variability_of_time_between_attacks_for_each_voice(
+    data: &DataInstance,
+    vector: &mut [FloatType],
+) -> Result<()> {
+    let mut deviations = Vec::new();
+    for onsets in onsets_by_part(data)? {
+        let gaps = time_between(&onsets);
+        if gaps.is_empty() {
+            return Err(Error::Feature("at least one part lacks notes".to_string()));
+        }
+        deviations.push(crate::statistics::pstdev(&gaps));
+    }
+    vector[0] = crate::statistics::python_sum(&deviations) / deviations.len() as FloatType;
+    Ok(())
+}
+
+fn initial_tempo(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+    let boundaries = data.metronome_mark_boundaries()?;
+    vector[0] = boundaries
+        .first()
+        .and_then(|(_, _, mark)| mark.sounding_quarter_bpm())
+        .ok_or_else(|| Error::Feature("the first tempo says no number".to_string()))?;
+    Ok(())
+}
+
+fn initial_time_signature(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+    if let Some(meter) = data.time_signatures().first() {
+        vector[0] = FloatType::from(meter.numerator());
+        vector[1] = FloatType::from(meter.denominator());
+    }
+    Ok(())
+}
+
+fn compound_or_simple_meter(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+    if data
+        .time_signatures()
+        .first()
+        .is_some_and(|meter| meter.beat_division_count_name() == "Compound")
+    {
+        vector[0] = 1.0;
+    }
+    Ok(())
+}
+
+fn triple_meter(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+    if data
+        .time_signatures()
+        .first()
+        .is_some_and(|meter| meter.numerator() == 3)
+    {
+        vector[0] = 1.0;
+    }
+    Ok(())
+}
+
+fn quintuple_meter(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+    if data
+        .time_signatures()
+        .first()
+        .is_some_and(|meter| meter.numerator() == 5)
+    {
+        vector[0] = 1.0;
+    }
+    Ok(())
+}
+
+fn changes_of_meter(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+    let meters = data.time_signatures();
+    if let [first, rest @ ..] = meters.as_slice()
+        && rest.iter().any(|meter| !first.ratio_equal(meter))
+    {
+        vector[0] = 1.0;
+    }
+    Ok(())
+}
+
+fn duration(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+    let seconds = data.seconds_map()?;
+    if seconds.is_empty() {
+        return Err(Error::Feature("input lacks duration".to_string()));
+    }
+    vector[0] = seconds
+        .iter()
+        .map(|note| note.end)
+        .fold(FloatType::NEG_INFINITY, FloatType::max);
     Ok(())
 }
