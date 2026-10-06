@@ -29,9 +29,11 @@ are tunes whose own reading cannot be written back.
 
 - `features` is music21's `features` package, begun: a `DataInstance`
   prepares a piece once -- ties stripped, each part and voice on its own --
-  and works out its pitch, interval and contour histograms as they are
-  asked for, and `features::jsymbolic::JSYMBOLIC` holds the 38 melodic and
-  pitch extractors music21 ports from jSymbolic, each answering a `Feature`
+  and works out its pitch, interval and contour histograms, and when each
+  note sounds in seconds at the piece's tempi (`seconds_map`,
+  `metronome_mark_boundaries`), as they are asked for.
+  `features::jsymbolic::JSYMBOLIC` holds the 55 melodic, rhythmic and pitch
+  extractors music21 ports from jSymbolic, each answering a `Feature`
   vector. Every one gives music21's values on every MusicXML score of
   music21's corpus.
 - `analysis::windowed::WindowedAnalysis` cuts a stream into windows of a

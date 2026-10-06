@@ -294,13 +294,13 @@ pub fn estimate_key_from_distribution(
     profile: KeyProfile,
     distribution: &[FloatType; 12],
 ) -> Vec<KeyEstimate> {
-    let histogram_average = python_sum(distribution) / 12.0;
+    let histogram_average = crate::statistics::python_sum(distribution) / 12.0;
     let mut ranked: Vec<(FloatType, usize, &'static str)> = Vec::with_capacity(24);
     for (mode, weights) in [
         ("major", profile.major_weights()),
         ("minor", profile.minor_weights()),
     ] {
-        let profile_average = python_sum(&weights) / 12.0;
+        let profile_average = crate::statistics::python_sum(&weights) / 12.0;
         for tonic in 0..12 {
             let mut top = 0.0;
             let mut bottom_right = 0.0;
@@ -327,26 +327,6 @@ pub fn estimate_key_from_distribution(
             score,
         })
         .collect()
-}
-
-/// A sum of floats as Python's `sum` makes it, Neumaier's compensated sum,
-/// so an average music21 takes of the same numbers is the same number.
-fn python_sum(values: &[FloatType]) -> FloatType {
-    let mut total: FloatType = 0.0;
-    let mut compensation: FloatType = 0.0;
-    for &value in values {
-        let next = total + value;
-        if total.abs() >= value.abs() {
-            compensation += (total - next) + value;
-        } else {
-            compensation += (value - next) + total;
-        }
-        total = next;
-    }
-    if compensation != 0.0 && compensation.is_finite() {
-        total += compensation;
-    }
-    total
 }
 
 /// The key on pitch class `tonic` in `mode`, spelled as music21's analysis
