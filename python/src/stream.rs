@@ -482,6 +482,99 @@ impl Stream {
         from_crate(slf.py(), &made)
     }
 
+    /// The notes and chords that follow one another in the stream, the very
+    /// objects it holds, with `None` wherever the line breaks: music21's
+    /// `findConsecutiveNotes`, with its keywords.
+    #[pyo3(signature = (*, skipRests = false, skipChords = false, skipUnisons = false, skipOctaves = false, skipGaps = false, getOverlaps = false, noNone = false, **_keywords))]
+    #[allow(clippy::too_many_arguments)]
+    fn findConsecutiveNotes<'py>(
+        slf: &Bound<'py, Self>,
+        skipRests: bool,
+        skipChords: bool,
+        skipUnisons: bool,
+        skipOctaves: bool,
+        skipGaps: bool,
+        getOverlaps: bool,
+        noNone: bool,
+        _keywords: Option<&Bound<'py, PyDict>>,
+    ) -> PyResult<Bound<'py, PyList>> {
+        let options = music21_rs_crate::stream::ConsecutiveOptions {
+            skip_rests: skipRests,
+            skip_chords: skipChords,
+            skip_unisons: skipUnisons,
+            skip_octaves: skipOctaves,
+            skip_gaps: skipGaps,
+            get_overlaps: getOverlaps,
+            no_none: noNone,
+        };
+        let read = read_values(slf.as_any())?;
+        let found = read
+            .stream
+            .find_consecutive_notes(&options)
+            .map_err(|error| StreamException::new_err(crate::pitch::message(&error)))?;
+        let py = slf.py();
+        let list = PyList::empty(py);
+        for position in found {
+            match position {
+                Some(position) => list.append(read.leaves[position].bind(py))?,
+                None => list.append(py.None())?,
+            }
+        }
+        Ok(list)
+    }
+
+    /// The intervals between the notes `findConsecutiveNotes` finds next to
+    /// each other, in a stream of the same class, each standing where the
+    /// note it leaves ends: music21's `melodicIntervals`. An interval to or
+    /// from a chord is taken from the chord's first note, and its
+    /// `noteStart` and `noteEnd` are the notes themselves.
+    #[pyo3(signature = (**skipKeywords))]
+    fn melodicIntervals<'py>(
+        slf: &Bound<'py, Self>,
+        skipKeywords: Option<&Bound<'py, PyDict>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
+        let flag = |name: &str| -> PyResult<bool> {
+            match skipKeywords
+                .map(|keywords| keywords.get_item(name))
+                .transpose()?
+            {
+                Some(Some(value)) => value.is_truthy(),
+                _ => Ok(false),
+            }
+        };
+        let options = music21_rs_crate::stream::ConsecutiveOptions {
+            skip_rests: flag("skipRests")?,
+            skip_chords: flag("skipChords")?,
+            skip_unisons: flag("skipUnisons")?,
+            skip_octaves: flag("skipOctaves")?,
+            skip_gaps: flag("skipGaps")?,
+            get_overlaps: flag("getOverlaps")?,
+            no_none: flag("noNone")?,
+        };
+        let read = read_values(slf.as_any())?;
+        let steps = read
+            .stream
+            .melodic_intervals(&options)
+            .map_err(|error| StreamException::new_err(crate::pitch::message(&error)))?;
+        let made = slf.get_type().call0()?;
+        let interval = py.get_type::<crate::interval::Interval>();
+        let first_note = |object: &Bound<'py, PyAny>| -> PyResult<Bound<'py, PyAny>> {
+            if is_of_class(object, &pyo3::types::PyString::new(py, "Chord"))? {
+                object.getattr("notes")?.get_item(0)
+            } else {
+                Ok(object.clone())
+            }
+        };
+        for step in steps {
+            let start = first_note(read.leaves[step.start()].bind(py))?;
+            let end = first_note(read.leaves[step.end()].bind(py))?;
+            let between = interval.call1((start, end))?;
+            made.call_method1("insert", (step.offset(), between))?;
+        }
+        Ok(made)
+    }
+
     /// How long the stream lasts, which is its highest time.
     #[getter]
     fn quarterLength(slf: &Bound<'_, Self>) -> PyResult<f64> {
@@ -1784,6 +1877,14 @@ pub fn crate_stream(stream: &Bound<'_, PyAny>) -> PyResult<RsStream> {
         }
     }
     Ok(read)
+}
+
+/// Reads a stream, this wheel's or music21's, into the crate with every
+/// element as the value it is, beside the objects at each position.
+fn read_values(stream: &Bound<'_, PyAny>) -> PyResult<Read> {
+    let mut leaves = Vec::new();
+    let stream = read_into(stream, &mut leaves, false)?;
+    Ok(Read { stream, leaves })
 }
 
 /// Reads a stream, this wheel's or music21's, into the crate.

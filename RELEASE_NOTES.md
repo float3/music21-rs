@@ -27,6 +27,18 @@ are tunes whose own reading cannot be written back.
 
 ## Added
 
+- `Stream::find_consecutive_notes` and `melodic_intervals` find the notes
+  of a stream that follow one another and the intervals between them, as
+  music21's `findConsecutiveNotes` and `melodicIntervals` do, with its
+  options in `ConsecutiveOptions`. Four of music21's small analyses are
+  built on them: `analysis::patel` (the rhythm's normalized pairwise
+  variability and the melodic interval variability), `analysis::metrical`
+  (the depth of the metrical hierarchy at each note, which
+  `label_beat_depth` marks with stars as music21 does, and Thomassen's
+  melodic accent), `analysis::segment_by_rests` and
+  `analysis::pitch_analysis`. Every MusicXML score of music21's corpus
+  gives music21's answers. The wheel's `Stream` has `findConsecutiveNotes`
+  and `melodicIntervals` too, answering with the objects it holds.
 - `Stream::chordify` and `chordify_with` make a score's parts one line of
   chords, as music21's `chordify` does: laid out as the first part is, with
   a chord of every pitch sounding wherever any part starts or stops a note,

@@ -23,12 +23,14 @@
 //! again.
 
 mod chordify;
+mod consecutive;
 mod placed;
 mod repeats;
 mod sounding;
 mod ties;
 
 pub use chordify::ChordifyOptions;
+pub use consecutive::{ConsecutiveOptions, MelodicInterval};
 pub use placed::Placed;
 
 use crate::{

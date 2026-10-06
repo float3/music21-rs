@@ -605,6 +605,7 @@ pub fn normalize_ids(document: &str) -> String {
 
 /// The first line two documents differ on, with a little of what surrounds
 /// it, so a failure says where to look.
+#[allow(dead_code)]
 pub fn first_difference(ours: &str, theirs: &str) -> Option<String> {
     let ours: Vec<&str> = ours.lines().collect();
     let theirs: Vec<&str> = theirs.lines().collect();
@@ -813,7 +814,8 @@ fn describe(element: &StreamElement) -> String {
 
 /// A pitch's name and octave as music21 writes them, a flat as `-`: the
 /// crate's `Bb4` is `B-4`, and its `Bb-1` `B--1`.
-fn music21_name(pitch: &music21_rs::Pitch) -> String {
+#[allow(dead_code)]
+pub fn music21_name(pitch: &music21_rs::Pitch) -> String {
     let name = pitch.name_with_octave();
     let mut letters = name.chars();
     let Some(step) = letters.next() else {

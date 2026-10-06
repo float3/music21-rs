@@ -876,3 +876,31 @@ listDistinctNormalOrders = "distinct_normal_orders"
 numDistinctTranspositions = "distinct_count"
 getChordsOfDistinctTranspositions = "distinct_chords"
 getPitchesOfDistinctTranspositions = "distinct_pitches"
+
+[[class]]
+python = "analysis/patel.py"
+rust = ["src/analysis/patel.rs"]
+note = "The normalized pairwise variability of a rhythm and the melodic interval variability of a line."
+
+[class.renames]
+nPVI = "n_pvi"
+
+[[class]]
+python = "analysis/metrical.py"
+rust = ["src/analysis/metrical.rs"]
+note = "The depth of the metrical hierarchy at each note, and Thomassen's melodic accent."
+
+[[class]]
+python = "analysis/segmentByRests.py"
+name = "Segmenter"
+rust = ["src/analysis/segment_by_rests.rs"]
+note = "A part cut into its runs of notes between rests and clefs, and the intervals inside them."
+
+[class.renames]
+getSegmentsList = "segments_list"
+getIntervalList = "interval_list"
+
+[[class]]
+python = "analysis/pitchAnalysis.py"
+rust = ["src/analysis/pitch_analysis.rs"]
+note = "How often each value of a property of a stream's pitches comes."
