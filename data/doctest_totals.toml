@@ -11,10 +11,10 @@
 # reads that. This is what the report falls back to where no such run
 # has happened.
 #
-# music21 11.0.0b9 at 9916ae61d8c05ec757f00e8839b1d1c6d1b9c580
+# music21 11.0.0b10 at 50f399c12875575e9cc2ac9782ae33f768da8c00
 
-music21_version = "11.0.0b9"
-music21_commit = "9916ae61d8c05ec757f00e8839b1d1c6d1b9c580"
+music21_version = "11.0.0b10"
+music21_commit = "50f399c12875575e9cc2ac9782ae33f768da8c00"
 
 [[module]]
 module = "music21.analysis.discrete"
@@ -35,10 +35,34 @@ examples = 22
 tests = 4
 
 [[module]]
+module = "music21.analysis.metrical"
+docstrings = 2
+examples = 13
+tests = 0
+
+[[module]]
 module = "music21.analysis.neoRiemannian"
 docstrings = 13
 examples = 107
 tests = 6
+
+[[module]]
+module = "music21.analysis.patel"
+docstrings = 2
+examples = 14
+tests = 0
+
+[[module]]
+module = "music21.analysis.pitchAnalysis"
+docstrings = 1
+examples = 7
+tests = 0
+
+[[module]]
+module = "music21.analysis.segmentByRests"
+docstrings = 2
+examples = 6
+tests = 2
 
 [[module]]
 module = "music21.analysis.transposition"
@@ -60,15 +84,15 @@ tests = 2
 
 [[module]]
 module = "music21.chord"
-docstrings = 105
-examples = 970
-tests = 28
+docstrings = 108
+examples = 981
+tests = 31
 
 [[module]]
 module = "music21.chord.tables"
 docstrings = 10
 examples = 65
-tests = 32
+tests = 35
 
 [[module]]
 module = "music21.clef"
@@ -92,7 +116,7 @@ tests = 6
 module = "music21.expressions"
 docstrings = 40
 examples = 350
-tests = 11
+tests = 12
 
 [[module]]
 module = "music21.figuredBass.notation"
@@ -110,7 +134,7 @@ tests = 0
 module = "music21.figuredBass.realizer"
 docstrings = 8
 examples = 80
-tests = 1
+tests = 3
 
 [[module]]
 module = "music21.figuredBass.realizerScale"
@@ -140,7 +164,7 @@ tests = 28
 module = "music21.instrument"
 docstrings = 15
 examples = 150
-tests = 10
+tests = 11
 
 [[module]]
 module = "music21.interval"
@@ -182,19 +206,19 @@ tests = 27
 module = "music21.roman"
 docstrings = 34
 examples = 560
-tests = 33
+tests = 34
 
 [[module]]
 module = "music21.scale"
 docstrings = 62
 examples = 344
-tests = 46
+tests = 52
 
 [[module]]
 module = "music21.scale.scala"
 docstrings = 7
 examples = 55
-tests = 51
+tests = 57
 
 [[module]]
 module = "music21.serial"

@@ -124,9 +124,37 @@ pub fn bundle_instruments(stream: &mut Stream) {
     });
 }
 
-/// What [`deduplicate`] makes of the instruments one part holds, in order:
-/// each instrument as it is to stand, or nothing where it goes. Nothing at
-/// all where the part is left as it is.
+/// What [`deduplicate`] makes of the instruments one part holds, each
+/// beside its offset in the part, in order: for each, nothing where it is
+/// left as it is, else what it is to stand as, or nothing where it goes.
+/// Instruments are settled with the others at their offset only.
+pub(crate) fn settle_by_offset(
+    held: &[(FloatType, &Instrument)],
+) -> Vec<Option<Option<Instrument>>> {
+    let mut plan: Vec<Option<Option<Instrument>>> = vec![None; held.len()];
+    let mut offsets: Vec<FloatType> = Vec::new();
+    for (offset, _) in held {
+        if !offsets.contains(offset) {
+            offsets.push(*offset);
+        }
+    }
+    for offset in offsets {
+        let places: Vec<usize> = (0..held.len())
+            .filter(|&index| held[index].0 == offset)
+            .collect();
+        let together: Vec<&Instrument> = places.iter().map(|&index| held[index].1).collect();
+        if let Some(settled) = settle(&together) {
+            for (index, becomes) in places.into_iter().zip(settled) {
+                plan[index] = Some(becomes);
+            }
+        }
+    }
+    plan
+}
+
+/// What [`deduplicate`] makes of the instruments standing together, in
+/// order: each instrument as it is to stand, or nothing where it goes.
+/// Nothing at all where they are left as they are.
 ///
 /// Where the instruments disagree on the part's name or on their own, they
 /// are left alone. Otherwise every instrument kept takes the one name each
@@ -185,11 +213,11 @@ pub(crate) fn settle(instruments: &[&Instrument]) -> Option<Vec<Option<Instrumen
 /// `instrument.deduplicate`.
 ///
 /// Each part of a score is done on its own, or the stream itself where it
-/// holds no parts, and every instrument it holds counts, wherever it stands
-/// in the part -- music21 gathers them all as one. Where the instruments
-/// agree on the part's name and on their own, or say nothing, all of them
-/// take those names; then of instruments all of one kind only the first is
-/// kept, and of instruments of several kinds the bare `Instrument`s go.
+/// holds no parts, and the instruments standing at one offset of it, in a
+/// measure or the part itself, are settled together. Where they agree on
+/// the part's name and on their own, or say nothing, all of them take those
+/// names; then of instruments all of one kind only the first is kept, and of
+/// instruments of several kinds the bare `Instrument`s go.
 ///
 /// ```
 /// use music21_rs::{instrument::deduplicate, Instrument, Stream, StreamElement};
@@ -235,17 +263,17 @@ pub fn deduplicate(stream: &mut Stream) {
                     && matches!(leaves[position].1, StreamElement::Instrument(_))
             })
             .collect();
-        let held: Vec<&Instrument> = places
+        let held: Vec<(FloatType, &Instrument)> = places
             .iter()
             .filter_map(|&position| match leaves[position].1 {
-                StreamElement::Instrument(instrument) => Some(instrument.as_ref()),
+                StreamElement::Instrument(instrument) => {
+                    Some((leaves[position].0, instrument.as_ref()))
+                }
                 _ => None,
             })
             .collect();
-        if let Some(settled) = settle(&held) {
-            for (position, becomes) in places.into_iter().zip(settled) {
-                plan[position] = Some(becomes);
-            }
+        for (position, becomes) in places.into_iter().zip(settle_by_offset(&held)) {
+            plan[position] = becomes;
         }
     }
     stream.retain_leaves(&mut |position, element| match plan[position].take() {

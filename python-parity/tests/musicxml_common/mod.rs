@@ -126,6 +126,10 @@ pub const SCORES: &[(&str, &str)] = &[
         "octave lines written where they are read, moved where they sound",
     ),
     (
+        "built:partstaff-gap",
+        "a piano's staves, the upper missing a measure the lower has",
+    ),
+    (
         "trecento/PMFC_12_19-Sanctus Barbitonsoris.xml",
         "rehearsal marks in a file",
     ),
@@ -457,7 +461,20 @@ def ottavas():
         part.insert(0, ottava)
     return one_part(part)
 
+def partstaff_gap():
+    """A piano's two staves, the upper lacking the measure numbered 3, which
+    music21's exporter joins measure by measure all the same."""
+    from music21 import layout, note, stream
+    upper = stream.PartStaff()
+    lower = stream.PartStaff()
+    for staff, numbers, name in ((upper, [1, 2, 4, 5], 'C5'), (lower, [1, 2, 3, 4, 5], 'C3')):
+        for number in numbers:
+            staff.append(stream.Measure([note.Note(name, type='whole')], number=number))
+    group = layout.StaffGroup([upper, lower], symbol='brace')
+    return stream.Score([group, upper, lower])
+
 BUILT = {
+    'built:partstaff-gap': partstaff_gap,
     'built:ottavas': ottavas,
     'built:rehearsal-marks': rehearsal_marks,
     'built:glissandi': glissandi,
@@ -601,6 +618,36 @@ pub fn normalize_ids(document: &str) -> String {
             "
 ",
         )
+}
+
+/// Scores music21's own exporter raises on, each with what it raises and
+/// why. A test passes over a listed score while music21 still raises that,
+/// and fails once music21 writes it, so the list cannot go stale.
+#[allow(dead_code)]
+pub const MUSIC21_CANNOT_WRITE: &[(&str, &str, &str)] = &[(
+    "schumann_clara/opus17/movement3",
+    "object of type 'Note' has no len()",
+    "music21's reader makes an arpeggio of a single note where the file      numbers one, and its exporter asks that note for its length",
+)];
+
+/// Whether music21 is known to raise `error` writing the score `name` (a
+/// subject named `xml:` and a corpus name counts as that name).
+#[allow(dead_code)]
+pub fn music21_cannot_write(name: &str, error: &str) -> bool {
+    let name = name.strip_prefix("xml:").unwrap_or(name);
+    MUSIC21_CANNOT_WRITE
+        .iter()
+        .any(|(listed, raises, _)| *listed == name && error.contains(raises))
+}
+
+/// What to say of a listed score music21 has just written after all.
+#[allow(dead_code)]
+pub fn music21_writes_after_all(name: &str) -> Option<String> {
+    let name = name.strip_prefix("xml:").unwrap_or(name);
+    MUSIC21_CANNOT_WRITE
+        .iter()
+        .any(|(listed, _, _)| *listed == name)
+        .then(|| format!("{name}: music21 writes it now; take it off MUSIC21_CANNOT_WRITE"))
 }
 
 /// The first line two documents differ on, with a little of what surrounds

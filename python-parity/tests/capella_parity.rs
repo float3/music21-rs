@@ -109,7 +109,21 @@ fn written() -> Vec<(&'static str, String)> {
         note("B4", "1/2"),
     ]
     .concat();
+    let prolonged = [
+        "<timeSign time=\"3/4\"/>".to_string(),
+        "<chord><duration base=\"1/8\"><tuplet count=\"3\" prolong=\"true\"/></duration>         <heads><head pitch=\"E4\"/></heads></chord>"
+            .repeat(3),
+        note("F4", "1/4"),
+        "<barline type=\"single\"/>".to_string(),
+        note("G4", "1/2"),
+        note("A4", "1/4"),
+    ]
+    .concat();
     vec![
+        (
+            "prolonged triplets and a single barline",
+            document(&[&[("S", &[&prolonged])]]),
+        ),
         (
             "two systems of two staves",
             document(&[

@@ -147,9 +147,16 @@ fn the_crate_reads_musicxml_as_music21_does() {
                 .and_then(|written| written.call_method1("decode", ("utf-8",)))
                 .and_then(|text| text.extract())
             {
-                Ok(text) => text,
+                Ok(text) => {
+                    failures.extend(musicxml_common::music21_writes_after_all(name));
+                    text
+                }
                 Err(error) => {
+                    if musicxml_common::music21_cannot_write(name, &error.to_string()) {
+                        continue;
+                    }
                     failures.push(format!("{name}: music21 could not write it: {error}"));
+
                     continue;
                 }
             };

@@ -390,29 +390,29 @@ fn meta_of(events: &[(u64, Event)]) -> Result<Vec<(u64, StreamElement)>> {
 }
 
 /// music21's `instrument.deduplicate` over the events of one part: where
-/// every instrument it holds is of one kind they are made one, the first,
-/// and a generic one among others of a kind goes. music21 gathers the
-/// instruments of the whole part for this and not only those standing
-/// together, so a program change after a track name is folded into the
-/// instrument the name made.
+/// every instrument standing at one offset is of one kind they are made one,
+/// the first, and a generic one among others of a kind goes.
 fn deduplicate(events: &mut Vec<StreamEvent>) {
     let places: Vec<usize> = (0..events.len())
         .filter(|index| matches!(events[*index].element(), StreamElement::Instrument(_)))
         .collect();
-    let held: Vec<&Instrument> = places
+    let held: Vec<(FloatType, &Instrument)> = places
         .iter()
         .filter_map(|index| match events[*index].element() {
-            StreamElement::Instrument(instrument) => Some(instrument.as_ref()),
+            StreamElement::Instrument(instrument) => {
+                Some((events[*index].offset(), instrument.as_ref()))
+            }
             _ => None,
         })
         .collect();
-    let Some(settled) = crate::instrument::settle(&held) else {
-        return;
-    };
+    let settled = crate::instrument::settle_by_offset(&held);
     for (place, becomes) in places.into_iter().zip(settled).rev() {
         match becomes {
-            Some(named) => events[place] = StreamEvent::new(events[place].offset(), named),
-            None => {
+            None => {}
+            Some(Some(named)) => {
+                events[place] = StreamEvent::new(events[place].offset(), named);
+            }
+            Some(None) => {
                 events.remove(place);
             }
         }

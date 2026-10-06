@@ -9,11 +9,7 @@
 //! stages: voices, chords, ties, shown and cautionary accidentals, beams,
 //! articulations, dynamics, lyrics, repeats, a transposing part and a tempo
 //! word, none of which music21's own file reaches all of. music21 has no
-//! stage-1 file at all, and cannot write its own reading of one: it gives a
-//! stage-1 part the id `None`, which reads back as a number -- the
-//! object's address -- that it takes as the part's name too, and its
-//! exporter refuses a number. So before writing, the test gives such a part
-//! a string id, which is renumbered anyway, and no name.
+//! stage-1 file at all.
 //!
 //! music21 is music21 here, with nothing of the crate installed over it.
 
@@ -200,15 +196,6 @@ def read_text(text):
     return converter.parse(text, format='musedata', forceSource=True)
 
 def written(score, strip_layout):
-    # A stage-1 part is given the id None, which music21 then reads as the
-    # number Python's id() gives, and takes as its name too; its exporter
-    # cannot write a number. Ids are renumbered before comparing, so any
-    # string will do, and the name an address gives is no name.
-    for index, part in enumerate(score.parts):
-        if not isinstance(part.id, str):
-            part.id = f'P{index + 1}'
-        if not isinstance(part.partName, str):
-            part.partName = None
     exporter = m21ToXml.GeneralObjectExporter(strip_layout(score))
     exporter.makeNotation = False
     return exporter.parse().decode('utf-8')

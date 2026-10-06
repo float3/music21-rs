@@ -2062,9 +2062,9 @@ fn measure_stream(line: &Line) -> Stream {
 /// second taking the meter that fits it where it is not a whole bar, and
 /// every later measure is numbered one further on.
 ///
-/// music21 gives up where it stands on a measure with no meter in force or
-/// one no meter fits, keeping what it had done; that measure's overflow is
-/// then lost, as it is there.
+/// An overflow no meter fits is kept as a measure stating none. music21
+/// gives up where it stands on a measure with no meter in force, or one it
+/// cannot cut, keeping what it had done.
 fn re_bar(measures: &mut Vec<MeasureIr>, brackets: &mut [Bracket]) {
     let mut meter: Option<TimeSignature> = None;
     let mut shift = 0;
@@ -2136,10 +2136,9 @@ fn re_bar(measures: &mut Vec<MeasureIr>, brackets: &mut [Bracket]) {
                 second.seq += 1;
             }
             second.end = op_frac(end - bar);
-            if (bar - second.end).abs() > 1e-9 {
-                let Ok(best) = crate::meter::best_time_signature(&measure_stream(&second)) else {
-                    break 'measures;
-                };
+            if (bar - second.end).abs() > 1e-9
+                && let Ok(best) = crate::meter::best_time_signature(&measure_stream(&second))
+            {
                 second.set_at_start(best.into());
                 if original + 1 < count && measures[index + 1].line.meter().is_none() {
                     // music21 puts the very meter object back, so it stands

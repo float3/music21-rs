@@ -1594,7 +1594,10 @@ impl<'a, 'b> MeasureExporter<'a, 'b> {
                 let mxnote = self.note_element(note, 0, None, Some(position))?;
                 self.root.push(mxnote);
             }
-            StreamElement::Chord(chord) => self.chord_elements(chord, Some(position))?,
+            // music21 sorts a chord in place before writing it.
+            StreamElement::Chord(chord) => {
+                self.chord_elements(&chord.sort_diatonic_ascending(), Some(position))?
+            }
             StreamElement::Unpitched(stroke) => {
                 let mxnote =
                     self.written_note_element(stroke.written(), 0, None, Some(position), true)?;

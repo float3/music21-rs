@@ -44,9 +44,7 @@ type Staff = (String, Placed);
 ///
 /// music21's limits are kept: a staff of more than one voice is read as
 /// empty, a barline is a mark standing in the measure rather than the
-/// measure's own (where a MusicXML writer passes it over), a `single`
-/// barline is refused as music21 refuses it, and a tuplet's `prolong` is
-/// never read.
+/// measure's own (where a MusicXML writer passes it over).
 ///
 /// ```
 /// use music21_rs::capella::from_capella;
@@ -432,8 +430,7 @@ fn duration(written: &Xml) -> Result<Duration> {
 }
 
 /// `tupletFromTuplet`: `count` notes in the time of the power of two below
-/// it. music21 reads `prolong` only where `count` says `true`, which no
-/// count does.
+/// it, or of the one above it where `prolong` says `true`.
 fn tuplet_of(tuplet: &Xml) -> Result<Tuplet> {
     let mut actual = 1;
     let mut normal = 1;
@@ -443,7 +440,7 @@ fn tuplet_of(tuplet: &Xml) -> Result<Tuplet> {
             normal *= 2;
         }
     }
-    if tuplet.get("prolong").is_some() && tuplet.get("count") == Some("true") {
+    if tuplet.get("prolong") == Some("true") {
         normal *= 2;
     }
     Ok(Tuplet::ratio(actual, normal))
@@ -476,8 +473,7 @@ fn barlines(object: &Xml) -> Result<Vec<StreamElement>> {
         }
     } else {
         let bar_type = match kind {
-            // music21 names this `normal`, which is no barline type it knows.
-            "single" => return Err(error("cannot process style: normal")),
+            "single" => BarlineType::Regular,
             "double" => BarlineType::Double,
             "end" => BarlineType::Final,
             _ => return Ok(Vec::new()),
@@ -552,11 +548,15 @@ mod tests {
     fn a_tuplet_count_takes_the_power_of_two_below_it() {
         let tuplet = Xml::parse("<tuplet count=\"5\"/>").unwrap();
         assert_eq!(tuplet_of(&tuplet).unwrap(), Tuplet::ratio(5, 4));
+        let prolonged = Xml::parse("<tuplet count=\"3\" prolong=\"true\"/>").unwrap();
+        assert_eq!(tuplet_of(&prolonged).unwrap(), Tuplet::ratio(3, 4));
+        let plain = Xml::parse("<tuplet count=\"3\" prolong=\"false\"/>").unwrap();
+        assert_eq!(tuplet_of(&plain).unwrap(), Tuplet::ratio(3, 2));
     }
 
     #[test]
-    fn a_single_barline_is_refused_as_music21_refuses_it() {
-        assert!(from_capella(&staff("<barline type=\"single\"/>")).is_err());
+    fn a_single_barline_is_a_regular_one() {
+        assert!(from_capella(&staff("<barline type=\"single\"/>")).is_ok());
         assert!(from_capella(&staff("<barline/>")).is_ok());
     }
 

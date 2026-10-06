@@ -291,6 +291,29 @@ are tunes whose own reading cannot be written back.
 
 ## Changed
 
+- The crate is held to music21 11.0.0b10 with the fixes sent upstream from
+  here, and stops copying the music21 bugs those fix:
+  - `capella::from_capella` reads a `single` barline as a regular one, where
+    it refused it, and reads a tuplet's `prolong`.
+  - `noteworthy::from_nwc` reads tenor and percussion clefs, and the notes of
+    a chord in a file of version 2 or later.
+  - `volpiano::from_volpiano` puts a break in the measure being read, not the
+    first measure, and makes a neume of every note of its run, not just the
+    last pair.
+  - `tinynotation::from_tiny_notation` counts only notes and rests towards a
+    tie or a bracket, and a `}` closes the last bracket opened rather than a
+    tie.
+  - `abc::from_abc` keeps a measure's overflow that no meter fits, where it
+    lost it.
+  - `instrument::deduplicate`, and the MIDI reader with it, settle only the
+    instruments standing at one offset together, so a program change later
+    in a part is kept.
+  - A roman numeral past seven, `VIII`, is refused, where it read as `VII`.
+  - A trill takes its accidental's showing only where that is decided.
+  - `to_musicxml` writes a chord's notes lowest first on the staff, joins a
+    piano's staves where the upper lacks a measure the lower has, and the
+    reader keys an arpeggio across chords by its number and its offset in
+    the part.
 - `abc::to_abc` says each voice's opening clef on its `V:` line, where it
   used to name it in the `K:` field, and says every clef but a treble clef
   the notes fit, where it used to leave unsaid any clef the notes fit. A

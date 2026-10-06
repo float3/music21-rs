@@ -732,11 +732,18 @@ fn the_crate_makes_notation_as_music21_does() {
                         .extract::<String>()
                 });
             let theirs = match theirs {
-                Ok(text) => text,
+                Ok(text) => {
+                    failures.extend(musicxml_common::music21_writes_after_all(subject));
+                    text
+                }
                 Err(error) => {
+                    if musicxml_common::music21_cannot_write(subject, &error.to_string()) {
+                        continue;
+                    }
                     failures.push(format!(
                         "{subject}: music21 could not read or write it: {error}"
                     ));
+
                     continue;
                 }
             };

@@ -25,7 +25,7 @@
 mod streams;
 mod tables;
 
-pub(crate) use streams::settle;
+pub(crate) use streams::settle_by_offset;
 pub use streams::{bundle_instruments, deduplicate, partition_by_instrument, unbundle_instruments};
 
 use std::fmt;

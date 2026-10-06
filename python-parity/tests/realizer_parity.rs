@@ -11,22 +11,8 @@
 //! two documents must be the same text. Where music21 chooses at random its
 //! `random.sample` is replaced by a choice the crate is given too.
 //!
-//! Two things music21 does are not followed, and the test steps round both.
-//! It builds every voicing of a segment out of one list of `Pitch` objects,
-//! so two parts doubling a note hold the same object, and it writes a score
-//! with those very objects. Writing a score therefore changes the voicings
-//! it was made from: their accidentals are given a display status, which
-//! changes what a pitch hashes to, and the realization can then no longer
-//! count its voicings or choose among them (`getNumSolutions` raises). And
-//! in chorale style a part that doubles a note of a part already written
-//! finds that note's accidental already decided, takes its accidentals for
-//! made and decides none of the others, so every one of them is written,
-//! the key signature's included. So each score here is asked of a
-//! realization made afresh, and the voicings are handed to music21 with
-//! pitches of their own. What music21 writes from its own voicings several
-//! at a time -- `generateAllRealizations`, `generateRandomRealizations` --
-//! is compared only on lines in C major with no accidental to write, where
-//! neither shows.
+//! Each score is asked of a realization made afresh, so that what one
+//! realization chose cannot carry into the next.
 //!
 //! music21 is music21 here, with nothing of the crate installed over it. A
 //! mismatch leaves both documents in `target/realizer-parity/`.
@@ -56,17 +42,6 @@ struct Line {
     notes: &'static [(&'static str, f64, Option<&'static str>)],
     chords: &'static [&'static str],
     overlaid: &'static [&'static [(Option<&'static str>, f64)]],
-    /// Whether music21 can write the line from its own voicings, several
-    /// realizations from one `Realization`: a line in C major with no
-    /// accidental to write.
-    repeats: bool,
-    /// Whether music21 can realize the line. In a line with a tuplet it
-    /// cannot: `createOffsetMapping` adds a note's length to a float offset,
-    /// which gives a float, `retrieveSegments` compares that with the next
-    /// note's offset, a `Fraction` no float equals, and every segment from
-    /// there on is taken for one an overlaid part made and lasts nothing.
-    /// Such a line's bass line is compared alone.
-    realizes: bool,
 }
 
 const LINES: &[Line] = &[
@@ -82,8 +57,6 @@ const LINES: &[Line] = &[
         ],
         chords: &[],
         overlaid: &[],
-        repeats: false,
-        realizes: true,
     },
     Line {
         label: "a suspension",
@@ -96,8 +69,6 @@ const LINES: &[Line] = &[
         ],
         chords: &[],
         overlaid: &[],
-        repeats: true,
-        realizes: true,
     },
     Line {
         label: "a dominant seventh resolving, few enough ways to write them all",
@@ -106,8 +77,6 @@ const LINES: &[Line] = &[
         notes: &[("G2", 1.0, Some("7")), ("C3", 1.0, None)],
         chords: &[],
         overlaid: &[],
-        repeats: true,
-        realizes: true,
     },
     Line {
         label: "a minor key, eighths to beam, an accidental to write",
@@ -123,8 +92,6 @@ const LINES: &[Line] = &[
         ],
         chords: &[],
         overlaid: &[],
-        repeats: false,
-        realizes: true,
     },
     Line {
         label: "a triplet, bracketed and beamed",
@@ -139,8 +106,6 @@ const LINES: &[Line] = &[
         ],
         chords: &[],
         overlaid: &[],
-        repeats: false,
-        realizes: false,
     },
     Line {
         label: "one chord",
@@ -149,8 +114,6 @@ const LINES: &[Line] = &[
         notes: &[("C3", 4.0, None)],
         chords: &[],
         overlaid: &[],
-        repeats: true,
-        realizes: true,
     },
     Line {
         label: "a melody laid over the line, moving once while the bass holds",
@@ -168,8 +131,6 @@ const LINES: &[Line] = &[
             (Some("G5"), 1.0),
             (Some("C5"), 1.0),
         ]],
-        repeats: true,
-        realizes: true,
     },
     Line {
         label: "two parts laid over the line",
@@ -181,8 +142,6 @@ const LINES: &[Line] = &[
             &[(Some("E5"), 2.0), (Some("D5"), 2.0), (Some("C5"), 4.0)],
             &[(Some("G4"), 2.0), (Some("B4"), 2.0), (Some("G4"), 4.0)],
         ],
-        repeats: true,
-        realizes: true,
     },
     Line {
         label: "a line of chords, as music21 reads roman numerals into one",
@@ -191,8 +150,6 @@ const LINES: &[Line] = &[
         notes: &[],
         chords: &["I", "IV", "V7", "I"],
         overlaid: &[],
-        repeats: true,
-        realizes: true,
     },
     Line {
         label: "a compound meter in a flat key",
@@ -209,8 +166,6 @@ const LINES: &[Line] = &[
         ],
         chords: &[],
         overlaid: &[],
-        repeats: false,
-        realizes: true,
     },
 ];
 
@@ -262,18 +217,14 @@ class Chooser:
 def choose_as_the_crate_does():
     realizer.random = Chooser()
 
-def own_pitches(progression):
-    """The same voicings, every pitch an object of its own."""
-    return [tuple(pitch.Pitch(p.nameWithOctave) for p in voicing) for voicing in progression]
-
 def way(realization, index):
     progression = realization.getAllPossibilityProgressions()[index]
-    return realization.generateRealizationFromPossibilityProgression(own_pitches(progression))
+    return realization.generateRealizationFromPossibilityProgression(progression)
 
 def chosen_way(realization):
     choose_as_the_crate_does()
     progression = realization.getRandomPossibilityProgression()
-    return realization.generateRealizationFromPossibilityProgression(own_pitches(progression))
+    return realization.generateRealizationFromPossibilityProgression(progression)
 "#;
 
 fn our_line(line: &Line) -> FiguredBassLine {
@@ -438,9 +389,7 @@ fn the_realizer_writes_the_scores_music21_s_writes() {
                         .collect::<Vec<_>>(),
                 ))
             };
-            // Each score is asked of a realization made afresh, and the
-            // voicings are handed to music21 with pitches of their own; the
-            // module's header says why.
+            // Each score is asked of a realization made afresh.
             let their_realization = |keyboard: bool| -> PyResult<Bound<'_, PyAny>> {
                 let realization = their_line()?.call_method0("realize")?;
                 realization.setattr("keyboardStyleOutput", keyboard)?;
@@ -465,9 +414,6 @@ fn the_realizer_writes_the_scores_music21_s_writes() {
                 failures.push(format!("{label}: a bass line was written of chords"));
             }
 
-            if !line.realizes {
-                continue;
-            }
             let first = their_realization(true)?;
             let top = Pitch::from_name("B5").expect("a pitch");
             let mut our_realization: Realization = match ours.realize(&Rules::default(), 4, &top) {
@@ -541,10 +487,6 @@ fn the_realizer_writes_the_scores_music21_s_writes() {
                         .and_then(written),
                     our_realization.generate_random_realization(chooser()),
                 ));
-                if !line.repeats {
-                    continue;
-                }
-                // What follows music21 writes from its own voicings.
                 asked.getattr("choose_as_the_crate_does")?.call0()?;
                 compared += 1;
                 failures.extend(differs(

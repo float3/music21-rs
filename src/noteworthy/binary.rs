@@ -20,10 +20,7 @@ const COMPRESSED: &[u8] = b"[NWZ]\x00";
 ///
 /// music21 calls this reader beta, and what it leaves out is left out here:
 /// lyrics, dynamics, flow marks and performance marks are read past and not
-/// written; a chord in a file of version 2 or later holds no notes, which
-/// the text reader refuses; and music21's table of clef names runs `Tenor`
-/// and `Percussion` together for want of a comma, so a tenor or percussion
-/// clef is refused too.
+/// written.
 ///
 /// # Errors
 ///
@@ -88,9 +85,8 @@ fn python_index<T: Copy>(table: &[T], index: i32) -> Option<T> {
         .and_then(|index| table.get(index).copied())
 }
 
-/// music21's `constants.ClefNames`, as music21 writes it: a missing comma
-/// joins its last two names.
-const CLEF_NAMES: [&str; 4] = ["Treble", "Bass", "Alto", "TenorPercussion"];
+/// music21's `constants.ClefNames`.
+const CLEF_NAMES: [&str; 5] = ["Treble", "Bass", "Alto", "Tenor", "Percussion"];
 
 /// music21's `constants.OctaveShiftNames`.
 const OCTAVE_SHIFT_NAMES: [Option<&str>; 3] = [None, Some("Octave Up"), Some("Octave Down")];
@@ -849,13 +845,16 @@ impl Bytes<'_> {
             self.take(12)
         } else if self.version == 175 {
             let data = self.take(10);
-            notes = *data.get(8).ok_or_else(Self::ended)?;
+            notes = usize::from(*data.get(8).ok_or_else(Self::ended)?);
             data
         } else {
             self.take(8)
         };
-        if self.version >= 200 && data.get(7).ok_or_else(Self::ended)? & 0x40 != 0 {
-            let _stem = self.byte()?;
+        if self.version >= 200 {
+            if data.get(7).ok_or_else(Self::ended)? & 0x40 != 0 {
+                let _stem = self.byte()?;
+            }
+            notes = usize::try_from(self.short()?).unwrap_or(0);
         }
         let mut members = Vec::new();
         for _ in 0..notes {
@@ -917,9 +916,37 @@ mod tests {
     #[test]
     fn a_table_is_indexed_as_python_indexes_one() {
         assert_eq!(python_index(&CLEF_NAMES, 1), Some("Bass"));
-        assert_eq!(python_index(&CLEF_NAMES, -1), Some("TenorPercussion"));
-        assert_eq!(python_index(&CLEF_NAMES, 4), None);
-        assert_eq!(python_index(&CLEF_NAMES, -5), None);
+        assert_eq!(python_index(&CLEF_NAMES, -1), Some("Percussion"));
+        assert_eq!(python_index(&CLEF_NAMES, 5), None);
+        assert_eq!(python_index(&CLEF_NAMES, -6), None);
+    }
+
+    fn read(data: &[u8]) -> String {
+        let mut bytes = Bytes {
+            data,
+            at: 0,
+            version: 201,
+            alterations: Vec::new(),
+        };
+        bytes.object().unwrap().line()
+    }
+
+    #[test]
+    fn a_tenor_and_a_percussion_clef_are_named() {
+        // An object of kind 0, shown, a clef type and no octave shift.
+        assert_eq!(read(&[0, 0, 0, 3, 0, 0, 0]), "|Clef|Type:Tenor|");
+        assert_eq!(read(&[0, 0, 0, 4, 0, 0, 0]), "|Clef|Type:Percussion|");
+    }
+
+    #[test]
+    fn a_version_two_chord_reads_its_notes() {
+        // A chord of quarters and its count, then two notes on positions
+        // nought and minus two.
+        let mut chord = vec![10, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 2, 0];
+        for position in [0u8, (-2i8) as u8] {
+            chord.extend([8, 0, 0, 2, 0, 0, 0, 0, 0, position, 5]);
+        }
+        assert_eq!(read(&chord), "|Chord|Dur:4th|Pos:0,2");
     }
 
     #[test]
