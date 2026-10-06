@@ -43,7 +43,7 @@ pub fn pitch_attribute_count<K: PartialEq>(
     Ok(counts)
 }
 
-fn music21_pitches(stream: &Stream) -> Result<Vec<Pitch>> {
+pub(crate) fn music21_pitches(stream: &Stream) -> Result<Vec<Pitch>> {
     let mut pitches = Vec::new();
     for event in stream.events() {
         match event.element() {
