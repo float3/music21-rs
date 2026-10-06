@@ -6,7 +6,9 @@
 //! of each part; the rhythmic features (`R`) read when each note sounds, in
 //! seconds at the piece's tempi, and its meters; the texture features (`T`)
 //! read how many parts sound in each chord of the piece chordified; the
-//! pitch features (`P`) read the piece's pitches. Several
+//! instrument features (`I`) read the piece partitioned by instrument and
+//! each part's General MIDI program; the pitch features (`P`) read the
+//! piece's pitches. Several
 //! of music21's habits are kept, since the values are the comparison: the
 //! pitch variety (`P8`) counts the MIDI numbers sounding but MIDI nought, a
 //! tie between two pitches equally common goes to the one sounded first, and
@@ -14,13 +16,13 @@
 //! notes.
 
 use super::{DataInstance, Extractor};
+use crate::stream::StreamElement;
 use crate::{
     defaults::{FloatType, IntegerType},
     error::{Error, Result},
 };
 
-/// Every jSymbolic extractor of melody, rhythm, texture and pitch music21
-/// implements, in music21's order.
+/// Every jSymbolic extractor music21 implements, in music21's order.
 pub const JSYMBOLIC: &[Extractor] = &[
     Extractor {
         id: "M1",
@@ -183,6 +185,132 @@ pub const JSYMBOLIC: &[Extractor] = &[
         discrete: true,
         normalize: false,
         process: size_of_melodic_arcs,
+    },
+    Extractor {
+        id: "I1",
+        name: "Pitched Instruments Present",
+        description: "Which pitched General MIDI Instruments are present. There is one entry for each instrument, which is set to 1.0 if there is at least one Note On in the recording corresponding to the instrument and to 0.0 if there is not.",
+        dimensions: 128,
+        discrete: true,
+        normalize: false,
+        process: pitched_instruments_present,
+    },
+    Extractor {
+        id: "I3",
+        name: "Note Prevalence of Pitched Instruments",
+        description: "The fraction of (pitched) notes played by each General MIDI Instrument. There is one entry for each instrument, which is set to the number of Note Ons played using the corresponding MIDI patch divided by the total number of Note Ons in the recording.",
+        dimensions: 128,
+        discrete: true,
+        normalize: false,
+        process: note_prevalence_of_pitched_instruments,
+    },
+    Extractor {
+        id: "I6",
+        name: "Variability of Note Prevalence of Pitched Instruments",
+        description: "Standard deviation of the fraction of Note Ons played by each (pitched) General MIDI instrument that is used to play at least one note.",
+        dimensions: 1,
+        discrete: true,
+        normalize: false,
+        process: variability_of_note_prevalence_of_pitched_instruments,
+    },
+    Extractor {
+        id: "I8",
+        name: "Number of Pitched Instruments",
+        description: "Total number of General MIDI patches that are used to play at least one note.",
+        dimensions: 1,
+        discrete: true,
+        normalize: false,
+        process: number_of_pitched_instruments,
+    },
+    Extractor {
+        id: "I11",
+        name: "String Keyboard Fraction",
+        description: "Fraction of all Note Ons belonging to string keyboard patches (General MIDI patches 1 to 8).",
+        dimensions: 1,
+        discrete: true,
+        normalize: false,
+        process: string_keyboard_fraction,
+    },
+    Extractor {
+        id: "I12",
+        name: "Acoustic Guitar Fraction",
+        description: "Fraction of all Note Ons belonging to acoustic guitar patches (General MIDI patches 25 and 26).",
+        dimensions: 1,
+        discrete: true,
+        normalize: false,
+        process: acoustic_guitar_fraction,
+    },
+    Extractor {
+        id: "I13",
+        name: "Electric Guitar Fraction",
+        description: "Fraction of all Note Ons belonging to electric guitar patches (General MIDI patches 27 to 32).",
+        dimensions: 1,
+        discrete: true,
+        normalize: false,
+        process: electric_guitar_fraction,
+    },
+    Extractor {
+        id: "I14",
+        name: "Violin Fraction",
+        description: "Fraction of all Note Ons belonging to violin patches (General MIDI patches 41 or 111).",
+        dimensions: 1,
+        discrete: true,
+        normalize: false,
+        process: violin_fraction,
+    },
+    Extractor {
+        id: "I15",
+        name: "Saxophone Fraction",
+        description: "Fraction of all Note Ons belonging to saxophone patches (General MIDI patches 65 through 68).",
+        dimensions: 1,
+        discrete: true,
+        normalize: false,
+        process: saxophone_fraction,
+    },
+    Extractor {
+        id: "I16",
+        name: "Brass Fraction",
+        description: "Fraction of all Note Ons belonging to brass patches (General MIDI patches 57 through 68).",
+        dimensions: 1,
+        discrete: true,
+        normalize: false,
+        process: brass_fraction,
+    },
+    Extractor {
+        id: "I17",
+        name: "Woodwinds Fraction",
+        description: "Fraction of all Note Ons belonging to woodwind patches (General MIDI patches 69 through 76).",
+        dimensions: 1,
+        discrete: true,
+        normalize: false,
+        process: woodwinds_fraction,
+    },
+    Extractor {
+        id: "I18",
+        name: "Orchestral Strings Fraction",
+        description: "Fraction of all Note Ons belonging to orchestral strings patches (General MIDI patches 41 or 47).",
+        dimensions: 1,
+        discrete: true,
+        normalize: false,
+        process: orchestral_strings_fraction,
+    },
+    Extractor {
+        id: "I19",
+        name: "String Ensemble Fraction",
+        description: "Fraction of all Note Ons belonging to string ensemble patches (General MIDI patches 49 to 52).",
+        dimensions: 1,
+        discrete: true,
+        normalize: false,
+        process: string_ensemble_fraction,
+    },
+    Extractor {
+        id: "I20",
+        name: "Electric Instrument Fraction",
+        description: "Fraction of all Note Ons belonging to electric instrument patches (General MIDI patches 5, 6, 17, 19, 27 to 32 or 34 to 40).",
+        dimensions: 1,
+        discrete: true,
+        normalize: false,
+        process: electric_instrument_fraction,
     },
     Extractor {
         id: "R15",
@@ -1294,5 +1422,198 @@ fn variability_of_number_of_independent_voices(
     }
     let counts: Vec<FloatType> = sounding.iter().map(|count| *count as FloatType).collect();
     vector[0] = crate::statistics::pstdev(&counts);
+    Ok(())
+}
+
+/// Each part of the piece partitioned by instrument, as the program of its
+/// first instrument (`None` where it states none) and how many notes it
+/// holds: what music21's instrument features read off
+/// `partitionByInstrument`. Nothing where the partition is empty.
+fn instrument_parts(data: &DataInstance) -> Result<Vec<(Option<Option<u8>>, usize)>> {
+    let partitioned = crate::instrument::partition_by_instrument(data.prepared());
+    if partitioned.is_empty() {
+        return Err(Error::Feature("input lacks instruments".to_string()));
+    }
+    Ok(partitioned
+        .parts()
+        .into_iter()
+        .map(|part| {
+            let program = part
+                .events()
+                .iter()
+                .find_map(|event| match event.element() {
+                    StreamElement::Instrument(instrument) => Some(instrument.midi_program()),
+                    _ => None,
+                });
+            let notes = part
+                .recurse()
+                .into_iter()
+                .filter(|(_, element)| {
+                    matches!(
+                        element,
+                        StreamElement::Note(_)
+                            | StreamElement::Chord(_)
+                            | StreamElement::Unpitched(_)
+                            | StreamElement::PercussionChord(_)
+                            | StreamElement::ChordSymbol(_)
+                    )
+                })
+                .count();
+            (program, notes)
+        })
+        .collect())
+}
+
+/// The program of a part's first instrument, refused where it has none or
+/// the instrument names no program, as music21 refuses it.
+fn program_of(program: Option<Option<u8>>) -> Result<usize> {
+    match program {
+        Some(Some(program)) => Ok(usize::from(program)),
+        Some(None) => Err(Error::Feature(
+            "an instrument lacks a midiProgram".to_string(),
+        )),
+        None => Err(Error::Feature(
+            "'NoneType' object has no attribute 'midiProgram'".to_string(),
+        )),
+    }
+}
+
+/// How many pitches sound in the piece, which the instrument features
+/// divide by.
+fn pitch_total(data: &DataInstance) -> usize {
+    data.pitch_class_histogram().iter().sum()
+}
+
+fn pitched_instruments_present(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+    for (program, notes) in instrument_parts(data)? {
+        if notes > 0 {
+            vector[program_of(program)?] = 1.0;
+        }
+    }
+    Ok(())
+}
+
+fn note_prevalence_of_pitched_instruments(
+    data: &DataInstance,
+    vector: &mut [FloatType],
+) -> Result<()> {
+    let total = pitch_total(data);
+    for (program, notes) in instrument_parts(data)? {
+        if notes > 0 {
+            let program = program_of(program)?;
+            if total == 0 {
+                return Err(Error::Feature("division by zero".to_string()));
+            }
+            vector[program] = notes as FloatType / total as FloatType;
+        }
+    }
+    Ok(())
+}
+
+fn variability_of_note_prevalence_of_pitched_instruments(
+    data: &DataInstance,
+    vector: &mut [FloatType],
+) -> Result<()> {
+    let parts = instrument_parts(data)?;
+    let total = pitch_total(data);
+    if total == 0 {
+        return Err(lacks_notes());
+    }
+    let shares: Vec<FloatType> = parts
+        .iter()
+        .filter(|(_, notes)| *notes > 0)
+        .map(|(_, notes)| *notes as FloatType / total as FloatType)
+        .collect();
+    if shares.is_empty() {
+        return Err(Error::Feature("division by zero".to_string()));
+    }
+    let mean = crate::statistics::python_sum(&shares) / shares.len() as FloatType;
+    let squares: Vec<FloatType> = shares.iter().map(|share| (share - mean).powi(2)).collect();
+    vector[0] = (crate::statistics::python_sum(&squares) / squares.len() as FloatType).sqrt();
+    Ok(())
+}
+
+fn number_of_pitched_instruments(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+    vector[0] = instrument_parts(data)?
+        .iter()
+        .filter(|(_, notes)| *notes > 0)
+        .count() as FloatType;
+    Ok(())
+}
+
+/// The share of the piece's pitches played by instruments of these
+/// programs: music21's `InstrumentFractionFeature`.
+fn instrument_fraction(data: &DataInstance, programs: &[usize]) -> Result<FloatType> {
+    let parts = instrument_parts(data)?;
+    let total = pitch_total(data);
+    if total == 0 {
+        return Err(lacks_notes());
+    }
+    let mut count = 0;
+    for (program, notes) in parts {
+        // An instrument naming no program is in no family; a part with no
+        // instrument at all is refused.
+        let Some(program) = program else {
+            return Err(program_of(None).unwrap_err());
+        };
+        if program.is_some_and(|program| programs.contains(&usize::from(program))) {
+            count += notes;
+        }
+    }
+    Ok(count as FloatType / total as FloatType)
+}
+
+fn string_keyboard_fraction(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+    vector[0] = instrument_fraction(data, &[0, 1, 2, 3, 4, 5, 6, 7])?;
+    Ok(())
+}
+
+fn acoustic_guitar_fraction(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+    vector[0] = instrument_fraction(data, &[24, 25])?;
+    Ok(())
+}
+
+fn electric_guitar_fraction(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+    vector[0] = instrument_fraction(data, &[26, 27, 28, 29, 30, 31])?;
+    Ok(())
+}
+
+fn violin_fraction(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+    vector[0] = instrument_fraction(data, &[40, 110])?;
+    Ok(())
+}
+
+fn saxophone_fraction(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+    vector[0] = instrument_fraction(data, &[64, 65, 66, 67])?;
+    Ok(())
+}
+
+fn brass_fraction(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+    vector[0] = instrument_fraction(data, &[56, 57, 58, 59, 60, 61])?;
+    Ok(())
+}
+
+fn woodwinds_fraction(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+    vector[0] = instrument_fraction(data, &[68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79])?;
+    Ok(())
+}
+
+fn orchestral_strings_fraction(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+    vector[0] = instrument_fraction(data, &[41, 42, 43, 44, 45])?;
+    Ok(())
+}
+
+fn string_ensemble_fraction(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+    vector[0] = instrument_fraction(data, &[48, 49, 50, 51])?;
+    Ok(())
+}
+
+fn electric_instrument_fraction(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+    vector[0] = instrument_fraction(
+        data,
+        &[
+            4, 5, 16, 18, 26, 27, 28, 29, 30, 31, 33, 34, 35, 36, 37, 38, 39,
+        ],
+    )?;
     Ok(())
 }
