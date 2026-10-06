@@ -807,7 +807,6 @@ impl Ornament {
     ) -> PyResult<()> {
         let _ = otherSimultaneousPitches;
         let py = slf.py();
-        let trill = slf.borrow().shape() == Shape::Trill;
         let pairs: Vec<(Py<PyAny>, Option<Py<PyAny>>)> = {
             let me = slf.borrow();
             let governing = match me.shape() {
@@ -828,13 +827,12 @@ impl Ornament {
         };
         for (pitch, accidental) in pairs {
             let pitch = pitch.bind(py);
-            // A trill takes whatever its accidental says, decided or not; a
-            // mordent and a turn only an accidental whose showing is decided.
+            // An accidental whose showing is decided says so outright.
             let status = match &accidental {
                 Some(accidental) => Some(accidental.bind(py).getattr("displayStatus")?),
                 None => None,
             }
-            .filter(|status| trill || !status.is_none());
+            .filter(|status| !status.is_none());
             if let Some(status) = status {
                 if pitch.getattr("accidental")?.is_none() {
                     let natural = crate::installed_new(
