@@ -27,6 +27,12 @@ are tunes whose own reading cannot be written back.
 
 ## Added
 
+- `analysis::windowed::WindowedAnalysis` cuts a stream into windows of a
+  quarter note and runs any analysis over windows of each size, overlapping,
+  side by side or averaged, as music21's `WindowedAnalysis` does; and
+  `analysis::floating_key::KeyAnalyzer` reads a key for every measure and
+  smooths each by its neighbours, as music21's `floatingKey` does. Every
+  MusicXML score of music21's corpus gives music21's windows and keys.
 - `Stream::find_consecutive_notes` and `melodic_intervals` find the notes
   of a stream that follow one another and the intervals between them, as
   music21's `findConsecutiveNotes` and `melodicIntervals` do, with its

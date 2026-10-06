@@ -11,6 +11,7 @@ use crate::{
 };
 
 pub mod enharmonics;
+pub mod floating_key;
 pub mod harmonic_function;
 pub mod metrical;
 pub mod neoriemannian;
@@ -18,6 +19,7 @@ pub mod patel;
 pub mod pitch_analysis;
 pub mod segment_by_rests;
 pub mod transposition;
+pub mod windowed;
 
 /// A set of key-finding weights for the Krumhansl-Schmuckler algorithm.
 ///
