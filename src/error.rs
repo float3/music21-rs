@@ -127,6 +127,10 @@ pub enum Error {
     /// whose values are all nought: music21's `FeatureException`.
     #[error("Feature error: {0}")]
     Feature(String),
+    /// Text that cannot be worked on as asked: an article looked for in a
+    /// language music21 knows none of.
+    #[error("Text error: {0}")]
+    Text(String),
     /// A score that cannot be written as MusicXML.
     #[cfg(feature = "musicxml")]
     #[error("MusicXML export error: {0}")]

@@ -142,11 +142,64 @@ impl Metadata {
             .filter(|(name, _)| is_contributor_unique_name(name))
     }
 
+    /// Every value under a unique name as one piece of text, as music21's
+    /// attribute of that name reads it -- `title`, `composer`, `movementName`:
+    /// one contributor by name, two joined with `and`, more as the first
+    /// `and` how many others; a title's values each with an article written
+    /// after a comma put back in front; anything else the values joined with
+    /// commas. Nothing for a name outside the vocabulary, or with no value.
+    pub fn string_value(&self, unique_name: &str) -> Option<String> {
+        namespace_name(unique_name)?;
+        let values = self.get(unique_name);
+        if values.is_empty() {
+            return None;
+        }
+        if is_contributor_unique_name(unique_name) {
+            return Some(match values {
+                [only] => only.text().to_string(),
+                [first, second] => format!("{} and {}", first.text(), second.text()),
+                [first, rest @ ..] => format!("{} and {} others", first.text(), rest.len()),
+                [] => String::new(),
+            });
+        }
+        let texts: Vec<String> = if ARTICLED_TITLES.contains(&unique_name) {
+            values
+                .iter()
+                .map(|value| {
+                    crate::text::prepend_article(value.text(), None)
+                        .unwrap_or_else(|_| value.text().to_string())
+                })
+                .collect()
+        } else {
+            values
+                .iter()
+                .map(|value| value.text().to_string())
+                .collect()
+        };
+        Some(texts.join(", "))
+    }
+
+    /// The title, as [`Self::string_value`] reads it: music21's `title`.
+    pub fn title(&self) -> Option<String> {
+        self.string_value("title")
+    }
+
     /// Whether nothing is in it.
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
 }
+
+/// The names whose values are titles, an article at their end moved to the
+/// front when read as text: music21's `needsArticleNormalization`.
+const ARTICLED_TITLES: [&str; 6] = [
+    "title",
+    "alternativeTitle",
+    "popularTitle",
+    "parentTitle",
+    "movementName",
+    "groupTitle",
+];
 
 /// Whether a unique name is one of the vocabulary's contributor names:
 /// music21's `_isContributorUniqueName`.

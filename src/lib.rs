@@ -138,6 +138,8 @@ pub(crate) mod stepname;
 pub mod stream;
 /// Metronome marks and tempo-word conventions.
 pub mod tempo;
+/// Lyrics joined into words and lines, and the articles of titles.
+pub mod text;
 /// TinyNotation, a line of notes written as letters and numbers.
 pub mod tinynotation;
 /// Tuning-system ratios, labels and frequency helpers.

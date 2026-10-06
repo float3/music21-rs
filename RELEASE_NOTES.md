@@ -37,6 +37,13 @@ are tunes whose own reading cannot be written back.
   pitch --, each answering a `Feature`
   vector. Every one gives music21's values on every MusicXML score of
   music21's corpus.
+- `text` is music21's `text` module: `assemble_lyrics` and
+  `assemble_all_lyrics` join a stream's lyrics into words and lines, and
+  `prepend_article` and `postpend_article` move a title's article. With it
+  `Metadata::string_value` reads any attribute as music21's does --
+  contributors summarised, titles with their articles put back in front --
+  and `Metadata::title` the title. Every MusicXML score of music21's corpus
+  gives music21's lyrics and metadata text.
 - `analysis::windowed::WindowedAnalysis` cuts a stream into windows of a
   quarter note and runs any analysis over windows of each size, overlapping,
   side by side or averaged, as music21's `WindowedAnalysis` does; and
