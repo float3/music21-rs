@@ -51,6 +51,15 @@ are tunes whose own reading cannot be written back.
   read as text, verse by verse, and searched for a string, each match
   giving the lyrics, notes and measures it spans. Every MusicXML score of
   music21's corpus indexes and searches as music21's does.
+- The rest of `search` is music21's `search.base`: `StreamSearcher` finds
+  runs of elements by a list of terms and algorithms -- wildcards, rhythm,
+  note names, or one's own -- and `rhythmic_search`, `note_name_search`
+  and `note_name_rhythmic_search` do the same for the common cases. The
+  `translate_*` functions turn notes and rests into text as music21's do,
+  and the approximate searches rank streams by how alike that text is,
+  with Python's `difflib` ratio; `most_common_measure_rhythms` groups
+  measures by rhythm. Every MusicXML score of music21's corpus searches,
+  translates and ranks as music21's does.
 - `analysis::windowed::WindowedAnalysis` cuts a stream into windows of a
   quarter note and runs any analysis over windows of each size, overlapping,
   side by side or averaged, as music21's `WindowedAnalysis` does; and
