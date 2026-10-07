@@ -76,6 +76,13 @@ are tunes whose own reading cannot be written back.
   `ActivityMatch.pitchToDynamic` does, and `pitch_to_dynamic_counts`
   counts the pairs. Every MusicXML score of music21's corpus pairs as
   music21's does.
+- `search::ContiguousSegmentSearcher` finds every run of a stream's notes
+  and chords holding a number of pitch classes, reading repetitions in each
+  of music21's four ways, and `search::SegmentMatcher` finds the runs that
+  are rows or sets of pitch classes searched for -- exactly, transposed,
+  transformed, or as multisets, transposed or inverted -- and labels them
+  in a copy of the stream with a line and a lyric, as music21's
+  `search.serial` does.
 - `analysis::windowed::WindowedAnalysis` cuts a stream into windows of a
   quarter note and runs any analysis over windows of each size, overlapping,
   side by side or averaged, as music21's `WindowedAnalysis` does; and

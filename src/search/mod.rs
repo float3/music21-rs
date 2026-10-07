@@ -5,12 +5,15 @@
 //! [`LyricSearcher`] finds text in a stream's lyrics, and the notes it is
 //! sung to. [`index_score_parts`] cuts each part of a score into
 //! overlapping stretches of that text, and [`score_similarity`] compares
-//! every stretch of some scores with every other.
+//! every stretch of some scores with every other. A [`SegmentMatcher`]
+//! finds rows and sets of pitch classes in the notes of a stream, and
+//! labels them there.
 
 mod base;
 mod difflib;
 mod lyrics;
 mod segment;
+mod serial;
 
 pub use base::{
     Algorithm, Filter, MeasureRhythm, SearchMatch, SearchTerm, Searched, StreamSearcher,
@@ -26,4 +29,8 @@ pub use lyrics::{IndexedLyric, LINE_BREAK, LyricIdentifier, LyricMatch, LyricSea
 pub use segment::{
     SegmentAt, SegmentSimilarity, Segments, index_score_parts, index_score_parts_with,
     score_similarity, translate_monophonic_part_to_segments,
+};
+pub use serial::{
+    ContiguousSegment, ContiguousSegmentSearcher, Matching, Repetitions, SegmentMatcher,
+    SegmentNote,
 };
