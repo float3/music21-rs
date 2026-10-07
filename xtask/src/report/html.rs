@@ -215,10 +215,11 @@ fn page_open(report: &Report, root: &str, current: Option<View>, title: &str) ->
         html,
         "                <span>commit <code>{head}</code></span>
                 <span class=\"sep\">/</span>
-                <span>music21 <code>{version}</code></span>
+                <span>music21 <code>{version}</code>{source}</span>
 ",
         head = escape(&report.generated_from),
         version = escape(&report.music21_version),
+        source = music21_source(report),
     );
     if let Some(benchmarks) = report
         .benchmarks
@@ -580,6 +581,31 @@ fn wheel_facts(report: &Report) -> Vec<Fact> {
         });
     }
     facts
+}
+
+/// Which music21 the suites ran against, as the report header says it: the
+/// repository the submodule is cloned from -- the fork, not upstream -- and
+/// its commit, linked where the repository is on GitHub.
+fn music21_source(report: &Report) -> String {
+    let repository = report.music21_repository.trim_end_matches(".git");
+    if repository.is_empty() {
+        return String::new();
+    }
+    let name = repository
+        .strip_prefix("https://github.com/")
+        .unwrap_or(repository);
+    let short: String = report.music21_commit.chars().take(9).collect();
+    if repository.starts_with("https://github.com/") && !short.is_empty() {
+        format!(
+            " from <a href=\"{repository}/commit/{commit}\">{name}</a> <code>{short}</code>",
+            repository = escape(repository),
+            commit = escape(&report.music21_commit),
+            name = escape(name),
+            short = escape(&short),
+        )
+    } else {
+        format!(" from {} <code>{}</code>", escape(name), escape(&short))
+    }
 }
 
 /// What is true of both: music21's own documentation and tests, run over the
