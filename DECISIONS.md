@@ -26,6 +26,20 @@ to make an object a *member* of a stream — sites and contexts, derivations,
 to carry music21's own half, which is what makes an installed chord cost
 eight `Music21Object.__init__` calls. See `issues.md`.
 
+**Nothing answers at random.** *Changed 2026-10-07.* Where music21 picks
+at random -- a note a scale stands on twice, the way Rag Marwa comes down
+from its `D-`, a fresh part or instrument id -- the crate and the wheel
+follow a fixed rule instead: the lowest degree, the first place in order of
+degree, ids counted up through the process. A choice music21 makes by
+chance and a caller may want to make is an argument or a seed
+(`next_pitch_below_from`, `WeightedHexatonicBlues::sample`), never a
+random number generator.
+
+*Costs:* music21's `testRagMarwaB` and `testRagMarwaC` count both random
+answers, so they fail on the crate's side of `music21-suite`; both are
+listed in `EXPECTED_DIVERGENCES`. The fork's
+`relative-node-id-deterministic` branch makes music21 answer the same way.
+
 **Where music21's author names a mistake, the crate does not repeat it.**
 *Changed 2026-09-25.* Cuthbert's "Music21's Mistakes"
 (`music21/documentation/source/developerReference/startingOver.ipynb`) lists
