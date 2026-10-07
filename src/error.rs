@@ -135,6 +135,10 @@ pub enum Error {
     /// and `LyricSearcherException`.
     #[error("Search error: {0}")]
     Search(String),
+    /// A fretboard that cannot say what it sounds: one not tuned a pitch a
+    /// string, or a note on a string it has not got.
+    #[error("Tablature error: {0}")]
+    Tablature(String),
     /// A score that cannot be written as MusicXML.
     #[cfg(feature = "musicxml")]
     #[error("MusicXML export error: {0}")]
