@@ -708,6 +708,29 @@ def test_an_instrument_starts_out_as_music21s_class_does():
         m.fromString("kazoo concerto")
 
 
+def test_fresh_instrument_ids_are_counted_not_drawn():
+    piano, violin = m.Piano(), m.Violin()
+    piano.partIdRandomize()
+    violin.partIdRandomize()
+    piano.instrumentIdRandomize()
+    assert piano.partId != violin.partId
+    for given, prefix in ((piano.partId, "P"), (violin.partId, "P"), (piano.instrumentId, "I")):
+        assert given[0] == prefix and len(given) == 33
+        int(given[1:], 16)
+    assert int(violin.partId[1:], 16) == int(piano.partId[1:], 16) + 1
+
+
+def test_a_note_a_scale_stands_twice_is_read_as_its_lowest_degree():
+    # Rag Marwa's A is its fifth degree and its seventh, and its D- coming
+    # down is its second and its seventh.
+    marwa = m.RagMarwa("c4")
+    for _ in range(20):
+        assert marwa.getScaleDegreeFromPitch("A1", m.Direction.ASCENDING) == 5
+        assert marwa.getScaleDegreeFromPitch("D-3", m.Direction.DESCENDING) == 2
+        assert str(marwa.nextPitch("A1", m.Direction.ASCENDING)) == "B1"
+        assert str(marwa.nextPitch("D-2", m.Direction.DESCENDING)) == "C2"
+
+
 def test_a_figured_bass_segment_voices_as_music21s_does():
     # Each answer read off music21 11.0.0b9.
     dominant = m.Segment(m.Note("G2"), "7")

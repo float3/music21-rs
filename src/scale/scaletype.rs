@@ -1669,8 +1669,10 @@ Observed Javanese Slendro scale, Helmholtz/Ellis p. 518, nr.94
     #[test]
     fn a_note_a_scale_stands_twice_has_two_notes_below_it() {
         // Rag Marwa comes down through the flat second twice over: once
-        // above the octave and once above the tonic. music21 reads `D-2` as
-        // either, and the note below it is `B1` or `C2` accordingly.
+        // above the tonic, its second degree, and once above the octave, its
+        // seventh. `D-2` may be read as either, and the note below it is `C2`
+        // or `B1` accordingly. The places run lowest degree first, and the
+        // plain step below reads the note as the first of them.
         let marwa = Scale::new(ScaleType::RagMarwa, Pitch::from_name("C4").unwrap()).descending();
         let from = Pitch::from_name("D-2").unwrap();
         assert_eq!(marwa.places_of(&from).unwrap(), 2);
@@ -1682,7 +1684,11 @@ Observed Javanese Slendro scale, Helmholtz/Ellis p. 518, nr.94
                     .name_with_octave()
             })
             .collect();
-        assert_eq!(below, ["B1", "C2"]);
+        assert_eq!(below, ["C2", "B1"]);
+        assert_eq!(
+            marwa.next_pitch_below(&from, 1).unwrap().name_with_octave(),
+            "C2"
+        );
 
         // A note the scale stands only once is the same whichever place is
         // asked for, so a caller that always asks for the first is right.

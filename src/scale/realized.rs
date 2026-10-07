@@ -787,8 +787,8 @@ impl Scale {
     /// fifths on C has an F#, but not the one below middle C — so music21
     /// realizes the cycle an octave either side of the pitch and takes every
     /// note there that matches it. A pitch with no octave is heard in the
-    /// fourth. Two matches may stand on different places, and music21
-    /// chooses between them at random; which there are is answered here.
+    /// fourth. Two matches may stand on different places, and every one is
+    /// answered here.
     fn cycle_places_of(&self, pitch: &Pitch, comparison: DegreeComparison) -> Result<Vec<usize>> {
         let sounding = Self::sounding(pitch).ps();
         let wanted = comparison.key(pitch);
@@ -1140,8 +1140,8 @@ impl Scale {
     ///
     /// A scale may name the same note twice — Rag Marwa's A is both its
     /// fifth degree and its seventh, since the pattern dips before it closes
-    /// — and music21 chooses between them at random. The choosing is left to
-    /// the caller; this says what there is to choose from.
+    /// — and this gives every one. [`Self::degree_of_by`] gives the first
+    /// the scale reaches.
     pub fn degrees_of_by(&self, pitch: &Pitch, comparison: DegreeComparison) -> Result<Vec<usize>> {
         if !self.repeats_at_the_octave() {
             return Ok(self
@@ -1262,14 +1262,18 @@ impl Scale {
     /// A scale may name the same note twice: Rag Marwa's `D-` is both the
     /// note above its tonic and the one it passes through coming down from
     /// the octave, and where the next note is depends on which of them is
-    /// meant. music21 chooses between them at random — the choosing is the
-    /// caller's, and [`Self::next_pitch_below_from`] takes it.
+    /// meant. [`Self::next_pitch_below_from`] and
+    /// [`Self::next_pitch_above_from`] take the place to read it as. The
+    /// places are numbered by the degree each stands on, lowest first, so
+    /// place `0` is the lowest degree; that is the one
+    /// [`Self::next_pitch_below`] and [`Self::next_pitch_above`] read a note
+    /// as.
     pub fn places_of(&self, origin: &Pitch) -> Result<usize> {
         Ok(self.places_on(origin)?.len())
     }
 
     /// The places of the realization, and the octave shift each stands at,
-    /// that sound `origin`.
+    /// that sound `origin`, lowest degree first.
     fn places_on(&self, origin: &Pitch) -> Result<Vec<(usize, IntegerType)>> {
         if !self.repeats_at_the_octave() {
             return Ok(self
@@ -1282,7 +1286,7 @@ impl Scale {
         let origin_ps = origin.ps();
         let name = origin.name();
         let base_shift = ((origin_ps - self.tonic.ps()) / 12.0).floor() as IntegerType;
-        Ok((base_shift - 1..=base_shift + 1)
+        let mut places = (base_shift - 1..=base_shift + 1)
             .flat_map(|shift| {
                 pitches.iter().enumerate().map(move |(index, pitch)| {
                     (pitch.ps() + 12.0 * shift as FloatType, index, shift)
@@ -1292,7 +1296,9 @@ impl Scale {
                 pitches[*index].name() == name && (ps - origin_ps).abs() < 1e-9
             })
             .map(|(_, index, shift)| (index, shift))
-            .collect())
+            .collect::<Vec<_>>();
+        places.sort_by_key(|&(index, shift)| (self.degree_at_position(index), index, shift));
+        Ok(places)
     }
 
     /// The note `steps` below `origin`, read as the `place`-th of the places

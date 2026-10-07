@@ -14,6 +14,8 @@
 // music21's own names, kept as music21 spells them.
 #![allow(non_snake_case)]
 
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use pyo3::prelude::*;
 
 use crate::Walkable;
@@ -111,12 +113,15 @@ impl Instrument {
     }
 }
 
-/// Thirty-two random hex digits, as music21's `getMd5` gives for an id.
-fn random_hex(py: Python<'_>) -> PyResult<String> {
-    py.import("uuid")?
-        .call_method0("uuid4")?
-        .getattr("hex")?
-        .extract()
+/// How many ids `fresh_id` has handed out in this process.
+static IDS_GIVEN: AtomicU64 = AtomicU64::new(0);
+
+/// The next id of this process: `prefix` and thirty-two hex digits, the
+/// shape of music21's `getMd5` ids, counting up from one. No two calls in a
+/// process answer the same id.
+fn fresh_id(prefix: char) -> String {
+    let number = IDS_GIVEN.fetch_add(1, Ordering::Relaxed) + 1;
+    format!("{prefix}{number:032x}")
 }
 
 fn language(value: Option<&str>) -> PyResult<SearchLanguage> {
@@ -331,18 +336,18 @@ impl Instrument {
         self.inner.best_name()
     }
 
-    /// music21's `partIdRandomize`: a part id no other part will have, `P`
-    /// and thirty-two hex digits.
-    fn partIdRandomize(&mut self, py: Python<'_>) -> PyResult<()> {
-        self.partId = Some(format!("P{}", random_hex(py)?));
-        Ok(())
+    /// music21's `partIdRandomize`: a part id no other one given out in
+    /// this process has, `P` and thirty-two hex digits. The ids are counted
+    /// rather than drawn at random, so a program gives the same ids on every
+    /// run.
+    fn partIdRandomize(&mut self) {
+        self.partId = Some(fresh_id('P'));
     }
 
     /// music21's `instrumentIdRandomize`: the same for the instrument id,
-    /// `I` and thirty-two hex digits.
-    fn instrumentIdRandomize(&mut self, py: Python<'_>) -> PyResult<()> {
-        self.instrumentId = Some(format!("I{}", random_hex(py)?));
-        Ok(())
+    /// `I` and thirty-two hex digits, counted the same way.
+    fn instrumentIdRandomize(&mut self) {
+        self.instrumentId = Some(fresh_id('I'));
     }
 
     /// music21's `autoAssignMidiChannel`: takes a free channel and says which.

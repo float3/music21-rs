@@ -1524,14 +1524,7 @@ impl ConcreteScale {
         let Ok(value) = pitch_from_any(other) else {
             return Ok(false);
         };
-        let next = self.nextPitch(
-            py,
-            Some(pitchOrigin),
-            direction,
-            stepSize,
-            getNeighbor,
-            None,
-        )?;
+        let next = self.nextPitch(Some(pitchOrigin), direction, stepSize, getNeighbor, None)?;
         // Compared on whatever music21 was told to compare on: two pitches
         // may share a name and stand an octave apart, and a search for a
         // run of scale steps says so.
@@ -1662,11 +1655,12 @@ impl ConcreteScale {
     }
 
     /// music21's `getScaleDegreeFromPitch`: which degree a pitch is, or
-    /// nothing when it is not in the scale.
+    /// nothing when it is not in the scale. A pitch the scale stands on
+    /// more than one degree is the lowest of them: Rag Marwa's A is its
+    /// fifth degree and its seventh, and is answered as the fifth.
     #[pyo3(signature = (pitchTarget, direction = None, comparisonAttribute = "name", **_keywords))]
     fn getScaleDegreeFromPitch(
         &self,
-        py: Python<'_>,
         pitchTarget: &Bound<'_, PyAny>,
         direction: Option<&Bound<'_, PyAny>>,
         comparisonAttribute: &str,
@@ -1694,7 +1688,7 @@ impl ConcreteScale {
             .heard(direction)?
             .degrees_of_by(&pitch, comparison)
             .map_err(scale_error)?;
-        chosen_degree(py, &degrees)
+        Ok(degrees.into_iter().min())
     }
 
     /// music21's `getScaleDegreeAndAccidentalFromPitch`: the degree and how
@@ -1725,7 +1719,10 @@ impl ConcreteScale {
             .unbind())
     }
 
-    /// music21's `nextPitch`: the pitch so many steps along the scale.
+    /// music21's `nextPitch`: the pitch so many steps along the scale. A
+    /// pitch the scale stands on more than one degree is read as the lowest
+    /// of them: coming down from Rag Marwa's `D-`, its second degree, the
+    /// next note is `C`.
     #[pyo3(signature = (
         pitchOrigin = None,
         direction = None,
@@ -1735,7 +1732,6 @@ impl ConcreteScale {
     ))]
     fn nextPitch(
         &self,
-        py: Python<'_>,
         pitchOrigin: Option<&Bound<'_, PyAny>>,
         direction: Option<&Bound<'_, PyAny>>,
         stepSize: usize,
@@ -1767,16 +1763,15 @@ impl ConcreteScale {
                 scale.next_pitch_beside(&origin, steps, below)
             }
             // A scale may stand this note on more than one of its places —
-            // Rag Marwa's `D-` is both the note above the tonic and the one
-            // it passes through coming down from the octave — and where the
-            // next note is depends on which was meant. music21 chooses
-            // between them at random, and so does this.
+            // Rag Marwa's `D-` is both its second degree and the seventh it
+            // passes through coming down from the octave — and where the
+            // next note is depends on which was meant. The crate reads it as
+            // the lowest degree, as `getScaleDegreeFromPitch` answers.
             None => {
-                let place = chosen_place(py, scale.places_of(&origin).map_err(scale_error)?)?;
                 if is_descending(direction) {
-                    scale.next_pitch_below_from(&origin, stepSize, place)
+                    scale.next_pitch_below(&origin, stepSize)
                 } else {
-                    scale.next_pitch_above_from(&origin, stepSize, place)
+                    scale.next_pitch_above(&origin, stepSize)
                 }
             }
         };
@@ -2020,39 +2015,6 @@ pub(crate) fn comparison_of(attribute: &str) -> RsDegreeComparison {
 
 /// Whether a `direction` argument says downwards. music21 passes its own
 /// `Direction` enum, a name, or a signed number.
-/// One of the degrees a pitch stands on, chosen the way music21 chooses.
-///
-/// A scale may name the same note twice — Rag Marwa's A is its fifth degree
-/// and its seventh — and music21 picks between them at random each time it
-/// is asked, which is what its own tests count on. The choosing is done here
-/// rather than in the crate: which degrees there are is a musical question
-/// and which one is answered is not.
-/// One of the places a scale stands a note on, chosen the same way.
-fn chosen_place(py: Python<'_>, places: usize) -> PyResult<usize> {
-    if places < 2 {
-        return Ok(0);
-    }
-    py.import("random")?
-        .getattr("randrange")?
-        .call1((places,))?
-        .extract()
-}
-
-fn chosen_degree(py: Python<'_>, degrees: &[usize]) -> PyResult<Option<usize>> {
-    match degrees {
-        [] => Ok(None),
-        [only] => Ok(Some(*only)),
-        many => {
-            let index: usize = py
-                .import("random")?
-                .getattr("randrange")?
-                .call1((many.len(),))?
-                .extract()?;
-            Ok(many.get(index).copied())
-        }
-    }
-}
-
 fn is_descending(direction: Option<&Bound<'_, PyAny>>) -> bool {
     direction.is_some_and(|direction| {
         direction
