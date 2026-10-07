@@ -40,12 +40,12 @@ impl Default for ChordifyOptions {
 }
 
 /// One element sounding over a stretch of time: music21's timespan.
-struct Span<'a> {
-    start: FloatType,
-    end: FloatType,
-    element: &'a StreamElement,
+pub(crate) struct Span<'a> {
+    pub(crate) start: FloatType,
+    pub(crate) end: FloatType,
+    pub(crate) element: &'a StreamElement,
     /// Which of the streams read the element came from.
-    part: usize,
+    pub(crate) part: usize,
 }
 
 impl Stream {
@@ -403,7 +403,7 @@ fn with_chord_marks(
 
 /// music21's `Verticality.makeElement`: a chord of every pitch sounding at
 /// `offset`, lasting `length`, or a rest where nothing sounds.
-fn make_element(
+pub(crate) fn make_element(
     spans: &[Span<'_>],
     offset: FloatType,
     length: FloatType,

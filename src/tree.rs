@@ -23,10 +23,11 @@
 use crate::{
     chord::Chord,
     defaults::{FloatType, IntegerType},
-    error::Result,
+    error::{Error, Result},
     makenotation::op_frac,
     pitch::Pitch,
     stream::{Stream, StreamElement, StreamKind},
+    voiceleading::VoiceLeadingQuartet,
 };
 
 /// How [`as_timespans`] reads the streams a stream holds.
@@ -125,6 +126,17 @@ impl<'a> ElementTimespan<'a> {
     }
 }
 
+impl ElementTimespan<'_> {
+    /// The same element over another span: music21's `new`.
+    fn spanning(&self, offset: FloatType, end_time: FloatType) -> Self {
+        Self {
+            offset,
+            end_time,
+            ..self.clone()
+        }
+    }
+}
+
 /// Whether music21 makes a `PitchedTimespan` of an element: a `NotRest` or
 /// a stream.
 fn is_pitched(element: &StreamElement) -> bool {
@@ -144,6 +156,7 @@ fn is_pitched(element: &StreamElement) -> bool {
 /// music21's `TimespanTree`.
 #[derive(Clone, Debug)]
 pub struct TimespanTree<'a> {
+    source: &'a Stream,
     timespans: Vec<ElementTimespan<'a>>,
 }
 
@@ -171,7 +184,10 @@ pub fn as_timespans<'a>(
             .total_cmp(&b.offset)
             .then_with(|| a.end_time.total_cmp(&b.end_time))
     });
-    TimespanTree { timespans }
+    TimespanTree {
+        source: stream,
+        timespans,
+    }
 }
 
 fn walk<'a>(
@@ -393,6 +409,112 @@ impl<'a> TimespanTree<'a> {
             .unwrap_or(0)
     }
 
+    /// The stream the tree was read from: music21's `source`.
+    pub fn source(&self) -> &'a Stream {
+        self.source
+    }
+
+    /// Cuts every timespan sounding across one of these offsets in two
+    /// there: music21's `splitAt`. The pieces come after what already
+    /// starts and ends where each does.
+    pub fn split_at(&mut self, offsets: &[FloatType]) {
+        for &offset in offsets {
+            let (across, mut kept): (Vec<ElementTimespan<'a>>, Vec<ElementTimespan<'a>>) =
+                std::mem::take(&mut self.timespans)
+                    .into_iter()
+                    .partition(|span| span.offset < offset && offset < span.end_time);
+            for span in across {
+                kept.push(span.spanning(span.offset, offset));
+                kept.push(span.spanning(offset, span.end_time));
+            }
+            kept.sort_by(|a, b| {
+                a.offset
+                    .total_cmp(&b.offset)
+                    .then_with(|| a.end_time.total_cmp(&b.end_time))
+            });
+            self.timespans = kept;
+        }
+    }
+
+    /// Runs of `n` verticalities, each starting one after the last, in
+    /// order or `reverse`d: music21's `iterateVerticalitiesNwise`. Where
+    /// there are fewer than `n`, or with `pad_end` at the end, a run is
+    /// filled out with an empty verticality at the tree's end.
+    ///
+    /// # Errors
+    ///
+    /// A run of no verticalities.
+    pub fn verticalities_nwise(
+        &self,
+        n: usize,
+        reverse: bool,
+        pad_end: bool,
+    ) -> Result<Vec<Vec<Verticality<'_, 'a>>>> {
+        if n == 0 {
+            return Err(Error::Tree(format!(
+                "The number of verticalities in the group must be at least one. Got {n}"
+            )));
+        }
+        let sentinel = Verticality {
+            tree: self,
+            offset: self.end_time().unwrap_or(FloatType::INFINITY),
+            start_timespans: Vec::new(),
+            overlap_timespans: Vec::new(),
+            stop_timespans: Vec::new(),
+        };
+        let mut sequence = self.verticalities();
+        if reverse {
+            sequence.reverse();
+        }
+        if pad_end {
+            sequence.extend(std::iter::repeat_n(sentinel.clone(), n - 1));
+        }
+        let mut windows: Vec<Vec<Verticality<'_, 'a>>> = if sequence.len() < n {
+            let mut window = sequence;
+            let missing = n - window.len();
+            window.extend(std::iter::repeat_n(sentinel, missing));
+            vec![window]
+        } else {
+            sequence.windows(n).map(<[_]>::to_vec).collect()
+        };
+        if reverse {
+            for window in &mut windows {
+                window.reverse();
+            }
+        }
+        Ok(windows)
+    }
+
+    /// Each run of verticalities from one whose chord is consonant to the
+    /// next that is, with at least one between: music21's
+    /// `iterateConsonanceBoundedVerticalities`.
+    ///
+    /// # Errors
+    ///
+    /// A verticality whose pitches make no chord.
+    pub fn consonance_bounded_verticalities(&self) -> Result<Vec<Vec<Verticality<'_, 'a>>>> {
+        let mut runs = Vec::new();
+        let mut buffer: Vec<Verticality<'_, 'a>> = Vec::new();
+        for verticality in self.verticalities() {
+            let consonant = verticality.to_chord()?.is_consonant();
+            if buffer.is_empty() {
+                if consonant {
+                    buffer.push(verticality);
+                }
+                continue;
+            }
+            buffer.push(verticality);
+            if consonant {
+                if buffer.len() > 2 {
+                    runs.push(buffer.clone());
+                }
+                let last = buffer.pop().expect("the verticality just pushed");
+                buffer = vec![last];
+            }
+        }
+        Ok(runs)
+    }
+
     /// The next timespan after this one, starting at a later offset, in the
     /// same part: music21's `findNextPitchedTimespanInSameStreamByClass`.
     pub fn next_in_same_part(
@@ -553,6 +675,183 @@ impl<'t, 'a> Verticality<'t, 'a> {
         self.start_timespans.first().and_then(|span| span.measure)
     }
 
+    /// Each pitched timespan starting here paired with the one before it in
+    /// its part, and, with `include_oblique`, each pitched one sounding
+    /// across paired with itself: music21's `getPairedMotion`. Without
+    /// `include_rests`, a pair is kept only where the earlier one stops
+    /// here; without `include_oblique`, a pair of the same pitches is not
+    /// kept.
+    pub fn paired_motion(
+        &self,
+        include_rests: bool,
+        include_oblique: bool,
+    ) -> Vec<(&'t ElementTimespan<'a>, &'t ElementTimespan<'a>)> {
+        let mut pairs = Vec::new();
+        for &starting in &self.start_timespans {
+            if !starting.pitched {
+                continue;
+            }
+            let Some(previous) = self.tree.previous_in_same_part(starting) else {
+                continue;
+            };
+            if !previous.pitched {
+                continue;
+            }
+            if !include_rests
+                && !self
+                    .stop_timespans
+                    .iter()
+                    .any(|stopping| std::ptr::eq(*stopping, previous))
+            {
+                continue;
+            }
+            if !include_oblique && starting.pitches() == previous.pitches() {
+                continue;
+            }
+            pairs.push((previous, starting));
+        }
+        if include_oblique {
+            for &overlap in &self.overlap_timespans {
+                if overlap.pitched {
+                    pairs.push((overlap, overlap));
+                }
+            }
+        }
+        pairs
+    }
+
+    /// Each two pairs of [`Self::paired_motion`], the earlier pair first:
+    /// music21's `getAllVoiceLeadingQuartets(returnObjects=False)`. Without
+    /// `include_no_motion`, two pairs neither of which moves are left out;
+    /// with `part_pairs`, only those whose two parts are one of the pairs of
+    /// the source's parts given, by their places among them.
+    ///
+    /// # Errors
+    ///
+    /// A part pair naming a part the source has not got.
+    pub fn voice_leading_timespans(
+        &self,
+        include_rests: bool,
+        include_oblique: bool,
+        include_no_motion: bool,
+        part_pairs: Option<&[(usize, usize)]>,
+    ) -> Result<Vec<[&'t ElementTimespan<'a>; 4]>> {
+        let pairs = self.paired_motion(include_rests, include_oblique);
+        let parts = self.tree.source.parts();
+        let mut quartets = Vec::new();
+        for (index, upper) in pairs.iter().enumerate() {
+            for lower in &pairs[index + 1..] {
+                if !include_no_motion
+                    && upper.0.pitches() == upper.1.pitches()
+                    && lower.0.pitches() == lower.1.pitches()
+                {
+                    continue;
+                }
+                if let Some(part_pairs) = part_pairs {
+                    let (top, bottom) = (upper.0.part(), lower.0.part());
+                    let is_either = |index: usize| -> Result<bool> {
+                        let part = parts
+                            .get(index)
+                            .copied()
+                            .ok_or_else(|| Error::Tree("list index out of range".to_string()))?;
+                        Ok(same_stream(Some(part), top) || same_stream(Some(part), bottom))
+                    };
+                    let mut appropriate = false;
+                    for (first, second) in part_pairs {
+                        if is_either(*first)? && is_either(*second)? {
+                            appropriate = true;
+                            break;
+                        }
+                    }
+                    if !appropriate {
+                        continue;
+                    }
+                }
+                quartets.push([upper.0, upper.1, lower.0, lower.1]);
+            }
+        }
+        Ok(quartets)
+    }
+
+    /// The same quartets as voice-leading quartets, where all four are
+    /// notes: music21's `getAllVoiceLeadingQuartets`.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::voice_leading_timespans`], or two pitches no interval can
+    /// be spelled between.
+    pub fn voice_leading_quartets(
+        &self,
+        include_rests: bool,
+        include_oblique: bool,
+        include_no_motion: bool,
+        part_pairs: Option<&[(usize, usize)]>,
+    ) -> Result<Vec<VoiceLeadingQuartet>> {
+        let mut quartets = Vec::new();
+        for spans in self.voice_leading_timespans(
+            include_rests,
+            include_oblique,
+            include_no_motion,
+            part_pairs,
+        )? {
+            let pitches: Vec<Pitch> = spans
+                .iter()
+                .filter_map(|span| match span.element {
+                    StreamElement::Note(note) => Some(note.pitch().clone()),
+                    _ => None,
+                })
+                .collect();
+            if let [v1n1, v1n2, v2n1, v2n2] = pitches.as_slice() {
+                quartets.push(VoiceLeadingQuartet::new(
+                    v1n1.clone(),
+                    v1n2.clone(),
+                    v2n1.clone(),
+                    v2n2.clone(),
+                )?);
+            }
+        }
+        Ok(quartets)
+    }
+
+    /// A chord of every pitch sounding here, lasting `length` or, without
+    /// one, until the next start -- a quarter where nothing follows -- or a
+    /// rest where nothing sounds: music21's `makeElement`. With
+    /// `add_ties`, a note begun before or going on after is tied; with
+    /// `remove_redundant_pitches`, a pitch two timespans sound is one note.
+    ///
+    /// # Errors
+    ///
+    /// A length no duration can have, or a chord symbol whose pitches
+    /// cannot be worked out.
+    pub fn make_element(
+        &self,
+        length: Option<FloatType>,
+        add_ties: bool,
+        remove_redundant_pitches: bool,
+    ) -> Result<StreamElement> {
+        let length = match length {
+            Some(length) => op_frac(length),
+            None => self.time_to_next_event().unwrap_or(1.0),
+        };
+        let spans: Vec<crate::stream::chordify::Span<'a>> = self
+            .start_and_overlap_timespans()
+            .into_iter()
+            .filter(|span| span.pitched)
+            .map(|span| crate::stream::chordify::Span {
+                start: span.offset,
+                end: span.end_time,
+                element: span.element,
+                part: 0,
+            })
+            .collect();
+        let options = crate::stream::ChordifyOptions {
+            add_ties,
+            remove_redundant_pitches,
+            to_sounding_pitch: false,
+        };
+        crate::stream::chordify::make_element(&spans, self.offset, length, &options)
+    }
+
     /// The next offset a timespan starts at: music21's `nextStartOffset`.
     pub fn next_start_offset(&self) -> Option<FloatType> {
         self.tree.position_after(self.offset)
@@ -578,6 +877,128 @@ impl<'t, 'a> Verticality<'t, 'a> {
         let next = self.next_start_offset().or_else(|| self.tree.end_time())?;
         Some(op_frac(next - self.offset))
     }
+}
+
+/// Each part's timespans across a run of verticalities -- those sounding
+/// across or starting at the first, then those starting at the rest --
+/// part by part in the order first met: music21's
+/// `VerticalitySequence.unwrap`.
+pub fn unwrap<'t, 'a>(
+    verticalities: &[Verticality<'t, 'a>],
+) -> Vec<(Option<&'a Stream>, Horizontality<'t, 'a>)> {
+    let Some((first, rest)) = verticalities.split_first() else {
+        return Vec::new();
+    };
+    let mut parts: Vec<(Option<&'a Stream>, Vec<&'t ElementTimespan<'a>>)> = Vec::new();
+    let spans = first
+        .overlap_timespans
+        .iter()
+        .chain(&first.start_timespans)
+        .chain(
+            rest.iter()
+                .flat_map(|verticality| &verticality.start_timespans),
+        );
+    for &span in spans {
+        let part = span.part();
+        match parts
+            .iter_mut()
+            .find(|(known, _)| same_stream(*known, part))
+        {
+            Some((_, spans)) => spans.push(span),
+            None => parts.push((part, vec![span])),
+        }
+    }
+    parts
+        .into_iter()
+        .map(|(part, timespans)| (part, Horizontality { timespans }))
+        .collect()
+}
+
+/// One part's timespans one after another: music21's `Horizontality`.
+#[derive(Clone, Debug)]
+pub struct Horizontality<'t, 'a> {
+    timespans: Vec<&'t ElementTimespan<'a>>,
+}
+
+impl<'t, 'a> Horizontality<'t, 'a> {
+    /// The timespans, in order.
+    pub fn timespans(&self) -> &[&'t ElementTimespan<'a>] {
+        &self.timespans
+    }
+
+    /// The first pitch of each of the first three, where there are three
+    /// and every timespan has a pitch, as music21 asks.
+    fn first_three(&self) -> Option<[Pitch; 3]> {
+        if self.timespans.len() < 3 || self.timespans.iter().any(|span| span.pitches().is_empty()) {
+            return None;
+        }
+        let firsts: Vec<Pitch> = self
+            .timespans
+            .iter()
+            .take(3)
+            .map(|span| span.pitches().into_iter().next())
+            .collect::<Option<_>>()?;
+        Some([firsts[0].clone(), firsts[1].clone(), firsts[2].clone()])
+    }
+
+    /// Whether the first pitches of the first three rise all the way or
+    /// fall all the way: music21's `hasPassingTone`.
+    pub fn has_passing_tone(&self) -> bool {
+        self.first_three().is_some_and(|[a, b, c]| {
+            (a.ps() < b.ps() && b.ps() < c.ps()) || (a.ps() > b.ps() && b.ps() > c.ps())
+        })
+    }
+
+    /// Whether the first and third of the first three are the same pitch and
+    /// the second is less than three semitones from them: music21's
+    /// `hasNeighborTone`.
+    pub fn has_neighbor_tone(&self) -> bool {
+        self.first_three()
+            .is_some_and(|[a, b, c]| a == c && (b.ps() - a.ps()).abs() < 3.0)
+    }
+
+    /// Whether every timespan sounds the same pitches, written alike:
+    /// music21's `hasNoMotion`. music21 gathers the pitches in a set, which
+    /// tells apart pitches equal but for how their accidentals are shown or
+    /// whether their spelling was worked out, so this does too.
+    pub fn has_no_motion(&self) -> bool {
+        let mut seen: Vec<Vec<String>> = Vec::new();
+        for span in &self.timespans {
+            let keys: Vec<String> = span.pitches().iter().map(set_key).collect();
+            if !seen.contains(&keys) {
+                seen.push(keys);
+            }
+        }
+        seen.len() == 1
+    }
+}
+
+/// What tells two pitches apart in music21's sets of them: what its
+/// `Pitch.__hash__` reads -- the accidental and how it is shown, the
+/// fundamental, whether the spelling was worked out, the microtone, octave
+/// and step.
+fn set_key(pitch: &Pitch) -> String {
+    let accidental = pitch.written_accidental().map(|accidental| {
+        format!(
+            "{}|{:?}|{}|{}|{}|{}|{}|{}",
+            accidental.alter(),
+            accidental.display_status(),
+            accidental.display_type(),
+            accidental.modifier(),
+            accidental.name(),
+            accidental.display_location(),
+            accidental.display_size(),
+            accidental.display_style()
+        )
+    });
+    format!(
+        "{accidental:?}|{:?}|{}|{:?}|{:?}|{}",
+        pitch.fundamental().map(set_key),
+        pitch.spelling_is_inferred(),
+        pitch.microtone().map(|microtone| microtone.cents()),
+        pitch.octave(),
+        pitch.name_with_octave()
+    )
 }
 
 #[cfg(test)]
