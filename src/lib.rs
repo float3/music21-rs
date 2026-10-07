@@ -126,6 +126,8 @@ pub mod roman;
 pub mod romantext;
 /// Public scale helpers.
 pub mod scale;
+/// Finding music in streams: lyrics as text.
+pub mod search;
 /// Tone rows, twelve-tone matrices and serial transformations.
 pub mod serial;
 pub mod sieve;
