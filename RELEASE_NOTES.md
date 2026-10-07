@@ -83,6 +83,8 @@ are tunes whose own reading cannot be written back.
   transformed, or as multisets, transposed or inverted -- and labels them
   in a copy of the stream with a line and a lyric, as music21's
   `search.serial` does.
+- `ChordSymbol` carries lyrics, as music21's does, with `lyrics`,
+  `lyrics_mut` and `add_lyric`.
 - `analysis::windowed::WindowedAnalysis` cuts a stream into windows of a
   quarter note and runs any analysis over windows of each size, overlapping,
   side by side or averaged, as music21's `WindowedAnalysis` does; and

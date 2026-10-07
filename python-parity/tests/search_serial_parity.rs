@@ -236,6 +236,10 @@ fn labelled(result: music21_rs::Result<Stream>) -> Labelled {
                     StreamElement::Chord(chord) => {
                         Some(chord.lyrics().iter().map(|lyric| lyric.text()).collect())
                     }
+                    // A chord symbol is a chord to music21.
+                    StreamElement::ChordSymbol(symbol) => {
+                        Some(symbol.lyrics().iter().map(|lyric| lyric.text()).collect())
+                    }
                     _ => None,
                 })
                 .collect();

@@ -308,7 +308,7 @@ impl ContiguousSegmentSearcher {
                             include_all_exclude(&mut walk, note);
                         }
                     }
-                    (false, Repetitions::RowsOnly) => rows_only_exclude(&mut walk, note),
+                    (false, Repetitions::RowsOnly) => rows_only_exclude(&mut walk, note)?,
                     (false, Repetitions::IncludeAll) => include_all_exclude(&mut walk, note),
                     (false, Repetitions::IgnoreAll) => {
                         ignore_all_exclude(&mut walk, note, self.trim_to_shortest_length_fast);
@@ -456,21 +456,28 @@ fn ignore_all_include<'a>(walk: &mut Walk<'a>, note: SegmentNote<'a>, trim: bool
     Ok(())
 }
 
-/// music21's `searchRowsOnlyExclude`.
-fn rows_only_exclude<'a>(walk: &mut Walk<'a>, note: SegmentNote<'a>) {
+/// music21's `searchRowsOnlyExclude`, which reads the `pitch` of what is
+/// left once chords are passed over, and so refuses anything but a note.
+fn rows_only_exclude<'a>(walk: &mut Walk<'a>, note: SegmentNote<'a>) -> Result<()> {
     if count(&note) > 1 {
         walk.chords.clear();
-        return;
+        return Ok(());
     }
     if walk.chords.len() == walk.length && !walk.chords.is_empty() {
         walk.chords.remove(0);
     }
-    let class = pitches_of(note.element).first().map(pitch_class);
-    let existing: Vec<Option<u8>> = walk
+    let pitch_of = |element: &StreamElement| match element {
+        StreamElement::Note(note) => Ok(pitch_class(note.pitch())),
+        _ => Err(Error::Search(
+            "only a note has a single pitch to read".to_string(),
+        )),
+    };
+    let class = pitch_of(note.element)?;
+    let existing = walk
         .chords
         .iter()
-        .map(|old| pitches_of(old.element).first().map(pitch_class))
-        .collect();
+        .map(|old| pitch_of(old.element))
+        .collect::<Result<Vec<u8>>>()?;
     if existing.contains(&class) {
         walk.chords = vec![note];
     } else {
@@ -480,6 +487,7 @@ fn rows_only_exclude<'a>(walk: &mut Walk<'a>, note: SegmentNote<'a>) {
         let notes = walk.chords.clone();
         walk.add(notes);
     }
+    Ok(())
 }
 
 /// music21's `searchRowsOnlyInclude`.
@@ -909,6 +917,7 @@ impl SegmentMatcher {
                     let lyrics = match element {
                         StreamElement::Note(note) => Some(note.lyrics().to_vec()),
                         StreamElement::Chord(chord) => Some(chord.lyrics().to_vec()),
+                        StreamElement::ChordSymbol(symbol) => Some(symbol.lyrics().to_vec()),
                         _ => None,
                     };
                     let present = lyrics
@@ -917,6 +926,10 @@ impl SegmentMatcher {
                         result = match element {
                             StreamElement::Note(note) => note.add_lyric(&label, None, false),
                             StreamElement::Chord(chord) => chord.add_lyric(&label, None, false),
+                            StreamElement::ChordSymbol(symbol) => {
+                                symbol.add_lyric(&label, None, false);
+                                Ok(())
+                            }
                             _ => Ok(()),
                         };
                     }
