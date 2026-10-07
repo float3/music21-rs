@@ -43,12 +43,7 @@ fn the_crate_writes_musicxml_as_music21_does() {
         )?;
         let corpus = py.import("music21.corpus")?;
         let exporter = py.import("music21.musicxml.m21ToXml")?;
-        let today: String = py
-            .import("datetime")?
-            .getattr("date")?
-            .call_method0("today")?
-            .str()?
-            .extract()?;
+        let today = musicxml_common::pin_encoding_date(py)?;
 
         let chosen: Vec<String> = match std::env::var("MUSICXML_PARITY_SCORES") {
             Ok(list) => list

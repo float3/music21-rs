@@ -564,12 +564,7 @@ fn the_crate_makes_notation_as_music21_does() {
         let converter = py.import("music21.converter")?;
         let corpus = py.import("music21.corpus")?;
         let exporter = py.import("music21.musicxml.m21ToXml")?;
-        let today: String = py
-            .import("datetime")?
-            .getattr("date")?
-            .call_method0("today")?
-            .str()?
-            .extract()?;
+        let today = musicxml_common::pin_encoding_date(py)?;
         let version: String = py.import("music21")?.getattr("__version__")?.extract()?;
         let software = format!("music21 v.{version}");
 

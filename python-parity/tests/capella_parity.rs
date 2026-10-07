@@ -183,12 +183,7 @@ fn the_crate_reads_capella_as_music21_does() {
         let music21 = module(MUSIC21, "capella_parity_music21")?;
         let helpers = module(STRIP_LAYOUT, "capella_parity_helpers")?;
         let outlines = module(OUTLINE, "capella_parity_outline")?;
-        let today: String = py
-            .import("datetime")?
-            .getattr("date")?
-            .call_method0("today")?
-            .str()?
-            .extract()?;
+        let today = musicxml_common::pin_encoding_date(py)?;
         let version: String = py.import("music21")?.getattr("__version__")?.extract()?;
         let options = ExportOptions {
             encoding_date: Some(today),
