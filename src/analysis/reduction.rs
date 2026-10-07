@@ -6,7 +6,8 @@
 //! puts it in the fifth octave with a hollow notehead and the text `3`
 //! above, in the part for the group `Ursatz`. A [`ScoreReduction`] gathers
 //! every note so marked into parts of their own, above the score with the
-//! marks taken out of its lyrics.
+//! marks taken out of its lyrics. A [`PartReduction`] answers when, and how
+//! loudly, each part or group of parts plays.
 //!
 //! ```
 //! use music21_rs::analysis::reduction::ScoreReduction;
@@ -676,6 +677,578 @@ fn fill_gaps(voice: &mut Stream) -> Result<()> {
     Ok(())
 }
 
+/// A group of a score's parts drawn as one: music21's `partGroups` entry.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct PartGroup {
+    /// The group's name, which is also its id in what is drawn.
+    pub name: String,
+    /// The colour the group is drawn in.
+    pub color: String,
+    /// What a part's id must hold, ignoring case, for the part to be in the
+    /// group: the name where nothing is given. music21 also reads each as a
+    /// regular expression matched at the start of the id, which for a name
+    /// without pattern characters says nothing more; patterns are not read.
+    pub matches: Option<Vec<String>>,
+}
+
+/// When and how loudly each part, or group of parts, of a score plays:
+/// music21's `PartReduction`, whose `getGraphHorizontalBarWeightedData`
+/// [`PartReduction::weighted_spans`] answers.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct PartReduction {
+    /// The groups drawn, or each part on its own where there are none.
+    pub part_groups: Option<Vec<PartGroup>>,
+    /// Whether a part plays the whole of each measure it has a note in,
+    /// rather than each run of notes: music21's `fillByMeasure`. A score
+    /// with a part holding no measures is read by its runs of notes.
+    pub fill_by_measure: bool,
+    /// Whether each stretch is cut where a dynamic changes, each piece as
+    /// loud as its dynamic: music21's `segmentByTarget`.
+    pub segment_by_target: bool,
+    /// Whether the weights are scaled so the loudest is one: music21's
+    /// `normalize`.
+    pub normalize: bool,
+    /// Whether each part's loudest is one, rather than the score's:
+    /// music21's `normalizeByPart`.
+    pub normalize_by_part: bool,
+}
+
+impl Default for PartReduction {
+    fn default() -> Self {
+        Self {
+            part_groups: None,
+            fill_by_measure: true,
+            segment_by_target: true,
+            normalize: true,
+            normalize_by_part: false,
+        }
+    }
+}
+
+/// A stretch of a part's playing, and how loud: one bar of music21's
+/// weighted horizontal bar graph.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct WeightedSpan {
+    /// Where the stretch starts, in quarter lengths from the score's start.
+    pub start: FloatType,
+    /// How long it lasts.
+    pub span: FloatType,
+    /// How loud it is.
+    pub weight: FloatType,
+    /// The colour it is drawn in.
+    pub color: String,
+}
+
+/// A part, or a group of parts, and the stretches it plays.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct PartActivity {
+    /// The group's name, or the part's id.
+    pub id: Option<String>,
+    /// The stretches it plays, in order.
+    pub spans: Vec<WeightedSpan>,
+}
+
+/// A stretch being weighed: music21's `ds` dictionaries.
+#[derive(Clone, Debug)]
+struct Stretch {
+    start: FloatType,
+    span: FloatType,
+    weight: Option<FloatType>,
+    color: String,
+}
+
+/// An element of a group's flattened parts, with which part and leaf it is.
+struct Flat {
+    offset: FloatType,
+    element: StreamElement,
+    part: usize,
+    leaf: usize,
+}
+
+/// music21 divides the summed loudness by the length of the class name it
+/// looks for, `'Dynamic'`, rather than by how many dynamics there are.
+const DYNAMIC_NAME_LENGTH: FloatType = 7.0;
+
+/// The weight a stretch takes when nothing has said one: music21's
+/// `minValue`.
+const MIN_WEIGHT: FloatType = 0.01;
+
+impl PartReduction {
+    /// Each group's stretches of playing and their weights: music21's
+    /// `process` and `getGraphHorizontalBarWeightedData`.
+    ///
+    /// Each stretch is a measure with a note in it, from its start for its
+    /// bar's length, or a run of notes. Its weight is the loudness of the
+    /// dynamics starting in it, summed and divided by seven as music21
+    /// divides it; cut by dynamic, each piece from a dynamic to the next,
+    /// with the stretch before the first dynamic left out where that
+    /// dynamic starts later, as music21 leaves it. A stretch with no
+    /// dynamic takes the weight of the last that had one, and the first,
+    /// with none before it, a hundredth. music21 lengthens each dynamic it
+    /// cuts by to reach the next as it goes, and a later stretch, or group,
+    /// reads those lengths; so does this. Groups, or parts, of one id share
+    /// their stretches, as music21 keeps them by id: each is cut, weighed
+    /// and normalized again, and each answers the same stretches.
+    ///
+    /// # Errors
+    ///
+    /// A stream that is not a score, a group's parts with fewer measures
+    /// than its first, or notes whose runs cannot be found.
+    pub fn weighted_spans(&self, score: &Stream) -> Result<Vec<PartActivity>> {
+        if score.kind() != StreamKind::Score {
+            return Err(Error::Analysis("provided Stream must be Score".to_string()));
+        }
+        let parts = score.parts();
+        let fill_by_measure =
+            self.fill_by_measure && parts.iter().all(|part| !part.measures().is_empty());
+        // Each group's id, colour and parts, by index.
+        let mut bundles: Vec<(Option<String>, String, Vec<usize>)> = Vec::new();
+        match &self.part_groups {
+            Some(groups) => {
+                for group in groups {
+                    let names = group
+                        .matches
+                        .clone()
+                        .unwrap_or_else(|| vec![group.name.clone()]);
+                    let held: Vec<usize> = parts
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, part)| {
+                            let id = part.id().unwrap_or_default().to_lowercase();
+                            names.iter().any(|name| id.contains(&name.to_lowercase()))
+                        })
+                        .map(|(index, _)| index)
+                        .collect();
+                    if !held.is_empty() {
+                        bundles.push((Some(group.name.clone()), group.color.clone(), held));
+                    }
+                }
+            }
+            None => {
+                for (index, part) in parts.iter().enumerate() {
+                    bundles.push((
+                        part.id().map(str::to_string),
+                        "#666666".to_string(),
+                        vec![index],
+                    ));
+                }
+            }
+        }
+        // The length of every leaf of every part, as music21 lengthens the
+        // dynamics.
+        let mut lengths: Vec<Vec<FloatType>> = parts
+            .iter()
+            .map(|part| {
+                part.leaves()
+                    .iter()
+                    .map(|(_, element)| element.quarter_length())
+                    .collect()
+            })
+            .collect();
+
+        // music21 keeps each group's stretches under its id, so groups of
+        // one id share them: each works on, and reads back, the same list.
+        // A part with no id has one of its own there.
+        let keys: Vec<Result<String, usize>> = bundles
+            .iter()
+            .enumerate()
+            .map(|(index, (id, _, _))| id.clone().ok_or(index))
+            .collect();
+        let mut kept: Vec<(Result<String, usize>, Vec<Stretch>)> = Vec::new();
+        let slot = |kept: &[(Result<String, usize>, Vec<Stretch>)], key: &Result<String, usize>| {
+            kept.iter().position(|(known, _)| known == key)
+        };
+        let flats: Vec<Vec<Flat>> = bundles
+            .iter()
+            .map(|(_, _, held)| flatten_parts(&parts, held))
+            .collect();
+        for (((_, color, held), key), flat) in bundles.iter().zip(&keys).zip(&flats) {
+            let mut stretches = if fill_by_measure {
+                measure_stretches(&parts, held)?
+            } else {
+                run_stretches(flat)?
+            };
+            for stretch in &mut stretches {
+                stretch.color = color.clone();
+            }
+            match slot(&kept, key) {
+                Some(index) => kept[index].1 = stretches,
+                None => kept.push((key.clone(), stretches)),
+            }
+        }
+        for (key, flat) in keys.iter().zip(&flats) {
+            let index = slot(&kept, key).expect("every group has stretches");
+            if self.segment_by_target {
+                kept[index].1 = split_by_dynamics(&kept[index].1, flat, &mut lengths);
+            } else {
+                for stretch in &mut kept[index].1 {
+                    let end = op_frac(stretch.start + stretch.span);
+                    let loudness: Vec<FloatType> = flat
+                        .iter()
+                        .filter(|item| {
+                            in_range(
+                                item.offset,
+                                lengths[item.part][item.leaf],
+                                stretch.start,
+                                end,
+                                false,
+                            )
+                        })
+                        .filter_map(|item| match &item.element {
+                            StreamElement::Dynamic(dynamic) => Some(dynamic.volume_scalar()),
+                            _ => None,
+                        })
+                        .collect();
+                    stretch.weight = (!loudness.is_empty())
+                        .then(|| loudness.iter().sum::<FloatType>() / DYNAMIC_NAME_LENGTH);
+                }
+            }
+        }
+        for key in &keys {
+            let index = slot(&kept, key).expect("every group has stretches");
+            extend_weights(&mut kept[index].1);
+        }
+        if self.normalize {
+            let maxima: Vec<FloatType> = kept
+                .iter()
+                .map(|(_, stretches)| {
+                    stretches
+                        .iter()
+                        .filter_map(|stretch| stretch.weight)
+                        .fold(0.0, |max, weight| if weight > max { weight } else { max })
+                })
+                .collect();
+            let overall = maxima.iter().copied().fold(0.0, FloatType::max);
+            for key in &keys {
+                let index = slot(&kept, key).expect("every group has stretches");
+                let best = if self.normalize_by_part {
+                    maxima[index]
+                } else {
+                    overall
+                };
+                for stretch in &mut kept[index].1 {
+                    stretch.weight = Some(if best != 0.0 {
+                        stretch.weight.unwrap_or_default() / best
+                    } else {
+                        1.0
+                    });
+                }
+            }
+        }
+        Ok(bundles
+            .into_iter()
+            .zip(&keys)
+            .map(|((id, _, _), key)| {
+                let index = slot(&kept, key).expect("every group has stretches");
+                PartActivity {
+                    id,
+                    spans: kept[index]
+                        .1
+                        .iter()
+                        .map(|stretch| WeightedSpan {
+                            start: stretch.start,
+                            span: stretch.span,
+                            weight: stretch.weight.unwrap_or_default(),
+                            color: stretch.color.clone(),
+                        })
+                        .collect(),
+                }
+            })
+            .collect())
+    }
+}
+
+/// A group's parts flattened together, as music21 flattens a stream holding
+/// them: by offset, class and grace, and otherwise in the order met.
+fn flatten_parts(parts: &[&Stream], held: &[usize]) -> Vec<Flat> {
+    let mut flat: Vec<Flat> = Vec::new();
+    for &part in held {
+        for (leaf, (offset, element)) in parts[part].leaves().into_iter().enumerate() {
+            flat.push(Flat {
+                offset,
+                element: element.clone(),
+                part,
+                leaf,
+            });
+        }
+    }
+    let grace = |element: &StreamElement| element.duration().is_some_and(Duration::is_grace);
+    flat.sort_by(|left, right| {
+        left.offset
+            .partial_cmp(&right.offset)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| {
+                left.element
+                    .class_sort_order()
+                    .cmp(&right.element.class_sort_order())
+            })
+            .then_with(|| grace(&right.element).cmp(&grace(&left.element)))
+    });
+    flat
+}
+
+/// The meter a measure opens with: music21's `timeSignature`.
+fn meter_in(measure: &Stream) -> Option<crate::meter::TimeSignature> {
+    measure
+        .events()
+        .iter()
+        .find_map(|event| match event.element() {
+            StreamElement::TimeSignature(meter) if event.offset() == 0.0 => Some(meter.clone()),
+            _ => None,
+        })
+}
+
+/// A stretch for each measure of the group's first part in which any of
+/// its parts has a note directly, as long as the measure's bar: music21's
+/// `fillByMeasure`.
+fn measure_stretches(parts: &[&Stream], held: &[usize]) -> Result<Vec<Stretch>> {
+    let measured: Vec<Vec<(FloatType, &Stream)>> = held
+        .iter()
+        .map(|&part| {
+            parts[part]
+                .events()
+                .iter()
+                .filter_map(|event| match event.element() {
+                    StreamElement::Stream(measure) if measure.kind() == StreamKind::Measure => {
+                        Some((op_frac(event.offset()), &**measure))
+                    }
+                    _ => None,
+                })
+                .collect()
+        })
+        .collect();
+    let first = parts[held[0]];
+    let loose: Vec<(FloatType, crate::meter::TimeSignature)> = first
+        .events()
+        .iter()
+        .filter_map(|event| match event.element() {
+            StreamElement::TimeSignature(meter) => Some((event.offset(), meter.clone())),
+            _ => None,
+        })
+        .collect();
+    let mut meter: Option<crate::meter::TimeSignature> = None;
+    let mut stretches = Vec::new();
+    for (index, (offset, measure)) in measured[0].iter().enumerate() {
+        if let Some(own) = meter_in(measure) {
+            meter = Some(own);
+        }
+        let mut active = false;
+        for part in &measured {
+            let (_, other) = part
+                .get(index)
+                .ok_or_else(|| Error::Analysis("index out of range".to_string()))?;
+            if other.events().iter().any(|event| is_note(event.element())) {
+                active = true;
+                break;
+            }
+        }
+        if !active {
+            continue;
+        }
+        // music21's `barDuration`: the measure's meter or the one standing
+        // before it, else the meter that fits what it holds, else what it
+        // holds.
+        let bar = match &meter {
+            Some(meter) => meter.bar_quarter_length(),
+            None => match loose.iter().rev().find(|(at, _)| at < offset) {
+                Some((_, meter)) => meter.bar_quarter_length(),
+                None => crate::meter::best_time_signature(measure)
+                    .map_or_else(|_| measure.end_offset(), |meter| meter.bar_quarter_length()),
+            },
+        };
+        stretches.push(Stretch {
+            start: op_frac(*offset),
+            span: op_frac(op_frac(*offset + bar) - *offset),
+            weight: None,
+            color: String::new(),
+        });
+    }
+    Ok(stretches)
+}
+
+/// A stretch for each run of consecutive notes of the flattened parts,
+/// from the first note's start to the last's end: music21's stretches when
+/// not filling by measure.
+fn run_stretches(flat: &[Flat]) -> Result<Vec<Stretch>> {
+    let stream = Stream::from_events(
+        flat.iter()
+            .map(|item| StreamEvent::new(item.offset, item.element.clone())),
+    );
+    let found = stream.find_consecutive_notes(&crate::stream::ConsecutiveOptions::default())?;
+    let leaves = stream.leaves();
+    let place = |index: usize| {
+        let (offset, element) = leaves[index];
+        (offset, element.quarter_length())
+    };
+    let mut stretches = Vec::new();
+    let mut start: Option<FloatType> = None;
+    let mut last: Option<usize> = None;
+    let count = found.len();
+    for (position, entry) in found.into_iter().enumerate() {
+        match entry {
+            None => {
+                let Some(begun) = start else {
+                    continue;
+                };
+                let (offset, length) = place(last.expect("a run has a last note"));
+                let end = op_frac(offset + length);
+                stretches.push(Stretch {
+                    start: begun,
+                    span: op_frac(end - begun),
+                    weight: None,
+                    color: String::new(),
+                });
+                start = None;
+            }
+            Some(index) if position + 1 >= count => {
+                let (offset, length) = place(index);
+                let begun = start.unwrap_or(offset);
+                let end = op_frac(offset + length);
+                stretches.push(Stretch {
+                    start: begun,
+                    span: op_frac(end - begun),
+                    weight: None,
+                    color: String::new(),
+                });
+                start = None;
+            }
+            Some(index) => {
+                if start.is_none() {
+                    start = Some(place(index).0);
+                }
+                last = Some(index);
+            }
+        }
+    }
+    Ok(stretches)
+}
+
+/// Whether music21's `getElementsByOffset` finds an element at `offset`
+/// lasting `length` between `start` and `end`, the element starting in
+/// the span and the end itself counted only with `include_end`.
+fn in_range(
+    offset: FloatType,
+    length: FloatType,
+    start: FloatType,
+    end: FloatType,
+    include_end: bool,
+) -> bool {
+    if offset > end {
+        return false;
+    }
+    if op_frac(offset + length) < start {
+        return false;
+    }
+    if end <= start && length == 0.0 {
+        return true;
+    }
+    if offset < start {
+        return false;
+    }
+    include_end || offset != end
+}
+
+/// Each stretch cut at its dynamics, each piece as loud as its dynamic,
+/// the dynamics lengthened to reach the next as music21 lengthens them.
+fn split_by_dynamics(
+    stretches: &[Stretch],
+    flat: &[Flat],
+    lengths: &mut [Vec<FloatType>],
+) -> Vec<Stretch> {
+    let mut cut = Vec::new();
+    for stretch in stretches {
+        let end = op_frac(stretch.start + stretch.span);
+        let dynamics: Vec<&Flat> = flat
+            .iter()
+            .filter(|item| matches!(item.element, StreamElement::Dynamic(_)))
+            .filter(|item| {
+                in_range(
+                    item.offset,
+                    lengths[item.part][item.leaf],
+                    stretch.start,
+                    end,
+                    true,
+                )
+            })
+            .collect();
+        if dynamics.is_empty() {
+            cut.push(stretch.clone());
+            continue;
+        }
+        // music21's `extendDuration`: each dynamic lasts to the next, the
+        // last to where the latest of them ends.
+        let total = dynamics
+            .iter()
+            .map(|item| op_frac(item.offset + lengths[item.part][item.leaf]))
+            .fold(0.0, FloatType::max);
+        for (index, item) in dynamics.iter().enumerate() {
+            let length = match dynamics.get(index + 1) {
+                Some(next) => op_frac(next.offset - item.offset),
+                None => op_frac(total - item.offset),
+            };
+            lengths[item.part][item.leaf] = length;
+        }
+        for (index, item) in dynamics.iter().enumerate() {
+            let StreamElement::Dynamic(dynamic) = &item.element else {
+                continue;
+            };
+            let mut span = lengths[item.part][item.leaf];
+            if op_frac(item.offset + span) > end {
+                span = op_frac(end - item.offset);
+            }
+            if span <= 0.001 {
+                span = op_frac(end - item.offset);
+            }
+            let weight = Some(dynamic.volume_scalar() / DYNAMIC_NAME_LENGTH);
+            if index == 0 && stretch.start == item.offset {
+                cut.push(Stretch {
+                    start: stretch.start,
+                    span,
+                    weight,
+                    color: stretch.color.clone(),
+                });
+            } else {
+                cut.push(Stretch {
+                    start: item.offset,
+                    span,
+                    weight,
+                    color: stretch.color.clone(),
+                });
+            }
+        }
+    }
+    cut
+}
+
+/// Gives each stretch with no weight the last weight before it, and the
+/// first, or any with none before, the least: music21's `_extendSpans`.
+fn extend_weights(stretches: &mut [Stretch]) {
+    let mut last: Option<FloatType> = None;
+    for (index, stretch) in stretches.iter_mut().enumerate() {
+        if index == 0 {
+            match stretch.weight {
+                None => stretch.weight = Some(MIN_WEIGHT),
+                Some(weight) => last = Some(weight),
+            }
+            continue;
+        }
+        match stretch.weight {
+            Some(weight) if weight != 0.0 => last = Some(weight),
+            weight => {
+                if let Some(previous) = last.filter(|previous| *previous != 0.0) {
+                    stretch.weight = Some(previous);
+                } else if weight.is_none() && last.is_none() {
+                    stretch.weight = Some(MIN_WEIGHT);
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -721,6 +1294,59 @@ mod tests {
                 .pitch()
                 .name_with_octave(),
             "C4"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn parts_are_weighed_by_their_dynamics() -> Result<()> {
+        // music21's testPartReductionC: two parts of the same notes, their
+        // dynamics in different places, weighed without normalizing.
+        let mut score = Stream::with_kind(StreamKind::Score);
+        let placed = [
+            [(0.0, "p"), (2.0, "fff"), (6.0, "ppp")],
+            [(0.0, "p"), (1.0, "fff"), (2.0, "ppp")],
+        ];
+        for (id, dynamics) in placed.iter().enumerate() {
+            let mut part = Stream::with_kind(StreamKind::Part);
+            part.set_id(Some(id.to_string()));
+            for length in [1.0, 2.0, 1.0, 4.0] {
+                part.push(Note::from_name("C4")?.with_duration(Duration::new(length)?));
+            }
+            for (offset, mark) in dynamics {
+                part.insert(*offset, crate::dynamics::Dynamic::new(*mark));
+            }
+            score.insert(0.0, part);
+        }
+        let reduction = PartReduction {
+            normalize: false,
+            ..PartReduction::default()
+        };
+        let spans: Vec<Vec<(FloatType, FloatType, FloatType)>> = reduction
+            .weighted_spans(&score)?
+            .into_iter()
+            .map(|activity| {
+                activity
+                    .spans
+                    .into_iter()
+                    .map(|span| (span.start, span.span, (span.weight * 1e9).round() / 1e9))
+                    .collect()
+            })
+            .collect();
+        assert_eq!(
+            spans,
+            [
+                vec![
+                    (0.0, 2.0, 0.05),
+                    (2.0, 4.0, 0.128571429),
+                    (6.0, 2.0, 0.021428571)
+                ],
+                vec![
+                    (0.0, 1.0, 0.05),
+                    (1.0, 1.0, 0.128571429),
+                    (2.0, 6.0, 0.021428571)
+                ],
+            ]
         );
         Ok(())
     }

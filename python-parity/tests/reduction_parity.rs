@@ -1,5 +1,5 @@
-//! The crate's score reductions against music21's:
-//! `analysis.reduction.ScoreReduction`.
+//! The crate's score and part reductions against music21's:
+//! `analysis.reduction.ScoreReduction` and `PartReduction`.
 //!
 //! The text of each corpus score is read by music21 and by `from_musicxml`
 //! (which `musicxml_read_parity` holds to music21's reader). Every fifth
@@ -11,14 +11,17 @@
 //! made for a group its streams, notes, chords, rests and text expressions
 //! with their offsets, lengths, pitches, lyrics, stems, notehead fills,
 //! shown accidentals and hidden rests, and in each part of the score the
-//! lyrics left on its notes. Clefs, instruments and the like stand where
-//! each reader puts them, which is `musicxml_read_parity`'s to compare.
-//! `REDUCTION_PARITY_SCORES`, a `;`-separated list of corpus names, runs
-//! those instead of the writer test's scores, which is how the corpus is
-//! swept.
+//! lyrics left on its notes. Each score's parts are also weighed by
+//! `PartReduction` -- by measure and by run of notes, cut by dynamic or
+//! not, normalized over the score, by part or not at all, and in groups
+//! named by the parts' ids -- and each group's spans must be music21's.
+//! Clefs, instruments and the like stand where each reader puts them,
+//! which is `musicxml_read_parity`'s to compare. `REDUCTION_PARITY_SCORES`,
+//! a `;`-separated list of corpus names, runs those instead of the writer
+//! test's scores, which is how the corpus is swept.
 
 use music21_rs::FloatType;
-use music21_rs::analysis::reduction::ScoreReduction;
+use music21_rs::analysis::reduction::{PartGroup, PartReduction, ScoreReduction};
 use music21_rs::musicxml::from_musicxml;
 use music21_rs::notation::Lyric;
 use music21_rs::stream::{Stream, StreamElement, StreamKind};
@@ -30,6 +33,7 @@ mod musicxml_common;
 use musicxml_common::SCORES;
 
 const MUSIC21: &str = r#"
+import copy
 import zipfile
 from music21 import converter, corpus, note, chord, harmony, percussion, stream, expressions
 from music21.analysis import reduction
@@ -122,6 +126,30 @@ def lyrics_left(part):
         if n.lyrics:
             out.append((i, [(ly.number, ly.text or '') for ly in n.lyrics]))
     return out
+
+def activity(text):
+    score = converter.parse(text, format='musicxml', forceSource=True)
+    ids = [str(p.id) for p in score.parts]
+    groups = [('first', '#ff0000', [ids[0][:3]] if ids else None),
+              ('staffs', '#00ff00', ['staff', 'p2']),
+              ('nothing', '#0000ff', ['zzzz']),
+              ('soprano', '#000000', None)]
+    variants = [{}, {'fillByMeasure': False}, {'segmentByTarget': False}, {'normalize': False},
+                {'normalizeByPart': True},
+                {'partGroups': [{'name': n, 'color': c, 'match': m} for n, c, m in groups]}]
+    out = []
+    for keywords in variants:
+        s = copy.deepcopy(score)
+        try:
+            pr = reduction.PartReduction(s, **keywords)
+            pr.process()
+            data = [(gid if isinstance(gid, str) else None,
+                     [(float(a), float(b), float(c), d) for a, b, c, d in spans])
+                    for gid, spans in pr.getGraphHorizontalBarWeightedData()]
+            out.append((data, ''))
+        except Exception as e:
+            out.append(([], type(e).__name__))
+    return (groups, out)
 
 def report(text):
     score = converter.parse(text, format='musicxml', forceSource=True)
@@ -486,6 +514,172 @@ fn the_crate_reduces_scores_as_music21_does() {
     .expect("the Python side runs");
 
     println!("{compared} scores compared");
+    assert!(
+        failures.is_empty(),
+        "{} differences:\n\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
+}
+
+type Spans = Vec<(
+    Option<String>,
+    Vec<(FloatType, FloatType, FloatType, String)>,
+)>;
+type Activity = (
+    Vec<(String, String, Option<Vec<String>>)>,
+    Vec<(Spans, String)>,
+);
+
+/// Whether two groups' spans are the same, their numbers to a billionth.
+fn spans_agree(ours: &Spans, theirs: &Spans) -> bool {
+    let close = |a: FloatType, b: FloatType| (a - b).abs() < 1e-9;
+    ours.len() == theirs.len()
+        && ours
+            .iter()
+            .zip(theirs)
+            .all(|((our_id, our_spans), (their_id, their_spans))| {
+                our_id == their_id
+                    && our_spans.len() == their_spans.len()
+                    && our_spans.iter().zip(their_spans).all(|(a, b)| {
+                        close(a.0, b.0) && close(a.1, b.1) && close(a.2, b.2) && a.3 == b.3
+                    })
+            })
+}
+
+#[test]
+fn the_crate_weighs_parts_as_music21_does() {
+    let root = repo_root();
+    std::env::set_current_dir(&root).expect("chdir to the repository root");
+    prepare().expect("prepare the music21 reference checkout");
+
+    let (failures, compared) = Python::attach(|py| -> PyResult<(Vec<String>, usize)> {
+        init_py(py)?;
+        add_dependency_venv(py, &root)?;
+        let music21 = PyModule::from_code(
+            py,
+            &std::ffi::CString::new(MUSIC21).expect("no nul in the helper"),
+            c"part_reduction_parity_music21.py",
+            c"part_reduction_parity_music21",
+        )?;
+        let mut failures = Vec::new();
+        let chosen: Vec<String> = match std::env::var("REDUCTION_PARITY_SCORES") {
+            Ok(list) => list
+                .split(';')
+                .map(str::trim)
+                .filter(|name| !name.is_empty())
+                .map(str::to_string)
+                .collect(),
+            Err(_) => SCORES
+                .iter()
+                .map(|(name, _)| name.to_string())
+                .filter(|name| !name.starts_with("built:"))
+                .collect(),
+        };
+        let mut compared = 0;
+        for name in &chosen {
+            let Some(text): Option<String> =
+                music21.getattr("source_text")?.call1((name,))?.extract()?
+            else {
+                continue;
+            };
+            let score = match from_musicxml(&text) {
+                Ok(score) => score,
+                Err(error) => {
+                    failures.push(format!("{name}: the crate could not read it: {error}"));
+                    continue;
+                }
+            };
+            let theirs: Activity = match music21.getattr("activity")?.call1((&text,)) {
+                Ok(report) => report.extract()?,
+                Err(error) => {
+                    failures.push(format!("{name}: music21 could not weigh it: {error}"));
+                    continue;
+                }
+            };
+            compared += 1;
+            let groups: Vec<PartGroup> = theirs
+                .0
+                .iter()
+                .map(|(name, color, matches)| PartGroup {
+                    name: name.clone(),
+                    color: color.clone(),
+                    matches: matches.clone(),
+                })
+                .collect();
+            let variants = [
+                PartReduction::default(),
+                PartReduction {
+                    fill_by_measure: false,
+                    ..PartReduction::default()
+                },
+                PartReduction {
+                    segment_by_target: false,
+                    ..PartReduction::default()
+                },
+                PartReduction {
+                    normalize: false,
+                    ..PartReduction::default()
+                },
+                PartReduction {
+                    normalize_by_part: true,
+                    ..PartReduction::default()
+                },
+                PartReduction {
+                    part_groups: Some(groups),
+                    ..PartReduction::default()
+                },
+            ];
+            for (index, (variant, (their_spans, their_error))) in
+                variants.iter().zip(&theirs.1).enumerate()
+            {
+                let (ours, error): (Spans, String) = match variant.weighted_spans(&score) {
+                    Ok(activity) => (
+                        activity
+                            .into_iter()
+                            .map(|part| {
+                                (
+                                    part.id,
+                                    part.spans
+                                        .into_iter()
+                                        .map(|span| {
+                                            (span.start, span.span, span.weight, span.color)
+                                        })
+                                        .collect(),
+                                )
+                            })
+                            .collect(),
+                        String::new(),
+                    ),
+                    Err(error) => (Vec::new(), error.to_string()),
+                };
+                if their_error.is_empty() != error.is_empty()
+                    || (error.is_empty() && !spans_agree(&ours, their_spans))
+                {
+                    let at = ours
+                        .iter()
+                        .zip(their_spans)
+                        .flat_map(|(a, b)| a.1.iter().zip(&b.1).map(move |(x, y)| (&a.0, x, y)))
+                        .find(|(_, x, y)| {
+                            (x.0 - y.0).abs() >= 1e-9
+                                || (x.1 - y.1).abs() >= 1e-9
+                                || (x.2 - y.2).abs() >= 1e-9
+                                || x.3 != y.3
+                        });
+                    failures.push(format!(
+                        "{name}: variant {index}: {their_error:?} {error:?}, {} groups and {} \
+                         in music21; first different span (group, music21-rs, music21): {at:?}",
+                        ours.len(),
+                        their_spans.len()
+                    ));
+                }
+            }
+        }
+        Ok((failures, compared))
+    })
+    .expect("the Python side runs");
+
+    println!("{compared} scores weighed");
     assert!(
         failures.is_empty(),
         "{} differences:\n\n{}",

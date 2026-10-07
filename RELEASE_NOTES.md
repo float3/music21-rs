@@ -99,9 +99,11 @@ are tunes whose own reading cannot be written back.
   `ReductiveNote` -- and `ScoreReduction` draws the marked notes of a score,
   and of a chord reduction, into a part for each group, their voices filled
   with hidden rests, above the score's parts with the marks taken out of
-  their lyrics. `Duration::set_dots` is music21's `dots` setter. Every
-  MusicXML score of music21's corpus, its notes marked, is reduced as
-  music21 reduces it.
+  their lyrics. `PartReduction` answers when, and how loudly, each part or
+  group of parts plays, by measure or by run of notes, weighed by its
+  dynamics, as music21's `PartReduction` does. `Duration::set_dots` is
+  music21's `dots` setter. Every MusicXML score of music21's corpus, its
+  notes marked, is reduced and weighed as music21 reduces and weighs it.
 - `ChordSymbol` carries lyrics, as music21's does, with `lyrics`,
   `lyrics_mut` and `add_lyric`.
 - `tablature` is music21's `tablature`: `FretNote`s on a `FretBoard` --
