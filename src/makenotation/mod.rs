@@ -26,13 +26,13 @@ use crate::stream::{Stream, StreamElement, StreamEvent, StreamKind};
 
 mod score;
 
-pub(crate) use score::make_part_notation_by;
 #[cfg(feature = "musicxml")]
 pub(crate) use score::{
     Kept, accidentals_made, for_each_measure, keeping_spanners, make_measure_notation,
     make_part_notation, tuplet_brackets_made,
 };
 pub use score::{make_notation, make_tuplet_brackets, split_at_durations};
+pub(crate) use score::{make_part_notation_by, make_part_notation_keeping_spanners};
 
 /// Beams the notes of every measure of a part by the meter in force, and
 /// points the stems of each beamed group one way: music21's `makeBeams`.

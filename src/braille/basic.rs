@@ -196,7 +196,11 @@ pub fn chord_to_braille(chord: &Chord, descending: bool, show_octave: bool) -> T
     };
     let length = chord.duration().map_or(1.0, Duration::quarter_length);
     let mut first = Note::from_pitch(base.clone());
-    if let Ok(duration) = Duration::new(length) {
+    // music21 makes the note with `quarterLength=` the chord's, which it
+    // passes over when nought, leaving a quarter.
+    if length != 0.0
+        && let Ok(duration) = Duration::new(length)
+    {
         first.set_duration(duration);
     }
     let written = note_to_braille(&first, show_octave, true, NoteContext::default());
@@ -438,7 +442,10 @@ pub fn metronome_mark_to_braille(mark: &MetronomeMark) -> Option<Transcription> 
     let number = mark.number()?;
     let mut english = Vec::new();
     let mut note = Note::from_pitch(Pitch::from_name("C4").expect("C4 is a pitch"));
-    if let Ok(duration) = Duration::new(mark.referent().quarter_length()) {
+    let length = mark.referent().quarter_length();
+    if length != 0.0
+        && let Ok(duration) = Duration::new(length)
+    {
         note.set_duration(duration);
     }
     let written = note_to_braille(&note, false, true, NoteContext::default());
