@@ -54,6 +54,7 @@ pub mod analysis;
 pub mod articulations;
 /// Barlines and repeat signs.
 pub mod bar;
+pub mod braille;
 pub mod capella;
 /// Chord construction, common-name analysis and chord input conversion traits.
 pub mod chord;

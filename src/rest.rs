@@ -32,6 +32,8 @@ pub struct Rest {
     size: Option<crate::notation::NoteSize>,
     #[cfg_attr(feature = "serde", serde(default))]
     tie: Option<crate::notation::Tie>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    full_measure: Option<bool>,
 }
 
 impl PartialEq for Rest {
@@ -52,7 +54,20 @@ impl Rest {
             step_shift: 0,
             size: None,
             tie: None,
+            full_measure: None,
         }
+    }
+
+    /// Whether the rest stands for the whole of its measure, however long
+    /// it is written: music21's `fullMeasure`, nothing for its `auto`. The
+    /// MusicXML reader says so where music21's does.
+    pub fn full_measure(&self) -> Option<bool> {
+        self.full_measure
+    }
+
+    /// Says whether the rest stands for the whole of its measure.
+    pub fn set_full_measure(&mut self, full_measure: Option<bool>) {
+        self.full_measure = full_measure;
     }
 
     /// This rest written as a grace note's value and lasting no time:
