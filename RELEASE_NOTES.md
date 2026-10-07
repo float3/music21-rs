@@ -71,6 +71,11 @@ are tunes whose own reading cannot be written back.
   and `score_similarity` compares every stretch of some scores with every
   stretch of the scores after it by `difflib`'s ratio. Every MusicXML
   score of music21's corpus segments and compares as music21's does.
+- `analysis::correlate::pitch_to_dynamic` pairs each pitch of a stream's
+  notes and chords with each dynamic it sounds under, as music21's
+  `ActivityMatch.pitchToDynamic` does, and `pitch_to_dynamic_counts`
+  counts the pairs. Every MusicXML score of music21's corpus pairs as
+  music21's does.
 - `analysis::windowed::WindowedAnalysis` cuts a stream into windows of a
   quarter note and runs any analysis over windows of each size, overlapping,
   side by side or averaged, as music21's `WindowedAnalysis` does; and

@@ -10,6 +10,7 @@ use crate::{
     stream::{Stream, StreamElement},
 };
 
+pub mod correlate;
 pub mod enharmonics;
 pub mod floating_key;
 pub mod harmonic_function;
