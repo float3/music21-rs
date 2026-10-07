@@ -13,7 +13,7 @@
 //! music21's language feature (`TX1`), which reads lyrics against texts in
 //! seven languages, is not here.
 
-use super::{DataInstance, Extractor};
+use super::{DataInstance, Extractor, Value};
 use crate::{
     chord::Chord,
     chordsymbol::ChordSymbol,
@@ -214,15 +214,15 @@ fn pitch_class(pitch: &Pitch) -> usize {
     (pitch.ps().round_ties_even() as i64).rem_euclid(12) as usize
 }
 
-fn mode_value(mode: &str) -> Option<FloatType> {
+fn mode_value(mode: &str) -> Option<Value> {
     match mode {
-        "major" => Some(0.0),
-        "minor" => Some(1.0),
+        "major" => Some(Value::Integer(0)),
+        "minor" => Some(Value::Integer(1)),
         _ => None,
     }
 }
 
-fn quality(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn quality(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     let modes = data.key_modes();
     if let [only] = modes.as_slice()
         && let Some(value) = mode_value(only)
@@ -255,26 +255,26 @@ fn quality(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
     Ok(())
 }
 
-fn tonal_certainty(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn tonal_certainty(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     let estimates = data.analyzed_key().ok_or_else(|| {
         Error::Feature("failed to get likely keys for Stream component".to_string())
     })?;
-    vector[0] = crate::analysis::tonal_certainty(estimates);
+    vector[0] = crate::analysis::tonal_certainty(estimates).into();
     Ok(())
 }
 
-fn unique_note_quarter_lengths(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
-    vector[0] = data.quarter_length_histogram().len() as FloatType;
+fn unique_note_quarter_lengths(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
+    vector[0] = data.quarter_length_histogram().len().into();
     Ok(())
 }
 
-fn most_common_note_quarter_length(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn most_common_note_quarter_length(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     let mut maximum = 0;
-    let mut most_common = 0.0;
+    let mut most_common = Value::Integer(0);
     for &(length, count) in data.quarter_length_histogram() {
         if count >= maximum {
             maximum = count;
-            most_common = length;
+            most_common = length.into();
         }
     }
     vector[0] = most_common;
@@ -295,17 +295,17 @@ fn prevalence<'a>(counts: impl Iterator<Item = &'a usize>) -> FloatType {
 
 fn most_common_note_quarter_length_prevalence(
     data: &DataInstance,
-    vector: &mut [FloatType],
+    vector: &mut [Value],
 ) -> Result<()> {
     let histogram = data.quarter_length_histogram();
     if histogram.is_empty() {
         return Err(lacks_notes());
     }
-    vector[0] = prevalence(histogram.iter().map(|(_, count)| count));
+    vector[0] = prevalence(histogram.iter().map(|(_, count)| count)).into();
     Ok(())
 }
 
-fn range_of_note_quarter_lengths(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn range_of_note_quarter_lengths(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     let lengths = data
         .quarter_length_histogram()
         .iter()
@@ -315,7 +315,7 @@ fn range_of_note_quarter_lengths(data: &DataInstance, vector: &mut [FloatType]) 
         .reduce(FloatType::min)
         .ok_or_else(lacks_notes)?;
     let longest = lengths.reduce(FloatType::max).ok_or_else(lacks_notes)?;
-    vector[0] = longest - shortest;
+    vector[0] = (longest - shortest).into();
     Ok(())
 }
 
@@ -348,40 +348,37 @@ fn set_class_histogram(data: &DataInstance) -> Result<Vec<(String, usize)>> {
     })
 }
 
-fn unique_pitch_class_set_simultaneities(
-    data: &DataInstance,
-    vector: &mut [FloatType],
-) -> Result<()> {
-    vector[0] = pitch_class_set_histogram(data)?.len() as FloatType;
+fn unique_pitch_class_set_simultaneities(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
+    vector[0] = pitch_class_set_histogram(data)?.len().into();
     Ok(())
 }
 
-fn unique_set_class_simultaneities(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
-    vector[0] = set_class_histogram(data)?.len() as FloatType;
+fn unique_set_class_simultaneities(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
+    vector[0] = set_class_histogram(data)?.len().into();
     Ok(())
 }
 
 fn most_common_pitch_class_set_simultaneity_prevalence(
     data: &DataInstance,
-    vector: &mut [FloatType],
+    vector: &mut [Value],
 ) -> Result<()> {
     let histogram = pitch_class_set_histogram(data)?;
     if histogram.is_empty() {
         return Err(lacks_notes());
     }
-    vector[0] = prevalence(histogram.iter().map(|(_, count)| count));
+    vector[0] = prevalence(histogram.iter().map(|(_, count)| count)).into();
     Ok(())
 }
 
 fn most_common_set_class_simultaneity_prevalence(
     data: &DataInstance,
-    vector: &mut [FloatType],
+    vector: &mut [Value],
 ) -> Result<()> {
     let histogram = set_class_histogram(data)?;
     if histogram.is_empty() {
         return Err(lacks_notes());
     }
-    vector[0] = prevalence(histogram.iter().map(|(_, count)| count));
+    vector[0] = prevalence(histogram.iter().map(|(_, count)| count)).into();
     Ok(())
 }
 
@@ -389,7 +386,7 @@ fn most_common_set_class_simultaneity_prevalence(
 /// as a share of how many chords there are, nought where there are none.
 fn share_of_chords(
     data: &DataInstance,
-    vector: &mut [FloatType],
+    vector: &mut [Value],
     kinds: &[fn(&Chord) -> bool],
 ) -> Result<()> {
     let chords = data.chordified_chords()?;
@@ -398,17 +395,14 @@ fn share_of_chords(
         .map(|kind| chords.iter().filter(|chord| kind(chord)).count())
         .sum();
     vector[0] = if chords.is_empty() {
-        0.0
+        Value::Integer(0)
     } else {
-        counted as FloatType / chords.len() as FloatType
+        (counted as FloatType / chords.len() as FloatType).into()
     };
     Ok(())
 }
 
-fn major_triad_simultaneity_prevalence(
-    data: &DataInstance,
-    vector: &mut [FloatType],
-) -> Result<()> {
+fn major_triad_simultaneity_prevalence(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     share_of_chords(
         data,
         vector,
@@ -416,10 +410,7 @@ fn major_triad_simultaneity_prevalence(
     )
 }
 
-fn minor_triad_simultaneity_prevalence(
-    data: &DataInstance,
-    vector: &mut [FloatType],
-) -> Result<()> {
+fn minor_triad_simultaneity_prevalence(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     share_of_chords(
         data,
         vector,
@@ -429,35 +420,32 @@ fn minor_triad_simultaneity_prevalence(
 
 fn dominant_seventh_simultaneity_prevalence(
     data: &DataInstance,
-    vector: &mut [FloatType],
+    vector: &mut [Value],
 ) -> Result<()> {
     share_of_chords(data, vector, &[Chord::is_dominant_seventh])
 }
 
 fn diminished_triad_simultaneity_prevalence(
     data: &DataInstance,
-    vector: &mut [FloatType],
+    vector: &mut [Value],
 ) -> Result<()> {
     share_of_chords(data, vector, &[Chord::is_diminished_triad])
 }
 
-fn triad_simultaneity_prevalence(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn triad_simultaneity_prevalence(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     share_of_chords(data, vector, &[Chord::is_triad])
 }
 
 fn diminished_seventh_simultaneity_prevalence(
     data: &DataInstance,
-    vector: &mut [FloatType],
+    vector: &mut [Value],
 ) -> Result<()> {
     share_of_chords(data, vector, &[Chord::is_diminished_seventh])
 }
 
 /// The share of the chords whose set class is a triad's -- major, minor,
 /// diminished or augmented -- that are not spelled as a triad.
-fn incorrectly_spelled_triad_prevalence(
-    data: &DataInstance,
-    vector: &mut [FloatType],
-) -> Result<()> {
+fn incorrectly_spelled_triad_prevalence(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     let chords = data.chordified_chords()?;
     if chords.is_empty() {
         return Err(lacks_notes());
@@ -473,7 +461,7 @@ fn incorrectly_spelled_triad_prevalence(
         return Err(Error::Feature("input lacks Forte triads".to_string()));
     }
     let triads = triads as FloatType;
-    vector[0] = (triads - spelled) / triads;
+    vector[0] = ((triads - spelled) / triads).into();
     Ok(())
 }
 
@@ -496,7 +484,7 @@ fn bass_class(symbol: &ChordSymbol) -> Result<usize> {
 /// each chord symbol to the next that has another bass, each as a share of
 /// all such moves; the first value, a bass staying put, is one where the
 /// bass never moves.
-fn chord_bass_motion(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn chord_bass_motion(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     let flat = data.prepared().flatten();
     let mut motion = [0_usize; 12];
     let mut total = 0;
@@ -517,11 +505,16 @@ fn chord_bass_motion(data: &DataInstance, vector: &mut [FloatType]) -> Result<()
             last = Some(this);
         }
     }
+    // music21 writes every value as a float here, the ones it never
+    // reaches too.
+    for value in vector.iter_mut() {
+        *value = Value::Float(0.0);
+    }
     if total == 0 {
-        vector[0] = 1.0;
+        vector[0] = Value::Float(1.0);
     } else {
         for (value, count) in vector.iter_mut().zip(motion).skip(1) {
-            *value = count as FloatType / total as FloatType;
+            *value = (count as FloatType / total as FloatType).into();
         }
     }
     Ok(())
@@ -530,7 +523,7 @@ fn chord_bass_motion(data: &DataInstance, vector: &mut [FloatType]) -> Result<()
 /// Whether any part's melody, its repeated notes left out, ends falling a
 /// tone and rising a minor third, or falling a semitone and a tone and
 /// rising a minor third.
-fn landini_cadence(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn landini_cadence(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     const ENDINGS: [&[IntegerType]; 2] = [&[-2, 3], &[-1, -2, 3]];
     let contours: Vec<&[IntegerType]> = if data.parts_count() > 0 {
         data.parts()[..data.parts_count()]
@@ -545,7 +538,7 @@ fn landini_cadence(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> 
         ENDINGS.iter().any(|ending| moving.ends_with(ending))
     });
     if found {
-        vector[0] = 1.0;
+        vector[0] = Value::Integer(1);
     }
     Ok(())
 }

@@ -5,9 +5,12 @@
 //! and voice prepared on its own -- and works out each representation an
 //! extractor asks for the first time one does: its pitches, its pitch and
 //! interval histograms, its melodic contour. An [`Extractor`] reads those
-//! and answers a [`Feature`], a vector of numbers of a fixed length.
+//! and answers a [`Feature`], a vector of numbers of a fixed length, each a
+//! [`Value`] that is a whole number or a measurement as music21's is.
 //! [`jsymbolic::JSYMBOLIC`] holds the extractors music21 ports from Cory
-//! McKay's jSymbolic, and [`native::NATIVE`] those music21 adds of its own.
+//! McKay's jSymbolic, and [`native::NATIVE`] those music21 adds of its own;
+//! [`extractors_by_id`] finds them by id. A [`DataSet`] reads features of
+//! many pieces into one table and writes it for a machine-learning tool.
 //!
 //! ```
 //! use music21_rs::features::{DataInstance, jsymbolic};
@@ -20,8 +23,14 @@
 //! # Ok::<(), music21_rs::Error>(())
 //! ```
 
+mod dataset;
 pub mod jsymbolic;
 pub mod native;
+
+pub use dataset::{
+    Cell, DataSet, Failure, Library, OutputFormat, all_features_as_list, extractor_by_id,
+    extractors_by_id, index_of, vector_by_id,
+};
 
 use std::cell::OnceCell;
 
@@ -36,6 +45,69 @@ use crate::{
     tempo::MetronomeMark,
 };
 
+/// One value of a [`Feature`]: a whole number, as a count or an index is,
+/// or a float, as a share or a measurement is. music21 keeps the two apart,
+/// a vector starting as whole noughts, and writes them apart -- `4` and
+/// `4.0` -- in a data set.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum Value {
+    /// A whole number.
+    Integer(i64),
+    /// A float.
+    Float(FloatType),
+}
+
+impl Value {
+    /// The value as a float, whichever it is.
+    pub fn as_float(self) -> FloatType {
+        match self {
+            Self::Integer(value) => value as FloatType,
+            Self::Float(value) => value,
+        }
+    }
+
+    /// Whether it is a whole number rather than a float.
+    pub fn is_integer(self) -> bool {
+        matches!(self, Self::Integer(_))
+    }
+}
+
+impl Default for Value {
+    fn default() -> Self {
+        Self::Integer(0)
+    }
+}
+
+/// Written as Python writes it: `4` for the whole number, `4.0` for the
+/// float, the fewest digits that read back as the float.
+impl std::fmt::Display for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Integer(value) => write!(f, "{value}"),
+            Self::Float(value) => f.write_str(&crate::statistics::python_repr(*value)),
+        }
+    }
+}
+
+macro_rules! whole_values {
+    ($($kind:ty),*) => {$(
+        impl From<$kind> for Value {
+            fn from(value: $kind) -> Self {
+                Self::Integer(value as i64)
+            }
+        }
+    )*};
+}
+
+whole_values!(i32, i64, u8, u32, usize);
+
+impl From<FloatType> for Value {
+    fn from(value: FloatType) -> Self {
+        Self::Float(value)
+    }
+}
+
 /// What an [`Extractor`] answers: its name and the vector it found.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -43,7 +115,7 @@ pub struct Feature {
     id: String,
     name: String,
     discrete: bool,
-    vector: Vec<FloatType>,
+    values: Vec<Value>,
 }
 
 impl Feature {
@@ -62,22 +134,33 @@ impl Feature {
         self.discrete
     }
 
-    /// The values, as many as the extractor has dimensions.
-    pub fn vector(&self) -> &[FloatType] {
-        &self.vector
+    /// The values as floats, as many as the extractor has dimensions.
+    pub fn vector(&self) -> Vec<FloatType> {
+        self.values.iter().map(|value| value.as_float()).collect()
+    }
+
+    /// The values, each a whole number or a float as music21's is.
+    pub fn values(&self) -> &[Value] {
+        &self.values
     }
 
     /// The labels music21 gives the values in a data set: the name with
     /// underscores for spaces, numbered where there is more than one.
     pub fn attribute_labels(&self) -> Vec<String> {
-        let name = self.name.replace(' ', "_");
-        if self.vector.len() == 1 {
-            vec![name]
-        } else {
-            (0..self.vector.len())
-                .map(|index| format!("{name}_{index}"))
-                .collect()
-        }
+        attribute_labels(&self.name, self.values.len())
+    }
+}
+
+/// music21's `getAttributeLabels`: the name with underscores for spaces,
+/// numbered where there is more than one value.
+fn attribute_labels(name: &str, dimensions: usize) -> Vec<String> {
+    let name = name.replace(' ', "_");
+    if dimensions == 1 {
+        vec![name]
+    } else {
+        (0..dimensions)
+            .map(|index| format!("{name}_{index}"))
+            .collect()
     }
 }
 
@@ -91,7 +174,7 @@ pub struct Extractor {
     dimensions: usize,
     discrete: bool,
     normalize: bool,
-    process: fn(&DataInstance, &mut [FloatType]) -> Result<()>,
+    process: fn(&DataInstance, &mut [Value]) -> Result<()>,
 }
 
 impl std::fmt::Debug for Extractor {
@@ -135,6 +218,24 @@ impl Extractor {
         self.normalize
     }
 
+    /// The labels of the values in a data set: the name with underscores
+    /// for spaces, numbered where there is more than one value.
+    pub fn attribute_labels(&self) -> Vec<String> {
+        attribute_labels(self.name, self.dimensions)
+    }
+
+    /// The feature as it stands before anything is read: every value a
+    /// whole nought. music21's `getBlankFeature`, which a data set stands
+    /// in for a feature that cannot be read.
+    pub fn blank(&self) -> Feature {
+        Feature {
+            id: self.id.to_string(),
+            name: self.name.to_string(),
+            discrete: self.discrete,
+            values: vec![Value::Integer(0); self.dimensions],
+        }
+    }
+
     /// The feature of a prepared piece: music21's `extract`.
     ///
     /// # Errors
@@ -142,26 +243,38 @@ impl Extractor {
     /// A piece the feature cannot be read from -- one with no notes, for
     /// most of them -- or a normalized feature whose values are all nought.
     pub fn extract(&self, data: &DataInstance) -> Result<Feature> {
-        let mut vector = vec![0.0; self.dimensions];
-        (self.process)(data, &mut vector)?;
+        let mut feature = self.blank();
+        (self.process)(data, &mut feature.values)?;
         if self.normalize {
-            let sum: FloatType = vector.iter().sum();
+            let sum = python_sum_of(&feature.values);
             if sum == 0.0 {
                 return Err(Error::Feature("cannot normalize zero vector".to_string()));
             }
             // music21 multiplies by the reciprocal rather than dividing.
             let scalar = 1.0 / sum;
-            for value in &mut vector {
-                *value *= scalar;
+            for value in &mut feature.values {
+                *value = Value::Float(value.as_float() * scalar);
             }
         }
-        Ok(Feature {
-            id: self.id.to_string(),
-            name: self.name.to_string(),
-            discrete: self.discrete,
-            vector,
-        })
+        Ok(feature)
     }
+}
+
+/// The sum of some values as Python's `sum` makes it: the whole numbers
+/// before the first float added exactly, the rest by compensated
+/// summation.
+fn python_sum_of(values: &[Value]) -> FloatType {
+    let whole = values.iter().take_while(|value| value.is_integer()).count();
+    let exact: i64 = values[..whole]
+        .iter()
+        .map(|value| match value {
+            Value::Integer(value) => *value,
+            Value::Float(_) => 0,
+        })
+        .sum();
+    let mut rest = vec![exact as FloatType];
+    rest.extend(values[whole..].iter().map(|value| value.as_float()));
+    crate::statistics::python_sum(&rest)
 }
 
 /// A piece prepared for feature extraction, with each representation of it

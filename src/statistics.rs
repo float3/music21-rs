@@ -129,6 +129,49 @@ pub(crate) fn python_round(value: FloatType, places: u32) -> FloatType {
     if value < 0.0 { -digits } else { digits }
 }
 
+/// A float as Python's `repr` writes it: the fewest digits that read back
+/// as the same float, `1.0` for a whole number, and an exponent, `1e-05` or
+/// `1.5e+16`, where the decimal point would sit more than four places
+/// before the first digit or sixteen after it.
+pub(crate) fn python_repr(value: FloatType) -> String {
+    if value.is_nan() {
+        return "nan".to_string();
+    }
+    if value.is_infinite() {
+        return if value > 0.0 { "inf" } else { "-inf" }.to_string();
+    }
+    let sign = if value.is_sign_negative() { "-" } else { "" };
+    if value == 0.0 {
+        return format!("{sign}0.0");
+    }
+    // Rust's shortest round-trip digits, as `d.ddde±x`.
+    let scientific = format!("{:e}", value.abs());
+    let (mantissa, exponent) = scientific
+        .split_once('e')
+        .expect("a float written with an exponent");
+    let exponent: i32 = exponent.parse().expect("a whole exponent");
+    let digits: String = mantissa.chars().filter(char::is_ascii_digit).collect();
+    let point = exponent + 1;
+    let body = if point <= -4 || point > 16 {
+        let (first, rest) = digits.split_at(1);
+        let fraction = if rest.is_empty() {
+            String::new()
+        } else {
+            format!(".{rest}")
+        };
+        let exponent_sign = if exponent < 0 { '-' } else { '+' };
+        format!("{first}{fraction}e{exponent_sign}{:02}", exponent.abs())
+    } else if point <= 0 {
+        format!("0.{}{digits}", "0".repeat(point.unsigned_abs() as usize))
+    } else if point as usize >= digits.len() {
+        format!("{digits}{}.0", "0".repeat(point as usize - digits.len()))
+    } else {
+        let (whole, fraction) = digits.split_at(point as usize);
+        format!("{whole}.{fraction}")
+    };
+    format!("{sign}{body}")
+}
+
 /// The mean of some values, the exact answer rounded once: Python's
 /// `statistics.mean`. Nought for no values.
 pub(crate) fn mean(values: &[FloatType]) -> FloatType {
@@ -248,6 +291,30 @@ mod tests {
         assert_eq!(python_round(0.123_456_785, 8), 0.123_456_78);
         assert_eq!(python_round(7.429_687_5, 8), 7.429_687_5);
         assert_eq!(python_round(-0.333_984_375, 8), -0.333_984_38);
+    }
+
+    #[test]
+    fn a_float_is_written_as_python_writes_it() {
+        // Each read off Python's repr.
+        for (value, written) in [
+            (1.0, "1.0"),
+            (0.5, "0.5"),
+            (0.1, "0.1"),
+            (0.0001, "0.0001"),
+            (0.00001, "1e-05"),
+            (0.000_012_5, "1.25e-05"),
+            (123_456.789, "123456.789"),
+            (1e16, "1e+16"),
+            (1_234_567_890_123_456.0, "1234567890123456.0"),
+            (1.5e300, "1.5e+300"),
+            (-2.75, "-2.75"),
+            (-0.0, "-0.0"),
+            (1.0 / 3.0, "0.3333333333333333"),
+            (2.0 / 3.0, "0.6666666666666666"),
+            (100.0, "100.0"),
+        ] {
+            assert_eq!(python_repr(value), written);
+        }
     }
 
     #[test]
