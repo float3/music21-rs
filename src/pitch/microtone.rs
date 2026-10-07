@@ -241,12 +241,13 @@ impl TryFrom<FloatType> for Microtone {
     }
 }
 
+/// music21's `ordinalAbbreviation`, on Python's remainders: `-1` is
+/// `-1th`, as its last digit modulo ten is nine.
 pub(crate) fn ordinal_suffix(value: IntegerType) -> &'static str {
-    if (value % 100).abs() >= 11 && (value % 100).abs() <= 13 {
+    if (11..=13).contains(&value.rem_euclid(100)) {
         return "th";
     }
-
-    match value.abs() % 10 {
+    match value.rem_euclid(10) {
         1 => "st",
         2 => "nd",
         3 => "rd",
@@ -354,8 +355,9 @@ mod tests {
         assert_eq!(microtone.harmonic_shift(), 11);
         assert_eq!(microtone.to_string(), "(-0c+11thH)");
 
+        // music21 takes the suffix of -2 modulo ten, which is eight.
         microtone.set_harmonic_shift(-2);
-        assert_eq!(microtone.to_string(), "(-0c+-2ndH)");
+        assert_eq!(microtone.to_string(), "(-0c+-2thH)");
     }
 
     #[test]

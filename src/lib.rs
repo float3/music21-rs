@@ -138,6 +138,8 @@ pub(crate) mod stepname;
 /// Streams: notes, chords and other events placed on a timeline, nested as
 /// scores, parts and measures.
 pub mod stream;
+/// Notes on the strings and frets of a fretted instrument.
+pub mod tablature;
 /// Metronome marks and tempo-word conventions.
 pub mod tempo;
 /// Lyrics joined into words and lines, and the articles of titles.

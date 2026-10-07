@@ -85,6 +85,10 @@ are tunes whose own reading cannot be written back.
   `search.serial` does.
 - `ChordSymbol` carries lyrics, as music21's does, with `lyrics`,
   `lyrics_mut` and `add_lyric`.
+- `tablature` is music21's `tablature`: `FretNote`s on a `FretBoard` --
+  bare, or tuned as a guitar, ukulele, bass guitar or mandolin -- ordered
+  lowest string first and sounded as pitches, with `FirstFret` and
+  `ChordWithFretBoard`.
 - `analysis::windowed::WindowedAnalysis` cuts a stream into windows of a
   quarter note and runs any analysis over windows of each size, overlapping,
   side by side or averaged, as music21's `WindowedAnalysis` does; and
@@ -417,6 +421,8 @@ are tunes whose own reading cannot be written back.
 
 ## Fixed
 
+- A negative harmonic shift is written with music21's ordinal suffix:
+  `-2th`, as Python takes the last digit of -2 modulo ten to be eight.
 - `Stream::flatten`, `recurse` and `leaves` snap each offset they add up
   as music21's `opFrac` does, so a note after three triplets stands on the
   beat rather than a hair before it, and lands in the measure it starts.
