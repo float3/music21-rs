@@ -22,7 +22,7 @@
 //! names keeping objects and sites apart this way as what he would do
 //! again.
 
-mod chordify;
+pub(crate) mod chordify;
 mod consecutive;
 mod placed;
 mod repeats;

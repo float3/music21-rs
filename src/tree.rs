@@ -813,6 +813,45 @@ impl<'t, 'a> Verticality<'t, 'a> {
         Ok(quartets)
     }
 
+    /// A chord of every pitch sounding here, lasting `length` or, without
+    /// one, until the next start -- a quarter where nothing follows -- or a
+    /// rest where nothing sounds: music21's `makeElement`. With
+    /// `add_ties`, a note begun before or going on after is tied; with
+    /// `remove_redundant_pitches`, a pitch two timespans sound is one note.
+    ///
+    /// # Errors
+    ///
+    /// A length no duration can have, or a chord symbol whose pitches
+    /// cannot be worked out.
+    pub fn make_element(
+        &self,
+        length: Option<FloatType>,
+        add_ties: bool,
+        remove_redundant_pitches: bool,
+    ) -> Result<StreamElement> {
+        let length = match length {
+            Some(length) => op_frac(length),
+            None => self.time_to_next_event().unwrap_or(1.0),
+        };
+        let spans: Vec<crate::stream::chordify::Span<'a>> = self
+            .start_and_overlap_timespans()
+            .into_iter()
+            .filter(|span| span.pitched)
+            .map(|span| crate::stream::chordify::Span {
+                start: span.offset,
+                end: span.end_time,
+                element: span.element,
+                part: 0,
+            })
+            .collect();
+        let options = crate::stream::ChordifyOptions {
+            add_ties,
+            remove_redundant_pitches,
+            to_sounding_pitch: false,
+        };
+        crate::stream::chordify::make_element(&spans, self.offset, length, &options)
+    }
+
     /// The next offset a timespan starts at: music21's `nextStartOffset`.
     pub fn next_start_offset(&self) -> Option<FloatType> {
         self.tree.position_after(self.offset)

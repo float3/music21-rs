@@ -99,7 +99,9 @@ are tunes whose own reading cannot be written back.
   quartets, music21's `getPairedMotion` and `getAllVoiceLeadingQuartets`;
   the tree walks verticalities n at a time, `unwrap`s them into each
   part's `Horizontality` with its passing and neighbour tones, finds the
-  runs between consonances and splits at offsets.
+  runs between consonances and splits at offsets. `Verticality::make_element`
+  makes the chord or rest sounding there, as music21's `makeElement` does
+  for chordify.
 - `analysis::windowed::WindowedAnalysis` cuts a stream into windows of a
   quarter note and runs any analysis over windows of each size, overlapping,
   side by side or averaged, as music21's `WindowedAnalysis` does; and

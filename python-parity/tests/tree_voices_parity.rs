@@ -8,7 +8,8 @@
 //! and chords read as a timespan tree. At every verticality the paired
 //! motion in each way of counting rests and oblique motion, the quartets
 //! with and without motionless ones and between the first two parts, and
-//! the voice-leading quartets' motion must be music21's; so must each run of
+//! the voice-leading quartets' motion and the chord or rest made there must
+//! be music21's; so must each run of
 //! three verticalities unwrapped into horizontalities and what they say of
 //! passing and neighbour tones and motion, the consonance-bounded runs, and
 //! the tree split at every half beat. music21's quartets take minutes over
@@ -91,7 +92,13 @@ def report(text):
                         returnObjects=False, partPairNumbers=[(0, 1)])])
         objects = [(q.motionType().value, float(q.v1n1.pitch.ps), float(q.v2n2.pitch.ps))
                    for q in v.getAllVoiceLeadingQuartets()]
-        verticals.append((paired, quartets, (between or [], error), objects))
+        made = []
+        for ties, redundant in ((True, True), (True, False), (False, True)):
+            e = v.makeElement(addTies=ties, removeRedundantPitches=redundant)
+            notes = [] if e.isRest else [(float(n.pitch.ps), n.tie.type if n.tie else '')
+                                         for n in e.notes]
+            made.append(('Rest' if e.isRest else 'Chord', float(e.quarterLength), notes))
+        verticals.append((paired, quartets, (between or [], error), objects, made))
     windows = []
     for window in tree.iterateVerticalitiesNwise(3):
         unwrapped = window.unwrap()
@@ -107,11 +114,13 @@ def report(text):
 type Ident = (FloatType, FloatType, Vec<FloatType>);
 type Pair = (Ident, Ident);
 type Motion = (String, FloatType, FloatType);
+type Made = (String, FloatType, Vec<(FloatType, String)>);
 type Vertical = (
     Vec<Vec<Pair>>,
     Vec<Vec<Vec<Ident>>>,
     (Vec<Vec<Ident>>, String),
     Vec<Motion>,
+    Vec<Made>,
 );
 type Window = Vec<(usize, bool, bool, bool)>;
 type Report = (
@@ -234,7 +243,30 @@ fn the_crate_reads_voice_leading_in_trees_as_music21_does() {
                             )
                         })
                         .collect();
-                    (paired, quartets, between, objects)
+                    let made = [(true, true), (true, false), (false, true)]
+                        .into_iter()
+                        .map(|(ties, redundant)| match v.make_element(None, ties, redundant) {
+                            Ok(StreamElement::Chord(chord)) => (
+                                "Chord".to_string(),
+                                chord.duration().map_or(0.0, |duration| duration.quarter_length()),
+                                chord
+                                    .notes()
+                                    .iter()
+                                    .map(|note| {
+                                        (
+                                            note.pitch().ps(),
+                                            note.tie()
+                                                .map(|tie| tie.tie_type().as_str().to_string())
+                                                .unwrap_or_default(),
+                                        )
+                                    })
+                                    .collect(),
+                            ),
+                            Ok(element) => ("Rest".to_string(), element.quarter_length(), Vec::new()),
+                            Err(error) => (error.to_string(), 0.0, Vec::new()),
+                        })
+                        .collect();
+                    (paired, quartets, between, objects, made)
                 })
                 .collect();
             if verticals.len() != their_verticals.len() {
@@ -250,16 +282,25 @@ fn the_crate_reads_voice_leading_in_trees_as_music21_does() {
                 } else {
                     !ours.2.1.is_empty()
                 };
-                if ours.0 != theirs.0 || ours.1 != theirs.1 || !between_agree || ours.3 != theirs.3 {
+                if ours.0 != theirs.0
+                    || ours.1 != theirs.1
+                    || !between_agree
+                    || ours.3 != theirs.3
+                    || ours.4 != theirs.4
+                {
                     failures.push(format!(
                         "{name}: verticality {index} differs in paired {}, quartets {}, \
-                         between {}, objects {}:\n  music21    {:?}\n  music21-rs {:?}",
+                         between {}, objects {}, made {}:\n  music21    {:?} {:?}\n  \
+                         music21-rs {:?} {:?}",
                         ours.0 != theirs.0,
                         ours.1 != theirs.1,
                         !between_agree,
                         ours.3 != theirs.3,
+                        ours.4 != theirs.4,
                         theirs.3,
-                        ours.3
+                        theirs.4,
+                        ours.3,
+                        ours.4
                     ));
                     break;
                 }
