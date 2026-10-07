@@ -66,6 +66,11 @@ are tunes whose own reading cannot be written back.
   with Python's `difflib` ratio; `most_common_measure_rhythms` groups
   measures by rhythm. Every MusicXML score of music21's corpus searches,
   translates and ranks as music21's does.
+- `search::index_score_parts` cuts each part of a score into overlapping
+  stretches of its translated notes, as music21's `search.segment` does,
+  and `score_similarity` compares every stretch of some scores with every
+  stretch of the scores after it by `difflib`'s ratio. Every MusicXML
+  score of music21's corpus segments and compares as music21's does.
 - `analysis::windowed::WindowedAnalysis` cuts a stream into windows of a
   quarter note and runs any analysis over windows of each size, overlapping,
   side by side or averaged, as music21's `WindowedAnalysis` does; and

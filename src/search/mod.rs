@@ -3,11 +3,14 @@
 //! name, rhythm or anything else; the translations turn notes into text,
 //! which the approximate searches compare as Python's `difflib` does; and a
 //! [`LyricSearcher`] finds text in a stream's lyrics, and the notes it is
-//! sung to.
+//! sung to. [`index_score_parts`] cuts each part of a score into
+//! overlapping stretches of that text, and [`score_similarity`] compares
+//! every stretch of some scores with every other.
 
 mod base;
 mod difflib;
 mod lyrics;
+mod segment;
 
 pub use base::{
     Algorithm, Filter, MeasureRhythm, SearchMatch, SearchTerm, Searched, StreamSearcher,
@@ -20,3 +23,7 @@ pub use base::{
     translate_stream_to_string_no_rhythm, translate_stream_to_string_only_rhythm,
 };
 pub use lyrics::{IndexedLyric, LINE_BREAK, LyricIdentifier, LyricMatch, LyricSearcher};
+pub use segment::{
+    SegmentAt, SegmentSimilarity, Segments, index_score_parts, index_score_parts_with,
+    score_similarity, translate_monophonic_part_to_segments,
+};
