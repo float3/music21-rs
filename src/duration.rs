@@ -1041,6 +1041,35 @@ impl Duration {
         self.type_and_dots().map_or(0, |(_, dots)| dots)
     }
 
+    /// Writes every value of the duration with so many dots, each keeping
+    /// its note value and the whole its tuplets: music21's `dots` setter.
+    /// The length becomes what the values then come to, and a duration
+    /// still worked out from its length is then taken as written so.
+    ///
+    /// # Errors
+    ///
+    /// A value written as no note value at all, which cannot take dots.
+    pub fn set_dots(&mut self, dots: u32) -> Result<()> {
+        let values = self.written_values();
+        if values.is_empty() {
+            return Ok(());
+        }
+        let dotted = values
+            .iter()
+            .map(|value| {
+                value
+                    .duration_type()
+                    .map(|duration_type| DurationTuple::new(duration_type, dots))
+                    .ok_or_else(|| Error::Duration("Unknown type: inexpressible".to_string()))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        self.set_written_values(dotted);
+        if self.linked() {
+            self.set_expression_is_inferred(false);
+        }
+        Ok(())
+    }
+
     /// music21's `ordinal` for the duration's type, or `None` where music21
     /// says `complex` or the duration is zero: a duration whose quarter length
     /// is not a single dotted note value.

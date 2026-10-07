@@ -93,6 +93,15 @@ are tunes whose own reading cannot be written back.
   takes out empty voices and the voice left alone, as music21's
   `flattenUnnecessaryVoices` does. Every MusicXML score of music21's corpus
   gives music21's templates, merged notes and flattened measures.
+- `analysis::reduction` is music21's `analysis.reduction`: a lyric starting
+  `::` marks its note for a reduction -- its pitch from a chord, octave,
+  notehead fill, stem, group, voice and texts above and below, read as a
+  `ReductiveNote` -- and `ScoreReduction` draws the marked notes of a score,
+  and of a chord reduction, into a part for each group, their voices filled
+  with hidden rests, above the score's parts with the marks taken out of
+  their lyrics. `Duration::set_dots` is music21's `dots` setter. Every
+  MusicXML score of music21's corpus, its notes marked, is reduced as
+  music21 reduces it.
 - `ChordSymbol` carries lyrics, as music21's does, with `lyrics`,
   `lyrics_mut` and `add_lyric`.
 - `tablature` is music21's `tablature`: `FretNote`s on a `FretBoard` --
