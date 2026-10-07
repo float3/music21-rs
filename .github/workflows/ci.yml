@@ -200,9 +200,10 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           python -m pip install music21 lark numpy
+          # The interpreter's full path, its version in it, so a cached pyo3
+          # build looks for the runner's Python again when that changes.
+          export PYO3_PYTHON="$(python -c 'import sys; print(sys.executable)')"
           cargo run --release -p xtask -- downstream
-        env:
-          PYO3_PYTHON: python
 
       - name: Upload the wheel
         uses: actions/upload-artifact@v7
@@ -271,9 +272,11 @@ jobs:
       # xtask's `python` feature; the wheel it measures is the downloaded one,
       # imported by name from the interpreter this points at.
       - name: Run music21's suite on music21 and on music21_rs
-        run: cargo run --release -p xtask --features python -- music21-suite
-        env:
-          PYO3_PYTHON: python
+        run: |
+          # The interpreter's full path, its version in it, so a cached pyo3
+          # build looks for the runner's Python again when that changes.
+          export PYO3_PYTHON="$(python -c 'import sys; print(sys.executable)')"
+          cargo run --release -p xtask --features python -- music21-suite
 
   lint:
     name: Lint (fmt + clippy + check)
@@ -574,9 +577,11 @@ jobs:
       # has gone stale. It is fast, so it gates every run here; the full
       # report is `report`'s.
       - name: Check the feature map
-        run: cargo run --release -p xtask --features python -- report --features-only --out target/features-report
-        env:
-          PYO3_PYTHON: python
+        run: |
+          # The interpreter's full path, its version in it, so a cached pyo3
+          # build looks for the runner's Python again when that changes.
+          export PYO3_PYTHON="$(python -c 'import sys; print(sys.executable)')"
+          cargo run --release -p xtask --features python -- report --features-only --out target/features-report
 
       # The last full report `report` finished, whichever commit it was for,
       # so the site this job publishes keeps its report until `pages-report`
@@ -861,9 +866,11 @@ jobs:
       # report drives them by running itself, so the binary it builds has to
       # be the one with pyo3 in it.
       - name: Build reports
-        run: cargo run --release -p xtask --features python -- report --out target/reports
-        env:
-          PYO3_PYTHON: python
+        run: |
+          # The interpreter's full path, its version in it, so a cached pyo3
+          # build looks for the runner's Python again when that changes.
+          export PYO3_PYTHON="$(python -c 'import sys; print(sys.executable)')"
+          cargo run --release -p xtask --features python -- report --out target/reports
 
       - name: Check the report
         shell: bash
