@@ -113,6 +113,16 @@ are tunes whose own reading cannot be written back.
   each with the English music21 writes beside it, and converts braille to
   braille ASCII and dots and back. Every element of every MusicXML score of
   music21's corpus is written as music21 writes it.
+- `braille::translate` writes whole scores, parts and measures in braille
+  as music21's `objectToBraille` does: `braille::segment` cuts a part into
+  segments of groupings -- signatures and tempo for the heading, notes,
+  voices in accord, long texts -- with slurs, beamed groups, repeated
+  measures, doubled articulations and groupings split to fit a line, a
+  piano's two staves side by side, and `braille::text` lays them out in
+  lines with headings and measure numbers. `BrailleOptions` holds
+  music21's keyword arguments, and its `debug` gives music21's English
+  listing of each segment instead. Every MusicXML score of music21's corpus
+  is written as music21 writes it, in braille and in English.
 - `Rest::full_measure` is music21's `fullMeasure`, which the MusicXML reader
   sets where music21's does.
 - `ChordSymbol` carries lyrics, as music21's does, with `lyrics`,

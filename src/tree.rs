@@ -978,6 +978,12 @@ impl<'t, 'a> Horizontality<'t, 'a> {
 /// fundamental, whether the spelling was worked out, the microtone, octave
 /// and step.
 fn set_key(pitch: &Pitch) -> String {
+    pitch_set_key(pitch)
+}
+
+/// What music21 hashes a pitch by, as text: a set of pitches holds two
+/// pitches once only where these agree.
+pub(crate) fn pitch_set_key(pitch: &Pitch) -> String {
     let accidental = pitch.written_accidental().map(|accidental| {
         format!(
             "{}|{:?}|{}|{}|{}|{}|{}|{}",
@@ -993,7 +999,7 @@ fn set_key(pitch: &Pitch) -> String {
     });
     format!(
         "{accidental:?}|{:?}|{}|{:?}|{:?}|{}",
-        pitch.fundamental().map(set_key),
+        pitch.fundamental().map(pitch_set_key),
         pitch.spelling_is_inferred(),
         pitch.microtone().map(|microtone| microtone.cents()),
         pitch.octave(),

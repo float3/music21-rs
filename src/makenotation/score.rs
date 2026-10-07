@@ -83,6 +83,18 @@ pub(crate) fn make_part_notation(part: &mut Stream) -> Result<PartNotation> {
 }
 
 /// music21's `Stream.makeNotation` on one part, given its
+/// `cautionaryNotImmediateRepeat`, the part's spanners carried back on the
+/// elements they joined.
+pub(crate) fn make_part_notation_keeping_spanners(
+    part: &mut Stream,
+    cautionary_not_immediate_repeat: bool,
+) -> Result<()> {
+    keeping_spanners(part, Kept::Retained, &mut |part| {
+        make_part_notation_by(part, cautionary_not_immediate_repeat).map(|_| ())
+    })
+}
+
+/// music21's `Stream.makeNotation` on one part, given its
 /// `cautionaryNotImmediateRepeat`.
 pub(crate) fn make_part_notation_by(
     part: &mut Stream,
