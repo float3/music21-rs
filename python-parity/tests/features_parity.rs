@@ -6,7 +6,7 @@
 //! by `from_musicxml` (which `musicxml_read_parity` holds to music21's
 //! reader), prepared once on each side as a `DataInstance`, and put through
 //! every extractor: the two must refuse the same features and agree on the
-//! rest to a few ulps.
+//! rest to a few ulps, each value a whole number where music21's is.
 //!
 //! music21 is music21 here, with nothing of the crate installed over it.
 //! `FEATURES_PARITY_SCORES`, a `;`-separated list of corpus names, runs
@@ -67,12 +67,19 @@ def report(name):
     for module, extractors in EXTRACTORS.items():
         for cls in extractors:
             try:
-                vector = [float(value) for value in cls(data).extract().vector]
-                out.append((module, cls.id, vector, ''))
+                vector = cls(data).extract().vector
+                out.append((module, cls.id,
+                            [(float(value), type(value) is int, str(value)) for value in vector],
+                            ''))
             except Exception as error:
                 out.append((module, cls.id, [], type(error).__name__))
     return out
 "#;
+
+/// music21's answer for one extractor: its library and id, each value as
+/// a float, whether it is a whole number and how Python writes it, and the
+/// name of the exception it raised instead, if it did.
+type Report = (String, String, Vec<(FloatType, bool, String)>, String);
 
 const MODULES: [(&str, &[Extractor]); 2] = [
     ("jSymbolic", jsymbolic::JSYMBOLIC),
@@ -140,7 +147,7 @@ fn the_crate_extracts_features_as_music21_does() {
             else {
                 continue;
             };
-            let theirs: Vec<(String, String, Vec<FloatType>, String)> =
+            let theirs: Vec<Report> =
                 match music21.getattr("report")?.call1((name,)) {
                     Ok(report) => report.extract()?,
                     Err(error) => {
@@ -173,33 +180,42 @@ fn the_crate_extracts_features_as_music21_does() {
                     failures.push(format!("{name}: the crate has no {module} extractor {id}"));
                     continue;
                 };
+                let their_text: Vec<&str> = their_vector
+                    .iter()
+                    .take(16)
+                    .map(|(_, _, text)| text.as_str())
+                    .collect();
                 match extractor.extract(&data) {
                     Ok(feature) => {
-                        let agree =
-                            their_error.is_empty()
-                                && feature.vector().len() == their_vector.len()
-                                && feature.vector().iter().zip(&their_vector).all(
-                                    |(ours, theirs)| {
-                                        (ours - theirs).abs() <= 1e-12 * theirs.abs().max(1.0)
-                                    },
-                                );
+                        // Each value must be a whole number where music21's
+                        // is, within a few ulps of it, and written as music21
+                        // writes it wherever the two are the same number.
+                        let agree = their_error.is_empty()
+                            && feature.values().len() == their_vector.len()
+                            && feature.values().iter().zip(&their_vector).all(
+                                |(ours, (theirs, integer, text))| {
+                                    let ours_float = ours.as_float();
+                                    ours.is_integer() == *integer
+                                        && (ours_float - theirs).abs() <= 1e-12 * theirs.abs().max(1.0)
+                                        && (ours_float != *theirs || ours.to_string() == *text)
+                                },
+                            );
                         if !agree {
-                            let shown = |vector: &[FloatType]| -> String {
-                                format!("{:?}", &vector[..vector.len().min(16)])
-                            };
+                            let our_text: Vec<String> = feature
+                                .values()
+                                .iter()
+                                .take(16)
+                                .map(ToString::to_string)
+                                .collect();
                             failures.push(format!(
-                                "{name}: {id}: music21 {} {}, music21-rs {}",
-                                their_error,
-                                shown(&their_vector),
-                                shown(feature.vector())
+                                "{name}: {id}: music21 {their_error} {their_text:?}, music21-rs {our_text:?}"
                             ));
                         }
                     }
                     Err(error) => {
                         if their_error.is_empty() {
                             failures.push(format!(
-                                "{name}: {id}: music21 {:?}, music21-rs refused: {error}",
-                                &their_vector[..their_vector.len().min(16)]
+                                "{name}: {id}: music21 {their_text:?}, music21-rs refused: {error}"
                             ));
                         }
                     }

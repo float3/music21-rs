@@ -15,7 +15,7 @@
 //! a melody with no arpeggiation at all (`M8`) is refused as one with no
 //! notes.
 
-use super::{DataInstance, Extractor};
+use super::{DataInstance, Extractor, Value};
 use crate::stream::StreamElement;
 use crate::{
     defaults::{FloatType, IntegerType},
@@ -708,14 +708,14 @@ fn share_of(histogram: &[usize], targets: &[usize]) -> Result<FloatType> {
     Ok(count as FloatType / total as FloatType)
 }
 
-fn melodic_interval_histogram(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn melodic_interval_histogram(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     for (value, count) in vector.iter_mut().zip(data.midi_interval_histogram()) {
-        *value = *count as FloatType;
+        *value = (*count).into();
     }
     Ok(())
 }
 
-fn average_melodic_interval(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn average_melodic_interval(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     let histogram = data.midi_interval_histogram();
     let count: usize = histogram.iter().sum();
     if count == 0 {
@@ -726,30 +726,30 @@ fn average_melodic_interval(data: &DataInstance, vector: &mut [FloatType]) -> Re
         .enumerate()
         .map(|(size, count)| size * count)
         .sum();
-    vector[0] = total as FloatType / count as FloatType;
+    vector[0] = (total as FloatType / count as FloatType).into();
     Ok(())
 }
 
-fn most_common_melodic_interval(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
-    vector[0] = first_max(data.midi_interval_histogram()) as FloatType;
+fn most_common_melodic_interval(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
+    vector[0] = first_max(data.midi_interval_histogram()).into();
     Ok(())
 }
 
 fn distance_between_most_common_melodic_intervals(
     data: &DataInstance,
-    vector: &mut [FloatType],
+    vector: &mut [Value],
 ) -> Result<()> {
     let mut histogram = data.midi_interval_histogram().to_vec();
     let first = first_max(&histogram);
     histogram[first] = 0;
     let second = first_max(&histogram);
-    vector[0] = first.abs_diff(second) as FloatType;
+    vector[0] = first.abs_diff(second).into();
     Ok(())
 }
 
 fn most_common_melodic_interval_prevalence(
     data: &DataInstance,
-    vector: &mut [FloatType],
+    vector: &mut [Value],
 ) -> Result<()> {
     let histogram = data.midi_interval_histogram();
     let most = histogram.iter().copied().max().unwrap_or(0);
@@ -757,13 +757,13 @@ fn most_common_melodic_interval_prevalence(
     if count == 0 {
         return Err(lacks_notes());
     }
-    vector[0] = most as FloatType / count as FloatType;
+    vector[0] = (most as FloatType / count as FloatType).into();
     Ok(())
 }
 
 fn relative_strength_of_most_common_intervals(
     data: &DataInstance,
-    vector: &mut [FloatType],
+    vector: &mut [Value],
 ) -> Result<()> {
     let mut histogram = data.midi_interval_histogram().to_vec();
     let count: usize = histogram.iter().sum();
@@ -775,11 +775,11 @@ fn relative_strength_of_most_common_intervals(
     histogram[first] = 0;
     let second = histogram.iter().copied().max().unwrap_or(0);
     let count = count as FloatType;
-    vector[0] = (second as FloatType / count) / (most as FloatType / count);
+    vector[0] = ((second as FloatType / count) / (most as FloatType / count)).into();
     Ok(())
 }
 
-fn number_of_common_melodic_intervals(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn number_of_common_melodic_intervals(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     let histogram = data.midi_interval_histogram();
     let total: usize = histogram.iter().sum();
     if total == 0 {
@@ -788,11 +788,12 @@ fn number_of_common_melodic_intervals(data: &DataInstance, vector: &mut [FloatTy
     vector[0] = histogram
         .iter()
         .filter(|count| **count as FloatType / total as FloatType >= 0.09)
-        .count() as FloatType;
+        .count()
+        .into();
     Ok(())
 }
 
-fn amount_of_arpeggiation(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn amount_of_arpeggiation(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     let histogram = data.midi_interval_histogram();
     let total: usize = histogram.iter().sum();
     if total == 0 {
@@ -807,50 +808,51 @@ fn amount_of_arpeggiation(data: &DataInstance, vector: &mut [FloatType]) -> Resu
     if count == 0 {
         return Err(lacks_notes());
     }
-    vector[0] = count as FloatType / total as FloatType;
+    vector[0] = (count as FloatType / total as FloatType).into();
     Ok(())
 }
 
-fn repeated_notes(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn repeated_notes(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     let histogram = data.midi_interval_histogram();
     let total: usize = histogram.iter().sum();
     if total == 0 {
         return Ok(());
     }
-    vector[0] = histogram[0] as FloatType / total as FloatType;
+    vector[0] = (histogram[0] as FloatType / total as FloatType).into();
     Ok(())
 }
 
-fn chromatic_motion(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
-    vector[0] = share_of(data.midi_interval_histogram(), &[1])?;
+fn chromatic_motion(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
+    vector[0] = share_of(data.midi_interval_histogram(), &[1])?.into();
     Ok(())
 }
 
-fn stepwise_motion(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
-    vector[0] = share_of(data.midi_interval_histogram(), &[1, 2])?;
+fn stepwise_motion(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
+    vector[0] = share_of(data.midi_interval_histogram(), &[1, 2])?.into();
     Ok(())
 }
 
-fn melodic_thirds(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
-    vector[0] = share_of(data.midi_interval_histogram(), &[3, 4])?;
+fn melodic_thirds(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
+    vector[0] = share_of(data.midi_interval_histogram(), &[3, 4])?.into();
     Ok(())
 }
 
-fn melodic_fifths(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
-    vector[0] = share_of(data.midi_interval_histogram(), &[7])?;
+fn melodic_fifths(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
+    vector[0] = share_of(data.midi_interval_histogram(), &[7])?.into();
     Ok(())
 }
 
-fn melodic_tritones(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
-    vector[0] = share_of(data.midi_interval_histogram(), &[6])?;
+fn melodic_tritones(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
+    vector[0] = share_of(data.midi_interval_histogram(), &[6])?.into();
     Ok(())
 }
 
-fn melodic_octaves(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn melodic_octaves(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     vector[0] = share_of(
         data.midi_interval_histogram(),
         &[12, 24, 48, 60, 72, 84, 96, 108, 120],
-    )?;
+    )?
+    .into();
     Ok(())
 }
 
@@ -867,7 +869,7 @@ fn contours(data: &DataInstance) -> Vec<&[IntegerType]> {
     }
 }
 
-fn direction_of_motion(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn direction_of_motion(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     let (mut rising, mut falling) = (0usize, 0usize);
     for contour in contours(data) {
         for step in contour {
@@ -881,11 +883,11 @@ fn direction_of_motion(data: &DataInstance, vector: &mut [FloatType]) -> Result<
     if rising + falling == 0 {
         return Err(lacks_notes());
     }
-    vector[0] = rising as FloatType / (falling + rising) as FloatType;
+    vector[0] = (rising as FloatType / (falling + rising) as FloatType).into();
     Ok(())
 }
 
-fn duration_of_melodic_arcs(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn duration_of_melodic_arcs(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     let (mut changes, mut moving) = (0usize, 0usize);
     for contour in contours(data) {
         let mut direction = 0;
@@ -908,12 +910,12 @@ fn duration_of_melodic_arcs(data: &DataInstance, vector: &mut [FloatType]) -> Re
         }
     }
     if changes > 0 {
-        vector[0] = moving as FloatType / changes as FloatType;
+        vector[0] = (moving as FloatType / changes as FloatType).into();
     }
     Ok(())
 }
 
-fn size_of_melodic_arcs(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn size_of_melodic_arcs(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     let (mut changes, mut total) = (0usize, 0i64);
     for contour in contours(data) {
         let mut direction = 0;
@@ -938,7 +940,7 @@ fn size_of_melodic_arcs(data: &DataInstance, vector: &mut [FloatType]) -> Result
         }
     }
     if changes > 0 {
-        vector[0] = total as FloatType / changes as FloatType;
+        vector[0] = (total as FloatType / changes as FloatType).into();
     }
     Ok(())
 }
@@ -947,39 +949,36 @@ fn total_of(counts: &[(IntegerType, usize)]) -> usize {
     counts.iter().map(|(_, count)| count).sum()
 }
 
-fn most_common_pitch_prevalence(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn most_common_pitch_prevalence(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     let histogram = data.midi_pitch_histogram();
     if histogram.is_empty() {
         return Err(lacks_notes());
     }
     let most = histogram.iter().map(|(_, count)| *count).max().unwrap_or(0);
-    vector[0] = most as FloatType / total_of(histogram) as FloatType;
+    vector[0] = (most as FloatType / total_of(histogram) as FloatType).into();
     Ok(())
 }
 
-fn most_common_pitch_class_prevalence(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn most_common_pitch_class_prevalence(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     let histogram = data.pitch_class_histogram();
     let class = first_max(histogram);
     let total: usize = histogram.iter().sum();
     if total == 0 {
         return Err(lacks_notes());
     }
-    vector[0] = histogram[class] as FloatType / total as FloatType;
+    vector[0] = (histogram[class] as FloatType / total as FloatType).into();
     Ok(())
 }
 
-fn relative_strength_of_top_pitches(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn relative_strength_of_top_pitches(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     vector[0] = match most_common(data.midi_pitch_histogram()).as_slice() {
-        [first, second, ..] => second.1 as FloatType / first.1 as FloatType,
-        _ => 0.0,
+        [first, second, ..] => (second.1 as FloatType / first.1 as FloatType).into(),
+        _ => Value::Float(0.0),
     };
     Ok(())
 }
 
-fn relative_strength_of_top_pitch_classes(
-    data: &DataInstance,
-    vector: &mut [FloatType],
-) -> Result<()> {
+fn relative_strength_of_top_pitch_classes(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     let mut histogram = *data.pitch_class_histogram();
     let first = first_max(&histogram);
     let most = histogram[first];
@@ -988,85 +987,88 @@ fn relative_strength_of_top_pitch_classes(
     }
     histogram[first] = 0;
     let second = histogram[first_max(&histogram)];
-    vector[0] = second as FloatType / most as FloatType;
+    vector[0] = (second as FloatType / most as FloatType).into();
     Ok(())
 }
 
-fn interval_between_strongest_pitches(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn interval_between_strongest_pitches(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     vector[0] = match most_common(data.midi_pitch_histogram()).as_slice() {
-        [first, second, ..] => FloatType::from((second.0 - first.0).abs()),
-        _ => 0.0,
+        [first, second, ..] => (second.0 - first.0).abs().into(),
+        _ => Value::Float(0.0),
     };
     Ok(())
 }
 
 fn interval_between_strongest_pitch_classes(
     data: &DataInstance,
-    vector: &mut [FloatType],
+    vector: &mut [Value],
 ) -> Result<()> {
     let mut histogram = *data.pitch_class_histogram();
     let first = first_max(&histogram);
     histogram[first] = 0;
     let second = first_max(&histogram);
-    vector[0] = first.abs_diff(second) as FloatType;
+    vector[0] = first.abs_diff(second).into();
     Ok(())
 }
 
-fn number_of_common_pitches(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn number_of_common_pitches(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     let histogram = data.midi_pitch_histogram();
     let total = total_of(histogram) as FloatType;
     vector[0] = histogram
         .iter()
         .filter(|(_, count)| *count as FloatType / total >= 0.09)
-        .count() as FloatType;
+        .count()
+        .into();
     Ok(())
 }
 
-fn pitch_variety(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn pitch_variety(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     // music21 walks the counter's keys, the MIDI numbers, and counts those
     // at least one, which leaves out MIDI nought.
     vector[0] = data
         .midi_pitch_histogram()
         .iter()
         .filter(|(midi, _)| *midi >= 1)
-        .count() as FloatType;
+        .count()
+        .into();
     Ok(())
 }
 
-fn pitch_class_variety(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn pitch_class_variety(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     vector[0] = data
         .pitch_class_histogram()
         .iter()
         .filter(|count| **count >= 1)
-        .count() as FloatType;
+        .count()
+        .into();
     Ok(())
 }
 
-fn range(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn range(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     let histogram = data.midi_pitch_histogram();
     let lowest = histogram.iter().map(|(midi, _)| *midi).min();
     let highest = histogram.iter().map(|(midi, _)| *midi).max();
     let (Some(lowest), Some(highest)) = (lowest, highest) else {
         return Err(lacks_notes());
     };
-    vector[0] = FloatType::from(highest - lowest);
+    vector[0] = (highest - lowest).into();
     Ok(())
 }
 
-fn most_common_pitch(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn most_common_pitch(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     vector[0] = most_common(data.midi_pitch_histogram())
         .first()
-        .map_or(0.0, |(midi, _)| FloatType::from(*midi));
+        .map_or(Value::Float(0.0), |(midi, _)| (*midi).into());
     Ok(())
 }
 
-fn primary_register(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn primary_register(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     let pitches = data.pitches();
     if pitches.is_empty() {
         return Err(lacks_notes());
     }
     let heights: Vec<FloatType> = pitches.iter().map(|pitch| pitch.ps()).collect();
-    vector[0] = crate::statistics::mean(&heights);
+    vector[0] = crate::statistics::mean(&heights).into();
     Ok(())
 }
 
@@ -1084,43 +1086,43 @@ fn register_share(data: &DataInstance, within: impl Fn(IntegerType) -> bool) -> 
     Ok(matched as FloatType / total_of(histogram) as FloatType)
 }
 
-fn importance_of_bass_register(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
-    vector[0] = register_share(data, |midi| midi <= 54)?;
+fn importance_of_bass_register(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
+    vector[0] = register_share(data, |midi| midi <= 54)?.into();
     Ok(())
 }
 
-fn importance_of_middle_register(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
-    vector[0] = register_share(data, |midi| (55..=72).contains(&midi))?;
+fn importance_of_middle_register(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
+    vector[0] = register_share(data, |midi| (55..=72).contains(&midi))?.into();
     Ok(())
 }
 
-fn importance_of_high_register(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
-    vector[0] = register_share(data, |midi| midi >= 73)?;
+fn importance_of_high_register(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
+    vector[0] = register_share(data, |midi| midi >= 73)?.into();
     Ok(())
 }
 
-fn most_common_pitch_class(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
-    vector[0] = first_max(data.pitch_class_histogram()) as FloatType;
+fn most_common_pitch_class(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
+    vector[0] = first_max(data.pitch_class_histogram()).into();
     Ok(())
 }
 
-fn basic_pitch_histogram(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn basic_pitch_histogram(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     for (midi, count) in data.midi_pitch_histogram() {
         if let Some(value) = usize::try_from(*midi)
             .ok()
             .and_then(|midi| vector.get_mut(midi))
         {
-            *value = *count as FloatType;
+            *value = (*count).into();
         }
     }
     Ok(())
 }
 
-fn pitch_class_distribution(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn pitch_class_distribution(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     let histogram = data.pitch_class_histogram();
     let most = first_max(histogram);
     for (class, count) in histogram.iter().enumerate() {
-        vector[(class + 12 - most) % 12] = *count as FloatType;
+        vector[(class + 12 - most) % 12] = (*count).into();
     }
     Ok(())
 }
@@ -1128,23 +1130,23 @@ fn pitch_class_distribution(data: &DataInstance, vector: &mut [FloatType]) -> Re
 /// Where each pitch class goes in a histogram ordered by fifths.
 const FIFTHS: [usize; 12] = [0, 7, 2, 9, 4, 11, 6, 1, 8, 3, 10, 5];
 
-fn fifths_pitch_histogram(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn fifths_pitch_histogram(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     for (class, count) in data.pitch_class_histogram().iter().enumerate() {
-        vector[FIFTHS[class]] = *count as FloatType;
+        vector[FIFTHS[class]] = (*count).into();
     }
     Ok(())
 }
 
-fn quality(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn quality(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     vector[0] = data
         .key_modes()
         .iter()
         .find_map(|mode| match mode.as_str() {
-            "major" => Some(0.0),
-            "minor" => Some(1.0),
+            "major" => Some(Value::Integer(0)),
+            "minor" => Some(Value::Integer(1)),
             _ => None,
         })
-        .unwrap_or(0.0);
+        .unwrap_or(Value::Integer(0));
     Ok(())
 }
 
@@ -1177,7 +1179,7 @@ fn onsets_by_part(data: &DataInstance) -> Result<Vec<Vec<FloatType>>> {
     }
 }
 
-fn note_density(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn note_density(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     let seconds = data.seconds_map()?;
     let last = seconds
         .iter()
@@ -1185,16 +1187,15 @@ fn note_density(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
         .fold(None, |most: Option<FloatType>, end| {
             Some(most.map_or(end, |most| most.max(end)))
         });
-    if let Some(last) = last {
-        if last == 0.0 {
-            return Err(Error::Feature("float division by zero".to_string()));
-        }
-        vector[0] = seconds.len() as FloatType / last;
-    }
+    vector[0] = match last {
+        Some(0.0) => return Err(Error::Feature("float division by zero".to_string())),
+        Some(last) => (seconds.len() as FloatType / last).into(),
+        None => Value::Float(0.0),
+    };
     Ok(())
 }
 
-fn average_note_duration(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn average_note_duration(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     let seconds = data.seconds_map()?;
     if seconds.is_empty() {
         return Err(lacks_notes());
@@ -1203,21 +1204,21 @@ fn average_note_duration(data: &DataInstance, vector: &mut [FloatType]) -> Resul
     for note in seconds {
         total += note.duration;
     }
-    vector[0] = total / seconds.len() as FloatType;
+    vector[0] = (total / seconds.len() as FloatType).into();
     Ok(())
 }
 
-fn variability_of_note_duration(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn variability_of_note_duration(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     let seconds = data.seconds_map()?;
     if seconds.is_empty() {
         return Err(lacks_notes());
     }
     let durations: Vec<FloatType> = seconds.iter().map(|note| note.duration).collect();
-    vector[0] = crate::statistics::pstdev(&durations);
+    vector[0] = crate::statistics::pstdev(&durations).into();
     Ok(())
 }
 
-fn maximum_note_duration(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn maximum_note_duration(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     let seconds = data.seconds_map()?;
     if seconds.is_empty() {
         return Err(lacks_notes());
@@ -1228,11 +1229,11 @@ fn maximum_note_duration(data: &DataInstance, vector: &mut [FloatType]) -> Resul
             longest = note.duration;
         }
     }
-    vector[0] = longest;
+    vector[0] = longest.into();
     Ok(())
 }
 
-fn minimum_note_duration(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn minimum_note_duration(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     let seconds = data.seconds_map()?;
     let Some(first) = seconds.first() else {
         return Err(lacks_notes());
@@ -1243,21 +1244,21 @@ fn minimum_note_duration(data: &DataInstance, vector: &mut [FloatType]) -> Resul
             shortest = note.duration;
         }
     }
-    vector[0] = shortest;
+    vector[0] = shortest.into();
     Ok(())
 }
 
-fn staccato_incidence(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn staccato_incidence(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     let seconds = data.seconds_map()?;
     if seconds.is_empty() {
         return Err(lacks_notes());
     }
     let short = seconds.iter().filter(|note| note.duration < 0.10).count();
-    vector[0] = short as FloatType / seconds.len() as FloatType;
+    vector[0] = (short as FloatType / seconds.len() as FloatType).into();
     Ok(())
 }
 
-fn average_time_between_attacks(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn average_time_between_attacks(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     let onsets = onsets(data)?;
     if onsets.is_empty() {
         return Err(lacks_notes());
@@ -1266,14 +1267,11 @@ fn average_time_between_attacks(data: &DataInstance, vector: &mut [FloatType]) -
     if gaps.is_empty() {
         return Err(Error::Feature("division by zero".to_string()));
     }
-    vector[0] = crate::statistics::python_sum(&gaps) / gaps.len() as FloatType;
+    vector[0] = (crate::statistics::python_sum(&gaps) / gaps.len() as FloatType).into();
     Ok(())
 }
 
-fn variability_of_time_between_attacks(
-    data: &DataInstance,
-    vector: &mut [FloatType],
-) -> Result<()> {
+fn variability_of_time_between_attacks(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     let onsets = onsets(data)?;
     if onsets.is_empty() {
         return Err(lacks_notes());
@@ -1284,13 +1282,13 @@ fn variability_of_time_between_attacks(
             "pstdev requires at least one data point".to_string(),
         ));
     }
-    vector[0] = crate::statistics::pstdev(&gaps);
+    vector[0] = crate::statistics::pstdev(&gaps).into();
     Ok(())
 }
 
 fn average_time_between_attacks_for_each_voice(
     data: &DataInstance,
-    vector: &mut [FloatType],
+    vector: &mut [Value],
 ) -> Result<()> {
     let mut averages = Vec::new();
     for onsets in onsets_by_part(data)? {
@@ -1300,13 +1298,13 @@ fn average_time_between_attacks_for_each_voice(
         }
         averages.push(crate::statistics::python_sum(&gaps) / gaps.len() as FloatType);
     }
-    vector[0] = crate::statistics::python_sum(&averages) / averages.len() as FloatType;
+    vector[0] = (crate::statistics::python_sum(&averages) / averages.len() as FloatType).into();
     Ok(())
 }
 
 fn average_variability_of_time_between_attacks_for_each_voice(
     data: &DataInstance,
-    vector: &mut [FloatType],
+    vector: &mut [Value],
 ) -> Result<()> {
     let mut deviations = Vec::new();
     for onsets in onsets_by_part(data)? {
@@ -1316,71 +1314,72 @@ fn average_variability_of_time_between_attacks_for_each_voice(
         }
         deviations.push(crate::statistics::pstdev(&gaps));
     }
-    vector[0] = crate::statistics::python_sum(&deviations) / deviations.len() as FloatType;
+    vector[0] = (crate::statistics::python_sum(&deviations) / deviations.len() as FloatType).into();
     Ok(())
 }
 
-fn initial_tempo(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn initial_tempo(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     let boundaries = data.metronome_mark_boundaries()?;
     vector[0] = boundaries
         .first()
         .and_then(|(_, _, mark)| mark.sounding_quarter_bpm())
-        .ok_or_else(|| Error::Feature("the first tempo says no number".to_string()))?;
+        .ok_or_else(|| Error::Feature("the first tempo says no number".to_string()))?
+        .into();
     Ok(())
 }
 
-fn initial_time_signature(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn initial_time_signature(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     if let Some(meter) = data.time_signatures().first() {
-        vector[0] = FloatType::from(meter.numerator());
-        vector[1] = FloatType::from(meter.denominator());
+        vector[0] = meter.numerator().into();
+        vector[1] = meter.denominator().into();
     }
     Ok(())
 }
 
-fn compound_or_simple_meter(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn compound_or_simple_meter(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     if data
         .time_signatures()
         .first()
         .is_some_and(|meter| meter.beat_division_count_name() == "Compound")
     {
-        vector[0] = 1.0;
+        vector[0] = Value::Integer(1);
     }
     Ok(())
 }
 
-fn triple_meter(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn triple_meter(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     if data
         .time_signatures()
         .first()
         .is_some_and(|meter| meter.numerator() == 3)
     {
-        vector[0] = 1.0;
+        vector[0] = Value::Integer(1);
     }
     Ok(())
 }
 
-fn quintuple_meter(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn quintuple_meter(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     if data
         .time_signatures()
         .first()
         .is_some_and(|meter| meter.numerator() == 5)
     {
-        vector[0] = 1.0;
+        vector[0] = Value::Integer(1);
     }
     Ok(())
 }
 
-fn changes_of_meter(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn changes_of_meter(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     let meters = data.time_signatures();
     if let [first, rest @ ..] = meters.as_slice()
         && rest.iter().any(|meter| !first.ratio_equal(meter))
     {
-        vector[0] = 1.0;
+        vector[0] = Value::Integer(1);
     }
     Ok(())
 }
 
-fn duration(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn duration(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     let seconds = data.seconds_map()?;
     if seconds.is_empty() {
         return Err(Error::Feature("input lacks duration".to_string()));
@@ -1388,40 +1387,41 @@ fn duration(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
     vector[0] = seconds
         .iter()
         .map(|note| note.end)
-        .fold(FloatType::NEG_INFINITY, FloatType::max);
+        .fold(FloatType::NEG_INFINITY, FloatType::max)
+        .into();
     Ok(())
 }
 
-fn maximum_number_of_independent_voices(
-    data: &DataInstance,
-    vector: &mut [FloatType],
-) -> Result<()> {
-    vector[0] = data.parts_sounding()?.iter().copied().max().unwrap_or(0) as FloatType;
+fn maximum_number_of_independent_voices(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
+    vector[0] = data
+        .parts_sounding()?
+        .iter()
+        .copied()
+        .max()
+        .unwrap_or(0)
+        .into();
     Ok(())
 }
 
-fn average_number_of_independent_voices(
-    data: &DataInstance,
-    vector: &mut [FloatType],
-) -> Result<()> {
+fn average_number_of_independent_voices(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     let sounding = data.parts_sounding()?;
     if sounding.is_empty() {
         return Err(lacks_notes());
     }
-    vector[0] = sounding.iter().sum::<usize>() as FloatType / sounding.len() as FloatType;
+    vector[0] = (sounding.iter().sum::<usize>() as FloatType / sounding.len() as FloatType).into();
     Ok(())
 }
 
 fn variability_of_number_of_independent_voices(
     data: &DataInstance,
-    vector: &mut [FloatType],
+    vector: &mut [Value],
 ) -> Result<()> {
     let sounding = data.parts_sounding()?;
     if sounding.is_empty() {
         return Err(lacks_notes());
     }
     let counts: Vec<FloatType> = sounding.iter().map(|count| *count as FloatType).collect();
-    vector[0] = crate::statistics::pstdev(&counts);
+    vector[0] = crate::statistics::pstdev(&counts).into();
     Ok(())
 }
 
@@ -1484,19 +1484,16 @@ fn pitch_total(data: &DataInstance) -> usize {
     data.pitch_class_histogram().iter().sum()
 }
 
-fn pitched_instruments_present(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn pitched_instruments_present(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     for (program, notes) in instrument_parts(data)? {
         if notes > 0 {
-            vector[program_of(program)?] = 1.0;
+            vector[program_of(program)?] = Value::Integer(1);
         }
     }
     Ok(())
 }
 
-fn note_prevalence_of_pitched_instruments(
-    data: &DataInstance,
-    vector: &mut [FloatType],
-) -> Result<()> {
+fn note_prevalence_of_pitched_instruments(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     let total = pitch_total(data);
     for (program, notes) in instrument_parts(data)? {
         if notes > 0 {
@@ -1504,7 +1501,7 @@ fn note_prevalence_of_pitched_instruments(
             if total == 0 {
                 return Err(Error::Feature("division by zero".to_string()));
             }
-            vector[program] = notes as FloatType / total as FloatType;
+            vector[program] = (notes as FloatType / total as FloatType).into();
         }
     }
     Ok(())
@@ -1512,7 +1509,7 @@ fn note_prevalence_of_pitched_instruments(
 
 fn variability_of_note_prevalence_of_pitched_instruments(
     data: &DataInstance,
-    vector: &mut [FloatType],
+    vector: &mut [Value],
 ) -> Result<()> {
     let parts = instrument_parts(data)?;
     let total = pitch_total(data);
@@ -1529,15 +1526,18 @@ fn variability_of_note_prevalence_of_pitched_instruments(
     }
     let mean = crate::statistics::python_sum(&shares) / shares.len() as FloatType;
     let squares: Vec<FloatType> = shares.iter().map(|share| (share - mean).powi(2)).collect();
-    vector[0] = (crate::statistics::python_sum(&squares) / squares.len() as FloatType).sqrt();
+    vector[0] = (crate::statistics::python_sum(&squares) / squares.len() as FloatType)
+        .sqrt()
+        .into();
     Ok(())
 }
 
-fn number_of_pitched_instruments(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn number_of_pitched_instruments(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     vector[0] = instrument_parts(data)?
         .iter()
         .filter(|(_, notes)| *notes > 0)
-        .count() as FloatType;
+        .count()
+        .into();
     Ok(())
 }
 
@@ -1563,57 +1563,59 @@ fn instrument_fraction(data: &DataInstance, programs: &[usize]) -> Result<FloatT
     Ok(count as FloatType / total as FloatType)
 }
 
-fn string_keyboard_fraction(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
-    vector[0] = instrument_fraction(data, &[0, 1, 2, 3, 4, 5, 6, 7])?;
+fn string_keyboard_fraction(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
+    vector[0] = instrument_fraction(data, &[0, 1, 2, 3, 4, 5, 6, 7])?.into();
     Ok(())
 }
 
-fn acoustic_guitar_fraction(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
-    vector[0] = instrument_fraction(data, &[24, 25])?;
+fn acoustic_guitar_fraction(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
+    vector[0] = instrument_fraction(data, &[24, 25])?.into();
     Ok(())
 }
 
-fn electric_guitar_fraction(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
-    vector[0] = instrument_fraction(data, &[26, 27, 28, 29, 30, 31])?;
+fn electric_guitar_fraction(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
+    vector[0] = instrument_fraction(data, &[26, 27, 28, 29, 30, 31])?.into();
     Ok(())
 }
 
-fn violin_fraction(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
-    vector[0] = instrument_fraction(data, &[40, 110])?;
+fn violin_fraction(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
+    vector[0] = instrument_fraction(data, &[40, 110])?.into();
     Ok(())
 }
 
-fn saxophone_fraction(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
-    vector[0] = instrument_fraction(data, &[64, 65, 66, 67])?;
+fn saxophone_fraction(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
+    vector[0] = instrument_fraction(data, &[64, 65, 66, 67])?.into();
     Ok(())
 }
 
-fn brass_fraction(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
-    vector[0] = instrument_fraction(data, &[56, 57, 58, 59, 60, 61])?;
+fn brass_fraction(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
+    vector[0] = instrument_fraction(data, &[56, 57, 58, 59, 60, 61])?.into();
     Ok(())
 }
 
-fn woodwinds_fraction(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
-    vector[0] = instrument_fraction(data, &[68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79])?;
+fn woodwinds_fraction(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
+    vector[0] =
+        instrument_fraction(data, &[68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79])?.into();
     Ok(())
 }
 
-fn orchestral_strings_fraction(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
-    vector[0] = instrument_fraction(data, &[41, 42, 43, 44, 45])?;
+fn orchestral_strings_fraction(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
+    vector[0] = instrument_fraction(data, &[41, 42, 43, 44, 45])?.into();
     Ok(())
 }
 
-fn string_ensemble_fraction(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
-    vector[0] = instrument_fraction(data, &[48, 49, 50, 51])?;
+fn string_ensemble_fraction(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
+    vector[0] = instrument_fraction(data, &[48, 49, 50, 51])?.into();
     Ok(())
 }
 
-fn electric_instrument_fraction(data: &DataInstance, vector: &mut [FloatType]) -> Result<()> {
+fn electric_instrument_fraction(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     vector[0] = instrument_fraction(
         data,
         &[
             4, 5, 16, 18, 26, 27, 28, 29, 30, 31, 33, 34, 35, 36, 37, 38, 39,
         ],
-    )?;
+    )?
+    .into();
     Ok(())
 }

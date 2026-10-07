@@ -38,8 +38,14 @@ are tunes whose own reading cannot be written back.
   vector, and `features::native::NATIVE` the 19 music21 adds of its own:
   the key's mode and tonal certainty, note lengths, the chords of the piece
   chordified, chord-symbol bass motion and the Landini cadence. music21's
-  language feature is not ported. Every one gives music21's values on
-  every MusicXML score of music21's corpus.
+  language feature is not ported. Each value is a `features::Value`, a
+  whole number or a float as music21's is. Every one gives music21's
+  values on every MusicXML score of music21's corpus. A `features::DataSet`
+  reads features of many pieces into one table, each row labelled with its
+  piece's class, and writes it as tab-separated, CSV or ARFF text exactly
+  as music21's `DataSet` does; `extractors_by_id`, `index_of`,
+  `vector_by_id` and `all_features_as_list` are music21's helpers of those
+  names.
 - `text` is music21's `text` module: `assemble_lyrics` and
   `assemble_all_lyrics` join a stream's lyrics into words and lines, and
   `prepend_article` and `postpend_article` move a title's article. With it
