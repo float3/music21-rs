@@ -89,6 +89,12 @@ are tunes whose own reading cannot be written back.
   bare, or tuned as a guitar, ukulele, bass guitar or mandolin -- ordered
   lowest string first and sounded as pitches, with `FirstFret` and
   `ChordWithFretBoard`.
+- `tree` begins music21's `tree` package: `as_timespans` reads every
+  element of a stream, flat or semi-flat, as an `ElementTimespan`, and a
+  `TimespanTree` answers what starts, stops or sounds across an offset and
+  walks the `Verticality` at each offset something starts, with its
+  pitches, pitch classes, bass and the time to the next. Every MusicXML
+  score of music21's corpus is read as music21 reads it.
 - `analysis::windowed::WindowedAnalysis` cuts a stream into windows of a
   quarter note and runs any analysis over windows of each size, overlapping,
   side by side or averaged, as music21's `WindowedAnalysis` does; and
