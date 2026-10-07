@@ -83,6 +83,16 @@ are tunes whose own reading cannot be written back.
   transformed, or as multisets, transposed or inverted -- and labels them
   in a copy of the stream with a line and a lyric, as music21's
   `search.serial` does.
+- `Stream::template` is music21's `template`: the stream and every stream
+  in it without its notes, chords, rests, dynamics and expressions, a rest
+  standing for each stretch of them unless asked not to, with
+  `TemplateOptions` choosing what goes, whether voices stay and what is
+  kept whatever else says. `Stream::insert_into_note_or_chord` adds a note
+  or chord into what starts within its length, as music21's
+  `insertIntoNoteOrChord` does, and `Stream::flatten_unnecessary_voices`
+  takes out empty voices and the voice left alone, as music21's
+  `flattenUnnecessaryVoices` does. Every MusicXML score of music21's corpus
+  gives music21's templates, merged notes and flattened measures.
 - `ChordSymbol` carries lyrics, as music21's does, with `lyrics`,
   `lyrics_mut` and `add_lyric`.
 - `tablature` is music21's `tablature`: `FretNote`s on a `FretBoard` --
