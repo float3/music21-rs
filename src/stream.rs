@@ -27,11 +27,13 @@ mod consecutive;
 mod placed;
 mod repeats;
 mod sounding;
+mod template;
 mod ties;
 
 pub use chordify::ChordifyOptions;
 pub use consecutive::{ConsecutiveOptions, MelodicInterval};
 pub use placed::Placed;
+pub use template::{TemplateOptions, removed_by_default};
 
 use crate::{
     bar::{Barline, Ending},
