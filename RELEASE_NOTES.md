@@ -104,6 +104,17 @@ are tunes whose own reading cannot be written back.
   dynamics, as music21's `PartReduction` does. `Duration::set_dots` is
   music21's `dots` setter. Every MusicXML score of music21's corpus, its
   notes marked, is reduced and weighed as music21 reduces and weighs it.
+- `braille` begins music21's `braille` package: `braille::lookup` holds
+  the signs of braille music, and `braille::basic` writes one element at a
+  time -- notes with their slurs, tuplets, articulations, accidentals,
+  octaves, fingerings, fermatas and ties, chords as intervals, rests,
+  clefs, key and time signatures, barlines, dynamics, text expressions,
+  tempo texts, metronome marks, instruments, headings, words and numbers --
+  each with the English music21 writes beside it, and converts braille to
+  braille ASCII and dots and back. Every element of every MusicXML score of
+  music21's corpus is written as music21 writes it.
+- `Rest::full_measure` is music21's `fullMeasure`, which the MusicXML reader
+  sets where music21's does.
 - `ChordSymbol` carries lyrics, as music21's does, with `lyrics`,
   `lyrics_mut` and `add_lyric`.
 - `tablature` is music21's `tablature`: `FretNote`s on a `FretBoard` --
