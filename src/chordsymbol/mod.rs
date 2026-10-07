@@ -117,6 +117,10 @@ pub struct ChordSymbol {
     kind_text: crate::display::Drawn<Option<String>>,
     #[cfg_attr(feature = "serde", serde(default))]
     placement: crate::display::Drawn<Option<crate::notation::Placement>>,
+    /// Syllables sung to the symbol, which music21 lets any note-like
+    /// object carry.
+    #[cfg_attr(feature = "serde", serde(default))]
+    lyrics: Vec<crate::notation::Lyric>,
 }
 
 /// The length of a symbol nobody has given one: none at all.
@@ -405,6 +409,7 @@ impl ChordSymbol {
             duration: no_time(),
             kind_text: crate::display::Drawn(None),
             placement: crate::display::Drawn(None),
+            lyrics: Vec::new(),
         })
     }
 
@@ -487,6 +492,7 @@ impl ChordSymbol {
             duration: no_time(),
             kind_text: crate::display::Drawn(None),
             placement: crate::display::Drawn(None),
+            lyrics: Vec::new(),
         })
     }
 
@@ -508,7 +514,24 @@ impl ChordSymbol {
             duration: no_time(),
             kind_text: crate::display::Drawn(Some(text.unwrap_or_else(|| "N.C.".to_string()))),
             placement: crate::display::Drawn(None),
+            lyrics: Vec::new(),
         }
+    }
+
+    /// The syllables sung to the symbol, one per verse.
+    pub fn lyrics(&self) -> &[crate::notation::Lyric] {
+        &self.lyrics
+    }
+
+    /// The same, for editing in place.
+    pub fn lyrics_mut(&mut self) -> &mut Vec<crate::notation::Lyric> {
+        &mut self.lyrics
+    }
+
+    /// Adds a syllable as a verse, as [`crate::note::Note::add_lyric`] does:
+    /// music21's `addLyric`.
+    pub fn add_lyric(&mut self, text: &str, number: Option<IntegerType>, apply_raw: bool) {
+        crate::notation::verses::add(&mut self.lyrics, text, number, apply_raw);
     }
 
     /// Whether this says nothing sounds: music21's `NoChord`.
