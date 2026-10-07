@@ -314,12 +314,7 @@ fn the_realizer_writes_the_scores_music21_s_writes() {
         let helpers = module(STRIP_LAYOUT, "musicxml_parity_helpers")?;
         let asked = module(ASKED, "realizer_asked")?;
         let exporter = py.import("music21.musicxml.m21ToXml")?;
-        let today: String = py
-            .import("datetime")?
-            .getattr("date")?
-            .call_method0("today")?
-            .str()?
-            .extract()?;
+        let today = musicxml_common::pin_encoding_date(py)?;
         let version: String = py.import("music21")?.getattr("__version__")?.extract()?;
         let options = ExportOptions {
             encoding_date: Some(today),

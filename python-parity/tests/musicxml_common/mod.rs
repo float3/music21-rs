@@ -2,6 +2,7 @@
 //! the layout a score is stripped of, and how two documents are compared.
 
 use music21_rs::{Stream, StreamElement, StreamKind};
+use pyo3::prelude::*;
 
 /// Scores that are written the same by both, and what each exercises.
 // The ABC reader's test shares this module and brings its own tunes.
@@ -565,6 +566,47 @@ def strip_layout(score):
             reset_placing(note)
     return score
 "#;
+
+/// Python that fixes the date music21's MusicXML exporter stamps in
+/// `<encoding-date>`: `m21ToXml` reads it from `datetime.date.today()` at
+/// export time, and is given a `datetime` whose `date.today()` is the day
+/// `pin` was called.
+const PIN_ENCODING_DATE: &str = r#"
+import datetime
+import types
+
+from music21.musicxml import m21ToXml
+
+def pin():
+    day = datetime.date.today()
+
+    class PinnedDate(datetime.date):
+        @classmethod
+        def today(cls):
+            return day
+
+    pinned = types.ModuleType('datetime')
+    pinned.__dict__.update(vars(datetime))
+    pinned.date = PinnedDate
+    m21ToXml.datetime = pinned
+    return str(day)
+"#;
+
+/// The date both writers put in `<encoding-date>`: today's, read once, with
+/// music21's exporter held to it for the rest of the run, so a run that
+/// crosses midnight still writes the same date on both sides.
+#[allow(dead_code)]
+pub fn pin_encoding_date(py: Python<'_>) -> PyResult<String> {
+    PyModule::from_code(
+        py,
+        &std::ffi::CString::new(PIN_ENCODING_DATE).expect("no nul in the helper"),
+        c"musicxml_encoding_date.py",
+        c"musicxml_encoding_date",
+    )?
+    .getattr("pin")?
+    .call0()?
+    .extract()
+}
 
 /// Part and instrument ids renamed `PART1`, `ID1`... in the order they first
 /// appear.
