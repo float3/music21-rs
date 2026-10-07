@@ -943,12 +943,29 @@ impl Stream {
     /// One timeline with the nesting dissolved: music21's `flatten`.
     ///
     /// Each nested stream's offset is added to its contents', and the
-    /// streams themselves are gone; everything else comes through in offset
-    /// order.
+    /// streams themselves are gone; everything else comes through in
+    /// music21's order: by offset, then at one offset by class -- a clef
+    /// before a key before a dynamic before a chord symbol before a note --
+    /// with grace notes first among their class, and otherwise as the
+    /// nesting held them, part by part.
     pub fn flatten(&self) -> Self {
         let mut flattened = Self::with_kind(self.kind);
         self.flatten_into(0.0, &mut flattened.events);
-        flattened.sort_events();
+        // music21 sorts what stands at one offset by its class order --
+        // a dynamic before a chord symbol before a note -- and a grace note
+        // before the rest of its class, and otherwise keeps the order the
+        // walk met them in.
+        flattened.events.sort_by(|left, right| {
+            left.offset
+                .partial_cmp(&right.offset)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| {
+                    left.element
+                        .class_sort_order()
+                        .cmp(&right.element.class_sort_order())
+                })
+                .then_with(|| is_grace(&right.element).cmp(&is_grace(&left.element)))
+        });
         flattened
     }
 
@@ -1311,6 +1328,11 @@ impl Stream {
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
     }
+}
+
+/// Whether an element is a grace note or chord, which takes no time.
+fn is_grace(element: &StreamElement) -> bool {
+    element.duration().is_some_and(Duration::is_grace)
 }
 
 /// How many leaves an element is: those of a nested stream, or itself.
