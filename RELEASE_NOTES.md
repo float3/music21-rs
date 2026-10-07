@@ -95,6 +95,11 @@ are tunes whose own reading cannot be written back.
   walks the `Verticality` at each offset something starts, with its
   pitches, pitch classes, bass and the time to the next. Every MusicXML
   score of music21's corpus is read as music21 reads it.
+  Each `Verticality` pairs its parts' motion and gathers voice-leading
+  quartets, music21's `getPairedMotion` and `getAllVoiceLeadingQuartets`;
+  the tree walks verticalities n at a time, `unwrap`s them into each
+  part's `Horizontality` with its passing and neighbour tones, finds the
+  runs between consonances and splits at offsets.
 - `analysis::windowed::WindowedAnalysis` cuts a stream into windows of a
   quarter note and runs any analysis over windows of each size, overlapping,
   side by side or averaged, as music21's `WindowedAnalysis` does; and

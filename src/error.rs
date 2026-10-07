@@ -139,6 +139,10 @@ pub enum Error {
     /// string, or a note on a string it has not got.
     #[error("Tablature error: {0}")]
     Tablature(String),
+    /// A timespan tree that cannot answer as asked: music21's
+    /// `TreeException`.
+    #[error("Tree error: {0}")]
+    Tree(String),
     /// A score that cannot be written as MusicXML.
     #[cfg(feature = "musicxml")]
     #[error("MusicXML export error: {0}")]
