@@ -146,6 +146,9 @@ pub mod tempo;
 pub mod text;
 /// TinyNotation, a line of notes written as letters and numbers.
 pub mod tinynotation;
+/// A stream's elements as spans of time, and the moments where what sounds
+/// changes.
+pub mod tree;
 /// Tuning-system ratios, labels and frequency helpers.
 pub mod tuningsystem;
 /// Two-voice voice-leading classification and parallel-interval checks.
