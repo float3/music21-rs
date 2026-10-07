@@ -1,5 +1,5 @@
-//! The crate's jSymbolic feature extractors against music21's:
-//! `features.jSymbolic`.
+//! The crate's feature extractors against music21's: `features.jSymbolic`
+//! and `features.native`, all but the native language feature.
 //!
 //! Every extractor's id, name, description, size and flags are compared
 //! with music21's live class. Then each corpus score is read by music21 and
@@ -13,7 +13,7 @@
 //! those instead of the writer test's scores, which is how the corpus is
 //! swept.
 
-use music21_rs::features::{DataInstance, jsymbolic};
+use music21_rs::features::{DataInstance, Extractor, jsymbolic, native};
 use music21_rs::musicxml::from_musicxml;
 use music21_rs::{FloatType, StreamKind};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
@@ -26,7 +26,7 @@ use musicxml_common::SCORES;
 const MUSIC21: &str = r#"
 import zipfile
 from music21 import corpus, features
-from music21.features import jSymbolic
+from music21.features import jSymbolic, native
 
 def source_text(name):
     path = corpus.getWork(name)
@@ -51,27 +51,33 @@ def source_text(name):
             pass
     return data.decode('latin-1')
 
-def ours(extractor_id):
-    return extractor_id[:1].upper() in 'MPRTI'
+EXTRACTORS = {
+    'jSymbolic': jSymbolic.featureExtractors,
+    'native': [cls for cls in native.featureExtractors if cls.id != 'TX1'],
+}
 
-def metadata():
+def metadata(module):
     return [(cls.id, cls.name, ' '.join(cls.description.split()), cls.dimensions,
              cls.discrete, cls.normalize)
-            for cls in jSymbolic.featureExtractors if ours(cls.id)]
+            for cls in EXTRACTORS[module]]
 
 def report(name):
     data = features.DataInstance(corpus.parse(name, forceSource=True))
     out = []
-    for cls in jSymbolic.featureExtractors:
-        if not ours(cls.id):
-            continue
-        try:
-            vector = [float(value) for value in cls(data).extract().vector]
-            out.append((cls.id, vector, ''))
-        except Exception as error:
-            out.append((cls.id, [], type(error).__name__))
+    for module, extractors in EXTRACTORS.items():
+        for cls in extractors:
+            try:
+                vector = [float(value) for value in cls(data).extract().vector]
+                out.append((module, cls.id, vector, ''))
+            except Exception as error:
+                out.append((module, cls.id, [], type(error).__name__))
     return out
 "#;
+
+const MODULES: [(&str, &[Extractor]); 2] = [
+    ("jSymbolic", jsymbolic::JSYMBOLIC),
+    ("native", native::NATIVE),
+];
 
 #[test]
 fn the_crate_extracts_features_as_music21_does() {
@@ -91,24 +97,27 @@ fn the_crate_extracts_features_as_music21_does() {
         let mut failures = Vec::new();
 
         type Metadata = (String, String, String, usize, bool, bool);
-        let theirs: Vec<Metadata> = music21.getattr("metadata")?.call0()?.extract()?;
-        let ours: Vec<Metadata> = jsymbolic::JSYMBOLIC
-            .iter()
-            .map(|extractor| {
-                (
-                    extractor.id().to_string(),
-                    extractor.name().to_string(),
-                    extractor.description().to_string(),
-                    extractor.dimensions(),
-                    extractor.discrete(),
-                    extractor.normalize(),
-                )
-            })
-            .collect();
-        if ours != theirs {
-            failures.push(format!(
-                "the extractors differ:\n  music21    {theirs:?}\n  music21-rs {ours:?}"
-            ));
+        for (module, extractors) in MODULES {
+            let theirs: Vec<Metadata> =
+                music21.getattr("metadata")?.call1((module,))?.extract()?;
+            let ours: Vec<Metadata> = extractors
+                .iter()
+                .map(|extractor| {
+                    (
+                        extractor.id().to_string(),
+                        extractor.name().to_string(),
+                        extractor.description().to_string(),
+                        extractor.dimensions(),
+                        extractor.discrete(),
+                        extractor.normalize(),
+                    )
+                })
+                .collect();
+            if ours != theirs {
+                failures.push(format!(
+                    "the {module} extractors differ:\n  music21    {theirs:?}\n  music21-rs {ours:?}"
+                ));
+            }
         }
 
         let chosen: Vec<String> = match std::env::var("FEATURES_PARITY_SCORES") {
@@ -131,7 +140,7 @@ fn the_crate_extracts_features_as_music21_does() {
             else {
                 continue;
             };
-            let theirs: Vec<(String, Vec<FloatType>, String)> =
+            let theirs: Vec<(String, String, Vec<FloatType>, String)> =
                 match music21.getattr("report")?.call1((name,)) {
                     Ok(report) => report.extract()?,
                     Err(error) => {
@@ -155,9 +164,13 @@ fn the_crate_extracts_features_as_music21_does() {
                 }
             };
             compared += 1;
-            for (id, their_vector, their_error) in theirs {
-                let Some(extractor) = jsymbolic::extractor(&id) else {
-                    failures.push(format!("{name}: the crate has no extractor {id}"));
+            for (module, id, their_vector, their_error) in theirs {
+                let extractor = match module.as_str() {
+                    "jSymbolic" => jsymbolic::extractor(&id),
+                    _ => native::extractor(&id),
+                };
+                let Some(extractor) = extractor else {
+                    failures.push(format!("{name}: the crate has no {module} extractor {id}"));
                     continue;
                 };
                 match extractor.extract(&data) {

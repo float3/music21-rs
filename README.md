@@ -106,8 +106,9 @@ music21's analyses of whole pieces are ported beside its chord and pitch
 analysis, each held to music21 on its corpus: `Stream::chordify`, the
 melodic intervals between consecutive notes, Patel's rhythmic and melodic
 variability, metrical depth and melodic accent, windowed and floating key
-analysis (`analysis::windowed`, `analysis::floating_key`), and jSymbolic's
-melodic and pitch features for machine learning (`features::jsymbolic`).
+analysis (`analysis::windowed`, `analysis::floating_key`), and the features
+music21 extracts for machine learning, jSymbolic's and its own
+(`features::jsymbolic`, `features::native`).
 
 MuseScore's own files are read with no feature and no MuseScore installed:
 `musescore::from_mscx` takes the text of a `.mscx`, as MuseScore 3 and 4 save

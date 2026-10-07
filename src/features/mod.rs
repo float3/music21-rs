@@ -7,7 +7,7 @@
 //! interval histograms, its melodic contour. An [`Extractor`] reads those
 //! and answers a [`Feature`], a vector of numbers of a fixed length.
 //! [`jsymbolic::JSYMBOLIC`] holds the extractors music21 ports from Cory
-//! McKay's jSymbolic.
+//! McKay's jSymbolic, and [`native::NATIVE`] those music21 adds of its own.
 //!
 //! ```
 //! use music21_rs::features::{DataInstance, jsymbolic};
@@ -21,11 +21,13 @@
 //! ```
 
 pub mod jsymbolic;
+pub mod native;
 
 use std::cell::OnceCell;
 
 use crate::{
-    analysis::pitch_analysis,
+    analysis::{self, KeyEstimate, KeyProfile, pitch_analysis},
+    chord::Chord,
     defaults::{FloatType, IntegerType},
     error::{Error, Result},
     meter::TimeSignature,
@@ -177,7 +179,16 @@ pub struct DataInstance {
     midi_interval_histogram: OnceCell<Vec<usize>>,
     contour: OnceCell<Vec<IntegerType>>,
     seconds: OnceCell<std::result::Result<Vec<Seconds>, Error>>,
-    parts_sounding: OnceCell<std::result::Result<Vec<usize>, Error>>,
+    chordified: OnceCell<std::result::Result<Chordified, Error>>,
+    quarter_length_histogram: OnceCell<Vec<(FloatType, usize)>>,
+    analyzed_key: OnceCell<Option<Vec<KeyEstimate>>>,
+}
+
+/// The chords of a piece chordified, and how many parts sound in each.
+#[derive(Debug)]
+struct Chordified {
+    chords: Vec<Chord>,
+    parts_sounding: Vec<usize>,
 }
 
 /// Where a note sounds in time, in seconds at the tempi of the piece:
@@ -233,7 +244,9 @@ impl DataInstance {
             midi_interval_histogram: OnceCell::new(),
             contour: OnceCell::new(),
             seconds: OnceCell::new(),
-            parts_sounding: OnceCell::new(),
+            chordified: OnceCell::new(),
+            quarter_length_histogram: OnceCell::new(),
+            analyzed_key: OnceCell::new(),
         })
     }
 
@@ -450,28 +463,80 @@ impl DataInstance {
     ///
     /// A score that cannot be chordified.
     pub fn parts_sounding(&self) -> Result<&[usize]> {
-        self.parts_sounding
+        Ok(&self.chordified()?.parts_sounding)
+    }
+
+    /// The chords of the piece chordified with every pitch kept: music21's
+    /// `chordify.flat.getElementsByClass(Chord)`. A piece that is not a
+    /// score is not chordified, so these are its own chords and chord
+    /// symbols, a symbol that sounds nothing an empty chord.
+    ///
+    /// # Errors
+    ///
+    /// A score that cannot be chordified.
+    pub fn chordified_chords(&self) -> Result<&[Chord]> {
+        Ok(&self.chordified()?.chords)
+    }
+
+    fn chordified(&self) -> Result<&Chordified> {
+        self.chordified
             .get_or_init(|| {
                 if self.prepared.kind() == StreamKind::Score {
-                    self.prepared.chordify_parts_sounding()
+                    let (chordified, parts_sounding) = self.prepared.chordify_parts_sounding()?;
+                    Ok(Chordified {
+                        chords: chords_of(&chordified)?,
+                        parts_sounding,
+                    })
                 } else {
-                    Ok(self
-                        .prepared
-                        .flatten()
-                        .events()
-                        .iter()
-                        .filter(|event| {
-                            matches!(
-                                event.element(),
-                                StreamElement::Chord(_) | StreamElement::ChordSymbol(_)
-                            )
-                        })
-                        .map(|_| 0)
-                        .collect())
+                    let chords = chords_of(&self.prepared)?;
+                    Ok(Chordified {
+                        parts_sounding: vec![0; chords.len()],
+                        chords,
+                    })
                 }
             })
-            .as_deref()
+            .as_ref()
             .map_err(Clone::clone)
+    }
+
+    /// How often each length in quarters comes among the piece's notes, in
+    /// the order each is first met: music21's
+    /// `flat.notes.quarterLengthHistogram`, a `Counter`.
+    pub fn quarter_length_histogram(&self) -> &[(FloatType, usize)] {
+        self.quarter_length_histogram.get_or_init(|| {
+            let mut counts: Vec<(FloatType, usize)> = Vec::new();
+            for event in self.prepared.flatten().events() {
+                let element = event.element();
+                if !matches!(
+                    element,
+                    StreamElement::Note(_)
+                        | StreamElement::Chord(_)
+                        | StreamElement::Unpitched(_)
+                        | StreamElement::PercussionChord(_)
+                        | StreamElement::ChordSymbol(_)
+                ) {
+                    continue;
+                }
+                let length = element.quarter_length();
+                match counts.iter_mut().find(|(known, _)| *known == length) {
+                    Some((_, count)) => *count += 1,
+                    None => counts.push((length, 1)),
+                }
+            }
+            counts
+        })
+    }
+
+    /// The keys the piece is likely in, best first, by Aarden and Essen's
+    /// weights: music21's `flat.analyzedKey`, the key and its
+    /// `alternateInterpretations`. Nothing for a piece with no pitched
+    /// notes.
+    pub fn analyzed_key(&self) -> Option<&[KeyEstimate]> {
+        self.analyzed_key
+            .get_or_init(|| {
+                analysis::estimate_key_of_stream(KeyProfile::AardenEssen, &self.prepared)
+            })
+            .as_deref()
     }
 
     /// The meters the piece states, in order.
@@ -507,6 +572,23 @@ impl DataInstance {
             vec![&self.prepared]
         }
     }
+}
+
+/// The chords and chord symbols of a stream, nested ones included.
+fn chords_of(stream: &Stream) -> Result<Vec<Chord>> {
+    stream
+        .flatten()
+        .events()
+        .iter()
+        .filter_map(|event| match event.element() {
+            StreamElement::Chord(chord) => Some(Ok(chord.clone())),
+            StreamElement::ChordSymbol(symbol) if symbol.is_no_chord() => {
+                Some(Chord::new(&[] as &[Pitch]))
+            }
+            StreamElement::ChordSymbol(symbol) => Some(symbol.to_chord()),
+            _ => None,
+        })
+        .collect()
 }
 
 /// The MIDI numbers of the notes [`Stream::find_consecutive_notes`] finds,
