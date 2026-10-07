@@ -47,6 +47,10 @@ are tunes whose own reading cannot be written back.
   contributors summarised, titles with their articles put back in front --
   and `Metadata::title` the title. Every MusicXML score of music21's corpus
   gives music21's lyrics and metadata text.
+- `search::LyricSearcher` is music21's `LyricSearcher`: a stream's lyrics
+  read as text, verse by verse, and searched for a string, each match
+  giving the lyrics, notes and measures it spans. Every MusicXML score of
+  music21's corpus indexes and searches as music21's does.
 - `analysis::windowed::WindowedAnalysis` cuts a stream into windows of a
   quarter note and runs any analysis over windows of each size, overlapping,
   side by side or averaged, as music21's `WindowedAnalysis` does; and

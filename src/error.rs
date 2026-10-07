@@ -131,6 +131,10 @@ pub enum Error {
     /// language music21 knows none of.
     #[error("Text error: {0}")]
     Text(String),
+    /// A search that cannot be made as asked: music21's `SearchException`
+    /// and `LyricSearcherException`.
+    #[error("Search error: {0}")]
+    Search(String),
     /// A score that cannot be written as MusicXML.
     #[cfg(feature = "musicxml")]
     #[error("MusicXML export error: {0}")]
