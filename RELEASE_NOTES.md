@@ -123,6 +123,19 @@ are tunes whose own reading cannot be written back.
   music21's keyword arguments, and its `debug` gives music21's English
   listing of each segment instead. Every MusicXML score of music21's corpus
   is written as music21 writes it, in braille and in English.
+- `alpha` begins music21's experimental `alpha` package:
+  `alpha::analysis::hasher::Hasher` hashes each note, rest and chord of a
+  stream by what music21's `Hasher` is set to hash -- pitch, MIDI number,
+  name with and without octave, duration and offset (rounded or not), the
+  interval from the note before, accidentals, ties, chords as notes or as
+  chords with their normal order and prime form -- and
+  `alpha::analysis::aligner::StreamAligner` aligns two streams by those
+  hashes, with music21's edit distance, the insertions, deletions and
+  substitutions it takes, and how alike the streams are. Every MusicXML
+  score of music21's corpus is hashed and aligned as music21 hashes and
+  aligns it; the interval from the note before is compared on the scores
+  of up to 600 notes and rests with no part split into staves, where
+  music21 answers in good time and the same however the score was read.
 - `Rest::full_measure` is music21's `fullMeasure`, which the MusicXML reader
   sets where music21's does.
 - `ChordSymbol` carries lyrics, as music21's does, with `lyrics`,
