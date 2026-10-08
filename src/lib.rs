@@ -48,6 +48,8 @@ mod readme {}
 // #![feature(lazy_get)]
 /// ABC notation export helpers.
 pub mod abc;
+/// music21's experimental modules: notes hashed and streams aligned by them.
+pub mod alpha;
 /// Key-finding and compact analysis helpers.
 pub mod analysis;
 /// Articulations: how a note is played.
