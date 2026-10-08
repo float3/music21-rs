@@ -158,6 +158,13 @@ enum Members {
 struct Report {
     generated_from: String,
     music21_version: String,
+    /// The commit of music21 every suite ran against: the submodule's.
+    #[serde(default)]
+    music21_commit: String,
+    /// Where that music21 comes from: the submodule's repository, which is
+    /// the fork this repository pins rather than upstream music21.
+    #[serde(default)]
+    music21_repository: String,
     coverage: Option<Coverage>,
     #[serde(default)]
     sizes: Option<Sizes>,
@@ -762,6 +769,8 @@ pub(crate) fn report(workspace_root: &Path, options: &Options) -> Result<(), Box
     let report = Report {
         generated_from: git_head(workspace_root),
         music21_version: submodule_version(workspace_root)?,
+        music21_commit: crate::submodule::commit(workspace_root, "music21")?,
+        music21_repository: crate::submodule::url(workspace_root, "music21")?,
         coverage,
         sizes: Some(measure_sizes(workspace_root)),
         suites,

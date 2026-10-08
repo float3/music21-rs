@@ -44,6 +44,24 @@ pub(crate) fn music21_version(workspace_root: &Path) -> Result<String, Box<dyn E
     Err(format!("no __version__ in {}", path.display()).into())
 }
 
+/// The repository a submodule is cloned from, as `.gitmodules` names it.
+pub(crate) fn url(workspace_root: &Path, name: &str) -> Result<String, Box<dyn Error>> {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(workspace_root)
+        .args(["config", "-f", ".gitmodules", "--get"])
+        .arg(format!("submodule.{name}.url"))
+        .output()
+        .map_err(|error| format!("could not run git for .gitmodules: {error}"))?;
+    if !output.status.success() {
+        return Err(format!("no url for submodule {name} in .gitmodules").into());
+    }
+    Ok(String::from_utf8(output.stdout)
+        .map_err(|error| format!("git printed a non-UTF-8 url: {error}"))?
+        .trim()
+        .to_string())
+}
+
 /// The commit a submodule is checked out at, as a full forty-character hash.
 ///
 /// Asks git rather than parsing `.git` by hand: a submodule's `.git` is a file
