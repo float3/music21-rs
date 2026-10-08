@@ -473,6 +473,18 @@ are tunes whose own reading cannot be written back.
 - `Duration::from_type` and the named values (`Duration::quarter()` and the
   rest) say how they are written, so `expression_is_inferred` is false for
   them, as it is for music21's `Duration('quarter')`.
+- The places `Scale::places_of` counts are numbered by the degree each
+  stands on, lowest first, and `next_pitch_below` and `next_pitch_above`
+  read a note the scale stands twice as the first of them: coming down from
+  Rag Marwa's `D-`, its second degree, the next note is `C`, where it was
+  `B`, as from the seventh.
+- The wheel answers the same on every run where music21 picks at random.
+  A pitch a scale stands on more than one degree is the lowest of them, in
+  `getScaleDegreeFromPitch` and in where `nextPitch` steps from: Rag
+  Marwa's `A` is its fifth degree, not its fifth or its seventh by chance.
+  `partIdRandomize` and `instrumentIdRandomize` count their ids up from one
+  through the process, in the same `P` or `I` and thirty-two hex digits,
+  where they drew them at random.
 
 ## Fixed
 
