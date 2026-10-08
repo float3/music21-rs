@@ -174,14 +174,10 @@ def report(text):
 
 type Value = (String, String);
 type Hashed = (Vec<Value>, (i64, i64));
-type Alignment = (
-    usize,
-    usize,
-    usize,
-    Vec<((i64, i64), (i64, i64), u8)>,
-    f64,
-    String,
-);
+/// A change: what of the target and of the source it is made from, and
+/// which change it is.
+type Change = ((i64, i64), (i64, i64), u8);
+type Alignment = (usize, usize, usize, Vec<Change>, f64, String);
 type Report = (Vec<(Vec<Hashed>, String)>, Vec<Alignment>);
 
 fn hasher_for(variant: usize) -> Hasher {
@@ -369,7 +365,7 @@ fn the_crate_hashes_and_aligns_as_music21_does() {
                             let at = ours
                                 .iter()
                                 .zip(their_hashes)
-                                .position(|(a, b)| !hashes_agree(&[a.clone()], &[b.clone()]))
+                                .position(|(a, b)| !hashes_agree(std::slice::from_ref(a), std::slice::from_ref(b)))
                                 .unwrap_or(ours.len().min(their_hashes.len()));
                             failures.push(format!(
                                 "{name}: hasher {variant}: {} hashes and {} in music21; first difference at {at}:\n  music21    {:?}\n  music21-rs {:?}",
@@ -412,7 +408,7 @@ fn the_crate_hashes_and_aligns_as_music21_does() {
                             failures.push(format!("{name}: align {a} {b}: music21 refused ({their_error})"));
                             continue;
                         }
-                        let ours: Vec<((i64, i64), (i64, i64), u8)> = aligner
+                        let ours: Vec<Change> = aligner
                             .changes
                             .iter()
                             .map(|change| (
