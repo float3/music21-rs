@@ -192,14 +192,15 @@ impl ReductiveNote {
     /// music21's `getNoteAndTextExpression`.
     ///
     /// A chord gives the last of its notes named as the `p` parameter says,
-    /// C where none is said. The note keeps its pitch and length but loses
+    /// or its highest where none is said, the first of equally high ones.
+    /// The note keeps its pitch and length but loses
     /// its lyrics, tie, expressions, articulations and dots; its accidental,
     /// if written, is shown. The octave, stem direction and notehead fill
     /// are then set as said, and the text below added as a lyric.
     ///
     /// # Errors
     ///
-    /// A chord with no note of the name, an unpitched note or percussion
+    /// A chord with no note of the name, or no note, an unpitched note or percussion
     /// chord, or a parameter music21 cannot read: an octave not a number, a
     /// stem direction or notehead fill it does not name.
     pub fn note_and_text_expression(&self) -> Result<(Note, Option<TextExpression>)> {
@@ -227,24 +228,30 @@ impl ReductiveNote {
                 )));
             }
         };
-        let mut note = if let StreamElement::Note(note) = &self.note {
-            note.clone()
-        } else {
-            let wanted = match &self.parameters.pitch {
-                Some(name) => Pitch::from_name(name.as_str())?,
-                None => Pitch::default(),
+        let mut note = match (&self.note, &self.parameters.pitch) {
+            (StreamElement::Note(note), _) => note.clone(),
+            (_, Some(name)) => {
+                let wanted = Pitch::from_name(name.as_str())?.name().to_lowercase();
+                components
+                    .into_iter()
+                    .rfind(|note| note.pitch().name().to_lowercase() == wanted)
+                    .ok_or_else(|| {
+                        Error::Analysis(format!(
+                            "Could not find pitch, {:?} in the note",
+                            self.parameters.pitch
+                        ))
+                    })?
             }
-            .name()
-            .to_lowercase();
-            components
+            (_, None) => components
                 .into_iter()
-                .rfind(|note| note.pitch().name().to_lowercase() == wanted)
-                .ok_or_else(|| {
-                    Error::Analysis(format!(
-                        "Could not find pitch, {:?} in the note",
-                        self.parameters.pitch
-                    ))
-                })?
+                .reduce(|highest, note| {
+                    if note.pitch().ps() > highest.pitch().ps() {
+                        note
+                    } else {
+                        highest
+                    }
+                })
+                .ok_or_else(|| Error::Analysis("max() iterable argument is empty".to_string()))?,
         };
         note.lyrics_mut().clear();
         note.set_tie(None);
@@ -685,10 +692,10 @@ pub struct PartGroup {
     pub name: String,
     /// The colour the group is drawn in.
     pub color: String,
-    /// What a part's id must hold, ignoring case, for the part to be in the
-    /// group: the name where nothing is given. music21 also reads each as a
-    /// regular expression matched at the start of the id, which for a name
-    /// without pattern characters says nothing more; patterns are not read.
+    /// What a part's id must hold as a whole word, ignoring case, for the
+    /// part to be in the group: the name where nothing is given. music21
+    /// reads each as a regular expression; here each is read as written, as
+    /// music21 reads one with no pattern characters.
     pub matches: Option<Vec<String>>,
 }
 
@@ -761,17 +768,11 @@ struct Stretch {
     color: String,
 }
 
-/// An element of a group's flattened parts, with which part and leaf it is.
+/// An element of a group's flattened parts.
 struct Flat {
     offset: FloatType,
     element: StreamElement,
-    part: usize,
-    leaf: usize,
 }
-
-/// music21 divides the summed loudness by the length of the class name it
-/// looks for, `'Dynamic'`, rather than by how many dynamics there are.
-const DYNAMIC_NAME_LENGTH: FloatType = 7.0;
 
 /// The weight a stretch takes when nothing has said one: music21's
 /// `minValue`.
@@ -782,17 +783,12 @@ impl PartReduction {
     /// `process` and `getGraphHorizontalBarWeightedData`.
     ///
     /// Each stretch is a measure with a note in it, from its start for its
-    /// bar's length, or a run of notes. Its weight is the loudness of the
-    /// dynamics starting in it, summed and divided by seven as music21
-    /// divides it; cut by dynamic, each piece from a dynamic to the next,
-    /// with the stretch before the first dynamic left out where that
-    /// dynamic starts later, as music21 leaves it. A stretch with no
+    /// bar's length, or a run of notes. Its weight is the mean loudness of
+    /// the dynamics starting in it; cut by dynamic, each piece runs from a
+    /// dynamic to the next, as loud as it, and the piece before the first
+    /// is as loud as the last dynamic before the stretch. A stretch with no
     /// dynamic takes the weight of the last that had one, and the first,
-    /// with none before it, a hundredth. music21 lengthens each dynamic it
-    /// cuts by to reach the next as it goes, and a later stretch, or group,
-    /// reads those lengths; so does this. Groups, or parts, of one id share
-    /// their stretches, as music21 keeps them by id: each is cut, weighed
-    /// and normalized again, and each answers the same stretches.
+    /// with none before it, a hundredth.
     ///
     /// # Errors
     ///
@@ -818,8 +814,8 @@ impl PartReduction {
                         .iter()
                         .enumerate()
                         .filter(|(_, part)| {
-                            let id = part.id().unwrap_or_default().to_lowercase();
-                            names.iter().any(|name| id.contains(&name.to_lowercase()))
+                            let id = part.id().unwrap_or_default();
+                            names.iter().any(|name| holds_word(id, name))
                         })
                         .map(|(index, _)| index)
                         .collect();
@@ -838,61 +834,29 @@ impl PartReduction {
                 }
             }
         }
-        // The length of every leaf of every part, as music21 lengthens the
-        // dynamics.
-        let mut lengths: Vec<Vec<FloatType>> = parts
-            .iter()
-            .map(|part| {
-                part.leaves()
-                    .iter()
-                    .map(|(_, element)| element.quarter_length())
-                    .collect()
-            })
-            .collect();
 
-        // music21 keeps each group's stretches under its id, so groups of
-        // one id share them: each works on, and reads back, the same list.
-        // A part with no id has one of its own there.
-        let keys: Vec<Result<String, usize>> = bundles
-            .iter()
-            .enumerate()
-            .map(|(index, (id, _, _))| id.clone().ok_or(index))
-            .collect();
-        let mut kept: Vec<(Result<String, usize>, Vec<Stretch>)> = Vec::new();
-        let slot = |kept: &[(Result<String, usize>, Vec<Stretch>)], key: &Result<String, usize>| {
-            kept.iter().position(|(known, _)| known == key)
-        };
-        let flats: Vec<Vec<Flat>> = bundles
-            .iter()
-            .map(|(_, _, held)| flatten_parts(&parts, held))
-            .collect();
-        for (((_, color, held), key), flat) in bundles.iter().zip(&keys).zip(&flats) {
+        let mut groups: Vec<Vec<Stretch>> = Vec::new();
+        for (_, color, held) in &bundles {
+            let flat = flatten_parts(&parts, held);
             let mut stretches = if fill_by_measure {
                 measure_stretches(&parts, held)?
             } else {
-                run_stretches(flat)?
+                run_stretches(&flat)?
             };
             for stretch in &mut stretches {
                 stretch.color = color.clone();
             }
-            match slot(&kept, key) {
-                Some(index) => kept[index].1 = stretches,
-                None => kept.push((key.clone(), stretches)),
-            }
-        }
-        for (key, flat) in keys.iter().zip(&flats) {
-            let index = slot(&kept, key).expect("every group has stretches");
             if self.segment_by_target {
-                kept[index].1 = split_by_dynamics(&kept[index].1, flat, &mut lengths);
+                stretches = split_by_dynamics(&stretches, &flat);
             } else {
-                for stretch in &mut kept[index].1 {
+                for stretch in &mut stretches {
                     let end = op_frac(stretch.start + stretch.span);
                     let loudness: Vec<FloatType> = flat
                         .iter()
                         .filter(|item| {
                             in_range(
                                 item.offset,
-                                lengths[item.part][item.leaf],
+                                item.element.quarter_length(),
                                 stretch.start,
                                 end,
                                 false,
@@ -904,18 +868,16 @@ impl PartReduction {
                         })
                         .collect();
                     stretch.weight = (!loudness.is_empty())
-                        .then(|| loudness.iter().sum::<FloatType>() / DYNAMIC_NAME_LENGTH);
+                        .then(|| loudness.iter().sum::<FloatType>() / loudness.len() as FloatType);
                 }
             }
-        }
-        for key in &keys {
-            let index = slot(&kept, key).expect("every group has stretches");
-            extend_weights(&mut kept[index].1);
+            extend_weights(&mut stretches);
+            groups.push(stretches);
         }
         if self.normalize {
-            let maxima: Vec<FloatType> = kept
+            let maxima: Vec<FloatType> = groups
                 .iter()
-                .map(|(_, stretches)| {
+                .map(|stretches| {
                     stretches
                         .iter()
                         .filter_map(|stretch| stretch.weight)
@@ -923,14 +885,13 @@ impl PartReduction {
                 })
                 .collect();
             let overall = maxima.iter().copied().fold(0.0, FloatType::max);
-            for key in &keys {
-                let index = slot(&kept, key).expect("every group has stretches");
+            for (stretches, maximum) in groups.iter_mut().zip(maxima) {
                 let best = if self.normalize_by_part {
-                    maxima[index]
+                    maximum
                 } else {
                     overall
                 };
-                for stretch in &mut kept[index].1 {
+                for stretch in stretches {
                     stretch.weight = Some(if best != 0.0 {
                         stretch.weight.unwrap_or_default() / best
                     } else {
@@ -941,25 +902,35 @@ impl PartReduction {
         }
         Ok(bundles
             .into_iter()
-            .zip(&keys)
-            .map(|((id, _, _), key)| {
-                let index = slot(&kept, key).expect("every group has stretches");
-                PartActivity {
-                    id,
-                    spans: kept[index]
-                        .1
-                        .iter()
-                        .map(|stretch| WeightedSpan {
-                            start: stretch.start,
-                            span: stretch.span,
-                            weight: stretch.weight.unwrap_or_default(),
-                            color: stretch.color.clone(),
-                        })
-                        .collect(),
-                }
+            .zip(groups)
+            .map(|((id, _, _), stretches)| PartActivity {
+                id,
+                spans: stretches
+                    .into_iter()
+                    .map(|stretch| WeightedSpan {
+                        start: stretch.start,
+                        span: stretch.span,
+                        weight: stretch.weight.unwrap_or_default(),
+                        color: stretch.color,
+                    })
+                    .collect(),
             })
             .collect())
     }
+}
+
+/// Whether `word` stands in `id` as a whole word, ignoring case: music21's
+/// `re.search(rf'(?<!\w)(?:{word})(?!\w)', id, re.IGNORECASE)` for a word
+/// with no pattern characters.
+fn holds_word(id: &str, word: &str) -> bool {
+    let id: Vec<char> = id.to_lowercase().chars().collect();
+    let word: Vec<char> = word.to_lowercase().chars().collect();
+    let is_word = |c: &char| c.is_alphanumeric() || *c == '_';
+    (0..=id.len().saturating_sub(word.len()))
+        .filter(|&at| id.len() >= word.len() && id[at..at + word.len()] == word[..])
+        .any(|at| {
+            !(at > 0 && is_word(&id[at - 1])) && !id.get(at + word.len()).is_some_and(is_word)
+        })
 }
 
 /// A group's parts flattened together, as music21 flattens a stream holding
@@ -967,12 +938,10 @@ impl PartReduction {
 fn flatten_parts(parts: &[&Stream], held: &[usize]) -> Vec<Flat> {
     let mut flat: Vec<Flat> = Vec::new();
     for &part in held {
-        for (leaf, (offset, element)) in parts[part].leaves().into_iter().enumerate() {
+        for (offset, element) in parts[part].leaves() {
             flat.push(Flat {
                 offset,
                 element: element.clone(),
-                part,
-                leaf,
             });
         }
     }
@@ -1152,72 +1121,82 @@ fn in_range(
     include_end || offset != end
 }
 
-/// Each stretch cut at its dynamics, each piece as loud as its dynamic,
-/// the dynamics lengthened to reach the next as music21 lengthens them.
-fn split_by_dynamics(
-    stretches: &[Stretch],
-    flat: &[Flat],
-    lengths: &mut [Vec<FloatType>],
-) -> Vec<Stretch> {
+/// Each stretch cut at the dynamics starting in it, each piece as loud as
+/// its dynamic and lasting to the next, the last to the stretch's end. The
+/// piece before the first dynamic is as loud as the last dynamic at or
+/// before the stretch's start, and has no weight where there is none.
+fn split_by_dynamics(stretches: &[Stretch], flat: &[Flat]) -> Vec<Stretch> {
     let mut cut = Vec::new();
     for stretch in stretches {
         let end = op_frac(stretch.start + stretch.span);
-        let dynamics: Vec<&Flat> = flat
+        let dynamics: Vec<(FloatType, FloatType, FloatType)> = flat
             .iter()
-            .filter(|item| matches!(item.element, StreamElement::Dynamic(_)))
-            .filter(|item| {
-                in_range(
-                    item.offset,
-                    lengths[item.part][item.leaf],
-                    stretch.start,
-                    end,
-                    true,
-                )
+            .filter_map(|item| match &item.element {
+                StreamElement::Dynamic(dynamic)
+                    if in_range(
+                        item.offset,
+                        item.element.quarter_length(),
+                        stretch.start,
+                        end,
+                        false,
+                    ) =>
+                {
+                    Some((
+                        item.offset,
+                        item.element.quarter_length(),
+                        dynamic.volume_scalar(),
+                    ))
+                }
+                _ => None,
             })
             .collect();
+        let mut first = stretch.clone();
+        if let Some(prior) = flat.iter().rev().find_map(|item| match &item.element {
+            StreamElement::Dynamic(dynamic) if item.offset <= stretch.start => Some(dynamic),
+            _ => None,
+        }) {
+            first.weight = Some(prior.volume_scalar());
+        }
         if dynamics.is_empty() {
-            cut.push(stretch.clone());
+            cut.push(first);
             continue;
         }
         // music21's `extendDuration`: each dynamic lasts to the next, the
         // last to where the latest of them ends.
         let total = dynamics
             .iter()
-            .map(|item| op_frac(item.offset + lengths[item.part][item.leaf]))
+            .map(|(offset, length, _)| op_frac(offset + length))
             .fold(0.0, FloatType::max);
-        for (index, item) in dynamics.iter().enumerate() {
-            let length = match dynamics.get(index + 1) {
-                Some(next) => op_frac(next.offset - item.offset),
-                None => op_frac(total - item.offset),
+        for (index, &(offset, _, loudness)) in dynamics.iter().enumerate() {
+            let mut span = match dynamics.get(index + 1) {
+                Some((next, _, _)) => op_frac(next - offset),
+                None => op_frac(total - offset),
             };
-            lengths[item.part][item.leaf] = length;
-        }
-        for (index, item) in dynamics.iter().enumerate() {
-            let StreamElement::Dynamic(dynamic) = &item.element else {
-                continue;
-            };
-            let mut span = lengths[item.part][item.leaf];
-            if op_frac(item.offset + span) > end {
-                span = op_frac(end - item.offset);
+            if op_frac(offset + span) > end {
+                span = op_frac(end - offset);
             }
             if span <= 0.001 {
-                span = op_frac(end - item.offset);
+                span = op_frac(end - offset);
             }
-            let weight = Some(dynamic.volume_scalar() / DYNAMIC_NAME_LENGTH);
-            if index == 0 && stretch.start == item.offset {
+            let piece = Stretch {
+                start: offset,
+                span,
+                weight: Some(loudness),
+                color: stretch.color.clone(),
+            };
+            if index == 0 && stretch.start == offset {
                 cut.push(Stretch {
                     start: stretch.start,
-                    span,
-                    weight,
-                    color: stretch.color.clone(),
+                    ..piece
                 });
-            } else {
+            } else if index == 0 {
                 cut.push(Stretch {
-                    start: item.offset,
-                    span,
-                    weight,
-                    color: stretch.color.clone(),
+                    span: op_frac(offset - stretch.start),
+                    ..first.clone()
                 });
+                cut.push(piece);
+            } else {
+                cut.push(piece);
             }
         }
     }
@@ -1286,14 +1265,14 @@ mod tests {
             text.map(|text| text.content().to_string()),
             Some("hi".to_string())
         );
-        // With no pitch said, a chord gives its C.
+        // With no pitch said, a chord gives its highest note.
         let note = ReductiveNote::new("::", StreamElement::Chord(chord), 0, 0.0)?;
         assert_eq!(
             note.note_and_text_expression()?
                 .0
                 .pitch()
                 .name_with_octave(),
-            "C4"
+            "G4"
         );
         Ok(())
     }
@@ -1336,16 +1315,8 @@ mod tests {
         assert_eq!(
             spans,
             [
-                vec![
-                    (0.0, 2.0, 0.05),
-                    (2.0, 4.0, 0.128571429),
-                    (6.0, 2.0, 0.021428571)
-                ],
-                vec![
-                    (0.0, 1.0, 0.05),
-                    (1.0, 1.0, 0.128571429),
-                    (2.0, 6.0, 0.021428571)
-                ],
+                vec![(0.0, 2.0, 0.35), (2.0, 4.0, 0.9), (6.0, 2.0, 0.15)],
+                vec![(0.0, 1.0, 0.35), (1.0, 1.0, 0.9), (2.0, 6.0, 0.15)],
             ]
         );
         Ok(())

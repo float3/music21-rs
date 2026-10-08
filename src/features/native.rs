@@ -223,29 +223,25 @@ fn mode_value(mode: &str) -> Option<Value> {
 }
 
 fn quality(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
+    // Several stated keys are taken where they agree in mode, as the keys
+    // of transposing parts do.
     let modes = data.key_modes();
-    if let [only] = modes.as_slice()
-        && let Some(value) = mode_value(only)
+    if let Some((first, rest)) = modes.split_first()
+        && rest.iter().all(|mode| mode == first)
+        && let Some(value) = mode_value(first)
     {
         vector[0] = value;
         return Ok(());
     }
-    let stated = match modes.split_first() {
-        Some((first, rest)) if rest.iter().all(|mode| mode == first) => Some(first.clone()),
-        _ => None,
-    };
-    let mode = match stated {
-        Some(mode) => mode,
-        None => data
-            .analyzed_key()
-            .and_then(<[_]>::first)
-            .ok_or_else(|| {
-                Error::Feature("failed to get likely keys for Stream component".to_string())
-            })?
-            .key()
-            .mode()
-            .to_string(),
-    };
+    let mode = data
+        .analyzed_key()
+        .and_then(<[_]>::first)
+        .ok_or_else(|| {
+            Error::Feature("failed to get likely keys for Stream component".to_string())
+        })?
+        .key()
+        .mode()
+        .to_string();
     vector[0] = mode_value(&mode).ok_or_else(|| {
         Error::Feature(
             "should be able to get a mode from something here -- perhaps there are no notes?"
@@ -467,23 +463,14 @@ fn incorrectly_spelled_triad_prevalence(data: &DataInstance, vector: &mut [Value
 
 /// The pitch class a chord symbol's bass is on, its root where it names
 /// no other bass.
-///
-/// # Errors
-///
-/// A symbol that sounds nothing, in which music21 finds neither.
-fn bass_class(symbol: &ChordSymbol) -> Result<usize> {
-    if symbol.is_no_chord() {
-        return Err(Error::Feature(
-            "a chord symbol that sounds nothing has no bass".to_string(),
-        ));
-    }
-    Ok(pitch_class(symbol.bass().unwrap_or(symbol.root())))
+fn bass_class(symbol: &ChordSymbol) -> usize {
+    pitch_class(symbol.bass().unwrap_or(symbol.root()))
 }
 
 /// How far the bass moves down, in semitones folded into the octave, from
 /// each chord symbol to the next that has another bass, each as a share of
 /// all such moves; the first value, a bass staying put, is one where the
-/// bass never moves.
+/// bass never moves. A symbol that sounds nothing is passed over.
 fn chord_bass_motion(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     let flat = data.prepared().flatten();
     let mut motion = [0_usize; 12];
@@ -493,12 +480,15 @@ fn chord_bass_motion(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
         let StreamElement::ChordSymbol(this) = event.element() else {
             continue;
         };
+        if this.is_no_chord() {
+            continue;
+        }
         let Some(previous) = last else {
             last = Some(this);
             continue;
         };
-        let last_bass = bass_class(previous)?;
-        let this_bass = bass_class(this)?;
+        let last_bass = bass_class(previous);
+        let this_bass = bass_class(this);
         if last_bass != this_bass {
             motion[(last_bass + 12 - this_bass) % 12] += 1;
             total += 1;
@@ -576,10 +566,20 @@ mod tests {
         expected[10] = 1.0 / 3.0;
         assert_eq!(vector("CS12", &data), expected);
 
-        let mut silent = symbols(&["C"]);
-        silent.insert(1.0, StreamElement::ChordSymbol(ChordSymbol::no_chord(None)));
+        // A symbol that sounds nothing is passed over, wherever it stands.
+        let mut silent = symbols(&["C", "G"]);
+        silent.insert(0.5, StreamElement::ChordSymbol(ChordSymbol::no_chord(None)));
+        silent.insert(2.0, StreamElement::ChordSymbol(ChordSymbol::no_chord(None)));
         let data = DataInstance::new(&silent)?;
-        assert!(extractor("CS12").expect("CS12").extract(&data).is_err());
+        let mut expected = vec![0.0; 12];
+        expected[5] = 1.0;
+        assert_eq!(vector("CS12", &data), expected);
+        let mut alone = symbols(&["C"]);
+        alone.insert(1.0, StreamElement::ChordSymbol(ChordSymbol::no_chord(None)));
+        let data = DataInstance::new(&alone)?;
+        let mut still = vec![0.0; 12];
+        still[0] = 1.0;
+        assert_eq!(vector("CS12", &data), still);
         Ok(())
     }
 

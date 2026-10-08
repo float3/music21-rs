@@ -105,10 +105,9 @@ impl Stream {
     }
 
     /// The stream chordified with every pitch kept, and how many parts
-    /// sound a single note in each chord made, in order, parts sharing an
-    /// id counted once: the groups music21's
-    /// `chordify(addPartIdAsGroup=True)` writes on the chord's pitches,
-    /// which it finds no part for where a note is one of a chord.
+    /// sound a note in each chord made, alone or in a chord, in order,
+    /// parts sharing an id counted once: the groups music21's
+    /// `chordify(addPartIdAsGroup=True)` writes on the chord's pitches.
     pub(crate) fn chordify_parts_sounding(&self) -> Result<(Stream, Vec<usize>)> {
         let options = ChordifyOptions {
             remove_redundant_pitches: false,
@@ -233,6 +232,23 @@ impl Stream {
     }
 }
 
+/// Whether an element brings a pitched note to a chord made: a note, or a
+/// chord with a note among its members.
+fn sounds_a_note(element: &StreamElement) -> bool {
+    match element {
+        StreamElement::Note(_) => true,
+        StreamElement::Chord(chord) => !chord.notes().is_empty(),
+        StreamElement::ChordSymbol(symbol) => {
+            symbol.pitches().is_ok_and(|pitches| !pitches.is_empty())
+        }
+        StreamElement::PercussionChord(chord) => chord
+            .members()
+            .iter()
+            .any(|member| matches!(member, PercussionNote::Note(_))),
+        _ => false,
+    }
+}
+
 /// Whether an element is one of music21's `GeneralNote`s, which chordify
 /// takes out of the template and reads the time of.
 fn is_general_note(element: &StreamElement) -> bool {
@@ -317,12 +333,9 @@ fn fill(
         }
         let element = make_element(spans, offset, op_frac(end - offset), options)?;
         if matches!(element, StreamElement::Chord(_)) {
-            // music21 finds a note's part by where the note stands, and a
-            // note inside a chord stands nowhere: only single notes say
-            // which part they are in.
             let mut parts = Vec::new();
             for span in sounding_at(spans, offset) {
-                if matches!(span.element, StreamElement::Note(_)) && !parts.contains(&span.part) {
+                if sounds_a_note(span.element) && !parts.contains(&span.part) {
                     parts.push(span.part);
                 }
             }

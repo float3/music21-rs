@@ -3325,10 +3325,8 @@ fn lyrics_from<'x>(written: impl Iterator<Item = &'x Xml>) -> Result<Vec<Lyric>>
         if let Some(placement) = lyric.get("placement") {
             read.set_placement(Placement::from_name(placement).ok());
         }
-        // music21 reads `print-object` straight into `hideObjectOnPrint`,
-        // so the lyric a file says to print is the one it hides.
-        if let Some(printed) = lyric.get("print-object") {
-            read.set_hidden(printed == "yes");
+        if lyric.get("print-object") == Some("no") {
+            read.set_hidden(true);
         }
         if let Some(color) = lyric.get("color") {
             read.set_color(Some(color.to_string()));
@@ -4077,12 +4075,11 @@ mod tests {
         let lyric = &note.lyrics()[0];
         assert_eq!(lyric.justify(), Some(Justification::Left));
         assert_eq!(lyric.placement(), Some(Placement::Below));
-        // music21 hides the lyric a file says to print.
-        assert!(lyric.is_hidden());
-        assert!(written_back(&read).contains(
-            "<lyric justify=\"left\" name=\"1\" number=\"1\" placement=\"below\" \
-             print-object=\"no\">"
-        ));
+        assert!(!lyric.is_hidden());
+        assert!(
+            written_back(&read)
+                .contains("<lyric justify=\"left\" name=\"1\" number=\"1\" placement=\"below\">")
+        );
     }
 
     #[test]

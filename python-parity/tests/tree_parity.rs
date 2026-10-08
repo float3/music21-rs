@@ -81,10 +81,6 @@ def ident(ts):
                                      ts.measureNumber)
 
 def verticalities(tree):
-    # music21 cannot walk the verticalities of an empty tree: the one it
-    # starts from lasts to an endless end, which opFrac cannot read.
-    if not len(tree):
-        return []
     out = []
     for v in tree.iterateVerticalities():
         nxt = v.nextStartOffset
@@ -138,7 +134,7 @@ type Report = (
     Vec<Span>,
     Vec<FloatType>,
     Vec<FloatType>,
-    usize,
+    Option<usize>,
     Vec<Vertical>,
 );
 

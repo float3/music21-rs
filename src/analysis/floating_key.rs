@@ -102,12 +102,8 @@ impl<'a> KeyAnalyzer<'a> {
 
     /// The key of every measure that has a reading, smoothed by its
     /// neighbours': music21's `smoothInterpretationByMeasure`. A measure
-    /// with no reading has no key, and is left out.
-    ///
-    /// music21 keeps each measure's reading once it has been asked for and
-    /// hands that very reading back after, so a measure smoothed by the time
-    /// a later one asks for it is read smoothed; the first measure is
-    /// smoothed on a copy and stays as it was read. This is kept.
+    /// with no reading has no key, and is left out. Each measure is
+    /// smoothed by its neighbours' own readings, not their smoothed ones.
     ///
     /// # Errors
     ///
@@ -118,20 +114,9 @@ impl<'a> KeyAnalyzer<'a> {
             .iter()
             .map(|estimates| estimates.as_deref().map(interpretations))
             .collect();
-        let mut kept: Vec<Option<Option<Interpretations>>> = vec![None; self.measure_count];
         let mut smoothed = Vec::new();
         for index in 0..self.measure_count {
-            // The first time a reading is asked for it is kept and a copy
-            // handed back; after that the kept reading itself.
-            let first_time = kept[index].is_none();
-            let mut base = match &kept[index] {
-                Some(reading) => reading.clone(),
-                None => {
-                    kept[index] = Some(raw[index].clone());
-                    raw[index].clone()
-                }
-            };
-            let Some(readings) = base.as_mut() else {
+            let Some(mut readings) = raw[index].clone() else {
                 continue;
             };
             let window = self.window_size as IntegerType;
@@ -141,11 +126,7 @@ impl<'a> KeyAnalyzer<'a> {
                 {
                     continue;
                 }
-                let neighbour = neighbour as usize;
-                if kept[neighbour].is_none() {
-                    kept[neighbour] = Some(raw[neighbour].clone());
-                }
-                let Some(Some(theirs)) = &kept[neighbour] else {
+                let Some(theirs) = &raw[neighbour as usize] else {
                     continue;
                 };
                 for (name, value) in readings.iter_mut() {
@@ -162,9 +143,6 @@ impl<'a> KeyAnalyzer<'a> {
             }
             if let Some((name, _)) = best {
                 smoothed.push(Key::from_tonic(name)?);
-            }
-            if !first_time {
-                kept[index] = Some(base);
             }
         }
         Ok(smoothed)

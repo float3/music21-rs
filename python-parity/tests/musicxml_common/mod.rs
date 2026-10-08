@@ -666,11 +666,7 @@ pub fn normalize_ids(document: &str) -> String {
 /// why. A test passes over a listed score while music21 still raises that,
 /// and fails once music21 writes it, so the list cannot go stale.
 #[allow(dead_code)]
-pub const MUSIC21_CANNOT_WRITE: &[(&str, &str, &str)] = &[(
-    "schumann_clara/opus17/movement3",
-    "object of type 'Note' has no len()",
-    "music21's reader makes an arpeggio of a single note where the file      numbers one, and its exporter asks that note for its length",
-)];
+pub const MUSIC21_CANNOT_WRITE: &[(&str, &str, &str)] = &[];
 
 /// Whether music21 is known to raise `error` writing the score `name` (a
 /// subject named `xml:` and a corpus name counts as that name).

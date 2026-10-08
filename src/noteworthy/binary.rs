@@ -288,10 +288,12 @@ enum Object {
     Tempo(i32),
     Note(Member),
     Rest(String),
-    /// A chord's notes; with `rest`, the last group is the rest beside them.
-    Chord {
+    /// A chord's notes.
+    Chord(Vec<Member>),
+    /// A rest's length and the notes sounding with it.
+    RestChord {
         members: Vec<Member>,
-        rest: bool,
+        rest: String,
     },
     Text(Vec<u8>, i32),
 }
@@ -335,27 +337,19 @@ impl Object {
             Self::Tempo(value) => format!("|Tempo|Tempo:{value}"),
             Self::Note(member) => format!("|Note|Dur:{}|Pos:{}|", member.duration, member.position),
             Self::Rest(duration) => format!("|Rest|Dur:{duration}|"),
-            Self::Chord { members, rest } => {
-                // Grouped by duration, in the order each first appears.
-                let mut groups: Vec<(&str, Vec<&str>)> = Vec::new();
-                for member in members {
-                    match groups
-                        .iter_mut()
-                        .find(|(duration, _)| *duration == member.duration)
-                    {
-                        Some((_, positions)) => positions.push(&member.position),
-                        None => groups.push((&member.duration, vec![&member.position])),
-                    }
-                }
+            Self::Chord(members) => {
                 let mut line = "|Chord".to_string();
-                let last = groups.len().saturating_sub(1);
-                for (index, (duration, positions)) in groups.iter().enumerate() {
-                    let (dur, pos) = if *rest && index == last {
-                        ("Dur2", "Pos2")
-                    } else {
-                        ("Dur", "Pos")
-                    };
-                    line.push_str(&format!("|{dur}:{duration}|{pos}:{}", positions.join(",")));
+                for (index, (duration, positions)) in by_duration(members).iter().enumerate() {
+                    let suffix = if index == 0 { "" } else { "2" };
+                    line.push_str(&format!("|Dur{suffix}:{duration}|Pos{suffix}:{positions}"));
+                }
+                line
+            }
+            Self::RestChord { members, rest } if members.is_empty() => format!("|Rest|Dur:{rest}"),
+            Self::RestChord { members, rest } => {
+                let mut line = format!("|RestChord|Dur:{rest}");
+                for (duration, positions) in by_duration(members) {
+                    line.push_str(&format!("|Dur2:{duration}|Pos2:{positions}"));
                 }
                 line
             }
@@ -730,13 +724,7 @@ impl Bytes<'_> {
                 let _offset = self.short()?;
                 Object::Rest(duration_text(duration, &data, None)?)
             }
-            10 => {
-                let (members, _) = self.chord()?;
-                Object::Chord {
-                    members,
-                    rest: false,
-                }
-            }
+            10 => Object::Chord(self.chord()?.0),
             11 => {
                 if self.version >= 170 {
                     self.take(3);
@@ -778,15 +766,21 @@ impl Bytes<'_> {
                 Object::Text(self.until_nul(), position)
             }
             _ => {
-                let (mut members, data) = self.chord()?;
+                // Only a file of version 1.75 writes a rest chord as it
+                // writes a chord; the others give the rest's length, its
+                // five bytes and its offset, then how many notes follow.
+                let (members, data) = if 170 < self.version && self.version < 200 {
+                    self.chord()?
+                } else {
+                    let data = self.take(8);
+                    let notes = usize::try_from(self.short()?).unwrap_or(0);
+                    (self.members(notes)?, data)
+                };
                 let duration = *data.first().ok_or_else(Self::ended)?;
-                members.push(Member {
-                    duration: duration_text(duration, &data, None)?,
-                    position: "0".to_string(),
-                });
-                Object::Chord {
+                let rest_data = data.get(1..6).ok_or_else(Self::ended)?;
+                Object::RestChord {
                     members,
-                    rest: true,
+                    rest: duration_text(duration, rest_data, None)?,
                 }
             }
         })
@@ -837,12 +831,13 @@ impl Bytes<'_> {
         })
     }
 
-    /// `noteChordMember`: the chord's own bytes and its notes, which only a
-    /// file of version 1.75 says how many of there are.
+    /// `noteChordMember`: the chord's own bytes and its notes.
     fn chord(&mut self) -> Result<(Vec<Member>, Vec<u8>)> {
         let mut notes = 0;
         let data = if self.version <= 170 {
-            self.take(12)
+            let data = self.take(12);
+            notes = usize::try_from(self.short()?).unwrap_or(0);
+            data
         } else if self.version == 175 {
             let data = self.take(10);
             notes = usize::from(*data.get(8).ok_or_else(Self::ended)?);
@@ -856,6 +851,11 @@ impl Bytes<'_> {
             }
             notes = usize::try_from(self.short()?).unwrap_or(0);
         }
+        Ok((self.members(notes)?, data))
+    }
+
+    /// `_readChordNotes`: the notes of a chord.
+    fn members(&mut self, notes: usize) -> Result<Vec<Member>> {
         let mut members = Vec::new();
         for _ in 0..notes {
             match self.object()? {
@@ -869,8 +869,27 @@ impl Bytes<'_> {
                 _ => return Err(error("a chord holding something other than a note")),
             }
         }
-        Ok((members, data))
+        Ok(members)
     }
+}
+
+/// `_positionsByDuration`: a chord's notes grouped by length, in the order
+/// each length first appears, with their positions joined.
+fn by_duration(members: &[Member]) -> Vec<(&str, String)> {
+    let mut groups: Vec<(&str, Vec<&str>)> = Vec::new();
+    for member in members {
+        match groups
+            .iter_mut()
+            .find(|(duration, _)| *duration == member.duration)
+        {
+            Some((_, positions)) => positions.push(&member.position),
+            None => groups.push((&member.duration, vec![&member.position])),
+        }
+    }
+    groups
+        .into_iter()
+        .map(|(duration, positions)| (duration, positions.join(",")))
+        .collect()
 }
 
 /// `setDurationForObject`: a note's or rest's `Dur` text, from its length
@@ -950,23 +969,30 @@ mod tests {
     }
 
     #[test]
-    fn a_chord_groups_its_notes_by_length_and_a_rest_comes_last() {
+    fn a_chord_groups_its_notes_by_length() {
         let member = |duration: &str, position: &str| Member {
             duration: duration.to_string(),
             position: position.to_string(),
         };
-        let chord = Object::Chord {
-            members: vec![
-                member("4th", "1"),
-                member("Half", "3"),
-                member("4th", "#5^"),
-                member("8th", "0"),
-            ],
-            rest: true,
-        };
+        let chord = Object::Chord(vec![
+            member("4th", "1"),
+            member("Half", "3"),
+            member("4th", "#5^"),
+        ]);
+        assert_eq!(chord.line(), "|Chord|Dur:4th|Pos:1,#5^|Dur2:Half|Pos2:3");
+    }
+
+    #[test]
+    fn a_version_two_rest_chord_gives_its_rest_and_then_its_notes() {
+        // A half rest, its five bytes, an offset of minus two and a count,
+        // then a quarter on position nought.
+        let mut chord = vec![18, 0, 0, 1, 0, 0, 0, 0, 0, 0xfe, 0xff, 1, 0];
+        chord.extend([8, 0, 0, 2, 0, 0, 0, 0, 0, 0, 5]);
+        assert_eq!(read(&chord), "|RestChord|Dur:Half|Dur2:4th|Pos2:0");
+        // With no notes it is a rest, dotted where its fourth byte says so.
         assert_eq!(
-            chord.line(),
-            "|Chord|Dur:4th|Pos:1,#5^|Dur:Half|Pos:3|Dur2:8th|Pos2:0"
+            read(&[18, 0, 0, 1, 0, 0, 0, 0x04, 0, 0, 0, 0, 0]),
+            "|Rest|Dur:Half,Dotted"
         );
     }
 
