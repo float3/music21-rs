@@ -1273,7 +1273,9 @@ impl Scale {
     }
 
     /// The places of the realization, and the octave shift each stands at,
-    /// that sound `origin`, lowest degree first.
+    /// that sound `origin`, lowest degree first. A place sounds a pitch
+    /// however it is spelled, as music21 finds where to step from by pitch
+    /// space: `E#4` in C major stands on the place of `F4`.
     fn places_on(&self, origin: &Pitch) -> Result<Vec<(usize, IntegerType)>> {
         if !self.repeats_at_the_octave() {
             return Ok(self
@@ -1284,7 +1286,6 @@ impl Scale {
         }
         let pitches = self.scale_pitches()?;
         let origin_ps = origin.ps();
-        let name = origin.name();
         let base_shift = ((origin_ps - self.tonic.ps()) / 12.0).floor() as IntegerType;
         let mut places = (base_shift - 1..=base_shift + 1)
             .flat_map(|shift| {
@@ -1292,9 +1293,7 @@ impl Scale {
                     (pitch.ps() + 12.0 * shift as FloatType, index, shift)
                 })
             })
-            .filter(|(ps, index, _)| {
-                pitches[*index].name() == name && (ps - origin_ps).abs() < 1e-9
-            })
+            .filter(|(ps, _, _)| (ps - origin_ps).abs() < 1e-9)
             .map(|(_, index, shift)| (index, shift))
             .collect::<Vec<_>>();
         places.sort_by_key(|&(index, shift)| (self.degree_at_position(index), index, shift));

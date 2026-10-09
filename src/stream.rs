@@ -1055,6 +1055,32 @@ impl Stream {
         }
     }
 
+    /// Takes out one of this stream's own events, and with it whatever it
+    /// holds: music21's `remove`. Every spanner, here or in a nested
+    /// stream, is moved to where what it names now stands, and names
+    /// nothing for an element taken out. Nothing is taken out for a place
+    /// past the end.
+    pub fn remove_event(&mut self, index: usize) -> Option<StreamEvent> {
+        if index >= self.events.len() {
+            return None;
+        }
+        let under = self.leaves_under_top();
+        let doomed: Vec<usize> = under
+            .iter()
+            .enumerate()
+            .filter(|(_, (top, _, _))| *top == index)
+            .map(|(position, _)| position)
+            .collect();
+        let holds_a_stream = matches!(self.events[index].element, StreamElement::Stream(_));
+        if holds_a_stream {
+            self.retain_leaves(&mut |position, _| !doomed.contains(&position));
+            return Some(self.events.remove(index));
+        }
+        let removed = self.events[index].clone();
+        self.retain_leaves(&mut |position, _| !doomed.contains(&position));
+        Some(removed)
+    }
+
     /// Hands every element to a closure with its offset from this stream's
     /// start, nested streams' contents included, so that it may be changed
     /// where it sits.

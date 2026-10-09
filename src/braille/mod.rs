@@ -6,7 +6,7 @@
 //! measures.
 
 pub mod basic;
-mod equality;
+pub(crate) mod equality;
 pub mod lookup;
 pub mod segment;
 pub mod text;
