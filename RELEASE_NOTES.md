@@ -141,6 +141,16 @@ are tunes whose own reading cannot be written back.
   aligns it; the interval from the note before is compared on the scores
   of up to 600 notes and rests with no part split into staves, where
   music21 answers in good time and the same however the score was read.
+- `alpha::analysis` is music21's whole `alpha.analysis` package:
+  `ornament_recognizer` answers the trill or turn a run of notes plays, from
+  the note it is written on or alone, with its note length, nachschlag and
+  accidental; `search::find_consecutive_scale` finds the runs of notes going
+  one way through a scale, by name, name and octave, pitch class or letter;
+  and `fixer` corrects a score read by optical music recognition by a
+  performance of it aligned to it, respelling what it misspelled, taking out
+  the measures it read wrong, and writing the trills and turns played. Each
+  answers as music21's does on thousands of runs, searches and readings
+  built for it. `Stream::remove_event` is music21's `remove`.
 - `Rest::full_measure` is music21's `fullMeasure`, which the MusicXML reader
   sets where music21's does.
 - `ChordSymbol` carries lyrics, as music21's does, with `lyrics`,
@@ -543,6 +553,10 @@ are tunes whose own reading cannot be written back.
 
 ## Fixed
 
+- A scale steps from a pitch on one of its degrees however the pitch is
+  spelled, as music21 finds the degree by pitch space: told to start below
+  `E#4` in C major, `next_pitch_beside` stepped up from `E4` to `F4`, where
+  music21 steps from `F4` to `G4`.
 - A pitch built from a number keeps the natural music21 writes on it:
   `Pitch(60)` has a natural, where only setting `ps` or `midi` leaves
   none.
