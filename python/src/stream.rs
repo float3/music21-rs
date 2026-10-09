@@ -907,7 +907,8 @@ fn element_object<'py>(
         | StreamElement::PedalObject(_)
         | StreamElement::RehearsalMark(_)
         | StreamElement::MetricModulation(_)
-        | StreamElement::Break(_) => return Ok(None),
+        | StreamElement::Break(_)
+        | StreamElement::Layout(_) => return Ok(None),
     }))
 }
 
@@ -1250,6 +1251,9 @@ fn element_value(object: &Bound<'_, PyAny>, stand_ins: bool) -> PyResult<Option<
             if is_of_class(object, &pyo3::types::PyString::new(py, kind.class_name()))? {
                 return Ok(Some(StreamElement::Break(kind)));
             }
+        }
+        if let Some(layout) = layout_value(object)? {
+            return Ok(Some(StreamElement::Layout(layout)));
         }
         if is_of_class(object, &pyo3::types::PyString::new(py, "RehearsalMark"))? {
             // music21 writes whatever the mark holds as text.
@@ -1644,8 +1648,126 @@ fn given_id(object: &Bound<'_, PyAny>) -> Option<String> {
 
 /// What a stream is called and numbered: a measure's number, a part's name,
 /// a score's metadata.
+/// A length music21 keeps as the `int` or `float` it read.
+fn tenths_of(object: &Bound<'_, PyAny>, name: &str) -> Option<music21_rs_crate::layout::Tenths> {
+    use music21_rs_crate::layout::Tenths;
+    let value = object.getattr(name).ok().filter(|value| !value.is_none())?;
+    if value.is_instance_of::<pyo3::types::PyInt>() {
+        return value.extract::<i64>().ok().map(Tenths::Whole);
+    }
+    value.extract::<f64>().ok().map(Tenths::Fraction)
+}
+
+fn whole_of(object: &Bound<'_, PyAny>, name: &str) -> Option<i64> {
+    let value = object.getattr(name).ok().filter(|value| !value.is_none())?;
+    value
+        .extract::<i64>()
+        .ok()
+        .or_else(|| value.extract::<f64>().ok().map(|value| value as i64))
+}
+
+fn flag_of(object: &Bound<'_, PyAny>, name: &str) -> Option<bool> {
+    object
+        .getattr(name)
+        .ok()
+        .filter(|value| !value.is_none())
+        .and_then(|value| value.is_truthy().ok())
+}
+
+fn page_layout_of(object: &Bound<'_, PyAny>) -> music21_rs_crate::layout::PageLayout {
+    music21_rs_crate::layout::PageLayout {
+        page_number: whole_of(object, "pageNumber"),
+        left_margin: tenths_of(object, "leftMargin"),
+        right_margin: tenths_of(object, "rightMargin"),
+        top_margin: tenths_of(object, "topMargin"),
+        bottom_margin: tenths_of(object, "bottomMargin"),
+        page_height: tenths_of(object, "pageHeight"),
+        page_width: tenths_of(object, "pageWidth"),
+        is_new: flag_of(object, "isNew"),
+    }
+}
+
+fn system_layout_of(object: &Bound<'_, PyAny>) -> music21_rs_crate::layout::SystemLayout {
+    music21_rs_crate::layout::SystemLayout {
+        left_margin: tenths_of(object, "leftMargin"),
+        right_margin: tenths_of(object, "rightMargin"),
+        top_margin: tenths_of(object, "topMargin"),
+        bottom_margin: tenths_of(object, "bottomMargin"),
+        distance: tenths_of(object, "distance"),
+        top_distance: tenths_of(object, "topDistance"),
+        is_new: flag_of(object, "isNew"),
+    }
+}
+
+fn staff_layout_of(object: &Bound<'_, PyAny>) -> music21_rs_crate::layout::StaffLayout {
+    use music21_rs_crate::layout::{StaffLayout, StaffType};
+    StaffLayout {
+        distance: tenths_of(object, "distance"),
+        staff_number: whole_of(object, "staffNumber"),
+        staff_size: object
+            .getattr("staffSize")
+            .ok()
+            .filter(|value| !value.is_none())
+            .and_then(|value| value.extract::<f64>().ok()),
+        staff_lines: whole_of(object, "staffLines"),
+        hidden: flag_of(object, "hidden"),
+        staff_type: object
+            .getattr("staffType")
+            .and_then(|kind| kind.getattr("value"))
+            .ok()
+            .and_then(|value| value.extract::<String>().ok())
+            .and_then(|value| StaffType::from_name(&value))
+            .unwrap_or_default(),
+    }
+}
+
+/// One of music21's layout objects, where the object is one.
+fn layout_value(object: &Bound<'_, PyAny>) -> PyResult<Option<music21_rs_crate::layout::Layout>> {
+    use music21_rs_crate::layout::{Layout, ScoreLayout};
+    let py = object.py();
+    let is = |class: &str| is_of_class(object, &pyo3::types::PyString::new(py, class));
+    Ok(Some(if is("ScoreLayout")? {
+        let staff_layouts = match object.getattr("staffLayoutList") {
+            Ok(list) => list
+                .try_iter()?
+                .map(|staff| staff.map(|staff| staff_layout_of(&staff)))
+                .collect::<PyResult<Vec<_>>>()?,
+            Err(_) => Vec::new(),
+        };
+        let inner = |name: &str| object.getattr(name).ok().filter(|value| !value.is_none());
+        Layout::Score(Box::new(ScoreLayout {
+            scaling_millimeters: tenths_of(object, "scalingMillimeters"),
+            scaling_tenths: tenths_of(object, "scalingTenths"),
+            page_layout: inner("pageLayout").map(|page| page_layout_of(&page)),
+            system_layout: inner("systemLayout").map(|system| system_layout_of(&system)),
+            staff_layouts,
+        }))
+    } else if is("PageLayout")? {
+        Layout::Page(page_layout_of(object))
+    } else if is("SystemLayout")? {
+        Layout::System(system_layout_of(object))
+    } else if is("StaffLayout")? {
+        Layout::Staff(staff_layout_of(object))
+    } else {
+        return Ok(None);
+    }))
+}
+
 fn read_labels(object: &Bound<'_, PyAny>, stream: &mut RsStream) -> PyResult<()> {
     stream.set_id(given_id(object));
+    // How measures are numbered, said on a measure's style.
+    let styled = object
+        .getattr("hasStyleInformation")
+        .and_then(|said| said.is_truthy())
+        .unwrap_or(false);
+    if styled
+        && let Ok(numbering) = object
+            .getattr("style")
+            .and_then(|style| style.getattr("measureNumbering"))
+        && !numbering.is_none()
+    {
+        stream.set_measure_numbering(Some(numbering.str()?.to_string()));
+    }
     if let Some(number) = object
         .getattr("number")
         .ok()

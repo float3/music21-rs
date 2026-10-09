@@ -262,6 +262,23 @@ enum Outcome {
     MusicXmlDiffers(String),
 }
 
+/// Takes out how the export is laid out: MuseScore writes the pages and
+/// systems it engraved, which its own file does not say and the crate's
+/// reader of it does not read.
+fn strip_layouts(stream: &mut Stream) {
+    stream.retain_leaves(&mut |_, element| !matches!(element, StreamElement::Layout(_)));
+    clear_numbering(stream);
+}
+
+fn clear_numbering(stream: &mut Stream) {
+    stream.set_measure_numbering(None);
+    for event in stream.events_mut() {
+        if let StreamElement::Stream(inner) = event.element_mut() {
+            clear_numbering(inner);
+        }
+    }
+}
+
 fn compare(directory: &Path, name: &str, style_shows_name: bool) -> Result<Outcome, String> {
     let read = |extension: &str| {
         let path = directory.join(format!("{name}.{extension}"));
@@ -271,6 +288,7 @@ fn compare(directory: &Path, name: &str, style_shows_name: bool) -> Result<Outco
         from_mscx(&read("mscx")?).map_err(|error| format!("the reader refused it: {error}"))?;
     let mut export = from_musicxml(&read("musicxml")?)
         .map_err(|error| format!("MuseScore's export could not be read: {error}"))?;
+    strip_layouts(&mut export);
 
     let (ours, theirs) = (outline(&file), outline(&export));
     if let Some(difference) = first_difference(&ours, &theirs) {

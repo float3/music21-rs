@@ -169,6 +169,8 @@ pub enum StreamElement {
     MetricModulation(Box<MetricModulation>),
     /// Where a manuscript's line, page or column breaks.
     Break(crate::volpiano::Break),
+    /// How the page, a system or a staff is laid out from here on.
+    Layout(crate::layout::Layout),
 }
 
 impl StreamElement {
@@ -201,7 +203,8 @@ impl StreamElement {
             | Self::PedalObject(_)
             | Self::RehearsalMark(_)
             | Self::MetricModulation(_)
-            | Self::Break(_) => None,
+            | Self::Break(_)
+            | Self::Layout(_) => None,
         }
     }
 
@@ -227,7 +230,8 @@ impl StreamElement {
             | Self::PedalObject(_)
             | Self::RehearsalMark(_)
             | Self::MetricModulation(_)
-            | Self::Break(_) => 0.0,
+            | Self::Break(_)
+            | Self::Layout(_) => 0.0,
             _ => self
                 .duration()
                 .map(Duration::quarter_length)
@@ -260,7 +264,8 @@ impl StreamElement {
             | Self::PedalObject(_)
             | Self::RehearsalMark(_)
             | Self::MetricModulation(_)
-            | Self::Break(_) => Vec::new(),
+            | Self::Break(_)
+            | Self::Layout(_) => Vec::new(),
         }
     }
 
@@ -278,6 +283,7 @@ impl StreamElement {
         match self {
             Self::TextExpression(_) | Self::RehearsalMark(_) => -30,
             Self::Instrument(_) => -25,
+            Self::Layout(_) => -10,
             Self::Stream(stream) if stream.kind() == StreamKind::Voice => 5,
             Self::Stream(_) => -20,
             Self::Barline(_) => -5,
@@ -331,6 +337,7 @@ impl StreamElement {
             Self::RehearsalMark(mark) => Ok(Self::RehearsalMark(mark.clone())),
             Self::MetricModulation(modulation) => Ok(Self::MetricModulation(modulation.clone())),
             Self::Break(kind) => Ok(Self::Break(*kind)),
+            Self::Layout(layout) => Ok(Self::Layout(layout.clone())),
         }
     }
 }
@@ -663,6 +670,8 @@ struct Labels {
     /// music21's `atSoundingPitch`, `None` for its `'unknown'`.
     #[cfg_attr(feature = "serde", serde(default))]
     at_sounding_pitch: Option<bool>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    measure_numbering: Option<String>,
 }
 
 impl Stream {
@@ -720,6 +729,19 @@ impl Stream {
     /// Says whether the measure's number is left unshown.
     pub fn set_number_hidden(&mut self, hidden: bool) {
         self.labels.number_hidden = hidden;
+    }
+
+    /// Which measures' numbers are shown from this measure on, as MusicXML's
+    /// `<measure-numbering>` says it -- `none`, `measure` or `system`:
+    /// music21's `style.measureNumbering`. How the numbers are drawn is not
+    /// kept.
+    pub fn measure_numbering(&self) -> Option<&str> {
+        self.labels.measure_numbering.as_deref()
+    }
+
+    /// Says which measures' numbers are shown from this measure on.
+    pub fn set_measure_numbering(&mut self, numbering: Option<String>) {
+        self.labels.measure_numbering = numbering;
     }
 
     /// The name the stream is known by, as a part's `P1`: music21's `id`
@@ -1113,10 +1135,7 @@ impl Stream {
     /// [`Stream::leaves`] to change as it likes, and drops the rest. Every
     /// spanner, here or in a nested stream, is moved to where what it names
     /// now stands, and names nothing for an element dropped.
-    pub(crate) fn retain_leaves(
-        &mut self,
-        keep: &mut impl FnMut(usize, &mut StreamElement) -> bool,
-    ) {
+    pub fn retain_leaves(&mut self, keep: &mut impl FnMut(usize, &mut StreamElement) -> bool) {
         let mut seen = 0;
         self.retain_leaves_from(&mut seen, keep);
     }

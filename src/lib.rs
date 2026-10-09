@@ -89,6 +89,8 @@ pub mod instrument;
 pub mod interval;
 /// Public key and key-signature helpers.
 pub mod key;
+/// How a score is laid out on the page: music21's `layout` objects.
+pub mod layout;
 /// Measures, ties, rests, voices, beams and stems worked out for a score
 /// that does not say them.
 pub mod makenotation;

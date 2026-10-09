@@ -54,7 +54,7 @@ def chordified(name):
     return score
 
 def written(score, strip_layout):
-    exporter = m21ToXml.GeneralObjectExporter(strip_layout(score))
+    exporter = m21ToXml.GeneralObjectExporter(strip_layout(score, True))
     exporter.makeNotation = False
     return exporter.parse().decode('utf-8')
 "#;

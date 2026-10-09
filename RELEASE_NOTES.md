@@ -24,6 +24,8 @@ are tunes whose own reading cannot be written back.
 - `musicxml::ExportOptions` has a new public field, `make_notation`. Code
   building one with every field named needs it; code using
   `..ExportOptions::default()` does not.
+- `StreamElement` has a `Layout` variant, a page, system, staff or score
+  layout, so a `match` over it needs an arm for one.
 - `TimespanTree::maximum_overlap` returns an `Option`, nothing for an empty
   tree, as music21's `maximumOverlap` returns `None`.
 - `DataSet::class_position_labels` takes `include_class_label` after
@@ -141,6 +143,16 @@ are tunes whose own reading cannot be written back.
   aligns it; the interval from the note before is compared on the scores
   of up to 600 notes and rests with no part split into staves, where
   music21 answers in good time and the same however the score was read.
+- `layout` holds music21's layout objects: a `ScoreLayout` with the scaling
+  and the page, system and staff layouts a score starts with, and the
+  `PageLayout`, `SystemLayout` and `StaffLayout` a measure changes them
+  with or starts a new page or system by, each margin and distance kept as
+  the whole or fractional number of tenths the file gave. `from_musicxml`
+  reads them from `<defaults>`, `<print>` and `<staff-details>`, and
+  `to_musicxml` writes them back as music21 does, with a measure's
+  `<measure-numbering>` (`Stream::measure_numbering`). Every MusicXML score
+  of music21's corpus music21 can write is read and written with its
+  layouts as music21 reads and writes it.
 - `alpha::analysis` is music21's whole `alpha.analysis` package:
   `ornament_recognizer` answers the trill or turn a run of notes plays, from
   the note it is written on or alone, with its note length, nachschlag and

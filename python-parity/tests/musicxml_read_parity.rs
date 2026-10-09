@@ -132,7 +132,7 @@ fn the_crate_reads_musicxml_as_music21_does() {
                 (text, file_name, score)
             };
             count += 1;
-            let score = helpers.getattr("strip_layout")?.call1((score,))?;
+            let score = helpers.getattr("strip_layout")?.call1((score, true))?;
             let general = exporter
                 .getattr("GeneralObjectExporter")?
                 .call1((&score,))?;
