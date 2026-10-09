@@ -19,9 +19,11 @@ pub struct ConsecutiveOptions {
     /// Whether a chord breaks the line rather than joining it:
     /// `skipChords`.
     pub skip_chords: bool,
-    /// Whether a note sounding the pitch of the note before is passed over:
+    /// Whether a note sounding the pitch of the note before, or a chord
+    /// sounding the pitches of the chord before, is passed over:
     /// `skipUnisons`. Pitches are compared as sounded, so `F#` and `G-` are
-    /// one.
+    /// one. What is passed over still sounds until it ends, so no break
+    /// follows it.
     pub skip_unisons: bool,
     /// Whether a note an octave or more from the note before, in the same
     /// pitch class, is passed over too: `skipOctaves`, which implies
@@ -183,12 +185,14 @@ impl Stream {
                 let length = element.quarter_length();
                 if let StreamElement::Note(note) = element {
                     let pitch = note.pitch();
-                    // A unison is judged against a single note only.
+                    // A unison is judged against a single note only. One
+                    // passed over still sounds until it ends.
                     if skip_unisons
                         && last_pitches.len() == 1
                         && pitch.pitch_class() == last_pitches[0].pitch_class()
                         && (options.skip_octaves || pitch.ps() == last_pitches[0].ps())
                     {
+                        last_end = last_end.max(op_frac(offset + length));
                         continue;
                     }
                     if !options.get_overlaps && offset < last_end {
@@ -211,9 +215,10 @@ impl Stream {
                             last_was_none = true;
                             last_pitches.clear();
                         }
-                    // music21 means to pass over a chord repeating the
-                    // chord before when unisons are skipped, but compares
-                    // two generators, which never agree; no chord is.
+                    } else if skip_unisons && same_sounds(&pitches, &last_pitches) {
+                        // A repeated chord is passed over, but still sounds
+                        // until it ends.
+                        last_end = last_end.max(op_frac(offset + length));
                     } else if options.get_overlaps || offset >= last_end {
                         found.push(Some(position));
                         if offset < last_end {
@@ -289,10 +294,38 @@ impl Stream {
     }
 }
 
+/// Whether two chords sound the same pitches, in any order.
+fn same_sounds(pitches: &[Pitch], other: &[Pitch]) -> bool {
+    let sorted = |pitches: &[Pitch]| {
+        let mut sounds: Vec<FloatType> = pitches.iter().map(Pitch::ps).collect();
+        sounds.sort_by(FloatType::total_cmp);
+        sounds
+    };
+    pitches.len() == other.len() && sorted(pitches) == sorted(other)
+}
+
 /// A note's pitch, or a chord's first note's.
 fn first_pitch(element: &StreamElement) -> Result<Option<Pitch>> {
     Ok(match element {
         StreamElement::Note(note) => Some(note.pitch().clone()),
         element => chord_pitches(element)?.and_then(|pitches| pitches.into_iter().next()),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tinynotation::from_tiny_notation;
+
+    #[test]
+    fn a_skipped_unison_does_not_break_the_line() {
+        let line = from_tiny_notation("4/4 c4 c4 d4 e4").unwrap();
+        let options = ConsecutiveOptions {
+            skip_unisons: true,
+            ..ConsecutiveOptions::default()
+        };
+        let found = line.find_consecutive_notes(&options).unwrap();
+        assert_eq!(found.len(), 3);
+        assert!(found.iter().all(Option::is_some));
+    }
 }

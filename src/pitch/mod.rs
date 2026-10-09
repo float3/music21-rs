@@ -335,9 +335,6 @@ impl Pitch {
         }
         if let Some(accidental) = explicit_accidental {
             pitch.accidental_setter(accidental);
-        } else if pitch.spelling_is_inferred {
-            // A spelling the crate chose writes no natural nobody asked for.
-            pitch.accidental = pitch.accidental.take().filter(|a| a.alter() != 0.0);
         }
         if let Some(microtone) = pitch.microtone.clone() {
             pitch.microtone_setter(microtone);
@@ -798,7 +795,7 @@ impl Pitch {
         self.spelling_is_inferred = true;
     }
 
-    fn fundamental_setter(&mut self, f: Pitch) {
+    pub(crate) fn fundamental_setter(&mut self, f: Pitch) {
         self.fundamental = Some(Arc::new(f));
     }
 

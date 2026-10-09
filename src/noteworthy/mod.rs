@@ -290,57 +290,75 @@ impl MeasureBuilt {
         }
     }
 
-    /// music21's `getVoiceAtDuration`: the voice with this id, made where
-    /// there is none -- taking the notes the measure holds when it is the
-    /// first -- and filled with a rest up to `length`.
-    fn voice_at(&mut self, id: usize, length: FloatType) -> usize {
-        let found = self
-            .items
-            .iter()
-            .position(|item| matches!(&item.content, Content::Voice(voice) if voice.id == id));
-        let place = match found {
-            Some(place) => place,
-            None => {
-                let mut voice = VoiceBuilt {
-                    id,
-                    items: Vec::new(),
-                };
-                if !self.has_voices() {
-                    let notes: Vec<usize> = sorted_places(&self.items)
-                        .into_iter()
-                        .filter(|place| {
-                            matches!(&self.items[*place].content,
-                                Content::Element(element, _) if is_general_note(element))
-                        })
-                        .collect();
-                    for place in &notes {
-                        if let Content::Element(element, serial) = &self.items[*place].content {
-                            append_to_voice(&mut voice, (**element).clone(), *serial);
-                        }
-                    }
-                    let mut index = 0;
-                    self.items.retain(|_| {
-                        let keep = !notes.contains(&index);
-                        index += 1;
-                        keep
-                    });
-                }
-                let at = highest_time(&self.items);
-                self.insert(at, Content::Voice(voice));
-                self.items.len() - 1
-            }
+    /// Elements starting together where music21's `appendSimultaneous`
+    /// puts them: where the shortest voice ends, each in the next voice
+    /// ending there or a new one -- the notes the measure holds becoming
+    /// its first voice where it has none.
+    fn append_in_voices(&mut self, elements: Vec<(StreamElement, usize)>) {
+        let offset = if self.has_voices() {
+            self.items
+                .iter()
+                .filter(|item| matches!(item.content, Content::Voice(_)))
+                .map(voice_length)
+                .fold(FloatType::INFINITY, FloatType::min)
+        } else {
+            highest_time(&self.items)
         };
-        if let Content::Voice(voice) = &mut self.items[place].content {
-            let missing = length - highest_time(&voice.items);
-            if missing > 0.0
-                && let Ok(duration) = Duration::new(missing)
-            {
-                let mut rest = Rest::new(duration);
-                rest.set_step_shift(3);
-                append_to_voice(voice, StreamElement::Rest(rest), None);
+        if !self.has_voices() {
+            let mut voice = VoiceBuilt {
+                id: 0,
+                items: Vec::new(),
+            };
+            let notes: Vec<usize> = sorted_places(&self.items)
+                .into_iter()
+                .filter(|place| {
+                    matches!(&self.items[*place].content,
+                        Content::Element(element, _) if is_general_note(element))
+                })
+                .collect();
+            for place in &notes {
+                if let Content::Element(element, serial) = &self.items[*place].content {
+                    append_to_voice(&mut voice, (**element).clone(), *serial);
+                }
+            }
+            let mut index = 0;
+            self.items.retain(|_| {
+                let keep = !notes.contains(&index);
+                index += 1;
+                keep
+            });
+            self.insert(0.0, Content::Voice(voice));
+        }
+        let voices: Vec<usize> = sorted_places(&self.items)
+            .into_iter()
+            .filter(|place| matches!(self.items[*place].content, Content::Voice(_)))
+            .collect();
+        let mut count = voices.len();
+        let mut free: std::collections::VecDeque<usize> = voices
+            .into_iter()
+            .filter(|place| voice_length(&self.items[*place]) == offset)
+            .collect();
+        for (element, serial) in elements {
+            let place = free.pop_front().unwrap_or_else(|| {
+                self.insert(
+                    0.0,
+                    Content::Voice(VoiceBuilt {
+                        id: count,
+                        items: Vec::new(),
+                    }),
+                );
+                count += 1;
+                self.items.len() - 1
+            });
+            if let Content::Voice(voice) = &mut self.items[place].content {
+                let inserted = voice.items.len();
+                voice.items.push(Item {
+                    offset,
+                    content: Content::Element(Box::new(element), Some(serial)),
+                    inserted,
+                });
             }
         }
-        place
     }
 }
 
@@ -504,6 +522,10 @@ impl Reader {
             "Lyric1" => self.lyrics = lyrics(attributes.required("Text")?),
             "Note" => {
                 self.note(attributes)?;
+                self.lyric_position += 1;
+            }
+            "RestChord" => {
+                self.rest_chord(attributes)?;
                 self.lyric_position += 1;
             }
             "Rest" => {
@@ -888,71 +910,71 @@ impl Reader {
         Ok(())
     }
 
+    /// music21's `translateChord`: a chord for each `Dur` and the `Pos`
+    /// beside it, and one more for `Dur2` and `Pos2`, all starting together.
     fn chord(&mut self, attributes: &Attributes) -> Result<()> {
         attributes.required("Dur")?;
         attributes.required("Pos")?;
-        let durations = attributes.list("Dur");
-        let positions = attributes.list("Pos");
-        let length = if self.measure.has_voices() {
-            sorted_places(&self.measure.items)
-                .into_iter()
-                .filter_map(|place| match &self.measure.items[place].content {
-                    Content::Voice(voice) => Some(highest_time(&voice.items)),
-                    Content::Element(..) => None,
-                })
-                .fold(FloatType::INFINITY, FloatType::min)
-        } else {
-            highest_time(&self.measure.items)
-        };
-        let rest_beside = attributes.get("Dur2");
-        let mut voice = 0;
-        for written in &durations {
-            let serial = self.serial();
-            let duration = self.duration(written, serial)?;
-            // music21 takes the position of the first equal duration.
-            let index = durations
-                .iter()
-                .position(|other| other == written)
-                .unwrap_or(0);
-            let position = positions
-                .get(index)
-                .ok_or_else(|| error("a chord with no Pos"))?
-                .clone();
-            let mut pitches = Vec::new();
-            for one in position.split(',') {
-                pitches.push(self.pitch(one)?);
+        let mut groups: Vec<(String, String)> = attributes
+            .list("Dur")
+            .into_iter()
+            .zip(attributes.list("Pos"))
+            .collect();
+        if let Some(written) = attributes.get("Dur2") {
+            groups.push((
+                written.to_string(),
+                attributes.required("Pos2")?.to_string(),
+            ));
+        }
+        let mut chords = Vec::new();
+        for (written, position) in &groups {
+            chords.push(self.chord_of(written, position)?);
+        }
+        self.simultaneous(chords)
+    }
+
+    /// music21's `translateRestChord`: the chord of `Dur2` and `Pos2`, and a
+    /// rest of `Dur` sounding with it.
+    fn rest_chord(&mut self, attributes: &Attributes) -> Result<()> {
+        let chord = self.chord_of(attributes.required("Dur2")?, attributes.required("Pos2")?)?;
+        let serial = self.serial();
+        let mut rest = Rest::new(Duration::quarter());
+        rest.set_duration(self.duration(attributes.required("Dur")?, serial)?);
+        self.simultaneous(vec![chord, (StreamElement::Rest(rest), serial)])
+    }
+
+    /// music21's `createChord`: one group of a chord's notes.
+    fn chord_of(&mut self, written: &str, position: &str) -> Result<(StreamElement, usize)> {
+        let serial = self.serial();
+        let duration = self.duration(written, serial)?;
+        let mut pitches = Vec::new();
+        for one in position.split(',') {
+            pitches.push(self.pitch(one)?);
+        }
+        let notes: Vec<Note> = pitches.into_iter().map(Note::from_pitch).collect();
+        let mut chord = Chord::new(notes)?.with_duration(duration);
+        if let Some(tie) = self.tie(position) {
+            for note in chord.notes_mut() {
+                note.set_tie(Some(tie.clone()));
             }
-            let notes: Vec<Note> = pitches.into_iter().map(Note::from_pitch).collect();
-            let mut chord = Chord::new(notes)?.with_duration(duration);
-            if let Some(tie) = self.tie(&position) {
-                for note in chord.notes_mut() {
-                    note.set_tie(Some(tie.clone()));
-                }
-            }
-            if let Some(lyric) = self.lyric().map(str::to_string) {
+        }
+        Ok((StreamElement::Chord(chord), serial))
+    }
+
+    /// music21's `appendSimultaneous`: the first takes the lyric sung now,
+    /// and each goes in a voice of its own where there are more than one.
+    fn simultaneous(&mut self, mut elements: Vec<(StreamElement, usize)>) -> Result<()> {
+        if let Some(lyric) = self.lyric().map(str::to_string) {
+            // The first is always a chord.
+            if let StreamElement::Chord(chord) = &mut elements[0].0 {
                 chord.add_lyric(&lyric, None, false)?;
             }
-            if durations.len() == 1 {
-                self.measure
-                    .append_shortest(StreamElement::Chord(chord), Some(serial));
-            } else {
-                let place = self.measure.voice_at(voice, length);
-                if let Content::Voice(built) = &mut self.measure.items[place].content {
-                    append_to_voice(built, StreamElement::Chord(chord), Some(serial));
-                }
-            }
-            voice += 1;
         }
-        if let Some(written) = rest_beside {
-            let serial = self.serial();
-            let mut rest = Rest::new(Duration::quarter());
-            rest.set_step_shift(3);
-            let duration = self.duration(written, serial)?;
-            rest.set_duration(duration);
-            let place = self.measure.voice_at(voice, length);
-            if let Content::Voice(built) = &mut self.measure.items[place].content {
-                append_to_voice(built, StreamElement::Rest(rest), Some(serial));
-            }
+        if elements.len() == 1 {
+            let (element, serial) = elements.remove(0);
+            self.measure.append_shortest(element, Some(serial));
+        } else {
+            self.measure.append_in_voices(elements);
         }
         Ok(())
     }
@@ -1174,5 +1196,68 @@ mod tests {
     fn a_line_with_an_attribute_and_no_value_is_refused() {
         assert!(from_noteworthy("|AddStaff|\n|Note|Dur\n").is_err());
         assert!(from_noteworthy("|Note|Dur:4th|Pos:1\n").is_err());
+    }
+
+    /// The notes, chords and rests of the first measure: where each starts
+    /// in it, how long it is and what it sounds.
+    fn first_measure(lines: &str) -> Vec<(FloatType, FloatType, String)> {
+        let score = from_noteworthy(&format!("|AddStaff|\n|Clef|Type:Treble\n{lines}")).unwrap();
+        let mut out: Vec<(FloatType, FloatType, String)> = score.parts()[0].measures()[0]
+            .leaves()
+            .into_iter()
+            .filter_map(|(offset, element)| {
+                let sounds = match element {
+                    StreamElement::Note(note) => note.pitch().name_with_octave(),
+                    StreamElement::Chord(chord) => chord
+                        .notes()
+                        .iter()
+                        .map(|note| note.pitch().name_with_octave())
+                        .collect::<Vec<_>>()
+                        .join(" "),
+                    StreamElement::Rest(_) => "rest".to_string(),
+                    _ => return None,
+                };
+                Some((offset, element.quarter_length(), sounds))
+            })
+            .collect();
+        out.sort_by(|left, right| left.partial_cmp(right).unwrap());
+        out
+    }
+
+    #[test]
+    fn a_chord_of_two_lengths_is_two_chords_starting_together() {
+        assert_eq!(
+            first_measure(
+                "|Note|Dur:4th|Pos:0\n\
+                 |Chord|Dur:8th|Pos:-4,n-3,b-2,#-1,x0,v1,2x|Opts:Stem=Down|Dur2:8th,DblDotted|Pos2:3x\n\
+                 |Note|Dur:4th|Pos:-5\n"
+            ),
+            [
+                (0.0, 1.0, "B4".to_string()),
+                (1.0, 0.5, "E4 F4 Gb4 A#4 B##4 Cbb5 D5".to_string()),
+                (1.0, 0.875, "E5".to_string()),
+                (1.5, 1.0, "D4".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_rest_chord_is_a_rest_and_a_chord_starting_together() {
+        assert_eq!(
+            first_measure(
+                "|Note|Dur:4th|Pos:0\n\
+                 |RestChord|Dur:Half|Opts:Stem=Up|Dur2:4th|Pos2:-1,1\n\
+                 |RestChord|Dur:4th|Dur2:4th|Pos2:-5\n\
+                 |Note|Dur:4th|Pos:0\n"
+            ),
+            [
+                (0.0, 1.0, "B4".to_string()),
+                (1.0, 1.0, "A4 C5".to_string()),
+                (1.0, 2.0, "rest".to_string()),
+                (2.0, 1.0, "D4".to_string()),
+                (2.0, 1.0, "rest".to_string()),
+                (3.0, 1.0, "B4".to_string()),
+            ]
+        );
     }
 }

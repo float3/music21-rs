@@ -24,6 +24,11 @@ are tunes whose own reading cannot be written back.
 - `musicxml::ExportOptions` has a new public field, `make_notation`. Code
   building one with every field named needs it; code using
   `..ExportOptions::default()` does not.
+- `TimespanTree::maximum_overlap` returns an `Option`, nothing for an empty
+  tree, as music21's `maximumOverlap` returns `None`.
+- `DataSet::class_position_labels` takes `include_class_label` after
+  `include_id`, as music21's `getClassPositionLabels` does, and leaves the
+  class's column out without it.
 
 ## Added
 
@@ -427,12 +432,16 @@ are tunes whose own reading cannot be written back.
 
 ## Changed
 
-- The crate is held to music21 11.0.0b10 with the fixes sent upstream from
+- The crate is held to music21 11.0.0b11 with the fixes sent upstream from
   here, and stops copying the music21 bugs those fix:
   - `capella::from_capella` reads a `single` barline as a regular one, where
     it refused it, and reads a tuplet's `prolong`.
-  - `noteworthy::from_nwc` reads tenor and percussion clefs, and the notes of
-    a chord in a file of version 2 or later.
+  - `noteworthy::from_nwc` reads tenor and percussion clefs, the notes of a
+    chord in a file of version 2 or later and of version 1.70 or earlier,
+    and a rest chord as its rest and the notes sounding with it.
+    `from_noteworthy` reads a chord's `Dur2` and `Pos2` as notes sounding
+    with the chord, where it took them for a rest, and a `RestChord` as a
+    rest and a chord starting together, each in a voice of its own.
   - `volpiano::from_volpiano` puts a break in the measure being read, not the
     first measure, and makes a neume of every note of its run, not just the
     last pair.
@@ -446,10 +455,43 @@ are tunes whose own reading cannot be written back.
     in a part is kept.
   - A roman numeral past seven, `VIII`, is refused, where it read as `VII`.
   - A trill takes its accidental's showing only where that is decided.
-  - `to_musicxml` writes a chord's notes lowest first on the staff, joins a
-    piano's staves where the upper lacks a measure the lower has, and the
-    reader keys an arpeggio across chords by its number and its offset in
-    the part.
+  - `to_musicxml` writes a chord's notes lowest first on the staff, its
+    fingerings moving with their notes, and a chord whose fingered notes
+    would not stay first as it stands; it joins a piano's staves where the
+    upper lacks a measure the lower has, and the reader keys an arpeggio
+    across chords by its number and its offset in the part.
+  - `from_musicxml` hides a lyric only where its `print-object` is `no`,
+    where it hid one marked `yes`.
+  - `Stream::find_consecutive_notes` with `skip_unisons` passes over a chord
+    sounding the pitches of the chord before, in any order, and what it
+    passes over still sounds until it ends, so no break follows it.
+  - `KeyAnalyzer::smooth_interpretation_by_measure` smooths each measure by
+    its neighbours' own readings, where a measure read after its neighbour
+    was smoothed took the smoothed reading.
+  - jSymbolic's independent voices (`T1` to `T3`) count a part sounding a
+    chord among the parts sounding, where only single notes counted.
+    Native `CS12` passes over a chord symbol that sounds nothing, where it
+    refused the piece, and `P22` analyses a piece whose stated keys agree
+    in a mode other than major or minor, where it refused it.
+  - `PartReduction::weighted_spans` puts a part in a group where its id
+    holds one of the group's matches as a whole word, weighs a stretch by
+    the mean loudness of its dynamics, where it divided their sum by seven,
+    keeps each group's stretches apart where groups of one id shared them,
+    keeps the stretch before a stretch's first dynamic, as loud as the last
+    dynamic before it, and leaves a dynamic on a stretch's end to the next.
+  - `ReductiveNote::note_and_text_expression` gives a chord's highest note
+    where no pitch is said, where it looked for a C.
+  - `Sieve` reads a modulus of nought as the empty class, and its
+    complement as every integer, where it refused it.
+  - `StepScale::octave_repeating` respells the last step of steps a whole
+    octave wide spelled as something else, so `M3 M3 M3` closes on the
+    tonic as `M3 M3 d4` rather than on `B#`.
+  - The Python package's `Accidental` reads a value as music21's lookup
+    table does -- a name, modifier, alternate name or alter, a string tried
+    again lowercased -- refusing `''` and `None`. With
+    `allowNonStandardValue`, `set` sets the name or the alter alone, and a
+    standard `set` tells its `_client`. `Pitch(step=...)` refuses what is
+    not one letter of the scale, and is passed over where a name is given.
 - `abc::to_abc` says each voice's opening clef on its `V:` line, where it
   used to name it in the `K:` field, and says every clef but a treble clef
   the notes fit, where it used to leave unsaid any clef the notes fit. A
@@ -501,6 +543,12 @@ are tunes whose own reading cannot be written back.
 
 ## Fixed
 
+- A pitch built from a number keeps the natural music21 writes on it:
+  `Pitch(60)` has a natural, where only setting `ps` or `midi` leaves
+  none.
+- Transposing a pitch moves its fundamental with it, as music21 does: a
+  diatonic interval dropped the fundamental, and one counted in semitones
+  left it where it was.
 - A negative harmonic shift is written with music21's ordinal suffix:
   `-2th`, as Python takes the last digit of -2 modulo ten to be eight.
 - `Stream::flatten`, `recurse` and `leaves` snap each offset they add up

@@ -11,10 +11,10 @@
 # reads that. This is what the report falls back to where no such run
 # has happened.
 #
-# music21 11.0.0b10 at 50f399c12875575e9cc2ac9782ae33f768da8c00
+# music21 11.0.0b11 at 23cbd81bacbaf4b1e6ee0d7245456e945b49043f
 
-music21_version = "11.0.0b10"
-music21_commit = "50f399c12875575e9cc2ac9782ae33f768da8c00"
+music21_version = "11.0.0b11"
+music21_commit = "23cbd81bacbaf4b1e6ee0d7245456e945b49043f"
 
 [[module]]
 module = "music21.analysis.discrete"
@@ -32,7 +32,7 @@ tests = 4
 module = "music21.analysis.floatingKey"
 docstrings = 2
 examples = 14
-tests = 0
+tests = 1
 
 [[module]]
 module = "music21.analysis.harmonicFunction"
@@ -80,7 +80,7 @@ tests = 7
 module = "music21.analysis.windowed"
 docstrings = 3
 examples = 35
-tests = 4
+tests = 5
 
 [[module]]
 module = "music21.articulations"
@@ -176,13 +176,13 @@ tests = 28
 module = "music21.instrument"
 docstrings = 15
 examples = 150
-tests = 11
+tests = 12
 
 [[module]]
 module = "music21.interval"
 docstrings = 107
 examples = 771
-tests = 13
+tests = 14
 
 [[module]]
 module = "music21.key"
@@ -211,8 +211,8 @@ tests = 13
 [[module]]
 module = "music21.pitch"
 docstrings = 83
-examples = 930
-tests = 27
+examples = 931
+tests = 35
 
 [[module]]
 module = "music21.roman"
@@ -224,13 +224,13 @@ tests = 34
 module = "music21.scale"
 docstrings = 62
 examples = 344
-tests = 52
+tests = 58
 
 [[module]]
 module = "music21.scale.scala"
 docstrings = 7
 examples = 55
-tests = 57
+tests = 63
 
 [[module]]
 module = "music21.serial"
@@ -242,7 +242,7 @@ tests = 6
 module = "music21.sieve"
 docstrings = 25
 examples = 107
-tests = 8
+tests = 9
 
 [[module]]
 module = "music21.tempo"

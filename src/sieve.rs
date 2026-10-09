@@ -42,7 +42,8 @@ pub struct Sieve {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum Node {
-    /// Integers congruent to `shift` modulo `modulus`.
+    /// Integers congruent to `shift` modulo `modulus`; none at all where
+    /// the modulus is nought.
     Residual {
         modulus: UnsignedIntegerType,
         shift: UnsignedIntegerType,
@@ -63,6 +64,7 @@ enum Node {
 impl Node {
     fn contains(&self, z: IntegerType) -> bool {
         match self {
+            Self::Residual { modulus: 0, .. } => false,
             Self::Residual { modulus, shift } => {
                 z.rem_euclid(*modulus as IntegerType) == *shift as IntegerType
             }
@@ -81,6 +83,7 @@ impl Node {
     /// of three.
     fn shifted(&self, n: IntegerType) -> Node {
         match self {
+            Self::Residual { modulus: 0, .. } => self.clone(),
             Self::Residual { modulus, shift } => Self::Residual {
                 modulus: *modulus,
                 shift: (*shift as IntegerType + n).rem_euclid(*modulus as IntegerType)
@@ -530,8 +533,12 @@ fn lcm(a: UnsignedIntegerType, b: UnsignedIntegerType) -> UnsignedIntegerType {
 /// music21's `Residual.__and__`, after Xenakis.
 ///
 /// Two classes whose moduli share a factor meet only when their shifts agree
-/// modulo it, and otherwise not at all.
+/// modulo it, and otherwise not at all. The empty class, of modulus nought,
+/// meets nothing.
 fn intersect_classes((m1, n1): (i128, i128), (m2, n2): (i128, i128)) -> Result<(i128, i128)> {
+    if m1 == 0 || m2 == 0 {
+        return Ok((0, 0));
+    }
     let d = num::integer::gcd(m1, m2);
     if (n1 - n2) % d != 0 {
         return Err(Error::Sieve(format!(
@@ -727,10 +734,6 @@ impl Parser<'_> {
         };
         self.position += 1;
 
-        if modulus == 0 {
-            return Err(Error::Sieve("sieve modulus must be non-zero".to_string()));
-        }
-
         // A bare modulus means a shift of zero, as music21's `5` is `5@0`.
         let shift = if self.eat(Token::At) {
             let Some(Token::Number(shift)) = self.peek() else {
@@ -744,9 +747,10 @@ impl Parser<'_> {
             0
         };
 
+        // music21 keeps the shift of the empty class as written.
         Ok(Node::Residual {
             modulus,
-            shift: shift % modulus,
+            shift: if modulus == 0 { shift } else { shift % modulus },
         })
     }
 }
@@ -1177,11 +1181,23 @@ mod tests {
     #[test]
     fn malformed_expressions_error_instead_of_panicking() {
         for bad in [
-            "", "  ", "@", "3@", "|3@0", "3@0|", "(3@0", "3@0)", "0@0", "3@0 & ", "x", "3@@0",
+            "", "  ", "@", "3@", "|3@0", "3@0|", "(3@0", "3@0)", "3@0 & ", "x", "3@@0",
         ] {
             let parsed = Sieve::parse(bad);
             assert!(parsed.is_err(), "{bad:?} should be rejected");
         }
+    }
+
+    /// music21's own test: a modulus of nought is the empty class, and its
+    /// complement every integer.
+    #[test]
+    fn a_modulus_of_nought_is_the_empty_class() {
+        let all: Vec<IntegerType> = (0..6).collect();
+        assert!(Sieve::parse("0@0").unwrap().segment(0, 5).is_empty());
+        assert_eq!(Sieve::parse("-0@0").unwrap().segment(0, 5), all);
+        assert_eq!(Sieve::parse("-0@0|3@1").unwrap().segment(0, 5), all);
+        assert_eq!(Sieve::parse("0@0|3@1").unwrap().segment(0, 5), [1, 4]);
+        assert_eq!(Sieve::parse("0@0|3@1").unwrap().period(), 0);
     }
 
     /// music21 reads brackets as a group, and a residual written `M,N` or

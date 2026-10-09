@@ -16,7 +16,7 @@
 //! let tree = as_timespans(&line, Flatten::Flat, None);
 //! let third = tree.verticality_at(3.0);
 //! assert_eq!(third.start_timespans().len(), 1);
-//! assert_eq!(tree.maximum_overlap(), 3);
+//! assert_eq!(tree.maximum_overlap(), Some(3));
 //! # Ok::<(), music21_rs::Error>(())
 //! ```
 
@@ -397,16 +397,15 @@ impl<'a> TimespanTree<'a> {
     }
 
     /// The most timespans starting at or sounding across any one offset a
-    /// timespan starts at, nought for an empty tree: music21's
+    /// timespan starts at, nothing for an empty tree: music21's
     /// `maximumOverlap`.
-    pub fn maximum_overlap(&self) -> usize {
+    pub fn maximum_overlap(&self) -> Option<usize> {
         self.verticalities()
             .iter()
             .map(|verticality| {
                 verticality.start_timespans.len() + verticality.overlap_timespans.len()
             })
             .max()
-            .unwrap_or(0)
     }
 
     /// The stream the tree was read from: music21's `source`.

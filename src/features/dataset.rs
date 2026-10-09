@@ -399,7 +399,11 @@ impl DataSet {
 
     /// Whether each column is the class's, nothing for the id's: music21's
     /// `getClassPositionLabels`.
-    pub fn class_position_labels(&self, include_id: bool) -> Vec<Option<bool>> {
+    pub fn class_position_labels(
+        &self,
+        include_id: bool,
+        include_class_label: bool,
+    ) -> Vec<Option<bool>> {
         let mut labels = Vec::new();
         if include_id {
             labels.push(None);
@@ -407,7 +411,9 @@ impl DataSet {
         for extractor in &self.extractors {
             labels.extend(std::iter::repeat_n(Some(false), extractor.dimensions()));
         }
-        labels.push(Some(true));
+        if include_class_label {
+            labels.push(Some(true));
+        }
         labels
     }
 
@@ -471,7 +477,7 @@ impl DataSet {
                         .join("\t"),
                 );
                 lines.push(
-                    self.class_position_labels(true)
+                    self.class_position_labels(true, true)
                         .into_iter()
                         .map(|class| match class {
                             None => "meta",
@@ -491,7 +497,7 @@ impl DataSet {
                 lines.push(format!("@RELATION {}", self.class_label));
                 let labels = self.attribute_labels(true, true);
                 let discrete = self.discrete_labels(true, true);
-                let classes = self.class_position_labels(true);
+                let classes = self.class_position_labels(true, true);
                 for ((label, discrete), class) in labels.iter().zip(discrete).zip(classes) {
                     lines.push(match (class, discrete) {
                         (Some(true), _) => {

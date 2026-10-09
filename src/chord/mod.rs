@@ -773,16 +773,28 @@ impl Chord {
     }
 
     fn sort_ascending_in_place(&mut self) {
-        self.notes.sort_by(|left, right| {
-            root::diatonic_note_number(&left.pitch)
-                .cmp(&root::diatonic_note_number(&right.pitch))
+        let order = self.ascending_order();
+        self.notes = order
+            .iter()
+            .map(|&index| self.notes[index].clone())
+            .collect();
+    }
+
+    /// The indices of the notes, sorted by staff position and then pitch
+    /// space, equal notes keeping their order.
+    pub(crate) fn ascending_order(&self) -> Vec<usize> {
+        let mut order: Vec<usize> = (0..self.notes.len()).collect();
+        order.sort_by(|&left, &right| {
+            let (left, right) = (&self.notes[left].pitch, &self.notes[right].pitch);
+            root::diatonic_note_number(left)
+                .cmp(&root::diatonic_note_number(right))
                 .then_with(|| {
-                    left.pitch
-                        .ps()
-                        .partial_cmp(&right.pitch.ps())
+                    left.ps()
+                        .partial_cmp(&right.ps())
                         .unwrap_or(std::cmp::Ordering::Equal)
                 })
         });
+        order
     }
 
     /// Returns a copy with every note transposed by the interval.

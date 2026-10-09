@@ -21,7 +21,7 @@ mod tree;
 
 pub use read::from_musicxml;
 
-use crate::articulations::Articulation;
+use crate::articulations::{Articulation, ArticulationKind};
 use crate::bar::{Barline, Ending, RepeatDirection};
 use crate::chord::Chord;
 use crate::chordsymbol::ChordSymbol;
@@ -1596,7 +1596,7 @@ impl<'a, 'b> MeasureExporter<'a, 'b> {
             }
             // music21 sorts a chord in place before writing it.
             StreamElement::Chord(chord) => {
-                self.chord_elements(&chord.sort_diatonic_ascending(), Some(position))?
+                self.chord_elements(&written_order(chord), Some(position))?
             }
             StreamElement::Unpitched(stroke) => {
                 let mxnote =
@@ -2440,6 +2440,38 @@ fn notations(
     notations.extend(technical);
     notations.extend(ornaments);
     Ok(notations)
+}
+
+/// A chord in the order music21's exporter writes it: sorted by staff
+/// position and pitch space, each fingering moved with the note it is the
+/// turn of. A chord where a note with no fingering would sort before one
+/// with a fingering is written as it stands.
+fn written_order(chord: &Chord) -> Chord {
+    let order = chord.ascending_order();
+    if order
+        .iter()
+        .enumerate()
+        .all(|(place, &index)| place == index)
+    {
+        return chord.clone();
+    }
+    let slots: Vec<usize> = chord
+        .articulations()
+        .iter()
+        .enumerate()
+        .filter(|(_, articulation)| articulation.kind() == ArticulationKind::Fingering)
+        .map(|(slot, _)| slot)
+        .collect();
+    let fingered = slots.len().min(order.len());
+    if order[..fingered].iter().any(|&index| index >= fingered) {
+        return chord.clone();
+    }
+    let mut sorted = chord.sort_ascending();
+    let articulations = sorted.articulations_mut();
+    for (place, &index) in order[..fingered].iter().enumerate() {
+        articulations[slots[place]] = chord.articulations()[slots[index]].clone();
+    }
+    sorted
 }
 
 /// The `<articulations>` and `<technical>` of a note, the `index`th of its
