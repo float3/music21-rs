@@ -242,6 +242,9 @@ pub struct Accidental {
     /// not something this crate models — and its mere existence is what
     /// `hasStyleInformation` answers, as music21's does.
     style: Option<Py<PyAny>>,
+    /// music21's `_client`, where something other than the pitch it came
+    /// off was given as one: told by `informClient` when `set` changes this.
+    client: Option<Py<PyAny>>,
 }
 
 impl Clone for Accidental {
@@ -253,6 +256,7 @@ impl Clone for Accidental {
             inner: self.inner.clone(),
             owner: None,
             style: crate::notation::copied_style(py, self.style.as_ref()),
+            client: None,
         })
     }
 }
@@ -281,12 +285,46 @@ pub(crate) fn accidental_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsAccide
     RsAccidental::new(value.extract::<f64>()?).map_err(accidental_error)
 }
 
+/// The accidental music21's `accidentalLookupTable` gives for a value: a
+/// standard name, modifier or alternate name, a string tried as written and
+/// then lowercased, or a number equal to a standard alter. Anything else,
+/// natural's empty modifier among it, gives nothing.
+fn looked_up(value: &Bound<'_, PyAny>) -> Option<RsAccidental> {
+    if let Ok(text) = value.cast::<pyo3::types::PyString>() {
+        let text = text.to_string();
+        let standard = |text: &str| {
+            // The crate also reads accidental signs and alters written out,
+            // which music21's table does not hold.
+            if text.is_empty() || !text.is_ascii() || text.parse::<f64>().is_ok() {
+                return None;
+            }
+            RsAccidental::new(text).ok()
+        };
+        return standard(&text).or_else(|| standard(&text.to_lowercase()));
+    }
+    let alter = value.extract::<f64>().ok()?;
+    RsAccidental::new(alter).ok()
+}
+
+/// What music21 says of a value its table does not hold: the value,
+/// lowercased where it is a string, as Python writes it.
+fn unsupported(value: &Bound<'_, PyAny>) -> PyErr {
+    let shown = match value.cast::<pyo3::types::PyString>() {
+        Ok(text) => text.to_string().to_lowercase(),
+        Err(_) => value
+            .str()
+            .map_or_else(|_| String::new(), |text| text.to_string()),
+    };
+    AccidentalException::new_err(format!("{shown} is not a supported accidental type"))
+}
+
 impl Accidental {
     pub(crate) fn from_inner(inner: RsAccidental) -> Self {
         Self {
             inner,
             owner: None,
             style: None,
+            client: None,
         }
     }
 
@@ -296,6 +334,7 @@ impl Accidental {
             inner,
             owner: Some(pitch),
             style: None,
+            client: None,
         }
     }
 
@@ -331,12 +370,14 @@ impl Accidental {
     ) -> Result<(), pyo3::pyclass::PyTraverseError> {
         visit.call(&self.owner)?;
         visit.call(&self.style)?;
+        visit.call(&self.client)?;
         Ok(())
     }
 
     fn __clear__(&mut self) {
         self.owner = None;
         self.style = None;
+        self.client = None;
     }
 
     /// The names of this object's class and every class it inherits from,
@@ -381,12 +422,28 @@ impl Accidental {
         Ok(())
     }
 
+    /// music21's `Accidental(specifier='natural')`. Taken as given rather
+    /// than with a default, since `None` said outright is refused.
     #[new]
-    #[pyo3(signature = (specifier = None))]
-    fn new(specifier: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
+    #[pyo3(signature = (*arguments, **keywords))]
+    fn new(
+        arguments: &Bound<'_, pyo3::types::PyTuple>,
+        keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Self> {
+        let specifier = match arguments.get_item(0) {
+            Ok(value) => Some(value),
+            Err(_) => keywords
+                .map(|keywords| keywords.get_item("specifier"))
+                .transpose()?
+                .flatten(),
+        };
+        let specifier = specifier.as_ref();
         let inner = match specifier {
             None => RsAccidental::natural(),
-            Some(value) => accidental_from_any(value)?,
+            Some(value) => match value.extract::<PyRef<Accidental>>() {
+                Ok(facade) => facade.inner.clone(),
+                Err(_) => looked_up(value).ok_or_else(|| unsupported(value))?,
+            },
         };
         Ok(Self::from_inner(inner))
     }
@@ -396,27 +453,66 @@ impl Accidental {
         RsAccidental::list_names()
     }
 
+    /// music21's `set`: a value its table holds sets the name, alter and
+    /// modifier together and tells the client; with `allowNonStandardValue`
+    /// any other string sets the name alone, lowercased, and any other
+    /// number the alter alone, telling nobody. Anything else is refused.
     #[pyo3(signature = (specifier, *, allowNonStandardValue = false))]
     fn set(
-        &mut self,
-        py: Python<'_>,
+        slf: &Bound<'_, Self>,
         specifier: &Bound<'_, PyAny>,
         allowNonStandardValue: bool,
     ) -> PyResult<()> {
-        if allowNonStandardValue {
-            if let Ok(text) = specifier.extract::<String>() {
-                self.inner
-                    .set_allowing_non_standard_value(text.as_str())
-                    .map_err(accidental_error)?;
-            } else {
-                self.inner
-                    .set_allowing_non_standard_value(specifier.extract::<f64>()?)
-                    .map_err(accidental_error)?;
+        let py = slf.py();
+        if let Some(standard) = looked_up(specifier) {
+            let client = {
+                let mut me = slf.borrow_mut();
+                let display = me.inner.clone();
+                me.inner = standard;
+                me.inner.inherit_display(&display);
+                me.client.as_ref().map(|client| client.clone_ref(py))
+            };
+            if let Some(client) = client {
+                client.bind(py).call_method0("informClient")?;
             }
-            return self.write_back(py);
+            return slf.borrow().write_back(py);
         }
-        self.inner = accidental_from_any(specifier)?;
-        self.write_back(py)
+        if !allowNonStandardValue {
+            return Err(unsupported(specifier));
+        }
+        if let Ok(text) = specifier.cast::<pyo3::types::PyString>() {
+            slf.borrow_mut()
+                .inner
+                .set_name_independently(text.to_string().to_lowercase());
+        } else if specifier.is_instance_of::<pyo3::types::PyInt>()
+            || specifier.is_instance_of::<pyo3::types::PyFloat>()
+        {
+            slf.borrow_mut()
+                .inner
+                .set_alter_independently(specifier.extract::<f64>()?);
+        } else {
+            return Err(unsupported(specifier));
+        }
+        slf.borrow().write_back(py)
+    }
+
+    /// music21's `_client`: what is told when `set` changes this, the pitch
+    /// it came off where nothing else was given.
+    #[getter]
+    fn get__client(&self, py: Python<'_>) -> Option<Py<PyAny>> {
+        self.client
+            .as_ref()
+            .map(|client| client.clone_ref(py))
+            .or_else(|| {
+                self.owner
+                    .as_ref()
+                    .map(|owner| owner.clone_ref(py).into_any())
+            })
+    }
+
+    #[setter]
+    fn set__client(&mut self, value: Option<Py<PyAny>>) {
+        self.client = value;
     }
 
     fn isTwelveTone(&self) -> bool {
@@ -1004,11 +1100,18 @@ impl Pitch {
                 inferred = true;
             }
         }
-        if let Some(step) = step {
-            let letter = step
-                .chars()
-                .next()
-                .ok_or_else(|| PitchException::new_err("step cannot be empty"))?;
+        // music21 reads the step only where no name is given, and a step
+        // that is not one letter of the scale is refused.
+        if let Some(step) = step.filter(|_| name.is_none()) {
+            let cleaned = step.trim().to_uppercase();
+            let letter = match cleaned.chars().collect::<Vec<_>>()[..] {
+                [letter] if "CDEFGAB".contains(letter) => letter,
+                _ => {
+                    return Err(PitchException::new_err(format!(
+                        "Cannot make a step out of '{cleaned}'"
+                    )));
+                }
+            };
             options = options.step(letter);
             inferred = false;
         }

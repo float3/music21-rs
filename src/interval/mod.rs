@@ -866,7 +866,7 @@ impl Interval {
     /// does, with its keyword arguments: `reverse` transposes by the
     /// reversed interval, and `max_accidental` respells any result carrying
     /// more accidentals than that (music21's default is `Some(4)`), `None`
-    /// meaning no limit.
+    /// meaning no limit. A pitch's fundamental moves with it.
     pub fn transpose_pitch_with_options(
         &self,
         p: &Pitch,
@@ -878,6 +878,23 @@ impl Interval {
                 .reverse()?
                 .transpose_pitch_with_options(p, false, max_accidental);
         }
+        let mut moved = self.transpose_pitch_alone(p, max_accidental)?;
+        if let Some(fundamental) = p.fundamental() {
+            moved.fundamental_setter(self.transpose_pitch_with_options(
+                fundamental,
+                false,
+                max_accidental,
+            )?);
+        }
+        Ok(moved)
+    }
+
+    /// The pitch moved by the interval, its fundamental left as it was.
+    fn transpose_pitch_alone(
+        &self,
+        p: &Pitch,
+        max_accidental: Option<IntegerType>,
+    ) -> Result<Pitch> {
         if self.implicit_diatonic {
             return self.chromatic.transpose_pitch(p);
         }

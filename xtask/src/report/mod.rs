@@ -50,16 +50,7 @@ pub(crate) use suites::python_command;
 /// report reads it too, and the report is built whether or not `xtask` has
 /// its `python` feature. A row calling a documented divergence a regression
 /// would have the page disagreeing with the command it names.
-pub(crate) const EXPECTED_DIVERGENCES: &[(&str, &str)] = &[
-    (
-        "testRagMarwaB (music21.scale.test_scale_main.Test.testRagMarwaB)",
-        "music21 answers a note Rag Marwa stands on twice at random and the test counts both answers; the crate answers the lowest degree every time",
-    ),
-    (
-        "testRagMarwaC (music21.scale.test_scale_main.Test.testRagMarwaC)",
-        "music21 answers a note Rag Marwa stands on twice at random and the test counts both answers; the crate answers the lowest degree every time",
-    ),
-];
+pub(crate) const EXPECTED_DIVERGENCES: &[(&str, &str)] = &[];
 
 /// The toolchain every suite is built with when coverage is measured.
 /// cargo-llvm-cov's `--doctests` is what lets the rustdoc examples write

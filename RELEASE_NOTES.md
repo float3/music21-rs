@@ -468,6 +468,17 @@ are tunes whose own reading cannot be written back.
     dynamic before it, and leaves a dynamic on a stretch's end to the next.
   - `ReductiveNote::note_and_text_expression` gives a chord's highest note
     where no pitch is said, where it looked for a C.
+  - `Sieve` reads a modulus of nought as the empty class, and its
+    complement as every integer, where it refused it.
+  - `StepScale::octave_repeating` respells the last step of steps a whole
+    octave wide spelled as something else, so `M3 M3 M3` closes on the
+    tonic as `M3 M3 d4` rather than on `B#`.
+  - The Python package's `Accidental` reads a value as music21's lookup
+    table does -- a name, modifier, alternate name or alter, a string tried
+    again lowercased -- refusing `''` and `None`. With
+    `allowNonStandardValue`, `set` sets the name or the alter alone, and a
+    standard `set` tells its `_client`. `Pitch(step=...)` refuses what is
+    not one letter of the scale, and is passed over where a name is given.
 - `abc::to_abc` says each voice's opening clef on its `V:` line, where it
   used to name it in the `K:` field, and says every clef but a treble clef
   the notes fit, where it used to leave unsaid any clef the notes fit. A
@@ -519,6 +530,12 @@ are tunes whose own reading cannot be written back.
 
 ## Fixed
 
+- A pitch built from a number keeps the natural music21 writes on it:
+  `Pitch(60)` has a natural, where only setting `ps` or `midi` leaves
+  none.
+- Transposing a pitch moves its fundamental with it, as music21 does: a
+  diatonic interval dropped the fundamental, and one counted in semitones
+  left it where it was.
 - A negative harmonic shift is written with music21's ordinal suffix:
   `-2th`, as Python takes the last digit of -2 modulo ten to be eight.
 - `Stream::flatten`, `recurse` and `leaves` snap each offset they add up

@@ -97,6 +97,25 @@ impl StepScale {
     /// The same from intervals already in hand.
     pub fn octave_repeating_of(tonic: Pitch, steps: Vec<Interval>) -> Result<Self> {
         let mut steps = or_default(steps);
+        // Steps a whole octave wide spelled as something else -- three major
+        // thirds come to `B#` -- have their last step respelled to land on
+        // the tonic, so `M3 M3 M3` is `M3 M3 d4`.
+        if let Ok(sum) = interval_sum(&tonic, &steps)
+            && sum.semitones() == 12.0
+            && sum.short_name() != "P8"
+        {
+            let last = steps.len() - 1;
+            let start = interval_sum(&tonic, &steps[..last])?
+                .transpose_pitch_with_options(&tonic, false, None)?;
+            let octave =
+                Interval::from_name("P8")?.transpose_pitch_with_options(&tonic, false, None)?;
+            steps[last] = Interval::between_pitches(&start, &octave)?;
+            return Ok(Self {
+                tonic,
+                steps,
+                closed: true,
+            });
+        }
         let closing = match interval_sum(&tonic, &steps).and_then(|sum| sum.inversion()) {
             Ok(closing) => closing,
             // A sum no accidental can spell -- eleven minor seconds come to a
