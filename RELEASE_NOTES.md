@@ -1,4 +1,14 @@
-# Unreleased
+# music21-rs 0.9.0
+
+Every score format music21 reads is read -- Capella, MuseData and
+NoteWorthy join the others -- and every one it writes is written: MusicXML,
+MIDI, RomanText, Volpiano, LilyPond and braille, and ABC besides, which
+music21 does not write. Most of music21's analysis beyond the chord is the crate's as well:
+`chordify`, windowed and floating key analysis, the jSymbolic and native
+features and their data sets, the `search`, `tree`, `text`, `layout`,
+`variant` and `omr` modules, score reductions, `alpha.analysis`, and
+tablature. Each is held to music21 on its corpus, usually every MusicXML
+score of it, output for output.
 
 ABC is written as well as read. music21 writes no ABC, so `abc::to_abc` is
 held to the two readers instead: on every tenth tune of music21's corpus,
@@ -213,9 +223,6 @@ are tunes whose own reading cannot be written back.
   corpus, merged with a version with a measure transposed, one taken out
   and one played twice, every function leaves the same measures, notes and
   variants as music21's, offsets and lengths bit for bit.
-- `from_musicxml` puts each measure at the offset music21 does, the sum of
-  the lengths before it snapped to a fraction: a measure after a run of
-  triplet-length bars was a hair early.
 - `Rest::full_measure` is music21's `fullMeasure`, which the MusicXML reader
   sets where music21's does.
 - `ChordSymbol` carries lyrics, as music21's does, with `lyrics`,
@@ -618,6 +625,9 @@ are tunes whose own reading cannot be written back.
 
 ## Fixed
 
+- `from_musicxml` puts each measure at the offset music21 does, the sum of
+  the lengths before it snapped to a fraction: a measure after a run of
+  triplet-length bars was a hair early.
 - A scale steps from a pitch on one of its degrees however the pitch is
   spelled, as music21 finds the degree by pitch space: told to start below
   `E#4` in C major, `next_pitch_beside` stepped up from `E4` to `F4`, where
