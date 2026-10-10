@@ -654,6 +654,32 @@ pub fn split_at_durations(stream: &mut Stream) -> Result<()> {
     })
 }
 
+/// An element of a complex duration cut into one piece for each of its
+/// written values, tied: music21's `splitAtDurations` of one element. Each
+/// piece comes with its length.
+pub(crate) fn element_at_durations(
+    element: &StreamElement,
+    duration: &Duration,
+) -> Result<Vec<(FloatType, StreamElement)>> {
+    let multiplier = duration.aggregate_tuplet_multiplier();
+    let multiplier = *multiplier.numer().unwrap_or(&1) as FloatType
+        / *multiplier.denom().unwrap_or(&1) as FloatType;
+    let lengths: Vec<FloatType> = duration
+        .written_values()
+        .iter()
+        .map(|value| op_frac(value.quarter_length() * multiplier))
+        .collect();
+    let mut pieces = Vec::new();
+    let mut remain = element.clone();
+    for length in &lengths[..lengths.len().saturating_sub(1)] {
+        let (piece, rest) = split_element(&remain, *length)?;
+        pieces.push((*length, piece));
+        remain = rest;
+    }
+    pieces.push((lengths.last().copied().unwrap_or(0.0), remain));
+    Ok(pieces)
+}
+
 /// [`split_at_durations`] with no spanners to keep: the length of the bar
 /// in force where the stream is a measure or a voice in one.
 fn split_container(stream: &mut Stream, bar: Option<FloatType>) -> Result<()> {
@@ -682,23 +708,11 @@ fn split_container(stream: &mut Stream, bar: Option<FloatType>) -> Result<()> {
             events.push(event.clone());
             continue;
         }
-        let multiplier = duration.aggregate_tuplet_multiplier();
-        let multiplier = *multiplier.numer().unwrap_or(&1) as FloatType
-            / *multiplier.denom().unwrap_or(&1) as FloatType;
-        let lengths: Vec<FloatType> = duration
-            .written_values()
-            .iter()
-            .map(|value| op_frac(value.quarter_length() * multiplier))
-            .collect();
         let mut offset = event.offset();
-        let mut remain = element.clone();
-        for length in &lengths[..lengths.len() - 1] {
-            let (piece, rest) = split_element(&remain, *length)?;
+        for (length, piece) in element_at_durations(element, duration)? {
             pieces.push(StreamEvent::new(offset, piece));
             offset = op_frac(offset + length);
-            remain = rest;
         }
-        pieces.push(StreamEvent::new(offset, remain));
     }
     // music21 puts each piece in as a new element, the first as much as the
     // others: after everything already standing where it starts.

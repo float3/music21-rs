@@ -93,7 +93,9 @@ music21's `streamToMidiFile` writes, its repeats played out first, and
 reader and this package's both read back as the same score. `to_volpiano`
 writes it as Volpiano, as music21's `volpiano.fromStream` does, and
 `to_roman_text` writes its roman numerals as a RomanText analysis, as
-music21's `RnWriter` does.
+music21's `RnWriter` does. `to_lilypond` writes it as LilyPond, as music21's
+`LilypondConverter` does, with no LilyPond installed: `version` is the
+LilyPond version the file says it is for, 2.24 unless given.
 
 ## Using it inside music21
 

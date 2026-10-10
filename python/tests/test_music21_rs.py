@@ -1357,6 +1357,15 @@ def test_roman_numerals_are_written_as_roman_text():
     assert written.endswith(analysis)
 
 
+def test_a_line_is_written_as_lilypond():
+    written = m.to_lilypond(m.from_tiny_notation("4/4 c4 d8 e f#4. g8"))
+    assert written.startswith('\\version "2.24"')
+    assert "fis' 4." in written
+    assert m.to_lilypond(m.from_tiny_notation("c1"), version=(2, 18)).startswith(
+        '\\version "2.18"'
+    )
+
+
 def test_a_reader_refuses_what_it_cannot_read():
     with pytest.raises(m.StreamException):
         m.from_mei("<html></html>")

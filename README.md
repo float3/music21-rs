@@ -100,7 +100,10 @@ written in Volpiano is read and written by `volpiano::from_volpiano` and
 `volpiano::to_volpiano`, as music21's `volpiano` module reads and writes it.
 A RomanText analysis is written back by `romantext::to_roman_text`, as
 music21's `RnWriter` writes one: every analysis of music21's corpus comes
-out the same text on both sides.
+out the same text on both sides. `lily::to_lilypond` writes a score as
+LilyPond, as music21's `LilypondConverter` writes it: every MusicXML score
+of music21's corpus that music21 can write comes out the same text, space
+for space.
 
 music21's analyses of whole pieces are ported beside its chord and pitch
 analysis, each held to music21 on its corpus: `Stream::chordify`, the
