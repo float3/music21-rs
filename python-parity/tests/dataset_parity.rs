@@ -2,7 +2,7 @@
 //! its tab, CSV and ARFF output, `allFeaturesAsList`, `extractorsById` and
 //! `getIndex`.
 //!
-//! Every extractor of both libraries, but music21's language feature, reads
+//! Every extractor of both libraries reads
 //! a handful of corpus scores into one data set on each side, music21 and
 //! the crate each reading the score's MusicXML text; each table must come
 //! out the same in every format. A cell that is a number may differ from
@@ -47,8 +47,7 @@ def source_text(name):
             pass
     return data.decode('latin-1')
 
-EXTRACTORS = (list(jSymbolic.featureExtractors)
-              + [cls for cls in native.featureExtractors if cls.id != 'TX1'])
+EXTRACTORS = list(jSymbolic.featureExtractors) + list(native.featureExtractors)
 
 def tables(names):
     data_set = features.DataSet(classLabel='Composer Name')
@@ -63,7 +62,7 @@ def tables(names):
 def all_features(name):
     score = converter.parse(source_text(name), format='musicxml', forceSource=True)
     return [[str(value) for value in vector]
-            for vector in features.allFeaturesAsList(score)[:-1]]
+            for vector in features.allFeaturesAsList(score)]
 
 def indexes(names):
     out = []
@@ -217,11 +216,6 @@ fn the_crate_writes_data_sets_as_music21_does() {
             .call1((names.clone(),))?
             .extract()?;
         for (name, theirs) in names.iter().zip(theirs) {
-            // music21's native list ends with the language feature, which
-            // the crate has not got.
-            if *name == "Language Feature" {
-                continue;
-            }
             let ours =
                 index_of(name, None).map(|(index, library)| (index, library.name().to_string()));
             if ours != theirs {

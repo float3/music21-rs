@@ -83,6 +83,8 @@ cargo add music21-rs
 
 Default features are empty. `serde` adds `Serialize` and `Deserialize` to the
 public types; `scala-archive` bundles the Scala scale archive described below;
+`language-detection` bundles music21's excerpts in seven languages, about
+1.9 MB, for its language feature `TX1` and `features::language`;
 `musicxml` reads and writes MusicXML; `musescore` converts through an installed
 MuseScore, and turns `musicxml` on. ABC, MIDI, TinyNotation, Humdrum, MEI
 and RomanText are read with no feature at all: `abc::from_abc`,
@@ -369,6 +371,14 @@ under GPL-3.0 within this work, as AGPL-3.0 section 13 provides for.
 `data/temperaments.toml` records the mapping, generators, commas and scales
 of 95 regular temperaments from the [Xenharmonic Wiki](https://en.xen.wiki),
 which is CC BY-SA. Only the numbers are used.
+
+### Language excerpts
+
+`src/features/language/` holds the seven excerpts music21's language
+detector compares lyrics with (`music21/languageExcerpts/trainingData`),
+public-domain texts from [Project Gutenberg](https://www.gutenberg.org) as
+music21 ships them. They are compiled in only with the `language-detection`
+feature.
 
 ### Contributed back
 

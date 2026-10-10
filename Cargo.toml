@@ -39,6 +39,9 @@ workspace = true
 [features]
 default = []
 scala-archive = []
+# music21's language feature (TX1) and LanguageDetector, with the seven
+# excerpts, about 1.9 MB, they compare a text with.
+language-detection = []
 # Runs an installed MuseScore to read and write its files. Off by default:
 # it is the one part of the crate that starts a program and touches files.
 musescore = ["musicxml"]

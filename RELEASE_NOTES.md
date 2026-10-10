@@ -1,3 +1,18 @@
+# Unreleased
+
+## Added
+
+- The `language-detection` feature brings music21's language feature,
+  `TX1`, which names the language of a piece's lyrics, last among
+  `features::native::NATIVE` as it is in music21, and
+  `features::language`, music21's `LanguageDetector` and `Trigram`:
+  `most_likely_language` and `most_likely_language_numeric` compare a text
+  with excerpts in English, French, Italian, German, Chinese, Latin and
+  Dutch by the letters that follow each pair of letters. The excerpts are
+  music21's, from Project Gutenberg, about 1.9 MB, so the feature is off by
+  default. `TX1` gives music21's value on every MusicXML score of
+  music21's corpus.
+
 # music21-rs 0.9.0
 
 Every score format music21 reads is read -- Capella, MuseData and
