@@ -181,6 +181,19 @@ are tunes whose own reading cannot be written back.
   the measures it read wrong, and writing the trills and turns played. Each
   answers as music21's does on thousands of runs, searches and readings
   built for it. `Stream::remove_event` is music21's `remove`.
+- `omr` is music21's `omr` package. `omr::correctors::ScoreCorrector`
+  flags the measures of a score read by optical music recognition whose
+  notes do not fill their bar, and puts in their place the rhythm most
+  likely meant -- from a measure of the same part a likely distance away,
+  or from the measure at the same place in a part that tends to move with
+  it -- keeping their pitches; `measure_hash` writes a measure's rhythm as
+  the text both models compare. `omr::evaluators` measures a corrected
+  score against its ground truth (`evaluate_correcting_model`,
+  `OmrGroundTruthPair`) and counts the measures whose rhythm comes again
+  (`auto_correlation_best_measure`). Every MusicXML score of music21's
+  corpus is flagged, corrected and counted as music21 does it, measure for
+  measure, and music21's own Mozart K. 525 pair evaluates the same.
+  `Error::Omr` is what it refuses with.
 - `Rest::full_measure` is music21's `fullMeasure`, which the MusicXML reader
   sets where music21's does.
 - `ChordSymbol` carries lyrics, as music21's does, with `lyrics`,

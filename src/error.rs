@@ -143,6 +143,11 @@ pub enum Error {
     /// `TreeException`.
     #[error("Tree error: {0}")]
     Tree(String),
+    /// A score the OMR correctors cannot work on: parts of different
+    /// lengths, where music21 runs out of measures in one of them, or a
+    /// measure with no time signature in force.
+    #[error("OMR error: {0}")]
+    Omr(String),
     /// A score that cannot be written as MusicXML.
     #[cfg(feature = "musicxml")]
     #[error("MusicXML export error: {0}")]

@@ -578,6 +578,20 @@ impl Pitch {
         self.set_octave(octave);
     }
 
+    /// Spells the pitch as `other` is named, keeping its own octave and
+    /// microtone: music21's `name` setter given `other.name`, which writes
+    /// a fresh accidental from the modifier and none for a natural.
+    pub(crate) fn take_name_of(&mut self, other: &Pitch) -> Result<()> {
+        self.step_setter(other.step);
+        self.accidental = match other.written_accidental() {
+            Some(accidental) if !accidental.modifier().is_empty() => {
+                Some(Accidental::new(accidental.modifier())?)
+            }
+            _ => None,
+        };
+        Ok(())
+    }
+
     /// Returns this pitch transposed by the interval, as music21's
     /// `Pitch.transpose` does: a pitch whose spelling was inferred from a
     /// number is respelled to its most common enharmonic afterwards, one
