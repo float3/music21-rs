@@ -305,6 +305,24 @@ fn to_volpiano(score: &Bound<'_, PyAny>) -> PyResult<String> {
     music21_rs_crate::volpiano::to_volpiano(&stream).map_err(format_error)
 }
 
+/// Writes a score as LilyPond, as music21's `lily.translate`
+/// `LilypondConverter` writes it with `textFromMusic21Object`, and hands
+/// back the text.
+///
+/// The score may be one of this wheel's streams or one of music21's; a
+/// stream that is not a score is written as the one part of a score.
+/// `version`, major and minor, is the LilyPond version the file says it is
+/// for, which music21 asks of the LilyPond it finds installed. A stream with
+/// no id of its own is named by a number of the writer's, where music21
+/// writes the address of the object.
+#[pyfunction]
+#[pyo3(signature = (score, version = (2, 24)))]
+fn to_lilypond(score: &Bound<'_, PyAny>, version: (u32, u32)) -> PyResult<String> {
+    let stream = crate::stream::crate_stream(score)?;
+    let options = music21_rs_crate::lily::LilyOptions { version };
+    music21_rs_crate::lily::to_lilypond(&stream, &options).map_err(format_error)
+}
+
 /// Reads a NoteWorthy Composer `.nwc` file's `bytes` as music21's
 /// `converter.parse` reads one, as a `Score` of a part per staff: the
 /// objects written out as `.nwctxt` lines and those read as
@@ -357,5 +375,6 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(from_nwc, m)?)?;
     m.add_function(wrap_pyfunction!(from_volpiano, m)?)?;
     m.add_function(wrap_pyfunction!(to_volpiano, m)?)?;
+    m.add_function(wrap_pyfunction!(to_lilypond, m)?)?;
     Ok(())
 }

@@ -60,6 +60,17 @@ are tunes whose own reading cannot be written back.
   contributors summarised, titles with their articles put back in front --
   and `Metadata::title` the title. Every MusicXML score of music21's corpus
   gives music21's lyrics and metadata text.
+- `lily::to_lilypond` writes a stream as LilyPond, as music21's
+  `LilypondConverter` writes it with `textFromMusic21Object`: parts on
+  staves, voices, measures and their barlines, pickups, clefs, keys,
+  meters, tempi, line and page breaks, notes, rests and chords with their
+  beams, stems, ties, fermatas, tuplets and colours, and lyrics.
+  `LilyOptions::version` is the LilyPond version the file says it is for,
+  which music21 asks of the LilyPond installed. Of the 654 MusicXML scores
+  in music21's corpus, 602 come out the same text as music21's, space for
+  space, and the crate refuses the other 52 as music21 does: notes of no
+  length, such as chord symbols and grace chords, and lengths no note value
+  writes. Running it does not need LilyPond.
 - `search::LyricSearcher` is music21's `LyricSearcher`: a stream's lyrics
   read as text, verse by verse, and searched for a string, each match
   giving the lyrics, notes and measures it spans. Every MusicXML score of

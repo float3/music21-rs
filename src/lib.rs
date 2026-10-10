@@ -91,6 +91,8 @@ pub mod interval;
 pub mod key;
 /// How a score is laid out on the page: music21's `layout` objects.
 pub mod layout;
+/// LilyPond, written as music21 writes it.
+pub mod lily;
 /// Measures, ties, rests, voices, beams and stems worked out for a score
 /// that does not say them.
 pub mod makenotation;
