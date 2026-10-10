@@ -1955,7 +1955,8 @@ impl<'a, 'b> MeasureExporter<'a, 'b> {
             StreamElement::Barline(_)
             | StreamElement::Break(_)
             | StreamElement::Layout(_)
-            | StreamElement::TextBox(_) => {}
+            | StreamElement::TextBox(_)
+            | StreamElement::Variant(_) => {}
         }
         Ok(())
     }

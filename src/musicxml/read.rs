@@ -1119,7 +1119,8 @@ impl<'a, 'x> PartParser<'a, 'x> {
             }
         }
 
-        measure.offset = self.last_measure_offset;
+        // music21 sums the lengths as floats and snaps where it inserts.
+        measure.offset = op_frac(self.last_measure_offset);
         let index = self.measures.len();
 
         // music21's `adjustTimeAttributesFromMeasure`.
@@ -2143,11 +2144,13 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
             for (kind, dots) in base.components() {
                 written.add_duration_tuple(kind, dots);
             }
-            if base.components().is_empty() {
+            let unsaid = base.components().is_empty();
+            if unsaid {
                 written.add_duration_tuple(DurationType::Eighth, 0);
             }
             let mut value = written.grace_duration();
             let mut marks = Grace::new();
+            marks.set_value_unsaid(unsaid);
             marks.set_slash(matches!(grace.get("slash"), Some("yes") | None));
             let share = |name: &str| {
                 grace

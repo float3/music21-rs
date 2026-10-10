@@ -18,11 +18,22 @@ fn duration_equal(left: &Duration, right: &Duration) -> bool {
     if left.expression_is_inferred() && right.expression_is_inferred() {
         return left.quarter_length() == right.quarter_length();
     }
-    let (ours, theirs) = (left.written_values(), right.written_values());
-    if left.is_complex() != right.is_complex() || ours.len() != theirs.len() {
+    // A grace note that said no value has none written, as music21 keeps
+    // it, though it is called an eighth.
+    let values = |duration: &Duration| {
+        if duration
+            .grace()
+            .is_some_and(crate::duration::Grace::value_unsaid)
+        {
+            0
+        } else {
+            duration.written_values().len()
+        }
+    };
+    if left.is_complex() != right.is_complex() || values(left) != values(right) {
         return false;
     }
-    if ours.is_empty() {
+    if values(left) == 0 {
         return true;
     }
     super::basic::duration_type(left) == super::basic::duration_type(right)
@@ -113,6 +124,12 @@ fn note_equal(left: &Note, right: &Note) -> bool {
 pub(crate) fn equal(left: &StreamElement, right: &StreamElement) -> bool {
     match (left, right) {
         (StreamElement::Note(left), StreamElement::Note(right)) => note_equal(left, right),
+        // A stroke compares as a note does, at the place it is displayed,
+        // and by the instrument it keeps.
+        (StreamElement::Unpitched(left), StreamElement::Unpitched(right)) => {
+            note_equal(left.written(), right.written())
+                && left.stored_instrument() == right.stored_instrument()
+        }
         (StreamElement::Rest(left), StreamElement::Rest(right)) => {
             duration_equal(left.duration(), right.duration())
                 && left.tie().map(|tie| tie.tie_type()) == right.tie().map(|tie| tie.tie_type())

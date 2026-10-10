@@ -271,6 +271,11 @@ pub struct Grace {
     steal_time_previous: Option<FloatType>,
     steal_time_following: Option<FloatType>,
     make_time: bool,
+    /// Whether the grace note said no note value: music21 calls it an
+    /// eighth but keeps no written value for it, so it is not the same
+    /// length as an eighth grace note that says so.
+    #[cfg_attr(feature = "serde", serde(default))]
+    value_unsaid: bool,
 }
 
 impl Default for Grace {
@@ -282,11 +287,22 @@ impl Default for Grace {
             steal_time_previous: None,
             steal_time_following: None,
             make_time: false,
+            value_unsaid: false,
         }
     }
 }
 
 impl Grace {
+    /// Whether the grace note said no note value, which music21 keeps none
+    /// for while calling it an eighth.
+    pub(crate) fn value_unsaid(&self) -> bool {
+        self.value_unsaid
+    }
+
+    pub(crate) fn set_value_unsaid(&mut self, unsaid: bool) {
+        self.value_unsaid = unsaid;
+    }
+
     /// An acciaccatura, slashed and taking no time.
     pub fn new() -> Self {
         Self::default()

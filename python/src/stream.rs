@@ -909,7 +909,8 @@ fn element_object<'py>(
         | StreamElement::MetricModulation(_)
         | StreamElement::Break(_)
         | StreamElement::Layout(_)
-        | StreamElement::TextBox(_) => return Ok(None),
+        | StreamElement::TextBox(_)
+        | StreamElement::Variant(_) => return Ok(None),
     }))
 }
 

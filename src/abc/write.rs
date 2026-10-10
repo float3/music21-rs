@@ -1655,7 +1655,9 @@ impl<'a> Tune<'a> {
             let at_start = held.offset < EPSILON;
             let header = at_start && (first || voice.measured);
             match held.element {
-                StreamElement::Stream(_) | StreamElement::Instrument(_) => {}
+                StreamElement::Stream(_)
+                | StreamElement::Instrument(_)
+                | StreamElement::Variant(_) => {}
                 StreamElement::Clef(clef) => {
                     if !header {
                         lead.push_str(&format!("[K:clef={}]", clef_name(clef)?));

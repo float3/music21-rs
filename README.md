@@ -114,6 +114,9 @@ music21 extracts for machine learning, jSymbolic's and its own
 (`features::jsymbolic`, `features::native`), and the correction of
 scores read by optical music recognition (`omr`), which finds the measures
 whose rhythm was misread and puts the likeliest rhythm in their place.
+Other readings of a passage are kept beside it as music21's variants
+(`variant`): merged in from another version of a score, and made the
+score's reading by `Stream::activate_variants`.
 
 MuseScore's own files are read with no feature and no MuseScore installed:
 `musescore::from_mscx` takes the text of a `.mscx`, as MuseScore 3 and 4 save
