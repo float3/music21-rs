@@ -530,9 +530,11 @@ def built_source(name, directory):
 
 def strip_layout(score, keep_layouts=False):
     from music21 import text
-    stripped = (text.TextBox,) if keep_layouts else (layout.LayoutBase, text.TextBox)
-    for element in list(score.recurse().getElementsByClass(stripped)):
-        element.activeSite.remove(element)
+    # The crate keeps the layouts and the text boxes, and where a text box
+    # stands on its page.
+    if not keep_layouts:
+        for element in list(score.recurse().getElementsByClass((layout.LayoutBase, text.TextBox))):
+            element.activeSite.remove(element)
     score.definesExplicitSystemBreaks = False
     score.definesExplicitPageBreaks = False
     # How the page is drawn as a whole: line widths, note sizes, fonts.
@@ -542,6 +544,8 @@ def strip_layout(score, keep_layouts=False):
     for element in score.recurse(includeSelf=True):
         if hasattr(element, 'layoutWidth'):
             element.layoutWidth = None
+        if isinstance(element, text.TextBox):
+            continue
         reset_placing(element)
         if element.isStream:
             continue

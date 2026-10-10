@@ -1,6 +1,6 @@
 //! Text in scores: music21's `text` module. The lyrics of a stream joined
-//! into words and lines, and the articles of a title moved to its front or
-//! its end.
+//! into words and lines, the articles of a title moved to its front or its
+//! end, and the [`TextBox`] a page carries.
 //!
 //! ```
 //! use music21_rs::text::{assemble_lyrics, prepend_article};
@@ -250,5 +250,39 @@ mod tests {
         assert_eq!(assemble_lyrics(&stream, 0, "-"), "Hi-there");
         assert_eq!(assemble_lyrics(&stream, 2, " "), "");
         assert_eq!(assemble_all_lyrics(&stream, 10, "\n", " "), "Hi there");
+    }
+}
+
+/// Text standing anywhere on a page, its title or a header: music21's
+/// `TextBox`, MusicXML's `<credit>`.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TextBox {
+    /// The text, its lines joined by newlines: `content`.
+    pub content: String,
+    /// The page it stands on, the first where nothing says: `page`.
+    pub page: i64,
+    /// Where it stands and how it is drawn: `style`.
+    pub style: crate::style::TextStyle,
+}
+
+impl TextBox {
+    /// A text box on the first page, centred across and hung from the top
+    /// at 500 tenths each way, as music21's `TextBox(content)` starts.
+    pub fn new(content: impl Into<String>) -> Self {
+        let mut style = crate::style::TextStyle::default();
+        style.absolute_x = Some(crate::style::StyleValue::Whole(500));
+        style.absolute_y = Some(crate::style::StyleValue::Whole(500));
+        style
+            .set_align_vertical(Some("top"))
+            .expect("top is an alignment");
+        style
+            .set_align_horizontal(Some("center"))
+            .expect("center is an alignment");
+        Self {
+            content: content.into(),
+            page: 1,
+            style,
+        }
     }
 }

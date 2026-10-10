@@ -25,7 +25,7 @@ are tunes whose own reading cannot be written back.
   building one with every field named needs it; code using
   `..ExportOptions::default()` does not.
 - `StreamElement` has a `Layout` variant, a page, system, staff or score
-  layout, so a `match` over it needs an arm for one.
+  layout, and a `TextBox` variant, so a `match` over it needs arms for them.
 - `TimespanTree::maximum_overlap` returns an `Option`, nothing for an empty
   tree, as music21's `maximumOverlap` returns `None`.
 - `DataSet::class_position_labels` takes `include_class_label` after
@@ -153,6 +153,13 @@ are tunes whose own reading cannot be written back.
   `<measure-numbering>` (`Stream::measure_numbering`). Every MusicXML score
   of music21's corpus music21 can write is read and written with its
   layouts as music21 reads and writes it.
+- `text::TextBox` is music21's `TextBox`, text standing anywhere on a page,
+  drawn as a `style::TextStyle` says: where it stands, its fonts, size,
+  weight and colour, and how it is aligned and justified, each value an
+  integer, a decimal or text as music21's `numToIntOrFloat` reads it
+  (`style::StyleValue`). `from_musicxml` reads each `<credit>` into one
+  and `to_musicxml` writes it back as music21 does; a style music21 does
+  not name is refused, as music21 refuses it.
 - `alpha::analysis` is music21's whole `alpha.analysis` package:
   `ornament_recognizer` answers the trill or turn a run of notes plays, from
   the note it is written on or alone, with its note length, nachschlag and

@@ -48,7 +48,9 @@ use crate::spanner::{
     PedalForm, PedalObject, PedalObjectKind, PedalType, SlideType, Spanner, SpannerKind,
 };
 use crate::stream::{StaffGroup, Stream, StreamElement, StreamKind};
+use crate::style::TextStyle;
 use crate::tempo::{MetricModulation, MetronomeMark};
+use crate::text::TextBox;
 
 use tree::Element;
 
@@ -286,6 +288,11 @@ fn score_element(score: &Stream, options: &ExportOptions) -> Result<Element> {
     set_titles(&mut root, metadata, options);
     set_identification(&mut root, metadata, options);
     set_defaults(&mut root, score);
+    for event in score.events() {
+        if let StreamElement::TextBox(text) = event.element() {
+            root.push(credit_element(text)?);
+        }
+    }
     set_part_list(root.sub("part-list"), &exported, groups, &joined);
     for (index, part) in exported.into_iter().flatten().enumerate() {
         add_divider_comment(&mut root, &format!("Part {}", index + 1));
@@ -893,6 +900,77 @@ fn set_defaults(root: &mut Element, score: &Stream) {
     for staff in &layout.staff_layouts {
         defaults.push(staff_layout_element(staff));
     }
+}
+
+/// music21's `setPrintStyleAlign`: where text stands, its font and colour,
+/// and how it is aligned, each as an attribute where the style says it.
+pub(crate) fn set_print_style_align(element: &mut Element, style: &TextStyle) -> Result<()> {
+    for (name, value) in [
+        ("default-x", &style.absolute_x),
+        ("default-y", &style.absolute_y),
+        ("relative-x", &style.relative_x),
+        ("relative-y", &style.relative_y),
+    ] {
+        if let Some(value) = value {
+            element.set(name, value.to_string());
+        }
+    }
+    if let Some(font_style) = style.font_style() {
+        element.set("font-style", font_style);
+    }
+    if let Some(size) = &style.font_size {
+        element.set("font-size", size.to_string());
+    }
+    if let Some(weight) = style.font_weight() {
+        element.set("font-weight", weight);
+    }
+    // MusicXML's font-style has no bold, which music21 writes as a weight.
+    match style.font_style() {
+        Some("bold") => {
+            element.set("font-weight", "bold");
+            element.remove_attribute("font-style");
+        }
+        Some("bolditalic") => {
+            element.set("font-weight", "bold");
+            element.set("font-style", "italic");
+        }
+        _ => {}
+    }
+    if let Some(family) = style
+        .font_family
+        .as_ref()
+        .filter(|family| !family.is_empty())
+    {
+        element.set("font-family", family.join(","));
+    }
+    if let Some(color) = &style.color {
+        element.set("color", normalize_color(color)?);
+    }
+    if let Some(align) = style.align_vertical() {
+        element.set("valign", align);
+    }
+    if let Some(align) = style.align_horizontal() {
+        element.set("halign", align);
+    }
+    Ok(())
+}
+
+/// music21's `textBoxToXmlCredit`: the box's text as the words of a credit
+/// on its page, drawn as its style says.
+fn credit_element(text: &TextBox) -> Result<Element> {
+    let mut credit = Element::new("credit");
+    credit.set("page", text.page.to_string());
+    let mut words = Element::new("credit-words");
+    if text.content.contains('\n') {
+        words.set("xml:space", "preserve");
+    }
+    words.set_text(text.content.clone());
+    set_print_style_align(&mut words, &text.style)?;
+    if let Some(justify) = text.style.justify() {
+        words.set("justify", justify);
+    }
+    credit.push(words);
+    Ok(credit)
 }
 
 /// music21's `_setTagTextFromAttribute`: a child with the value, where
@@ -1874,7 +1952,10 @@ impl<'a, 'b> MeasureExporter<'a, 'b> {
             // music21 writes nothing for a barline standing inside a
             // measure: `Barline` is one of `ignoreOnParseClasses`. A
             // manuscript's break is no class its exporter knows.
-            StreamElement::Barline(_) | StreamElement::Break(_) | StreamElement::Layout(_) => {}
+            StreamElement::Barline(_)
+            | StreamElement::Break(_)
+            | StreamElement::Layout(_)
+            | StreamElement::TextBox(_) => {}
         }
         Ok(())
     }

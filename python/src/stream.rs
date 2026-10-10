@@ -908,7 +908,8 @@ fn element_object<'py>(
         | StreamElement::RehearsalMark(_)
         | StreamElement::MetricModulation(_)
         | StreamElement::Break(_)
-        | StreamElement::Layout(_) => return Ok(None),
+        | StreamElement::Layout(_)
+        | StreamElement::TextBox(_) => return Ok(None),
     }))
 }
 
@@ -1254,6 +1255,11 @@ fn element_value(object: &Bound<'_, PyAny>, stand_ins: bool) -> PyResult<Option<
         }
         if let Some(layout) = layout_value(object)? {
             return Ok(Some(StreamElement::Layout(layout)));
+        }
+        if is_of_class(object, &pyo3::types::PyString::new(py, "TextBox"))? {
+            return Ok(Some(StreamElement::TextBox(Box::new(text_box_value(
+                object,
+            )?))));
         }
         if is_of_class(object, &pyo3::types::PyString::new(py, "RehearsalMark"))? {
             // music21 writes whatever the mark holds as text.
@@ -1719,6 +1725,59 @@ fn staff_layout_of(object: &Bound<'_, PyAny>) -> music21_rs_crate::layout::Staff
             .and_then(|value| StaffType::from_name(&value))
             .unwrap_or_default(),
     }
+}
+
+/// A value of music21's style as the crate keeps it: an `int`, a `float`,
+/// or text.
+fn style_value_of(
+    object: &Bound<'_, PyAny>,
+    name: &str,
+) -> Option<music21_rs_crate::style::StyleValue> {
+    use music21_rs_crate::style::StyleValue;
+    let value = object.getattr(name).ok().filter(|value| !value.is_none())?;
+    if value.is_instance_of::<pyo3::types::PyInt>() {
+        return value.extract::<i64>().ok().map(StyleValue::Whole);
+    }
+    if let Ok(number) = value.extract::<f64>() {
+        return Some(StyleValue::Decimal(number));
+    }
+    value
+        .str()
+        .ok()
+        .map(|text| StyleValue::Text(text.to_string()))
+}
+
+/// music21's `TextBox`, with the style it is drawn in.
+fn text_box_value(object: &Bound<'_, PyAny>) -> PyResult<music21_rs_crate::text::TextBox> {
+    let content = text_attribute(object, "content").unwrap_or_default();
+    let mut read = music21_rs_crate::text::TextBox::new(content);
+    read.page = whole_of(object, "page").unwrap_or(1);
+    let style = object.getattr("style")?;
+    let words = |name: &str| text_attribute(&style, name);
+    let text = &mut read.style;
+    text.absolute_x = style_value_of(&style, "absoluteX");
+    text.absolute_y = style_value_of(&style, "absoluteY");
+    text.relative_x = style_value_of(&style, "relativeX");
+    text.relative_y = style_value_of(&style, "relativeY");
+    text.font_size = style_value_of(&style, "fontSize");
+    text.color = words("color");
+    text.font_family = style
+        .getattr("fontFamily")
+        .ok()
+        .filter(|family| !family.is_none())
+        .and_then(|family| family.extract::<Vec<String>>().ok());
+    let refused = |error: music21_rs_crate::Error| StreamException::new_err(error.to_string());
+    text.set_font_style(words("fontStyle").as_deref())
+        .map_err(refused)?;
+    text.set_font_weight(words("fontWeight").as_deref())
+        .map_err(refused)?;
+    text.set_justify(words("justify").as_deref())
+        .map_err(refused)?;
+    text.set_align_horizontal(words("alignHorizontal").as_deref())
+        .map_err(refused)?;
+    text.set_align_vertical(words("alignVertical").as_deref())
+        .map_err(refused)?;
+    Ok(read)
 }
 
 /// One of music21's layout objects, where the object is one.

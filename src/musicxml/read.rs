@@ -46,7 +46,9 @@ use crate::spanner::{
     PedalType, SlideType, Spanner, SpannerKind,
 };
 use crate::stream::{BarTogether, StaffGroup, Stream, StreamElement, StreamEvent, StreamKind};
+use crate::style::{StyleValue, TextStyle};
 use crate::tempo::{MetricModulation, MetronomeMark};
+use crate::text::TextBox;
 use crate::volume::Volume;
 use crate::xml::Xml;
 
@@ -472,6 +474,10 @@ impl Importer {
     fn score(mut self, root: &Xml) -> Result<Stream> {
         let metadata = self.metadata(root);
         let defaults = root.find("defaults").map(score_layout);
+        let credits = root
+            .find_all("credit")
+            .map(text_box)
+            .collect::<Result<Vec<_>>>()?;
         let (score_parts, groups) = part_list(root);
 
         let mut built: Vec<BuiltPart> = Vec::new();
@@ -571,8 +577,13 @@ impl Importer {
             .collect();
         self.finished.extend(late);
 
-        let mut uids: Vec<Option<usize>> = Vec::new();
-        let mut events = Vec::new();
+        // The credits sort before the parts, as music21 sorts its text boxes,
+        // and stand before the parts' leaves where spanners count them.
+        let mut uids: Vec<Option<usize>> = vec![None; credits.len()];
+        let mut events: Vec<StreamEvent> = credits
+            .into_iter()
+            .map(|credit| StreamEvent::new(0.0, StreamElement::TextBox(Box::new(credit))))
+            .collect();
         for part in built {
             uids.extend(part.uids);
             events.push(StreamEvent::new(0.0, part.stream));
@@ -3323,6 +3334,84 @@ fn read_staff_details(details: &Xml, read: &mut StaffLayout) {
     }
 }
 
+/// music21's `setPrintStyleAlign`: where text stands, its font and colour,
+/// and how it is aligned, read into a style.
+pub(crate) fn read_print_style_align(written: &Xml, style: &mut TextStyle) -> Result<()> {
+    let value = |name: &str| written.get(name).map(StyleValue::read);
+    if let Some(read) = value("default-x") {
+        style.absolute_x = Some(read);
+    }
+    if let Some(read) = value("default-y") {
+        style.absolute_y = Some(read);
+    }
+    if let Some(read) = value("relative-x") {
+        style.relative_x = Some(read);
+    }
+    if let Some(read) = value("relative-y") {
+        style.relative_y = Some(read);
+    }
+    if let Some(family) = written.get("font-family") {
+        style.font_family = Some(
+            family
+                .split(',')
+                .map(|name| name.trim().to_string())
+                .collect(),
+        );
+    }
+    if let Some(font_style) = written.get("font-style") {
+        style.set_font_style(Some(font_style))?;
+    }
+    if let Some(size) = value("font-size") {
+        style.font_size = Some(size);
+    }
+    if let Some(weight) = written.get("font-weight") {
+        style.set_font_weight(Some(weight))?;
+    }
+    if let Some(color) = written.get("color") {
+        style.color = Some(color.to_string());
+    }
+    if let Some(align) = written.get("valign") {
+        style.set_align_vertical(Some(align))?;
+    }
+    if let Some(align) = written.get("halign") {
+        style.set_align_horizontal(Some(align))?;
+    }
+    Ok(())
+}
+
+/// music21's `xmlCreditToTextBox`: a text box of the credit's words, one
+/// line each, drawn as its first words say, on the page it names or the
+/// first. A fresh text box's place, 500 tenths each way, stands where the
+/// words say none.
+fn text_box(credit: &Xml) -> Result<TextBox> {
+    let mut read = TextBox::new("");
+    read.style.set_align_horizontal(None)?;
+    read.style.set_align_vertical(None)?;
+    if let Some(page) = credit.get("page") {
+        read.page = page.trim().parse().map_err(|_| {
+            import_error(format!("invalid literal for int() with base 10: {page:?}"))
+        })?;
+    }
+    let words: Vec<String> = credit
+        .find_all("credit-words")
+        .filter_map(|words| {
+            words
+                .text()
+                .filter(|text| !text.is_empty())
+                .map(str::to_string)
+        })
+        .collect();
+    if words.is_empty() {
+        return Ok(read);
+    }
+    read.content = words.join("\n");
+    if let Some(first) = credit.find("credit-words") {
+        read_print_style_align(first, &mut read.style)?;
+        read.style.set_justify(first.get("justify"))?;
+    }
+    Ok(read)
+}
+
 /// music21's `xmlDefaultsToScoreLayout`.
 fn score_layout(defaults: &Xml) -> ScoreLayout {
     let mut read = ScoreLayout::default();
@@ -4419,6 +4508,54 @@ mod tests {
     fn a_document_that_is_not_a_score_is_refused() {
         assert!(from_musicxml("<opus/>").is_err());
         assert!(from_musicxml("not xml at all").is_err());
+    }
+
+    #[test]
+    fn credits_are_read_and_written_as_music21_keeps_them() {
+        let document = format!(
+            "<?xml version=\"1.0\"?><score-partwise version=\"4.0\">\
+             <credit page=\"2\"><credit-words default-x=\"600.5\" default-y=\"1500\" \
+             font-size=\"22.0\" font-style=\"bolditalic\" justify=\"Center\" valign=\"top\">\
+             Sonata</credit-words><credit-words>in G</credit-words></credit>\
+             <credit><credit-words halign=\"right\">Anon</credit-words></credit>\
+             <part-list><score-part id=\"P1\"><part-name>Flute</part-name></score-part>\
+             </part-list><part id=\"P1\"><measure number=\"1\"><attributes><divisions>1\
+             </divisions></attributes>{NOTE}</measure></part></score-partwise>"
+        );
+        let read = from_musicxml(&document).unwrap();
+        let boxes: Vec<&TextBox> = read
+            .events()
+            .iter()
+            .filter_map(|event| match event.element() {
+                StreamElement::TextBox(text) => Some(&**text),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(boxes.len(), 2);
+        assert_eq!(boxes[0].content, "Sonata\nin G");
+        assert_eq!(boxes[0].page, 2);
+        assert_eq!(boxes[0].style.font_size, Some(StyleValue::Whole(22)));
+        assert_eq!(boxes[0].style.justify(), Some("center"));
+        // A credit that says no place stands where a fresh text box does.
+        assert_eq!(boxes[1].style.absolute_x, Some(StyleValue::Whole(500)));
+        assert_eq!(boxes[1].page, 1);
+
+        let written = written_back(&read);
+        for expected in [
+            "<credit page=\"2\">",
+            "default-x=\"600.5\"",
+            "font-size=\"22\"",
+            "font-style=\"italic\"",
+            "font-weight=\"bold\"",
+            "justify=\"center\"",
+            "xml:space=\"preserve\"",
+            "<credit-words default-x=\"500\" default-y=\"500\" halign=\"right\">Anon</credit-words>",
+        ] {
+            assert!(written.contains(expected), "{expected} in\n{written}");
+        }
+        assert!(written.find("<credit").unwrap() < written.find("<part-list>").unwrap());
+        // A page that is no number is refused, as music21's `int` refuses it.
+        assert!(from_musicxml("<score-partwise><credit page=\"x\"/></score-partwise>").is_err());
     }
 
     #[test]
