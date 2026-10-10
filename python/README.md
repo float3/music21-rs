@@ -261,10 +261,13 @@ Fixes found while porting went upstream:
   two deepcopies in `AbstractScale` of values that are already copies.
 - [cuthbertLab/music21#2054](https://github.com/cuthbertLab/music21/pull/2054):
   a realization cached without its altered degrees, so a harmonic minor lost
-  its raised seventh after `nextPitch` (open).
+  its raised seventh after `nextPitch`.
 - [cuthbertLab/music21#2056](https://github.com/cuthbertLab/music21/pull/2056):
   `getAllNamesForInstrument` finding names only for an instrument whose name
   is spelled like its class.
+- [cuthbertLab/music21#2057](https://github.com/cuthbertLab/music21/pull/2057):
+  `nextPitch` on a cyclical scale answering below the pitch it was given:
+  F#3 after C4 on a scale of major thirds from D3.
 - [PLAINSOUND/hexatone#3](https://github.com/PLAINSOUND/hexatone/pull/3):
   Scala headers in five Hexatone scale files (open).
 - Corrections to the Xenharmonic Wiki's temperament pages, found while
