@@ -280,9 +280,11 @@ fn template_of(stream: &Stream) -> Stream {
         })
         .collect();
     // music21's `cloneEmpty` keeps a measure's number and padding and a
-    // part's name, but not whether either is shown.
+    // part's name, but not whether either is shown, nor how measures are
+    // numbered.
     let mut template = stream.with_events(events);
     template.set_number_hidden(false);
+    template.set_measure_numbering(None);
     template.set_name_hidden(false);
     template.set_abbreviation_hidden(false);
     template

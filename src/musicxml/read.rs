@@ -27,6 +27,9 @@ use crate::expressions::{
 use crate::instrument::{Instrument, SearchLanguage};
 use crate::interval::Interval;
 use crate::key::KeySignature;
+use crate::layout::{
+    Layout, PageLayout, ScoreLayout, StaffLayout, StaffType, SystemLayout, Tenths,
+};
 use crate::metadata::{Metadata, MetadataValue};
 use crate::meter::TimeSignature;
 use crate::notation::{
@@ -209,22 +212,7 @@ struct Item {
 impl Item {
     /// music21's `classSortOrder`.
     fn order(&self) -> i32 {
-        match &self.element {
-            StreamElement::TextExpression(_) | StreamElement::RehearsalMark(_) => -30,
-            StreamElement::Instrument(_) => -25,
-            StreamElement::Stream(stream) if stream.kind() == StreamKind::Voice => 5,
-            StreamElement::Stream(_) => -20,
-            StreamElement::Barline(_) => -5,
-            StreamElement::Clef(_) => 0,
-            StreamElement::MetronomeMark(_)
-            | StreamElement::TempoText(_)
-            | StreamElement::MetricModulation(_) => 1,
-            StreamElement::KeySignature(_) | StreamElement::Key(_) => 2,
-            StreamElement::TimeSignature(_) => 4,
-            StreamElement::Dynamic(_) => 10,
-            StreamElement::ChordSymbol(_) => 19,
-            _ => 20,
-        }
+        self.element.class_sort_order()
     }
 
     fn is_grace(&self) -> bool {
@@ -275,6 +263,7 @@ struct MeasureIr {
     ending: Option<Ending>,
     padding_left: FloatType,
     padding_right: FloatType,
+    measure_numbering: Option<String>,
     items: Vec<Item>,
     voices: Vec<VoiceIr>,
 }
@@ -482,6 +471,7 @@ impl Importer {
     /// music21's `xmlRootToScore`.
     fn score(mut self, root: &Xml) -> Result<Stream> {
         let metadata = self.metadata(root);
+        let defaults = root.find("defaults").map(score_layout);
         let (score_parts, groups) = part_list(root);
 
         let mut built: Vec<BuiltPart> = Vec::new();
@@ -586,6 +576,13 @@ impl Importer {
         for part in built {
             uids.extend(part.uids);
             events.push(StreamEvent::new(0.0, part.stream));
+        }
+        if let Some(defaults) = defaults {
+            // music21 inserts it first, and sorts it after the parts.
+            events.push(StreamEvent::new(
+                0.0,
+                StreamElement::Layout(Layout::Score(Box::new(defaults))),
+            ));
         }
         let mut assembled = Stream::from_events(events);
         assembled.set_kind(StreamKind::Score);
@@ -1251,6 +1248,9 @@ impl<'a, 'x> PartParser<'a, 'x> {
                     ending: measure.ending.clone(),
                     padding_left: measure.padding_left,
                     padding_right: measure.padding_right,
+                    // music21 makes the staff's measures from a template,
+                    // which keeps nothing of how the measure is drawn.
+                    measure_numbering: None,
                     items: Vec::new(),
                     voices: Vec::new(),
                 };
@@ -1374,6 +1374,7 @@ fn build_measure(measure: MeasureIr) -> (Stream, Vec<Option<usize>>) {
     stream.set_ending(measure.ending);
     stream.set_padding_left(measure.padding_left);
     stream.set_padding_right(measure.padding_right);
+    stream.set_measure_numbering(measure.measure_numbering);
     (stream, uids)
 }
 
@@ -1407,6 +1408,10 @@ struct MeasureParser<'p, 'a, 'x> {
     /// the inner value is its seq.
     finale_forward: Option<Option<usize>>,
     pedal_starts: Vec<(usize, FloatType)>,
+    /// The staff layouts read here, by staff number and offset, each with
+    /// what it was put in as, where it was put anywhere: music21's
+    /// `staffLayoutObjects`.
+    staff_layouts: Vec<((i64, FloatType), Option<usize>)>,
 }
 
 impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
@@ -1433,6 +1438,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
             marking_full: false,
             finale_forward: None,
             pedal_starts: Vec::new(),
+            staff_layouts: Vec::new(),
         }
     }
 
@@ -1459,6 +1465,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
                     }
                 }
                 "barline" => self.barline(child)?,
+                "print" => self.print(child),
                 _ => {}
             }
         }
@@ -1621,10 +1628,106 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
                     }
                 }
                 "transpose" => self.transposition = Some(transpose_interval(child)?),
+                "staff-details" => self.staff_details(child),
                 _ => {}
             }
         }
         Ok(())
+    }
+
+    /// music21's `xmlPrint`: a page layout where the print starts a page or
+    /// says how one is laid out, a system layout where it starts a system,
+    /// says how one is laid out, or does not concern a page, and a staff
+    /// layout for each numbered staff it lays out.
+    fn print(&mut self, print: &'x Xml) {
+        let says = |name: &str| print.get(name).is_some_and(|value| value != "no");
+        let page = says("new-page")
+            || print.get("page-number").is_some()
+            || print.find("page-layout").is_some();
+        let system = says("new-system") || print.find("system-layout").is_some();
+        if page {
+            let mut read = PageLayout {
+                is_new: print.get("new-page").map(|value| value == "yes"),
+                page_number: print
+                    .get("page-number")
+                    .and_then(|value| value.trim().parse().ok()),
+                ..PageLayout::default()
+            };
+            if let Some(written) = print.find("page-layout") {
+                read_page_layout(written, &mut read);
+            }
+            self.insert(0.0, NO_STAFF, StreamElement::Layout(Layout::Page(read)));
+        }
+        if system || !page {
+            let mut read = SystemLayout {
+                is_new: print.get("new-system").map(|value| value == "yes"),
+                ..SystemLayout::default()
+            };
+            if let Some(written) = print.find("system-layout") {
+                read_system_layout(written, &mut read);
+            }
+            self.insert(0.0, NO_STAFF, StreamElement::Layout(Layout::System(read)));
+        }
+        for written in print.find_all("staff-layout") {
+            let read = staff_layout(written);
+            let key = (read.staff_number.unwrap_or(1), self.offset);
+            // music21 keeps it to be added to before knowing whether it is
+            // put anywhere: one with no number is not, and details for its
+            // staff added to it are lost with it.
+            let Some(number) = read.staff_number else {
+                self.staff_layouts.push((key, None));
+                continue;
+            };
+            let uid = self.insert(
+                0.0,
+                i32::try_from(number).unwrap_or(NO_STAFF),
+                StreamElement::Layout(Layout::Staff(read)),
+            );
+            self.staff_layouts.push((key, Some(uid)));
+        }
+        if let Some(numbering) = print.find("measure-numbering") {
+            self.measure.measure_numbering = numbering.text().map(str::to_string);
+        }
+    }
+
+    /// music21's `handleStaffDetails`: the details of a staff read into the
+    /// staff layout already standing for it here, or into a new one.
+    fn staff_details(&mut self, details: &'x Xml) {
+        let number = details
+            .get("number")
+            .and_then(|value| value.trim().parse::<i64>().ok());
+        let key = (number.unwrap_or(1), self.offset);
+        let existing = self
+            .staff_layouts
+            .iter()
+            .rev()
+            .find(|(known, _)| known.0 == key.0 && known.1 == key.1)
+            .map(|(_, uid)| *uid);
+        match existing {
+            Some(Some(uid)) => {
+                if let Some(item) = self
+                    .measure
+                    .items
+                    .iter_mut()
+                    .find(|item| item.uid == Some(uid))
+                    && let StreamElement::Layout(Layout::Staff(layout)) = &mut item.element
+                {
+                    read_staff_details(details, layout);
+                }
+            }
+            // Added to one never put anywhere.
+            Some(None) => {}
+            None => {
+                let mut read = StaffLayout::default();
+                read_staff_details(details, &mut read);
+                let uid = self.insert(
+                    self.offset,
+                    staff_number(details),
+                    StreamElement::Layout(Layout::Staff(read)),
+                );
+                self.staff_layouts.push((key, Some(uid)));
+            }
+        }
     }
 
     // ----------------------------------------------------------- notes
@@ -3123,6 +3226,127 @@ fn reduce(numerator: i64, denominator: i64) -> (i64, i64) {
     (numerator / divisor, denominator / divisor)
 }
 
+/// music21's `_setAttributeFromTagText` with `_floatOrIntStr`: the length
+/// a child gives, where it gives one.
+fn tenths(element: &Xml, tag: &str) -> Option<Tenths> {
+    element
+        .find(tag)
+        .and_then(Xml::text)
+        .filter(|text| !text.is_empty())
+        .and_then(Tenths::parse)
+}
+
+/// music21's `xmlPageLayoutToPageLayout`.
+fn read_page_layout(written: &Xml, read: &mut PageLayout) {
+    if let Some(height) = tenths(written, "page-height") {
+        read.page_height = Some(height);
+    }
+    if let Some(width) = tenths(written, "page-width") {
+        read.page_width = Some(width);
+    }
+    if let Some(margins) = written.find("page-margins") {
+        for (tag, place) in [
+            ("top-margin", &mut read.top_margin),
+            ("bottom-margin", &mut read.bottom_margin),
+            ("left-margin", &mut read.left_margin),
+            ("right-margin", &mut read.right_margin),
+        ] {
+            if let Some(margin) = tenths(margins, tag) {
+                *place = Some(margin);
+            }
+        }
+    }
+}
+
+/// music21's `xmlSystemLayoutToSystemLayout`.
+fn read_system_layout(written: &Xml, read: &mut SystemLayout) {
+    if let Some(margins) = written.find("system-margins") {
+        for (tag, place) in [
+            ("top-margin", &mut read.top_margin),
+            ("bottom-margin", &mut read.bottom_margin),
+            ("left-margin", &mut read.left_margin),
+            ("right-margin", &mut read.right_margin),
+        ] {
+            if let Some(margin) = tenths(margins, tag) {
+                *place = Some(margin);
+            }
+        }
+    }
+    if let Some(distance) = tenths(written, "system-distance") {
+        read.distance = Some(distance);
+    }
+    if let Some(distance) = tenths(written, "top-system-distance") {
+        read.top_distance = Some(distance);
+    }
+}
+
+/// music21's `xmlStaffLayoutToStaffLayout`.
+fn staff_layout(written: &Xml) -> StaffLayout {
+    StaffLayout {
+        distance: tenths(written, "staff-distance"),
+        staff_number: written
+            .get("number")
+            .and_then(|value| value.trim().parse().ok()),
+        ..StaffLayout::default()
+    }
+}
+
+/// music21's `xmlStaffLayoutFromStaffDetails`.
+fn read_staff_details(details: &Xml, read: &mut StaffLayout) {
+    if let Some(number) = details
+        .get("number")
+        .and_then(|value| value.trim().parse().ok())
+    {
+        read.staff_number = Some(number);
+    }
+    match details.get("print-object") {
+        Some("no") => read.hidden = Some(true),
+        Some("yes") => read.hidden = Some(false),
+        _ => {}
+    }
+    if let Some(lines) = details
+        .find("staff-lines")
+        .and_then(Xml::text)
+        .and_then(|text| text.trim().parse().ok())
+    {
+        read.staff_lines = Some(lines);
+    }
+    if let Some(kind) = details
+        .find("staff-type")
+        .and_then(Xml::text)
+        .and_then(|text| StaffType::from_name(text.trim()))
+    {
+        read.staff_type = kind;
+    }
+    if let Some(size) = tenths(details, "staff-size") {
+        read.staff_size = Some(size.value());
+    }
+}
+
+/// music21's `xmlDefaultsToScoreLayout`.
+fn score_layout(defaults: &Xml) -> ScoreLayout {
+    let mut read = ScoreLayout::default();
+    if let Some(scaling) = defaults.find("scaling") {
+        read.scaling_millimeters = tenths(scaling, "millimeters");
+        read.scaling_tenths = tenths(scaling, "tenths");
+    }
+    if let Some(written) = defaults.find("page-layout") {
+        let mut page = PageLayout::default();
+        read_page_layout(written, &mut page);
+        read.page_layout = Some(page);
+    }
+    if let Some(written) = defaults.find("system-layout") {
+        let mut system = SystemLayout::default();
+        read_system_layout(written, &mut system);
+        read.system_layout = Some(system);
+    }
+    read.staff_layouts = defaults
+        .find_all("staff-layout")
+        .map(staff_layout)
+        .collect();
+    read
+}
+
 /// music21's `getStaffNumber`.
 fn staff_number(element: &Xml) -> i32 {
     match element.tag.as_str() {
@@ -4195,5 +4419,63 @@ mod tests {
     fn a_document_that_is_not_a_score_is_refused() {
         assert!(from_musicxml("<opus/>").is_err());
         assert!(from_musicxml("not xml at all").is_err());
+    }
+
+    #[test]
+    fn layouts_are_read_and_written_as_music21_keeps_them() {
+        let document = format!(
+            "<?xml version=\"1.0\"?><score-partwise version=\"4.0\">             <defaults><scaling><millimeters>6.5</millimeters><tenths>40</tenths></scaling>             <page-layout><page-height>1800.0</page-height><page-width>1400</page-width>             <page-margins><left-margin>80</left-margin><right-margin>80</right-margin>             </page-margins></page-layout><staff-layout><staff-distance>90</staff-distance>             </staff-layout></defaults><part-list><score-part id=\"P1\"><part-name>Flute             </part-name></score-part></part-list><part id=\"P1\"><measure number=\"1\">             <print new-system=\"yes\"><system-layout><system-distance>120</system-distance>             </system-layout><staff-layout number=\"1\"><staff-distance>70.5</staff-distance>             </staff-layout><measure-numbering>system</measure-numbering></print>             <attributes><divisions>1</divisions><staff-details number=\"1\" print-object=\"no\">             <staff-lines>4</staff-lines></staff-details></attributes>{NOTE}</measure></part>             </score-partwise>"
+        );
+        let read = from_musicxml(&document).unwrap();
+        let score_layout = read
+            .events()
+            .iter()
+            .find_map(|event| match event.element() {
+                StreamElement::Layout(Layout::Score(layout)) => Some(layout),
+                _ => None,
+            })
+            .expect("the defaults are a score layout");
+        // `1800.0` is kept whole, as music21's `_floatOrIntStr` keeps it.
+        assert_eq!(
+            score_layout.page_layout.as_ref().unwrap().page_height,
+            Some(Tenths::Whole(1800))
+        );
+        assert_eq!(
+            score_layout.scaling_millimeters,
+            Some(Tenths::Fraction(6.5))
+        );
+        let measure = &read.parts()[0].measures()[0];
+        assert_eq!(measure.measure_numbering(), Some("system"));
+        let staff = measure
+            .events()
+            .iter()
+            .find_map(|event| match event.element() {
+                StreamElement::Layout(Layout::Staff(layout)) => Some(layout),
+                _ => None,
+            })
+            .expect("a staff layout");
+        // The details are read into the staff layout the print made.
+        assert_eq!(staff.distance, Some(Tenths::Fraction(70.5)));
+        assert_eq!(staff.staff_lines, Some(4));
+        assert_eq!(staff.hidden, Some(true));
+
+        let written = written_back(&read);
+        for expected in [
+            "<millimeters>6.5</millimeters>",
+            "<page-height>1800</page-height>",
+            "<staff-distance>90</staff-distance>",
+            "<print new-system=\"yes\">",
+            "<system-distance>120</system-distance>",
+            "<staff-layout number=\"1\">",
+            "<measure-numbering>system</measure-numbering>",
+            "<staff-details print-object=\"no\">",
+            "<staff-lines>4</staff-lines>",
+        ] {
+            assert!(
+                written.contains(expected),
+                "{expected} in
+{written}"
+            );
+        }
     }
 }

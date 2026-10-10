@@ -73,7 +73,7 @@ fn the_crate_writes_musicxml_as_music21_does() {
                     continue;
                 }
             };
-            let score = helpers.getattr("strip_layout")?.call1((score,))?;
+            let score = helpers.getattr("strip_layout")?.call1((score, true))?;
 
             // Read before music21 writes: its exporter changes the score as
             // it goes, sounding pitch to written and ids to fresh ones.

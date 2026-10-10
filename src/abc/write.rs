@@ -1737,7 +1737,8 @@ impl<'a> Tune<'a> {
                 }
                 // A barline inside a measure is drawn and not heard, and
                 // music21's exporters write nothing for one either.
-                StreamElement::Barline(_) => {}
+                // How the page is laid out is not the tune's to say.
+                StreamElement::Barline(_) | StreamElement::Layout(_) => {}
                 StreamElement::PedalObject(_) => {
                     return Err(abc_error("ABC has no pedal bounces or gaps"));
                 }

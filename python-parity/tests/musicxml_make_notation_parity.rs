@@ -717,7 +717,7 @@ fn the_crate_makes_notation_as_music21_does() {
             };
             compared += 1;
             let theirs = theirs
-                .and_then(|read| strip.getattr("strip_layout")?.call1((read,)))
+                .and_then(|read| strip.getattr("strip_layout")?.call1((read, true)))
                 .and_then(|read| {
                     exporter
                         .getattr("GeneralObjectExporter")?

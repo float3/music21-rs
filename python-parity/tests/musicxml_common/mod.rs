@@ -528,9 +528,10 @@ def built_source(name, directory):
         handle.write(text)
     return path, text
 
-def strip_layout(score):
+def strip_layout(score, keep_layouts=False):
     from music21 import text
-    for element in list(score.recurse().getElementsByClass((layout.LayoutBase, text.TextBox))):
+    stripped = (text.TextBox,) if keep_layouts else (layout.LayoutBase, text.TextBox)
+    for element in list(score.recurse().getElementsByClass(stripped)):
         element.activeSite.remove(element)
     score.definesExplicitSystemBreaks = False
     score.definesExplicitPageBreaks = False

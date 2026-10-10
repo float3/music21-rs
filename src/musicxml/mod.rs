@@ -34,6 +34,7 @@ use crate::expressions::{ArpeggioType, Expression, Ornament};
 use crate::instrument::Instrument;
 use crate::interval::Interval;
 use crate::key::KeySignature;
+use crate::layout::{Layout, PageLayout, StaffLayout, StaffType, SystemLayout, Tenths};
 use crate::metadata::{Metadata, namespace_name};
 use crate::meter::TimeSignature;
 use crate::notation::{
@@ -284,7 +285,7 @@ fn score_element(score: &Stream, options: &ExportOptions) -> Result<Element> {
     let metadata = score.metadata();
     set_titles(&mut root, metadata, options);
     set_identification(&mut root, metadata, options);
-    set_defaults(&mut root);
+    set_defaults(&mut root, score);
     set_part_list(root.sub("part-list"), &exported, groups, &joined);
     for (index, part) in exported.into_iter().flatten().enumerate() {
         add_divider_comment(&mut root, &format!("Part {}", index + 1));
@@ -857,11 +858,119 @@ fn set_identification(root: &mut Element, metadata: Option<&Metadata>, options: 
     }
 }
 
-/// music21's `setDefaults` for a score with no layout of its own.
-fn set_defaults(root: &mut Element) {
-    let scaling = root.sub("defaults").sub("scaling");
-    scaling.sub_text("millimeters", "7");
-    scaling.sub_text("tenths", "40");
+/// music21's `setDefaults`: the scaling and the page, system and staff
+/// layouts of the score's first score layout, or music21's own scaling
+/// where it has none.
+fn set_defaults(root: &mut Element, score: &Stream) {
+    let first = score
+        .events()
+        .iter()
+        .find_map(|event| match event.element() {
+            StreamElement::Layout(Layout::Score(layout)) => Some(layout),
+            _ => None,
+        });
+    let defaults = root.sub("defaults");
+    let Some(layout) = first else {
+        let scaling = defaults.sub("scaling");
+        scaling.sub_text("millimeters", "7");
+        scaling.sub_text("tenths", "40");
+        return;
+    };
+    if layout.scaling_millimeters.is_some() || layout.scaling_tenths.is_some() {
+        let said = |value: Option<Tenths>| {
+            value.map_or_else(|| "None".to_string(), |value| value.to_string())
+        };
+        let scaling = defaults.sub("scaling");
+        scaling.sub_text("millimeters", said(layout.scaling_millimeters));
+        scaling.sub_text("tenths", said(layout.scaling_tenths));
+    }
+    if let Some(page) = &layout.page_layout {
+        defaults.push(page_layout_element(page));
+    }
+    if let Some(system) = &layout.system_layout {
+        defaults.push(system_layout_element(system));
+    }
+    for staff in &layout.staff_layouts {
+        defaults.push(staff_layout_element(staff));
+    }
+}
+
+/// music21's `_setTagTextFromAttribute`: a child with the value, where
+/// there is one.
+fn sub_tenths(element: &mut Element, tag: &'static str, value: Option<Tenths>) {
+    if let Some(value) = value {
+        element.sub_text(tag, value.to_string());
+    }
+}
+
+/// music21's `pageLayoutToXmlPageLayout`.
+fn page_layout_element(page: &PageLayout) -> Element {
+    let mut element = Element::new("page-layout");
+    sub_tenths(&mut element, "page-height", page.page_height);
+    sub_tenths(&mut element, "page-width", page.page_width);
+    let mut margins = Element::new("page-margins");
+    sub_tenths(&mut margins, "left-margin", page.left_margin);
+    sub_tenths(&mut margins, "right-margin", page.right_margin);
+    sub_tenths(&mut margins, "top-margin", page.top_margin);
+    sub_tenths(&mut margins, "bottom-margin", page.bottom_margin);
+    if margins.len() > 0 {
+        element.push(margins);
+    }
+    element
+}
+
+/// music21's `systemLayoutToXmlSystemLayout`.
+fn system_layout_element(system: &SystemLayout) -> Element {
+    let mut element = Element::new("system-layout");
+    let mut margins = Element::new("system-margins");
+    sub_tenths(&mut margins, "top-margin", system.top_margin);
+    sub_tenths(&mut margins, "bottom-margin", system.bottom_margin);
+    sub_tenths(&mut margins, "left-margin", system.left_margin);
+    sub_tenths(&mut margins, "right-margin", system.right_margin);
+    if margins.len() > 0 {
+        element.push(margins);
+    }
+    sub_tenths(&mut element, "system-distance", system.distance);
+    sub_tenths(&mut element, "top-system-distance", system.top_distance);
+    element
+}
+
+/// music21's `staffLayoutToXmlStaffLayout`.
+fn staff_layout_element(staff: &StaffLayout) -> Element {
+    let mut element = Element::new("staff-layout");
+    sub_tenths(&mut element, "staff-distance", staff.distance);
+    if let Some(number) = staff.staff_number {
+        element.set("number", number.to_string());
+    }
+    element
+}
+
+/// music21's `staffLayoutToXmlStaffDetails`: whether the staff is printed,
+/// what it is for where that is not ordinary, and its lines.
+fn staff_details_element(staff: &StaffLayout) -> Element {
+    let mut element = Element::new("staff-details");
+    element.set(
+        "print-object",
+        if staff.hidden == Some(true) {
+            "no"
+        } else {
+            "yes"
+        },
+    );
+    if !matches!(staff.staff_type, StaffType::Regular | StaffType::Other) {
+        element.sub_text("staff-type", staff.staff_type.as_str());
+    }
+    if let Some(lines) = staff.staff_lines {
+        element.sub_text("staff-lines", lines.to_string());
+    }
+    element
+}
+
+/// music21's `yesNo` of an attribute it sets only where it has a value.
+fn set_yes_no(element: &mut Element, name: &'static str, value: Option<bool>) {
+    if let Some(value) = value {
+        element.set(name, if value { "yes" } else { "no" });
+    }
 }
 
 // ------------------------------------------------------------------- part
@@ -1340,6 +1449,7 @@ impl<'a, 'b> MeasureExporter<'a, 'b> {
                 "no"
             },
         );
+        self.set_print();
         self.set_attributes_for_start_of_measure(transposition.as_ref())?;
         // music21's `setLeftBarline` and `setRightBarline`: a barline where
         // the measure has one, or where an ending opens or closes on it.
@@ -1383,6 +1493,67 @@ impl<'a, 'b> MeasureExporter<'a, 'b> {
                 placed.offset >= self.start && (placed.offset < end || placed.offset == self.start)
             })
             .and_then(|placed| placed.instrument.transposition().cloned())
+    }
+
+    /// music21's `setMxPrint`: a `<print>` from the measure's first page,
+    /// system and staff layouts, where it has any.
+    fn set_print(&mut self) {
+        let layouts: Vec<&Layout> = self
+            .stream
+            .events()
+            .iter()
+            .filter_map(|event| match event.element() {
+                StreamElement::Layout(layout) => Some(layout),
+                _ => None,
+            })
+            .collect();
+        let mut print: Option<Element> = None;
+        if let Some(page) = layouts.iter().find_map(|layout| match layout {
+            Layout::Page(page) => Some(page),
+            _ => None,
+        }) {
+            let mut element = Element::new("print");
+            set_yes_no(&mut element, "new-page", page.is_new);
+            if let Some(number) = page.page_number {
+                element.set("page-number", number.to_string());
+            }
+            let laid = page_layout_element(page);
+            if laid.len() > 0 {
+                element.push(laid);
+            }
+            print = Some(element);
+        }
+        if let Some(system) = layouts.iter().find_map(|layout| match layout {
+            Layout::System(system) => Some(system),
+            _ => None,
+        }) {
+            let element = print.get_or_insert_with(|| Element::new("print"));
+            set_yes_no(element, "new-system", system.is_new);
+            let laid = system_layout_element(system);
+            if laid.len() > 0 {
+                element.push(laid);
+            }
+        }
+        if let Some(staff) = layouts.iter().find_map(|layout| match layout {
+            Layout::Staff(staff) => Some(staff),
+            _ => None,
+        }) {
+            print
+                .get_or_insert_with(|| Element::new("print"))
+                .push(staff_layout_element(staff));
+        }
+        // music21 says how measures are numbered only in a measure it lays
+        // out.
+        if !layouts.is_empty()
+            && let Some(numbering) = self.stream.measure_numbering()
+        {
+            print
+                .get_or_insert_with(|| Element::new("print"))
+                .sub_text("measure-numbering", numbering.to_string());
+        }
+        if let Some(print) = print {
+            self.root.push(print);
+        }
     }
 
     /// music21's `setMxAttributesObjectForStartOfMeasure`.
@@ -1440,6 +1611,17 @@ impl<'a, 'b> MeasureExporter<'a, 'b> {
                 attributes.push(clef_element(clef)?);
                 break;
             }
+        }
+        if let Some(staff) = self
+            .stream
+            .events()
+            .iter()
+            .find_map(|event| match event.element() {
+                StreamElement::Layout(Layout::Staff(staff)) => Some(staff),
+                _ => None,
+            })
+        {
+            attributes.push(staff_details_element(staff));
         }
         if let Some(interval) = transposition {
             attributes.push(transpose_element(interval));
@@ -1692,7 +1874,7 @@ impl<'a, 'b> MeasureExporter<'a, 'b> {
             // music21 writes nothing for a barline standing inside a
             // measure: `Barline` is one of `ignoreOnParseClasses`. A
             // manuscript's break is no class its exporter knows.
-            StreamElement::Barline(_) | StreamElement::Break(_) => {}
+            StreamElement::Barline(_) | StreamElement::Break(_) | StreamElement::Layout(_) => {}
         }
         Ok(())
     }
