@@ -355,6 +355,15 @@ credited in their own descriptions to Wilson, Fokker, Vicentino, Farabi and
 others. Entries carry `source = "vendored"`. Those files remain under GPL-3.0
 within this work, as AGPL-3.0 section 13 provides for.
 
+### MuseScore
+
+`src/musescore/beams.rs`, which works out how MuseScore beams the notes of a
+`.mscx` that leaves beaming to it, is a port of
+[MuseScore](https://github.com/musescore/MuseScore)'s own beaming code,
+copyright MuseScore BVBA and others, licensed
+[GPL-3.0](https://www.gnu.org/licenses/gpl-3.0.en.html). That file remains
+under GPL-3.0 within this work, as AGPL-3.0 section 13 provides for.
+
 ### The Xenharmonic Wiki
 
 `data/temperaments.toml` records the mapping, generators, commas and scales

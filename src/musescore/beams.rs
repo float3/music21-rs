@@ -6,6 +6,14 @@
 //! working out -- the beam groups of each meter, the rules that break a
 //! beam at a beat whose notes are shorter, at a gap, at a rest -- and then
 //! the beams each note carries at each level.
+//!
+//! It is a port of MuseScore's own code for this -- its beam groups of each
+//! meter (`Groups::endings`), `Groups::baseBeamMode`, the beams of a beamed
+//! group and `Tuplet::calcHasBracket` -- from
+//! [MuseScore](https://github.com/musescore/MuseScore), copyright
+//! MuseScore BVBA and others and licensed
+//! [GPL-3.0](https://www.gnu.org/licenses/gpl-3.0.en.html). This file stays
+//! under GPL-3.0 within this work, as AGPL-3.0 section 13 provides for.
 
 use crate::notation::{Beam, BeamDirection, BeamType, Beams};
 
