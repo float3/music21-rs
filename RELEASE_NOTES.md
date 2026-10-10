@@ -28,6 +28,8 @@ are tunes whose own reading cannot be written back.
   layout, and a `TextBox` variant, so a `match` over it needs arms for them.
 - `TimespanTree::maximum_overlap` returns an `Option`, nothing for an empty
   tree, as music21's `maximumOverlap` returns `None`.
+- `StreamElement` has a `Variant` variant, another reading of the passage
+  it stands at, so a `match` over it needs an arm for it.
 - `DataSet::class_position_labels` takes `include_class_label` after
   `include_id`, as music21's `getClassPositionLabels` does, and leaves the
   class's column out without it.
@@ -194,6 +196,26 @@ are tunes whose own reading cannot be written back.
   corpus is flagged, corrected and counted as music21 does it, measure for
   measure, and music21's own Mozart K. 525 pair evaluates the same.
   `Error::Omr` is what it refuses with.
+- `variant` is music21's `variant` module. A `Variant` holds another
+  reading of a passage beside it, in named groups, standing in for as much
+  of the stream as its replacement length says. `merge_variants` merges
+  another version of a score, a stream of measures or a stretch of notes
+  into it as variants where they differ (`merge_variant_scores`,
+  `merge_variant_measure_streams`, `merge_variants_equal_duration`), and
+  `merge_part_as_ossia` an ossia part; `add_variant`, `replaced_elements`,
+  `refine_variant`, `make_all_variants_replacements` and
+  `make_variant_blocks` are music21's functions of those names, and
+  `Stream::activate_variants` and `Stream::show_variant_as_ossialike_part`
+  music21's methods. They keep music21's slips: measures are found by
+  number where music21 finds them so, `refine_variant` works in place only,
+  as music21's does, and `make_variant_blocks` fails where music21's does,
+  after moving the first variant. On every MusicXML score of music21's
+  corpus, merged with a version with a measure transposed, one taken out
+  and one played twice, every function leaves the same measures, notes and
+  variants as music21's, offsets and lengths bit for bit.
+- `from_musicxml` puts each measure at the offset music21 does, the sum of
+  the lengths before it snapped to a fraction: a measure after a run of
+  triplet-length bars was a hair early.
 - `Rest::full_measure` is music21's `fullMeasure`, which the MusicXML reader
   sets where music21's does.
 - `ChordSymbol` carries lyrics, as music21's does, with `lyrics`,

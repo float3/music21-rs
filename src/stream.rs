@@ -173,6 +173,9 @@ pub enum StreamElement {
     Layout(crate::layout::Layout),
     /// Text standing anywhere on a page. Boxed: it carries its style.
     TextBox(Box<crate::text::TextBox>),
+    /// Another reading of the passage starting here, which takes no time
+    /// itself. Boxed: it holds a stream.
+    Variant(Box<crate::variant::Variant>),
 }
 
 impl StreamElement {
@@ -207,7 +210,8 @@ impl StreamElement {
             | Self::MetricModulation(_)
             | Self::Break(_)
             | Self::Layout(_)
-            | Self::TextBox(_) => None,
+            | Self::TextBox(_)
+            | Self::Variant(_) => None,
         }
     }
 
@@ -235,7 +239,8 @@ impl StreamElement {
             | Self::MetricModulation(_)
             | Self::Break(_)
             | Self::Layout(_)
-            | Self::TextBox(_) => 0.0,
+            | Self::TextBox(_)
+            | Self::Variant(_) => 0.0,
             _ => self
                 .duration()
                 .map(Duration::quarter_length)
@@ -270,7 +275,8 @@ impl StreamElement {
             | Self::MetricModulation(_)
             | Self::Break(_)
             | Self::Layout(_)
-            | Self::TextBox(_) => Vec::new(),
+            | Self::TextBox(_)
+            | Self::Variant(_) => Vec::new(),
         }
     }
 
@@ -292,6 +298,7 @@ impl StreamElement {
             Self::Layout(_) => -10,
             Self::Stream(stream) if stream.kind() == StreamKind::Voice => 5,
             Self::Stream(_) => -20,
+            Self::Variant(_) => -22,
             Self::Barline(_) => -5,
             Self::Clef(_) => 0,
             Self::MetronomeMark(_) | Self::TempoText(_) | Self::MetricModulation(_) => 1,
@@ -345,6 +352,7 @@ impl StreamElement {
             Self::Break(kind) => Ok(Self::Break(*kind)),
             Self::Layout(layout) => Ok(Self::Layout(layout.clone())),
             Self::TextBox(text) => Ok(Self::TextBox(text.clone())),
+            Self::Variant(variant) => Ok(Self::Variant(Box::new(variant.transpose(interval)?))),
         }
     }
 }
@@ -1152,58 +1160,108 @@ impl Stream {
     /// Every spanner of a stream on the way moves past what was replaced
     /// to where it now stands, and names nothing for an element replaced.
     pub(crate) fn replace_nested(&mut self, path: &[usize], replacement: Stream) {
+        self.edit_nested(path, |target| {
+            let gone = vec![None; target.leaf_total()];
+            *target = replacement;
+            ((), gone)
+        });
+    }
+
+    /// Edits the stream reached by `path`, the index of an event holding a
+    /// stream at each level down from here. `edit` answers what it answers
+    /// and where each of the stream's leaves went, by old position, having
+    /// moved that stream's own spanners itself; every spanner of a stream on
+    /// the way is moved with them. The answer is `edit`'s, and where each of
+    /// this stream's leaves went.
+    pub(crate) fn edit_nested<R>(
+        &mut self,
+        path: &[usize],
+        edit: impl FnOnce(&mut Stream) -> (R, Vec<Option<usize>>),
+    ) -> (R, Vec<Option<usize>>) {
         let Some((&first, rest)) = path.split_first() else {
-            *self = replacement;
-            return;
+            return edit(self);
         };
+        let total = self.leaf_total();
         let before: usize = self.events[..first]
             .iter()
             .map(|event| leaf_count(&event.element))
             .sum();
         let StreamElement::Stream(inner) = &mut self.events[first].element else {
-            return;
+            return edit(self);
         };
-        let (start, old, new) = inner.leaf_span(rest, &replacement);
-        inner.replace_nested(rest, replacement);
-        let start = before + start;
+        let old = inner.leaf_total();
+        let (answer, inner_moved) = inner.edit_nested(rest, edit);
+        let new = inner.leaf_total();
+        let moved: Vec<Option<usize>> = (0..total)
+            .map(|place| {
+                if place < before {
+                    Some(place)
+                } else if place < before + old {
+                    inner_moved
+                        .get(place - before)
+                        .copied()
+                        .flatten()
+                        .map(|at| at + before)
+                } else {
+                    Some(place - old + new)
+                }
+            })
+            .collect();
         for spanner in &mut self.labels.spanners {
-            for position in spanner.spanned_mut() {
-                *position = match *position {
-                    Some(at) if at < start => Some(at),
-                    Some(at) if at < start + old => None,
-                    Some(at) => Some(at - old + new),
-                    None => None,
-                };
-            }
+            spanner.move_places(&moved);
         }
+        (answer, moved)
     }
 
-    /// Where the leaves of the stream reached by `path` start among this
-    /// stream's, how many it has, and how many `replacement` has.
-    fn leaf_span(&self, path: &[usize], replacement: &Stream) -> (usize, usize, usize) {
-        match path.split_first() {
-            None => (0, self.leaves().len(), replacement.leaves().len()),
-            Some((&first, rest)) => {
-                let before: usize = self.events[..first]
-                    .iter()
-                    .map(|event| leaf_count(&event.element))
-                    .sum();
-                match &self.events[first].element {
-                    StreamElement::Stream(inner) => {
-                        let (start, old, new) = inner.leaf_span(rest, replacement);
-                        (before + start, old, new)
+    /// How many leaves this stream has.
+    pub(crate) fn leaf_total(&self) -> usize {
+        self.events
+            .iter()
+            .map(|event| leaf_count(&event.element))
+            .sum()
+    }
+
+    /// Puts `events` in place of this stream's own, in the order given,
+    /// each with the index of the event it stood at here, if it did. Every
+    /// spanner of this stream is moved to where what it names now stands,
+    /// and names nothing for an element no longer here. The answer is where
+    /// each leaf went, by old position.
+    pub(crate) fn replace_events(
+        &mut self,
+        events: Vec<(StreamEvent, Option<usize>)>,
+    ) -> Vec<Option<usize>> {
+        let mut starts = Vec::with_capacity(self.events.len());
+        let mut first = 0;
+        for event in &self.events {
+            starts.push(first);
+            first += leaf_count(&event.element);
+        }
+        let mut moved: Vec<Option<usize>> = vec![None; first];
+        let mut placed = 0;
+        for (event, origin) in &events {
+            let count = leaf_count(&event.element);
+            if let Some(&start) = origin.and_then(|origin| starts.get(origin)) {
+                for leaf in 0..count {
+                    if let Some(slot) = moved.get_mut(start + leaf) {
+                        *slot = Some(placed + leaf);
                     }
-                    _ => (before, 0, 0),
                 }
             }
+            placed += count;
         }
+        self.events = events.into_iter().map(|(event, _)| event).collect();
+        for spanner in &mut self.labels.spanners {
+            spanner.move_places(&moved);
+        }
+        moved
     }
 
     /// Adds events to this stream's own and puts them all in the order
     /// music21 sorts a stream in, an added event after one already here that
     /// sorts alike. Every spanner of this stream is moved to where what it
-    /// names now stands.
-    pub(crate) fn insert_sorted(&mut self, added: Vec<StreamEvent>) {
+    /// names now stands. The answer is where each leaf went, by old
+    /// position.
+    pub(crate) fn insert_sorted(&mut self, added: Vec<StreamEvent>) -> Vec<Option<usize>> {
         // Each event held here with where its leaves started; nothing for
         // one added.
         let mut first = 0;
@@ -1230,6 +1288,7 @@ impl Stream {
         for spanner in &mut self.labels.spanners {
             spanner.move_places(&moved);
         }
+        moved
     }
 
     /// [`Stream::retain_leaves`] below the `seen` leaves already walked; the

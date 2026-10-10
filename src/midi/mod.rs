@@ -119,7 +119,8 @@ pub fn midi_notes_from_stream(stream: &Stream) -> Result<Vec<MidiNote>> {
             | StreamElement::MetricModulation(_)
             | StreamElement::Break(_)
             | StreamElement::Layout(_)
-            | StreamElement::TextBox(_) => {}
+            | StreamElement::TextBox(_)
+            | StreamElement::Variant(_) => {}
         }
     }
     Ok(notes)

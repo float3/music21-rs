@@ -161,6 +161,7 @@ pub mod tinynotation;
 pub mod tree;
 /// Tuning-system ratios, labels and frequency helpers.
 pub mod tuningsystem;
+pub mod variant;
 /// Two-voice voice-leading classification and parallel-interval checks.
 pub mod voiceleading;
 pub mod volpiano;

@@ -148,6 +148,11 @@ pub enum Error {
     /// measure with no time signature in force.
     #[error("OMR error: {0}")]
     Omr(String),
+    /// Variants that cannot be merged, placed or made real as asked:
+    /// music21's `VariantException`, and the errors music21 meets on the
+    /// way.
+    #[error("Variant error: {0}")]
+    Variant(String),
     /// A score that cannot be written as MusicXML.
     #[cfg(feature = "musicxml")]
     #[error("MusicXML export error: {0}")]
