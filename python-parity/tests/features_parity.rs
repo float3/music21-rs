@@ -1,5 +1,5 @@
 //! The crate's feature extractors against music21's: `features.jSymbolic`
-//! and `features.native`, all but the native language feature.
+//! and `features.native`, the language feature among them.
 //!
 //! Every extractor's id, name, description, size and flags are compared
 //! with music21's live class. Then each corpus score is read by music21 and
@@ -53,7 +53,7 @@ def source_text(name):
 
 EXTRACTORS = {
     'jSymbolic': jSymbolic.featureExtractors,
-    'native': [cls for cls in native.featureExtractors if cls.id != 'TX1'],
+    'native': native.featureExtractors,
 }
 
 def metadata(module):

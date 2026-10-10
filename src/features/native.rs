@@ -10,8 +10,9 @@
 //! common, and a chord symbol that sounds nothing refuses the bass-motion
 //! feature, as music21 finds no bass in it.
 //!
-//! music21's language feature (`TX1`), which reads lyrics against texts in
-//! seven languages, is not here.
+//! music21's language feature (`TX1`) reads the lyrics against texts in
+//! seven languages, about 1.9 MB of them, so it is here only with the
+//! `language-detection` feature.
 
 use super::{DataInstance, Extractor, Value};
 use crate::{
@@ -23,9 +24,15 @@ use crate::{
     stream::StreamElement,
 };
 
-/// Every native extractor music21 lists, in music21's order, but its
-/// language feature.
-pub const NATIVE: &[Extractor] = &[
+/// Every native extractor music21 lists, in music21's order: its language
+/// feature last, and only with the `language-detection` feature.
+pub const NATIVE: &[Extractor] = if cfg!(feature = "language-detection") {
+    &ALL
+} else {
+    ALL.split_at(ALL.len() - 1).0
+};
+
+const ALL: [Extractor; 20] = [
     Extractor {
         id: "P22",
         name: "Quality",
@@ -196,6 +203,15 @@ pub const NATIVE: &[Extractor] = &[
         discrete: false,
         normalize: false,
         process: landini_cadence,
+    },
+    Extractor {
+        id: "TX1",
+        name: "Language Feature",
+        description: "Language of the lyrics of the piece given as a numeric value from text.LanguageDetector.mostLikelyLanguageNumeric().",
+        dimensions: 1,
+        discrete: true,
+        normalize: false,
+        process: language,
     },
 ];
 
@@ -513,6 +529,24 @@ fn chord_bass_motion(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
 /// Whether any part's melody, its repeated notes left out, ends falling a
 /// tone and rising a minor third, or falling a semitone and a tone and
 /// rising a minor third.
+/// The language of the piece's lyrics, assembled from its first verse, as
+/// one more than its place among the languages music21 knows, or nought
+/// for none: `TX1`.
+#[cfg(feature = "language-detection")]
+fn language(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
+    let lyrics = crate::text::assemble_lyrics(data.prepared(), 1, " ");
+    let number = super::language::most_likely_language_numeric(&lyrics)?;
+    vector[0] = Value::Integer(number as i64);
+    Ok(())
+}
+
+#[cfg(not(feature = "language-detection"))]
+fn language(_: &DataInstance, _: &mut [Value]) -> Result<()> {
+    Err(Error::Feature(
+        "the language feature needs the language-detection feature".to_string(),
+    ))
+}
+
 fn landini_cadence(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
     const ENDINGS: [&[IntegerType]; 2] = [&[-2, 3], &[-1, -2, 3]];
     let contours: Vec<&[IntegerType]> = if data.parts_count() > 0 {

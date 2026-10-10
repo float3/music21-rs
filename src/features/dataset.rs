@@ -572,7 +572,13 @@ mod tests {
         );
         assert_eq!(ids(extractors_by_id(&["p 21"], &Library::ALL)), ["P21"]);
         let all = extractors_by_id(&["all"], &Library::ALL);
-        assert_eq!(all.len(), 91);
+        // music21 has 92: its language feature comes with `language-detection`.
+        let expected = if cfg!(feature = "language-detection") {
+            92
+        } else {
+            91
+        };
+        assert_eq!(all.len(), expected);
         assert_eq!(index_of("Range", None), Some((61, Library::JSymbolic)));
         assert_eq!(
             index_of("Ends With Landini Melodic Contour", None),
@@ -591,7 +597,12 @@ mod tests {
     fn every_feature_of_a_piece_is_listed() -> Result<()> {
         // music21: features.allFeaturesAsList(s)[2:5] == [[2], [2], [1.0]]
         let features = all_features_as_list(&from_tiny_notation("4/4 c4 d e2")?)?;
-        assert_eq!(features.len(), 91);
+        let expected = if cfg!(feature = "language-detection") {
+            92
+        } else {
+            91
+        };
+        assert_eq!(features.len(), expected);
         assert_eq!(
             features[2..5],
             [

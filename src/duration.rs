@@ -299,6 +299,7 @@ impl Grace {
         self.value_unsaid
     }
 
+    #[cfg(feature = "musicxml")]
     pub(crate) fn set_value_unsaid(&mut self, unsaid: bool) {
         self.value_unsaid = unsaid;
     }

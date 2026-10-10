@@ -28,6 +28,9 @@
 //! - `serde` derives `Serialize` and `Deserialize` for the public types.
 //! - `scala-archive` bundles the Scala scale archive (about 4,000 `.scl`
 //!   files, roughly 1 MB) and enables `ScalaArchive::bundled()`.
+//! - `language-detection` bundles music21's excerpts in seven languages
+//!   (about 1.9 MB) and enables `features::language` and music21's language
+//!   feature, `TX1`, among the native extractors.
 //! - `musicxml` reads and writes MusicXML (`musicxml::from_musicxml`,
 //!   `musicxml::to_musicxml`).
 //! - `musescore` runs an installed MuseScore to read and write the formats it

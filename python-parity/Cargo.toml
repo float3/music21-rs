@@ -5,7 +5,10 @@ publish = false
 version = "0.0.0"
 
 [dependencies]
-music21-rs = { path = "..", default-features = false, features = ["musicxml"] }
+music21-rs = { path = "..", default-features = false, features = [
+    "language-detection",
+    "musicxml",
+] }
 # Renamed because the wheel crate's lib is also called `music21_rs`,
 # which is the name the extension module has to have.
 # The bundled Scala archive comes with it: music21's own `scale.scala`

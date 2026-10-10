@@ -25,6 +25,10 @@
 
 mod dataset;
 pub mod jsymbolic;
+/// Which language a text is in: music21's `LanguageDetector`, with the
+/// `language-detection` feature.
+#[cfg(feature = "language-detection")]
+pub mod language;
 pub mod native;
 
 pub use dataset::{
