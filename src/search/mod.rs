@@ -10,7 +10,7 @@
 //! labels them there.
 
 mod base;
-mod difflib;
+pub(crate) mod difflib;
 mod lyrics;
 mod segment;
 mod serial;

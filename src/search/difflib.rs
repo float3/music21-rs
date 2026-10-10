@@ -83,6 +83,91 @@ fn longest_match<T: Copy + Eq + std::hash::Hash>(
     (best_i, best_j, best_size)
 }
 
+/// What one stretch of an [`Opcode`] does to turn the first sequence into
+/// the second: Python's opcode tags.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum OpcodeTag {
+    /// The first sequence's stretch is replaced by the second's: `replace`.
+    Replace,
+    /// The first sequence's stretch is left out: `delete`.
+    Delete,
+    /// The second sequence's stretch is put in: `insert`.
+    Insert,
+    /// The two stretches are the same: `equal`.
+    Equal,
+}
+
+impl OpcodeTag {
+    /// Python's name for the tag.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Replace => "replace",
+            Self::Delete => "delete",
+            Self::Insert => "insert",
+            Self::Equal => "equal",
+        }
+    }
+}
+
+/// One step of turning one sequence into another: Python's opcode
+/// `(tag, i1, i2, j1, j2)`, the first sequence's items `i1..i2` and the
+/// second's `j1..j2`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Opcode {
+    /// What the step does.
+    pub tag: OpcodeTag,
+    /// Where the stretch of the first sequence starts.
+    pub i1: usize,
+    /// Where it ends.
+    pub i2: usize,
+    /// Where the stretch of the second sequence starts.
+    pub j1: usize,
+    /// Where it ends.
+    pub j2: usize,
+}
+
+/// Python's `SequenceMatcher(None, a, b).get_opcodes()`: the steps that turn
+/// `a` into `b`, between the matching blocks.
+pub(crate) fn opcodes<T: Copy + Eq + std::hash::Hash>(a: &[T], b: &[T]) -> Vec<Opcode> {
+    let mut blocks = matching_blocks(a, b);
+    blocks.push((a.len(), b.len(), 0));
+    let (mut i, mut j) = (0, 0);
+    let mut steps = Vec::new();
+    for (ai, bj, size) in blocks {
+        let tag = if i < ai && j < bj {
+            Some(OpcodeTag::Replace)
+        } else if i < ai {
+            Some(OpcodeTag::Delete)
+        } else if j < bj {
+            Some(OpcodeTag::Insert)
+        } else {
+            None
+        };
+        if let Some(tag) = tag {
+            steps.push(Opcode {
+                tag,
+                i1: i,
+                i2: ai,
+                j1: j,
+                j2: bj,
+            });
+        }
+        (i, j) = (ai + size, bj + size);
+        if size > 0 {
+            steps.push(Opcode {
+                tag: OpcodeTag::Equal,
+                i1: ai,
+                i2: i,
+                j1: bj,
+                j2: j,
+            });
+        }
+    }
+    steps
+}
+
 /// Python's `get_matching_blocks`, without its closing sentinel: each
 /// `(i, j, size)` with `a[i..i + size] == b[j..j + size]`, adjacent blocks
 /// joined.
@@ -120,6 +205,27 @@ mod tests {
 
     fn chars(text: &str) -> Vec<char> {
         text.chars().collect()
+    }
+
+    #[test]
+    fn opcodes_are_pythons() {
+        // Read off Python's SequenceMatcher(None, 'qabxcd', 'abycdf').get_opcodes().
+        let steps: Vec<(&str, usize, usize, usize, usize)> =
+            opcodes(&chars("qabxcd"), &chars("abycdf"))
+                .iter()
+                .map(|step| (step.tag.as_str(), step.i1, step.i2, step.j1, step.j2))
+                .collect();
+        assert_eq!(
+            steps,
+            [
+                ("delete", 0, 1, 0, 0),
+                ("equal", 1, 3, 0, 2),
+                ("replace", 3, 4, 2, 3),
+                ("equal", 4, 6, 3, 5),
+                ("insert", 6, 6, 5, 6),
+            ]
+        );
+        assert!(opcodes::<char>(&[], &[]).is_empty());
     }
 
     #[test]

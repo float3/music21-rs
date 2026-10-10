@@ -1147,6 +1147,58 @@ impl Stream {
         self.retain_leaves_from(&mut seen, keep);
     }
 
+    /// Puts `replacement` in place of the stream reached by `path`, the
+    /// index of an event holding a stream at each level down from here.
+    /// Every spanner of a stream on the way moves past what was replaced
+    /// to where it now stands, and names nothing for an element replaced.
+    pub(crate) fn replace_nested(&mut self, path: &[usize], replacement: Stream) {
+        let Some((&first, rest)) = path.split_first() else {
+            *self = replacement;
+            return;
+        };
+        let before: usize = self.events[..first]
+            .iter()
+            .map(|event| leaf_count(&event.element))
+            .sum();
+        let StreamElement::Stream(inner) = &mut self.events[first].element else {
+            return;
+        };
+        let (start, old, new) = inner.leaf_span(rest, &replacement);
+        inner.replace_nested(rest, replacement);
+        let start = before + start;
+        for spanner in &mut self.labels.spanners {
+            for position in spanner.spanned_mut() {
+                *position = match *position {
+                    Some(at) if at < start => Some(at),
+                    Some(at) if at < start + old => None,
+                    Some(at) => Some(at - old + new),
+                    None => None,
+                };
+            }
+        }
+    }
+
+    /// Where the leaves of the stream reached by `path` start among this
+    /// stream's, how many it has, and how many `replacement` has.
+    fn leaf_span(&self, path: &[usize], replacement: &Stream) -> (usize, usize, usize) {
+        match path.split_first() {
+            None => (0, self.leaves().len(), replacement.leaves().len()),
+            Some((&first, rest)) => {
+                let before: usize = self.events[..first]
+                    .iter()
+                    .map(|event| leaf_count(&event.element))
+                    .sum();
+                match &self.events[first].element {
+                    StreamElement::Stream(inner) => {
+                        let (start, old, new) = inner.leaf_span(rest, replacement);
+                        (before + start, old, new)
+                    }
+                    _ => (before, 0, 0),
+                }
+            }
+        }
+    }
+
     /// Adds events to this stream's own and puts them all in the order
     /// music21 sorts a stream in, an added event after one already here that
     /// sorts alike. Every spanner of this stream is moved to where what it

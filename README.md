@@ -111,7 +111,9 @@ melodic intervals between consecutive notes, Patel's rhythmic and melodic
 variability, metrical depth and melodic accent, windowed and floating key
 analysis (`analysis::windowed`, `analysis::floating_key`), and the features
 music21 extracts for machine learning, jSymbolic's and its own
-(`features::jsymbolic`, `features::native`).
+(`features::jsymbolic`, `features::native`), and the correction of
+scores read by optical music recognition (`omr`), which finds the measures
+whose rhythm was misread and puts the likeliest rhythm in their place.
 
 MuseScore's own files are read with no feature and no MuseScore installed:
 `musescore::from_mscx` takes the text of a `.mscx`, as MuseScore 3 and 4 save
