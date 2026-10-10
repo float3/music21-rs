@@ -52,6 +52,11 @@ impl Element {
         }
     }
 
+    /// Takes an attribute away, where it stands.
+    pub(crate) fn remove_attribute(&mut self, name: &str) {
+        self.attributes.retain(|(key, _)| *key != name);
+    }
+
     pub(crate) fn set_text(&mut self, text: impl Into<String>) {
         self.text = Some(text.into());
     }

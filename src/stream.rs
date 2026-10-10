@@ -171,6 +171,8 @@ pub enum StreamElement {
     Break(crate::volpiano::Break),
     /// How the page, a system or a staff is laid out from here on.
     Layout(crate::layout::Layout),
+    /// Text standing anywhere on a page. Boxed: it carries its style.
+    TextBox(Box<crate::text::TextBox>),
 }
 
 impl StreamElement {
@@ -204,7 +206,8 @@ impl StreamElement {
             | Self::RehearsalMark(_)
             | Self::MetricModulation(_)
             | Self::Break(_)
-            | Self::Layout(_) => None,
+            | Self::Layout(_)
+            | Self::TextBox(_) => None,
         }
     }
 
@@ -231,7 +234,8 @@ impl StreamElement {
             | Self::RehearsalMark(_)
             | Self::MetricModulation(_)
             | Self::Break(_)
-            | Self::Layout(_) => 0.0,
+            | Self::Layout(_)
+            | Self::TextBox(_) => 0.0,
             _ => self
                 .duration()
                 .map(Duration::quarter_length)
@@ -265,7 +269,8 @@ impl StreamElement {
             | Self::RehearsalMark(_)
             | Self::MetricModulation(_)
             | Self::Break(_)
-            | Self::Layout(_) => Vec::new(),
+            | Self::Layout(_)
+            | Self::TextBox(_) => Vec::new(),
         }
     }
 
@@ -281,6 +286,7 @@ impl StreamElement {
     /// at one offset.
     pub(crate) fn class_sort_order(&self) -> i32 {
         match self {
+            Self::TextBox(_) => -31,
             Self::TextExpression(_) | Self::RehearsalMark(_) => -30,
             Self::Instrument(_) => -25,
             Self::Layout(_) => -10,
@@ -338,6 +344,7 @@ impl StreamElement {
             Self::MetricModulation(modulation) => Ok(Self::MetricModulation(modulation.clone())),
             Self::Break(kind) => Ok(Self::Break(*kind)),
             Self::Layout(layout) => Ok(Self::Layout(layout.clone())),
+            Self::TextBox(text) => Ok(Self::TextBox(text.clone())),
         }
     }
 }
