@@ -7,7 +7,7 @@ use super::{StreamElement, StreamKind};
 impl StreamElement {
     /// music21's class names of the element, the most particular first,
     /// ending with `Music21Object`.
-    pub(crate) fn music21_classes(&self) -> Vec<&'static str> {
+    pub fn music21_classes(&self) -> Vec<&'static str> {
         let mut names: Vec<&'static str> = match self {
             StreamElement::Note(_) => vec!["Note", "NotRest", "GeneralNote"],
             StreamElement::Unpitched(_) => vec!["Unpitched", "NotRest", "GeneralNote"],
@@ -80,7 +80,17 @@ impl StreamElement {
 
     /// Whether the element is of a class, by music21's name for it:
     /// music21's `isinstance` by class name.
-    pub(crate) fn is_instance(&self, class: &str) -> bool {
+    ///
+    /// ```
+    /// use music21_rs::{Note, StreamElement};
+    ///
+    /// let note: StreamElement = Note::from_name("C4")?.into();
+    /// assert!(note.is_instance("NotRest"));
+    /// assert!(note.is_instance("GeneralNote"));
+    /// assert!(!note.is_instance("Rest"));
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
+    pub fn is_instance(&self, class: &str) -> bool {
         self.music21_classes().contains(&class)
     }
 }

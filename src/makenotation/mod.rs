@@ -389,7 +389,7 @@ struct Bar {
 /// Snaps an offset as music21's `opFrac` does, to the nearest fraction with
 /// a denominator up to 65535, so that three triplets end on the beat. A
 /// negative offset is snapped as its size is.
-pub(crate) fn op_frac(value: FloatType) -> FloatType {
+pub fn op_frac(value: FloatType) -> FloatType {
     if value < 0.0 {
         return -op_frac(-value);
     }

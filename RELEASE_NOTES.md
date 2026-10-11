@@ -36,6 +36,19 @@
   `parts_to_voices` takes only the notes a measure holds itself, not those
   already in its voices. Each moves every MusicXML score of music21's
   corpus as music21 does.
+- `Stream` finds elements by where they stand as music21 does:
+  `element_at_or_before`, `element_before_offset` and `element_after`
+  (music21's `getElementAtOrBefore`, `getElementBeforeOffset` and
+  `getElementAfterElement`), each of the music21 classes named;
+  `beat_and_measure_from_offset`, which counts a partial measure's beats
+  on from the measure before it; and `time_signatures`, `instruments` and
+  `instrument` (music21's `getTimeSignatures`, `getInstruments` and
+  `getInstrument`), which look within the stream. Each answers as
+  music21's does on every MusicXML score of music21's corpus.
+- `StreamElement::is_instance` and `StreamElement::music21_classes` are
+  public: music21's `isinstance` by class name, and the class names an
+  element answers to.
+- `makenotation::op_frac` is public: music21's `opFrac`.
 - The `language-detection` feature brings music21's language feature,
   `TX1`, which names the language of a piece's lyrics, last among
   `features::native::NATIVE` as it is in music21, and
@@ -53,6 +66,9 @@
   stream of chord symbols or strokes as holding music, as music21 does.
 - An offset worked out to be negative is snapped to the fraction it stands
   for, as a positive one is, as music21's `opFrac` snaps it.
+- `TimeSignature::beat_proportion` snaps the beat to the fraction it
+  stands for, as music21's `getBeatProportion` does, so a third of a beat
+  in is music21's to the last bit.
 - `Duration::augment_or_diminish` snaps the scaled length to the fraction
   it stands for, as music21 does; an unlinked duration stays unlinked,
   keeps its written values, and has its length scaled as it is, unsnapped.

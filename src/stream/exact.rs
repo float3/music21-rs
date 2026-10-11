@@ -70,6 +70,15 @@ impl Exact {
         }
     }
 
+    /// A Python `int`, which adds to a `Fraction` exactly.
+    pub(crate) fn integer(value: i64) -> Self {
+        Self {
+            numerator: i128::from(value),
+            denominator: 1,
+            fraction: true,
+        }
+    }
+
     /// Two numbers music21 holds added as Python adds them: exactly when
     /// both are fractions, and as floats otherwise.
     pub(crate) fn plus(self, other: Self) -> Self {
