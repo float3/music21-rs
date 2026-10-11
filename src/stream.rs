@@ -28,6 +28,7 @@ mod consecutive;
 mod placed;
 mod queries;
 mod repeats;
+mod slicing;
 mod sounding;
 mod template;
 mod ties;

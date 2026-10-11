@@ -10,6 +10,14 @@
   `measure_offset_map`, `highest_offset`, `lowest_offset`, `has_measures`,
   `has_voices` and `is_well_formed_notation`. Each answers as music21's
   does on every MusicXML score of music21's corpus.
+- `Stream` cuts its notes and rests as music21's slicing does:
+  `slice_by_quarter_lengths`, `slice_by_greatest_divisor` (by measure, and
+  across a score's parts at each measure), `slice_at_offsets`,
+  `slice_by_beat` and `split_by` (music21's `splitByClass`). music21's
+  slips are kept: a measure with a grace note or nothing to cut has no
+  greatest divisor, and a note in a voice cut at an offset leaves its
+  later pieces in the measure rather than the voice. Each cuts every
+  MusicXML score of music21's corpus as music21 does.
 - The `language-detection` feature brings music21's language feature,
   `TX1`, which names the language of a piece's lyrics, last among
   `features::native::NATIVE` as it is in music21, and
