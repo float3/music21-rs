@@ -25,6 +25,8 @@
 pub(crate) mod chordify;
 mod classes;
 mod consecutive;
+mod editing;
+pub(crate) mod exact;
 mod placed;
 mod queries;
 mod repeats;
@@ -35,7 +37,9 @@ mod ties;
 
 pub use chordify::ChordifyOptions;
 pub use consecutive::{ConsecutiveOptions, MelodicInterval};
+pub use editing::Anchor;
 pub use placed::Placed;
+pub use queries::OffsetMapEntry;
 pub use template::{TemplateOptions, removed_by_default};
 
 use crate::{

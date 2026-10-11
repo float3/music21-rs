@@ -18,6 +18,15 @@
   greatest divisor, and a note in a voice cut at an offset leaves its
   later pieces in the measure rather than the voice. Each cuts every
   MusicXML score of music21's corpus as music21 does.
+- `Stream` edits itself as music21's editing methods do: `extend_ties`,
+  `scale_offsets` (from a `stream::Anchor`), `scale_durations`,
+  `augment_or_diminish`, `invert_diatonic`, `shift_elements`,
+  `repeat_append`, `repeat_insert`, `insert_and_shift`, and for a measure
+  `bar_duration_proportion` and `pad_as_anacrusis`. As in music21, a note
+  is tied to one starting where it ends only where Python's sum of its
+  offset and length meets that start exactly, which misses some notes
+  after a triplet. Each edits every MusicXML score of music21's corpus as
+  music21 does.
 - The `language-detection` feature brings music21's language feature,
   `TX1`, which names the language of a piece's lyrics, last among
   `features::native::NATIVE` as it is in music21, and
@@ -35,6 +44,13 @@
   stream of chord symbols or strokes as holding music, as music21 does.
 - An offset worked out to be negative is snapped to the fraction it stands
   for, as a positive one is, as music21's `opFrac` snaps it.
+- `Duration::augment_or_diminish` snaps the scaled length to the fraction
+  it stands for, as music21 does; an unlinked duration stays unlinked,
+  keeps its written values, and has its length scaled as it is, unsnapped.
+- The MusicXML reader pads a pickup measure by the share of its bar it
+  lacks, as music21's `padAsAnacrusis` works it out, and a measure cut
+  short by what its exact length lacks, so the padding of a measure whose
+  length is no binary fraction is music21's to the last bit.
 
 # music21-rs 0.9.0
 

@@ -1096,13 +1096,22 @@ impl Duration {
 
     /// Returns the duration scaled by a positive factor: music21's
     /// `augmentOrDiminish`, so a quarter by two is a half.
+    ///
+    /// An unlinked duration stays unlinked and keeps its written values; only
+    /// its length is scaled, and it is not snapped to a fraction.
     pub fn augment_or_diminish(&self, factor: FloatType) -> Result<Duration> {
         if factor.is_nan() || factor <= 0.0 {
             return Err(Error::Duration(
                 "amountToScale must be greater than zero".to_string(),
             ));
         }
-        Duration::new(self.quarter_length * factor)
+        if self.unlinked {
+            let mut scaled = self.clone();
+            scaled.tuplets = Some(Vec::new());
+            scaled.quarter_length = self.quarter_length * factor;
+            return Ok(scaled);
+        }
+        Duration::new(crate::makenotation::op_frac(self.quarter_length * factor))
     }
 
     /// The tuplet this length is written as, if any: the first of
@@ -2273,6 +2282,15 @@ mod tests {
                 .augment_or_diminish(-1.0)
                 .is_err()
         );
+        // A 16th sounding 4/17 of a quarter, as music21's reader leaves one.
+        let mut unlinked = Duration::new(0.25).unwrap();
+        unlinked.set_linked(false);
+        unlinked.set_quarter_length(4.0 / 17.0).unwrap();
+        let scaled = unlinked.augment_or_diminish(1.5).unwrap();
+        assert!(!scaled.linked());
+        assert_eq!(scaled.quarter_length(), 4.0 / 17.0 * 1.5);
+        assert_ne!(scaled.quarter_length(), 6.0 / 17.0);
+        assert_eq!(scaled.type_and_dots(), Some((DurationType::Sixteenth, 0)));
     }
     use super::*;
 
