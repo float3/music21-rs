@@ -9,8 +9,8 @@
 # ratio, a decimal for cents. `1/1` is explicit and the repeat interval
 # is held apart as `period`, which is this crate's convention rather
 # than Scala's.
-music21_version = "11.0.0b11"
-music21_commit = "23cbd81bacbaf4b1e6ee0d7245456e945b49043f"
+music21_version = "11.0.0b12"
+music21_commit = "4223020c79d6f48a91466803b5e9d20d2e57e0ad"
 hexatone_commit = "aee6afdfabd7ac68323be62a7bdef08fae0007dc"
 
 [[scale]]

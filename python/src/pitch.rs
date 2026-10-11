@@ -1191,6 +1191,74 @@ impl Pitch {
         self.write_back()
     }
 
+    /// Parses a name and remembers its step, accidental and octave in
+    /// music21's own `pitch._pitchNameCache`, as music21's `Pitch` does.
+    #[pyo3(name = "_cacheParsedName")]
+    fn cache_parsed_name(&self, py: Python<'_>, usr_str: &Bound<'_, PyAny>) -> PyResult<()> {
+        let key = usr_str.extract::<String>().map_err(|_| {
+            pyo3::exceptions::PyValueError::new_err(format!(
+                "Argument to name, {}, must be a string, not {}.",
+                usr_str
+                    .repr()
+                    .map(|repr| repr.to_string())
+                    .unwrap_or_default(),
+                usr_str.get_type(),
+            ))
+        })?;
+        if key.chars().count() > 100 {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "Argument to name must be at most 100 characters, not {}.",
+                key.chars().count()
+            )));
+        }
+        let stripped = key.trim();
+        let mut letters = String::new();
+        let mut digits = String::new();
+        for c in stripped.chars() {
+            if c.is_ascii_digit() {
+                if letters.is_empty() {
+                    return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                        "Cannot have octave given before pitch name in {stripped:?}."
+                    )));
+                }
+                digits.push(c);
+            } else {
+                letters.push(c);
+            }
+        }
+        let mut chars = letters.chars();
+        let Some(first) = chars.next() else {
+            return Err(PitchException::new_err(format!(
+                "Cannot make a name out of {letters:?}"
+            )));
+        };
+        let step = first.to_ascii_uppercase();
+        if !"CDEFGAB".contains(step) {
+            return Err(PitchException::new_err(format!(
+                "Cannot make a step out of {step:?}"
+            )));
+        }
+        let accidental: String = chars.collect();
+        // the crate decides whether the accidental is one
+        let _parsed = RsPitch::from_name(&letters).map_err(pitch_error)?;
+        let octave: Option<i64> = if digits.is_empty() {
+            None
+        } else {
+            Some(digits.parse().map_err(|_| {
+                pyo3::exceptions::PyValueError::new_err(format!("invalid octave {digits:?}"))
+            })?)
+        };
+        let module = py.import("music21.pitch")?;
+        let cache = module.getattr("_pitchNameCache")?;
+        let size: usize = module.getattr("_pitchNameCacheSize")?.extract()?;
+        if cache.len()? >= size {
+            cache.call_method0("clear")?;
+        }
+        let accidental = (!accidental.is_empty()).then_some(accidental);
+        cache.set_item(key, (step.to_string(), accidental, octave))?;
+        Ok(())
+    }
+
     #[getter]
     fn nameWithOctave(&self) -> String {
         music21_name(&self.inner.name_with_octave())
