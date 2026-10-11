@@ -31,6 +31,7 @@ mod lookups;
 mod placed;
 mod queries;
 mod repeats;
+mod selection;
 mod slicing;
 mod sounding;
 mod template;
