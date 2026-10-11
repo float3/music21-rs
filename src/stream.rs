@@ -34,6 +34,7 @@ mod slicing;
 mod sounding;
 mod template;
 mod ties;
+mod voices;
 
 pub use chordify::ChordifyOptions;
 pub use consecutive::{ConsecutiveOptions, MelodicInterval};
@@ -41,6 +42,7 @@ pub use editing::Anchor;
 pub use placed::Placed;
 pub use queries::OffsetMapEntry;
 pub use template::{TemplateOptions, removed_by_default};
+pub use voices::VoiceAllocation;
 
 use crate::{
     bar::{Barline, Ending},
