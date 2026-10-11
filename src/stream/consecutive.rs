@@ -292,6 +292,56 @@ impl Stream {
         }
         Ok(intervals)
     }
+
+    /// For each note this stream holds itself, by its index here, the
+    /// interval from it to the first note of `other` sounding where it
+    /// starts -- starting there, or sounding on to it or ending there --
+    /// that an interval can be taken to: what music21's
+    /// `attachIntervalsBetweenStreams` attaches to each note as its
+    /// `harmonicInterval`. `None` where no note of `other` sounds.
+    ///
+    /// ```
+    /// use music21_rs::tinynotation::from_tiny_notation;
+    ///
+    /// let upper = from_tiny_notation("4/4 e'2 d'2")?.flatten();
+    /// let lower = from_tiny_notation("4/4 c1")?.flatten();
+    /// let names: Vec<_> = upper
+    ///     .harmonic_intervals(&lower)
+    ///     .into_iter()
+    ///     .map(|(_, interval)| interval.map(|interval| interval.name()))
+    ///     .collect();
+    /// let expected = ["Major Tenth", "Major Ninth"].map(|name| Some(name.to_string()));
+    /// assert_eq!(names, expected);
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
+    pub fn harmonic_intervals(&self, other: &Stream) -> Vec<(usize, Option<Interval>)> {
+        self.events
+            .iter()
+            .enumerate()
+            .filter_map(|(index, event)| match event.element() {
+                StreamElement::Note(note) => Some((index, event.offset(), note)),
+                _ => None,
+            })
+            .map(|(index, offset, note)| {
+                let sounding = super::queries::OffsetSpan {
+                    must_begin_in_span: false,
+                    ..super::queries::OffsetSpan::new(offset, None)
+                };
+                let interval = other
+                    .events
+                    .iter()
+                    .filter(|event| {
+                        sounding.holds(event.offset(), event.element().quarter_length())
+                    })
+                    .filter_map(|event| match event.element() {
+                        StreamElement::Note(other) => Interval::between_notes(note, other).ok(),
+                        _ => None,
+                    })
+                    .next();
+                (index, interval)
+            })
+            .collect()
+    }
 }
 
 /// Whether two chords sound the same pitches, in any order.

@@ -45,6 +45,13 @@
   `instrument` (music21's `getTimeSignatures`, `getInstruments` and
   `getInstrument`), which look within the stream. Each answers as
   music21's does on every MusicXML score of music21's corpus.
+- `Stream` keeps and takes out elements as music21 does:
+  `extract_context` (the elements from some way before one to some way
+  after it, bounded as music21 bounds them), `remove_by_class` and
+  `remove_by_not_of_class`; and `harmonic_intervals` gives each note the
+  interval to the first note of another stream sounding with it, which
+  music21's `attachIntervalsBetweenStreams` attaches. Each answers as
+  music21's does on every MusicXML score of music21's corpus.
 - `StreamElement::is_instance` and `StreamElement::music21_classes` are
   public: music21's `isinstance` by class name, and the class names an
   element answers to.
