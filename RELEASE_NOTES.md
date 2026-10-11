@@ -48,8 +48,9 @@
   it stands for, as music21 does; an unlinked duration stays unlinked,
   keeps its written values, and has its length scaled as it is, unsnapped.
 - The MusicXML reader pads a pickup measure by the share of its bar it
-  lacks, as music21's `padAsAnacrusis` works it out, so the padding of a
-  pickup whose length is no binary fraction is music21's to the last bit.
+  lacks, as music21's `padAsAnacrusis` works it out, and a measure cut
+  short by what its exact length lacks, so the padding of a measure whose
+  length is no binary fraction is music21's to the last bit.
 
 # music21-rs 0.9.0
 
