@@ -1158,18 +1158,21 @@ impl<'a, 'x> PartParser<'a, 'x> {
         } else {
             // A short measure is a pickup where it opens the part or follows
             // another short one, and is cut short at its end otherwise.
+            // music21 pads a pickup as `padAsAnacrusis` does, by the share
+            // of the bar it lacks.
+            let anacrusis = || op_frac(bar_length * (1.0 - op_frac(highest / bar_length)));
             if self.last_measure_offset == 0.0 {
                 if highest < bar_length {
-                    measure.padding_left = bar_length - highest;
+                    measure.padding_left = anacrusis();
                 }
             } else if self.last_measure_was_short {
                 if highest < bar_length {
-                    measure.padding_left = bar_length - highest;
+                    measure.padding_left = anacrusis();
                     self.last_measure_was_short = false;
                 }
             } else {
                 if highest < bar_length {
-                    measure.padding_right = bar_length - highest;
+                    measure.padding_right = op_frac(bar_length - highest);
                 }
                 self.last_measure_was_short = highest < bar_length;
             }
