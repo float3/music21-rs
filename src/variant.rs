@@ -216,84 +216,9 @@ fn unmoved(stream: &Stream) -> Vec<Option<usize>> {
     (0..stream.leaf_total()).map(Some).collect()
 }
 
-// ------------------------------------------------------------ classes
-
-/// music21's class names of an element, the most particular first: what
-/// music21's `classes` holds, as far as variants ask.
-fn classes(element: &StreamElement) -> Vec<&'static str> {
-    let mut names: Vec<&'static str> = match element {
-        StreamElement::Note(_) => vec!["Note", "NotRest", "GeneralNote"],
-        StreamElement::Unpitched(_) => vec!["Unpitched", "NotRest", "GeneralNote"],
-        StreamElement::Chord(chord) if chord.numeral().is_some() => vec![
-            "RomanNumeral",
-            "Harmony",
-            "Chord",
-            "ChordBase",
-            "NotRest",
-            "GeneralNote",
-        ],
-        StreamElement::Chord(_) => vec!["Chord", "ChordBase", "NotRest", "GeneralNote"],
-        StreamElement::PercussionChord(_) => {
-            vec!["PercussionChord", "ChordBase", "NotRest", "GeneralNote"]
-        }
-        StreamElement::ChordSymbol(symbol) => {
-            let mut names = vec![
-                "ChordSymbol",
-                "Harmony",
-                "Chord",
-                "ChordBase",
-                "NotRest",
-                "GeneralNote",
-            ];
-            if symbol.is_no_chord() {
-                names.insert(0, "NoChord");
-            }
-            names
-        }
-        StreamElement::Rest(_) => vec!["Rest", "GeneralNote"],
-        StreamElement::Stream(stream) => match stream.kind() {
-            StreamKind::Measure => vec!["Measure", "Stream", "StreamCore"],
-            StreamKind::Voice => vec!["Voice", "Stream", "StreamCore"],
-            StreamKind::Part => vec!["Part", "Stream", "StreamCore"],
-            StreamKind::PartStaff => vec!["PartStaff", "Part", "Stream", "StreamCore"],
-            StreamKind::Score => vec!["Score", "Stream", "StreamCore"],
-            StreamKind::Opus => vec!["Opus", "Stream", "StreamCore"],
-            StreamKind::Stream => vec!["Stream", "StreamCore"],
-        },
-        StreamElement::Clef(clef) => {
-            let kind = clef.kind();
-            let mut names = vec![kind.class_name()];
-            names.extend(kind.parents().iter().copied());
-            if !names.contains(&"Clef") {
-                names.push("Clef");
-            }
-            names
-        }
-        StreamElement::Instrument(_) => vec!["Instrument"],
-        StreamElement::KeySignature(_) => vec!["KeySignature"],
-        StreamElement::Key(_) => vec!["Key", "KeySignature"],
-        StreamElement::TimeSignature(_) => vec!["TimeSignature", "TimeSignatureBase"],
-        StreamElement::MetronomeMark(_) => vec!["MetronomeMark", "TempoIndication"],
-        StreamElement::TempoText(_) => vec!["TempoText", "TempoIndication"],
-        StreamElement::MetricModulation(_) => vec!["MetricModulation", "TempoIndication"],
-        StreamElement::TextExpression(_) => vec!["TextExpression", "Expression"],
-        StreamElement::RepeatExpression(_) => vec!["RepeatExpression", "Expression"],
-        StreamElement::Dynamic(_) => vec!["Dynamic"],
-        StreamElement::Barline(_) => vec!["Barline"],
-        StreamElement::PedalObject(_) => vec!["PedalObject"],
-        StreamElement::RehearsalMark(_) => vec!["RehearsalMark"],
-        StreamElement::Break(_) => vec!["Break"],
-        StreamElement::Layout(layout) => vec![layout.class_name(), "LayoutBase"],
-        StreamElement::TextBox(_) => vec!["TextBox"],
-        StreamElement::Variant(_) => vec!["Variant"],
-    };
-    names.push("Music21Object");
-    names
-}
-
 /// Whether an element is one of a class, by music21's name for it.
 fn is_a(element: &StreamElement, class: &str) -> bool {
-    classes(element).contains(&class)
+    element.is_instance(class)
 }
 
 /// music21's `GeneralNote`: a note, chord or rest of any kind.
@@ -691,7 +616,7 @@ fn replaced(
         .contents
         .events()
         .iter()
-        .map(|event| classes(event.element())[0])
+        .map(|event| event.element().music21_classes()[0])
         .collect();
     wanted.extend_from_slice(class_list);
     let of_class = |held_id: usize| {
@@ -1714,7 +1639,7 @@ fn first_of_kinds<'a>(
                 .iter()
                 .any(|class| is_a(element, class))
         })
-        .map(|element| classes(element)[0])
+        .map(|element| element.music21_classes()[0])
 }
 
 /// music21's `_doVariantFixingOnStream`.
@@ -1935,7 +1860,7 @@ fn activate_replacement(site: &mut Site, id: usize, match_by_span: bool) -> Resu
             // added as Python adds them.
             let exact = Exact::held(start).plus(Exact::held(event.offset()));
             let at = exact.to_float();
-            let class = classes(event.element())[0];
+            let class = event.element().music21_classes()[0];
             let target = site.held.iter().find(|held| {
                 is_a(&held.element, class)
                     && at_offset(held.offset, length_of(&held.element), exact)

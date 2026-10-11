@@ -23,8 +23,10 @@
 //! again.
 
 pub(crate) mod chordify;
+mod classes;
 mod consecutive;
 mod placed;
+mod queries;
 mod repeats;
 mod sounding;
 mod template;
@@ -1343,19 +1345,17 @@ impl Stream {
                 continue;
             };
             match stream.kind {
-                StreamKind::Part => return true,
+                StreamKind::Part | StreamKind::PartStaff => return true,
                 StreamKind::Measure | StreamKind::Voice => return false,
                 _ if event.offset != 0.0 => return false,
                 _ => {}
             }
             let holds_music = stream.events.iter().any(|inner| {
-                matches!(
-                    inner.element,
-                    StreamElement::Note(_) | StreamElement::Chord(_) | StreamElement::Rest(_)
-                ) || inner
-                    .element
-                    .as_stream()
-                    .is_some_and(|nested| nested.kind == StreamKind::Measure)
+                inner.element.is_instance("GeneralNote")
+                    || inner
+                        .element
+                        .as_stream()
+                        .is_some_and(|nested| nested.kind == StreamKind::Measure)
             });
             if holds_music {
                 part_like = true;

@@ -2,6 +2,14 @@
 
 ## Added
 
+- `Stream` answers music21's questions of its layout: `find_gaps` and
+  `is_gapless`, `overlaps` and `is_sequence` (music21's `getOverlaps`,
+  which gathers only the overlaps found looking on from each element until
+  the first it does not overlap), `simultaneous_attacks`,
+  `playing_when_attacked`, `all_playing_while_sounding`, `offset_map`,
+  `measure_offset_map`, `highest_offset`, `lowest_offset`, `has_measures`,
+  `has_voices` and `is_well_formed_notation`. Each answers as music21's
+  does on every MusicXML score of music21's corpus.
 - The `language-detection` feature brings music21's language feature,
   `TX1`, which names the language of a piece's lyrics, last among
   `features::native::NATIVE` as it is in music21, and
@@ -12,6 +20,13 @@
   music21's, from Project Gutenberg, about 1.9 MB, so the feature is off by
   default. `TX1` gives music21's value on every MusicXML score of
   music21's corpus.
+
+## Fixed
+
+- `Stream::has_part_like_streams` counts a `PartStaff` as a part and a
+  stream of chord symbols or strokes as holding music, as music21 does.
+- An offset worked out to be negative is snapped to the fraction it stands
+  for, as a positive one is, as music21's `opFrac` snaps it.
 
 # music21-rs 0.9.0
 
