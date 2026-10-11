@@ -902,7 +902,9 @@ impl TimeSignature {
     pub fn beat_proportion(&self, offset: FloatType) -> Result<FloatType> {
         let (beat, progress) = self.beat_progress(offset)?;
         let (start, end) = self.beat_spans()[beat as usize - 1];
-        Ok(FloatType::from(beat) + progress / (end - start))
+        Ok(crate::makenotation::op_frac(
+            FloatType::from(beat) + progress / (end - start),
+        ))
     }
 
     /// Returns [`Self::beat_proportion`] the way music21's

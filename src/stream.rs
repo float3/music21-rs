@@ -27,6 +27,7 @@ mod classes;
 mod consecutive;
 mod editing;
 pub(crate) mod exact;
+mod lookups;
 mod placed;
 mod queries;
 mod repeats;
