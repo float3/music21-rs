@@ -49,8 +49,10 @@ suite results, coverage, benchmarks and sizes, refreshed on every push.
   ABC tunes with no barlines, loose notes, notated corpus scores — come out
   byte for byte as music21 writes them.
 
-Not ported: music21's stream machinery, parsing of other formats and the
-corpus.
+Not ported: music21's sites and context search (a crate stream knows
+nothing outside itself, so what music21 finds in context is passed in),
+its plotting, recording from a microphone and following a score live, and
+the corpus.
 
 ## Speed and size
 
@@ -119,6 +121,10 @@ whose rhythm was misread and puts the likeliest rhythm in their place.
 Other readings of a passage are kept beside it as music21's variants
 (`variant`): merged in from another version of a score, and made the
 score's reading by `Stream::activate_variants`.
+A recording of one line is transcribed as music21's `audioSearch` does
+it (`audiosearch::monophonic_stream_from_wav`): a WAV file's frequencies
+found by autocorrelation, snapped to a scale, smoothed and joined into
+notes and rests whose lengths are quantized, the same notes music21 finds.
 
 MuseScore's own files are read with no feature and no MuseScore installed:
 `musescore::from_mscx` takes the text of a `.mscx`, as MuseScore 3 and 4 save

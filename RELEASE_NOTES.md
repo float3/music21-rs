@@ -56,6 +56,19 @@
   public: music21's `isinstance` by class name, and the class names an
   element answers to.
 - `makenotation::op_frac` is public: music21's `opFrac`.
+- `audiosearch` ports music21's `audioSearch`: frequencies found by
+  autocorrelation (`autocorrelation_frequency`, `frequencies_from_wav`),
+  snapped to a scale (`prepare_thresholds`, `normalize_input_frequency`,
+  `detect_pitch_frequencies`), smoothed (`smooth_frequencies`), made
+  pitches (`pitch_frequencies_to_objects`) and notes and rests
+  (`join_consecutive_identical_pitches`), quantized into a stream
+  (`quantize_duration`, `quarter_length_estimation`, `histogram`,
+  `notes_and_durations_to_stream`), and all of it at once as music21's
+  transcriber does (`monophonic_stream_from_wav`); and the score
+  follower's `decision_process`. Every stage gives music21's answers, bit
+  for bit, on music21's own test recording and on tones made for the
+  test; the frequencies, which music21 finds by FFT, agree to within a
+  millionth.
 - The `language-detection` feature brings music21's language feature,
   `TX1`, which names the language of a piece's lyrics, last among
   `features::native::NATIVE` as it is in music21, and

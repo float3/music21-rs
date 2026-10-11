@@ -57,6 +57,8 @@ pub mod alpha;
 pub mod analysis;
 /// Articulations: how a note is played.
 pub mod articulations;
+/// Finding the notes in a recording: music21's `audioSearch`.
+pub mod audiosearch;
 /// Barlines and repeat signs.
 pub mod bar;
 pub mod braille;
