@@ -27,6 +27,15 @@
   offset and length meets that start exactly, which misses some notes
   after a triplet. Each edits every MusicXML score of music21's corpus as
   music21 does.
+- `Stream` moves music between voices and parts as music21 does:
+  `voices_to_parts` (by place, or with `separate_by_id` by voice id) and
+  `explode` make a part of each voice, each with its part's instruments
+  and the clef that best fits its notes; `parts_to_voices` (grouped by a
+  `stream::VoiceAllocation`) and `implode` make the parts of each group
+  the voices of one part, stems set up and down if asked. As in music21,
+  `parts_to_voices` takes only the notes a measure holds itself, not those
+  already in its voices. Each moves every MusicXML score of music21's
+  corpus as music21 does.
 - The `language-detection` feature brings music21's language feature,
   `TX1`, which names the language of a piece's lyrics, last among
   `features::native::NATIVE` as it is in music21, and
