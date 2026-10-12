@@ -99,6 +99,14 @@ def merged(o):
              None if md is None else md.composer), None)
 "#;
 
+/// A merged score as both sides name it: how many parts it has, its title
+/// and its composer.
+type Merged = (usize, Option<String>, Option<String>);
+
+/// What music21 answered when asked to merge: the merged score, or the
+/// class of the error it raised.
+type TheirMerge = (Option<Merged>, Option<String>);
+
 /// Whether music21 reads a plain query as a regular expression.
 fn reads_a_pattern(query: &str) -> bool {
     query.chars().any(|character| "*.|+?{}".contains(character))
@@ -267,7 +275,7 @@ fn the_crate_looks_up_opus_scores_as_music21_does() {
                 }
             }
 
-            let their_merge: (Option<(usize, Option<String>, Option<String>)>, Option<String>) =
+            let their_merge: TheirMerge =
                 music21.getattr("merged")?.call1((&their_opus,))?.extract()?;
             let our_merge = our_opus.merge_scores();
             match (their_merge, our_merge) {
