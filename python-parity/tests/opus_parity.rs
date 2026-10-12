@@ -111,15 +111,13 @@ fn found_title(found: Option<&Stream>) -> Option<String> {
 
 /// The title under a query, music21's reading of a pattern in it kept.
 fn by_title(opus: &Stream, query: &str) -> Option<String> {
-    if reads_a_pattern(query) {
-        let Ok(pattern) = Regex::new(&format!("(?i){query}")) else {
-            // A title `regex` will not compile is not asked for; the Python
-            // side skips it too.
-            return None;
-        };
+    if reads_a_pattern(query)
+        && let Ok(pattern) = Regex::new(&format!("(?i){query}"))
+    {
         let matches = |text: &str| pattern.is_match(text);
         return found_title(opus.score_by_title(&MetadataQuery::Matcher(&matches)));
     }
+    // A query no engine will compile is searched for as it stands.
     found_title(opus.score_by_title(&MetadataQuery::Text(query)))
 }
 
@@ -230,7 +228,7 @@ fn the_crate_looks_up_opus_scores_as_music21_does() {
                     uncompilable += 1;
                     if ours.as_deref() != Some(title.as_str()) {
                         failures.push(format!(
-                            "{name}: title {title:?} raises {raised:?} in music21 and is                              {ours:?} to the crate, which should find it"
+                            "{name}: title {title:?} raises {raised:?} in music21,                              and the crate answers {ours:?} where it should find the score"
                         ));
                     }
                     continue;
