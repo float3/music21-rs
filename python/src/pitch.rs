@@ -121,7 +121,7 @@ fn parse_into_name_cache(py: Python<'_>, usr_str: &Bound<'_, PyAny>) -> PyResult
             ))
         })?)
     };
-    if let Ok(module) = py.import("music21.pitch") {
+    if let Some(module) = music21_pitch(py) {
         let cache = module.getattr("_pitchNameCache")?;
         let size: usize = module.getattr("_pitchNameCacheSize")?.extract()?;
         if cache.len()? >= size {
@@ -131,6 +131,20 @@ fn parse_into_name_cache(py: Python<'_>, usr_str: &Bound<'_, PyAny>) -> PyResult
         cache.set_item(&key, (step.to_string(), accidental, octave))?;
     }
     Ok(key)
+}
+
+/// music21's `pitch` module where it is loaded and keeps a name cache:
+/// found among the modules Python holds, never imported, so a facade used
+/// without music21 leaves Python searching for nothing.
+fn music21_pitch(py: Python<'_>) -> Option<Bound<'_, PyAny>> {
+    let module = py
+        .import("sys")
+        .ok()?
+        .getattr("modules")
+        .ok()?
+        .get_item("music21.pitch")
+        .ok()?;
+    module.hasattr("_pitchNameCache").ok()?.then_some(module)
 }
 
 /// A string as Python's `repr` writes it, for messages music21 words so.
@@ -145,7 +159,7 @@ fn py_repr(py: Python<'_>, text: &str) -> String {
 /// checked and put there by [`parse_into_name_cache`].
 fn cached_name(py: Python<'_>, usr_str: &Bound<'_, PyAny>) -> PyResult<String> {
     if let Ok(key) = usr_str.extract::<String>()
-        && let Ok(module) = py.import("music21.pitch")
+        && let Some(module) = music21_pitch(py)
         && module.getattr("_pitchNameCache")?.contains(&key)?
     {
         return Ok(key);
