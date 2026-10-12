@@ -10,6 +10,8 @@
 //! lyricist. Its unique name is its role where the role is in the
 //! vocabulary, and `otherContributor` where it is not.
 
+use std::borrow::Cow;
+
 /// One value of a metadata name: its text and, for a contributor or a
 /// copyright, the role it was given.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -188,7 +190,274 @@ impl Metadata {
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
+
+    /// Every name and value sorted by name and then by text, as music21's
+    /// `all` reads them by default and [`Self::search`] walks them.
+    pub fn all_sorted(&self) -> Vec<(&str, &MetadataValue)> {
+        let mut all: Vec<(&str, &MetadataValue)> = self.all().collect();
+        all.sort_by(|(left, left_value), (right, right_value)| {
+            left.cmp(right)
+                .then_with(|| left_value.text().cmp(right_value.text()))
+        });
+        all
+    }
+
+    /// The first value a query matches, and the field it was found under:
+    /// music21's `search`.
+    ///
+    /// With no `field`, every standard name is searched, sorted by name,
+    /// and then every contributor in the order they were added, under its
+    /// role rather than its unique name so that a made-up role can be
+    /// searched for.
+    ///
+    /// A `field` names where to look, and need not be the whole name:
+    /// music21 takes a unique name, one of its four grandfathered work ids
+    /// (`date`, `volume`, `dedication`, `commission`), one of its twenty
+    /// Humdrum abbreviations (`otl`, `ode`), or any piece of a name --
+    /// `compos` finds `composer`. A field naming nothing finds nothing.
+    ///
+    /// ```
+    /// use music21_rs::metadata::{Metadata, MetadataQuery};
+    ///
+    /// let mut md = Metadata::new();
+    /// md.add_contributor("composer", "Joplin, Scott");
+    /// md.add_text("title", "Maple Leaf Rag");
+    ///
+    /// let joplin = MetadataQuery::Text("joplin");
+    /// assert_eq!(
+    ///     md.search(&joplin, Some("composer")).unwrap().field(),
+    ///     Some("composer")
+    /// );
+    /// assert_eq!(
+    ///     md.search(&joplin, Some("compos")).unwrap().field(),
+    ///     Some("composer")
+    /// );
+    /// assert!(md.search(&joplin, Some("title")).is_none());
+    ///
+    /// let found = md.search(&MetadataQuery::Text("leaf"), None).unwrap();
+    /// assert_eq!((found.field(), found.text()), (Some("title"), "Maple Leaf Rag"));
+    /// ```
+    pub fn search(
+        &self,
+        query: &MetadataQuery<'_>,
+        field: Option<&str>,
+    ) -> Option<MetadataMatch<'_>> {
+        let field = field.map(str::to_lowercase);
+        self.search_fields(field.as_deref())
+            .into_iter()
+            .find(|(text, _)| query.matches(text))
+            .map(|(text, field)| MetadataMatch { field, text })
+    }
+
+    /// The text a search looks through and the field each piece answers
+    /// under, in the order music21 builds them.
+    fn search_fields(&self, field: Option<&str>) -> Vec<(Cow<'_, str>, Option<&str>)> {
+        let mut pairs: Vec<(Cow<'_, str>, Option<&str>)> = Vec::new();
+        match field {
+            Some(field) => {
+                let named = unique_name_of_field(field);
+                let texts =
+                    named.map_or_else(Vec::new, |(unique_name, _)| self.field_texts(unique_name));
+                match (texts.is_empty(), named) {
+                    // music21 answers under the field as it was asked for,
+                    // not under the unique name that field stands for.
+                    (false, Some((_, asked))) => {
+                        pairs.extend(texts.into_iter().map(|text| (text, Some(asked))));
+                    }
+                    _ => pairs.extend(self.partial_field_match(field)),
+                }
+            }
+            None => pairs.extend(
+                self.standard_non_contributors()
+                    .map(|(name, value)| (Cow::Borrowed(value.text()), Some(name))),
+            ),
+        }
+        pairs.extend(
+            self.contributors()
+                .filter(|(_, value)| contributor_answers_to(value.role(), field))
+                .map(|(_, value)| (Cow::Borrowed(value.text()), value.role())),
+        );
+        pairs
+    }
+
+    /// A name's values as a search of that name alone reads them: a
+    /// title-like name's article written back in front, which music21's
+    /// `_getStringValuesByNamespaceName` does and the rest of a search
+    /// does not, so that a title stored as `Grassy Turf, The` is searched
+    /// as `The Grassy Turf` under `title` and as itself under every field.
+    fn field_texts(&self, unique_name: &str) -> Vec<Cow<'_, str>> {
+        self.get(unique_name)
+            .iter()
+            .map(|value| {
+                if ARTICLED_TITLES.contains(&unique_name) {
+                    Cow::Owned(
+                        crate::text::prepend_article(value.text(), None)
+                            .unwrap_or_else(|_| value.text().to_string()),
+                    )
+                } else {
+                    Cow::Borrowed(value.text())
+                }
+            })
+            .collect()
+    }
+
+    /// The vocabulary's names that are not contributors, sorted, with their
+    /// values: music21's `all(skipContributors=True)` without the names a
+    /// caller made up, which it does not search.
+    fn standard_non_contributors(&self) -> impl Iterator<Item = (&str, &MetadataValue)> {
+        self.all_sorted()
+            .into_iter()
+            .filter(|(name, _)| !is_contributor_unique_name(name) && namespace_name(name).is_some())
+    }
+
+    /// The first standard name holding `field` anywhere in it, with the
+    /// first of that name's values: music21's partial field match, which
+    /// stops at the name it finds and searches that one value alone.
+    fn partial_field_match(&self, field: &str) -> Option<(Cow<'_, str>, Option<&str>)> {
+        self.standard_non_contributors().find_map(|(name, value)| {
+            if name.to_lowercase().contains(field) {
+                return Some((Cow::Borrowed(value.text()), Some(name)));
+            }
+            let work_id = old_work_id(name)?;
+            work_id
+                .to_lowercase()
+                .contains(field)
+                .then_some((Cow::Borrowed(value.text()), Some(work_id)))
+        })
+    }
 }
+
+/// Whether a contributor answers to a search field: every contributor where
+/// none was asked for, one whose role holds the field, and a contributor
+/// with no role only under `contributor` itself.
+fn contributor_answers_to(role: Option<&str>, field: Option<&str>) -> bool {
+    let Some(field) = field else {
+        return true;
+    };
+    match role {
+        None => field == "contributor",
+        Some(role) => role.to_lowercase().contains(field),
+    }
+}
+
+/// The unique name a search field stands for where it names one outright,
+/// with the spelling it was asked for: the name itself, one of music21's
+/// grandfathered work ids, or one of its Humdrum abbreviations. The field
+/// reaching here is already lowercase, so a name written with a capital in
+/// it is only found by [`Metadata::partial_field_match`], as in music21.
+fn unique_name_of_field(field: &str) -> Option<(&'static str, &'static str)> {
+    if let Some((name, _, _)) = STANDARD_PROPERTIES
+        .iter()
+        .find(|(name, _, _)| *name == field)
+    {
+        return Some((name, name));
+    }
+    OLD_MUSIC21_NAMES
+        .iter()
+        .find_map(
+            |(name, abbreviation, work_id)| match (abbreviation, work_id) {
+                (Some(asked), _) if *asked == field => Some((*name, *asked)),
+                (_, Some(asked)) if *asked == field => Some((*name, *asked)),
+                _ => None,
+            },
+        )
+}
+
+/// The work id a unique name was written as before music21 v8, where it had
+/// one: music21's `UNIQUE_NAME_TO_MUSIC21_WORK_ID`.
+fn old_work_id(unique_name: &str) -> Option<&'static str> {
+    OLD_MUSIC21_NAMES
+        .iter()
+        .find(|(name, _, _)| *name == unique_name)
+        .and_then(|(_, _, work_id)| *work_id)
+}
+
+/// What a [`Metadata::search`] asks of one value's text.
+///
+/// music21 reads a regular expression out of a plain string where it holds
+/// any of `*.|+?{}`, and matches the rest by containment. Nothing here
+/// compiles a pattern -- the crate carries no regular expression engine --
+/// so [`Self::Text`] is music21's plain-string reading alone, and a caller
+/// who wants its regular expression hands over a [`Self::Matcher`] built
+/// from whichever engine they already have.
+pub enum MetadataQuery<'a> {
+    /// A value matches where its text holds this text, either case
+    /// ignored: music21's string query.
+    Text(&'a str),
+    /// A value matches where this answers `true` to its text: music21's
+    /// callable query.
+    Matcher(&'a dyn Fn(&str) -> bool),
+}
+
+impl MetadataQuery<'_> {
+    /// Whether one value's text matches.
+    fn matches(&self, text: &str) -> bool {
+        match self {
+            Self::Text(query) => text.to_lowercase().contains(&query.to_lowercase()),
+            Self::Matcher(matcher) => matcher(text),
+        }
+    }
+}
+
+impl std::fmt::Debug for MetadataQuery<'_> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Text(query) => formatter.debug_tuple("Text").field(query).finish(),
+            Self::Matcher(_) => formatter.write_str("Matcher(..)"),
+        }
+    }
+}
+
+/// What a [`Metadata::search`] found: the text that matched and the field it
+/// answers under. A contributor with a made-up role answers under that
+/// role, and one with no role at all under no field, which is music21's
+/// `(True, None)`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MetadataMatch<'a> {
+    field: Option<&'a str>,
+    text: Cow<'a, str>,
+}
+
+impl<'a> MetadataMatch<'a> {
+    /// The field the value was found under.
+    pub fn field(&self) -> Option<&'a str> {
+        self.field
+    }
+
+    /// The text that matched.
+    pub fn text(&self) -> &str {
+        &self.text
+    }
+}
+
+/// The unique names music21 kept an older spelling of: its
+/// `oldMusic21Abbrev` and `oldMusic21WorkId`, both of which
+/// [`Metadata::search`] takes as a field name. Each row is the unique
+/// name, its Humdrum abbreviation and the work id it was written as
+/// before music21 v8.
+pub const OLD_MUSIC21_NAMES: [(&str, Option<&str>, Option<&str>); 21] = [
+    ("alternativeTitle", Some("ota"), None),
+    ("dateCreated", None, Some("date")),
+    ("title", Some("otl"), None),
+    ("textOriginalLanguage", Some("txo"), None),
+    ("textLanguage", Some("txl"), None),
+    ("popularTitle", Some("otp"), None),
+    ("parentTitle", Some("opr"), None),
+    ("actNumber", Some("oac"), None),
+    ("sceneNumber", Some("osc"), None),
+    ("movementNumber", Some("omv"), None),
+    ("movementName", Some("omd"), None),
+    ("opusNumber", Some("ops"), None),
+    ("number", Some("onm"), None),
+    ("volumeNumber", Some("ovm"), Some("volume")),
+    ("dedicatedTo", Some("ode"), Some("dedication")),
+    ("commissionedBy", Some("oco"), Some("commission")),
+    ("countryOfComposition", Some("ocy"), None),
+    ("localeOfComposition", Some("opc"), None),
+    ("groupTitle", Some("gtl"), None),
+    ("associatedWork", Some("gaw"), None),
+    ("collectionDesignation", Some("gco"), None),
+];
 
 /// The names whose values are titles, an article at their end moved to the
 /// front when read as text: music21's `needsArticleNormalization`.
@@ -388,6 +657,60 @@ mod tests {
         let names: Vec<&str> = md.contributors().map(|(name, _)| name).collect();
         assert_eq!(names, ["composer", "otherContributor"]);
         assert_eq!(md.get("otherContributor")[0].role(), Some("tuba player"));
+    }
+
+    #[test]
+    fn a_search_of_one_name_reads_a_title_with_its_article_in_front() {
+        let mut md = Metadata::new();
+        md.add_text("title", "Grassy Turf, The");
+        // music21 normalizes the article only where the field is named
+        // outright, and leaves the stored text alone everywhere else.
+        let query = MetadataQuery::Text("The Grassy");
+        assert_eq!(
+            md.search(&query, Some("title"))
+                .map(|found| found.text().to_string()),
+            Some("The Grassy Turf".to_string())
+        );
+        assert!(md.search(&query, None).is_none());
+        assert!(md.search(&query, Some("titl")).is_none());
+    }
+
+    #[test]
+    fn a_contributor_answers_under_the_role_it_was_given() {
+        let mut md = Metadata::new();
+        md.add_contributor("tuba player", "Somebody");
+        let query = MetadataQuery::Text("somebody");
+        assert_eq!(
+            md.search(&query, None).and_then(|found| found.field()),
+            Some("tuba player")
+        );
+        assert_eq!(
+            md.search(&query, Some("tuba"))
+                .and_then(|found| found.field()),
+            Some("tuba player")
+        );
+        // A role of its own is not reached under `contributor`, as in
+        // music21, which only asks that of a contributor with no role.
+        assert!(md.search(&query, Some("contributor")).is_none());
+    }
+
+    #[test]
+    fn a_matcher_searches_where_music21_would_read_a_pattern() {
+        let mut md = Metadata::new();
+        md.add_text("title", "Maple Leaf Rag");
+        md.add_contributor("composer", "Joplin, Scott");
+        let ends_in_rag = |text: &str| text.ends_with("Rag");
+        let found = md
+            .search(&MetadataQuery::Matcher(&ends_in_rag), None)
+            .expect("the title");
+        assert_eq!(
+            (found.field(), found.text()),
+            (Some("title"), "Maple Leaf Rag")
+        );
+        assert!(
+            md.search(&MetadataQuery::Matcher(&ends_in_rag), Some("composer"))
+                .is_none()
+        );
     }
 
     #[test]

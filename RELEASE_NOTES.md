@@ -63,6 +63,19 @@
   `voicesToParts`, `explode`, `partsToVoices` and `implode`, each handing
   back a new stream, and `highestOffset`, `lowestOffset`, `hasMeasures`,
   `hasVoices`, `isGapless`, `isSequence` and `isWellFormedNotation`.
+- `Metadata::search` answers music21's `search`: a query, and a field that
+  may be a unique name, one of music21's four grandfathered work ids or
+  twenty Humdrum abbreviations (`OLD_MUSIC21_NAMES`), or any piece of a
+  name -- `compos` finds `composer`. A `MetadataQuery::Text` matches by
+  containment with either case ignored, as music21's plain string query
+  does, and a `MetadataQuery::Matcher` stands in for the regular
+  expression music21 reads out of a query holding `*.|+?{}`, since the
+  crate compiles no pattern itself. `Metadata::all_sorted` reads the names
+  in the order music21's `all` reads them.
+- `Stream` looks a score up in an opus as music21's `stream.Opus` does:
+  `scores`, `score_numbers`, `score_by_number`, `score_by_title` and
+  `merge_scores`. Each answers as music21's does on every multi-tune ABC
+  file of music21's corpus.
 - `StreamElement::is_instance` and `StreamElement::music21_classes` are
   public: music21's `isinstance` by class name, and the class names an
   element answers to.
