@@ -185,12 +185,15 @@ Two rules, set 2026-09-12, that most of the open work now serves:
   `maturin` and `pytest` are on PATH; they live in `.m21venv/Scripts` here.
   The report records the reason rather than failing, which is right, but the
   page then carries two skipped rows.
-- music21's suite spawns workers under the embedded interpreter, where
-  `sys.executable` is `xtask.exe`; each worker re-execs it with `-c` and
-  dies, printing `unknown xtask command "-c"` a few hundred times into the
-  log. It costs no tests — both Rust sides match exactly — but it makes the
-  log hard to read. `multiprocessing.set_executable` pointed at a real
-  interpreter would silence it.
+- **The suite's workers start Python now — done.** They were started by
+  running `sys.executable`, which under the embedded interpreter is
+  `xtask.exe`, so each worker ran xtask with `-c`, xtask read `-c` as a
+  command it does not have, and the worker died: **1,295** refusals in one
+  run's log. `multiprocessing.set_executable`, pointed at the interpreter
+  `sys._base_executable` or `sys.base_prefix` names, brings that to **0**.
+  It cost no tests either way — 5,154 run on each side, with the same
+  failures before and after — so it was a log that could not be read
+  rather than a gap.
 
 ## Deliberate, and not issues
 
