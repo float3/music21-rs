@@ -2150,16 +2150,15 @@ fn re_bar(measures: &mut Vec<MeasureIr>, brackets: &mut [Bracket]) {
             }
             let number = measures[index].number + 1;
             shift += 1;
-            // The barline closing the measure is moved with the notes and
-            // lands at the start of the new one.
-            let left = measures[index].right.take();
+            // The barline closing the measure closes the new one.
+            let right = measures[index].right.take();
             measures.insert(
                 index + 1,
                 MeasureIr {
                     line: second,
                     number,
-                    left,
-                    right: None,
+                    left: None,
+                    right,
                     padding_left: 0.0,
                 },
             );

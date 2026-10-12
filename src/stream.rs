@@ -34,6 +34,7 @@ mod repeats;
 mod selection;
 mod slicing;
 mod sounding;
+mod splitting;
 mod template;
 mod ties;
 mod voices;
@@ -43,6 +44,7 @@ pub use consecutive::{ConsecutiveOptions, MelodicInterval};
 pub use editing::Anchor;
 pub use placed::Placed;
 pub use queries::OffsetMapEntry;
+pub use splitting::InForce;
 pub use template::{TemplateOptions, removed_by_default};
 pub use voices::VoiceAllocation;
 
@@ -1415,12 +1417,15 @@ impl Stream {
     }
 
     /// Returns the maximum event end offset, a nested stream's own length
-    /// included.
+    /// included, snapped to the fraction it stands for: music21's
+    /// `highestTime`.
     pub fn end_offset(&self) -> FloatType {
-        self.events
-            .iter()
-            .map(StreamEvent::end_offset)
-            .fold(0.0, FloatType::max)
+        crate::makenotation::op_frac(
+            self.events
+                .iter()
+                .map(StreamEvent::end_offset)
+                .fold(0.0, FloatType::max),
+        )
     }
 
     /// Returns all pitches in timeline order, from nested streams too.

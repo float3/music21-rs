@@ -2,10 +2,10 @@
 # `cargo run --release -p xtask --features python -- regenerate-fixtures`.
 # `key_analysis_parity` reads the notes back and asks the crate.
 #
-# music21 11.0.0b12 at 4223020c79d6f48a91466803b5e9d20d2e57e0ad
+# music21 11.0.0b12 at 98cba19d816e3dd9dd244586f10c4caea85550f2
 
 music21_version = "11.0.0b12"
-music21_commit = "4223020c79d6f48a91466803b5e9d20d2e57e0ad"
+music21_commit = "98cba19d816e3dd9dd244586f10c4caea85550f2"
 
 [[piece]]
 name = "bach/bwv66.6"
