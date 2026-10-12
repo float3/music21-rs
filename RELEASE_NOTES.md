@@ -57,6 +57,12 @@
   `stream::InForce`, which `Stream::in_force_before` reads off a part.
   Every measure of every MusicXML score of music21's corpus is cut as
   music21 cuts it.
+- The Python package's `Stream` gains music21's `sliceByQuarterLengths`,
+  `sliceAtOffsets`, `sliceByBeat`, `sliceByGreatestDivisor`,
+  `scaleOffsets`, `scaleDurations`, `augmentOrDiminish`, `invertDiatonic`,
+  `voicesToParts`, `explode`, `partsToVoices` and `implode`, each handing
+  back a new stream, and `highestOffset`, `lowestOffset`, `hasMeasures`,
+  `hasVoices`, `isGapless`, `isSequence` and `isWellFormedNotation`.
 - `StreamElement::is_instance` and `StreamElement::music21_classes` are
   public: music21's `isinstance` by class name, and the class names an
   element answers to.
