@@ -97,6 +97,15 @@
   `Stream::metronome_mark_boundaries` is music21's
   `metronomeMarkBoundaries`, moved from `features::DataInstance` to the
   class music21 keeps it on.
+- `Stream::final_barline`, `final_barlines` and `set_final_barline` are
+  music21's `finalBarline`: the right barline of the last measure a stream
+  holds, or a measure's own, and nothing for a stream holding no measures.
+  A score answers one barline per part, which `final_barlines` gives, and
+  writing one reaches the last measure of every part.
+- `Stream::staff_lines` is music21's `staffLines`: the lines named by the
+  first staff layout standing at the start of the stream, however deep,
+  and five where none names any. Only the staff layouts are read, so a
+  note or a measure standing later does not stop the search.
 - `StreamElement::is_instance` and `StreamElement::music21_classes` are
   public: music21's `isinstance` by class name, and the class names an
   element answers to.
