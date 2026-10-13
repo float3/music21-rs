@@ -88,6 +88,15 @@
   `getElementsNotOfClass` and `hasElementOfClass`. Every measure of every
   MusicXML score of music21's corpus answers all thirty-eight spans as
   music21 answers them.
+- `Stream::seconds` is music21's `seconds`: how long a stream lasts at the
+  tempi it holds, each holding until the next and the last to the end.
+  Where the stream states no tempo, or none from its start, the tempo in
+  force is given to it, as music21 searches its context for one. A stream
+  holding nothing that lasts is nought seconds long and one holding
+  something is `NaN`, which is music21's answer rather than a refusal.
+  `Stream::metronome_mark_boundaries` is music21's
+  `metronomeMarkBoundaries`, moved from `features::DataInstance` to the
+  class music21 keeps it on.
 - `StreamElement::is_instance` and `StreamElement::music21_classes` are
   public: music21's `isinstance` by class name, and the class names an
   element answers to.
@@ -117,6 +126,14 @@
   music21's corpus.
 
 ## Fixed
+
+- `MetronomeMark::seconds_per_quarter` reads the speed a mark is *played*
+  at, as music21's `secondsPerQuarter` does through a `getQuarterBPM()`
+  that takes `useNumberSounding=True`. A mark that says no number but
+  carries a sounding one -- what a MusicXML `<sound tempo="96">` reads as,
+  which much of music21's corpus carries -- was refused where music21
+  answers, and so were `duration_to_seconds`, `quarter_length_to_seconds`
+  and `seconds_to_duration`.
 
 - `Stream::has_part_like_streams` counts a `PartStaff` as a part and a
   stream of chord symbols or strokes as holding music, as music21 does.
