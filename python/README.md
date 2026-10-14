@@ -81,6 +81,16 @@ repeat marks, slurs and other spanners, unpitched percussion, metadata -- is
 read and left out. Input a reader cannot read raises `StreamException`. A
 compressed `.mxl` is a zip holding the document: unpack it first.
 
+The package's streams slice, scale, invert and regroup themselves as
+music21's do -- `sliceByQuarterLengths`, `sliceAtOffsets`, `sliceByBeat`,
+`sliceByGreatestDivisor`, `scaleOffsets`, `scaleDurations`,
+`augmentOrDiminish`, `invertDiatonic`, `voicesToParts`, `explode`,
+`partsToVoices`, `implode` -- each handing back a new stream, so
+`inPlace=True` and a `target` are refused; and they answer `highestOffset`,
+`lowestOffset`, `hasMeasures`, `hasVoices`, `isGapless`, `isSequence` and
+`isWellFormedNotation`, besides `chordify`, `findConsecutiveNotes` and
+`melodicIntervals`.
+
 `to_musicxml` takes one of this package's streams or one of music21's and
 writes what music21's exporter writes with `makeNotation=False`. With
 `make_notation=True` it makes the notation first, as music21's exporter does

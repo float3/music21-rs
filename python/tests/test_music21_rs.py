@@ -1390,3 +1390,63 @@ def test_a_score_is_chordified_into_one_line_of_chords():
     assert [note.tie.type if note.tie else None for note in made[1].notes] == [None, "stop"]
     with pytest.raises(m.StreamException):
         score.chordify(addPartIdAsGroup=True)
+
+
+def _flat_notes(stream):
+    flat = stream.flatten()
+    return [
+        (n.nameWithOctave, flat.elementOffset(n), n.quarterLength) for n in flat.notes
+    ]
+
+
+def test_streams_are_sliced_scaled_and_inverted_as_music21_does():
+    # Each answer read off music21 11.0.0b12.
+    part = m.from_tiny_notation("tinyNotation: 4/4 c2 d4 e4 f1")
+    quarters = [
+        ("C4", 0.0, 1.0), ("C4", 1.0, 1.0), ("D4", 2.0, 1.0), ("E4", 3.0, 1.0),
+        ("F4", 4.0, 1.0), ("F4", 5.0, 1.0), ("F4", 6.0, 1.0), ("F4", 7.0, 1.0),
+    ]
+    assert _flat_notes(part.sliceByQuarterLengths(1)) == quarters
+    assert _flat_notes(part.sliceByBeat()) == quarters
+    assert _flat_notes(part.sliceAtOffsets([1.0, 5.0])) == [
+        ("C4", 0.0, 1.0), ("C4", 1.0, 1.0), ("D4", 2.0, 1.0), ("E4", 3.0, 1.0),
+        ("F4", 4.0, 1.0), ("F4", 5.0, 3.0),
+    ]
+    assert _flat_notes(part.sliceByGreatestDivisor()) == quarters[:4] + [("F4", 4.0, 4.0)]
+    assert _flat_notes(part.augmentOrDiminish(2)) == [
+        ("C4", 0.0, 4.0), ("D4", 4.0, 2.0), ("E4", 6.0, 2.0), ("F4", 8.0, 8.0),
+    ]
+    assert _flat_notes(part.scaleDurations(0.5)) == [
+        ("C4", 0.0, 1.0), ("D4", 2.0, 0.5), ("E4", 3.0, 0.5), ("F4", 4.0, 2.0),
+    ]
+    stretched = part.scaleOffsets(2)
+    assert [stretched.elementOffset(measure) for measure in stretched] == [0.0, 8.0]
+    assert [n.nameWithOctave for n in part.invertDiatonic().flatten().notes] == [
+        "C4", "B3", "A3", "G3",
+    ]
+    assert [n.nameWithOctave for n in part.invertDiatonic(m.Note("E4")).flatten().notes] == [
+        "G4", "F4", "E4", "D4",
+    ]
+    assert (part.highestOffset, part.lowestOffset) == (4.0, 0.0)
+    assert part.hasMeasures() and not part.hasVoices()
+    assert part.isGapless and part.isSequence() and part.isWellFormedNotation()
+    with pytest.raises(m.StreamException, match="inPlace=True"):
+        part.augmentOrDiminish(2, inPlace=True)
+
+
+def test_parts_become_voices_and_voices_parts_as_music21_does():
+    # Each answer read off music21 11.0.0b12.
+    upper = m.from_tiny_notation("tinyNotation: 4/4 e1")
+    lower = m.from_tiny_notation("tinyNotation: 4/4 C1")
+    score = m.Score([upper, lower])
+    joined = score.partsToVoices()
+    assert len(joined.parts) == 1
+    assert [n.stemDirection for n in joined.flatten().notes] == ["up", "down"]
+    apart = joined.voicesToParts()
+    assert [[n.nameWithOctave for n in p.flatten().notes] for p in apart.parts] == [
+        ["E4"], ["C3"],
+    ]
+    assert len(joined.explode().parts) == 2
+    assert len(score.implode().parts) == 1
+    assert len(score.partsToVoices(1, permitOneVoicePerPart=True).parts) == 2
+    assert len(score.partsToVoices([[1, 0]]).parts) == 1

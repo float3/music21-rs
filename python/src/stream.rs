@@ -575,6 +575,229 @@ impl Stream {
         Ok(made)
     }
 
+    /// A copy with each note and rest cut into pieces of these lengths in
+    /// turn: music21's `sliceByQuarterLengths`. Cutting only `target`,
+    /// untied, or in place is refused: the copy is a new stream.
+    #[pyo3(signature = (quarterLengthList, *, target = None, addTies = true, inPlace = false))]
+    fn sliceByQuarterLengths<'py>(
+        slf: &Bound<'py, Self>,
+        quarterLengthList: &Bound<'py, PyAny>,
+        target: Option<&Bound<'py, PyAny>>,
+        addTies: bool,
+        inPlace: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        refuse_unported(target.is_some(), !addTies, inPlace)?;
+        let lengths: Vec<f64> = match quarterLengthList.extract::<f64>() {
+            Ok(length) => vec![length],
+            Err(_) => quarterLengthList.extract()?,
+        };
+        edited(slf, |stream| stream.slice_by_quarter_lengths(&lengths))
+    }
+
+    /// A copy with each note and rest cut into pieces of the greatest
+    /// length that goes into them all, measure by measure: music21's
+    /// `sliceByGreatestDivisor`.
+    #[pyo3(signature = (*, addTies = true, inPlace = false))]
+    fn sliceByGreatestDivisor<'py>(
+        slf: &Bound<'py, Self>,
+        addTies: bool,
+        inPlace: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        refuse_unported(false, !addTies, inPlace)?;
+        edited(slf, RsStream::slice_by_greatest_divisor)
+    }
+
+    /// A copy with what sounds across each offset cut there: music21's
+    /// `sliceAtOffsets`.
+    #[pyo3(signature = (offsetList, target = None, addTies = true, inPlace = false, displayTiedAccidentals = false))]
+    fn sliceAtOffsets<'py>(
+        slf: &Bound<'py, Self>,
+        offsetList: Vec<f64>,
+        target: Option<&Bound<'py, PyAny>>,
+        addTies: bool,
+        inPlace: bool,
+        displayTiedAccidentals: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let _ = displayTiedAccidentals;
+        refuse_unported(target.is_some(), !addTies, inPlace)?;
+        edited(slf, |stream| stream.slice_at_offsets(&offsetList))
+    }
+
+    /// A copy with each note and rest cut at the beats of its time
+    /// signature: music21's `sliceByBeat`.
+    #[pyo3(signature = (target = None, addTies = true, inPlace = false, displayTiedAccidentals = false))]
+    fn sliceByBeat<'py>(
+        slf: &Bound<'py, Self>,
+        target: Option<&Bound<'py, PyAny>>,
+        addTies: bool,
+        inPlace: bool,
+        displayTiedAccidentals: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let _ = displayTiedAccidentals;
+        refuse_unported(target.is_some(), !addTies, inPlace)?;
+        edited(slf, RsStream::slice_by_beat)
+    }
+
+    /// A copy with its offsets scaled, held still at `anchorZero`
+    /// (`'lowest'`, `'highest'` or `None` for nought) and nested streams at
+    /// `anchorZeroRecurse`: music21's `scaleOffsets`.
+    #[pyo3(signature = (amountToScale, *, anchorZero = Some("lowest".to_string()), anchorZeroRecurse = None, inPlace = false))]
+    fn scaleOffsets<'py>(
+        slf: &Bound<'py, Self>,
+        amountToScale: f64,
+        anchorZero: Option<String>,
+        anchorZeroRecurse: Option<String>,
+        inPlace: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        refuse_unported(false, false, inPlace)?;
+        let anchor = anchor_of(anchorZero.as_deref())?;
+        let nested = anchor_of(anchorZeroRecurse.as_deref())?;
+        edited(slf, |stream| {
+            stream.scale_offsets(amountToScale, anchor, nested)
+        })
+    }
+
+    /// A copy with every length scaled: music21's `scaleDurations`.
+    #[pyo3(signature = (amountToScale, *, inPlace = false))]
+    fn scaleDurations<'py>(
+        slf: &Bound<'py, Self>,
+        amountToScale: f64,
+        inPlace: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        refuse_unported(false, false, inPlace)?;
+        edited(slf, |stream| stream.scale_durations(amountToScale))
+    }
+
+    /// A copy with its offsets and lengths scaled: music21's
+    /// `augmentOrDiminish`.
+    #[pyo3(signature = (amountToScale, *, inPlace = false))]
+    fn augmentOrDiminish<'py>(
+        slf: &Bound<'py, Self>,
+        amountToScale: f64,
+        inPlace: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        refuse_unported(false, false, inPlace)?;
+        edited(slf, |stream| stream.augment_or_diminish(amountToScale))
+    }
+
+    /// A copy with each note turned upside down about `inversionNote`, C4
+    /// where none is given, by step in the key: music21's `invertDiatonic`.
+    #[pyo3(signature = (inversionNote = None, *, inPlace = false))]
+    fn invertDiatonic<'py>(
+        slf: &Bound<'py, Self>,
+        inversionNote: Option<&Bound<'py, PyAny>>,
+        inPlace: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        refuse_unported(false, false, inPlace)?;
+        let pitch = match inversionNote {
+            Some(note) => {
+                let pitch = if note.hasattr("pitch")? {
+                    note.getattr("pitch")?
+                } else {
+                    note.clone()
+                };
+                let name: String = pitch.getattr("nameWithOctave")?.extract()?;
+                Some(music21_rs_crate::Pitch::from_name(&name).map_err(crate::pitch::pitch_error)?)
+            }
+            None => None,
+        };
+        edited(slf, |stream| stream.invert_diatonic(pitch.as_ref()))
+    }
+
+    /// A score with a part for each voice: music21's `voicesToParts`.
+    #[pyo3(signature = (*, separateById = false))]
+    fn voicesToParts<'py>(
+        slf: &Bound<'py, Self>,
+        separateById: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        edited(slf, |stream| stream.voices_to_parts(separateById))
+    }
+
+    /// A score with a part for each voice: music21's `explode`.
+    fn explode<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        edited(slf, RsStream::explode)
+    }
+
+    /// A score whose parts hold this score's parts as voices, grouped by
+    /// `voiceAllocation`, a count to a part or a list of groups of part
+    /// indices: music21's `partsToVoices`.
+    #[pyo3(signature = (voiceAllocation = None, permitOneVoicePerPart = false, setStems = true))]
+    fn partsToVoices<'py>(
+        slf: &Bound<'py, Self>,
+        voiceAllocation: Option<&Bound<'py, PyAny>>,
+        permitOneVoicePerPart: bool,
+        setStems: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        use music21_rs_crate::stream::VoiceAllocation;
+        let allocation = match voiceAllocation {
+            None => VoiceAllocation::default(),
+            Some(value) => match value.extract::<usize>() {
+                Ok(each) => VoiceAllocation::Each(each),
+                Err(_) => {
+                    let mut groups = Vec::new();
+                    for group in value.try_iter()? {
+                        let group = group?;
+                        groups.push(match group.extract::<usize>() {
+                            Ok(index) => vec![index],
+                            Err(_) => group.extract::<Vec<usize>>()?,
+                        });
+                    }
+                    VoiceAllocation::Groups(groups)
+                }
+            },
+        };
+        edited(slf, |stream| {
+            stream.parts_to_voices(&allocation, permitOneVoicePerPart, setStems)
+        })
+    }
+
+    /// The parts joined two to a part as voices: music21's `implode`.
+    fn implode<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        edited(slf, RsStream::implode)
+    }
+
+    /// Where the last element this stream holds itself starts: music21's
+    /// `highestOffset`.
+    #[getter]
+    fn highestOffset(slf: &Bound<'_, Self>) -> PyResult<f64> {
+        Ok(crate_stream(slf.as_any())?.highest_offset())
+    }
+
+    /// Where the first element this stream holds itself starts: music21's
+    /// `lowestOffset`.
+    #[getter]
+    fn lowestOffset(slf: &Bound<'_, Self>) -> PyResult<f64> {
+        Ok(crate_stream(slf.as_any())?.lowest_offset())
+    }
+
+    /// Whether the stream holds a measure itself: music21's `hasMeasures`.
+    fn hasMeasures(slf: &Bound<'_, Self>) -> PyResult<bool> {
+        Ok(crate_stream(slf.as_any())?.has_measures())
+    }
+
+    /// Whether the stream holds a voice itself: music21's `hasVoices`.
+    fn hasVoices(slf: &Bound<'_, Self>) -> PyResult<bool> {
+        Ok(crate_stream(slf.as_any())?.has_voices())
+    }
+
+    /// Whether nothing is missing between the stream's start and its end:
+    /// music21's `isGapless`.
+    #[getter]
+    fn isGapless(slf: &Bound<'_, Self>) -> PyResult<bool> {
+        Ok(crate_stream(slf.as_any())?.is_gapless())
+    }
+
+    /// Whether no two notes overlap: music21's `isSequence`.
+    fn isSequence(slf: &Bound<'_, Self>) -> PyResult<bool> {
+        Ok(crate_stream(slf.as_any())?.is_sequence())
+    }
+
+    /// Whether the stream is notation as music21 writes it out: music21's
+    /// `isWellFormedNotation`.
+    fn isWellFormedNotation(slf: &Bound<'_, Self>) -> PyResult<bool> {
+        Ok(crate_stream(slf.as_any())?.is_well_formed_notation())
+    }
+
     /// How long the stream lasts, which is its highest time.
     #[getter]
     fn quarterLength(slf: &Bound<'_, Self>) -> PyResult<f64> {
@@ -755,6 +978,47 @@ impl Stream {
             Self::class_name(slf)?
         ))
     }
+}
+
+/// Refuses what the wheel's copies of music21's editing methods cannot do:
+/// edit one target, cut without ties, or change the stream in place.
+fn refuse_unported(target: bool, untied: bool, in_place: bool) -> PyResult<()> {
+    let refused = if target {
+        "a target"
+    } else if untied {
+        "addTies=False"
+    } else if in_place {
+        "inPlace=True"
+    } else {
+        return Ok(());
+    };
+    Err(StreamException::new_err(format!(
+        "{refused} is not supported here: the result is a new stream"
+    )))
+}
+
+/// music21's `anchorZero` and `anchorZeroRecurse`.
+fn anchor_of(name: Option<&str>) -> PyResult<music21_rs_crate::stream::Anchor> {
+    use music21_rs_crate::stream::Anchor;
+    match name {
+        None => Ok(Anchor::Zero),
+        Some("lowest") => Ok(Anchor::Lowest),
+        Some("highest") => Ok(Anchor::Highest),
+        Some(other) => Err(StreamException::new_err(format!(
+            "an anchorZero value is not supported: {other}"
+        ))),
+    }
+}
+
+/// The stream edited by the crate, as a new stream of this package's.
+fn edited<'py>(
+    slf: &Bound<'py, Stream>,
+    edit: impl FnOnce(&RsStream) -> music21_rs_crate::Result<RsStream>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let stream = crate_stream(slf.as_any())?;
+    let made =
+        edit(&stream).map_err(|error| StreamException::new_err(crate::pitch::message(&error)))?;
+    from_crate(slf.py(), &made)
 }
 
 /// A crate stream as this wheel's objects: a stream of its kind holding a
