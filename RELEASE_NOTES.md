@@ -106,6 +106,18 @@
   first staff layout standing at the start of the stream, however deep,
   and five where none names any. Only the staff layouts are read, so a
   note or a measure standing later does not stop the search.
+- `Stream::extend_duration` is music21's `extendDuration`: a copy with
+  each element of a class stretched to where the next one starts, the last
+  to the end of the stream. Only what the crate gives a length to is
+  stretched -- a note, a rest, a chord, a chord symbol -- where music21
+  stretches any element, everything there carrying a duration; the marks
+  the crate keeps timeless have nothing to write.
+- `Stream::merge_elements` is music21's `mergeElements`, taking in what
+  another stream holds at the offsets it holds them at, filtered by class
+  where asked. music21 stores the other stream's own objects in both
+  streams; a crate stream owns what it holds, so they are copied.
+- `Stream::clone_empty` is music21's `cloneEmpty`: the same kind and id,
+  holding nothing.
 - `StreamElement::is_instance` and `StreamElement::music21_classes` are
   public: music21's `isinstance` by class name, and the class names an
   element answers to.

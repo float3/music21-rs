@@ -587,36 +587,53 @@ fn invert_note(
 /// Scales an element's length, as music21's `augmentOrDiminish` of its
 /// duration.
 fn scale_duration(element: &mut StreamElement, amount: FloatType) -> Result<()> {
+    map_duration(element, &mut |duration| {
+        // An element given no length of its own has none to scale.
+        duration
+            .map(|duration| duration.augment_or_diminish(amount))
+            .transpose()
+    })
+}
+
+/// Writes a new length on an element, worked out from the one it carries,
+/// which is nothing where it has been given none: the marks that only say
+/// what is in force from a point -- a key, a metre, a tempo -- never have
+/// one, and a note or rest need not have been given one yet. Answering
+/// `None` leaves the element as it stands.
+pub(crate) fn map_duration(
+    element: &mut StreamElement,
+    change: &mut impl FnMut(Option<&Duration>) -> Result<Option<Duration>>,
+) -> Result<()> {
     match element {
         StreamElement::Note(note) => {
-            if let Some(duration) = note.duration() {
-                note.set_duration(duration.augment_or_diminish(amount)?);
+            if let Some(next) = change(note.duration())? {
+                note.set_duration(next);
             }
         }
         StreamElement::Chord(chord) => {
-            if let Some(duration) = chord.duration() {
-                chord.set_duration(duration.augment_or_diminish(amount)?);
+            if let Some(next) = change(chord.duration())? {
+                chord.set_duration(next);
             }
         }
         StreamElement::Rest(rest) => {
-            let duration = rest.duration().augment_or_diminish(amount)?;
-            rest.set_duration(duration);
+            if let Some(next) = change(Some(rest.duration()))? {
+                rest.set_duration(next);
+            }
         }
         StreamElement::Unpitched(stroke) => {
-            if let Some(duration) = stroke.written().duration() {
-                let scaled = duration.augment_or_diminish(amount)?;
-                stroke.written_mut().set_duration(scaled);
+            if let Some(next) = change(stroke.written().duration())? {
+                stroke.written_mut().set_duration(next);
             }
         }
         StreamElement::PercussionChord(chord) => {
-            if let Some(duration) = chord.written().duration() {
-                let scaled = duration.augment_or_diminish(amount)?;
-                chord.written_mut().set_duration(scaled);
+            if let Some(next) = change(chord.written().duration())? {
+                chord.written_mut().set_duration(next);
             }
         }
         StreamElement::ChordSymbol(symbol) => {
-            let scaled = symbol.duration().augment_or_diminish(amount)?;
-            symbol.set_duration(scaled);
+            if let Some(next) = change(Some(symbol.duration()))? {
+                symbol.set_duration(next);
+            }
         }
         _ => {}
     }

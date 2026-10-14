@@ -28,6 +28,7 @@ mod consecutive;
 mod editing;
 mod ends;
 pub(crate) mod exact;
+mod filling;
 mod lookups;
 mod opus;
 mod placed;
