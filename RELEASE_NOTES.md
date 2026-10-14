@@ -130,6 +130,15 @@
   `Stream::notes_and_rests` is its `flatten().notesAndRests`, where
   `Stream::notes` leaves the rests out. What the stream holds itself is
   `elements_of_class` for `GeneralNote`.
+- `Stream::lyrics` is music21's `lyrics`, gathering the syllables sung in
+  a stream by the number each is sung under, taking a
+  `stream::LyricsOptions`. Each number's line keeps one place for every
+  note read -- the lyric sung there, or `SungLyric::Unsung` where that
+  note sings nothing under that number -- so the lines stay level with the
+  notes, and a number first met partway through is padded with the notes
+  before it. As in music21, the notes of a measure are read through the
+  barlines by default, every other nested stream only where asked, and
+  each then answers a `SungLyric::Nested` list of its own.
 - `StreamElement::is_instance` and `StreamElement::music21_classes` are
   public: music21's `isinstance` by class name, and the class names an
   element answers to.
