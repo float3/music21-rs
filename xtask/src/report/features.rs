@@ -277,14 +277,25 @@ pub(super) fn scan_features(
 }
 
 /// The public methods and properties of one class, in source order, each once.
+/// Whether a `class` line opens this class: with bases, with nothing, or
+/// with the type parameters music21 writes in PEP 695's brackets, as
+/// `class Stream[M21ObjType: base.Music21Object](core.StreamCore):` does.
+fn opens_class(line: &str, class: &str) -> bool {
+    let Some(rest) = line
+        .strip_prefix("class ")
+        .and_then(|rest| rest.strip_prefix(class))
+    else {
+        return false;
+    };
+    rest.starts_with('(') || rest.starts_with(':') || rest.starts_with('[')
+}
+
 pub(super) fn class_methods(python: &str, class: &str) -> Vec<String> {
-    let header = format!("class {class}(");
-    let bare = format!("class {class}:");
     let mut inside = false;
     let mut names = Vec::new();
     for line in python.lines() {
         if line.starts_with("class ") {
-            inside = line.starts_with(&header) || line.starts_with(&bare);
+            inside = opens_class(line, class);
             continue;
         }
         if !inside {
@@ -300,14 +311,12 @@ pub(super) fn class_methods(python: &str, class: &str) -> Vec<String> {
 /// The attributes a class declares in `__slots__`, which for a class with no
 /// methods of its own is the whole of its API.
 pub(super) fn class_slots(python: &str, class: &str) -> Vec<String> {
-    let header = format!("class {class}(");
-    let bare = format!("class {class}:");
     let mut inside = false;
     let mut reading = false;
     let mut names = Vec::new();
     for line in python.lines() {
         if line.starts_with("class ") {
-            inside = line.starts_with(&header) || line.starts_with(&bare);
+            inside = opens_class(line, class);
             reading = false;
             continue;
         }
