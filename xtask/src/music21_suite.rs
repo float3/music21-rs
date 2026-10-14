@@ -327,6 +327,7 @@ fn run_one(workspace_root: &Path, out: &Path, which: Which, only: Option<&str>) 
                 .getattr(stream)?
                 .call_method("reconfigure", (), Some(&kwargs));
         }
+        point_workers_at_python(py, &sys)?;
         add_dependency_venv(py, workspace_root)?;
         sys.getattr("path")?.cast_into::<PyList>()?.insert(
             0,
@@ -492,6 +493,41 @@ fn run_one(workspace_root: &Path, out: &Path, which: Which, only: Option<&str>) 
 /// question this answers is what the crate passes of music21's suite. Whether
 /// a failure is the crate's doing is the comparison the two runs make, and
 /// that is reported on its own.
+/// Points `multiprocessing` at the interpreter this binary embeds, so that a
+/// worker started under it runs Python.
+///
+/// `multiprocessing` spawns a worker by running `sys.executable`, which under
+/// an embedded interpreter is this binary: a worker then starts xtask with
+/// `-c` and a program to run, xtask reads `-c` as a command it does not have,
+/// and the worker dies. Some of music21's tests spawn workers, so the log
+/// filled with those refusals. The interpreter is found where
+/// `sys._base_executable` names it, or beside `sys.base_prefix`.
+fn point_workers_at_python(py: Python<'_>, sys: &Bound<'_, PyAny>) -> PyResult<()> {
+    let named: Option<String> = sys
+        .getattr("_base_executable")
+        .ok()
+        .and_then(|named| named.extract().ok());
+    let base: String = sys.getattr("base_prefix")?.extract()?;
+    let base = Path::new(&base);
+    let beside: &[PathBuf] = &if cfg!(windows) {
+        [base.join("python.exe"), base.join("bin/python.exe")]
+    } else {
+        [base.join("bin/python3"), base.join("bin/python")]
+    };
+    let python = named
+        .map(PathBuf::from)
+        .into_iter()
+        .chain(beside.iter().cloned())
+        .find(|path| path.is_file() && path != &std::env::current_exe().unwrap_or_default());
+    let Some(python) = python else {
+        // Nothing found to point at; the refusals are noise, not a failure.
+        return Ok(());
+    };
+    py.import("multiprocessing")?
+        .call_method1("set_executable", (python.to_string_lossy().as_ref(),))?;
+    Ok(())
+}
+
 fn module_tally(
     py: Python<'_>,
     workspace_root: &Path,
