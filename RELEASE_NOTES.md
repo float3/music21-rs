@@ -1185,6 +1185,15 @@ reader the same way, on scores from music21's corpus and its own tests.
   (`C add 2/B-`).
 - MusicXML is behind the `musicxml` feature, which `musescore` turns on.## Fixed
 
+- The music21 submodule follows the fork's master to `5151b5189`, which
+  fixes a ninth music21 bug found porting the opus lookups:
+  `Metadata.search` compiled any query holding one of `*.|+?{}` as a
+  regular expression, so a query carrying that punctuation without being a
+  pattern raised `re.error`. Ten titles of the Essen collections -- an
+  unbalanced bracket, or a `(?)` -- therefore made `Opus.getScoreByTitle`
+  raise when asked for one of music21's own titles. `opus_parity` no
+  longer has to count them.
+
 - a lyric written as a hyphen alone is the middle of a word with nothing
   sung to it, as music21 reads it, not the end of one; and a lyric of no
   text at all says nothing of where it falls in a word.

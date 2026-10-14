@@ -11,10 +11,10 @@
 //! `regex` built here for exactly those titles, which is what a caller with
 //! an engine of their own would do.
 //!
-//! Ten titles of the Essen collections hold unbalanced brackets or a `(?)`,
-//! which music21 compiles as a pattern and `re` refuses, so music21 raises
-//! where it is asked for one of its own titles. Those are counted, and the
-//! crate is held to finding the score.
+//! Ten titles of the Essen collections hold unbalanced brackets or a `(?)`.
+//! music21 read those as patterns and `re` refused them, so it raised when
+//! asked for one of its own titles; the fork fixes that and the submodule
+//! pins the fix, so both sides simply find the score.
 //!
 //! `OPUS_PARITY_WORKS`, a `;`-separated list of corpus files, runs those
 //! instead of `WORKS`, which is how the rest of the corpus is swept.
@@ -135,8 +135,7 @@ fn the_crate_looks_up_opus_scores_as_music21_does() {
     std::env::set_current_dir(&root).expect("chdir to the repository root");
     prepare().expect("prepare the music21 reference checkout");
 
-    let (failures, compared, uncompilable) =
-        Python::attach(|py| -> PyResult<(Vec<String>, usize, usize)> {
+    let (failures, compared) = Python::attach(|py| -> PyResult<(Vec<String>, usize)> {
         init_py(py)?;
         add_dependency_venv(py, &root)?;
         let module = |code: &str, name: &str| -> PyResult<Bound<'_, PyModule>> {
@@ -161,7 +160,6 @@ fn the_crate_looks_up_opus_scores_as_music21_does() {
 
         let mut failures = Vec::new();
         let mut compared = 0;
-        let mut uncompilable = 0;
         for name in &chosen {
             let text: String = music21.getattr("source_text")?.call1((name,))?.extract()?;
             let our_opus = match from_abc(&text) {
@@ -227,20 +225,13 @@ fn the_crate_looks_up_opus_scores_as_music21_does() {
                     .getattr("by_title")?
                     .call1((&their_opus, title))?
                     .extract()?;
-                let ours = by_title(&our_opus, title);
-                if raised.is_some() {
-                    // music21 compiles a title holding `*.|+?{}` as a
-                    // pattern, so ten titles of the Essen collections
-                    // raise `re.error` there rather than finding their own
-                    // score. The crate finds it.
-                    uncompilable += 1;
-                    if ours.as_deref() != Some(title.as_str()) {
-                        failures.push(format!(
-                            "{name}: title {title:?} raises {raised:?} in music21,                              and the crate answers {ours:?} where it should find the score"
-                        ));
-                    }
+                if let Some(raised) = raised {
+                    failures.push(format!(
+                        "{name}: title {title:?} raises {raised} in music21, which the                          fork's search no longer does"
+                    ));
                     continue;
                 }
+                let ours = by_title(&our_opus, title);
                 if ours != theirs {
                     failures.push(format!(
                         "{name}: title {title:?} is {theirs:?} to music21, {ours:?} to the crate"
@@ -305,7 +296,7 @@ fn the_crate_looks_up_opus_scores_as_music21_does() {
                 )),
             }
         }
-            Ok((failures, compared, uncompilable))
+            Ok((failures, compared))
         })
         .unwrap_or_else(|error| panic!("asking music21 about its opuses: {error}"));
 
@@ -316,5 +307,5 @@ fn the_crate_looks_up_opus_scores_as_music21_does() {
         failures.join("\n")
     );
     assert!(compared > 0, "no opus was compared");
-    println!("{compared} opuses compared, {uncompilable} titles music21 cannot compile");
+    println!("{compared} opuses compared");
 }
