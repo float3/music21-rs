@@ -48,6 +48,15 @@
   interval to the first note of another stream sounding with it, which
   music21's `attachIntervalsBetweenStreams` attaches. Each answers as
   music21's does on every MusicXML score of music21's corpus.
+- `Stream::split_at_quarter_length` cuts a stream in two, as music21's
+  `splitAtQuarterLength` does: what sounds across the point is cut and
+  tied, what follows moves to the second half, a voice is cut as a stream
+  is, and the second half of a measure gets its time signature, the key
+  and clef in force at the point, and its right barline. What is in force
+  before a measure, which music21 finds in its context, is given as a
+  `stream::InForce`, which `Stream::in_force_before` reads off a part.
+  Every measure of every MusicXML score of music21's corpus is cut as
+  music21 cuts it.
 - `StreamElement::is_instance` and `StreamElement::music21_classes` are
   public: music21's `isinstance` by class name, and the class names an
   element answers to.
@@ -86,6 +95,13 @@
   falls a hair short of the fraction the element stands at, as music21
   does with its search for one offset fixed on the fork the crate is held
   to.
+- An ABC measure cut in two because it overflows its bar keeps its
+  closing barline at the end of the second measure, where it was put at
+  the start, as music21 does with its `splitAtQuarterLength` fixed on the
+  fork the crate is held to.
+- `Stream::end_offset` is snapped to the fraction it stands for, as
+  music21's `highestTime` is, so a stream ending on a triplet is as long
+  as music21 says to the last bit.
 - `TimeSignature::beat_proportion` snaps the beat to the fraction it
   stands for, as music21's `getBeatProportion` does, so a third of a beat
   in is music21's to the last bit.
