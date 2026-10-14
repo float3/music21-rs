@@ -1164,6 +1164,24 @@ mod tests {
         assert_eq!(module_classes(python, Some("B")), ["B"]);
     }
 
+    /// music21 writes `class Stream[M21ObjType: base.Music21Object](...)`,
+    /// PEP 695's type parameters, which its AGENTS.md asks for.
+    #[test]
+    fn a_class_is_read_through_its_type_parameters() {
+        let python = "class Generic[T: Base](Other):
+    def one(self):
+        pass
+class Plain:
+    def two(self):
+        pass
+";
+        assert_eq!(class_methods(python, "Generic"), ["one"]);
+        assert_eq!(class_methods(python, "Plain"), ["two"]);
+        assert_eq!(module_classes(python, None), ["Generic", "Plain"]);
+        // A name the line only starts with is not that class.
+        assert!(class_methods(python, "Gen").is_empty());
+    }
+
     #[test]
     fn a_badge_carries_the_share_and_the_count_behind_it() {
         let json: serde_json::Value = serde_json::from_str(&badge("ported", 565, 617)).unwrap();
