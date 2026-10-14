@@ -78,6 +78,19 @@ grow any without the attribute coming off. The wheel denies rather than
 forbids it, with exactly one allow, because a pyo3 exception type standing on
 music21's own base needs a hand-written `PyTypeInfo`.
 
+**The caller brings the regular expression engine.** music21's
+`Metadata.search` reads a pattern out of any query holding `*.|+?{}` and
+compiles it with Python's `re`. The crate carries no engine and takes no
+dependency for one: `MetadataQuery::Text` is music21's plain-string reading,
+containment with either case ignored, and `MetadataQuery::Matcher` takes a
+predicate, so a caller who wants the pattern hands over whichever engine
+they already have. The parity test builds that predicate with `regex`, a
+dependency of the test crate alone, for exactly the queries music21 would
+read as a pattern.
+
+*Costs:* a Rust caller searching by pattern writes two lines rather than
+one, and the facade keeps music21's own `re` for its own search.
+
 **Generated tables are committed.** The chord tables, the tuning tables and
 the Scala archive are emitted into Rust by `xtask` and checked in, so a
 normal build needs no Python and no submodule. Each generated file carries

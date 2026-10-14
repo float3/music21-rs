@@ -18,6 +18,10 @@ music21_rs_python = { package = "music21-rs-python", path = "../python", feature
   "scala-archive",
 ] }
 pyo3 = { version = "0.29.0", features = ["auto-initialize"] }
+# Only the parity tests need it: music21 reads a regular expression out of a
+# metadata search query, and the crate hands that engine's choice to the
+# caller. This crate is not published, so the weight is a test's alone.
+regex = "1.12"
 serde = { version = "1.0.228", features = ["derive"] }
 toml = "1.1"
 utils = { path = "../utils", features = ["python"] }
