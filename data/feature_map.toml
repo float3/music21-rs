@@ -925,3 +925,141 @@ note = "A key for every measure, each measure's reading smoothed by its neighbou
 [[class]]
 python = "analysis/floatingKey.py"
 rust = ["src/analysis/floating_key.rs"]
+
+[[class]]
+python = "stream/base.py"
+name = "Stream"
+rust = [
+  "src/stream.rs",
+  "src/stream/analyze.rs",
+  "src/stream/chordify.rs",
+  "src/stream/classes.rs",
+  "src/stream/consecutive.rs",
+  "src/stream/editing.rs",
+  "src/stream/ends.rs",
+  "src/stream/exact.rs",
+  "src/stream/filling.rs",
+  "src/stream/lookups.rs",
+  "src/stream/lyrics.rs",
+  "src/stream/opus.rs",
+  "src/stream/placed.rs",
+  "src/stream/queries.rs",
+  "src/stream/repeats.rs",
+  "src/stream/seconds.rs",
+  "src/stream/selection.rs",
+  "src/stream/slicing.rs",
+  "src/stream/sounding.rs",
+  "src/stream/span.rs",
+  "src/stream/splitting.rs",
+  "src/stream/template.rs",
+  "src/stream/ties.rs",
+  "src/stream/voices.rs",
+  "src/makenotation/mod.rs",
+  "src/makenotation/score.rs",
+  "src/meter/mod.rs",
+  "src/variant.rs",
+]
+note = "Music on a timeline, and the subclasses music21 nests inside one another: `Measure`, `Part`, `PartStaff`, `Score`, `Voice` and `Opus` are all read here, since the crate has one `Stream` with a `StreamKind` where music21 has seven classes. What makes an object a *member* of a music21 stream is deliberately absent -- sites, contexts, derivations, `activeSite` -- so the members that ask an element where it sits, or ask the stream to hold somebody else's object, are excluded with their reasons. The notation methods live in `makenotation`, what a bar and a beat last in `meter`, and the variant methods in `variant`, which is where music21 keeps them too."
+
+[class.renames]
+append = "push"
+attachIntervalsBetweenStreams = "harmonic_intervals"
+elements = "events"
+getElementAfterElement = "element_after"
+getElementsByClass = "elements_of_class"
+getElementsByOffset = "elements_in_span"
+# The key and the metre a stream opens with are read at an offset, since
+# that is the question a crate stream answers.
+keySignature = "key_signature_at"
+timeSignature = "time_signature_at"
+pop = "remove_event"
+splitByClass = "split_by"
+
+[class.excluded]
+addGroupForElements = "the group names music21 picks elements out of a stream by; nothing a crate stream holds carries them"
+attachMelodicIntervals = "attaches an interval to each note; `melodic_intervals` answers them instead, a crate note carrying nothing of its line"
+beat = "where one element sits in its bar; `placed` answers it for every element at once, and `beat_and_measure_from_offset` for a point"
+beatStr = "as `beat`"
+beatStrength = "as `beat`"
+clear = "empties a stream in place; `clone_empty` answers an empty one of the same kind"
+clef = "the clef a stream opens with; the clef in force is read by `in_force_before`, a crate stream keeping no clef of its own"
+containerInHierarchy = "needs the sites a crate stream does not keep"
+duration = "a crate stream has no `Duration` of its own; `highest_time` answers when the last thing in it ends"
+elementOffset = "asks where one object sits; a crate stream owns values rather than objects, so `events` gives each with its offset"
+first = "as `elementOffset`: `events` answers in order"
+getElementById = "an id on every element, which only a stream and a note carry here"
+getElementsByGroup = "as `addGroupForElements`"
+haveAccidentalsBeenMade = "a flag music21 keeps on the stream; nothing here remembers having been asked"
+index = "as `elementOffset`"
+isAtEnd = "needs the sites a crate stream does not keep"
+last = "as `elementOffset`: `events` answers in order"
+makeImmutable = "music21's mutability machinery, which a value has no need of"
+makeMutable = "as `makeImmutable`"
+measure = "one measure by its number; `measures` answers them all, each carrying its own `number`"
+mergeAttributes = "what `clone_empty` carries over"
+plot = "plotting, which the crate leaves to its caller"
+recurseRepr = "music21's own text dump of a stream"
+remove = "takes a named object out; `retain_leaves` and `remove_event` take out by place or by test"
+replace = "swaps one object for another; `events_mut` reaches each in place"
+setDerivationMethod = "derivations, which a crate stream does not keep"
+setElementOffset = "as `elementOffset`: `events_mut` reaches each in place"
+show = "rendering, which the crate leaves to its caller"
+sort = "a crate stream is in offset order as it is built"
+sorted = "as `sort`"
+storeAtEnd = "elements music21 keeps at the right barline rather than at an offset; a measure's barlines are its own here"
+transferOffsetToElements = "moves a stream's own offset onto what it holds, which needs the sites a crate stream does not keep"
+write = "writing a file, which the format modules do"
+
+[[class]]
+python = "stream/base.py"
+name = "Measure"
+rust = ["src/stream.rs", "src/stream/editing.rs", "src/makenotation/score.rs", "src/meter/mod.rs"]
+note = "A bar of music. A crate stream of kind `Measure` carries its own barlines and padding, and what a bar and a beat last is read off the metre."
+
+[class.renames]
+measureNumberWithSuffix = "number_with_suffix"
+
+[class.excluded]
+mergeAttributes = "what `clone_empty` carries over"
+
+[[class]]
+python = "stream/base.py"
+name = "Part"
+rust = ["src/stream.rs", "src/makenotation/mod.rs"]
+note = "One player's line. A crate stream of kind `Part` or `PartStaff` carries the name and abbreviation music21 keeps as `partName` and `partAbbreviation`."
+
+[class.renames]
+partName = "name"
+partAbbreviation = "abbreviation"
+
+[class.excluded]
+mergeAttributes = "what `clone_empty` carries over"
+
+[[class]]
+python = "stream/base.py"
+name = "Score"
+rust = [
+  "src/stream.rs",
+  "src/stream/queries.rs",
+  "src/stream/repeats.rs",
+  "src/stream/slicing.rs",
+  "src/stream/voices.rs",
+  "src/makenotation/score.rs",
+]
+note = "Every part of a piece together."
+
+[class.excluded]
+measure = "one measure by its number; `measures` answers them all, each carrying its own `number`"
+
+[[class]]
+python = "stream/base.py"
+name = "Opus"
+rust = ["src/stream/opus.rs"]
+note = "The scores a multi-work file holds, which many an ABC or Essen collection is."
+
+[class.renames]
+getNumbers = "score_numbers"
+
+[class.excluded]
+write = "writing a file, which the format modules do"
+show = "rendering, which the crate leaves to its caller"
