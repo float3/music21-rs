@@ -1183,7 +1183,6 @@ fn merge_notes(a: &mut Stream, b: &Stream, name: Option<&str>) -> Result<Vec<Opt
     if in_variant {
         insert(a, &buffer, variant_start);
     }
-    drop(insert);
     Ok(moved)
 }
 
