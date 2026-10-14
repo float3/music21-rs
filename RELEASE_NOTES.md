@@ -76,6 +76,18 @@
   `scores`, `score_numbers`, `score_by_number`, `score_by_title` and
   `merge_scores`. Each answers as music21's does on every multi-tune ABC
   file of music21's corpus.
+- `Stream::elements_in_span` is music21's `getElementsByOffset`, taking a
+  `stream::OffsetSpan`: one offset or a stretch, with music21's four flags
+  -- `include_end_boundary`, `must_finish_in_span`, `must_begin_in_span`
+  and `include_elements_that_end_at_start` -- starting at music21's own
+  defaults, under which an element is found only where it *begins*. A span
+  of no length takes the snapped start as its end, as the fork's music21
+  does, so a float a hair off the fraction an element stands at still
+  finds it. `elements_of_class`, `elements_not_of_class` and
+  `has_element_of_class` are music21's `getElementsByClass`,
+  `getElementsNotOfClass` and `hasElementOfClass`. Every measure of every
+  MusicXML score of music21's corpus answers all thirty-eight spans as
+  music21 answers them.
 - `StreamElement::is_instance` and `StreamElement::music21_classes` are
   public: music21's `isinstance` by class name, and the class names an
   element answers to.
