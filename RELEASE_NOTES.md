@@ -118,6 +118,18 @@
   streams; a crate stream owns what it holds, so they are copied.
 - `Stream::clone_empty` is music21's `cloneEmpty`: the same kind and id,
   holding nothing.
+- `Stream::analyze` is music21's `analyze`, answering a `stream::Analysis`:
+  `ambitus`, `span` and `range` give the interval from the lowest pitch
+  sounding to the highest, and `key` and the names of music21's five key
+  weightings give the key the stream is most likely in. The name is read as
+  music21 reads it, three searches over and loosest last, so `kostka` finds
+  Temperley's profile and a bare `key` finds Aarden's. A stream with no
+  pitches has no ambitus and answers nothing, where a key analysis of one
+  refuses, which is what music21 answers and raises.
+- `Stream::is_twelve_tone` is music21's `isTwelveTone`, and
+  `Stream::notes_and_rests` is its `flatten().notesAndRests`, where
+  `Stream::notes` leaves the rests out. What the stream holds itself is
+  `elements_of_class` for `GeneralNote`.
 - `StreamElement::is_instance` and `StreamElement::music21_classes` are
   public: music21's `isinstance` by class name, and the class names an
   element answers to.
@@ -148,6 +160,11 @@
 
 ## Fixed
 
+- The feature map pointed music21's `Interval.name` at the crate's `name`,
+  which answers the long spelling, `Perfect Octave`; `short_name` is the
+  one that answers `P8`, and the map now says so. The count is unchanged:
+  the member was already read as ported, by the function that does not
+  implement it.
 - `MetronomeMark::seconds_per_quarter` reads the speed a mark is *played*
   at, as music21's `secondsPerQuarter` does through a `getQuarterBPM()`
   that takes `useNumberSounding=True`. A mark that says no number but

@@ -63,6 +63,8 @@ rust = ["src/interval/mod.rs"]
 
 [class.renames]
 niceName = "name"
+# `name` here is the short spelling, `P8`; `name()` answers the long one.
+name = "short_name"
 reverse = "reversed"
 
 [[class]]
