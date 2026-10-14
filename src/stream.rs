@@ -22,6 +22,7 @@
 //! names keeping objects and sites apart this way as what he would do
 //! again.
 
+mod analyze;
 pub(crate) mod chordify;
 mod classes;
 mod consecutive;
@@ -44,6 +45,7 @@ mod template;
 mod ties;
 mod voices;
 
+pub use analyze::Analysis;
 pub use chordify::ChordifyOptions;
 pub use consecutive::{ConsecutiveOptions, MelodicInterval};
 pub use editing::Anchor;
