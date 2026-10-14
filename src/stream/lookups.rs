@@ -121,10 +121,9 @@ impl Stream {
     /// A measure with a number suffix, or numbered nought where
     /// `fix_zeros`, is taken as the second half of the measure before it,
     /// which is answered instead, with the beat counted on from that
-    /// measure's last in the time signature in force before it, as music21
-    /// counts them, not one that measure opens with; a measure so numbered
-    /// that opens the piece is taken as a pickup, its beats counted from the
-    /// end of a full bar. A score answers for its first part with measures.
+    /// measure's last; a measure so numbered that opens the piece is taken
+    /// as a pickup, its beats counted from the end of a full bar. A score
+    /// answers for its first part with measures.
     ///
     /// ```
     /// use music21_rs::tinynotation::from_tiny_notation;
@@ -192,22 +191,9 @@ impl Stream {
             });
         match previous {
             Some((previous_offset, previous)) => {
-                // music21 asks the measure before for its context, which
-                // passes over the time signature that measure opens with.
-                let earlier = holder
-                    .flatten()
-                    .events
-                    .into_iter()
-                    .take_while(|event| event.offset < previous_offset)
-                    .filter_map(|event| match event.element {
-                        StreamElement::TimeSignature(meter) => Some(meter),
-                        _ => None,
-                    })
-                    .last()
-                    .ok_or_else(|| {
+                let earlier = holder.time_signature_at(previous_offset).ok_or_else(|| {
                     stream_error(
-                        "beatAndMeasureFromOffset: partial measure found, but could not find a time \
-                         signature for the preceding measure",
+                        "beatAndMeasureFromOffset: partial measure found, but could not find a time signature for the preceding measure",
                     )
                 })?;
                 let filled = op_frac(previous.end_offset());

@@ -118,11 +118,6 @@ def report(text):
     score = converter.parse(text, format='musicxml', forceSource=True)
     lines = []
     for i, p in enumerate(score.parts):
-        # A music21 duration that has not yet worked out its notes keeps its
-        # tuplet through augmentOrDiminish, and its old length with it; read
-        # once first, every duration has.
-        for e in p.recurse():
-            e.duration.components
         def ties(ignore):
             c = copy.deepcopy(p)
             c.extendTies(ignoreRests=ignore)

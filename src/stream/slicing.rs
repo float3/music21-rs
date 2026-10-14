@@ -226,11 +226,14 @@ impl Stream {
     /// music21's `sliceByGreatestDivisor`. A score finds one length for
     /// each measure across its parts.
     ///
+    /// Grace notes take no time to divide and are left whole; a measure
+    /// with no notes or rests of its own is left as it is.
+    ///
     /// # Errors
     ///
-    /// A measure with no notes or rests, or with a grace note, which
-    /// music21's `approximateGCD` cannot divide; a score whose first part
-    /// has more measures than another, or none of its own.
+    /// Lengths with no common divisor music21's `approximateGCD` finds; a
+    /// score whose first part has more measures than another, or none of
+    /// its own.
     pub fn slice_by_greatest_divisor(&self) -> Result<Stream> {
         let mut out = self.clone();
         if out.kind() == StreamKind::Score {
@@ -245,7 +248,7 @@ impl Stream {
         for event in self.events() {
             if event.element().is_instance("GeneralNote") {
                 let length = event.element().quarter_length();
-                if !into.contains(&length) {
+                if length != 0.0 && !into.contains(&length) {
                     into.push(length);
                 }
             }
@@ -260,6 +263,9 @@ impl Stream {
         }
         let mut lengths = Vec::new();
         self.unique_lengths(&mut lengths);
+        if lengths.is_empty() {
+            return Ok(unmoved(self));
+        }
         let divisor = approximate_gcd(&lengths)?;
         self.slice_lengths_in_place(&[divisor])
     }
@@ -303,6 +309,9 @@ impl Stream {
                     None => part.unique_lengths(&mut lengths),
                 }
             }
+            if lengths.is_empty() {
+                continue;
+            }
             let divisor = approximate_gcd(&lengths)?;
             for &part_index in &parts {
                 let StreamElement::Stream(part) = self.events()[part_index].element() else {
@@ -328,8 +337,7 @@ impl Stream {
     /// `offsets` cut there, tied: music21's `sliceAtOffsets`. A stream of
     /// measures is cut measure by measure, each at the offsets that fall in
     /// it, and a score part by part. A note in a voice is cut in its voice,
-    /// and the pieces after the first are put in the measure itself, as
-    /// music21 puts them.
+    /// at the offsets counted from the voice's start.
     ///
     /// # Errors
     ///
@@ -393,30 +401,14 @@ impl Stream {
             }
             Ok(())
         };
-        let has_voices = self.has_voices();
+        let is_voice = |element: &StreamElement| matches!(element, StreamElement::Stream(inner) if inner.kind() == StreamKind::Voice);
+        let in_voices = each_nested(self, is_voice, &mut |voice, at| {
+            let local: Vec<FloatType> = offsets.iter().map(|offset| offset - at).collect();
+            voice.slice_offsets_in_place(&local)
+        })?;
         let mut events: Vec<StreamEvent> = self.events().to_vec();
-        if has_voices {
-            for event in events.iter_mut() {
-                if !matches!(event.element(), StreamElement::Stream(inner) if inner.kind() == StreamKind::Voice)
-                {
-                    let start = event.offset();
-                    cut_one(event.element_mut(), start)?;
-                }
-            }
-            // music21 reads a voice's elements at their offsets in the
-            // voice.
-            for event in events.iter_mut() {
-                if let StreamElement::Stream(voice) = event.element_mut()
-                    && voice.kind() == StreamKind::Voice
-                {
-                    for inner in voice.events_mut() {
-                        let start = inner.offset();
-                        cut_one(inner.element_mut(), start)?;
-                    }
-                }
-            }
-        } else {
-            for event in events.iter_mut() {
+        for event in events.iter_mut() {
+            if !is_voice(event.element()) {
                 let start = event.offset();
                 cut_one(event.element_mut(), start)?;
             }
@@ -433,7 +425,7 @@ impl Stream {
                 .enumerate()
                 .map(|(rank, event)| (event, None, count + rank)),
         );
-        Ok(reorder(self, held))
+        Ok(then(in_voices, &reorder(self, held)))
     }
 
     /// A copy of the stream with each note and rest cut at the beats of
@@ -513,6 +505,57 @@ impl Stream {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn lengths(stream: &Stream) -> Vec<(FloatType, FloatType)> {
+        stream
+            .events()
+            .iter()
+            .filter(|event| event.element().is_instance("GeneralNote"))
+            .map(|event| (event.offset(), event.element().quarter_length()))
+            .collect()
+    }
+
+    #[test]
+    fn grace_notes_and_empty_measures_have_nothing_to_divide() -> Result<()> {
+        use crate::duration::Duration;
+        use crate::note::Note;
+        let mut measure = Stream::with_kind(StreamKind::Measure);
+        measure.insert(0.0, Note::from_name("C4")?.grace_note(false));
+        measure.insert(
+            0.0,
+            Note::from_name("D4")?.with_duration(Duration::new(1.5)?),
+        );
+        measure.insert(
+            1.5,
+            Note::from_name("E4")?.with_duration(Duration::new(0.5)?),
+        );
+        let sliced = measure.slice_by_greatest_divisor()?;
+        assert_eq!(
+            lengths(&sliced),
+            [(0.0, 0.0), (0.0, 0.5), (0.5, 0.5), (1.0, 0.5), (1.5, 0.5)]
+        );
+        let empty = Stream::with_kind(StreamKind::Measure);
+        assert!(empty.slice_by_greatest_divisor()?.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn a_note_in_a_voice_is_cut_in_its_voice() -> Result<()> {
+        use crate::duration::Duration;
+        use crate::note::Note;
+        let mut upper = Stream::with_kind(StreamKind::Voice);
+        upper.insert(0.0, Note::from_name("C5")?.with_duration(Duration::half()));
+        upper.insert(2.0, Note::from_name("D5")?.with_duration(Duration::half()));
+        let mut measure = Stream::with_kind(StreamKind::Measure);
+        measure.insert(0.0, upper);
+        let sliced = measure.slice_at_offsets(&[1.0])?;
+        assert!(lengths(&sliced).is_empty());
+        assert_eq!(
+            lengths(sliced.voices()[0]),
+            [(0.0, 1.0), (1.0, 1.0), (2.0, 2.0)]
+        );
+        Ok(())
+    }
 
     #[test]
     fn the_greatest_divisor_is_music21s() -> Result<()> {

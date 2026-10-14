@@ -104,19 +104,18 @@ impl Exact {
 
 /// music21's `getElementsByOffset` at one offset, given as music21 holds
 /// it: an element there, or of no length ending there. The offset is
-/// snapped as the start of the span but is its end as given, so a float
-/// short of the fraction an element stands at finds nothing.
+/// snapped to the fraction it stands for, as music21 snaps it.
 pub(crate) fn at_offset(offset: FloatType, length: FloatType, at: Exact) -> bool {
-    let start = Exact::held(at.to_float());
+    let at = Exact::held(at.to_float());
     let held = Exact::held(offset);
     if held.cmp(at).is_gt() {
         return false;
     }
-    if Exact::held(offset + length).cmp(start).is_lt() {
+    if Exact::held(offset + length).cmp(at).is_lt() {
         return false;
     }
     if length == 0.0 {
         return true;
     }
-    !held.cmp(start).is_lt()
+    !held.cmp(at).is_lt()
 }

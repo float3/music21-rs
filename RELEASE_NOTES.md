@@ -13,20 +13,16 @@
 - `Stream` cuts its notes and rests as music21's slicing does:
   `slice_by_quarter_lengths`, `slice_by_greatest_divisor` (by measure, and
   across a score's parts at each measure), `slice_at_offsets`,
-  `slice_by_beat` and `split_by` (music21's `splitByClass`). music21's
-  slips are kept: a measure with a grace note or nothing to cut has no
-  greatest divisor, and a note in a voice cut at an offset leaves its
-  later pieces in the measure rather than the voice. Each cuts every
-  MusicXML score of music21's corpus as music21 does.
+  `slice_by_beat` and `split_by` (music21's `splitByClass`). Grace notes
+  are left whole and a measure with nothing of its own to cut is left as
+  it is; a note in a voice is cut in its voice. Each cuts every MusicXML
+  score of music21's corpus as music21 does.
 - `Stream` edits itself as music21's editing methods do: `extend_ties`,
   `scale_offsets` (from a `stream::Anchor`), `scale_durations`,
   `augment_or_diminish`, `invert_diatonic`, `shift_elements`,
   `repeat_append`, `repeat_insert`, `insert_and_shift`, and for a measure
-  `bar_duration_proportion` and `pad_as_anacrusis`. As in music21, a note
-  is tied to one starting where it ends only where Python's sum of its
-  offset and length meets that start exactly, which misses some notes
-  after a triplet. Each edits every MusicXML score of music21's corpus as
-  music21 does.
+  `bar_duration_proportion` and `pad_as_anacrusis`. Each edits every
+  MusicXML score of music21's corpus as music21 does.
 - `Stream` moves music between voices and parts as music21 does:
   `voices_to_parts` (by place, or with `separate_by_id` by voice id) and
   `explode` make a part of each voice, each with its part's instruments
@@ -86,6 +82,10 @@
   stream of chord symbols or strokes as holding music, as music21 does.
 - An offset worked out to be negative is snapped to the fraction it stands
   for, as a positive one is, as music21's `opFrac` snaps it.
+- Merging variants finds an element where an offset worked out in floats
+  falls a hair short of the fraction the element stands at, as music21
+  does with its search for one offset fixed on the fork the crate is held
+  to.
 - `TimeSignature::beat_proportion` snaps the beat to the fraction it
   stands for, as music21's `getBeatProportion` does, so a third of a beat
   in is music21's to the last bit.

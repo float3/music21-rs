@@ -11,10 +11,10 @@
 # reads that. This is what the report falls back to where no such run
 # has happened.
 #
-# music21 11.0.0b11 at 23cbd81bacbaf4b1e6ee0d7245456e945b49043f
+# music21 11.0.0b12 at 4223020c79d6f48a91466803b5e9d20d2e57e0ad
 
-music21_version = "11.0.0b11"
-music21_commit = "23cbd81bacbaf4b1e6ee0d7245456e945b49043f"
+music21_version = "11.0.0b12"
+music21_commit = "4223020c79d6f48a91466803b5e9d20d2e57e0ad"
 
 [[module]]
 module = "music21.analysis.discrete"
@@ -116,7 +116,7 @@ tests = 4
 module = "music21.duration"
 docstrings = 53
 examples = 588
-tests = 15
+tests = 16
 
 [[module]]
 module = "music21.dynamics"
@@ -210,9 +210,9 @@ tests = 13
 
 [[module]]
 module = "music21.pitch"
-docstrings = 83
-examples = 931
-tests = 35
+docstrings = 84
+examples = 934
+tests = 38
 
 [[module]]
 module = "music21.roman"
@@ -259,7 +259,7 @@ tests = 1
 [[module]]
 module = "music21.voiceLeading"
 docstrings = 61
-examples = 513
+examples = 515
 tests = 2
 
 [[module]]

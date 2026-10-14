@@ -56,6 +56,117 @@ pub(crate) fn message(error: &music21_rs_crate::Error) -> String {
 /// The exception class music21 would raise for a crate error: accidental
 /// and microtone errors keep their own classes, everything else is a pitch
 /// error.
+/// The name a value gives, checked and parsed as music21's
+/// `Pitch._cacheParsedName` checks it and remembered in music21's own
+/// `pitch._pitchNameCache`, emptied first when full, as music21 remembers
+/// every name it parses.
+fn parse_into_name_cache(py: Python<'_>, usr_str: &Bound<'_, PyAny>) -> PyResult<String> {
+    let key = usr_str.extract::<String>().map_err(|_| {
+        pyo3::exceptions::PyValueError::new_err(format!(
+            "Argument to name, {}, must be a string, not {}.",
+            usr_str
+                .repr()
+                .map(|repr| repr.to_string())
+                .unwrap_or_default(),
+            usr_str.get_type(),
+        ))
+    })?;
+    if key.chars().count() > 100 {
+        return Err(pyo3::exceptions::PyValueError::new_err(format!(
+            "Argument to name must be at most 100 characters, not {}.",
+            key.chars().count()
+        )));
+    }
+    let stripped = key.trim();
+    let mut letters = String::new();
+    let mut digits = String::new();
+    for c in stripped.chars() {
+        if c.is_ascii_digit() {
+            if letters.is_empty() {
+                return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                    "Cannot have octave given before pitch name in {}.",
+                    py_repr(py, stripped)
+                )));
+            }
+            digits.push(c);
+        } else {
+            letters.push(c);
+        }
+    }
+    let mut chars = letters.chars();
+    let Some(first) = chars.next() else {
+        return Err(PitchException::new_err(format!(
+            "Cannot make a name out of {}",
+            py_repr(py, &letters)
+        )));
+    };
+    let step = first.to_ascii_uppercase();
+    if !"CDEFGAB".contains(step) {
+        return Err(PitchException::new_err(format!(
+            "Cannot make a step out of {}",
+            py_repr(py, &step.to_string())
+        )));
+    }
+    let accidental: String = chars.collect();
+    if !accidental.is_empty() {
+        let _checked = RsAccidental::new(accidental.as_str()).map_err(pitch_error)?;
+    }
+    let octave: Option<i64> = if digits.is_empty() {
+        None
+    } else {
+        Some(digits.parse().map_err(|_| {
+            pyo3::exceptions::PyValueError::new_err(format!(
+                "invalid octave {}",
+                py_repr(py, &digits)
+            ))
+        })?)
+    };
+    if let Some(module) = music21_pitch(py) {
+        let cache = module.getattr("_pitchNameCache")?;
+        let size: usize = module.getattr("_pitchNameCacheSize")?.extract()?;
+        if cache.len()? >= size {
+            cache.call_method0("clear")?;
+        }
+        let accidental = (!accidental.is_empty()).then_some(accidental);
+        cache.set_item(&key, (step.to_string(), accidental, octave))?;
+    }
+    Ok(key)
+}
+
+/// music21's `pitch` module where it is loaded and keeps a name cache:
+/// found among the modules Python holds, never imported, so a facade used
+/// without music21 leaves Python searching for nothing.
+fn music21_pitch(py: Python<'_>) -> Option<Bound<'_, PyAny>> {
+    let module = py
+        .import("sys")
+        .ok()?
+        .getattr("modules")
+        .ok()?
+        .get_item("music21.pitch")
+        .ok()?;
+    module.hasattr("_pitchNameCache").ok()?.then_some(module)
+}
+
+/// A string as Python's `repr` writes it, for messages music21 words so.
+fn py_repr(py: Python<'_>, text: &str) -> String {
+    pyo3::types::PyString::new(py, text)
+        .repr()
+        .map(|repr| repr.to_string())
+        .unwrap_or_else(|_| format!("{text:?}"))
+}
+
+/// A name music21's `pitch._pitchNameCache` already holds, or else one
+/// checked and put there by [`parse_into_name_cache`].
+fn cached_name(py: Python<'_>, usr_str: &Bound<'_, PyAny>) -> PyResult<String> {
+    if let Ok(key) = usr_str.extract::<String>()
+        && let Some(module) = music21_pitch(py)
+        && module.getattr("_pitchNameCache")?.contains(&key)?
+    {
+        return Ok(key);
+    }
+    parse_into_name_cache(py, usr_str)
+}
+
 pub(crate) fn pitch_error(error: music21_rs_crate::Error) -> PyErr {
     specific_error(&error).unwrap_or_else(|| PitchException::new_err(message(&error)))
 }
@@ -1090,7 +1201,12 @@ impl Pitch {
         let mut inferred = name.is_none() && step.is_none();
         if let Some(name) = name {
             if let Ok(text) = name.extract::<String>() {
-                options = options.name(text);
+                // music21 parses every name but `C` and `C4` through its
+                // name cache.
+                if text != "C" && text != "C4" {
+                    cached_name(name.py(), name)?;
+                }
+                options = options.name(text.trim());
                 inferred = false;
             } else if let Ok(integer) = name.extract::<i32>() {
                 options = options.name(integer);
@@ -1165,30 +1281,32 @@ impl Pitch {
     }
 
     #[setter]
-    fn set_name(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
-        // music21 refuses anything but a string here, and says so as a
-        // `ValueError` rather than letting Python raise its own `TypeError`.
-        let value = &value.extract::<String>().map_err(|_| {
-            pyo3::exceptions::PyValueError::new_err(format!(
-                "Argument to name, {}, must be a string, not {}.",
-                value
-                    .repr()
-                    .map(|repr| repr.to_string())
-                    .unwrap_or_default(),
-                value.get_type(),
-            ))
-        })?;
-        let value = value.as_str();
+    fn set_name(&mut self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        let value = cached_name(py, value)?;
+        let value = value.trim();
         let octave = self.inner.octave();
+        let cents = self.inner.microtone().map(|microtone| microtone.cents());
         let mut options = PitchOptions::new().name(value);
         if let Some(octave) = octave
             && !value.chars().any(|c| c.is_ascii_digit())
         {
             options = options.octave(octave);
         }
-        self.inner = options.build().map_err(pitch_error)?;
+        let mut pitch = options.build().map_err(pitch_error)?;
+        // A new name keeps the microtone, as music21's setter does.
+        if let Some(cents) = cents {
+            pitch.set_microtone_cents(cents).map_err(pitch_error)?;
+        }
+        self.inner = pitch;
         self.mark_inferred(false);
         self.write_back()
+    }
+
+    /// Parses a name and remembers its step, accidental and octave in
+    /// music21's own `pitch._pitchNameCache`, as music21's `Pitch` does.
+    #[pyo3(name = "_cacheParsedName")]
+    fn cache_parsed_name(&self, py: Python<'_>, usr_str: &Bound<'_, PyAny>) -> PyResult<()> {
+        parse_into_name_cache(py, usr_str).map(|_| ())
     }
 
     #[getter]
