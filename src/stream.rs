@@ -32,6 +32,7 @@ mod opus;
 mod placed;
 mod queries;
 mod repeats;
+mod seconds;
 mod selection;
 mod slicing;
 mod sounding;

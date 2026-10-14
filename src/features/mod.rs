@@ -466,67 +466,21 @@ impl DataInstance {
     }
 
     /// The stretches of the piece each tempo holds, start, end and the mark
-    /// sounding there: music21's `metronomeMarkBoundaries`. Where the piece
-    /// states no tempo, or none from its start, a quarter at 120 holds.
+    /// sounding there: [`Stream::metronome_mark_boundaries`] of the piece as
+    /// this instance prepared it.
     ///
     /// # Errors
     ///
-    /// A metric modulation whose new tempo cannot be worked out.
+    /// As [`Stream::metronome_mark_boundaries`].
     pub fn metronome_mark_boundaries(&self) -> Result<Vec<(FloatType, FloatType, MetronomeMark)>> {
-        let flat = self.prepared.flatten();
-        let highest = flat.end_offset();
-        let lowest = flat.events().first().map_or(0.0, StreamEvent::offset);
-        let mut marks: Vec<(FloatType, MetronomeMark)> = Vec::new();
-        for event in flat.events() {
-            let sounding = match event.element() {
-                StreamElement::MetronomeMark(mark) => mark.clone(),
-                StreamElement::TempoText(text) => text.metronome_mark(),
-                StreamElement::MetricModulation(modulation) => {
-                    let mut modulation = (**modulation).clone();
-                    if modulation
-                        .new_metronome()
-                        .is_some_and(|mark| mark.number().is_none())
-                    {
-                        let previous = marks.last().map(|(_, mark)| mark.clone());
-                        modulation.update_from(previous.as_ref());
-                    }
-                    modulation.new_metronome().cloned().ok_or_else(|| {
-                        Error::Tempo("a metric modulation with no new tempo".to_string())
-                    })?
-                }
-                _ => continue,
-            };
-            marks.push((event.offset(), sounding));
-        }
-        let default = || MetronomeMark::new(120.0);
-        let mut boundaries = Vec::new();
-        match marks.as_slice() {
-            [] => boundaries.push((lowest, highest, default())),
-            [(offset, mark)] => {
-                if *offset > lowest {
-                    boundaries.push((lowest, *offset, default()));
-                    boundaries.push((*offset, highest, mark.clone()));
-                } else {
-                    boundaries.push((lowest, highest, mark.clone()));
-                }
-            }
-            _ => {
-                if marks[0].0 > lowest {
-                    boundaries.push((lowest, marks[0].0, default()));
-                }
-                boundaries.push((marks[0].0, marks[1].0, marks[0].1.clone()));
-                for index in 1..marks.len() {
-                    let end = marks.get(index + 1).map_or(highest, |(offset, _)| *offset);
-                    boundaries.push((marks[index].0, end, marks[index].1.clone()));
-                }
-            }
-        }
-        Ok(boundaries)
+        self.prepared.metronome_mark_boundaries()
     }
 
     /// When each note, chord and chord symbol of the piece sounds, in
-    /// seconds: music21's `secondsMap`, notes alone, in the order the piece
-    /// holds them.
+    /// seconds, in the order the piece holds them: the notes of music21's
+    /// `secondsMap`, read over the piece *flattened*, where music21's own
+    /// `secondsMap` reads only what a stream holds directly. The features
+    /// that read it want every note of the piece.
     ///
     /// # Errors
     ///
@@ -755,13 +709,7 @@ fn accumulated_seconds(
             continue;
         }
         let active_end = if end < *to { end } else { *to };
-        let per_quarter = mark
-            .sounding_quarter_bpm()
-            .map(|bpm| 60.0 / bpm)
-            .ok_or_else(|| {
-                Error::Tempo("cannot derive seconds as getQuarterBPM() returns None".to_string())
-            })?;
-        total += per_quarter * (active_end - active_start);
+        total += mark.seconds_per_quarter()? * (active_end - active_start);
         if active_end == end {
             break;
         }

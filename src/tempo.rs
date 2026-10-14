@@ -349,8 +349,12 @@ impl MetronomeMark {
     /// an infinity, which is what dividing by it gives and what every
     /// arithmetic downstream of it would then carry.
     pub fn seconds_per_quarter(&self) -> Result<FloatType> {
-        let quarter_bpm = self.quarter_bpm().ok_or_else(|| {
-            Error::Tempo("cannot derive seconds without a tempo number".to_string())
+        // music21 reads the speed the mark is played at, its
+        // getQuarterBPM() taking useNumberSounding=True by default, so a
+        // mark that says no number but carries a sounding one -- what a
+        // MusicXML <sound tempo="..."> reads as -- still answers.
+        let quarter_bpm = self.sounding_quarter_bpm().ok_or_else(|| {
+            Error::Tempo("cannot derive seconds as getQuarterBPM() returns None".to_string())
         })?;
         if quarter_bpm == 0.0 {
             return Err(Error::Tempo(
@@ -983,6 +987,15 @@ mod tests {
         let unknown = MetronomeMark::from_text("unknown words");
         assert_eq!(unknown.quarter_bpm(), None);
         assert!(unknown.seconds_per_quarter().is_err());
+
+        // A mark that says no number but sounds one -- what a MusicXML
+        // <sound tempo="96"> reads as -- is counted at the one it sounds,
+        // as music21's getQuarterBPM() takes useNumberSounding=True.
+        let mut playback = MetronomeMark::from_text("unknown words");
+        playback.set_number_sounding(Some(96.0));
+        assert_eq!(playback.number(), None);
+        assert_eq!(playback.sounding_quarter_bpm(), Some(96.0));
+        assert!((playback.seconds_per_quarter().expect("seconds") - 0.625).abs() < 1e-12);
         assert!(quarter.seconds_to_duration(0.0).is_err());
 
         let motionless = MetronomeMark::new(0.0);
